@@ -12,6 +12,8 @@ import (
 	"strings"
 
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
+
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
 
 const (
@@ -282,6 +284,66 @@ func handleWebSearch(ctx context.Context, a *Agent, args map[string]interface{})
 		a.captureWebText("web_search", query, result)
 	}
 	return result, err
+}
+
+// handleFetchURLWithImages is the image-capable fetch_url handler.
+// When the model supports vision and the URL serves binary content (image or PDF),
+// it downloads and returns the content as multimodal data. For text/HTML content,
+// it falls through to the existing text handler.
+func handleFetchURLWithImages(ctx context.Context, a *Agent, args map[string]interface{}) ([]api.ImageData, string, error) {
+	url, ok := args["url"].(string)
+	if !ok || url == "" {
+		return nil, "", fmt.Errorf("missing or invalid 'url' parameter")
+	}
+
+	// Guard: a is always non-nil from ExecuteTool, but protect against invariant changes
+	if a == nil {
+		result, err := handleFetchURL(ctx, a, args)
+		return nil, result, err
+	}
+
+	// GitHub MCP routing takes priority — always use text path for GitHub URLs
+	if result, handled, err := a.tryRouteGitHubToMCP(ctx, url); handled {
+		a.captureWebText("fetch_url", url, result)
+		return nil, result, err
+	}
+
+	// Only intercept binary content for multimodal models
+	if a.client == nil || !a.client.SupportsVision() {
+		result, err := handleFetchURL(ctx, a, args)
+		return nil, result, err
+	}
+
+	// Probe the URL to check Content-Type
+	kind, _ := tools.ProbeURLContentType(url)
+	if !kind.IsBinary() {
+		// Text/HTML — use existing text handler
+		result, err := handleFetchURL(ctx, a, args)
+		return nil, result, err
+	}
+
+	a.debugLog("🖼️ fetch_url detected binary content (%v), processing for multimodal: %s\n", kind, url)
+
+	result, err := tools.FetchBinaryURL(url, kind)
+	if err != nil {
+		// Fall back to text handler on binary processing failure
+		a.debugLog("⚠️ Binary fetch failed: %v, falling back to text handler\n", err)
+		result, ferr := handleFetchURL(ctx, a, args)
+		return nil, result, ferr
+	}
+
+	displayURL := url
+	if result.EffectiveURL != "" {
+		displayURL = result.EffectiveURL
+	}
+
+	if len(result.Images) > 0 {
+		textResult := fmt.Sprintf("[Fetched %s: %s (%d images)]", result.Source, displayURL, len(result.Images))
+		return result.Images, textResult, nil
+	}
+
+	textResult := fmt.Sprintf("[Fetched %s: %s]\n\n%s", result.Source, displayURL, result.Text)
+	return nil, textResult, nil
 }
 
 func handleFetchURL(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {

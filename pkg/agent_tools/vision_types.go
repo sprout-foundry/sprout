@@ -564,7 +564,7 @@ func (vp *VisionProcessor) GetImageData(imagePath string) (string, string, error
 		}
 	}
 
-	optimizedData, mimeType, optErr := optimizeImageData(imagePath, data)
+	optimizedData, mimeType, optErr := OptimizeImageData(imagePath, data)
 	if optErr != nil {
 		// Log optimization error but continue with original data
 		if vp.logger != nil {
@@ -608,7 +608,7 @@ func (vp *VisionProcessor) DownloadImage(url string) ([]byte, error) {
 	return io.ReadAll(resp.Body)
 }
 
-func optimizeImageData(imagePath string, data []byte) ([]byte, string, error) {
+func OptimizeImageData(imagePath string, data []byte) ([]byte, string, error) {
 	// Phase 0: Check and resize dimensions if image exceeds visionMaxDimension
 	// This runs first, before any file size optimization
 	img, format, err := image.Decode(bytes.NewReader(data))

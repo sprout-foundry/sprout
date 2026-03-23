@@ -904,8 +904,12 @@ func (ir *InputReader) finalizePaste() bool {
 				ir.hasEditedLine = true
 				ir.historyIndex = -1
 				ir.Refresh()
-				ir.lastLineLength = visibleRuneWidth(ir.prompt) + len([]rune(ir.line))
-				ir.lastWrapPending = isWrapPending(ir.terminalWidth, ir.lastLineLength, visibleRuneWidth(ir.prompt)+len([]rune(ir.line)), ir.lastLineLength)
+				promptWidth := visibleRuneWidth(ir.prompt)
+				lineWidth := len([]rune(ir.line))
+				newLength := promptWidth + lineWidth
+				ir.lastLineLength = newLength
+				cursorPos := promptWidth + ir.cursorPos
+				ir.lastWrapPending = isWrapPending(ir.terminalWidth, newLength, cursorPos, newLength)
 				return true
 			}
 		}
@@ -932,8 +936,12 @@ func (ir *InputReader) finalizePaste() bool {
 	// Show feedback and refresh
 	ir.Refresh()
 
-	ir.lastLineLength = visibleRuneWidth(ir.prompt) + len([]rune(ir.line))
-	ir.lastWrapPending = isWrapPending(ir.terminalWidth, ir.lastLineLength, visibleRuneWidth(ir.prompt)+len([]rune(ir.line)), ir.lastLineLength)
+	promptWidth := visibleRuneWidth(ir.prompt)
+	lineWidth := len([]rune(ir.line))
+	newLength := promptWidth + lineWidth
+	ir.lastLineLength = newLength
+	cursorPos := promptWidth + ir.cursorPos
+	ir.lastWrapPending = isWrapPending(ir.terminalWidth, newLength, cursorPos, newLength)
 
 	return true
 }

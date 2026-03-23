@@ -1,12 +1,16 @@
 package agent
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
+	"github.com/alantheprice/ledit/pkg/console"
 	"github.com/alantheprice/ledit/pkg/configuration"
 )
 
@@ -174,13 +178,132 @@ func (a *Agent) GetOptimizationStats() map[string]interface{} {
 	}
 }
 
-// processImagesInQuery detects and processes images in user queries
-func (a *Agent) processImagesInQuery(query string) (string, error) {
+// maxTotalImagePayloadBytes is the maximum combined size of all images sent in a
+// single query (20 MB).  Individual images are capped by console.MaxPastedImageSize.
+const maxTotalImagePayloadBytes = 20 * 1024 * 1024
+
+// pastedImagePlaceholderRe matches the placeholder inserted by the console
+// when a user pastes an image.  ONLY this pattern is considered safe to load
+// and send as multimodal content — arbitrary file paths in user text are ignored.
+var pastedImagePlaceholderRe = regexp.MustCompile(`Pasted image saved to disk: (\S+)`)
+
+// processImagesInQuery detects and processes images in user queries.
+// If the primary model supports vision it returns the image data as multimodal
+// content so the model can see the images directly.  Otherwise it falls back
+// to the existing OCR pipeline which converts images to text descriptions.
+func (a *Agent) processImagesInQuery(query string) ([]api.ImageData, string, error) {
 	// Skip if no client is available
 	if a.client == nil {
-		return query, nil
+		return nil, query, nil
 	}
 
+	// If the primary model supports vision, send images as multimodal content.
+	if a.client.SupportsVision() {
+		return a.processImagesAsMultimodal(query)
+	}
+
+	// Fallback: use the OCR approach via a separate vision model.
+	enhancedQuery, err := a.processImagesViaOCR(query)
+	return nil, enhancedQuery, err
+}
+
+// processImagesAsMultimodal extracts pasted-image references from the query,
+// reads each file, and returns the image data for multimodal embedding.
+func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		a.debugLog("⚠️ Failed to get working directory for image resolution: %v\n", err)
+		return nil, query, nil
+	}
+
+	var images []api.ImageData
+	totalBytes := 0
+
+	// Run the regex once: it serves as both the "any matches?" check and
+	// the source of file paths for processing.
+	uniqueMatches := pastedImagePlaceholderRe.FindAllStringSubmatchIndex(query, -1)
+	if len(uniqueMatches) == 0 {
+		return nil, query, nil
+	}
+
+	// Build replacement map so we can rewrite the query in a single pass.
+	type placeholderInfo struct {
+		fullMatch string
+	filePath   string
+	}
+	var placeholders []placeholderInfo
+	seen := make(map[string]struct{}, len(uniqueMatches))
+	for _, loc := range uniqueMatches {
+		fullMatch := query[loc[0]:loc[1]]
+		filePath := query[loc[2]:loc[3]]
+		if _, exists := seen[filePath]; exists {
+			continue
+		}
+		seen[filePath] = struct{}{}
+		placeholders = append(placeholders, placeholderInfo{fullMatch: fullMatch, filePath: filePath})
+	}
+
+	// Rewrite the query once, replacing every occurrence of each placeholder.
+	cleanedQuery := query
+	for _, ph := range placeholders {
+		fileName := filepath.Base(ph.filePath)
+		replacement := fmt.Sprintf("[image: %s]", fileName)
+		cleanedQuery = strings.ReplaceAll(cleanedQuery, ph.fullMatch, replacement)
+	}
+
+	// Load image files.
+	expectedDir := filepath.Join(cwd, console.PastedImageDirName)
+	for _, ph := range placeholders {
+		filePath := ph.filePath
+
+		// Resolve all paths to absolute for containment checking.
+		if !filepath.IsAbs(filePath) {
+			filePath = filepath.Join(cwd, filePath)
+		}
+
+		// Defense-in-depth: only read files under the pasted-images directory.
+		// This prevents reading arbitrary files if an LLM were to produce text
+		// matching the placeholder pattern.
+		relToExpected, err := filepath.Rel(expectedDir, filePath)
+		if err != nil || strings.HasPrefix(relToExpected, "..") {
+			a.debugLog("⚠️ Skipping image %s: not in pasted images directory\n", filePath)
+			continue
+		}
+
+		imgData, imgSize, err := readImageAsImageData(filePath)
+		if err != nil {
+			a.debugLog("⚠️ Skipping image %s: %v\n", filePath, err)
+			continue
+		}
+
+		// Enforce per-image size cap (should already be enforced by console, but be safe).
+		if imgSize > console.MaxPastedImageSize {
+			a.debugLog("⚠️ Skipping image %s: exceeds per-image size cap (%d > %d)\n",
+				filePath, imgSize, console.MaxPastedImageSize)
+			continue
+		}
+
+		// Enforce total payload cap.
+		if totalBytes+imgSize > maxTotalImagePayloadBytes {
+			a.debugLog("⚠️ Skipping image %s: total payload would exceed cap (%d bytes)\n",
+				filePath, maxTotalImagePayloadBytes)
+			continue
+		}
+
+		totalBytes += imgSize
+		images = append(images, imgData)
+	}
+
+	if len(images) > 0 {
+		a.debugLog("🖼️ Attached %d image(s) as multimodal content (%d bytes)\n", len(images), totalBytes)
+	}
+
+	return images, cleanedQuery, nil
+}
+
+// processImagesViaOCR uses the existing VisionProcessor to convert images to
+// text descriptions and embed them in the query.
+func (a *Agent) processImagesViaOCR(query string) (string, error) {
 	// Check if vision processing is available
 	if !tools.HasVisionCapability() {
 		// No vision capability available, return original query
@@ -220,4 +343,43 @@ func (a *Agent) processImagesInQuery(query string) (string, error) {
 	}
 
 	return enhancedQuery, nil
+}
+
+// readImageAsImageData reads an image file from disk, validates it, detects
+// the MIME type from magic bytes, optimizes the image for vision models, and
+// returns base64-encoded ImageData with the byte length of the (possibly
+// optimized) image data.
+func readImageAsImageData(filePath string) (api.ImageData, int, error) {
+	// Check size before reading to avoid loading huge files into memory.
+	stat, err := os.Stat(filePath)
+	if err != nil {
+		return api.ImageData{}, 0, fmt.Errorf("failed to stat file: %w", err)
+	}
+	if stat.Size() > console.MaxPastedImageSize {
+		return api.ImageData{}, 0, fmt.Errorf("image too large (%d bytes)", stat.Size())
+	}
+
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return api.ImageData{}, 0, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	// Validate it is actually an image by checking magic bytes.
+	_, mimeType := console.DetectImageMagic(data)
+	if mimeType == "" {
+		return api.ImageData{}, 0, fmt.Errorf("unrecognised image format")
+	}
+
+	// Optimize to cap dimensions at 4096px and compress for context efficiency.
+	optimized, optMime, optErr := tools.OptimizeImageData(filePath, data)
+	if optErr == nil && len(optimized) > 0 {
+		mimeType = optMime
+		data = optimized
+	}
+
+	encoded := base64.StdEncoding.EncodeToString(data)
+	return api.ImageData{
+		Base64: encoded,
+		Type:   mimeType,
+	}, len(data), nil
 }

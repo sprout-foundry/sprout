@@ -374,41 +374,52 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 
 	// Create a channel to receive the result of the tool execution
 	resultChan := make(chan struct {
+		images []api.ImageData
 		result string
 		err    error
 	}, 1)
 
 	// Execute the tool in a goroutine
 	go func() {
-		var result string
-		var err error
-
 		if normalizedToolName == "mcp_tools" {
-			result, err = te.agent.handleMCPToolsCommand(args)
-		} else {
-			registry := GetToolRegistry()
-			result, err = registry.ExecuteTool(ctx, normalizedToolName, args, te.agent)
+			result, err := te.agent.handleMCPToolsCommand(args)
+			resultChan <- struct {
+				images []api.ImageData
+				result string
+				err    error
+			}{nil, result, err}
+			return
+		}
 
-			if err != nil && strings.Contains(err.Error(), "unknown tool") {
-				if fallbackResult, fallbackErr, handled := te.tryExecuteMCPTool(normalizedToolName, args); handled {
-					result = fallbackResult
-					err = fallbackErr
-				}
+		registry := GetToolRegistry()
+		images, result, err := registry.ExecuteTool(ctx, normalizedToolName, args, te.agent)
+
+		if err != nil && strings.Contains(err.Error(), "unknown tool") {
+			if fallbackResult, fallbackErr, handled := te.tryExecuteMCPTool(normalizedToolName, args); handled {
+				resultChan <- struct {
+					images []api.ImageData
+					result string
+					err    error
+				}{nil, fallbackResult, fallbackErr}
+				return
 			}
 		}
 
 		resultChan <- struct {
+			images []api.ImageData
 			result string
 			err    error
-		}{result, err}
+		}{images, result, err}
 	}()
 
 	var fullResult string
+	var images []api.ImageData
 	var err error
 
 	// Wait for the tool to complete, timeout, or interrupt
 	select {
 	case res := <-resultChan:
+		images = res.images
 		fullResult = res.result
 		err = res.err
 	case <-ctx.Done():
@@ -464,6 +475,7 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 		Role:       "tool",
 		Content:    modelResult,
 		ToolCallId: toolCallID,
+		Images:     images,
 	}
 }
 

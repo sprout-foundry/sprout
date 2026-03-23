@@ -8,6 +8,7 @@ import (
 	"os"
 	"sync"
 
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/filesystem"
 	"github.com/alantheprice/ledit/pkg/security_validator"
 	"github.com/alantheprice/ledit/pkg/utils"
@@ -24,14 +25,20 @@ type ParameterConfig struct {
 
 // ToolConfig holds configuration for a tool
 type ToolConfig struct {
-	Name        string            `json:"name"`
-	Description string            `json:"description"`
-	Parameters  []ParameterConfig `json:"parameters"`
-	Handler     ToolHandler       `json:"-"` // Function reference, not serialized
+	Name          string             `json:"name"`
+	Description   string             `json:"description"`
+	Parameters    []ParameterConfig  `json:"parameters"`
+	Handler       ToolHandler        `json:"-"` // Function reference, not serialized
+	HandlerImages ToolHandlerWithImages `json:"-"` // Optional image-returning handler (takes precedence over Handler when set)
 }
 
 // ToolHandler represents a function that can handle a tool execution
 type ToolHandler func(ctx context.Context, a *Agent, args map[string]interface{}) (string, error)
+
+// ToolHandlerWithImages is like ToolHandler but can also return image data
+// for multimodal (vision-capable) models. The []api.ImageData slice should be
+// nil when no images are produced; the string is always the text result.
+type ToolHandlerWithImages func(ctx context.Context, a *Agent, args map[string]interface{}) ([]api.ImageData, string, error)
 
 // ToolRegistry manages tool configurations in a data-driven way
 type ToolRegistry struct {
@@ -93,7 +100,8 @@ func newDefaultToolRegistry() *ToolRegistry {
 			{"path", "string", true, []string{"file_path"}, "Path to the file to read"},
 			{"view_range", "array", false, []string{}, "Line range as [start, end] array (1-based)"},
 		},
-		Handler: handleReadFile,
+		Handler:       handleReadFile,
+		HandlerImages: handleReadFileWithImages,
 	})
 
 	// Register write_file tool
@@ -216,11 +224,12 @@ func newDefaultToolRegistry() *ToolRegistry {
 	// Register fetch_url tool
 	registry.RegisterTool(ToolConfig{
 		Name:        "fetch_url",
-		Description: "Fetch and extract content from a URL",
+		Description: "Fetch and extract content from a URL. For HTML/text content, extracts readable text. For images and PDFs (when the model supports vision), returns visual content directly.",
 		Parameters: []ParameterConfig{
 			{"url", "string", true, []string{}, "URL to fetch content from"},
 		},
-		Handler: handleFetchURL,
+		Handler:       handleFetchURL,
+		HandlerImages: handleFetchURLWithImages,
 	})
 
 	// Register browse_url tool
@@ -259,7 +268,8 @@ func newDefaultToolRegistry() *ToolRegistry {
 			{"analysis_prompt", "string", false, []string{}, "Optional custom vision prompt"},
 			{"analysis_mode", "string", false, []string{}, "Optional analysis mode override"},
 		},
-		Handler: handleAnalyzeImageContent,
+		Handler:       handleAnalyzeImageContent,
+		HandlerImages: handleAnalyzeImageContentWithImages,
 	})
 
 	// Register history tools
@@ -343,10 +353,10 @@ func (r *ToolRegistry) GetAvailableTools() []string {
 }
 
 // ExecuteTool executes a tool with standardized parameter validation and error handling
-func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args map[string]interface{}, agent *Agent) (string, error) {
+func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args map[string]interface{}, agent *Agent) ([]api.ImageData, string, error) {
 	tool, exists := r.tools[toolName]
 	if !exists {
-		return "", fmt.Errorf("unknown tool '%s'", toolName)
+		return nil, "", fmt.Errorf("unknown tool '%s'", toolName)
 	}
 
 	// CRITICAL: Prevent subagents from creating nested subagents
@@ -361,25 +371,29 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 			if agent != nil && agent.debug {
 				agent.debugLog("🚫 Blocked subagent tool '%s' - nested subagents are not allowed\n", toolName)
 			}
-			return "", fmt.Errorf("%s", errMsg)
+			return nil, "", fmt.Errorf("%s", errMsg)
 		}
 	}
 
 	// Security validation (if enabled and not bypassed)
 	if agent != nil && !filesystem.SecurityBypassEnabled(ctx) {
 		if validationErr := r.validateToolSecurity(ctx, toolName, args, agent); validationErr != nil {
-			return "", validationErr
+			return nil, "", validationErr
 		}
 	}
 
 	// Validate and extract parameters
 	validatedArgs, err := r.validateParameters(tool, args, agent)
 	if err != nil {
-		return "", fmt.Errorf("parameter validation failed for tool '%s': %w", toolName, err)
+		return nil, "", fmt.Errorf("parameter validation failed for tool '%s': %w", toolName, err)
 	}
 
-	// Execute the tool handler
-	return tool.Handler(ctx, agent, validatedArgs)
+	// Execute the tool handler — prefer the image-capable handler when set
+	if tool.HandlerImages != nil {
+		return tool.HandlerImages(ctx, agent, validatedArgs)
+	}
+	result, err := tool.Handler(ctx, agent, validatedArgs)
+	return nil, result, err
 }
 
 // validateToolSecurity performs LLM-based security validation if enabled

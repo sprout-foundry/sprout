@@ -93,6 +93,7 @@ pkg/webui/static/asset-manifest.json
 pkg/webui/static/manifest.json
 pkg/webui/static/browserconfig.xml
 pkg/webui/static/*.LICENSE.txt
+pkg/webui/static/js/*.LICENSE.txt
 
 # Track source assets in pkg/webui/static (these are not generated)
 pkg/webui/static/icon-192.png
@@ -126,3 +127,8 @@ run-prompt.md
 !pkg/webui/static/icon-192.png
 !pkg/webui/static/icon-512.png
 
+# Windows ADS metadata artifacts
+*:Zone.Identifier
+
+# Local scratch artifacts
+html_scraped_example_whitespace.txt

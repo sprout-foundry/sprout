@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './Terminal.css';
 import { TerminalWebSocketService } from '../services/terminalWebSocket';
 import { debugLog } from '../utils/log';
+import { stripAnsiCodes } from '../utils/ansi';
 
 interface TerminalProps {
   onCommand?: (command: string) => void;
@@ -79,9 +80,9 @@ const Terminal: React.FC<TerminalProps> = ({
         } else if (event.type === 'session_ready') {
           setTerminalConnected(true);
         } else if (event.type === 'output') {
-          addLine('output', event.data.output);
+          addLine('output', stripAnsiCodes(event.data.output));
         } else if (event.type === 'error_output') {
-          addLine('error', event.data.output);
+          addLine('error', stripAnsiCodes(event.data.output));
         } else if (event.type === 'error') {
           addLine('error', event.data.message);
         }

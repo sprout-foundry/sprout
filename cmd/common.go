@@ -15,6 +15,7 @@ type InstanceInfo struct {
 	StartTime  time.Time `json:"start_time"`
 	WorkingDir string    `json:"working_dir"`
 	LastPing   time.Time `json:"last_ping"`
+	SessionID  string    `json:"session_id,omitempty"`
 }
 
 // getConfigDir returns the config directory path
@@ -60,6 +61,25 @@ func loadInstances() (map[string]InstanceInfo, error) {
 	}
 
 	return instances, nil
+}
+
+// saveInstances persists running instances to config.
+func saveInstances(instances map[string]InstanceInfo) error {
+	if err := os.MkdirAll(getConfigDir(), 0755); err != nil {
+		return err
+	}
+
+	instancesFile := filepath.Join(getConfigDir(), "instances.json")
+	data, err := json.MarshalIndent(instances, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	tmpFile := instancesFile + ".tmp"
+	if err := os.WriteFile(tmpFile, data, 0644); err != nil {
+		return err
+	}
+	return os.Rename(tmpFile, instancesFile)
 }
 
 // cleanStaleInstances removes instances that haven't pinged recently

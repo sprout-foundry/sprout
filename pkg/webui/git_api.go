@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/events"
@@ -36,6 +37,52 @@ func (ws *ReactWebServer) gitCommand(args ...string) *exec.Cmd {
 		cmd.Dir = ws.workspaceRoot
 	}
 	return cmd
+}
+
+func parseNameStatusLine(line string) (status string, path string, ok bool) {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return "", "", false
+	}
+
+	parts := strings.Split(line, "\t")
+	if len(parts) < 2 {
+		return "", "", false
+	}
+
+	statusCode := strings.TrimSpace(parts[0])
+	if statusCode == "" {
+		return "", "", false
+	}
+
+	// For rename/copy entries, Git prints both old and new paths; use the new path.
+	filePath := strings.TrimSpace(parts[len(parts)-1])
+	if filePath == "" {
+		return "", "", false
+	}
+
+	return string(statusCode[0]), filePath, true
+}
+
+func normalizeGitPath(path string) string {
+	cleaned := filepath.Clean(strings.TrimSpace(path))
+	if cleaned == "." || cleaned == "" {
+		return ""
+	}
+	return cleaned
+}
+
+func pathExistsInGitStatus(path string, status *GitStatus) bool {
+	if status == nil {
+		return false
+	}
+	all := getAllGitFiles(status)
+	for _, file := range all {
+		if normalizeGitPath(file.Path) == path {
+			return true
+		}
+	}
+	return false
 }
 
 // handleAPIGitStatus handles git status requests
@@ -79,6 +126,21 @@ func (ws *ReactWebServer) handleAPIGitStage(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "Path is required", http.StatusBadRequest)
 		return
 	}
+	req.Path = normalizeGitPath(req.Path)
+	if req.Path == "" {
+		http.Error(w, "Invalid path", http.StatusBadRequest)
+		return
+	}
+
+	status, err := ws.getGitStatus()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to validate path: %v", err), http.StatusInternalServerError)
+		return
+	}
+	if !pathExistsInGitStatus(req.Path, status) {
+		http.Error(w, "File is not part of git changes", http.StatusBadRequest)
+		return
+	}
 
 	// Stage the file
 	cmd := ws.gitCommand("add", "--", req.Path)
@@ -119,6 +181,21 @@ func (ws *ReactWebServer) handleAPIGitUnstage(w http.ResponseWriter, r *http.Req
 		http.Error(w, "Path is required", http.StatusBadRequest)
 		return
 	}
+	req.Path = normalizeGitPath(req.Path)
+	if req.Path == "" {
+		http.Error(w, "Invalid path", http.StatusBadRequest)
+		return
+	}
+
+	status, err := ws.getGitStatus()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to validate path: %v", err), http.StatusInternalServerError)
+		return
+	}
+	if !pathExistsInGitStatus(req.Path, status) {
+		http.Error(w, "File is not part of git changes", http.StatusBadRequest)
+		return
+	}
 
 	// Unstage the file
 	cmd := ws.gitCommand("reset", "HEAD", "--", req.Path)
@@ -157,6 +234,21 @@ func (ws *ReactWebServer) handleAPIGitDiscard(w http.ResponseWriter, r *http.Req
 
 	if req.Path == "" {
 		http.Error(w, "Path is required", http.StatusBadRequest)
+		return
+	}
+	req.Path = normalizeGitPath(req.Path)
+	if req.Path == "" {
+		http.Error(w, "Invalid path", http.StatusBadRequest)
+		return
+	}
+
+	status, err := ws.getGitStatus()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to validate path: %v", err), http.StatusInternalServerError)
+		return
+	}
+	if !pathExistsInGitStatus(req.Path, status) {
+		http.Error(w, "File is not part of git changes", http.StatusBadRequest)
 		return
 	}
 
@@ -264,58 +356,50 @@ func (ws *ReactWebServer) getGitStatus() (*GitStatus, error) {
 		}
 	}
 
-	// Get staged changes
+	// Get staged changes.
+	// Use tab-separated parsing so file names with spaces are preserved.
 	cmd = ws.gitCommand("diff", "--name-status", "--cached")
 	output, err = cmd.Output()
 	if err == nil {
 		for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
-			if line == "" {
-				continue
-			}
-			parts := strings.Fields(line)
-			if len(parts) >= 2 {
+			if statusChar, path, ok := parseNameStatusLine(line); ok {
 				status.Staged = append(status.Staged, GitFile{
-					Path:   strings.TrimSpace(parts[1]),
-					Status: string(parts[0][0]),
+					Path:   path,
+					Status: statusChar,
 					Staged: true,
 				})
 			}
 		}
 	}
 
-	// Get unstaged changes
+	// Get unstaged changes.
+	// Use tab-separated parsing so file names with spaces are preserved.
 	cmd = ws.gitCommand("diff", "--name-status")
 	output, err = cmd.Output()
 	if err == nil {
 		for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
-			if line == "" {
-				continue
-			}
-			parts := strings.Fields(line)
-			if len(parts) >= 2 {
-				code := string(parts[0])
-				statusChar := code[0]
-				if statusChar == 'M' {
+			if statusChar, path, ok := parseNameStatusLine(line); ok {
+				if statusChar == "M" {
 					status.Modified = append(status.Modified, GitFile{
-						Path:   strings.TrimSpace(parts[1]),
+						Path:   path,
 						Status: "M",
 						Staged: false,
 					})
-				} else if statusChar == 'D' {
+				} else if statusChar == "D" {
 					status.Deleted = append(status.Deleted, GitFile{
-						Path:   strings.TrimSpace(parts[1]),
+						Path:   path,
 						Status: "D",
 						Staged: false,
 					})
-				} else if statusChar == 'A' {
+				} else if statusChar == "A" {
 					status.Modified = append(status.Modified, GitFile{
-						Path:   strings.TrimSpace(parts[1]),
+						Path:   path,
 						Status: "A",
 						Staged: false,
 					})
-				} else if statusChar == 'R' {
+				} else if statusChar == "R" {
 					status.Renamed = append(status.Renamed, GitFile{
-						Path:   strings.TrimSpace(parts[1]),
+						Path:   path,
 						Status: "R",
 						Staged: false,
 					})

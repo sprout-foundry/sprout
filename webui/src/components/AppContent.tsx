@@ -1,4 +1,5 @@
 import React, { useCallback, useRef } from 'react';
+import { Menu, X, Columns2, Rows2 } from 'lucide-react';
 import Sidebar from './Sidebar';
 import Chat from './Chat';
 import GitView from './GitView';
@@ -190,7 +191,7 @@ const AppContent: React.FC<AppContentProps> = ({
           onClick={onToggleSidebar}
           aria-label="Toggle sidebar"
         >
-          ☰
+          <Menu size={20} />
         </button>
       )}
 
@@ -263,7 +264,7 @@ const AppContent: React.FC<AppContentProps> = ({
                   className="pane-control-btn"
                   title="Close split pane"
                 >
-                  ❌ Close Split
+                  <X size={14} /> Close Split
                 </button>
               )}
               {canSplit && (
@@ -272,7 +273,7 @@ const AppContent: React.FC<AppContentProps> = ({
                   className="pane-control-btn"
                   title="Split vertically"
                 >
-                  ⬇️ Split ⟂
+                  <Columns2 size={16} /> Split
                 </button>
               )}
               {canSplit && (
@@ -281,7 +282,7 @@ const AppContent: React.FC<AppContentProps> = ({
                   className="pane-control-btn"
                   title="Split horizontally"
                 >
-                  ➡️ Split ↔
+                  <Rows2 size={16} /> Split
                 </button>
               )}
             </div>

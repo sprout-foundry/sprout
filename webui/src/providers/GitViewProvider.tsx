@@ -4,6 +4,13 @@
  * Data-driven provider for Git view sidebar content
  */
 
+import React from 'react';
+import {
+  AlertTriangle,
+  GitBranch,
+  ArrowUp,
+  ArrowDown,
+} from 'lucide-react';
 import { ContentProvider, ProviderContext, SidebarSection, Action, ActionResult } from './types';
 import { ApiService } from '../services/api';
 
@@ -80,7 +87,7 @@ export class GitViewProvider implements ContentProvider {
           if (this.state.error) {
             return (
               <div className="error">
-                <span className="error-icon">⚠️</span>
+                <span className="error-icon"><AlertTriangle size={14} /></span>
                 <span>{this.state.error}</span>
                 <button
                   className="retry-button"
@@ -101,19 +108,19 @@ export class GitViewProvider implements ContentProvider {
           return (
             <div className="git-branch-info">
               <div className="branch-name">
-                <span className="branch-icon">🔀</span>
+                <span className="branch-icon"><GitBranch size={14} /></span>
                 <span className="branch-text">{branch || 'No branch'}</span>
               </div>
               {(ahead > 0 || behind > 0) && (
                 <div className="branch-tracking">
-                  {ahead > 0 && <span className="ahead">▲ {ahead} ahead</span>}
-                  {behind > 0 && <span className="behind">▼ {behind} behind</span>}
+                  {ahead > 0 && <span className="ahead"><ArrowUp size={12} /> {ahead} ahead</span>}
+                  {behind > 0 && <span className="behind"><ArrowDown size={12} /> {behind} behind</span>}
                 </div>
               )}
             </div>
           );
         },
-        title: () => `🔀 Git Status`,
+        title: () => 'Git Status',
         order: 1
       },
       {

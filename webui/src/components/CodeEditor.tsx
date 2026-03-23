@@ -18,6 +18,14 @@ import { readFileWithConsent, writeFileWithConsent } from '../services/fileAcces
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { getHotkeyPresetKeymap } from '../utils/editorHotkeys';
+import {
+  FileEdit,
+  File,
+  Loader2,
+  AlertTriangle,
+  Save,
+  X,
+} from 'lucide-react';
 
 import './CodeEditor.css';
 
@@ -288,10 +296,10 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
     return (
       <div className="code-editor">
         <div className="editor-header">
-          <h3>📝 Code Editor</h3>
+          <h3><FileEdit size={16} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />Code Editor</h3>
         </div>
         <div className="no-file-selected">
-          <div className="no-file-icon">📄</div>
+          <div className="no-file-icon"><File size={40} /></div>
           <div className="no-file-text">Select a file to edit</div>
         </div>
       </div>
@@ -302,7 +310,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
     <div className="code-editor">
       <div className="editor-header">
         <div className="editor-info">
-          <h3>📝 Code Editor</h3>
+          <h3><FileEdit size={16} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />Code Editor</h3>
           <div className="file-info">
             <span className="file-name">{file.name}</span>
             <span className="file-path">{file.path}</span>
@@ -316,21 +324,21 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
             className="save-button"
             title="Save file (Ctrl+S)"
           >
-            {saving ? '⚡ Saving...' : '💾 Save'}
+            {saving ? <><Loader2 size={14} className="spinner-inline" /> Saving...</> : <><Save size={14} /> Save</>}
           </button>
         </div>
       </div>
 
       {loading && (
         <div className="loading-indicator">
-          <div className="spinner">⚡</div>
+          <Loader2 size={16} className="spinner" />
           <span>Loading file...</span>
         </div>
       )}
 
       {error && (
         <div className="error-message">
-          <span className="error-icon">⚠️</span>
+          <AlertTriangle size={16} className="error-icon" />
           <span className="error-text">{error}</span>
         </div>
       )}
@@ -358,7 +366,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
         <div className="unsaved-dialog-overlay">
           <div className="unsaved-dialog">
             <div className="dialog-header">
-              <h3>⚠️ Unsaved Changes</h3>
+              <h3><AlertTriangle size={16} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />Unsaved Changes</h3>
             </div>
             <div className="dialog-body">
               <p>You have unsaved changes in <strong>{file.name}</strong>.</p>
@@ -366,10 +374,10 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
             </div>
             <div className="dialog-actions">
               <button onClick={handleSaveAndSwitch} className="dialog-btn primary">
-                💾 Save & Switch
+                <Save size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />Save & Switch
               </button>
               <button onClick={handleDiscardAndSwitch} className="dialog-btn danger">
-                ❌ Don't Save
+                <X size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />Don't Save
               </button>
               <button onClick={handleCancel} className="dialog-btn secondary">
                 Cancel

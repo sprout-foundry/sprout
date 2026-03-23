@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Trash2, TriangleAlert } from 'lucide-react';
 import './Terminal.css';
 import { TerminalWebSocketService } from '../services/terminalWebSocket';
 import { debugLog } from '../utils/log';
@@ -325,7 +326,7 @@ const Terminal: React.FC<TerminalProps> = ({
             onClick={clearTerminal}
             title="Clear terminal"
           >
-            🗑️
+            <Trash2 size={16} />
           </button>
           <button 
             className="terminal-btn toggle-btn"
@@ -365,7 +366,8 @@ const Terminal: React.FC<TerminalProps> = ({
             />
             {!terminalConnected && (
               <div className="terminal-status-message">
-                ⚠️ Backend not connected. Start with: <code>./ledit agent --web-port 54421</code>
+                <TriangleAlert size={14} className="inline-block mr-1 align-text-bottom" />
+                Backend not connected. Start with: <code>./ledit agent --web-port 54421</code>
               </div>
             )}
           </div>

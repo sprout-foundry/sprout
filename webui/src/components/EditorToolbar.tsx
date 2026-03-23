@@ -1,6 +1,15 @@
 import React, { useState } from 'react';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useTheme } from '../contexts/ThemeContext';
+import {
+  Hash,
+  X,
+  ArrowDownToLine,
+  Columns2,
+  Rows2,
+  Sun,
+  Moon,
+} from 'lucide-react';
 import './EditorToolbar.css';
 
 interface EditorToolbarProps {
@@ -55,7 +64,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
           onClick={onToggleLineNumbers}
           title="Toggle line numbers (Ctrl+L)"
         >
-          <span className="toolbar-icon">🔢</span>
+          <span className="toolbar-icon"><Hash size={16} /></span>
         </button>
 
         {/* Go to Line */}
@@ -71,7 +80,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
               min="1"
             />
             <button type="button" className="go-to-line-cancel" onClick={() => { setShowGoToLine(false); setLineInput(''); }}>
-              ✕
+              <X size={12} />
             </button>
           </form>
         ) : (
@@ -80,7 +89,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
             onClick={() => setShowGoToLine(true)}
             title="Go to line (Ctrl+G)"
           >
-            <span className="toolbar-icon">↣</span>
+            <span className="toolbar-icon"><ArrowDownToLine size={16} /></span>
           </button>
         )}
       </div>
@@ -94,14 +103,14 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
               onClick={handleSplitVertical}
               title="Split vertically"
             >
-              <span className="toolbar-icon">⬌</span>
+              <span className="toolbar-icon"><Columns2 size={16} /></span>
             </button>
             <button
               className="toolbar-button"
               onClick={handleSplitHorizontal}
               title="Split horizontally"
             >
-              <span className="toolbar-icon">⬍</span>
+              <span className="toolbar-icon"><Rows2 size={16} /></span>
             </button>
           </>
         )}
@@ -112,7 +121,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
             onClick={handleCloseSplit}
             title="Close split view"
           >
-            <span className="toolbar-icon">✕</span>
+            <span className="toolbar-icon"><X size={16} /></span>
           </button>
         )}
 
@@ -122,7 +131,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
           onClick={toggleTheme}
           title={`Switch mode from ${themePack.name} to ${theme === 'dark' ? 'light' : 'dark'}`}
         >
-          <span className="toolbar-icon">{theme === 'dark' ? '☀️' : '🌙'}</span>
+          <span className="toolbar-icon">{theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}</span>
         </button>
       </div>
     </div>

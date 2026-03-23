@@ -2,14 +2,19 @@ package agent
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
+	"github.com/alantheprice/ledit/pkg/console"
 	"github.com/alantheprice/ledit/pkg/events"
+	"github.com/alantheprice/ledit/pkg/filesystem"
 )
 
 // Tool handler implementations for file operations
@@ -74,6 +79,145 @@ func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 	}
 
 	return result, err
+}
+
+// isImageExtension returns true for common image file extensions
+func isImageExtension(filePath string) bool {
+	ext := strings.ToLower(filepath.Ext(filePath))
+	switch ext {
+	case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".avif":
+		return true
+	default:
+		return false
+	}
+}
+
+// isPDFExtension returns true for PDF file extensions
+func isPDFExtension(filePath string) bool {
+	return strings.ToLower(filepath.Ext(filePath)) == ".pdf"
+}
+
+// handleReadFileWithImages is the image-capable read_file handler.
+// When the primary model supports vision and the file is an image or PDF, it returns
+// the content as multimodal data. Otherwise falls back to the text handler.
+func handleReadFileWithImages(ctx context.Context, a *Agent, args map[string]interface{}) ([]api.ImageData, string, error) {
+	path, err := getFilePath(args)
+	if err != nil {
+		return nil, "", err
+	}
+
+	// Handle PDFs — either via multimodal pipeline or OCR text extraction
+	if isPDFExtension(path) {
+		cleanPath, resolveErr := filesystem.SafeResolvePathWithBypass(ctx, path)
+		if resolveErr != nil {
+			return nil, "", resolveErr
+		}
+
+		if a != nil && a.client != nil && a.client.SupportsVision() {
+			return handleReadPDFFileMultimodal(ctx, a, cleanPath)
+		}
+
+		// Non-multimodal: extract text via OCR
+		result, ocrErr := tools.ProcessPDFForTextOnly(cleanPath)
+		if ocrErr != nil {
+			return nil, "", fmt.Errorf("failed to read PDF %s: %w", path, ocrErr)
+		}
+		return nil, preparePDFTextResult(path, result), nil
+	}
+
+	// Only use image path for files with image extensions and when model supports vision
+	if !isImageExtension(path) || a == nil || a.client == nil || !a.client.SupportsVision() {
+		result, err := handleReadFile(ctx, a, args)
+		return nil, result, err
+	}
+
+	return handleReadImageFileMultimodal(ctx, a, path)
+}
+
+// handleReadImageFileMultimodal reads an image file and returns it as multimodal content
+func handleReadImageFileMultimodal(ctx context.Context, a *Agent, filePath string) ([]api.ImageData, string, error) {
+	// Resolve path securely
+	cleanPath, err := filesystem.SafeResolvePathWithBypass(ctx, filePath)
+	if err != nil {
+		return nil, "", err
+	}
+
+	info, err := os.Stat(cleanPath)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to access file %s: %w", cleanPath, err)
+	}
+	if info.IsDir() {
+		return nil, "", fmt.Errorf("path is a directory, not a file: %s", cleanPath)
+	}
+
+	// Read file data
+	data, err := os.ReadFile(cleanPath)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to read file %s: %w", cleanPath, err)
+	}
+
+	// Validate it's actually an image via magic bytes
+	_, mimeType := console.DetectImageMagic(data)
+	if mimeType == "" {
+		// Not a valid image — fall back to text handler error
+		return nil, "", fmt.Errorf("only text content files can be read. %s appears to be a non-text or unsupported image file", cleanPath)
+	}
+
+	// Check size limit
+	if len(data) > console.MaxPastedImageSize {
+		return nil, "", fmt.Errorf("image file too large (%d bytes, max %d bytes): %s", len(data), console.MaxPastedImageSize, cleanPath)
+	}
+
+	// Optimize/resize if needed (using existing vision_types.go function)
+	optimizedData, optimizedMIME, optErr := tools.OptimizeImageData(cleanPath, data)
+	if optErr != nil {
+		a.debugLog("⚠️ Image optimization failed for %s: %v, using original data\n", cleanPath, optErr)
+		// Use original data if optimization fails
+	} else if optimizedData != nil && len(optimizedData) > 0 {
+		data = optimizedData
+		if optimizedMIME != "" {
+			mimeType = optimizedMIME
+		}
+	}
+
+	// Encode to base64
+	encoded := base64.StdEncoding.EncodeToString(data)
+
+	// Build descriptive text for the tool result
+	textResult := fmt.Sprintf("[Image file: %s (%s, %d bytes)]", cleanPath, mimeType, len(data))
+
+	images := []api.ImageData{{
+		Base64: encoded,
+		Type:   mimeType,
+	}}
+
+	return images, textResult, nil
+}
+
+// handleReadPDFFileMultimodal processes a PDF file for multimodal consumption.
+// When the PDF contains extractable text, returns it directly. Otherwise renders
+// pages as images so the model can visually analyze them.
+func handleReadPDFFileMultimodal(ctx context.Context, a *Agent, filePath string) ([]api.ImageData, string, error) {
+	a.debugLog("📄 PDF detected, processing via multimodal pipeline: %s\n", filePath)
+
+	result, err := tools.ProcessPDFForMultimodal(filePath)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to process PDF %s: %w", filePath, err)
+	}
+
+	if len(result.Images) > 0 {
+		textResult := fmt.Sprintf("[PDF file: %s (%d pages rendered as images for visual analysis)]", filePath, len(result.Images))
+		return result.Images, textResult, nil
+	}
+
+	// Text was extractable via pypdf — return as text only (no images needed)
+	textResult := fmt.Sprintf("[PDF content: %s (extracted as text)]\n\n%s", filePath, result.Text)
+	return nil, textResult, nil
+}
+
+// preparePDFTextResult formats OCR-extracted PDF text for display.
+func preparePDFTextResult(filePath, text string) string {
+	return fmt.Sprintf("[PDF content: %s (converted to text via OCR)]\n\n%s", filePath, text)
 }
 
 func handleWriteFile(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {

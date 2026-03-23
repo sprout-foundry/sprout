@@ -63,7 +63,7 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 	}
 
 	// Use the tool registry for data-driven tool execution
-	result, err := registry.ExecuteTool(context.Background(), toolName, args, a)
+	_, result, err := registry.ExecuteTool(context.Background(), toolName, args, a)
 
 	// If tool not found in registry, check for special cases
 	if err != nil && strings.Contains(err.Error(), "unknown tool") {

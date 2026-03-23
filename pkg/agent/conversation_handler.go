@@ -89,16 +89,17 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 	}
 
 	// Process images if present
-	processedQuery, err := ch.processImagesInQuery(userQuery)
+	images, processedQuery, err := ch.processImagesInQuery(userQuery)
 	if err != nil {
 		ch.agent.publishEvent(events.EventTypeError, events.ErrorEvent("Image processing failed", err))
 		return "", err
 	}
 
-	// Add user message
+	// Add user message with optional multimodal images
 	userMessage := api.Message{
 		Role:    "user",
 		Content: ch.prepareUserInputForModel(processedQuery),
+		Images:  images,
 	}
 	ch.agent.messages = append(ch.agent.messages, userMessage)
 

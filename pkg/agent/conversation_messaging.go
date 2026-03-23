@@ -430,8 +430,7 @@ func (ch *ConversationHandler) sanitizeContent(content string) string {
 }
 
 // processImagesInQuery handles image processing in queries
-func (ch *ConversationHandler) processImagesInQuery(query string) (string, error) {
-	// Move image processing logic here
+func (ch *ConversationHandler) processImagesInQuery(query string) ([]api.ImageData, string, error) {
 	return ch.agent.processImagesInQuery(query)
 }
 

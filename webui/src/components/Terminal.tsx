@@ -40,6 +40,38 @@ const Terminal: React.FC<TerminalProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const terminalWS = useRef<TerminalWebSocketService | null>(null);
   const terminalEventHandlerRef = useRef<((event: any) => void) | null>(null);
+  const resizeTimerRef = useRef<number | null>(null);
+
+  const sendTerminalResize = useCallback(() => {
+    if (!isExpanded || !terminalConnected || !terminalWS.current || !terminalRef.current) {
+      return;
+    }
+
+    const outputEl = terminalRef.current;
+    const computed = window.getComputedStyle(outputEl);
+    const font = computed.font || `${computed.fontSize} ${computed.fontFamily}`;
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.font = font;
+    const charWidth = Math.max(6, ctx.measureText('W').width || 8);
+    const lineHeightRaw = parseFloat(computed.lineHeight || '');
+    const lineHeight = Number.isFinite(lineHeightRaw) && lineHeightRaw > 0
+      ? lineHeightRaw
+      : Math.max(16, parseFloat(computed.fontSize || '13') * 1.45);
+
+    const paddingLeft = parseFloat(computed.paddingLeft || '0') || 0;
+    const paddingRight = parseFloat(computed.paddingRight || '0') || 0;
+    const availableWidth = Math.max(80, outputEl.clientWidth - paddingLeft - paddingRight);
+    const availableHeight = Math.max(48, outputEl.clientHeight);
+
+    const cols = Math.max(20, Math.floor(availableWidth / charWidth));
+    const rows = Math.max(5, Math.floor(availableHeight / lineHeight));
+
+    terminalWS.current.sendResize(cols, rows);
+  }, [isExpanded, terminalConnected]);
 
   // Append text to the stream buffer.
   // Keeps the buffer under MAX_BUFFER_SIZE by trimming old content.
@@ -90,6 +122,9 @@ const Terminal: React.FC<TerminalProps> = ({
           }
         } else if (event.type === 'session_ready') {
           setTerminalConnected(true);
+          requestAnimationFrame(() => {
+            sendTerminalResize();
+          });
         } else if (event.type === 'output') {
           // Append raw PTY output directly to the stream buffer.
           // This ensures ANSI escape sequences that span multiple chunks
@@ -126,7 +161,40 @@ const Terminal: React.FC<TerminalProps> = ({
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isExpanded, isConnected]);
+  }, [isExpanded, isConnected, appendToBuffer, sendTerminalResize]);
+
+  useEffect(() => {
+    if (!isExpanded || !terminalConnected) {
+      return;
+    }
+
+    const scheduleResize = () => {
+      if (resizeTimerRef.current !== null) {
+        window.clearTimeout(resizeTimerRef.current);
+      }
+      resizeTimerRef.current = window.setTimeout(() => {
+        sendTerminalResize();
+      }, 80);
+    };
+
+    scheduleResize();
+    window.addEventListener('resize', scheduleResize);
+
+    let observer: ResizeObserver | null = null;
+    if (terminalRef.current && 'ResizeObserver' in window) {
+      observer = new ResizeObserver(() => scheduleResize());
+      observer.observe(terminalRef.current);
+    }
+
+    return () => {
+      window.removeEventListener('resize', scheduleResize);
+      if (observer) observer.disconnect();
+      if (resizeTimerRef.current !== null) {
+        window.clearTimeout(resizeTimerRef.current);
+        resizeTimerRef.current = null;
+      }
+    };
+  }, [isExpanded, terminalConnected, sendTerminalResize, terminalHeight]);
 
   // Auto-scroll to bottom when buffer content changes
   useEffect(() => {

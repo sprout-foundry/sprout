@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/history"
@@ -20,11 +21,25 @@ type ChangelogEntry struct {
 
 // FileRevision represents a file revision
 type FileRevision struct {
-	Path         string `json:"path"`
-	Operation    string `json:"operation"`
-	LinesAdded   int    `json:"lines_added"`
-	LinesDeleted int    `json:"lines_deleted"`
+	FileRevisionHash string `json:"file_revision_hash,omitempty"`
+	Path             string `json:"path"`
+	Operation        string `json:"operation"`
+	LinesAdded       int    `json:"lines_added"`
+	LinesDeleted     int    `json:"lines_deleted"`
 }
+
+type FileRevisionDetail struct {
+	FileRevisionHash string `json:"file_revision_hash,omitempty"`
+	Path             string `json:"path"`
+	Operation        string `json:"operation"`
+	LinesAdded       int    `json:"lines_added"`
+	LinesDeleted     int    `json:"lines_deleted"`
+	OriginalCode     string `json:"original_code"`
+	NewCode          string `json:"new_code"`
+	Diff             string `json:"diff"`
+}
+
+var ansiSequencePattern = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]`)
 
 // handleAPIHistoryChangelog handles requests to get the changelog
 func (ws *ReactWebServer) handleAPIHistoryChangelog(w http.ResponseWriter, r *http.Request) {
@@ -62,10 +77,11 @@ func (ws *ReactWebServer) handleAPIHistoryChangelog(w http.ResponseWriter, r *ht
 			}
 
 			files = append(files, FileRevision{
-				Path:         change.Filename,
-				Operation:    operation,
-				LinesAdded:   linesAdded,
-				LinesDeleted: linesDeleted,
+				FileRevisionHash: change.FileRevisionHash,
+				Path:             change.Filename,
+				Operation:        operation,
+				LinesAdded:       linesAdded,
+				LinesDeleted:     linesDeleted,
 			})
 		}
 
@@ -168,10 +184,11 @@ func (ws *ReactWebServer) handleAPIHistoryChanges(w http.ResponseWriter, r *http
 			}
 
 			files = append(files, FileRevision{
-				Path:         change.Filename,
-				Operation:    operation,
-				LinesAdded:   linesAdded,
-				LinesDeleted: linesDeleted,
+				FileRevisionHash: change.FileRevisionHash,
+				Path:             change.Filename,
+				Operation:        operation,
+				LinesAdded:       linesAdded,
+				LinesDeleted:     linesDeleted,
 			})
 		}
 
@@ -188,4 +205,77 @@ func (ws *ReactWebServer) handleAPIHistoryChanges(w http.ResponseWriter, r *http
 		"message": "success",
 		"changes": changes,
 	})
+}
+
+// handleAPIHistoryRevision handles requests to get detailed changes for a revision
+func (ws *ReactWebServer) handleAPIHistoryRevision(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	revisionID := strings.TrimSpace(r.URL.Query().Get("revision_id"))
+	if revisionID == "" {
+		http.Error(w, "revision_id is required", http.StatusBadRequest)
+		return
+	}
+
+	revisionGroups, err := history.GetRevisionGroups()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to get revision history: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	for _, group := range revisionGroups {
+		if group.RevisionID != revisionID {
+			continue
+		}
+
+		files := make([]FileRevisionDetail, 0, len(group.Changes))
+		for _, change := range group.Changes {
+			operation := "edited"
+			if change.OriginalCode == "" {
+				operation = "created"
+			} else if change.NewCode == "" {
+				operation = "deleted"
+			}
+
+			linesAdded := 0
+			linesDeleted := 0
+			if change.OriginalCode != "" {
+				linesDeleted = len(strings.Split(change.OriginalCode, "\n"))
+			}
+			if change.NewCode != "" {
+				linesAdded = len(strings.Split(change.NewCode, "\n"))
+			}
+
+			diff := history.GetDiff(change.Filename, change.OriginalCode, change.NewCode)
+			diff = ansiSequencePattern.ReplaceAllString(diff, "")
+
+			files = append(files, FileRevisionDetail{
+				FileRevisionHash: change.FileRevisionHash,
+				Path:             change.Filename,
+				Operation:        operation,
+				LinesAdded:       linesAdded,
+				LinesDeleted:     linesDeleted,
+				OriginalCode:     change.OriginalCode,
+				NewCode:          change.NewCode,
+				Diff:             diff,
+			})
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "success",
+			"revision": map[string]interface{}{
+				"revision_id": group.RevisionID,
+				"timestamp":   group.Timestamp.Format("2006-01-02T15:04:05Z07:00"),
+				"description": group.Instructions,
+				"files":       files,
+			},
+		})
+		return
+	}
+
+	http.Error(w, fmt.Sprintf("revision %q not found", revisionID), http.StatusNotFound)
 }

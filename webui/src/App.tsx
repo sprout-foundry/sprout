@@ -756,6 +756,10 @@ function App() {
     }
   }, []);
 
+  const handleGitAICommit = useCallback(async () => {
+    await handleSendMessage('/commit');
+  }, [handleSendMessage]);
+
   const handleGitStage = useCallback(async (files: string[]) => {
     debugLog('Git stage:', files);
     try {
@@ -860,6 +864,7 @@ function App() {
                 onProviderChange={handleProviderChange}
                 onSendMessage={handleSendMessage}
                 onGitCommit={handleGitCommit}
+                onGitAICommit={handleGitAICommit}
                 onGitStage={handleGitStage}
                 onGitUnstage={handleGitUnstage}
                 onGitDiscard={handleGitDiscard}

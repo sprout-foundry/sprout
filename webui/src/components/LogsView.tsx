@@ -114,6 +114,38 @@ const LogsView: React.FC<LogsViewProps> = ({ logs, onClearLogs }) => {
     }
   };
 
+  const extractFilePath = (data: any): string | null => {
+    let payload = data;
+    if (typeof payload === 'string') {
+      try {
+        payload = JSON.parse(payload);
+      } catch {
+        payload = {};
+      }
+    }
+    if (!payload || typeof payload !== 'object') {
+      return null;
+    }
+
+    const candidates = [
+      payload.path,
+      payload.file_path,
+      payload.filePath,
+      payload.target_path,
+      payload.targetPath,
+      payload.file?.path,
+      payload.file?.name,
+      payload.name
+    ];
+
+    for (const value of candidates) {
+      if (typeof value === 'string' && value.trim() !== '') {
+        return value;
+      }
+    }
+    return null;
+  };
+
   const getLogSummary = (log: LogEntry) => {
     try {
       switch (log.type) {
@@ -122,7 +154,14 @@ const LogsView: React.FC<LogsViewProps> = ({ logs, onClearLogs }) => {
         case 'tool_execution':
           return `Tool: ${log.data?.tool || 'Unknown'} - ${log.data?.status || 'Unknown'}`;
         case 'file_changed':
-          return `File: ${log.data?.path || 'Unknown path'}`;
+          {
+            const filePath = extractFilePath(log.data);
+            if (!filePath) {
+              return 'File changed';
+            }
+            const fileName = filePath.split('/').filter(Boolean).pop() || filePath;
+            return `File: ${fileName}`;
+          }
         case 'stream_chunk':
           return `Stream: ${log.data?.chunk?.substring(0, 50) || 'No chunk'}${log.data?.chunk?.length > 50 ? '...' : ''}`;
         case 'error':

@@ -57,6 +57,18 @@ export interface ProviderOption {
   models: string[];
 }
 
+export interface LeditInstance {
+  id: string;
+  pid: number;
+  port: number;
+  working_dir: string;
+  start_time: string;
+  last_ping: string;
+  session_id?: string;
+  is_host: boolean;
+  is_current: boolean;
+}
+
 class ApiService {
   private static instance: ApiService;
 
@@ -93,6 +105,34 @@ class ApiService {
     const response = await fetch('/api/files');
     if (!response.ok) {
       throw new Error('Failed to fetch files');
+    }
+    return response.json();
+  }
+
+  async getInstances(): Promise<{
+    instances: LeditInstance[];
+    current_pid: number;
+    active_host_pid: number;
+    active_host_port: number;
+    desired_host_pid: number;
+  }> {
+    const response = await fetch('/api/instances');
+    if (!response.ok) {
+      throw new Error('Failed to fetch instances');
+    }
+    return response.json();
+  }
+
+  async selectInstance(pid: number): Promise<{ message: string; pid: number }> {
+    const response = await fetch('/api/instances/select', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ pid }),
+    });
+    if (!response.ok) {
+      throw new Error('Failed to select instance');
     }
     return response.json();
   }

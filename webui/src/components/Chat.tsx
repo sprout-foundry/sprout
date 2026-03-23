@@ -113,6 +113,10 @@ const Chat: React.FC<ChatProps> = ({
     navigator.clipboard.writeText(text);
   }, []);
 
+  const activeToolCount = toolExecutions.filter(
+    (tool) => tool.status === 'started' || tool.status === 'running'
+  ).length;
+
   const renderContent = (content: string) => {
     const parts = content.split(/(```[\s\S]*?```)/g);
     return parts.map((part, i) => {
@@ -190,7 +194,9 @@ const Chat: React.FC<ChatProps> = ({
           <div className="tool-executions">
             <div className="tool-executions-header">
               <h4>🔧 Tool Executions</h4>
-              <span className="tool-count">{toolExecutions.length} active</span>
+              <span className="tool-count">
+                {activeToolCount > 0 ? `${activeToolCount} active` : `${toolExecutions.length} done`}
+              </span>
             </div>
             {toolExecutions.map((tool) => (
               <div

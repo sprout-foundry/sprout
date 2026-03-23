@@ -57,7 +57,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   const [activeBufferId, setActiveBufferId] = useState<string | null>(null);
   const [isAutoSaveEnabled] = useState(true);
   const [autoSaveInterval] = useState(30000); // 30 seconds
-  const [paneSizes, setPaneSizes] = useState<PaneSize>({ 'pane-1': 50 }); // Initial sizes in percentage
+  const [paneSizes, setPaneSizes] = useState<PaneSize>({ 'pane-1': 100 }); // Initial sizes in percentage
 
   // Keep a ref to the latest buffers Map so async closures don't read stale data
   const buffersRef = useRef(buffers);

@@ -73,29 +73,46 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 
 	// Create web server if enabled
 	var webServer *webui.ReactWebServer
+	var webUISup *webUISupervisor
 	if enableWebUI {
 		// Connect agent to event bus for real-time UI updates
 		chatAgent.SetEventBus(eventBus)
 
-		// Determine port: use specified port or auto-find from 54321
+		// Determine port: fixed default on 54321, unless explicitly overridden.
 		port := webPort
 		if port == 0 {
-			port = webui.FindAvailablePort(54321)
+			port = defaultWebUIPort
 		}
 
 		webServer = webui.NewReactWebServer(chatAgent, eventBus, port)
+		startInstanceTracker(ctx, port, chatAgent)
 
-		// Start web server in background
-		go func() {
-			if err := webServer.Start(ctx); err != nil && ctx.Err() == nil {
-				// Only log error if not due to context cancellation
-				fmt.Fprintf(os.Stderr, "⚠️  Web UI failed to start: %v\n", err)
-			}
-		}()
+		// Default mode uses single-port leadership/failover on 54321.
+		if webPort == 0 {
+			webUISup = newWebUISupervisor(
+				webServer,
+				port,
+				func(activePort int) {
+					fmt.Printf("\n🌐 Web UI available at http://localhost:%d\n", activePort)
+				},
+				func(activePort int) {
+					fmt.Printf("\n🌐 Reusing active Web UI at http://localhost:%d\n", activePort)
+				},
+			)
+			go webUISup.Run(ctx)
+		} else {
+			// Explicit port override keeps direct startup behavior.
+			go func() {
+				if err := webServer.Start(ctx); err != nil && ctx.Err() == nil {
+					// Only log error if not due to context cancellation
+					fmt.Fprintf(os.Stderr, "⚠️  Web UI failed to start: %v\n", err)
+				}
+			}()
+		}
 
 		// Give web server a moment to start
 		time.Sleep(100 * time.Millisecond)
-		if webServer.IsRunning() {
+		if webServer.IsRunning() && webPort != 0 {
 			fmt.Printf("\n🌐 Web UI available at http://localhost:%d\n", webServer.GetPort())
 		}
 	}
@@ -297,6 +314,9 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 	}
 
 	// Graceful shutdown
+	if webUISup != nil {
+		webUISup.cleanupHostRecordIfOwned()
+	}
 	if webServer != nil && webServer.IsRunning() {
 		fmt.Printf("🔄 Shutting down web server...\n")
 

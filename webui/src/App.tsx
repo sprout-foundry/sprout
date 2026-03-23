@@ -77,6 +77,10 @@ interface ToolExecution {
   startTime: Date;
   endTime?: Date;
   details?: any;
+  arguments?: string;
+  result?: string;
+  persona?: string;
+  subagentType?: 'single' | 'parallel';
 }
 
 interface Message {
@@ -95,21 +99,89 @@ interface LogEntry {
   category: 'query' | 'tool' | 'file' | 'system' | 'stream';
 }
 
+const APP_STATE_STORAGE_KEY = 'ledit:webui:state:v1';
+
+const parseDate = (value: unknown): Date => {
+  if (value instanceof Date) {
+    return value;
+  }
+  if (typeof value === 'string' || typeof value === 'number') {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed;
+    }
+  }
+  return new Date();
+};
+
+const loadPersistedAppState = (): Partial<AppState> | null => {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(APP_STATE_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw);
+    return {
+      provider: typeof parsed.provider === 'string' ? parsed.provider : 'unknown',
+      model: typeof parsed.model === 'string' ? parsed.model : 'unknown',
+      queryCount: typeof parsed.queryCount === 'number' ? parsed.queryCount : 0,
+      currentView: ['chat', 'editor', 'git', 'logs'].includes(parsed.currentView) ? parsed.currentView : 'chat',
+      messages: Array.isArray(parsed.messages)
+        ? parsed.messages.map((message: any) => ({
+            ...message,
+            timestamp: parseDate(message?.timestamp)
+          }))
+        : [],
+      logs: Array.isArray(parsed.logs)
+        ? parsed.logs.map((log: any) => ({
+            ...log,
+            timestamp: parseDate(log?.timestamp)
+          }))
+        : [],
+      toolExecutions: Array.isArray(parsed.toolExecutions)
+        ? parsed.toolExecutions.map((tool: any) => ({
+            ...tool,
+            startTime: parseDate(tool?.startTime),
+            endTime: tool?.endTime ? parseDate(tool.endTime) : undefined
+          }))
+        : [],
+      fileEdits: Array.isArray(parsed.fileEdits)
+        ? parsed.fileEdits.map((edit: any) => ({
+            ...edit,
+            timestamp: parseDate(edit?.timestamp)
+          }))
+        : []
+    };
+  } catch (error) {
+    console.warn('Failed to load persisted app state:', error);
+    return null;
+  }
+};
+
 function App() {
-  const [state, setState] = useState<AppState>({
-    isConnected: false,
-    provider: 'unknown',
-    model: 'unknown',
-    queryCount: 0,
-    messages: [],
-    logs: [],
-    isProcessing: false,
-    lastError: null,
-    currentView: 'chat',
-    toolExecutions: [],
-    queryProgress: null,
-    stats: {},
-    fileEdits: []
+  const [state, setState] = useState<AppState>(() => {
+    const persisted = loadPersistedAppState();
+    return {
+      provider: 'unknown',
+      model: 'unknown',
+      queryCount: 0,
+      messages: [],
+      logs: [],
+      currentView: 'chat',
+      toolExecutions: [],
+      stats: {},
+      fileEdits: [],
+      ...persisted,
+      isConnected: false,
+      isProcessing: false,
+      lastError: null,
+      queryProgress: null,
+    };
   });
 
   const [inputValue, setInputValue] = useState('');
@@ -121,6 +193,40 @@ function App() {
   const isProcessingRef = useRef(false);
   const [recentFiles, setRecentFiles] = useState<Array<{ path: string; modified: boolean }>>([]);
   const [gitRefreshToken, setGitRefreshToken] = useState(0);
+  const [selectedGitFilePath, setSelectedGitFilePath] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(
+        APP_STATE_STORAGE_KEY,
+        JSON.stringify({
+          provider: state.provider,
+          model: state.model,
+          queryCount: state.queryCount,
+          currentView: state.currentView,
+          messages: state.messages.slice(-200),
+          logs: state.logs.slice(-300),
+          toolExecutions: state.toolExecutions.slice(-200),
+          fileEdits: state.fileEdits.slice(-100)
+        })
+      );
+    } catch (error) {
+      console.warn('Failed to persist app state:', error);
+    }
+  }, [
+    state.provider,
+    state.model,
+    state.queryCount,
+    state.currentView,
+    state.messages,
+    state.logs,
+    state.toolExecutions,
+    state.fileEdits
+  ]);
 
   // Memoize recent logs to prevent unnecessary Sidebar remounts
   const recentLogs = useMemo(() => state.logs.slice(-10), [state.logs]);
@@ -306,18 +412,64 @@ function App() {
             }
             return t.tool === normalizedToolName && !t.endTime;
           });
+          const evArgs = event.data?.arguments != null ? String(event.data.arguments) : undefined;
+          const evResult = event.data?.result != null ? String(event.data.result) : undefined;
+          const evError = event.data?.error != null ? String(event.data.error) : undefined;
+          const isSubagent = normalizedToolName === 'run_subagent' || normalizedToolName === 'run_parallel_subagents';
+          const subagentType: ToolExecution['subagentType'] = normalizedToolName === 'run_parallel_subagents' ? 'parallel' : normalizedToolName === 'run_subagent' ? 'single' : undefined;
+
+          // Extract persona from subagent arguments
+          let parsedPersona: string | undefined;
+          if (isSubagent && evArgs) {
+            try {
+              const argsObj = JSON.parse(evArgs);
+              parsedPersona = typeof argsObj.persona === 'string' ? argsObj.persona : undefined;
+            } catch { /* args not parseable */ }
+          }
+
+          // Extract summary from subagent result JSON into a readable string
+          let subagentSummary: string | undefined;
+          if (isSubagent && evResult) {
+            try {
+              const resultObj = JSON.parse(evResult);
+              if (normalizedToolName === 'run_parallel_subagents') {
+                // Parallel: collect task IDs and statuses
+                const taskSummaries: string[] = [];
+                for (const [taskId, taskResult] of Object.entries(resultObj)) {
+                  if (typeof taskResult === 'object' && taskResult !== null) {
+                    const tr = taskResult as Record<string, unknown>;
+                    const exitCode = String(tr.exit_code ?? '?');
+                    taskSummaries.push(`[${taskId}] exit ${exitCode}`);
+                  }
+                }
+                subagentSummary = taskSummaries.join('\n');
+              } else {
+                // Single: use the summary field if present
+                if (resultObj.summary) {
+                  subagentSummary = typeof resultObj.summary === 'string'
+                    ? resultObj.summary
+                    : JSON.stringify(resultObj.summary, null, 2);
+                }
+              }
+            } catch { /* result not parseable */ }
+          }
+
           let updatedExecutions: ToolExecution[];
           
           if (existingExecution) {
-            // Update existing execution
+            // Update existing execution, preserving arguments from start and adding result/error from completion
             updatedExecutions = prev.toolExecutions.map(t => 
               t.id === existingExecution.id
                 ? {
                     ...t,
                     status: normalizedStatus,
-                    message: normalizedMessage,
+                    message: normalizedMessage || (evError ? evError : t.message),
                     endTime: normalizedStatus === 'completed' || normalizedStatus === 'error' ? new Date() : undefined,
-                    details: event.data || t.details
+                    details: event.data || t.details,
+                    arguments: t.arguments || evArgs,
+                    result: t.result || subagentSummary || evResult || evError,
+                    persona: t.persona || parsedPersona,
+                    subagentType: t.subagentType || subagentType
                   }
                 : t
             );
@@ -330,7 +482,11 @@ function App() {
               message: normalizedMessage,
               startTime: new Date(),
               endTime: normalizedStatus === 'completed' || normalizedStatus === 'error' ? new Date() : undefined,
-              details: event.data
+              details: event.data,
+              arguments: evArgs,
+              result: subagentSummary || evResult || evError,
+              persona: parsedPersona,
+              subagentType
             };
             updatedExecutions = [...prev.toolExecutions, newExecution];
           }
@@ -688,6 +844,8 @@ function App() {
                 onGitStage={handleGitStage}
                 onGitUnstage={handleGitUnstage}
                 onGitDiscard={handleGitDiscard}
+                selectedGitFilePath={selectedGitFilePath}
+                onGitFileSelect={setSelectedGitFilePath}
                 onClearLogs={() => setState(prev => ({ ...prev, logs: [] }))}
                 onTerminalOutput={handleTerminalOutput}
                 onTerminalExpandedChange={setIsTerminalExpanded}

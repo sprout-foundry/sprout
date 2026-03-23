@@ -322,6 +322,27 @@ class ApiService {
     }
   }
 
+  async getGitDiff(path: string): Promise<{
+    message: string;
+    path: string;
+    has_staged: boolean;
+    has_unstaged: boolean;
+    staged_diff: string;
+    unstaged_diff: string;
+    diff: string;
+  }> {
+    try {
+      const response = await fetch(`/api/git/diff?path=${encodeURIComponent(path)}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to get git diff:', error);
+      throw error;
+    }
+  }
+
   // History and Rollback API methods
   async getChangelog(): Promise<{
     message: string;

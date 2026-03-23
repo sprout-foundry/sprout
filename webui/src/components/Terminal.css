@@ -23,9 +23,42 @@
   pointer-events: auto;
 }
 
+.terminal-container.resizing {
+  transition: none !important;
+}
+
 .terminal-container.expanded {
-  height: 400px;
   z-index: 1000;
+}
+
+/* Resize handle — appears at the top of the expanded terminal */
+.terminal-resize-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: row-resize;
+  z-index: 10;
+}
+
+.terminal-resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 48px;
+  height: 3px;
+  border-radius: 3px;
+  background: rgba(148, 163, 184, 0.35);
+  transition: background 0.15s, width 0.15s;
+}
+
+.terminal-resize-handle:hover::after,
+.terminal-resize-handle:active::after {
+  background: rgba(34, 211, 238, 0.6);
+  width: 72px;
 }
 
 .terminal-header {

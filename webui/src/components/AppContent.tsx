@@ -20,6 +20,10 @@ interface ToolExecution {
   startTime: Date;
   endTime?: Date;
   details?: any;
+  arguments?: string;
+  result?: string;
+  persona?: string;
+  subagentType?: 'single' | 'parallel';
 }
 
 interface Message {
@@ -86,6 +90,8 @@ interface AppContentProps {
   onGitStage: (files: string[]) => Promise<void>;
   onGitUnstage: (files: string[]) => Promise<void>;
   onGitDiscard: (files: string[]) => Promise<void>;
+  selectedGitFilePath?: string | null;
+  onGitFileSelect?: (filePath: string) => void;
   onClearLogs: () => void;
   onTerminalOutput: (output: string) => void;
   onTerminalExpandedChange: (expanded: boolean) => void;
@@ -114,6 +120,8 @@ const AppContent: React.FC<AppContentProps> = ({
   onGitStage,
   onGitUnstage,
   onGitDiscard,
+  selectedGitFilePath,
+  onGitFileSelect,
   onClearLogs,
   onTerminalOutput,
   onTerminalExpandedChange
@@ -150,7 +158,7 @@ const AppContent: React.FC<AppContentProps> = ({
         });
         break;
       case 'git':
-        console.log('Git status for file:', filePath);
+        onGitFileSelect?.(filePath);
         break;
       case 'logs':
         console.log('Filter logs by file:', filePath);
@@ -158,7 +166,7 @@ const AppContent: React.FC<AppContentProps> = ({
       default:
         console.log('File clicked in unknown view:', state.currentView, filePath);
     }
-  }, [state.currentView, onInputChange, openFile]);
+  }, [state.currentView, onInputChange, openFile, onGitFileSelect]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const handlePaneResize = useCallback((paneId: string) => (deltaPixels: number) => {
@@ -245,6 +253,7 @@ const AppContent: React.FC<AppContentProps> = ({
             onStage={onGitStage}
             onUnstage={onGitUnstage}
             onDiscard={onGitDiscard}
+            selectedFilePath={selectedGitFilePath}
           />
         ) : state.currentView === 'logs' ? (
           <LogsView

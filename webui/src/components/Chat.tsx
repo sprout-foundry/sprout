@@ -18,6 +18,10 @@ interface ToolExecution {
   startTime: Date;
   endTime?: Date;
   details?: any;
+  arguments?: string;
+  result?: string;
+  persona?: string;
+  subagentType?: 'single' | 'parallel';
 }
 
 interface ChatProps {
@@ -83,6 +87,20 @@ const Chat: React.FC<ChatProps> = ({
     return iconMap[toolName] || '🔧';
   };
 
+  const getPersonaColor = (persona?: string) => {
+    const colorMap: Record<string, string> = {
+      coder: '#58a6ff',
+      reviewer: '#d2a8ff',
+      code_reviewer: '#d2a8ff',
+      tester: '#7ee787',
+      debugger: '#f0883e',
+      refactor: '#79c0ff',
+      researcher: '#ff7b72',
+      general: '#8b949e',
+    };
+    return colorMap[persona || ''] || '#8b949e';
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'started': return '🚀';
@@ -102,6 +120,28 @@ const Chat: React.FC<ChatProps> = ({
       return `${(duration / 1000).toFixed(1)}s`;
     } else {
       return `${(duration / 60000).toFixed(1)}m`;
+    }
+  };
+
+  const formatToolDetail = (content: string) => {
+    try {
+      const parsed = JSON.parse(content);
+      return JSON.stringify(parsed, null, 2);
+    } catch {
+      return content;
+    }
+  };
+
+  const isSubagentTool = (tool: ToolExecution) =>
+    tool.tool === 'run_subagent' || tool.tool === 'run_parallel_subagents';
+
+  const getSubagentPrompt = (tool: ToolExecution): string | undefined => {
+    if (!tool.arguments) return undefined;
+    try {
+      const args = JSON.parse(tool.arguments);
+      return typeof args.prompt === 'string' ? args.prompt : undefined;
+    } catch {
+      return undefined;
     }
   };
 
@@ -237,33 +277,78 @@ const Chat: React.FC<ChatProps> = ({
             {toolExecutions.length === 0 ? (
               <div className="chat-tools-empty">Tool calls will appear here.</div>
             ) : (
-              toolExecutions.map((tool) => (
-                <div
-                  key={tool.id}
-                  className={`tool-execution tool-${tool.status}`}
-                  onClick={() => toggleToolExpansion(tool.id)}
-                >
-                  <div className="tool-summary">
-                    <span className="tool-icon">{getToolIcon(tool.tool)}</span>
-                    <span className="tool-name">{tool.tool}</span>
-                    <span className="tool-status">{getStatusIcon(tool.status)}</span>
-                    <span className="tool-duration">{formatDuration(tool.startTime, tool.endTime)}</span>
-                    <span className="tool-expand">
-                      {expandedTools.has(tool.id) ? '▼' : '▶'}
-                    </span>
-                  </div>
+              toolExecutions.map((tool) => {
+                const isSub = isSubagentTool(tool);
+                const subagentPrompt = isSub ? getSubagentPrompt(tool) : undefined;
 
-                  {tool.message && (
-                    <div className="tool-message">{stripAnsiCodes(tool.message)}</div>
-                  )}
-
-                  {expandedTools.has(tool.id) && tool.details && (
-                    <div className="tool-details">
-                      <pre>{JSON.stringify(tool.details, null, 2)}</pre>
+                return (
+                  <div
+                    key={tool.id}
+                    className={`tool-execution tool-${tool.status} ${isSub ? 'tool-subagent' : ''}`}
+                    onClick={() => toggleToolExpansion(tool.id)}
+                  >
+                    <div className="tool-summary">
+                      <span className="tool-icon">
+                        {isSub ? (
+                          <span className="subagent-icon" style={{ color: getPersonaColor(tool.persona) }}>
+                            🤖
+                          </span>
+                        ) : (
+                          getToolIcon(tool.tool)
+                        )}
+                      </span>
+                      <span className={`tool-name ${isSub ? 'tool-name-subagent' : ''}`}>
+                        {isSub
+                          ? (tool.persona ? `${tool.persona}` : (tool.subagentType === 'parallel' ? 'parallel subagents' : 'subagent'))
+                          : tool.tool}
+                        {isSub && tool.subagentType === 'parallel' && ' (parallel)'}
+                      </span>
+                      <span className="tool-status">{getStatusIcon(tool.status)}</span>
+                      <span className="tool-duration">{formatDuration(tool.startTime, tool.endTime)}</span>
+                      <span className="tool-expand">
+                        {expandedTools.has(tool.id) ? '▼' : '▶'}
+                      </span>
                     </div>
-                  )}
-                </div>
-              ))
+
+                    {isSub && subagentPrompt && !expandedTools.has(tool.id) && (
+                      <div className="tool-message tool-subagent-prompt">{stripAnsiCodes(subagentPrompt)}</div>
+                    )}
+
+                    {tool.message && !(isSub && subagentPrompt) && (
+                      <div className="tool-message">{stripAnsiCodes(tool.message)}</div>
+                    )}
+
+                    {expandedTools.has(tool.id) && (tool.arguments || tool.result || tool.details) && (
+                      <div className="tool-details">
+                        {isSub && subagentPrompt && (
+                          <div className="tool-detail-section">
+                            <div className="tool-detail-label">📝 Task</div>
+                            <pre className="subagent-prompt-detail">{stripAnsiCodes(subagentPrompt)}</pre>
+                          </div>
+                        )}
+                        {tool.arguments && !isSub && (
+                          <div className="tool-detail-section">
+                            <div className="tool-detail-label">📋 Call</div>
+                            <pre>{formatToolDetail(tool.arguments)}</pre>
+                          </div>
+                        )}
+                        {tool.result && (
+                          <div className="tool-detail-section">
+                            <div className="tool-detail-label">{isSub ? '📊 Summary' : '📄 Response'}</div>
+                            <pre>{formatToolDetail(tool.result)}</pre>
+                          </div>
+                        )}
+                        {!tool.result && tool.arguments && isSub && (
+                          <div className="tool-detail-section">
+                            <div className="tool-detail-label">📋 Call</div>
+                            <pre>{formatToolDetail(tool.arguments)}</pre>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
         </aside>

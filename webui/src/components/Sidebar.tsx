@@ -4,6 +4,10 @@ import { ApiService, ProviderOption, LeditInstance } from '../services/api';
 import { viewRegistry, ProviderContext, SidebarSection, ProviderLogEntry } from '../providers';
 import { useTheme } from '../contexts/ThemeContext';
 import { HotkeyPreset, useHotkeys } from '../contexts/HotkeyContext';
+import { LayoutList, Zap, FolderCog, Settings, type LucideIcon } from 'lucide-react';
+import FileTree from './FileTree';
+
+type SectionTab = 'context' | 'activity' | 'files' | 'settings';
 
 interface SidebarProps {
   isConnected: boolean;
@@ -42,6 +46,14 @@ interface SectionData {
   error: string | null;
 }
 
+/** Section tab definitions */
+const SECTION_TABS: { id: SectionTab; icon: LucideIcon; label: string }[] = [
+  { id: 'context', icon: LayoutList, label: 'Context' },
+  { id: 'activity', icon: Zap, label: 'Activity' },
+  { id: 'files', icon: FolderCog, label: 'Files' },
+  { id: 'settings', icon: Settings, label: 'Settings' },
+];
+
 const Sidebar: React.FC<SidebarProps> = ({
   isConnected,
   selectedModel,
@@ -79,6 +91,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [isLoadingProviders, setIsLoadingProviders] = useState(false);
   const [sectionsData, setSectionsData] = useState<Map<string, SectionData>>(new Map());
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [selectedSection, setSelectedSection] = useState<SectionTab>('context');
   const apiService = ApiService.getInstance();
 
   const finalSelectedModel = selectedModel || selectedModelState;
@@ -196,6 +209,9 @@ const Sidebar: React.FC<SidebarProps> = ({
             // Fetch from API endpoint
             if (section.dataSource.endpoint) {
               const response = await fetch(section.dataSource.endpoint);
+              if (!response.ok) {
+                throw new Error(`API ${response.status}: ${response.statusText}`);
+              }
               data = await response.json();
               data = section.dataSource.transform?.(data) || data;
             }
@@ -388,8 +404,20 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  // Render sidebar content sections from providers
-  const renderContentSections = () => {
+  const handleSectionTabClick = (tab: SectionTab) => {
+    if (sidebarCollapsed) {
+      // If collapsed, expand sidebar and switch to the section
+      setSelectedSection(tab);
+      onSidebarToggle?.();
+    } else {
+      setSelectedSection(tab);
+    }
+  };
+
+  // ─── Section Renderers ───────────────────────────────────────────────
+
+  /** Context section: view-specific data-driven provider content */
+  const renderContextSection = () => {
     if (sectionsData.size === 0) {
       return <div className="empty">No content available</div>;
     }
@@ -420,13 +448,221 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       const context = viewRegistry.getContext();
 
+      if (!context) {
+        return (
+          <div key={section.id} className="section">
+            <h4>{section.title?.(data) || section.id}</h4>
+            <div className="empty">Loading context...</div>
+          </div>
+        );
+      }
+
       return (
         <div key={section.id} className="section">
           <h4>{section.title?.(data) || section.id}</h4>
-          {section.renderItem(data, context!)}
+          {section.renderItem(data, context)}
         </div>
       );
     });
+  };
+
+  /** Activity section: event/log stream */
+  const renderActivitySection = () => {
+    if (normalizedRecentLogs.length === 0) {
+      return <div className="empty">No activity yet</div>;
+    }
+
+    const getLogIcon = (level: string) => {
+      switch (level) {
+        case 'success': return '✓';
+        case 'error': return '✕';
+        case 'warning': return '!';
+        case 'info': return 'i';
+        default: return '•';
+      }
+    };
+
+    const extractFilePath = (data: any): string | null => {
+      let payload = data;
+      if (typeof payload === 'string') {
+        try { payload = JSON.parse(payload); } catch { payload = {}; }
+      }
+      if (!payload || typeof payload !== 'object') return null;
+      const candidates = [
+        payload.path, payload.file_path, payload.filePath,
+        payload.target_path, payload.targetPath,
+        payload.file?.path, payload.file?.name, payload.name
+      ];
+      for (const value of candidates) {
+        if (typeof value === 'string' && value.trim() !== '') return value;
+      }
+      return null;
+    };
+
+    const getLogSummary = (logEntry: any) => {
+      try {
+        switch (logEntry.type) {
+          case 'query_started':
+            return `Query: ${logEntry.data?.query?.substring(0, 50) || 'No query'}...`;
+          case 'tool_execution':
+            return `${logEntry.data?.tool || 'Unknown'}: ${logEntry.data?.status || 'Unknown'}`;
+          case 'file_changed': {
+            const filePath = extractFilePath(logEntry.data);
+            if (!filePath) return 'File changed';
+            return `File: ${filePath.split('/').filter(Boolean).pop() || filePath}`;
+          }
+          case 'stream_chunk':
+            return `Stream: ${logEntry.data?.chunk?.substring(0, 50) || 'No chunk'}...`;
+          case 'error':
+            return `Error: ${logEntry.data?.message?.substring(0, 50) || 'Unknown error'}...`;
+          case 'connection_status':
+            return logEntry.data?.connected ? 'Connected' : 'Disconnected';
+          default:
+            return `${logEntry.type}`;
+        }
+      } catch {
+        return `${logEntry.type}`;
+      }
+    };
+
+    const displayLogs = normalizedRecentLogs.slice(-20);
+
+    return (
+      <div className="logs-list logs-expanded">
+        {displayLogs.map((logEntry, index) => (
+          <div key={logEntry.id || index} className="log-item">
+            <span className="log-icon">{getLogIcon(logEntry.level)}</span>
+            <span className="log-text">{getLogSummary(logEntry)}</span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  /** Files section: file tree for editor, recent files list otherwise */
+  const renderFilesSection = () => {
+    if (currentView === 'editor') {
+      return (
+        <FileTree
+          rootPath="."
+          onFileSelect={(file) => onFileClick?.(file.path)}
+        />
+      );
+    }
+
+    // For non-editor views, show recent files list
+    if (finalRecentFiles.length === 0) {
+      return <div className="empty">No recent files</div>;
+    }
+
+    return (
+      <div className="files-list">
+        {finalRecentFiles.map((file, index) => (
+          <div
+            key={`${file.path}-${index}`}
+            className={`file-item clickable ${file.modified ? 'modified' : ''}`}
+            onClick={() => onFileClick?.(file.path)}
+          >
+            <span className="file-icon">{file.modified ? 'M' : '📄'}</span>
+            <span className={`file-path ${file.modified ? 'modified' : ''}`}>
+              {file.path.split('/').filter(Boolean).pop() || file.path}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  /** Settings section: appearance + agent config */
+  const renderSettingsSection = () => {
+    return (
+      <>
+        <div className="section">
+          <h4>Appearance</h4>
+          <div className="config-item">
+            <label htmlFor="theme-select">Theme Pack:</label>
+            <select
+              id="theme-select"
+              value={themePack.id}
+              onChange={(e) => setThemePack(e.target.value)}
+              className="styled-select"
+            >
+              {availableThemePacks.map((pack) => (
+                <option key={pack.id} value={pack.id}>
+                  {pack.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="config-item">
+            <label htmlFor="hotkey-preset-select">Editor Hotkeys:</label>
+            <select
+              id="hotkey-preset-select"
+              value={hotkeyPreset}
+              onChange={handleHotkeyPresetChange}
+              className="styled-select"
+            >
+              <option value="vscode">VS Code</option>
+              <option value="webstorm">WebStorm</option>
+              <option value="ledit">Ledit (Legacy)</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="section">
+          <h4>Agent Config</h4>
+          <div className="config-item">
+            <label htmlFor="provider-select">Provider:</label>
+            <select
+              id="provider-select"
+              value={selectedProvider}
+              onChange={handleProviderChange}
+              disabled={!isConnected || isLoadingProviders}
+              className="styled-select"
+            >
+              {providers.length === 0 && (
+                <option value="">
+                  {isLoadingProviders ? 'Loading providers...' : 'No providers available'}
+                </option>
+              )}
+              {providers.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="config-item">
+            <label htmlFor="model-select">Model:</label>
+            <select
+              id="model-select"
+              value={finalSelectedModel}
+              onChange={handleModelChange}
+              disabled={!isConnected || finalAvailableModels.length === 0}
+              className="styled-select"
+            >
+              {finalAvailableModels.map(m => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </>
+    );
+  };
+
+  /** Render the content pane based on selected section */
+  const renderContentPane = () => {
+    switch (selectedSection) {
+      case 'context':
+        return renderContextSection();
+      case 'activity':
+        return renderActivitySection();
+      case 'files':
+        return renderFilesSection();
+      case 'settings':
+        return renderSettingsSection();
+      default:
+        return null;
+    }
   };
 
   return (
@@ -452,183 +688,92 @@ const Sidebar: React.FC<SidebarProps> = ({
         </button>
       )}
 
-      {!sidebarCollapsed && (
-        <>
-          <div className="sidebar-header">
-            <div className="connection-indicator">
-              <div className={`status-dot ${isConnected ? 'connected' : 'disconnected'}`}></div>
-              <span className="status-text">
-                {isConnected ? 'Connected' : 'Disconnected'}
+      {/* Pinned global header: connection status + instance selector */}
+      <div className="sidebar-pinned-header">
+        <div className="connection-indicator">
+          <div className={`status-dot ${isConnected ? 'connected' : 'disconnected'}`} />
+          {!sidebarCollapsed && (
+            <span className="status-text">
+              {isConnected ? 'Connected' : 'Disconnected'}
+            </span>
+          )}
+        </div>
+        {!sidebarCollapsed && (
+          <div className="instance-selector">
+            <select
+              id="instance-select"
+              value={selectedInstancePID || ''}
+              onChange={handleInstanceChange}
+              disabled={!isConnected || instances.length === 0 || isSwitchingInstance}
+              className="styled-select instance-select"
+              title={instances.find(i => i.pid === selectedInstancePID)?.working_dir || ''}
+            >
+              {instances.length === 0 && (
+                <option value="">No instances</option>
+              )}
+              {instances.map((instance) => {
+                const suffix = [
+                  instance.is_host ? 'host' : '',
+                  instance.is_current ? 'this' : '',
+                ].filter(Boolean).join(', ');
+                const name = instance.working_dir.split('/').filter(Boolean).slice(-2).join('/');
+                const label = suffix
+                  ? `${name} (${suffix})`
+                  : `${name}`;
+                const fullLabel = sidebarCollapsed
+                  ? label
+                  : `${name} · pid:${instance.pid}${suffix ? ` (${suffix})` : ''}`;
+                return (
+                  <option key={instance.id} value={instance.pid}>
+                    {fullLabel}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+        )}
+        {isSwitchingInstance && (
+          <div className="instance-switch-status">Switching UI host...</div>
+        )}
+        {instanceSwitchError && (
+          <div className="instance-switch-error">{instanceSwitchError}</div>
+        )}
+      </div>
+
+      {/* Icon rail (always visible) + Content pane (only when expanded) */}
+      <div className="sidebar-body">
+        {/* Icon Rail */}
+        <div className="sidebar-icon-rail" role="tablist" aria-orientation="vertical">
+          {SECTION_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              role="tab"
+              aria-selected={selectedSection === tab.id}
+              aria-controls="sidebar-tabpanel"
+              className={`rail-icon ${selectedSection === tab.id ? 'active' : ''}`}
+              onClick={() => handleSectionTabClick(tab.id)}
+              title={tab.label}
+              aria-label={tab.label}
+            >
+              <tab.icon size={18} strokeWidth={1.5} />
+            </button>
+          ))}
+        </div>
+
+        {/* Content Pane (only when expanded) */}
+        {!sidebarCollapsed && (
+          <div className="sidebar-content-pane" role="tabpanel" id="sidebar-tabpanel">
+            <div className="content-pane-header">
+              <span className="content-pane-title">
+                {SECTION_TABS.find(t => t.id === selectedSection)?.label || ''}
               </span>
             </div>
-          </div>
-
-          {/* Main Navigation - 4 Icon View Switcher */}
-          <div className="main-nav-section">
-            <div className="nav-icons">
-              <button
-                className={`nav-icon ${currentView === 'chat' ? 'active' : ''}`}
-                onClick={() => {
-                  onViewChange?.('chat');
-                  if (isMobile && finalOnMobileMenuToggle) finalOnMobileMenuToggle();
-                }}
-                disabled={!onViewChange}
-                title="Chat View"
-              >
-                <span className="nav-icon-label">Chat</span>
-              </button>
-              <button
-                className={`nav-icon ${currentView === 'editor' ? 'active' : ''}`}
-                onClick={() => {
-                  onViewChange?.('editor');
-                  if (isMobile && finalOnMobileMenuToggle) finalOnMobileMenuToggle();
-                }}
-                disabled={!onViewChange}
-                title="Editor View"
-              >
-                <span className="nav-icon-label">Editor</span>
-              </button>
-              <button
-                className={`nav-icon ${currentView === 'git' ? 'active' : ''}`}
-                onClick={() => {
-                  onViewChange?.('git');
-                  if (isMobile && finalOnMobileMenuToggle) finalOnMobileMenuToggle();
-                }}
-                disabled={!onViewChange}
-                title="Git View"
-              >
-                <span className="nav-icon-label">Git</span>
-              </button>
-              <button
-                className={`nav-icon ${currentView === 'logs' ? 'active' : ''}`}
-                onClick={() => {
-                  onViewChange?.('logs');
-                  if (isMobile && finalOnMobileMenuToggle) finalOnMobileMenuToggle();
-                }}
-                disabled={!onViewChange}
-                title="Logs View"
-              >
-                <span className="nav-icon-label">Logs</span>
-              </button>
+            <div className="content-pane-scroll">
+              {renderContentPane()}
             </div>
           </div>
-
-          <div className="appearance-section">
-            <h4>Appearance</h4>
-            <div className="config-item">
-              <label htmlFor="theme-select">Theme Pack:</label>
-              <select
-                id="theme-select"
-                value={themePack.id}
-                onChange={(e) => setThemePack(e.target.value)}
-                className="styled-select"
-              >
-                {availableThemePacks.map((pack) => (
-                  <option key={pack.id} value={pack.id}>
-                    {pack.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="config-item">
-              <label htmlFor="hotkey-preset-select">Editor Hotkeys:</label>
-              <select
-                id="hotkey-preset-select"
-                value={hotkeyPreset}
-                onChange={handleHotkeyPresetChange}
-                className="styled-select"
-              >
-                <option value="vscode">VS Code</option>
-                <option value="webstorm">WebStorm</option>
-                <option value="ledit">Ledit (Legacy)</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="config-section">
-            <h4>Instance</h4>
-            <div className="config-item">
-              <label htmlFor="instance-select">Active UI Host:</label>
-              <select
-                id="instance-select"
-                value={selectedInstancePID || ''}
-                onChange={handleInstanceChange}
-                disabled={!isConnected || instances.length === 0 || isSwitchingInstance}
-                className="styled-select"
-              >
-                {instances.length === 0 && (
-                  <option value="">No instances detected</option>
-                )}
-                {instances.map((instance) => {
-                  const suffix = [
-                    instance.is_host ? 'host' : '',
-                    instance.is_current ? 'this' : '',
-                  ].filter(Boolean).join(', ');
-                  const name = instance.working_dir.split('/').filter(Boolean).slice(-2).join('/');
-                  const label = suffix
-                    ? `${name} · pid:${instance.pid} (${suffix})`
-                    : `${name} · pid:${instance.pid}`;
-                  return (
-                    <option key={instance.id} value={instance.pid}>
-                      {label}
-                    </option>
-                  );
-                })}
-              </select>
-              {isSwitchingInstance && (
-                <div className="instance-switch-status">Switching UI host...</div>
-              )}
-              {instanceSwitchError && (
-                <div className="instance-switch-error">{instanceSwitchError}</div>
-              )}
-            </div>
-          </div>
-
-          {currentView === 'chat' && (
-            <div className="config-section">
-              <h4>Config</h4>
-              <div className="config-item">
-                <label htmlFor="provider-select">Provider:</label>
-                <select
-                  id="provider-select"
-                  value={selectedProvider}
-                  onChange={handleProviderChange}
-                  disabled={!isConnected || isLoadingProviders}
-                  className="styled-select"
-                >
-                  {providers.length === 0 && (
-                    <option value="">
-                      {isLoadingProviders ? 'Loading providers...' : 'No providers available'}
-                    </option>
-                  )}
-                  {providers.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="config-item">
-                <label htmlFor="model-select">Model:</label>
-                <select
-                  id="model-select"
-                  value={finalSelectedModel}
-                  onChange={handleModelChange}
-                  disabled={!isConnected || finalAvailableModels.length === 0}
-                  className="styled-select"
-                >
-                  {finalAvailableModels.map(m => (
-                    <option key={m} value={m}>{m}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
-
-          {/* Context-Aware Content Section (from Data-Driven Providers) */}
-          <div className="context-content">
-            {renderContentSections()}
-          </div>
-        </>
-      )}
+        )}
+      </div>
     </div>
   );
 };

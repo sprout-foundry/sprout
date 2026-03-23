@@ -4,7 +4,7 @@
  * Displays files that have been edited during the session
  */
 
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ApiService } from '../services/api';
 import './FileEditsPanel.css';
 
@@ -29,7 +29,7 @@ const FileEditsPanel: React.FC<FileEditsPanelProps> = ({ edits, onFileClick }) =
 
   const apiService = ApiService.getInstance();
 
-  const handleViewHistory = async () => {
+  const handleViewHistory = useCallback(async () => {
     setIsLoadingHistory(true);
     setRollbackError(null);
     try {
@@ -42,7 +42,18 @@ const FileEditsPanel: React.FC<FileEditsPanelProps> = ({ edits, onFileClick }) =
     } finally {
       setIsLoadingHistory(false);
     }
-  };
+  }, [apiService]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const openHistory = () => {
+      handleViewHistory();
+    };
+    window.addEventListener('ledit:open-revision-history', openHistory);
+    return () => window.removeEventListener('ledit:open-revision-history', openHistory);
+  }, [handleViewHistory]);
 
   const handleRollback = async (revisionId: string) => {
     if (!window.confirm(`Are you sure you want to rollback to revision ${revisionId}?\n\nThis will undo all changes made after this revision.`)) {
@@ -105,10 +116,6 @@ const FileEditsPanel: React.FC<FileEditsPanelProps> = ({ edits, onFileClick }) =
     }
   };
 
-  if (edits.length === 0) {
-    return null;
-  }
-
   // Group edits by file path, showing only the most recent action
   const latestEditsByFile = new Map<string, FileEdit>();
   edits.forEach(edit => {
@@ -132,52 +139,64 @@ const FileEditsPanel: React.FC<FileEditsPanelProps> = ({ edits, onFileClick }) =
           className="history-button"
           title="View revision history and rollback"
         >
-          {isLoadingHistory ? 'Loading...' : '⏪ History'}
+          {isLoadingHistory ? 'Loading...' : '⏪ Revision History'}
         </button>
       </div>
-      <div className="edits-list">
-        {sortedEdits.map((edit, index) => {
-          const fileName = edit.path.split('/').pop() || edit.path;
-          const fileDir = edit.path.substring(0, edit.path.lastIndexOf('/'));
+      {sortedEdits.length === 0 ? (
+        <div className="edits-list">
+          <div className="edit-item">
+            <span className="edit-icon">📭</span>
+            <span className="edit-info">
+              <span className="file-name">No file edits yet</span>
+              <span className="file-dir">Start editing to build a revision trail</span>
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div className="edits-list">
+          {sortedEdits.map((edit, index) => {
+            const fileName = edit.path.split('/').pop() || edit.path;
+            const fileDir = edit.path.substring(0, edit.path.lastIndexOf('/'));
 
-          return (
-            <div
-              key={index}
-              className="edit-item"
-              onClick={() => onFileClick?.(edit.path)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  onFileClick?.(edit.path);
-                }
-              }}
-              role="button"
-              tabIndex={0}
-              title={edit.path}
-            >
-              <span className="edit-icon">{getActionIcon(edit.action)}</span>
-              <span className="edit-info">
-                <span className="file-name">{fileName}</span>
-                {fileDir && (
-                  <span className="file-dir">{fileDir}</span>
-                )}
-              </span>
-              <span className="edit-action">{getActionText(edit.action)}</span>
-              <span className="edit-time">{formatTime(edit.timestamp)}</span>
-              {(edit.linesAdded !== undefined || edit.linesDeleted !== undefined) && (
-                <span className="edit-diff">
-                  {edit.linesAdded !== undefined && edit.linesAdded > 0 && (
-                    <span className="lines-added">+{edit.linesAdded}</span>
-                  )}
-                  {edit.linesDeleted !== undefined && edit.linesDeleted > 0 && (
-                    <span className="lines-deleted">-{edit.linesDeleted}</span>
+            return (
+              <div
+                key={index}
+                className="edit-item"
+                onClick={() => onFileClick?.(edit.path)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onFileClick?.(edit.path);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+                title={edit.path}
+              >
+                <span className="edit-icon">{getActionIcon(edit.action)}</span>
+                <span className="edit-info">
+                  <span className="file-name">{fileName}</span>
+                  {fileDir && (
+                    <span className="file-dir">{fileDir}</span>
                   )}
                 </span>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                <span className="edit-action">{getActionText(edit.action)}</span>
+                <span className="edit-time">{formatTime(edit.timestamp)}</span>
+                {(edit.linesAdded !== undefined || edit.linesDeleted !== undefined) && (
+                  <span className="edit-diff">
+                    {edit.linesAdded !== undefined && edit.linesAdded > 0 && (
+                      <span className="lines-added">+{edit.linesAdded}</span>
+                    )}
+                    {edit.linesDeleted !== undefined && edit.linesDeleted > 0 && (
+                      <span className="lines-deleted">-{edit.linesDeleted}</span>
+                    )}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* History/Rollback Modal */}
       {showHistory && (

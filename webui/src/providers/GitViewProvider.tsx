@@ -129,10 +129,15 @@ export class GitViewProvider implements ContentProvider {
               <div className="git-section-title">Staged Changes</div>
               <div className="files-list">
                 {this.state.status.staged.map((file: any, index: number) => (
-                  <div key={index} className="file-item staged">
+                  <button
+                    key={index}
+                    className="file-item staged clickable"
+                    onClick={() => context.onFileClick?.(file.path)}
+                    type="button"
+                  >
                     <span className={`badge status-${file.status.toLowerCase()}`}>{file.status}</span>
                     <span className="file-path">{file.path}</span>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -164,10 +169,15 @@ export class GitViewProvider implements ContentProvider {
                 <div className="git-file-group">
                   <div className="git-group-title">Modified</div>
                   {modified.map((file: any, index: number) => (
-                    <div key={`mod-${index}`} className="file-item modified">
+                    <button
+                      key={`mod-${index}`}
+                      className="file-item modified clickable"
+                      onClick={() => context.onFileClick?.(file.path)}
+                      type="button"
+                    >
                       <span className="badge status-m">M</span>
                       <span className="file-path">{file.path}</span>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
@@ -176,10 +186,15 @@ export class GitViewProvider implements ContentProvider {
                 <div className="git-file-group">
                   <div className="git-group-title">Untracked</div>
                   {untracked.map((file: any, index: number) => (
-                    <div key={`untr-${index}`} className="file-item untracked">
+                    <button
+                      key={`untr-${index}`}
+                      className="file-item untracked clickable"
+                      onClick={() => context.onFileClick?.(file.path)}
+                      type="button"
+                    >
                       <span className="badge status-?">?</span>
                       <span className="file-path">{file.path}</span>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
@@ -188,10 +203,15 @@ export class GitViewProvider implements ContentProvider {
                 <div className="git-file-group">
                   <div className="git-group-title">Deleted</div>
                   {deleted.map((file: any, index: number) => (
-                    <div key={`del-${index}`} className="file-item deleted">
+                    <button
+                      key={`del-${index}`}
+                      className="file-item deleted clickable"
+                      onClick={() => context.onFileClick?.(file.path)}
+                      type="button"
+                    >
                       <span className="badge status-d">D</span>
                       <span className="file-path">{file.path}</span>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
@@ -200,10 +220,15 @@ export class GitViewProvider implements ContentProvider {
                 <div className="git-file-group">
                   <div className="git-group-title">Renamed</div>
                   {renamed.map((file: any, index: number) => (
-                    <div key={`ren-${index}`} className="file-item renamed">
+                    <button
+                      key={`ren-${index}`}
+                      className="file-item renamed clickable"
+                      onClick={() => context.onFileClick?.(file.path)}
+                      type="button"
+                    >
                       <span className="badge status-r">R</span>
                       <span className="file-path">{file.path}</span>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}

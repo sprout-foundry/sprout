@@ -29,6 +29,7 @@ interface GitViewProps {
   onStage?: (files: string[]) => void | Promise<unknown>;
   onUnstage?: (files: string[]) => void | Promise<unknown>;
   onDiscard?: (files: string[]) => void | Promise<unknown>;
+  selectedFilePath?: string | null;
 }
 
 const GitView: React.FC<GitViewProps> = ({
@@ -36,11 +37,16 @@ const GitView: React.FC<GitViewProps> = ({
   onCommit,
   onStage,
   onUnstage,
-  onDiscard
+  onDiscard,
+  selectedFilePath = null
 }) => {
   const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
   const [commitMessage, setCommitMessage] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [activeDiffPath, setActiveDiffPath] = useState<string | null>(selectedFilePath);
+  const [activeDiffContent, setActiveDiffContent] = useState<string>('');
+  const [isDiffLoading, setIsDiffLoading] = useState(false);
+  const [diffError, setDiffError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isActing, setIsActing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -89,6 +95,28 @@ const GitView: React.FC<GitViewProps> = ({
     loadGitStatus();
   }, [loadGitStatus, refreshToken]);
 
+  const loadDiff = useCallback(async (filePath: string) => {
+    setIsDiffLoading(true);
+    setDiffError(null);
+    try {
+      const response = await apiService.getGitDiff(filePath);
+      setActiveDiffContent(response.diff || '');
+    } catch (err) {
+      setDiffError(err instanceof Error ? err.message : 'Failed to load diff');
+      setActiveDiffContent('');
+    } finally {
+      setIsDiffLoading(false);
+    }
+  }, [apiService]);
+
+  useEffect(() => {
+    if (!selectedFilePath) {
+      return;
+    }
+    setActiveDiffPath(selectedFilePath);
+    loadDiff(selectedFilePath);
+  }, [selectedFilePath, loadDiff]);
+
   const handleFileSelect = (filePath: string) => {
     setSelectedFiles(prev => {
       const newSet = new Set(prev);
@@ -117,6 +145,11 @@ const GitView: React.FC<GitViewProps> = ({
 
   const handleDeselectAll = () => {
     setSelectedFiles(new Set());
+  };
+
+  const handlePreviewFile = (filePath: string) => {
+    setActiveDiffPath(filePath);
+    loadDiff(filePath);
   };
 
   const selectedPaths = Array.from(selectedFiles);
@@ -287,6 +320,23 @@ const GitView: React.FC<GitViewProps> = ({
       </div>
       {actionError && <div className="git-action-error">{actionError}</div>}
 
+      {/* Diff Preview */}
+      <div className="git-diff-preview">
+        <div className="git-diff-preview-header">
+          <h3>Diff Preview</h3>
+          {activeDiffPath && <span className="git-diff-path">{activeDiffPath}</span>}
+        </div>
+        {isDiffLoading ? (
+          <div className="git-diff-loading">Loading diff...</div>
+        ) : diffError ? (
+          <div className="git-diff-error">{diffError}</div>
+        ) : activeDiffPath ? (
+          <pre className="git-diff-content">{activeDiffContent || 'No diff output.'}</pre>
+        ) : (
+          <div className="git-diff-empty">Select a file to preview its diff.</div>
+        )}
+      </div>
+
       {/* File Sections */}
       <div className="git-files">
         {/* Staged Files */}
@@ -297,8 +347,7 @@ const GitView: React.FC<GitViewProps> = ({
               {gitStatus.staged.map((file, index) => (
                 <div 
                   key={`staged-${index}`}
-                  className={`file-item ${selectedFiles.has(file.path) ? 'selected' : ''}`}
-                  onClick={() => handleFileSelect(file.path)}
+                  className={`file-item ${selectedFiles.has(file.path) ? 'selected' : ''} ${activeDiffPath === file.path ? 'active-diff' : ''}`}
                 >
                   <input 
                     type="checkbox" 
@@ -307,7 +356,9 @@ const GitView: React.FC<GitViewProps> = ({
                     onChange={() => handleFileSelect(file.path)}
                   />
                   <span className="file-icon">{getStatusIcon(file.status)}</span>
-                  <span className="file-path">{file.path}</span>
+                  <button type="button" className="file-path file-path-btn" onClick={() => handlePreviewFile(file.path)}>
+                    {file.path}
+                  </button>
                   <span className="file-status">{getStatusText(file.status)}</span>
                   {file.changes && (
                     <span className="file-changes">
@@ -329,8 +380,7 @@ const GitView: React.FC<GitViewProps> = ({
               {gitStatus.modified.map((file, index) => (
                 <div 
                   key={`modified-${index}`}
-                  className={`file-item ${selectedFiles.has(file.path) ? 'selected' : ''}`}
-                  onClick={() => handleFileSelect(file.path)}
+                  className={`file-item ${selectedFiles.has(file.path) ? 'selected' : ''} ${activeDiffPath === file.path ? 'active-diff' : ''}`}
                 >
                   <input 
                     type="checkbox" 
@@ -339,7 +389,9 @@ const GitView: React.FC<GitViewProps> = ({
                     onChange={() => handleFileSelect(file.path)}
                   />
                   <span className="file-icon">{getStatusIcon(file.status)}</span>
-                  <span className="file-path">{file.path}</span>
+                  <button type="button" className="file-path file-path-btn" onClick={() => handlePreviewFile(file.path)}>
+                    {file.path}
+                  </button>
                   <span className="file-status">{getStatusText(file.status)}</span>
                   {file.changes && (
                     <span className="file-changes">
@@ -361,8 +413,7 @@ const GitView: React.FC<GitViewProps> = ({
               {gitStatus.untracked.map((file, index) => (
                 <div 
                   key={`untracked-${index}`}
-                  className={`file-item ${selectedFiles.has(file.path) ? 'selected' : ''}`}
-                  onClick={() => handleFileSelect(file.path)}
+                  className={`file-item ${selectedFiles.has(file.path) ? 'selected' : ''} ${activeDiffPath === file.path ? 'active-diff' : ''}`}
                 >
                   <input 
                     type="checkbox" 
@@ -371,7 +422,9 @@ const GitView: React.FC<GitViewProps> = ({
                     onChange={() => handleFileSelect(file.path)}
                   />
                   <span className="file-icon">{getStatusIcon(file.status)}</span>
-                  <span className="file-path">{file.path}</span>
+                  <button type="button" className="file-path file-path-btn" onClick={() => handlePreviewFile(file.path)}>
+                    {file.path}
+                  </button>
                   <span className="file-status">{getStatusText(file.status)}</span>
                 </div>
               ))}

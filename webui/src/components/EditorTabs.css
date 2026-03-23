@@ -2,8 +2,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(30, 30, 47, 0.98);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
   padding: 0 8px;
   min-height: 40px;
 }
@@ -30,7 +30,7 @@
   max-width: 200px;
   height: 36px;
   padding: 0 8px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-tertiary);
   border: 1px solid transparent;
   border-bottom: 2px solid transparent;
   border-radius: 6px 6px 0 0;
@@ -40,13 +40,13 @@
 }
 
 .tab:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-elevated);
 }
 
 .tab.active {
-  background: rgba(99, 102, 241, 0.15);
-  border-color: rgba(99, 102, 241, 0.5);
-  border-bottom-color: #6366f1;
+  background: var(--accent-primary-alpha);
+  border-color: var(--border-focus);
+  border-bottom-color: var(--accent-primary);
 }
 
 .tab-content {
@@ -64,7 +64,7 @@
 
 .tab-name {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -73,12 +73,12 @@
 
 .tab.active .tab-name {
   font-weight: 500;
-  color: white;
+  color: var(--text-primary);
 }
 
 .tab-modified {
   font-size: 12px;
-  color: #ffd93d;
+  color: var(--accent-warning);
   flex-shrink: 0;
   margin-left: 4px;
   font-weight: bold;
@@ -87,7 +87,7 @@
 .tab-close {
   background: none;
   border: none;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-tertiary);
   cursor: pointer;
   font-size: 16px;
   padding: 0;
@@ -108,8 +108,8 @@
 }
 
 .tab-close:hover {
-  background: rgba(239, 68, 68, 0.3);
-  color: #ef4444;
+  background: var(--color-error-bg);
+  color: var(--accent-error);
 }
 
 .no-tabs {
@@ -117,7 +117,7 @@
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-tertiary);
   font-size: 13px;
 }
 
@@ -134,8 +134,8 @@
 
 .tab-count {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.5);
-  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-tertiary);
+  background: var(--bg-tertiary);
   padding: 4px 8px;
   border-radius: 4px;
 }
@@ -150,12 +150,12 @@
 }
 
 .tabs-list::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--border-default);
   border-radius: 2px;
 }
 
 .tabs-list::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--border-strong);
 }
 
 /* Mobile Responsive */
@@ -172,7 +172,7 @@
   }
 
   .tab-close {
-    opacity: 1; /* Always show close button on mobile */
+    opacity: 1;
   }
 
   .editor-tabs {
@@ -196,7 +196,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.52);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -206,10 +206,10 @@
 }
 
 .close-confirm-dialog {
-  background: linear-gradient(135deg, #2a2a3a 0%, #3a3a4a 100%);
+  background: var(--bg-secondary);
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--border-default);
+  box-shadow: var(--shadow-elevated);
   max-width: 360px;
   width: 90%;
   animation: slideUp 0.2s ease;
@@ -217,12 +217,12 @@
 
 .close-confirm-dialog .dialog-header {
   padding: 16px 16px 12px 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .close-confirm-dialog .dialog-header h3 {
   margin: 0;
-  color: #ffd93d;
+  color: var(--accent-warning);
   font-size: 16px;
   font-weight: 600;
 }
@@ -231,7 +231,7 @@
   padding: 16px;
   font-size: 13px;
   line-height: 1.5;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--text-primary);
 }
 
 .close-confirm-dialog .dialog-body p {
@@ -242,13 +242,13 @@
   display: flex;
   gap: 8px;
   padding: 12px 16px 16px 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid var(--border-subtle);
   justify-content: flex-end;
 }
 
 .close-confirm-dialog .dialog-btn {
   padding: 8px 14px;
-  border: none;
+  border: 1px solid transparent;
   border-radius: 6px;
   font-size: 13px;
   font-weight: 500;
@@ -257,19 +257,21 @@
 }
 
 .close-confirm-dialog .dialog-btn.primary {
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.9);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--border-default);
 }
 
 .close-confirm-dialog .dialog-btn.primary:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--bg-elevated);
 }
 
 .close-confirm-dialog .dialog-btn.danger {
-  background: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
+  background: var(--color-error-bg);
+  color: var(--accent-error);
+  border-color: var(--accent-error);
 }
 
 .close-confirm-dialog .dialog-btn.danger:hover {
-  background: rgba(239, 68, 68, 0.3);
+  filter: brightness(0.95);
 }

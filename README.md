@@ -110,7 +110,7 @@ After adding this, restart your terminal or run `source ~/.bashrc` (or your resp
 Once installed, you can use `ledit` in your project directory and start using its powerful features.
 
 ```bash
-# Start interactive agent mode (default; use --ui or LEDIT_UI=1 for enhanced UI)
+# Start interactive agent mode (default; web UI enabled automatically, use --no-web-ui to disable)
 ledit
 
 # Run a specific task with the AI agent
@@ -152,6 +152,22 @@ For Z.AI Coding Plan support, set `ZAI_API_KEY` and select the provider/model:
 export ZAI_API_KEY=your_api_key
 ledit agent --provider zai --model GLM-4.6 "implement feature X"
 ```
+
+### Environment Variables
+
+`ledit` respects the following environment variables:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `LEDIT_NO_STREAM=1` | Disable streaming mode | `LEDIT_NO_STREAM=1 ledit agent "task"` |
+| `LEDIT_NO_SUBAGENTS=1` | Disable subagent tools | `LEDIT_NO_SUBAGENTS=1 ledit agent "task"` |
+| `LEDIT_NO_CONNECTION_CHECK=1` | Skip provider connection check | `LEDIT_NO_CONNECTION_CHECK=1 ledit agent "task"` |
+| `LEDIT_RESOURCE_DIRECTORY=<dir>` | Store web/vision resources | `LEDIT_RESOURCE_DIRECTORY=captures` |
+| `LEDIT_TRACE_DATASET_DIR=<dir>` | Enable dataset tracing | `LEDIT_TRACE_DATASET_DIR=traces` |
+| `LEDIT_CONFIG=<dir>` | Custom config directory | `LEDIT_CONFIG=/my/config` |
+| `CI=1` or `GITHUB_ACTIONS=1` | CI environment mode | `CI=1 ledit agent "task"` |
+| `GITHUB_PERSONAL_ACCESS_TOKEN` | GitHub token for MCP | Auto-discovers GitHub MCP server |
+| `OPENAI_API_KEY`, `DEEPINFRA_API_KEY`, etc. | API keys for providers | Set directly or in `api_keys.json` |
 
 ### `config.json` settings
 
@@ -319,27 +335,87 @@ The `.ledit/` directory is automatically created when you first run `ledit` comm
   ```
 
 - **`ledit mcp`**: Manage MCP servers (see MCP section).
+- **`ledit custom`**: Manage custom OpenAI-compatible providers.
+- **`ledit diag`**: Show diagnostic information about configuration.
+- **`ledit plan [idea]`**: Planning and execution mode with todo creation.
+- **`ledit skill`**: Manage agent skills and conventions.
+- **`ledit export-training`**: Export session data to training formats (sharegpt, openai, alpaca).
 
-- **Agent workflow automation**: Run config-driven non-interactive orchestration with triggers and per-step runtime overrides.
-  - Documentation: [docs/AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md)
-  ```bash
-  ledit agent --workflow-config examples/agent_workflow.json
-  ```
+### Advanced Agent Flags
+
+The `ledit agent` command supports numerous flags for fine-grained control:
+
+**Session Management:**
+```bash
+ledit agent --session-id my-session "continue work"
+ledit agent --last-session "resume previous session"
+```
+
+**Persona Selection:**
+```bash
+ledit agent --persona coder "implement feature"
+ledit agent --persona debugger "fix this bug"
+ledit agent --persona code_reviewer "review my code"
+```
+
+**Performance & Safety:**
+```bash
+ledit agent --no-connection-check "skip provider check (saves 1-3s)"
+ledit agent --max-iterations 50 "limit iterations (default: 1000)"
+ledit agent --no-stream "disable streaming for scripts"
+ledit agent --no-subagents "disable subagent tools"
+ledit agent --unsafe "bypass security checks (use with caution)"
+```
+
+**Custom Prompts:**
+```bash
+ledit agent --system-prompt prompts/custom.md "use custom system prompt"
+ledit agent --system-prompt-str "You are a security expert..." "inline prompt"
+```
+
+**Resource Management:**
+```bash
+ledit agent --resource-directory captures "store web/vision resources"
+ledit agent --workflow-config examples/agent_workflow.json "run workflow"
+ledit agent --trace-dataset-dir traces "enable dataset tracing"
+ledit agent --prompt-stdin "read prompt from stdin (avoids ARG_MAX)"
+```
+
+**Workflow Automation:**
+```bash
+ledit agent --workflow-config examples/agent_workflow.json "Initial task"
+```
+See [docs/AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md) for workflow configuration.
 
 ### Slash Commands in Interactive Mode
 
 In interactive `ledit` or `ledit agent`, use `/` for commands (tab-complete):
+
+**Session & History:**
 - `/clear`: Clear conversation history.
-- `/help`: Show usage and slash commands.
+- `/sessions [session_num]`: Show and load previous conversation sessions.
+- `/log`: View changes.
+
+**Models & Providers:**
 - `/models [select|<id>]`: List/select models (e.g., `/models select` for interactive dropdown).
 - `/providers [select|<name>]`: Switch providers (e.g., `/providers ollama`).
+
+**Agent Features:**
 - `/commit`: Generate commit message.
 - `/shell <desc>`: Generate shell script.
-- `/sessions [session_num]`: Show and load previous conversation sessions.
 - `/init`: Regenerate workspace context.
-- `/log`: View changes.
-- `/mcp`: Manage MCP.
+- `/mcp`: Manage MCP servers.
 - `/exit`: Quit session.
+
+**Skills & Configuration:**
+- `/skills`: List and load agent skills.
+- `/export`: Export training data.
+- `/plan [idea]`: Start planning mode.
+- `/custom`: Manage custom providers.
+- `/diag`: Show diagnostic information.
+
+**Help:**
+- `/help`: Show usage and all slash commands.
 
 ### Ignoring Files
 
@@ -365,36 +441,43 @@ Config: `~/.ledit/mcp_config.json`. Use in agent: "Create GitHub PR for feature 
 
 ## Contributing
 
-See CONTRIBUTING.md for guidelines. Run `go test ./...` and e2e_tests/ before PRs.
+See CONTRIBUTING.md for guidelines. Run `go test ./...` before PRs.
 
 ## File Structure
 
 ### Key files maintained by ledit
 
-- **Root**: main.go (entry), cmd/ (CLI subcommands: agent, commit, log, mcp, review, shell, version).
+- **Root**: `main.go` (entry), `cmd/` (CLI subcommands: `agent`, `commit`, `custom`, `diag`, `export-training`, `log`, `mcp`, `plan`, `review`, `shell`, `skill`, `version`).
 - **pkg/**: 
   - `agent/`: Core agent orchestration and conversation handling
   - `agent_api/`: LLM provider integrations and API clients
-  - `agent_providers/`: Provider-specific implementations and configurations
+  - `agent_commands/`: CLI command implementations (commit, shell, etc.)
   - `agent_tools/`: Built-in tools (file operations, web search, shell execution)
-  - `console/`: Terminal UI and streaming interfaces
-  - `configuration/`: Configuration management and API keys
-  - `history/`: Change tracking and rollback functionality
-  - `mcp/`: Model Context Protocol client implementation
-  - `security/`: Credential scanning and safety checks
+  - `commands/`: Command utilities and helpers (sessions)
   - `codereview/`: Code review functionality
-  - `utils/`: Utility functions and helpers
+  - `configuration/`: Configuration management and API keys
+  - `console/`: Terminal UI and streaming interfaces
+  - `events/`: Event bus system
+  - `filediscovery/`: File discovery and indexing
+  - `git/`: Git integration
+  - `history/`: Change tracking and rollback functionality
+  - `index/`: Workspace indexing
+  - `mcp/`: Model Context Protocol client implementation
+  - `personas/`: Agent persona definitions
+  - `prompts/`: Prompt templates
+  - `security/`: Credential scanning and safety checks
   - `tools/`: Tool registry and execution framework
-  - `agent_commands/`: Command implementations for CLI commands (commit, shell, etc.)
+  - `utils/`: Utility functions and helpers
+  - `webcontent/`: Web content fetching
 - **.ledit/** (project-local):
   - `config.json`: Local overrides.
-  - `leditignore`: Ignore patterns (augments .gitignore).
+  - `leditignore`: Ignore patterns (augments `.gitignore`).
   - `changes/`: Per-change diff logs with original and updated files.
   - `revisions/`: Per-session directories with instructions and LLM responses.
   - `runlogs/`: JSONL workflow traces.
   - `workspace.log`: Verbose execution log.
-- **Global (~/.ledit/)**: config.json (global config), api_keys.json, mcp_config.json.
-- **Tests**: Unit tests in each pkg/ subdirectory, integration_tests/, e2e_tests/, smoke_tests/.
+- **Global (~/.ledit/)**: `config.json` (global config), `api_keys.json`, `mcp_config.json`.
+- **Tests**: Unit tests in each `pkg/` subdirectory, `integration_tests/`, `e2e_tests/`, `smoke_tests/`.
 
 ## License
 

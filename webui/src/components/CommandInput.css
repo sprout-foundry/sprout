@@ -1,17 +1,17 @@
 .command-input {
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.84), rgba(15, 23, 42, 0.72));
-  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
   border-radius: 14px;
   overflow: hidden;
-  box-shadow: 0 12px 28px rgba(2, 6, 23, 0.34);
+  box-shadow: var(--shadow-subtle);
   transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 .command-input:focus-within {
-  border-color: rgba(56, 189, 248, 0.75);
-  box-shadow: 0 16px 34px rgba(2, 6, 23, 0.42), 0 0 0 1px rgba(56, 189, 248, 0.2);
+  border-color: var(--border-focus);
+  box-shadow: var(--shadow-elevated), 0 0 0 1px var(--border-focus);
 }
 
 .input-header {
@@ -19,7 +19,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 8px 12px 0;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  border-bottom: 1px solid var(--border-subtle);
   margin-bottom: 6px;
 }
 
@@ -30,7 +30,7 @@
 }
 
 .history-indicator {
-  color: #fbbf24;
+  color: var(--accent-warning);
   font-size: 11px;
   font-weight: 600;
 }
@@ -45,8 +45,8 @@
 .history-exit-btn {
   width: 20px;
   height: 20px;
-  background: rgba(30, 41, 59, 0.8);
-  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
   border-radius: 999px;
   cursor: pointer;
   color: var(--text-secondary);
@@ -74,8 +74,8 @@
 }
 
 .input-field.history-mode {
-  background: rgba(245, 158, 11, 0.08);
-  border-left: 3px solid rgba(245, 158, 11, 0.75);
+  background: var(--color-warning-bg);
+  border-left: 3px solid var(--accent-warning);
   padding-left: 13px;
 }
 
@@ -88,7 +88,7 @@
 }
 
 .input-field::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.26);
+  background: var(--border-default);
   border-radius: 999px;
 }
 
@@ -101,8 +101,8 @@
 }
 
 .send-button {
-  background: linear-gradient(135deg, #0ea5e9 0%, #14b8a6 100%);
-  color: #f8fafc;
+  background: var(--sidebar-nav-btn-active-bg);
+  color: var(--text-primary);
   border: none;
   padding: 9px 14px;
   border-radius: 9px;
@@ -110,7 +110,7 @@
   font-weight: 650;
   font-size: 13px;
   transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
-  box-shadow: 0 8px 18px rgba(14, 165, 233, 0.25);
+  box-shadow: var(--shadow-subtle);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -118,7 +118,7 @@
 
 .send-button:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 12px 24px rgba(14, 165, 233, 0.3);
+  box-shadow: var(--shadow-elevated);
 }
 
 .send-button:disabled {
@@ -134,9 +134,9 @@
 
 .clear-button,
 .refresh-button {
-  background: rgba(30, 41, 59, 0.75);
+  background: var(--bg-elevated);
   color: var(--text-secondary);
-  border: 1px solid rgba(148, 163, 184, 0.22);
+  border: 1px solid var(--border-default);
   padding: 7px 10px;
   border-radius: 8px;
   cursor: pointer;
@@ -147,7 +147,7 @@
 .clear-button:hover:not(:disabled),
 .refresh-button:hover:not(:disabled) {
   color: var(--text-primary);
-  border-color: rgba(148, 163, 184, 0.42);
+  border-color: var(--border-strong);
 }
 
 .clear-button:disabled,
@@ -160,17 +160,17 @@
   display: flex;
   gap: 10px;
   padding: 6px 12px 8px;
-  background: rgba(2, 6, 23, 0.32);
-  border-top: 1px solid rgba(148, 163, 184, 0.14);
+  background: var(--bg-tertiary);
+  border-top: 1px solid var(--border-subtle);
   font-size: 10px;
   color: var(--text-tertiary);
 }
 
 .keyboard-hints kbd {
-  background: rgba(30, 41, 59, 0.9);
+  background: var(--bg-elevated);
   padding: 2px 5px;
   border-radius: 4px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  border: 1px solid var(--border-default);
   margin-right: 2px;
 }
 

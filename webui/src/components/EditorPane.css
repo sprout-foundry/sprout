@@ -19,12 +19,14 @@
 
 .pane-content {
   flex: 1;
+  min-height: 0;
   overflow: hidden;
   position: relative;
 }
 
 .pane-content .editor {
   height: 100%;
+  min-height: 0;
 }
 
 .pane-footer {

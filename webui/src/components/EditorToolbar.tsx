@@ -17,7 +17,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
   onGoToLine
 }) => {
   const { splitPane, closeSplit, activePaneId, paneLayout } = useEditorManager();
-  const { theme, toggleTheme } = useTheme();
+  const { theme, themePack, toggleTheme } = useTheme();
   const [showGoToLine, setShowGoToLine] = useState(false);
   const [lineInput, setLineInput] = useState('');
 
@@ -120,7 +120,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
         <button
           className="toolbar-button"
           onClick={toggleTheme}
-          title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+          title={`Switch mode from ${themePack.name} to ${theme === 'dark' ? 'light' : 'dark'}`}
         >
           <span className="toolbar-icon">{theme === 'dark' ? '☀️' : '🌙'}</span>
         </button>

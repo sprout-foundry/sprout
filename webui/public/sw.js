@@ -29,10 +29,26 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
 
   // Skip non-GET requests and external requests
-  if (request.method !== 'GET' || !url.origin.includes(self.location.origin)) {
+  if (request.method !== 'GET' || url.origin !== self.location.origin) {
     return;
   }
 
-  // Always use network only - no caching
-  event.respondWith(fetch(request));
+  // Chromium can emit non-same-origin only-if-cached requests that throw if intercepted
+  if (request.cache === 'only-if-cached' && request.mode !== 'same-origin') {
+    return;
+  }
+
+  // Always use network only - no caching, but avoid unhandled promise rejection noise
+  event.respondWith(
+    fetch(request).catch(() => {
+      if (request.mode === 'navigate') {
+        return new Response('Offline', {
+          status: 503,
+          statusText: 'Service Unavailable',
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+        });
+      }
+      return Response.error();
+    })
+  );
 });

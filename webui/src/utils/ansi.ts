@@ -6,9 +6,18 @@
  * Strip ANSI escape codes from text
  * Removes color codes, formatting, and other terminal control sequences
  */
-export function stripAnsiCodes(text: string): string {
+export function stripAnsiCodes(text: unknown): string {
+  const normalized =
+    typeof text === 'string'
+      ? text
+      : text == null
+        ? ''
+        : typeof text === 'object'
+          ? JSON.stringify(text, null, 2)
+          : String(text);
+
   // Normalize common line endings first.
-  let cleaned = text.replace(/\r\n/g, '\n').replace(/\r/g, '');
+  let cleaned = normalized.replace(/\r\n/g, '\n').replace(/\r/g, '');
 
   // Remove OSC (Operating System Command) sequences:
   // ESC ] ... BEL   or   ESC ] ... ESC \
@@ -34,6 +43,6 @@ export function stripAnsiCodes(text: string): string {
 /**
  * Check if text contains ANSI codes
  */
-export function hasAnsiCodes(text: string): boolean {
+export function hasAnsiCodes(text: unknown): boolean {
   return stripAnsiCodes(text) !== text;
 }

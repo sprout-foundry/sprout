@@ -85,6 +85,38 @@ func pathExistsInGitStatus(path string, status *GitStatus) bool {
 	return false
 }
 
+func containsPath(files []GitFile, path string) bool {
+	for _, file := range files {
+		if normalizeGitPath(file.Path) == path {
+			return true
+		}
+	}
+	return false
+}
+
+func (ws *ReactWebServer) gitDiffAllowExitOne(args ...string) (string, error) {
+	cmd := ws.gitCommand(args...)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		return string(output), nil
+	}
+
+	// `git diff --no-index` can return exit code 1 when differences exist.
+	if strings.TrimSpace(string(output)) != "" {
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			return string(output), nil
+		}
+	}
+	return "", err
+}
+
+func truncateDiffOutput(diff string, maxBytes int) string {
+	if len(diff) <= maxBytes {
+		return diff
+	}
+	return diff[:maxBytes] + "\n\n... [diff truncated]"
+}
+
 // handleAPIGitStatus handles git status requests
 func (ws *ReactWebServer) handleAPIGitStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -103,6 +135,87 @@ func (ws *ReactWebServer) handleAPIGitStatus(w http.ResponseWriter, r *http.Requ
 		"message": "success",
 		"status":  status,
 		"files":   getAllGitFiles(status), // Backward compatibility
+	})
+}
+
+// handleAPIGitDiff handles git diff requests for a specific file
+func (ws *ReactWebServer) handleAPIGitDiff(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	reqPath := normalizeGitPath(r.URL.Query().Get("path"))
+	if reqPath == "" {
+		http.Error(w, "Path is required", http.StatusBadRequest)
+		return
+	}
+
+	status, err := ws.getGitStatus()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to validate path: %v", err), http.StatusInternalServerError)
+		return
+	}
+	if !pathExistsInGitStatus(reqPath, status) {
+		http.Error(w, "File is not part of git changes", http.StatusBadRequest)
+		return
+	}
+
+	stagedDiff, err := ws.gitDiffAllowExitOne("diff", "--cached", "--", reqPath)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to get staged diff: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	unstagedDiff, err := ws.gitDiffAllowExitOne("diff", "--", reqPath)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to get unstaged diff: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// For untracked files, generate a synthetic diff against /dev/null.
+	if strings.TrimSpace(stagedDiff) == "" && strings.TrimSpace(unstagedDiff) == "" && containsPath(status.Untracked, reqPath) {
+		untrackedDiff, untrackedErr := ws.gitDiffAllowExitOne("diff", "--no-index", "--", "/dev/null", reqPath)
+		if untrackedErr == nil {
+			unstagedDiff = untrackedDiff
+		}
+	}
+
+	const maxDiffBytes = 200000
+	stagedDiff = truncateDiffOutput(stagedDiff, maxDiffBytes)
+	unstagedDiff = truncateDiffOutput(unstagedDiff, maxDiffBytes)
+
+	var combined strings.Builder
+	if strings.TrimSpace(stagedDiff) != "" {
+		combined.WriteString("### Staged changes\n")
+		combined.WriteString(stagedDiff)
+		if !strings.HasSuffix(stagedDiff, "\n") {
+			combined.WriteString("\n")
+		}
+	}
+	if strings.TrimSpace(unstagedDiff) != "" {
+		if combined.Len() > 0 {
+			combined.WriteString("\n")
+		}
+		combined.WriteString("### Unstaged changes\n")
+		combined.WriteString(unstagedDiff)
+		if !strings.HasSuffix(unstagedDiff, "\n") {
+			combined.WriteString("\n")
+		}
+	}
+	if combined.Len() == 0 {
+		combined.WriteString("No diff available for this file.")
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":       "success",
+		"path":          reqPath,
+		"has_staged":    strings.TrimSpace(stagedDiff) != "",
+		"has_unstaged":  strings.TrimSpace(unstagedDiff) != "",
+		"staged_diff":   stagedDiff,
+		"unstaged_diff": unstagedDiff,
+		"diff":          combined.String(),
 	})
 }
 

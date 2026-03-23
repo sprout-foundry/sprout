@@ -229,7 +229,7 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile, rootPat
       return (
         <React.Fragment key={file.path}>
           <div
-            className={`file-item ${file.isDir ? 'directory' : 'file'} ${isSelected ? 'selected' : ''}`}
+            className={`file-tree-item ${file.isDir ? 'directory' : 'file'} ${isSelected ? 'selected' : ''}`}
             style={{ paddingLeft: `${depth * 16 + 8}px` }}
             data-ext={file.ext || ''}
             onClick={() => handleClick(file)}
@@ -244,17 +244,17 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile, rootPat
               }
             }}
           >
-            <div className="file-icon">
+            <div className="file-tree-icon">
               {getFileIcon(file)}
             </div>
             {file.isDir && (
-              <span className="expand-icon">
+              <span className="file-tree-expand">
                 {isExpanded ? '▼' : '▶'}
               </span>
             )}
-            <span className="file-name">{file.name}</span>
+            <span className="file-tree-name">{file.name}</span>
             {file.isDir && hasChildren && (
-              <span className="child-count">({file.children?.length})</span>
+              <span className="file-tree-count">({file.children?.length})</span>
             )}
           </div>
           

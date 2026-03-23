@@ -115,6 +115,8 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/git/commit", ws.handleAPIGitCommit)
 	mux.HandleFunc("/api/git/stage-all", ws.handleAPIGitStageAll)
 	mux.HandleFunc("/api/git/unstage-all", ws.handleAPIGitUnstageAll)
+	mux.HandleFunc("/api/instances", ws.handleAPIInstances)
+	mux.HandleFunc("/api/instances/select", ws.handleAPIInstanceSelect)
 	mux.HandleFunc("/api/history/changelog", ws.handleAPIHistoryChangelog)
 	mux.HandleFunc("/api/history/rollback", ws.handleAPIHistoryRollback)
 	mux.HandleFunc("/api/history/changes", ws.handleAPIHistoryChanges)

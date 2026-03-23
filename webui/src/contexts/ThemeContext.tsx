@@ -5,6 +5,7 @@ type Theme = 'dark' | 'light';
 interface ThemeContextValue {
   theme: Theme;
   toggleTheme: () => void;
+  setTheme: (theme: Theme) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -42,6 +43,11 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     });
   }, []);
 
+  const setThemeExplicit = useCallback((nextTheme: Theme) => {
+    setTheme(nextTheme);
+    localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+  }, []);
+
   // Update document class for CSS-based theming
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -49,7 +55,8 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
 
   const value: ThemeContextValue = {
     theme,
-    toggleTheme
+    toggleTheme,
+    setTheme: setThemeExplicit
   };
 
   return (

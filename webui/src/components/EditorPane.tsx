@@ -4,7 +4,6 @@ import { EditorState } from '@codemirror/state';
 import { defaultKeymap, indentWithTab } from '@codemirror/commands';
 import { search, searchKeymap } from '@codemirror/search';
 import { autocompletion } from '@codemirror/autocomplete';
-import { oneDark } from '@codemirror/theme-one-dark';
 import { syntaxHighlighting, defaultHighlightStyle, codeFolding, foldGutter } from '@codemirror/language';
 import { bracketMatching } from '@codemirror/language';
 
@@ -82,13 +81,6 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       default:
         return [];
     }
-  }, []);
-
-  // Get theme extension based on current theme
-  const getThemeExtension = useCallback(() => {
-    // For now, we use oneDark but support light theme via CSS overrides
-    // A full light theme implementation would require additional packages
-    return oneDark;
   }, []);
 
   const loadFileRef = useRef<((filePath: string) => Promise<void>) | null>(null);
@@ -300,7 +292,9 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         '&': {
           height: '100%',
           fontSize: '13px',
-          fontFamily: "'Monaco', 'Menlo', 'Fira Code', monospace"
+          fontFamily: "'Monaco', 'Menlo', 'Fira Code', monospace",
+          backgroundColor: 'var(--cm-bg)',
+          color: 'var(--cm-fg)'
         },
         '.cm-content': {
           padding: '16px'
@@ -309,19 +303,25 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
           outline: 'none'
         },
         '.cm-gutters': {
-          backgroundColor: 'var(--gutter-bg, #1e1e1e)',
+          backgroundColor: 'var(--cm-gutter-bg)',
           border: 'none',
-          color: 'var(--gutter-fg, #666)'
+          color: 'var(--cm-gutter-fg)'
         },
         '.cm-scroller': {
           fontFamily: 'inherit'
         },
+        '.cm-cursor': {
+          borderLeftColor: 'var(--cm-cursor)'
+        },
+        '.cm-selectionBackground, .cm-content ::selection': {
+          backgroundColor: 'var(--cm-selection) !important'
+        },
         '&.cm-focused .cm-activeLine': {
-          backgroundColor: 'rgba(99, 102, 241, 0.1)'
+          backgroundColor: 'var(--cm-active-line)'
         },
         '.cm-activeLineGutter': {
-          backgroundColor: 'rgba(99, 102, 241, 0.1)',
-          color: 'var(--gutter-fg-active, #ccc)'
+          backgroundColor: 'var(--cm-active-line-gutter)',
+          color: 'var(--cm-gutter-fg-active)'
         },
         '.cm-foldGutter': {
           width: '20px'
@@ -354,7 +354,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       view.destroy();
       viewRef.current = null;
     };
-  }, [paneId, buffer?.id, buffer?.file?.ext, showLineNumbers, theme, updateBufferContent, setBufferModified, updateBufferCursor, getLanguageSupport, getThemeExtension]); // eslint-disable-line react-hooks/exhaustive-deps -- handleSave and handleToggleLineNumbers intentionally excluded to prevent infinite re-init loop when buffer changes
+  }, [paneId, buffer?.id, buffer?.file?.ext, showLineNumbers, theme, updateBufferContent, setBufferModified, updateBufferCursor, getLanguageSupport]); // eslint-disable-line react-hooks/exhaustive-deps -- handleSave and handleToggleLineNumbers intentionally excluded to prevent infinite re-init loop when buffer changes
 
 
   // Listen for go to line event from toolbar
@@ -384,7 +384,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   }
 
   return (
-    <div className="editor-pane" data-theme={theme}>
+    <div className="editor-pane">
       <EditorToolbar
         paneId={paneId}
         showLineNumbers={showLineNumbers}

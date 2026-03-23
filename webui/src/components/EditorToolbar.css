@@ -86,16 +86,3 @@
   background: var(--toolbar-hover-bg, #333);
   color: var(--toolbar-hover-fg, #fff);
 }
-
-/* Light theme support */
-:root[data-theme="light"] {
-  --toolbar-bg: #f0f0f0;
-  --toolbar-fg: #444;
-  --toolbar-hover-bg: #e0e0e0;
-  --toolbar-hover-fg: #000;
-  --accent-bg: #06b6d4;
-  --accent-fg: #fff;
-  --border-color: #ccc;
-  --input-bg: #fff;
-  --input-fg: #000;
-}

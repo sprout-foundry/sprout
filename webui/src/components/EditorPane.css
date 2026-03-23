@@ -2,20 +2,15 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: linear-gradient(135deg, #2a2a3a 0%, #3a3a4a 100%);
+  background: var(--editor-pane-bg);
   overflow: hidden;
   border-radius: 8px;
-}
-
-/* Light theme support */
-.editor-pane[data-theme='light'] {
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
 }
 
 .editor-pane.empty {
   justify-content: center;
   align-items: center;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--editor-pane-footer-bg);
 }
 
 .pane-header {
@@ -37,10 +32,10 @@
   justify-content: space-between;
   align-items: center;
   padding: 6px 16px;
-  background: rgba(255, 255, 255, 0.03);
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--editor-pane-footer-bg);
+  border-top: 1px solid var(--border-subtle);
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--editor-pane-footer-fg);
 }
 
 .editor-stats {
@@ -53,7 +48,7 @@
   flex-direction: column;
   align-items: center;
   gap: 12px;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--editor-empty-fg);
   font-size: 14px;
 }
 
@@ -83,13 +78,13 @@
 }
 
 .loading-indicator {
-  background: rgba(99, 102, 241, 0.2);
-  color: white;
+  background: var(--editor-loading-bg);
+  color: var(--editor-loading-fg);
 }
 
 .error-message {
-  background: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
+  background: var(--editor-error-bg);
+  color: var(--editor-error-fg);
 }
 
 @keyframes spin {

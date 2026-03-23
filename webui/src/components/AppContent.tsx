@@ -291,7 +291,9 @@ const AppContent: React.FC<AppContentProps> = ({
                 className={`panes-container layout-${paneLayout}`}
               >
                 {panes.map((pane, index) => {
-                  const paneSize = paneSizes[pane.id] || (100 / panes.length);
+                  const paneSize = panes.length === 1
+                    ? 100
+                    : (paneSizes[pane.id] || (100 / panes.length));
                   const isLast = index === panes.length - 1;
 
                   return (

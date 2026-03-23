@@ -108,10 +108,10 @@ func runCustomModelAdd() error {
 
 	models, discoverErr := configuration.DiscoverCustomProviderModels(provider)
 	if discoverErr != nil {
-		fmt.Printf("\n⚠️  Model discovery failed: %v\n", discoverErr)
+		fmt.Printf("\n[WARN] Model discovery failed: %v\n", discoverErr)
 		fmt.Println("The provider can still be saved, but model selection will rely on runtime discovery.")
 	} else {
-		fmt.Printf("\n✅ Discovered %d model(s)\n", len(models))
+		fmt.Printf("\n[OK] Discovered %d model(s)\n", len(models))
 		maxShow := len(models)
 		if maxShow > 10 {
 			maxShow = 10
@@ -130,7 +130,7 @@ func runCustomModelAdd() error {
 			}
 			selectedModel, err := resolvePreferredCustomProviderModel(preferred, models)
 			if err != nil {
-				fmt.Printf("\n⚠️  %v\n", err)
+				fmt.Printf("\n[WARN] %v\n", err)
 				continue
 			}
 			provider.ModelName = selectedModel

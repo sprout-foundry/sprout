@@ -142,35 +142,35 @@ func TestPotentialSecurityConcernsFound(t *testing.T) {
 			relativePath: "config/secrets.yaml",
 			concern:      "hardcoded API key",
 			snippet:      "api_key: abc123",
-			contains:     []string{"⚠️", "config/secrets.yaml", "hardcoded API key", "api_key: abc123", "Is this a security issue?"},
+			contains:     []string{"[WARN]", "config/secrets.yaml", "hardcoded API key", "api_key: abc123", "Is this a security issue?"},
 		},
 		{
 			name:         "SQL injection concern",
 			relativePath: "db/queries.go",
 			concern:      "potential SQL injection",
 			snippet:      "db.Query(\"SELECT * FROM users WHERE id = \" + userID)",
-			contains:     []string{"⚠️", "db/queries.go", "potential SQL injection", "SELECT * FROM users", "Is this a security issue?"},
+			contains:     []string{"[WARN]", "db/queries.go", "potential SQL injection", "SELECT * FROM users", "Is this a security issue?"},
 		},
 		{
 			name:         "path traversal concern",
 			relativePath: "handlers/files.go",
 			concern:      "path traversal vulnerability",
 			snippet:      "filepath.Join(\"/uploads\", userPath)",
-			contains:     []string{"⚠️", "handlers/files.go", "path traversal vulnerability"},
+			contains:     []string{"[WARN]", "handlers/files.go", "path traversal vulnerability"},
 		},
 		{
 			name:         "empty snippet",
 			relativePath: "test.txt",
 			concern:      "some concern",
 			snippet:      "",
-			contains:     []string{"⚠️", "test.txt", "some concern"},
+			contains:     []string{"[WARN]", "test.txt", "some concern"},
 		},
 		{
 			name:         "multiline snippet",
 			relativePath: "auth/login.go",
 			concern:      "weak password check",
 			snippet:      "if len(password) < 4 {\n  return true\n}",
-			contains:     []string{"⚠️", "auth/login.go", "weak password check", "password"},
+			contains:     []string{"[WARN]", "auth/login.go", "weak password check", "password"},
 		},
 	}
 
@@ -191,7 +191,7 @@ func TestPotentialSecurityConcernsFoundFormat(t *testing.T) {
 	result := PotentialSecurityConcernsFound("path/to/file.go", "test concern", "code snippet")
 
 	// Verify the structure of the output
-	if !strings.HasPrefix(result, "⚠️  Potential security concern found in ") {
+	if !strings.HasPrefix(result, "[WARN] Potential security concern found in ") {
 		t.Error("Output should start with warning emoji and proper prefix")
 	}
 
@@ -219,22 +219,22 @@ func TestSkippingLLMSummarizationDueToSecurity(t *testing.T) {
 		{
 			name:         "standard path",
 			relativePath: "config/database.yaml",
-			contains:     []string{"⚠️", "Skipping LLM summarization", "config/database.yaml", "security concerns"},
+			contains:     []string{"[WARN]", "Skipping LLM summarization", "config/database.yaml", "security concerns"},
 		},
 		{
 			name:         "nested path",
 			relativePath: "internal/secrets/credentials.json",
-			contains:     []string{"⚠️", "Skipping LLM summarization", "internal/secrets/credentials.json"},
+			contains:     []string{"[WARN]", "Skipping LLM summarization", "internal/secrets/credentials.json"},
 		},
 		{
 			name:         "simple filename",
 			relativePath: ".env",
-			contains:     []string{"⚠️", "Skipping LLM summarization", ".env"},
+			contains:     []string{"[WARN]", "Skipping LLM summarization", ".env"},
 		},
 		{
 			name:         "empty path",
 			relativePath: "",
-			contains:     []string{"⚠️", "Skipping LLM summarization", "security concerns"},
+			contains:     []string{"[WARN]", "Skipping LLM summarization", "security concerns"},
 		},
 	}
 

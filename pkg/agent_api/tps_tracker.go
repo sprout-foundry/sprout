@@ -38,7 +38,7 @@ func (t *TPSTracker) RecordRequest(duration time.Duration, completionTokens int)
 		// Note: Modern LLMs can output tool calls very quickly (5000+ TPS)
 		// Only warn for truly impossible values
 		if tps > 2000 {
-			// fmt.Printf("⚠️  WARNING: Suspiciously high TPS detected!\n")
+			// fmt.Printf("[WARN] WARNING: Suspiciously high TPS detected!\n")
 			// fmt.Printf("   Duration: %v (%.3f seconds)\n", duration, durationSeconds)
 			// fmt.Printf("   Completion Tokens: %d\n", completionTokens)
 			// fmt.Printf("   Calculated TPS: %.2f\n", tps)

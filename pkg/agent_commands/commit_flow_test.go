@@ -49,15 +49,15 @@ func TestCommitActionItem_Interface(t *testing.T) {
 func TestFileItem_Interface(t *testing.T) {
 	item := &FileItem{
 		Filename:    "test.go",
-		Description: "📝 Modified Go file",
+		Description: "[edit] Modified Go file",
 	}
 
-	if item.Display() != "📝 Modified Go file" {
+	if item.Display() != "[edit] Modified Go file" {
 		t.Errorf("Expected Display() to return description, got '%s'", item.Display())
 	}
 
 	searchText := item.SearchText()
-	expected := "test.go 📝 Modified Go file"
+	expected := "test.go [edit] Modified Go file"
 	if searchText != expected {
 		t.Errorf("Expected SearchText() to return '%s', got '%s'", expected, searchText)
 	}

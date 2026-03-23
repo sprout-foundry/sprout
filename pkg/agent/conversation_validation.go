@@ -60,7 +60,7 @@ func (ch *ConversationHandler) isRepetitiveContent(content string) bool {
 	lowerContent := strings.ToLower(trimmedContent)
 	for _, pattern := range repetitivePatterns {
 		if strings.Contains(lowerContent, pattern) {
-			ch.agent.debugLog("🔄 Repetitive content pattern detected: %s\n", pattern)
+			ch.agent.debugLog("[~] Repetitive content pattern detected: %s\n", pattern)
 			return true
 		}
 	}
@@ -72,7 +72,7 @@ func (ch *ConversationHandler) isRepetitiveContent(content string) bool {
 			continue
 		}
 		if strings.TrimSpace(prevMsg.Content) == trimmedContent {
-			ch.agent.debugLog("🔄 Exact duplicate content detected\n")
+			ch.agent.debugLog("[~] Exact duplicate content detected\n")
 			return true
 		}
 		break
@@ -90,7 +90,7 @@ func (ch *ConversationHandler) isRepetitiveContent(content string) bool {
 		// If any word appears more than 30% of the time, it's likely repetitive
 		for word, count := range wordCount {
 			if float64(count)/float64(len(words)) > 0.3 && len(word) > 3 {
-				ch.agent.debugLog("🔄 High word repetition detected: %s (%d/%d)\n", word, count, len(words))
+				ch.agent.debugLog("[~] High word repetition detected: %s (%d/%d)\n", word, count, len(words))
 				return true
 			}
 		}

@@ -180,18 +180,18 @@ func extractSubagentSummary(stdout string) map[string]string {
 
 			// Extract build status (only if line contains "Build:")
 			if strings.Contains(trimmedLine, "Build:") {
-				if strings.Contains(trimmedLine, "✅ Passed") {
+				if strings.Contains(trimmedLine, "[OK] Passed") {
 					buildStatus = "passed"
-				} else if strings.Contains(trimmedLine, "✅ Failed") || strings.Contains(trimmedLine, "❌ Failed") {
+				} else if strings.Contains(trimmedLine, "[OK] Failed") || strings.Contains(trimmedLine, "[FAIL] Failed") {
 					buildStatus = "failed"
 				}
 			}
 
 			// Extract test status and counts
 			if strings.Contains(trimmedLine, "Test:") || strings.Contains(trimmedLine, "Tests:") {
-				if strings.Contains(trimmedLine, "✅ Passed") {
+				if strings.Contains(trimmedLine, "[OK] Passed") {
 					testStatus = "passed"
-				} else if strings.Contains(trimmedLine, "✅ Failed") || strings.Contains(trimmedLine, "❌ Failed") {
+				} else if strings.Contains(trimmedLine, "[OK] Failed") || strings.Contains(trimmedLine, "[FAIL] Failed") {
 					testStatus = "failed"
 				}
 
@@ -524,7 +524,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	if displayModel == "" {
 		displayModel = "default"
 	}
-	fmt.Fprintf(os.Stderr, "🔄 Spawning subagent [%s]: provider=%s, model=%s\n", persona, displayProvider, displayModel)
+	fmt.Fprintf(os.Stderr, "[~] Spawning subagent [%s]: provider=%s, model=%s\n", persona, displayProvider, displayModel)
 
 	resultMap, err := tools.RunSubagent(enhancedPrompt.String(), model, provider, streamCallback, systemPromptPath, systemPromptText, persona)
 	if err != nil {
@@ -843,7 +843,7 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 	if displayModel == "" {
 		displayModel = "default"
 	}
-	fmt.Fprintf(os.Stderr, "🔄 Spawning %d parallel subagents: provider=%s, model=%s\n", len(parallelTasks), displayProvider, displayModel)
+	fmt.Fprintf(os.Stderr, "[~] Spawning %d parallel subagents: provider=%s, model=%s\n", len(parallelTasks), displayProvider, displayModel)
 
 	resultMap, err := tools.RunParallelSubagents(parallelTasks, false, streamCallback)
 	if err != nil {
@@ -980,7 +980,7 @@ func (a *Agent) warnSubagentFallback(scope, configuredProvider, configuredModel,
 		model = "<provider default>"
 	}
 
-	a.PrintLineAsync(fmt.Sprintf("⚠️ Subagent fallback active (%s): provider=%s model=%s", scope, provider, model))
+	a.PrintLineAsync(fmt.Sprintf("[WARN] Subagent fallback active (%s): provider=%s model=%s", scope, provider, model))
 }
 
 // Helper functions for subagent handlers

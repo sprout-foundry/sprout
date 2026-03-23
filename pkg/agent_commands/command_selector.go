@@ -54,7 +54,7 @@ func ShowCommandSelector(registry *CommandRegistry, chatAgent *agent.Agent) (str
 
 	// Check if we're in agent console - show help instead
 	if os.Getenv("LEDIT_AGENT_CONSOLE") == "1" {
-		fmt.Println("\n📋 Available Commands:")
+		fmt.Println("\n[list] Available Commands:")
 		fmt.Println("=====================")
 
 		for _, name := range names {
@@ -62,7 +62,7 @@ func ShowCommandSelector(registry *CommandRegistry, chatAgent *agent.Agent) (str
 			fmt.Printf("/%s - %s\n", name, cmd.Description())
 		}
 
-		fmt.Println("\n💡 Type any command to use it")
+		fmt.Println("\n[i] Type any command to use it")
 		return "", fmt.Errorf("command selector not available in agent console")
 	}
 

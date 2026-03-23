@@ -464,7 +464,7 @@ func TestPathValidation_TmpVariations(t *testing.T) {
 		if !isPathInTmp(path) {
 			t.Errorf("Path %q should be detected as tmp path", path)
 		}
-		t.Logf("✓ Path %q correctly identified as tmp path", path)
+		t.Logf("[ok] Path %q correctly identified as tmp path", path)
 	}
 }
 
@@ -494,7 +494,7 @@ func TestPathValidation_WorkspaceVariations(t *testing.T) {
 			t.Errorf("isPathInWorkspace(%q, %q) = %v, want %v", 
 				tt.path, workspaceDir, result, tt.expected)
 		} else {
-			t.Logf("✓ Path %q = %v (as expected)", tt.path, result)
+			t.Logf("[ok] Path %q = %v (as expected)", tt.path, result)
 		}
 	}
 }

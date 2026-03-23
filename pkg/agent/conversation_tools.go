@@ -26,7 +26,7 @@ func (ch *ConversationHandler) prepareTools() []api.Tool {
 	}
 
 	if ch.agent != nil {
-		ch.agent.debugLog("⚠️ prepareTools produced 0 tools; falling back to default tool definitions\n")
+		ch.agent.debugLog("[WARN] prepareTools produced 0 tools; falling back to default tool definitions\n")
 	}
 
 	fallback := api.GetToolDefinitions()
@@ -65,7 +65,7 @@ func (ch *ConversationHandler) sanitizeToolMessages(messages []api.Message) []ap
 	if ch.agent != nil {
 		provider := ch.agent.GetProvider()
 		if strings.EqualFold(provider, "deepseek") || strings.EqualFold(provider, "minimax") {
-			ch.agent.debugLog("🔍 %s sanitizing %d messages\n", strings.ToUpper(provider), len(messages))
+			ch.agent.debugLog("[search] %s sanitizing %d messages\n", strings.ToUpper(provider), len(messages))
 		}
 	}
 
@@ -120,7 +120,7 @@ func (ch *ConversationHandler) sanitizeToolMessages(messages []api.Message) []ap
 					finalSanitized = append(finalSanitized, msg)
 					delete(validToolCallIds, msg.ToolCallId)
 				} else {
-					ch.agent.debugLog("🚨 Minimax: DROPPING orphaned tool result with tool_call_id=%s\n", msg.ToolCallId)
+					ch.agent.debugLog("[!!] Minimax: DROPPING orphaned tool result with tool_call_id=%s\n", msg.ToolCallId)
 				}
 			} else {
 				finalSanitized = append(finalSanitized, msg)
@@ -128,7 +128,7 @@ func (ch *ConversationHandler) sanitizeToolMessages(messages []api.Message) []ap
 		}
 
 		if len(finalSanitized) != len(sanitized) {
-			ch.agent.debugLog("✅ Minimax: Sanitization removed %d orphaned tool result(s)\n", len(sanitized)-len(finalSanitized))
+			ch.agent.debugLog("[OK] Minimax: Sanitization removed %d orphaned tool result(s)\n", len(sanitized)-len(finalSanitized))
 		}
 
 		return finalSanitized
@@ -151,10 +151,10 @@ func (ch *ConversationHandler) logDroppedToolMessage(reason string, msg api.Mess
 	// Enhanced logging for DeepSeek and Minimax
 	provider := ch.agent.GetProvider()
 	if strings.EqualFold(provider, "deepseek") {
-		ch.agent.debugLog("🚨 DeepSeek: ⚠️ Dropping tool message (%s). tool_call_id=%s snippet=%q\n", reason, msg.ToolCallId, snippet)
+		ch.agent.debugLog("[!!] DeepSeek: [WARN] Dropping tool message (%s). tool_call_id=%s snippet=%q\n", reason, msg.ToolCallId, snippet)
 	} else if strings.EqualFold(provider, "minimax") {
-		ch.agent.debugLog("🚨 Minimax: ⚠️ Dropping tool message (%s). tool_call_id=%s snippet=%q\n", reason, msg.ToolCallId, snippet)
+		ch.agent.debugLog("[!!] Minimax: [WARN] Dropping tool message (%s). tool_call_id=%s snippet=%q\n", reason, msg.ToolCallId, snippet)
 	} else {
-		ch.agent.debugLog("⚠️ Dropping tool message (%s). tool_call_id=%s snippet=%q\n", reason, msg.ToolCallId, snippet)
+		ch.agent.debugLog("[WARN] Dropping tool message (%s). tool_call_id=%s snippet=%q\n", reason, msg.ToolCallId, snippet)
 	}
 }

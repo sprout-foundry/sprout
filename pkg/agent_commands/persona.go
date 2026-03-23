@@ -49,7 +49,7 @@ func (p *PersonaCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 	if strings.EqualFold(args[0], "none") || strings.EqualFold(args[0], "clear") {
 		chatAgent.ClearActivePersona()
-		fmt.Println("✅ Cleared active persona; restored base system prompt")
+		fmt.Println("[OK] Cleared active persona; restored base system prompt")
 		return nil
 	}
 
@@ -70,7 +70,7 @@ func (p *PersonaCommand) Execute(args []string, chatAgent *agent.Agent) error {
 			return err
 		}
 		provider, model, _ := chatAgent.GetPersonaProviderModel(personaID)
-		fmt.Printf("✅ Active persona: %s (%s)\n", persona.Name, personaID)
+		fmt.Printf("[OK] Active persona: %s (%s)\n", persona.Name, personaID)
 		fmt.Printf("   Provider: %s\n", provider)
 		fmt.Printf("   Model: %s\n", model)
 		return nil
@@ -91,7 +91,7 @@ func (p *PersonaCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		}); err != nil {
 			return fmt.Errorf("failed to save config: %w", err)
 		}
-		fmt.Printf("✅ Enabled persona %s\n", personaID)
+		fmt.Printf("[OK] Enabled persona %s\n", personaID)
 		return nil
 	case "disable":
 		persona.Enabled = false
@@ -104,7 +104,7 @@ func (p *PersonaCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		}); err != nil {
 			return fmt.Errorf("failed to save config: %w", err)
 		}
-		fmt.Printf("✅ Disabled persona %s\n", personaID)
+		fmt.Printf("[OK] Disabled persona %s\n", personaID)
 		return nil
 	case "provider":
 		if len(args) < 3 {
@@ -138,7 +138,7 @@ func (p *PersonaCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		} else {
 			persona.AllowedTools = parseCommaList(toolsArg)
 			if unknown := configuration.UnknownPersonaTools(persona.AllowedTools); len(unknown) > 0 {
-				fmt.Fprintf(os.Stderr, "⚠️  Unknown tools in allowlist: %s\n", strings.Join(unknown, ", "))
+				fmt.Fprintf(os.Stderr, "[WARN] Unknown tools in allowlist: %s\n", strings.Join(unknown, ", "))
 			}
 		}
 	case "prompt":
@@ -178,13 +178,13 @@ func (p *PersonaCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	fmt.Printf("✅ Updated persona %s\n", personaID)
-	fmt.Println("💡 Activate it with: /persona " + personaID)
+	fmt.Printf("[OK] Updated persona %s\n", personaID)
+	fmt.Println("[i] Activate it with: /persona " + personaID)
 	return nil
 }
 
 func (p *PersonaCommand) listPersonas(config *configuration.Config, chatAgent *agent.Agent) error {
-	fmt.Println("\n🎭 Personas")
+	fmt.Println("\n[role] Personas")
 	fmt.Println("===========")
 	active := chatAgent.GetActivePersona()
 	if active == "" {
@@ -221,7 +221,7 @@ func (p *PersonaCommand) listPersonas(config *configuration.Config, chatAgent *a
 
 func (p *PersonaCommand) showPersona(personaID string, persona configuration.SubagentType, chatAgent *agent.Agent) error {
 	provider, model, _ := chatAgent.GetPersonaProviderModel(personaID)
-	fmt.Printf("\n🎭 %s (%s)\n", persona.Name, personaID)
+	fmt.Printf("\n[role] %s (%s)\n", persona.Name, personaID)
 	fmt.Printf("Description: %s\n", persona.Description)
 	fmt.Printf("Enabled: %t\n", persona.Enabled)
 	fmt.Printf("Provider: %s\n", provider)
@@ -260,8 +260,8 @@ func (p *PersonaCommand) createPersona(personaID string, config *configuration.C
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	fmt.Printf("✅ Created persona %s\n", personaID)
-	fmt.Printf("💡 Configure it with: /persona %s show\n", personaID)
+	fmt.Printf("[OK] Created persona %s\n", personaID)
+	fmt.Printf("[i] Configure it with: /persona %s show\n", personaID)
 	return nil
 }
 

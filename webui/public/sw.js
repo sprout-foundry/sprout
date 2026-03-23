@@ -23,6 +23,13 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Allow the page to force immediate activation of an updated worker.
+self.addEventListener('message', (event) => {
+  if (event?.data?.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
 // Fetch event - Network Only (never use cache)
 self.addEventListener('fetch', (event) => {
   const { request } = event;

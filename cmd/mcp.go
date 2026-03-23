@@ -218,14 +218,14 @@ func runMCPAdd() error {
 	}
 
 	fmt.Println()
-	fmt.Printf("✅ %s configured successfully!\n", serverConfig.Name)
+	fmt.Printf("[OK] %s configured successfully!\n", serverConfig.Name)
 	fmt.Printf("Command: %s %v\n", serverConfig.Command, serverConfig.Args)
 	fmt.Println()
 	fmt.Printf("To test the configuration, run: ledit mcp test %s\n", serverName)
 	fmt.Println()
 
 	if selectedTemplate.Docs != "" {
-		fmt.Printf("📖 Documentation: %s\n", selectedTemplate.Docs)
+		fmt.Printf("[read] Documentation: %s\n", selectedTemplate.Docs)
 	}
 
 	return nil
@@ -310,7 +310,7 @@ func setupGitMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
 	}
 
 	fmt.Println()
-	fmt.Println("✅ Git MCP Server configured successfully!")
+	fmt.Println("[OK] Git MCP Server configured successfully!")
 	fmt.Printf("Command: %s %v\n", serverConfig.Command, serverConfig.Args)
 	fmt.Println()
 	fmt.Println("To test the configuration, run: ledit mcp test git")
@@ -318,10 +318,10 @@ func setupGitMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
 
 	// Installation instructions
 	if installChoice == "1" || installChoice == "" {
-		fmt.Println("📦 Installation (if not already installed):")
+		fmt.Println("[pkg] Installation (if not already installed):")
 		fmt.Println("No installation needed - uvx will install automatically")
 	} else {
-		fmt.Println("📦 Installation (if not already installed):")
+		fmt.Println("[pkg] Installation (if not already installed):")
 		fmt.Println("pip install mcp-server-git")
 	}
 
@@ -330,7 +330,7 @@ func setupGitMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
 
 func setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
 	fmt.Println()
-	fmt.Println("🐙 GitHub MCP Server Setup")
+	fmt.Println("[oct] GitHub MCP Server Setup")
 	fmt.Println("==========================")
 	fmt.Println()
 
@@ -374,11 +374,11 @@ func setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 	case "1", "":
 		// Remote OAuth server — no token needed
 		fmt.Println()
-		fmt.Println("ℹ️  Remote OAuth server selected.")
+		fmt.Println("[info] Remote OAuth server selected.")
 		fmt.Println("   Authentication will happen automatically via OAuth")
 		fmt.Println("   when the agent first connects to the server.")
 		fmt.Println()
-		fmt.Println("   ⚠️  This requires an active GitHub Copilot or Copilot Enterprise seat.")
+		fmt.Println("   [WARN] This requires an active GitHub Copilot or Copilot Enterprise seat.")
 		fmt.Println("   If you don't have a Copilot seat, choose option 2 or 3 instead.")
 
 		serverConfig = mcp.MCPServerConfig{
@@ -441,7 +441,7 @@ func setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 	}
 
 	fmt.Println()
-	fmt.Println("✅ GitHub MCP Server configured successfully!")
+	fmt.Println("[OK] GitHub MCP Server configured successfully!")
 	if serverConfig.Type == "http" {
 		fmt.Printf("   Type: Remote HTTP server (OAuth)\n")
 		fmt.Printf("   URL:  %s\n", serverConfig.URL)
@@ -456,7 +456,7 @@ func setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 	if strings.ToLower(strings.TrimSpace(testChoice)) != "n" {
 		fmt.Println()
 		if err := runMCPTest("github"); err != nil {
-			fmt.Printf("⚠️  Test failed: %v\n", err)
+			fmt.Printf("[WARN] Test failed: %v\n", err)
 			fmt.Println("You can retry later with: ledit mcp test github")
 		}
 		return nil
@@ -465,7 +465,7 @@ func setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 	fmt.Println()
 	fmt.Println("To test the configuration later, run: ledit mcp test github")
 	fmt.Println()
-	fmt.Println("📦 Features available:")
+	fmt.Println("[pkg] Features available:")
 	fmt.Println("• Repository management and file operations")
 	fmt.Println("• Issues and pull request automation")
 	fmt.Println("• GitHub Actions workflow monitoring")
@@ -514,7 +514,7 @@ func promptForGitHubToken(reader *bufio.Reader) (string, error) {
 
 func setupPlaywrightMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
 	fmt.Println()
-	fmt.Println("🎭 Playwright MCP Server Setup")
+	fmt.Println("[role] Playwright MCP Server Setup")
 	fmt.Println("=============================")
 	fmt.Println()
 
@@ -588,15 +588,15 @@ func setupPlaywrightMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) er
 	}
 
 	fmt.Println()
-	fmt.Println("✅ Playwright MCP Server configured successfully!")
+	fmt.Println("[OK] Playwright MCP Server configured successfully!")
 	fmt.Printf("Command: %s %v\n", serverConfig.Command, serverConfig.Args)
 	fmt.Println()
 	fmt.Println("To test the configuration, run: ledit mcp test playwright")
 	fmt.Println()
-	fmt.Println("📦 Installation (if not already installed):")
+	fmt.Println("[pkg] Installation (if not already installed):")
 	fmt.Println("npx will install the package automatically")
 	fmt.Println()
-	fmt.Println("🎭 Features available:")
+	fmt.Println("[role] Features available:")
 	fmt.Println("• Browser automation (Chromium, Firefox, WebKit)")
 	fmt.Println("• Web scraping and data extraction")
 	fmt.Println("• UI testing and validation")
@@ -608,7 +608,7 @@ func setupPlaywrightMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) er
 
 func setupChromeDevToolsMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
 	fmt.Println()
-	fmt.Println("🌐 Chrome DevTools MCP Server Setup")
+	fmt.Println("[web] Chrome DevTools MCP Server Setup")
 	fmt.Println("====================================")
 	fmt.Println()
 
@@ -669,15 +669,15 @@ func setupChromeDevToolsMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader
 	}
 
 	fmt.Println()
-	fmt.Println("✅ Chrome DevTools MCP Server configured successfully!")
+	fmt.Println("[OK] Chrome DevTools MCP Server configured successfully!")
 	fmt.Printf("Command: %s %v\n", serverConfig.Command, serverConfig.Args)
 	fmt.Println()
 	fmt.Println("To test the configuration, run: ledit mcp test chrome-devtools")
 	fmt.Println()
-	fmt.Println("📦 Installation (if not already installed):")
+	fmt.Println("[pkg] Installation (if not already installed):")
 	fmt.Println("npx will install the package automatically")
 	fmt.Println()
-	fmt.Println("🌐 Features available:")
+	fmt.Println("[web] Features available:")
 	fmt.Println("• Browser automation (click, fill forms, navigation)")
 	fmt.Println("• Performance analysis and tracing")
 	fmt.Println("• Network request inspection")
@@ -685,14 +685,14 @@ func setupChromeDevToolsMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader
 	fmt.Println("• Screenshot and snapshot capture")
 	fmt.Println("• DOM inspection and scripting")
 	fmt.Println()
-	fmt.Println("📖 Documentation: https://github.com/ChromeDevTools/chrome-devtools-mcp")
+	fmt.Println("[read] Documentation: https://github.com/ChromeDevTools/chrome-devtools-mcp")
 
 	return nil
 }
 
 func setupCustomMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader, registry *mcp.MCPServerRegistry) error {
 	fmt.Println()
-	fmt.Println("🔧 Custom MCP Server Setup")
+	fmt.Println("[tool] Custom MCP Server Setup")
 	fmt.Println("==========================")
 	fmt.Println()
 
@@ -815,7 +815,7 @@ func setupCustomMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader, regist
 	}
 
 	fmt.Println()
-	fmt.Printf("✅ Custom MCP Server '%s' configured successfully!\n", serverName)
+	fmt.Printf("[OK] Custom MCP Server '%s' configured successfully!\n", serverName)
 	fmt.Printf("Command: %s %v\n", serverConfig.Command, serverConfig.Args)
 	fmt.Println()
 	fmt.Printf("To test the configuration, run: ledit mcp test %s\n", serverName)
@@ -897,7 +897,7 @@ func runMCPRemove(serverName string) error {
 		return fmt.Errorf("failed to save MCP config: %w", err)
 	}
 
-	fmt.Printf("✅ Server '%s' removed successfully!\n", serverName)
+	fmt.Printf("[OK] Server '%s' removed successfully!\n", serverName)
 
 	if len(mcpConfig.Servers) == 0 {
 		fmt.Println("MCP disabled (no servers remain).")
@@ -937,7 +937,7 @@ func runMCPList() error {
 	fmt.Println("-------------------")
 
 	for name, server := range mcpConfig.Servers {
-		fmt.Printf("📡 %s\n", name)
+		fmt.Printf("[signal] %s\n", name)
 		if server.Type == "http" {
 			fmt.Printf("   Type: HTTP Remote Server\n")
 			fmt.Printf("   URL: %s\n", server.URL)
@@ -1030,7 +1030,7 @@ func runMCPTest(serverName string) error {
 		return fmt.Errorf("server '%s' not found", serverName)
 	}
 
-	fmt.Printf("🧪 Testing MCP Server: %s\n", serverName)
+	fmt.Printf("[test] Testing MCP Server: %s\n", serverName)
 	fmt.Println("========================")
 	fmt.Printf("Command: %s %v\n", serverConfig.Command, serverConfig.Args)
 	fmt.Println()
@@ -1049,36 +1049,36 @@ func runMCPTest(serverName string) error {
 		return fmt.Errorf("failed to get server from manager")
 	}
 
-	fmt.Println("⏳ Starting server...")
+	fmt.Println("[...] Starting server...")
 	if err := server.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start server: %w", err)
 	}
 
 	defer func() {
-		fmt.Println("🛑 Stopping server...")
+		fmt.Println("[STOP] Stopping server...")
 		server.Stop(context.Background())
 	}()
 
-	fmt.Println("✅ Server started successfully!")
+	fmt.Println("[OK] Server started successfully!")
 
-	fmt.Println("🔄 Initializing server...")
+	fmt.Println("[~] Initializing server...")
 	if err := server.Initialize(ctx); err != nil {
 		return fmt.Errorf("failed to initialize server: %w", err)
 	}
-	fmt.Println("✅ Server initialized successfully!")
+	fmt.Println("[OK] Server initialized successfully!")
 
-	fmt.Println("🔍 Listing available tools...")
+	fmt.Println("[search] Listing available tools...")
 	tools, err := server.ListTools(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list tools: %w", err)
 	}
 
 	if len(tools) == 0 {
-		fmt.Println("⚠️  No tools available from this server.")
+		fmt.Println("[WARN] No tools available from this server.")
 		return nil
 	}
 
-	fmt.Printf("✅ Found %d tools:\n", len(tools))
+	fmt.Printf("[OK] Found %d tools:\n", len(tools))
 	fmt.Println()
 
 	for i, tool := range tools {
@@ -1089,7 +1089,7 @@ func runMCPTest(serverName string) error {
 		fmt.Println()
 	}
 
-	fmt.Printf("\n🎉 Test completed successfully! Server '%s' is working properly.\n", serverName)
+	fmt.Printf("\n[done] Test completed successfully! Server '%s' is working properly.\n", serverName)
 
 	return nil
 }

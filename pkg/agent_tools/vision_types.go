@@ -559,7 +559,7 @@ func (vp *VisionProcessor) GetImageData(imagePath string) (string, string, error
 	// Warn user if image is approaching the limit
 	if len(data) > visionOptimizeThresholdBytes {
 		if vp.logger != nil {
-			vp.logger.LogProcessStep(fmt.Sprintf("⚠️ Large image detected (%d MB), attempting optimization to stay under %d MB limit",
+			vp.logger.LogProcessStep(fmt.Sprintf("[WARN] Large image detected (%d MB), attempting optimization to stay under %d MB limit",
 				originalSize/1024/1024, visionMaxImageFileSizeBytes/1024/1024))
 		}
 	}
@@ -568,12 +568,12 @@ func (vp *VisionProcessor) GetImageData(imagePath string) (string, string, error
 	if optErr != nil {
 		// Log optimization error but continue with original data
 		if vp.logger != nil {
-			vp.logger.LogProcessStep(fmt.Sprintf("⚠️ Image optimization failed: %v, using original data", optErr))
+			vp.logger.LogProcessStep(fmt.Sprintf("[WARN] Image optimization failed: %v, using original data", optErr))
 		}
 	} else if optimizedData != nil && len(optimizedData) > 0 {
 		data = optimizedData
 		if len(data) < originalSize && vp.logger != nil {
-			vp.logger.LogProcessStep(fmt.Sprintf("✓ Image optimized: %d MB → %d MB (%.1f%% reduction)",
+			vp.logger.LogProcessStep(fmt.Sprintf("[ok] Image optimized: %d MB → %d MB (%.1f%% reduction)",
 				originalSize/1024/1024, len(data)/1024/1024, 100-float64(len(data))/float64(originalSize)*100))
 		}
 	}
@@ -659,7 +659,7 @@ func OptimizeImageData(imagePath string, data []byte) ([]byte, string, error) {
 		img = resized
 		width = newWidth
 		height = newHeight
-		fmt.Printf("📐 Resized image from %dx%d to %dx%d (exceeded max dimension of %d)\n",
+		fmt.Printf("[measure] Resized image from %dx%d to %dx%d (exceeded max dimension of %d)\n",
 			bounds.Dx(), bounds.Dy(), width, height, visionMaxDimension)
 	}
 
@@ -852,7 +852,7 @@ func AnalyzeImage(imagePath string, analysisPrompt string, analysisMode string) 
 	cacheKey := fmt.Sprintf("%s|%s|%s", imagePath, analysisMode, analysisPrompt)
 
 	if cachedResult, exists := visionCache[cacheKey]; exists {
-		fmt.Printf("🔄 Using cached vision analysis for %s [%s]\n", GetBaseName(imagePath), analysisMode)
+		fmt.Printf("[~] Using cached vision analysis for %s [%s]\n", GetBaseName(imagePath), analysisMode)
 
 		if cachedUsage, hasUsage := visionCacheUsage[cacheKey]; hasUsage {
 			lastVisionUsage = cachedUsage

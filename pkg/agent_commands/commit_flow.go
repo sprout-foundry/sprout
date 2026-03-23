@@ -118,7 +118,7 @@ func (cf *CommitFlow) buildCommitActions(stagedFiles, unstagedFiles []string) []
 
 		actions = append(actions, CommitAction{
 			ID:          "commit_staged",
-			DisplayName: "📦 Commit Staged Files",
+			DisplayName: "[pkg] Commit Staged Files",
 			Description: stagingInfo,
 			Action:      (*CommitFlow).commitStagedFiles,
 		})
@@ -128,7 +128,7 @@ func (cf *CommitFlow) buildCommitActions(stagedFiles, unstagedFiles []string) []
 	if len(unstagedFiles) > 0 {
 		actions = append(actions, CommitAction{
 			ID:          "select_files",
-			DisplayName: "📝 Select Files to Commit",
+			DisplayName: "[edit] Select Files to Commit",
 			Description: fmt.Sprintf("Choose from %d modified file(s)", len(unstagedFiles)),
 			Action:      (*CommitFlow).selectFilesToCommit,
 		})
@@ -138,7 +138,7 @@ func (cf *CommitFlow) buildCommitActions(stagedFiles, unstagedFiles []string) []
 	if len(unstagedFiles) > 0 {
 		actions = append(actions, CommitAction{
 			ID:          "commit_all",
-			DisplayName: "🎯 Stage All & Commit",
+			DisplayName: "[*] Stage All & Commit",
 			Description: fmt.Sprintf("Stage and commit all %d modified file(s)", len(unstagedFiles)),
 			Action:      (*CommitFlow).stageAllAndCommit,
 		})
@@ -149,7 +149,7 @@ func (cf *CommitFlow) buildCommitActions(stagedFiles, unstagedFiles []string) []
 	if totalFiles > 1 {
 		actions = append(actions, CommitAction{
 			ID:          "single_file",
-			DisplayName: "📄 Single File Commit",
+			DisplayName: "[doc] Single File Commit",
 			Description: "Commit changes to just one file",
 			Action:      (*CommitFlow).singleFileCommit,
 		})
@@ -196,7 +196,7 @@ func (cf *CommitFlow) getGitStatus() (staged, unstaged []string, err error) {
 // commitStagedFiles commits the currently staged files
 func (cf *CommitFlow) commitStagedFiles() error {
 	cf.println("")
-	cf.println("📦 Committing staged files...")
+	cf.println("[pkg] Committing staged files...")
 	return cf.generateCommitMessageAndCommit()
 }
 
@@ -214,7 +214,7 @@ func (cf *CommitFlow) selectFilesToCommit() error {
 
 	if len(unstagedFiles) == 0 {
 		cf.println("")
-		cf.println("📭 No unstaged files to select.")
+		cf.println("[empty] No unstaged files to select.")
 		return nil
 	}
 
@@ -235,7 +235,7 @@ func (cf *CommitFlow) selectFilesToCommit() error {
 
 	if len(selectedFiles) == 0 {
 		cf.println("")
-		cf.println("❌ No files selected")
+		cf.println("[FAIL] No files selected")
 		return nil
 	}
 
@@ -246,14 +246,14 @@ func (cf *CommitFlow) selectFilesToCommit() error {
 // stageAllAndCommit stages all modified files and commits them
 func (cf *CommitFlow) stageAllAndCommit() error {
 	cf.println("")
-	cf.println("🎯 Staging all modified files...")
+	cf.println("[*] Staging all modified files...")
 
 	cmd := exec.Command("git", "add", "-A")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to stage files: %w", err)
 	}
 
-	cf.println("✅ All files staged.")
+	cf.println("[OK] All files staged.")
 	return cf.generateCommitMessageAndCommit()
 }
 
@@ -273,7 +273,7 @@ func (cf *CommitFlow) singleFileCommit() error {
 	allFiles := append(stagedFiles, unstagedFiles...)
 	if len(allFiles) == 0 {
 		cf.println("")
-		cf.println("📭 No files available for commit.")
+		cf.println("[empty] No files available for commit.")
 		return nil
 	}
 
@@ -290,10 +290,10 @@ func (cf *CommitFlow) singleFileCommit() error {
 
 	// Reset staging area and stage only the selected file
 	cf.println("")
-	cf.println("🔄 Resetting staging area...")
+	cf.println("[~] Resetting staging area...")
 	exec.Command("git", "reset").Run() // Reset staging area
 
-	cf.printf("📤 Staging: %s\n", selectedFile)
+	cf.printf("[up] Staging: %s\n", selectedFile)
 	cmd := exec.Command("git", "add", selectedFile)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to stage file %s: %w", selectedFile, err)
@@ -312,14 +312,14 @@ func (cf *CommitFlow) generateCommitMessageAndCommit() error {
 
 	if len(diffOutput) == 0 {
 		cf.println("")
-		cf.println("📭 No staged changes to commit.")
+		cf.println("[empty] No staged changes to commit.")
 		return nil
 	}
 
 	// Use existing commit message generation logic from the original commit command
 	// This will use the diff optimizer we already implemented
 	cf.println("")
-	cf.println("🤖 Generating commit message...")
+	cf.println("[bot] Generating commit message...")
 
 	// Create a temporary CommitCommand to reuse the existing logic
 	commitCmd := &CommitCommand{

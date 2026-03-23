@@ -133,7 +133,7 @@ func TryZshCommandExecution(ctx context.Context, chatAgent *agent.Agent, query s
 	)
 
 	if err != nil {
-		fmt.Printf("%s❌ Error:%s %v\n",
+		fmt.Printf("%s[FAIL] Error:%s %v\n",
 			console.ColorRed,
 			console.ColorReset,
 			err,
@@ -247,8 +247,8 @@ func TryDirectExecution(ctx context.Context, chatAgent *agent.Agent, query strin
 
 // executeDirectCommand executes a command directly and prints output
 func executeDirectCommand(command string) (bool, error) {
-	fmt.Printf("%s⚡ Fast path:%s %s\n",
-		console.ColorizeBold("⚡ Fast path:", console.ColorYellow),
+	fmt.Printf("%s[!] Fast path:%s %s\n",
+		console.ColorizeBold("[!] Fast path:", console.ColorYellow),
 		console.ColorReset,
 		command,
 	)
@@ -273,7 +273,7 @@ func executeDirectCommand(command string) (bool, error) {
 	)
 
 	if err != nil {
-		fmt.Printf("%s❌ Error:%s %v\n",
+		fmt.Printf("%s[FAIL] Error:%s %v\n",
 			console.ColorRed,
 			console.ColorReset,
 			err,
@@ -292,8 +292,8 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 	if registry.IsSlashCommand(query) {
 		if err := registry.Execute(query, chatAgent); err != nil {
 			// For slash commands, show error and exit immediately
-			fmt.Fprintf(os.Stderr, "❌ Slash command error: %v\n", err)
-			fmt.Fprintf(os.Stderr, "💡 Use '/help' to see available commands\n")
+			fmt.Fprintf(os.Stderr, "[FAIL] Slash command error: %v\n", err)
+			fmt.Fprintf(os.Stderr, "[i] Use '/help' to see available commands\n")
 			return fmt.Errorf("slash command failed: %w", err)
 		}
 		return nil
@@ -385,12 +385,12 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 
 		switch chatAgent.GetLastRunTerminationReason() {
 		case agent.RunTerminationMaxIterations:
-			fmt.Printf("\n⚠️ Reached max iterations (%d) in %s\n", chatAgent.GetMaxIterations(), FormatDuration(duration))
+			fmt.Printf("\n[WARN] Reached max iterations (%d) in %s\n", chatAgent.GetMaxIterations(), FormatDuration(duration))
 		case agent.RunTerminationInterrupted:
-			fmt.Printf("\n⏹️ Stopped in %s\n", FormatDuration(duration))
+			fmt.Printf("\n[STOP] Stopped in %s\n", FormatDuration(duration))
 		default:
 			// Print completion message without automatic summary (use /stats to see summary)
-			fmt.Printf("\n✅ Completed in %s\n", FormatDuration(duration))
+			fmt.Printf("\n[OK] Completed in %s\n", FormatDuration(duration))
 		}
 
 		return nil
@@ -399,7 +399,7 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 		// Context was cancelled - agent processing was interrupted
 		chatAgent.TriggerInterrupt()
 		duration := time.Since(startTime)
-		fmt.Printf("\n⏹️ Query interrupted after %s\n", FormatDuration(duration))
+		fmt.Printf("\n[STOP] Query interrupted after %s\n", FormatDuration(duration))
 
 		// Allow the agent goroutine to stop cleanly after receiving interrupt.
 		select {

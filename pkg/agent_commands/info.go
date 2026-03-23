@@ -21,7 +21,7 @@ func (s *StatsCommand) Description() string {
 
 // Execute runs the stats command
 func (s *StatsCommand) Execute(args []string, chatAgent *agent.Agent) error {
-	fmt.Println("\n📊 Detailed Conversation Summary:")
+	fmt.Println("\n[chart] Detailed Conversation Summary:")
 	fmt.Println("=====================================")
 	chatAgent.PrintConversationSummary(true)
 	return nil

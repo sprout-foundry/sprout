@@ -46,7 +46,7 @@ func (c *SessionsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		}
 
 		chatAgent.ApplyState(state)
-		fmt.Printf("✓ Conversation session loaded: %s\n", sessionID)
+		fmt.Printf("[ok] Conversation session loaded: %s\n", sessionID)
 		return nil
 	}
 
@@ -63,7 +63,7 @@ func (c *SessionsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 // selectSessionWithDropdown provides interactive session selection with dropdown
 func (c *SessionsCommand) selectSessionWithDropdown(sessions []agent.SessionInfo, chatAgent *agent.Agent) error {
 	// Simple numeric selector - display sessions and prompt for choice
-	fmt.Println("\n📂 Available Sessions:")
+	fmt.Println("\n[dir/] Available Sessions:")
 	fmt.Println("=====================")
 
 	// Display sessions in reverse order (newest first)
@@ -112,6 +112,6 @@ func (c *SessionsCommand) selectSessionWithDropdown(sessions []agent.SessionInfo
 	}
 
 	chatAgent.ApplyState(state)
-	fmt.Printf("\r\n✅ Conversation session loaded: %s\r\n", sessionID)
+	fmt.Printf("\r\n[OK] Conversation session loaded: %s\r\n", sessionID)
 	return nil
 }

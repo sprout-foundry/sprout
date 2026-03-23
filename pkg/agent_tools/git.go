@@ -81,7 +81,7 @@ func ExecuteGitOperation(ctx context.Context, op GitOperation, sessionID string,
 // PromptForGitApprovalStdin prompts for git approval using stdin
 func PromptForGitApprovalStdin(command string) (bool, error) {
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Printf("\n🔒 Git Operation Requires Approval\n")
+	fmt.Printf("\n[LOCK] Git Operation Requires Approval\n")
 	fmt.Printf("Command: %s\n", command)
 	fmt.Printf("\n")
 	fmt.Printf("Approve? (y/n): ")

@@ -1,4 +1,11 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, type ReactNode } from 'react';
+import {
+  Terminal, BookOpen, FileEdit, Pencil, Search, Eye, FlaskConical,
+  Globe, ArrowDown, ClipboardList, ScrollText, RotateCcw,
+  Wrench, Rocket, Zap, CheckCircle2, XCircle, Hourglass,
+  Bot, Copy, AlertTriangle, ChevronDown, ChevronRight,
+  BarChart3, FileText
+} from 'lucide-react';
 import CommandInput from './CommandInput';
 import { stripAnsiCodes } from '../utils/ansi';
 import './Chat.css';
@@ -67,24 +74,24 @@ const Chat: React.FC<ChatProps> = ({
     });
   };
 
-  const getToolIcon = (toolName: string) => {
-    const iconMap: { [key: string]: string } = {
-      'shell_command': '🖥️',
-      'read_file': '📖',
-      'write_file': '✏️',
-      'edit_file': '📝',
-      'search_files': '🔍',
-      'analyze_ui_screenshot': '🖼️',
-      'analyze_image_content': '🔬',
-      'web_search': '🌐',
-      'fetch_url': '📥',
-      'TodoWrite': '📋',
-      'TodoRead': '📝',
-      'view_history': '📚',
-      'rollback_changes': '⏪',
-      'mcp_tools': '🔧'
+  const getToolIcon = (toolName: string): ReactNode => {
+    const iconMap: { [key: string]: ReactNode } = {
+      'shell_command': <Terminal size={14} />,
+      'read_file': <BookOpen size={14} />,
+      'write_file': <Pencil size={14} />,
+      'edit_file': <FileEdit size={14} />,
+      'search_files': <Search size={14} />,
+      'analyze_ui_screenshot': <Eye size={14} />,
+      'analyze_image_content': <FlaskConical size={14} />,
+      'web_search': <Globe size={14} />,
+      'fetch_url': <ArrowDown size={14} />,
+      'TodoWrite': <ClipboardList size={14} />,
+      'TodoRead': <ClipboardList size={14} />,
+      'view_history': <ScrollText size={14} />,
+      'rollback_changes': <RotateCcw size={14} />,
+      'mcp_tools': <Wrench size={14} />
     };
-    return iconMap[toolName] || '🔧';
+    return iconMap[toolName] || <Wrench size={14} />;
   };
 
   const getPersonaColor = (persona?: string) => {
@@ -101,13 +108,13 @@ const Chat: React.FC<ChatProps> = ({
     return colorMap[persona || ''] || '#8b949e';
   };
 
-  const getStatusIcon = (status: string) => {
+  const getStatusIcon = (status: string): ReactNode => {
     switch (status) {
-      case 'started': return '🚀';
-      case 'running': return '⚡';
-      case 'completed': return '✅';
-      case 'error': return '❌';
-      default: return '⏳';
+      case 'started': return <Rocket size={14} />;
+      case 'running': return <Zap size={14} />;
+      case 'completed': return <CheckCircle2 size={14} />;
+      case 'error': return <XCircle size={14} />;
+      default: return <Hourglass size={14} />;
     }
   };
 
@@ -181,7 +188,7 @@ const Chat: React.FC<ChatProps> = ({
   return (
     <div className="chat-shell">
       <div className="chat-header">
-        <h2><span className="header-icon">🤖</span>AI Assistant</h2>
+        <h2><span className="header-icon"><Bot size={16} /></span>AI Assistant</h2>
         {isProcessing && (
           <div className="header-status">
             <span className="status-dot processing"></span>
@@ -194,7 +201,7 @@ const Chat: React.FC<ChatProps> = ({
         <div className="chat-container" ref={chatContainerRef}>
           {messages.length === 0 ? (
             <div className="welcome-message">
-              <div className="welcome-icon">🤖</div>
+              <div className="welcome-icon"><Bot size={32} /></div>
               <div className="welcome-text">
                 Welcome to ledit! I'm ready to help you with code analysis, editing, and more.
               </div>
@@ -217,7 +224,7 @@ const Chat: React.FC<ChatProps> = ({
                     title="Copy message"
                     aria-label="Copy message"
                   >
-                    📋
+                    <Copy size={14} />
                   </button>
                   <div className="message-content">
                     {renderContent(message.content)}
@@ -234,7 +241,7 @@ const Chat: React.FC<ChatProps> = ({
           {queryProgress && (
             <div className="query-progress">
               <div className="progress-header">
-                <span className="progress-icon">⚡</span>
+                <span className="progress-icon"><Zap size={14} /></span>
                 <span className="progress-text">{queryProgress.message || 'Processing...'}</span>
               </div>
               {queryProgress.details && (
@@ -249,7 +256,7 @@ const Chat: React.FC<ChatProps> = ({
           {isProcessing && toolExecutions.length === 0 && !queryProgress && (
             <div className="processing-indicator">
               <div className="processing-content">
-                <div className="processing-spinner">⚡</div>
+                <div className="processing-spinner"><Zap size={14} /></div>
                 <div className="processing-text">Processing your request...</div>
               </div>
             </div>
@@ -259,7 +266,7 @@ const Chat: React.FC<ChatProps> = ({
           {lastError && (
             <div className="error-indicator">
               <div className="error-content">
-                <div className="error-icon">⚠️</div>
+                <div className="error-icon"><AlertTriangle size={14} /></div>
                 <div className="error-text">{lastError}</div>
               </div>
             </div>
@@ -268,7 +275,7 @@ const Chat: React.FC<ChatProps> = ({
 
         <aside className="chat-tools-panel" aria-label="Tool executions panel">
           <div className="tool-executions-header">
-            <h4>🔧 Tool Executions</h4>
+            <h4><Wrench size={14} className="inline-icon" /> Tool Executions</h4>
             <span className="tool-count">
               {activeToolCount > 0 ? `${activeToolCount} active` : `${toolExecutions.length} total`}
             </span>
@@ -291,7 +298,7 @@ const Chat: React.FC<ChatProps> = ({
                       <span className="tool-icon">
                         {isSub ? (
                           <span className="subagent-icon" style={{ color: getPersonaColor(tool.persona) }}>
-                            🤖
+                            <Bot size={14} />
                           </span>
                         ) : (
                           getToolIcon(tool.tool)
@@ -306,7 +313,7 @@ const Chat: React.FC<ChatProps> = ({
                       <span className="tool-status">{getStatusIcon(tool.status)}</span>
                       <span className="tool-duration">{formatDuration(tool.startTime, tool.endTime)}</span>
                       <span className="tool-expand">
-                        {expandedTools.has(tool.id) ? '▼' : '▶'}
+                        {expandedTools.has(tool.id) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                       </span>
                     </div>
 
@@ -322,25 +329,25 @@ const Chat: React.FC<ChatProps> = ({
                       <div className="tool-details">
                         {isSub && subagentPrompt && (
                           <div className="tool-detail-section">
-                            <div className="tool-detail-label">📝 Task</div>
+                            <div className="tool-detail-label"><FileEdit size={12} className="inline-icon" /> Task</div>
                             <pre className="subagent-prompt-detail">{stripAnsiCodes(subagentPrompt)}</pre>
                           </div>
                         )}
                         {tool.arguments && !isSub && (
                           <div className="tool-detail-section">
-                            <div className="tool-detail-label">📋 Call</div>
+                            <div className="tool-detail-label"><ClipboardList size={12} className="inline-icon" /> Call</div>
                             <pre>{formatToolDetail(tool.arguments)}</pre>
                           </div>
                         )}
                         {tool.result && (
                           <div className="tool-detail-section">
-                            <div className="tool-detail-label">{isSub ? '📊 Summary' : '📄 Response'}</div>
+                            <div className="tool-detail-label">{isSub ? <><BarChart3 size={12} className="inline-icon" /> Summary</> : <><FileText size={12} className="inline-icon" /> Response</>}</div>
                             <pre>{formatToolDetail(tool.result)}</pre>
                           </div>
                         )}
                         {!tool.result && tool.arguments && isSub && (
                           <div className="tool-detail-section">
-                            <div className="tool-detail-label">📋 Call</div>
+                            <div className="tool-detail-label"><ClipboardList size={12} className="inline-icon" /> Call</div>
                             <pre>{formatToolDetail(tool.arguments)}</pre>
                           </div>
                         )}

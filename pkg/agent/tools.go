@@ -25,7 +25,7 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 	}
 
 	// Log the tool call for debugging
-	a.debugLog("🔧 Executing tool: %s with args: %v\n", toolName, args)
+	a.debugLog("[tool] Executing tool: %s with args: %v\n", toolName, args)
 
 	// Validate tool name and provide helpful error for common mistakes
 	registry := GetToolRegistry()

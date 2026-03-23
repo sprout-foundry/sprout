@@ -5,7 +5,6 @@ import GitView from './GitView';
 import LogsView from './LogsView';
 import FileEditsPanel from './FileEditsPanel';
 import Terminal from './Terminal';
-import NavigationBar from './NavigationBar';
 import EditorTabs from './EditorTabs';
 import EditorPane from './EditorPane';
 import ResizeHandle from './ResizeHandle';
@@ -222,11 +221,6 @@ const AppContent: React.FC<AppContentProps> = ({
         onProviderChange={onProviderChange}
       />
       <div className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''} ${isTerminalExpanded ? 'terminal-expanded' : ''}`}>
-        <NavigationBar
-          currentView={state.currentView}
-          onViewChange={onViewChange}
-        />
-
         <Status isConnected={state.isConnected} stats={state.stats} />
 
         {state.currentView === 'chat' ? (

@@ -887,12 +887,12 @@ func (ir *InputReader) finalizePaste() bool {
 	// Check for binary image paste data (bracketed paste may contain raw image bytes)
 	if len(rawBytes) > 4 && len(rawBytes) <= MaxPastedImageSize {
 		if ext, mimeType := DetectImageMagic(rawBytes); ext != "" {
-			fmt.Fprintf(os.Stderr, "\n📷 Image paste detected (%s, %d bytes)\n", mimeType, len(rawBytes))
+			fmt.Fprintf(os.Stderr, "\n[img] Image paste detected (%s, %d bytes)\n", mimeType, len(rawBytes))
 			savedPath, err := SavePastedImage(rawBytes)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "❌ Failed to save pasted image: %v\n", err)
+				fmt.Fprintf(os.Stderr, "[FAIL] Failed to save pasted image: %v\n", err)
 			} else {
-				fmt.Fprintf(os.Stderr, "💾 Saved to %s\n", savedPath)
+				fmt.Fprintf(os.Stderr, "[save] Saved to %s\n", savedPath)
 				placeholder := fmt.Sprintf("Pasted image saved to disk: %s ", savedPath)
 				// Insert placeholder at cursor position
 				before := ir.line[:ir.cursorPos]

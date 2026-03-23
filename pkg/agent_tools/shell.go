@@ -171,10 +171,10 @@ func buildShellOutputWithStatus(output, command string, exitCode int, err error)
 	var icon string
 	if exitCode == 0 {
 		status = "SUCCESS"
-		icon = "✅"
+		icon = "[OK]"
 	} else {
 		status = "FAILED"
-		icon = "❌"
+		icon = "[FAIL]"
 	}
 
 	// Build status header

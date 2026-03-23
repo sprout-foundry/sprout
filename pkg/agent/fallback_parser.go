@@ -55,7 +55,7 @@ func NewFallbackParser(agent *Agent) *FallbackParser {
 // Parse attempts to extract tool calls from content and returns both the calls and cleaned content
 func (fp *FallbackParser) Parse(content string) *FallbackParseResult {
 	if fp.agent.debug {
-		fp.agent.debugLog("🔍 FallbackParser: Attempting to parse tool calls from content\n")
+		fp.agent.debugLog("[search] FallbackParser: Attempting to parse tool calls from content\n")
 	}
 
 	trimmed := strings.TrimSpace(content)
@@ -65,7 +65,7 @@ func (fp *FallbackParser) Parse(content string) *FallbackParseResult {
 
 	if !fp.containsToolCallPatterns(trimmed) {
 		if fp.agent.debug {
-			fp.agent.debugLog("🔍 FallbackParser: No tool call patterns detected\n")
+			fp.agent.debugLog("[search] FallbackParser: No tool call patterns detected\n")
 		}
 		return nil
 	}
@@ -73,7 +73,7 @@ func (fp *FallbackParser) Parse(content string) *FallbackParseResult {
 	blocks := fp.collectBlocks(trimmed)
 	if len(blocks) == 0 {
 		if fp.agent.debug {
-			fp.agent.debugLog("🔍 FallbackParser: No valid tool calls found in content\n")
+			fp.agent.debugLog("[search] FallbackParser: No valid tool calls found in content\n")
 		}
 		return nil
 	}
@@ -93,7 +93,7 @@ func (fp *FallbackParser) Parse(content string) *FallbackParseResult {
 	toolCalls = fp.dedupeToolCalls(toolCalls)
 	if len(toolCalls) == 0 {
 		if fp.agent.debug {
-			fp.agent.debugLog("🔍 FallbackParser: No valid tool calls after normalization\n")
+			fp.agent.debugLog("[search] FallbackParser: No valid tool calls after normalization\n")
 		}
 		return nil
 	}

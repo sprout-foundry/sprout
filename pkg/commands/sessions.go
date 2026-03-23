@@ -48,7 +48,7 @@ func (c *SessionsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		}
 
 		chatAgent.ApplyState(state)
-		fmt.Printf("✓ Conversation session loaded: %s\n", sessionID)
+		fmt.Printf("[ok] Conversation session loaded: %s\n", sessionID)
 
 		// Show conversation preview
 		displayConversationPreview(chatAgent)
@@ -63,7 +63,7 @@ func (c *SessionsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 func (c *SessionsCommand) selectSessionWithDropdown(sessions []agent.SessionInfo, chatAgent *agent.Agent) error {
 	// Check if we're in agent console - if so, show list with help
 	if os.Getenv("LEDIT_AGENT_CONSOLE") == "1" {
-		fmt.Println("\n📂 Available Sessions:")
+		fmt.Println("\n[dir/] Available Sessions:")
 		fmt.Println("=====================")
 
 		// Display sessions newest first.
@@ -72,7 +72,7 @@ func (c *SessionsCommand) selectSessionWithDropdown(sessions []agent.SessionInfo
 			fmt.Printf("%d. Session %s - %s\n", sessionNum, session.SessionID, session.LastUpdated.Format("2006-01-02 15:04:05"))
 		}
 
-		fmt.Println("\n💡 To load a session, use: /sessions <session_number>")
+		fmt.Println("\n[i] To load a session, use: /sessions <session_number>")
 		fmt.Println("   Example: /sessions 1")
 		return nil
 	}
@@ -85,7 +85,7 @@ func (c *SessionsCommand) selectSessionWithDropdown(sessions []agent.SessionInfo
 	}
 
 	// Simple numeric selector - display sessions and prompt for choice
-	fmt.Println("\n📂 Available Sessions:")
+	fmt.Println("\n[dir/] Available Sessions:")
 	fmt.Println("=====================")
 
 	// Display sessions newest first.
@@ -132,7 +132,7 @@ func (c *SessionsCommand) selectSessionWithDropdown(sessions []agent.SessionInfo
 	}
 
 	chatAgent.ApplyState(state)
-	fmt.Printf("\r\n✅ Conversation session loaded: %s\r\n", sessionID)
+	fmt.Printf("\r\n[OK] Conversation session loaded: %s\r\n", sessionID)
 
 	// Show conversation preview
 	displayConversationPreview(chatAgent)
@@ -145,13 +145,13 @@ func displayConversationPreview(chatAgent *agent.Agent) {
 	lastMessages := chatAgent.GetLastMessages(5)
 
 	if len(lastMessages) > 0 {
-		fmt.Println("\n📋 Recent conversation preview:")
+		fmt.Println("\n[list] Recent conversation preview:")
 		fmt.Println("================================")
 		for _, msg := range lastMessages {
 			if msg.Role == "user" {
-				fmt.Printf("👤 You: %s\n", msg.Content)
+				fmt.Printf("[you] You: %s\n", msg.Content)
 			} else if msg.Role == "assistant" {
-				fmt.Printf("🤖 Assistant: %s\n", msg.Content)
+				fmt.Printf("[bot] Assistant: %s\n", msg.Content)
 			}
 		}
 		fmt.Println("================================")

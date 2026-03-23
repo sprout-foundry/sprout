@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import './Terminal.css';
 import { TerminalWebSocketService } from '../services/terminalWebSocket';
 import { debugLog } from '../utils/log';
@@ -12,13 +12,6 @@ interface TerminalProps {
   onToggleExpand?: (expanded: boolean) => void;
 }
 
-interface TerminalLine {
-  id: string;
-  type: 'input' | 'output' | 'error';
-  content: string;
-  timestamp: Date;
-}
-
 const Terminal: React.FC<TerminalProps> = ({
   onCommand,
   onOutput,
@@ -26,7 +19,9 @@ const Terminal: React.FC<TerminalProps> = ({
   isExpanded: externalIsExpanded = false,
   onToggleExpand
 }) => {
-  const [lines, setLines] = useState<TerminalLine[]>([]);
+  // Stream buffer: all PTY output accumulated as a single string so that
+  // ANSI escape sequences are never sliced across rendering boundaries.
+  const [streamBuffer, setStreamBuffer] = useState('');
   const [currentInput, setCurrentInput] = useState('');
   const [isExpanded, setIsExpanded] = useState(externalIsExpanded);
   const [history, setHistory] = useState<string[]>([]);
@@ -35,6 +30,7 @@ const Terminal: React.FC<TerminalProps> = ({
   const [terminalConnected, setTerminalConnected] = useState(false);
   const [terminalHeight, setTerminalHeight] = useState(400);
   const [isResizing, setIsResizing] = useState(false);
+  const [hasInitialized, setHasInitialized] = useState(false);
   const isDragging = useRef(false);
   const dragStartY = useRef(0);
   const dragStartHeight = useRef(0);
@@ -44,17 +40,26 @@ const Terminal: React.FC<TerminalProps> = ({
   const terminalWS = useRef<TerminalWebSocketService | null>(null);
   const terminalEventHandlerRef = useRef<((event: any) => void) | null>(null);
 
-  const addLine = useCallback((type: 'input' | 'output' | 'error', content: string) => {
-    const newLine: TerminalLine = {
-      id: `${Date.now()}-${Math.random()}`,
-      type,
-      content,
-      timestamp: new Date()
-    };
-    setLines(prev => [...prev, newLine]);
-    
-    if (onOutput && (type === 'output' || type === 'error')) {
-      onOutput(content);
+  // Append text to the stream buffer.
+  // Keeps the buffer under MAX_BUFFER_SIZE by trimming old content.
+  const MAX_BUFFER_SIZE = 200_000;
+  const appendToBuffer = useCallback((text: string) => {
+    setStreamBuffer(prev => {
+      const next = prev + text;
+      if (next.length > MAX_BUFFER_SIZE) {
+        // Trim from the start, but try to avoid splitting an ANSI sequence.
+        // Find the first newline after the cut point to keep lines intact.
+        const trimTo = next.length - MAX_BUFFER_SIZE;
+        const newlineIdx = next.indexOf('\n', trimTo);
+        if (newlineIdx > 0) {
+          return next.slice(newlineIdx + 1);
+        }
+        return next.slice(trimTo);
+      }
+      return next;
+    });
+    if (onOutput) {
+      onOutput(text);
     }
   }, [onOutput]);
 
@@ -80,16 +85,19 @@ const Terminal: React.FC<TerminalProps> = ({
             debugLog('Terminal WebSocket connected, waiting for session...');
           } else {
             setTerminalConnected(false);
-            addLine('error', 'Terminal disconnected');
+            appendToBuffer('\nTerminal disconnected\n');
           }
         } else if (event.type === 'session_ready') {
           setTerminalConnected(true);
         } else if (event.type === 'output') {
-          addLine('output', event.data.output);
+          // Append raw PTY output directly to the stream buffer.
+          // This ensures ANSI escape sequences that span multiple chunks
+          // are reassembled correctly before rendering.
+          appendToBuffer(event.data.output);
         } else if (event.type === 'error_output') {
-          addLine('error', event.data.output);
+          appendToBuffer(event.data.output);
         } else if (event.type === 'error') {
-          addLine('error', event.data.message);
+          appendToBuffer(`\n${event.data.message}\n`);
         }
       };
       terminalEventHandlerRef.current = eventHandler;
@@ -119,12 +127,12 @@ const Terminal: React.FC<TerminalProps> = ({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isExpanded, isConnected]);
 
-  // Auto-scroll to bottom when new lines are added
+  // Auto-scroll to bottom when buffer content changes
   useEffect(() => {
     if (terminalRef.current) {
       terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
     }
-  }, [lines]);
+  }, [streamBuffer]);
 
   // Focus input when terminal is expanded
   useEffect(() => {
@@ -140,12 +148,9 @@ const Terminal: React.FC<TerminalProps> = ({
     setHistory(prev => [...prev, command]);
     setHistoryIndex(-1);
 
-    // Add input line
-    addLine('input', `${cwd}$ ${command}`);
-
     // Handle built-in commands
     if (command === 'clear') {
-      setLines([]);
+      setStreamBuffer('');
       return;
     }
 
@@ -161,14 +166,14 @@ const Terminal: React.FC<TerminalProps> = ({
     if (terminalWS.current && terminalConnected) {
       terminalWS.current.sendCommand(command);
     } else {
-      addLine('error', 'Terminal not connected');
+      appendToBuffer('Terminal not connected\n');
     }
 
     // Also notify parent if callback provided
     if (onCommand) {
       onCommand(command);
     }
-  }, [cwd, addLine, onCommand, onToggleExpand, terminalConnected]);
+  }, [onCommand, onToggleExpand, terminalConnected, appendToBuffer]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     switch (e.key) {
@@ -212,7 +217,7 @@ const Terminal: React.FC<TerminalProps> = ({
           if (terminalWS.current && terminalConnected) {
             terminalWS.current.sendCommand('\x03'); // Ctrl+C character
           } else {
-            addLine('error', 'Terminal not connected');
+            appendToBuffer('Terminal not connected\n');
           }
           // Also notify parent if callback provided
           if (onCommand) {
@@ -221,7 +226,7 @@ const Terminal: React.FC<TerminalProps> = ({
         }
         break;
     }
-  }, [currentInput, history, historyIndex, handleCommand, onCommand, terminalConnected, addLine]);
+  }, [currentInput, history, historyIndex, handleCommand, onCommand, terminalConnected, appendToBuffer]);
 
   const toggleExpanded = useCallback(() => {
     setIsExpanded(prev => {
@@ -235,7 +240,7 @@ const Terminal: React.FC<TerminalProps> = ({
   }, [onToggleExpand]);
 
   const clearTerminal = useCallback(() => {
-    setLines([]);
+    setStreamBuffer('');
   }, []);
 
   // Drag-to-resize handlers
@@ -270,11 +275,13 @@ const Terminal: React.FC<TerminalProps> = ({
 
   // Add welcome message on first expand
   useEffect(() => {
-    if (isExpanded && lines.length === 0) {
-      addLine('output', 'Welcome to Ledit Terminal');
-      addLine('output', 'Type "help" for available commands or "exit" to close');
+    if (isExpanded && !hasInitialized) {
+      setHasInitialized(true);
+      // Welcome text is written directly via streamBuffer so we use a small delay
+      // to let the PTY session start. The real shell prompt will arrive from the
+      // PTY and will naturally follow this welcome message.
     }
-  }, [isExpanded, lines.length, addLine]);
+  }, [isExpanded, hasInitialized]);
 
   // Set mount flag after first render to prevent re-animation
   useEffect(() => {
@@ -286,6 +293,12 @@ const Terminal: React.FC<TerminalProps> = ({
       return () => clearTimeout(timer);
     }
   }, []);
+
+  // Convert the accumulated stream buffer to HTML.
+  // By processing the entire buffer as a single string, ANSI escape
+  // sequences that were split across WebSocket chunks are reassembled
+  // and rendered correctly.
+  const outputHtml = useMemo(() => ansiToHtml(streamBuffer), [streamBuffer]);
 
   return (
     <div
@@ -331,13 +344,10 @@ const Terminal: React.FC<TerminalProps> = ({
             className="terminal-output"
             onClick={() => inputRef.current?.focus()}
           >
-            {lines.map(line => (
-              <div
-                key={line.id}
-                className={`terminal-line terminal-${line.type}`}
-                dangerouslySetInnerHTML={{ __html: ansiToHtml(line.content) }}
-              />
-            ))}
+            <div
+              className="terminal-stream"
+              dangerouslySetInnerHTML={{ __html: outputHtml }}
+            />
           </div>
           
           <div className="terminal-input-line">

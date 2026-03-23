@@ -123,7 +123,7 @@ func (v *Validator) ValidateToolCall(ctx context.Context, toolName string, args 
 		result.ShouldConfirm = false
 	} else if result.RiskLevel == RiskDangerous && v.interactive && v.logger != nil {
 		// Interactive DANGEROUS: prompt user
-		prompt := fmt.Sprintf("⚠️  Security Validation Warning\n\nTool: %s\nArguments: %v\n\nRisk Level: %s\nReasoning: %s\n\nDo you want to proceed? (yes/no): ",
+		prompt := fmt.Sprintf("[WARN] Security Validation Warning\n\nTool: %s\nArguments: %v\n\nRisk Level: %s\nReasoning: %s\n\nDo you want to proceed? (yes/no): ",
 			toolName, args, result.RiskLevel, result.Reasoning)
 
 		if v.logger.AskForConfirmation(prompt, false, false) {
@@ -138,7 +138,7 @@ func (v *Validator) ValidateToolCall(ctx context.Context, toolName string, args 
 		}
 	} else if result.ShouldConfirm && v.interactive && v.logger != nil {
 		// Interactive CAUTION: prompt user
-		prompt := fmt.Sprintf("⚠️  Security Validation Warning\n\nTool: %s\nArguments: %v\n\nRisk Level: %s\nReasoning: %s\n\nDo you want to proceed? (yes/no): ",
+		prompt := fmt.Sprintf("[WARN] Security Validation Warning\n\nTool: %s\nArguments: %v\n\nRisk Level: %s\nReasoning: %s\n\nDo you want to proceed? (yes/no): ",
 			toolName, args, result.RiskLevel, result.Reasoning)
 
 		if v.logger.AskForConfirmation(prompt, false, false) {
@@ -153,7 +153,7 @@ func (v *Validator) ValidateToolCall(ctx context.Context, toolName string, args 
 		}
 	} else if result.RiskLevel == RiskCaution && v.logger != nil {
 		// Non-interactive CAUTION: auto-allow with logging
-		v.logger.Logf("🔒 Security validation: %s %v - CAUTION: %s", toolName, args, result.Reasoning)
+		v.logger.Logf("[LOCK] Security validation: %s %v - CAUTION: %s", toolName, args, result.Reasoning)
 	}
 
 	return result, nil

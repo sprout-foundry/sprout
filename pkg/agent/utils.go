@@ -35,7 +35,7 @@ func (a *Agent) getModelContextLimit() int {
 	if err != nil {
 		// Fallback to conservative default if API method fails
 		if a.debug {
-			a.debugLog("⚠️  Failed to get model context limit: %v, using default\n", err)
+			a.debugLog("[WARN] Failed to get model context limit: %v, using default\n", err)
 		}
 		return 32000
 	}

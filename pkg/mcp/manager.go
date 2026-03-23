@@ -47,7 +47,7 @@ func (m *DefaultMCPManager) AddServer(config MCPServerConfig) error {
 		if serverType == "" {
 			serverType = "stdio"
 		}
-		m.logger.LogProcessStep(fmt.Sprintf("📋 Added MCP server: %s (%s)", config.Name, serverType))
+		m.logger.LogProcessStep(fmt.Sprintf("[list] Added MCP server: %s (%s)", config.Name, serverType))
 	}
 
 	return nil
@@ -68,7 +68,7 @@ func (m *DefaultMCPManager) RemoveServer(name string) error {
 		ctx := context.Background()
 		if err := server.Stop(ctx); err != nil {
 			if m.logger != nil {
-				m.logger.LogProcessStep(fmt.Sprintf("⚠️ Failed to stop MCP server %s: %v", name, err))
+				m.logger.LogProcessStep(fmt.Sprintf("[WARN] Failed to stop MCP server %s: %v", name, err))
 			}
 		}
 	}
@@ -76,7 +76,7 @@ func (m *DefaultMCPManager) RemoveServer(name string) error {
 	delete(m.servers, name)
 
 	if m.logger != nil {
-		m.logger.LogProcessStep(fmt.Sprintf("🗑️ Removed MCP server: %s", name))
+		m.logger.LogProcessStep(fmt.Sprintf("[x] Removed MCP server: %s", name))
 	}
 
 	return nil
@@ -145,7 +145,7 @@ func (m *DefaultMCPManager) StartAll(ctx context.Context) error {
 				runningCount++
 			}
 		}
-		m.logger.LogProcessStep(fmt.Sprintf("🚀 Started %d MCP servers", runningCount))
+		m.logger.LogProcessStep(fmt.Sprintf("[>>] Started %d MCP servers", runningCount))
 	}
 
 	return nil
@@ -186,7 +186,7 @@ func (m *DefaultMCPManager) StopAll(ctx context.Context) error {
 	}
 
 	if m.logger != nil && len(servers) > 0 {
-		m.logger.LogProcessStep(fmt.Sprintf("🛑 Stopped %d MCP servers", len(servers)))
+		m.logger.LogProcessStep(fmt.Sprintf("[STOP] Stopped %d MCP servers", len(servers)))
 	}
 
 	return nil
@@ -234,7 +234,7 @@ func (m *DefaultMCPManager) GetAllTools(ctx context.Context) ([]MCPTool, error) 
 		// Log errors but don't fail completely - return partial results
 		if m.logger != nil {
 			for _, err := range errors {
-				m.logger.LogProcessStep(fmt.Sprintf("⚠️ %v", err))
+				m.logger.LogProcessStep(fmt.Sprintf("[WARN] %v", err))
 			}
 		}
 	}
@@ -302,7 +302,7 @@ func (m *DefaultMCPManager) AutoDiscoverGitHubServer(ctx context.Context) error 
 			}
 
 			if m.logger != nil {
-				m.logger.LogProcessStep(fmt.Sprintf("✅ Auto-discovered GitHub MCP server using: %s %v", config.Command, config.Args))
+				m.logger.LogProcessStep(fmt.Sprintf("[OK] Auto-discovered GitHub MCP server using: %s %v", config.Command, config.Args))
 			}
 			return nil
 		}

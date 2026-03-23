@@ -274,8 +274,8 @@ func NewAgentWithModel(model string) (*Agent, error) {
 
 	clientType, finalModel, err = configManager.ResolveProviderModel("", model)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "⚠️  Failed to resolve configured provider/model: %v\n", err)
-		fmt.Fprintf(os.Stderr, "🔧 Selecting an available provider...\n")
+		fmt.Fprintf(os.Stderr, "[WARN] Failed to resolve configured provider/model: %v\n", err)
+		fmt.Fprintf(os.Stderr, "[tool] Selecting an available provider...\n")
 		clientType, err = configManager.SelectNewProvider()
 		if err != nil {
 			return nil, fmt.Errorf("failed to select provider: %w", err)
@@ -290,7 +290,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	var client api.ClientInterface
 	for {
 		if err := configManager.EnsureAPIKey(clientType); err != nil {
-			fmt.Fprintf(os.Stderr, "⚠️  Provider %s is not configured: %v\n", api.GetProviderName(clientType), err)
+			fmt.Fprintf(os.Stderr, "[WARN] Provider %s is not configured: %v\n", api.GetProviderName(clientType), err)
 			nextClientType, nextModel, recoverErr := recoverProviderStartup(configManager, clientType, model, err)
 			if recoverErr != nil {
 				return nil, recoverErr
@@ -330,7 +330,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 				continue
 			}
 		} else if debug {
-			fmt.Printf("\n⚠️  Skipping provider connection check for %s\n", api.GetProviderName(clientType))
+			fmt.Printf("\n[WARN] Skipping provider connection check for %s\n", api.GetProviderName(clientType))
 		}
 
 		break
@@ -342,7 +342,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	}
 	if finalModel != "" && finalModel != configManager.GetModelForProvider(clientType) {
 		if err := configManager.SetModelForProvider(clientType, finalModel); err != nil {
-			fmt.Printf("\n⚠️  Warning: Failed to save model selection: %v\n", err)
+			fmt.Printf("\n[WARN] Warning: Failed to save model selection: %v\n", err)
 		}
 	}
 
@@ -417,11 +417,11 @@ func NewAgentWithModel(model string) (*Agent, error) {
 
 	// Pre-initialize tool registry to avoid first-use overhead
 	if debug {
-		fmt.Printf("\n⚙️  Pre-initializing tool registry...\n")
+		fmt.Printf("\n[cfg] Pre-initializing tool registry...\n")
 	}
 	InitializeToolRegistry()
 	if debug {
-		fmt.Printf("✓ Tool registry initialized\n")
+		fmt.Printf("[ok] Tool registry initialized\n")
 	}
 
 	// Initialize MCP manager (but don't start servers yet - lazy load)
@@ -745,7 +745,7 @@ func looksLikeProviderModelSpecifier(configManager *configuration.Manager, model
 
 func recoverProviderStartup(configManager *configuration.Manager, failedProvider api.ClientType, modelArg string, startupErr error) (api.ClientType, string, error) {
 	failedProviderName := api.GetProviderName(failedProvider)
-	fmt.Fprintf(os.Stderr, "⚠️  Failed to initialize provider '%s': %v\n", failedProviderName, startupErr)
+	fmt.Fprintf(os.Stderr, "[WARN] Failed to initialize provider '%s': %v\n", failedProviderName, startupErr)
 
 	// Non-interactive mode cannot recover via prompt.
 	if !term.IsTerminal(int(os.Stdin.Fd())) {

@@ -24,7 +24,7 @@ func (cf *CommitFlow) executeConsoleFlow() error {
 	}
 
 	if len(unstagedFiles) == 0 {
-		fmt.Printf("\r\n📭 No changes to commit. Working directory is clean.\r\n")
+		fmt.Printf("\r\n[empty] No changes to commit. Working directory is clean.\r\n")
 		return nil
 	}
 
@@ -124,25 +124,25 @@ func (cf *CommitFlow) selectFilesToCommitConsole() error {
 	}
 
 	if len(unstagedFiles) == 0 {
-		fmt.Printf("\r\n📭 No unstaged files to select.\r\n")
+		fmt.Printf("\r\n[empty] No unstaged files to select.\r\n")
 		return nil
 	}
 
 	// Let user select files
-	selectedFiles, err := cf.promptForFiles(unstagedFiles, "📝 Select Files to Commit")
+	selectedFiles, err := cf.promptForFiles(unstagedFiles, "[edit] Select Files to Commit")
 	if err != nil {
 		fmt.Printf("\r\nFile selection cancelled.\r\n")
 		return nil
 	}
 
 	// Stage selected files
-	fmt.Printf("\r\n📤 Staging %d file(s)...\r\n", len(selectedFiles))
+	fmt.Printf("\r\n[up] Staging %d file(s)...\r\n", len(selectedFiles))
 	for _, file := range selectedFiles {
 		cmd := exec.Command("git", "add", file)
 		if output, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("failed to stage %s: %w\n%s", file, err, output)
 		}
-		fmt.Printf("   ✓ %s\r\n", file)
+		fmt.Printf("   [ok] %s\r\n", file)
 	}
 
 	// Generate commit message
@@ -160,12 +160,12 @@ func (cf *CommitFlow) singleFileCommitConsole() error {
 	// Combine all files
 	allFiles := append(stagedFiles, unstagedFiles...)
 	if len(allFiles) == 0 {
-		fmt.Printf("\r\n📭 No files to commit.\r\n")
+		fmt.Printf("\r\n[empty] No files to commit.\r\n")
 		return nil
 	}
 
 	// Show just one file selection
-	fmt.Printf("\r\n📄 Select ONE file to commit:\r\n")
+	fmt.Printf("\r\n[doc] Select ONE file to commit:\r\n")
 	fmt.Printf("============================\r\n\r\n")
 
 	for i, file := range allFiles {
@@ -195,13 +195,13 @@ func (cf *CommitFlow) singleFileCommitConsole() error {
 	selectedFile := allFiles[choice-1]
 
 	// Reset any staged files first
-	fmt.Printf("\r\n🔄 Resetting staged files...\r\n")
+	fmt.Printf("\r\n[~] Resetting staged files...\r\n")
 	if err := exec.Command("git", "reset", "HEAD").Run(); err != nil {
 		return fmt.Errorf("failed to reset staged files: %w", err)
 	}
 
 	// Stage only the selected file
-	fmt.Printf("📤 Staging %s...\r\n", selectedFile)
+	fmt.Printf("[up] Staging %s...\r\n", selectedFile)
 	cmd := exec.Command("git", "add", selectedFile)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to stage %s: %w\n%s", selectedFile, err, output)
@@ -213,13 +213,13 @@ func (cf *CommitFlow) singleFileCommitConsole() error {
 
 // stageAllAndCommitConsole is the console version (same as regular since no dropdown)
 func (cf *CommitFlow) stageAllAndCommitConsole() error {
-	fmt.Printf("\r\n🎯 Staging all modified files...\r\n")
+	fmt.Printf("\r\n[*] Staging all modified files...\r\n")
 
 	cmd := exec.Command("git", "add", "-A")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to stage files: %w", err)
 	}
 
-	fmt.Printf("✅ All files staged.\r\n")
+	fmt.Printf("[OK] All files staged.\r\n")
 	return cf.generateCommitMessageAndCommit()
 }

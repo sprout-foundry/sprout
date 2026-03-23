@@ -141,5 +141,5 @@ func TestToolParameterConversion(t *testing.T) {
 		}
 	}
 
-	t.Logf("✅ Successfully converted map content to JSON string: %s", content)
+	t.Logf("[OK] Successfully converted map content to JSON string: %s", content)
 }

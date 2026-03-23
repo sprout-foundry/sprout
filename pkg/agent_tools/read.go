@@ -131,7 +131,7 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 
 		// Warn if file was truncated during line range request
 		if truncated {
-			fileContent = fmt.Sprintf("⚠️  Warning: File was truncated due to size. Requested lines %d-%d, but only %d lines were available in the truncated content.\n\n%s",
+			fileContent = fmt.Sprintf("[WARN] Warning: File was truncated due to size. Requested lines %d-%d, but only %d lines were available in the truncated content.\n\n%s",
 				startLine, endLine, totalLines, fileContent)
 		}
 
@@ -146,7 +146,7 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 			actualSizeKB++
 		}
 		limitKB := maxFileSize / 1024
-		fileContent = fmt.Sprintf("⚠️  File truncated (file is %d bytes, exceeds %dKB limit). Showing first %dKB of %s. Use line range to read specific sections or adjust LEDIT_READ_FILE_MAX_BYTES.\n%s\n\n[Content truncated]",
+		fileContent = fmt.Sprintf("[WARN] File truncated (file is %d bytes, exceeds %dKB limit). Showing first %dKB of %s. Use line range to read specific sections or adjust LEDIT_READ_FILE_MAX_BYTES.\n%s\n\n[Content truncated]",
 			info.Size(), limitKB, limitKB, cleanPath, fileContent)
 	}
 

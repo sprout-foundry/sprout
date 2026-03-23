@@ -182,7 +182,7 @@ func (rlb *RateLimitBackoff) LogRateLimit(provider, model string, totalTokens in
 		errorMsg = err.Error()
 	}
 
-	logger.LogProcessStep(fmt.Sprintf("🚨 RATE LIMIT: %s/%s | Tokens: %d | Error: %s%s",
+	logger.LogProcessStep(fmt.Sprintf("[!!] RATE LIMIT: %s/%s | Tokens: %d | Error: %s%s",
 		provider, model, totalTokens, errorMsg, rateLimitInfo))
 
 	// Also log to run logger for structured data
@@ -218,7 +218,7 @@ func (rlb *RateLimitBackoff) WaitWithProgress(duration time.Duration, provider s
 		return
 	}
 
-	rlb.print(fmt.Sprintf("⏳ Rate limited by %s. Waiting %v before retry...\n", provider, duration.Round(time.Second)))
+	rlb.print(fmt.Sprintf("[...] Rate limited by %s. Waiting %v before retry...\n", provider, duration.Round(time.Second)))
 
 	// Show progress for long waits
 	if duration > 10*time.Second {
@@ -235,17 +235,17 @@ func (rlb *RateLimitBackoff) WaitWithProgress(duration time.Duration, provider s
 				elapsed := time.Since(start)
 				remaining := duration - elapsed
 				if remaining <= 0 {
-					rlb.print("✅ Rate limit wait complete, retrying...\n")
+					rlb.print("[OK] Rate limit wait complete, retrying...\n")
 					return
 				}
 				rlb.print(fmt.Sprintf("   Still waiting... %v remaining\n", remaining.Round(time.Second)))
 			case <-deadline.C:
-				rlb.print("✅ Rate limit wait complete, retrying...\n")
+				rlb.print("[OK] Rate limit wait complete, retrying...\n")
 				return
 			}
 		}
 	} else {
 		time.Sleep(duration)
-		rlb.print("✅ Rate limit wait complete, retrying...\n")
+		rlb.print("[OK] Rate limit wait complete, retrying...\n")
 	}
 }

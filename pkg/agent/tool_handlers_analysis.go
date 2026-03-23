@@ -2,8 +2,10 @@ package agent
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -11,7 +13,10 @@ import (
 	"strings"
 	"time"
 
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
+	"github.com/alantheprice/ledit/pkg/console"
+	"github.com/alantheprice/ledit/pkg/filesystem"
 	"github.com/alantheprice/ledit/pkg/webcontent"
 )
 
@@ -246,6 +251,134 @@ func handleAnalyzeImageContent(ctx context.Context, a *Agent, args map[string]in
 	return normalized, nil
 }
 
+// handleAnalyzeImageContentWithImages is the image-capable analyze_image_content handler.
+// When the primary model supports vision, it sends image data directly as multimodal content
+// instead of routing through a separate OCR model. PDFs still use the OCR pipeline.
+func handleAnalyzeImageContentWithImages(ctx context.Context, a *Agent, args map[string]interface{}) ([]api.ImageData, string, error) {
+	if a == nil {
+		result, err := handleAnalyzeImageContent(ctx, a, args)
+		return nil, result, err
+	}
+
+	imagePath, ok := args["image_path"].(string)
+	if !ok || imagePath == "" {
+		result, err := handleAnalyzeImageContent(ctx, a, args)
+		return nil, result, err
+	}
+
+	// Only use multimodal path when primary model supports vision
+	if a.client == nil || !a.client.SupportsVision() {
+		result, err := handleAnalyzeImageContent(ctx, a, args)
+		return nil, result, err
+	}
+
+	// For PDFs, use multimodal pipeline
+	lowerPath := strings.ToLower(imagePath)
+	if strings.HasSuffix(lowerPath, ".pdf") {
+		a.debugLog("📄 PDF detected, processing via multimodal pipeline\n")
+		return handleAnalyzePDFWithImages(ctx, a, imagePath, args)
+	}
+
+	// Handle HTML URLs via screenshot first
+	effectiveImagePath := imagePath
+	if isLocalHTMLFile(effectiveImagePath) || tools.IsHTMLInput(effectiveImagePath) {
+		a.debugLog("HTML content detected, rendering via headless browser: %s\n", effectiveImagePath)
+		screenshotPath, screenshotErr := renderHTMLContent(ctx, a, effectiveImagePath, 1280, 720)
+		if screenshotErr != nil {
+			// Fall back to standard OCR pipeline
+			result, ferr := handleAnalyzeImageContent(ctx, a, args)
+			return nil, result, ferr
+		}
+		defer os.Remove(screenshotPath)
+		effectiveImagePath = screenshotPath
+	}
+
+	// Read image data
+	var data []byte
+	var resolvedPath string
+
+	if strings.HasPrefix(strings.ToLower(effectiveImagePath), "http://") || strings.HasPrefix(strings.ToLower(effectiveImagePath), "https://") {
+		// Download remote image
+		httpClient := &http.Client{Timeout: 30 * time.Second}
+		resp, err := httpClient.Get(effectiveImagePath)
+		if err != nil {
+			result, ferr := handleAnalyzeImageContent(ctx, a, args)
+			return nil, result, ferr
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			result, ferr := handleAnalyzeImageContent(ctx, a, args)
+			return nil, result, ferr
+		}
+		// Limit download size to 20MB
+		data, err = io.ReadAll(io.LimitReader(resp.Body, 20*1024*1024))
+		if err != nil {
+			result, ferr := handleAnalyzeImageContent(ctx, a, args)
+			return nil, result, ferr
+		}
+		resolvedPath = effectiveImagePath
+	} else {
+		// Local file
+		var err error
+		resolvedPath, err = filesystem.SafeResolvePathWithBypass(ctx, effectiveImagePath)
+		if err != nil {
+			result, ferr := handleAnalyzeImageContent(ctx, a, args)
+			return nil, result, ferr
+		}
+		data, err = os.ReadFile(resolvedPath)
+		if err != nil {
+			result, ferr := handleAnalyzeImageContent(ctx, a, args)
+			return nil, result, ferr
+		}
+	}
+
+	// Validate image via magic bytes
+	_, mimeType := console.DetectImageMagic(data)
+	if mimeType == "" {
+		a.debugLog("⚠️ File is not a valid image, falling back to OCR pipeline: %s\n", imagePath)
+		result, err := handleAnalyzeImageContent(ctx, a, args)
+		return nil, result, err
+	}
+
+	// Optimize/resize if needed
+	optimizedData, optimizedMIME, optErr := tools.OptimizeImageData(resolvedPath, data)
+	if optErr != nil {
+		a.debugLog("⚠️ Image optimization failed: %v, using original\n", optErr)
+	} else if len(optimizedData) > 0 {
+		data = optimizedData
+		if optimizedMIME != "" {
+			mimeType = optimizedMIME
+		}
+	}
+
+	// Check size after optimization
+	if len(data) > console.MaxPastedImageSize {
+		a.debugLog("⚠️ Optimized image still too large (%d bytes), falling back to OCR\n", len(data))
+		result, err := handleAnalyzeImageContent(ctx, a, args)
+		return nil, result, err
+	}
+
+	// Encode to base64
+	encoded := base64.StdEncoding.EncodeToString(data)
+
+	// Build descriptive text result
+	prompt := ""
+	if v, ok := args["analysis_prompt"].(string); ok {
+		prompt = v
+	}
+	textResult := fmt.Sprintf("[Image analyzed: %s (%s, %d bytes)]", imagePath, mimeType, len(data))
+	if prompt != "" {
+		textResult += "\nAnalysis prompt: " + prompt
+	}
+
+	images := []api.ImageData{{
+		Base64: encoded,
+		Type:   mimeType,
+	}}
+
+	return images, textResult, nil
+}
+
 func normalizeVisionToolOutput(result string, preferPlainText bool) (string, error) {
 	trimmed := strings.TrimSpace(result)
 	if trimmed == "" {
@@ -288,4 +421,67 @@ func normalizeVisionToolOutput(result string, preferPlainText bool) (string, err
 		}
 	}
 	return result, nil
+}
+
+// handleAnalyzePDFWithImages processes a PDF for multimodal consumption.
+// For text-based PDFs, returns extracted text. For scanned/image PDFs, renders
+// pages as images so the model can visually analyze them. Falls back to the
+// full OCR pipeline if multimodal processing fails.
+func handleAnalyzePDFWithImages(ctx context.Context, a *Agent, path string, args map[string]interface{}) ([]api.ImageData, string, error) {
+	// Resolve path (handle remote URLs and local files)
+	var effectivePath string
+	var cleanup func()
+
+	if strings.HasPrefix(strings.ToLower(path), "http://") || strings.HasPrefix(strings.ToLower(path), "https://") {
+		resolvedPath, resolvedCleanup, resolveErr := tools.ResolvePDFInputPath(path)
+		if resolveErr != nil || resolvedPath == "" {
+			a.debugLog("⚠️ Failed to resolve remote PDF: %v\n", resolveErr)
+			// Fall back to text-only pipeline
+			result, err := handleAnalyzeImageContent(ctx, a, args)
+			return nil, result, err
+		}
+		effectivePath = resolvedPath
+		cleanup = resolvedCleanup
+	} else {
+		var err error
+		effectivePath, err = filesystem.SafeResolvePathWithBypass(ctx, path)
+		if err != nil {
+			result, ferr := handleAnalyzeImageContent(ctx, a, args)
+			return nil, result, ferr
+		}
+	}
+
+	result, err := tools.ProcessPDFForMultimodal(effectivePath)
+
+	if cleanup != nil {
+		cleanup()
+	}
+
+	if err != nil {
+		// Fall back to full OCR pipeline (existing behavior)
+		a.debugLog("⚠️ Multimodal PDF processing failed: %v, falling back to OCR pipeline\n", err)
+		result, err := handleAnalyzeImageContent(ctx, a, args)
+		return nil, result, err
+	}
+
+	// Extract optional analysis_prompt for text result
+	analysisPrompt := ""
+	if v, ok := args["analysis_prompt"].(string); ok {
+		analysisPrompt = v
+	}
+
+	if len(result.Images) > 0 {
+		textResult := fmt.Sprintf("[PDF analyzed: %s (%d pages rendered as images)]", path, len(result.Images))
+		if analysisPrompt != "" {
+			textResult += "\nAnalysis prompt: " + analysisPrompt
+		}
+		return result.Images, textResult, nil
+	}
+
+	// Text was extractable via pypdf — return directly to model
+	textResult := fmt.Sprintf("[PDF content: %s (extracted as text)]\n\n%s", path, result.Text)
+	if analysisPrompt != "" {
+		textResult += "\nAnalysis prompt: " + analysisPrompt
+	}
+	return nil, textResult, nil
 }

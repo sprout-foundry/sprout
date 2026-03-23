@@ -28,7 +28,7 @@ const (
 
 // ProcessPDFWithVision processes a PDF file using Ollama with glm-ocr model
 func ProcessPDFWithVision(pdfPath string) (string, error) {
-	resolvedPath, cleanup, err := resolvePDFInputPath(pdfPath)
+	resolvedPath, cleanup, err := ResolvePDFInputPath(pdfPath)
 	if err != nil {
 		return "", err
 	}
@@ -52,7 +52,63 @@ func ProcessPDFWithVision(pdfPath string) (string, error) {
 	return text, nil
 }
 
-func resolvePDFInputPath(inputPath string) (string, func(), error) {
+// ProcessPDFForTextOnly processes a PDF to extract text content.
+// First tries pypdf text extraction (no vision client required).
+// If text extraction fails and a vision client is available, falls back to OCR.
+func ProcessPDFForTextOnly(pdfPath string) (string, error) {
+	resolvedPath, cleanup, err := ResolvePDFInputPath(pdfPath)
+	if err != nil {
+		return "", err
+	}
+	defer cleanup()
+
+	pythonExec, pypdfErr := GetPDFPythonExecutable()
+	if pypdfErr == nil {
+		text, hasText, err := extractTextWithPypdf(resolvedPath, pythonExec)
+		if err == nil && hasText && len(strings.TrimSpace(text)) > 0 {
+			return text, nil
+		}
+	}
+
+	// pypdf failed or no text — use OCR-only pipeline to avoid redundant pypdf call
+	client, err := CreateVisionClient()
+	if err != nil {
+		return "", fmt.Errorf("PDF has no extractable text and no vision client available for OCR: %w", err)
+	}
+	if pythonExec != "" {
+		return processPDFForOCROnly(resolvedPath, pythonExec, client)
+	}
+
+	return "", fmt.Errorf("PDF has no extractable text and Python is unavailable for page rasterization OCR")
+}
+
+// processPDFForOCROnly processes a PDF using OCR steps only (skips pypdf text extraction).
+func processPDFForOCROnly(pdfPath, pythonExec string, client api.ClientInterface) (string, error) {
+	fileInfo, err := os.Stat(pdfPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to stat PDF file: %w", err)
+	}
+
+	maxSize := int64(50 * 1024 * 1024)
+	if fileInfo.Size() > maxSize {
+		return "", fmt.Errorf("PDF file too large (%d MB, maximum size is %d MB)", fileInfo.Size()/1024/1024, maxSize/1024/1024)
+	}
+
+	directOCRText, directOCRErr := processPDFWithVisionModel(pdfPath, client)
+	if directOCRErr == nil && len(strings.TrimSpace(directOCRText)) > 0 {
+		return directOCRText, nil
+	}
+
+	ocrText, ocrErr := processPDFWithOCR(pdfPath, pythonExec, client)
+	if ocrErr == nil && len(strings.TrimSpace(ocrText)) > 0 {
+		return ocrText, nil
+	}
+
+	return "", fmt.Errorf("PDF has no extractable text. direct OCR error: %s; page OCR error: %s",
+		compactVisionError(directOCRErr), compactVisionError(ocrErr))
+}
+// The caller must invoke the returned cleanup function when done with the resolved path.
+func ResolvePDFInputPath(inputPath string) (string, func(), error) {
 	if strings.HasPrefix(inputPath, "http://") || strings.HasPrefix(inputPath, "https://") {
 		return downloadRemotePDFToTemp(inputPath)
 	}
@@ -71,7 +127,7 @@ func downloadRemotePDFToTemp(url string) (string, func(), error) {
 		return "", func() {}, fmt.Errorf("failed to download PDF: status %d", resp.StatusCode)
 	}
 
-	data, err := io.ReadAll(resp.Body)
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 60*1024*1024))
 	if err != nil {
 		return "", func() {}, fmt.Errorf("failed reading downloaded PDF bytes: %w", err)
 	}
@@ -143,36 +199,10 @@ func processPDFWithProvider(pdfPath, pythonExec string, client api.ClientInterfa
 	return text, nil
 }
 
-// extractTextWithPypdf extracts text from PDF using pypdf
+// extractTextWithPypdf extracts text from PDF using pypdf (5000 char output limit).
 func extractTextWithPypdf(pdfPath, pythonExec string) (string, bool, error) {
-	cmd := exec.Command(pythonExec, "-c", `
-import sys
-try:
-    from pypdf import PdfReader
-    reader = PdfReader(sys.argv[1])
-    text = ''
-    for page in reader.pages:
-        page_text = page.extract_text()
-        if page_text:
-            text += page_text + '\\n'
-    print(text[:5000])  # Limit output
-    if text.strip():
-        sys.exit(0)
-    else:
-        sys.exit(1)  # No text found
-except Exception as e:
-    print(f'Error: {e}', file=sys.stderr)
-    sys.exit(2)
-`, pdfPath)
-
-	output, err := cmd.CombinedOutput()
-	exitCode := cmd.ProcessState.ExitCode()
-
-	if err == nil && exitCode == 0 {
-		return string(output), true, nil
-	}
-
-	return "", false, fmt.Errorf("pypdf extraction failed: %s", string(output))
+	cmd := newPypdfTextExtractionCommand(pythonExec, pdfPath, 5000)
+	return executePypdfTextExtraction(cmd)
 }
 
 // processPDFWithOCR extracts images from PDF and uses vision model for OCR
@@ -226,7 +256,7 @@ func processOCRImages(images [][]byte, client api.ClientInterface, sectionLabel 
 		preparedData := imgData
 		imgType := detectImageMimeType(imagePathHint)
 
-		optimizedData, optimizedMimeType, optErr := optimizeImageData(imagePathHint, preparedData)
+		optimizedData, optimizedMimeType, optErr := OptimizeImageData(imagePathHint, preparedData)
 		if optErr == nil && len(optimizedData) > 0 {
 			preparedData = optimizedData
 			if optimizedMimeType != "" {
@@ -314,7 +344,7 @@ except Exception as e:
     sys.exit(1)
 `, pdfPath)
 
-	output, err := cmd.CombinedOutput()
+	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("pypdfium2 page render failed: %s", strings.TrimSpace(string(output)))
 	}
@@ -375,7 +405,7 @@ except Exception as e:
     sys.exit(1)
 `, pdfPath)
 
-	output, err := cmd.CombinedOutput()
+	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("pypdf image extraction failed: %s", string(output))
 	}

@@ -105,6 +105,6 @@ func SavePastedImage(data []byte) (string, error) {
 		return "", fmt.Errorf("failed to write image file: %w", err)
 	}
 
-	relativePath := "./" + PastedImageDirName + "/" + filename
+	relativePath := "./" + filepath.Join(PastedImageDirName, filename)
 	return relativePath, nil
 }

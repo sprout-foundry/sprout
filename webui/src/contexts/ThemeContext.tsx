@@ -1,11 +1,23 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import {
+  DEFAULT_THEME_PACK_ID,
+  getThemePackByID,
+  getThemePackForMode,
+  THEME_PACKS,
+  THEME_VARIABLE_KEYS,
+  ThemeMode,
+  ThemePack
+} from '../themes/themePacks';
 
-type Theme = 'dark' | 'light';
+type Theme = ThemeMode;
 
 interface ThemeContextValue {
   theme: Theme;
+  themePack: ThemePack;
+  availableThemePacks: ThemePack[];
   toggleTheme: () => void;
   setTheme: (theme: Theme) => void;
+  setThemePack: (themePackID: string) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -22,41 +34,67 @@ interface ThemeProviderProps {
   children: ReactNode;
 }
 
-const THEME_STORAGE_KEY = 'ledit-editor-theme';
+const THEME_STORAGE_KEY = 'ledit-editor-theme-mode';
+const THEME_PACK_STORAGE_KEY = 'ledit-editor-theme-pack';
 
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
-  const [theme, setTheme] = useState<Theme>(() => {
-    // Try to load from localStorage
-    const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    if (stored === 'dark' || stored === 'light') {
-      return stored;
+  const [themePackID, setThemePackID] = useState<string>(() => {
+    const storedPack = localStorage.getItem(THEME_PACK_STORAGE_KEY);
+    if (storedPack && THEME_PACKS.some((pack) => pack.id === storedPack)) {
+      return storedPack;
     }
-    // Default to dark theme
-    return 'dark';
+    const storedMode = localStorage.getItem(THEME_STORAGE_KEY);
+    if (storedMode === 'dark' || storedMode === 'light') {
+      return getThemePackForMode(storedMode).id;
+    }
+    return DEFAULT_THEME_PACK_ID;
   });
 
+  const themePack = getThemePackByID(themePackID);
+  const theme = themePack.mode;
+
   const toggleTheme = useCallback(() => {
-    setTheme(prevTheme => {
-      const newTheme = prevTheme === 'dark' ? 'light' : 'dark';
-      localStorage.setItem(THEME_STORAGE_KEY, newTheme);
-      return newTheme;
-    });
-  }, []);
+    const nextMode: Theme = theme === 'dark' ? 'light' : 'dark';
+    const nextPack = getThemePackForMode(nextMode);
+    setThemePackID(nextPack.id);
+    localStorage.setItem(THEME_STORAGE_KEY, nextMode);
+    localStorage.setItem(THEME_PACK_STORAGE_KEY, nextPack.id);
+  }, [theme]);
 
   const setThemeExplicit = useCallback((nextTheme: Theme) => {
-    setTheme(nextTheme);
+    const nextPack = getThemePackForMode(nextTheme);
+    setThemePackID(nextPack.id);
     localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+    localStorage.setItem(THEME_PACK_STORAGE_KEY, nextPack.id);
   }, []);
 
-  // Update document class for CSS-based theming
+  const setThemePack = useCallback((nextThemePackID: string) => {
+    const nextPack = getThemePackByID(nextThemePackID);
+    setThemePackID(nextPack.id);
+    localStorage.setItem(THEME_PACK_STORAGE_KEY, nextPack.id);
+    localStorage.setItem(THEME_STORAGE_KEY, nextPack.mode);
+  }, []);
+
+  // Update CSS variable tokens and document attributes for global theming
   useEffect(() => {
+    const root = document.documentElement;
+    THEME_VARIABLE_KEYS.forEach((key) => {
+      root.style.removeProperty(key);
+    });
+    Object.entries(themePack.variables).forEach(([key, value]) => {
+      root.style.setProperty(key, value);
+    });
     document.documentElement.setAttribute('data-theme', theme);
-  }, [theme]);
+    document.documentElement.setAttribute('data-theme-pack', themePack.id);
+  }, [theme, themePack]);
 
   const value: ThemeContextValue = {
     theme,
+    themePack,
+    availableThemePacks: THEME_PACKS,
     toggleTheme,
-    setTheme: setThemeExplicit
+    setTheme: setThemeExplicit,
+    setThemePack
   };
 
   return (

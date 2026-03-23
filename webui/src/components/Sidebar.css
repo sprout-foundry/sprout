@@ -153,6 +153,18 @@
   letter-spacing: 0.04em;
 }
 
+.sidebar .instance-switch-status {
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.sidebar .instance-switch-error {
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+  color: #fecaca;
+}
+
 .sidebar .styled-select {
   width: 100%;
   min-height: 34px;
@@ -244,17 +256,20 @@
   font-size: var(--text-base);
   font-weight: 600;
   border: 1px solid var(--border-default);
-  background: rgba(18, 34, 58, 0.9);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
 }
 
 .sidebar .stats .value.status.connected {
-  border-color: rgba(16, 185, 129, 0.45);
-  color: #b7f7db;
+  border-color: var(--accent-success);
+  background: var(--color-success-bg);
+  color: var(--accent-success);
 }
 
 .sidebar .stats .value.status.disconnected {
-  border-color: rgba(244, 63, 94, 0.45);
-  color: #fecdd3;
+  border-color: var(--accent-error);
+  background: var(--color-error-bg);
+  color: var(--accent-error);
 }
 
 .sidebar .logs-list {
@@ -274,7 +289,7 @@
   align-items: flex-start;
   gap: var(--space-3);
   padding: var(--space-4);
-  background: rgba(17, 31, 53, 0.85);
+  background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   font-size: var(--text-xs);
@@ -300,7 +315,7 @@
 }
 
 .sidebar .error {
-  color: #fecaca;
+  color: var(--accent-error);
 }
 
 .sidebar .retry-button {
@@ -338,11 +353,11 @@
 }
 
 .sidebar .ahead {
-  color: #86efac;
+  color: var(--accent-success);
 }
 
 .sidebar .behind {
-  color: #fca5a5;
+  color: var(--accent-warning);
 }
 
 .sidebar .git-section-title,
@@ -368,18 +383,19 @@
   gap: var(--space-3);
   min-height: 30px;
   padding: 0 var(--space-3);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  background: rgba(14, 26, 46, 0.76);
+  background: var(--bg-elevated);
 }
 
 .sidebar .files-list .file-item.clickable {
   cursor: pointer;
 }
 
-.sidebar .files-list .file-item.clickable:hover {
+.sidebar .files-list .file-item.clickable:hover,
+.sidebar .git-file-group .file-item.clickable:hover {
   border-color: var(--border-strong);
-  background: rgba(20, 37, 62, 0.86);
+  background: var(--bg-surface);
 }
 
 .sidebar .files-list .file-icon {
@@ -395,12 +411,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--text-secondary);
+  color: var(--text-primary);
   font-size: var(--text-sm);
 }
 
 .sidebar .files-list .file-path.modified {
-  color: #8fe7ff;
+  color: var(--accent-primary);
 }
 
 .sidebar .badge {
@@ -428,7 +444,7 @@
   height: 34px;
   border-radius: 10px;
   border: 1px solid var(--border-default);
-  background: rgba(20, 33, 56, 0.95);
+  background: var(--bg-elevated);
   color: var(--text-secondary);
   cursor: pointer;
   z-index: 101;
@@ -438,7 +454,7 @@
 .desktop-collapse-btn:hover {
   color: var(--text-primary);
   border-color: var(--border-strong);
-  background: rgba(28, 45, 71, 0.95);
+  background: var(--bg-surface);
 }
 
 .mobile-close-btn {

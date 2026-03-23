@@ -2,6 +2,13 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.11.17] - 2026-03-23
+
+- Updates 22 files - Updates multimodal image support for vision-capable models (4164789)
+- Adds 3 files - Adds pasted image detection and disk saving (bf2bd05)
+- Updates 8 files - Updates pruning logic and adds LLM compaction summaries (6320200)
+- Updates webui/src/contexts/EditorManagerContext.tsx - Updates callback dependencies by removing buffers (4a2b07b)
+
 ## [v0.11.15] - 2026-03-21
 
 - Merge remote-tracking branch 'origin/main' (1f691f3)

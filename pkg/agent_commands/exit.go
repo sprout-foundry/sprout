@@ -27,7 +27,7 @@ func (e *ExitCommand) Description() string {
 // Execute runs the exit command
 func (e *ExitCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	// Print full session summary before exiting
-	fmt.Println("\n👋 Goodbye! Here's your session summary:")
+	fmt.Println("\n-- Goodbye! Here's your session summary:")
 	fmt.Println("=====================================")
 	chatAgent.PrintConversationSummary(true)
 	sessionID := strings.TrimSpace(chatAgent.GetSessionID())

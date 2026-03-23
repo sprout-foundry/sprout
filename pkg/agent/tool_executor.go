@@ -74,7 +74,7 @@ func (te *ToolExecutor) ExecuteTools(toolCalls []api.ToolCall) []api.Message {
 
 	// Log tool calls at the beginning of the process
 	if te.agent != nil {
-		te.agent.debugLog("🛠️ Executing %d tool calls\n", len(toolCalls))
+		te.agent.debugLog("[tool] Executing %d tool calls\n", len(toolCalls))
 		for _, tc := range toolCalls {
 			te.agent.LogToolCall(tc, "executing")
 			te.agent.PublishToolExecution(tc.Function.Name, "starting", map[string]interface{}{
@@ -203,7 +203,7 @@ func (te *ToolExecutor) executeParallel(toolCalls []api.ToolCall) []api.Message 
 	}
 
 	limit := parallelWorkerLimit(toolName, len(toolCalls))
-	te.agent.debugLog("🚀 Executing %d %s operations in parallel (workers=%d)\n", len(toolCalls), toolName, limit)
+	te.agent.debugLog("[>>] Executing %d %s operations in parallel (workers=%d)\n", len(toolCalls), toolName, limit)
 
 	// Pre-generate tool call IDs for any tool calls that don't have them
 	// This ensures each goroutine has its own unique ID before parallel execution
@@ -229,7 +229,7 @@ func (te *ToolExecutor) executeParallel(toolCalls []api.ToolCall) []api.Message 
 			defer func() {
 				<-workers
 				if r := recover(); r != nil {
-					te.agent.debugLog("⚠️ Tool execution panicked: %v\n", r)
+					te.agent.debugLog("[WARN] Tool execution panicked: %v\n", r)
 					// Create error result
 					resultsMutex.Lock()
 					results[index] = api.Message{
@@ -293,7 +293,7 @@ func (te *ToolExecutor) executeSequential(toolCalls []api.ToolCall) []api.Messag
 
 		// Show progress
 		if len(toolCalls) > 1 {
-			te.agent.debugLog("🔧 Executing tool %d/%d [%.0f%%]: %s\n", i+1, len(toolCalls), float64(i+1)/float64(len(toolCalls))*100, tc.Function.Name)
+			te.agent.debugLog("[tool] Executing tool %d/%d [%.0f%%]: %s\n", i+1, len(toolCalls), float64(i+1)/float64(len(toolCalls))*100, tc.Function.Name)
 		}
 
 		// Execute tool
@@ -323,7 +323,7 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 	te.agent.ToolLog("executing tool", formatToolCall(toolCall))
 	normalizedToolName := te.normalizeToolNameForScheduling(toolCall.Function.Name)
 	if normalizedToolName != toolCall.Function.Name {
-		te.agent.debugLog("🔁 Normalized tool name: %s -> %s\n", toolCall.Function.Name, normalizedToolName)
+		te.agent.debugLog("[~] Normalized tool name: %s -> %s\n", toolCall.Function.Name, normalizedToolName)
 	}
 
 	var todoBefore []tools.TodoItem
@@ -335,7 +335,7 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 	toolCallID := toolCall.ID
 	if toolCallID == "" {
 		toolCallID = te.GenerateToolCallID(toolCall.Function.Name)
-		te.agent.debugLog("🔧 Generated missing tool call ID: %s for tool: %s\n", toolCallID, toolCall.Function.Name)
+		te.agent.debugLog("[tool] Generated missing tool call ID: %s for tool: %s\n", toolCallID, toolCall.Function.Name)
 	}
 
 	// Parse arguments
@@ -350,7 +350,7 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 		}
 	}
 	if repairedArgs {
-		te.agent.debugLog("🔧 Repaired malformed tool arguments for %s\n", normalizedToolName)
+		te.agent.debugLog("[tool] Repaired malformed tool arguments for %s\n", normalizedToolName)
 	}
 
 	// Execute with circuit breaker check
@@ -435,7 +435,7 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 		safeErr := sanitizeToolFailureMessage(err.Error())
 		// Ensure the error is visible to the user immediately
 		te.agent.PrintLine("")
-		te.agent.PrintLine(fmt.Sprintf("❌ Tool '%s' failed: %s", normalizedToolName, safeErr))
+		te.agent.PrintLine(fmt.Sprintf("[FAIL] Tool '%s' failed: %s", normalizedToolName, safeErr))
 		te.agent.PrintLine("")
 		fullResult = fmt.Sprintf("Error: %s", safeErr)
 	}
@@ -972,7 +972,7 @@ func (te *ToolExecutor) emitTodoChecklistUpdate(before, after []tools.TodoItem) 
 	}
 
 	te.agent.PrintLine("")
-	te.agent.PrintLine(fmt.Sprintf("📝 Todo update: %d total | [ ] %d pending | [~] %d in progress | [x] %d completed | [-] %d cancelled",
+	te.agent.PrintLine(fmt.Sprintf("[edit] Todo update: %d total | [ ] %d pending | [~] %d in progress | [x] %d completed | [-] %d cancelled",
 		len(after), pending, inProgress, completed, cancelled))
 	if len(changed) == 0 {
 		te.agent.PrintLine("   No checklist changes detected.")

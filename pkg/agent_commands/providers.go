@@ -57,19 +57,19 @@ func (p *ProvidersCommand) Execute(args []string, chatAgent *agent.Agent) error 
 
 // showProviderStatus displays current provider information
 func (p *ProvidersCommand) showProviderStatus(configManager *configuration.Manager, chatAgent *agent.Agent) error {
-	fmt.Println("\n🔧 Provider Status:")
+	fmt.Println("\n[tool] Provider Status:")
 	fmt.Println("===================")
 
 	// Show current active provider
 	currentProvider := chatAgent.GetProviderType()
 	currentModel := chatAgent.GetModel()
-	fmt.Printf("✅ **Active Provider**: %s\n", getProviderDisplayName(currentProvider))
-	fmt.Printf("🤖 **Current Model**: %s\n", currentModel)
+	fmt.Printf("[OK] **Active Provider**: %s\n", getProviderDisplayName(currentProvider))
+	fmt.Printf("[bot] **Current Model**: %s\n", currentModel)
 	fmt.Println()
 
 	// Show all supported providers
 	available := configManager.GetAvailableProviders()
-	fmt.Println("📋 Supported Providers:")
+	fmt.Println("[list] Supported Providers:")
 	fmt.Println("------------------")
 
 	for _, provider := range available {
@@ -79,13 +79,13 @@ func (p *ProvidersCommand) showProviderStatus(configManager *configuration.Manag
 		// Check if provider is ready to use
 		isReady := p.isProviderReady(configManager, provider)
 
-		icon := "❌"
+		icon := "[FAIL]"
 		statusText := "(API key required)"
 		if isReady {
-			icon = "✅"
+			icon = "[OK]"
 			statusText = "(configured)"
 			if provider == currentProvider {
-				icon = "🌟"
+				icon = "[*]"
 				statusText = "(active)"
 			}
 		}
@@ -108,7 +108,7 @@ func (p *ProvidersCommand) showProviderStatus(configManager *configuration.Manag
 func (p *ProvidersCommand) listProviders(configManager *configuration.Manager) error {
 	available := configManager.GetAvailableProviders()
 
-	fmt.Println("\n📋 All Providers:")
+	fmt.Println("\n[list] All Providers:")
 	fmt.Println("=================")
 
 	for i, provider := range available {
@@ -118,9 +118,9 @@ func (p *ProvidersCommand) listProviders(configManager *configuration.Manager) e
 		// Check if provider is ready
 		isReady := p.isProviderReady(configManager, provider)
 
-		status := "❌ (API key required)"
+		status := "[FAIL] (API key required)"
 		if isReady {
-			status = "✅ (ready)"
+			status = "[OK] (ready)"
 		}
 
 		fmt.Printf("%d. **%s** %s - %s\n", i+1, name, status, model)
@@ -160,7 +160,7 @@ func (p *ProvidersCommand) selectProvider(configManager *configuration.Manager, 
 
 	// UI not available - show provider list with help
 	fmt.Println("Interactive provider selection not available.")
-	fmt.Println("\n📋 Available Providers:")
+	fmt.Println("\n[list] Available Providers:")
 	fmt.Println("======================")
 
 	for i, provider := range providers {
@@ -171,13 +171,13 @@ func (p *ProvidersCommand) selectProvider(configManager *configuration.Manager, 
 		if !isReady {
 			status = " (API key required)"
 		} else if provider == chatAgent.GetProviderType() {
-			status = " ✓"
+			status = " [ok]"
 		}
 
 		fmt.Printf("%d. %s%s\n", i+1, getProviderDisplayName(provider), status)
 	}
 
-	fmt.Println("\n💡 To select a provider, use: /provider <provider_name>")
+	fmt.Println("\n[i] To select a provider, use: /provider <provider_name>")
 	fmt.Println("   Example: /provider openai")
 	return nil
 }
@@ -231,7 +231,7 @@ func (p *ProvidersCommand) setProvider(providerName string, configManager *confi
 	}
 
 	// Switch to the provider
-	fmt.Printf("🔄 Switching to %s...\n", getProviderDisplayName(provider))
+	fmt.Printf("[~] Switching to %s...\n", getProviderDisplayName(provider))
 
 	// Switch the agent to the new provider
 	err = chatAgent.SetProvider(provider)
@@ -242,10 +242,10 @@ func (p *ProvidersCommand) setProvider(providerName string, configManager *confi
 	// Get the model that was set
 	model := chatAgent.GetModel()
 
-	fmt.Printf("✅ Provider switched to: %s\n", getProviderDisplayName(provider))
-	fmt.Printf("🤖 Using model: %s\n", model)
+	fmt.Printf("[OK] Provider switched to: %s\n", getProviderDisplayName(provider))
+	fmt.Printf("[bot] Using model: %s\n", model)
 	if note := chatAgent.ConsumePendingStrictSwitchNotice(); note != "" {
-		fmt.Printf("\nℹ️  %s\n", note)
+		fmt.Printf("\n[info] %s\n", note)
 	}
 
 	return nil
@@ -264,7 +264,7 @@ func selectModelFromList(models []api.ModelInfo, preferredModel string) (string,
 		}
 	}
 
-	fmt.Printf("\n⚠️  Preferred model '%s' not found.\n", preferredModel)
+	fmt.Printf("\n[WARN] Preferred model '%s' not found.\n", preferredModel)
 	fmt.Println("Available models:")
 	for i, model := range models {
 		fmt.Printf("  %d) %s\n", i+1, model.ID)
@@ -276,26 +276,26 @@ func selectModelFromList(models []api.ModelInfo, preferredModel string) (string,
 	if input == "" {
 		// Default to first model
 		selectedModel := models[0].ID
-		fmt.Printf("🔄 Selected first available model: %s\n", selectedModel)
+		fmt.Printf("[~] Selected first available model: %s\n", selectedModel)
 		return selectedModel, nil
 	}
 
 	// Try to parse as number
 	if selection, err := strconv.Atoi(input); err == nil && selection >= 1 && selection <= len(models) {
 		selectedModel := models[selection-1].ID
-		fmt.Printf("✅ Selected model: %s\n", selectedModel)
+		fmt.Printf("[OK] Selected model: %s\n", selectedModel)
 		return selectedModel, nil
 	}
 
 	// Try to find exact match
 	for _, model := range models {
 		if strings.EqualFold(model.ID, input) {
-			fmt.Printf("✅ Selected model: %s\n", model.ID)
+			fmt.Printf("[OK] Selected model: %s\n", model.ID)
 			return model.ID, nil
 		}
 	}
 
-	fmt.Printf("❌ Invalid selection. Using first available model: %s\n", models[0].ID)
+	fmt.Printf("[FAIL] Invalid selection. Using first available model: %s\n", models[0].ID)
 	return models[0].ID, nil
 }
 

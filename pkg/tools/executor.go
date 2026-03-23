@@ -81,7 +81,7 @@ func (e *Executor) ExecuteTool(ctx context.Context, tool Tool, params Parameters
 
 	// Log tool execution start
 	if e.logger != nil {
-		e.logger.LogProcessStep(fmt.Sprintf("🔧 Executing tool: %s (%s)", tool.Name(), tool.Description()))
+		e.logger.LogProcessStep(fmt.Sprintf("[tool] Executing tool: %s (%s)", tool.Name(), tool.Description()))
 	}
 
 	// Execute the tool
@@ -96,11 +96,11 @@ func (e *Executor) ExecuteTool(ctx context.Context, tool Tool, params Parameters
 	// Log tool execution end
 	if e.logger != nil {
 		if err != nil {
-			e.logger.LogProcessStep(fmt.Sprintf("❌ Tool %s failed after %v: %v", tool.Name(), executionTime, err))
+			e.logger.LogProcessStep(fmt.Sprintf("[FAIL] Tool %s failed after %v: %v", tool.Name(), executionTime, err))
 		} else if result != nil && result.Success {
-			e.logger.LogProcessStep(fmt.Sprintf("✅ Tool %s completed successfully in %v", tool.Name(), executionTime))
+			e.logger.LogProcessStep(fmt.Sprintf("[OK] Tool %s completed successfully in %v", tool.Name(), executionTime))
 		} else {
-			e.logger.LogProcessStep(fmt.Sprintf("⚠️ Tool %s completed with issues in %v", tool.Name(), executionTime))
+			e.logger.LogProcessStep(fmt.Sprintf("[WARN] Tool %s completed with issues in %v", tool.Name(), executionTime))
 		}
 	}
 
@@ -297,7 +297,7 @@ func (e *Executor) handleDuplicateRequest(toolName string, args map[string]inter
 	if toolName == "read_file" {
 		// For read_file duplicates, return a special response indicating the file was already requested
 		filePath, _ := args["file_path"].(string)
-		response := fmt.Sprintf(`⚡ Duplicate request detected
+		response := fmt.Sprintf(`[!] Duplicate request detected
 
 File: '%s'
 Read %d times in this session
@@ -326,7 +326,7 @@ You already have this file content available.`,
 	}
 
 	// For other tools, return a generic duplicate response
-	response := fmt.Sprintf("⚡ Duplicate request detected: This %s call has been made %d times in this session. Please avoid redundant requests.",
+	response := fmt.Sprintf("[!] Duplicate request detected: This %s call has been made %d times in this session. Please avoid redundant requests.",
 		toolName, callInfo.CallCount)
 
 	if e.logger != nil {

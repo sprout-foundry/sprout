@@ -193,16 +193,16 @@ func (c *CommitCommand) selectAndStageFiles(chatAgent *agent.Agent, reader *bufi
 		return nil, err
 	}
 	var filesToAdd []string
-	fmt.Println("\n💡 Enter file numbers to commit (comma-separated, 'a' for all, 'q' to quit):")
+	fmt.Println("\n[i] Enter file numbers to commit (comma-separated, 'a' for all, 'q' to quit):")
 	input, _ := reader.ReadString('\n')
 	input = strings.TrimSpace(input)
 	switch strings.ToLower(input) {
 	case "q", "quit":
-		fmt.Println("❌ Commit cancelled")
+		fmt.Println("[FAIL] Commit cancelled")
 		return nil, nil
 	case "a", "all":
 		filesToAdd = selectAllModifiedFiles(validStatusLines)
-		fmt.Println("✅ Adding all modified files")
+		fmt.Println("[OK] Adding all modified files")
 	default:
 		selections := strings.Split(input, ",")
 		for _, sel := range selections {
@@ -212,12 +212,12 @@ func (c *CommitCommand) selectAndStageFiles(chatAgent *agent.Agent, reader *bufi
 			}
 			var index int
 			if _, err := fmt.Sscanf(sel, "%d", &index); err != nil || index < 1 || index > len(validStatusLines) {
-				fmt.Printf("❌ Invalid selection: %s\n", sel)
+				fmt.Printf("[FAIL] Invalid selection: %s\n", sel)
 				continue
 			}
 			if name, ok := parseFilenameFromStatusLine(validStatusLines[index-1]); ok {
 				filesToAdd = append(filesToAdd, name)
-				fmt.Printf("✅ Adding: %s\n", name)
+				fmt.Printf("[OK] Adding: %s\n", name)
 			}
 		}
 	}
@@ -227,12 +227,12 @@ func (c *CommitCommand) selectAndStageFiles(chatAgent *agent.Agent, reader *bufi
 		cmd := exec.Command("git", "add", file)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
-			c.printf("❌ Failed to stage %s: %v\n", file, err)
+			c.printf("[FAIL] Failed to stage %s: %v\n", file, err)
 			if len(output) > 0 {
 				c.printf("Output: %s\n", string(output))
 			}
 		} else {
-			c.printf("✅ Staged: %s\n", file)
+			c.printf("[OK] Staged: %s\n", file)
 		}
 	}
 
@@ -245,7 +245,7 @@ func (c *CommitCommand) checkForAnyChanges(chatAgent *agent.Agent) (bool, error)
 		return false, err
 	}
 	if len(validStatusLines) == 0 {
-		chatAgent.PrintLine("✅ No changes to commit")
+		chatAgent.PrintLine("[OK] No changes to commit")
 		return false, nil
 	}
 	return true, nil
@@ -258,8 +258,8 @@ func (c *CommitCommand) printStatus(chatAgent *agent.Agent) error {
 		return err
 	}
 	// Print the current git status
-	chatAgent.PrintLine("📊 Current git status:")
-	chatAgent.PrintLine("\n📁 Modified files:")
+	chatAgent.PrintLine("[chart] Current git status:")
+	chatAgent.PrintLine("\n[dir/] Modified files:")
 	for i, line := range validStatusLines {
 		chatAgent.PrintLine(fmt.Sprintf("%2d. %s", i+1, line))
 	}
@@ -280,13 +280,13 @@ func (c *CommitCommand) executeMultiFileCommit(chatAgent *agent.Agent) error {
 		return err
 	}
 	if len(staged) == 0 {
-		chatAgent.PrintLine("✅ No staged files found")
+		chatAgent.PrintLine("[OK] No staged files found")
 		staged, err = c.selectAndStageFiles(chatAgent, reader)
 		if err != nil {
 			return err
 		}
 	} else {
-		chatAgent.PrintLine(fmt.Sprintf("📦 Found %d staged file(s):", len(staged)))
+		chatAgent.PrintLine(fmt.Sprintf("[pkg] Found %d staged file(s):", len(staged)))
 	}
 
 	if err := c.printStatus(chatAgent); err != nil {
@@ -294,7 +294,7 @@ func (c *CommitCommand) executeMultiFileCommit(chatAgent *agent.Agent) error {
 	}
 
 	if len(staged) == 0 {
-		fmt.Println("❌ No files selected")
+		fmt.Println("[FAIL] No files selected")
 		return nil
 	}
 
@@ -304,7 +304,7 @@ func (c *CommitCommand) executeMultiFileCommit(chatAgent *agent.Agent) error {
 
 // showHelp displays commit command usage
 func (c *CommitCommand) showHelp() error {
-	fmt.Println("📝 Commit Command Usage:")
+	fmt.Println("[edit] Commit Command Usage:")
 	fmt.Println("========================")
 	fmt.Println("/commit          - Interactive commit workflow for staged files")
 	fmt.Println("/commit help     - Show this help message")
@@ -345,7 +345,7 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 		}
 	} else {
 		if c.agentError != nil {
-			c.printf("⚠️  Using manual commit mode (AI agent unavailable: %v)", c.agentError)
+			c.printf("[WARN] Using manual commit mode (AI agent unavailable: %v)", c.agentError)
 		} else {
 			c.println("Using manual commit mode (no AI agent available)")
 		}
@@ -358,7 +358,7 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 	}
 
 	if len(strings.TrimSpace(string(diffOutput))) == 0 {
-		c.println("❌ No changes staged")
+		c.println("[FAIL] No changes staged")
 		return nil
 	}
 
@@ -461,14 +461,14 @@ retryLoop:
 		if client == nil {
 			// Manual fallback when LLM client isn't available
 			c.println("")
-			c.println("🧾 Staged diff (truncated):")
+			c.println("[receipt] Staged diff (truncated):")
 			preview := string(diffOutput)
 			if len(preview) > 2000 {
 				preview = preview[:2000] + "\n... (truncated)"
 			}
 			c.println(preview)
 			c.println("")
-			c.println("✏️  Enter commit message (end with a blank line):")
+			c.println("[edit] Enter commit message (end with a blank line):")
 			var b strings.Builder
 			empty := 0
 			for {
@@ -485,7 +485,7 @@ retryLoop:
 			}
 			commitMessage = strings.TrimSpace(b.String())
 			if commitMessage == "" {
-				c.println("❌ Empty commit message; aborting")
+				c.println("[FAIL] Empty commit message; aborting")
 				return nil
 			}
 
@@ -614,7 +614,7 @@ Generate a Git commit message summary. The message should follow these rules:
 		commitMessage = commitTitle + "\n\n" + wrappedDesc
 
 		// Show token usage (both requests)
-		c.printf("\n💰 Tokens used: ~%d (model: %s/%s)\n", resp.Usage.TotalTokens*2, clientType, model)
+		c.printf("\n$ Tokens used: ~%d (model: %s/%s)\n", resp.Usage.TotalTokens*2, clientType, model)
 
 		// Show staged files summary and commit message (minimal, no emoji)
 		c.println("")
@@ -641,7 +641,7 @@ Generate a Git commit message summary. The message should follow these rules:
 		// Handle confirmation (or auto-proceed if skipPrompt)
 		if c.skipPrompt {
 			c.println("")
-			c.println("✅ Auto-proceeding with commit (--skip-prompt)")
+			c.println("[OK] Auto-proceeding with commit (--skip-prompt)")
 			break // Exit retry loop
 		} else {
 			// If TUI is active use dropdown, otherwise stdin prompt
@@ -729,15 +729,15 @@ Generate a Git commit message summary. The message should follow these rules:
 	// Handle dry-run mode
 	if c.dryRun {
 		c.println("")
-		c.println("🔍 Dry-run mode: Commit message generated successfully!")
-		c.println("💡 The commit was not created due to --dry-run flag")
-		c.println("📝 To create the commit, run the command again without --dry-run")
+		c.println("[search] Dry-run mode: Commit message generated successfully!")
+		c.println("[i] The commit was not created due to --dry-run flag")
+		c.println("[edit] To create the commit, run the command again without --dry-run")
 		return nil
 	}
 
 	// Create the commit
 	c.println("")
-	c.println("💾 Creating commit...")
+	c.println("[save] Creating commit...")
 
 	// Write commit message to temporary file
 	tempFile := "commit_msg.txt"
@@ -753,7 +753,7 @@ Generate a Git commit message summary. The message should follow these rules:
 		return fmt.Errorf("failed to create commit: %v\nOutput: %s", err, string(output))
 	}
 
-	c.println("✅ Commit created successfully!")
+	c.println("[OK] Commit created successfully!")
 	c.printf("Output: %s\n", string(output))
 
 	return nil

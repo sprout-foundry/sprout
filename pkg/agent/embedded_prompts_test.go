@@ -88,7 +88,7 @@ func TestConsolidatedEfficiencyGuidelines(t *testing.T) {
 		}
 	}
 
-	t.Logf("✅ All providers use consolidated base prompt")
+	t.Logf("[OK] All providers use consolidated base prompt")
 	t.Logf("Base prompt length: %d", len(basePrompt))
 }
 

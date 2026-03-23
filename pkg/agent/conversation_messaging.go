@@ -83,7 +83,7 @@ func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 		if ch.agent.conversationPruner.ShouldPrune(historyTokens, ch.agent.maxContextTokens, ch.agent.GetProvider(), true) {
 			if ch.agent.debug {
 				contextUsage := float64(historyTokens) / float64(ch.agent.maxContextTokens)
-				ch.agent.PrintLineAsync(fmt.Sprintf("🔄 Context pruning triggered: %d/%d tokens (%.1f%%, history only)",
+				ch.agent.PrintLineAsync(fmt.Sprintf("[~] Context pruning triggered: %d/%d tokens (%.1f%%, history only)",
 					historyTokens, ch.agent.maxContextTokens, contextUsage*100))
 			}
 
@@ -103,7 +103,7 @@ func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 					break
 				}
 				if ch.agent.debug {
-					ch.agent.PrintLineAsync(fmt.Sprintf("🔁 Context still high after prune pass %d: %d/%d tokens", pass+1, historyTokens, ch.agent.maxContextTokens))
+					ch.agent.PrintLineAsync(fmt.Sprintf("[~] Context still high after prune pass %d: %d/%d tokens", pass+1, historyTokens, ch.agent.maxContextTokens))
 				}
 			}
 
@@ -123,7 +123,7 @@ func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 			// do one more prune pass targeting the full payload size.
 			if currentTokens > ch.agent.maxContextTokens {
 				if ch.agent.debug {
-					ch.agent.PrintLineAsync(fmt.Sprintf("🔁 Full payload exceeds max after history prune: %d/%d tokens, pruning once more",
+					ch.agent.PrintLineAsync(fmt.Sprintf("[~] Full payload exceeds max after history prune: %d/%d tokens, pruning once more",
 						currentTokens, ch.agent.maxContextTokens))
 				}
 				prunedMessages = ch.agent.conversationPruner.PruneConversation(prunedMessages, currentTokens, ch.agent.maxContextTokens, ch.agent.optimizer, ch.agent.GetProvider(), true)
@@ -138,7 +138,7 @@ func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 			}
 
 			if ch.agent.debug {
-				ch.agent.PrintLineAsync(fmt.Sprintf("✅ Context after pruning: %d tokens (%.1f%%)",
+				ch.agent.PrintLineAsync(fmt.Sprintf("[OK] Context after pruning: %d tokens (%.1f%%)",
 					currentTokens, float64(currentTokens)/float64(ch.agent.maxContextTokens)*100))
 			}
 		}
@@ -225,14 +225,14 @@ func (ch *ConversationHandler) removeOrphanedToolResults(messages []api.Message)
 			if msg.Role == "tool" {
 				removedCount++
 				if ch.agent.debug {
-					ch.agent.debugLog("🧹 Removed orphaned tool result with tool_call_id=%s\n", msg.ToolCallId)
+					ch.agent.debugLog("[clean] Removed orphaned tool result with tool_call_id=%s\n", msg.ToolCallId)
 				}
 			} else {
 				filtered = append(filtered, msg)
 			}
 		}
 		if removedCount > 0 && ch.agent.debug {
-			ch.agent.debugLog("🧹 Removed %d orphaned tool result(s) (no assistant with tool_calls)\n", removedCount)
+			ch.agent.debugLog("[clean] Removed %d orphaned tool result(s) (no assistant with tool_calls)\n", removedCount)
 		}
 		return filtered
 	}
@@ -247,7 +247,7 @@ func (ch *ConversationHandler) removeOrphanedToolResults(messages []api.Message)
 			} else {
 				removedCount++
 				if ch.agent.debug {
-					ch.agent.debugLog("🧹 Removed orphaned tool result with tool_call_id=%s\n", msg.ToolCallId)
+					ch.agent.debugLog("[clean] Removed orphaned tool result with tool_call_id=%s\n", msg.ToolCallId)
 				}
 			}
 		} else {
@@ -256,7 +256,7 @@ func (ch *ConversationHandler) removeOrphanedToolResults(messages []api.Message)
 	}
 
 	if removedCount > 0 && ch.agent.debug {
-		ch.agent.debugLog("🧹 Removed %d orphaned tool result(s)\n", removedCount)
+		ch.agent.debugLog("[clean] Removed %d orphaned tool result(s)\n", removedCount)
 	}
 
 	return filtered
@@ -264,7 +264,7 @@ func (ch *ConversationHandler) removeOrphanedToolResults(messages []api.Message)
 
 // validateDeepSeekToolCalls performs additional validation for DeepSeek tool call format
 func (ch *ConversationHandler) validateDeepSeekToolCalls(messages []api.Message) {
-	ch.agent.debugLog("🔍 DeepSeek: Validating tool call format for %d messages\n", len(messages))
+	ch.agent.debugLog("[search] DeepSeek: Validating tool call format for %d messages\n", len(messages))
 
 	for i, msg := range messages {
 		if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
@@ -283,10 +283,10 @@ func (ch *ConversationHandler) validateDeepSeekToolCalls(messages []api.Message)
 			}
 
 			if foundToolResponses < expectedToolCalls {
-				ch.agent.debugLog("🚨 DeepSeek: WARNING - Assistant message at index %d has %d tool_calls but only %d tool responses found\n",
+				ch.agent.debugLog("[!!] DeepSeek: WARNING - Assistant message at index %d has %d tool_calls but only %d tool responses found\n",
 					i, expectedToolCalls, foundToolResponses)
 			} else {
-				ch.agent.debugLog("✅ DeepSeek: Assistant message at index %d has %d tool_calls with %d tool responses\n",
+				ch.agent.debugLog("[OK] DeepSeek: Assistant message at index %d has %d tool_calls with %d tool responses\n",
 					i, expectedToolCalls, foundToolResponses)
 			}
 		}
@@ -297,7 +297,7 @@ func (ch *ConversationHandler) validateDeepSeekToolCalls(messages []api.Message)
 // Minimax requires that tool results immediately follow their corresponding tool calls
 // and that each tool result's tool_call_id matches a tool call from the previous assistant message
 func (ch *ConversationHandler) validateMinimaxToolCalls(messages []api.Message) {
-	ch.agent.debugLog("🔍 Minimax: Validating tool call format for %d messages\n", len(messages))
+	ch.agent.debugLog("[search] Minimax: Validating tool call format for %d messages\n", len(messages))
 
 	// Track expected tool call IDs from the last assistant message
 	var expectedToolCallIDs []string
@@ -314,7 +314,7 @@ func (ch *ConversationHandler) validateMinimaxToolCalls(messages []api.Message) 
 
 			// Check that tool results immediately follow
 			if i+1 >= len(messages) {
-				ch.agent.debugLog("⚠️ Minimax: Assistant message at end with no tool results\n")
+				ch.agent.debugLog("[WARN] Minimax: Assistant message at end with no tool results\n")
 				continue
 			}
 
@@ -332,11 +332,11 @@ func (ch *ConversationHandler) validateMinimaxToolCalls(messages []api.Message) 
 						}
 					}
 					if !found {
-						ch.agent.debugLog("🚨 Minimax: ERROR - Tool result at index %d has tool_call_id=%s which doesn't match any tool call from assistant at index %d\n",
+						ch.agent.debugLog("[!!] Minimax: ERROR - Tool result at index %d has tool_call_id=%s which doesn't match any tool call from assistant at index %d\n",
 							j, messages[j].ToolCallId, i)
 						ch.agent.debugLog("   Expected IDs: %v\n", expectedToolCallIDs)
 						// THIS IS THE BUG - we have orphaned tool results
-						ch.agent.debugLog("🚨🚨🚨 MINIMAX BUG: Orphaned tool result detected! This will cause error 2013!\n")
+						ch.agent.debugLog("[!!!] MINIMAX BUG: Orphaned tool result detected! This will cause error 2013!\n")
 					} else {
 						ch.agent.debugLog("  Minimax: Tool[%d] result for tool_call_id=%s\n", j, messages[j].ToolCallId)
 					}
@@ -352,7 +352,7 @@ func (ch *ConversationHandler) validateMinimaxToolCalls(messages []api.Message) 
 			}
 
 			if foundToolResults < len(expectedToolCallIDs) {
-				ch.agent.debugLog("🚨 Minimax: WARNING - Expected %d tool results but only found %d after assistant at index %d\n",
+				ch.agent.debugLog("[!!] Minimax: WARNING - Expected %d tool results but only found %d after assistant at index %d\n",
 					len(expectedToolCallIDs), foundToolResults, i)
 			}
 		}
@@ -370,9 +370,9 @@ func (ch *ConversationHandler) validateMinimaxToolCalls(messages []api.Message) 
 
 	for i, msg := range messages {
 		if msg.Role == "tool" && (firstAssistantWithTools == -1 || i < firstAssistantWithTools) {
-			ch.agent.debugLog("🚨 Minimax: CRITICAL - Tool result at index %d appears before any assistant message with tool calls!\n", i)
+			ch.agent.debugLog("[!!] Minimax: CRITICAL - Tool result at index %d appears before any assistant message with tool calls!\n", i)
 			ch.agent.debugLog("   tool_call_id=%s\n", msg.ToolCallId)
-			ch.agent.debugLog("🚨🚨🚨 MINIMAX BUG: Orphaned tool result at beginning! This will cause error 2013!\n")
+			ch.agent.debugLog("[!!!] MINIMAX BUG: Orphaned tool result at beginning! This will cause error 2013!\n")
 		}
 	}
 }
@@ -385,7 +385,7 @@ func (ch *ConversationHandler) enqueueTransientMessage(msg api.Message) {
 	// Check for duplicate transient messages to avoid role alternation issues
 	for _, existing := range ch.transientMessages {
 		if existing.Role == msg.Role && existing.Content == msg.Content {
-			ch.agent.debugLog("⚠️ Skipping duplicate transient message: role=%s, content=%q\n", msg.Role, msg.Content)
+			ch.agent.debugLog("[WARN] Skipping duplicate transient message: role=%s, content=%q\n", msg.Role, msg.Content)
 			return
 		}
 	}
@@ -423,7 +423,7 @@ func (ch *ConversationHandler) sanitizeContent(content string) string {
 	cleaned = strings.ReplaceAll(cleaned, "\x1b", "")
 
 	if ch.agent.debug && cleaned != content {
-		ch.agent.debugLog("🧹 Sanitized content, removed %d chars\n", len(content)-len(cleaned))
+		ch.agent.debugLog("[clean] Sanitized content, removed %d chars\n", len(content)-len(cleaned))
 	}
 
 	return cleaned
@@ -474,16 +474,16 @@ func (ch *ConversationHandler) appendTurnLogFile(turn TurnEvaluation) {
 	}
 	data, err := json.Marshal(turn)
 	if err != nil {
-		ch.agent.debugLog("⚠️ Failed to marshal turn log: %v\n", err)
+		ch.agent.debugLog("[WARN] Failed to marshal turn log: %v\n", err)
 		return
 	}
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
-		ch.agent.debugLog("⚠️ Failed to open turn log file %s: %v\n", path, err)
+		ch.agent.debugLog("[WARN] Failed to open turn log file %s: %v\n", path, err)
 		return
 	}
 	defer f.Close()
 	if _, err := f.Write(append(data, '\n')); err != nil {
-		ch.agent.debugLog("⚠️ Failed to write turn log: %v\n", err)
+		ch.agent.debugLog("[WARN] Failed to write turn log: %v\n", err)
 	}
 }

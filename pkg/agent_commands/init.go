@@ -23,8 +23,8 @@ func (i *InitCommand) Description() string {
 
 // Execute runs the init command using the LLM to analyze the codebase
 func (i *InitCommand) Execute(args []string, chatAgent *agent.Agent) error {
-	fmt.Println("🔧 Analyzing codebase and generating AGENTS.md...")
-	fmt.Println("📖 The agent will explore your project and create/update AGENTS.md")
+	fmt.Println("[tool] Analyzing codebase and generating AGENTS.md...")
+	fmt.Println("[read] The agent will explore your project and create/update AGENTS.md")
 	fmt.Println()
 
 	// Check for existing context files to include as reference

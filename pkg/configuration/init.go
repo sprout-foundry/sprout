@@ -75,7 +75,7 @@ func Initialize() (*Config, *APIKeys, error) {
 		if RequiresAPIKey(currentProvider) && !HasProviderCredential(currentProvider, apiKeys) {
 			needsSetup = true
 			if !isCI {
-				fmt.Printf("\n⚠️  Current provider '%s' requires an API key but none is configured.\n", getProviderDisplayName(currentProvider))
+				fmt.Printf("\n[WARN] Current provider '%s' requires an API key but none is configured.\n", getProviderDisplayName(currentProvider))
 			}
 		}
 	}
@@ -83,28 +83,28 @@ func Initialize() (*Config, *APIKeys, error) {
 	// In CI environments, skip interactive setup and use defaults
 	if isCI && (isFirstRun || needsSetup) {
 		if isFirstRun {
-			fmt.Printf("🚀 Welcome to ledit! Let's set up your AI provider.\n")
+			fmt.Printf("[>>] Welcome to ledit! Let's set up your AI provider.\n")
 			fmt.Printf("   Config directory: %s\n\n", configDir)
 		}
 
 		// Set a default provider that works in CI
 		if HasProviderCredential("openrouter", apiKeys) {
 			config.LastUsedProvider = "openrouter"
-			fmt.Printf("✅ Using OpenRouter provider from environment\n")
+			fmt.Printf("[OK] Using OpenRouter provider from environment\n")
 		} else if HasProviderCredential("openai", apiKeys) {
 			config.LastUsedProvider = "openai"
-			fmt.Printf("✅ Using OpenAI provider from environment\n")
+			fmt.Printf("[OK] Using OpenAI provider from environment\n")
 		} else {
 			// Default to test provider which is designed for CI/testing
 			config.LastUsedProvider = "test"
-			fmt.Printf("✅ Using test provider (designed for CI environments)\n")
+			fmt.Printf("[OK] Using test provider (designed for CI environments)\n")
 		}
 
 		if err := config.Save(); err != nil {
 			return nil, nil, fmt.Errorf("failed to save config: %w", err)
 		}
 
-		fmt.Printf("🎉 Setup complete! You can now use ledit.\n\n")
+		fmt.Printf("[done] Setup complete! You can now use ledit.\n\n")
 
 		return config, apiKeys, nil
 	}
@@ -126,7 +126,7 @@ func Initialize() (*Config, *APIKeys, error) {
 			return nil, nil, fmt.Errorf("failed to save config: %w", err)
 		}
 
-		fmt.Printf("🎉 Setup complete! You can now use ledit with %s.\n\n", getProviderDisplayName(provider))
+		fmt.Printf("[done] Setup complete! You can now use ledit with %s.\n\n", getProviderDisplayName(provider))
 
 		// Show helpful next steps
 		ShowNextSteps(provider, configDir)
@@ -158,7 +158,7 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 
 	// If we have providers with environment variables, prioritize them
 	if len(envProviders) > 0 {
-		fmt.Println("🚀 Found providers with environment variables set:")
+		fmt.Println("[>>] Found providers with environment variables set:")
 		for i, providerName := range envProviders {
 			// Find the provider struct to get the environment variable name
 			var envVarName string
@@ -174,7 +174,7 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 		fmt.Println()
 
 		// Auto-select the first provider with environment variable
-		fmt.Printf("✅ Auto-selecting %s (environment variable detected)\n", getProviderDisplayName(envProviders[0]))
+		fmt.Printf("[OK] Auto-selecting %s (environment variable detected)\n", getProviderDisplayName(envProviders[0]))
 		return envProviders[0], nil
 	}
 
@@ -187,7 +187,7 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 
 	// If we have providers ready to use, show them first
 	if len(providersWithKeys) > 0 {
-		fmt.Println("✅ Ready to use (configured or no API key needed):")
+		fmt.Println("[OK] Ready to use (configured or no API key needed):")
 		for i, providerName := range providersWithKeys {
 			fmt.Printf("  %d. %s", i+1, getProviderDisplayName(providerName))
 			if !RequiresAPIKey(providerName) {
@@ -199,7 +199,7 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 	}
 
 	// Show all provider options with clear descriptions
-	fmt.Println("🤖 All available AI providers:")
+	fmt.Println("[bot] All available AI providers:")
 	for i, provider := range allProviders {
 		status := ""
 		description := ""
@@ -207,7 +207,7 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 		if provider.RequiresKey && !HasProviderCredential(provider.Name, apiKeys) {
 			status = " (needs API key)"
 		} else if provider.RequiresKey && HasProviderCredential(provider.Name, apiKeys) {
-			status = " ✅"
+			status = " [OK]"
 		} else {
 			status = " (local, no key needed)"
 		}
@@ -245,7 +245,7 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 	// Check if API key is needed
 	if selectedProvider.RequiresKey && !HasProviderCredential(selectedProvider.Name, apiKeys) {
 		fmt.Println()
-		fmt.Printf("📋 Setting up %s:\n", selectedProvider.FormattedName)
+		fmt.Printf("[list] Setting up %s:\n", selectedProvider.FormattedName)
 
 		// Provide helpful information about getting API keys
 		switch selectedProvider.Name {
@@ -277,11 +277,11 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 			return "", fmt.Errorf("failed to save API key: %w", err)
 		}
 
-		fmt.Printf("✅ API key saved for %s\n", selectedProvider.FormattedName)
+		fmt.Printf("[OK] API key saved for %s\n", selectedProvider.FormattedName)
 	} else if selectedProvider.RequiresKey {
-		fmt.Printf("✅ Using existing API key for %s\n", selectedProvider.FormattedName)
+		fmt.Printf("[OK] Using existing API key for %s\n", selectedProvider.FormattedName)
 	} else {
-		fmt.Printf("✅ Selected %s (no API key required)\n", selectedProvider.FormattedName)
+		fmt.Printf("[OK] Selected %s (no API key required)\n", selectedProvider.FormattedName)
 	}
 
 	return selectedProvider.Name, nil
@@ -298,7 +298,7 @@ func EnsureProviderAPIKey(provider string, apiKeys *APIKeys) error {
 	}
 
 	fmt.Println()
-	fmt.Printf("⚠️  No API key found for %s\n", getProviderDisplayName(provider))
+	fmt.Printf("[WARN] No API key found for %s\n", getProviderDisplayName(provider))
 	fmt.Println()
 	fmt.Println("Options:")
 	fmt.Println("  1. Enter API key now")
@@ -321,7 +321,7 @@ func EnsureProviderAPIKey(provider string, apiKeys *APIKeys) error {
 			return fmt.Errorf("failed to save API key: %w", err)
 		}
 
-		fmt.Printf("✅ API key saved for %s\n", getProviderDisplayName(provider))
+		fmt.Printf("[OK] API key saved for %s\n", getProviderDisplayName(provider))
 		return nil
 	}
 
@@ -397,7 +397,7 @@ func SelectProvider(currentProvider string, apiKeys *APIKeys) (string, error) {
 		return "", fmt.Errorf("no providers available - please configure API keys")
 	}
 
-	fmt.Println("🤖 Available providers:")
+	fmt.Println("[bot] Available providers:")
 	for i, provider := range available {
 		indicator := "  "
 		if provider == currentProvider {
@@ -441,7 +441,7 @@ func SelectProvider(currentProvider string, apiKeys *APIKeys) (string, error) {
 // addNewProvider guides user through adding a new provider
 func addNewProvider(apiKeys *APIKeys) (string, error) {
 	fmt.Println()
-	fmt.Println("➕ Add new provider:")
+	fmt.Println("[+] Add new provider:")
 
 	// Show providers that need API keys
 	needsKey := []string{}
@@ -480,7 +480,7 @@ func addNewProvider(apiKeys *APIKeys) (string, error) {
 		return "", fmt.Errorf("failed to save API key: %w", err)
 	}
 
-	fmt.Printf("✅ Added %s\n", getProviderDisplayName(provider))
+	fmt.Printf("[OK] Added %s\n", getProviderDisplayName(provider))
 	return provider, nil
 }
 
@@ -543,7 +543,7 @@ func LoadOrInitConfig(skipPrompt bool) (*Config, error) {
 
 // DebugPrintConfig prints current configuration for debugging
 func DebugPrintConfig(config *Config, apiKeys *APIKeys) {
-	fmt.Println("🔧 Current Configuration:")
+	fmt.Println("[tool] Current Configuration:")
 	fmt.Printf("  Config Version: %s\n", config.Version)
 	fmt.Printf("  Last Provider: %s\n", config.LastUsedProvider)
 	fmt.Println()
@@ -575,19 +575,19 @@ func DebugPrintConfig(config *Config, apiKeys *APIKeys) {
 
 // ShowWelcomeMessage displays a comprehensive welcome message for new users
 func ShowWelcomeMessage() {
-	fmt.Println("🚀 Welcome to ledit - AI-powered code assistance!")
+	fmt.Println("[>>] Welcome to ledit - AI-powered code assistance!")
 	fmt.Println()
 	fmt.Println("   ledit helps you write code faster using AI language models.")
 	fmt.Println("   Requires models with tool-calling support for code editing.")
 	fmt.Println("   Get started with low-cost AI models - no lock-in, maximum flexibility.")
 	fmt.Println()
-	fmt.Println("💡 Recommended for beginners:")
+	fmt.Println("[i] Recommended for beginners:")
 	fmt.Println("   • OpenRouter - Access to 100+ AI models through one API")
 	fmt.Println("   • Tool-calling models are required for ledit to function properly")
 	fmt.Println("   • Pay-as-you-go pricing starting from $0.0001 per request")
 	fmt.Println("   • Great model: qwen/qwen3-coder-30b-a3b-instruct (excellent for coding)")
 	fmt.Println()
-	fmt.Println("🔗 Get started: https://openrouter.ai/keys")
+	fmt.Println("[link] Get started: https://openrouter.ai/keys")
 	fmt.Println()
 }
 
@@ -600,12 +600,12 @@ func ShowNextSteps(provider, configDir string) {
 	// Add specific recommendations based on provider
 	if provider == "openrouter" {
 		fmt.Println()
-		fmt.Println("💰 Cost-effective tool-calling models:")
+		fmt.Println("$ Cost-effective tool-calling models:")
 		fmt.Println("  • qwen/qwen3-coder-30b-a3b-instruct - Excellent for coding tasks")
 		fmt.Println("  • openai/gpt-5-mini - Good performance, low cost")
 		fmt.Println("  • Note: Avoid models without tool-calling support - they won't work with ledit")
 		fmt.Println()
-		fmt.Println("📖 Usage examples:")
+		fmt.Println("[read] Usage examples:")
 		fmt.Println("  ledit agent -m \"qwen/qwen3-coder-30b-a3b-instruct\" \"Add error handling to my function\"")
 		fmt.Println("  ledit agent -p openrouter \"Explain this code and suggest improvements\"")
 	}

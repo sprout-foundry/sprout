@@ -31,7 +31,7 @@ func NewCompletionContextSummarizer(debug bool) *CompletionContextSummarizer {
 // that preserves continuity while eliminating execution baggage
 func (ccs *CompletionContextSummarizer) CreateCompletionSummary(messages []api.Message) string {
 	if ccs.debug {
-		fmt.Printf("🔍 Creating completion summary from %d messages\n", len(messages))
+		fmt.Printf("[search] Creating completion summary from %d messages\n", len(messages))
 	}
 
 	// Extract key information from the conversation
@@ -52,7 +52,7 @@ func (ccs *CompletionContextSummarizer) CreateCompletionSummary(messages []api.M
 		summary.WriteString("**Files Modified**: " + filesModified + "\n\n")
 	}
 
-	summary.WriteString("**Status**: ✅ Task completed successfully\n")
+	summary.WriteString("**Status**: [OK] Task completed successfully\n")
 	summary.WriteString("**Next Steps**: Future instructions should be treated as new tasks.\n")
 
 	return summary.String()

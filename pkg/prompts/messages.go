@@ -8,11 +8,11 @@ type Message struct {
 
 // Security-related prompts
 func PotentialSecurityConcernsFound(relativePath, concern, snippet string) string {
-	return "⚠️  Potential security concern found in " + relativePath + ": " + concern + "\n" + snippet + "\nIs this a security issue? (y/n)"
+	return "[WARN] Potential security concern found in " + relativePath + ": " + concern + "\n" + snippet + "\nIs this a security issue? (y/n)"
 }
 
 func SkippingLLMSummarizationDueToSecurity(relativePath string) string {
-	return "⚠️  Skipping LLM summarization for " + relativePath + " due to potential security concerns"
+	return "[WARN] Skipping LLM summarization for " + relativePath + " due to potential security concerns"
 }
 
 // CodeReviewStagedPrompt returns the prompt for code review

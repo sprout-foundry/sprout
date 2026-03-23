@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './Terminal.css';
 import { TerminalWebSocketService } from '../services/terminalWebSocket';
 import { debugLog } from '../utils/log';
-import { stripAnsiCodes } from '../utils/ansi';
+import { ansiToHtml } from '../utils/ansi';
 
 interface TerminalProps {
   onCommand?: (command: string) => void;
@@ -33,6 +33,11 @@ const Terminal: React.FC<TerminalProps> = ({
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [cwd] = useState('~');
   const [terminalConnected, setTerminalConnected] = useState(false);
+  const [terminalHeight, setTerminalHeight] = useState(400);
+  const [isResizing, setIsResizing] = useState(false);
+  const isDragging = useRef(false);
+  const dragStartY = useRef(0);
+  const dragStartHeight = useRef(0);
   const hasMountedRef = useRef(false);
   const terminalRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -80,9 +85,9 @@ const Terminal: React.FC<TerminalProps> = ({
         } else if (event.type === 'session_ready') {
           setTerminalConnected(true);
         } else if (event.type === 'output') {
-          addLine('output', stripAnsiCodes(event.data.output));
+          addLine('output', event.data.output);
         } else if (event.type === 'error_output') {
-          addLine('error', stripAnsiCodes(event.data.output));
+          addLine('error', event.data.output);
         } else if (event.type === 'error') {
           addLine('error', event.data.message);
         }
@@ -233,6 +238,36 @@ const Terminal: React.FC<TerminalProps> = ({
     setLines([]);
   }, []);
 
+  // Drag-to-resize handlers
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isDragging.current = true;
+    setIsResizing(true);
+    dragStartY.current = e.clientY;
+    dragStartHeight.current = terminalHeight;
+
+    const handleResizeMove = (moveEvent: MouseEvent) => {
+      if (!isDragging.current) return;
+      const delta = dragStartY.current - moveEvent.clientY; // dragging up = increase height
+      const newHeight = Math.max(120, Math.min(window.innerHeight - 100, dragStartHeight.current + delta));
+      setTerminalHeight(newHeight);
+    };
+
+    const handleResizeEnd = () => {
+      isDragging.current = false;
+      setIsResizing(false);
+      document.removeEventListener('mousemove', handleResizeMove);
+      document.removeEventListener('mouseup', handleResizeEnd);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+    };
+
+    document.addEventListener('mousemove', handleResizeMove);
+    document.addEventListener('mouseup', handleResizeEnd);
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'row-resize';
+  }, [terminalHeight]);
+
   // Add welcome message on first expand
   useEffect(() => {
     if (isExpanded && lines.length === 0) {
@@ -253,7 +288,17 @@ const Terminal: React.FC<TerminalProps> = ({
   }, []);
 
   return (
-    <div className={`terminal-container ${isExpanded ? 'expanded' : 'collapsed'} ${hasMountedRef.current ? 'initial-mount' : ''}`}>
+    <div
+      className={`terminal-container ${isExpanded ? 'expanded' : 'collapsed'} ${hasMountedRef.current ? 'initial-mount' : ''} ${isResizing ? 'resizing' : ''}`}
+      style={isExpanded ? { height: `${terminalHeight}px` } : undefined}
+    >
+      {isExpanded && (
+        <div
+          className="terminal-resize-handle"
+          onMouseDown={handleResizeStart}
+          title="Drag to resize terminal"
+        />
+      )}
       <div className="terminal-header">
         <div className="terminal-title">
           <span className="terminal-icon">$</span>
@@ -287,12 +332,11 @@ const Terminal: React.FC<TerminalProps> = ({
             onClick={() => inputRef.current?.focus()}
           >
             {lines.map(line => (
-              <div 
-                key={line.id} 
+              <div
+                key={line.id}
                 className={`terminal-line terminal-${line.type}`}
-              >
-                {line.content}
-              </div>
+                dangerouslySetInnerHTML={{ __html: ansiToHtml(line.content) }}
+              />
             ))}
           </div>
           

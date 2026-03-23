@@ -14,6 +14,12 @@ import (
 	"github.com/creack/pty"
 )
 
+// shellExists checks if a shell binary exists in PATH.
+func shellExists(name string) bool {
+	_, err := exec.LookPath(name)
+	return err == nil
+}
+
 // TerminalSession represents a terminal session
 type TerminalSession struct {
 	ID           string
@@ -65,16 +71,22 @@ func (tm *TerminalManager) CreateSession(sessionID string) (*TerminalSession, er
 		return tm.createWindowsSession(sessionID)
 	default:
 		// Unix-like systems - use PTY
-		if _, err := exec.LookPath("bash"); err == nil {
+		// Prefer user's configured shell ($SHELL), then fall back to bash/zsh/sh
+		userShell := os.Getenv("SHELL")
+		switch {
+		case userShell != "":
+			shell = userShell
+			shellArgs = []string{"--login"}
+		case shellExists("bash"):
 			shell = "bash"
 			shellArgs = []string{"--login"}
-		} else if _, err := exec.LookPath("zsh"); err == nil {
+		case shellExists("zsh"):
 			shell = "zsh"
 			shellArgs = []string{"--login"}
-		} else if _, err := exec.LookPath("sh"); err == nil {
+		case shellExists("sh"):
 			shell = "sh"
 			shellArgs = []string{"-l"}
-		} else {
+		default:
 			return nil, fmt.Errorf("no suitable shell found")
 		}
 	}

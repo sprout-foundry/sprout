@@ -111,6 +111,7 @@
   --sidebar-nav-btn-hover-bg: #353b45;
   --sidebar-nav-btn-active-bg: linear-gradient(180deg, #3a404b, #343a45);
   --sidebar-select-bg: #242932;
+  --sidebar-rail-bg: rgba(0, 0, 0, 0.15);
 
   /* Transitions */
   --ease-out: cubic-bezier(0, 0, 0.2, 1);
@@ -181,6 +182,7 @@
   --sidebar-nav-btn-hover-bg: rgba(196, 214, 236, 0.94);
   --sidebar-nav-btn-active-bg: linear-gradient(180deg, #0284c7, #0369a1);
   --sidebar-select-bg: rgba(255, 255, 255, 0.96);
+  --sidebar-rail-bg: rgba(0, 0, 0, 0.06);
 }
 
 body {

@@ -354,11 +354,70 @@
   background: var(--bg-secondary);
 }
 
+.tool-detail-section + .tool-detail-section {
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.tool-detail-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
 .tool-details pre {
   margin: 0;
   font-size: 11px;
   color: var(--text-primary);
   overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* Subagent-specific styles */
+.tool-execution.tool-subagent {
+  border-left: 3px solid var(--accent-primary);
+  background: linear-gradient(
+    135deg,
+    rgba(var(--accent-primary-rgb, 88, 166, 255), 0.06) 0%,
+    var(--bg-tertiary) 100%
+  );
+}
+
+.tool-name-subagent {
+  font-weight: 650 !important;
+  letter-spacing: 0.02em;
+}
+
+.subagent-icon {
+  font-size: 14px;
+  filter: drop-shadow(0 0 4px currentColor);
+}
+
+.tool-subagent-prompt {
+  font-size: 11px;
+  font-style: italic;
+  color: var(--text-secondary);
+  padding: 0 10px 8px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.subagent-prompt-detail {
+  font-size: 11px;
+  font-style: italic;
+  color: var(--text-secondary);
+  line-height: 1.5;
 }
 
 @media (max-width: 768px) {

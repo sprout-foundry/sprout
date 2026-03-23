@@ -2,7 +2,7 @@
   "name": "ledit-webui",
   "version": "1.0.0",
   "private": true,
-  "proxy": "http://localhost:54321",
+  "proxy": "http://localhost:54421",
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.0",
     "@codemirror/commands": "^6.10.0",

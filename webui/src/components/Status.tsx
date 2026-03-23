@@ -57,7 +57,7 @@ const Status: React.FC<StatusProps> = ({ isConnected, stats }) => {
       <div className="status-indicator">
         <span className={`indicator ${isConnected ? 'on' : 'off'}`}></span>
         <span className="status-text">
-          {isConnected ? 'Connected to ledit server' : 'Backend not connected - Start with: ./ledit agent --web-port 54321'}
+          {isConnected ? 'Connected to ledit server' : 'Backend not connected - Start with: ./ledit agent --web-port 54421'}
         </span>
       </div>
 

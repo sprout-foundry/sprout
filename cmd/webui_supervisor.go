@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	defaultWebUIPort      = 54321
+	defaultWebUIPort      = 54421
 	hostHeartbeatInterval = 1 * time.Second
 	hostStaleAfter        = 4 * time.Second
 )

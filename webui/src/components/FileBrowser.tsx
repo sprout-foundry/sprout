@@ -1,4 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import {
+  Folder,
+  File,
+  ArrowUp,
+  X,
+  FolderOpen,
+} from 'lucide-react';
 import './FileBrowser.css';
 
 export interface FileNode {
@@ -144,8 +151,8 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
       <div className="filebrowser-container" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="filebrowser-header">
-          <h3>📁 File Browser</h3>
-          <button className="filebrowser-close" onClick={onCancel}>✕</button>
+          <h3><FolderOpen size={16} style={{ marginRight: 6, verticalAlign: 'middle' }} /> File Browser</h3>
+          <button className="filebrowser-close" onClick={onCancel}><X size={16} /></button>
         </div>
 
         {/* Navigation */}
@@ -155,7 +162,7 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
             onClick={navigateUp}
             disabled={currentPath === '/'}
           >
-            ⬆️ Up
+            <ArrowUp size={14} style={{ marginRight: 4, verticalAlign: 'middle' }} /> Up
           </button>
           <div className="filebrowser-path">
             <input
@@ -189,7 +196,7 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
                   onDoubleClick={() => handleFileDoubleClick(file)}
                 >
                   <div className="filebrowser-icon">
-                    {file.type === 'directory' ? '📁' : '📄'}
+                    {file.type === 'directory' ? <Folder size={16} /> : <File size={16} />}
                   </div>
                   <div className="filebrowser-info">
                     <div className="filebrowser-name">{file.name}</div>

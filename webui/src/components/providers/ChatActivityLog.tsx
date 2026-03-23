@@ -5,6 +5,7 @@
  */
 
 import React from 'react';
+import { CheckCircle2, XCircle, AlertTriangle, Info, FileEdit } from 'lucide-react';
 import { ProviderLogEntry } from '../../providers';
 
 interface ChatActivityLogProps {
@@ -21,11 +22,11 @@ export const ChatActivityLog: React.FC<ChatActivityLogProps> = ({ logs }) => {
 
   const getLogIcon = (level: string) => {
     switch (level) {
-      case 'success': return '✅';
-      case 'error': return '❌';
-      case 'warning': return '⚠️';
-      case 'info': return 'ℹ️';
-      default: return '📝';
+      case 'success': return <CheckCircle2 size={14} />;
+      case 'error': return <XCircle size={14} />;
+      case 'warning': return <AlertTriangle size={14} />;
+      case 'info': return <Info size={14} />;
+      default: return <FileEdit size={14} />;
     }
   };
 

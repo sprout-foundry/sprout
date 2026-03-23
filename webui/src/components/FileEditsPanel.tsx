@@ -5,6 +5,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
+import { Pencil, Plus, Trash2, ArrowLeftRight, CircleCheck, ArrowDown, Undo2, File, FilePen, RotateCcw, X, TriangleAlert, ScrollText, Inbox } from 'lucide-react';
 import { ApiService } from '../services/api';
 import './FileEditsPanel.css';
 
@@ -77,14 +78,14 @@ const FileEditsPanel: React.FC<FileEditsPanelProps> = ({ edits, onFileClick }) =
   };
   const getActionIcon = (action: string) => {
     switch (action) {
-      case 'edited': return '📝';
-      case 'created': return '➕';
-      case 'deleted': return '🗑️';
-      case 'renamed': return '🔄';
-      case 'git_stage': return '✅';
-      case 'git_unstage': return '⬇️';
-      case 'git_discard': return '↩️';
-      default: return '📄';
+      case 'edited': return <Pencil size={14} />;
+      case 'created': return <Plus size={14} />;
+      case 'deleted': return <Trash2 size={14} />;
+      case 'renamed': return <ArrowLeftRight size={14} />;
+      case 'git_stage': return <CircleCheck size={14} />;
+      case 'git_unstage': return <ArrowDown size={14} />;
+      case 'git_discard': return <Undo2 size={14} />;
+      default: return <File size={14} />;
     }
   };
 
@@ -132,20 +133,20 @@ const FileEditsPanel: React.FC<FileEditsPanelProps> = ({ edits, onFileClick }) =
   return (
     <div className="file-edits-panel">
       <div className="edits-header">
-        <h4>📝 File Edits ({sortedEdits.length})</h4>
+        <h4><FilePen size={14} /> File Edits ({sortedEdits.length})</h4>
         <button
           onClick={handleViewHistory}
           disabled={isLoadingHistory}
           className="history-button"
           title="View revision history and rollback"
         >
-          {isLoadingHistory ? 'Loading...' : '⏪ Revision History'}
+          {isLoadingHistory ? 'Loading...' : <><RotateCcw size={14} /> Revision History</>}
         </button>
       </div>
       {sortedEdits.length === 0 ? (
         <div className="edits-list">
           <div className="edit-item">
-            <span className="edit-icon">📭</span>
+            <span className="edit-icon"><Inbox size={16} /></span>
             <span className="edit-info">
               <span className="file-name">No file edits yet</span>
               <span className="file-dir">Start editing to build a revision trail</span>
@@ -203,19 +204,19 @@ const FileEditsPanel: React.FC<FileEditsPanelProps> = ({ edits, onFileClick }) =
         <div className="history-modal-overlay" onClick={() => setShowHistory(false)}>
           <div className="history-modal" onClick={(e) => e.stopPropagation()}>
             <div className="history-modal-header">
-              <h3>⏪ Revision History</h3>
+              <h3><RotateCcw size={16} /> Revision History</h3>
               <button
                 className="close-button"
                 onClick={() => setShowHistory(false)}
                 title="Close"
               >
-                ✕
+                <X size={14} />
               </button>
             </div>
 
             {rollbackError && (
               <div className="history-error">
-                <span className="error-icon">⚠️</span>
+                <span className="error-icon"><TriangleAlert size={14} /></span>
                 <span>{rollbackError}</span>
               </div>
             )}
@@ -223,7 +224,7 @@ const FileEditsPanel: React.FC<FileEditsPanelProps> = ({ edits, onFileClick }) =
             <div className="history-content">
               {revisions.length === 0 ? (
                 <div className="history-empty">
-                  <span className="empty-icon">📜</span>
+                  <span className="empty-icon"><ScrollText size={16} /></span>
                   <p>No revision history available</p>
                   <p className="empty-hint">Make some changes to see revisions here</p>
                 </div>
@@ -262,7 +263,7 @@ const FileEditsPanel: React.FC<FileEditsPanelProps> = ({ edits, onFileClick }) =
                           className="rollback-button"
                           disabled={isLoadingHistory}
                         >
-                          ⏪ Rollback to this revision
+                          <RotateCcw size={14} /> Rollback to this revision
                         </button>
                       </div>
                     </div>

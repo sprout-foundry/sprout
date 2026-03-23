@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useLayoutEffect, memo } from 'react';
+import { ScrollText, X, RefreshCw, Send } from 'lucide-react';
 import './CommandInput.css';
 import { ApiService } from '../services/api';
 import { CommandHistoryState, loadCommandHistory, saveCommandHistory } from './command_input_history';
@@ -373,7 +374,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
         <div className="input-info">
           {isHistoryMode && (
             <span className="history-indicator">
-              📜 History ({history.index + 1}/{history.commands.length})
+              <ScrollText size={14} /> History ({history.index + 1}/{history.commands.length})
             </span>
           )}
           {isLoadingHistory && (
@@ -390,7 +391,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
             }}
             title="Exit history mode (Esc)"
           >
-            ✕
+            <X size={12} />
           </button>
         )}
       </div>
@@ -443,7 +444,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
             className="refresh-button"
             title="Refresh history from terminal (Ctrl+R)"
           >
-            🔄
+            <RefreshCw size={14} />
           </button>
         </div>
         <button
@@ -452,7 +453,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
           className="send-button"
           aria-label="Send message"
         >
-          <span className="send-icon">➤</span>
+          <span className="send-icon"><Send size={14} /></span>
           <span className="send-text">Send</span>
         </button>
       </div>

@@ -5,6 +5,7 @@
  */
 
 import React from 'react';
+import { CheckCircle2, XCircle, AlertTriangle, Info, FileEdit } from 'lucide-react';
 import { ContentProvider, ProviderContext, SidebarSection, Action, ActionResult } from './types';
 
 export class LogsViewProvider implements ContentProvider {
@@ -54,18 +55,18 @@ export class LogsViewProvider implements ContentProvider {
             .filter((entry) => !(entry.type === 'file_changed' && !this.extractFilePath(entry.data)))
             .slice(-10)
         },
-        renderItem: (logs: any[]) => {
+        renderItem: (logs: any[], _context: ProviderContext) => {
           if (logs.length === 0) {
             return <span className="empty">No logs yet</span>;
           }
 
           const getLogIcon = (level: string) => {
             switch (level) {
-              case 'success': return '✅';
-              case 'error': return '❌';
-              case 'warning': return '⚠️';
-              case 'info': return 'ℹ️';
-              default: return '📝';
+              case 'success': return <CheckCircle2 size={14} />;
+              case 'error': return <XCircle size={14} />;
+              case 'warning': return <AlertTriangle size={14} />;
+              case 'info': return <Info size={14} />;
+              default: return <FileEdit size={14} />;
             }
           };
 
@@ -122,7 +123,7 @@ export class LogsViewProvider implements ContentProvider {
             </div>
           );
         },
-        title: () => `📋 System Logs`,
+        title: () => 'System Logs',
         order: 1
       }
     ];

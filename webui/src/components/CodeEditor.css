@@ -227,7 +227,13 @@
 
 .loading-indicator .spinner {
   font-size: 16px;
-  animation: pulse 1.5s ease-in-out infinite;
+  animation: spin 1s linear infinite;
+}
+
+.spinner-inline {
+  display: inline-block;
+  vertical-align: middle;
+  animation: spin 1s linear infinite;
 }
 
 .error-message {
@@ -268,9 +274,11 @@
 }
 
 .no-file-icon {
-  font-size: 64px;
   margin-bottom: 16px;
   opacity: 0.3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .no-file-text {
@@ -715,4 +723,9 @@
     justify-content: center;
     padding: 12px;
   }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }

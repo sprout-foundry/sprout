@@ -50,10 +50,10 @@
 .status-info {
   color: var(--text-secondary);
   font-size: 11px;
-  padding: 6px 10px;
-  background: var(--bg-tertiary);
-  border-radius: 10px;
-  border: 1px solid var(--border-subtle);
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  border: none;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;

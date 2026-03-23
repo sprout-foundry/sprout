@@ -1,4 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, type ReactNode } from 'react';
+import {
+  X,
+  AlertTriangle,
+  FolderOpen,
+  FileCode,
+  FileText,
+  File,
+  Code2,
+  Globe,
+  Palette,
+  Settings,
+  Terminal,
+  Braces,
+  type LucideIcon,
+} from 'lucide-react';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { EditorBuffer } from '../types/editor';
 import './EditorTabs.css';
@@ -51,7 +66,7 @@ const EditorTabs: React.FC = () => {
       <div className="tabs-container">
         {bufferList.length === 0 ? (
           <div className="no-tabs">
-            <span className="no-tabs-icon">📂</span>
+            <span className="no-tabs-icon"><FolderOpen size={20} /></span>
             <span className="no-tabs-text">No open files</span>
           </div>
         ) : (
@@ -73,7 +88,7 @@ const EditorTabs: React.FC = () => {
                     onClick={(e) => handleTabClose(e, buffer)}
                     title={`Close ${buffer.file.name}`}
                   >
-                    ✕
+                    <X size={14} />
                   </button>
                 </div>
               </div>
@@ -92,7 +107,7 @@ const EditorTabs: React.FC = () => {
         <div className="close-confirm-overlay">
           <div className="close-confirm-dialog">
             <div className="dialog-header">
-              <h3>⚠️ Unsaved Changes</h3>
+              <h3><AlertTriangle size={16} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />Unsaved Changes</h3>
             </div>
             <div className="dialog-body">
               <p>You have unsaved changes in <strong>"{showConfirm.fileName}"</strong>.</p>
@@ -100,7 +115,7 @@ const EditorTabs: React.FC = () => {
             </div>
             <div className="dialog-actions">
               <button onClick={handleConfirmClose} className="dialog-btn danger">
-                × Yes, Close
+                <X size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />Yes, Close
               </button>
               <button onClick={handleCancelClose} className="dialog-btn primary">
                 Cancel
@@ -113,37 +128,44 @@ const EditorTabs: React.FC = () => {
   );
 };
 
-const getFileIcon = (ext?: string): string => {
-  if (!ext) return '📄';
+const FILE_ICON_SIZE = 16;
+
+const getFileIcon = (ext?: string): ReactNode => {
+  const Icon = getFileIconComponent(ext);
+  return <Icon size={FILE_ICON_SIZE} />;
+};
+
+const getFileIconComponent = (ext?: string): LucideIcon => {
+  if (!ext) return File;
 
   switch (ext.toLowerCase()) {
     case '.js':
     case '.jsx':
-      return '🟨';
+      return FileCode;
     case '.ts':
     case '.tsx':
-      return '🔷';
+      return Braces;
     case '.go':
-      return '🐹';
+      return Code2;
     case '.py':
-      return '🐍';
+      return FileCode;
     case '.json':
-      return '📋';
+      return Braces;
     case '.html':
-      return '🌐';
+      return Globe;
     case '.css':
-      return '🎨';
+      return Palette;
     case '.md':
-      return '📝';
+      return FileText;
     case '.txt':
-      return '📄';
+      return FileText;
     case '.yml':
     case '.yaml':
-      return '⚙️';
+      return Settings;
     case '.sh':
-      return '🐚';
+      return Terminal;
     default:
-      return '📄';
+      return File;
   }
 };
 

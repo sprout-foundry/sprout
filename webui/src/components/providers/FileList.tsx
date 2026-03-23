@@ -5,6 +5,10 @@
  */
 
 import React from 'react';
+import {
+  Folder, FileCode, Code2, Code, FileText, Braces,
+  File, Palette, Globe, Terminal, Package, Lock, ScrollText, Check
+} from 'lucide-react';
 
 interface FileListProps {
   files: Array<{ path: string; modified: boolean }>;
@@ -25,30 +29,33 @@ export const FileList: React.FC<FileListProps> = ({
     const extension = fileName.split('.').pop()?.toLowerCase() || '';
     const isDirectory = fileName.endsWith('/') || !fileName.includes('.');
 
-    if (isDirectory) return '📁';
+    if (isDirectory) return <Folder size={14} />;
 
-    const iconMap: { [key: string]: string } = {
-      'js': '📜',
-      'jsx': '⚛️',
-      'ts': '📘',
-      'tsx': '⚛️',
-      'go': '🐹',
-      'py': '🐍',
-      'rs': '🦀',
-      'java': '☕',
-      'md': '📝',
-      'json': '📋',
-      'yaml': '⚙️',
-      'yml': '⚙️',
-      'txt': '📄',
-      'css': '🎨',
-      'html': '🌐',
-      'sh': '💻',
-      'mod': '📦',
-      'sum': '🔒'
+    const iconMap: { [key: string]: React.ReactNode } = {
+      'js': <FileCode size={14} />,
+      'jsx': <FileCode size={14} />,
+      'ts': <Code2 size={14} />,
+      'tsx': <Code2 size={14} />,
+      'go': <Code2 size={14} />,
+      'py': <Code size={14} />,
+      'rs': <FileCode size={14} />,
+      'java': <Code size={14} />,
+      'md': <FileText size={14} />,
+      'json': <Braces size={14} />,
+      'yaml': <Palette size={14} />,
+      'yml': <Palette size={14} />,
+      'txt': <File size={14} />,
+      'css': <Palette size={14} />,
+      'html': <Globe size={14} />,
+      'sh': <Terminal size={14} />,
+      'mod': <Package size={14} />,
+      'sum': <Lock size={14} />,
+      'log': <ScrollText size={14} />,
+      'toml': <Braces size={14} />,
+      'sql': <Code2 size={14} />,
     };
 
-    return iconMap[extension] || '📄';
+    return iconMap[extension] || <File size={14} />;
   };
 
   if (files.length === 0) {
@@ -72,7 +79,7 @@ export const FileList: React.FC<FileListProps> = ({
             <span className={`file-path ${file.modified ? 'modified' : ''}`}>
               {fileName}
             </span>
-            {file.modified && <span className="badge">✓</span>}
+            {file.modified && <span className="badge"><Check size={10} /></span>}
           </div>
         );
       })}

@@ -6,6 +6,7 @@
  */
 
 import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { TriangleAlert } from 'lucide-react';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -74,7 +75,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       return (
         <div className="error-boundary">
           <div className="error-boundary-content">
-            <h2>⚠️ Something went wrong</h2>
+            <h2><TriangleAlert size={24} className="inline-block mr-2 align-text-bottom" /> Something went wrong</h2>
             <p className="error-message">
               {this.state.error && this.state.error.toString()}
             </p>

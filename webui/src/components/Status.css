@@ -1,21 +1,21 @@
 .status-bar {
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.72), rgba(15, 23, 42, 0.48));
+  background: var(--bg-secondary);
   padding: 10px 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  border-bottom: 1px solid var(--border-subtle);
   font-size: var(--text-sm);
   flex-wrap: wrap;
   gap: 10px;
 }
 
 .status-bar.connected {
-  box-shadow: inset 0 -1px 0 rgba(16, 185, 129, 0.35);
+  box-shadow: inset 0 -1px 0 var(--accent-success);
 }
 
 .status-bar.disconnected {
-  box-shadow: inset 0 -1px 0 rgba(244, 63, 94, 0.35);
+  box-shadow: inset 0 -1px 0 var(--accent-error);
 }
 
 .status-indicator {
@@ -32,13 +32,13 @@
 }
 
 .indicator.on {
-  background: #10b981;
-  box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.14);
+  background: var(--accent-success);
+  box-shadow: 0 0 0 6px var(--color-success-bg);
 }
 
 .indicator.off {
-  background: #f43f5e;
-  box-shadow: 0 0 0 6px rgba(244, 63, 94, 0.14);
+  background: var(--accent-error);
+  box-shadow: 0 0 0 6px var(--color-error-bg);
 }
 
 .status-text {
@@ -51,9 +51,9 @@
   color: var(--text-secondary);
   font-size: 11px;
   padding: 6px 10px;
-  background: rgba(15, 23, 42, 0.58);
+  background: var(--bg-tertiary);
   border-radius: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  border: 1px solid var(--border-subtle);
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -65,16 +65,16 @@
 .status-item {
   padding: 2px 7px;
   border-radius: 7px;
-  background: rgba(30, 41, 59, 0.55);
-  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
 }
 
 .disconnected-help {
-  background: rgba(127, 29, 29, 0.28);
-  border: 1px solid rgba(248, 113, 113, 0.45);
+  background: var(--color-error-bg);
+  border: 1px solid var(--accent-error);
   border-radius: 8px;
   padding: 4px 8px;
-  color: #fecaca;
+  color: var(--accent-error);
   font-size: 11px;
   font-weight: 500;
   display: flex;
@@ -83,12 +83,12 @@
 }
 
 .disconnected-help code {
-  background: rgba(2, 6, 23, 0.55);
+  background: var(--bg-elevated);
   padding: 2px 6px;
   border-radius: 5px;
   font-family: var(--font-mono);
   font-size: 11px;
-  color: #f8fafc;
+  color: var(--text-primary);
 }
 
 @media (max-width: 768px) {

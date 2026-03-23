@@ -5,6 +5,7 @@ import { defaultKeymap, indentWithTab } from '@codemirror/commands';
 import { search, searchKeymap } from '@codemirror/search';
 import { autocompletion } from '@codemirror/autocomplete';
 import { oneDark } from '@codemirror/theme-one-dark';
+import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
 
 // Language support
 import { javascript } from '@codemirror/lang-javascript';
@@ -14,6 +15,9 @@ import { json } from '@codemirror/lang-json';
 import { html } from '@codemirror/lang-html';
 import { css } from '@codemirror/lang-css';
 import { readFileWithConsent, writeFileWithConsent } from '../services/fileAccess';
+import { useHotkeys } from '../contexts/HotkeyContext';
+import { useTheme } from '../contexts/ThemeContext';
+import { getHotkeyPresetKeymap } from '../utils/editorHotkeys';
 
 import './CodeEditor.css';
 
@@ -42,6 +46,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
   const [pendingFile, setPendingFile] = useState<FileInfo | null>(null);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState<boolean>(false);
   const originalContentRef = useRef('');
+  const { preset: hotkeyPreset } = useHotkeys();
+  const { themePack } = useTheme();
 
   // Get language support based on file extension
   const getLanguageSupport = (ext?: string) => {
@@ -208,14 +214,17 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
       }
     });
 
-    const saveKeymap = {
-      key: 'Mod-s',
-      preventDefault: true,
-      run: () => {
+    const customKeymap = getHotkeyPresetKeymap(hotkeyPreset, {
+      onSave: () => {
         saveFile();
-        return true;
-      }
-    };
+      },
+      onGoToLine: () => {
+        // CodeEditor doesn't expose toolbar goto-line; keep no-op for now.
+      },
+      onToggleLineNumbers: () => {
+        // CodeEditor has no line number toggle UI; keep no-op for now.
+      },
+    });
 
     const state = EditorState.create({
       doc: content,
@@ -224,10 +233,10 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
         keymap.of(defaultKeymap),
         keymap.of([indentWithTab]),
         keymap.of(searchKeymap),
-        keymap.of([saveKeymap]),
+        keymap.of(customKeymap),
         search(),
         autocompletion(),
-        oneDark,
+        ...(themePack.editorSyntaxStyle === 'one-dark' ? [oneDark] : [syntaxHighlighting(defaultHighlightStyle)]),
         EditorView.theme({
           '&': {
             height: '100%',
@@ -257,19 +266,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
       view.destroy();
       viewRef.current = null;
     };
-  }, [file, content, saveFile]);
-
-  // Keyboard shortcuts
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-      saveFile();
-    }
-  }, [saveFile]);
-
-  useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleKeyDown]);
+  }, [file, content, hotkeyPreset, themePack.id, saveFile]);
 
   // Handle dialog actions
   const handleSaveAndSwitch = async () => {

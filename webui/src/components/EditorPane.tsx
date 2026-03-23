@@ -6,6 +6,7 @@ import { search, searchKeymap } from '@codemirror/search';
 import { autocompletion } from '@codemirror/autocomplete';
 import { syntaxHighlighting, defaultHighlightStyle, codeFolding, foldGutter } from '@codemirror/language';
 import { bracketMatching } from '@codemirror/language';
+import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark';
 
 // Language support
 import { javascript } from '@codemirror/lang-javascript';
@@ -18,9 +19,11 @@ import { markdown } from '@codemirror/lang-markdown';
 import { php } from '@codemirror/lang-php';
 
 import { useEditorManager } from '../contexts/EditorManagerContext';
+import { useHotkeys } from '../contexts/HotkeyContext';
 import { useTheme } from '../contexts/ThemeContext';
 import EditorToolbar from './EditorToolbar';
 import { readFileWithConsent } from '../services/fileAccess';
+import { getHotkeyPresetKeymap } from '../utils/editorHotkeys';
 import './EditorPane.css';
 
 interface EditorPaneProps {
@@ -44,7 +47,8 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     setBufferModified
   } = useEditorManager();
 
-  const { theme } = useTheme();
+  const { theme, themePack } = useTheme();
+  const { preset: hotkeyPreset } = useHotkeys();
 
   // Get buffer for this pane
   const pane = panes.find(p => p.id === paneId);
@@ -242,35 +246,18 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       }
     });
 
-    // Keyboard shortcuts
-    const customKeymap = [
-      {
-        key: 'Mod-s',
-        preventDefault: true,
-        run: () => {
-          handleSave();
-          return true;
-        }
+    const customKeymap = getHotkeyPresetKeymap(hotkeyPreset, {
+      onSave: () => {
+        handleSave();
       },
-      {
-        key: 'Mod-l',
-        preventDefault: true,
-        run: () => {
-          handleToggleLineNumbers();
-          return true;
-        }
+      onToggleLineNumbers: () => {
+        handleToggleLineNumbers();
       },
-      {
-        key: 'Mod-g',
-        preventDefault: true,
-        run: (view: EditorView) => {
-          // Trigger go to line via an event that the toolbar handles
-          const event = new CustomEvent('editor-goto-line');
-          document.dispatchEvent(event);
-          return true;
-        }
-      }
-    ];
+      onGoToLine: () => {
+        const event = new CustomEvent('editor-goto-line');
+        document.dispatchEvent(event);
+      },
+    });
 
     const extensions = [
       updateListener,
@@ -281,7 +268,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       search(),
       autocompletion(),
       bracketMatching(),
-      syntaxHighlighting(defaultHighlightStyle),
+      syntaxHighlighting(themePack.editorSyntaxStyle === 'one-dark' ? oneDarkHighlightStyle : defaultHighlightStyle),
       lineNumbers(),
       foldGutter({
         openText: '▼',
@@ -308,7 +295,10 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
           color: 'var(--cm-gutter-fg)'
         },
         '.cm-scroller': {
-          fontFamily: 'inherit'
+          fontFamily: 'inherit',
+          overflow: 'auto',
+          minHeight: '0',
+          height: '100%'
         },
         '.cm-cursor': {
           borderLeftColor: 'var(--cm-cursor)'
@@ -354,7 +344,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       view.destroy();
       viewRef.current = null;
     };
-  }, [paneId, buffer?.id, buffer?.file?.ext, showLineNumbers, theme, updateBufferContent, setBufferModified, updateBufferCursor, getLanguageSupport]); // eslint-disable-line react-hooks/exhaustive-deps -- handleSave and handleToggleLineNumbers intentionally excluded to prevent infinite re-init loop when buffer changes
+  }, [paneId, buffer?.id, buffer?.file?.ext, showLineNumbers, theme, themePack.id, hotkeyPreset, updateBufferContent, setBufferModified, updateBufferCursor, getLanguageSupport]); // eslint-disable-line react-hooks/exhaustive-deps -- handleSave and handleToggleLineNumbers intentionally excluded to prevent infinite re-init loop when buffer changes
 
 
   // Listen for go to line event from toolbar

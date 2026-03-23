@@ -4,7 +4,6 @@ import Sidebar from './Sidebar';
 import Chat from './Chat';
 import GitView from './GitView';
 import LogsView from './LogsView';
-import FileEditsPanel from './FileEditsPanel';
 import Terminal from './Terminal';
 import EditorTabs from './EditorTabs';
 import EditorPane from './EditorPane';
@@ -87,6 +86,7 @@ interface AppContentProps {
   onProviderChange: (provider: string) => void;
   onSendMessage: (message: string) => void;
   onGitCommit: (message: string, files: string[]) => Promise<unknown>;
+  onGitAICommit: () => Promise<void>;
   onGitStage: (files: string[]) => Promise<void>;
   onGitUnstage: (files: string[]) => Promise<void>;
   onGitDiscard: (files: string[]) => Promise<void>;
@@ -117,6 +117,7 @@ const AppContent: React.FC<AppContentProps> = ({
   onProviderChange,
   onSendMessage,
   onGitCommit,
+  onGitAICommit,
   onGitStage,
   onGitUnstage,
   onGitDiscard,
@@ -226,10 +227,6 @@ const AppContent: React.FC<AppContentProps> = ({
 
         {state.currentView === 'chat' ? (
           <>
-            <FileEditsPanel
-              edits={state.fileEdits}
-              onFileClick={handleFileClick}
-            />
             <Chat
               messages={state.messages}
               onSendMessage={onSendMessage}
@@ -245,6 +242,7 @@ const AppContent: React.FC<AppContentProps> = ({
           <GitView
             refreshToken={gitRefreshToken}
             onCommit={onGitCommit}
+            onAICommit={onGitAICommit}
             onStage={onGitStage}
             onUnstage={onGitUnstage}
             onDiscard={onGitDiscard}
@@ -289,7 +287,7 @@ const AppContent: React.FC<AppContentProps> = ({
 
             <EditorTabs />
 
-            <div className={`editor-content ${paneLayout}`}>
+            <div className={`editor-workspace ${paneLayout}`}>
               <div
                 ref={containerRef}
                 className={`panes-container layout-${paneLayout}`}
@@ -358,7 +356,7 @@ const EditorPaneWrapper: React.FC<{children: React.ReactNode, isActive?: boolean
 
 const EditorPaneComponent: React.FC<{paneId: string, isActive?: boolean, onClick?: () => void}> = ({ paneId, onClick }) => {
   return (
-    <div onClick={onClick}>
+    <div className="editor-pane-host" onClick={onClick}>
       <EditorPane paneId={paneId} />
     </div>
   );

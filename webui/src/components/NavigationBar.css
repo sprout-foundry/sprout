@@ -52,7 +52,7 @@
 
 .nav-tab.active {
   background: var(--sidebar-nav-btn-active-bg);
-  color: var(--text-primary);
+  color: var(--accent-fg);
   font-weight: 650;
   box-shadow: var(--shadow-subtle);
 }

@@ -1,0 +1,836 @@
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import './SettingsPanel.css';
+import { ApiService, LeditSettings } from '../services/api';
+import {
+  Pencil,
+  Plus,
+  Trash2,
+} from 'lucide-react';
+
+/* ─── Types ──────────────────────────────────────────────────── */
+
+type SettingsSubTab =
+  | 'general'
+  | 'security'
+  | 'performance'
+  | 'subagents'
+  | 'pdf-ocr'
+  | 'mcp'
+  | 'providers'
+  | 'skills';
+
+interface SettingsPanelProps {
+  settings: LeditSettings | null;
+  onSettingsChanged: (settings: LeditSettings) => void;
+}
+
+/** Toast auto-dismisses after 2s */
+interface Toast {
+  id: number;
+  message: string;
+  type: 'success' | 'error';
+}
+
+/* ─── Sub-tab definitions ────────────────────────────────────── */
+
+const SUB_TABS: { id: SettingsSubTab; label: string }[] = [
+  { id: 'general', label: 'General' },
+  { id: 'security', label: 'Security' },
+  { id: 'performance', label: 'Perf' },
+  { id: 'subagents', label: 'Subagents' },
+  { id: 'pdf-ocr', label: 'OCR' },
+  { id: 'mcp', label: 'MCP' },
+  { id: 'providers', label: 'Providers' },
+  { id: 'skills', label: 'Skills' },
+];
+
+/* ─── Helpers ────────────────────────────────────────────────── */
+
+/** Get a nested value from an object using dot-notation key */
+function getNestedValue(obj: Record<string, any>, key: string): any {
+  return key.split('.').reduce((o: any, k: string) => (o && o[k] !== undefined ? o[k] : ''), obj);
+}
+
+/** Set a nested value in an object using dot-notation key (immutable) */
+function setNestedValue(obj: Record<string, any>, key: string, value: any): Record<string, any> {
+  const parts = key.split('.');
+  const result = { ...obj };
+  let current: any = result;
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (current[parts[i]] === undefined || typeof current[parts[i]] !== 'object') {
+      current[parts[i]] = {};
+    } else {
+      current[parts[i]] = { ...current[parts[i]] };
+    }
+    current = current[parts[i]];
+  }
+  current[parts[parts.length - 1]] = value;
+  return result;
+}
+
+let toastCounter = 0;
+
+/* ─── Component ──────────────────────────────────────────────── */
+
+const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChanged }) => {
+  const [activeSubTab, setActiveSubTab] = useState<SettingsSubTab>('general');
+  const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  // MCP / Provider form state
+  const [editingServer, setEditingServer] = useState<{ mode: 'add' | 'edit'; originalName?: string } | null>(null);
+  const [serverName, setServerName] = useState('');
+  const [serverCommand, setServerCommand] = useState('');
+  const [serverArgs, setServerArgs] = useState('');
+
+  const [editingProvider, setEditingProvider] = useState<{ mode: 'add' | 'edit'; originalName?: string } | null>(null);
+  const [providerName, setProviderName] = useState('');
+  const [providerApiBase, setProviderApiBase] = useState('');
+  const [providerApiKey, setProviderApiKey] = useState('');
+  const [providerModels, setProviderModels] = useState('');
+
+  const api = ApiService.getInstance();
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // Keep a ref to settings for stable callback identities (avoids focus loss on re-render)
+  const settingsRef = useRef(settings);
+  useEffect(() => { settingsRef.current = settings; }, [settings]);
+
+  // Cleanup toast timer on unmount
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
+
+  /* ─── Toast helpers ──────────────────────────────────────── */
+
+  const showToast = useCallback((message: string, type: 'success' | 'error') => {
+    const id = ++toastCounter;
+    setToasts((prev) => [...prev, { id, message, type }]);
+    // Auto-remove after 2s
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 2000);
+  }, []);
+
+  /* ─── Settings mutation helpers ──────────────────────────── */
+
+  /**
+   * Update a top-level or deeply nested setting.
+   * Optimistically updates local state, then persists via API.
+   */
+  const updateSetting = useCallback(
+    async (keyOrPath: string, value: any) => {
+      const current = settingsRef.current;
+      if (!current) return;
+
+      const prev = { ...current };
+      setSavingKey(keyOrPath);
+
+      try {
+        const updated = setNestedValue(current as any, keyOrPath, value) as LeditSettings;
+        onSettingsChanged(updated);
+        await api.updateSettings({ [keyOrPath]: value });
+        showToast('Saved', 'success');
+      } catch {
+        onSettingsChanged(prev);
+        showToast('Save failed', 'error');
+      } finally {
+        setSavingKey(null);
+      }
+    },
+    [onSettingsChanged, api, showToast],
+  );
+
+  /* ─── Toggle helper ─────────────────────────────────────── */
+
+  const Toggle = useCallback(
+    ({ settingKey, label }: { settingKey: string; label: string }) => {
+      const s = settingsRef.current;
+      if (!s) return null;
+      const checked = !!getNestedValue(s as any, settingKey);
+      return (
+        <label className="styled-toggle">
+          <input
+            type="checkbox"
+            checked={checked}
+            onChange={() => updateSetting(settingKey, !checked)}
+          />
+          <span className="toggle-track" />
+          <span className="toggle-label">{label}</span>
+        </label>
+      );
+    },
+    [updateSetting],
+  );
+
+  /* ─── Select helper ─────────────────────────────────────── */
+
+  const Select = useCallback(
+    ({ settingKey, label, options }: { settingKey: string; label: string; options: string[] }) => {
+      const s = settingsRef.current;
+      if (!s) return null;
+      const value = String(getNestedValue(s as any, settingKey) || '');
+      return (
+        <div className="config-item">
+          <label htmlFor={`setting-${settingKey}`}>{label}</label>
+          <select
+            id={`setting-${settingKey}`}
+            value={value}
+            onChange={(e) => updateSetting(settingKey, e.target.value)}
+            className="styled-select"
+          >
+            {options.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        </div>
+      );
+    },
+    [updateSetting],
+  );
+
+  /* ─── Number input helper ───────────────────────────────── */
+
+  const NumberInput = useCallback(
+    ({ settingKey, label, min, max, step = 1 }: { settingKey: string; label: string; min?: number; max?: number; step?: number }) => {
+      const s = settingsRef.current;
+      if (!s) return null;
+      const value = getNestedValue(s as any, settingKey);
+      return (
+        <div className="config-item">
+          <label htmlFor={`setting-${settingKey}`}>{label}</label>
+          <input
+            id={`setting-${settingKey}`}
+            type="number"
+            className="styled-input config-row-input"
+            value={value ?? ''}
+            min={min}
+            max={max}
+            step={step}
+            onChange={(e) => {
+              const v = e.target.value === '' ? 0 : Number(e.target.value);
+              updateSetting(settingKey, v);
+            }}
+          />
+        </div>
+      );
+    },
+    [updateSetting],
+  );
+
+  /* ─── Text input helper ─────────────────────────────────── */
+
+  const TextInput = useCallback(
+    ({ settingKey, label, placeholder }: { settingKey: string; label: string; placeholder?: string }) => {
+      const s = settingsRef.current;
+      if (!s) return null;
+      const value = String(getNestedValue(s as any, settingKey) || '');
+      return (
+        <div className="config-item">
+          <label htmlFor={`setting-${settingKey}`}>{label}</label>
+          <input
+            id={`setting-${settingKey}`}
+            type="text"
+            className="styled-input"
+            value={value}
+            placeholder={placeholder}
+            onChange={(e) => updateSetting(settingKey, e.target.value)}
+          />
+        </div>
+      );
+    },
+    [updateSetting],
+  );
+
+  /* ─── Saving indicator ─────────────────────────────────── */
+
+  const renderSaving = () => {
+    if (!savingKey) return null;
+    return (
+      <span className="settings-saving">
+        <span className="saving-dot" />
+        Saving…
+      </span>
+    );
+  };
+
+  /* ─── MCP server CRUD ──────────────────────────────────── */
+
+  const resetServerForm = () => {
+    setEditingServer(null);
+    setServerName('');
+    setServerCommand('');
+    setServerArgs('');
+  };
+
+  const handleAddServer = async () => {
+    if (!serverName.trim()) return;
+    const server: Record<string, any> = { command: serverCommand };
+    if (serverArgs.trim()) {
+      server.args = serverArgs.split(/\s+/).filter(Boolean);
+    }
+    setSavingKey('mcp-server-add');
+    try {
+      await api.addMCPServer({ name: serverName.trim(), ...server });
+      // Refresh settings
+      const fresh = await api.getSettings();
+      onSettingsChanged(fresh);
+      showToast('Server added', 'success');
+      resetServerForm();
+    } catch {
+      showToast('Failed to add server', 'error');
+    } finally {
+      setSavingKey(null);
+    }
+  };
+
+  const handleUpdateServer = async () => {
+    if (!editingServer?.originalName || !serverName.trim()) return;
+    const server: Record<string, any> = { command: serverCommand };
+    if (serverArgs.trim()) {
+      server.args = serverArgs.split(/\s+/).filter(Boolean);
+    }
+    setSavingKey('mcp-server-update');
+    try {
+      await api.updateMCPServer(editingServer.originalName, { name: serverName.trim(), ...server });
+      const fresh = await api.getSettings();
+      onSettingsChanged(fresh);
+      showToast('Server updated', 'success');
+      resetServerForm();
+    } catch {
+      showToast('Failed to update server', 'error');
+    } finally {
+      setSavingKey(null);
+    }
+  };
+
+  const handleDeleteServer = async (name: string) => {
+    setSavingKey('mcp-server-delete');
+    try {
+      await api.deleteMCPServer(name);
+      const fresh = await api.getSettings();
+      onSettingsChanged(fresh);
+      showToast('Server deleted', 'success');
+      if (editingServer?.originalName === name) resetServerForm();
+    } catch {
+      showToast('Failed to delete server', 'error');
+    } finally {
+      setSavingKey(null);
+    }
+  };
+
+  /* ─── Custom Provider CRUD ─────────────────────────────── */
+
+  const resetProviderForm = () => {
+    setEditingProvider(null);
+    setProviderName('');
+    setProviderApiBase('');
+    setProviderApiKey('');
+    setProviderModels('');
+  };
+
+  const handleAddProvider = async () => {
+    if (!providerName.trim()) return;
+    const provider: Record<string, any> = { api_base: providerApiBase };
+    if (providerApiKey.trim()) provider.api_key = providerApiKey;
+    if (providerModels.trim()) provider.models = providerModels.split(',').map((m) => m.trim()).filter(Boolean);
+    setSavingKey('provider-add');
+    try {
+      await api.addCustomProvider({ name: providerName.trim(), ...provider });
+      const fresh = await api.getSettings();
+      onSettingsChanged(fresh);
+      showToast('Provider added', 'success');
+      resetProviderForm();
+    } catch {
+      showToast('Failed to add provider', 'error');
+    } finally {
+      setSavingKey(null);
+    }
+  };
+
+  const handleUpdateProvider = async () => {
+    if (!editingProvider?.originalName || !providerName.trim()) return;
+    const provider: Record<string, any> = { api_base: providerApiBase };
+    if (providerApiKey.trim()) provider.api_key = providerApiKey;
+    if (providerModels.trim()) provider.models = providerModels.split(',').map((m) => m.trim()).filter(Boolean);
+    setSavingKey('provider-update');
+    try {
+      await api.updateCustomProvider(editingProvider.originalName, { name: providerName.trim(), ...provider });
+      const fresh = await api.getSettings();
+      onSettingsChanged(fresh);
+      showToast('Provider updated', 'success');
+      resetProviderForm();
+    } catch {
+      showToast('Failed to update provider', 'error');
+    } finally {
+      setSavingKey(null);
+    }
+  };
+
+  const handleDeleteProvider = async (name: string) => {
+    setSavingKey('provider-delete');
+    try {
+      await api.deleteCustomProvider(name);
+      const fresh = await api.getSettings();
+      onSettingsChanged(fresh);
+      showToast('Provider deleted', 'success');
+      if (editingProvider?.originalName === name) resetProviderForm();
+    } catch {
+      showToast('Failed to delete provider', 'error');
+    } finally {
+      setSavingKey(null);
+    }
+  };
+
+  /* ─── Skills toggle ────────────────────────────────────── */
+
+  const toggleSkill = async (skillName: string, enabled: boolean) => {
+    if (!settings) return;
+    setSavingKey(`skill-${skillName}`);
+    try {
+      const updatedSkills = {
+        ...settings.skills,
+        [skillName]: {
+          ...(settings.skills?.[skillName] || {}),
+          enabled,
+        },
+      };
+      await api.updateSkills(updatedSkills);
+      onSettingsChanged({ ...settings, skills: updatedSkills });
+      showToast(`${skillName} ${enabled ? 'enabled' : 'disabled'}`, 'success');
+    } catch {
+      showToast('Failed to update skill', 'error');
+    } finally {
+      setSavingKey(null);
+    }
+  };
+
+  /* ─── Render sub-tab content ───────────────────────────── */
+
+  const renderContent = () => {
+    if (!settings) {
+      return <div className="settings-empty">Loading settings…</div>;
+    }
+
+    switch (activeSubTab) {
+      /* ── General ─────────────────────────────────────────── */
+      case 'general':
+        return (
+          <div className="section">
+            <h4>Behavior</h4>
+            <div className="config-item">
+              <Select
+                settingKey="reasoning_effort"
+                label="Reasoning effort"
+                options={['low', 'medium', 'high']}
+              />
+            </div>
+            <Toggle settingKey="skip_prompt" label="Skip confirmation prompt" />
+            <Toggle settingKey="enable_pre_write_validation" label="Pre-write validation" />
+            <Select
+              settingKey="history_scope"
+              label="History scope"
+              options={['session', 'project', 'global']}
+            />
+          </div>
+        );
+
+      /* ── Security ────────────────────────────────────────── */
+      case 'security':
+        return (
+          <div className="section">
+            <h4>Security</h4>
+            <NumberInput
+              settingKey="security_validation.threshold"
+              label="Validation threshold (0-2)"
+              min={0}
+              max={2}
+            />
+            <Select
+              settingKey="self_review_gate_mode"
+              label="Self-review gate"
+              options={['off', 'code', 'always']}
+            />
+          </div>
+        );
+
+      /* ── Performance ─────────────────────────────────────── */
+      case 'performance':
+        return (
+          <div className="section">
+            <h4>API Timeouts</h4>
+            <NumberInput
+              settingKey="api_timeouts.connection_timeout_sec"
+              label="Connection timeout (s)"
+              min={1}
+              max={300}
+            />
+            <NumberInput
+              settingKey="api_timeouts.first_chunk_timeout_sec"
+              label="First chunk timeout (s)"
+              min={1}
+              max={600}
+            />
+            <NumberInput
+              settingKey="api_timeouts.chunk_timeout_sec"
+              label="Chunk timeout (s)"
+              min={1}
+              max={600}
+            />
+            <NumberInput
+              settingKey="api_timeouts.overall_timeout_sec"
+              label="Overall timeout (s)"
+              min={1}
+              max={3600}
+            />
+          </div>
+        );
+
+      /* ── Subagents ──────────────────────────────────────── */
+      case 'subagents':
+        return (
+          <div className="section">
+            <h4>Subagent</h4>
+            <TextInput settingKey="subagent_provider" label="Provider" placeholder="openai, anthropic…" />
+            <TextInput settingKey="subagent_model" label="Model" placeholder="gpt-4o-mini, claude-3-5-sonnet…" />
+          </div>
+        );
+
+      /* ── PDF OCR ─────────────────────────────────────────── */
+      case 'pdf-ocr':
+        return (
+          <div className="section">
+            <h4>PDF OCR</h4>
+            <Toggle settingKey="pdf_ocr_enabled" label="Enable PDF OCR" />
+            <TextInput settingKey="pdf_ocr_provider" label="Provider" placeholder="openai, anthropic…" />
+            <TextInput settingKey="pdf_ocr_model" label="Model" placeholder="gpt-4o…" />
+          </div>
+        );
+
+      /* ── MCP ─────────────────────────────────────────────── */
+      case 'mcp': {
+        const mcpSettings = settings.mcp || {};
+        const servers = mcpSettings.servers || {};
+        const serverEntries = Object.entries(servers);
+
+        return (
+          <div className="section">
+            <h4>MCP Configuration</h4>
+
+            {/* MCP toggles */}
+            <Toggle settingKey="mcp.enabled" label="MCP enabled" />
+            <Toggle settingKey="mcp.auto_start" label="Auto-start servers" />
+            <Toggle settingKey="mcp.auto_discover" label="Auto-discover servers" />
+            <TextInput
+              settingKey="mcp.timeout"
+              label="Timeout (e.g. 30s)"
+              placeholder="30s"
+            />
+
+            {/* Server list */}
+            <div style={{ marginTop: 'var(--space-5)' }}>
+              <h4>Servers ({serverEntries.length})</h4>
+
+              {serverEntries.length === 0 && !editingServer && (
+                <div className="settings-empty">No MCP servers configured</div>
+              )}
+
+              <div className="crud-list">
+                {serverEntries.map(([name, cfg]: [string, any]) => (
+                  <div key={name} className="crud-item">
+                    <span className="crud-item-name">{name}</span>
+                    <span className="crud-item-detail">{cfg?.command || ''}</span>
+                    <button
+                      type="button"
+                      className="crud-btn"
+                      title="Edit server"
+                      onClick={() => {
+                        setEditingServer({ mode: 'edit', originalName: name });
+                        setServerName(name);
+                        setServerCommand(cfg?.command || '');
+                        setServerArgs(Array.isArray(cfg?.args) ? cfg.args.join(' ') : '');
+                      }}
+                    >
+                      <Pencil size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      className="crud-btn danger"
+                      title="Delete server"
+                      onClick={() => handleDeleteServer(name)}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+
+                {/* Inline form (Add / Edit) */}
+                {editingServer && (
+                  <div className="crud-inline-form">
+                    <div className="form-row">
+                      <label>Name</label>
+                      <input
+                        type="text"
+                        className="styled-input"
+                        value={serverName}
+                        onChange={(e) => setServerName(e.target.value)}
+                        placeholder="server-name"
+                        disabled={editingServer.mode === 'edit'}
+                      />
+                    </div>
+                    <div className="form-row">
+                      <label>Command</label>
+                      <input
+                        type="text"
+                        className="styled-input"
+                        value={serverCommand}
+                        onChange={(e) => setServerCommand(e.target.value)}
+                        placeholder="npx or path/to/binary"
+                      />
+                    </div>
+                    <div className="form-row">
+                      <label>Args (space-separated)</label>
+                      <input
+                        type="text"
+                        className="styled-input"
+                        value={serverArgs}
+                        onChange={(e) => setServerArgs(e.target.value)}
+                        placeholder="--flag value"
+                      />
+                    </div>
+                    <div className="form-actions">
+                      <button
+                        type="button"
+                        className="form-btn primary"
+                        onClick={editingServer.mode === 'edit' ? handleUpdateServer : handleAddServer}
+                      >
+                        {editingServer.mode === 'edit' ? 'Update' : 'Add'}
+                      </button>
+                      <button type="button" className="form-btn cancel" onClick={resetServerForm}>
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {!editingServer && (
+                  <button
+                    type="button"
+                    className="crud-add-btn"
+                    onClick={() => {
+                      setEditingServer({ mode: 'add' });
+                      setServerName('');
+                      setServerCommand('');
+                      setServerArgs('');
+                    }}
+                  >
+                    <Plus size={14} /> Add server
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      /* ── Custom Providers ────────────────────────────────── */
+      case 'providers': {
+        const customProviders = settings.custom_providers || {};
+        const providerEntries = Object.entries(customProviders);
+
+        return (
+          <div className="section">
+            <h4>Custom Providers ({providerEntries.length})</h4>
+
+            {providerEntries.length === 0 && !editingProvider && (
+              <div className="settings-empty">No custom providers configured</div>
+            )}
+
+            <div className="crud-list">
+              {providerEntries.map(([name, cfg]: [string, any]) => (
+                <div key={name} className="crud-item">
+                  <span className="crud-item-name">{name}</span>
+                  <span className="crud-item-detail">{cfg?.api_base || ''}</span>
+                  <button
+                    type="button"
+                    className="crud-btn"
+                    title="Edit provider"
+                    onClick={() => {
+                      setEditingProvider({ mode: 'edit', originalName: name });
+                      setProviderName(name);
+                      setProviderApiBase(cfg?.api_base || '');
+                      setProviderApiKey(cfg?.api_key || '');
+                      setProviderModels(
+                        Array.isArray(cfg?.models) ? cfg.models.join(', ') : '',
+                      );
+                    }}
+                  >
+                    <Pencil size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    className="crud-btn danger"
+                    title="Delete provider"
+                    onClick={() => handleDeleteProvider(name)}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              ))}
+
+              {/* Inline form */}
+              {editingProvider && (
+                <div className="crud-inline-form">
+                  <div className="form-row">
+                    <label>Name</label>
+                    <input
+                      type="text"
+                      className="styled-input"
+                      value={providerName}
+                      onChange={(e) => setProviderName(e.target.value)}
+                      placeholder="provider-name"
+                      disabled={editingProvider.mode === 'edit'}
+                    />
+                  </div>
+                  <div className="form-row">
+                    <label>API Base URL</label>
+                    <input
+                      type="text"
+                      className="styled-input"
+                      value={providerApiBase}
+                      onChange={(e) => setProviderApiBase(e.target.value)}
+                      placeholder="https://api.example.com/v1"
+                    />
+                  </div>
+                  <div className="form-row">
+                    <label>API Key</label>
+                    <input
+                      type="password"
+                      className="styled-input"
+                      value={providerApiKey}
+                      onChange={(e) => setProviderApiKey(e.target.value)}
+                      placeholder="sk-…"
+                    />
+                  </div>
+                  <div className="form-row">
+                    <label>Models (comma-separated)</label>
+                    <input
+                      type="text"
+                      className="styled-input"
+                      value={providerModels}
+                      onChange={(e) => setProviderModels(e.target.value)}
+                      placeholder="model-1, model-2"
+                    />
+                  </div>
+                  <div className="form-actions">
+                    <button
+                      type="button"
+                      className="form-btn primary"
+                      onClick={editingProvider.mode === 'edit' ? handleUpdateProvider : handleAddProvider}
+                    >
+                      {editingProvider.mode === 'edit' ? 'Update' : 'Add'}
+                    </button>
+                    <button type="button" className="form-btn cancel" onClick={resetProviderForm}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {!editingProvider && (
+                <button
+                  type="button"
+                  className="crud-add-btn"
+                  onClick={() => {
+                    setEditingProvider({ mode: 'add' });
+                    setProviderName('');
+                    setProviderApiBase('');
+                    setProviderApiKey('');
+                    setProviderModels('');
+                  }}
+                >
+                  <Plus size={14} /> Add provider
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      /* ── Skills ───────────────────────────────────────────── */
+      case 'skills': {
+        const skills = settings.skills || {};
+        const skillEntries = Object.entries(skills);
+
+        if (skillEntries.length === 0) {
+          return <div className="settings-empty">No skills available</div>;
+        }
+
+        return (
+          <div className="section">
+            <h4>Skills ({skillEntries.length})</h4>
+            <div className="skills-list">
+              {skillEntries.map(([name, cfg]: [string, any]) => {
+                const enabled = !!cfg?.enabled;
+                return (
+                  <div key={name} className="skill-item">
+                    <span className="skill-item-name">{name}</span>
+                    <label className="styled-toggle">
+                      <input
+                        type="checkbox"
+                        checked={enabled}
+                        onChange={() => toggleSkill(name, !enabled)}
+                      />
+                      <span className="toggle-track" />
+                    </label>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      }
+
+      default:
+        return null;
+    }
+  };
+
+  /* ─── Main render ───────────────────────────────────────── */
+
+  return (
+    <div className="settings-panel">
+      {/* Sub-tab bar */}
+      <div className="settings-subtab-bar">
+        {SUB_TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            className={`settings-subtab ${activeSubTab === tab.id ? 'active' : ''}`}
+            onClick={() => setActiveSubTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+        {renderSaving()}
+      </div>
+
+      {/* Content */}
+      {renderContent()}
+
+      {/* Toasts */}
+      {toasts.map((toast) => (
+        <div key={toast.id} className={`settings-toast ${toast.type}`}>
+          {toast.message}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+export default SettingsPanel;

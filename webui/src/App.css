@@ -135,13 +135,13 @@
   --text-tertiary: #475569;
   --text-muted: #64748b;
 
-  --accent-primary: #0284c7;
+  --accent-primary: #1d4ed8;
   --accent-secondary: #0f766e;
   --accent-success: #059669;
   --accent-warning: #d97706;
   --accent-error: #dc2626;
   --accent-cyan: #0891b2;
-  --accent-primary-alpha: rgba(2, 132, 199, 0.14);
+  --accent-primary-alpha: rgba(29, 78, 216, 0.16);
 
   --editor-pane-bg: linear-gradient(135deg, #f8fbff 0%, #eef4fb 100%);
   --editor-pane-footer-bg: rgba(15, 23, 42, 0.04);
@@ -156,7 +156,7 @@
   --toolbar-fg: #334155;
   --toolbar-hover-bg: #d9e5f4;
   --toolbar-hover-fg: #0f172a;
-  --accent-bg: #0284c7;
+  --accent-bg: #1d4ed8;
   --accent-fg: #ffffff;
   --border-color: rgba(71, 85, 105, 0.26);
   --input-bg: #ffffff;
@@ -180,7 +180,7 @@
   --sidebar-header-bg: rgba(226, 236, 248, 0.92);
   --sidebar-nav-btn-bg: rgba(212, 225, 242, 0.92);
   --sidebar-nav-btn-hover-bg: rgba(196, 214, 236, 0.94);
-  --sidebar-nav-btn-active-bg: linear-gradient(180deg, #0284c7, #0369a1);
+  --sidebar-nav-btn-active-bg: linear-gradient(180deg, #1d4ed8, #1e40af);
   --sidebar-select-bg: rgba(255, 255, 255, 0.96);
   --sidebar-rail-bg: rgba(0, 0, 0, 0.06);
 }
@@ -272,8 +272,17 @@ html, body, #root {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
   overflow: hidden;
   background: var(--bg-secondary);
+}
+
+.editor-workspace {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .editor-pane-wrapper {
@@ -414,6 +423,14 @@ html, body, #root {
   min-height: 0;
   overflow: hidden;
   background: var(--bg-secondary);
+}
+
+.editor-pane-host {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .filetree-wrapper {

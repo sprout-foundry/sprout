@@ -18,6 +18,11 @@ class TerminalWebSocketService {
 
   private constructor() {}
 
+  /** Creates a fresh independent instance (not the singleton). Use for split panes. */
+  static createInstance(): TerminalWebSocketService {
+    return new TerminalWebSocketService();
+  }
+
   private startPingInterval() {
     this.stopPingInterval();
     this.pingInterval = setInterval(() => {

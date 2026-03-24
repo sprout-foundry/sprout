@@ -51,6 +51,21 @@ interface FilesResponse {
   }>;
 }
 
+interface SearchMatch {
+  line_number: number;
+  line: string;
+  column_start: number;
+  column_end: number;
+  context_before: string[];
+  context_after: string[];
+}
+
+interface SearchResult {
+  file: string;
+  matches: SearchMatch[];
+  match_count: number;
+}
+
 export interface ProviderOption {
   id: string;
   name: string;
@@ -662,10 +677,98 @@ class ApiService {
       throw error;
     }
   }
+
+  // ── Search API ───────────────────────────────────────────────────
+
+  async search(query: string, options?: {
+    case_sensitive?: boolean;
+    whole_word?: boolean;
+    regex?: boolean;
+    include?: string;
+    exclude?: string;
+    max_results?: number;
+    context_lines?: number;
+  }): Promise<{
+    results: Array<{
+      file: string;
+      matches: Array<{
+        line_number: number;
+        line: string;
+        column_start: number;
+        column_end: number;
+        context_before: string[];
+        context_after: string[];
+      }>;
+      match_count: number;
+    }>;
+    total_matches: number;
+    total_files: number;
+    truncated: boolean;
+    query: string;
+  }> {
+    try {
+      const params = new URLSearchParams({ query });
+      if (options?.case_sensitive) params.set('case_sensitive', 'true');
+      if (options?.whole_word) params.set('whole_word', 'true');
+      if (options?.regex) params.set('regex', 'true');
+      if (options?.include) params.set('include', options.include);
+      if (options?.exclude) params.set('exclude', options.exclude);
+      if (options?.max_results) params.set('max_results', String(options.max_results));
+      if (options?.context_lines != null) params.set('context_lines', String(options.context_lines));
+
+      const response = await fetch(`/api/search?${params}`);
+      if (!response.ok) {
+        throw new Error(`Search failed: ${response.statusText}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to search:', error);
+      throw error;
+    }
+  }
+
+  async searchReplace(request: {
+    search: string;
+    replace: string;
+    files: string[];
+    case_sensitive?: boolean;
+    whole_word?: boolean;
+    regex?: boolean;
+    preview: boolean;
+  }): Promise<{
+    changes: Array<{
+      file: string;
+      matches: Array<{
+        line_number: number;
+        old_line: string;
+        new_line: string;
+        column_start: number;
+        column_end: number;
+      }>;
+      changed_lines: number;
+    }>;
+    total_changes: number;
+    preview: boolean;
+  }> {
+    try {
+      const response = await fetch('/api/search/replace', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+      });
+      if (!response.ok) {
+        throw new Error(`Replace failed: ${response.statusText}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to replace:', error);
+      throw error;
+    }
+  }
 }
 
 export { ApiService };
-export type { StatsResponse, QueryRequest, FilesResponse };
+export type { StatsResponse, QueryRequest, FilesResponse, SearchMatch, SearchResult };
 export interface ProvidersResponse {
   providers: Array<{
     id: string;

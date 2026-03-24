@@ -1,9 +1,8 @@
 import React, { useCallback, useRef, useState, useEffect } from 'react';
-import { Menu, X, Columns2, Rows2 } from 'lucide-react';
+import { Menu, X, Columns2, Rows2, MessageSquare, FileCode2, GitBranch } from 'lucide-react';
 import Sidebar from './Sidebar';
 import Chat from './Chat';
 import GitView from './GitView';
-import LogsView from './LogsView';
 import Terminal from './Terminal';
 import EditorTabs from './EditorTabs';
 import EditorPane from './EditorPane';
@@ -11,7 +10,7 @@ import ResizeHandle from './ResizeHandle';
 import Status from './Status';
 import CommandPalette from './CommandPalette';
 import { useEditorManager } from '../contexts/EditorManagerContext';
-import { ApiService } from '../services/api';
+import { ApiService, LeditInstance } from '../services/api';
 
 interface ToolExecution {
   id: string;
@@ -52,7 +51,7 @@ interface AppState {
   logs: LogEntry[];
   isProcessing: boolean;
   lastError: string | null;
-  currentView: 'chat' | 'editor' | 'git' | 'logs';
+  currentView: 'chat' | 'editor' | 'git';
   toolExecutions: ToolExecution[];
   queryProgress: any;
   stats: any;
@@ -83,7 +82,7 @@ interface AppContentProps {
   onSidebarToggle: () => void;
   onToggleSidebar: () => void;
   onCloseSidebar: () => void;
-  onViewChange: (view: 'chat' | 'editor' | 'git' | 'logs') => void;
+  onViewChange: (view: 'chat' | 'editor' | 'git') => void;
   onModelChange: (model: string) => void;
   onProviderChange: (provider: string) => void;
   onSendMessage: (message: string) => void;
@@ -94,7 +93,6 @@ interface AppContentProps {
   onGitDiscard: (files: string[]) => Promise<void>;
   selectedGitFilePath?: string | null;
   onGitFileSelect?: (filePath: string) => void;
-  onClearLogs: () => void;
   onTerminalOutput: (output: string) => void;
   onTerminalExpandedChange: (expanded: boolean) => void;
   isConnected: boolean;
@@ -126,7 +124,6 @@ const AppContent: React.FC<AppContentProps> = ({
   onGitDiscard,
   selectedGitFilePath,
   onGitFileSelect,
-  onClearLogs,
   onTerminalOutput,
   onTerminalExpandedChange,
   isConnected
@@ -137,6 +134,10 @@ const AppContent: React.FC<AppContentProps> = ({
   // Command palette state
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [hotkeysConfigPath, setHotkeysConfigPath] = useState<string | null>(null);
+  const [instances, setInstances] = useState<LeditInstance[]>([]);
+  const [selectedInstancePID, setSelectedInstancePID] = useState<number>(0);
+  const [isSwitchingInstance, setIsSwitchingInstance] = useState(false);
+  const [instanceSwitchError, setInstanceSwitchError] = useState<string | null>(null);
 
   // Load hotkeys config path on mount
   useEffect(() => {
@@ -145,6 +146,74 @@ const AppContent: React.FC<AppContentProps> = ({
       if (config.path) setHotkeysConfigPath(config.path);
     }).catch(() => {});
   }, [isConnected, apiService]);
+
+  useEffect(() => {
+    if (!isConnected) {
+      return;
+    }
+
+    let cancelled = false;
+    let timer: NodeJS.Timeout | null = null;
+
+    const loadInstances = async () => {
+      try {
+        const data = await apiService.getInstances();
+        if (cancelled) {
+          return;
+        }
+        setInstances(data.instances || []);
+        if (data.desired_host_pid && data.desired_host_pid > 0) {
+          setSelectedInstancePID(data.desired_host_pid);
+        } else if (data.active_host_pid && data.active_host_pid > 0) {
+          setSelectedInstancePID(data.active_host_pid);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Failed to fetch instances:', error);
+        }
+      }
+      if (!cancelled) {
+        timer = setTimeout(loadInstances, 2000);
+      }
+    };
+
+    loadInstances();
+    return () => {
+      cancelled = true;
+      if (timer) {
+        clearTimeout(timer);
+      }
+    };
+  }, [apiService, isConnected]);
+
+  useEffect(() => {
+    if (!isSwitchingInstance || selectedInstancePID <= 0) {
+      return;
+    }
+    const selected = instances.find((instance) => instance.pid === selectedInstancePID);
+    if (selected?.is_host) {
+      setIsSwitchingInstance(false);
+      setInstanceSwitchError(null);
+    }
+  }, [instances, isSwitchingInstance, selectedInstancePID]);
+
+  const handleInstanceChange = useCallback(async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const pid = Number(e.target.value);
+    if (!Number.isFinite(pid) || pid <= 0 || pid === selectedInstancePID) {
+      return;
+    }
+
+    setInstanceSwitchError(null);
+    setIsSwitchingInstance(true);
+    try {
+      await apiService.selectInstance(pid);
+      setSelectedInstancePID(pid);
+    } catch (error) {
+      console.error('Failed to switch instance:', error);
+      setInstanceSwitchError('Failed to switch instance');
+      setIsSwitchingInstance(false);
+    }
+  }, [apiService, selectedInstancePID]);
 
   // Listen for hotkey custom events
   useEffect(() => {
@@ -176,9 +245,6 @@ const AppContent: React.FC<AppContentProps> = ({
           break;
         case 'switch_to_git':
           onViewChange('git');
-          break;
-        case 'switch_to_logs':
-          onViewChange('logs');
           break;
       }
     };
@@ -249,9 +315,6 @@ const AppContent: React.FC<AppContentProps> = ({
       case 'git':
         onGitFileSelect?.(filePath);
         break;
-      case 'logs':
-        console.log('Filter logs by file:', filePath);
-        break;
       default:
         console.log('File clicked in unknown view:', state.currentView, filePath);
     }
@@ -274,16 +337,6 @@ const AppContent: React.FC<AppContentProps> = ({
 
   return (
     <div className="app">
-      {isMobile && (
-        <button
-          className="mobile-menu-btn"
-          onClick={onToggleSidebar}
-          aria-label="Toggle sidebar"
-        >
-          <Menu size={20} />
-        </button>
-      )}
-
       {isMobile && isSidebarOpen && (
         <div
           className="mobile-overlay"
@@ -311,8 +364,88 @@ const AppContent: React.FC<AppContentProps> = ({
         onProviderChange={onProviderChange}
       />
       <div className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''} ${isTerminalExpanded ? 'terminal-expanded' : ''}`}>
-        <Status isConnected={state.isConnected} stats={state.stats} />
+        <div className="top-view-toolbar">
+          <div className="top-toolbar-left">
+            {isMobile && (
+              <button
+                className="top-mobile-menu-btn"
+                onClick={onToggleSidebar}
+                aria-label={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+                title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+              >
+                <Menu size={16} />
+              </button>
+            )}
+          <div className="top-view-group" role="tablist" aria-label="Primary views">
+            <button
+              className={`top-view-btn ${state.currentView === 'chat' ? 'active' : ''}`}
+              onClick={() => onViewChange('chat')}
+              aria-label="Chat view"
+              title="Chat"
+              role="tab"
+              aria-selected={state.currentView === 'chat'}
+            >
+              <MessageSquare size={16} />
+            </button>
+            <button
+              className={`top-view-btn ${state.currentView === 'editor' ? 'active' : ''}`}
+              onClick={() => onViewChange('editor')}
+              aria-label="Editor view"
+              title="Editor"
+              role="tab"
+              aria-selected={state.currentView === 'editor'}
+            >
+              <FileCode2 size={16} />
+            </button>
+            <button
+              className={`top-view-btn ${state.currentView === 'git' ? 'active' : ''}`}
+              onClick={() => onViewChange('git')}
+              aria-label="Git view"
+              title="Git"
+              role="tab"
+              aria-selected={state.currentView === 'git'}
+            >
+              <GitBranch size={16} />
+            </button>
+          </div>
+          </div>
+          <div className="top-toolbar-right">
+            <div className="top-instance-switcher">
+              <select
+                id="top-instance-select"
+                value={selectedInstancePID || ''}
+                onChange={handleInstanceChange}
+                disabled={!isConnected || instances.length === 0 || isSwitchingInstance}
+                className="top-instance-select"
+                title={instances.find(i => i.pid === selectedInstancePID)?.working_dir || ''}
+              >
+                {instances.length === 0 && (
+                  <option value="">No instances</option>
+                )}
+                {instances.map((instance) => {
+                  const suffix = [
+                    instance.is_host ? 'host' : '',
+                    instance.is_current ? 'this' : '',
+                  ].filter(Boolean).join(', ');
+                  const name = instance.working_dir.split('/').filter(Boolean).slice(-2).join('/');
+                  const fullLabel = isMobile
+                    ? `pid:${instance.pid}${suffix ? ` (${suffix})` : ''}`
+                    : `${name} · pid:${instance.pid}${suffix ? ` (${suffix})` : ''}`;
+                  return (
+                    <option key={instance.id} value={instance.pid}>
+                      {fullLabel}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          <span className="top-view-current" aria-live="polite">
+            {isSwitchingInstance ? 'switching…' : (instanceSwitchError || state.currentView)}
+          </span>
+          </div>
+        </div>
 
+        <div className="main-view-content">
         {state.currentView === 'chat' ? (
           <>
             <Chat
@@ -335,11 +468,6 @@ const AppContent: React.FC<AppContentProps> = ({
             onUnstage={onGitUnstage}
             onDiscard={onGitDiscard}
             selectedFilePath={selectedGitFilePath}
-          />
-        ) : state.currentView === 'logs' ? (
-          <LogsView
-            logs={state.logs}
-            onClearLogs={onClearLogs}
           />
         ) : state.currentView === 'editor' ? (
           <div className="editor-view">
@@ -414,6 +542,8 @@ const AppContent: React.FC<AppContentProps> = ({
             </div>
           </div>
         ) : null}
+        </div>
+        <Status isConnected={state.isConnected} position="bottom" stats={state.stats} />
       </div>
 
       <Terminal

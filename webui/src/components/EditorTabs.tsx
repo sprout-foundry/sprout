@@ -19,7 +19,7 @@ import { EditorBuffer } from '../types/editor';
 import './EditorTabs.css';
 
 const EditorTabs: React.FC = () => {
-  const { buffers, activeBufferId, switchPane, closeBuffer, panes } = useEditorManager();
+  const { buffers, activeBufferId, switchToBuffer, closeBuffer } = useEditorManager();
   const [showConfirm, setShowConfirm] = useState<{ bufferId: string; fileName: string } | null>(null);
 
   // Convert buffers Map to array and sort by last opened (most recent first)
@@ -33,9 +33,8 @@ const EditorTabs: React.FC = () => {
     });
 
   const handleTabClick = (buffer: EditorBuffer) => {
-    const pane = panes.find(p => p.bufferId === buffer.id);
-    if (pane && pane.id !== panes.find(p => p.isActive)?.id) {
-      switchPane(pane.id);
+    if (buffer.id !== activeBufferId) {
+      switchToBuffer(buffer.id);
     }
   };
 

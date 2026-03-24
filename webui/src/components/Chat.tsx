@@ -4,7 +4,7 @@ import {
   Globe, ArrowDown, ClipboardList, ScrollText, RotateCcw,
   Wrench, Rocket, Zap, CheckCircle2, XCircle, Hourglass,
   Bot, Copy, AlertTriangle, ChevronDown, ChevronRight,
-  BarChart3, FileText, PanelRightOpen, PanelRightClose, History
+  BarChart3, FileText, PanelRightOpen, PanelRightClose, History, SlidersHorizontal
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -71,6 +71,20 @@ interface ChatProps {
   queryProgress?: any;
 }
 
+interface ChatManagementAction {
+  id: string;
+  label: string;
+  description: string;
+  command: string;
+  requiresConfirm?: boolean;
+  confirmMessage?: string;
+}
+
+const SIDE_PANEL_WIDTH_KEY = 'ledit.chat.sidePanelWidth';
+const SIDE_PANEL_COLLAPSED_KEY = 'ledit.chat.sidePanelCollapsed';
+const SIDE_PANEL_MIN = 280;
+const SIDE_PANEL_MAX = 760;
+
 const normalizeRevision = (raw: any): Revision => {
   const files = Array.isArray(raw?.files)
     ? raw.files.map((file: any) => ({
@@ -101,12 +115,10 @@ const Chat: React.FC<ChatProps> = ({
   queryProgress = null
 }) => {
   const apiService = ApiService.getInstance();
-  const SIDE_PANEL_MIN = 280;
-  const SIDE_PANEL_MAX = 760;
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
   const [sidePanelCollapsed, setSidePanelCollapsed] = useState(false);
   const [sidePanelWidth, setSidePanelWidth] = useState(360);
-  const [sidePanelTab, setSidePanelTab] = useState<'tools' | 'history'>('tools');
+  const [sidePanelTab, setSidePanelTab] = useState<'tools' | 'history' | 'manage'>('tools');
   const [revisions, setRevisions] = useState<Revision[]>([]);
   const [expandedRevisionIds, setExpandedRevisionIds] = useState<Set<string>>(new Set());
   const [expandedRevisionFileDiffs, setExpandedRevisionFileDiffs] = useState<Set<string>>(new Set());
@@ -115,9 +127,33 @@ const Chat: React.FC<ChatProps> = ({
   const [revisionDetailsError, setRevisionDetailsError] = useState<Record<string, string>>({});
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [manageNotice, setManageNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const chatMainRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const resizingSidePanelRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const storedWidth = Number(window.localStorage.getItem(SIDE_PANEL_WIDTH_KEY));
+    const storedCollapsed = window.localStorage.getItem(SIDE_PANEL_COLLAPSED_KEY);
+
+    if (Number.isFinite(storedWidth) && storedWidth >= SIDE_PANEL_MIN && storedWidth <= SIDE_PANEL_MAX) {
+      setSidePanelWidth(storedWidth);
+    }
+    if (storedCollapsed === '1') {
+      setSidePanelCollapsed(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(SIDE_PANEL_WIDTH_KEY, String(Math.round(sidePanelWidth)));
+  }, [sidePanelWidth]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(SIDE_PANEL_COLLAPSED_KEY, sidePanelCollapsed ? '1' : '0');
+  }, [sidePanelCollapsed]);
 
   useEffect(() => {
     if (chatContainerRef.current) {
@@ -504,7 +540,62 @@ const Chat: React.FC<ChatProps> = ({
     return revisions.length;
   }, [revisions.length]);
 
-  const panelTabs: Array<{ id: 'tools' | 'history'; label: string; icon: ReactNode; count: string }> = [
+  const managementActions: ChatManagementAction[] = [
+    {
+      id: 'clear',
+      label: 'Clear Conversation',
+      description: 'Run /clear to reset conversation history for this session.',
+      command: '/clear',
+      requiresConfirm: true,
+      confirmMessage: 'Clear conversation history for the active session?',
+    },
+    {
+      id: 'status',
+      label: 'Session Status',
+      description: 'Run /status to show provider, model, tokens, and tracked files.',
+      command: '/status',
+    },
+    {
+      id: 'changes',
+      label: 'Tracked Changes',
+      description: 'Run /changes to list file changes tracked in this session.',
+      command: '/changes',
+    },
+    {
+      id: 'log',
+      label: 'Revision Log',
+      description: 'Run /log to display recent revision history and rollback points.',
+      command: '/log',
+    },
+    {
+      id: 'help',
+      label: 'Slash Command Help',
+      description: 'Run /help to show all available slash commands.',
+      command: '/help',
+    },
+  ];
+
+  const runManagementAction = useCallback(async (action: ChatManagementAction) => {
+    if (isProcessing) {
+      setManageNotice({ type: 'error', text: 'Wait for current request to finish before running another action.' });
+      return;
+    }
+
+    if (action.requiresConfirm) {
+      const ok = window.confirm(action.confirmMessage || `Run ${action.command}?`);
+      if (!ok) return;
+    }
+
+    try {
+      await Promise.resolve(onSendMessage(action.command) as unknown as Promise<void>);
+      setManageNotice({ type: 'success', text: `Ran ${action.command}` });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : `Failed to run ${action.command}`;
+      setManageNotice({ type: 'error', text: message });
+    }
+  }, [isProcessing, onSendMessage]);
+
+  const panelTabs: Array<{ id: 'tools' | 'history' | 'manage'; label: string; icon: ReactNode; count: string }> = [
     {
       id: 'tools',
       label: 'Tool Executions',
@@ -516,6 +607,12 @@ const Chat: React.FC<ChatProps> = ({
       label: 'Revision History',
       icon: <History size={14} />,
       count: `${historyCounts} revisions`,
+    },
+    {
+      id: 'manage',
+      label: 'Manage',
+      icon: <SlidersHorizontal size={14} />,
+      count: 'commands',
     },
   ];
 
@@ -533,7 +630,15 @@ const Chat: React.FC<ChatProps> = ({
         )}
       </div>
 
-      <div className="chat-main" ref={chatMainRef}>
+      <div
+        className={`chat-main ${sidePanelCollapsed ? 'panel-collapsed' : ''}`}
+        ref={chatMainRef}
+        style={{
+          gridTemplateColumns: sidePanelCollapsed
+            ? 'minmax(0, 1fr) 0 52px'
+            : `minmax(0, 1fr) 6px ${sidePanelWidth}px`,
+        }}
+      >
         <div className="chat-container" ref={chatContainerRef}>
           {messages.length === 0 ? (
             <div className="welcome-message">
@@ -608,7 +713,7 @@ const Chat: React.FC<ChatProps> = ({
 
         {!sidePanelCollapsed && (
           <div
-            className="chat-side-resizer"
+          className={`chat-side-resizer ${sidePanelCollapsed ? 'hidden' : ''}`}
             onMouseDown={startSidePanelResize}
             role="separator"
             aria-orientation="vertical"
@@ -733,7 +838,7 @@ const Chat: React.FC<ChatProps> = ({
                     )}
                   </div>
                 </>
-              ) : (
+              ) : sidePanelTab === 'history' ? (
                 <>
                   <div className="chat-tools-list">
                     <div className="history-toolbar">
@@ -828,9 +933,38 @@ const Chat: React.FC<ChatProps> = ({
                     )}
                   </div>
                 </>
+              ) : (
+                <div className="chat-manage-panel">
+                  <div className="manage-intro">
+                    Trigger common chat/session slash commands without typing.
+                  </div>
+                  {manageNotice && (
+                    <div className={`manage-notice ${manageNotice.type}`}>
+                      {manageNotice.text}
+                    </div>
+                  )}
+                  <div className="manage-actions">
+                    {managementActions.map((action) => (
+                      <button
+                        key={action.id}
+                        type="button"
+                        className="manage-action-btn"
+                        onClick={() => runManagementAction(action)}
+                        disabled={isProcessing}
+                        title={action.command}
+                      >
+                        <span className="manage-action-header">
+                          <span className="manage-action-label">{action.label}</span>
+                          <code className="manage-action-command">{action.command}</code>
+                        </span>
+                        <span className="manage-action-description">{action.description}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               )}
+              </div>
             </div>
-          </div>
           )}
         </aside>
       </div>

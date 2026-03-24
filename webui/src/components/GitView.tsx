@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   FileEdit,
   Plus,
@@ -13,6 +13,9 @@ import {
   ArrowUp,
   ArrowDown,
   AlertTriangle,
+  PanelLeftClose,
+  PanelLeftOpen,
+  SplitSquareHorizontal,
 } from 'lucide-react';
 import './GitView.css';
 import { ApiService } from '../services/api';
@@ -79,6 +82,10 @@ const GitView: React.FC<GitViewProps> = ({
   const [isActing, setIsActing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [filesPaneWidth, setFilesPaneWidth] = useState(440);
+  const [filesPaneCollapsed, setFilesPaneCollapsed] = useState(false);
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const isResizingRef = useRef(false);
   const apiService = ApiService.getInstance();
 
   const loadGitStatus = useCallback(async () => {
@@ -164,11 +171,6 @@ const GitView: React.FC<GitViewProps> = ({
     });
   };
 
-  const handleFileRowClick = (filePath: string) => {
-    handleFileSelect(filePath);
-    handlePreviewFile(filePath);
-  };
-
   const handleSelectAll = () => {
     if (!gitStatus) return;
     
@@ -188,8 +190,41 @@ const GitView: React.FC<GitViewProps> = ({
   };
 
   const handlePreviewFile = (filePath: string) => {
+    if (filesPaneCollapsed) {
+      setFilesPaneCollapsed(false);
+    }
     setActiveDiffPath(filePath);
     loadDiff(filePath);
+  };
+
+  const handleStartResize = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    if (filesPaneCollapsed) {
+      setFilesPaneCollapsed(false);
+    }
+    isResizingRef.current = true;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      if (!isResizingRef.current || !workspaceRef.current) return;
+      const rect = workspaceRef.current.getBoundingClientRect();
+      const raw = moveEvent.clientX - rect.left;
+      const maxWidth = Math.max(280, rect.width - 360);
+      const next = Math.max(280, Math.min(maxWidth, raw));
+      setFilesPaneWidth(next);
+    };
+
+    const onMouseUp = () => {
+      isResizingRef.current = false;
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
   };
 
   const getVisibleDiffText = () => {
@@ -291,6 +326,57 @@ const GitView: React.FC<GitViewProps> = ({
     }
   };
 
+  const FileItem: React.FC<{
+    file: GitFile;
+    keyPrefix: string;
+    index: number;
+    isSelected: boolean;
+    isActive: boolean;
+    onSelect: (path: string) => void;
+    onPreview: (path: string) => void;
+  }> = ({ file, keyPrefix, index, isSelected, isActive, onSelect, onPreview }) => (
+    <div
+      key={`${keyPrefix}-${index}`}
+      className={`file-item ${isSelected ? 'selected' : ''} ${isActive ? 'active-diff' : ''}`}
+      onClick={() => onSelect(file.path)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect(file.path);
+        }
+      }}
+    >
+      <input
+        type="checkbox"
+        checked={isSelected}
+        onClick={(e) => e.stopPropagation()}
+        onChange={() => onSelect(file.path)}
+      />
+      <span className="file-icon">{getStatusIcon(file.status)}</span>
+      <span className="file-path">{file.path}</span>
+      <span className="file-status">{getStatusText(file.status)}</span>
+      {file.changes && (
+        <span className="file-changes">
+          <span className="additions">+{file.changes.additions}</span>
+          <span className="deletions">-{file.changes.deletions}</span>
+        </span>
+      )}
+      <button
+        className="file-diff-btn"
+        onClick={(e) => {
+          e.stopPropagation();
+          onPreview(file.path);
+        }}
+        title="Show diff"
+        type="button"
+      >
+        <SplitSquareHorizontal size={14} />
+      </button>
+    </div>
+  );
+
   if (isLoading) {
     return (
       <div className="git-view">
@@ -383,46 +469,32 @@ const GitView: React.FC<GitViewProps> = ({
       </div>
       {actionError && <div className="git-action-error"><AlertTriangle size={14} style={{ marginRight: 4, verticalAlign: 'middle' }} />{actionError}</div>}
 
-      <div className="git-workspace">
+      <div
+        className="git-workspace"
+        ref={workspaceRef}
+        style={{
+          gridTemplateColumns: filesPaneCollapsed
+            ? '0 8px minmax(0, 1fr)'
+            : `${filesPaneWidth}px 8px minmax(0, 1fr)`
+        }}
+      >
         {/* File Sections */}
-        <div className="git-files">
+        <div className={`git-files ${filesPaneCollapsed ? 'collapsed' : ''}`}>
         {/* Staged Files */}
         {gitStatus.staged.length > 0 && (
           <div className="file-section staged">
             <h3>Staged Files ({gitStatus.staged.length})</h3>
             <div className="file-list">
               {gitStatus.staged.map((file, index) => (
-                <div 
-                  key={`staged-${index}`}
-                  className={`file-item ${selectedFiles.has(file.path) ? 'selected' : ''} ${activeDiffPath === file.path ? 'active-diff' : ''}`}
-                  onClick={() => handleFileRowClick(file.path)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      handleFileRowClick(file.path);
-                    }
-                  }}
-                >
-                  <input 
-                    type="checkbox" 
-                    checked={selectedFiles.has(file.path)}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={() => handleFileSelect(file.path)}
-                  />
-                  <span className="file-icon">{getStatusIcon(file.status)}</span>
-                  <span className="file-path">
-                    {file.path}
-                  </span>
-                  <span className="file-status">{getStatusText(file.status)}</span>
-                  {file.changes && (
-                    <span className="file-changes">
-                      <span className="additions">+{file.changes.additions}</span>
-                      <span className="deletions">-{file.changes.deletions}</span>
-                    </span>
-                  )}
-                </div>
+                <FileItem
+                  keyPrefix="staged"
+                  index={index}
+                  file={file}
+                  isSelected={selectedFiles.has(file.path)}
+                  isActive={activeDiffPath === file.path}
+                  onSelect={handleFileSelect}
+                  onPreview={handlePreviewFile}
+                />
               ))}
             </div>
           </div>
@@ -434,37 +506,15 @@ const GitView: React.FC<GitViewProps> = ({
             <h3>Modified Files ({gitStatus.modified.length})</h3>
             <div className="file-list">
               {gitStatus.modified.map((file, index) => (
-                <div 
-                  key={`modified-${index}`}
-                  className={`file-item ${selectedFiles.has(file.path) ? 'selected' : ''} ${activeDiffPath === file.path ? 'active-diff' : ''}`}
-                  onClick={() => handleFileRowClick(file.path)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      handleFileRowClick(file.path);
-                    }
-                  }}
-                >
-                  <input 
-                    type="checkbox" 
-                    checked={selectedFiles.has(file.path)}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={() => handleFileSelect(file.path)}
-                  />
-                  <span className="file-icon">{getStatusIcon(file.status)}</span>
-                  <span className="file-path">
-                    {file.path}
-                  </span>
-                  <span className="file-status">{getStatusText(file.status)}</span>
-                  {file.changes && (
-                    <span className="file-changes">
-                      <span className="additions">+{file.changes.additions}</span>
-                      <span className="deletions">-{file.changes.deletions}</span>
-                    </span>
-                  )}
-                </div>
+                <FileItem
+                  keyPrefix="modified"
+                  index={index}
+                  file={file}
+                  isSelected={selectedFiles.has(file.path)}
+                  isActive={activeDiffPath === file.path}
+                  onSelect={handleFileSelect}
+                  onPreview={handlePreviewFile}
+                />
               ))}
             </div>
           </div>
@@ -476,31 +526,15 @@ const GitView: React.FC<GitViewProps> = ({
             <h3>Untracked Files ({gitStatus.untracked.length})</h3>
             <div className="file-list">
               {gitStatus.untracked.map((file, index) => (
-                <div 
-                  key={`untracked-${index}`}
-                  className={`file-item ${selectedFiles.has(file.path) ? 'selected' : ''} ${activeDiffPath === file.path ? 'active-diff' : ''}`}
-                  onClick={() => handleFileRowClick(file.path)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      handleFileRowClick(file.path);
-                    }
-                  }}
-                >
-                  <input 
-                    type="checkbox" 
-                    checked={selectedFiles.has(file.path)}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={() => handleFileSelect(file.path)}
-                  />
-                  <span className="file-icon">{getStatusIcon(file.status)}</span>
-                  <span className="file-path">
-                    {file.path}
-                  </span>
-                  <span className="file-status">{getStatusText(file.status)}</span>
-                </div>
+                <FileItem
+                  keyPrefix="untracked"
+                  index={index}
+                  file={file}
+                  isSelected={selectedFiles.has(file.path)}
+                  isActive={activeDiffPath === file.path}
+                  onSelect={handleFileSelect}
+                  onPreview={handlePreviewFile}
+                />
               ))}
             </div>
           </div>
@@ -515,11 +549,29 @@ const GitView: React.FC<GitViewProps> = ({
         )}
         </div>
 
+        <div
+          className="git-workspace-resizer"
+          onMouseDown={handleStartResize}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize git file list"
+        />
+
         {/* Diff Preview */}
         <div className="git-diff-preview">
           <div className="git-diff-preview-header">
             <h3>Diff Preview</h3>
-            {activeDiffPath && <span className="git-diff-path">{activeDiffPath}</span>}
+            <div className="git-diff-preview-actions">
+              {activeDiffPath && <span className="git-diff-path">{activeDiffPath}</span>}
+              <button
+                type="button"
+                className="git-pane-toggle-btn"
+                onClick={() => setFilesPaneCollapsed(prev => !prev)}
+                title={filesPaneCollapsed ? 'Show file list' : 'Hide file list'}
+              >
+                {filesPaneCollapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
+              </button>
+            </div>
           </div>
           {activeDiff && activeDiff.has_staged && activeDiff.has_unstaged && (
             <div className="git-diff-mode-tabs">

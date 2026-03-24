@@ -102,10 +102,11 @@
   border-radius: 4px;
   transition: all 0.1s ease;
   flex-shrink: 0;
-  opacity: 0;
+  opacity: 0.4;
 }
 
-.tab:hover .tab-close {
+.tab:hover .tab-close,
+.tab.active .tab-close {
   opacity: 1;
 }
 

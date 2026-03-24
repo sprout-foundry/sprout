@@ -512,6 +512,8 @@ const Sidebar: React.FC<SidebarProps> = ({
       );
     });
 
+    const shouldRenderViewContext = currentView !== 'git';
+
     return (
       <>
         <div className="section">
@@ -529,7 +531,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             ))}
           </div>
         </div>
-        {renderedContext}
+        {shouldRenderViewContext ? renderedContext : null}
       </>
     );
   };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   FolderOpen,
   Folder,
@@ -53,6 +53,11 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile, rootPat
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [currentPath, setCurrentPath] = useState<string>(rootPath);
+  const filesRef = useRef<FileInfo[]>([]);
+
+  useEffect(() => {
+    filesRef.current = files;
+  }, [files]);
 
   // Fetch files for a given path
   const fetchFiles = async (path: string): Promise<FileInfo[]> => {
@@ -142,13 +147,9 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile, rootPat
       return;
     }
 
-    // Load children if not already loaded, using latest file tree state to avoid stale closures.
-    let needsLoad = false;
-    setFiles((prev) => {
-      const dir = findFileByPath(prev, dirPath);
-      needsLoad = Boolean(dir && (!dir.children || dir.children.length === 0));
-      return prev;
-    });
+    // Load children if not already loaded.
+    const dir = findFileByPath(filesRef.current, dirPath);
+    const needsLoad = Boolean(dir && (!dir.children || dir.children.length === 0));
 
     if (!needsLoad) {
       return;
@@ -294,9 +295,9 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile, rootPat
           </div>
           
           {/* Render children if directory is expanded */}
-          {file.isDir && isExpanded && Array.isArray(file.children) && (
-            <div className="directory-children">
-              {renderFileTree(file.children, depth + 1)}
+          {file.isDir && isExpanded && (
+            <div className="file-tree-children">
+              {Array.isArray(file.children) ? renderFileTree(file.children, depth + 1) : null}
             </div>
           )}
         </React.Fragment>

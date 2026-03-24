@@ -675,7 +675,10 @@ function App() {
   }, []);
 
   const handleSendMessage = useCallback(async (message: string) => {
-    if (!message.trim() || isProcessingRef.current) return;
+    if (!message.trim()) return;
+    if (isProcessingRef.current) {
+      throw new Error('Another request is already running');
+    }
     isProcessingRef.current = true;
 
     // Clear any previous errors and set processing state
@@ -757,7 +760,7 @@ function App() {
   }, []);
 
   const handleGitAICommit = useCallback(async () => {
-    await handleSendMessage('/commit');
+    await handleSendMessage('/commit --skip-prompt');
   }, [handleSendMessage]);
 
   const handleGitStage = useCallback(async (files: string[]) => {

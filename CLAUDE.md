@@ -60,7 +60,7 @@ Before making changes, evaluate code against these metrics:
 - Consolidate repeated error handling, validation, or utility patterns
 
 ### Self-Documenting Code
-- Prefer descriptive names; code should explain itself
+- Prefer descriptive names; code should explain 
 - Comments only for "why", not "what"
 - Avoid explaining obvious logic with comments
 

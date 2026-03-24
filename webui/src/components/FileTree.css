@@ -200,8 +200,9 @@
   font-family: var(--font-mono);
 }
 
-.file-tree .directory-children {
-  overflow: hidden;
+.file-tree .file-tree-children {
+  display: block;
+  overflow: visible;
 }
 
 .file-tree .empty-directory {

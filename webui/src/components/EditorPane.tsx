@@ -165,7 +165,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     if (!buffer || !viewRef.current) return;
 
     try {
-      await saveBuffer(paneId);
+      await saveBuffer(buffer.id);
     } catch (err) {
       setError('Failed to save file');
     }
@@ -393,6 +393,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         showLineNumbers={showLineNumbers}
         onToggleLineNumbers={handleToggleLineNumbers}
         onGoToLine={handleGoToLine}
+        onSave={handleSave}
       />
 
       {loading && (

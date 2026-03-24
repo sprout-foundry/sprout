@@ -114,6 +114,9 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/settings/providers", ws.handleAPISettingsProviders)
 	mux.HandleFunc("/api/settings/providers/", ws.handleAPISettingsProviders)
 	mux.HandleFunc("/api/settings/skills", ws.handleAPISettingsSkills)
+	// Hotkeys API
+	mux.HandleFunc("/api/hotkeys", ws.handleAPIHotkeys)
+	mux.HandleFunc("/api/hotkeys/validate", ws.handleAPIHotkeysValidate)
 	mux.HandleFunc("/api/terminal/history", ws.handleTerminalHistory)
 	mux.HandleFunc("/api/git/status", ws.handleAPIGitStatus)
 	mux.HandleFunc("/api/git/stage", ws.handleAPIGitStage)

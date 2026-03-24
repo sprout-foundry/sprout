@@ -9,6 +9,8 @@ export interface ThemePack {
   description?: string;
   editorSyntaxStyle: EditorSyntaxStyle;
   variables: Record<string, string>;
+  /** Token color rules for syntax highlighting (from imported themes). */
+  tokenColors?: Array<{ scope?: string; settings: { foreground?: string; fontStyle?: string } }>;
 }
 
 const atomOneDark: ThemePack = {
@@ -198,6 +200,54 @@ const dracula: ThemePack = {
     '--accent-error': '#ff5555',
     '--accent-cyan': '#8be9fd',
     '--accent-primary-alpha': 'rgba(139, 233, 253, 0.2)',
+
+    '--color-success-bg': 'rgba(80, 250, 123, 0.12)',
+    '--color-warning-bg': 'rgba(241, 250, 140, 0.12)',
+    '--color-error-bg': 'rgba(255, 85, 85, 0.12)',
+    '--color-info-bg': 'rgba(139, 233, 253, 0.12)',
+
+    '--editor-pane-bg': 'linear-gradient(135deg, #282a36 0%, #2a2d3a 100%)',
+    '--editor-pane-footer-bg': 'rgba(0, 0, 0, 0.2)',
+    '--editor-pane-footer-fg': 'rgba(248, 248, 242, 0.7)',
+    '--editor-empty-fg': 'rgba(248, 248, 242, 0.5)',
+    '--editor-loading-bg': 'rgba(139, 233, 253, 0.18)',
+    '--editor-loading-fg': '#e0f7ff',
+    '--editor-error-bg': 'rgba(255, 85, 85, 0.18)',
+    '--editor-error-fg': '#ffd7dc',
+
+    '--toolbar-bg': '#2a2d3a',
+    '--toolbar-fg': '#f8f8f2',
+    '--toolbar-hover-bg': '#343748',
+    '--toolbar-hover-fg': '#ffffff',
+    '--accent-bg': '#8be9fd',
+    '--accent-fg': '#282a36',
+    '--border-color': 'rgba(248, 248, 242, 0.22)',
+    '--input-bg': '#21222c',
+    '--input-fg': '#f8f8f2',
+
+    '--cm-bg': '#282a36',
+    '--cm-fg': '#f8f8f2',
+    '--cm-gutter-bg': '#21222c',
+    '--cm-gutter-fg': '#6272a4',
+    '--cm-gutter-fg-active': '#f8f8f2',
+    '--cm-cursor': '#f8f8f2',
+    '--cm-selection': 'rgba(68, 71, 90, 0.95)',
+    '--cm-active-line': 'rgba(42, 45, 58, 0.8)',
+    '--cm-active-line-gutter': 'rgba(42, 45, 58, 0.8)',
+    '--editor-pane-inactive-overlay': 'rgba(0, 0, 0, 0.28)',
+    '--editor-pane-inactive-overlay-hover': 'rgba(0, 0, 0, 0.18)',
+
+    '--app-shell-bg': 'linear-gradient(180deg, #21222c, #282a36)',
+    '--app-main-bg': '#282a36',
+    '--sidebar-bg': 'linear-gradient(180deg, #21222c, #1e1f29)',
+    '--sidebar-header-bg': 'rgba(33, 34, 44, 0.95)',
+    '--sidebar-nav-btn-bg': '#303442',
+    '--sidebar-nav-btn-hover-bg': '#353949',
+    '--sidebar-nav-btn-active-bg': 'linear-gradient(180deg, #44475a, #3d4058)',
+    '--sidebar-select-bg': '#21222c',
+
+    '--gradient-subtle': 'radial-gradient(1100px 420px at -5% -10%, rgba(139, 233, 253, 0.08), transparent 55%), radial-gradient(1100px 420px at 105% -10%, rgba(255, 121, 198, 0.08), transparent 58%)',
+    '--gradient-elevated': 'linear-gradient(145deg, rgba(139, 233, 253, 0.16), rgba(255, 121, 198, 0.12))',
   },
 };
 

@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useRef, useState, useEffect } from 'react';
 import { Menu, X, Columns2, Rows2 } from 'lucide-react';
 import Sidebar from './Sidebar';
 import Chat from './Chat';
@@ -9,7 +9,9 @@ import EditorTabs from './EditorTabs';
 import EditorPane from './EditorPane';
 import ResizeHandle from './ResizeHandle';
 import Status from './Status';
+import CommandPalette from './CommandPalette';
 import { useEditorManager } from '../contexts/EditorManagerContext';
+import { ApiService } from '../services/api';
 
 interface ToolExecution {
   id: string;
@@ -95,6 +97,7 @@ interface AppContentProps {
   onClearLogs: () => void;
   onTerminalOutput: (output: string) => void;
   onTerminalExpandedChange: (expanded: boolean) => void;
+  isConnected: boolean;
 }
 
 const AppContent: React.FC<AppContentProps> = ({
@@ -125,9 +128,94 @@ const AppContent: React.FC<AppContentProps> = ({
   onGitFileSelect,
   onClearLogs,
   onTerminalOutput,
-  onTerminalExpandedChange
+  onTerminalExpandedChange,
+  isConnected
 }) => {
   const { panes, paneLayout, activePaneId, switchPane, splitPane, closeSplit, openFile, paneSizes, updatePaneSize } = useEditorManager();
+  const apiService = ApiService.getInstance();
+
+  // Command palette state
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [hotkeysConfigPath, setHotkeysConfigPath] = useState<string | null>(null);
+
+  // Load hotkeys config path on mount
+  useEffect(() => {
+    if (!isConnected) return;
+    apiService.getHotkeys().then(config => {
+      if (config.path) setHotkeysConfigPath(config.path);
+    }).catch(() => {});
+  }, [isConnected, apiService]);
+
+  // Listen for hotkey custom events
+  useEffect(() => {
+    const handleHotkey = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail?.commandId) return;
+      
+      switch (detail.commandId) {
+        case 'command_palette':
+          setIsCommandPaletteOpen(prev => !prev);
+          break;
+        case 'toggle_sidebar':
+          onSidebarToggle();
+          break;
+        case 'toggle_terminal':
+          onTerminalExpandedChange(!isTerminalExpanded);
+          break;
+        case 'toggle_explorer':
+          onSidebarToggle();
+          break;
+        case 'quick_open':
+          setIsCommandPaletteOpen(true);
+          break;
+        case 'switch_to_chat':
+          onViewChange('chat');
+          break;
+        case 'switch_to_editor':
+          onViewChange('editor');
+          break;
+        case 'switch_to_git':
+          onViewChange('git');
+          break;
+        case 'switch_to_logs':
+          onViewChange('logs');
+          break;
+      }
+    };
+    
+    window.addEventListener('ledit:hotkey', handleHotkey);
+    return () => window.removeEventListener('ledit:hotkey', handleHotkey);
+  }, [onSidebarToggle, onTerminalExpandedChange, isTerminalExpanded, onViewChange]);
+
+  // Handler to open hotkeys config in editor
+  const handleOpenHotkeysConfig = useCallback(() => {
+    if (!hotkeysConfigPath) return;
+    const fileName = hotkeysConfigPath.split('/').pop() || 'hotkeys.json';
+    const extensionIndex = fileName.lastIndexOf('.');
+    const fileExt = extensionIndex > 0 ? fileName.slice(extensionIndex) : '';
+    
+    openFile({
+      path: hotkeysConfigPath,
+      name: fileName,
+      isDir: false,
+      size: 0,
+      modified: 0,
+      ext: fileExt,
+    });
+    
+    // Ensure we're in editor view
+    onViewChange('editor');
+    setIsCommandPaletteOpen(false);
+  }, [hotkeysConfigPath, openFile, onViewChange]);
+
+  // Listen for open hotkeys config event
+  useEffect(() => {
+    const handleOpenHotkeys = () => {
+      handleOpenHotkeysConfig();
+    };
+    window.addEventListener('ledit:open-hotkeys-config', handleOpenHotkeys);
+    return () => window.removeEventListener('ledit:open-hotkeys-config', handleOpenHotkeys);
+  }, [handleOpenHotkeysConfig]);
 
   const canSplit = panes.length < 3;
   const canCloseSplit = panes.length > 1;
@@ -332,6 +420,28 @@ const AppContent: React.FC<AppContentProps> = ({
         onOutput={onTerminalOutput}
         isExpanded={isTerminalExpanded}
         onToggleExpand={onTerminalExpandedChange}
+      />
+
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        onOpenFile={(filePath) => {
+          const fileName = filePath.split('/').filter(Boolean).pop() || filePath;
+          const extensionIndex = fileName.lastIndexOf('.');
+          const fileExt = extensionIndex > 0 ? fileName.slice(extensionIndex) : '';
+          openFile({
+            path: filePath,
+            name: fileName,
+            isDir: false,
+            size: 0,
+            modified: 0,
+            ext: fileExt,
+          });
+        }}
+        onViewChange={onViewChange}
+        onToggleSidebar={onSidebarToggle}
+        onToggleTerminal={() => onTerminalExpandedChange(!isTerminalExpanded)}
+        onOpenHotkeysConfig={handleOpenHotkeysConfig}
       />
     </div>
   );

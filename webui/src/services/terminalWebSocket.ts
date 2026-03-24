@@ -195,6 +195,25 @@ class TerminalWebSocketService {
     }
   }
 
+  sendRawInput(input: string) {
+    if (!this.isConnected || !this.sessionId) {
+      return false;
+    }
+
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      const message = {
+        type: 'input_raw',
+        data: {
+          session_id: this.sessionId,
+          input
+        }
+      };
+      this.ws.send(JSON.stringify(message));
+      return true;
+    }
+    return false;
+  }
+
   sendResize(cols: number, rows: number) {
     if (!this.isConnected || !this.sessionId) {
       return false;

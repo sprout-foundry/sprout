@@ -254,6 +254,33 @@ func (tm *TerminalManager) ExecuteCommand(sessionID, command string) error {
 	return nil
 }
 
+// WriteRawInput writes raw terminal input bytes directly to PTY without
+// command history mutation or implicit carriage-return handling.
+func (tm *TerminalManager) WriteRawInput(sessionID, input string) error {
+	session, exists := tm.GetSession(sessionID)
+	if !exists {
+		return fmt.Errorf("session %s not found", sessionID)
+	}
+
+	session.mutex.Lock()
+	defer session.mutex.Unlock()
+
+	if !session.Active {
+		return fmt.Errorf("session %s is not active", sessionID)
+	}
+
+	if session.Pty == nil {
+		return fmt.Errorf("no PTY available for session %s", sessionID)
+	}
+
+	if _, err := session.Pty.Write([]byte(input)); err != nil {
+		return fmt.Errorf("failed to write raw input to PTY: %w", err)
+	}
+
+	session.LastUsed = time.Now()
+	return nil
+}
+
 func isControlOnlyCommand(command string) bool {
 	if command == "" {
 		return false

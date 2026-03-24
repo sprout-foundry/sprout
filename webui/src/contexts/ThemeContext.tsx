@@ -1,15 +1,19 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, ReactNode } from 'react';
+import { HighlightStyle } from '@codemirror/language';
 import {
   DEFAULT_THEME_PACK_ID,
-  getThemePackByID,
   getThemePackForMode,
   THEME_PACKS,
   THEME_VARIABLE_KEYS,
   ThemeMode,
   ThemePack
 } from '../themes/themePacks';
+import { ThemeImporter, type VSCodeTheme, type ImportResult } from '../themes/themeImport';
 
 type Theme = ThemeMode;
+
+const IMPORTED_THEMES_STORAGE_KEY = 'ledit-imported-themes';
+const importer = new ThemeImporter();
 
 interface ThemeContextValue {
   theme: Theme;
@@ -18,6 +22,9 @@ interface ThemeContextValue {
   toggleTheme: () => void;
   setTheme: (theme: Theme) => void;
   setThemePack: (themePackID: string) => void;
+  customHighlightStyle: HighlightStyle | null;
+  importTheme: (jsonString: string) => ImportResult;
+  removeTheme: (id: string) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -37,10 +44,28 @@ interface ThemeProviderProps {
 const THEME_STORAGE_KEY = 'ledit-editor-theme-mode';
 const THEME_PACK_STORAGE_KEY = 'ledit-editor-theme-pack';
 
+function loadImportedThemes(): ThemePack[] {
+  try {
+    const raw = localStorage.getItem(IMPORTED_THEMES_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed;
+  } catch {
+    return [];
+  }
+}
+
+function saveImportedThemes(themes: ThemePack[]) {
+  localStorage.setItem(IMPORTED_THEMES_STORAGE_KEY, JSON.stringify(themes));
+}
+
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
+  const [importedThemes, setImportedThemes] = useState<ThemePack[]>(loadImportedThemes);
   const [themePackID, setThemePackID] = useState<string>(() => {
     const storedPack = localStorage.getItem(THEME_PACK_STORAGE_KEY);
-    if (storedPack && THEME_PACKS.some((pack) => pack.id === storedPack)) {
+    const allPacks = [...THEME_PACKS, ...loadImportedThemes()];
+    if (storedPack && allPacks.some((pack) => pack.id === storedPack)) {
       return storedPack;
     }
     const storedMode = localStorage.getItem(THEME_STORAGE_KEY);
@@ -50,8 +75,30 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     return DEFAULT_THEME_PACK_ID;
   });
 
-  const themePack = getThemePackByID(themePackID);
+  // Merge built-in + imported themes
+  const allPacks = useMemo(() => [...THEME_PACKS, ...importedThemes], [importedThemes]);
+
+  const getValidPack = useCallback((id: string): ThemePack => {
+    return allPacks.find((pack) => pack.id === id) ||
+      allPacks.find((pack) => pack.id === DEFAULT_THEME_PACK_ID) ||
+      allPacks[0];
+  }, [allPacks]);
+
+  const themePack = getValidPack(themePackID);
   const theme = themePack.mode;
+
+  // Build a custom HighlightStyle if the current theme has tokenColors
+  const customHighlightStyle = useMemo<HighlightStyle | null>(() => {
+    if (!themePack.tokenColors || themePack.tokenColors.length === 0) {
+      return null;
+    }
+    try {
+      return importer.buildHighlightStyle(themePack.tokenColors);
+    } catch (err) {
+      console.error('Failed to build custom highlight style:', err);
+      return null;
+    }
+  }, [themePack.tokenColors]);
 
   const toggleTheme = useCallback(() => {
     const nextMode: Theme = theme === 'dark' ? 'light' : 'dark';
@@ -69,11 +116,65 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   }, []);
 
   const setThemePack = useCallback((nextThemePackID: string) => {
-    const nextPack = getThemePackByID(nextThemePackID);
+    const nextPack = getValidPack(nextThemePackID);
     setThemePackID(nextPack.id);
     localStorage.setItem(THEME_PACK_STORAGE_KEY, nextPack.id);
     localStorage.setItem(THEME_STORAGE_KEY, nextPack.mode);
+  }, [getValidPack]);
+
+  const importTheme = useCallback((jsonString: string): ImportResult => {
+    let parsed: VSCodeTheme;
+    try {
+      parsed = JSON.parse(jsonString);
+    } catch (err) {
+      return { success: false, warnings: [`Invalid JSON: ${(err as Error).message}`] };
+    }
+
+    if (!parsed.name || !Array.isArray(parsed.tokenColors)) {
+      return { success: false, warnings: ['Invalid VSCode theme: missing "name" or "tokenColors"'] };
+    }
+
+    const result = importer.importVSCodeTheme(parsed);
+    if (!result.success || !result.themePack) {
+      return { success: false, warnings: result.warnings || ['Import failed'] };
+    }
+
+    // Store tokenColors on the pack for persistence and custom HighlightStyle
+    const packWithTokens: ThemePack = {
+      ...result.themePack,
+      tokenColors: parsed.tokenColors as ThemePack['tokenColors'],
+    };
+
+    // Remove any previous import with the same ID, then add
+    setImportedThemes((prev) => {
+      const updated = prev.filter((t) => t.id !== packWithTokens.id);
+      updated.push(packWithTokens);
+      saveImportedThemes(updated);
+      return updated;
+    });
+
+    // Auto-select the imported theme
+    setThemePackID(packWithTokens.id);
+    localStorage.setItem(THEME_PACK_STORAGE_KEY, packWithTokens.id);
+    localStorage.setItem(THEME_STORAGE_KEY, packWithTokens.mode);
+
+    return result;
   }, []);
+
+  const removeTheme = useCallback((id: string) => {
+    setImportedThemes((prev) => {
+      const updated = prev.filter((t) => t.id !== id);
+      saveImportedThemes(updated);
+      return updated;
+    });
+
+    // If we removed the active theme, fall back to built-in
+    if (themePackID === id) {
+      const fallback = getThemePackForMode(theme);
+      setThemePackID(fallback.id);
+      localStorage.setItem(THEME_PACK_STORAGE_KEY, fallback.id);
+    }
+  }, [themePackID, theme]);
 
   // Update CSS variable tokens and document attributes for global theming
   useEffect(() => {
@@ -91,10 +192,13 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   const value: ThemeContextValue = {
     theme,
     themePack,
-    availableThemePacks: THEME_PACKS,
+    availableThemePacks: allPacks,
     toggleTheme,
     setTheme: setThemeExplicit,
-    setThemePack
+    setThemePack,
+    customHighlightStyle,
+    importTheme,
+    removeTheme,
   };
 
   return (

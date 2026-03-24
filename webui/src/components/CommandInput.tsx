@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useLayoutEffect, memo } from 'react';
-import { ScrollText, X, RefreshCw, Send } from 'lucide-react';
+import { ScrollText, X, Send, ChevronDown } from 'lucide-react';
 import './CommandInput.css';
 import { ApiService } from '../services/api';
 import { CommandHistoryState, loadCommandHistory, saveCommandHistory } from './command_input_history';
@@ -14,6 +14,23 @@ interface CommandInputProps {
   multiline?: boolean;
   autoFocus?: boolean;
 }
+
+interface QuickAction {
+  id: string;
+  label: string;
+  command?: string;
+  local?: 'clear-input' | 'refresh-history';
+}
+
+const QUICK_ACTIONS: QuickAction[] = [
+  { id: 'clear-convo', label: 'Clear Conversation', command: '/clear' },
+  { id: 'status', label: 'Session Status', command: '/status' },
+  { id: 'changes', label: 'Tracked Changes', command: '/changes' },
+  { id: 'history', label: 'Revision Log', command: '/log' },
+  { id: 'help', label: 'Command Help', command: '/help' },
+  { id: 'refresh-history', label: 'Refresh Input History', local: 'refresh-history' },
+  { id: 'clear-input', label: 'Clear Input', local: 'clear-input' },
+];
 
 const CommandInput: React.FC<CommandInputProps> = ({
   value = '',
@@ -33,7 +50,9 @@ const CommandInput: React.FC<CommandInputProps> = ({
   });
   const [isHistoryMode, setIsHistoryMode] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const actionsMenuRef = useRef<HTMLDivElement>(null);
   const apiService = useRef(ApiService.getInstance());
   const selectionRef = useRef<{ start: number; end: number } | null>(null);
 
@@ -64,11 +83,6 @@ const CommandInput: React.FC<CommandInputProps> = ({
     );
   }, [draftValue]);
 
-  // Load history from localStorage and terminal on mount
-  useEffect(() => {
-    loadHistory();
-  }, []);
-
   // Focus input if autoFocus is true
   useEffect(() => {
     if (autoFocus && inputRef.current) {
@@ -76,7 +90,20 @@ const CommandInput: React.FC<CommandInputProps> = ({
     }
   }, [autoFocus]);
 
-  const loadHistory = async () => {
+  useEffect(() => {
+    if (!actionsOpen) return;
+
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (!actionsMenuRef.current) return;
+      if (actionsMenuRef.current.contains(event.target as Node)) return;
+      setActionsOpen(false);
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [actionsOpen]);
+
+  const loadHistory = useCallback(async () => {
     setIsLoadingHistory(true);
     try {
       const commands = await loadCommandHistory(apiService.current);
@@ -89,7 +116,12 @@ const CommandInput: React.FC<CommandInputProps> = ({
     } finally {
       setIsLoadingHistory(false);
     }
-  };
+  }, []);
+
+  // Load history from localStorage and terminal on mount
+  useEffect(() => {
+    loadHistory();
+  }, [loadHistory]);
 
   const saveToHistory = useCallback(async (command: string) => {
     if (!command.trim()) return;
@@ -360,6 +392,41 @@ const CommandInput: React.FC<CommandInputProps> = ({
     }, 100);
   };
 
+  const sendCommand = useCallback(async (command: string) => {
+    await saveToHistory(command);
+    resetHistoryNavigation();
+
+    if (onSend) {
+      await Promise.resolve(onSend(command));
+    } else if (onSendCommand) {
+      await Promise.resolve(onSendCommand(command));
+    }
+
+    updateValue('', { start: 0, end: 0 });
+    setActionsOpen(false);
+  }, [onSend, onSendCommand, saveToHistory, updateValue]);
+
+  const handleQuickAction = useCallback(async (action: QuickAction) => {
+    if (disabled) return;
+
+    if (action.local === 'clear-input') {
+      resetHistoryNavigation();
+      updateValue('', { start: 0, end: 0 });
+      setActionsOpen(false);
+      return;
+    }
+
+    if (action.local === 'refresh-history') {
+      await loadHistory();
+      setActionsOpen(false);
+      return;
+    }
+
+    if (action.command) {
+      await sendCommand(action.command);
+    }
+  }, [disabled, loadHistory, sendCommand, updateValue]);
+
   const handleCompositionStart = () => {
     // Prevent Enter key from sending during IME composition
   };
@@ -426,26 +493,37 @@ const CommandInput: React.FC<CommandInputProps> = ({
       />
 
       <div className="input-actions">
-        <div className="action-buttons">
+        <div className="action-buttons" ref={actionsMenuRef}>
           <button
-            onClick={() => {
-              resetHistoryNavigation();
-              updateValue('', { start: 0, end: 0 });
-            }}
-            disabled={disabled || !draftValue}
-            className="clear-button"
-            title="Clear input (Ctrl+C)"
+            type="button"
+            className="actions-toggle-button"
+            onClick={() => setActionsOpen((prev) => !prev)}
+            aria-haspopup="menu"
+            aria-expanded={actionsOpen}
+            disabled={disabled}
+            title="Chat actions"
           >
-            Clear
+            Actions
+            <ChevronDown size={14} />
           </button>
-          <button
-            onClick={loadHistory}
-            disabled={disabled || isLoadingHistory}
-            className="refresh-button"
-            title="Refresh history from terminal (Ctrl+R)"
-          >
-            <RefreshCw size={14} />
-          </button>
+          {actionsOpen && (
+            <div className="actions-dropdown" role="menu" aria-label="Chat actions">
+              {QUICK_ACTIONS.map((action) => (
+                <button
+                  key={action.id}
+                  type="button"
+                  role="menuitem"
+                  className="actions-dropdown-item"
+                  onClick={() => void handleQuickAction(action)}
+                  disabled={disabled || (action.local === 'refresh-history' && isLoadingHistory)}
+                  title={action.command || action.label}
+                >
+                  <span>{action.label}</span>
+                  {action.command && <code>{action.command}</code>}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <button
           onClick={handleSend}

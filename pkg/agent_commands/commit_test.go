@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	gitops "github.com/alantheprice/ledit/pkg/git"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -279,13 +280,13 @@ func TestWrapText_MultipleParagraphs(t *testing.T) {
 }
 
 func TestNormalizeShortTitle(t *testing.T) {
-	assert.Equal(t, "Updates parser edge cases", normalizeShortTitle("Updates parser edge cases\n\nextra"))
-	assert.Equal(t, "Fix wrapping issue", normalizeShortTitle("`Fix wrapping issue`"))
-	assert.Equal(t, "Improve commit prompt", normalizeShortTitle("Title: Improve commit prompt"))
+	assert.Equal(t, "Updates parser edge cases", gitops.NormalizeShortTitle("Updates parser edge cases\n\nextra"))
+	assert.Equal(t, "Fix wrapping issue", gitops.NormalizeShortTitle("`Fix wrapping issue`"))
+	assert.Equal(t, "Improve commit prompt", gitops.NormalizeShortTitle("Title: Improve commit prompt"))
 }
 
 func TestTruncateRunes(t *testing.T) {
-	assert.Equal(t, "short", truncateRunes("short", 10))
-	assert.Equal(t, "abcdefg...", truncateRunes("abcdefghijklmnopqrstuvwxyz", 10))
-	assert.Equal(t, "", truncateRunes("abc", 0))
+	assert.Equal(t, "short", gitops.TruncateRunes("short", 10))
+	assert.Equal(t, "abcdefg...", gitops.TruncateRunes("abcdefghijklmnopqrstuvwxyz", 10))
+	assert.Equal(t, "", gitops.TruncateRunes("abc", 0))
 }

@@ -289,7 +289,8 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
           color: 'var(--cm-fg)'
         },
         '.cm-content': {
-          padding: '16px'
+          padding: '16px',
+          caretColor: 'var(--cm-cursor, ' + (themePack.mode === 'dark' ? '#f8f8f2' : '#526fff') + ')'
         },
         '.cm-focused': {
           outline: 'none'
@@ -306,15 +307,15 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
           height: '100%'
         },
         '.cm-cursor': {
-          borderLeftColor: 'var(--cm-cursor)',
+          borderLeftColor: themePack.mode === 'dark' ? 'var(--cm-cursor, #f8f8f2)' : 'var(--cm-cursor, #526fff)',
           borderLeftWidth: '2px'
         },
         '&.cm-focused .cm-cursor': {
-          borderLeftColor: 'var(--cm-cursor)',
+          borderLeftColor: themePack.mode === 'dark' ? 'var(--cm-cursor, #f8f8f2)' : 'var(--cm-cursor, #526fff)',
           borderLeftWidth: '2px'
         },
         '.cm-dropCursor': {
-          borderLeftColor: 'var(--cm-cursor)'
+          borderLeftColor: themePack.mode === 'dark' ? 'var(--cm-cursor, #f8f8f2)' : 'var(--cm-cursor, #526fff)'
         },
         '.cm-selectionBackground, .cm-content ::selection': {
           backgroundColor: 'var(--cm-selection) !important'

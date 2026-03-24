@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -41,6 +42,67 @@ type FileRevisionDetail struct {
 
 var ansiSequencePattern = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]`)
 
+const maxRevisions = 100
+
+// relativeFilePath converts an absolute or workspace-relative path to a relative path
+// from the workspace root for display purposes.
+func (ws *ReactWebServer) relativeFilePath(path string) string {
+	rel, err := filepath.Rel(ws.workspaceRoot, path)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return path
+	}
+	return rel
+}
+
+// buildChangelogEntry converts a history.RevisionGroup into a ChangelogEntry with relative file paths
+func (ws *ReactWebServer) buildChangelogEntry(group history.RevisionGroup) ChangelogEntry {
+	files := make([]FileRevision, 0, len(group.Changes))
+	for _, change := range group.Changes {
+		operation := "edited"
+		if change.OriginalCode == "" {
+			operation = "created"
+		} else if change.NewCode == "" {
+			operation = "deleted"
+		}
+
+		linesAdded := 0
+		linesDeleted := 0
+		if change.OriginalCode != "" {
+			linesDeleted = len(strings.Split(change.OriginalCode, "\n"))
+		}
+		if change.NewCode != "" {
+			linesAdded = len(strings.Split(change.NewCode, "\n"))
+		}
+
+		files = append(files, FileRevision{
+			FileRevisionHash: change.FileRevisionHash,
+			Path:             ws.relativeFilePath(change.Filename),
+			Operation:        operation,
+			LinesAdded:       linesAdded,
+			LinesDeleted:     linesDeleted,
+		})
+	}
+
+	return ChangelogEntry{
+		RevisionID:  group.RevisionID,
+		Timestamp:   group.Timestamp.Format("2006-01-02T15:04:05Z07:00"),
+		Files:       files,
+		Description: group.Instructions,
+	}
+}
+
+// revisionGroupArrayToEntry converts a array of RevisionGroup to ChangelogEntry array
+func (ws *ReactWebServer) convertRevisionGroups(revisionGroups []history.RevisionGroup, limit int) []ChangelogEntry {
+	if len(revisionGroups) > limit {
+		revisionGroups = revisionGroups[:limit]
+	}
+	revisions := make([]ChangelogEntry, 0, len(revisionGroups))
+	for _, group := range revisionGroups {
+		revisions = append(revisions, ws.buildChangelogEntry(group))
+	}
+	return revisions
+}
+
 // handleAPIHistoryChangelog handles requests to get the changelog
 func (ws *ReactWebServer) handleAPIHistoryChangelog(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -55,43 +117,7 @@ func (ws *ReactWebServer) handleAPIHistoryChangelog(w http.ResponseWriter, r *ht
 		return
 	}
 
-	// Convert to API response format
-	revisions := make([]ChangelogEntry, 0, len(revisionGroups))
-	for _, group := range revisionGroups {
-		files := make([]FileRevision, 0, len(group.Changes))
-		for _, change := range group.Changes {
-			operation := "edited"
-			if change.OriginalCode == "" {
-				operation = "created"
-			} else if change.NewCode == "" {
-				operation = "deleted"
-			}
-
-			linesAdded := 0
-			linesDeleted := 0
-			if change.OriginalCode != "" {
-				linesDeleted = len(strings.Split(change.OriginalCode, "\n"))
-			}
-			if change.NewCode != "" {
-				linesAdded = len(strings.Split(change.NewCode, "\n"))
-			}
-
-			files = append(files, FileRevision{
-				FileRevisionHash: change.FileRevisionHash,
-				Path:             change.Filename,
-				Operation:        operation,
-				LinesAdded:       linesAdded,
-				LinesDeleted:     linesDeleted,
-			})
-		}
-
-		revisions = append(revisions, ChangelogEntry{
-			RevisionID:  group.RevisionID,
-			Timestamp:   group.Timestamp.Format("2006-01-02T15:04:05Z07:00"),
-			Files:       files,
-			Description: group.Instructions,
-		})
-	}
+	revisions := ws.convertRevisionGroups(revisionGroups, maxRevisions)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -162,43 +188,7 @@ func (ws *ReactWebServer) handleAPIHistoryChanges(w http.ResponseWriter, r *http
 		return
 	}
 
-	// Convert to API response format (same as changelog)
-	changes := make([]ChangelogEntry, 0, len(revisionGroups))
-	for _, group := range revisionGroups {
-		files := make([]FileRevision, 0, len(group.Changes))
-		for _, change := range group.Changes {
-			operation := "edited"
-			if change.OriginalCode == "" {
-				operation = "created"
-			} else if change.NewCode == "" {
-				operation = "deleted"
-			}
-
-			linesAdded := 0
-			linesDeleted := 0
-			if change.OriginalCode != "" {
-				linesDeleted = len(strings.Split(change.OriginalCode, "\n"))
-			}
-			if change.NewCode != "" {
-				linesAdded = len(strings.Split(change.NewCode, "\n"))
-			}
-
-			files = append(files, FileRevision{
-				FileRevisionHash: change.FileRevisionHash,
-				Path:             change.Filename,
-				Operation:        operation,
-				LinesAdded:       linesAdded,
-				LinesDeleted:     linesDeleted,
-			})
-		}
-
-		changes = append(changes, ChangelogEntry{
-			RevisionID:  group.RevisionID,
-			Timestamp:   group.Timestamp.Format("2006-01-02T15:04:05Z07:00"),
-			Files:       files,
-			Description: group.Instructions,
-		})
-	}
+	changes := ws.convertRevisionGroups(revisionGroups, maxRevisions)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -254,7 +244,7 @@ func (ws *ReactWebServer) handleAPIHistoryRevision(w http.ResponseWriter, r *htt
 
 			files = append(files, FileRevisionDetail{
 				FileRevisionHash: change.FileRevisionHash,
-				Path:             change.Filename,
+				Path:             ws.relativeFilePath(change.Filename),
 				Operation:        operation,
 				LinesAdded:       linesAdded,
 				LinesDeleted:     linesDeleted,

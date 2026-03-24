@@ -20,6 +20,7 @@ const Terminal: React.FC<TerminalProps> = ({
   onToggleExpand,
 }) => {
   const [isExpanded, setIsExpanded] = useState(externalIsExpanded);
+  const [hasActivated, setHasActivated] = useState(externalIsExpanded);
   const [terminalHeight, setTerminalHeight] = useState(400);
   const [isResizingVertical, setIsResizingVertical] = useState(false);
 
@@ -44,6 +45,9 @@ const Terminal: React.FC<TerminalProps> = ({
 
   useEffect(() => {
     setIsExpanded(externalIsExpanded);
+    if (externalIsExpanded) {
+      setHasActivated(true);
+    }
   }, [externalIsExpanded]);
 
   useEffect(() => {
@@ -57,6 +61,9 @@ const Terminal: React.FC<TerminalProps> = ({
   const toggleExpanded = useCallback(() => {
     setIsExpanded(prev => {
       const next = !prev;
+      if (next) {
+        setHasActivated(true);
+      }
       onToggleExpand?.(next);
       return next;
     });
@@ -213,50 +220,48 @@ const Terminal: React.FC<TerminalProps> = ({
       </div>
 
       {/* ── Body ── */}
-      {isExpanded && (
-        <div className="terminal-body">
-          <div
-            className={`terminal-panes-container${isSplit ? ' split' : ''}`}
-            ref={splitContainerRef}
-          >
-            {panes.map((pane, index) => (
-              <React.Fragment key={pane.id}>
-                <div
-                  className="terminal-pane-wrapper"
-                  style={
-                    isSplit
-                      ? { width: index === 0 ? `${splitPosition}%` : `${100 - splitPosition}%` }
-                      : undefined
-                  }
-                >
-                  <TerminalPane
-                    ref={handle => {
-                      if (handle) {
-                        paneHandles.current.set(pane.id, handle);
-                      } else {
-                        paneHandles.current.delete(pane.id);
-                      }
-                    }}
-                    isActive={isExpanded}
-                    isConnected={isConnected}
-                    showCloseButton={isSplit}
-                    onClose={() => removePane(pane.id)}
-                  />
-                </div>
+      <div className="terminal-body">
+        <div
+          className={`terminal-panes-container${isSplit ? ' split' : ''}`}
+          ref={splitContainerRef}
+        >
+          {panes.map((pane, index) => (
+            <React.Fragment key={pane.id}>
+              <div
+                className="terminal-pane-wrapper"
+                style={
+                  isSplit
+                    ? { width: index === 0 ? `${splitPosition}%` : `${100 - splitPosition}%` }
+                    : undefined
+                }
+              >
+                <TerminalPane
+                  ref={handle => {
+                    if (handle) {
+                      paneHandles.current.set(pane.id, handle);
+                    } else {
+                      paneHandles.current.delete(pane.id);
+                    }
+                  }}
+                  isActive={hasActivated || isExpanded}
+                  isConnected={isConnected}
+                  showCloseButton={isSplit}
+                  onClose={() => removePane(pane.id)}
+                />
+              </div>
 
-                {/* Draggable divider between panes */}
-                {isSplit && index === 0 && (
-                  <div
-                    className="terminal-split-divider"
-                    onMouseDown={handleSplitResizeStart}
-                    title="Drag to resize panes"
-                  />
-                )}
-              </React.Fragment>
-            ))}
-          </div>
+              {/* Draggable divider between panes */}
+              {isSplit && index === 0 && (
+                <div
+                  className="terminal-split-divider"
+                  onMouseDown={handleSplitResizeStart}
+                  title="Drag to resize panes"
+                />
+              )}
+            </React.Fragment>
+          ))}
         </div>
-      )}
+      </div>
     </div>
   );
 };

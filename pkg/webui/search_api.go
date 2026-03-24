@@ -247,8 +247,9 @@ func (ws *ReactWebServer) performSearch(ctx context.Context, query string, caseS
 		}
 
 		if matchCount > 0 {
+			relPath, _ := filepath.Rel(ws.workspaceRoot, path)
 			results = append(results, SearchResult{
-				File:       path,
+				File:       relPath,
 				Matches:    fileResults,
 				MatchCount: matchCount,
 			})
@@ -419,10 +420,16 @@ func (ws *ReactWebServer) performReplace(req ReplaceRequest, pattern *regexp.Reg
 	var changes []ReplaceFileChange
 
 	for _, filePath := range req.Files {
+		// Resolve relative path against workspace root
+		absFilePath := filePath
+		if !filepath.IsAbs(filePath) {
+			absFilePath = filepath.Join(ws.workspaceRoot, filePath)
+		}
+
 		// Open file
-		content, err := os.ReadFile(filePath)
+		content, err := os.ReadFile(absFilePath)
 		if err != nil {
-			log.Printf("Error reading file %s: %v", filePath, err)
+			log.Printf("Error reading file %s: %v", absFilePath, err)
 			continue
 		}
 
@@ -469,14 +476,14 @@ func (ws *ReactWebServer) performReplace(req ReplaceRequest, pattern *regexp.Reg
 			if !req.Preview {
 				// Write changes to file
 				newContent := strings.Join(newLines, "\n")
-				if err := os.WriteFile(filePath, []byte(newContent), 0644); err != nil {
-					log.Printf("Error writing file %s: %v", filePath, err)
+				if err := os.WriteFile(absFilePath, []byte(newContent), 0644); err != nil {
+					log.Printf("Error writing file %s: %v", absFilePath, err)
 					continue
 				}
 
 				// Publish file change event
 				if ws.eventBus != nil {
-					ws.eventBus.Publish(events.EventTypeFileChanged, events.FileChangedEvent(filePath, "write", newContent))
+					ws.eventBus.Publish(events.EventTypeFileChanged, events.FileChangedEvent(absFilePath, "write", newContent))
 				}
 			}
 

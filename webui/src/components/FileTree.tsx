@@ -29,6 +29,7 @@ interface FileInfo {
   size: number;
   modified: number;
   ext?: string;
+  gitStatus?: 'modified' | 'untracked' | 'ignored';
   children?: FileInfo[]; // For hierarchical structure
 }
 
@@ -38,6 +39,7 @@ interface FileTreeResponse {
   files: Array<FileInfo & {
     is_dir?: boolean;
     mod_time?: number;
+    git_status?: string;
   }>;
 }
 
@@ -78,11 +80,15 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile, rootPat
             isDir: Boolean(file.isDir ?? file.is_dir),
             ext: (file.isDir ?? file.is_dir)
               ? ''
-              : (file.name.includes('.') ? `.${file.name.split('.').pop() || ''}` : '')
+              : (file.name.includes('.') ? `.${file.name.split('.').pop() || ''}` : ''),
+            gitStatus: file.git_status as FileInfo['gitStatus'] || undefined,
           }))
           .sort((a, b) => {
             if (a.isDir !== b.isDir) {
               return a.isDir ? -1 : 1;
+            }
+            if (a.gitStatus === 'ignored' !== (b.gitStatus === 'ignored')) {
+              return a.gitStatus === 'ignored' ? 1 : -1;
             }
             return a.name.localeCompare(b.name);
           });
@@ -265,9 +271,10 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile, rootPat
       return (
         <React.Fragment key={file.path}>
           <div
-            className={`file-tree-item ${file.isDir ? 'directory' : 'file'} ${isSelected ? 'selected' : ''}`}
+            className={`file-tree-item ${file.isDir ? 'directory' : 'file'} ${isSelected ? 'selected' : ''}${file.gitStatus ? ` git-${file.gitStatus}` : ''}`}
             style={{ paddingLeft: `${depth * 16 + 8}px` }}
             data-ext={file.ext || ''}
+            data-git-status={file.gitStatus || ''}
             onClick={() => handleClick(file)}
             role="treeitem"
             tabIndex={0}

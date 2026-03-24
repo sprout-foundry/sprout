@@ -225,6 +225,39 @@
   font-size: 12px;
 }
 
+/* Git status colors */
+.file-tree .file-tree-item.git-ignored .file-tree-name {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.file-tree .file-tree-item.git-ignored .file-tree-icon {
+  opacity: 0.4;
+}
+
+.file-tree .file-tree-item.git-ignored:hover .file-tree-name,
+.file-tree .file-tree-item.git-ignored:hover .file-tree-icon {
+  opacity: 0.7;
+}
+
+.file-tree .file-tree-item.git-modified .file-tree-name {
+  color: var(--accent-warning);
+  font-weight: 500;
+}
+
+.file-tree .file-tree-item.git-modified .file-tree-icon {
+  opacity: 1;
+}
+
+.file-tree .file-tree-item.git-untracked .file-tree-name {
+  color: var(--accent-success);
+  font-weight: 500;
+}
+
+.file-tree .file-tree-item.git-untracked .file-tree-icon {
+  opacity: 1;
+}
+
 /* File-type accents */
 .file-tree .file-tree-item[data-ext='.js'] .file-tree-icon,
 .file-tree .file-tree-item[data-ext='.jsx'] .file-tree-icon { color: #f7df1e; }

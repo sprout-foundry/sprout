@@ -607,7 +607,10 @@ export class ThemeImporter {
     const cssVars = this.mapUIColors(theme.colors || {});
 
     // Warn if critical colors are missing
-    if (!cssVars["--cm-cursor"]) warnings.push("No cursor color defined — will use CSS fallback");
+    if (!cssVars["--cm-cursor"]) {
+      warnings.push("No cursor color defined — using default");
+      cssVars["--cm-cursor"] = mode === "dark" ? "#f8f8f2" : "#526999";
+    }
     if (!cssVars["--cm-bg"]) warnings.push("No editor background defined");
 
     const themePack: ThemePack = {
@@ -660,7 +663,10 @@ export class ThemeImporter {
     if (globalSettings.selection) tmColorMap["--cm-selection"] = globalSettings.selection;
     if (globalSettings.lineHighlight) tmColorMap["--cm-active-line"] = globalSettings.lineHighlight;
 
-    if (!tmColorMap["--cm-cursor"]) warnings.push("No caret/cursor color defined — will use CSS fallback");
+    if (!tmColorMap["--cm-cursor"]) {
+      warnings.push("No caret/cursor color defined — using default");
+      tmColorMap["--cm-cursor"] = mode === "dark" ? "#f8f8f2" : "#526999";
+    }
 
     const themePack: ThemePack = {
       id,

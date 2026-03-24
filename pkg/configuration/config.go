@@ -119,21 +119,22 @@ type CustomProviderConfig struct {
 	Name                   string                      `json:"name"`
 	Endpoint               string                      `json:"endpoint"`
 	ModelName              string                      `json:"model_name"`
-	ContextSize            int                         `json:"context_size"`
-	ReasoningEffort        string                      `json:"reasoning_effort,omitempty"` // Optional provider-specific reasoning effort override
-	Temperature            *float64                    `json:"temperature,omitempty"`      // Optional default temperature
-	TopP                   *float64                    `json:"top_p,omitempty"`            // Optional default top_p
-	Parameters             map[string]interface{}      `json:"parameters,omitempty"`       // Optional provider-specific default parameters
+	ContextSize            int                         `json:"context_size"`                         // Default context size for provider
+	ModelContextSizes      map[string]int              `json:"model_context_sizes,omitempty"`        // Per-model context sizes (e.g., "my-model": 131072)
+	ReasoningEffort        string                      `json:"reasoning_effort,omitempty"`           // Optional provider-specific reasoning effort override
+	Temperature            *float64                    `json:"temperature,omitempty"`                // Optional default temperature
+	TopP                   *float64                    `json:"top_p,omitempty"`                      // Optional default top_p
+	Parameters             map[string]interface{}      `json:"parameters,omitempty"`                 // Optional provider-specific default parameters
 	RequiresAPIKey         bool                        `json:"requires_api_key"`
-	ToolCalls              []string                    `json:"tool_calls,omitempty"`               // Optional explicit tool allowlist; when set, only these tools are exposed
-	APIKey                 string                      `json:"api_key,omitempty"`                  // Stored in config (not recommended for production)
-	EnvVar                 string                      `json:"env_var,omitempty"`                  // Environment variable name for API key
-	ChunkTimeoutMs         int                         `json:"chunk_timeout_ms,omitempty"`         // Streaming chunk timeout in milliseconds
-	Conversion             providers.MessageConversion `json:"message_conversion,omitempty"`       // Message conversion configuration
-	SupportsVision         bool                        `json:"supports_vision,omitempty"`          // Whether this provider supports vision requests
-	VisionModel            string                      `json:"vision_model,omitempty"`             // Vision-capable model for this provider
-	VisionFallbackProvider string                      `json:"vision_fallback_provider,omitempty"` // Optional fallback provider for vision
-	VisionFallbackModel    string                      `json:"vision_fallback_model,omitempty"`    // Optional fallback model for vision provider
+	ToolCalls              []string                    `json:"tool_calls,omitempty"`                 // Optional explicit tool allowlist; when set, only these tools are exposed
+	APIKey                 string                      `json:"api_key,omitempty"`                    // Stored in config (not recommended for production)
+	EnvVar                 string                      `json:"env_var,omitempty"`                    // Environment variable name for API key
+	ChunkTimeoutMs         int                         `json:"chunk_timeout_ms,omitempty"`           // Streaming chunk timeout in milliseconds
+	Conversion             providers.MessageConversion `json:"message_conversion,omitempty"`         // Message conversion configuration
+	SupportsVision         bool                        `json:"supports_vision,omitempty"`            // Whether this provider supports vision requests
+	VisionModel            string                      `json:"vision_model,omitempty"`               // Vision-capable model for this provider
+	VisionFallbackProvider string                      `json:"vision_fallback_provider,omitempty"`   // Optional fallback provider for vision
+	VisionFallbackModel    string                      `json:"vision_fallback_model,omitempty"`      // Optional fallback model for vision provider
 }
 
 // SubagentType defines a specialized subagent persona with its own configuration

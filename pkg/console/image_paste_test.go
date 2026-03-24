@@ -235,7 +235,7 @@ func TestSavePastedImage(t *testing.T) {
 	}
 
 	// Check the path format
-	if !strings.HasPrefix(relPath, "./.ledit_pasted_images/paste_") {
+	if !strings.HasPrefix(relPath, "./.ledit/pasted-images/paste_") {
 		t.Errorf("unexpected path format: %s", relPath)
 	}
 	if !strings.HasSuffix(relPath, ".png") {

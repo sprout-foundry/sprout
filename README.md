@@ -9,6 +9,7 @@
   - [Disclaimer](#disclaimer)
   - [Overview](#overview)
   - [Features](#features)
+    - [Web UI](#web-ui)
   - [Installation](#installation)
     - [Prerequisites](#prerequisites)
     - [From Source (Preferred Method)](#from-source-preferred-method)
@@ -70,6 +71,43 @@ Safety: Currently there are very few, and limited safety checks in place. Use at
 - **Interactive UI**: Rich terminal UI with streaming output, progress bars, and slash command support (via `--ui` or LEDIT_UI=1).
 - **Tool Suite**: Built-in tools for editing, reading/writing files, web search, vision analysis, shell execution (allowlisted), and user interaction.
 
+### Web UI
+
+`ledit` includes a built-in **React-based Web UI** that launches automatically alongside the terminal interface when you run `ledit` or `ledit agent` in interactive mode. It provides a full browser-based environment for AI-assisted coding:
+
+- **AI Chat Interface**: Real-time streaming conversation with the AI agent, with interactive prompts and tool output rendered inline.
+- **Code Editor**: CodeMirror-based editor with syntax highlighting for JavaScript, Python, Go, JSON, HTML, CSS, and more. Supports multiple tabs, split views, and unsaved change detection.
+- **Integrated Terminal**: Full terminal session running in the browser via WebSocket, with command history and PTY support.
+- **File Browser**: Browse and navigate your workspace files directly in the browser. Click files to open them in the editor.
+- **Git Integration**: Full Git UI for staging/unstaging files, viewing diffs, committing with AI-generated messages, and AI-powered deep code review with auto-fix.
+- **Search & Replace**: Workspace-wide search with case-sensitive, whole-word, and regex options. Search results link directly to the editor.
+- **Change History**: Browse changelogs, view file revisions with diffs, and rollback changes — all from the browser.
+- **Settings Panel**: Configure providers, models, MCP servers, skills, and other settings without touching config files.
+- **Command Palette**: Quick-access command palette (`Ctrl+Shift+P`) for fast navigation and actions (Go to File, toggle views, etc.).
+- **Multi-Instance Support**: Multiple `ledit` sessions can share a single Web UI server. Switch between instances from the UI.
+- **Session Management**: Save and restore chat sessions from the browser.
+- **Image Upload**: Upload images for the AI to analyze (vision support).
+- **Themes**: Multiple dark and light editor themes (Atom One Dark, Dracula, Solarized, etc.).
+- **PWA Support**: Installable as a Progressive Web App on desktop and mobile — works as a standalone app with app shortcuts for Chat and Editor.
+- **Responsive & Mobile-Friendly**: Adapts to different screen sizes with collapsible sidebar and touch-friendly controls.
+- **Customizable Hotkeys**: Keyboard shortcuts customizable through the Settings panel.
+
+**Accessing the Web UI:**
+
+When you start `ledit` in interactive mode, the Web UI is available at `http://localhost:54421` (or the next available port if 54421 is in use). The terminal will display the URL on startup.
+
+```bash
+# Start with Web UI (default)
+ledit
+
+# Disable the Web UI if not needed
+ledit --no-web-ui
+ledit agent --no-web-ui "Analyze this code"
+
+# Use a custom port
+ledit agent --web-ui-port 8080
+```
+
 ## Installation
 
 To get started with `ledit`, the preferred method is to install it via `go install`.
@@ -110,10 +148,11 @@ After adding this, restart your terminal or run `source ~/.bashrc` (or your resp
 Once installed, you can use `ledit` in your project directory and start using its powerful features.
 
 ```bash
-# Start interactive agent mode (default; web UI enabled automatically, use --no-web-ui to disable)
+# Start interactive agent mode (default; Web UI enabled automatically, use --no-web-ui to disable)
 ledit
 
-# Run a specific task with the AI agent
+# The Web UI opens at http://localhost:54421
+# Run a specific task with the AI agent (Web UI still launches)
 ledit agent "Create a python script that prints 'Hello, World!'"
 ledit agent "What does the main function in main.go do?"
 ledit agent "Fix the build errors in this Go project"
@@ -469,6 +508,7 @@ See CONTRIBUTING.md for guidelines. Run `go test ./...` before PRs.
   - `tools/`: Tool registry and execution framework
   - `utils/`: Utility functions and helpers
   - `webcontent/`: Web content fetching
+  - `webui/`: React-based Web UI server (embedded assets, WebSocket API, Git/Settings/Search/History APIs, terminal management)
 - **.ledit/** (project-local):
   - `config.json`: Local overrides.
   - `leditignore`: Ignore patterns (augments `.gitignore`).

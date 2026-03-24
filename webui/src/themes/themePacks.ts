@@ -80,6 +80,13 @@ const atomOneDark: ThemePack = {
     '--editor-pane-inactive-overlay': 'rgba(0, 0, 0, 0.28)',
     '--editor-pane-inactive-overlay-hover': 'rgba(0, 0, 0, 0.18)',
 
+    '--diff-add-color': 'rgba(46, 160, 67, 0.7)',
+    '--diff-del-color': 'rgba(248, 81, 73, 0.7)',
+    '--diff-mod-color': 'rgba(66, 133, 244, 0.7)',
+    '--diff-add-bg': 'rgba(46, 160, 67, 0.08)',
+    '--diff-del-bg': 'rgba(248, 81, 73, 0.08)',
+    '--diff-mod-bg': 'rgba(66, 133, 244, 0.08)',
+
     '--app-shell-bg': 'linear-gradient(180deg, #262b33, #282c34)',
     '--app-main-bg': '#282c34',
     '--sidebar-bg': 'linear-gradient(180deg, #21252b, #1f2329)',
@@ -155,6 +162,13 @@ const atomOneLight: ThemePack = {
     '--cm-active-line-gutter': 'rgba(0, 0, 0, 0.035)',
     '--editor-pane-inactive-overlay': 'rgba(56, 58, 66, 0.1)',
     '--editor-pane-inactive-overlay-hover': 'rgba(56, 58, 66, 0.06)',
+
+    '--diff-add-color': 'rgba(46, 160, 67, 0.6)',
+    '--diff-del-color': 'rgba(248, 81, 73, 0.6)',
+    '--diff-mod-color': 'rgba(66, 133, 244, 0.6)',
+    '--diff-add-bg': 'rgba(46, 160, 67, 0.06)',
+    '--diff-del-bg': 'rgba(248, 81, 73, 0.06)',
+    '--diff-mod-bg': 'rgba(66, 133, 244, 0.06)',
 
     '--app-shell-bg': 'linear-gradient(180deg, #f6f6f6, #fafafa)',
     '--app-main-bg': '#fafafa',
@@ -236,6 +250,13 @@ const dracula: ThemePack = {
     '--cm-active-line-gutter': 'rgba(42, 45, 58, 0.8)',
     '--editor-pane-inactive-overlay': 'rgba(0, 0, 0, 0.28)',
     '--editor-pane-inactive-overlay-hover': 'rgba(0, 0, 0, 0.18)',
+
+    '--diff-add-color': 'rgba(46, 160, 67, 0.7)',
+    '--diff-del-color': 'rgba(248, 81, 73, 0.7)',
+    '--diff-mod-color': 'rgba(66, 133, 244, 0.7)',
+    '--diff-add-bg': 'rgba(46, 160, 67, 0.08)',
+    '--diff-del-bg': 'rgba(248, 81, 73, 0.08)',
+    '--diff-mod-bg': 'rgba(66, 133, 244, 0.08)',
 
     '--app-shell-bg': 'linear-gradient(180deg, #21222c, #282a36)',
     '--app-main-bg': '#282a36',

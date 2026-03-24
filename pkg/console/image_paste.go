@@ -13,7 +13,7 @@ import (
 const MaxPastedImageSize = 10 * 1024 * 1024
 
 // PastedImageDirName is the subdirectory (relative to CWD) where pasted images are saved.
-const PastedImageDirName = ".ledit_pasted_images"
+const PastedImageDirName = ".ledit/pasted-images"
 
 // DetectImageMagic checks if data starts with a known image format signature.
 // Returns the file extension (e.g., ".png") and MIME type (e.g., "image/png"),
@@ -68,9 +68,9 @@ func DetectImageMagic(data []byte) (ext string, mimeType string) {
 	return "", ""
 }
 
-// SavePastedImage saves raw image data to .ledit_pasted_images/ in the current
+// SavePastedImage saves raw image data to .ledit/pasted-images/ in the current
 // working directory. It returns a relative path like
-// "./.ledit_pasted_images/paste_20260320_145959_abc123.png".
+// "./.ledit/pasted-images/paste_20260320_145959_abc123.png".
 func SavePastedImage(data []byte) (string, error) {
 	if len(data) > MaxPastedImageSize {
 		return "", fmt.Errorf("pasted image exceeds maximum size of %d bytes", MaxPastedImageSize)

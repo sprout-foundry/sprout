@@ -422,36 +422,30 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
                 <div className="search-file-matches">
                   {result.matches.map((match, idx) => (
                     <div key={idx} className="search-match">
-                      <span className="search-match-line-number">
-                        {match.line_number}
-                      </span>
-                      <div className="search-match-line">
-                        {highlightMatch(match.line, match.column_start, match.column_end)}
+                      {match.context_before.map((ctx, i) => (
+                        <div key={`before-${i}`} className="search-match-row search-match-row--context">
+                          <span className="search-match-line-number">
+                            {match.line_number - (match.context_before.length - i)}
+                          </span>
+                          <div className="search-match-line">{ctx}</div>
+                        </div>
+                      ))}
+                      <div className="search-match-row search-match-row--hit">
+                        <span className="search-match-line-number">
+                          {match.line_number}
+                        </span>
+                        <div className="search-match-line">
+                          {highlightMatch(match.line, match.column_start, match.column_end)}
+                        </div>
                       </div>
-                      {match.context_before.length > 0 && (
-                        <div className="search-match-context">
-                          {match.context_before.map((ctx, i) => (
-                            <div key={`before-${i}`} className="context-line">
-                              <span className="search-match-line-number">
-                                {match.line_number - (match.context_before.length - i)}
-                              </span>
-                              <span className="context-text">{ctx}</span>
-                            </div>
-                          ))}
+                      {match.context_after.map((ctx, i) => (
+                        <div key={`after-${i}`} className="search-match-row search-match-row--context">
+                          <span className="search-match-line-number">
+                            {match.line_number + i + 1}
+                          </span>
+                          <div className="search-match-line">{ctx}</div>
                         </div>
-                      )}
-                      {match.context_after.length > 0 && (
-                        <div className="search-match-context">
-                          {match.context_after.map((ctx, i) => (
-                            <div key={`after-${i}`} className="context-line">
-                              <span className="search-match-line-number">
-                                {match.line_number + match.context_before.length + i + 1}
-                              </span>
-                              <span className="context-text">{ctx}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                      ))}
                     </div>
                   ))}
                 </div>

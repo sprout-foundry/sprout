@@ -16,6 +16,9 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   SplitSquareHorizontal,
+  ShieldCheck,
+  Check,
+  Minus,
 } from 'lucide-react';
 import './GitView.css';
 import { ApiService } from '../services/api';
@@ -51,14 +54,45 @@ interface GitDiffResponse {
   diff: string;
 }
 
+type FileSection = 'staged' | 'modified' | 'untracked';
+
+const selectionKey = (section: FileSection, path: string): string => `${section}:${path}`;
+
+const parseSelectionKey = (key: string): { section: FileSection; path: string } | null => {
+  const separatorIndex = key.indexOf(':');
+  if (separatorIndex <= 0) {
+    return null;
+  }
+  const section = key.slice(0, separatorIndex) as FileSection;
+  const path = key.slice(separatorIndex + 1);
+  if (!path) {
+    return null;
+  }
+  if (section !== 'staged' && section !== 'modified' && section !== 'untracked') {
+    return null;
+  }
+  return { section, path };
+};
+
 interface GitViewProps {
   refreshToken?: number;
   onCommit?: (message: string, files: string[]) => void | Promise<unknown>;
-  onAICommit?: () => void | Promise<unknown>;
+  onAICommit?: () => Promise<string>;
   onStage?: (files: string[]) => void | Promise<unknown>;
   onUnstage?: (files: string[]) => void | Promise<unknown>;
   onDiscard?: (files: string[]) => void | Promise<unknown>;
   selectedFilePath?: string | null;
+}
+
+interface DeepReviewResult {
+  message: string;
+  status: string;
+  feedback: string;
+  detailed_guidance?: string;
+  suggested_new_prompt?: string;
+  review_output: string;
+  provider?: string;
+  model?: string;
 }
 
 const GitView: React.FC<GitViewProps> = ({
@@ -74,19 +108,40 @@ const GitView: React.FC<GitViewProps> = ({
   const [commitMessage, setCommitMessage] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [activeDiffPath, setActiveDiffPath] = useState<string | null>(selectedFilePath);
+  const [activeDiffSelectionKey, setActiveDiffSelectionKey] = useState<string | null>(null);
   const [activeDiff, setActiveDiff] = useState<GitDiffResponse | null>(null);
   const [diffMode, setDiffMode] = useState<'combined' | 'staged' | 'unstaged'>('combined');
   const [isDiffLoading, setIsDiffLoading] = useState(false);
   const [diffError, setDiffError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isActing, setIsActing] = useState(false);
+  const [isGeneratingCommitMessage, setIsGeneratingCommitMessage] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [filesPaneWidth, setFilesPaneWidth] = useState(440);
   const [filesPaneCollapsed, setFilesPaneCollapsed] = useState(false);
+  const [isReviewLoading, setIsReviewLoading] = useState(false);
+  const [isReviewFixing, setIsReviewFixing] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewFixResult, setReviewFixResult] = useState<string | null>(null);
+  const [reviewFixLogs, setReviewFixLogs] = useState<string[]>([]);
+  const [reviewFixSessionID, setReviewFixSessionID] = useState<string | null>(null);
+  const [deepReview, setDeepReview] = useState<DeepReviewResult | null>(null);
+  const [rightPanelTab, setRightPanelTab] = useState<'diff' | 'review'>('diff');
   const workspaceRef = useRef<HTMLDivElement>(null);
   const isResizingRef = useRef(false);
+  const fixPollTimeoutRef = useRef<number | null>(null);
+  const fixPollIndexRef = useRef(0);
   const apiService = ApiService.getInstance();
+
+  useEffect(() => {
+    return () => {
+      if (fixPollTimeoutRef.current !== null) {
+        window.clearTimeout(fixPollTimeoutRef.current);
+        fixPollTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   const loadGitStatus = useCallback(async () => {
     setIsLoading(true);
@@ -155,17 +210,19 @@ const GitView: React.FC<GitViewProps> = ({
     if (!selectedFilePath) {
       return;
     }
+    setActiveDiffSelectionKey(null);
     setActiveDiffPath(selectedFilePath);
     loadDiff(selectedFilePath);
   }, [selectedFilePath, loadDiff]);
 
-  const handleFileSelect = (filePath: string) => {
+  const handleFileSelect = (section: FileSection, filePath: string) => {
+    const key = selectionKey(section, filePath);
     setSelectedFiles(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(filePath)) {
-        newSet.delete(filePath);
+      if (newSet.has(key)) {
+        newSet.delete(key);
       } else {
-        newSet.add(filePath);
+        newSet.add(key);
       }
       return newSet;
     });
@@ -175,11 +232,9 @@ const GitView: React.FC<GitViewProps> = ({
     if (!gitStatus) return;
     
     const allFiles = [
-      ...gitStatus.staged.map(f => f.path),
-      ...gitStatus.modified.map(f => f.path),
-      ...gitStatus.untracked.map(f => f.path),
-      ...gitStatus.deleted.map(f => f.path),
-      ...gitStatus.renamed.map(f => f.path)
+      ...gitStatus.staged.map(f => selectionKey('staged', f.path)),
+      ...gitStatus.modified.map(f => selectionKey('modified', f.path)),
+      ...gitStatus.untracked.map(f => selectionKey('untracked', f.path)),
     ];
     
     setSelectedFiles(new Set(allFiles));
@@ -189,10 +244,34 @@ const GitView: React.FC<GitViewProps> = ({
     setSelectedFiles(new Set());
   };
 
-  const handlePreviewFile = (filePath: string) => {
+  const isSectionFullySelected = (section: FileSection, files: GitFile[]) =>
+    files.length > 0 && files.every((file) => selectedFiles.has(selectionKey(section, file.path)));
+
+  const getSectionSelectedCount = (section: FileSection, files: GitFile[]) =>
+    files.reduce((count, file) => (
+      selectedFiles.has(selectionKey(section, file.path)) ? count + 1 : count
+    ), 0);
+
+  const handleToggleSectionSelect = (section: FileSection, files: GitFile[]) => {
+    if (files.length === 0) return;
+    setSelectedFiles((prev) => {
+      const next = new Set(prev);
+      const sectionKeys = files.map((file) => selectionKey(section, file.path));
+      const allSelected = sectionKeys.every((key) => next.has(key));
+      if (allSelected) {
+        sectionKeys.forEach((key) => next.delete(key));
+      } else {
+        sectionKeys.forEach((key) => next.add(key));
+      }
+      return next;
+    });
+  };
+
+  const handlePreviewFile = (section: FileSection, filePath: string) => {
     if (filesPaneCollapsed) {
       setFilesPaneCollapsed(false);
     }
+    setActiveDiffSelectionKey(selectionKey(section, filePath));
     setActiveDiffPath(filePath);
     loadDiff(filePath);
   };
@@ -243,20 +322,25 @@ const GitView: React.FC<GitViewProps> = ({
   const visibleDiff = getVisibleDiffText();
   const diffLines = visibleDiff.split('\n');
 
-  const selectedPaths = Array.from(selectedFiles);
-  const stagedSet = new Set(gitStatus?.staged.map(f => f.path) || []);
-  const modifiedSet = new Set(gitStatus?.modified.map(f => f.path) || []);
-  const deletedSet = new Set(gitStatus?.deleted.map(f => f.path) || []);
-  const renamedSet = new Set(gitStatus?.renamed.map(f => f.path) || []);
-  const untrackedSet = new Set(gitStatus?.untracked.map(f => f.path) || []);
+  const selectedEntries = Array.from(selectedFiles)
+    .map(parseSelectionKey)
+    .filter((entry): entry is { section: FileSection; path: string } => entry !== null);
 
-  const stageablePaths = selectedPaths.filter(
-    p => modifiedSet.has(p) || deletedSet.has(p) || renamedSet.has(p) || untrackedSet.has(p),
-  );
-  const unstageablePaths = selectedPaths.filter(p => stagedSet.has(p));
-  const discardablePaths = selectedPaths.filter(
-    p => modifiedSet.has(p) || deletedSet.has(p) || renamedSet.has(p),
-  );
+  const stageablePaths = Array.from(new Set(
+    selectedEntries
+      .filter((entry) => entry.section !== 'staged')
+      .map((entry) => entry.path),
+  ));
+  const unstageablePaths = Array.from(new Set(
+    selectedEntries
+      .filter((entry) => entry.section === 'staged')
+      .map((entry) => entry.path),
+  ));
+  const discardablePaths = Array.from(new Set(
+    selectedEntries
+      .filter((entry) => entry.section === 'modified')
+      .map((entry) => entry.path),
+  ));
 
   const runAction = async (action: () => void | Promise<unknown>, fallbackMessage: string) => {
     setActionError(null);
@@ -294,14 +378,87 @@ const GitView: React.FC<GitViewProps> = ({
 
   const handleAICommit = () => {
     if (!gitStatus?.staged.length || !onAICommit) return;
-    runAction(async () => {
-      await onAICommit();
-    }, 'Failed to run /commit workflow');
+    setActionError(null);
+    setIsGeneratingCommitMessage(true);
+    onAICommit()
+      .then((generatedMessage) => {
+        if (!generatedMessage || !generatedMessage.trim()) {
+          throw new Error('AI returned an empty commit message');
+        }
+        setCommitMessage(generatedMessage.trim());
+      })
+      .catch((err) => {
+        setActionError(err instanceof Error ? err.message : 'Failed to generate commit message');
+      })
+      .finally(() => {
+        setIsGeneratingCommitMessage(false);
+      });
   };
 
   const handleDiscardSelected = () => {
     if (discardablePaths.length === 0 || !onDiscard) return;
     runAction(() => onDiscard(discardablePaths), 'Failed to discard selected files');
+  };
+
+  const handleDeepReview = async () => {
+    setRightPanelTab('review');
+    setReviewError(null);
+    setReviewFixResult(null);
+    setIsReviewLoading(true);
+    try {
+      const response = await apiService.generateDeepReview();
+      setDeepReview(response);
+    } catch (err) {
+      setReviewError(err instanceof Error ? err.message : 'Failed to generate deep review');
+      setDeepReview(null);
+    } finally {
+      setIsReviewLoading(false);
+    }
+  };
+
+  const handleFixFromReview = async () => {
+    if (!deepReview?.review_output) return;
+    setReviewError(null);
+    setReviewFixResult(null);
+    setReviewFixLogs([]);
+    setReviewFixSessionID(null);
+    setIsReviewFixing(true);
+    try {
+      const started = await apiService.startFixFromDeepReview(deepReview.review_output);
+      setReviewFixSessionID(started.session_id || null);
+      fixPollIndexRef.current = 0;
+      setReviewFixLogs((prev) => [...prev, `Started fix session: ${started.session_id}`]);
+
+      const poll = async () => {
+        try {
+          const status = await apiService.getFixFromDeepReviewStatus(started.job_id, fixPollIndexRef.current);
+          if (status.logs?.length) {
+            setReviewFixLogs((prev) => [...prev, ...status.logs]);
+          }
+          fixPollIndexRef.current = status.next_index || fixPollIndexRef.current;
+
+          if (status.status === 'completed') {
+            setReviewFixResult(status.result || 'Fix workflow completed.');
+            setIsReviewFixing(false);
+            await loadGitStatus();
+            return;
+          }
+          if (status.status === 'error') {
+            throw new Error(status.error || 'Fix workflow failed');
+          }
+
+          fixPollTimeoutRef.current = window.setTimeout(poll, 1000);
+        } catch (pollErr) {
+          setReviewError(pollErr instanceof Error ? pollErr.message : 'Failed to fetch fix progress');
+          setIsReviewFixing(false);
+        }
+      };
+
+      await poll();
+    } catch (err) {
+      setReviewError(err instanceof Error ? err.message : 'Failed to apply fixes from deep review');
+      setIsReviewFixing(false);
+    }
   };
 
   const getStatusIcon = (status: string): React.ReactNode => {
@@ -328,23 +485,21 @@ const GitView: React.FC<GitViewProps> = ({
 
   const FileItem: React.FC<{
     file: GitFile;
-    keyPrefix: string;
-    index: number;
+    section: FileSection;
     isSelected: boolean;
     isActive: boolean;
-    onSelect: (path: string) => void;
-    onPreview: (path: string) => void;
-  }> = ({ file, keyPrefix, index, isSelected, isActive, onSelect, onPreview }) => (
+    onSelect: (section: FileSection, path: string) => void;
+    onPreview: (section: FileSection, path: string) => void;
+  }> = ({ file, section, isSelected, isActive, onSelect, onPreview }) => (
     <div
-      key={`${keyPrefix}-${index}`}
       className={`file-item ${isSelected ? 'selected' : ''} ${isActive ? 'active-diff' : ''}`}
-      onClick={() => onSelect(file.path)}
+      onClick={() => onSelect(section, file.path)}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          onSelect(file.path);
+          onSelect(section, file.path);
         }
       }}
     >
@@ -352,7 +507,7 @@ const GitView: React.FC<GitViewProps> = ({
         type="checkbox"
         checked={isSelected}
         onClick={(e) => e.stopPropagation()}
-        onChange={() => onSelect(file.path)}
+        onChange={() => onSelect(section, file.path)}
       />
       <span className="file-icon">{getStatusIcon(file.status)}</span>
       <span className="file-path">{file.path}</span>
@@ -367,7 +522,7 @@ const GitView: React.FC<GitViewProps> = ({
         className="file-diff-btn"
         onClick={(e) => {
           e.stopPropagation();
-          onPreview(file.path);
+          onPreview(section, file.path);
         }}
         title="Show diff"
         type="button"
@@ -444,6 +599,14 @@ const GitView: React.FC<GitViewProps> = ({
           </span>
         </div>
         <div className="file-actions">
+          <button
+            onClick={handleDeepReview}
+            disabled={isActing || isReviewLoading || isReviewFixing || !gitStatus.staged.length}
+            className="action-btn"
+          >
+            <ShieldCheck size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+            {isReviewLoading ? 'Reviewing…' : 'Deep Review'}
+          </button>
           <button 
             onClick={handleStageSelected}
             disabled={stageablePaths.length === 0 || isActing}
@@ -483,15 +646,33 @@ const GitView: React.FC<GitViewProps> = ({
         {/* Staged Files */}
         {gitStatus.staged.length > 0 && (
           <div className="file-section staged">
-            <h3>Staged Files ({gitStatus.staged.length})</h3>
+            <div className="file-section-header">
+              <h3>Staged Files ({gitStatus.staged.length})</h3>
+              <button
+                type="button"
+                className="section-select-btn"
+                onClick={() => handleToggleSectionSelect('staged', gitStatus.staged)}
+                title={isSectionFullySelected('staged', gitStatus.staged) ? 'Clear staged selection' : 'Select all staged files'}
+                aria-label={isSectionFullySelected('staged', gitStatus.staged) ? 'Clear staged selection' : 'Select all staged files'}
+              >
+                {isSectionFullySelected('staged', gitStatus.staged) ? <Minus size={14} /> : <Check size={14} />}
+                <span className="section-select-count">
+                  {getSectionSelectedCount('staged', gitStatus.staged)}
+                </span>
+              </button>
+            </div>
             <div className="file-list">
               {gitStatus.staged.map((file, index) => (
                 <FileItem
-                  keyPrefix="staged"
-                  index={index}
+                  key={`staged-${file.path}-${index}`}
+                  section="staged"
                   file={file}
-                  isSelected={selectedFiles.has(file.path)}
-                  isActive={activeDiffPath === file.path}
+                  isSelected={selectedFiles.has(selectionKey('staged', file.path))}
+                  isActive={
+                    activeDiffSelectionKey
+                      ? activeDiffSelectionKey === selectionKey('staged', file.path)
+                      : activeDiffPath === file.path
+                  }
                   onSelect={handleFileSelect}
                   onPreview={handlePreviewFile}
                 />
@@ -503,15 +684,33 @@ const GitView: React.FC<GitViewProps> = ({
         {/* Modified Files */}
         {gitStatus.modified.length > 0 && (
           <div className="file-section modified">
-            <h3>Modified Files ({gitStatus.modified.length})</h3>
+            <div className="file-section-header">
+              <h3>Modified Files ({gitStatus.modified.length})</h3>
+              <button
+                type="button"
+                className="section-select-btn"
+                onClick={() => handleToggleSectionSelect('modified', gitStatus.modified)}
+                title={isSectionFullySelected('modified', gitStatus.modified) ? 'Clear modified selection' : 'Select all modified files'}
+                aria-label={isSectionFullySelected('modified', gitStatus.modified) ? 'Clear modified selection' : 'Select all modified files'}
+              >
+                {isSectionFullySelected('modified', gitStatus.modified) ? <Minus size={14} /> : <Check size={14} />}
+                <span className="section-select-count">
+                  {getSectionSelectedCount('modified', gitStatus.modified)}
+                </span>
+              </button>
+            </div>
             <div className="file-list">
               {gitStatus.modified.map((file, index) => (
                 <FileItem
-                  keyPrefix="modified"
-                  index={index}
+                  key={`modified-${file.path}-${index}`}
+                  section="modified"
                   file={file}
-                  isSelected={selectedFiles.has(file.path)}
-                  isActive={activeDiffPath === file.path}
+                  isSelected={selectedFiles.has(selectionKey('modified', file.path))}
+                  isActive={
+                    activeDiffSelectionKey
+                      ? activeDiffSelectionKey === selectionKey('modified', file.path)
+                      : activeDiffPath === file.path
+                  }
                   onSelect={handleFileSelect}
                   onPreview={handlePreviewFile}
                 />
@@ -523,15 +722,33 @@ const GitView: React.FC<GitViewProps> = ({
         {/* Untracked Files */}
         {gitStatus.untracked.length > 0 && (
           <div className="file-section untracked">
-            <h3>Untracked Files ({gitStatus.untracked.length})</h3>
+            <div className="file-section-header">
+              <h3>Untracked Files ({gitStatus.untracked.length})</h3>
+              <button
+                type="button"
+                className="section-select-btn"
+                onClick={() => handleToggleSectionSelect('untracked', gitStatus.untracked)}
+                title={isSectionFullySelected('untracked', gitStatus.untracked) ? 'Clear untracked selection' : 'Select all untracked files'}
+                aria-label={isSectionFullySelected('untracked', gitStatus.untracked) ? 'Clear untracked selection' : 'Select all untracked files'}
+              >
+                {isSectionFullySelected('untracked', gitStatus.untracked) ? <Minus size={14} /> : <Check size={14} />}
+                <span className="section-select-count">
+                  {getSectionSelectedCount('untracked', gitStatus.untracked)}
+                </span>
+              </button>
+            </div>
             <div className="file-list">
               {gitStatus.untracked.map((file, index) => (
                 <FileItem
-                  keyPrefix="untracked"
-                  index={index}
+                  key={`untracked-${file.path}-${index}`}
+                  section="untracked"
                   file={file}
-                  isSelected={selectedFiles.has(file.path)}
-                  isActive={activeDiffPath === file.path}
+                  isSelected={selectedFiles.has(selectionKey('untracked', file.path))}
+                  isActive={
+                    activeDiffSelectionKey
+                      ? activeDiffSelectionKey === selectionKey('untracked', file.path)
+                      : activeDiffPath === file.path
+                  }
                   onSelect={handleFileSelect}
                   onPreview={handlePreviewFile}
                 />
@@ -557,12 +774,30 @@ const GitView: React.FC<GitViewProps> = ({
           aria-label="Resize git file list"
         />
 
-        {/* Diff Preview */}
-        <div className="git-diff-preview">
-          <div className="git-diff-preview-header">
-            <h3>Diff Preview</h3>
-            <div className="git-diff-preview-actions">
-              {activeDiffPath && <span className="git-diff-path">{activeDiffPath}</span>}
+        {/* Combined Right Panel */}
+        <div className="git-combined-panel">
+          {/* Tab Bar */}
+          <div className="git-combined-panel-tabs">
+            <button
+              type="button"
+              className={`git-combined-panel-tab ${rightPanelTab === 'diff' ? 'active' : ''}`}
+              onClick={() => setRightPanelTab('diff')}
+            >
+              <SplitSquareHorizontal size={14} style={{ marginRight: 6 }} />
+              Diff Preview
+            </button>
+            <button
+              type="button"
+              className={`git-combined-panel-tab ${rightPanelTab === 'review' ? 'active' : ''}`}
+              onClick={() => setRightPanelTab('review')}
+            >
+              <ShieldCheck size={14} style={{ marginRight: 6 }} />
+              Deep Review
+            </button>
+            <div className="git-combined-panel-actions">
+              {rightPanelTab === 'diff' && activeDiffPath && (
+                <span className="git-diff-path">{activeDiffPath}</span>
+              )}
               <button
                 type="button"
                 className="git-pane-toggle-btn"
@@ -573,57 +808,136 @@ const GitView: React.FC<GitViewProps> = ({
               </button>
             </div>
           </div>
-          {activeDiff && activeDiff.has_staged && activeDiff.has_unstaged && (
-            <div className="git-diff-mode-tabs">
-              <button
-                type="button"
-                className={`git-diff-mode-tab ${diffMode === 'combined' ? 'active' : ''}`}
-                onClick={() => setDiffMode('combined')}
-              >
-                Combined
-              </button>
-              <button
-                type="button"
-                className={`git-diff-mode-tab ${diffMode === 'staged' ? 'active' : ''}`}
-                onClick={() => setDiffMode('staged')}
-              >
-                Staged
-              </button>
-              <button
-                type="button"
-                className={`git-diff-mode-tab ${diffMode === 'unstaged' ? 'active' : ''}`}
-                onClick={() => setDiffMode('unstaged')}
-              >
-                Unstaged
-              </button>
-            </div>
-          )}
-          {isDiffLoading ? (
-            <div className="git-diff-loading">Loading diff...</div>
-          ) : diffError ? (
-            <div className="git-diff-error">{diffError}</div>
-          ) : activeDiffPath ? (
-            <pre className="git-diff-content">
-              {diffLines.map((line, index) => {
-                const className =
-                  line.startsWith('+++') || line.startsWith('---')
-                    ? 'diff-file'
-                    : line.startsWith('@@')
-                      ? 'diff-hunk'
-                      : line.startsWith('+')
-                        ? 'diff-add'
-                        : line.startsWith('-')
-                          ? 'diff-del'
-                          : 'diff-context';
-                return (
-                  <div key={index} className={`diff-line ${className}`}>
-                    {line || ' '}
-                  </div>
-                );
-              })}
-            </pre>
+
+          {/* Tab Content */}
+          {rightPanelTab === 'diff' ? (
+            <>
+              {activeDiff && activeDiff.has_staged && activeDiff.has_unstaged && (
+                <div className="git-diff-mode-tabs">
+                  <button
+                    type="button"
+                    className={`git-diff-mode-tab ${diffMode === 'combined' ? 'active' : ''}`}
+                    onClick={() => setDiffMode('combined')}
+                  >
+                    Combined
+                  </button>
+                  <button
+                    type="button"
+                    className={`git-diff-mode-tab ${diffMode === 'staged' ? 'active' : ''}`}
+                    onClick={() => setDiffMode('staged')}
+                  >
+                    Staged
+                  </button>
+                  <button
+                    type="button"
+                    className={`git-diff-mode-tab ${diffMode === 'unstaged' ? 'active' : ''}`}
+                    onClick={() => setDiffMode('unstaged')}
+                  >
+                    Unstaged
+                  </button>
+                </div>
+              )}
+              {isDiffLoading ? (
+                <div className="git-diff-loading">Loading diff...</div>
+              ) : diffError ? (
+                <div className="git-diff-error">{diffError}</div>
+              ) : activeDiffPath ? (
+                <pre className="git-diff-content">
+                  {diffLines.map((line, index) => {
+                    const className =
+                      line.startsWith('+++') || line.startsWith('---')
+                        ? 'diff-file'
+                        : line.startsWith('@@')
+                          ? 'diff-hunk'
+                          : line.startsWith('+')
+                            ? 'diff-add'
+                            : line.startsWith('-')
+                              ? 'diff-del'
+                              : 'diff-context';
+                    return (
+                      <div key={index} className={`diff-line ${className}`}>
+                        {line || ' '}
+                      </div>
+                    );
+                  })}
+                </pre>
+              ) : (
+                <div className="git-diff-empty">Select a file to preview its diff.</div>
+              )}
+            </>
           ) : (
-            <div className="git-diff-empty">Select a file to preview its diff.</div>
+            <div className="git-review-pane-body">
+              {isReviewLoading ? (
+                <div className="git-review-loading">
+                  <div className="spinner"></div>
+                  <p>Running /deep-review on staged changes…</p>
+                </div>
+              ) : reviewError ? (
+                <div className="git-review-error">{reviewError}</div>
+              ) : deepReview ? (
+                <>
+                  <div className="git-review-meta">
+                    <span className={`git-review-status status-${(deepReview.status || '').toLowerCase()}`}>
+                      {(deepReview.status || 'unknown').toUpperCase()}
+                    </span>
+                    {deepReview.provider && deepReview.model && (
+                      <span className="git-review-model">{deepReview.provider} · {deepReview.model}</span>
+                    )}
+                  </div>
+                  <div className="git-review-section">
+                    <h4>Feedback</h4>
+                    <pre>{deepReview.feedback || 'No feedback.'}</pre>
+                  </div>
+                  {deepReview.detailed_guidance && (
+                    <div className="git-review-section">
+                      <h4>Detailed Guidance</h4>
+                      <pre>{deepReview.detailed_guidance}</pre>
+                    </div>
+                  )}
+                  {deepReview.suggested_new_prompt && (
+                    <div className="git-review-section">
+                      <h4>Suggested New Prompt</h4>
+                      <pre>{deepReview.suggested_new_prompt}</pre>
+                    </div>
+                  )}
+                  {reviewFixResult && (
+                    <div className="git-review-section">
+                      <h4>Fix Result</h4>
+                      <pre>{reviewFixResult}</pre>
+                    </div>
+                  )}
+                  {(isReviewFixing || reviewFixLogs.length > 0) && (
+                    <div className="git-review-section">
+                      <h4>
+                        Fix Progress
+                        {reviewFixSessionID ? ` (${reviewFixSessionID})` : ''}
+                      </h4>
+                      <pre>{reviewFixLogs.length ? reviewFixLogs.join('\n') : 'Waiting for progress...'}</pre>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="git-review-empty">Run Deep Review to analyze staged changes.</div>
+              )}
+              <div className="git-review-pane-footer">
+                <button
+                  type="button"
+                  className="action-btn"
+                  onClick={() => setRightPanelTab('diff')}
+                  disabled={isReviewFixing}
+                >
+                  Accept
+                </button>
+                <button
+                  type="button"
+                  className="action-btn primary"
+                  onClick={handleFixFromReview}
+                  disabled={!deepReview || isReviewLoading || isReviewFixing}
+                >
+                  {isReviewFixing ? 'Fixing…' : 'Fix'}
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>
@@ -642,11 +956,11 @@ const GitView: React.FC<GitViewProps> = ({
           <div className="commit-actions">
             <button
               onClick={handleAICommit}
-              disabled={gitStatus.staged.length === 0 || isActing}
+              disabled={gitStatus.staged.length === 0 || isActing || isGeneratingCommitMessage}
               className="commit-btn ai"
             >
               <Sparkles size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
-              AI Commit (/commit)
+              {isGeneratingCommitMessage ? 'Generating…' : 'Generate Message'}
             </button>
             <button 
               onClick={handleCommit}
@@ -658,6 +972,16 @@ const GitView: React.FC<GitViewProps> = ({
           </div>
         </div>
       </div>
+
+      {isGeneratingCommitMessage && (
+        <div className="git-generating-overlay" role="dialog" aria-modal="true" aria-label="Generating commit message">
+          <div className="git-generating-dialog">
+            <div className="spinner"></div>
+            <h4>Generating Commit Message</h4>
+            <p>Using staged changes to draft a commit message...</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

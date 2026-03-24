@@ -4,7 +4,7 @@
 
 ## Table of Contents
 
-- [Ledit - AI-Powered Code Editing and Assistance Tool](#ledit---ai-powered-code-editing-and-assistance-tool)
+- [Ledit - LLM-Powered Code Editing and Assistance Tool](#ledit---llm-powered-code-editing-and-assistance-tool)
   - [Table of Contents](#table-of-contents)
   - [Disclaimer](#disclaimer)
   - [Overview](#overview)

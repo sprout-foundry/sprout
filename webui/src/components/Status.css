@@ -10,12 +10,28 @@
   gap: 10px;
 }
 
+.status-bar.status-bar-top {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.status-bar.status-bar-bottom {
+  border-top: 1px solid var(--border-subtle);
+}
+
 .status-bar.connected {
   box-shadow: inset 0 -1px 0 var(--accent-success);
 }
 
 .status-bar.disconnected {
   box-shadow: inset 0 -1px 0 var(--accent-error);
+}
+
+.status-bar.status-bar-bottom.connected {
+  box-shadow: inset 0 1px 0 var(--accent-success);
+}
+
+.status-bar.status-bar-bottom.disconnected {
+  box-shadow: inset 0 1px 0 var(--accent-error);
 }
 
 .status-indicator {
@@ -60,6 +76,7 @@
   align-items: center;
   flex: 1;
   justify-content: flex-end;
+  min-width: 0;
 }
 
 .status-item {
@@ -67,6 +84,7 @@
   border-radius: 7px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
+  white-space: nowrap;
 }
 
 .disconnected-help {
@@ -93,16 +111,63 @@
 
 @media (max-width: 768px) {
   .status-bar {
-    padding: 8px 10px;
+    padding: 7px 10px;
+    gap: 8px;
   }
 
   .status-text {
-    font-size: 12px;
+    font-size: 11px;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .status-info {
-    width: 100%;
-    justify-content: flex-start;
+    width: auto;
+    flex: 1;
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
     font-size: 10px;
+    gap: 6px;
+    padding-bottom: 1px;
+  }
+
+  .status-info::-webkit-scrollbar {
+    display: none;
+  }
+
+  .status-item {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 6px;
+  }
+
+  .status-item-secondary {
+    display: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .status-indicator {
+    min-width: 0;
+  }
+
+  .status-text {
+    max-width: 136px;
+  }
+
+  .status-item-priority.context-medium,
+  .status-item-priority.context-high,
+  .status-item-priority.context-critical {
+    display: inline-flex;
+  }
+
+  .status-item-priority.context-low {
+    display: none;
   }
 }

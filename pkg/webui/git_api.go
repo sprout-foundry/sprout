@@ -5,12 +5,34 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
+	"github.com/alantheprice/ledit/pkg/agent"
+	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/codereview"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/events"
+	"github.com/alantheprice/ledit/pkg/factory"
+	gitops "github.com/alantheprice/ledit/pkg/git"
+	"github.com/alantheprice/ledit/pkg/utils"
 )
+
+type gitFixReviewJob struct {
+	ID        string
+	SessionID string
+	Status    string
+	Logs      []string
+	Result    string
+	Error     string
+	StartedAt time.Time
+	UpdatedAt time.Time
+	mutex     sync.RWMutex
+}
 
 // GitStatus represents the git status response
 type GitStatus struct {
@@ -602,4 +624,703 @@ func (ws *ReactWebServer) handleAPIGitCommit(w http.ResponseWriter, r *http.Requ
 		"message": "Commit created successfully",
 		"commit":  strings.TrimSpace(string(output)),
 	})
+}
+
+// handleAPIGitCommitMessage generates an AI commit message from currently staged changes
+// without creating a commit and without publishing chat/query events.
+func (ws *ReactWebServer) handleAPIGitCommitMessage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if ws.agent == nil {
+		http.Error(w, "Agent is not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Verify staged changes exist (exit code 1 means there are staged changes).
+	checkCmd := ws.gitCommand("diff", "--cached", "--quiet", "--exit-code")
+	if err := checkCmd.Run(); err == nil {
+		http.Error(w, "No staged changes to generate commit message", http.StatusBadRequest)
+		return
+	}
+
+	diffCmd := ws.gitCommand("diff", "--staged")
+	diffOutput, err := diffCmd.CombinedOutput()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to get staged diff: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	diffText := strings.TrimSpace(string(diffOutput))
+	if diffText == "" {
+		http.Error(w, "No staged changes to generate commit message", http.StatusBadRequest)
+		return
+	}
+
+	configManager := ws.agent.GetConfigManager()
+	if configManager == nil {
+		http.Error(w, "Agent configuration is unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	clientType, err := configManager.GetProvider()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to resolve provider: %v", err), http.StatusInternalServerError)
+		return
+	}
+	model := configManager.GetModelForProvider(clientType)
+	client, err := factory.CreateProviderClient(clientType, model)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to create provider client: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Match /commit flow: detect branch and staged file actions.
+	branchOutput, err := ws.gitCommand("rev-parse", "--abbrev-ref", "HEAD").CombinedOutput()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to get branch name: %v", err), http.StatusInternalServerError)
+		return
+	}
+	branch := strings.TrimSpace(string(branchOutput))
+
+	stagedFilesOutput, err := ws.gitCommand("diff", "--cached", "--name-status").CombinedOutput()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to get staged file status: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	fileChanges := make([]gitops.CommitFileChange, 0)
+	for _, line := range strings.Split(strings.TrimSpace(string(stagedFilesOutput)), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		parts := strings.Fields(line)
+		if len(parts) < 2 {
+			continue
+		}
+		status := parts[0]
+		filePath := strings.Join(parts[1:], " ")
+		fileChanges = append(fileChanges, gitops.CommitFileChange{
+			Status: status,
+			Path:   filePath,
+		})
+	}
+	if len(fileChanges) == 0 {
+		http.Error(w, "No staged changes to generate commit message", http.StatusBadRequest)
+		return
+	}
+
+	result, err := gitops.GenerateCommitMessageFromStagedDiff(client, gitops.CommitMessageOptions{
+		Diff:        diffText,
+		Branch:      branch,
+		FileChanges: fileChanges,
+	})
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to generate commit message: %v", err), http.StatusInternalServerError)
+		return
+	}
+	commitMessage := strings.TrimSpace(result.Message)
+
+	if commitMessage == "" {
+		http.Error(w, "Generated commit message was empty", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":        "Commit message generated",
+		"commit_message": commitMessage,
+		"provider":       ws.agent.GetProvider(),
+		"model":          ws.agent.GetModel(),
+	})
+}
+
+// handleAPIGitDeepReview performs the same deep staged review flow as /review-deep,
+// but without routing through /api/query so it doesn't pollute chat history.
+func (ws *ReactWebServer) handleAPIGitDeepReview(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if ws.agent == nil {
+		http.Error(w, "Agent is not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Exit code 1 means staged changes exist.
+	checkCmd := ws.gitCommand("diff", "--cached", "--quiet", "--exit-code")
+	if err := checkCmd.Run(); err == nil {
+		http.Error(w, "No staged changes found", http.StatusBadRequest)
+		return
+	}
+
+	diffCmd := ws.gitCommand("diff", "--cached")
+	stagedDiffBytes, err := diffCmd.Output()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to get staged diff: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	stagedDiff := string(stagedDiffBytes)
+	stagedDiff = truncateDiffOutput(stagedDiff, 200000)
+	if strings.TrimSpace(stagedDiff) == "" {
+		http.Error(w, "No actual diff content found in staged changes", http.StatusBadRequest)
+		return
+	}
+
+	cfg, err := configuration.LoadOrInitConfig(true)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to load config: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	logger := utils.GetLogger(true)
+	optimizer := utils.NewDiffOptimizerForReview()
+	optimizedDiff := optimizer.OptimizeDiff(stagedDiff)
+
+	service := codereview.NewCodeReviewService(cfg, logger)
+	agentClient := service.GetDefaultAgentClient()
+
+	activeProvider := strings.TrimSpace(ws.agent.GetProvider())
+	activeModel := strings.TrimSpace(ws.agent.GetModel())
+	if activeProvider != "" {
+		if sessionClient, err := factory.CreateProviderClient(api.ClientType(activeProvider), activeModel); err == nil {
+			agentClient = sessionClient
+		}
+	}
+
+	if agentClient == nil {
+		http.Error(w, "Failed to initialize review client", http.StatusInternalServerError)
+		return
+	}
+
+	reviewCtx := &codereview.ReviewContext{
+		Diff:             optimizedDiff.OptimizedContent,
+		Config:           cfg,
+		Logger:           logger,
+		AgentClient:      agentClient,
+		ProjectType:      ws.gitReviewDetectProjectType(),
+		CommitMessage:    ws.gitReviewExtractStagedChangesSummary(),
+		KeyComments:      gitReviewExtractKeyCommentsFromDiff(stagedDiff),
+		ChangeCategories: gitReviewCategorizeChanges(stagedDiff),
+		FullFileContext:  ws.gitReviewExtractFileContextForChanges(stagedDiff),
+	}
+
+	if len(optimizedDiff.FileSummaries) > 0 {
+		var summaryInfo strings.Builder
+		summaryInfo.WriteString("\n\nLarge files optimized for review:\n")
+		for file, summary := range optimizedDiff.FileSummaries {
+			summaryInfo.WriteString(fmt.Sprintf("- %s: %s\n", file, summary))
+		}
+		reviewCtx.Diff += summaryInfo.String()
+	}
+
+	opts := &codereview.ReviewOptions{
+		Type:             codereview.StagedReview,
+		SkipPrompt:       true,
+		RollbackOnReject: false,
+	}
+
+	reviewResponse, err := service.PerformAgenticReview(reviewCtx, opts)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Deep review failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	reviewOutput := fmt.Sprintf("%s\n%s\n\nStatus: %s\n\nFeedback:\n%s",
+		"[list] AI CODE REVIEW (DEEP PASS)",
+		strings.Repeat("═", 50),
+		strings.ToUpper(reviewResponse.Status),
+		reviewResponse.Feedback)
+
+	if strings.TrimSpace(reviewResponse.DetailedGuidance) != "" {
+		reviewOutput += fmt.Sprintf("\n\nDetailed Guidance:\n%s", reviewResponse.DetailedGuidance)
+	}
+	if reviewResponse.Status == "rejected" && reviewResponse.NewPrompt != "" {
+		reviewOutput += fmt.Sprintf("\n\nSuggested New Prompt:\n%s", reviewResponse.NewPrompt)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":              "Deep review completed",
+		"status":               reviewResponse.Status,
+		"feedback":             reviewResponse.Feedback,
+		"detailed_guidance":    reviewResponse.DetailedGuidance,
+		"suggested_new_prompt": reviewResponse.NewPrompt,
+		"review_output":        reviewOutput,
+		"provider":             ws.agent.GetProvider(),
+		"model":                ws.agent.GetModel(),
+	})
+}
+
+// handleAPIGitDeepReviewFix runs the fix workflow and blocks until completion (legacy API).
+func (ws *ReactWebServer) handleAPIGitDeepReviewFix(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if ws.agent == nil {
+		http.Error(w, "Agent is not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req struct {
+		ReviewOutput string `json:"review_output"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	reviewOutput := strings.TrimSpace(req.ReviewOutput)
+	if reviewOutput == "" {
+		http.Error(w, "review_output is required", http.StatusBadRequest)
+		return
+	}
+
+	job, _, err := ws.startFixReviewJob(reviewOutput)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to start fix workflow: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	for {
+		status, _, _, result, jobErr := job.snapshot(0)
+		if status == "completed" {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"message":    "Fix workflow completed",
+				"result":     strings.TrimSpace(result),
+				"session_id": job.SessionID,
+			})
+			return
+		}
+		if status == "error" {
+			http.Error(w, fmt.Sprintf("Failed to run fix workflow: %s", jobErr), http.StatusInternalServerError)
+			return
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+}
+
+// handleAPIGitDeepReviewFixStart starts an isolated full-agent fix workflow job.
+func (ws *ReactWebServer) handleAPIGitDeepReviewFixStart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if ws.agent == nil {
+		http.Error(w, "Agent is not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req struct {
+		ReviewOutput string `json:"review_output"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	reviewOutput := strings.TrimSpace(req.ReviewOutput)
+	if reviewOutput == "" {
+		http.Error(w, "review_output is required", http.StatusBadRequest)
+		return
+	}
+
+	job, _, err := ws.startFixReviewJob(reviewOutput)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to start fix workflow: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":    "Fix workflow started",
+		"job_id":     job.ID,
+		"session_id": job.SessionID,
+	})
+}
+
+// handleAPIGitDeepReviewFixStatus returns incremental status/logs for a running fix workflow job.
+func (ws *ReactWebServer) handleAPIGitDeepReviewFixStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	jobID := strings.TrimSpace(r.URL.Query().Get("job_id"))
+	if jobID == "" {
+		http.Error(w, "job_id is required", http.StatusBadRequest)
+		return
+	}
+
+	since := 0
+	if rawSince := strings.TrimSpace(r.URL.Query().Get("since")); rawSince != "" {
+		_, _ = fmt.Sscanf(rawSince, "%d", &since)
+		if since < 0 {
+			since = 0
+		}
+	}
+
+	ws.fixReviewMu.RLock()
+	job, ok := ws.fixReviewJobs[jobID]
+	ws.fixReviewMu.RUnlock()
+	if !ok {
+		http.Error(w, "job not found", http.StatusNotFound)
+		return
+	}
+
+	status, logs, next, result, jobErr := job.snapshot(since)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":    "success",
+		"job_id":     job.ID,
+		"session_id": job.SessionID,
+		"status":     status,
+		"logs":       logs,
+		"next_index": next,
+		"result":     result,
+		"error":      jobErr,
+	})
+}
+
+func (ws *ReactWebServer) startFixReviewJob(reviewOutput string) (*gitFixReviewJob, string, error) {
+	fixInstructions := "First validate that all of these review items are valid issues, then use subagents to address any of the valid issues. When they are resolved, use a code review subagent to review the solution and fix any issues that come out of it of it and iterate through the process until the issues are resolved."
+	prompt := fmt.Sprintf("Use this deep review output as input:\n\n%s\n\n%s", reviewOutput, fixInstructions)
+
+	jobID := fmt.Sprintf("review-fix-%d", time.Now().UnixNano())
+	sessionID := fmt.Sprintf("review-fix-session-%d", time.Now().UnixNano())
+	job := &gitFixReviewJob{
+		ID:        jobID,
+		SessionID: sessionID,
+		Status:    "running",
+		Logs:      []string{"Starting isolated fix session..."},
+		StartedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	ws.fixReviewMu.Lock()
+	ws.fixReviewJobs[jobID] = job
+	ws.fixReviewMu.Unlock()
+
+	go ws.runFixReviewJob(job, prompt)
+
+	return job, prompt, nil
+}
+
+func (ws *ReactWebServer) runFixReviewJob(job *gitFixReviewJob, prompt string) {
+	reviewAgent, err := agent.NewAgentWithModel("")
+	if err != nil {
+		job.setError(fmt.Sprintf("Failed to initialize isolated agent: %v", err))
+		return
+	}
+	defer reviewAgent.Shutdown()
+
+	reviewAgent.SetSessionID(job.SessionID)
+	if provider := strings.TrimSpace(ws.agent.GetProvider()); provider != "" {
+		if err := reviewAgent.SetProvider(api.ClientType(provider)); err != nil {
+			job.appendLog(fmt.Sprintf("Warning: failed to set provider %s: %v", provider, err))
+		}
+	}
+	if model := strings.TrimSpace(ws.agent.GetModel()); model != "" {
+		if err := reviewAgent.SetModel(model); err != nil {
+			job.appendLog(fmt.Sprintf("Warning: failed to set model %s: %v", model, err))
+		}
+	}
+
+	reviewAgent.SetStreamingEnabled(true)
+	reviewAgent.SetStreamingCallback(func(text string) {
+		trimmed := strings.TrimSpace(text)
+		if trimmed == "" {
+			return
+		}
+		job.appendLog(trimmed)
+	})
+
+	job.appendLog("Running fix workflow with full agentic path...")
+	result, err := reviewAgent.ProcessQuery(prompt)
+	if err != nil {
+		job.setError(err.Error())
+		return
+	}
+	job.setCompleted(strings.TrimSpace(result))
+}
+
+func (j *gitFixReviewJob) appendLog(line string) {
+	j.mutex.Lock()
+	defer j.mutex.Unlock()
+	j.Logs = append(j.Logs, line)
+	if len(j.Logs) > 2000 {
+		j.Logs = j.Logs[len(j.Logs)-2000:]
+	}
+	j.UpdatedAt = time.Now()
+}
+
+func (j *gitFixReviewJob) setCompleted(result string) {
+	j.mutex.Lock()
+	defer j.mutex.Unlock()
+	j.Status = "completed"
+	j.Result = result
+	j.UpdatedAt = time.Now()
+}
+
+func (j *gitFixReviewJob) setError(err string) {
+	j.mutex.Lock()
+	defer j.mutex.Unlock()
+	j.Status = "error"
+	j.Error = strings.TrimSpace(err)
+	if j.Error == "" {
+		j.Error = "Unknown error"
+	}
+	j.UpdatedAt = time.Now()
+}
+
+func (j *gitFixReviewJob) snapshot(since int) (status string, logs []string, nextIndex int, result string, err string) {
+	j.mutex.RLock()
+	defer j.mutex.RUnlock()
+
+	total := len(j.Logs)
+	if since < 0 {
+		since = 0
+	}
+	if since > total {
+		since = total
+	}
+	chunk := make([]string, total-since)
+	copy(chunk, j.Logs[since:])
+
+	return j.Status, chunk, total, j.Result, j.Error
+}
+
+func (ws *ReactWebServer) gitReviewDetectProjectType() string {
+	projectMarkers := []struct {
+		name string
+		file string
+	}{
+		{name: "Go project", file: "go.mod"},
+		{name: "Node.js project", file: "package.json"},
+		{name: "Python project", file: "requirements.txt"},
+		{name: "Python project", file: "setup.py"},
+		{name: "Python project", file: "pyproject.toml"},
+		{name: "Rust project", file: "Cargo.toml"},
+		{name: "Ruby project", file: "Gemfile"},
+	}
+
+	for _, marker := range projectMarkers {
+		if _, err := os.Stat(filepath.Join(ws.workspaceRoot, marker.file)); err == nil {
+			return marker.name
+		}
+	}
+	return ""
+}
+
+func (ws *ReactWebServer) gitReviewExtractStagedChangesSummary() string {
+	cmd := ws.gitCommand("diff", "--cached", "--stat")
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+
+	statLines := strings.Split(string(output), "\n")
+	if len(statLines) > 0 && strings.TrimSpace(statLines[0]) != "" {
+		return fmt.Sprintf("Staged changes summary: %s", strings.TrimSpace(statLines[0]))
+	}
+	return ""
+}
+
+func gitReviewExtractKeyCommentsFromDiff(diff string) string {
+	lines := strings.Split(diff, "\n")
+	keyComments := make([]string, 0, 8)
+	currentFile := ""
+
+	for _, line := range lines {
+		if strings.HasPrefix(line, "diff --git") {
+			parts := strings.Fields(line)
+			if len(parts) >= 4 {
+				currentFile = strings.TrimPrefix(parts[3], "b/")
+			}
+			continue
+		}
+
+		if strings.HasPrefix(line, "+") && (strings.Contains(line, "//") || strings.Contains(line, "#")) {
+			comment := strings.TrimSpace(strings.TrimPrefix(line, "+"))
+			if gitReviewIsImportantComment(comment) {
+				keyComments = append(keyComments, fmt.Sprintf("- %s: %s", currentFile, comment))
+			}
+		}
+	}
+
+	if len(keyComments) == 0 {
+		return ""
+	}
+	if len(keyComments) > 10 {
+		keyComments = keyComments[:10]
+	}
+	return strings.Join(keyComments, "\n")
+}
+
+func gitReviewIsImportantComment(comment string) bool {
+	commentUpper := strings.ToUpper(comment)
+	keywords := []string{
+		"CRITICAL", "IMPORTANT", "NOTE:", "WARNING", "TODO:", "FIXME",
+		"HACK", "BUG", "SECURITY", "FIX", "WORKAROUND",
+		"BECAUSE", "REASON:", "WHY:", "INTENT:", "PURPOSE:",
+	}
+
+	for _, keyword := range keywords {
+		if strings.Contains(commentUpper, keyword) {
+			return true
+		}
+	}
+	return strings.HasPrefix(comment, "//") && len(comment) > 50
+}
+
+func gitReviewCategorizeChanges(diff string) string {
+	lines := strings.Split(diff, "\n")
+	categories := make(map[string]int)
+
+	for _, line := range lines {
+		if strings.HasPrefix(line, "diff --git") || strings.HasPrefix(line, "index") {
+			continue
+		}
+
+		if strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++") {
+			addedLine := strings.TrimPrefix(line, "+")
+			if strings.Contains(strings.ToUpper(addedLine), "SECURITY") ||
+				strings.Contains(addedLine, "filesystem.ErrOutsideWorkingDirectory") ||
+				strings.Contains(addedLine, "WithSecurityBypass") {
+				categories["Security fixes/improvements"]++
+			}
+			if strings.Contains(addedLine, "error") ||
+				strings.Contains(addedLine, "Err") ||
+				strings.Contains(addedLine, "return nil") ||
+				strings.Contains(addedLine, "if err") {
+				categories["Error handling"]++
+			}
+			if strings.Contains(addedLine, "require(") ||
+				strings.Contains(addedLine, "github.com/") ||
+				strings.Contains(addedLine, "go.mod") {
+				categories["Dependency updates"]++
+			}
+			if strings.Contains(addedLine, "Test") || strings.Contains(addedLine, "test") {
+				categories["Test changes"]++
+			}
+		}
+
+		if strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---") {
+			categories["Code removal/refactoring"]++
+		}
+	}
+
+	if len(categories) == 0 {
+		return ""
+	}
+
+	linesOut := make([]string, 0, len(categories))
+	for category, count := range categories {
+		linesOut = append(linesOut, fmt.Sprintf("- %s (%d changes)", category, count))
+	}
+	return strings.Join(linesOut, "\n")
+}
+
+func (ws *ReactWebServer) gitReviewExtractFileContextForChanges(diff string) string {
+	lines := strings.Split(diff, "\n")
+	changedFiles := make(map[string]bool)
+
+	for _, line := range lines {
+		if strings.HasPrefix(line, "diff --git") {
+			parts := strings.Fields(line)
+			if len(parts) >= 4 {
+				changedFiles[strings.TrimPrefix(parts[3], "b/")] = true
+			}
+		}
+	}
+
+	contextParts := make([]string, 0, len(changedFiles))
+	for relPath := range changedFiles {
+		if !ws.gitReviewIsValidRepoFilePath(relPath) || gitReviewShouldSkipFileForContext(relPath) {
+			continue
+		}
+
+		absPath := filepath.Join(ws.workspaceRoot, relPath)
+		if _, err := os.Stat(absPath); os.IsNotExist(err) {
+			continue
+		}
+
+		content, err := os.ReadFile(absPath)
+		if err != nil {
+			continue
+		}
+
+		fileLines := strings.Split(string(content), "\n")
+		maxLines := 500
+		if len(fileLines) < maxLines {
+			maxLines = len(fileLines)
+		}
+		if maxLines > 0 {
+			contextParts = append(contextParts, fmt.Sprintf("### %s\n```go\n%s\n```", relPath, strings.Join(fileLines[:maxLines], "\n")))
+		}
+	}
+
+	if len(contextParts) == 0 {
+		return ""
+	}
+	return strings.Join(contextParts, "\n\n")
+}
+
+func gitReviewShouldSkipFileForContext(filePath string) bool {
+	if utils.ClassifyReviewFile(filePath).SkipForReview {
+		return true
+	}
+
+	if strings.HasSuffix(filePath, ".sum") ||
+		strings.HasSuffix(filePath, ".lock") ||
+		strings.HasSuffix(filePath, "package-lock.json") ||
+		strings.HasSuffix(filePath, "yarn.lock") {
+		return true
+	}
+	if strings.Contains(filePath, ".min.") ||
+		strings.HasSuffix(filePath, ".map") ||
+		strings.Contains(filePath, "node_modules/") {
+		return true
+	}
+	if strings.HasSuffix(filePath, ".pb.go") ||
+		strings.Contains(filePath, "_generated.go") ||
+		strings.Contains(filePath, "_generated.") {
+		return true
+	}
+	if strings.HasSuffix(filePath, "coverage.out") ||
+		strings.HasSuffix(filePath, "coverage.html") ||
+		strings.HasSuffix(filePath, ".test") ||
+		strings.HasSuffix(filePath, ".out") {
+		return true
+	}
+	if strings.HasSuffix(filePath, ".svg") ||
+		strings.HasSuffix(filePath, ".png") ||
+		strings.HasSuffix(filePath, ".jpg") ||
+		strings.HasSuffix(filePath, ".ico") {
+		return true
+	}
+	return strings.Contains(filePath, "vendor/") || strings.Contains(filePath, ".git/")
+}
+
+func (ws *ReactWebServer) gitReviewIsValidRepoFilePath(relPath string) bool {
+	if strings.Contains(relPath, "..") {
+		return false
+	}
+
+	cleanRel := filepath.Clean(relPath)
+	absPath, err := filepath.Abs(filepath.Join(ws.workspaceRoot, cleanRel))
+	if err != nil {
+		return false
+	}
+	absRoot, err := filepath.Abs(ws.workspaceRoot)
+	if err != nil {
+		return false
+	}
+
+	return strings.HasPrefix(absPath, absRoot+string(filepath.Separator)) || absPath == absRoot
 }

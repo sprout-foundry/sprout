@@ -23,12 +23,14 @@ const ResizeHandle: React.FC<ResizeHandleProps> = ({
   className = ''
 }) => {
   const [isDragging, setIsDragging] = useState(false);
+  const isDraggingRef = useRef(false);
   const dragStartPos = useRef<{ x: number; y: number } | null>(null);
   const handleRef = useRef<HTMLDivElement>(null);
 
   // Handle mouse down on resize handle
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
+    isDraggingRef.current = true;
     setIsDragging(true);
     dragStartPos.current = { x: e.clientX, y: e.clientY };
 
@@ -44,7 +46,7 @@ const ResizeHandle: React.FC<ResizeHandleProps> = ({
 
   // Handle mouse move during drag
   const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isDragging || !dragStartPos.current) return;
+    if (!isDraggingRef.current || !dragStartPos.current) return;
 
     const deltaX = e.clientX - dragStartPos.current.x;
     const deltaY = e.clientY - dragStartPos.current.y;
@@ -57,10 +59,11 @@ const ResizeHandle: React.FC<ResizeHandleProps> = ({
 
     // Update start position for next move
     dragStartPos.current = { x: e.clientX, y: e.clientY };
-  }, [isDragging, direction, onResize]);
+  }, [direction, onResize]);
 
   // Handle mouse up to end drag
   const handleMouseUp = useCallback(() => {
+    isDraggingRef.current = false;
     setIsDragging(false);
     dragStartPos.current = null;
 
@@ -79,14 +82,14 @@ const ResizeHandle: React.FC<ResizeHandleProps> = ({
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (isDragging) {
+      if (isDraggingRef.current) {
         document.removeEventListener('mousemove', handleMouseMove);
         document.removeEventListener('mouseup', handleMouseUp);
         document.body.style.userSelect = '';
         document.body.style.cursor = '';
       }
     };
-  }, [isDragging, handleMouseMove, handleMouseUp]);
+  }, [handleMouseMove, handleMouseUp]);
 
   return (
     <div

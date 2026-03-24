@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useLayoutEffect, memo } from 'react';
-import { ScrollText, X, Send, ChevronDown } from 'lucide-react';
+import { ScrollText, X, Send, SquarePen } from 'lucide-react';
 import './CommandInput.css';
 import { ApiService } from '../services/api';
 import { CommandHistoryState, loadCommandHistory, saveCommandHistory } from './command_input_history';
@@ -13,24 +13,8 @@ interface CommandInputProps {
   disabled?: boolean;
   multiline?: boolean;
   autoFocus?: boolean;
+  isProcessing?: boolean;
 }
-
-interface QuickAction {
-  id: string;
-  label: string;
-  command?: string;
-  local?: 'clear-input' | 'refresh-history';
-}
-
-const QUICK_ACTIONS: QuickAction[] = [
-  { id: 'clear-convo', label: 'Clear Conversation', command: '/clear' },
-  { id: 'status', label: 'Session Status', command: '/status' },
-  { id: 'changes', label: 'Tracked Changes', command: '/changes' },
-  { id: 'history', label: 'Revision Log', command: '/log' },
-  { id: 'help', label: 'Command Help', command: '/help' },
-  { id: 'refresh-history', label: 'Refresh Input History', local: 'refresh-history' },
-  { id: 'clear-input', label: 'Clear Input', local: 'clear-input' },
-];
 
 const CommandInput: React.FC<CommandInputProps> = ({
   value = '',
@@ -40,7 +24,8 @@ const CommandInput: React.FC<CommandInputProps> = ({
   placeholder = "Ask me anything about your code...",
   disabled = false,
   multiline = true,
-  autoFocus = false
+  autoFocus = false,
+  isProcessing = false,
 }) => {
   const [draftValue, setDraftValue] = useState(value);
   const [history, setHistory] = useState<CommandHistoryState>({
@@ -50,9 +35,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
   });
   const [isHistoryMode, setIsHistoryMode] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-  const [actionsOpen, setActionsOpen] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const actionsMenuRef = useRef<HTMLDivElement>(null);
   const apiService = useRef(ApiService.getInstance());
   const selectionRef = useRef<{ start: number; end: number } | null>(null);
 
@@ -89,19 +72,6 @@ const CommandInput: React.FC<CommandInputProps> = ({
       inputRef.current.focus();
     }
   }, [autoFocus]);
-
-  useEffect(() => {
-    if (!actionsOpen) return;
-
-    const handleOutsideClick = (event: MouseEvent) => {
-      if (!actionsMenuRef.current) return;
-      if (actionsMenuRef.current.contains(event.target as Node)) return;
-      setActionsOpen(false);
-    };
-
-    document.addEventListener('mousedown', handleOutsideClick);
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
-  }, [actionsOpen]);
 
   const loadHistory = useCallback(async () => {
     setIsLoadingHistory(true);
@@ -392,40 +362,32 @@ const CommandInput: React.FC<CommandInputProps> = ({
     }, 100);
   };
 
-  const sendCommand = useCallback(async (command: string) => {
-    await saveToHistory(command);
+  const commandRef = useCallback(async (command: string) => {
     resetHistoryNavigation();
 
     if (onSend) {
-      await Promise.resolve(onSend(command));
+      onSend(command);
     } else if (onSendCommand) {
-      await Promise.resolve(onSendCommand(command));
+      onSendCommand(command);
     }
 
     updateValue('', { start: 0, end: 0 });
-    setActionsOpen(false);
-  }, [onSend, onSendCommand, saveToHistory, updateValue]);
 
-  const handleQuickAction = useCallback(async (action: QuickAction) => {
-    if (disabled) return;
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
+    }, 100);
+  }, [onSend, onSendCommand, updateValue]);
 
-    if (action.local === 'clear-input') {
-      resetHistoryNavigation();
-      updateValue('', { start: 0, end: 0 });
-      setActionsOpen(false);
-      return;
+  const handleNewSession = useCallback(() => {
+    if (isProcessing) {
+      if (!window.confirm('A request is currently processing. Stop it and start a new session?')) {
+        return;
+      }
     }
-
-    if (action.local === 'refresh-history') {
-      await loadHistory();
-      setActionsOpen(false);
-      return;
-    }
-
-    if (action.command) {
-      await sendCommand(action.command);
-    }
-  }, [disabled, loadHistory, sendCommand, updateValue]);
+    commandRef('/clear');
+  }, [isProcessing, commandRef]);
 
   const handleCompositionStart = () => {
     // Prevent Enter key from sending during IME composition
@@ -493,46 +455,24 @@ const CommandInput: React.FC<CommandInputProps> = ({
       />
 
       <div className="input-actions">
-        <div className="action-buttons" ref={actionsMenuRef}>
-          <button
-            type="button"
-            className="actions-toggle-button"
-            onClick={() => setActionsOpen((prev) => !prev)}
-            aria-haspopup="menu"
-            aria-expanded={actionsOpen}
-            disabled={disabled}
-            title="Chat actions"
-          >
-            Actions
-            <ChevronDown size={14} />
-          </button>
-          {actionsOpen && (
-            <div className="actions-dropdown" role="menu" aria-label="Chat actions">
-              {QUICK_ACTIONS.map((action) => (
-                <button
-                  key={action.id}
-                  type="button"
-                  role="menuitem"
-                  className="actions-dropdown-item"
-                  onClick={() => void handleQuickAction(action)}
-                  disabled={disabled || (action.local === 'refresh-history' && isLoadingHistory)}
-                  title={action.command || action.label}
-                >
-                  <span>{action.label}</span>
-                  {action.command && <code>{action.command}</code>}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <button
+          type="button"
+          className="new-session-button"
+          onClick={handleNewSession}
+          disabled={disabled}
+          data-tooltip="New Session (/clear)"
+          aria-label="New Session"
+        >
+          <SquarePen size={16} />
+        </button>
         <button
           onClick={handleSend}
           disabled={disabled || !(draftValue.trim())}
           className="send-button"
+          data-tooltip="Send message"
           aria-label="Send message"
         >
-          <span className="send-icon"><Send size={14} /></span>
-          <span className="send-text">Send</span>
+          <Send size={16} />
         </button>
       </div>
 

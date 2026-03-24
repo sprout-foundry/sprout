@@ -779,9 +779,10 @@ function App() {
     }
   }, []);
 
-  const handleGitAICommit = useCallback(async () => {
-    await handleSendMessage('/commit --skip-prompt', { allowConcurrent: true });
-  }, [handleSendMessage]);
+  const handleGitAICommit = useCallback(async (): Promise<string> => {
+    const response = await apiService.generateCommitMessage();
+    return response.commit_message || '';
+  }, [apiService]);
 
   const handleGitStage = useCallback(async (files: string[]) => {
     debugLog('Git stage:', files);

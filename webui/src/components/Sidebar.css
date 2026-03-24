@@ -6,6 +6,7 @@
 /* ── Resize wrapper ───────────────────────────────────────────── */
 .sidebar-resize-wrapper {
   display: flex;
+  align-items: stretch;
   flex-shrink: 0;
   position: relative;
   z-index: 100;
@@ -29,20 +30,18 @@
   min-width: 48px;
 }
 
-/* Sidebar resize handle spans full height */
+/* Sidebar resize handle — flex child of wrapper, sits between sidebar and main content */
 .sidebar-resize-handle {
-  position: absolute;
-  right: -5px;
-  top: 0;
-  bottom: 0;
-  width: 10px;
+  position: relative;
   z-index: 101;
   cursor: col-resize;
   touch-action: none;
+  width: 8px;
 }
 
 .sidebar-resize-handle.resize-handle-horizontal {
   margin: 0;
+  width: 8px;
 }
 
 .sidebar-resize-handle .resize-handle-indicator {

@@ -52,7 +52,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     setBufferModified
   } = useEditorManager();
 
-  const { theme, themePack } = useTheme();
+  const { theme, themePack, customHighlightStyle } = useTheme();
   const { preset: hotkeyPreset } = useHotkeys();
 
   // Get buffer for this pane
@@ -273,7 +273,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       search(),
       autocompletion(),
       bracketMatching(),
-      syntaxHighlighting(themePack.editorSyntaxStyle === 'one-dark' ? oneDarkHighlightStyle : defaultHighlightStyle),
+      syntaxHighlighting(customHighlightStyle || (themePack.editorSyntaxStyle === 'one-dark' ? oneDarkHighlightStyle : defaultHighlightStyle)),
       lineNumbers(),
       foldGutter({
         openText: '▼',
@@ -357,7 +357,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       view.destroy();
       viewRef.current = null;
     };
-  }, [paneId, buffer?.id, buffer?.file?.ext, showLineNumbers, theme, themePack.id, hotkeyPreset, updateBufferContent, setBufferModified, updateBufferCursor, getLanguageSupport]); // eslint-disable-line react-hooks/exhaustive-deps -- handleSave and handleToggleLineNumbers intentionally excluded to prevent infinite re-init loop when buffer changes
+  }, [paneId, buffer?.id, buffer?.file?.ext, showLineNumbers, theme, themePack.id, hotkeyPreset, customHighlightStyle, updateBufferContent, setBufferModified, updateBufferCursor, getLanguageSupport]); // eslint-disable-line react-hooks/exhaustive-deps -- handleSave and handleToggleLineNumbers intentionally excluded to prevent infinite re-init loop when buffer changes
 
 
   // Listen for go to line event from toolbar

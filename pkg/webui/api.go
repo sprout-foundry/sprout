@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	agent_commands "github.com/alantheprice/ledit/pkg/agent_commands"
 	"github.com/alantheprice/ledit/pkg/events"
 )
 
@@ -55,6 +56,44 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 
 	// Run the query asynchronously. The web UI consumes progress and completion via WebSocket.
 	go func() {
+		startedAt := time.Now()
+		registry := agent_commands.NewCommandRegistry()
+
+		if registry.IsSlashCommand(query.Query) {
+			log.Printf("handleAPIQuery: executing slash command: %s", query.Query)
+			if ws.eventBus != nil {
+				ws.eventBus.Publish(events.EventTypeQueryStarted, events.QueryStartedEvent(
+					query.Query,
+					ws.agent.GetProvider(),
+					ws.agent.GetModel(),
+				))
+			}
+
+			err := registry.Execute(query.Query, ws.agent)
+			if err != nil {
+				log.Printf("handleAPIQuery: slash command error: %v", err)
+				if ws.eventBus != nil {
+					ws.eventBus.Publish(events.EventTypeError, events.ErrorEvent("Slash command failed", err))
+				}
+				return
+			}
+
+			if ws.eventBus != nil {
+				trimmed := strings.TrimSpace(query.Query)
+				ws.eventBus.Publish(events.EventTypeStreamChunk, events.StreamChunkEvent(
+					fmt.Sprintf("Executed command: `%s`\n", trimmed),
+				))
+				ws.eventBus.Publish(events.EventTypeQueryCompleted, events.QueryCompletedEvent(
+					query.Query,
+					fmt.Sprintf("Executed command: %s", trimmed),
+					0,
+					0,
+					time.Since(startedAt),
+				))
+			}
+			return
+		}
+
 		log.Printf("handleAPIQuery: calling ProcessQuery")
 		_, err := ws.agent.ProcessQuery(query.Query)
 		if err != nil {
@@ -380,6 +419,30 @@ func (ws *ReactWebServer) handleFileWrite(w http.ResponseWriter, r *http.Request
 	}
 
 	content := []byte(requestData.Content)
+
+	// Validate hotkeys config before writing (prevent broken config)
+	hotkeysPath, _ := GetHotkeysPath()
+	if hotkeysPath != "" && canonicalPath == hotkeysPath {
+		var hotkeyCheck HotkeyConfig
+		if err := json.Unmarshal(content, &hotkeyCheck); err != nil {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"error":   fmt.Sprintf("Invalid hotkeys JSON: %v", err),
+				"path":    canonicalPath,
+			})
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if err := ValidateHotkeyConfig(&hotkeyCheck); err != nil {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"error":   fmt.Sprintf("Hotkeys validation failed: %v", err),
+				"path":    canonicalPath,
+			})
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+	}
 
 	// Create directory if it doesn't exist
 	dir := filepath.Dir(canonicalPath)

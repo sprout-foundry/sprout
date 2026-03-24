@@ -209,7 +209,7 @@ function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isTerminalExpanded, setIsTerminalExpanded] = useState(false);
   const lastChunkRef = useRef<string>('');
-  const isProcessingRef = useRef(false);
+  const activeRequestsRef = useRef(0);
   const [recentFiles, setRecentFiles] = useState<Array<{ path: string; modified: boolean }>>([]);
   const [gitRefreshToken, setGitRefreshToken] = useState(0);
   const [selectedGitFilePath, setSelectedGitFilePath] = useState<string | null>(null);
@@ -387,10 +387,15 @@ function App() {
       case 'query_completed':
         logEntry.category = 'query';
         logEntry.level = 'success';
-        isProcessingRef.current = false;
+        if (activeRequestsRef.current > 0) {
+          activeRequestsRef.current -= 1;
+        }
+        const completedQuery = String(event.data?.query || '').trim().toLowerCase();
+        const wasClearCommand = completedQuery === '/clear';
         setState(prev => ({
           ...prev,
-          isProcessing: false,
+          messages: wasClearCommand ? [] : prev.messages,
+          isProcessing: activeRequestsRef.current > 0,
           lastError: null,
           queryProgress: null,
           toolExecutions: prev.toolExecutions.map((tool) => {
@@ -556,11 +561,13 @@ function App() {
       case 'error':
         logEntry.category = 'system';
         logEntry.level = 'error';
-        isProcessingRef.current = false;
+        if (activeRequestsRef.current > 0) {
+          activeRequestsRef.current -= 1;
+        }
         const errorMessage = event.data?.message || 'Unknown error';
         setState(prev => ({
           ...prev,
-          isProcessing: false,
+          isProcessing: activeRequestsRef.current > 0,
           queryProgress: null,
           lastError: errorMessage,
           messages: [...prev.messages, {
@@ -674,12 +681,13 @@ function App() {
     debugLog('[OK] Content providers registered');
   }, []);
 
-  const handleSendMessage = useCallback(async (message: string) => {
+  const handleSendMessage = useCallback(async (message: string, options?: { allowConcurrent?: boolean }) => {
     if (!message.trim()) return;
-    if (isProcessingRef.current) {
+    const allowConcurrent = options?.allowConcurrent === true;
+    if (!allowConcurrent && activeRequestsRef.current > 0) {
       throw new Error('Another request is already running');
     }
-    isProcessingRef.current = true;
+    activeRequestsRef.current += 1;
 
     // Clear any previous errors and set processing state
     setState(prev => ({
@@ -695,11 +703,13 @@ function App() {
       debugLog('[OK] Message sent successfully');
     } catch (error) {
       console.error('[FAIL] Failed to send message:', error);
-      isProcessingRef.current = false;
+      if (activeRequestsRef.current > 0) {
+        activeRequestsRef.current -= 1;
+      }
       const errorMsg = error instanceof Error ? error.message : 'Failed to send message';
       setState(prev => ({
         ...prev,
-        isProcessing: false,
+        isProcessing: activeRequestsRef.current > 0,
         lastError: `Failed to send message: ${errorMsg}`,
         messages: [...prev.messages, {
           id: Date.now().toString(),
@@ -760,7 +770,7 @@ function App() {
   }, []);
 
   const handleGitAICommit = useCallback(async () => {
-    await handleSendMessage('/commit --skip-prompt');
+    await handleSendMessage('/commit --skip-prompt', { allowConcurrent: true });
   }, [handleSendMessage]);
 
   const handleGitStage = useCallback(async (files: string[]) => {
@@ -876,6 +886,7 @@ function App() {
                 onClearLogs={() => setState(prev => ({ ...prev, logs: [] }))}
                 onTerminalOutput={handleTerminalOutput}
                 onTerminalExpandedChange={setIsTerminalExpanded}
+                isConnected={state.isConnected}
               />
             </UIManager>
           </EditorManagerProvider>

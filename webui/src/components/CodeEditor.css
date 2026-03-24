@@ -368,7 +368,7 @@
 }
 
 .cm-cursor {
-  border-left: 2px solid #528bff;
+  border-left: 2px solid var(--cm-cursor, #528bff);
 }
 
 .cm-selectionMatch {

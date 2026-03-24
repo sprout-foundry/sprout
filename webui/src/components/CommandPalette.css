@@ -1,0 +1,177 @@
+/* Command Palette Overlay */
+.command-palette-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  padding-top: 10vh;
+}
+
+/* Command Palette Container */
+.command-palette-container {
+  width: 600px;
+  max-height: 400px;
+  background: var(--bg-primary, #1e1e1e);
+  border: 1px solid var(--border-color, #3c3c3c);
+  border-radius: 8px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Input wrapper (prefix + input) */
+.command-palette-input-wrapper {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color, #3c3c3c);
+  padding: 0 12px;
+  background: var(--bg-primary, #1e1e1e);
+}
+
+.command-palette-prefix {
+  color: var(--fg-muted, #888888);
+  font-size: 16px;
+  font-weight: bold;
+  margin-right: 8px;
+  user-select: none;
+  min-width: 12px;
+}
+
+/* Search Input */
+.command-palette-input {
+  flex: 1;
+  padding: 12px 4px;
+  border: none;
+  background: transparent;
+  color: var(--fg-primary, #ffffff);
+  font-size: 14px;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.command-palette-input::placeholder {
+  color: var(--fg-muted, #888888);
+}
+
+/* Results Area */
+.command-palette-results {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* Result Item */
+.command-palette-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  color: var(--fg-primary, #ffffff);
+  transition: background-color 0.1s ease;
+}
+
+.command-palette-item:hover {
+  background: var(--bg-secondary, #2a2a2a);
+}
+
+.command-palette-item.command-palette-selected {
+  background: var(--accent-primary, #007acc);
+  color: white;
+}
+
+/* Category Header */
+.command-palette-category {
+  padding: 6px 16px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--fg-muted, #888888);
+  background: var(--bg-secondary, #2a2a2a);
+  border-top: 1px solid var(--border-color, #3c3c3c);
+  user-select: none;
+}
+
+.command-palette-category:first-child {
+  border-top: none;
+}
+
+/* Command Label */
+.command-palette-label {
+  flex: 1;
+}
+
+/* Shortcut Display */
+.command-palette-shortcut {
+  font-size: 12px;
+  color: var(--fg-muted, #888888);
+  margin-left: 16px;
+  font-family: monospace;
+  background: var(--bg-secondary, #2a2a2a);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.command-palette-selected .command-palette-shortcut {
+  background: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* File Path Display */
+.command-palette-file-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+  margin-right: 8px;
+  width: 20px;
+  text-align: center;
+}
+
+.command-palette-file-path {
+  flex: 1;
+  font-family: monospace;
+  font-size: 13px;
+  word-break: break-all;
+  opacity: 0.9;
+}
+
+/* Empty / Loading State */
+.command-palette-empty {
+  padding: 16px;
+  color: var(--fg-muted, #888888);
+  font-style: italic;
+  text-align: center;
+}
+
+/* Hint Text */
+.command-palette-hint {
+  padding: 12px 16px;
+  font-size: 12px;
+  color: var(--fg-muted, #888888);
+  text-align: center;
+  font-style: italic;
+}
+
+/* Scrollbar Styling */
+.command-palette-results::-webkit-scrollbar {
+  width: 8px;
+}
+
+.command-palette-results::-webkit-scrollbar-track {
+  background: var(--bg-primary, #1e1e1e);
+}
+
+.command-palette-results::-webkit-scrollbar-thumb {
+  background: var(--border-color, #3c3c3c);
+  border-radius: 4px;
+}
+
+.command-palette-results::-webkit-scrollbar-thumb:hover {
+  background: var(--fg-muted, #555555);
+}
+
+/* Light theme overrides via CSS custom property — these are fallbacks
+   for when the theme doesn't define them */

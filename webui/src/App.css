@@ -91,18 +91,6 @@
   --input-bg: #0f1a2d;
   --input-fg: #e2e8f0;
 
-  --cm-bg: #0b1324;
-  --cm-fg: #d6e0ef;
-  --cm-gutter-bg: #101a2f;
-  --cm-gutter-fg: #6f819c;
-  --cm-gutter-fg-active: #cbd8ea;
-  --cm-cursor: #7dd3fc;
-  --cm-selection: rgba(34, 211, 238, 0.26);
-  --cm-active-line: rgba(56, 189, 248, 0.1);
-  --cm-active-line-gutter: rgba(56, 189, 248, 0.12);
-  --editor-pane-inactive-overlay: rgba(0, 0, 0, 0.28);
-  --editor-pane-inactive-overlay-hover: rgba(0, 0, 0, 0.18);
-
   --app-shell-bg: linear-gradient(180deg, #262b33, #282c34);
   --app-main-bg: #282c34;
   --sidebar-bg: linear-gradient(180deg, #21252b, #1f2329);
@@ -161,18 +149,6 @@
   --border-color: rgba(71, 85, 105, 0.26);
   --input-bg: #ffffff;
   --input-fg: #0f172a;
-
-  --cm-bg: #ffffff;
-  --cm-fg: #0f172a;
-  --cm-gutter-bg: #f1f5f9;
-  --cm-gutter-fg: #64748b;
-  --cm-gutter-fg-active: #1e293b;
-  --cm-cursor: #0f172a;
-  --cm-selection: rgba(2, 132, 199, 0.22);
-  --cm-active-line: rgba(2, 132, 199, 0.08);
-  --cm-active-line-gutter: rgba(2, 132, 199, 0.1);
-  --editor-pane-inactive-overlay: rgba(15, 23, 42, 0.12);
-  --editor-pane-inactive-overlay-hover: rgba(15, 23, 42, 0.08);
 
   --app-shell-bg: linear-gradient(180deg, #f8fbff, #eef4fb);
   --app-main-bg: rgba(244, 247, 251, 0.96);

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	agent_commands "github.com/alantheprice/ledit/pkg/agent_commands"
+	"github.com/alantheprice/ledit/pkg/console"
 	"github.com/alantheprice/ledit/pkg/events"
 	"github.com/alantheprice/ledit/pkg/filediscovery"
 	ignore "github.com/sabhiram/go-gitignore"
@@ -24,6 +25,26 @@ const (
 	maxFileWriteBodySize = 10 << 20 // 10 MiB
 	consentTokenHeader   = "X-Ledit-Consent-Token"
 )
+
+func (ws *ReactWebServer) incrementActiveQueries() {
+	ws.mutex.Lock()
+	ws.activeQueries++
+	ws.mutex.Unlock()
+}
+
+func (ws *ReactWebServer) decrementActiveQueries() {
+	ws.mutex.Lock()
+	if ws.activeQueries > 0 {
+		ws.activeQueries--
+	}
+	ws.mutex.Unlock()
+}
+
+func (ws *ReactWebServer) hasActiveQuery() bool {
+	ws.mutex.RLock()
+	defer ws.mutex.RUnlock()
+	return ws.activeQueries > 0
+}
 
 // handleAPIQuery handles API queries to the agent
 func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request) {
@@ -58,7 +79,9 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 	ws.mutex.Unlock()
 
 	// Run the query asynchronously. The web UI consumes progress and completion via WebSocket.
+	ws.incrementActiveQueries()
 	go func() {
+		defer ws.decrementActiveQueries()
 		startedAt := time.Now()
 		registry := agent_commands.NewCommandRegistry()
 
@@ -111,6 +134,54 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"accepted":  true,
+		"query":     query.Query,
+		"timestamp": time.Now().Unix(),
+	})
+}
+
+// handleAPIQuerySteer injects user input into the currently running query loop.
+func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)
+	var query struct {
+		Query string `json:"query"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&query); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	query.Query = strings.TrimSpace(query.Query)
+	if query.Query == "" {
+		http.Error(w, "Query is required", http.StatusBadRequest)
+		return
+	}
+
+	if strings.HasPrefix(query.Query, "/") {
+		http.Error(w, "Slash commands cannot be steered while a query is running", http.StatusBadRequest)
+		return
+	}
+
+	if !ws.hasActiveQuery() {
+		http.Error(w, "No active query to steer", http.StatusConflict)
+		return
+	}
+
+	if err := ws.agent.InjectInputContext(query.Query); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to steer active query: %v", err), http.StatusConflict)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"accepted":  true,
+		"mode":      "steer",
 		"query":     query.Query,
 		"timestamp": time.Now().Unix(),
 	})

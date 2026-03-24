@@ -32,7 +32,6 @@ func sanitizedConfig(cfg *configuration.Config) map[string]interface{} {
 		"reasoning_effort":              cfg.ReasoningEffort,
 		"skip_prompt":                   cfg.SkipPrompt,
 		"api_timeouts":                  cfg.APITimeouts,
-		"security_validation":           cfg.SecurityValidation,
 		"custom_providers":              sanitizedCustomProviders(cfg.CustomProviders),
 		"history_scope":                 cfg.HistoryScope,
 		"self_review_gate_mode":         cfg.SelfReviewGateMode,
@@ -121,13 +120,6 @@ var validHistoryScopes = map[string]bool{
 func validateReasoningEffort(v string) error {
 	if !validReasoningEfforts[v] {
 		return fmt.Errorf("invalid reasoning_effort %q (allowed: \"\", low, medium, high)", v)
-	}
-	return nil
-}
-
-func validateSecurityThreshold(t int) error {
-	if t < 0 || t > 2 {
-		return fmt.Errorf("security_validation.threshold must be between 0 and 2, got %d", t)
 	}
 	return nil
 }
@@ -337,35 +329,6 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 	}
 	if v, ok := patch["auto_execute_detected_commands"]; ok {
 		cfg.AutoExecuteDetectedCommands, _ = v.(bool)
-	}
-
-	// SecurityValidation
-	if sv, ok := patch["security_validation"]; ok {
-		if svMap, ok := sv.(map[string]interface{}); ok {
-			if existing := cfg.SecurityValidation; existing == nil {
-				cfg.SecurityValidation = &configuration.SecurityValidationConfig{}
-			}
-			if v2, ok2 := svMap["enabled"]; ok2 {
-				cfg.SecurityValidation.Enabled, _ = v2.(bool)
-			}
-			if v2, ok2 := svMap["threshold"]; ok2 {
-				n, ok3 := asInt(v2)
-				if !ok3 {
-					return fmt.Errorf("security_validation.threshold must be an integer")
-				}
-				if err := validateSecurityThreshold(n); err != nil {
-					return err
-				}
-				cfg.SecurityValidation.Threshold = n
-			}
-			if v2, ok2 := svMap["timeout_seconds"]; ok2 {
-				n, ok3 := asInt(v2)
-				if !ok3 || n < 0 {
-					return fmt.Errorf("security_validation.timeout_seconds must be a non-negative integer")
-				}
-				cfg.SecurityValidation.TimeoutSeconds = n
-			}
-		}
 	}
 
 	// APITimeouts

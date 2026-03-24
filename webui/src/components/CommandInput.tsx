@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useLayoutEffect, memo } from 'react';
-import { ScrollText, X, Send, SquarePen } from 'lucide-react';
+import { ScrollText, X, Send, SquarePen, ListPlus } from 'lucide-react';
 import './CommandInput.css';
 import { ApiService } from '../services/api';
 import { CommandHistoryState, loadCommandHistory, saveCommandHistory } from './command_input_history';
@@ -9,11 +9,13 @@ interface CommandInputProps {
   onChange?: (value: string) => void;
   onSend?: (command: string) => void;
   onSendCommand?: (command: string) => void;
+  onQueue?: (command: string) => void;
   placeholder?: string;
   disabled?: boolean;
   multiline?: boolean;
   autoFocus?: boolean;
   isProcessing?: boolean;
+  queuedCount?: number;
 }
 
 const CommandInput: React.FC<CommandInputProps> = ({
@@ -21,11 +23,13 @@ const CommandInput: React.FC<CommandInputProps> = ({
   onChange,
   onSend,
   onSendCommand,
+  onQueue,
   placeholder = "Ask me anything about your code...",
   disabled = false,
   multiline = true,
   autoFocus = false,
   isProcessing = false,
+  queuedCount = 0,
 }) => {
   const [draftValue, setDraftValue] = useState(value);
   const [history, setHistory] = useState<CommandHistoryState>({
@@ -362,6 +366,23 @@ const CommandInput: React.FC<CommandInputProps> = ({
     }, 100);
   };
 
+  const handleQueue = async () => {
+    const textareaValue = draftValue;
+    if (textareaValue.trim() === '') return;
+
+    const commandToQueue = textareaValue.trim();
+    await saveToHistory(commandToQueue);
+    resetHistoryNavigation();
+    onQueue?.(commandToQueue);
+    updateValue('', { start: 0, end: 0 });
+
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
+    }, 100);
+  };
+
   const commandRef = useCallback(async (command: string) => {
     resetHistoryNavigation();
 
@@ -385,9 +406,15 @@ const CommandInput: React.FC<CommandInputProps> = ({
       if (!window.confirm('A request is currently processing. Stop it and start a new session?')) {
         return;
       }
+      if (onQueue) {
+        onQueue('/clear');
+      } else {
+        commandRef('/clear');
+      }
+      return;
     }
     commandRef('/clear');
-  }, [isProcessing, commandRef]);
+  }, [isProcessing, commandRef, onQueue]);
 
   const handleCompositionStart = () => {
     // Prevent Enter key from sending during IME composition
@@ -469,11 +496,24 @@ const CommandInput: React.FC<CommandInputProps> = ({
           onClick={handleSend}
           disabled={disabled || !(draftValue.trim())}
           className="send-button"
-          data-tooltip="Send message"
+          data-tooltip={isProcessing ? 'Steer running request' : 'Send message'}
           aria-label="Send message"
         >
           <Send size={16} />
         </button>
+        {isProcessing && (
+          <button
+            type="button"
+            onClick={handleQueue}
+            disabled={disabled || !(draftValue.trim())}
+            className="queue-button"
+            data-tooltip={`Queue for after current run${queuedCount > 0 ? ` (${queuedCount} queued)` : ''}`}
+            aria-label="Queue message"
+          >
+            <ListPlus size={16} />
+            {queuedCount > 0 && <span className="queue-count">{queuedCount}</span>}
+          </button>
+        )}
       </div>
 
       <div className="keyboard-hints">

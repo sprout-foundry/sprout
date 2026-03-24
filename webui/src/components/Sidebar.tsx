@@ -1,10 +1,11 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import './Sidebar.css';
 import { ApiService, ProviderOption, LeditInstance, LeditSettings } from '../services/api';
 import SettingsPanel from './SettingsPanel';
 import { viewRegistry, ProviderContext, SidebarSection, ProviderLogEntry } from '../providers';
 import { useTheme } from '../contexts/ThemeContext';
 import { HotkeyPreset, useHotkeys } from '../contexts/HotkeyContext';
+import ResizeHandle from './ResizeHandle';
 import {
   LayoutList,
   ScrollText,
@@ -18,6 +19,9 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  Keyboard,
+  Upload,
+  Trash2,
   type LucideIcon,
 } from 'lucide-react';
 import FileTree from './FileTree';
@@ -94,8 +98,14 @@ const Sidebar: React.FC<SidebarProps> = ({
   onClose,
   isMobile = false
 }) => {
-  const { themePack, availableThemePacks, setThemePack } = useTheme();
+  const { themePack, availableThemePacks, setThemePack, importTheme, removeTheme } = useTheme();
   const { preset: hotkeyPreset, setPreset: setHotkeyPreset } = useHotkeys();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    const stored = localStorage.getItem('ledit-sidebar-width');
+    return stored ? Math.max(200, Math.min(600, Number(stored))) : 288;
+  });
   const [selectedProvider, setSelectedProvider] = useState(provider || '');
   const [selectedModelState, setSelectedModelState] = useState(model || selectedModel || '');
   const [providers, setProviders] = useState<ProviderOption[]>([]);
@@ -118,7 +128,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       if (!cancelled) setSettings(s);
     }).catch(() => { /* silent */ });
     return () => { cancelled = true; };
-  }, [isConnected]);
+  }, [isConnected, apiService]);
 
   const finalSelectedModel = selectedModel || selectedModelState;
   // Compute available models from providers and selectedProvider
@@ -425,6 +435,17 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
+  const handleSidebarResize = useCallback((delta: number) => {
+    setSidebarWidth(prev => Math.max(200, Math.min(600, prev + delta)));
+  }, []);
+
+  const handleSidebarResizeEnd = useCallback(() => {
+    setSidebarWidth(prev => {
+      localStorage.setItem('ledit-sidebar-width', String(prev));
+      return prev;
+    });
+  }, []);
+
   const handleSectionTabClick = (tab: SectionTab) => {
     if (sidebarCollapsed) {
       // If collapsed, expand sidebar and switch to the section
@@ -434,6 +455,25 @@ const Sidebar: React.FC<SidebarProps> = ({
       setSelectedSection(tab);
     }
   };
+
+  const handleImportTheme = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportError(null);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result;
+      if (typeof text !== 'string') return;
+      const result = importTheme(text);
+      if (!result.success) {
+        setImportError(result.warnings?.join('; ') || 'Import failed');
+      }
+    };
+    reader.onerror = () => setImportError('Failed to read file');
+    reader.readAsText(file);
+    // Reset input so same file can be re-imported
+    e.target.value = '';
+  }, [importTheme]);
 
   // ─── Section Renderers ───────────────────────────────────────────────
 
@@ -633,18 +673,73 @@ const Sidebar: React.FC<SidebarProps> = ({
           <h4>Appearance</h4>
           <div className="config-item">
             <label htmlFor="theme-select">Theme Pack:</label>
-            <select
-              id="theme-select"
-              value={themePack.id}
-              onChange={(e) => setThemePack(e.target.value)}
-              className="styled-select"
-            >
-              {availableThemePacks.map((pack) => (
-                <option key={pack.id} value={pack.id}>
-                  {pack.name}
-                </option>
-              ))}
-            </select>
+            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+              <select
+                id="theme-select"
+                value={themePack.id}
+                onChange={(e) => setThemePack(e.target.value)}
+                className="styled-select"
+                style={{ flex: 1 }}
+              >
+                {availableThemePacks.map((pack) => (
+                  <option key={pack.id} value={pack.id}>
+                    {pack.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="config-btn"
+                onClick={() => fileInputRef.current?.click()}
+                title="Import VSCode theme (.json)"
+                style={{
+                  background: 'var(--bg-tertiary)',
+                  border: '1px solid var(--border-default)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '4px 8px',
+                  cursor: 'pointer',
+                  color: 'var(--text-primary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                <Upload size={14} />
+              </button>
+              {themePack.id.startsWith('imported-') && (
+                <button
+                  type="button"
+                  className="config-btn"
+                  onClick={() => removeTheme(themePack.id)}
+                  title="Remove this imported theme"
+                  style={{
+                    background: 'var(--color-error-bg)',
+                    border: '1px solid var(--accent-error)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '4px 8px',
+                    cursor: 'pointer',
+                    color: 'var(--accent-error)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json"
+              style={{ display: 'none' }}
+              onChange={handleImportTheme}
+            />
+            {importError && (
+              <div style={{ color: 'var(--accent-error)', fontSize: '12px', marginTop: '2px' }}>
+                {importError}
+              </div>
+            )}
           </div>
           <div className="config-item">
             <label htmlFor="hotkey-preset-select">Editor Hotkeys:</label>
@@ -658,6 +753,32 @@ const Sidebar: React.FC<SidebarProps> = ({
               <option value="webstorm">WebStorm</option>
               <option value="ledit">Ledit (Legacy)</option>
             </select>
+          </div>
+          <div className="config-item" style={{ marginTop: 'var(--space-4, 8px)' }}>
+            <button
+              type="button"
+              className="settings-link-btn"
+              onClick={() => {
+                // Dispatch event to open hotkeys config
+                window.dispatchEvent(new CustomEvent('ledit:open-hotkeys-config'));
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '6px 12px',
+                background: 'var(--bg-secondary, #2a2a2a)',
+                border: '1px solid var(--border-color, #3c3c3c)',
+                borderRadius: '4px',
+                color: 'var(--fg-primary, #fff)',
+                cursor: 'pointer',
+                fontSize: '13px',
+                width: '100%',
+              }}
+            >
+              <Keyboard size={14} />
+              Edit Keyboard Shortcuts (JSON)
+            </button>
           </div>
         </div>
 
@@ -723,8 +844,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   return (
-    <div className={`sidebar ${isMobile ? 'mobile' : ''} ${finalIsMobileMenuOpen ? 'open' : 'closed'} ${sidebarCollapsed ? 'collapsed' : ''}`}>
-      {/* Desktop collapse button */}
+    <div className="sidebar-resize-wrapper" style={{ flexShrink: 0 }}>
+      <div className={`sidebar ${isMobile ? 'mobile' : ''} ${finalIsMobileMenuOpen ? 'open' : 'closed'} ${sidebarCollapsed ? 'collapsed' : ''}`} style={sidebarCollapsed ? undefined : { width: `${sidebarWidth}px` }}>
+        {/* Desktop collapse button */}
       {!isMobile && (
         <button
           className="desktop-collapse-btn"
@@ -827,6 +949,15 @@ const Sidebar: React.FC<SidebarProps> = ({
             </div>
           </div>
         )}
+      </div>
+      {!isMobile && !sidebarCollapsed && (
+        <ResizeHandle
+          direction="horizontal"
+          onResize={handleSidebarResize}
+          onResizeEnd={handleSidebarResizeEnd}
+          className="sidebar-resize-handle"
+        />
+      )}
       </div>
     </div>
   );

@@ -619,6 +619,49 @@ class ApiService {
       throw error;
     }
   }
+
+  // ── Hotkeys API ──────────────────────────────────────────────────
+
+  async getHotkeys(): Promise<HotkeyConfig> {
+    try {
+      const response = await fetch('/api/hotkeys');
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to get hotkeys:', error);
+      throw error;
+    }
+  }
+
+  async updateHotkeys(config: HotkeyConfig): Promise<{ success: boolean; config: HotkeyConfig }> {
+    try {
+      const response = await fetch('/api/hotkeys', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to update hotkeys:', error);
+      throw error;
+    }
+  }
+
+  async validateHotkeys(config: HotkeyConfig): Promise<{ valid: boolean; config: HotkeyConfig }> {
+    try {
+      const response = await fetch('/api/hotkeys/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to validate hotkeys:', error);
+      throw error;
+    }
+  }
 }
 
 export { ApiService };
@@ -666,4 +709,18 @@ export interface LeditSettings {
   };
   custom_providers: Record<string, any>;
   skills: Record<string, any>;
+}
+
+// ── Hotkeys interfaces ─────────────────────────────────────────────
+
+export interface HotkeyEntry {
+  key: string;
+  command_id: string;
+  description?: string;
+}
+
+export interface HotkeyConfig {
+  version: string;
+  hotkeys: HotkeyEntry[];
+  path?: string;  // Filesystem path to the hotkeys config file
 }

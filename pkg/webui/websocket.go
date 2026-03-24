@@ -502,6 +502,27 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 					})
 				}
 
+			case "input_raw":
+				data, ok := msg["data"].(map[string]interface{})
+				if !ok {
+					continue
+				}
+
+				input, ok := data["input"].(string)
+				if !ok {
+					continue
+				}
+
+				if err := ws.terminalManager.WriteRawInput(sessionID, input); err != nil {
+					safeConn.WriteJSON(map[string]interface{}{
+						"type": "error",
+						"data": map[string]string{
+							"session_id": sessionID,
+							"message":    err.Error(),
+						},
+					})
+				}
+
 			case "resize":
 				if data, ok := msg["data"].(map[string]interface{}); ok {
 					if rows, ok := data["rows"].(float64); ok {

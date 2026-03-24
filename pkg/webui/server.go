@@ -48,6 +48,7 @@ type ReactWebServer struct {
 	mutex           sync.RWMutex
 	startTime       time.Time
 	queryCount      int
+	activeQueries   int
 	fixReviewJobs   map[string]*gitFixReviewJob
 	fixReviewMu     sync.RWMutex
 }
@@ -103,6 +104,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/ws", ws.handleWebSocket)
 	mux.HandleFunc("/terminal", ws.handleTerminalWebSocket)
 	mux.HandleFunc("/api/query", ws.handleAPIQuery)
+	mux.HandleFunc("/api/query/steer", ws.handleAPIQuerySteer)
 	mux.HandleFunc("/api/stats", ws.handleAPIStats)
 	mux.HandleFunc("/api/providers", ws.handleAPIProviders)
 	mux.HandleFunc("/api/files", ws.handleAPIFiles)

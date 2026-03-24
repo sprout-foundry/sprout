@@ -171,12 +171,13 @@ func (ws *ReactWebServer) handleAPIRestoreSession(w http.ResponseWriter, r *http
 		})
 	}
 
-	// Return success response
+	// Return success response including messages so the frontend can populate the chat
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"message":           "Session restored",
 		"session_id":        state.SessionID,
 		"message_count":     len(state.Messages),
+		"messages":          state.Messages,
 		"total_tokens":      state.TotalTokens,
 		"name":              state.Name,
 		"working_directory": state.WorkingDirectory,

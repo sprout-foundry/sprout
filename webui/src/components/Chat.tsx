@@ -63,6 +63,8 @@ interface RevisionDetailFile {
 interface ChatProps {
   messages: Message[];
   onSendMessage: (message: string) => void;
+  onQueueMessage: (message: string) => void;
+  queuedMessagesCount: number;
   inputValue: string;
   onInputChange: (value: string) => void;
   isProcessing?: boolean;
@@ -98,6 +100,8 @@ const normalizeRevision = (raw: any): Revision => {
 const Chat: React.FC<ChatProps> = ({
   messages,
   onSendMessage,
+  onQueueMessage,
+  queuedMessagesCount,
   inputValue,
   onInputChange,
   isProcessing = false,
@@ -214,7 +218,16 @@ const Chat: React.FC<ChatProps> = ({
     setIsLoadingSessions(true);
     setSessionRestoreError(null);
     try {
-      await apiService.restoreSession(sessionId);
+      const response = await apiService.restoreSession(sessionId);
+      // Dispatch event so App.tsx can populate the chat with restored messages.
+      // Use a short delay to let the connection_status WebSocket event clear old messages first.
+      if (response.messages?.length) {
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('ledit:session-restored', {
+            detail: { messages: response.messages }
+          }));
+        }, 400);
+      }
       await loadSessions();
     } catch (error) {
       setSessionRestoreError(error instanceof Error ? error.message : 'Failed to restore session');
@@ -1164,10 +1177,12 @@ const Chat: React.FC<ChatProps> = ({
           value={inputValue}
           onChange={onInputChange}
           onSend={onSendMessage}
+          onQueue={onQueueMessage}
           placeholder="Ask me anything about your code..."
           multiline={true}
           autoFocus={true}
           isProcessing={isProcessing}
+          queuedCount={queuedMessagesCount}
         />
       </div>
     </div>

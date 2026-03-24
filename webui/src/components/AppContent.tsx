@@ -86,6 +86,8 @@ interface AppContentProps {
   onModelChange: (model: string) => void;
   onProviderChange: (provider: string) => void;
   onSendMessage: (message: string) => void;
+  onQueueMessage: (message: string) => void;
+  queuedMessagesCount: number;
   onGitCommit: (message: string, files: string[]) => Promise<unknown>;
   onGitAICommit: () => Promise<string>;
   onGitStage: (files: string[]) => Promise<void>;
@@ -117,6 +119,8 @@ const AppContent: React.FC<AppContentProps> = ({
   onModelChange,
   onProviderChange,
   onSendMessage,
+  onQueueMessage,
+  queuedMessagesCount,
   onGitCommit,
   onGitAICommit,
   onGitStage,
@@ -451,6 +455,8 @@ const AppContent: React.FC<AppContentProps> = ({
             <Chat
               messages={state.messages}
               onSendMessage={onSendMessage}
+              onQueueMessage={onQueueMessage}
+              queuedMessagesCount={queuedMessagesCount}
               inputValue={inputValue}
               onInputChange={onInputChange}
               isProcessing={state.isProcessing}

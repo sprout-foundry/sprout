@@ -48,9 +48,7 @@ func BootstrapIsolatedConfig(configDir string) error {
 			return fmt.Errorf("failed to parse source config file %q: %w", sourceConfigPath, err)
 		}
 
-		// Keep runtime/provider settings, but avoid copying global history.
-		cfg.CommandHistory = nil
-		cfg.HistoryIndex = 0
+		// Keep runtime/provider settings, but avoid copying history.
 		cfg.CommandHistoryByPath = nil
 		cfg.HistoryIndexByPath = nil
 

@@ -21,6 +21,7 @@ interface EditorManagerContextValue {
   closeBuffer: (bufferId: string) => void;
   closePane: (paneId: string) => void;
   switchPane: (paneId: string) => void;
+  switchToBuffer: (bufferId: string) => void;
   splitPane: (paneId: string, direction: 'vertical' | 'horizontal') => void;
   closeSplit: () => void;
   setPaneLayout: (layout: PaneLayout) => void;
@@ -291,6 +292,28 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     }
   }, [panes, activePaneId, closeBuffer]);
 
+  // Switch to a different buffer in the active pane
+  const switchToBuffer = useCallback((bufferId: string) => {
+    setActiveBufferId(bufferId);
+    setBuffers(prev => {
+      const newBuffers = new Map(prev);
+      // Deactivate all buffers in this pane, activate the target
+      Array.from(newBuffers.entries()).forEach(([id, buf]) => {
+        if (buf.paneId === activePaneId) {
+          newBuffers.set(id, { ...buf, isActive: id === bufferId });
+        }
+      });
+      const buffer = newBuffers.get(bufferId);
+      if (buffer) {
+        newBuffers.set(bufferId, { ...buffer, isActive: true, paneId: activePaneId });
+      }
+      return newBuffers;
+    });
+    setPanes(prev => prev.map(pane =>
+      pane.id === activePaneId ? { ...pane, bufferId } : pane
+    ));
+  }, [activePaneId]);
+
   // Switch to a different pane
   const switchPane = useCallback((paneId: string) => {
     setActivePaneId(paneId);
@@ -415,6 +438,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     closeBuffer,
     closePane,
     switchPane,
+    switchToBuffer,
     splitPane,
     closeSplit,
     setPaneLayout,

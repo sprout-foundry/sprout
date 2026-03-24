@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import {
   Hash,
+  Save,
   X,
   ArrowDownToLine,
   Sun,
@@ -14,13 +15,15 @@ interface EditorToolbarProps {
   showLineNumbers: boolean;
   onToggleLineNumbers: () => void;
   onGoToLine: (line: number) => void;
+  onSave: () => void;
 }
 
 const EditorToolbar: React.FC<EditorToolbarProps> = ({
   paneId: _paneId,
   showLineNumbers,
   onToggleLineNumbers,
-  onGoToLine
+  onGoToLine,
+  onSave
 }) => {
   const { theme, themePack, toggleTheme } = useTheme();
   const [showGoToLine, setShowGoToLine] = useState(false);
@@ -76,6 +79,15 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
       </div>
 
       <div className="toolbar-group">
+        {/* Save */}
+        <button
+          className="toolbar-button"
+          onClick={onSave}
+          title="Save file (Ctrl+S)"
+        >
+          <span className="toolbar-icon"><Save size={16} /></span>
+        </button>
+
         {/* Theme Toggle */}
         <button
           className="toolbar-button"

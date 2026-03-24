@@ -70,6 +70,10 @@
   padding: 12px;
 }
 
+.chat-main.panel-collapsed {
+  gap: 0;
+}
+
 .chat-side-resizer {
   width: 6px;
   min-height: 0;
@@ -78,6 +82,11 @@
   border: 1px solid var(--border-subtle);
   cursor: col-resize;
   transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.chat-side-resizer.hidden {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .chat-side-resizer:hover {
@@ -197,6 +206,98 @@
   color: var(--text-tertiary);
   font-size: 12px;
   padding: 10px 8px;
+}
+
+.chat-manage-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.manage-intro {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.manage-notice {
+  border-radius: 8px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 12px;
+  padding: 8px 10px;
+}
+
+.manage-notice.success {
+  border-color: var(--accent-success);
+  background: var(--color-success-bg);
+  color: var(--accent-success);
+}
+
+.manage-notice.error {
+  border-color: var(--accent-error);
+  background: var(--color-error-bg);
+  color: var(--accent-error);
+}
+
+.manage-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.manage-action-btn {
+  width: 100%;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  text-align: left;
+  padding: 10px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.manage-action-btn:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--bg-secondary);
+}
+
+.manage-action-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.manage-action-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.manage-action-label {
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.manage-action-command {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.manage-action-description {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 .history-toolbar {

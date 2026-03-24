@@ -620,16 +620,6 @@ const Chat: React.FC<ChatProps> = ({
 
   return (
     <div className="chat-shell">
-      <div className="chat-header">
-        <h2><span className="header-icon"><Bot size={16} /></span>AI Assistant</h2>
-        {isProcessing && (
-          <div className="header-status">
-            <span className="status-dot processing"></span>
-            Processing
-          </div>
-        )}
-      </div>
-
       <div
         className={`chat-main ${sidePanelCollapsed ? 'panel-collapsed' : ''}`}
         ref={chatMainRef}

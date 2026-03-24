@@ -46,14 +46,19 @@ interface CodeEditorProps {
 const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
-  const [content, setContent] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isModified, setIsModified] = useState<boolean>(false);
   const [pendingFile, setPendingFile] = useState<FileInfo | null>(null);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState<boolean>(false);
-  const originalContentRef = useRef('');
+  const [lineCount, setLineCount] = useState<number>(0);
+  const [charCount, setCharCount] = useState<number>(0);
+  
+  // Refs to avoid stale closures and prevent unnecessary re-renders
+  const fileContentRef = useRef<string>('');
+  const originalContentRef = useRef<string>('');
+  const saveFileRef = useRef<(() => void) | undefined>(undefined);
   const { preset: hotkeyPreset } = useHotkeys();
   const { themePack } = useTheme();
 
@@ -85,6 +90,15 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
     }
   };
 
+  // Update editor stats from the view
+  const updateEditorStats = useCallback(() => {
+    if (viewRef.current) {
+      const doc = viewRef.current.state.doc;
+      setLineCount(doc.lines);
+      setCharCount(doc.length);
+    }
+  }, []);
+
   // Load file content
   const loadFile = useCallback(async (filePath: string) => {
     setLoading(true);
@@ -97,7 +111,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
       }
 
       const rawContent = await response.text();
-      setContent(rawContent);
+      fileContentRef.current = rawContent;
       originalContentRef.current = rawContent;
       setIsModified(false);
 
@@ -110,13 +124,14 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
             insert: rawContent
           }
         });
+        updateEditorStats();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false);
     }
-  }, [setLoading, setError, setContent, setIsModified]);
+  }, [updateEditorStats]);
 
   // Save file content
   const saveFile = useCallback(async () => {
@@ -138,7 +153,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
       if (data.success === true || data.message === 'File saved successfully') {
         setIsModified(false);
         originalContentRef.current = currentContent;
-        setContent(currentContent);
+        fileContentRef.current = currentContent;
+        updateEditorStats();
         if (onSave) {
           onSave(currentContent);
         }
@@ -150,13 +166,18 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
     } finally {
       setSaving(false);
     }
-  }, [file, onSave]);
+  }, [file, onSave, updateEditorStats]);
+
+  // Keep saveFileRef updated
+  useEffect(() => {
+    saveFileRef.current = saveFile;
+  }, [saveFile]);
 
   // Handle file switch with unsaved changes check
   useEffect(() => {
     if (!file) {
-      setContent('');
       originalContentRef.current = '';
+      fileContentRef.current = '';
       setIsModified(false);
       if (viewRef.current) {
         viewRef.current.dispatch({
@@ -166,13 +187,14 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
             insert: ''
           }
         });
+        updateEditorStats();
       }
       return;
     }
 
     if (file.isDir) {
-      setContent('');
       originalContentRef.current = '';
+      fileContentRef.current = '';
       setIsModified(false);
       if (viewRef.current) {
         viewRef.current.dispatch({
@@ -182,6 +204,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
             insert: ''
           }
         });
+        updateEditorStats();
       }
       return;
     }
@@ -199,7 +222,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
 
     // No unsaved changes, load the new file directly
     loadFile(file.path);
-  }, [file, isModified, loadFile]);
+  }, [file, isModified, loadFile, updateEditorStats]);
 
   // Process pending file after dialog decision
   useEffect(() => {
@@ -211,20 +234,25 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
   }, [loadFile, pendingFile, showUnsavedDialog]);
 
   // Initialize CodeMirror editor
+  // Only re-create when config changes, NOT on content changes
+  const fileKey = file?.path || '';
   useEffect(() => {
     if (!editorRef.current) return;
 
     const updateListener = EditorView.updateListener.of((update) => {
       if (update.docChanged) {
         const newContent = update.state.doc.toString();
-        setContent(newContent);
-        setIsModified(newContent !== originalContentRef.current);
+        const isMod = newContent !== originalContentRef.current;
+        setIsModified(isMod);
+        updateEditorStats();
       }
     });
 
     const customKeymap = getHotkeyPresetKeymap(hotkeyPreset, {
       onSave: () => {
-        saveFile();
+        if (saveFileRef.current) {
+          saveFileRef.current();
+        }
       },
       onGoToLine: () => {
         // CodeEditor doesn't expose toolbar goto-line; keep no-op for now.
@@ -235,7 +263,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
     });
 
     const state = EditorState.create({
-      doc: content,
+      doc: fileContentRef.current,
       extensions: [
         updateListener,
         keymap.of(defaultKeymap),
@@ -270,11 +298,14 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
 
     viewRef.current = view;
 
+    // Update stats after view is created
+    updateEditorStats();
+
     return () => {
       view.destroy();
       viewRef.current = null;
     };
-  }, [file, content, hotkeyPreset, themePack.id, saveFile]);
+  }, [fileKey, file?.ext, hotkeyPreset, themePack.id, themePack.editorSyntaxStyle, updateEditorStats]);
 
   // Handle dialog actions
   const handleSaveAndSwitch = async () => {
@@ -350,10 +381,10 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
       <div className="editor-footer">
         <div className="editor-stats">
           <span className="line-count">
-            Lines: {content.split('\n').length}
+            Lines: {lineCount}
           </span>
           <span className="char-count">
-            Characters: {content.length}
+            Characters: {charCount}
           </span>
         </div>
         <div className="editor-help">

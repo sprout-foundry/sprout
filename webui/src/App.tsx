@@ -70,12 +70,13 @@ interface AppState {
   isConnected: boolean;
   provider: string;
   model: string;
+  sessionId: string | null;
   queryCount: number;
   messages: Message[];
   logs: LogEntry[];
   isProcessing: boolean;
   lastError: string | null;
-  currentView: 'chat' | 'editor' | 'git' | 'logs';
+  currentView: 'chat' | 'editor' | 'git';
   toolExecutions: ToolExecution[];
   queryProgress: any;
   stats: any; // Enhanced stats from API
@@ -148,8 +149,9 @@ const loadPersistedAppState = (): Partial<AppState> | null => {
     return {
       provider: typeof parsed.provider === 'string' ? parsed.provider : 'unknown',
       model: typeof parsed.model === 'string' ? parsed.model : 'unknown',
+      sessionId: typeof parsed.sessionId === 'string' ? parsed.sessionId : null,
       queryCount: typeof parsed.queryCount === 'number' ? parsed.queryCount : 0,
-      currentView: ['chat', 'editor', 'git', 'logs'].includes(parsed.currentView) ? parsed.currentView : 'chat',
+      currentView: ['chat', 'editor', 'git'].includes(parsed.currentView) ? parsed.currentView : 'chat',
       messages: Array.isArray(parsed.messages)
         ? parsed.messages.map((message: any) => ({
             ...message,
@@ -188,6 +190,7 @@ function App() {
     return {
       provider: 'unknown',
       model: 'unknown',
+      sessionId: null,
       queryCount: 0,
       messages: [],
       logs: [],
@@ -225,6 +228,7 @@ function App() {
         JSON.stringify({
           provider: state.provider,
           model: state.model,
+          sessionId: state.sessionId,
           queryCount: state.queryCount,
           currentView: state.currentView,
           messages: state.messages.slice(-200),
@@ -239,6 +243,7 @@ function App() {
   }, [
     state.provider,
     state.model,
+    state.sessionId,
     state.queryCount,
     state.currentView,
     state.messages,
@@ -292,6 +297,7 @@ function App() {
       case 'connection_status':
         logEntry.category = 'system';
         logEntry.level = event.data.connected ? 'success' : 'warning';
+        const incomingSessionId = typeof event.data?.session_id === 'string' ? event.data.session_id : null;
 
         // Debounce connection status updates to prevent rapid re-renders
         const newConnectionState = event.data.connected;
@@ -308,6 +314,10 @@ function App() {
             lastConnectionStateRef.current = newConnectionState;
             setState(prev => ({
               ...prev,
+              sessionId: incomingSessionId || prev.sessionId,
+              messages: incomingSessionId && prev.sessionId && incomingSessionId !== prev.sessionId ? [] : prev.messages,
+              toolExecutions: incomingSessionId && prev.sessionId && incomingSessionId !== prev.sessionId ? [] : prev.toolExecutions,
+              queryProgress: incomingSessionId && prev.sessionId && incomingSessionId !== prev.sessionId ? null : prev.queryProgress,
               isConnected: newConnectionState,
               logs: [...prev.logs, logEntry]
             }));
@@ -738,7 +748,7 @@ function App() {
     });
   }, [wsService]);
 
-  const handleViewChange = useCallback((view: 'chat' | 'editor' | 'git' | 'logs') => {
+  const handleViewChange = useCallback((view: 'chat' | 'editor' | 'git') => {
     setState(prev => ({
       ...prev,
       currentView: view
@@ -883,7 +893,6 @@ function App() {
                 onGitDiscard={handleGitDiscard}
                 selectedGitFilePath={selectedGitFilePath}
                 onGitFileSelect={setSelectedGitFilePath}
-                onClearLogs={() => setState(prev => ({ ...prev, logs: [] }))}
                 onTerminalOutput={handleTerminalOutput}
                 onTerminalExpandedChange={setIsTerminalExpanded}
                 isConnected={state.isConnected}

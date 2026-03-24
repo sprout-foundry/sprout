@@ -111,10 +111,17 @@
   padding: 3px 8px;
   border-radius: 6px;
   font-size: 12px;
+  display: flex;
+  align-items: center;
 }
 
 .terminal-btn:hover {
   color: #f8fafc;
+}
+
+.split-btn:hover {
+  border-color: rgba(34, 211, 238, 0.4);
+  background: rgba(8, 51, 68, 0.5);
 }
 
 .clear-btn:hover {
@@ -133,6 +140,109 @@
   display: none;
 }
 
+/* ── Pane container ──────────────────────────────────────── */
+
+.terminal-panes-container {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  height: 100%;
+  overflow: hidden;
+}
+
+.terminal-pane-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.terminal-panes-container.split .terminal-pane-wrapper {
+  flex: none;
+}
+
+/* Draggable vertical divider between split panes */
+.terminal-split-divider {
+  width: 5px;
+  flex-shrink: 0;
+  background: rgba(148, 163, 184, 0.16);
+  cursor: col-resize;
+  position: relative;
+  transition: background 0.15s;
+}
+
+.terminal-split-divider:hover,
+.terminal-split-divider:active {
+  background: rgba(34, 211, 238, 0.45);
+}
+
+/* ── Individual pane ─────────────────────────────────────── */
+
+.terminal-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  height: 100%;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* Thin header shown per-pane only in split mode */
+.terminal-pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 24px;
+  padding: 0 6px;
+  background: rgba(15, 23, 42, 0.6);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  flex-shrink: 0;
+}
+
+.terminal-pane-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.terminal-pane-dot.connected {
+  background: #10b981;
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.15);
+}
+
+.terminal-pane-dot.disconnected {
+  background: #f43f5e;
+  box-shadow: 0 0 0 4px rgba(244, 63, 94, 0.15);
+}
+
+.terminal-pane-close {
+  background: transparent;
+  border: none;
+  color: rgba(148, 163, 184, 0.6);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.terminal-pane-close:hover {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.15);
+}
+
+.terminal-pane-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Legacy selector kept for compatibility */
 .terminal-output {
   flex: 1;
   overflow-y: auto;
@@ -205,8 +315,14 @@
 
 .terminal-xterm .xterm {
   height: 100%;
+  letter-spacing: normal !important;
 }
 
 .terminal-xterm .xterm-viewport {
   overflow-y: auto !important;
+}
+
+.terminal-xterm .xterm-rows,
+.terminal-xterm .xterm-rows span {
+  letter-spacing: normal !important;
 }

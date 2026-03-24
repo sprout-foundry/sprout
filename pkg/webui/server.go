@@ -48,6 +48,8 @@ type ReactWebServer struct {
 	mutex           sync.RWMutex
 	startTime       time.Time
 	queryCount      int
+	fixReviewJobs   map[string]*gitFixReviewJob
+	fixReviewMu     sync.RWMutex
 }
 
 // NewReactWebServer creates a new React web server
@@ -89,6 +91,7 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int) 
 		},
 		terminalManager: NewTerminalManager(workspaceRoot),
 		startTime:       time.Now(),
+		fixReviewJobs:   make(map[string]*gitFixReviewJob),
 	}
 }
 
@@ -123,6 +126,11 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/git/unstage", ws.handleAPIGitUnstage)
 	mux.HandleFunc("/api/git/discard", ws.handleAPIGitDiscard)
 	mux.HandleFunc("/api/git/commit", ws.handleAPIGitCommit)
+	mux.HandleFunc("/api/git/commit-message", ws.handleAPIGitCommitMessage)
+	mux.HandleFunc("/api/git/deep-review", ws.handleAPIGitDeepReview)
+	mux.HandleFunc("/api/git/deep-review/fix", ws.handleAPIGitDeepReviewFix)
+	mux.HandleFunc("/api/git/deep-review/fix/start", ws.handleAPIGitDeepReviewFixStart)
+	mux.HandleFunc("/api/git/deep-review/fix/status", ws.handleAPIGitDeepReviewFixStatus)
 	mux.HandleFunc("/api/git/stage-all", ws.handleAPIGitStageAll)
 	mux.HandleFunc("/api/git/unstage-all", ws.handleAPIGitUnstageAll)
 	mux.HandleFunc("/api/git/diff", ws.handleAPIGitDiff)
@@ -133,6 +141,9 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/history/rollback", ws.handleAPIHistoryRollback)
 	mux.HandleFunc("/api/history/changes", ws.handleAPIHistoryChanges)
 	mux.HandleFunc("/api/terminal/sessions", ws.handleAPITerminalSessions)
+	// Session API
+	mux.HandleFunc("/api/sessions", ws.handleAPISessions)
+	mux.HandleFunc("/api/sessions/restore", ws.handleAPIRestoreSession)
 	// Search API
 	mux.HandleFunc("/api/search", ws.handleAPIQuerySearch)
 	mux.HandleFunc("/api/search/replace", ws.handleAPIQuerySearchReplace)

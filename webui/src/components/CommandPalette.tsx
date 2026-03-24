@@ -227,6 +227,15 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     const totalItems = mode === 'command' ? flatFilteredItems.length : filteredFiles.length;
 
+    // Prevent browser defaults for Ctrl/Cmd+key combinations so they don't
+    // trigger browser actions (e.g. Ctrl+P = print, Ctrl+E = address bar).
+    // The HotkeyContext global listener won't fire while an input is focused,
+    // so we must intercept these here.
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
     switch (e.key) {
       case 'Escape':
         e.preventDefault();
@@ -245,8 +254,9 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
 
       case 'Enter':
         e.preventDefault();
+        e.stopPropagation();
         if (mode === 'command') {
-          const item = flatFilteredItems[selectedIndex];
+          const item = flatFilteredItems[navigableIndex];
           if (item && !item.isCategoryHeader) {
             executeCommand(item.id);
           }

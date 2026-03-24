@@ -337,6 +337,120 @@ class ApiService {
     }
   }
 
+  async generateCommitMessage(): Promise<{
+    message: string;
+    commit_message: string;
+    provider?: string;
+    model?: string;
+  }> {
+    try {
+      const response = await fetch('/api/git/commit-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || `HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to generate commit message:', error);
+      throw error;
+    }
+  }
+
+  async generateDeepReview(): Promise<{
+    message: string;
+    status: string;
+    feedback: string;
+    detailed_guidance?: string;
+    suggested_new_prompt?: string;
+    review_output: string;
+    provider?: string;
+    model?: string;
+  }> {
+    try {
+      const response = await fetch('/api/git/deep-review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || `HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to generate deep review:', error);
+      throw error;
+    }
+  }
+
+  async fixFromDeepReview(reviewOutput: string): Promise<{
+    message: string;
+    result: string;
+  }> {
+    try {
+      const response = await fetch('/api/git/deep-review/fix', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ review_output: reviewOutput }),
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || `HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to run deep review fix:', error);
+      throw error;
+    }
+  }
+
+  async startFixFromDeepReview(reviewOutput: string): Promise<{
+    message: string;
+    job_id: string;
+    session_id: string;
+  }> {
+    try {
+      const response = await fetch('/api/git/deep-review/fix/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ review_output: reviewOutput }),
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || `HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to start deep review fix:', error);
+      throw error;
+    }
+  }
+
+  async getFixFromDeepReviewStatus(jobId: string, since = 0): Promise<{
+    message: string;
+    job_id: string;
+    session_id: string;
+    status: 'running' | 'completed' | 'error';
+    logs: string[];
+    next_index: number;
+    result: string;
+    error: string;
+  }> {
+    try {
+      const response = await fetch(`/api/git/deep-review/fix/status?job_id=${encodeURIComponent(jobId)}&since=${since}`);
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || `HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to fetch deep review fix status:', error);
+      throw error;
+    }
+  }
+
   async getGitDiff(path: string): Promise<{
     message: string;
     path: string;
@@ -454,6 +568,55 @@ class ApiService {
       return await response.json();
     } catch (error) {
       console.error('Failed to rollback:', error);
+      throw error;
+    }
+  }
+
+  // ── Session History API ─────────────────────────────────────────
+
+  async getSessions(scope?: string): Promise<{
+    message: string;
+    sessions: Array<{
+      session_id: string;
+      name: string;
+      working_directory: string;
+      last_updated: string;
+      message_count: number;
+      total_tokens: number;
+    }>;
+    current_session_id: string;
+  }> {
+    try {
+      const params = new URLSearchParams();
+      if (scope) params.set('scope', scope);
+      const url = `/api/sessions${params.toString() ? '?' + params.toString() : ''}`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to get sessions:', error);
+      throw error;
+    }
+  }
+
+  async restoreSession(sessionId: string): Promise<{
+    message: string;
+    session_id: string;
+    message_count: number;
+    total_tokens: number;
+    name?: string;
+    working_directory?: string;
+  }> {
+    try {
+      const response = await fetch('/api/sessions/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId }),
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to restore session:', error);
       throw error;
     }
   }

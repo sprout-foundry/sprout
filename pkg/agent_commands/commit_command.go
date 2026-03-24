@@ -6,12 +6,11 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/factory"
-	"github.com/alantheprice/ledit/pkg/utils"
+	gitops "github.com/alantheprice/ledit/pkg/git"
 )
 
 // --- Output helpers ---
@@ -386,16 +385,6 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 	}
 	branch := strings.TrimSpace(string(branchOutput))
 
-	// Check if it's a default branch
-	defaultBranches := []string{"master", "main", "develop", "dev"}
-	isDefaultBranch := false
-	for _, db := range defaultBranches {
-		if branch == db {
-			isDefaultBranch = true
-			break
-		}
-	}
-
 	// Get staged files with their status
 	stagedFilesOutput, err := exec.Command("git", "diff", "--cached", "--name-status").CombinedOutput()
 	if err != nil {
@@ -403,8 +392,7 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 	}
 
 	// Parse file actions and filenames
-	fileActions := []string{}
-	primaryAction := ""
+	fileChanges := make([]gitops.CommitFileChange, 0)
 	stagedFilenames := []string{}
 	lines := strings.Split(strings.TrimSpace(string(stagedFilesOutput)), "\n")
 	for _, line := range lines {
@@ -416,41 +404,11 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 			status := parts[0]
 			filepath := strings.Join(parts[1:], " ")
 			stagedFilenames = append(stagedFilenames, filepath)
-
-			action := ""
-			switch status {
-			case "A":
-				action = "Adds"
-			case "D":
-				action = "Deletes"
-			case "R":
-				action = "Renames"
-			default:
-				action = "Updates"
-			}
-
-			if primaryAction == "" {
-				primaryAction = action
-			}
-
-			fileActions = append(fileActions, fmt.Sprintf("%s %s", action, filepath))
+			fileChanges = append(fileChanges, gitops.CommitFileChange{
+				Status: status,
+				Path:   filepath,
+			})
 		}
-	}
-
-	// Build the file actions summary (detailed for single file, generic for multi-file)
-	var fileActionsSummary string
-	if len(fileActions) == 1 {
-		// Single file: include the specific action
-		fileActionsSummary = fileActions[0]
-	} else {
-		// Multi-file: use generic summary
-		fileActionsSummary = fmt.Sprintf("%s %d files", primaryAction, len(fileActions))
-	}
-
-	// Build branch prefix if not on default branch
-	branchPrefix := ""
-	if !isDefaultBranch {
-		branchPrefix = fmt.Sprintf("[%s] ", branch)
 	}
 
 	var commitMessage string
@@ -491,130 +449,17 @@ retryLoop:
 
 			break
 		}
-		// Title budget applies to model-generated message text only.
-		prefixAndActions := branchPrefix + fileActionsSummary + " - "
-		availableSpace := 72
-
-		// Optimize diff for API efficiency
-		optimizer := utils.NewDiffOptimizer()
-		optimizedDiff := optimizer.OptimizeDiff(string(diffOutput))
-
-		// Build context info for large files
-		var contextInfo string
-		if len(optimizedDiff.FileSummaries) > 0 {
-			contextInfo = "\n\nFile summaries for optimized content:\n"
-			for file, summary := range optimizedDiff.FileSummaries {
-				contextInfo += fmt.Sprintf("- %s: %s\n", file, summary)
-			}
-		}
-
-		// Create the commit message generation prompt
-		promptContent := fmt.Sprintf("%s%s", optimizedDiff.OptimizedContent, contextInfo)
-
-		// Add user instructions at the beginning for higher priority
-		if c.userInstructions != "" {
-			promptContent = fmt.Sprintf("USER INSTRUCTIONS:\n%s\n\nCODE CHANGES:\n%s", c.userInstructions, promptContent)
-		}
-
-		commitPrompt := fmt.Sprintf(`Base responses on the following changes:
-
-%s
-
-Generate a concise git commit title starting with the word: '%s'.
-The total length MUST be under %d characters. Don't include the file name or any
-colons. The title should be a single line without any markdown formatting. Only
-return the short title and nothing else.
-
-CRITICAL: Do NOT use markdown code blocks. Return plain text only.`, promptContent, primaryAction, availableSpace)
-
-		// Get commit message title using fast model
-		messages := []api.Message{
-			{
-				Role:    "system",
-				Content: "You are a git commit message generator. Generate concise, clear commit messages following conventional commit standards.",
-			},
-			{
-				Role:    "user",
-				Content: commitPrompt,
-			},
-		}
-
-		resp, err := client.SendChatRequest(messages, nil, "")
+		result, err := gitops.GenerateCommitMessageFromStagedDiff(client, gitops.CommitMessageOptions{
+			Diff:             string(diffOutput),
+			Branch:           branch,
+			FileChanges:      fileChanges,
+			UserInstructions: c.userInstructions,
+		})
 		if err != nil {
 			return fmt.Errorf("failed to generate commit message: %v", err)
 		}
-
-		if len(resp.Choices) == 0 {
-			return fmt.Errorf("no response from model")
-		}
-
-		shortTitle := normalizeShortTitle(resp.Choices[0].Message.Content)
-		shortTitle = truncateRunes(shortTitle, availableSpace)
-
-		// Now generate the description (reuse the optimized diff)
-		// Build prompt content with user instructions if provided
-		descPromptContent := fmt.Sprintf("%s%s", optimizedDiff.OptimizedContent, contextInfo)
-
-		// Add user instructions at the beginning for higher priority
-		if c.userInstructions != "" {
-			descPromptContent = fmt.Sprintf("USER INSTRUCTIONS:\n%s\n\nCODE CHANGES:\n%s", c.userInstructions, descPromptContent)
-		}
-
-		descPrompt := fmt.Sprintf(`Base responses on the following changes:
-
-%s
-
-Generate a Git commit message summary. The message should follow these rules:
-1. The total length MUST be under 500 characters.
-2. DO NOT include a title.
-3. DO NOT include any code blocks or filenames.
-4. DO NOT include any markdown formatting. 
-5. DO NOT include any ordered lists or unordered lists.
-6. Message will be a SINGLE paragraph without any markdown formatting.
-7. The message should be clear and concise and only give reasoning for the change if provided by the user.`, descPromptContent)
-
-		// Get description
-		messages = []api.Message{
-			{
-				Role: "system",
-				Content: `
-					You are a git commit message generator. Generate clear, concise descriptions that follow these immutable rules.
-					RULES:
-					1. The total length MUST be under 500 characters.
-					2. DO NOT include a title.
-					3. DO NOT include any code blocks or filenames.
-					4. DO NOT include any markdown formatting. 
-					5. DO NOT include any ordered lists or unordered lists.
-					6. Message will be a SINGLE paragraph without any markdown formatting.
-					7. The message should be clear and concise and only give reasoning for the change if provided by the user.
-					`,
-			},
-			{
-				Role:    "user",
-				Content: descPrompt,
-			},
-		}
-
-		resp, err = client.SendChatRequest(messages, nil, "")
-		if err != nil {
-			return fmt.Errorf("failed to generate description: %v", err)
-		}
-
-		if len(resp.Choices) == 0 {
-			return fmt.Errorf("no response from model for description")
-		}
-
-		description := strings.TrimSpace(resp.Choices[0].Message.Content)
-
-		// Wrap description at 72 characters
-		wrappedDesc := wrapText(description, 72)
-
-		// Build the full commit message
-		commitTitle := prefixAndActions + shortTitle
-		commitMessage = commitTitle + "\n\n" + wrappedDesc
-
-		// Show token usage (both requests)
-		c.printf("\n$ Tokens used: ~%d (model: %s/%s)\n", resp.Usage.TotalTokens*2, clientType, model)
+		commitMessage = result.Message
+		c.printf("\n$ Tokens used: ~%d (model: %s/%s)\n", result.ApproxTokens, clientType, model)
 
 		// Show staged files summary and commit message (minimal, no emoji)
 		c.println("")
@@ -757,29 +602,4 @@ Generate a Git commit message summary. The message should follow these rules:
 	c.printf("Output: %s\n", string(output))
 
 	return nil
-}
-
-func normalizeShortTitle(raw string) string {
-	title := strings.TrimSpace(raw)
-	if strings.Contains(title, "\n") {
-		title = strings.TrimSpace(strings.SplitN(title, "\n", 2)[0])
-	}
-	title = strings.Trim(title, "`")
-	title = strings.TrimSpace(strings.TrimPrefix(title, "title:"))
-	title = strings.TrimSpace(strings.TrimPrefix(title, "Title:"))
-	return title
-}
-
-func truncateRunes(s string, max int) string {
-	if max <= 0 {
-		return ""
-	}
-	if utf8.RuneCountInString(s) <= max {
-		return s
-	}
-	if max <= 3 {
-		return string([]rune(s)[:max])
-	}
-	runes := []rune(s)
-	return strings.TrimSpace(string(runes[:max-3])) + "..."
 }

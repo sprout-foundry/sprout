@@ -87,7 +87,7 @@ interface AppContentProps {
   onProviderChange: (provider: string) => void;
   onSendMessage: (message: string) => void;
   onGitCommit: (message: string, files: string[]) => Promise<unknown>;
-  onGitAICommit: () => Promise<void>;
+  onGitAICommit: () => Promise<string>;
   onGitStage: (files: string[]) => Promise<void>;
   onGitUnstage: (files: string[]) => Promise<void>;
   onGitDiscard: (files: string[]) => Promise<void>;

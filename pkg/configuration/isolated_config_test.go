@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestBootstrapIsolatedConfig_ClonesWithoutHistory(t *testing.T) {
+func TestBootstrapIsolatedConfig_ClonesProviderSettings(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
 	t.Setenv("XDG_CONFIG_HOME", "")
@@ -20,8 +20,6 @@ func TestBootstrapIsolatedConfig_ClonesWithoutHistory(t *testing.T) {
 
 	source := NewConfig()
 	source.LastUsedProvider = "openrouter"
-	source.CommandHistory = []string{"legacy"}
-	source.HistoryIndex = 5
 	source.CommandHistoryByPath = map[string][]string{"/tmp/project": {"cmd1"}}
 	source.HistoryIndexByPath = map[string]int{"/tmp/project": 1}
 
@@ -53,17 +51,11 @@ func TestBootstrapIsolatedConfig_ClonesWithoutHistory(t *testing.T) {
 	if isolatedCfg.LastUsedProvider != "openrouter" {
 		t.Fatalf("expected provider preserved, got %q", isolatedCfg.LastUsedProvider)
 	}
-	if len(isolatedCfg.CommandHistory) != 0 {
-		t.Fatalf("expected command history cleared, got %#v", isolatedCfg.CommandHistory)
-	}
-	if isolatedCfg.HistoryIndex != 0 {
-		t.Fatalf("expected history index cleared, got %d", isolatedCfg.HistoryIndex)
-	}
 	if len(isolatedCfg.CommandHistoryByPath) != 0 {
-		t.Fatalf("expected path history cleared, got %#v", isolatedCfg.CommandHistoryByPath)
+		t.Fatalf("expected command history cleared, got %#v", isolatedCfg.CommandHistoryByPath)
 	}
 	if len(isolatedCfg.HistoryIndexByPath) != 0 {
-		t.Fatalf("expected path history index cleared, got %#v", isolatedCfg.HistoryIndexByPath)
+		t.Fatalf("expected history index cleared, got %#v", isolatedCfg.HistoryIndexByPath)
 	}
 	if _, err := os.Stat(filepath.Join(isolatedDir, APIKeysFileName)); !os.IsNotExist(err) {
 		t.Fatalf("expected api keys to remain global-only, got err=%v", err)

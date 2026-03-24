@@ -10,7 +10,6 @@ import (
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/filesystem"
-	"github.com/alantheprice/ledit/pkg/security_validator"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
@@ -42,8 +41,7 @@ type ToolHandlerWithImages func(ctx context.Context, a *Agent, args map[string]i
 
 // ToolRegistry manages tool configurations in a data-driven way
 type ToolRegistry struct {
-	tools     map[string]ToolConfig
-	validator *security_validator.Validator
+	tools map[string]ToolConfig
 }
 
 var defaultToolRegistry *ToolRegistry
@@ -333,11 +331,6 @@ func newDefaultToolRegistry() *ToolRegistry {
 	return registry
 }
 
-// GetValidator returns the security validator (used for fast path optimization)
-func (r *ToolRegistry) GetValidator() *security_validator.Validator {
-	return r.validator
-}
-
 // RegisterTool adds a tool to the registry
 func (r *ToolRegistry) RegisterTool(config ToolConfig) {
 	r.tools[config.Name] = config
@@ -375,13 +368,6 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 		}
 	}
 
-	// Security validation (if enabled and not bypassed)
-	if agent != nil && !filesystem.SecurityBypassEnabled(ctx) {
-		if validationErr := r.validateToolSecurity(ctx, toolName, args, agent); validationErr != nil {
-			return nil, "", validationErr
-		}
-	}
-
 	// Validate and extract parameters
 	validatedArgs, err := r.validateParameters(tool, args, agent)
 	if err != nil {
@@ -394,70 +380,6 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 	}
 	result, err := tool.Handler(ctx, agent, validatedArgs)
 	return nil, result, err
-}
-
-// validateToolSecurity performs LLM-based security validation if enabled
-func (r *ToolRegistry) validateToolSecurity(ctx context.Context, toolName string, args map[string]interface{}, agent *Agent) error {
-	// Get config from agent
-	if agent.configManager == nil {
-		return nil // No config manager, skip validation
-	}
-
-	// Check for critical system operations FIRST - these are ALWAYS blocked, even in unsafe mode
-	if security_validator.IsCriticalSystemOperation(toolName, args) {
-		return fmt.Errorf("CRITICAL: operation blocked - this would permanently damage the system: %s", toolName)
-	}
-
-	// Unsafe mode bypasses most security checks
-	if agent.GetUnsafeMode() {
-		agent.debugLog("[UNLOCK] Unsafe mode enabled: skipping security validation for %s\n", toolName)
-		return nil
-	}
-
-	config := agent.configManager.GetConfig()
-	if config == nil || config.SecurityValidation == nil || !config.SecurityValidation.Enabled {
-		return nil // Security validation disabled
-	}
-
-	// Create or reuse validator
-	if r.validator == nil {
-		// Get logger and interactive mode from agent
-		agentConfig := agent.GetConfig()
-		isNonInteractive := agentConfig != nil && agentConfig.SkipPrompt
-		logger := utils.GetLogger(isNonInteractive)
-		interactive := !isNonInteractive
-
-		validator, err := security_validator.NewValidator(config.SecurityValidation, logger, interactive)
-		if err != nil {
-			agent.debugLog("Failed to create security validator: %v\n", err)
-			return nil // Fail open - don't block operations if validator fails to init
-		}
-		r.validator = validator
-		agent.debugLog("[ok] Security validator initialized successfully\n")
-	}
-
-	// Perform validation
-	result, err := r.validator.ValidateToolCall(ctx, toolName, args)
-	if err != nil {
-		agent.debugLog("Security validation error: %v\n", err)
-		return nil // Fail open on errors
-	}
-
-	// Log the validation result
-	agent.debugLog("[LOCK] Security validation: %s (%s) - IsSoftBlock: %v, ShouldBlock: %v, ShouldConfirm: %v\n",
-		toolName, result.RiskLevel, result.IsSoftBlock, result.ShouldBlock, result.ShouldConfirm)
-
-	// Handle blocks (user rejected in interactive mode or hard block)
-	if result.ShouldBlock {
-		return fmt.Errorf("operation blocked by security validation: %s (risk level: %s)\nReasoning: %s",
-			toolName, result.RiskLevel, result.Reasoning)
-	}
-
-	// ShouldConfirm is already handled by ValidateToolCall in interactive mode
-	// (the user is prompted there). In non-interactive mode, the validator's
-	// applyThreshold sets ShouldBlock=true for dangerous operations, so
-	// CAUTION is auto-allowed with a log warning.
-	return nil
 }
 
 // handleFileSecurityError checks if an error is due to filesystem security and prompts the user

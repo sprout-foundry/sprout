@@ -4,10 +4,8 @@ package cmd
 
 import (
 	commands "github.com/alantheprice/ledit/pkg/agent_commands"
-	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/console"
 	"github.com/alantheprice/ledit/pkg/events"
-	"github.com/alantheprice/ledit/pkg/security_validator"
 	"github.com/alantheprice/ledit/pkg/utils"
 	"github.com/alantheprice/ledit/pkg/webui"
 	"github.com/alantheprice/ledit/pkg/zsh"
@@ -28,10 +26,8 @@ func init() {
 // Ensure imports are used
 var (
 	_ = commands.NewCommandRegistry
-	_ = configuration.SecurityValidationConfig{}
 	_ = console.NewCIOutputHandler
 	_ = events.NewEventBus
-	_ = security_validator.NewValidator
 	_ = utils.GetLogger
 	_ = webui.NewReactWebServer
 	_ = zsh.IsCommand

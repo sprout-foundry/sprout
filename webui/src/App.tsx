@@ -213,6 +213,8 @@ function App() {
   const [isTerminalExpanded, setIsTerminalExpanded] = useState(false);
   const lastChunkRef = useRef<string>('');
   const activeRequestsRef = useRef(0);
+  const queuedMessagesRef = useRef<string[]>([]);
+  const [queuedMessagesCount, setQueuedMessagesCount] = useState(0);
   const [recentFiles, setRecentFiles] = useState<Array<{ path: string; modified: boolean }>>([]);
   const [gitRefreshToken, setGitRefreshToken] = useState(0);
   const [selectedGitFilePath, setSelectedGitFilePath] = useState<string | null>(null);
@@ -691,11 +693,57 @@ function App() {
     debugLog('[OK] Content providers registered');
   }, []);
 
+  // Listen for session-restored events from Chat.tsx to populate messages
+  useEffect(() => {
+    const handleSessionRestored = (event: Event) => {
+      const customEvent = event as CustomEvent<{ messages: Array<{ role: string; content: string }> }>;
+      const rawMessages = customEvent.detail?.messages;
+      if (!Array.isArray(rawMessages)) return;
+
+      // Map backend Message format { role, content } to frontend Message format { id, type, content, timestamp }
+      // Only include user and assistant messages (skip system/tool)
+      const restoredMessages: Message[] = rawMessages
+        .filter((m) => m.role === 'user' || m.role === 'assistant')
+        .map((m, i) => ({
+          id: `restored-${i}`,
+          type: m.role as 'user' | 'assistant',
+          content: typeof m.content === 'string' ? m.content : '',
+          timestamp: new Date()
+        }));
+
+      if (restoredMessages.length > 0) {
+        setState(prev => ({
+          ...prev,
+          messages: restoredMessages
+        }));
+      }
+    };
+
+    window.addEventListener('ledit:session-restored', handleSessionRestored);
+    return () => window.removeEventListener('ledit:session-restored', handleSessionRestored);
+  }, []);
+
   const handleSendMessage = useCallback(async (message: string, options?: { allowConcurrent?: boolean }) => {
     if (!message.trim()) return;
+    const trimmedMessage = message.trim();
     const allowConcurrent = options?.allowConcurrent === true;
     if (!allowConcurrent && activeRequestsRef.current > 0) {
-      throw new Error('Another request is already running');
+      if (trimmedMessage.startsWith('/')) {
+        throw new Error('Slash commands cannot steer an active run. Use Queue.');
+      }
+      setState(prev => ({
+        ...prev,
+        lastError: null,
+        messages: [...prev.messages, {
+          id: Date.now().toString(),
+          type: 'user',
+          content: trimmedMessage,
+          timestamp: new Date()
+        }]
+      }));
+      await apiService.steerQuery(trimmedMessage);
+      setInputValue('');
+      return;
     }
     activeRequestsRef.current += 1;
 
@@ -707,8 +755,8 @@ function App() {
     }));
 
     try {
-      debugLog('[>>] Sending message:', message);
-      await apiService.sendQuery(message);
+      debugLog('[>>] Sending message:', trimmedMessage);
+      await apiService.sendQuery(trimmedMessage);
       setInputValue('');
       debugLog('[OK] Message sent successfully');
     } catch (error) {
@@ -730,6 +778,40 @@ function App() {
       }));
     }
   }, [apiService]);
+
+  const handleQueueMessage = useCallback((message: string) => {
+    const trimmed = message.trim();
+    if (!trimmed) return;
+    queuedMessagesRef.current.push(trimmed);
+    setQueuedMessagesCount(queuedMessagesRef.current.length);
+  }, []);
+
+  useEffect(() => {
+    if (state.isProcessing || activeRequestsRef.current > 0) {
+      return;
+    }
+    if (queuedMessagesRef.current.length === 0) {
+      return;
+    }
+
+    const next = queuedMessagesRef.current.shift();
+    setQueuedMessagesCount(queuedMessagesRef.current.length);
+    if (!next) return;
+
+    handleSendMessage(next).catch((error) => {
+      const errorMsg = error instanceof Error ? error.message : 'Failed to send queued message';
+      setState(prev => ({
+        ...prev,
+        lastError: `Failed to send queued message: ${errorMsg}`,
+        messages: [...prev.messages, {
+          id: Date.now().toString(),
+          type: 'assistant',
+          content: `[FAIL] Error: ${errorMsg}`,
+          timestamp: new Date()
+        }]
+      }));
+    });
+  }, [state.isProcessing, handleSendMessage]);
 
   
   const handleModelChange = useCallback((model: string) => {
@@ -887,6 +969,8 @@ function App() {
                 onModelChange={handleModelChange}
                 onProviderChange={handleProviderChange}
                 onSendMessage={handleSendMessage}
+                onQueueMessage={handleQueueMessage}
+                queuedMessagesCount={queuedMessagesCount}
                 onGitCommit={handleGitCommit}
                 onGitAICommit={handleGitAICommit}
                 onGitStage={handleGitStage}

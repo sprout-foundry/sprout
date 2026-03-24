@@ -181,6 +181,46 @@
   box-shadow: none;
 }
 
+.queue-button {
+  position: relative;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.queue-button:hover:not(:disabled) {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+  background: var(--bg-elevated);
+}
+
+.queue-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.queue-count {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--accent-primary);
+  color: var(--accent-fg);
+  font-size: 10px;
+  line-height: 14px;
+  font-weight: 700;
+}
+
 .new-session-button {
   background: transparent;
   color: var(--text-secondary);

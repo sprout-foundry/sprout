@@ -136,8 +136,7 @@ type Agent struct {
 	// Filesystem security bypass approval - once user approves access outside CWD,
 	// all subsequent requests in the session are allowed without re-prompting
 	securityBypassApproved bool
-securityBypassMu       sync.RWMutex
-
+	securityBypassMu       sync.RWMutex
 }
 
 func isDebugEnvEnabled() bool {
@@ -488,39 +487,6 @@ func (a *Agent) SetSecurityBypassApproved() {
 	a.securityBypassMu.Lock()
 	defer a.securityBypassMu.Unlock()
 	a.securityBypassApproved = true
-}
-
-// getClientTypeFromName converts provider name to ClientType
-// DEPRECATED: Use configManager.MapStringToClientType instead to handle custom providers
-func getClientTypeFromName(name string) (api.ClientType, error) {
-	switch strings.ToLower(strings.TrimSpace(name)) {
-	case "chutes":
-		return api.ChutesClientType, nil
-	case "openai":
-		return api.OpenAIClientType, nil
-	case "deepinfra":
-		return api.DeepInfraClientType, nil
-	case "deepseek":
-		return api.DeepSeekClientType, nil
-	case "openrouter":
-		return api.OpenRouterClientType, nil
-	case "zai":
-		return api.ZAIClientType, nil
-	case "ollama":
-		return api.OllamaClientType, nil
-	case "ollama-local":
-		return api.OllamaLocalClientType, nil
-	case "ollama-turbo":
-		return api.OllamaTurboClientType, nil
-	case "test":
-		return api.TestClientType, nil
-	// For providers not yet in ClientType constants
-	case "anthropic", "gemini", "groq", "cerebras", "claude", "cohere", "mistral", "lmstudio":
-		return api.ClientType(name), nil
-	default:
-		// Return error for unknown provider, but allow graceful fallback
-		return "", fmt.Errorf("unknown provider: %s (known providers: chutes, openai, deepinfra, openrouter, zai, ollama, ollama-local, ollama-turbo, anthropic, gemini, groq, cerebras, lmstudio)", name)
-	}
 }
 
 // SetInterruptHandler sets the interrupt handler for UI mode
@@ -923,12 +889,6 @@ func (a *Agent) loadHistoryFromConfig() {
 			return
 		}
 	}
-
-	// Legacy fallback for older config files that stored one global history list.
-	if len(config.CommandHistory) > 0 {
-		a.commandHistory = append([]string(nil), config.CommandHistory...)
-		a.historyIndex = -1
-	}
 }
 
 // saveHistoryToConfig saves command history to the configuration
@@ -953,10 +913,6 @@ func (a *Agent) saveHistoryToConfig() {
 			config.CommandHistoryByPath[pathKey] = append([]string(nil), a.commandHistory...)
 			config.HistoryIndexByPath[pathKey] = a.historyIndex
 		}
-
-		// Legacy fields are no longer actively written.
-		config.CommandHistory = nil
-		config.HistoryIndex = 0
 		return nil
 	}); err != nil && a.debug {
 		a.debugLog("Failed to save command history to config: %v\n", err)

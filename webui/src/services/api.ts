@@ -166,6 +166,21 @@ class ApiService {
     }
   }
 
+  async steerQuery(query: string): Promise<void> {
+    const response = await fetch('/api/query/steer', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query } as QueryRequest),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(errText || 'Failed to steer query');
+    }
+  }
+
   async checkHealth(): Promise<boolean> {
     try {
       const response = await fetch('/');
@@ -603,6 +618,7 @@ class ApiService {
     message: string;
     session_id: string;
     message_count: number;
+    messages: Array<{ role: string; content: string }>;
     total_tokens: number;
     name?: string;
     working_directory?: string;
@@ -948,11 +964,6 @@ export interface LeditSettings {
   enable_pre_write_validation: boolean;
   enable_zsh_command_detection: boolean;
   auto_execute_detected_commands: boolean;
-  enable_security_checks: boolean; // present in config but not functionally read (see SecurityValidation.Enabled)
-  security_validation: {
-    enabled: boolean;
-    threshold: number;
-  };
   history_scope: string;
   self_review_gate_mode: string;
   subagent_provider: string;

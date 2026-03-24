@@ -1,6 +1,7 @@
 package webui
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -445,6 +446,11 @@ func getGitFileStatusMap(workspaceRoot string) (modified, untracked map[string]b
 
 // getGitStatusForEntry determines the git status for a single file or directory entry.
 func getGitStatusForEntry(relPath string, isDir bool, modified, untracked map[string]bool, ignoreRules *ignore.GitIgnore, workspaceRoot string) string {
+	// Special case: .git directory is always gitignored
+	if isDir && relPath == ".git" {
+		return "ignored"
+	}
+
 	if ignoreRules != nil {
 		if isDir {
 			if ignoreRules.MatchesPath(relPath) || ignoreRules.MatchesPath(relPath+"/") {
@@ -847,5 +853,82 @@ func (ws *ReactWebServer) handleAPITerminalSessions(w http.ResponseWriter, r *ht
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"sessions": sessions,
 		"count":    len(sessions),
+	})
+}
+
+// tryParseMultipartFile attempts to extract image data from a multipart form.
+// Returns the file data and true if successful, or nil and false otherwise.
+func tryParseMultipartFile(body []byte, contentType string) ([]byte, bool) {
+	if !strings.Contains(contentType, "multipart/form-data") {
+		return nil, false
+	}
+
+	r := &http.Request{
+		Header: http.Header{"Content-Type": []string{contentType}},
+		Body:   io.NopCloser(bytes.NewReader(body)),
+	}
+
+	if err := r.ParseMultipartForm(int64(len(body))); err != nil {
+		return nil, false
+	}
+
+	file, _, formErr := r.FormFile("image")
+	if formErr != nil {
+		return nil, false
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return nil, false
+	}
+
+	return data, true
+}
+
+// handleUploadImage handles image upload requests
+func (ws *ReactWebServer) handleUploadImage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Read the entire body once into a buffer
+	r.Body = http.MaxBytesReader(w, r.Body, console.MaxPastedImageSize)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to read request body: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	// Try to parse as multipart form if content type indicates multipart
+	contentType := r.Header.Get("Content-Type")
+	data, ok := tryParseMultipartFile(body, contentType)
+
+	// If multipart parsing failed or content type is not multipart, use raw body
+	if !ok {
+		data = body
+	}
+
+	// Validate image format
+	ext, _ := console.DetectImageMagic(data)
+	if ext == "" {
+		http.Error(w, "Not a recognized image format", http.StatusBadRequest)
+		return
+	}
+
+	// Save the image
+	relativePath, err := console.SavePastedImage(data)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to save image: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	filename := filepath.Base(relativePath)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"path":     relativePath,
+		"filename": filename,
 	})
 }

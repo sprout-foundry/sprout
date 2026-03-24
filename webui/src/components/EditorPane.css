@@ -109,3 +109,50 @@
   animation: spin 1s linear infinite;
   font-size: 14px;
 }
+
+/* ── Diff Gutter Styles ──────────────────────────────────────────── */
+
+/* Diff gutter - narrow bar on the left */
+.cm-diffGutter {
+  width: 4px;
+  margin-right: 0;
+}
+
+.cm-diffGutter .cm-gutterElement {
+  padding: 0 !important;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+/* Diff marker elements in the gutter */
+.cm-diff-marker {
+  width: 100%;
+  border-radius: 0;
+}
+
+.cm-diff-marker-added {
+  background-color: var(--diff-add-color);
+}
+
+.cm-diff-marker-removed {
+  background-color: var(--diff-del-color);
+}
+
+.cm-diff-marker-modified {
+  background-color: var(--diff-mod-color);
+}
+
+/* Subtle background highlighting for changed lines */
+.cm-diffLineAdded {
+  background-color: var(--diff-add-bg) !important;
+}
+
+.cm-diffLineRemoved {
+  background-color: var(--diff-del-bg) !important;
+}
+
+.cm-diffLineModified {
+  background-color: var(--diff-mod-bg) !important;
+}
+

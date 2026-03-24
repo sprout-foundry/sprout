@@ -117,7 +117,11 @@ func runCustomModelAdd() error {
 			maxShow = 10
 		}
 		for i := 0; i < maxShow; i++ {
-			fmt.Printf("  %d. %s\n", i+1, models[i].ID)
+			ctxInfo := ""
+			if models[i].ContextLength > 0 {
+				ctxInfo = fmt.Sprintf("  (%dK context)", models[i].ContextLength/1000)
+			}
+			fmt.Printf("  %d. %s%s\n", i+1, models[i].ID, ctxInfo)
 		}
 		if len(models) > maxShow {
 			fmt.Printf("  ... and %d more\n", len(models)-maxShow)
@@ -134,6 +138,70 @@ func runCustomModelAdd() error {
 				continue
 			}
 			provider.ModelName = selectedModel
+			break
+		}
+
+		// Auto-populate per-model context sizes from discovery data
+		if provider.ModelContextSizes == nil {
+			provider.ModelContextSizes = make(map[string]int)
+		}
+		for _, m := range models {
+			if m.ContextLength > 0 {
+				provider.ModelContextSizes[m.ID] = m.ContextLength
+			}
+		}
+	}
+
+	// Prompt for default context size.
+	// If discovery succeeded and the default model has a known context size,
+	// offer it as the default answer.
+	defaultCtxHint := ""
+	if provider.ModelName != "" && provider.ModelContextSizes != nil {
+		if ctxSz, ok := provider.ModelContextSizes[provider.ModelName]; ok {
+			defaultCtxHint = fmt.Sprintf(" [%d]", ctxSz)
+		}
+	}
+	fmt.Printf("\nDefault context size (tokens) for the provider%s: ", defaultCtxHint)
+	ctxInput, err := reader.ReadString('\n')
+	if err != nil {
+		return err
+	}
+	ctxInput = strings.TrimSpace(ctxInput)
+	if ctxInput != "" {
+		if n, err := strconv.Atoi(ctxInput); err == nil && n > 0 {
+			provider.ContextSize = n
+		}
+	} else if defaultCtxHint != "" {
+		// User pressed enter—use the discovered size for the default model
+		provider.ContextSize = provider.ModelContextSizes[provider.ModelName]
+	}
+
+	visionAnswer, err := promptLine(reader, "Does this provider/model support vision (multimodal images)? [y/N]: ")
+	if err != nil {
+		return err
+	}
+	if isYes(visionAnswer) {
+		provider.SupportsVision = true
+		for {
+			visionModelInput, err := promptLine(reader, "Vision model (name or number, leave empty to reuse default model): ")
+			if err != nil {
+				return err
+			}
+			trimmed := strings.TrimSpace(visionModelInput)
+			if trimmed == "" {
+				provider.VisionModel = provider.ModelName
+				break
+			}
+			if len(models) > 0 {
+				selectedVisionModel, err := resolvePreferredCustomProviderModel(trimmed, models)
+				if err != nil {
+					fmt.Printf("\n[WARN] %v\n", err)
+					continue
+				}
+				provider.VisionModel = selectedVisionModel
+				break
+			}
+			provider.VisionModel = trimmed
 			break
 		}
 	}
@@ -170,6 +238,14 @@ func runCustomModelAdd() error {
 	}
 	if normalized.ModelName != "" {
 		fmt.Printf("  Default model: %s\n", normalized.ModelName)
+		fmt.Printf("  Default context size: %d tokens\n", normalized.ContextSize)
+	}
+	if len(normalized.ModelContextSizes) > 0 {
+		fmt.Printf("  Per-model context sizes: %d model(s) with known context\n", len(normalized.ModelContextSizes))
+	}
+	fmt.Printf("  Supports vision: %t\n", normalized.SupportsVision)
+	if normalized.SupportsVision && normalized.VisionModel != "" {
+		fmt.Printf("  Vision model: %s\n", normalized.VisionModel)
 	}
 	fmt.Printf("  File: %s\n", path)
 	return nil
@@ -272,6 +348,19 @@ func runCustomModelList() error {
 		}
 		if model := cfg.ProviderModels[name]; model != "" {
 			fmt.Printf("  Selected model: %s\n", model)
+			if ctxSz := provider.ContextSize; ctxSz > 0 {
+				fmt.Printf("  Default context size: %d tokens\n", ctxSz)
+			}
+			if perModel, ok := provider.ModelContextSizes[model]; ok && perModel > 0 {
+				fmt.Printf("  Model context limit: %d tokens\n", perModel)
+			}
+		}
+		if len(provider.ModelContextSizes) > 0 {
+			fmt.Printf("  Known model contexts: %d model(s)\n", len(provider.ModelContextSizes))
+		}
+		fmt.Printf("  Supports vision: %t\n", provider.SupportsVision)
+		if provider.SupportsVision && provider.VisionModel != "" {
+			fmt.Printf("  Vision model: %s\n", provider.VisionModel)
 		}
 		fmt.Printf("  File: %s\n", path)
 		fmt.Println()

@@ -159,6 +159,11 @@ func NormalizeCustomProviderConfig(cfg CustomProviderConfig) (CustomProviderConf
 	cfg.VisionFallbackModel = strings.TrimSpace(cfg.VisionFallbackModel)
 	cfg.ToolCalls = normalizeUniqueStrings(cfg.ToolCalls)
 
+	// Initialize model context sizes map if nil
+	if cfg.ModelContextSizes == nil {
+		cfg.ModelContextSizes = make(map[string]int)
+	}
+
 	if cfg.ContextSize <= 0 {
 		cfg.ContextSize = 32768
 	}
@@ -264,6 +269,14 @@ func (c CustomProviderConfig) ToProviderConfig() (*providers.ProviderConfig, err
 		}
 	}
 
+	// Build model overrides for context sizes
+	modelOverrides := make(map[string]int)
+	for modelID, contextSize := range normalized.ModelContextSizes {
+		if contextSize > 0 {
+			modelOverrides[modelID] = contextSize
+		}
+	}
+
 	return &providers.ProviderConfig{
 		Name:     normalized.Name,
 		Endpoint: normalized.Endpoint,
@@ -287,6 +300,7 @@ func (c CustomProviderConfig) ToProviderConfig() (*providers.ProviderConfig, err
 		},
 		Models: providers.ModelConfig{
 			DefaultContextLimit: normalized.ContextSize,
+			ModelOverrides:      modelOverrides,
 			DefaultModel:        normalized.ModelName,
 			SupportsVision:      normalized.SupportsVision,
 			VisionModel:         normalized.VisionModel,

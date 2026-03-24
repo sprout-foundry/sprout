@@ -28,21 +28,6 @@ const (
 	SelfReviewGateModeAlways = "always"
 )
 
-// SecurityValidationConfig configures static heuristic-based security validation
-type SecurityValidationConfig struct {
-	// Enabled turns on security validation
-	Enabled bool `json:"enabled,omitempty"`
-
-	// Threshold controls sensitivity (0=allow_all, 1=cautious, 2=strict)
-	// 0: Allow all operations (validation disabled but still logs)
-	// 1: Allow safe operations, ask user for cautious ones
-	// 2: Block dangerous operations, require explicit approval
-	Threshold int `json:"threshold,omitempty"`
-
-	// TimeoutSeconds is reserved for future use
-	TimeoutSeconds int `json:"timeout_seconds,omitempty"`
-}
-
 // Config represents the unified application configuration
 type Config struct {
 	Version string `json:"version"`
@@ -54,9 +39,6 @@ type Config struct {
 
 	// MCP Configuration
 	MCP mcp.MCPConfig `json:"mcp"`
-
-	// Code Style Configuration
-	CodeStyle *CodeStyleConfig `json:"code_style,omitempty"`
 
 	// Preferences
 	Preferences map[string]interface{} `json:"preferences,omitempty"`
@@ -78,26 +60,13 @@ type Config struct {
 	// DismissedPrompts tracks which one-time prompts the user has dismissed.
 	DismissedPrompts map[string]bool `json:"dismissed_prompts,omitempty"`
 
-	// Performance Configuration
-	FileBatchSize         int `json:"file_batch_size,omitempty"`
-	MaxConcurrentRequests int `json:"max_concurrent_requests,omitempty"`
-	RequestDelayMs        int `json:"request_delay_ms,omitempty"`
-
 	// API Timeout Configuration (in seconds)
 	APITimeouts *APITimeoutConfig `json:"api_timeouts,omitempty"`
-
-	// Security Configuration
-	EnableSecurityChecks bool `json:"enable_security_checks,omitempty"`
-
-	// Security Validation Configuration
-	SecurityValidation *SecurityValidationConfig `json:"security_validation,omitempty"`
 
 	// Custom Providers Configuration
 	CustomProviders map[string]CustomProviderConfig `json:"custom_providers,omitempty"`
 
 	// Command History Configuration
-	CommandHistory       []string            `json:"command_history,omitempty"` // Legacy global history (fallback only)
-	HistoryIndex         int                 `json:"history_index,omitempty"`   // Legacy global history index
 	CommandHistoryByPath map[string][]string `json:"command_history_by_path,omitempty"`
 	HistoryIndexByPath   map[string]int      `json:"history_index_by_path,omitempty"`
 
@@ -127,42 +96,6 @@ type Config struct {
 
 	// Other flags
 	FromAgent bool `json:"-"` // Internal flag, not persisted
-}
-
-// CodeStyleConfig represents code style preferences
-type CodeStyleConfig struct {
-	IndentationType          string `json:"indentation_type"`
-	IndentationSize          int    `json:"indentation_size"`
-	QuoteStyle               string `json:"quote_style"`
-	LineEndings              string `json:"line_endings"`
-	TrailingSemicolons       bool   `json:"trailing_semicolons"`
-	TrailingCommas           bool   `json:"trailing_commas"`
-	BracketSpacing           bool   `json:"bracket_spacing"`
-	JavascriptStyle          string `json:"javascript_style"`
-	OptionalChaining         bool   `json:"optional_chaining"`
-	NullishCoalescing        bool   `json:"nullish_coalescing"`
-	AsynchronousPatterns     string `json:"asynchronous_patterns"`
-	TypeScriptStyle          string `json:"typescript_style"`
-	ReactStyle               string `json:"react_style"`
-	ComponentNaming          string `json:"component_naming"`
-	StateManagement          string `json:"state_management"`
-	PropTypeEnforcement      bool   `json:"prop_type_enforcement"`
-	ImportStyle              string `json:"import_style"`
-	ImportExtensions         bool   `json:"import_extensions"`
-	AbsoluteImports          bool   `json:"absolute_imports"`
-	ImportOrdering           string `json:"import_ordering"`
-	CommentStyle             string `json:"comment_style"`
-	DocstringFormat          string `json:"docstring_format"`
-	InlineCommentSpacing     int    `json:"inline_comment_spacing"`
-	FunctionStyle            string `json:"function_style"`
-	ArrowFunctionParentheses string `json:"arrow_function_parentheses"`
-	ReturnStatementStyle     string `json:"return_statement_style"`
-	FunctionSize             string `json:"function_size"`
-	FileSize                 string `json:"file_size"`
-	NamingConventions        string `json:"naming_conventions"`
-	ErrorHandling            string `json:"error_handling"`
-	TestingApproach          string `json:"testing_approach"`
-	Modularity               string `json:"modularity"`
 }
 
 // APITimeoutConfig represents timeout settings for API calls
@@ -266,22 +199,6 @@ func NewConfig() *Config {
 		HistoryIndexByPath:    make(map[string]int),
 		MCP:                   mcp.DefaultMCPConfig(),
 		Preferences:           make(map[string]interface{}),
-		FileBatchSize:         10,
-		MaxConcurrentRequests: 5,
-		RequestDelayMs:        100,
-		EnableSecurityChecks:  true,
-		SecurityValidation: &SecurityValidationConfig{
-			Enabled:        true, // Enabled by default (uses static heuristic rules)
-			Threshold:      1,    // Cautious by default
-			TimeoutSeconds: 10,   // Reserved for future use
-		},
-		CodeStyle: &CodeStyleConfig{
-			IndentationType: "spaces",
-			IndentationSize: 4,
-			QuoteStyle:      "double",
-			LineEndings:     "unix",
-			ImportStyle:     "grouped",
-		},
 		APITimeouts: &APITimeoutConfig{
 			ConnectionTimeoutSec: 30,
 			FirstChunkTimeoutSec: 60,

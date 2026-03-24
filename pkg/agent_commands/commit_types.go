@@ -2,7 +2,8 @@ package commands
 
 import (
 	"errors"
-	"strings"
+
+	gitops "github.com/alantheprice/ledit/pkg/git"
 )
 
 // Commit status constants
@@ -54,45 +55,5 @@ func (r *CommitJSONResult) Validate() error {
 
 // wrapText wraps text to a specific line length
 func wrapText(text string, lineLength int) string {
-	if text == "" {
-		return ""
-	}
-
-	paragraphs := strings.Split(text, "\n\n")
-	var wrappedParagraphs []string
-
-	for _, paragraph := range paragraphs {
-		// Skip empty paragraphs
-		if strings.TrimSpace(paragraph) == "" {
-			wrappedParagraphs = append(wrappedParagraphs, "")
-			continue
-		}
-
-		words := strings.Fields(paragraph)
-		if len(words) == 0 {
-			wrappedParagraphs = append(wrappedParagraphs, "")
-			continue
-		}
-
-		var lines []string
-		currentLine := words[0]
-
-		for i := 1; i < len(words); i++ {
-			word := words[i]
-			if len(currentLine)+1+len(word) <= lineLength {
-				currentLine += " " + word
-			} else {
-				lines = append(lines, currentLine)
-				currentLine = word
-			}
-		}
-
-		if currentLine != "" {
-			lines = append(lines, currentLine)
-		}
-
-		wrappedParagraphs = append(wrappedParagraphs, strings.Join(lines, "\n"))
-	}
-
-	return strings.Join(wrappedParagraphs, "\n\n")
+	return gitops.WrapText(text, lineLength)
 }

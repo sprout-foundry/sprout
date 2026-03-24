@@ -102,6 +102,8 @@ const Sidebar: React.FC<SidebarProps> = ({
     const stored = localStorage.getItem('ledit-sidebar-width');
     return stored ? clampSidebarWidth(Number(stored)) : SIDEBAR_DEFAULT_WIDTH;
   });
+  const sidebarWidthRef = useRef(sidebarWidth);
+  sidebarWidthRef.current = sidebarWidth;
   const [selectedProvider, setSelectedProvider] = useState(provider || '');
   const [selectedModelState, setSelectedModelState] = useState(model || selectedModel || '');
   const [providers, setProviders] = useState<ProviderOption[]>([]);
@@ -230,7 +232,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const handleSidebarResize = useCallback((delta: number) => {
-    const nextWidth = clampSidebarWidth(sidebarWidth + delta);
+    const nextWidth = clampSidebarWidth(sidebarWidthRef.current + delta);
 
     // Allow drag-to-expand behavior from collapsed mode.
     if (sidebarCollapsed) {
@@ -242,7 +244,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
 
     setSidebarWidth(nextWidth);
-  }, [onSidebarToggle, sidebarCollapsed, sidebarWidth]);
+  }, [onSidebarToggle, sidebarCollapsed]);
 
   const handleSidebarResizeEnd = useCallback(() => {
     setSidebarWidth(prev => {
@@ -628,6 +630,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
       </div>
+      </div>
       {!isMobile && (
         <ResizeHandle
           direction="horizontal"
@@ -637,7 +640,6 @@ const Sidebar: React.FC<SidebarProps> = ({
           className="sidebar-resize-handle"
         />
       )}
-      </div>
     </div>
   );
 };

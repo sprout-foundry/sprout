@@ -4,7 +4,7 @@ import {
   Globe, ArrowDown, ClipboardList, ScrollText, RotateCcw,
   Wrench, Rocket, Zap, CheckCircle2, XCircle, Hourglass,
   Bot, Copy, AlertTriangle, ChevronDown, ChevronRight,
-  BarChart3, FileText, PanelRightOpen, PanelRightClose, History, SlidersHorizontal
+  BarChart3, FileText, PanelRightOpen, PanelRightClose, History, Clock, Activity, FileCode
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -71,15 +71,6 @@ interface ChatProps {
   queryProgress?: any;
 }
 
-interface ChatManagementAction {
-  id: string;
-  label: string;
-  description: string;
-  command: string;
-  requiresConfirm?: boolean;
-  confirmMessage?: string;
-}
-
 const SIDE_PANEL_WIDTH_KEY = 'ledit.chat.sidePanelWidth';
 const SIDE_PANEL_COLLAPSED_KEY = 'ledit.chat.sidePanelCollapsed';
 const SIDE_PANEL_MIN = 280;
@@ -118,7 +109,7 @@ const Chat: React.FC<ChatProps> = ({
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
   const [sidePanelCollapsed, setSidePanelCollapsed] = useState(false);
   const [sidePanelWidth, setSidePanelWidth] = useState(360);
-  const [sidePanelTab, setSidePanelTab] = useState<'tools' | 'history' | 'manage'>('tools');
+  const [sidePanelTab, setSidePanelTab] = useState<'tools' | 'history' | 'status' | 'sessions'>('tools');
   const [revisions, setRevisions] = useState<Revision[]>([]);
   const [expandedRevisionIds, setExpandedRevisionIds] = useState<Set<string>>(new Set());
   const [expandedRevisionFileDiffs, setExpandedRevisionFileDiffs] = useState<Set<string>>(new Set());
@@ -127,7 +118,18 @@ const Chat: React.FC<ChatProps> = ({
   const [revisionDetailsError, setRevisionDetailsError] = useState<Record<string, string>>({});
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
-  const [manageNotice, setManageNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [sessions, setSessions] = useState<Array<{
+    session_id: string;
+    name: string;
+    working_directory: string;
+    last_updated: string;
+    message_count: number;
+    total_tokens: number;
+  }>>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string>('');
+  const [isLoadingSessions, setIsLoadingSessions] = useState(false);
+  const [sessionRestoreError, setSessionRestoreError] = useState<string | null>(null);
+  const [sessionsCount, setSessionsCount] = useState(0);
   const chatMainRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const resizingSidePanelRef = useRef(false);
@@ -183,6 +185,44 @@ const Chat: React.FC<ChatProps> = ({
     }
   }, [apiService]);
 
+  const loadSessions = useCallback(async () => {
+    setIsLoadingSessions(true);
+    try {
+      const response = await apiService.getSessions();
+      setSessions(response.sessions || []);
+      setCurrentSessionId(response.current_session_id || '');
+      setSessionsCount(response.sessions?.length || 0);
+    } catch (error) {
+      console.error('Failed to load sessions:', error);
+    } finally {
+      setIsLoadingSessions(false);
+    }
+  }, [apiService]);
+
+  const handleRestoreSession = useCallback(async (sessionId: string) => {
+    if (isProcessing) {
+      setSessionRestoreError('Wait for current request to finish.');
+      return;
+    }
+    if (sessionId === currentSessionId) {
+      setSessionRestoreError('This is the current session.');
+      return;
+    }
+    if (!window.confirm(`Restore session ${sessionId}?\n\nThis will replace the current conversation.`)) {
+      return;
+    }
+    setIsLoadingSessions(true);
+    setSessionRestoreError(null);
+    try {
+      await apiService.restoreSession(sessionId);
+      await loadSessions();
+    } catch (error) {
+      setSessionRestoreError(error instanceof Error ? error.message : 'Failed to restore session');
+    } finally {
+      setIsLoadingSessions(false);
+    }
+  }, [apiService, currentSessionId, isProcessing, loadSessions]);
+
   const buildRevisionFileKey = useCallback((file: RevisionFile | RevisionDetailFile, index: number) => {
     return `${file.file_revision_hash || file.path}::${index}`;
   }, []);
@@ -221,6 +261,12 @@ const Chat: React.FC<ChatProps> = ({
       loadRevisionHistory();
     }
   }, [sidePanelTab, revisions.length, isLoadingHistory, loadRevisionHistory]);
+
+  useEffect(() => {
+    if (sidePanelTab === 'sessions' && sessionsCount === 0 && !isLoadingSessions) {
+      loadSessions();
+    }
+  }, [sidePanelTab, sessionsCount, isLoadingSessions, loadSessions]);
 
   useEffect(() => {
     if (expandedRevisionIds.size === 0) {
@@ -540,62 +586,65 @@ const Chat: React.FC<ChatProps> = ({
     return revisions.length;
   }, [revisions.length]);
 
-  const managementActions: ChatManagementAction[] = [
-    {
-      id: 'clear',
-      label: 'Clear Conversation',
-      description: 'Run /clear to reset conversation history for this session.',
-      command: '/clear',
-      requiresConfirm: true,
-      confirmMessage: 'Clear conversation history for the active session?',
-    },
-    {
-      id: 'status',
-      label: 'Session Status',
-      description: 'Run /status to show provider, model, tokens, and tracked files.',
-      command: '/status',
-    },
-    {
-      id: 'changes',
-      label: 'Tracked Changes',
-      description: 'Run /changes to list file changes tracked in this session.',
-      command: '/changes',
-    },
-    {
-      id: 'log',
-      label: 'Revision Log',
-      description: 'Run /log to display recent revision history and rollback points.',
-      command: '/log',
-    },
-    {
-      id: 'help',
-      label: 'Slash Command Help',
-      description: 'Run /help to show all available slash commands.',
-      command: '/help',
-    },
-  ];
+  const statusMetrics = useMemo(() => {
+    const userMsgs = messages.filter(m => m.type === 'user').length;
+    const assistantMsgs = messages.filter(m => m.type === 'assistant').length;
+    const completedTools = toolExecutions.filter(t => t.status === 'completed').length;
+    const failedTools = toolExecutions.filter(t => t.status === 'error').length;
+    const activeTools = toolExecutions.filter(t => t.status === 'running' || t.status === 'started').length;
 
-  const runManagementAction = useCallback(async (action: ChatManagementAction) => {
-    if (isProcessing) {
-      setManageNotice({ type: 'error', text: 'Wait for current request to finish before running another action.' });
-      return;
+    const totalAdditions = revisions.reduce((sum, r) =>
+      sum + r.files.reduce((fSum, f) => fSum + (f.lines_added || 0), 0), 0);
+    const totalDeletions = revisions.reduce((sum, r) =>
+      sum + r.files.reduce((fSum, f) => fSum + (f.lines_deleted || 0), 0), 0);
+
+    const touchedFiles = new Set<string>();
+    toolExecutions.forEach(t => {
+      if (t.tool === 'write_file' || t.tool === 'edit_file') {
+        try {
+          const args = t.arguments ? JSON.parse(t.arguments) : {};
+          if (args.path) touchedFiles.add(args.path);
+        } catch { /* ignore */ }
+      }
+    });
+    revisions.forEach(r => {
+      r.files.forEach(f => touchedFiles.add(f.path));
+    });
+
+    const toolCounts: Record<string, number> = {};
+    toolExecutions.forEach(t => {
+      const name = isSubagentTool(t) ? 'subagent' : t.tool;
+      toolCounts[name] = (toolCounts[name] || 0) + 1;
+    });
+    const sortedTools = Object.entries(toolCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6);
+    const maxToolCount = sortedTools.length > 0 ? sortedTools[0][1] : 1;
+
+    let duration = 0;
+    if (messages.length >= 2) {
+      duration = messages[messages.length - 1].timestamp.getTime() - messages[0].timestamp.getTime();
     }
 
-    if (action.requiresConfirm) {
-      const ok = window.confirm(action.confirmMessage || `Run ${action.command}?`);
-      if (!ok) return;
-    }
+    return {
+      userMsgs, assistantMsgs, totalMsgs: userMsgs + assistantMsgs,
+      completedTools, failedTools, activeTools, totalTools: toolExecutions.length,
+      totalAdditions, totalDeletions,
+      filesTouched: touchedFiles.size,
+      topTools: sortedTools, maxToolCount,
+      duration,
+    };
+  }, [messages, toolExecutions, revisions]);
 
-    try {
-      await Promise.resolve(onSendMessage(action.command) as unknown as Promise<void>);
-      setManageNotice({ type: 'success', text: `Ran ${action.command}` });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : `Failed to run ${action.command}`;
-      setManageNotice({ type: 'error', text: message });
-    }
-  }, [isProcessing, onSendMessage]);
+  const formatDurationMs = (ms: number): string => {
+    if (ms < 1000) return `${ms}ms`;
+    if (ms < 60000) return `${(ms / 1000).toFixed(0)}s`;
+    const mins = Math.floor(ms / 60000);
+    const secs = Math.floor((ms % 60000) / 1000);
+    return `${mins}m ${secs}s`;
+  };
 
-  const panelTabs: Array<{ id: 'tools' | 'history' | 'manage'; label: string; icon: ReactNode; count: string }> = [
+  const panelTabs: Array<{ id: 'tools' | 'history' | 'status' | 'sessions'; label: string; icon: ReactNode; count: string }> = [
     {
       id: 'tools',
       label: 'Tool Executions',
@@ -609,10 +658,16 @@ const Chat: React.FC<ChatProps> = ({
       count: `${historyCounts} revisions`,
     },
     {
-      id: 'manage',
-      label: 'Manage',
-      icon: <SlidersHorizontal size={14} />,
-      count: 'commands',
+      id: 'sessions',
+      label: 'Sessions',
+      icon: <Clock size={14} />,
+      count: `${sessionsCount}`,
+    },
+    {
+      id: 'status',
+      label: 'Status',
+      icon: <Activity size={14} />,
+      count: `${statusMetrics.totalMsgs} msgs`,
     },
   ];
 
@@ -725,6 +780,9 @@ const Chat: React.FC<ChatProps> = ({
                   setSidePanelCollapsed(false);
                   if (tab.id === 'history' && revisions.length === 0) {
                     loadRevisionHistory();
+                  }
+                  if (tab.id === 'sessions' && sessionsCount === 0) {
+                    loadSessions();
                   }
                 }}
                 title={tab.label}
@@ -923,33 +981,175 @@ const Chat: React.FC<ChatProps> = ({
                     )}
                   </div>
                 </>
-              ) : (
-                <div className="chat-manage-panel">
-                  <div className="manage-intro">
-                    Trigger common chat/session slash commands without typing.
-                  </div>
-                  {manageNotice && (
-                    <div className={`manage-notice ${manageNotice.type}`}>
-                      {manageNotice.text}
-                    </div>
-                  )}
-                  <div className="manage-actions">
-                    {managementActions.map((action) => (
-                      <button
-                        key={action.id}
-                        type="button"
-                        className="manage-action-btn"
-                        onClick={() => runManagementAction(action)}
-                        disabled={isProcessing}
-                        title={action.command}
-                      >
-                        <span className="manage-action-header">
-                          <span className="manage-action-label">{action.label}</span>
-                          <code className="manage-action-command">{action.command}</code>
-                        </span>
-                        <span className="manage-action-description">{action.description}</span>
+              ) : sidePanelTab === 'sessions' ? (
+                <>
+                  <div className="chat-tools-list">
+                    <div className="history-toolbar">
+                      <button className="history-refresh-btn" onClick={loadSessions} disabled={isLoadingSessions}>
+                        <RotateCcw size={12} /> Refresh
                       </button>
-                    ))}
+                    </div>
+
+                    {sessionRestoreError && <div className="history-error-inline">{sessionRestoreError}</div>}
+
+                    {isLoadingSessions ? (
+                      <div className="chat-tools-empty">Loading sessions...</div>
+                    ) : sessions.length === 0 ? (
+                      <div className="chat-tools-empty">No saved sessions found.</div>
+                    ) : (
+                      sessions.map((session) => {
+                        const isCurrent = session.session_id === currentSessionId;
+                        const dirName = session.working_directory.split('/').filter(Boolean).slice(-2).join('/');
+                        return (
+                          <div key={session.session_id} className={`history-item ${isCurrent ? 'session-current' : ''}`}>
+                            <div className="session-summary">
+                              <span className="history-main">
+                                <span className="history-id" title={session.session_id}>
+                                  {session.name || session.session_id}
+                                </span>
+                                <span className="history-time">{formatRelativeTime(session.last_updated)}</span>
+                              </span>
+                              <span className="history-stats">
+                                <span>{session.message_count} msgs</span>
+                                {session.total_tokens > 0 && <span>{session.total_tokens.toLocaleString()} tok</span>}
+                              </span>
+                            </div>
+                            <div className="session-meta">
+                              <span className="session-dir" title={session.working_directory}>{dirName}</span>
+                              {isCurrent ? (
+                                <span className="session-current-badge">Current</span>
+                              ) : (
+                                <button
+                                  className="history-rollback-btn"
+                                  onClick={() => handleRestoreSession(session.session_id)}
+                                  disabled={isLoadingSessions}
+                                  style={{ marginTop: '4px' }}
+                                >
+                                  Restore
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="chat-status-panel">
+                  <div className="status-section">
+                    <div className="status-section-title">
+                      <Activity size={12} /> Processing
+                    </div>
+                    <div className="status-row">
+                      {isProcessing ? (
+                        <>
+                          <span className="status-dot-indicator active" />
+                          <span className="status-label">{queryProgress?.message || 'Working...'}</span>
+                        </>
+                      ) : lastError ? (
+                        <>
+                          <span className="status-dot-indicator error" />
+                          <span className="status-label">{lastError}</span>
+                        </>
+                      ) : messages.length === 0 ? (
+                        <>
+                          <span className="status-dot-indicator" />
+                          <span className="status-label">Idle — waiting for input</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="status-dot-indicator idle" />
+                          <span className="status-label">Ready</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="status-section">
+                    <div className="status-section-title">
+                      <Bot size={12} /> Conversation
+                    </div>
+                    <div className="status-metrics-grid">
+                      <div className="status-metric">
+                        <span className="status-metric-value">{statusMetrics.userMsgs}</span>
+                        <span className="status-metric-label">User</span>
+                      </div>
+                      <div className="status-metric">
+                        <span className="status-metric-value">{statusMetrics.assistantMsgs}</span>
+                        <span className="status-metric-label">Assistant</span>
+                      </div>
+                      {statusMetrics.duration > 0 && (
+                        <div className="status-metric status-metric-wide">
+                          <span className="status-metric-value">{formatDurationMs(statusMetrics.duration)}</span>
+                          <span className="status-metric-label">Duration</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="status-section">
+                    <div className="status-section-title">
+                      <Wrench size={12} /> Tool Usage
+                    </div>
+                    <div className="status-metrics-grid">
+                      <div className="status-metric">
+                        <span className="status-metric-value">{statusMetrics.completedTools}</span>
+                        <span className="status-metric-label">Completed</span>
+                      </div>
+                      <div className="status-metric">
+                        <span className="status-metric-value">{statusMetrics.failedTools}</span>
+                        <span className="status-metric-label">Failed</span>
+                      </div>
+                      {statusMetrics.activeTools > 0 && (
+                        <div className="status-metric">
+                          <span className="status-metric-value status-metric-active">{statusMetrics.activeTools}</span>
+                          <span className="status-metric-label">Active</span>
+                        </div>
+                      )}
+                    </div>
+                    {statusMetrics.topTools.length > 0 && (
+                      <div className="status-tool-bars">
+                        {statusMetrics.topTools.map(([name, count]) => (
+                          <div key={name} className="status-tool-bar-row">
+                            <span className="status-tool-bar-name">{name}</span>
+                            <div className="status-tool-bar-track">
+                              <div
+                                className="status-tool-bar-fill"
+                                style={{ width: `${(count / statusMetrics.maxToolCount) * 100}%` }}
+                              />
+                            </div>
+                            <span className="status-tool-bar-count">{count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="status-section">
+                    <div className="status-section-title">
+                      <FileCode size={12} /> Changes
+                    </div>
+                    <div className="status-metrics-grid">
+                      <div className="status-metric">
+                        <span className="status-metric-value">{statusMetrics.filesTouched}</span>
+                        <span className="status-metric-label">Files</span>
+                      </div>
+                      <div className="status-metric">
+                        <span className="status-metric-value status-metric-add">+{statusMetrics.totalAdditions}</span>
+                        <span className="status-metric-label">Added</span>
+                      </div>
+                      <div className="status-metric">
+                        <span className="status-metric-value status-metric-del">-{statusMetrics.totalDeletions}</span>
+                        <span className="status-metric-label">Removed</span>
+                      </div>
+                      {revisions.length > 0 && (
+                        <div className="status-metric">
+                          <span className="status-metric-value">{revisions.length}</span>
+                          <span className="status-metric-label">Revisions</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
@@ -967,6 +1167,7 @@ const Chat: React.FC<ChatProps> = ({
           placeholder="Ask me anything about your code..."
           multiline={true}
           autoFocus={true}
+          isProcessing={isProcessing}
         />
       </div>
     </div>

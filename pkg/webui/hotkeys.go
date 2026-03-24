@@ -16,12 +16,91 @@ type HotkeyEntry struct {
 	Key         string `json:"key"`
 	CommandID   string `json:"command_id"`
 	Description string `json:"description,omitempty"`
+	Global      bool   `json:"global,omitempty"` // If true, works even when input is focused
 }
 
 // HotkeyConfig represents the complete hotkey configuration
 type HotkeyConfig struct {
 	Version string        `json:"version"`
 	Hotkeys []HotkeyEntry `json:"hotkeys"`
+}
+
+// sharedUniversalHotkeys returns the set of hotkeys common to every preset
+// (app-level shortcuts like command palette, file explorer, etc.).
+func sharedUniversalHotkeys() []HotkeyEntry {
+	return []HotkeyEntry{
+		{Key: "Ctrl+Shift+P", CommandID: "command_palette", Description: "Toggle command palette"},
+		{Key: "Cmd+Shift+P", CommandID: "command_palette", Description: "Toggle command palette (Mac)"},
+		{Key: "Ctrl+P", CommandID: "quick_open", Description: "Quick open file"},
+		{Key: "Cmd+P", CommandID: "quick_open", Description: "Quick open file (Mac)"},
+		{Key: "Ctrl+Shift+E", CommandID: "toggle_explorer", Description: "Toggle file explorer"},
+		{Key: "Cmd+Shift+E", CommandID: "toggle_explorer", Description: "Toggle file explorer (Mac)"},
+		{Key: "Ctrl+B", CommandID: "toggle_sidebar", Description: "Toggle sidebar"},
+		{Key: "Cmd+B", CommandID: "toggle_sidebar", Description: "Toggle sidebar (Mac)"},
+		{Key: "Ctrl+`", CommandID: "toggle_terminal", Description: "Toggle terminal"},
+		{Key: "Cmd+`", CommandID: "toggle_terminal", Description: "Toggle terminal (Mac)"},
+		{Key: "Ctrl+W", CommandID: "close_editor", Description: "Close editor tab"},
+		{Key: "Cmd+W", CommandID: "close_editor", Description: "Close editor tab (Mac)"},
+		{Key: "Ctrl+S", CommandID: "save_file", Description: "Save file"},
+		{Key: "Cmd+S", CommandID: "save_file", Description: "Save file (Mac)"},
+		{Key: "Ctrl+Shift+S", CommandID: "save_all_files", Description: "Save all files"},
+		{Key: "Cmd+Shift+S", CommandID: "save_all_files", Description: "Save all files (Mac)"},
+		{Key: "Ctrl+N", CommandID: "new_file", Description: "New file"},
+		{Key: "Cmd+N", CommandID: "new_file", Description: "New file (Mac)"},
+		{Key: "Ctrl+\\", CommandID: "split_editor_vertical", Description: "Split editor vertical"},
+		{Key: "Ctrl+Shift+F", CommandID: "open_search", Description: "Open search", Global: true},
+		{Key: "Cmd+Shift+F", CommandID: "open_search", Description: "Open search (Mac)", Global: true},
+	}
+}
+
+// VsCodeHotkeyConfig returns a hotkey configuration matching VS Code defaults.
+func VsCodeHotkeyConfig() *HotkeyConfig {
+	editor := []HotkeyEntry{
+		{Key: "Ctrl+G", CommandID: "editor_goto_line", Description: "Go to line"},
+		{Key: "Cmd+G", CommandID: "editor_goto_line", Description: "Go to line (Mac)"},
+		{Key: "Alt+ArrowUp", CommandID: "editor_move_line_up", Description: "Move line up"},
+		{Key: "Alt+ArrowDown", CommandID: "editor_move_line_down", Description: "Move line down"},
+		{Key: "Shift+Alt+ArrowDown", CommandID: "editor_duplicate_line_down", Description: "Duplicate line down"},
+		{Key: "Shift+Alt+ArrowUp", CommandID: "editor_duplicate_line_up", Description: "Duplicate line up"},
+		{Key: "Ctrl+D", CommandID: "editor_delete_line", Description: "Delete current line"},
+		{Key: "Cmd+D", CommandID: "editor_delete_line", Description: "Delete current line (Mac)"},
+	}
+	all := append(sharedUniversalHotkeys(), editor...)
+	return &HotkeyConfig{Version: "1.0", Hotkeys: all}
+}
+
+// WebStormHotkeyConfig returns a hotkey configuration matching WebStorm/IntelliJ defaults.
+func WebStormHotkeyConfig() *HotkeyConfig {
+	editor := []HotkeyEntry{
+		{Key: "Ctrl+G", CommandID: "editor_goto_line", Description: "Go to line"},
+		{Key: "Cmd+G", CommandID: "editor_goto_line", Description: "Go to line (Mac)"},
+		{Key: "Shift+Alt+ArrowUp", CommandID: "editor_move_line_up", Description: "Move line up"},
+		{Key: "Shift+Alt+ArrowDown", CommandID: "editor_move_line_down", Description: "Move line down"},
+		{Key: "Ctrl+D", CommandID: "editor_duplicate_line_down", Description: "Duplicate line down"},
+		{Key: "Cmd+D", CommandID: "editor_duplicate_line_down", Description: "Duplicate line down (Mac)"},
+		{Key: "Ctrl+Shift+Alt+ArrowUp", CommandID: "editor_duplicate_line_up", Description: "Duplicate line up"},
+		{Key: "Cmd+Shift+Alt+ArrowUp", CommandID: "editor_duplicate_line_up", Description: "Duplicate line up (Mac)"},
+		{Key: "Ctrl+Shift+D", CommandID: "editor_delete_line", Description: "Delete current line"},
+		{Key: "Cmd+Shift+D", CommandID: "editor_delete_line", Description: "Delete current line (Mac)"},
+	}
+	all := append(sharedUniversalHotkeys(), editor...)
+	return &HotkeyConfig{Version: "1.0", Hotkeys: all}
+}
+
+// HotkeyPresetConfig returns the hotkey configuration for a named preset.
+// Supported presets: "vscode", "webstorm", "ledit".
+// For unknown presets, falls back to the default config.
+func HotkeyPresetConfig(preset string) *HotkeyConfig {
+	switch strings.ToLower(preset) {
+	case "vscode":
+		return VsCodeHotkeyConfig()
+	case "webstorm":
+		return WebStormHotkeyConfig()
+	case "ledit":
+		return DefaultHotkeyConfig()
+	default:
+		return DefaultHotkeyConfig()
+	}
 }
 
 // DefaultHotkeyConfig returns the default hotkey configuration
@@ -123,6 +202,58 @@ func DefaultHotkeyConfig() *HotkeyConfig {
 				Key:         "Ctrl+\\",
 				CommandID:   "split_editor_vertical",
 				Description: "Split editor vertical",
+			},
+			{
+				Key:         "Ctrl+Shift+F",
+				CommandID:   "open_search",
+				Description: "Open search",
+				Global:      true,
+			},
+			{
+				Key:         "Cmd+Shift+F",
+				CommandID:   "open_search",
+				Description: "Open search (Mac)",
+				Global:      true,
+			},
+			{
+				Key:         "Ctrl+G",
+				CommandID:   "editor_goto_line",
+				Description: "Go to line",
+			},
+			{
+				Key:         "Cmd+G",
+				CommandID:   "editor_goto_line",
+				Description: "Go to line (Mac)",
+			},
+			{
+				Key:         "Alt+ArrowUp",
+				CommandID:   "editor_move_line_up",
+				Description: "Move line up",
+			},
+			{
+				Key:         "Alt+ArrowDown",
+				CommandID:   "editor_move_line_down",
+				Description: "Move line down",
+			},
+			{
+				Key:         "Shift+Alt+ArrowDown",
+				CommandID:   "editor_duplicate_line_down",
+				Description: "Duplicate line down",
+			},
+			{
+				Key:         "Shift+Alt+ArrowUp",
+				CommandID:   "editor_duplicate_line_up",
+				Description: "Duplicate line up",
+			},
+			{
+				Key:         "Ctrl+D",
+				CommandID:   "editor_delete_line",
+				Description: "Delete current line",
+			},
+			{
+				Key:         "Cmd+D",
+				CommandID:   "editor_delete_line",
+				Description: "Delete current line (Mac)",
 			},
 		},
 	}

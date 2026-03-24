@@ -159,3 +159,8 @@ func (w *Logger) AskForConfirmation(prompt string, default_response bool, requir
 		}
 	}
 }
+
+// IsInteractive returns true if user interaction is enabled
+func (w *Logger) IsInteractive() bool {
+	return w.userInteractionEnabled
+}

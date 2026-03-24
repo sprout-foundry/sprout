@@ -246,6 +246,170 @@
   cursor: not-allowed;
 }
 
+.image-preview-strip {
+  display: flex;
+  gap: 8px;
+  padding: 0 12px 8px;
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+
+.image-preview-chip {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  min-width: 60px;
+  max-width: 80px;
+  flex-shrink: 0;
+  transition: border-color 0.2s ease;
+}
+
+.image-preview-chip img {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.image-preview-chip .image-name {
+  font-size: 9px;
+  color: var(--text-secondary);
+  max-width: 68px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.image-preview-chip .remove-btn {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.image-preview-chip:hover .remove-btn {
+  opacity: 1;
+}
+
+.image-preview-chip .remove-btn:hover {
+  background: var(--color-danger, #dc3545);
+  color: #fff;
+  border-color: var(--color-danger, #dc3545);
+}
+
+.image-preview-chip.uploading {
+  border-color: var(--accent-primary);
+}
+
+.image-preview-chip .upload-spinner {
+  font-size: 9px;
+  color: var(--text-tertiary);
+}
+
+.image-preview-chip.error {
+  border-color: var(--color-danger, #dc3545);
+}
+
+.image-preview-chip .upload-error {
+  font-size: 8px;
+  color: var(--color-danger, #dc3545);
+  max-width: 68px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upload-button {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upload-button:hover:not(:disabled) {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+  background: var(--bg-elevated);
+  transform: scale(1.05);
+}
+
+.upload-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Tooltip styling for upload button */
+.upload-button[data-tooltip] {
+  position: relative;
+}
+
+.upload-button[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-8px);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  box-shadow: var(--shadow-subtle);
+  border: 1px solid var(--border-default);
+  z-index: 100;
+}
+
+.upload-button[data-tooltip]:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(-4px);
+}
+
+.upload-button[data-tooltip]::before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-2px);
+  border: 4px solid transparent;
+  border-top-color: var(--border-default);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.upload-button[data-tooltip]:hover::before {
+  opacity: 0.5;
+}
+
 .keyboard-hints {
   display: flex;
   gap: 10px;

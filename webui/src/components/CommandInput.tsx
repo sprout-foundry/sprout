@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useLayoutEffect, memo } from 'react';
-import { ScrollText, X, Send, SquarePen, ListPlus } from 'lucide-react';
+import { ScrollText, X, Send, SquarePen, ListPlus, Plus } from 'lucide-react';
 import './CommandInput.css';
 import { ApiService } from '../services/api';
 import { CommandHistoryState, loadCommandHistory, saveCommandHistory } from './command_input_history';
@@ -39,9 +39,18 @@ const CommandInput: React.FC<CommandInputProps> = ({
   });
   const [isHistoryMode, setIsHistoryMode] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [attachedImages, setAttachedImages] = useState<Array<{
+    id: string;
+    file: File;
+    preview: string;
+    uploadedPath?: string;
+    error?: string;
+  }>>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const apiService = useRef(ApiService.getInstance());
   const selectionRef = useRef<{ start: number; end: number } | null>(null);
+  const uploadInProgressRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (value === draftValue) {
@@ -164,6 +173,93 @@ const CommandInput: React.FC<CommandInputProps> = ({
       }
     }
   }, [draftValue.length]);
+
+  // Handle paste event for images
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        e.preventDefault();
+        const blob = items[i].getAsFile();
+        if (blob) {
+          const preview = URL.createObjectURL(blob);
+          const imageId = crypto.randomUUID();
+          setAttachedImages(prev => [...prev, {
+            id: imageId,
+            file: blob,
+            preview,
+          }]);
+        }
+        break; // Only handle first image
+      }
+    }
+  }, []);
+
+  // Handle file selection from input
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const preview = URL.createObjectURL(file);
+      const imageId = crypto.randomUUID();
+      setAttachedImages(prev => [...prev, {
+        id: imageId,
+        file,
+        preview,
+      }]);
+      // Reset input so same file can be selected again
+      e.target.value = '';
+      // Focus back to textarea
+      inputRef.current?.focus();
+    }
+  }, []);
+
+  // Click handler for upload button
+  const handleUploadClick = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  // Remove an image from the list
+  const removeImage = useCallback((id: string) => {
+    setAttachedImages(prev => {
+      const imageToRemove = prev.find(img => img.id === id);
+      if (imageToRemove) {
+        URL.revokeObjectURL(imageToRemove.preview);
+      }
+      // Clean up upload tracking ref
+      uploadInProgressRef.current.delete(id);
+      return prev.filter(img => img.id !== id);
+    });
+  }, []);
+
+  // Upload image to server
+  const uploadImageAsync = useCallback(async (imageId: string, imageFile: File) => {
+    if (uploadInProgressRef.current.has(imageId)) return;
+    uploadInProgressRef.current.add(imageId);
+
+    try {
+      const result = await apiService.current.uploadImage(imageFile);
+      setAttachedImages(prev => prev.map(img => 
+        img.id === imageId 
+          ? { ...img, uploadedPath: result.path, error: undefined }
+          : img
+      ));
+    } catch (error) {
+      setAttachedImages(prev => prev.map(img => 
+        img.id === imageId 
+          ? { ...img, error: error instanceof Error ? error.message : 'Upload failed' }
+          : img
+      ));
+    }
+  }, []);
+
+  // Auto-upload images when they are added
+  useEffect(() => {
+    attachedImages.forEach(img => {
+      if (!img.uploadedPath && !img.error) {
+        uploadImageAsync(img.id, img.file);
+      }
+    });
+  }, [attachedImages]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (disabled) return;
@@ -340,7 +436,13 @@ const CommandInput: React.FC<CommandInputProps> = ({
     const textareaValue = draftValue;
     if (textareaValue.trim() === '') return;
 
-    const commandToSend = textareaValue.trim();
+    // Build query with image paths
+    let commandToSend = textareaValue.trim();
+    const uploadedImages = attachedImages.filter(img => img.uploadedPath);
+    if (uploadedImages.length > 0) {
+      const imagePaths = uploadedImages.map(img => `Pasted image saved to disk: ${img.uploadedPath}`).join('\n');
+      commandToSend = `${imagePaths}\n\n${commandToSend}`;
+    }
 
     // Save to history
     await saveToHistory(commandToSend);
@@ -358,6 +460,14 @@ const CommandInput: React.FC<CommandInputProps> = ({
     // Clear textarea using onChange for controlled component
     updateValue('', { start: 0, end: 0 });
 
+    // Clear attached images and revoke URLs
+    setAttachedImages(prev => {
+      prev.forEach(img => URL.revokeObjectURL(img.preview));
+      // Clean up upload tracking ref
+      prev.forEach(img => uploadInProgressRef.current.delete(img.id));
+      return [];
+    });
+
     // Focus back to input
     setTimeout(() => {
       if (inputRef.current) {
@@ -370,11 +480,26 @@ const CommandInput: React.FC<CommandInputProps> = ({
     const textareaValue = draftValue;
     if (textareaValue.trim() === '') return;
 
-    const commandToQueue = textareaValue.trim();
+    // Build query with image paths
+    let commandToQueue = textareaValue.trim();
+    const uploadedImages = attachedImages.filter(img => img.uploadedPath);
+    if (uploadedImages.length > 0) {
+      const imagePaths = uploadedImages.map(img => `Pasted image saved to disk: ${img.uploadedPath}`).join('\n');
+      commandToQueue = `${imagePaths}\n\n${commandToQueue}`;
+    }
+
     await saveToHistory(commandToQueue);
     resetHistoryNavigation();
     onQueue?.(commandToQueue);
     updateValue('', { start: 0, end: 0 });
+
+    // Clear attached images and revoke URLs
+    setAttachedImages(prev => {
+      prev.forEach(img => URL.revokeObjectURL(img.preview));
+      // Clean up upload tracking ref
+      prev.forEach(img => uploadInProgressRef.current.delete(img.id));
+      return [];
+    });
 
     setTimeout(() => {
       if (inputRef.current) {
@@ -471,6 +596,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
           };
         }}
         onKeyDown={handleKeyDown}
+        onPaste={handlePaste}
         onCompositionStart={handleCompositionStart}
         onCompositionEnd={handleCompositionEnd}
         placeholder={placeholder}
@@ -481,7 +607,45 @@ const CommandInput: React.FC<CommandInputProps> = ({
         data-testid="command-input"
       />
 
+      {attachedImages.length > 0 && (
+        <div className="image-preview-strip">
+          {attachedImages.map((img) => (
+            <div key={img.id} className={`image-preview-chip ${img.error ? 'error' : ''} ${!img.uploadedPath && !img.error ? 'uploading' : ''}`}>
+              <img src={img.preview} alt={img.file.name} />
+              <span className="image-name">{img.file.name}</span>
+              {!img.uploadedPath && !img.error && <span className="upload-spinner" />}
+              {img.error && <span className="upload-error">{img.error}</span>}
+              <button
+                type="button"
+                className="remove-btn"
+                onClick={() => removeImage(img.id)}
+                aria-label="Remove image"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="input-actions">
+        <button
+          type="button"
+          className="upload-button"
+          onClick={handleUploadClick}
+          disabled={disabled}
+          data-tooltip="Attach image"
+          aria-label="Attach image"
+        >
+          <Plus size={16} />
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={handleFileSelect}
+        />
         <button
           type="button"
           className="new-session-button"
@@ -494,7 +658,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
         </button>
         <button
           onClick={handleSend}
-          disabled={disabled || !(draftValue.trim())}
+          disabled={disabled || !(draftValue.trim()) || attachedImages.some(img => !img.uploadedPath && !img.error)}
           className="send-button"
           data-tooltip={isProcessing ? 'Steer running request' : 'Send message'}
           aria-label="Send message"
@@ -505,7 +669,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
           <button
             type="button"
             onClick={handleQueue}
-            disabled={disabled || !(draftValue.trim())}
+            disabled={disabled || !(draftValue.trim()) || attachedImages.some(img => !img.uploadedPath && !img.error)}
             className="queue-button"
             data-tooltip={`Queue for after current run${queuedCount > 0 ? ` (${queuedCount} queued)` : ''}`}
             aria-label="Queue message"

@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 	"github.com/alantheprice/ledit/pkg/filesystem"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
@@ -365,6 +366,44 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 				agent.debugLog("[NO] Blocked subagent tool '%s' - nested subagents are not allowed\n", toolName)
 			}
 			return nil, "", fmt.Errorf("%s", errMsg)
+		}
+	}
+
+	// Security validation — classify and block/prompt dangerous operations
+	if secResult := tools.ClassifyToolCall(toolName, args); secResult.ShouldBlock || secResult.ShouldPrompt {
+		if agent != nil && agent.GetUnsafeMode() {
+			// Unsafe mode: bypass all security checks
+			if agent.debug {
+				agent.debugLog("[UNLOCK] Unsafe mode: bypassing security validation for %s (risk: %s)\n", toolName, secResult.Risk)
+			}
+		} else if secResult.IsHardBlock {
+			return nil, "", fmt.Errorf("SECURITY_BLOCK: %s — %s", toolName, secResult.Reasoning)
+		} else if agent != nil {
+			// Check if we're running as a subagent — subagents cannot prompt
+			isSubagent := os.Getenv("LEDIT_FROM_AGENT") == "1" || os.Getenv("LEDIT_SUBAGENT") == "1"
+
+			if secResult.ShouldBlock && isSubagent {
+				// Non-interactive subagent: block DANGEROUS operations
+				return nil, "", fmt.Errorf("SECURITY_BLOCK: %s — %s (subagent cannot execute dangerous operations)", toolName, secResult.Reasoning)
+			}
+
+			// For non-subagent interactive or non-interactive with prompt support
+			agentConfig := agent.GetConfig()
+			logger := utils.GetLogger(agentConfig != nil && agentConfig.SkipPrompt)
+
+			if logger != nil && logger.IsInteractive() {
+				prompt := fmt.Sprintf("[WARN] Security Warning\n\nTool: %s\nRisk Level: %s\nReasoning: %s\n\nDo you want to proceed? (yes/no): ", toolName, secResult.Risk, secResult.Reasoning)
+				if !logger.AskForConfirmation(prompt, false, false) {
+					return nil, "", fmt.Errorf("SECURITY_REJECTED: User rejected %s — %s", toolName, secResult.Reasoning)
+				}
+			} else if secResult.ShouldBlock {
+				// Non-interactive, no logger: block DANGEROUS
+				return nil, "", fmt.Errorf("SECURITY_BLOCK: %s — %s", toolName, secResult.Reasoning)
+			}
+			// CAUTION in non-interactive: allow but log
+			if agent.debug {
+				agent.debugLog("[LOCK] Security validation: CAUTION auto-allowed for %s — %s\n", toolName, secResult.Reasoning)
+			}
 		}
 	}
 

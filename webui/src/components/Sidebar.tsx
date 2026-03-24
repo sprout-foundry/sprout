@@ -4,7 +4,7 @@ import { ApiService, ProviderOption, LeditSettings } from '../services/api';
 import SettingsPanel from './SettingsPanel';
 import { ProviderLogEntry } from '../providers';
 import { useTheme } from '../contexts/ThemeContext';
-import { HotkeyPreset, useHotkeys } from '../contexts/HotkeyContext';
+import { useHotkeys } from '../contexts/HotkeyContext';
 import ResizeHandle from './ResizeHandle';
 import {
   ScrollText,
@@ -22,6 +22,7 @@ import {
   Upload,
   Trash2,
   Search,
+  RotateCw,
   type LucideIcon,
 } from 'lucide-react';
 import FileTree from './FileTree';
@@ -95,8 +96,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   isMobile = false
 }) => {
   const { themePack, availableThemePacks, setThemePack, importTheme, removeTheme } = useTheme();
-  const { preset: hotkeyPreset, setPreset: setHotkeyPreset } = useHotkeys();
+  const { applyPreset } = useHotkeys();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileTreeRef = useRef<{ refresh: () => void } | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
     const stored = localStorage.getItem('ledit-sidebar-width');
@@ -227,8 +229,12 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  const handleHotkeyPresetChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setHotkeyPreset(e.target.value as HotkeyPreset);
+  const handleHotkeyPresetChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    try {
+      await applyPreset(e.target.value);
+    } catch (err) {
+      console.error('Failed to apply hotkey preset:', err);
+    }
   };
 
   const handleSidebarResize = useCallback((delta: number) => {
@@ -267,6 +273,23 @@ const Sidebar: React.FC<SidebarProps> = ({
       setSelectedSection(tab);
     }
   };
+
+  // Open search tab on hotkey command
+  useEffect(() => {
+    const handleHotkey = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.commandId === 'open_search') {
+        if (sidebarCollapsed) {
+          setSelectedSection('search');
+          onSidebarToggle?.();
+        } else {
+          setSelectedSection('search');
+        }
+      }
+    };
+    window.addEventListener('ledit:hotkey', handleHotkey);
+    return () => window.removeEventListener('ledit:hotkey', handleHotkey);
+  }, [sidebarCollapsed, onSidebarToggle]);
 
   const handleImportTheme = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -372,6 +395,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const renderFilesSection = () => {
     return (
       <FileTree
+        ref={fileTreeRef as any}
         rootPath="."
         onFileSelect={(file) => onFileClick?.(file.path)}
       />
@@ -455,13 +479,14 @@ const Sidebar: React.FC<SidebarProps> = ({
             )}
           </div>
           <div className="config-item">
-            <label htmlFor="hotkey-preset-select">Editor Hotkeys:</label>
+            <label htmlFor="hotkey-preset-select">Apply Hotkey Preset:</label>
             <select
               id="hotkey-preset-select"
-              value={hotkeyPreset}
+              defaultValue=""
               onChange={handleHotkeyPresetChange}
               className="styled-select"
             >
+              <option value="" disabled>Choose a preset…</option>
               <option value="vscode">VS Code</option>
               <option value="webstorm">WebStorm</option>
               <option value="ledit">Ledit (Legacy)</option>
@@ -619,12 +644,21 @@ const Sidebar: React.FC<SidebarProps> = ({
         {/* Content Pane (only when expanded) */}
         {!sidebarCollapsed && (
           <div className="sidebar-content-pane" role="tabpanel" id="sidebar-tabpanel">
-            <div className="content-pane-header">
-              <span className="content-pane-title">
-                {SECTION_TABS.find(t => t.id === selectedSection)?.label || ''}
-              </span>
-            </div>
-            <div className="content-pane-scroll">
+                  <div className="content-pane-header">
+        <span className="content-pane-title">
+          {SECTION_TABS.find(t => t.id === selectedSection)?.label || ''}
+        </span>
+        {selectedSection === 'files' && (
+          <button
+            onClick={() => fileTreeRef.current?.refresh()}
+            className="refresh-button"
+            title="Refresh file tree"
+            aria-label="Refresh file tree"
+          >
+            <RotateCw size={16} />
+          </button>
+        )}
+      </div><div className="content-pane-scroll">
               {renderContentPane()}
             </div>
           </div>

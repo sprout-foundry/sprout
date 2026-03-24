@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
 import {
   FolderOpen,
   Folder,
@@ -19,6 +19,7 @@ import {
   Zap,
   AlertTriangle,
   FolderClosed,
+  ImageIcon,
 } from 'lucide-react';
 import './FileTree.css';
 
@@ -47,15 +48,39 @@ interface FileTreeProps {
   onFileSelect: (file: FileInfo) => void;
   selectedFile?: string;
   rootPath?: string;
+  onRefresh?: () => void;
 }
 
-const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile, rootPath = '.' }) => {
+interface FileTreeHandle {
+  refresh: () => void;
+}
+
+const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({ onFileSelect, selectedFile, rootPath = '.', onRefresh }, ref) => {
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set([rootPath]));
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [currentPath, setCurrentPath] = useState<string>(rootPath);
   const filesRef = useRef<FileInfo[]>([]);
+
+  // Expose refresh method via ref
+  useImperativeHandle(ref, () => ({
+    refresh: async () => {
+      setLoading(true);
+      setError(null);
+      
+      try {
+        const rootFiles = await fetchFiles(rootPath);
+        setFiles(rootFiles);
+        setCurrentPath(rootPath);
+        onRefresh?.();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unknown error');
+      } finally {
+        setLoading(false);
+      }
+    }
+  }));
 
   useEffect(() => {
     filesRef.current = files;
@@ -201,22 +226,6 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile, rootPat
     }
   };
 
-  // Refresh the current directory
-  const refresh = async () => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const rootFiles = await fetchFiles(rootPath);
-      setFiles(rootFiles);
-      setCurrentPath(rootPath);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   // Get file icon based on extension or type — returns a React element
   const getFileIcon = (file: FileInfo): React.ReactNode => {
     if (file.isDir) {
@@ -256,6 +265,18 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile, rootPat
         return <Terminal size={16} className="icon-terminal icon-sh" />;
       case '.gitignore':
         return <FileX size={16} className="icon-file-x icon-gitignore" />;
+      case '.png':
+      case '.jpg':
+      case '.jpeg':
+      case '.gif':
+      case '.bmp':
+      case '.webp':
+      case '.svg':
+      case '.ico':
+      case '.tiff':
+      case '.tif':
+      case '.avif':
+        return <ImageIcon size={16} className="icon-image" style={{ color: '#c084fc' }} />;
       default:
         return <File size={16} className="icon-file" />;
     }
@@ -316,23 +337,7 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile, rootPat
       <div className="file-tree">
         <div className="file-tree-header">
           <h3><FolderClosed size={16} style={{ marginRight: 6, verticalAlign: 'middle' }} /> File Explorer</h3>
-          <div className="file-tree-controls">
-            <button
-              onClick={refresh}
-              disabled={loading}
-              className="refresh-button"
-              title="Refresh file tree"
-              aria-label="Refresh file tree"
-            >
-              <RotateCw size={16} />
-            </button>
-          </div>
         </div>
-
-      <div className="current-path">
-        <span className="path-label">Path:</span>
-        <span className="path-value">{currentPath}</span>
-      </div>
 
       {loading && (
         <div className="loading-indicator">
@@ -360,6 +365,6 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile, rootPat
       </div>
     </div>
   );
-};
+});
 
 export default FileTree;

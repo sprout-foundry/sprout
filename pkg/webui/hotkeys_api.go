@@ -89,3 +89,49 @@ func (ws *ReactWebServer) handleAPIHotkeysPut(w http.ResponseWriter, r *http.Req
 		"config":  config,
 	})
 }
+
+// hotkeysPresetsRequest is the request body for POST /api/hotkeys/preset
+type hotkeysPresetsRequest struct {
+	Preset string `json:"preset"`
+}
+
+// handleAPIHotkeysPreset handles POST /api/hotkeys/preset.
+// It generates a hotkey configuration from the named preset, validates it,
+// saves it to disk, and returns the result.
+func (ws *ReactWebServer) handleAPIHotkeysPreset(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxHotkeysBodyBytes)
+
+	var req hotkeysPresetsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "Invalid JSON: "+err.Error())
+		return
+	}
+
+	if req.Preset == "" {
+		writeJSONError(w, http.StatusBadRequest, "preset field is required")
+		return
+	}
+
+	config := HotkeyPresetConfig(req.Preset)
+
+	if err := ValidateHotkeyConfig(config); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "Generated preset config failed validation: "+err.Error())
+		return
+	}
+
+	if err := SaveHotkeys(config); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "Failed to save hotkeys: "+err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"preset":  req.Preset,
+		"config":  config,
+	})
+}

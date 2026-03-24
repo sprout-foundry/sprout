@@ -22,8 +22,11 @@ import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { useTheme } from '../contexts/ThemeContext';
 import EditorToolbar from './EditorToolbar';
+import ImageViewer from './ImageViewer';
 import { readFileWithConsent } from '../services/fileAccess';
-import { getHotkeyPresetKeymap } from '../utils/editorHotkeys';
+import { getEditorKeymap } from '../utils/editorHotkeys';
+import { diffGutter, updateDiffGutter, clearDiffGutter } from '../extensions/diffGutter';
+import { ApiService } from '../services/api';
 import {
   File,
   Loader2,
@@ -41,7 +44,6 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [localContent, setLocalContent] = useState<string>('');
-  const [showLineNumbers, setShowLineNumbers] = useState<boolean>(true);
 
   const {
     panes,
@@ -53,11 +55,23 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   } = useEditorManager();
 
   const { theme, themePack, customHighlightStyle } = useTheme();
-  const { preset: hotkeyPreset } = useHotkeys();
+  const { hotkeys } = useHotkeys();
 
   // Get buffer for this pane
   const pane = panes.find(p => p.id === paneId);
   const buffer = pane?.bufferId ? buffers.get(pane.bufferId) : null;
+
+  // Image extensions that should be viewed as images
+  const IMAGE_EXTENSIONS = new Set([
+    '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg', '.ico', '.tiff', '.tif', '.avif'
+  ]);
+
+  const isImageFile = (ext?: string): boolean => {
+    return !!ext && IMAGE_EXTENSIONS.has(ext.toLowerCase());
+  };
+
+  // API service instance (singleton)
+  const apiService = useRef(ApiService.getInstance()).current;
 
   // Get language support based on file extension
   const getLanguageSupport = useCallback((ext?: string) => {
@@ -121,6 +135,22 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
           }
         });
       }
+
+      // Fetch git diff after loading file
+      if (filePath && viewRef.current) {
+        try {
+          const diffResponse = await apiService.getGitDiff(filePath);
+          if (diffResponse.diff && diffResponse.diff.trim()) {
+            updateDiffGutter(viewRef.current, diffResponse.diff);
+          } else {
+            clearDiffGutter(viewRef.current);
+          }
+        } catch (err) {
+          // Graceful degradation - just clear diff if API fails
+          console.warn('Failed to fetch git diff:', err);
+          clearDiffGutter(viewRef.current);
+        }
+      }
     } catch (err) {
       console.error('[EditorPane loadFile] Error:', err);
       setError(err instanceof Error ? err.message : 'Unknown error');
@@ -128,7 +158,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       isExternalUpdateRef.current = false;
       setLoading(false);
     }
-  }, []);
+  }, [apiService]);
 
   // Keep ref in sync
   loadFileRef.current = loadFile;
@@ -155,21 +185,30 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     dispatch.focus();
   }, []);
 
-  // Toggle line numbers
-  const handleToggleLineNumbers = useCallback(() => {
-    setShowLineNumbers(prev => !prev);
-  }, []);
-
   // Save buffer
   const handleSave = useCallback(async () => {
     if (!buffer || !viewRef.current) return;
 
     try {
       await saveBuffer(buffer.id);
+      
+      // Re-fetch diff after save
+      if (buffer.file.path && viewRef.current) {
+        try {
+          const diffResponse = await apiService.getGitDiff(buffer.file.path);
+          if (diffResponse.diff && diffResponse.diff.trim()) {
+            updateDiffGutter(viewRef.current, diffResponse.diff);
+          } else {
+            clearDiffGutter(viewRef.current);
+          }
+        } catch (err) {
+          console.warn('Failed to re-fetch git diff after save:', err);
+        }
+      }
     } catch (err) {
       setError('Failed to save file');
     }
-  }, [buffer, paneId, saveBuffer]);
+  }, [buffer, saveBuffer, apiService]);
 
   const isExternalUpdateRef = useRef<boolean>(false);
   const lastLoadedRef = useRef<{bufferId: string, filePath: string} | null>(null);
@@ -192,6 +231,9 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       setError(null);
       lastLoadedRef.current = null;
       currentBufferIdRef.current = null;
+      if (viewRef.current) {
+        clearDiffGutter(viewRef.current);
+      }
       return;
     }
 
@@ -251,12 +293,9 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       }
     });
 
-    const customKeymap = getHotkeyPresetKeymap(hotkeyPreset, {
+    const customKeymap = getEditorKeymap(hotkeys, {
       onSave: () => {
         handleSave();
-      },
-      onToggleLineNumbers: () => {
-        handleToggleLineNumbers();
       },
       onGoToLine: () => {
         const event = new CustomEvent('editor-goto-line');
@@ -274,6 +313,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       autocompletion(),
       bracketMatching(),
       syntaxHighlighting(customHighlightStyle || (themePack.editorSyntaxStyle === 'one-dark' ? oneDarkHighlightStyle : defaultHighlightStyle)),
+      diffGutter(),
       lineNumbers(),
       foldGutter({
         openText: '▼',
@@ -358,7 +398,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       view.destroy();
       viewRef.current = null;
     };
-  }, [paneId, buffer?.id, buffer?.file?.ext, showLineNumbers, theme, themePack.id, hotkeyPreset, customHighlightStyle, updateBufferContent, setBufferModified, updateBufferCursor, getLanguageSupport]); // eslint-disable-line react-hooks/exhaustive-deps -- handleSave and handleToggleLineNumbers intentionally excluded to prevent infinite re-init loop when buffer changes
+  }, [paneId, buffer?.id, buffer?.file?.ext, theme, themePack.id, hotkeys, customHighlightStyle, updateBufferContent, setBufferModified, updateBufferCursor, getLanguageSupport]); // eslint-disable-line react-hooks/exhaustive-deps -- handleSave intentionally excluded to prevent infinite re-init loop when buffer changes
 
 
   // Listen for go to line event from toolbar
@@ -387,12 +427,25 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     );
   }
 
+  // Detect if this is an image file
+  const imageFile = buffer && buffer.file && !buffer.file.isDir && isImageFile(buffer.file.ext);
+
+  if (imageFile) {
+    return (
+      <div className="editor-pane">
+        <ImageViewer
+          filePath={buffer.file.path}
+          fileName={buffer.file.name}
+          fileSize={buffer.file.size}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="editor-pane">
       <EditorToolbar
         paneId={paneId}
-        showLineNumbers={showLineNumbers}
-        onToggleLineNumbers={handleToggleLineNumbers}
         onGoToLine={handleGoToLine}
         onSave={handleSave}
       />

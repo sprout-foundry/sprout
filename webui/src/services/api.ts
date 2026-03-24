@@ -166,6 +166,20 @@ class ApiService {
     }
   }
 
+  async uploadImage(file: File | Blob): Promise<{ path: string; filename: string }> {
+    const formData = new FormData();
+    formData.append('image', file);
+    const response = await fetch('/api/upload/image', {
+      method: 'POST',
+      body: formData,
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || 'Failed to upload image');
+    }
+    return response.json();
+  }
+
   async steerQuery(query: string): Promise<void> {
     const response = await fetch('/api/query/steer', {
       method: 'POST',
@@ -857,6 +871,24 @@ class ApiService {
     }
   }
 
+  async applyHotkeyPreset(preset: string): Promise<{ success: boolean; preset: string; config: HotkeyConfig }> {
+    try {
+      const response = await fetch('/api/hotkeys/preset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preset }),
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || `HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to apply hotkey preset:', error);
+      throw error;
+    }
+  }
+
   // ── Search API ───────────────────────────────────────────────────
 
   async search(query: string, options?: {
@@ -994,6 +1026,7 @@ export interface HotkeyEntry {
   key: string;
   command_id: string;
   description?: string;
+  global?: boolean;
 }
 
 export interface HotkeyConfig {

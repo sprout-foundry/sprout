@@ -55,6 +55,7 @@ interface GitDiffResponse {
 }
 
 type FileSection = 'staged' | 'modified' | 'untracked';
+const MOBILE_LAYOUT_MAX_WIDTH = 768;
 
 const selectionKey = (section: FileSection, path: string): string => `${section}:${path}`;
 
@@ -128,11 +129,24 @@ const GitView: React.FC<GitViewProps> = ({
   const [reviewFixSessionID, setReviewFixSessionID] = useState<string | null>(null);
   const [deepReview, setDeepReview] = useState<DeepReviewResult | null>(null);
   const [rightPanelTab, setRightPanelTab] = useState<'diff' | 'review'>('diff');
+  const [isMobileLayout, setIsMobileLayout] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= MOBILE_LAYOUT_MAX_WIDTH;
+  });
   const workspaceRef = useRef<HTMLDivElement>(null);
   const isResizingRef = useRef(false);
   const fixPollTimeoutRef = useRef<number | null>(null);
   const fixPollIndexRef = useRef(0);
   const apiService = ApiService.getInstance();
+
+  useEffect(() => {
+    const onResize = () => {
+      setIsMobileLayout(window.innerWidth <= MOBILE_LAYOUT_MAX_WIDTH);
+    };
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -605,7 +619,7 @@ const GitView: React.FC<GitViewProps> = ({
             className="action-btn"
           >
             <ShieldCheck size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
-            {isReviewLoading ? 'Reviewing…' : 'Deep Review'}
+            {isReviewLoading ? 'Reviewing…' : 'Review'}
           </button>
           <button 
             onClick={handleStageSelected}
@@ -635,7 +649,7 @@ const GitView: React.FC<GitViewProps> = ({
       <div
         className="git-workspace"
         ref={workspaceRef}
-        style={{
+        style={isMobileLayout ? undefined : {
           gridTemplateColumns: filesPaneCollapsed
             ? '0 8px minmax(0, 1fr)'
             : `${filesPaneWidth}px 8px minmax(0, 1fr)`
@@ -784,7 +798,7 @@ const GitView: React.FC<GitViewProps> = ({
               onClick={() => setRightPanelTab('diff')}
             >
               <SplitSquareHorizontal size={14} style={{ marginRight: 6 }} />
-              Diff Preview
+              Diff
             </button>
             <button
               type="button"
@@ -792,11 +806,22 @@ const GitView: React.FC<GitViewProps> = ({
               onClick={() => setRightPanelTab('review')}
             >
               <ShieldCheck size={14} style={{ marginRight: 6 }} />
-              Deep Review
+              Review
             </button>
             <div className="git-combined-panel-actions">
               {rightPanelTab === 'diff' && activeDiffPath && (
                 <span className="git-diff-path">{activeDiffPath}</span>
+              )}
+              {rightPanelTab === 'review' && (
+                <button
+                  type="button"
+                  className="action-btn"
+                  onClick={handleDeepReview}
+                  disabled={isActing || isReviewLoading || isReviewFixing || !gitStatus.staged.length}
+                  title={gitStatus.staged.length === 0 ? 'Stage files to run Review' : 'Run Review'}
+                >
+                  {isReviewLoading ? 'Reviewing…' : (deepReview ? 'Re-run Review' : 'Start Review')}
+                </button>
               )}
               <button
                 type="button"
@@ -873,7 +898,17 @@ const GitView: React.FC<GitViewProps> = ({
                   <p>Running /deep-review on staged changes…</p>
                 </div>
               ) : reviewError ? (
-                <div className="git-review-error">{reviewError}</div>
+                <div className="git-review-error">
+                  <p>{reviewError}</p>
+                  <button
+                    type="button"
+                    className="action-btn"
+                    onClick={handleDeepReview}
+                    disabled={isReviewLoading || isReviewFixing || !gitStatus.staged.length}
+                  >
+                    Retry Review
+                  </button>
+                </div>
               ) : deepReview ? (
                 <>
                   <div className="git-review-meta">
@@ -917,7 +952,17 @@ const GitView: React.FC<GitViewProps> = ({
                   )}
                 </>
               ) : (
-                <div className="git-review-empty">Run Deep Review to analyze staged changes.</div>
+                <div className="git-review-empty">
+                  <p>Run Review to analyze staged changes.</p>
+                  <button
+                    type="button"
+                    className="action-btn primary"
+                    onClick={handleDeepReview}
+                    disabled={isReviewLoading || isReviewFixing || !gitStatus.staged.length}
+                  >
+                    Start Review
+                  </button>
+                </div>
               )}
               <div className="git-review-pane-footer">
                 <button

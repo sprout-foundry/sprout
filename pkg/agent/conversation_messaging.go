@@ -55,6 +55,7 @@ func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 		filtered = append(filtered, m)
 	}
 	optimizedMessages = filtered
+	optimizedMessages = ch.stripImagesForNonVisionModels(optimizedMessages)
 
 	// Always include system prompt at the beginning
 	allMessages := []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
@@ -161,6 +162,27 @@ func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 	ch.transientMessagesMu.Unlock()
 
 	return allMessages
+}
+
+func (ch *ConversationHandler) stripImagesForNonVisionModels(messages []api.Message) []api.Message {
+	if ch.agent == nil || ch.agent.client == nil || ch.agent.client.SupportsVision() {
+		return messages
+	}
+
+	removed := 0
+	out := append([]api.Message(nil), messages...)
+	for i := range out {
+		if len(out[i].Images) == 0 {
+			continue
+		}
+		removed += len(out[i].Images)
+		out[i].Images = nil
+	}
+
+	if removed > 0 && ch.agent.debug {
+		ch.agent.debugLog("[img] Stripped %d historical image payload(s) for non-vision model\n", removed)
+	}
+	return out
 }
 
 func collapseSystemMessagesToFront(messages []api.Message) []api.Message {

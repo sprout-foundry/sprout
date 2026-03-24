@@ -4,12 +4,15 @@ import {
   Globe, ArrowDown, ClipboardList, ScrollText, RotateCcw,
   Wrench, Rocket, Zap, CheckCircle2, XCircle, Hourglass,
   Bot, Copy, AlertTriangle, ChevronDown, ChevronRight,
-  BarChart3, FileText, PanelRightOpen, PanelRightClose, History, Clock, Activity, FileCode
+  BarChart3, FileText, PanelRightOpen, PanelRightClose, History, Clock, Activity, FileCode,
+  ListTodo, ExternalLink, CheckCircle, Circle, Loader2, Minus
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import CommandInput from './CommandInput';
 import { stripAnsiCodes } from '../utils/ansi';
+import { parseMessageSegments } from '../utils/messageSegments';
+import TodoPanel from './TodoPanel';
 import { ApiService } from '../services/api';
 import './Chat.css';
 
@@ -71,12 +74,14 @@ interface ChatProps {
   lastError?: string | null;
   toolExecutions?: ToolExecution[];
   queryProgress?: any;
+  currentTodos?: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }>;
 }
 
 const SIDE_PANEL_WIDTH_KEY = 'ledit.chat.sidePanelWidth';
 const SIDE_PANEL_COLLAPSED_KEY = 'ledit.chat.sidePanelCollapsed';
 const SIDE_PANEL_MIN = 280;
 const SIDE_PANEL_MAX = 760;
+const MOBILE_LAYOUT_MAX_WIDTH = 900;
 
 const normalizeRevision = (raw: any): Revision => {
   const files = Array.isArray(raw?.files)
@@ -107,13 +112,18 @@ const Chat: React.FC<ChatProps> = ({
   isProcessing = false,
   lastError = null,
   toolExecutions = [],
-  queryProgress = null
+  queryProgress = null,
+  currentTodos = []
 }) => {
   const apiService = ApiService.getInstance();
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
   const [sidePanelCollapsed, setSidePanelCollapsed] = useState(false);
   const [sidePanelWidth, setSidePanelWidth] = useState(360);
-  const [sidePanelTab, setSidePanelTab] = useState<'tools' | 'history' | 'status' | 'sessions'>('tools');
+  const [sidePanelTab, setSidePanelTab] = useState<'tools' | 'history' | 'tasks' | 'status' | 'sessions'>('tools');
+  const [isMobileLayout, setIsMobileLayout] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= MOBILE_LAYOUT_MAX_WIDTH;
+  });
   const [revisions, setRevisions] = useState<Revision[]>([]);
   const [expandedRevisionIds, setExpandedRevisionIds] = useState<Set<string>>(new Set());
   const [expandedRevisionFileDiffs, setExpandedRevisionFileDiffs] = useState<Set<string>>(new Set());
@@ -134,6 +144,8 @@ const Chat: React.FC<ChatProps> = ({
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
   const [sessionRestoreError, setSessionRestoreError] = useState<string | null>(null);
   const [sessionsCount, setSessionsCount] = useState(0);
+  const [activeToolId, setActiveToolId] = useState<string | null>(null);
+  const toolRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const chatMainRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const resizingSidePanelRef = useRef(false);
@@ -149,6 +161,16 @@ const Chat: React.FC<ChatProps> = ({
     if (storedCollapsed === '1') {
       setSidePanelCollapsed(true);
     }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onResize = () => {
+      setIsMobileLayout(window.innerWidth <= MOBILE_LAYOUT_MAX_WIDTH);
+    };
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, []);
 
   useEffect(() => {
@@ -306,6 +328,14 @@ const Chat: React.FC<ChatProps> = ({
     return () => window.removeEventListener('ledit:open-revision-history', openHistoryPanel);
   }, [loadRevisionHistory]);
 
+  useEffect(() => {
+    // Clear highlight after 3 seconds
+    if (activeToolId) {
+      const timer = setTimeout(() => setActiveToolId(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [activeToolId]);
+
   const toggleToolExpansion = (toolId: string) => {
     setExpandedTools(prev => {
       const newSet = new Set(prev);
@@ -388,6 +418,18 @@ const Chat: React.FC<ChatProps> = ({
       setIsLoadingHistory(false);
     }
   }, [apiService]);
+
+  const handleToolPillClick = useCallback((toolId: string) => {
+    setSidePanelCollapsed(false);
+    setSidePanelTab('tools');
+    setActiveToolId(toolId);
+    setTimeout(() => {
+      const el = toolRefs.current[toolId];
+      if (el != null) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }, 100);
+  }, []);
 
   const getToolIcon = (toolName: string): ReactNode => {
     const iconMap: { [key: string]: ReactNode } = {
@@ -575,6 +617,116 @@ const Chat: React.FC<ChatProps> = ({
     );
   };
 
+  const renderMessageSegments = (content: string): ReactNode => {
+    try {
+      const cleaned = stripAnsiCodes(content);
+      const segments = parseMessageSegments(cleaned);
+    
+    return (
+      <div className="message-segments">
+        {segments.map((segment, idx) => {
+          switch (segment.type) {
+            case 'text':
+              // Render text as markdown (same as current renderContent for non-traces)
+              return (
+                <div key={`seg-${idx}`} className="segment-text">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      code({ inline, className, children, ...props }: any) {
+                        const languageMatch = /language-(\w+)/.exec(className || '');
+                        const language = languageMatch ? languageMatch[1] : '';
+                        if (inline) {
+                          return <code className="inline-code" {...props}>{children}</code>;
+                        }
+                        return (
+                          <pre className="code-block">
+                            <span className="code-language">{language || 'text'}</span>
+                            <code className={className} {...props}>{children}</code>
+                          </pre>
+                        );
+                      },
+                      a({ href, children, ...props }: any) {
+                        return <a href={href} target="_blank" rel="noreferrer" {...props}>{children}</a>;
+                      },
+                    }}
+                  >
+                    {segment.content}
+                  </ReactMarkdown>
+                </div>
+              );
+            
+            case 'tool_call':
+              return (
+                <div 
+                  key={`seg-${idx}`} 
+                  className="segment-tool-call"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`View ${segment.toolName} execution details`}
+                  onClick={() => {
+                    const matchingTool = toolExecutions.find(t => 
+                      t.tool === segment.toolName.split('(')[0]
+                    );
+                    if (matchingTool) {
+                      handleToolPillClick(matchingTool.id);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      const matchingTool = toolExecutions.find(t => 
+                        t.tool === segment.toolName.split('(')[0]
+                      );
+                      if (matchingTool) {
+                        handleToolPillClick(matchingTool.id);
+                      }
+                    }
+                  }}
+                >
+                  <span className="tool-pill-icon">{getToolIcon(segment.toolName.split('(')[0])}</span>
+                  <span className="tool-pill-name">{segment.summary || segment.toolName}</span>
+                  <ExternalLink size={10} className="tool-pill-link-icon" />
+                </div>
+              );
+            
+            case 'todo_update':
+              // Render as a compact inline todo summary
+              return (
+                <div key={`seg-${idx}`} className="segment-todo-summary">
+                  {segment.todos.map((todo, todoIdx) => (
+                    <span key={`todo-${todoIdx}`} className={`inline-todo inline-todo-${todo.status}`}>
+                      <span className="inline-todo-icon">
+                        {todo.status === 'completed' ? <CheckCircle size={10} /> :
+                         todo.status === 'in_progress' ? <Loader2 size={10} /> :
+                         todo.status === 'cancelled' ? <Minus size={10} /> :
+                         <Circle size={10} />}
+                      </span>
+                      {todo.content}
+                    </span>
+                  ))}
+                </div>
+              );
+            
+            case 'progress':
+              // Skip progress segments in the main chat (they're ephemeral)
+              return null;
+            
+            case 'result':
+              // Skip result segments in the main chat 
+              return null;
+            
+            default:
+              return null;
+          }
+        })}
+      </div>
+    );
+    } catch {
+      return renderContent(content);
+    }
+  };
+
   const renderDiff = (diff: string) => {
     const lines = stripAnsiCodes(diff).split('\n');
     return (
@@ -657,7 +809,7 @@ const Chat: React.FC<ChatProps> = ({
     return `${mins}m ${secs}s`;
   };
 
-  const panelTabs: Array<{ id: 'tools' | 'history' | 'status' | 'sessions'; label: string; icon: ReactNode; count: string }> = [
+  const panelTabs: Array<{ id: 'tools' | 'history' | 'tasks' | 'status' | 'sessions'; label: string; icon: ReactNode; count: string }> = [
     {
       id: 'tools',
       label: 'Tool Executions',
@@ -669,6 +821,12 @@ const Chat: React.FC<ChatProps> = ({
       label: 'Revision History',
       icon: <History size={14} />,
       count: `${historyCounts} revisions`,
+    },
+    {
+      id: 'tasks',
+      label: 'Tasks',
+      icon: <ListTodo size={14} />,
+      count: `${currentTodos?.filter(t => t.status === 'in_progress').length || 0} active`,
     },
     {
       id: 'sessions',
@@ -691,7 +849,7 @@ const Chat: React.FC<ChatProps> = ({
       <div
         className={`chat-main ${sidePanelCollapsed ? 'panel-collapsed' : ''}`}
         ref={chatMainRef}
-        style={{
+        style={isMobileLayout ? undefined : {
           gridTemplateColumns: sidePanelCollapsed
             ? 'minmax(0, 1fr) 0 52px'
             : `minmax(0, 1fr) 6px ${sidePanelWidth}px`,
@@ -726,7 +884,10 @@ const Chat: React.FC<ChatProps> = ({
                     <Copy size={14} />
                   </button>
                   <div className="message-content">
-                    {renderContent(message.content)}
+                    {message.type === 'assistant' 
+                      ? renderMessageSegments(message.content)
+                      : renderContent(message.content)
+                    }
                   </div>
                   <div className="message-timestamp">
                     {formatTime(message.timestamp)}
@@ -769,7 +930,7 @@ const Chat: React.FC<ChatProps> = ({
           )}
         </div>
 
-        {!sidePanelCollapsed && (
+        {!sidePanelCollapsed && !isMobileLayout && (
           <div
           className={`chat-side-resizer ${sidePanelCollapsed ? 'hidden' : ''}`}
             onMouseDown={startSidePanelResize}
@@ -781,7 +942,7 @@ const Chat: React.FC<ChatProps> = ({
         <aside
           className={`chat-side-panel ${sidePanelCollapsed ? 'collapsed' : ''}`}
           aria-label="Context side panel"
-          style={sidePanelCollapsed ? undefined : { width: `${sidePanelWidth}px` }}
+          style={sidePanelCollapsed || isMobileLayout ? undefined : { width: `${sidePanelWidth}px` }}
         >
           <div className="side-panel-rail">
             {panelTabs.map((tab) => (
@@ -837,7 +998,8 @@ const Chat: React.FC<ChatProps> = ({
                         return (
                           <div
                             key={tool.id}
-                            className={`tool-execution tool-${tool.status} ${isSub ? 'tool-subagent' : ''}`}
+                            ref={(el) => { toolRefs.current[tool.id] = el; }}
+                            className={`tool-execution tool-${tool.status} ${isSub ? 'tool-subagent' : ''} ${activeToolId === tool.id ? 'tool-highlighted' : ''}`}
                             onClick={() => toggleToolExpansion(tool.id)}
                           >
                             <div className="tool-summary">
@@ -1048,6 +1210,10 @@ const Chat: React.FC<ChatProps> = ({
                     )}
                   </div>
                 </>
+              ) : sidePanelTab === 'tasks' ? (
+                <div className="side-panel-tasks">
+                  <TodoPanel todos={currentTodos || []} isLoading={isProcessing} />
+                </div>
               ) : (
                 <div className="chat-status-panel">
                   <div className="status-section">

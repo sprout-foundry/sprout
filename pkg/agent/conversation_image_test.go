@@ -212,17 +212,17 @@ func (v *visionSupportingClient) SendChatRequest(messages []api.Message, tools [
 func (v *visionSupportingClient) SendChatRequestStream(messages []api.Message, tools []api.Tool, reasoning string, callback api.StreamCallback) (*api.ChatResponse, error) {
 	return nil, nil
 }
-func (v *visionSupportingClient) CheckConnection() error                                      { return nil }
-func (v *visionSupportingClient) SetDebug(debug bool)                                        {}
-func (v *visionSupportingClient) SetModel(model string) error                                { return nil }
-func (v *visionSupportingClient) GetModel() string                                           { return "test-vision-model" }
-func (v *visionSupportingClient) GetProvider() string                                        { return "test" }
-func (v *visionSupportingClient) GetModelContextLimit() (int, error)                         { return 4096, nil }
-func (v *visionSupportingClient) GetLastTPS() float64                                        { return 0 }
-func (v *visionSupportingClient) GetAverageTPS() float64                                     { return 0 }
-func (v *visionSupportingClient) GetTPSStats() map[string]float64                            { return nil }
-func (v *visionSupportingClient) ResetTPSStats()                                             {}
-func (v *visionSupportingClient) GetVisionModel() string                                     { return "test-vision-model" }
+func (v *visionSupportingClient) CheckConnection() error             { return nil }
+func (v *visionSupportingClient) SetDebug(debug bool)                {}
+func (v *visionSupportingClient) SetModel(model string) error        { return nil }
+func (v *visionSupportingClient) GetModel() string                   { return "test-vision-model" }
+func (v *visionSupportingClient) GetProvider() string                { return "test" }
+func (v *visionSupportingClient) GetModelContextLimit() (int, error) { return 4096, nil }
+func (v *visionSupportingClient) GetLastTPS() float64                { return 0 }
+func (v *visionSupportingClient) GetAverageTPS() float64             { return 0 }
+func (v *visionSupportingClient) GetTPSStats() map[string]float64    { return nil }
+func (v *visionSupportingClient) ResetTPSStats()                     {}
+func (v *visionSupportingClient) GetVisionModel() string             { return "test-vision-model" }
 func (v *visionSupportingClient) SendVisionRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
 	return nil, nil
 }
@@ -243,8 +243,8 @@ func TestProcessImagesInQuery_VisionClient_WithValidImages(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create the .ledit_pasted_images directory (mimics console behavior).
-	pasteDir := filepath.Join(dir, ".ledit_pasted_images")
+	// Create the .ledit/pasted-images directory (mimics console behavior).
+	pasteDir := filepath.Join(dir, ".ledit", "pasted-images")
 	if err := os.MkdirAll(pasteDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -255,7 +255,7 @@ func TestProcessImagesInQuery_VisionClient_WithValidImages(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	query := "Pasted image saved to disk: ./.ledit_pasted_images/paste_test_abc123.png — describe this screenshot"
+	query := "Pasted image saved to disk: ./.ledit/pasted-images/paste_test_abc123.png — describe this screenshot"
 
 	a := &Agent{client: &visionSupportingClient{supportsVision: true}}
 
@@ -301,6 +301,28 @@ func TestProcessImagesInQuery_VisionClient_NoPlaceholders_ReturnsQueryUnchanged(
 	}
 }
 
+func TestProcessImagesInQuery_NonVisionClient_InjectsToolPrompt(t *testing.T) {
+	query := "Pasted image saved to disk: ./.ledit/pasted-images/test_a.png\nPlease read this image."
+	a := &Agent{client: &visionSupportingClient{supportsVision: false}}
+
+	images, cleaned, err := a.processImagesInQuery(query)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(images) != 0 {
+		t.Fatalf("expected no multimodal images for non-vision client, got %d", len(images))
+	}
+	if !strings.Contains(cleaned, "OCR Trigger Policy (MANDATORY)") {
+		t.Fatalf("expected OCR trigger policy in prompt, got: %q", cleaned)
+	}
+	if !strings.Contains(cleaned, "analyze_image_content") {
+		t.Fatalf("expected analyze_image_content tool instruction, got: %q", cleaned)
+	}
+	if !strings.Contains(cleaned, "./.ledit/pasted-images/test_a.png") {
+		t.Fatalf("expected pasted image path in prompt, got: %q", cleaned)
+	}
+}
+
 func TestProcessImagesInQuery_VisionClient_InvalidImagePath_SkipsImage(t *testing.T) {
 	// Use a non-existent file path so readImageAsImageData fails.
 	query := "Pasted image saved to disk: /tmp/__nonexistent_ledit_test_noimage.png — what is this?"
@@ -336,14 +358,14 @@ func TestProcessImagesInQuery_VisionClient_OutsideContainmentDir_SkipsImage(t *t
 		t.Fatal(err)
 	}
 
-	// Create the .ledit_pasted_images directory (required for the containment
+	// Create the .ledit/pasted-images directory (required for the containment
 	// check), but do NOT place any image inside it.
-	pasteDir := filepath.Join(dir, ".ledit_pasted_images")
+	pasteDir := filepath.Join(dir, ".ledit", "pasted-images")
 	if err := os.MkdirAll(pasteDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	// Create a valid PNG file in the temp dir root — OUTSIDE .ledit_pasted_images.
+	// Create a valid PNG file in the temp dir root — OUTSIDE .ledit/pasted-images.
 	escapedPath := filepath.Join(dir, "sibling.png")
 	if err := os.WriteFile(escapedPath, pngMagic, 0o644); err != nil {
 		t.Fatal(err)
@@ -359,7 +381,7 @@ func TestProcessImagesInQuery_VisionClient_OutsideContainmentDir_SkipsImage(t *t
 		t.Fatalf("unexpected error (outside-containment path should be skipped silently): %v", err)
 	}
 
-	// The image must be rejected because it is not under .ledit_pasted_images/.
+	// The image must be rejected because it is not under .ledit/pasted-images/.
 	if len(images) != 0 {
 		t.Errorf("expected 0 images (file outside containment dir should be skipped), got %d", len(images))
 	}

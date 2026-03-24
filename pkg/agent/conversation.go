@@ -10,8 +10,8 @@ import (
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
-	"github.com/alantheprice/ledit/pkg/console"
 	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/alantheprice/ledit/pkg/console"
 )
 
 // ProcessQuery handles the main conversation loop with the LLM
@@ -202,9 +202,53 @@ func (a *Agent) processImagesInQuery(query string) ([]api.ImageData, string, err
 		return a.processImagesAsMultimodal(query)
 	}
 
-	// Fallback: use the OCR approach via a separate vision model.
-	enhancedQuery, err := a.processImagesViaOCR(query)
-	return nil, enhancedQuery, err
+	paths := extractPastedImagePaths(query)
+	if len(paths) > 0 {
+		// For non-vision models, explicitly force a tool-based OCR/image-analysis flow
+		// instead of embedding multimodal payloads.
+		return nil, a.buildNonVisionImageToolPrompt(query, paths), nil
+	}
+
+	// No pasted images: keep query unchanged.
+	return nil, query, nil
+}
+
+func extractPastedImagePaths(query string) []string {
+	uniqueMatches := pastedImagePlaceholderRe.FindAllStringSubmatchIndex(query, -1)
+	if len(uniqueMatches) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]struct{}, len(uniqueMatches))
+	paths := make([]string, 0, len(uniqueMatches))
+	for _, loc := range uniqueMatches {
+		filePath := strings.TrimSpace(query[loc[2]:loc[3]])
+		if filePath == "" {
+			continue
+		}
+		if _, exists := seen[filePath]; exists {
+			continue
+		}
+		seen[filePath] = struct{}{}
+		paths = append(paths, filePath)
+	}
+	return paths
+}
+
+func (a *Agent) buildNonVisionImageToolPrompt(query string, paths []string) string {
+	var b strings.Builder
+	b.WriteString("OCR Trigger Policy (MANDATORY): The active model is non-multimodal. ")
+	b.WriteString("Before answering, call analyze_image_content for each pasted image path below. ")
+	b.WriteString("Use analysis_mode=\"ocr\" first, then run additional image analysis as needed.\n")
+	b.WriteString("Pasted image paths:\n")
+	for _, path := range paths {
+		b.WriteString("- ")
+		b.WriteString(path)
+		b.WriteString("\n")
+	}
+	b.WriteString("\nOriginal user request:\n")
+	b.WriteString(query)
+	return b.String()
 }
 
 // processImagesAsMultimodal extracts pasted-image references from the query,
@@ -229,7 +273,7 @@ func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string
 	// Build replacement map so we can rewrite the query in a single pass.
 	type placeholderInfo struct {
 		fullMatch string
-	filePath   string
+		filePath  string
 	}
 	var placeholders []placeholderInfo
 	seen := make(map[string]struct{}, len(uniqueMatches))

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import {
-  Hash,
   Save,
   X,
   ArrowDownToLine,
@@ -12,16 +11,12 @@ import './EditorToolbar.css';
 
 interface EditorToolbarProps {
   paneId: string;
-  showLineNumbers: boolean;
-  onToggleLineNumbers: () => void;
   onGoToLine: (line: number) => void;
   onSave: () => void;
 }
 
 const EditorToolbar: React.FC<EditorToolbarProps> = ({
   paneId: _paneId,
-  showLineNumbers,
-  onToggleLineNumbers,
   onGoToLine,
   onSave
 }) => {
@@ -42,15 +37,6 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
   return (
     <div className="editor-toolbar">
       <div className="toolbar-group">
-        {/* Line Numbers Toggle */}
-        <button
-          className={`toolbar-button ${showLineNumbers ? 'active' : ''}`}
-          onClick={onToggleLineNumbers}
-          title="Toggle line numbers (Ctrl+L)"
-        >
-          <span className="toolbar-icon"><Hash size={16} /></span>
-        </button>
-
         {/* Go to Line */}
         {showGoToLine ? (
           <form className="go-to-line-form" onSubmit={handleGoToLineSubmit}>

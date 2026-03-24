@@ -178,3 +178,69 @@ func TestHotkeyConfigNil(t *testing.T) {
 		t.Error("ValidateHotkeyConfig(nil) should return error")
 	}
 }
+
+func TestHotkeyPresetConfigs(t *testing.T) {
+	for _, preset := range []string{"vscode", "webstorm", "ledit"} {
+		t.Run(preset, func(t *testing.T) {
+			config := HotkeyPresetConfig(preset)
+			if config == nil {
+				t.Fatal("HotkeyPresetConfig returned nil")
+			}
+			if config.Version == "" {
+				t.Error("Preset config missing version")
+			}
+			if len(config.Hotkeys) == 0 {
+				t.Error("Preset config has no hotkeys")
+			}
+			if err := ValidateHotkeyConfig(config); err != nil {
+				t.Errorf("Preset %q config failed validation: %v", preset, err)
+			}
+
+			// Every preset must include the universal hotkeys.
+			mustHave := []string{
+				"save_file", "command_palette", "toggle_sidebar",
+				"toggle_terminal", "close_editor", "open_search",
+			}
+			for _, cmd := range mustHave {
+				found := false
+				for _, h := range config.Hotkeys {
+					if h.CommandID == cmd {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("Preset %q missing required command_id %q", preset, cmd)
+				}
+			}
+
+			// Every preset must include editor-specific hotkeys.
+			editorCmds := []string{
+				"editor_goto_line", "editor_move_line_up", "editor_move_line_down",
+				"editor_duplicate_line_up", "editor_duplicate_line_down", "editor_delete_line",
+			}
+			for _, cmd := range editorCmds {
+				found := false
+				for _, h := range config.Hotkeys {
+					if h.CommandID == cmd {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("Preset %q missing editor command_id %q", preset, cmd)
+				}
+			}
+		})
+	}
+}
+
+func TestHotkeyPresetConfigUnknown(t *testing.T) {
+	// Unknown preset should fall back to default.
+	def := DefaultHotkeyConfig()
+	got := HotkeyPresetConfig("unknown_ide")
+	if len(got.Hotkeys) != len(def.Hotkeys) {
+		t.Errorf("Unknown preset should return default; got %d hotkeys, want %d",
+			len(got.Hotkeys), len(def.Hotkeys))
+	}
+}

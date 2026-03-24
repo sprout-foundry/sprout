@@ -17,7 +17,7 @@ import { css } from '@codemirror/lang-css';
 import { readFileWithConsent, writeFileWithConsent } from '../services/fileAccess';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { getHotkeyPresetKeymap } from '../utils/editorHotkeys';
+import { getEditorKeymap } from '../utils/editorHotkeys';
 import {
   FileEdit,
   File,
@@ -59,7 +59,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
   const fileContentRef = useRef<string>('');
   const originalContentRef = useRef<string>('');
   const saveFileRef = useRef<(() => void) | undefined>(undefined);
-  const { preset: hotkeyPreset } = useHotkeys();
+  const { hotkeys } = useHotkeys();
   const { themePack } = useTheme();
 
   // Get language support based on file extension
@@ -248,7 +248,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
       }
     });
 
-    const customKeymap = getHotkeyPresetKeymap(hotkeyPreset, {
+    const customKeymap = getEditorKeymap(hotkeys, {
       onSave: () => {
         if (saveFileRef.current) {
           saveFileRef.current();
@@ -256,9 +256,6 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
       },
       onGoToLine: () => {
         // CodeEditor doesn't expose toolbar goto-line; keep no-op for now.
-      },
-      onToggleLineNumbers: () => {
-        // CodeEditor has no line number toggle UI; keep no-op for now.
       },
     });
 
@@ -305,7 +302,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
       view.destroy();
       viewRef.current = null;
     };
-  }, [fileKey, file?.ext, hotkeyPreset, themePack.id, themePack.editorSyntaxStyle, updateEditorStats]);
+  }, [fileKey, file?.ext, hotkeys, themePack.id, themePack.editorSyntaxStyle, updateEditorStats]);
 
   // Handle dialog actions
   const handleSaveAndSwitch = async () => {

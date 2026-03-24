@@ -86,8 +86,12 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
   const [editingProvider, setEditingProvider] = useState<{ mode: 'add' | 'edit'; originalName?: string } | null>(null);
   const [providerName, setProviderName] = useState('');
   const [providerApiBase, setProviderApiBase] = useState('');
-  const [providerApiKey, setProviderApiKey] = useState('');
-  const [providerModels, setProviderModels] = useState('');
+  const [providerModelName, setProviderModelName] = useState('');
+  const [providerContextSize, setProviderContextSize] = useState(32768);
+  const [providerEnvVar, setProviderEnvVar] = useState('');
+  const [providerSupportsVision, setProviderSupportsVision] = useState(false);
+  const [providerVisionModel, setProviderVisionModel] = useState('');
+  const [providerModelContextSizes, setProviderModelContextSizes] = useState<string>('');
 
   const api = ApiService.getInstance();
   const toastTimerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -330,15 +334,46 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
     setEditingProvider(null);
     setProviderName('');
     setProviderApiBase('');
-    setProviderApiKey('');
-    setProviderModels('');
+    setProviderModelName('');
+    setProviderContextSize(32768);
+    setProviderEnvVar('');
+    setProviderSupportsVision(false);
+    setProviderVisionModel('');
+    setProviderModelContextSizes('');
   };
 
   const handleAddProvider = async () => {
     if (!providerName.trim()) return;
-    const provider: Record<string, any> = { api_base: providerApiBase };
-    if (providerApiKey.trim()) provider.api_key = providerApiKey;
-    if (providerModels.trim()) provider.models = providerModels.split(',').map((m) => m.trim()).filter(Boolean);
+    const modelName = providerModelName.trim();
+    const supportsVision = providerSupportsVision;
+    const visionModel = providerVisionModel.trim() || modelName;
+    const envVar = providerEnvVar.trim();
+    
+    // Parse model context sizes from format "model1:8192,model2:131072"
+    const modelContextSizes: Record<string, number> = {};
+    if (providerModelContextSizes.trim()) {
+      const pairs = providerModelContextSizes.split(',').map(s => s.trim()).filter(Boolean);
+      for (const pair of pairs) {
+        const [model, size] = pair.split(':');
+        if (model && size) {
+          const sizeNum = parseInt(size, 10);
+          if (!isNaN(sizeNum) && sizeNum > 0) {
+            modelContextSizes[model.trim()] = sizeNum;
+          }
+        }
+      }
+    }
+    
+    const provider: Record<string, any> = {
+      endpoint: providerApiBase.trim(),
+      model_name: modelName,
+      context_size: providerContextSize,
+      model_context_sizes: Object.keys(modelContextSizes).length > 0 ? modelContextSizes : undefined,
+      env_var: envVar,
+      requires_api_key: envVar.length > 0,
+      supports_vision: supportsVision,
+      vision_model: supportsVision ? visionModel : '',
+    };
     setSavingKey('provider-add');
     try {
       await api.addCustomProvider({ name: providerName.trim(), ...provider });
@@ -355,9 +390,36 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
 
   const handleUpdateProvider = async () => {
     if (!editingProvider?.originalName || !providerName.trim()) return;
-    const provider: Record<string, any> = { api_base: providerApiBase };
-    if (providerApiKey.trim()) provider.api_key = providerApiKey;
-    if (providerModels.trim()) provider.models = providerModels.split(',').map((m) => m.trim()).filter(Boolean);
+    const modelName = providerModelName.trim();
+    const supportsVision = providerSupportsVision;
+    const visionModel = providerVisionModel.trim() || modelName;
+    const envVar = providerEnvVar.trim();
+    
+    // Parse model context sizes from format "model1:8192,model2:131072"
+    const modelContextSizes: Record<string, number> = {};
+    if (providerModelContextSizes.trim()) {
+      const pairs = providerModelContextSizes.split(',').map(s => s.trim()).filter(Boolean);
+      for (const pair of pairs) {
+        const [model, size] = pair.split(':');
+        if (model && size) {
+          const sizeNum = parseInt(size, 10);
+          if (!isNaN(sizeNum) && sizeNum > 0) {
+            modelContextSizes[model.trim()] = sizeNum;
+          }
+        }
+      }
+    }
+    
+    const provider: Record<string, any> = {
+      endpoint: providerApiBase.trim(),
+      model_name: modelName,
+      context_size: providerContextSize,
+      model_context_sizes: Object.keys(modelContextSizes).length > 0 ? modelContextSizes : undefined,
+      env_var: envVar,
+      requires_api_key: envVar.length > 0,
+      supports_vision: supportsVision,
+      vision_model: supportsVision ? visionModel : '',
+    };
     setSavingKey('provider-update');
     try {
       await api.updateCustomProvider(editingProvider.originalName, { name: providerName.trim(), ...provider });
@@ -652,22 +714,34 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
             )}
 
             <div className="crud-list">
-              {providerEntries.map(([name, cfg]: [string, any]) => (
-                <div key={name} className="crud-item">
-                  <span className="crud-item-name">{name}</span>
-                  <span className="crud-item-detail">{cfg?.api_base || ''}</span>
-                  <button
-                    type="button"
-                    className="crud-btn"
+                {providerEntries.map(([name, cfg]: [string, any]) => (
+                  <div key={name} className="crud-item">
+                    <span className="crud-item-name">{name}</span>
+                    <span className="crud-item-detail">{cfg?.endpoint || cfg?.api_base || ''}</span>
+                    <button
+                      type="button"
+                      className="crud-btn"
                     title="Edit provider"
                     onClick={() => {
                       setEditingProvider({ mode: 'edit', originalName: name });
                       setProviderName(name);
-                      setProviderApiBase(cfg?.api_base || '');
-                      setProviderApiKey(cfg?.api_key || '');
-                      setProviderModels(
-                        Array.isArray(cfg?.models) ? cfg.models.join(', ') : '',
+                      setProviderApiBase(cfg?.endpoint || cfg?.api_base || '');
+                      setProviderModelName(
+                        cfg?.model_name || (Array.isArray(cfg?.models) && cfg.models.length > 0 ? cfg.models[0] : ''),
                       );
+                      setProviderContextSize(cfg?.context_size || 32768);
+                      setProviderEnvVar(cfg?.env_var || '');
+                      setProviderSupportsVision(!!cfg?.supports_vision);
+                      setProviderVisionModel(cfg?.vision_model || '');
+                      // Format model_context_sizes as "model1:8192,model2:131072"
+                      if (cfg?.model_context_sizes && typeof cfg.model_context_sizes === 'object') {
+                        const pairs = Object.entries(cfg.model_context_sizes)
+                          .map(([model, size]) => `${model}:${size}`)
+                          .join(',');
+                        setProviderModelContextSizes(pairs);
+                      } else {
+                        setProviderModelContextSizes('');
+                      }
                     }}
                   >
                     <Pencil size={12} />
@@ -708,25 +782,70 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
                     />
                   </div>
                   <div className="form-row">
-                    <label>API Key</label>
-                    <input
-                      type="password"
-                      className="styled-input"
-                      value={providerApiKey}
-                      onChange={(e) => setProviderApiKey(e.target.value)}
-                      placeholder="sk-…"
-                    />
-                  </div>
-                  <div className="form-row">
-                    <label>Models (comma-separated)</label>
+                    <label>Default Model</label>
                     <input
                       type="text"
                       className="styled-input"
-                      value={providerModels}
-                      onChange={(e) => setProviderModels(e.target.value)}
-                      placeholder="model-1, model-2"
+                      value={providerModelName}
+                      onChange={(e) => setProviderModelName(e.target.value)}
+                      placeholder="gpt-4o-mini"
                     />
                   </div>
+                  <div className="form-row">
+                    <label>Default Context Size (tokens)</label>
+                    <input
+                      type="number"
+                      className="styled-input config-row-input"
+                      value={providerContextSize}
+                      onChange={(e) => setProviderContextSize(parseInt(e.target.value) || 32768)}
+                      placeholder="32768"
+                      min="0"
+                    />
+                  </div>
+                  <div className="form-row">
+                    <label>Per-Model Context Sizes (optional)</label>
+                    <input
+                      type="text"
+                      className="styled-input"
+                      value={providerModelContextSizes}
+                      onChange={(e) => setProviderModelContextSizes(e.target.value)}
+                      placeholder="model1:8192,model2:131072,model3:2097152"
+                    />
+                    <small style={{ color: '#888', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                      Format: model_name:context_size, separated by commas
+                    </small>
+                  </div>
+                  <div className="form-row">
+                    <label>API Key Env Var (optional)</label>
+                    <input
+                      type="text"
+                      className="styled-input"
+                      value={providerEnvVar}
+                      onChange={(e) => setProviderEnvVar(e.target.value)}
+                      placeholder="OPENAI_API_KEY"
+                    />
+                  </div>
+                  <label className="styled-toggle">
+                    <input
+                      type="checkbox"
+                      checked={providerSupportsVision}
+                      onChange={(e) => setProviderSupportsVision(e.target.checked)}
+                    />
+                    <span className="toggle-track" />
+                    <span className="toggle-label">Supports Vision</span>
+                  </label>
+                  {providerSupportsVision && (
+                    <div className="form-row">
+                      <label>Vision Model (optional)</label>
+                      <input
+                        type="text"
+                        className="styled-input"
+                        value={providerVisionModel}
+                        onChange={(e) => setProviderVisionModel(e.target.value)}
+                        placeholder="Leave empty to use default model"
+                      />
+                    </div>
+                  )}
                   <div className="form-actions">
                     <button
                       type="button"
@@ -750,8 +869,12 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
                     setEditingProvider({ mode: 'add' });
                     setProviderName('');
                     setProviderApiBase('');
-                    setProviderApiKey('');
-                    setProviderModels('');
+                    setProviderModelName('');
+                    setProviderContextSize(32768);
+                    setProviderEnvVar('');
+                    setProviderSupportsVision(false);
+                    setProviderVisionModel('');
+                    setProviderModelContextSizes('');
                   }}
                 >
                   <Plus size={14} /> Add provider

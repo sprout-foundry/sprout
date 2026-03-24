@@ -122,6 +122,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	// Hotkeys API
 	mux.HandleFunc("/api/hotkeys", ws.handleAPIHotkeys)
 	mux.HandleFunc("/api/hotkeys/validate", ws.handleAPIHotkeysValidate)
+	mux.HandleFunc("/api/hotkeys/preset", ws.handleAPIHotkeysPreset)
 	mux.HandleFunc("/api/terminal/history", ws.handleTerminalHistory)
 	mux.HandleFunc("/api/git/status", ws.handleAPIGitStatus)
 	mux.HandleFunc("/api/git/stage", ws.handleAPIGitStage)
@@ -149,6 +150,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	// Search API
 	mux.HandleFunc("/api/search", ws.handleAPIQuerySearch)
 	mux.HandleFunc("/api/search/replace", ws.handleAPIQuerySearchReplace)
+	mux.HandleFunc("/api/upload/image", ws.handleUploadImage)
 	mux.HandleFunc("/static/", ws.handleStaticFiles)
 	mux.HandleFunc("/sw.js", ws.handleServiceWorker)
 	mux.HandleFunc("/manifest.json", ws.handleManifest)

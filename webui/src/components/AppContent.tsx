@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState, useEffect } from 'react';
+import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import { Menu, X, Columns2, Rows2, MessageSquare, FileCode2, GitBranch } from 'lucide-react';
 import Sidebar from './Sidebar';
 import Chat from './Chat';
@@ -135,6 +135,33 @@ const AppContent: React.FC<AppContentProps> = ({
   const { panes, paneLayout, activePaneId, switchPane, splitPane, closeSplit, openFile, paneSizes, updatePaneSize } = useEditorManager();
   const apiService = ApiService.getInstance();
 
+  // Compute current todos from TodoWrite tool executions
+  const currentTodos = useMemo(() => {
+    // Find the most recent TodoWrite tool execution that has todos in its result or arguments
+    const todoWrites = state.toolExecutions
+      .filter(t => t.tool === 'TodoWrite')
+      .sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
+    
+    if (todoWrites.length === 0) return [];
+    
+    // Try to parse todos from the latest TodoWrite
+    const latest = todoWrites[0];
+    try {
+      if (latest.arguments) {
+        const args = JSON.parse(latest.arguments);
+        if (Array.isArray(args.todos)) {
+          return args.todos.map((todo: any) => ({
+            id: todo.id || `${todo.content}-${todo.status}`,
+            content: todo.content || '',
+            status: (['pending', 'in_progress', 'completed', 'cancelled'].includes(todo.status) ? todo.status : 'pending') as 'pending' | 'in_progress' | 'completed' | 'cancelled'
+          }));
+        }
+      }
+    } catch { /* ignore */ }
+    
+    return [];
+  }, [state.toolExecutions]);
+
   // Command palette state
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [hotkeysConfigPath, setHotkeysConfigPath] = useState<string | null>(null);
@@ -190,17 +217,6 @@ const AppContent: React.FC<AppContentProps> = ({
     };
   }, [apiService, isConnected]);
 
-  useEffect(() => {
-    if (!isSwitchingInstance || selectedInstancePID <= 0) {
-      return;
-    }
-    const selected = instances.find((instance) => instance.pid === selectedInstancePID);
-    if (selected?.is_host) {
-      setIsSwitchingInstance(false);
-      setInstanceSwitchError(null);
-    }
-  }, [instances, isSwitchingInstance, selectedInstancePID]);
-
   const handleInstanceChange = useCallback(async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const pid = Number(e.target.value);
     if (!Number.isFinite(pid) || pid <= 0 || pid === selectedInstancePID) {
@@ -211,7 +227,9 @@ const AppContent: React.FC<AppContentProps> = ({
     setIsSwitchingInstance(true);
     try {
       await apiService.selectInstance(pid);
-      setSelectedInstancePID(pid);
+      // Full page reload to clear all client-side state (editor buffers,
+      // CodeMirror instances, WebSocket connections, chat history, etc.)
+      window.location.reload();
     } catch (error) {
       console.error('Failed to switch instance:', error);
       setInstanceSwitchError('Failed to switch instance');
@@ -463,6 +481,7 @@ const AppContent: React.FC<AppContentProps> = ({
               lastError={state.lastError}
               toolExecutions={state.toolExecutions}
               queryProgress={state.queryProgress}
+              currentTodos={currentTodos}
             />
           </>
         ) : state.currentView === 'git' ? (

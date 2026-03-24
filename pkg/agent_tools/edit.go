@@ -56,10 +56,10 @@ func validateEditInputs(filePath, oldString, newString string) error {
 		return fmt.Errorf("empty old string provided")
 	}
 
-	// Content validation removed - LLM-based security validator handles this
+	// Content validation removed - static classifier in security.go handles this
 	// Pattern matching on content (like "../") was blocking legitimate code edits
 	// Path security is handled by SafeResolvePathWithBypass
-	// Operation security is handled by the LLM-based security validation system
+	// Operation security is handled by the static classifier in security.go
 	// Only check for actual null bytes which could cause issues
 	suspiciousPatterns := []string{
 		"\x00", // Actual null bytes (can cause issues with string handling)

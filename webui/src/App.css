@@ -21,6 +21,7 @@
   --text-secondary: #9aa3b2;
   --text-tertiary: #7f8794;
   --text-muted: #5c6370;
+  --text-accent: #e5c07b;
 
   --accent-primary: #61afef;
   --accent-secondary: #56b6c2;
@@ -123,6 +124,7 @@
   --text-secondary: #334155;
   --text-tertiary: #475569;
   --text-muted: #64748b;
+  --text-accent: #b45309;
 
   --accent-primary: #1d4ed8;
   --accent-secondary: #0f766e;

@@ -6,7 +6,7 @@ import (
 
 // IsFileDeletionCommand checks if a command will delete files
 // This is used for change tracking (not security validation)
-// Security validation is handled by the LLM-based validator in tool_registry.go
+// Security validation is handled by the static classifier in security.go
 func IsFileDeletionCommand(command string) bool {
 	command = strings.TrimSpace(strings.ToLower(command))
 

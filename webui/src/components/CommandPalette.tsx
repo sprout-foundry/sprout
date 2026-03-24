@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useHotkeys } from '../contexts/HotkeyContext';
-import { ApiService } from '../services/api';
 import './CommandPalette.css';
 
 interface CommandPaletteProps {
@@ -26,7 +25,17 @@ interface FlatCommand {
   isCategoryHeader?: boolean;
 }
 
-const apiService = ApiService.getInstance();
+const MAX_FILE_RESULTS = 200;
+const MAX_INDEXED_FILES = 12000;
+const MAX_INDEXED_DIRECTORIES = 3000;
+const SKIP_DIRECTORIES = new Set([
+  '.git',
+  'node_modules',
+  '.ledit',
+  '.next',
+  'dist',
+  'build',
+]);
 
 // Command definitions — starting set
 const COMMAND_DEFINITIONS: Array<{ id: string; label: string; category: string }> = [
@@ -72,7 +81,6 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
 
   const inputRef = useRef<HTMLInputElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
-  const browseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevOpenRef = useRef(false);
 
   // Reset state when palette opens/closes
@@ -129,36 +137,97 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
   const filteredFiles = useMemo(() => {
     if (mode !== 'file' || !searchQuery) return [];
     const lower = searchQuery.toLowerCase();
-    return allFiles.filter(f =>
-      f.name.toLowerCase().includes(lower) ||
-      f.path.toLowerCase().includes(lower)
-    );
+    const getFileScore = (file: FileResult): number => {
+      const name = file.name.toLowerCase();
+      const path = file.path.toLowerCase();
+      if (name === lower) return 1200;
+      if (name.startsWith(lower)) return 1000;
+      if (name.includes(lower)) return 700;
+      if (path.endsWith(`/${lower}`)) return 650;
+      if (path.includes(`/${lower}`)) return 540;
+      if (path.includes(lower)) return 400;
+      return -1;
+    };
+
+    return allFiles
+      .map((file) => ({ file, score: getFileScore(file) }))
+      .filter((entry) => entry.score >= 0)
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        if (a.file.path.length !== b.file.path.length) return a.file.path.length - b.file.path.length;
+        return a.file.path.localeCompare(b.file.path);
+      })
+      .slice(0, MAX_FILE_RESULTS)
+      .map((entry) => entry.file);
   }, [mode, searchQuery, allFiles]);
 
   // Fetch file list when switching to file mode
   useEffect(() => {
     if (mode !== 'file') return;
+    let cancelled = false;
 
     const doFetch = async () => {
       setIsLoadingFiles(true);
       try {
-        const response = await fetch('/api/browse?path=.');
-        if (response.ok) {
+        const queue: string[] = ['.'];
+        const indexedFiles: FileResult[] = [];
+        const visited = new Set<string>();
+        let visitedDirs = 0;
+
+        while (queue.length > 0 && indexedFiles.length < MAX_INDEXED_FILES && visitedDirs < MAX_INDEXED_DIRECTORIES) {
+          const dir = queue.shift();
+          if (!dir || visited.has(dir)) continue;
+          visited.add(dir);
+          visitedDirs += 1;
+
+          const response = await fetch(`/api/browse?path=${encodeURIComponent(dir)}`);
+          if (!response.ok) continue;
+
           const data = await response.json();
-          const files: FileResult[] = (data.files || []).map((f: any) => ({
-            name: f.name || f.path?.split('/').pop() || '',
-            path: f.path || '',
-            type: f.type || 'file',
-          }));
-          setAllFiles(files);
+          const entries = Array.isArray(data.files) ? data.files : [];
+
+          for (const entry of entries) {
+            const entryPath = String(entry.path || '');
+            const entryName = String(entry.name || entryPath.split('/').pop() || '');
+            const entryType = String(entry.type || 'file');
+
+            if (!entryPath || !entryName) continue;
+
+            if (entryType === 'directory') {
+              if (!SKIP_DIRECTORIES.has(entryName)) {
+                queue.push(entryPath);
+              }
+              continue;
+            }
+
+            indexedFiles.push({
+              name: entryName,
+              path: entryPath,
+              type: entryType,
+            });
+
+            if (indexedFiles.length >= MAX_INDEXED_FILES) {
+              break;
+            }
+          }
+        }
+
+        if (!cancelled) {
+          setAllFiles(indexedFiles);
         }
       } catch (err) {
         console.error('Failed to browse files:', err);
       } finally {
-        setIsLoadingFiles(false);
+        if (!cancelled) {
+          setIsLoadingFiles(false);
+        }
       }
     };
     doFetch();
+
+    return () => {
+      cancelled = true;
+    };
   }, [mode]);
 
   // Reset selected index when query changes

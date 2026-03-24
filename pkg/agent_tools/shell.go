@@ -25,8 +25,7 @@ func ExecuteShellCommandWithSafety(ctx context.Context, command string, interact
 		return "", fmt.Errorf("empty command provided")
 	}
 
-	// NOTE: Security validation is now handled by the LLM-based validator at the tool registry level
-	// This provides context-aware evaluation instead of regex pattern matching
+	// NOTE: Security validation is handled by the static classifier in security.go, invoked at the tool registry level
 
 	// Create command with context
 	shell := os.Getenv("SHELL")

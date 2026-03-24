@@ -818,10 +818,12 @@
 .inline-code {
   font-family: var(--font-mono);
   font-size: 12px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-default);
-  border-radius: 5px;
-  padding: 1px 5px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 2px 6px;
+  color: var(--text-accent);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .code-block {
@@ -1090,4 +1092,155 @@
   flex-direction: column;
   gap: 2px;
   padding: 8px 8px 0 32px;
+}
+
+/* ── Message Segments ────────────────────────────────────────── */
+.message-segments {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.segment-text {
+  /* prose markdown rendered normally */
+}
+
+.segment-tool-call {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  cursor: pointer;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+  max-width: max-content;
+  user-select: none;
+}
+
+.segment-tool-call:hover {
+  background: var(--bg-elevated);
+  border-color: var(--border-focus);
+  color: var(--text-primary);
+}
+
+.segment-tool-call:focus {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.segment-tool-call:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.segment-tool-call:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.tool-pill-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.tool-pill-name {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 320px;
+}
+
+.tool-pill-link-icon {
+  color: var(--text-tertiary);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  flex-shrink: 0;
+}
+
+.segment-tool-call:hover .tool-pill-link-icon {
+  opacity: 1;
+}
+
+/* ── Inline Todo Summary ──────────────────────────────────────── */
+.segment-todo-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.inline-todo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  transition: background 0.12s ease;
+}
+
+.inline-todo.completed {
+  text-decoration: line-through;
+  opacity: 0.65;
+}
+
+.inline-todo.in_progress {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.inline-todo.cancelled {
+  text-decoration: line-through;
+  opacity: 0.45;
+}
+
+.inline-todo-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.inline-todo.completed .inline-todo-icon {
+  color: var(--accent-success);
+}
+
+.inline-todo.in_progress .inline-todo-icon {
+  color: var(--accent-primary);
+  animation: inline-todo-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes inline-todo-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* ── Tool Highlight (when pill is clicked) ───────────────────── */
+.tool-execution.tool-highlighted {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(var(--accent-primary-rgb, 99, 102, 241), 0.25);
+  animation: tool-highlight-fade 3s ease-out forwards;
+}
+
+@keyframes tool-highlight-fade {
+  0% { box-shadow: 0 0 0 2px rgba(var(--accent-primary-rgb, 99, 102, 241), 0.4); }
+  70% { box-shadow: 0 0 0 2px rgba(var(--accent-primary-rgb, 99, 102, 241), 0.2); }
+  100% { box-shadow: 0 0 0 0 rgba(var(--accent-primary-rgb, 99, 102, 241), 0); border-color: var(--border-default); }
+}
+
+/* ── Side Panel Tasks ────────────────────────────────────────── */
+.side-panel-tasks {
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: 2px;
 }

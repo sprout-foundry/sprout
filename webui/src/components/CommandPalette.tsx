@@ -7,7 +7,7 @@ interface CommandPaletteProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenFile: (filePath: string) => void;
-  onViewChange: (view: 'chat' | 'editor' | 'git' | 'logs') => void;
+  onViewChange: (view: 'chat' | 'editor' | 'git') => void;
   onToggleSidebar: () => void;
   onToggleTerminal: () => void;
   onOpenHotkeysConfig: () => void;
@@ -46,7 +46,6 @@ const COMMAND_DEFINITIONS: Array<{ id: string; label: string; category: string }
   { id: 'switch_to_chat', label: 'Switch to Chat', category: 'Navigation' },
   { id: 'switch_to_editor', label: 'Switch to Editor', category: 'Navigation' },
   { id: 'switch_to_git', label: 'Switch to Git', category: 'Navigation' },
-  { id: 'switch_to_logs', label: 'Switch to Logs', category: 'Navigation' },
   // Preferences
   { id: 'open_hotkeys_config', label: 'Edit Keyboard Shortcuts', category: 'Preferences' },
 ];
@@ -206,9 +205,6 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
         break;
       case 'switch_to_git':
         onViewChange('git');
-        break;
-      case 'switch_to_logs':
-        onViewChange('logs');
         break;
       case 'open_hotkeys_config':
         onOpenHotkeysConfig();

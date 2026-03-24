@@ -5,6 +5,7 @@ interface ResizeHandleProps {
   direction: 'horizontal' | 'vertical'; // Direction of the split line
   onResize: (delta: number) => void;    // Called with pixel delta during drag
   onResizeEnd?: () => void;             // Called when drag ends
+  onDoubleClick?: () => void;           // Called when handle is double-clicked
   className?: string;
 }
 
@@ -18,6 +19,7 @@ const ResizeHandle: React.FC<ResizeHandleProps> = ({
   direction,
   onResize,
   onResizeEnd,
+  onDoubleClick,
   className = ''
 }) => {
   const [isDragging, setIsDragging] = useState(false);
@@ -91,6 +93,7 @@ const ResizeHandle: React.FC<ResizeHandleProps> = ({
       ref={handleRef}
       className={`resize-handle resize-handle-${direction} ${isDragging ? 'resizing' : ''} ${className}`}
       onMouseDown={handleMouseDown}
+      onDoubleClick={onDoubleClick}
       style={{
         cursor: direction === 'horizontal' ? 'col-resize' : 'row-resize',
         position: 'relative',

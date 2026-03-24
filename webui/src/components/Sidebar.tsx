@@ -1,13 +1,12 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import './Sidebar.css';
-import { ApiService, ProviderOption, LeditInstance, LeditSettings } from '../services/api';
+import { ApiService, ProviderOption, LeditSettings } from '../services/api';
 import SettingsPanel from './SettingsPanel';
-import { viewRegistry, ProviderContext, SidebarSection, ProviderLogEntry } from '../providers';
+import { ProviderLogEntry } from '../providers';
 import { useTheme } from '../contexts/ThemeContext';
 import { HotkeyPreset, useHotkeys } from '../contexts/HotkeyContext';
 import ResizeHandle from './ResizeHandle';
 import {
-  LayoutList,
   ScrollText,
   FolderCog,
   Settings,
@@ -22,19 +21,21 @@ import {
   Keyboard,
   Upload,
   Trash2,
+  Search,
   type LucideIcon,
 } from 'lucide-react';
 import FileTree from './FileTree';
+import SearchView from './SearchView';
 
-type SectionTab = 'views' | 'logs' | 'files' | 'settings';
+type SectionTab = 'logs' | 'files' | 'settings' | 'search';
 
 interface SidebarProps {
   isConnected: boolean;
   selectedModel?: string;
   onModelChange?: (model: string) => void;
   availableModels?: string[];
-  currentView?: 'chat' | 'editor' | 'git' | 'logs';
-  onViewChange?: (view: 'chat' | 'editor' | 'git' | 'logs') => void;
+  currentView?: 'chat' | 'editor' | 'git';
+  onViewChange?: (view: 'chat' | 'editor' | 'git') => void;
   stats?: {
     queryCount: number;
     filesModified: number;
@@ -58,29 +59,26 @@ interface SidebarProps {
   isMobile?: boolean;
 }
 
-interface SectionData {
-  section: SidebarSection;
-  data: any;
-  loading: boolean;
-  error: string | null;
-}
-
 /** Section tab definitions */
 const SECTION_TABS: { id: SectionTab; icon: LucideIcon; label: string }[] = [
-  { id: 'views', icon: LayoutList, label: 'Views' },
   { id: 'logs', icon: ScrollText, label: 'Logs' },
   { id: 'files', icon: FolderCog, label: 'Files' },
+  { id: 'search', icon: Search, label: 'Search' },
   { id: 'settings', icon: Settings, label: 'Settings' },
 ];
+
+const SIDEBAR_MIN_WIDTH = 200;
+const SIDEBAR_MAX_WIDTH = 600;
+const SIDEBAR_DEFAULT_WIDTH = 288;
+
+const clampSidebarWidth = (value: number): number =>
+  Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, value));
 
 const Sidebar: React.FC<SidebarProps> = ({
   isConnected,
   selectedModel,
   onModelChange,
   availableModels,
-  currentView = 'chat',
-  onViewChange,
-  stats,
   recentFiles = [],
   recentLogs = [],
   isMobileMenuOpen,
@@ -90,9 +88,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onFileClick,
   provider,
   model,
-  queryCount,
   logs,
-  files,
   onProviderChange,
   isOpen = true,
   onClose,
@@ -104,19 +100,13 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [importError, setImportError] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
     const stored = localStorage.getItem('ledit-sidebar-width');
-    return stored ? Math.max(200, Math.min(600, Number(stored))) : 288;
+    return stored ? clampSidebarWidth(Number(stored)) : SIDEBAR_DEFAULT_WIDTH;
   });
   const [selectedProvider, setSelectedProvider] = useState(provider || '');
   const [selectedModelState, setSelectedModelState] = useState(model || selectedModel || '');
   const [providers, setProviders] = useState<ProviderOption[]>([]);
-  const [instances, setInstances] = useState<LeditInstance[]>([]);
-  const [selectedInstancePID, setSelectedInstancePID] = useState<number>(0);
-  const [isSwitchingInstance, setIsSwitchingInstance] = useState(false);
-  const [instanceSwitchError, setInstanceSwitchError] = useState<string | null>(null);
   const [isLoadingProviders, setIsLoadingProviders] = useState(false);
-  const [sectionsData, setSectionsData] = useState<Map<string, SectionData>>(new Map());
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [selectedSection, setSelectedSection] = useState<SectionTab>('views');
+  const [selectedSection, setSelectedSection] = useState<SectionTab>('files');
   const [settings, setSettings] = useState<LeditSettings | null>(null);
   const apiService = ApiService.getInstance();
 
@@ -140,12 +130,6 @@ const Sidebar: React.FC<SidebarProps> = ({
     ? availableModels
     : availableModelsState;
 
-  // Memoize computed values to prevent unnecessary re-renders
-  const finalStats = useMemo(() =>
-    stats || { queryCount: queryCount || 0, filesModified: files?.filter(f => f.modified).length || 0 },
-    [stats, queryCount, files]
-  );
-
   const finalRecentLogs = useMemo(() =>
     recentLogs.length > 0 ? recentLogs : (logs || []),
     [recentLogs, logs]
@@ -158,129 +142,6 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   const finalIsMobileMenuOpen = isMobileMenuOpen !== undefined ? isMobileMenuOpen : isOpen;
   const finalOnMobileMenuToggle = onMobileMenuToggle || onClose;
-
-  // Update provider context in registry
-  useEffect(() => {
-    const context: ProviderContext = {
-      isConnected,
-      currentView,
-      onFileClick,
-      onModelChange,
-      recentFiles: recentFiles.length > 0 ? recentFiles : (files || []),
-      recentLogs: normalizedRecentLogs,
-      stats: finalStats
-    };
-
-    viewRegistry.setContext(context);
-  }, [isConnected, currentView, onFileClick, onModelChange, recentFiles, files, normalizedRecentLogs, finalStats]);
-
-  // Subscribe to provider updates for current view
-  useEffect(() => {
-    const provider = viewRegistry.getProvider(currentView);
-    if (!provider || !provider.subscribe) {
-      return;
-    }
-
-    // Subscribe to provider state changes
-    const unsubscribe = provider.subscribe(() => {
-      // Trigger a re-fetch of sections by incrementing refresh trigger
-      setRefreshTrigger(prev => prev + 1);
-    });
-
-    // Cleanup subscription on unmount or view change
-    return () => {
-      if (unsubscribe) {
-        unsubscribe();
-      }
-    };
-  }, [currentView]);
-
-  // Fetch and render sections for current view
-  useEffect(() => {
-    const sections = viewRegistry.getSections(currentView);
-    let cancelled = false;
-    const validSectionIds = new Set(sections.map(section => section.id));
-
-    setSectionsData(prev => {
-      const next = new Map<string, SectionData>();
-      validSectionIds.forEach((id) => {
-        const existing = prev.get(id);
-        if (existing) {
-          next.set(id, existing);
-        }
-      });
-      return next;
-    });
-
-    // Load data for each section
-    sections.forEach(async (section) => {
-      if (cancelled) return;
-      setSectionsData(prev => {
-        const updated = new Map(prev);
-        updated.set(section.id, { section, data: null, loading: true, error: null });
-        return updated;
-      });
-
-      try {
-        let data: any;
-
-        // Fetch data based on data source type
-        switch (section.dataSource.type) {
-          case 'state':
-            // Transform context data
-            const context = viewRegistry.getContext();
-            if (!context) {
-              console.warn('Provider context not set, skipping section', section.id);
-              return;
-            }
-            data = section.dataSource.transform?.(context) || null;
-            break;
-
-          case 'api':
-            // Fetch from API endpoint
-            if (section.dataSource.endpoint) {
-              const response = await fetch(section.dataSource.endpoint);
-              if (!response.ok) {
-                throw new Error(`API ${response.status}: ${response.statusText}`);
-              }
-              data = await response.json();
-              data = section.dataSource.transform?.(data) || data;
-            }
-            break;
-
-          case 'websocket':
-            // Data will come from websocket events
-            // For now, use state data
-            const wsContext = viewRegistry.getContext();
-            if (!wsContext) {
-              console.warn('Provider context not set, skipping section', section.id);
-              return;
-            }
-            data = section.dataSource.transform?.(wsContext) || null;
-            break;
-        }
-
-        if (cancelled) return;
-        setSectionsData(prev => {
-          const updated = new Map(prev);
-          updated.set(section.id, { section, data, loading: false, error: null });
-          return updated;
-        });
-      } catch (error) {
-        console.error(`Failed to load data for section ${section.id}:`, error);
-        if (cancelled) return;
-        setSectionsData(prev => {
-          const updated = new Map(prev);
-          updated.set(section.id, { section, data: null, loading: false, error: 'Failed to load' });
-          return updated;
-        });
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentView, isConnected, refreshTrigger]);
 
   useEffect(() => {
     const fetchProviders = async () => {
@@ -305,55 +166,6 @@ const Sidebar: React.FC<SidebarProps> = ({
 
     fetchProviders();
   }, [apiService, isConnected]);
-
-  useEffect(() => {
-    if (!isConnected) {
-      return;
-    }
-
-    let cancelled = false;
-    let timer: NodeJS.Timeout | null = null;
-
-    const loadInstances = async () => {
-      try {
-        const data = await apiService.getInstances();
-        if (cancelled) {
-          return;
-        }
-        setInstances(data.instances || []);
-        if (data.desired_host_pid && data.desired_host_pid > 0) {
-          setSelectedInstancePID(data.desired_host_pid);
-        } else if (data.active_host_pid && data.active_host_pid > 0) {
-          setSelectedInstancePID(data.active_host_pid);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          console.error('Failed to fetch instances:', error);
-        }
-      }
-      if (!cancelled) {
-        timer = setTimeout(loadInstances, 2000);
-      }
-    };
-
-    loadInstances();
-    return () => {
-      cancelled = true;
-      if (timer) {
-        clearTimeout(timer);
-      }
-    };
-  }, [apiService, isConnected]);
-
-  useEffect(() => {
-    if (!isSwitchingInstance || selectedInstancePID <= 0) {
-      return;
-    }
-    const selected = instances.find((instance) => instance.pid === selectedInstancePID);
-    if (selected?.is_host) {
-      setIsSwitchingInstance(false);
-    }
-  }, [instances, isSwitchingInstance, selectedInstancePID]);
 
   useEffect(() => {
     if (!provider || provider === 'unknown') {
@@ -417,33 +229,31 @@ const Sidebar: React.FC<SidebarProps> = ({
     setHotkeyPreset(e.target.value as HotkeyPreset);
   };
 
-  const handleInstanceChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const pid = Number(e.target.value);
-    if (!Number.isFinite(pid) || pid <= 0 || pid === selectedInstancePID) {
+  const handleSidebarResize = useCallback((delta: number) => {
+    const nextWidth = clampSidebarWidth(sidebarWidth + delta);
+
+    // Allow drag-to-expand behavior from collapsed mode.
+    if (sidebarCollapsed) {
+      setSidebarWidth(nextWidth);
+      if (delta > 0) {
+        onSidebarToggle?.();
+      }
       return;
     }
 
-    setInstanceSwitchError(null);
-    setIsSwitchingInstance(true);
-    try {
-      await apiService.selectInstance(pid);
-      setSelectedInstancePID(pid);
-    } catch (error) {
-      console.error('Failed to switch instance:', error);
-      setInstanceSwitchError('Failed to switch instance');
-      setIsSwitchingInstance(false);
-    }
-  };
-
-  const handleSidebarResize = useCallback((delta: number) => {
-    setSidebarWidth(prev => Math.max(200, Math.min(600, prev + delta)));
-  }, []);
+    setSidebarWidth(nextWidth);
+  }, [onSidebarToggle, sidebarCollapsed, sidebarWidth]);
 
   const handleSidebarResizeEnd = useCallback(() => {
     setSidebarWidth(prev => {
       localStorage.setItem('ledit-sidebar-width', String(prev));
       return prev;
     });
+  }, []);
+
+  const handleSidebarResizeReset = useCallback(() => {
+    setSidebarWidth(SIDEBAR_DEFAULT_WIDTH);
+    localStorage.setItem('ledit-sidebar-width', String(SIDEBAR_DEFAULT_WIDTH));
   }, []);
 
   const handleSectionTabClick = (tab: SectionTab) => {
@@ -476,105 +286,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   }, [importTheme]);
 
   // ─── Section Renderers ───────────────────────────────────────────────
-
-  /** Views section: primary app mode switcher + view-specific provider content */
-  const renderViewsSection = () => {
-    const viewButtons: Array<{ id: 'chat' | 'editor' | 'git' | 'logs'; label: string }> = [
-      { id: 'chat', label: 'Chat' },
-      { id: 'editor', label: 'Editor' },
-      { id: 'git', label: 'Git' },
-      { id: 'logs', label: 'Logs' }
-    ];
-
-    if (sectionsData.size === 0) {
-      return (
-        <>
-          <div className="section">
-            <h4>Views</h4>
-            <div className="view-switcher-grid">
-              {viewButtons.map((view) => (
-                <button
-                  key={view.id}
-                  type="button"
-                  className={`view-switch-btn ${currentView === view.id ? 'active' : ''}`}
-                  onClick={() => onViewChange?.(view.id)}
-                >
-                  {view.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="empty">No content available</div>
-        </>
-      );
-    }
-
-    // Sort sections by order
-    const sortedSections = Array.from(sectionsData.values()).sort((a, b) =>
-      (a.section.order || 0) - (b.section.order || 0)
-    );
-
-    const renderedContext = sortedSections.map(({ section, data, loading, error }) => {
-      if (loading) {
-        return (
-          <div key={section.id} className="section">
-            <h4>{section.title?.(data) || section.id}</h4>
-            <div className="empty">Loading...</div>
-          </div>
-        );
-      }
-
-      if (error) {
-        return (
-          <div key={section.id} className="section">
-            <h4>{section.title?.(data) || section.id}</h4>
-            <div className="empty" style={{ color: 'var(--error)' }}>{error}</div>
-          </div>
-        );
-      }
-
-      const context = viewRegistry.getContext();
-
-      if (!context) {
-        return (
-          <div key={section.id} className="section">
-            <h4>{section.title?.(data) || section.id}</h4>
-            <div className="empty">Loading context...</div>
-          </div>
-        );
-      }
-
-      return (
-        <div key={section.id} className="section">
-          <h4>{section.title?.(data) || section.id}</h4>
-          {section.renderItem(data, context)}
-        </div>
-      );
-    });
-
-    const shouldRenderViewContext = currentView !== 'git';
-
-    return (
-      <>
-        <div className="section">
-          <h4>Views</h4>
-          <div className="view-switcher-grid">
-            {viewButtons.map((view) => (
-              <button
-                key={view.id}
-                type="button"
-                className={`view-switch-btn ${currentView === view.id ? 'active' : ''}`}
-                onClick={() => onViewChange?.(view.id)}
-              >
-                {view.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        {shouldRenderViewContext ? renderedContext : null}
-      </>
-    );
-  };
 
   /** Logs section: full event/log stream */
   const renderLogsSection = () => {
@@ -830,17 +541,24 @@ const Sidebar: React.FC<SidebarProps> = ({
   /** Render the content pane based on selected section */
   const renderContentPane = () => {
     switch (selectedSection) {
-      case 'views':
-        return renderViewsSection();
       case 'logs':
         return renderLogsSection();
       case 'files':
         return renderFilesSection();
+      case 'search':
+        return renderSearchSection();
       case 'settings':
         return renderSettingsSection();
       default:
         return null;
     }
+  };
+
+  /** Search section: find and replace panel */
+  const renderSearchSection = () => {
+    return (
+      <SearchView onFileClick={onFileClick} />
+    );
   };
 
   return (
@@ -874,46 +592,6 @@ const Sidebar: React.FC<SidebarProps> = ({
           aria-label={isConnected ? 'Connected' : 'Disconnected'}
           title={isConnected ? 'Connected' : 'Disconnected'}
         />
-        {!sidebarCollapsed && (
-          <div className="instance-selector">
-            <select
-              id="instance-select"
-              value={selectedInstancePID || ''}
-              onChange={handleInstanceChange}
-              disabled={!isConnected || instances.length === 0 || isSwitchingInstance}
-              className="styled-select instance-select"
-              title={instances.find(i => i.pid === selectedInstancePID)?.working_dir || ''}
-            >
-              {instances.length === 0 && (
-                <option value="">No instances</option>
-              )}
-              {instances.map((instance) => {
-                const suffix = [
-                  instance.is_host ? 'host' : '',
-                  instance.is_current ? 'this' : '',
-                ].filter(Boolean).join(', ');
-                const name = instance.working_dir.split('/').filter(Boolean).slice(-2).join('/');
-                const label = suffix
-                  ? `${name} (${suffix})`
-                  : `${name}`;
-                const fullLabel = sidebarCollapsed
-                  ? label
-                  : `${name} · pid:${instance.pid}${suffix ? ` (${suffix})` : ''}`;
-                return (
-                  <option key={instance.id} value={instance.pid}>
-                    {fullLabel}
-                  </option>
-                );
-              })}
-            </select>
-          </div>
-        )}
-        {isSwitchingInstance && (
-          <div className="instance-switch-status">Switching UI host...</div>
-        )}
-        {instanceSwitchError && (
-          <div className="instance-switch-error">{instanceSwitchError}</div>
-        )}
       </div>
 
       {/* Icon rail (always visible) + Content pane (only when expanded) */}
@@ -950,11 +628,12 @@ const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
       </div>
-      {!isMobile && !sidebarCollapsed && (
+      {!isMobile && (
         <ResizeHandle
           direction="horizontal"
           onResize={handleSidebarResize}
           onResizeEnd={handleSidebarResizeEnd}
+          onDoubleClick={handleSidebarResizeReset}
           className="sidebar-resize-handle"
         />
       )}

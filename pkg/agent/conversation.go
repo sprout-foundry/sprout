@@ -197,19 +197,14 @@ func (a *Agent) processImagesInQuery(query string) ([]api.ImageData, string, err
 		return nil, query, nil
 	}
 
-	// If the primary model supports vision, send images as multimodal content.
+	// Multimodal path: if the active client reports vision capability, send
+	// pasted images as direct image payloads and strip placeholder text.
 	if a.client.SupportsVision() {
 		return a.processImagesAsMultimodal(query)
 	}
 
-	paths := extractPastedImagePaths(query)
-	if len(paths) > 0 {
-		// For non-vision models, explicitly force a tool-based OCR/image-analysis flow
-		// instead of embedding multimodal payloads.
-		return nil, a.buildNonVisionImageToolPrompt(query, paths), nil
-	}
-
-	// No pasted images: keep query unchanged.
+	// Non-multimodal path: keep the original text placeholder in the prompt so
+	// the model can choose OCR/image-analysis tools.
 	return nil, query, nil
 }
 

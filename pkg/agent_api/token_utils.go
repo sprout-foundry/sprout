@@ -17,6 +17,10 @@ const (
 	SystemInstructionBuffer = 500
 	// MessageOverheadTokens accounts for role/message wrapper overhead
 	MessageOverheadTokens = 4
+	// ToolCallOverheadTokens accounts for assistant tool_call wrapper overhead
+	ToolCallOverheadTokens = 12
+	// ToolCallIDOverheadTokens accounts for tool response tool_call_id overhead
+	ToolCallIDOverheadTokens = 8
 	// ImageMessageOverheadTokens conservatively accounts for multimodal image parts
 	ImageMessageOverheadTokens = 256
 )
@@ -127,6 +131,17 @@ func EstimateInputTokens(messages []Message, tools []Tool) int {
 		inputTokens += EstimateTokens(msg.ReasoningContent)
 		for _, img := range msg.Images {
 			inputTokens += estimateImageTokens(img)
+		}
+		for _, toolCall := range msg.ToolCalls {
+			inputTokens += EstimateTokens(toolCall.ID)
+			inputTokens += EstimateTokens(toolCall.Type)
+			inputTokens += EstimateTokens(toolCall.Function.Name)
+			inputTokens += EstimateTokens(toolCall.Function.Arguments)
+			inputTokens += ToolCallOverheadTokens
+		}
+		if msg.ToolCallId != "" {
+			inputTokens += EstimateTokens(msg.ToolCallId)
+			inputTokens += ToolCallIDOverheadTokens
 		}
 		// Account for message role and formatting overhead
 		inputTokens += MessageOverheadTokens

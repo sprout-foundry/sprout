@@ -150,6 +150,7 @@ const Chat: React.FC<ChatProps> = ({
   const chatMainRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const resizingSidePanelRef = useRef(false);
+  const historyLoadRequestRef = useRef(0);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -191,10 +192,19 @@ const Chat: React.FC<ChatProps> = ({
   }, [messages, toolExecutions, queryProgress, isProcessing]);
 
   const loadRevisionHistory = useCallback(async () => {
+    const requestId = ++historyLoadRequestRef.current;
     setIsLoadingHistory(true);
     setHistoryError(null);
+    // Refresh should invalidate detail caches to avoid stale/partial diff states.
+    setExpandedRevisionFileDiffs(new Set());
+    setRevisionDetailsById({});
+    setRevisionDetailsLoading({});
+    setRevisionDetailsError({});
     try {
       const response = await apiService.getChangelog();
+      if (requestId !== historyLoadRequestRef.current) {
+        return;
+      }
       const normalized = (response.revisions || []).map(normalizeRevision).sort((a, b) => {
         return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
       });
@@ -205,10 +215,15 @@ const Chat: React.FC<ChatProps> = ({
         setExpandedRevisionIds(new Set());
       }
     } catch (error) {
+      if (requestId !== historyLoadRequestRef.current) {
+        return;
+      }
       console.error('Failed to load revision history:', error);
       setHistoryError('Failed to load revision history');
     } finally {
-      setIsLoadingHistory(false);
+      if (requestId === historyLoadRequestRef.current) {
+        setIsLoadingHistory(false);
+      }
     }
   }, [apiService]);
 
@@ -243,7 +258,7 @@ const Chat: React.FC<ChatProps> = ({
     try {
       const response = await apiService.restoreSession(sessionId);
       // Dispatch event so App.tsx can populate the chat with restored messages.
-      // Use a short delay to let the connection_status WebSocket event clear old messages first.
+      // Keep a short delay so websocket/provider-state updates settle before hydration.
       if (response.messages?.length) {
         setTimeout(() => {
           window.dispatchEvent(new CustomEvent('ledit:session-restored', {
@@ -1208,7 +1223,7 @@ const Chat: React.FC<ChatProps> = ({
                 </>
               ) : sidePanelTab === 'tasks' ? (
                 <div className="side-panel-tasks">
-                  <TodoPanel todos={currentTodos || []} isLoading={isProcessing} />
+                  <TodoPanel todos={currentTodos || []} isLoading={isProcessing && (currentTodos || []).length === 0} />
                 </div>
               ) : (
                 <div className="chat-status-panel">

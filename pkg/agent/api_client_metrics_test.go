@@ -54,3 +54,38 @@ func TestDeriveUsageMetricsEstimatesWhenProviderUsageMissing(t *testing.T) {
 		t.Fatalf("expected total=%d, got %d", prompt+completion, total)
 	}
 }
+
+func TestDeriveUsageMetricsUsesCentralizedEstimatorForToolCalls(t *testing.T) {
+	ac := &APIClient{agent: &Agent{}}
+	choice := api.Choice{}
+	choice.Message.Role = "assistant"
+	choice.Message.Content = "I can help with that."
+	resp := &api.ChatResponse{
+		Choices: []api.Choice{choice},
+	}
+
+	messages := []api.Message{
+		{
+			Role:    "assistant",
+			Content: "I can help with that.",
+			ToolCalls: []api.ToolCall{
+				{
+					ID:   "call_1",
+					Type: "function",
+				},
+			},
+		},
+	}
+	messages[0].ToolCalls[0].Function.Name = "calculator"
+	messages[0].ToolCalls[0].Function.Arguments = `{"value":1}`
+
+	prompt, _, _, _, _, estimated := ac.deriveUsageMetrics(resp, messages, nil)
+	if !estimated {
+		t.Fatalf("expected estimated usage when provider metrics are missing")
+	}
+
+	want := api.EstimateInputTokens(messages, nil)
+	if prompt != want {
+		t.Fatalf("expected prompt token estimate to match centralized estimator, got %d want %d", prompt, want)
+	}
+}

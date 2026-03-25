@@ -273,12 +273,6 @@ const CommandInput: React.FC<CommandInputProps> = ({
     // Handle special key combinations
     if (e.ctrlKey || e.metaKey) {
       switch (e.key) {
-        case 'c':
-          // Clear input (Ctrl+C)
-          e.preventDefault();
-          resetHistoryNavigation();
-          updateValue('', { start: 0, end: 0 });
-          return;
         case 'u':
           // Clear to beginning of line (Ctrl+U)
           e.preventDefault();
@@ -685,6 +679,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
         <span><kbd>Shift+Enter</kbd> New line</span>
         <span><kbd>↑↓</kbd> History</span>
         <span><kbd>Esc</kbd> Clear</span>
+        <span><kbd>Ctrl+C</kbd> Copy</span>
       </div>
     </div>
   );

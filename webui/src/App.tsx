@@ -136,6 +136,74 @@ const parseDate = (value: unknown): Date => {
   return new Date();
 };
 
+const AGENT_CHAT_LEAK_PATTERNS: RegExp[] = [
+  /^\[\d+\s*-\s*\d+%\]\s*executing tool/i,
+  /executing tool\s*\[[^\]]+\]/i,
+  /\bTodoWrite\b/i,
+  /\btodos=\d+/i,
+  /\[\s*\]=\d+\s*\[~\]=\d+\s*\[x\]=\d+\s*\[-\]=\d+/i,
+  /^Subagent:\s*\[\d+\s*-\s*\d+%\]/i,
+];
+
+const shouldSuppressAgentMessageInChat = (message: string): boolean => {
+  const line = message.trim();
+  if (!line) {
+    return true;
+  }
+  return AGENT_CHAT_LEAK_PATTERNS.some((pattern) => pattern.test(line));
+};
+
+const extractToolNameFromToolLogTarget = (target: string): string | null => {
+  if (!target) return null;
+  const trimmed = target.trim();
+  if (!trimmed.startsWith('[') || !trimmed.endsWith(']')) return null;
+  const inner = trimmed.slice(1, -1).trim();
+  if (!inner) return null;
+  const firstToken = inner.split(/\s+/, 1)[0] || '';
+  return firstToken || null;
+};
+
+const TODO_STATUSES = new Set(['pending', 'in_progress', 'completed', 'cancelled']);
+
+const normalizeTodoList = (
+  rawTodos: unknown
+): Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }> => {
+  if (!Array.isArray(rawTodos)) {
+    return [];
+  }
+
+  const normalized: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }> = [];
+  const seen = new Set<string>();
+
+  rawTodos.forEach((item, idx) => {
+    if (!item || typeof item !== 'object') {
+      return;
+    }
+
+    const t = item as Record<string, unknown>;
+    const rawContent = typeof t.content === 'string' ? t.content.trim() : '';
+    const rawStatus = typeof t.status === 'string' ? t.status.trim() : '';
+    const rawID = typeof t.id === 'string' ? t.id.trim() : '';
+
+    // Strict validation: reject entries that don't look like real todos.
+    if (!rawContent || !TODO_STATUSES.has(rawStatus)) {
+      return;
+    }
+
+    const status = rawStatus as 'pending' | 'in_progress' | 'completed' | 'cancelled';
+    const id = rawID || `todo-${idx}-${rawStatus}-${rawContent.slice(0, 48)}`;
+    const dedupeKey = `${id}::${status}::${rawContent}`;
+    if (seen.has(dedupeKey)) {
+      return;
+    }
+    seen.add(dedupeKey);
+
+    normalized.push({ id, content: rawContent, status });
+  });
+
+  return normalized;
+};
+
 const loadPersistedAppState = (): Partial<AppState> | null => {
   if (typeof window === 'undefined' || !window.localStorage) {
     return null;
@@ -318,11 +386,10 @@ function App() {
             lastConnectionStateRef.current = newConnectionState;
             setState(prev => ({
               ...prev,
-              sessionId: incomingSessionId || prev.sessionId,
-              messages: incomingSessionId && prev.sessionId && incomingSessionId !== prev.sessionId ? [] : prev.messages,
-              toolExecutions: incomingSessionId && prev.sessionId && incomingSessionId !== prev.sessionId ? [] : prev.toolExecutions,
-              queryProgress: incomingSessionId && prev.sessionId && incomingSessionId !== prev.sessionId ? null : prev.queryProgress,
-              currentTodos: incomingSessionId && prev.sessionId && incomingSessionId !== prev.sessionId ? [] : prev.currentTodos,
+              // NOTE:
+              // WebSocket `session_id` is a transport connection id (ws_<timestamp>),
+              // not a chat session id. It changes on reconnect and must never clear chat state.
+              sessionId: prev.sessionId || incomingSessionId,
               isConnected: newConnectionState,
               logs: [...prev.logs, logEntry]
             }));
@@ -555,6 +622,7 @@ function App() {
 
           // Clean ANSI codes from the message
           const cleanedMsg = message.replace(new RegExp(String.fromCharCode(27) + '\\[[0-9;]*[mGKHJABCD]', 'g'), '').trim();
+          const suppressInChat = shouldSuppressAgentMessageInChat(cleanedMsg);
 
           // Auto-classify info messages by content pattern so important ones render in chat
           if (category === 'info') {
@@ -568,41 +636,39 @@ function App() {
           }
 
           if (category === 'tool_log' && cleanedMsg) {
-            // Tool log: add to toolExecutions for side panel display
+            // Tool logs are operational breadcrumbs from the router.
+            // Do not create synthetic tool execution rows from these logs; rich
+            // tool_start/tool_end events are the source of truth for tool state.
             logEntry.category = 'tool';
             logEntry.level = 'info';
 
-            const toolName = String(event.data?.action || 'tool');
+            const toolAction = String(event.data?.action || 'tool');
             const toolTarget = String(event.data?.target || '');
-            const displayName = toolTarget ? `${toolName} ${toolTarget}` : toolName;
+            const parsedToolName = extractToolNameFromToolLogTarget(toolTarget);
 
             setState(prev => {
-              // Avoid duplicate tool_log entries for the same tool in the same iteration
-              const lastTool = prev.toolExecutions[prev.toolExecutions.length - 1];
-              const toolLogMessage = `AgentLog: ${displayName}`;
-              const isDuplicate = lastTool &&
-                lastTool.tool === toolName &&
-                lastTool.message === toolLogMessage &&
-                !lastTool.endTime; // Still active, don't add duplicate
-
-              if (isDuplicate) {
-                return { ...prev, logs: [...prev.logs, logEntry] };
+              // Best effort: if this log says a tool is executing, mark its
+              // most recent started row as running (without adding a duplicate row).
+              if (/^executing tool$/i.test(toolAction) && parsedToolName) {
+                let touched = false;
+                const updated = [...prev.toolExecutions];
+                for (let i = updated.length - 1; i >= 0; i--) {
+                  const row = updated[i];
+                  if (row.tool !== parsedToolName || row.endTime) continue;
+                  if (row.status !== 'running') {
+                    updated[i] = { ...row, status: 'running' };
+                  }
+                  touched = true;
+                  break;
+                }
+                if (touched) {
+                  return { ...prev, toolExecutions: updated, logs: [...prev.logs, logEntry] };
+                }
               }
 
-              const newTool: ToolExecution = {
-                id: `toollog-${Date.now()}`,
-                tool: toolName,
-                status: 'running',
-                message: toolLogMessage,
-                startTime: new Date(),
-              };
-              return {
-                ...prev,
-                toolExecutions: [...prev.toolExecutions, newTool],
-                logs: [...prev.logs, logEntry]
-              };
+              return { ...prev, logs: [...prev.logs, logEntry] };
             });
-          } else if (category === 'warning' || category === 'error') {
+          } else if ((category === 'warning' || category === 'error') && !suppressInChat) {
             // Warning/error messages: append to the current assistant message's reasoning field
             logEntry.category = 'system';
             logEntry.level = category === 'error' ? 'error' : 'warning';
@@ -622,7 +688,7 @@ function App() {
               }
               return { ...prev, messages: newMessages, logs: [...prev.logs, logEntry] };
             });
-          } else if (category === 'info_rendered' && cleanedMsg) {
+          } else if (category === 'info_rendered' && cleanedMsg && !suppressInChat) {
             // Meaningful info messages (auto-classified by pattern):
             // render them in the reasoning section so the user can see them
             logEntry.category = 'system';
@@ -649,14 +715,7 @@ function App() {
       case 'todo_update':
         logEntry.category = 'tool';
         logEntry.level = 'info';
-        const rawTodos = event.data?.todos;
-        const normalizedTodos = Array.isArray(rawTodos)
-          ? rawTodos.map((t: any) => ({
-              id: String(t.id || ''),
-              content: String(t.content || ''),
-              status: (['pending', 'in_progress', 'completed', 'cancelled'].includes(t.status) ? t.status : 'pending') as 'pending' | 'in_progress' | 'completed' | 'cancelled',
-            }))
-          : [];
+        const normalizedTodos = normalizeTodoList(event.data?.todos);
         setState(prev => ({
           ...prev,
           currentTodos: normalizedTodos,

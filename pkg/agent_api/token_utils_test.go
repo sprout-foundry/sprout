@@ -131,6 +131,57 @@ func TestEstimateInputTokens(t *testing.T) {
 	}
 }
 
+func TestEstimateInputTokensIncludesToolMetadata(t *testing.T) {
+	t.Run("assistant tool_calls increase estimate", func(t *testing.T) {
+		base := []Message{
+			{Role: "assistant", Content: "Use the calculator."},
+		}
+		withToolCalls := []Message{
+			{
+				Role:    "assistant",
+				Content: "Use the calculator.",
+				ToolCalls: []ToolCall{
+					{
+						ID:   "call_1",
+						Type: "function",
+					},
+				},
+			},
+		}
+		withToolCalls[0].ToolCalls[0].Function.Name = "calculator"
+		withToolCalls[0].ToolCalls[0].Function.Arguments = `{"value":1}`
+
+		baseTokens := EstimateInputTokens(base, nil)
+		toolTokens := EstimateInputTokens(withToolCalls, nil)
+		if toolTokens <= baseTokens {
+			t.Fatalf("expected tool_calls to increase estimate, base=%d tool_calls=%d", baseTokens, toolTokens)
+		}
+		minExpectedDelta := EstimateTokens("call_1") + EstimateTokens("function") + EstimateTokens("calculator") + EstimateTokens(`{"value":1}`) + ToolCallOverheadTokens
+		if toolTokens-baseTokens < minExpectedDelta {
+			t.Fatalf("expected tool_calls delta >= %d, got %d", minExpectedDelta, toolTokens-baseTokens)
+		}
+	})
+
+	t.Run("tool_call_id increase estimate", func(t *testing.T) {
+		base := []Message{
+			{Role: "tool", Content: "42"},
+		}
+		withToolCallID := []Message{
+			{Role: "tool", Content: "42", ToolCallId: "call_1"},
+		}
+
+		baseTokens := EstimateInputTokens(base, nil)
+		toolTokens := EstimateInputTokens(withToolCallID, nil)
+		if toolTokens <= baseTokens {
+			t.Fatalf("expected tool_call_id to increase estimate, base=%d tool_call_id=%d", baseTokens, toolTokens)
+		}
+		minExpectedDelta := EstimateTokens("call_1") + ToolCallIDOverheadTokens
+		if toolTokens-baseTokens < minExpectedDelta {
+			t.Fatalf("expected tool_call_id delta >= %d, got %d", minExpectedDelta, toolTokens-baseTokens)
+		}
+	})
+}
+
 func TestCalculateOutputBudget(t *testing.T) {
 	tests := []struct {
 		name         string

@@ -320,7 +320,12 @@ func (ws *ReactWebServer) handleAPIBrowse(w http.ResponseWriter, r *http.Request
 // handleAPIFiles handles API requests for file listing
 func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Method not allowed",
+			"code":  "method_not_allowed",
+		})
 		return
 	}
 
@@ -337,18 +342,33 @@ func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request)
 	}
 	canonicalDir, err := canonicalizePath(dir, ws.workspaceRoot, false)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Invalid directory: %v", err), http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": fmt.Sprintf("Invalid directory: %v", err),
+			"code":  "invalid_directory",
+		})
 		return
 	}
 	if !isWithinWorkspace(canonicalDir, ws.workspaceRoot) {
-		http.Error(w, "Directory outside workspace", http.StatusForbidden)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Directory outside workspace",
+			"code":  "directory_outside_workspace",
+		})
 		return
 	}
 
 	// Read directory
 	entries, err := os.ReadDir(canonicalDir)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to read directory: %v", err), http.StatusInternalServerError)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": fmt.Sprintf("Failed to read directory: %v", err),
+			"code":  "failed_to_read_directory",
+		})
 		return
 	}
 
@@ -396,6 +416,198 @@ func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request)
 		"files":     files,
 		"path":      canonicalDir,
 		"directory": canonicalDir,
+	})
+}
+
+// handleAPICreateFile handles API requests for creating new files
+func (ws *ReactWebServer) handleAPICreateFile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Path      string `json:"path"`
+		Directory string `json:"directory"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": fmt.Sprintf("Invalid request body: %v", err),
+			"code":  "invalid_request_body",
+		})
+		return
+	}
+
+	// Determine the path to create
+	var targetPath string
+	if req.Path != "" {
+		targetPath = req.Path
+	} else if req.Directory != "" {
+		targetPath = req.Directory
+	} else {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Either path or directory must be specified",
+			"code":  "missing_path_or_directory",
+		})
+		return
+	}
+
+	// Canonicalize and validate the path
+	canonicalPath, err := canonicalizePath(targetPath, ws.workspaceRoot, false)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": fmt.Sprintf("Invalid path: %v", err),
+			"code":  "invalid_path",
+		})
+		return
+	}
+
+	if !isWithinWorkspace(canonicalPath, ws.workspaceRoot) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Path outside workspace",
+			"code":  "path_outside_workspace",
+		})
+		return
+	}
+
+	// Check if path already exists
+	if _, err := os.Stat(canonicalPath); err == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Path already exists",
+			"code":  "path_already_exists",
+		})
+		return
+	}
+
+	// Create file or directory
+	if strings.HasSuffix(canonicalPath, "/") || req.Directory != "" {
+		// Create directory
+		if err := os.MkdirAll(canonicalPath, 0755); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": fmt.Sprintf("Failed to create directory: %v", err),
+				"code":  "failed_to_create_directory",
+			})
+			return
+		}
+	} else {
+		// Create file
+		parentDir := filepath.Dir(canonicalPath)
+		if err := os.MkdirAll(parentDir, 0755); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": fmt.Sprintf("Failed to create parent directory: %v", err),
+				"code":  "failed_to_create_parent_directory",
+			})
+			return
+		}
+
+		file, err := os.Create(canonicalPath)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": fmt.Sprintf("Failed to create file: %v", err),
+				"code":  "failed_to_create_file",
+			})
+			return
+		}
+		file.Close()
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "success",
+		"path":    canonicalPath,
+	})
+}
+
+// handleAPIDeleteItem handles API requests for deleting files or directories
+func (ws *ReactWebServer) handleAPIDeleteItem(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Method not allowed",
+			"code":  "method_not_allowed",
+		})
+		return
+	}
+
+	var req struct {
+		Path string `json:"path"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": fmt.Sprintf("Invalid request body: %v", err),
+			"code":  "invalid_request_body",
+		})
+		return
+	}
+
+	if req.Path == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Path must be specified",
+			"code":  "missing_path",
+		})
+		return
+	}
+
+	// Canonicalize and validate the path
+	canonicalPath, err := canonicalizePath(req.Path, ws.workspaceRoot, false)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": fmt.Sprintf("Invalid path: %v", err),
+			"code":  "invalid_path",
+		})
+		return
+	}
+
+	if !isWithinWorkspace(canonicalPath, ws.workspaceRoot) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Path outside workspace",
+			"code":  "path_outside_workspace",
+		})
+		return
+	}
+
+	// Delete the file or directory
+	if err := os.RemoveAll(canonicalPath); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": fmt.Sprintf("Failed to delete: %v", err),
+			"code":  "failed_to_delete",
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "success",
+		"path":    canonicalPath,
 	})
 }
 

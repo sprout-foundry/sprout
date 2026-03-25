@@ -75,6 +75,10 @@ export class LogsViewProvider implements ContentProvider {
               switch (logEntry.type) {
                 case 'query_started':
                   return `Query: ${logEntry.data?.query?.substring(0, 50) || 'No query'}...`;
+                case 'tool_start':
+                  return `${logEntry.data?.display_name || logEntry.data?.tool_name || 'tool'} started`;
+                case 'tool_end':
+                  return `${logEntry.data?.display_name || logEntry.data?.tool_name || 'tool'} ${logEntry.data?.status === 'failed' ? 'FAILED' : 'done'}`;
                 case 'tool_execution':
                   return `${logEntry.data?.tool || 'Unknown'}: ${logEntry.data?.status || 'Unknown'}`;
                 case 'file_changed':
@@ -84,7 +88,16 @@ export class LogsViewProvider implements ContentProvider {
                     return `File: ${filePath.split('/').filter(Boolean).pop() || filePath}`;
                   }
                 case 'stream_chunk':
-                  return `Stream: ${logEntry.data?.chunk?.substring(0, 50) || 'No chunk'}...`;
+                  return `Stream (${logEntry.data?.content_type || 'assistant_text'}): ${logEntry.data?.chunk?.substring(0, 50) || 'No chunk'}...`;
+                case 'agent_message': {
+                  const msg = String(logEntry.data?.message || '').trim();
+                  if (!msg) return '';
+                  return `[${String(logEntry.data?.category || 'info')}] ${msg.substring(0, 50)}...`;
+                }
+                case 'todo_update': {
+                  const todos = Array.isArray(logEntry.data?.todos) ? logEntry.data.todos : [];
+                  return `Todos updated (${todos.length})`;
+                }
                 case 'error':
                   return `Error: ${logEntry.data?.message?.substring(0, 50) || 'Unknown error'}...`;
                 case 'connection_status':

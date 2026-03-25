@@ -109,6 +109,7 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 				trimmed := strings.TrimSpace(query.Query)
 				ws.eventBus.Publish(events.EventTypeStreamChunk, events.StreamChunkEvent(
 					fmt.Sprintf("Executed command: `%s`\n", trimmed),
+					"assistant_text",
 				))
 				ws.eventBus.Publish(events.EventTypeQueryCompleted, events.QueryCompletedEvent(
 					query.Query,

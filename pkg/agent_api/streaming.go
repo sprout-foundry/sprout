@@ -11,8 +11,9 @@ import (
 	"time"
 )
 
-// StreamCallback is called for each content chunk received
-type StreamCallback func(content string)
+// StreamCallback is called for each content chunk received.
+// contentType is "assistant_text" for regular content or "reasoning" for thinking/reasoning content.
+type StreamCallback func(content string, contentType string)
 
 // StreamingChoice represents a streaming response choice
 type StreamingChoice struct {
@@ -128,7 +129,7 @@ func (b *StreamingResponseBuilder) ProcessChunk(chunk *StreamingChatResponse) er
 			sanitizedContent := sanitizeStreamingContent(choice.Delta.Content)
 			// Call stream callback for UI updates and timeout reset
 			if b.streamCallback != nil {
-				b.streamCallback(sanitizedContent)
+				b.streamCallback(sanitizedContent, "assistant_text")
 			}
 		}
 
@@ -150,10 +151,12 @@ func (b *StreamingResponseBuilder) ProcessChunk(chunk *StreamingChatResponse) er
 
 		if reasoningDelta != "" {
 			b.reasoningContent.WriteString(reasoningDelta)
-			// Call stream callback for timeout reset (even if content is empty)
-			// This ensures timeout is properly reset when receiving reasoning tokens
+			// Pass reasoning content to callback for real-time streaming
 			if b.streamCallback != nil {
-				b.streamCallback("") // Empty content to trigger timeout reset
+				sanitizedReasoning := sanitizeStreamingContent(reasoningDelta)
+				if sanitizedReasoning != "" {
+					b.streamCallback(sanitizedReasoning, "reasoning")
+				}
 			}
 		}
 

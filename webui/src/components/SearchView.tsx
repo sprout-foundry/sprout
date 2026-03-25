@@ -28,7 +28,7 @@ interface SearchResult {
 }
 
 interface SearchViewProps {
-  onFileClick?: (filePath: string) => void;
+  onFileClick?: (filePath: string, lineNumber?: number) => void;
 }
 
 const DEBOUNCE_DELAY = 300;
@@ -204,8 +204,8 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
   }, []);
 
   // Handle file click
-  const handleFileClick = useCallback((filePath: string) => {
-    onFileClick?.(filePath);
+  const handleFileClick = useCallback((filePath: string, lineNumber?: number) => {
+    onFileClick?.(filePath, lineNumber);
   }, [onFileClick]);
 
   // Clear search
@@ -406,13 +406,7 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
                 <span className="search-expand-icon">
                   {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                 </span>
-                <span
-                  className="search-file-path"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleFileClick(result.file);
-                  }}
-                >
+                <span className="search-file-path">
                   {relativePath}
                 </span>
                 <span className="search-file-badge">{result.match_count}</span>
@@ -423,14 +417,37 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
                   {result.matches.map((match, idx) => (
                     <div key={idx} className="search-match">
                       {match.context_before.map((ctx, i) => (
-                        <div key={`before-${i}`} className="search-match-row search-match-row--context">
+                        <div
+                          key={`before-${i}`}
+                          className="search-match-row search-match-row--context search-match-row--clickable"
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => handleFileClick(result.file, match.line_number - (match.context_before.length - i))}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleFileClick(result.file, match.line_number - (match.context_before.length - i));
+                            }
+                          }}
+                        >
                           <span className="search-match-line-number">
                             {match.line_number - (match.context_before.length - i)}
                           </span>
                           <div className="search-match-line">{ctx}</div>
                         </div>
                       ))}
-                      <div className="search-match-row search-match-row--hit">
+                      <div
+                        className="search-match-row search-match-row--hit search-match-row--clickable"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => handleFileClick(result.file, match.line_number)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            handleFileClick(result.file, match.line_number);
+                          }
+                        }}
+                      >
                         <span className="search-match-line-number">
                           {match.line_number}
                         </span>
@@ -439,7 +456,19 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
                         </div>
                       </div>
                       {match.context_after.map((ctx, i) => (
-                        <div key={`after-${i}`} className="search-match-row search-match-row--context">
+                        <div
+                          key={`after-${i}`}
+                          className="search-match-row search-match-row--context search-match-row--clickable"
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => handleFileClick(result.file, match.line_number + i + 1)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleFileClick(result.file, match.line_number + i + 1);
+                            }
+                          }}
+                        >
                           <span className="search-match-line-number">
                             {match.line_number + i + 1}
                           </span>

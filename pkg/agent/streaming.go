@@ -48,6 +48,20 @@ func (a *Agent) IsStreamingEnabled() bool {
 }
 
 // PublishStreamChunk publishes a streaming chunk for real-time updates
-func (a *Agent) PublishStreamChunk(chunk string) {
-	a.publishEvent(events.EventTypeStreamChunk, events.StreamChunkEvent(chunk))
+func (a *Agent) PublishStreamChunk(chunk string, contentType string) {
+	if contentType == "" {
+		contentType = "assistant_text"
+	}
+	// Route through OutputRouter (single source: publishes event + writes terminal)
+	if a.outputRouter != nil {
+		a.outputRouter.RouteStreamChunk(chunk, contentType)
+		return
+	}
+	// Fallback for when router isn't initialized: publish event and write terminal
+	a.publishEvent(events.EventTypeStreamChunk, events.StreamChunkEvent(chunk, contentType))
+	if contentType != "reasoning" {
+		if a.streamingCallback != nil {
+			a.streamingCallback(chunk)
+		}
+	}
 }

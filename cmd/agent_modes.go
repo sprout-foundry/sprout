@@ -347,12 +347,24 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 	return err
 }
 
-// setupAgentEvents configures the agent to publish events to the event bus
+// SetupAgentEvents configures the agent for event-driven output routing.
+// The OutputRouter handles dual-path delivery (EventBus + terminal)
+// so no separate streaming callback is needed here. This function ensures
+// the agent's output router is wired to the event bus for WebUI subscribers.
 func SetupAgentEvents(chatAgent *agent.Agent, eventBus *events.EventBus) {
-	// Set up streaming callback (unless disabled)
+	// Ensure the output router is connected to the event bus.
+	// When WebUI is active, events flow to both terminal and WebUI.
+	// When WebUI is inactive, events only flow to terminal.
+	if router := chatAgent.OutputRouter(); router != nil {
+		router.SetEventBus(eventBus)
+	}
+
+	// Set a simple streaming callback for direct terminal output of
+	// assistant text. The OutputRouter's RouteStreamChunk publishes
+	// the event AND calls this callback — no duplicate events or writes.
 	if !agentNoStreaming {
 		chatAgent.EnableStreaming(func(chunk string) {
-			eventBus.Publish(events.EventTypeStreamChunk, events.StreamChunkEvent(chunk))
+			fmt.Print(chunk)
 		})
 	}
 }

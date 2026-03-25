@@ -37,12 +37,25 @@ export const ChatActivityLog: React.FC<ChatActivityLogProps> = ({ logs }) => {
       switch (logEntry.type) {
         case 'query_started':
           return `Query: ${String(data.query || 'No query').substring(0, 30)}...`;
+        case 'tool_start':
+          return `${String(data.display_name || data.tool_name || 'tool')} started`;
+        case 'tool_end':
+          return `${String(data.display_name || data.tool_name || 'tool')} ${data.status === 'failed' ? 'FAILED' : 'done'}`;
         case 'tool_execution':
           return `${String(data.tool || 'Unknown')}: ${String(data.status || 'Unknown')}`;
         case 'file_changed':
           return `File: ${String(data.path || 'Unknown').split('/').pop() || 'Unknown'}`;
         case 'stream_chunk':
-          return `Stream: ${String(data.chunk || 'No chunk').substring(0, 30)}...`;
+          return `Stream (${String(data.content_type || 'assistant_text')}): ${String(data.chunk || 'No chunk').substring(0, 30)}...`;
+        case 'agent_message': {
+          const msg = String(data.message || '').trim();
+          if (!msg) return '';
+          return `[${String(data.category || 'info')}] ${msg.substring(0, 30)}...`;
+        }
+        case 'todo_update': {
+          const todos = Array.isArray(data.todos) ? data.todos : [];
+          return `Todos updated (${todos.length})`;
+        }
         case 'error':
           return `Error: ${String(data.message || 'Unknown error').substring(0, 30)}...`;
         case 'connection_status':

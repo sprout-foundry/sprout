@@ -222,6 +222,9 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, msg map[str
 
 	case "model_change":
 		go ws.handleModelChangeMessage(safeConn, msg)
+
+	case "security_approval_response":
+		go ws.handleSecurityApprovalResponse(safeConn, msg)
 	}
 }
 
@@ -337,6 +340,58 @@ func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, msg map[s
 	}
 
 	ws.publishProviderState()
+}
+
+// handleSecurityApprovalResponse processes security approval responses from the webui.
+// The webui sends a { "type": "security_approval_response", "data": { "request_id": "...", "approved": true/false } }
+// message when the user approves or rejects a security warning.
+func (ws *ReactWebServer) handleSecurityApprovalResponse(safeConn *SafeConn, msg map[string]interface{}) {
+	if ws.agent == nil {
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": "Agent is not available"},
+		})
+		return
+	}
+
+	data, ok := msg["data"].(map[string]interface{})
+	if !ok {
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": "Invalid security approval response payload"},
+		})
+		return
+	}
+
+	requestID, _ := data["request_id"].(string)
+	if requestID == "" {
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": "request_id is required"},
+		})
+		return
+	}
+
+	approved, _ := data["approved"].(bool)
+
+	mgr := ws.agent.GetSecurityApprovalMgr()
+	if mgr == nil {
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": "Security approval manager is not available"},
+		})
+		return
+	}
+
+	if !mgr.RespondToApproval(requestID, approved) {
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": fmt.Sprintf("No pending security request with id: %s", requestID)},
+		})
+		return
+	}
+
+	log.Printf("Security approval response received: request_id=%s approved=%v", requestID, approved)
 }
 
 // handleTerminalWebSocket handles terminal WebSocket connections

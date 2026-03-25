@@ -400,9 +400,22 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 				// Non-interactive, no logger: block DANGEROUS
 				return nil, "", fmt.Errorf("SECURITY_BLOCK: %s — %s", toolName, secResult.Reasoning)
 			}
-			// CAUTION in non-interactive: allow but log
-			if agent.debug {
-				agent.debugLog("[LOCK] Security validation: CAUTION auto-allowed for %s — %s\n", toolName, secResult.Reasoning)
+
+			// CAUTION in non-interactive: try webui approval if available, otherwise allow
+			if !secResult.ShouldBlock {
+				if agent.securityApprovalMgr != nil && agent.eventBus != nil {
+					if agent.debug {
+						agent.debugLog("[LOCK] Security validation: forwarding CAUTION approval request to webui for %s — %s\n", toolName, secResult.Reasoning)
+					}
+					if !agent.securityApprovalMgr.RequestApproval(agent.eventBus, toolName, secResult.Risk.String(), secResult.Reasoning) {
+						return nil, "", fmt.Errorf("SECURITY_REJECTED: User rejected %s via webui — %s", toolName, secResult.Reasoning)
+					}
+					if agent.debug {
+						agent.debugLog("[OK] Security validation: CAUTION approved via webui for %s\n", toolName)
+					}
+				} else if agent.debug {
+					agent.debugLog("[LOCK] Security validation: CAUTION auto-allowed for %s — %s\n", toolName, secResult.Reasoning)
+				}
 			}
 		}
 	}

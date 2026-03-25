@@ -55,6 +55,7 @@ interface AppState {
   toolExecutions: ToolExecution[];
   queryProgress: any;
   stats: any;
+  currentTodos: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }>;
   fileEdits: Array<{
     path: string;
     action: string;
@@ -135,16 +136,20 @@ const AppContent: React.FC<AppContentProps> = ({
   const { panes, paneLayout, activePaneId, switchPane, splitPane, closeSplit, openFile, paneSizes, updatePaneSize } = useEditorManager();
   const apiService = ApiService.getInstance();
 
-  // Compute current todos from TodoWrite tool executions
+  // Compute current todos: prefer state from todo_update events, fall back to parsing from TodoWrite tool executions
   const currentTodos = useMemo(() => {
-    // Find the most recent TodoWrite tool execution that has todos in its result or arguments
+    // Prefer directly-provided todos from structured todo_update events
+    if (state.currentTodos && state.currentTodos.length > 0) {
+      return state.currentTodos;
+    }
+
+    // Fallback: find the most recent TodoWrite tool execution and parse its arguments
     const todoWrites = state.toolExecutions
       .filter(t => t.tool === 'TodoWrite')
       .sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
-    
+
     if (todoWrites.length === 0) return [];
-    
-    // Try to parse todos from the latest TodoWrite
+
     const latest = todoWrites[0];
     try {
       if (latest.arguments) {
@@ -158,9 +163,9 @@ const AppContent: React.FC<AppContentProps> = ({
         }
       }
     } catch { /* ignore */ }
-    
+
     return [];
-  }, [state.toolExecutions]);
+  }, [state.currentTodos, state.toolExecutions]);
 
   // Command palette state
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
@@ -308,14 +313,35 @@ const AppContent: React.FC<AppContentProps> = ({
   const canSplit = panes.length < 3;
   const canCloseSplit = panes.length > 1;
 
-  const handleFileClick = useCallback((filePath: string) => {
+  const handleFileClick = useCallback((filePath: string, lineNumber?: number) => {
     const segments = filePath.split('/').filter(Boolean);
     const fileName = segments[segments.length - 1] || filePath;
     const extensionIndex = fileName.lastIndexOf('.');
     const fileExt = extensionIndex > 0 ? fileName.slice(extensionIndex) : '';
+    const openInEditor = () => {
+      if (state.currentView !== 'editor') {
+        onViewChange('editor');
+      }
+
+      openFile({
+        path: filePath,
+        name: fileName,
+        isDir: false,
+        size: 0,
+        modified: 0,
+        ext: fileExt
+      });
+    };
 
     switch (state.currentView) {
       case 'chat':
+        if (typeof lineNumber === 'number') {
+          openInEditor();
+          setTimeout(() => {
+            document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line: lineNumber } }));
+          }, 100);
+          break;
+        }
         onInputChange(prev => prev + ` @${filePath}`);
         setTimeout(() => {
           const textarea = document.querySelector('textarea[placeholder*="Ask me"]');
@@ -325,22 +351,27 @@ const AppContent: React.FC<AppContentProps> = ({
         }, 100);
         break;
       case 'editor':
-        openFile({
-          path: filePath,
-          name: fileName,
-          isDir: false,
-          size: 0,
-          modified: 0,
-          ext: fileExt
-        });
+        openInEditor();
+        if (typeof lineNumber === 'number') {
+          setTimeout(() => {
+            document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line: lineNumber } }));
+          }, 100);
+        }
         break;
       case 'git':
+        if (typeof lineNumber === 'number') {
+          openInEditor();
+          setTimeout(() => {
+            document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line: lineNumber } }));
+          }, 100);
+          break;
+        }
         onGitFileSelect?.(filePath);
         break;
       default:
         console.log('File clicked in unknown view:', state.currentView, filePath);
     }
-  }, [state.currentView, onInputChange, openFile, onGitFileSelect]);
+  }, [state.currentView, onInputChange, openFile, onGitFileSelect, onViewChange]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const handlePaneResize = useCallback((paneId: string) => (deltaPixels: number) => {

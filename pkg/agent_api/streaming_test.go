@@ -161,7 +161,7 @@ func TestParseSSEData(t *testing.T) {
 
 func TestStreamingResponseBuilder(t *testing.T) {
 	var capturedContent strings.Builder
-	callback := func(content string) {
+	callback := func(content string, contentType string) {
 		capturedContent.WriteString(content)
 	}
 
@@ -518,7 +518,7 @@ func TestStreamingErrorScenarios(t *testing.T) {
 // This benchmark can consume significant memory with high iteration counts
 func BenchmarkStreamingResponseBuilder_DISABLED(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		builder := NewStreamingResponseBuilder(func(string) {})
+		builder := NewStreamingResponseBuilder(func(string, string) {})
 
 		// Simulate 100 content chunks
 		for j := 0; j < 100; j++ {

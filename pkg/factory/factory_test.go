@@ -50,7 +50,7 @@ func TestTestClient_SendChatRequestStream(t *testing.T) {
 	client := &TestClient{model: "test-model"}
 
 	var receivedChunks []string
-	callback := func(chunk string) {
+	callback := func(chunk string, contentType string) {
 		receivedChunks = append(receivedChunks, chunk)
 	}
 

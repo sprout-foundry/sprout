@@ -17,7 +17,6 @@ import {
   Upload,
   Trash2,
   Search,
-  RotateCw,
   type LucideIcon,
 } from 'lucide-react';
 import FileTree from './FileTree';
@@ -394,6 +393,12 @@ const Sidebar: React.FC<SidebarProps> = ({
         ref={fileTreeRef as any}
         rootPath="."
         onFileSelect={(file) => onFileClick?.(file.path)}
+        onItemCreated={() => {
+          fileTreeRef.current?.refresh();
+        }}
+        onDeleteItem={(path) => {
+          fileTreeRef.current?.refresh();
+        }}
       />
     );
   };
@@ -504,7 +509,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 background: 'var(--bg-secondary, #2a2a2a)',
                 border: '1px solid var(--border-color, #3c3c3c)',
                 borderRadius: '4px',
-                color: 'var(--fg-primary, #fff)',
+                color: 'var(--text-primary, #fff)',
                 cursor: 'pointer',
                 fontSize: '13px',
                 width: '100%',
@@ -640,21 +645,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         {/* Content Pane (only when expanded) */}
         {!sidebarCollapsed && (
           <div className="sidebar-content-pane" role="tabpanel" id="sidebar-tabpanel">
-                  <div className="content-pane-header">
-        <span className="content-pane-title">
-          {SECTION_TABS.find(t => t.id === selectedSection)?.label || ''}
-        </span>
-        {selectedSection === 'files' && (
-          <button
-            onClick={() => fileTreeRef.current?.refresh()}
-            className="refresh-button"
-            title="Refresh file tree"
-            aria-label="Refresh file tree"
-          >
-            <RotateCw size={16} />
-          </button>
-        )}
-      </div><div className="content-pane-scroll">
+                  <div className="content-pane-scroll">
               {renderContentPane()}
             </div>
           </div>

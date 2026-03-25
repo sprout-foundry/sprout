@@ -301,13 +301,27 @@ func (ac *APIClient) printContextBreakdown(messages []api.Message, tools []api.T
 	if ac.agent == nil || !ac.agent.debug {
 		return
 	}
-	totalChars := 0
 	totalMsgTokens := 0
 	ac.agent.debugLog("\n[search] Context Breakdown (messages=%d, tools=%d)\n", len(messages), len(tools))
 	for i, m := range messages {
-		chars := len(m.Content) + len(m.ReasoningContent)
-		tokens := chars / 4 // rough estimate
-		totalChars += chars
+		tokens := api.EstimateTokens(m.Content) + api.EstimateTokens(m.ReasoningContent) + api.MessageOverheadTokens
+		for _, tc := range m.ToolCalls {
+			tokens += api.EstimateTokens(tc.ID)
+			tokens += api.EstimateTokens(tc.Type)
+			tokens += api.EstimateTokens(tc.Function.Name)
+			tokens += api.EstimateTokens(tc.Function.Arguments)
+			tokens += api.ToolCallOverheadTokens
+		}
+		if m.ToolCallId != "" {
+			tokens += api.EstimateTokens(m.ToolCallId)
+			tokens += api.ToolCallIDOverheadTokens
+		}
+		for _, img := range m.Images {
+			tokens += api.ImageMessageOverheadTokens
+			tokens += api.EstimateTokens(img.URL)
+			tokens += api.EstimateTokens(img.Type)
+			tokens += api.EstimateTokens(img.Base64)
+		}
 		totalMsgTokens += tokens
 		// Detect likely base context JSON by simple heuristic
 		tag := ""
@@ -321,18 +335,13 @@ func (ac *APIClient) printContextBreakdown(messages []api.Message, tools []api.T
 			preview = preview[:160] + "…"
 		}
 		preview = strings.ReplaceAll(preview, "\n", " ")
-		ac.agent.debugLog("  %2d) role=%s chars=%d est_tokens=%d%s | %s\n", i, m.Role, chars, tokens, tag, preview)
+		ac.agent.debugLog("  %2d) role=%s est_tokens=%d%s | %s\n", i, m.Role, tokens, tag, preview)
 	}
-	// Tools estimate mirroring estimateRequestTokens
-	toolTokens := 0
-	for _, t := range tools {
-		toolTokens += len(t.Function.Name) / 4
-		toolTokens += len(t.Function.Description) / 4
-		toolTokens += 200
-	}
-	ac.agent.debugLog("  Messages: chars=%d est_tokens=%d\n", totalChars, totalMsgTokens)
-	ac.agent.debugLog("  Tools: count=%d est_tokens~%d\n", len(tools), toolTokens)
-	ac.agent.debugLog("  Total est_tokens=%d (what footer will display as prompt)\n\n", totalMsgTokens+toolTokens+100)
+	toolTokens := len(tools) * api.ToolTokenEstimate
+	total := totalMsgTokens + toolTokens + api.SystemInstructionBuffer
+	ac.agent.debugLog("  Messages: est_tokens=%d\n", totalMsgTokens)
+	ac.agent.debugLog("  Tools: count=%d est_tokens=%d\n", len(tools), toolTokens)
+	ac.agent.debugLog("  Total est_tokens=%d (what footer will display as prompt)\n\n", total)
 }
 
 // sendStreamingRequest handles streaming API requests with timeouts
@@ -624,30 +633,7 @@ func (ac *APIClient) showTokenTrackingMessage() {
 
 // estimateRequestTokens estimates the token count for the current request
 func (ac *APIClient) estimateRequestTokens(messages []api.Message, tools []api.Tool) int {
-	tokenEstimate := 0
-
-	// Estimate tokens for messages (rough approximation: 1 token ≈ 4 characters)
-	for _, msg := range messages {
-		tokenEstimate += len(msg.Content) / 4
-		if msg.ReasoningContent != "" {
-			tokenEstimate += len(msg.ReasoningContent) / 4
-		}
-	}
-
-	// Estimate tokens for tools (JSON serialization overhead + descriptions)
-	for _, tool := range tools {
-		// Tool name and description
-		tokenEstimate += len(tool.Function.Name) / 4
-		tokenEstimate += len(tool.Function.Description) / 4
-
-		// Parameters are typically JSON schema - estimate ~200 tokens per tool
-		tokenEstimate += 200
-	}
-
-	// Add some overhead for API formatting
-	tokenEstimate += 100
-
-	return tokenEstimate
+	return api.EstimateInputTokens(messages, tools)
 }
 
 func estimateCompletionTokensFromResponse(resp *api.ChatResponse) int {

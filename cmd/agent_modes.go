@@ -357,6 +357,7 @@ func SetupAgentEvents(chatAgent *agent.Agent, eventBus *events.EventBus) {
 	// When WebUI is inactive, events only flow to terminal.
 	if router := chatAgent.OutputRouter(); router != nil {
 		router.SetEventBus(eventBus)
+		router.SetReasoningTerminalEnabled(agentShowReasoningTerminal)
 	}
 
 	// Set a simple streaming callback for direct terminal output of

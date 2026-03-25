@@ -7,7 +7,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { HotkeyProvider } from './contexts/HotkeyContext';
 import './App.css';
 import { WebSocketService } from './services/websocket';
-import { ApiService } from './services/api';
+import { ApiService, OnboardingProviderOption } from './services/api';
 import { viewRegistry, ChatViewProvider, EditorViewProvider, GitViewProvider, LogsViewProvider } from './providers';
 import { debugLog } from './utils/log';
 
@@ -119,6 +119,18 @@ interface LogEntry {
   data: any;
   level: 'info' | 'warning' | 'error' | 'success';
   category: 'query' | 'tool' | 'file' | 'system' | 'stream';
+}
+
+interface OnboardingState {
+  checking: boolean;
+  open: boolean;
+  reason: string;
+  providers: OnboardingProviderOption[];
+  provider: string;
+  model: string;
+  apiKey: string;
+  submitting: boolean;
+  error: string | null;
 }
 
 const APP_STATE_STORAGE_KEY = 'ledit:webui:state:v1';
@@ -288,6 +300,17 @@ function App() {
   const [recentFiles, setRecentFiles] = useState<Array<{ path: string; modified: boolean }>>([]);
   const [gitRefreshToken, setGitRefreshToken] = useState(0);
   const [selectedGitFilePath, setSelectedGitFilePath] = useState<string | null>(null);
+  const [onboarding, setOnboarding] = useState<OnboardingState>({
+    checking: true,
+    open: false,
+    reason: '',
+    providers: [],
+    provider: '',
+    model: '',
+    apiKey: '',
+    submitting: false,
+    error: null,
+  });
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.localStorage) {
@@ -341,9 +364,42 @@ function App() {
   const wsService = WebSocketService.getInstance();
   const apiService = ApiService.getInstance();
 
+  const selectedOnboardingProvider = useMemo(() => {
+    return onboarding.providers.find((p) => p.id === onboarding.provider) || null;
+  }, [onboarding.provider, onboarding.providers]);
+
   // Debounce connection status updates to prevent flashing
   const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastConnectionStateRef = useRef<boolean>(false);
+
+  const refreshOnboardingStatus = useCallback(async () => {
+    setOnboarding((prev) => ({ ...prev, checking: true, error: null }));
+    try {
+      const status = await apiService.getOnboardingStatus();
+      const providers = Array.isArray(status.providers) ? status.providers : [];
+      const preferredProvider = status.current_provider || providers[0]?.id || '';
+      const providerInfo = providers.find((p) => p.id === preferredProvider) || providers[0];
+      const preferredModel = status.current_model || providerInfo?.models?.[0] || '';
+      setOnboarding({
+        checking: false,
+        open: !!status.setup_required,
+        reason: status.reason || '',
+        providers,
+        provider: preferredProvider,
+        model: preferredModel,
+        apiKey: '',
+        submitting: false,
+        error: null,
+      });
+    } catch (error) {
+      setOnboarding((prev) => ({
+        ...prev,
+        checking: false,
+        open: true,
+        error: error instanceof Error ? error.message : 'Failed to check setup status',
+      }));
+    }
+  }, [apiService]);
 
   const handleEvent = useCallback((event: any) => {
     // Filter out ping events and webpack dev server events early to prevent console spam
@@ -807,6 +863,10 @@ function App() {
   }, []);
 
   useEffect(() => {
+    refreshOnboardingStatus().catch(() => {});
+  }, [refreshOnboardingStatus]);
+
+  useEffect(() => {
     // Register Service Worker for PWA functionality
     registerServiceWorker();
 
@@ -1000,6 +1060,56 @@ function App() {
     });
   }, [state.isProcessing, handleSendMessage]);
 
+  const handleOnboardingProviderChange = useCallback((providerID: string) => {
+    setOnboarding((prev) => {
+      const provider = prev.providers.find((p) => p.id === providerID);
+      return {
+        ...prev,
+        provider: providerID,
+        model: provider?.models?.[0] || '',
+        apiKey: '',
+        error: null,
+      };
+    });
+  }, []);
+
+  const handleCompleteOnboarding = useCallback(async () => {
+    if (!onboarding.provider) {
+      setOnboarding((prev) => ({ ...prev, error: 'Select a provider first.' }));
+      return;
+    }
+    if (selectedOnboardingProvider?.requires_api_key && !selectedOnboardingProvider.has_credential && !onboarding.apiKey.trim()) {
+      setOnboarding((prev) => ({ ...prev, error: 'API key is required for this provider.' }));
+      return;
+    }
+
+    setOnboarding((prev) => ({ ...prev, submitting: true, error: null }));
+    try {
+      const response = await apiService.completeOnboarding({
+        provider: onboarding.provider,
+        model: onboarding.model || undefined,
+        api_key: onboarding.apiKey.trim() || undefined,
+      });
+      setState((prev) => ({
+        ...prev,
+        provider: response.provider || prev.provider,
+        model: response.model || prev.model,
+      }));
+      setOnboarding((prev) => ({
+        ...prev,
+        open: false,
+        submitting: false,
+        apiKey: '',
+      }));
+    } catch (error) {
+      setOnboarding((prev) => ({
+        ...prev,
+        submitting: false,
+        error: error instanceof Error ? error.message : 'Failed to complete setup',
+      }));
+    }
+  }, [apiService, onboarding.apiKey, onboarding.model, onboarding.provider, selectedOnboardingProvider]);
+
   
   const handleModelChange = useCallback((model: string) => {
     debugLog('Model changed to:', model);
@@ -1169,6 +1279,86 @@ function App() {
                 onTerminalExpandedChange={setIsTerminalExpanded}
                 isConnected={state.isConnected}
               />
+              {onboarding.open && (
+                <div className="onboarding-overlay" role="dialog" aria-modal="true" aria-label="Set up ledit">
+                  <div className="onboarding-card">
+                    <h2>Set Up Ledit</h2>
+                    <p>
+                      Finish provider setup before using chat and tools.
+                      {onboarding.reason === 'provider_not_configured' ? ' No provider is configured yet.' : ''}
+                      {onboarding.reason === 'missing_provider_credential' ? ' The selected provider is missing credentials.' : ''}
+                    </p>
+
+                    <label htmlFor="onboarding-provider">Provider</label>
+                    <select
+                      id="onboarding-provider"
+                      value={onboarding.provider}
+                      onChange={(e) => handleOnboardingProviderChange(e.target.value)}
+                      disabled={onboarding.submitting || onboarding.checking}
+                    >
+                      {onboarding.providers.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                          {p.requires_api_key && !p.has_credential ? ' (API key required)' : ''}
+                        </option>
+                      ))}
+                    </select>
+
+                    <label htmlFor="onboarding-model">Model</label>
+                    <input
+                      id="onboarding-model"
+                      value={onboarding.model}
+                      onChange={(e) => setOnboarding((prev) => ({ ...prev, model: e.target.value }))}
+                      placeholder="Enter model name"
+                      list="onboarding-models"
+                      disabled={onboarding.submitting || onboarding.checking}
+                    />
+                    <datalist id="onboarding-models">
+                      {(selectedOnboardingProvider?.models || []).map((modelName) => (
+                        <option key={modelName} value={modelName} />
+                      ))}
+                    </datalist>
+
+                    {selectedOnboardingProvider?.requires_api_key && !selectedOnboardingProvider?.has_credential && (
+                      <>
+                        <label htmlFor="onboarding-api-key">API Key</label>
+                        <input
+                          id="onboarding-api-key"
+                          type="password"
+                          value={onboarding.apiKey}
+                          onChange={(e) => setOnboarding((prev) => ({ ...prev, apiKey: e.target.value }))}
+                          placeholder="Paste API key"
+                          disabled={onboarding.submitting || onboarding.checking}
+                        />
+                      </>
+                    )}
+
+                    {selectedOnboardingProvider?.requires_api_key && selectedOnboardingProvider?.has_credential && (
+                      <div className="onboarding-note">Credential already configured for this provider.</div>
+                    )}
+
+                    {onboarding.error && <div className="onboarding-error">{onboarding.error}</div>}
+
+                    <div className="onboarding-actions">
+                      <button
+                        type="button"
+                        onClick={refreshOnboardingStatus}
+                        disabled={onboarding.submitting}
+                      >
+                        Refresh
+                      </button>
+                      <button
+                        type="button"
+                        className="primary"
+                        onClick={handleCompleteOnboarding}
+                        disabled={onboarding.submitting || onboarding.checking}
+                      >
+                        {onboarding.submitting ? 'Saving...' : 'Complete Setup'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </UIManager>
           </EditorManagerProvider>
         </HotkeyProvider>

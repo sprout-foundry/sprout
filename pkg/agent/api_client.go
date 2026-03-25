@@ -350,8 +350,8 @@ func (ac *APIClient) sendStreamingRequest(messages []api.Message, tools []api.To
 	// Track streaming activity for timeout detection
 	chunkReceived := make(chan bool, 10) // Buffer to prevent blocking
 
-	// Enhanced callback with timeout tracking
-	streamCallback := func(content string) {
+	// Enhanced callback with timeout tracking and content type
+	streamCallback := func(content string, contentType string) {
 		// Notify that we received a chunk
 		select {
 		case chunkReceived <- true:
@@ -373,17 +373,9 @@ func (ac *APIClient) sendStreamingRequest(messages []api.Message, tools []api.To
 		}
 		ac.agent.streamingBuffer.WriteString(sanitizedContent)
 
-		// Publish stream chunk for real-time UI updates
-		ac.agent.PublishStreamChunk(sanitizedContent)
-
-		// Call user callback or default output
-		if ac.agent.streamingCallback != nil {
-			ac.agent.streamingCallback(content)
-		} else if ac.agent.outputMutex != nil {
-			ac.agent.outputMutex.Lock()
-			fmt.Print(content)
-			ac.agent.outputMutex.Unlock()
-		}
+		// Route through OutputRouter (single source: publishes event + writes terminal)
+		// This replaces the old dual-write pattern of PublishStreamChunk + streamingCallback
+		ac.agent.PublishStreamChunk(sanitizedContent, contentType)
 	}
 
 	// Start the API call in a goroutine

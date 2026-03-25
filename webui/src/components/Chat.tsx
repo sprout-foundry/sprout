@@ -21,6 +21,7 @@ interface Message {
   type: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  reasoning?: string;  // Chain-of-thought content from content_type: "reasoning"
 }
 
 interface ToolExecution {
@@ -554,29 +555,8 @@ const Chat: React.FC<ChatProps> = ({
     (tool) => tool.status === 'started' || tool.status === 'running'
   ).length;
 
-  const isLikelyToolTrace = (content: string): boolean => {
-    const text = stripAnsiCodes(content);
-    if (!text) return false;
-
-    return (
-      /\bexecuting tool\b/i.test(text) ||
-      /\btool[_ -]?call\b/i.test(text) ||
-      /\bTodoWrite\b/.test(text) ||
-      /\bTodoRead\b/.test(text) ||
-      /\brun_subagent\b/.test(text) ||
-      /\bsearch_files\b/.test(text) ||
-      /\bread_file\b/.test(text) ||
-      /\bshell_command\b/.test(text) ||
-      /\[\s*[-x~ ]\s*\]\s+/i.test(text)
-    );
-  };
-
   const renderContent = (content: string) => {
     const cleaned = stripAnsiCodes(content);
-
-    if (isLikelyToolTrace(cleaned)) {
-      return <pre className="plain-text-block">{cleaned}</pre>;
-    }
 
     return (
       <ReactMarkdown
@@ -885,7 +865,23 @@ const Chat: React.FC<ChatProps> = ({
                   </button>
                   <div className="message-content">
                     {message.type === 'assistant' 
-                      ? renderMessageSegments(message.content)
+                      ? (
+                        <>
+                          {message.reasoning && message.reasoning.trim() && (
+                            <details className="reasoning-block" open={false}>
+                              <summary className="reasoning-summary">
+                                <span className="reasoning-icon">💭</span>
+                                <span>Reasoning</span>
+                                <span className="reasoning-toggle">▶</span>
+                              </summary>
+                              <div className="reasoning-content">
+                                {renderContent(message.reasoning)}
+                              </div>
+                            </details>
+                          )}
+                          {renderMessageSegments(message.content)}
+                        </>
+                      )
                       : renderContent(message.content)
                     }
                   </div>

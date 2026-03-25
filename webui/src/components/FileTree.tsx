@@ -13,7 +13,6 @@ import {
   Terminal,
   FileX,
   File,
-  RotateCw,
   ChevronRight,
   ChevronDown,
   Zap,
@@ -60,7 +59,6 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({ onFileSelect, sele
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set([rootPath]));
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [currentPath, setCurrentPath] = useState<string>(rootPath);
   const filesRef = useRef<FileInfo[]>([]);
 
   // Expose refresh method via ref
@@ -72,7 +70,6 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({ onFileSelect, sele
       try {
         const rootFiles = await fetchFiles(rootPath);
         setFiles(rootFiles);
-        setCurrentPath(rootPath);
         onRefresh?.();
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unknown error');
@@ -112,7 +109,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({ onFileSelect, sele
             if (a.isDir !== b.isDir) {
               return a.isDir ? -1 : 1;
             }
-            if (a.gitStatus === 'ignored' !== (b.gitStatus === 'ignored')) {
+            if ((a.gitStatus === 'ignored') !== (b.gitStatus === 'ignored')) {
               return a.gitStatus === 'ignored' ? 1 : -1;
             }
             return a.name.localeCompare(b.name);
@@ -136,14 +133,13 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({ onFileSelect, sele
     try {
       const rootFiles = await fetchFiles(rootPath);
       setFiles(rootFiles);
-      setCurrentPath(rootPath);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
       setFiles([]);
     } finally {
       setLoading(false);
     }
-  }, [setLoading, setError, setFiles, setCurrentPath, rootPath]);
+  }, [setLoading, setError, setFiles, rootPath]);
 
   // Load initial files
   useEffect(() => {

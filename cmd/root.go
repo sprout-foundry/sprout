@@ -92,13 +92,14 @@ func initializeSystem() {
 		return
 	}
 
-	// For interactive use, ensure proper initialization
-	_, _, err := configuration.Initialize()
+	// WebUI-first bootstrap: initialize silently without terminal prompts.
+	// First-run setup is completed through the WebUI onboarding flow.
+	_, err := configuration.NewManagerSilent()
 	if err != nil {
 		// If initialization fails, print helpful error and exit
 		fmt.Fprintf(os.Stderr, "Failed to initialize ledit: %v\n", err)
 		fmt.Fprintln(os.Stderr, "\nThis usually means there's an issue with your configuration or API keys.")
-		fmt.Fprintln(os.Stderr, "   Try running 'ledit' again to set up your AI provider.")
+		fmt.Fprintln(os.Stderr, "   Try opening the Web UI onboarding or checking ~/.ledit configuration.")
 		os.Exit(1)
 	}
 

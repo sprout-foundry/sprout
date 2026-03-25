@@ -72,6 +72,22 @@ export interface ProviderOption {
   models: string[];
 }
 
+export interface OnboardingProviderOption {
+  id: string;
+  name: string;
+  models: string[];
+  requires_api_key: boolean;
+  has_credential: boolean;
+}
+
+export interface OnboardingStatusResponse {
+  setup_required: boolean;
+  reason: string;
+  current_provider: string;
+  current_model: string;
+  providers: OnboardingProviderOption[];
+}
+
 export interface LeditInstance {
   id: string;
   pid: number;
@@ -112,6 +128,34 @@ class ApiService {
     const response = await fetch('/api/providers');
     if (!response.ok) {
       throw new Error('Failed to fetch providers');
+    }
+    return response.json();
+  }
+
+  async getOnboardingStatus(): Promise<OnboardingStatusResponse> {
+    const response = await fetch('/api/onboarding/status', { cache: 'no-store' });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || 'Failed to fetch onboarding status');
+    }
+    return response.json();
+  }
+
+  async completeOnboarding(payload: {
+    provider: string;
+    model?: string;
+    api_key?: string;
+  }): Promise<{ success: boolean; message: string; provider: string; model: string }> {
+    const response = await fetch('/api/onboarding/complete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || 'Failed to complete onboarding');
     }
     return response.json();
   }

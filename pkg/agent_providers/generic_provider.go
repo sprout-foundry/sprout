@@ -225,6 +225,14 @@ func (p *GenericProvider) GetProvider() string {
 
 // GetModelContextLimit returns the context limit for the current model
 func (p *GenericProvider) GetModelContextLimit() (int, error) {
+	if p.modelsCached {
+		for _, model := range p.models {
+			if model.ID == p.model && model.ContextLength > 0 {
+				return model.ContextLength, nil
+			}
+		}
+	}
+
 	return p.config.GetContextLimit(p.model), nil
 }
 

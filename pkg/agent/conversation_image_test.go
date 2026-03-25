@@ -202,6 +202,8 @@ func TestProcessImagesInQuery_NilClient_ReturnsQueryUnchanged(t *testing.T) {
 type visionSupportingClient struct {
 	api.ClientInterface // embed for unused methods
 	supportsVision      bool
+	currentModel        string
+	visionModel         string
 }
 
 func (v *visionSupportingClient) SupportsVision() bool { return v.supportsVision }
@@ -215,14 +217,24 @@ func (v *visionSupportingClient) SendChatRequestStream(messages []api.Message, t
 func (v *visionSupportingClient) CheckConnection() error             { return nil }
 func (v *visionSupportingClient) SetDebug(debug bool)                {}
 func (v *visionSupportingClient) SetModel(model string) error        { return nil }
-func (v *visionSupportingClient) GetModel() string                   { return "test-vision-model" }
+func (v *visionSupportingClient) GetModel() string {
+	if strings.TrimSpace(v.currentModel) != "" {
+		return v.currentModel
+	}
+	return "test-vision-model"
+}
 func (v *visionSupportingClient) GetProvider() string                { return "test" }
 func (v *visionSupportingClient) GetModelContextLimit() (int, error) { return 4096, nil }
 func (v *visionSupportingClient) GetLastTPS() float64                { return 0 }
 func (v *visionSupportingClient) GetAverageTPS() float64             { return 0 }
 func (v *visionSupportingClient) GetTPSStats() map[string]float64    { return nil }
 func (v *visionSupportingClient) ResetTPSStats()                     {}
-func (v *visionSupportingClient) GetVisionModel() string             { return "test-vision-model" }
+func (v *visionSupportingClient) GetVisionModel() string {
+	if strings.TrimSpace(v.visionModel) != "" {
+		return v.visionModel
+	}
+	return "test-vision-model"
+}
 func (v *visionSupportingClient) SendVisionRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
 	return nil, nil
 }
@@ -312,14 +324,30 @@ func TestProcessImagesInQuery_NonVisionClient_InjectsToolPrompt(t *testing.T) {
 	if len(images) != 0 {
 		t.Fatalf("expected no multimodal images for non-vision client, got %d", len(images))
 	}
-	if !strings.Contains(cleaned, "OCR Trigger Policy (MANDATORY)") {
-		t.Fatalf("expected OCR trigger policy in prompt, got: %q", cleaned)
+	if cleaned != query {
+		t.Fatalf("expected non-vision query to remain unchanged, got: %q", cleaned)
 	}
-	if !strings.Contains(cleaned, "analyze_image_content") {
-		t.Fatalf("expected analyze_image_content tool instruction, got: %q", cleaned)
+}
+
+func TestProcessImagesInQuery_VisionProviderWithNonVisionModel_UsesMultimodalPath(t *testing.T) {
+	query := "Pasted image saved to disk: ./.ledit/pasted-images/test_a.png\nPlease read this image."
+	a := &Agent{
+		client: &visionSupportingClient{
+			supportsVision: true,
+			currentModel:   "glm-5-turbo",
+			visionModel:    "glm-4.6v",
+		},
 	}
-	if !strings.Contains(cleaned, "./.ledit/pasted-images/test_a.png") {
-		t.Fatalf("expected pasted image path in prompt, got: %q", cleaned)
+
+	images, cleaned, err := a.processImagesInQuery(query)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(images) != 0 {
+		t.Fatalf("expected image to be skipped because test path does not exist, got %d images", len(images))
+	}
+	if !strings.Contains(cleaned, "[image: test_a.png]") {
+		t.Fatalf("expected multimodal placeholder rewrite, got: %q", cleaned)
 	}
 }
 

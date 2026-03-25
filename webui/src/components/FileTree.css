@@ -16,7 +16,14 @@
   border-bottom: 1px solid var(--border-subtle);
 }
 
-.file-tree .file-tree-header h3 {
+.file-tree .file-tree-header .header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+}
+
+.file-tree .file-tree-header .header-title {
   margin: 0;
   color: var(--text-primary);
   font-size: var(--text-sm);
@@ -25,13 +32,13 @@
   text-transform: uppercase;
 }
 
-.file-tree .file-tree-controls {
+.file-tree .file-tree-header .header-actions {
   display: flex;
-  gap: var(--space-2);
+  align-items: center;
+  gap: var(--space-1);
 }
 
-.file-tree .refresh-button,
-.file-tree .parent-button {
+.file-tree .file-tree-header .action-button {
   background: var(--bg-elevated);
   border: 1px solid var(--border-default);
   color: var(--text-secondary);
@@ -47,15 +54,115 @@
   font-size: 12px;
 }
 
-.file-tree .refresh-button:hover,
-.file-tree .parent-button:hover {
+.file-tree .file-tree-header .action-button:hover {
   background: var(--bg-surface);
   border-color: var(--border-strong);
   color: var(--text-primary);
 }
 
-.file-tree .refresh-button:disabled,
-.file-tree .parent-button:disabled {
+.file-tree .file-tree-header .action-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.file-tree .file-tree-header .create-file-btn:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.file-tree .file-tree-header .create-folder-btn:hover {
+  border-color: var(--accent-warning);
+  color: var(--accent-warning);
+}
+
+.file-tree .file-tree-header .create-mode-input {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.file-tree .file-tree-header .create-input {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  width: 180px;
+  outline: none;
+}
+
+.file-tree .file-tree-header .create-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.file-tree .file-tree-header .create-input:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.file-tree .file-tree-header .create-actions {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.file-tree .file-tree-header .create-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  transition: all 0.12s var(--ease-out);
+}
+
+.file-tree .file-tree-header .create-btn.create-confirm {
+  color: var(--accent-success);
+}
+
+.file-tree .file-tree-header .create-btn.create-confirm:hover {
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.file-tree .file-tree-header .create-btn.create-cancel {
+  color: var(--accent-error);
+}
+
+.file-tree .file-tree-header .create-btn.create-cancel:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.file-tree .file-tree-header .create-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.file-tree .file-tree-header .refresh-button {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.12s var(--ease-out);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0;
+  font-size: 12px;
+}
+
+.file-tree .file-tree-header .refresh-button:hover {
+  background: var(--bg-surface);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.file-tree .file-tree-header .refresh-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -162,6 +269,26 @@
   box-shadow: inset 0 0 0 1px var(--border-focus);
 }
 
+.file-tree .file-tree-delete {
+  display: none;
+  background: transparent;
+  border: none;
+  color: var(--accent-error);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  transition: all 0.12s var(--ease-out);
+  flex-shrink: 0;
+}
+
+.file-tree .file-tree-item:hover .file-tree-delete {
+  display: flex;
+}
+
+.file-tree .file-tree-delete:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
 .file-tree .file-tree-icon {
   width: 14px;
   text-align: center;
@@ -221,6 +348,19 @@
 }
 
 .file-tree .empty-text {
+  font-size: 12px;
+}
+
+.file-tree .create-error-message {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  margin: var(--space-3);
+  background: var(--color-error-bg);
+  border: 1px solid var(--accent-error);
+  color: var(--accent-error);
+  border-radius: var(--radius-sm);
   font-size: 12px;
 }
 

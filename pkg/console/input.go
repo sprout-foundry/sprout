@@ -45,6 +45,8 @@ const (
 	EventEscape
 	EventPasteStart
 	EventPasteEnd
+	// Mouse events
+	EventMouse
 )
 
 // InputReader handles interactive input with proper escape sequence handling
@@ -80,6 +82,13 @@ type InputReader struct {
 
 	// Track current physical line (for multi-line wrapped input)
 	currentPhysicalLine int
+
+	// Context menu for right-click handling
+	contextMenu *ContextMenu
+
+	// Mouse position tracking
+	mouseRow int
+	mouseCol int
 }
 
 type pasteSpan struct {
@@ -104,6 +113,7 @@ func NewInputReader(prompt string) *InputReader {
 		history:         make([]string, 0, 100),
 		historyIndex:    -1,
 		collapsedPastes: make([]pasteSpan, 0, 8),
+		contextMenu:     NewContextMenu(),
 	}
 	ir.updateTerminalWidth()
 	return ir
@@ -124,6 +134,9 @@ func (ir *InputReader) ReadLine() (string, error) {
 	defer term.Restore(ir.termFd, oldState)
 	fmt.Print(bracketedPasteEnable)
 	defer fmt.Print(bracketedPasteDisable)
+
+	// Enable mouse tracking (SGR mode for extended coordinates)
+	fmt.Print(MouseTrackingSGR)
 
 	// Initialize line state
 	ir.line = ""
@@ -354,6 +367,11 @@ func (ir *InputReader) ReadLine() (string, error) {
 					ir.finalizePaste()
 					continue
 				}
+				if event.Type == EventMouse {
+					// Handle mouse event
+					ir.handleMouseEvent(event.Data)
+					continue
+				}
 				if event.Type == EventEnter {
 					// End of input
 					fmt.Println() // Move to next line
@@ -374,6 +392,11 @@ func (ir *InputReader) ReadLine() (string, error) {
 			}
 		}
 	}
+
+	// Disable mouse tracking before exiting
+	fmt.Print(MouseTrackingDisable)
+
+	return "", fmt.Errorf("unexpected end of input")
 }
 
 func (ir *InputReader) processPendingResize(resizeCh <-chan os.Signal, parser *EscapeParser) bool {
@@ -488,14 +511,127 @@ func (ir *InputReader) HandleEvent(event *InputEvent) {
 	case EventEnd:
 		ir.SetCursor(len(ir.line))
 	case EventUp:
-		ir.NavigateVertically(-1)
+		// If context menu is visible, navigate it
+		if ir.contextMenu != nil && ir.contextMenu.Visible {
+			ir.contextMenu.NavigateUp()
+			ir.contextMenu.Render()
+		} else {
+			ir.NavigateVertically(-1)
+		}
 	case EventDown:
-		ir.NavigateVertically(1)
+		// If context menu is visible, navigate it
+		if ir.contextMenu != nil && ir.contextMenu.Visible {
+			ir.contextMenu.NavigateDown()
+			ir.contextMenu.Render()
+		} else {
+			ir.NavigateVertically(1)
+		}
 	case EventTab, EventEscape:
-		// Handle as needed
+		// Handle escape - close context menu if open
+		if ir.contextMenu != nil && ir.contextMenu.Visible {
+			ir.contextMenu.Hide()
+			if ir.contextMenu.OnEscape != nil {
+				ir.contextMenu.OnEscape()
+			}
+		}
+		// Handle tab normally
+	case EventEnter:
+		// If context menu is visible, select current item
+		if ir.contextMenu != nil && ir.contextMenu.Visible {
+			item := ir.contextMenu.SelectCurrent()
+			if item != nil {
+				ir.contextMenu.Hide()
+			}
+			return
+		}
+		// Normal enter handling will occur after this function
 	default:
 		// Ignore other events
 	}
+}
+
+// handleMouseEvent processes mouse events from the terminal
+func (ir *InputReader) handleMouseEvent(data string) {
+	if ir.contextMenu == nil {
+		return
+	}
+
+	// Parse the mouse event
+	mouseEvent, err := ParseMouseEvent(data)
+	if err != nil {
+		return
+	}
+
+	// Update mouse position
+	ir.mouseRow = mouseEvent.Row
+	ir.mouseCol = mouseEvent.Col
+
+	// Handle right-click (button 2)
+	if mouseEvent.Button == MouseButtonRight && mouseEvent.Kind == MouseEventPress {
+		// Show context menu at mouse position
+		ir.showContextMenu()
+		return
+	}
+
+	// Handle click elsewhere to close menu
+	if mouseEvent.Button == MouseButtonLeft && mouseEvent.Kind == MouseEventPress {
+		// Check if click is outside menu area
+		if ir.contextMenu.Visible {
+			// Close menu if click is not in menu area
+			ir.contextMenu.Hide()
+			if ir.contextMenu.OnEscape != nil {
+				ir.contextMenu.OnEscape()
+			}
+		}
+		return
+	}
+
+	// Handle keyboard navigation when menu is visible
+	if ir.contextMenu.Visible {
+		// Keyboard navigation is handled in HandleEvent
+	}
+}
+
+// showContextMenu creates and displays the context menu
+func (ir *InputReader) showContextMenu() {
+	if ir.contextMenu == nil {
+		return
+	}
+
+	// Clear previous items
+	ir.contextMenu.ClearItems()
+
+	// Add common IDE context menu items
+	ir.contextMenu.AddItem("copy", "Copy", "Copy selected text", "Ctrl+C", true)
+	ir.contextMenu.AddItem("paste", "Paste", "Paste from clipboard", "Ctrl+V", true)
+	ir.contextMenu.AddItem("cut", "Cut", "Cut selected text", "Ctrl+X", true)
+	ir.contextMenu.AddItem("undo", "Undo", "Undo last action", "Ctrl+Z", true)
+	ir.contextMenu.AddItem("redo", "Redo", "Redo last undone action", "Ctrl+Y", true)
+	ir.contextMenu.AddItem("find", "Find", "Search in file", "Ctrl+F", true)
+	ir.contextMenu.AddItem("replace", "Replace", "Find and replace", "Ctrl+H", true)
+	ir.contextMenu.AddItem("goto", "Go to Line", "Jump to specific line", "Ctrl+G", true)
+	ir.contextMenu.AddItem("terminal", "New Terminal", "Open a new terminal", "Ctrl+T", true)
+	ir.contextMenu.AddItem("split", "Split View", "Split editor view", "Ctrl+\\", true)
+
+	// Set position based on mouse coordinates
+	ir.contextMenu.SetPosition(ir.mouseRow, ir.mouseCol)
+
+	// Set up callbacks
+	ir.contextMenu.OnSelect = func(item *ContextMenuItem) {
+		// Handle menu item selection
+		ir.handleMenuItemSelected(item)
+	}
+
+	// Show the menu
+	ir.contextMenu.Show()
+	ir.contextMenu.Render()
+}
+
+// handleMenuItemSelected handles the selection of a menu item
+func (ir *InputReader) handleMenuItemSelected(item *ContextMenuItem) {
+	// This is a placeholder - in a real implementation,
+	// this would trigger the appropriate action
+	fmt.Printf("\n[Menu] Selected: %s\n", item.Label)
 }
 
 // InsertChar inserts a character at the cursor position
@@ -1185,6 +1321,7 @@ type EscapeParser struct {
 	buffer      []byte
 	pendingChar byte // Stores a character that should be processed next
 	hasPending  bool // Whether there's a pending character
+	mouseBuf    []byte // Buffer for mouse event data
 }
 
 // NewEscapeParser creates a new escape sequence parser
@@ -1274,6 +1411,14 @@ func (ep *EscapeParser) Parse(b byte) *InputEvent {
 			event := &InputEvent{Type: EventEnd}
 			ep.Reset()
 			return event
+		case '<': // Mouse event (SGR mode): ESC [ < Cb;Cx;Cy M
+			ep.state = 5
+			ep.mouseBuf = []byte{27, '[', '<'}
+			return nil
+		case 'M': // Mouse event (X10 mode): ESC [ M Cb Cx Cy
+			ep.state = 6
+			ep.mouseBuf = []byte{27, '[', 'M'}
+			return nil
 		default:
 			// Handle numeric CSI params and terminated forms like ESC [ 3 ~ and ESC [ 200 ~.
 			if (b >= '0' && b <= '9') || b == ';' {
@@ -1349,6 +1494,35 @@ func (ep *EscapeParser) Parse(b byte) *InputEvent {
 			}
 			return &InputEvent{Type: EventEscape}
 		}
+
+	case 5: // Mouse event tracking (SGR mode: ESC [ < Cb;Cx;Cy M)
+		ep.mouseBuf = append(ep.mouseBuf, b)
+		if b == 'M' {
+			// Complete mouse event
+			mouseData := string(ep.mouseBuf)
+			ep.Reset()
+			ep.mouseBuf = nil
+			return &InputEvent{Type: EventMouse, Data: mouseData}
+		}
+		if b == 'm' {
+			// Complete mouse event (lowercase variant)
+			mouseData := string(ep.mouseBuf)
+			ep.Reset()
+			ep.mouseBuf = nil
+			return &InputEvent{Type: EventMouse, Data: mouseData}
+		}
+		return nil
+
+	case 6: // Mouse event tracking (X10 mode: ESC [ M Cb Cx Cy)
+		ep.mouseBuf = append(ep.mouseBuf, b)
+		if len(ep.mouseBuf) == 4 {
+			// Complete X10 mouse event: ESC [ M Cb Cx Cy
+			mouseData := string(ep.mouseBuf)
+			ep.Reset()
+			ep.mouseBuf = nil
+			return &InputEvent{Type: EventMouse, Data: mouseData}
+		}
+		return nil
 	}
 
 	return nil
@@ -1358,4 +1532,5 @@ func (ep *EscapeParser) Parse(b byte) *InputEvent {
 func (ep *EscapeParser) Reset() {
 	ep.state = 0
 	ep.buffer = ep.buffer[:0]
+	ep.mouseBuf = nil
 }

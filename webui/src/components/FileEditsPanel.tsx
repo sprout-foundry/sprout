@@ -4,7 +4,7 @@
  * Displays files edited in this session and revision checkpoints with rollback.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Pencil,
   Plus,
@@ -87,15 +87,20 @@ const FileEditsPanel: React.FC<FileEditsPanelProps> = ({ edits, onFileClick }) =
   const [expandedRevisionIds, setExpandedRevisionIds] = useState<Set<string>>(new Set());
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [rollbackError, setRollbackError] = useState<string | null>(null);
+  const historyLoadRequestRef = useRef(0);
 
   const apiService = ApiService.getInstance();
 
   const openHistory = useCallback(async () => {
+    const requestId = ++historyLoadRequestRef.current;
     setIsLoadingHistory(true);
     setRollbackError(null);
 
     try {
       const response = await apiService.getChangelog();
+      if (requestId !== historyLoadRequestRef.current) {
+        return;
+      }
       const normalized = sortRevisionsNewestFirst((response.revisions || []).map(normalizeRevision));
       setRevisions(normalized);
 
@@ -108,11 +113,16 @@ const FileEditsPanel: React.FC<FileEditsPanelProps> = ({ edits, onFileClick }) =
 
       setShowHistory(true);
     } catch (error) {
+      if (requestId !== historyLoadRequestRef.current) {
+        return;
+      }
       console.error('Failed to fetch changelog:', error);
       setRollbackError('Failed to fetch revision history');
       setShowHistory(true);
     } finally {
-      setIsLoadingHistory(false);
+      if (requestId === historyLoadRequestRef.current) {
+        setIsLoadingHistory(false);
+      }
     }
   }, [apiService]);
 

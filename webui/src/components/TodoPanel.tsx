@@ -18,6 +18,7 @@ const TodoPanel: React.FC<TodoPanelProps> = ({ todos, isLoading = false }) => {
   const completed = todos.filter(t => t.status === 'completed').length;
   const active = todos.filter(t => t.status === 'pending' || t.status === 'in_progress').length;
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+  const showLoadingState = isLoading && total === 0;
 
   const getStatusIcon = (status: TodoItem['status']) => {
     switch (status) {
@@ -32,7 +33,7 @@ const TodoPanel: React.FC<TodoPanelProps> = ({ todos, isLoading = false }) => {
     }
   };
 
-  if (isLoading) {
+  if (showLoadingState) {
     return (
       <div className="todo-panel">
         <div className="todo-header">
@@ -79,6 +80,7 @@ const TodoPanel: React.FC<TodoPanelProps> = ({ todos, isLoading = false }) => {
         <span className="todo-title">📋 Tasks</span>
         <span className="todo-count-summary">
           {total} tasks · {active} active · {completed} done
+          {isLoading ? ' · updating…' : ''}
         </span>
       </div>
       <div className="todo-progress-bar">

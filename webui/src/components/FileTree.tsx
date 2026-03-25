@@ -17,8 +17,11 @@ import {
   ChevronDown,
   Zap,
   AlertTriangle,
-  FolderClosed,
   ImageIcon,
+  FilePlus,
+  FolderPlus,
+  X,
+  Check,
 } from 'lucide-react';
 import './FileTree.css';
 
@@ -48,18 +51,24 @@ interface FileTreeProps {
   selectedFile?: string;
   rootPath?: string;
   onRefresh?: () => void;
+  onItemCreated?: () => void; // Callback when a file or folder is created
+  onDeleteItem?: (path: string) => void; // Callback when an item is deleted
 }
 
 interface FileTreeHandle {
   refresh: () => void;
 }
 
-const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({ onFileSelect, selectedFile, rootPath = '.', onRefresh }, ref) => {
+const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({ onFileSelect, selectedFile, rootPath = '.', onRefresh, onItemCreated, onDeleteItem }, ref) => {
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set([rootPath]));
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [createMode, setCreateMode] = useState<'file' | 'folder' | null>(null);
+  const [newItemName, setNewItemName] = useState('');
+  const [createError, setCreateError] = useState<string | null>(null);
   const filesRef = useRef<FileInfo[]>([]);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Expose refresh method via ref
   useImperativeHandle(ref, () => ({
@@ -78,6 +87,129 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({ onFileSelect, sele
       }
     }
   }));
+
+  // Local refresh handler for the button
+  const handleRefresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const rootFiles = await fetchFiles(rootPath);
+      setFiles(rootFiles);
+      onRefresh?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  }, [rootPath, onRefresh]);
+
+  // Create a new file or folder
+  const handleCreateItem = useCallback(async (type: 'file' | 'folder') => {
+    setCreateMode(type);
+    setNewItemName('');
+    setCreateError(null);
+    
+    // Focus the input after render
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 0);
+  }, []);
+
+  // Cancel create mode
+  const handleCancelCreate = useCallback(() => {
+    setCreateMode(null);
+    setNewItemName('');
+    setCreateError(null);
+  }, []);
+
+  // Confirm create item
+  const handleConfirmCreate = useCallback(async () => {
+    if (!newItemName.trim()) {
+      setCreateError('Please enter a name');
+      return;
+    }
+
+    setLoading(true);
+    setCreateError(null);
+
+    try {
+      const response = await fetch('/api/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          directory: createMode === 'file' ? rootPath : `${rootPath}/${newItemName}`,
+          path: createMode === 'file' ? `${rootPath}/${newItemName}` : `${rootPath}/${newItemName}/`,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to create item');
+      }
+
+      // Refresh the file list
+      const rootFiles = await fetchFiles(rootPath);
+      setFiles(rootFiles);
+      
+      // Notify parent of creation
+      onItemCreated?.();
+      
+      // Exit create mode
+      setCreateMode(null);
+      setNewItemName('');
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : 'Failed to create item');
+    } finally {
+      setLoading(false);
+    }
+  }, [newItemName, createMode, rootPath, onItemCreated]);
+
+  // Handle create item key events
+  const handleCreateKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleConfirmCreate();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      handleCancelCreate();
+    }
+  }, [handleConfirmCreate, handleCancelCreate]);
+
+  // Delete a file or folder
+  const handleDeleteItem = useCallback(async (file: FileInfo) => {
+    if (!window.confirm(`Delete "${file.name}"?\n\nThis action cannot be undone.`)) {
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch('/api/delete', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: file.path }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to delete item');
+      }
+
+      // Refresh the file list
+      const rootFiles = await fetchFiles(rootPath);
+      setFiles(rootFiles);
+      
+      // Notify parent of deletion
+      onDeleteItem?.(file.path);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete item');
+    } finally {
+      setLoading(false);
+    }
+  }, [rootPath, onDeleteItem]);
 
   useEffect(() => {
     filesRef.current = files;
@@ -301,6 +433,10 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({ onFileSelect, sele
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
                 handleClick(file);
+              } else if (e.key === 'Delete' && !file.isDir) {
+                // Allow delete key for files only
+                e.preventDefault();
+                handleDeleteItem(file);
               }
             }}
           >
@@ -315,6 +451,19 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({ onFileSelect, sele
             <span className="file-tree-name">{file.name}</span>
             {file.isDir && hasChildren && (
               <span className="file-tree-count">({file.children?.length})</span>
+            )}
+            {!file.isDir && (
+              <button
+                className="file-tree-delete"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeleteItem(file);
+                }}
+                aria-label={`Delete ${file.name}`}
+                title="Delete file"
+              >
+                <X size={12} />
+              </button>
             )}
           </div>
           
@@ -332,8 +481,81 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({ onFileSelect, sele
   return (
       <div className="file-tree">
         <div className="file-tree-header">
-          <h3><FolderClosed size={16} style={{ marginRight: 6, verticalAlign: 'middle' }} /> File Explorer</h3>
+          <div className="header-left">
+            <span className="header-title">Files</span>
+            {createMode && (
+              <div className="create-mode-input">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={newItemName}
+                  onChange={(e) => setNewItemName(e.target.value)}
+                  onKeyDown={handleCreateKeyDown}
+                  placeholder={createMode === 'file' ? 'filename.ext' : 'foldername'}
+                  className="create-input"
+                  aria-label="Enter name for new item"
+                />
+                <div className="create-actions">
+                  <button
+                    className="create-btn create-confirm"
+                    onClick={handleConfirmCreate}
+                    disabled={loading || !newItemName.trim()}
+                    aria-label="Create item"
+                  >
+                    <Check size={14} />
+                  </button>
+                  <button
+                    className="create-btn create-cancel"
+                    onClick={handleCancelCreate}
+                    aria-label="Cancel"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="header-actions">
+            <button 
+              className="action-button create-file-btn" 
+              onClick={() => handleCreateItem('file')}
+              disabled={loading}
+              aria-label="Create new file"
+              title="Create new file"
+            >
+              <FilePlus size={14} />
+            </button>
+            <button 
+              className="action-button create-folder-btn" 
+              onClick={() => handleCreateItem('folder')}
+              disabled={loading}
+              aria-label="Create new folder"
+              title="Create new folder"
+            >
+              <FolderPlus size={14} />
+            </button>
+            <button 
+              className="refresh-button" 
+              onClick={handleRefresh}
+              disabled={loading}
+              aria-label="Refresh"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                <path d="M3 3v5h5" />
+                <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                <path d="M16 21h5v-5" />
+              </svg>
+            </button>
+          </div>
         </div>
+
+        {createError && (
+          <div className="create-error-message">
+            <AlertTriangle size={14} />
+            <span>{createError}</span>
+          </div>
+        )}
 
       {loading && (
         <div className="loading-indicator">

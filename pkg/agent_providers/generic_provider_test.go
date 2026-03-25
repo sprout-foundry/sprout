@@ -167,6 +167,80 @@ func TestProviderModelContextLimits(t *testing.T) {
 	}
 }
 
+func TestGenericProviderGetModelContextLimitUsesCachedModel(t *testing.T) {
+	config := &ProviderConfig{
+		Name:     "test",
+		Endpoint: "https://example.com",
+		Auth:     AuthConfig{Type: "bearer", EnvVar: "API_KEY"},
+		Defaults: RequestDefaults{Model: "fallback-model"},
+		Models: ModelConfig{
+			DefaultContextLimit: 4096,
+		},
+	}
+
+	provider, err := NewGenericProvider(config)
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	provider.model = "cached-model"
+	provider.models = []api.ModelInfo{
+		{
+			ID:            "cached-model",
+			Name:          "cached-model",
+			Provider:      "test",
+			ContextLength: 128000,
+		},
+	}
+	provider.modelsCached = true
+
+	contextLimit, err := provider.GetModelContextLimit()
+	if err != nil {
+		t.Fatalf("failed to get context limit: %v", err)
+	}
+
+	if contextLimit != 128000 {
+		t.Fatalf("expected cached model context length 128000, got %d", contextLimit)
+	}
+}
+
+func TestGenericProviderGetModelContextLimitFallsBackWhenCachedEntryHasNoContext(t *testing.T) {
+	config := &ProviderConfig{
+		Name:     "test",
+		Endpoint: "https://example.com",
+		Auth:     AuthConfig{Type: "bearer", EnvVar: "API_KEY"},
+		Defaults: RequestDefaults{Model: "fallback-model"},
+		Models: ModelConfig{
+			DefaultContextLimit: 4096,
+		},
+	}
+
+	provider, err := NewGenericProvider(config)
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	provider.model = "cached-model"
+	provider.models = []api.ModelInfo{
+		{
+			ID:            "cached-model",
+			Name:          "cached-model",
+			Provider:      "test",
+			ContextLength: 0,
+		},
+	}
+	provider.modelsCached = true
+
+	contextLimit, err := provider.GetModelContextLimit()
+	if err != nil {
+		t.Fatalf("failed to get context limit: %v", err)
+	}
+
+	if contextLimit != 4096 {
+		t.Fatalf("expected fallback context limit 4096, got %d", contextLimit)
+	}
+}
+
 func TestConvertToolCallsArgumentsAsJSON(t *testing.T) {
 	config := &ProviderConfig{
 		Name:     "test",

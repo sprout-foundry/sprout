@@ -10,11 +10,6 @@ import {
   ScrollText,
   FolderCog,
   Settings,
-  CheckCircle2,
-  XCircle,
-  AlertTriangle,
-  Info,
-  Dot,
   ChevronLeft,
   ChevronRight,
   X,
@@ -47,7 +42,7 @@ interface SidebarProps {
   onMobileMenuToggle?: () => void;
   sidebarCollapsed?: boolean;
   onSidebarToggle?: () => void;
-  onFileClick?: (filePath: string) => void;
+  onFileClick?: (filePath: string, lineNumber?: number) => void;
   // Legacy props for backward compatibility
   provider?: string;
   model?: string;
@@ -62,10 +57,10 @@ interface SidebarProps {
 
 /** Section tab definitions */
 const SECTION_TABS: { id: SectionTab; icon: LucideIcon; label: string }[] = [
-  { id: 'logs', icon: ScrollText, label: 'Logs' },
   { id: 'files', icon: FolderCog, label: 'Files' },
   { id: 'search', icon: Search, label: 'Search' },
   { id: 'settings', icon: Settings, label: 'Settings' },
+  { id: 'logs', icon: ScrollText, label: 'Logs' },
 ];
 
 const SIDEBAR_MIN_WIDTH = 200;
@@ -313,80 +308,81 @@ const Sidebar: React.FC<SidebarProps> = ({
   // ─── Section Renderers ───────────────────────────────────────────────
 
   /** Logs section: full event/log stream */
+  // Terminal-style log formatting helper
+  const formatLogLine = (log: ProviderLogEntry): string => {
+    const d = log.data as any;
+    switch (log.type) {
+      case 'query_started': return `Query: ${d?.query?.substring(0, 80) || 'No query'}`;
+      case 'tool_start': return `${d?.display_name || d?.tool_name || 'tool'} started`;
+      case 'tool_end': return `${d?.display_name || d?.tool_name || 'tool'} ${d?.status === 'failed' ? 'FAILED' : 'done'}`;
+      case 'tool_execution': return `${d?.tool || 'tool'}: ${d?.status || 'running'}`;
+      case 'file_changed': {
+        const p = d?.path || d?.file_path || 'file';
+        return `${d?.action || 'changed'}: ${p.split('/').pop() || p}`;
+      }
+      case 'stream_chunk': return `stream: ${(d?.chunk || '').substring(0, 100)}`;
+      case 'error': return `Error: ${d?.message || 'unknown'}`;
+      case 'connection_status': return d?.connected ? 'Connected' : 'Disconnected';
+      case 'query_completed': return 'Query completed';
+      case 'query_progress': return `Step: ${d?.step || '?'}`;
+      case 'todo_update': {
+        const todos = d?.todos;
+        if (!Array.isArray(todos)) return 'todos updated';
+        const summary = todos.map((t: any) => `${t.status === 'completed' ? '✓' : t.status === 'in_progress' ? '→' : '○'} ${t.content}`).join('\n  ');
+        return `Todos (${todos.filter((t: any) => t.status === 'completed').length}/${todos.length}): ${summary}`;
+      }
+      case 'agent_message': {
+        const msg = String(d?.message || '');
+        if (!msg.trim()) return '';
+        return `[agent] ${msg.replace(new RegExp(String.fromCharCode(27) + '\\[[0-9;]*[mGKHJABCD]', 'g'), '').substring(0, 120)}`;
+      }
+      case 'metrics_update': return `Model: ${d?.model || '?'} | Provider: ${d?.provider || '?'}`;
+      default: return `${log.type}: ${JSON.stringify(d || {}).substring(0, 80)}`;
+    }
+  };
+
+  const logsContainerRef = useRef<HTMLDivElement>(null);
+  const logsEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when logs change
+  useEffect(() => {
+    if (logsEndRef.current) {
+      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [normalizedRecentLogs.length]);
+
+  /** Logs section: terminal-style log output */
   const renderLogsSection = () => {
-    if (normalizedRecentLogs.length === 0) {
+    // Cap at last 500 logs
+    const displayLogs = normalizedRecentLogs.slice(-500);
+
+    if (displayLogs.length === 0) {
       return <div className="empty">No logs yet</div>;
     }
 
-    const getLogIcon = (level: string) => {
-      switch (level) {
-        case 'success': return <CheckCircle2 size={12} />;
-        case 'error': return <XCircle size={12} />;
-        case 'warning': return <AlertTriangle size={12} />;
-        case 'info': return <Info size={12} />;
-        default: return <Dot size={12} />;
-      }
-    };
-
-    const extractFilePath = (data: any): string | null => {
-      let payload = data;
-      if (typeof payload === 'string') {
-        try { payload = JSON.parse(payload); } catch { payload = {}; }
-      }
-      if (!payload || typeof payload !== 'object') return null;
-      const candidates = [
-        payload.path, payload.file_path, payload.filePath,
-        payload.target_path, payload.targetPath,
-        payload.file?.path, payload.file?.name, payload.name
-      ];
-      for (const value of candidates) {
-        if (typeof value === 'string' && value.trim() !== '') return value;
-      }
-      return null;
-    };
-
-    const getLogSummary = (logEntry: any) => {
-      try {
-        switch (logEntry.type) {
-          case 'query_started':
-            return `Query: ${logEntry.data?.query?.substring(0, 50) || 'No query'}...`;
-          case 'tool_execution':
-            return `${logEntry.data?.tool || 'Unknown'}: ${logEntry.data?.status || 'Unknown'}`;
-          case 'file_changed': {
-            const filePath = extractFilePath(logEntry.data);
-            if (!filePath) return 'File changed';
-            return `File: ${filePath.split('/').filter(Boolean).pop() || filePath}`;
-          }
-          case 'stream_chunk':
-            return `Stream: ${logEntry.data?.chunk?.substring(0, 50) || 'No chunk'}...`;
-          case 'error':
-            return `Error: ${logEntry.data?.message?.substring(0, 50) || 'Unknown error'}...`;
-          case 'connection_status':
-            return logEntry.data?.connected ? 'Connected' : 'Disconnected';
-          default:
-            return `${logEntry.type}`;
-        }
-      } catch {
-        return `${logEntry.type}`;
-      }
-    };
-
-    const displayLogs = [...normalizedRecentLogs].reverse();
-
     return (
-      <div className="logs-list logs-expanded">
-        {displayLogs.map((logEntry, index) => (
-          <div key={logEntry.id || index} className="log-item">
-            <span className="log-icon">{getLogIcon(logEntry.level)}</span>
-            <span className="log-text">
-              <strong>{logEntry.type}</strong>
-              <span className="log-meta">
-                {new Date(logEntry.timestamp).toLocaleTimeString()}
-              </span>
-              <span>{getLogSummary(logEntry)}</span>
-            </span>
-          </div>
-        ))}
+      <div className="terminal-logs" ref={logsContainerRef}>
+        {displayLogs.map((log) => {
+          const message = formatLogLine(log);
+          // Skip empty log lines
+          if (!message) return null;
+
+          const timestamp = new Date(log.timestamp).toLocaleTimeString('en-US', {
+            hour12: false,
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+          }) + '.' + new Date(log.timestamp).getMilliseconds().toString().padStart(3, '0');
+
+          return (
+            <div key={log.id} className={`term-log-line term-log-${log.level}`}>
+              <span className="term-log-time">{timestamp}</span>
+              <span className="term-log-type">[{log.type}]</span>
+              <span className="term-log-msg">{message}</span>
+            </div>
+          );
+        })}
+        <div ref={logsEndRef} />
       </div>
     );
   };

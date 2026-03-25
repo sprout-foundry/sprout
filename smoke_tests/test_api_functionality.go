@@ -189,7 +189,7 @@ func main() {
 				var streamContent string
 				streamResp, err := client.SendChatRequestStream([]api.Message{
 					{Role: "user", Content: "Say hello"},
-				}, nil, "", func(content string) {
+				}, nil, "", func(content string, contentType string) {
 					streamContent += content
 				})
 

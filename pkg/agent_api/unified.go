@@ -364,10 +364,10 @@ func (w *UnifiedProviderWrapper) SendChatRequestStream(messages []Message, tools
 		}
 	}
 
-	// Create a wrapper callback that converts strings to our StreamCallback type
-	providerCallback := func(content string) {
+	// Create a wrapper callback that converts to our StreamCallback type
+	providerCallback := func(content string, contentType string) {
 		if callback != nil {
-			callback(content)
+			callback(content, contentType)
 		}
 	}
 

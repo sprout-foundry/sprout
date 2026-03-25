@@ -54,7 +54,7 @@ interface GitDiffResponse {
   diff: string;
 }
 
-type FileSection = 'staged' | 'modified' | 'untracked';
+type FileSection = 'staged' | 'modified' | 'untracked' | 'deleted';
 const MOBILE_LAYOUT_MAX_WIDTH = 768;
 
 const selectionKey = (section: FileSection, path: string): string => `${section}:${path}`;
@@ -69,7 +69,7 @@ const parseSelectionKey = (key: string): { section: FileSection; path: string } 
   if (!path) {
     return null;
   }
-  if (section !== 'staged' && section !== 'modified' && section !== 'untracked') {
+  if (section !== 'staged' && section !== 'modified' && section !== 'untracked' && section !== 'deleted') {
     return null;
   }
   return { section, path };
@@ -249,6 +249,7 @@ const GitView: React.FC<GitViewProps> = ({
       ...gitStatus.staged.map(f => selectionKey('staged', f.path)),
       ...gitStatus.modified.map(f => selectionKey('modified', f.path)),
       ...gitStatus.untracked.map(f => selectionKey('untracked', f.path)),
+      ...gitStatus.deleted.map(f => selectionKey('deleted', f.path)),
     ];
     
     setSelectedFiles(new Set(allFiles));
@@ -352,7 +353,7 @@ const GitView: React.FC<GitViewProps> = ({
   ));
   const discardablePaths = Array.from(new Set(
     selectedEntries
-      .filter((entry) => entry.section === 'modified')
+      .filter((entry) => entry.section === 'modified' || entry.section === 'deleted')
       .map((entry) => entry.path),
   ));
 
@@ -640,7 +641,7 @@ const GitView: React.FC<GitViewProps> = ({
             disabled={discardablePaths.length === 0 || isActing}
             className="action-btn danger"
           >
-            Discard Selected {discardablePaths.length > 0 ? `(${discardablePaths.length})` : ''}
+            Discard / Restore Selected {discardablePaths.length > 0 ? `(${discardablePaths.length})` : ''}
           </button>
         </div>
       </div>
@@ -761,6 +762,44 @@ const GitView: React.FC<GitViewProps> = ({
                   isActive={
                     activeDiffSelectionKey
                       ? activeDiffSelectionKey === selectionKey('untracked', file.path)
+                      : activeDiffPath === file.path
+                  }
+                  onSelect={handleFileSelect}
+                  onPreview={handlePreviewFile}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Deleted Files */}
+        {gitStatus.deleted.length > 0 && (
+          <div className="file-section deleted">
+            <div className="file-section-header">
+              <h3>Deleted Files ({gitStatus.deleted.length})</h3>
+              <button
+                type="button"
+                className="section-select-btn"
+                onClick={() => handleToggleSectionSelect('deleted', gitStatus.deleted)}
+                title={isSectionFullySelected('deleted', gitStatus.deleted) ? 'Clear deleted selection' : 'Select all deleted files'}
+                aria-label={isSectionFullySelected('deleted', gitStatus.deleted) ? 'Clear deleted selection' : 'Select all deleted files'}
+              >
+                {isSectionFullySelected('deleted', gitStatus.deleted) ? <Minus size={14} /> : <Check size={14} />}
+                <span className="section-select-count">
+                  {getSectionSelectedCount('deleted', gitStatus.deleted)}
+                </span>
+              </button>
+            </div>
+            <div className="file-list">
+              {gitStatus.deleted.map((file, index) => (
+                <FileItem
+                  key={`deleted-${file.path}-${index}`}
+                  section="deleted"
+                  file={file}
+                  isSelected={selectedFiles.has(selectionKey('deleted', file.path))}
+                  isActive={
+                    activeDiffSelectionKey
+                      ? activeDiffSelectionKey === selectionKey('deleted', file.path)
                       : activeDiffPath === file.path
                   }
                   onSelect={handleFileSelect}

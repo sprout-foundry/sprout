@@ -80,6 +80,7 @@ interface AppState {
   toolExecutions: ToolExecution[];
   queryProgress: any;
   stats: any; // Enhanced stats from API
+  currentTodos: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }>;
   fileEdits: Array<{
     path: string;
     action: string;
@@ -108,6 +109,7 @@ interface Message {
   type: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  reasoning?: string;  // Chain-of-thought content from content_type: "reasoning"
 }
 
 interface LogEntry {
@@ -197,6 +199,7 @@ function App() {
       currentView: 'chat',
       toolExecutions: [],
       stats: {},
+      currentTodos: [],
       fileEdits: [],
       ...persisted,
       isConnected: false,
@@ -211,7 +214,6 @@ function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isTerminalExpanded, setIsTerminalExpanded] = useState(false);
-  const lastChunkRef = useRef<string>('');
   const activeRequestsRef = useRef(0);
   const queuedMessagesRef = useRef<string[]>([]);
   const [queuedMessagesCount, setQueuedMessagesCount] = useState(0);
@@ -320,6 +322,7 @@ function App() {
               messages: incomingSessionId && prev.sessionId && incomingSessionId !== prev.sessionId ? [] : prev.messages,
               toolExecutions: incomingSessionId && prev.sessionId && incomingSessionId !== prev.sessionId ? [] : prev.toolExecutions,
               queryProgress: incomingSessionId && prev.sessionId && incomingSessionId !== prev.sessionId ? null : prev.queryProgress,
+              currentTodos: incomingSessionId && prev.sessionId && incomingSessionId !== prev.sessionId ? [] : prev.currentTodos,
               isConnected: newConnectionState,
               logs: [...prev.logs, logEntry]
             }));
@@ -332,7 +335,6 @@ function App() {
         logEntry.category = 'query';
         logEntry.level = 'info';
         const startedQuery = event.data?.query || '';
-        lastChunkRef.current = ''; // Reset chunk tracking for new query
         setState(prev => ({
           ...prev,
           isProcessing: true,
@@ -346,6 +348,7 @@ function App() {
           }],
           toolExecutions: [], // Clear previous tool executions
           queryProgress: null, // Clear previous progress
+          currentTodos: [],    // Clear previous todos
           logs: [...prev.logs, logEntry]
         }));
         debugLog('[>>] Query started:', startedQuery);
@@ -363,31 +366,38 @@ function App() {
         logEntry.category = 'stream';
         logEntry.level = 'info';
         
-        // Only skip duplicates for non-empty chunks to prevent message duplication
-        // Empty chunks (heartbeats) should always be passed through
-        if (event.data.chunk && event.data.chunk === lastChunkRef.current) {
-          break;
-        }
-        if (event.data.chunk) {
-          lastChunkRef.current = event.data.chunk;
-        }
+        const chunkContent = event.data.chunk || '';
+        const chunkType = event.data.content_type || 'assistant_text';
         
         setState(prev => {
           const newMessages = [...prev.messages];
           const lastMessage = newMessages[newMessages.length - 1];
           if (lastMessage && lastMessage.type === 'assistant') {
-            // Create new message object instead of mutating
-            newMessages[newMessages.length - 1] = {
-              ...lastMessage,
-              content: lastMessage.content + (event.data.chunk || '')
-            };
+            if (chunkType === 'reasoning') {
+              // Append to reasoning field
+              newMessages[newMessages.length - 1] = {
+                ...lastMessage,
+                reasoning: (lastMessage.reasoning || '') + chunkContent
+              };
+            } else {
+              // Append to content field (default behavior)
+              newMessages[newMessages.length - 1] = {
+                ...lastMessage,
+                content: lastMessage.content + chunkContent
+              };
+            }
           } else {
-            newMessages.push({
+            // Create new assistant message
+            const newMsg: Message = {
               id: Date.now().toString(),
               type: 'assistant',
-              content: event.data.chunk,
-              timestamp: new Date()
-            });
+              content: chunkType === 'reasoning' ? '' : chunkContent,
+              timestamp: new Date(),
+            };
+            if (chunkType === 'reasoning') {
+              newMsg.reasoning = chunkContent;
+            }
+            newMessages.push(newMsg);
           }
           return {
             ...prev,
@@ -423,6 +433,235 @@ function App() {
           logs: [...prev.logs, logEntry]
         }));
         debugLog('[OK] Query completed');
+        break;
+
+      case 'tool_start':
+        logEntry.category = 'tool';
+        logEntry.level = 'info';
+        setState(prev => {
+          const toolCallID = String(event.data?.tool_call_id || '');
+          const toolName = String(event.data?.tool_name || 'unknown_tool');
+          const rawArgs = event.data?.arguments != null ? String(event.data.arguments) : undefined;
+          const displayName = String(event.data?.display_name || toolName);
+          const persona = typeof event.data?.persona === 'string' ? event.data.persona : undefined;
+          const isSubagent = !!event.data?.is_subagent;
+          const subagentType: ToolExecution['subagentType'] = event.data?.subagent_type === 'parallel'
+            ? 'parallel'
+            : isSubagent ? 'single' : undefined;
+
+          // Check if we already have this tool from a legacy tool_execution event
+          const existingIdx = prev.toolExecutions.findIndex(t => {
+            const existingID = t.details?.tool_call_id || t.details?.id || t.id;
+            return toolCallID && existingID === toolCallID;
+          });
+
+          if (existingIdx >= 0) {
+            // Update existing with richer start data
+            const updated = [...prev.toolExecutions];
+            updated[existingIdx] = {
+              ...updated[existingIdx],
+              tool: toolName,
+              status: 'started',
+              startTime: updated[existingIdx].startTime, // keep existing start time
+              message: displayName,
+              arguments: updated[existingIdx].arguments || rawArgs,
+              details: event.data,
+              persona: updated[existingIdx].persona || persona,
+              subagentType: updated[existingIdx].subagentType || subagentType,
+            };
+            return { ...prev, toolExecutions: updated, logs: [...prev.logs, logEntry] };
+          }
+
+          // Add new tool execution from rich start event
+          const newTool: ToolExecution = {
+            id: toolCallID || `${toolName}-${Date.now()}`,
+            tool: toolName,
+            status: 'started',
+            message: displayName,
+            startTime: new Date(),
+            details: event.data,
+            arguments: rawArgs,
+            persona,
+            subagentType,
+          };
+          return {
+            ...prev,
+            toolExecutions: [...prev.toolExecutions, newTool],
+            logs: [...prev.logs, logEntry]
+          };
+        });
+        debugLog('[tool] Tool start:', event.data?.tool_name);
+        break;
+
+      case 'tool_end':
+        logEntry.category = 'tool';
+        logEntry.level = event.data?.status === 'failed' ? 'error' : 'info';
+        setState(prev => {
+          const toolCallID = String(event.data?.tool_call_id || '');
+          const status: ToolExecution['status'] = event.data?.status === 'failed' ? 'error' : 'completed';
+          const result = event.data?.result != null ? String(event.data.result) : undefined;
+          const error = event.data?.error != null ? String(event.data.error) : undefined;
+
+          let matched = false;
+          const updatedExecutions = prev.toolExecutions.map(t => {
+            const existingID = t.details?.tool_call_id || t.id;
+            const match = toolCallID && existingID === toolCallID;
+            if (!match) {
+              // Also try matching by tool name + no end time (for backward compat)
+              const nameMatch = !toolCallID && t.tool === event.data?.tool_name && !t.endTime;
+              if (!nameMatch) return t;
+            }
+            matched = true;
+
+            return {
+              ...t,
+              status,
+              endTime: new Date(),
+              result: t.result || result || error,
+              details: event.data,
+              arguments: t.arguments,  // preserve arguments from tool_start
+            };
+          });
+
+          if (!matched) {
+            const fallbackExecution: ToolExecution = {
+              id: toolCallID || `${event.data?.tool_name || 'tool'}-${Date.now()}`,
+              tool: String(event.data?.tool_name || 'unknown_tool'),
+              status,
+              message: String(event.data?.display_name || event.data?.tool_name || 'Tool'),
+              startTime: new Date(),
+              endTime: new Date(),
+              details: event.data,
+              arguments: event.data?.arguments != null ? String(event.data.arguments) : undefined,
+              result: result || error,
+            };
+            return {
+              ...prev,
+              toolExecutions: [...prev.toolExecutions, fallbackExecution],
+              logs: [...prev.logs, logEntry]
+            };
+          }
+
+          return { ...prev, toolExecutions: updatedExecutions, logs: [...prev.logs, logEntry] };
+        });
+        debugLog('[tool] Tool end:', event.data?.tool_name, event.data?.status);
+        break;
+
+      case 'agent_message':
+        {
+          // Handle agent system messages from the backend
+          let category = String(event.data?.category || 'info');
+          const message = String(event.data?.message || '');
+
+          // Clean ANSI codes from the message
+          const cleanedMsg = message.replace(new RegExp(String.fromCharCode(27) + '\\[[0-9;]*[mGKHJABCD]', 'g'), '').trim();
+
+          // Auto-classify info messages by content pattern so important ones render in chat
+          if (category === 'info') {
+            if (/^\[FAIL\]|\[!!\]/.test(cleanedMsg)) {
+              category = 'error';
+            } else if (/^\[WARN\]|\[~\]|\[!\]/.test(cleanedMsg)) {
+              category = 'warning';
+            } else if (/^\[OK\]|\[edit\]|\[chart\]/.test(cleanedMsg)) {
+              category = 'info_rendered'; // meaningful info that should render
+            }
+          }
+
+          if (category === 'tool_log' && cleanedMsg) {
+            // Tool log: add to toolExecutions for side panel display
+            logEntry.category = 'tool';
+            logEntry.level = 'info';
+
+            const toolName = String(event.data?.action || 'tool');
+            const toolTarget = String(event.data?.target || '');
+            const displayName = toolTarget ? `${toolName} ${toolTarget}` : toolName;
+
+            setState(prev => {
+              // Avoid duplicate tool_log entries for the same tool in the same iteration
+              const lastTool = prev.toolExecutions[prev.toolExecutions.length - 1];
+              const toolLogMessage = `AgentLog: ${displayName}`;
+              const isDuplicate = lastTool &&
+                lastTool.tool === toolName &&
+                lastTool.message === toolLogMessage &&
+                !lastTool.endTime; // Still active, don't add duplicate
+
+              if (isDuplicate) {
+                return { ...prev, logs: [...prev.logs, logEntry] };
+              }
+
+              const newTool: ToolExecution = {
+                id: `toollog-${Date.now()}`,
+                tool: toolName,
+                status: 'running',
+                message: toolLogMessage,
+                startTime: new Date(),
+              };
+              return {
+                ...prev,
+                toolExecutions: [...prev.toolExecutions, newTool],
+                logs: [...prev.logs, logEntry]
+              };
+            });
+          } else if (category === 'warning' || category === 'error') {
+            // Warning/error messages: append to the current assistant message's reasoning field
+            logEntry.category = 'system';
+            logEntry.level = category === 'error' ? 'error' : 'warning';
+
+            setState(prev => {
+              const newMessages = [...prev.messages];
+              const lastMessage = newMessages[newMessages.length - 1];
+              if (lastMessage && lastMessage.type === 'assistant') {
+                // Append with emoji prefix to separate from LLM content
+                const prefixedMsg = category === 'error'
+                  ? `⚠️ ${cleanedMsg}`
+                  : `📝 ${cleanedMsg}`;
+                newMessages[newMessages.length - 1] = {
+                  ...lastMessage,
+                  reasoning: (lastMessage.reasoning || '') + prefixedMsg + '\n'
+                };
+              }
+              return { ...prev, messages: newMessages, logs: [...prev.logs, logEntry] };
+            });
+          } else if (category === 'info_rendered' && cleanedMsg) {
+            // Meaningful info messages (auto-classified by pattern):
+            // render them in the reasoning section so the user can see them
+            logEntry.category = 'system';
+            logEntry.level = 'info';
+
+            setState(prev => {
+              const newMessages = [...prev.messages];
+              const lastMessage = newMessages[newMessages.length - 1];
+              if (lastMessage && lastMessage.type === 'assistant') {
+                newMessages[newMessages.length - 1] = {
+                  ...lastMessage,
+                  reasoning: (lastMessage.reasoning || '') + `ℹ️ ${cleanedMsg}\n`
+                };
+              }
+              return { ...prev, messages: newMessages, logs: [...prev.logs, logEntry] };
+            });
+          }
+          // For plain 'info' (unclassified): silently skip rendering in WebUI.
+          // These include blank lines, iteration markers, context pruning messages, etc.
+          // The meaningful assistant content comes through stream_chunk events.
+          break;
+        }
+
+      case 'todo_update':
+        logEntry.category = 'tool';
+        logEntry.level = 'info';
+        const rawTodos = event.data?.todos;
+        const normalizedTodos = Array.isArray(rawTodos)
+          ? rawTodos.map((t: any) => ({
+              id: String(t.id || ''),
+              content: String(t.content || ''),
+              status: (['pending', 'in_progress', 'completed', 'cancelled'].includes(t.status) ? t.status : 'pending') as 'pending' | 'in_progress' | 'completed' | 'cancelled',
+            }))
+          : [];
+        setState(prev => ({
+          ...prev,
+          currentTodos: normalizedTodos,
+          logs: [...prev.logs, logEntry]
+        }));
         break;
 
       case 'tool_execution':

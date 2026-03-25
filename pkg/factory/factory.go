@@ -57,7 +57,7 @@ func (t *TestClient) SendChatRequest(messages []api.Message, tools []api.Tool, r
 
 func (t *TestClient) SendChatRequestStream(messages []api.Message, tools []api.Tool, reasoning string, callback api.StreamCallback) (*api.ChatResponse, error) {
 	// Simple streaming simulation
-	callback("Test response from mock provider")
+	callback("Test response from mock provider", "assistant_text")
 	return t.SendChatRequest(messages, tools, reasoning)
 }
 

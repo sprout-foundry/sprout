@@ -1244,3 +1244,61 @@
   min-height: 0;
   padding-right: 2px;
 }
+
+/* ── Reasoning/Thinking Content ───────────────────────────────── */
+.reasoning-block {
+  margin-bottom: 12px;
+  border: 1px solid var(--border-color-light, #e2e8f0);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-secondary, #f8fafc);
+}
+
+.reasoning-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary, #64748b);
+  user-select: none;
+  transition: background-color 0.15s ease;
+}
+
+.reasoning-summary:hover {
+  background: var(--bg-hover, #f1f5f9);
+}
+
+.reasoning-icon {
+  font-size: 14px;
+}
+
+.reasoning-toggle {
+  margin-left: auto;
+  font-size: 10px;
+  transition: transform 0.2s ease;
+}
+
+.reasoning-block[open] .reasoning-toggle {
+  transform: rotate(90deg);
+}
+
+.reasoning-content {
+  padding: 0 12px 12px 12px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-tertiary, #94a3b8);
+  border-top: 1px solid var(--border-color-light, #e2e8f0);
+  margin-top: 0;
+  padding-top: 12px;
+}
+
+.reasoning-content pre {
+  background: var(--bg-tertiary, #f1f5f9);
+  padding: 8px;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-size: 12px;
+}

@@ -193,7 +193,7 @@ func TestOllamaLocalClientStreamingEmitsChunks(t *testing.T) {
 	require.NoError(t, err)
 
 	var chunks []string
-	resp, err := client.SendChatRequestStream([]Message{{Role: "user", Content: "hi"}}, nil, "", func(content string) {
+	resp, err := client.SendChatRequestStream([]Message{{Role: "user", Content: "hi"}}, nil, "", func(content string, contentType string) {
 		chunks = append(chunks, content)
 	})
 	require.NoError(t, err)
@@ -280,7 +280,7 @@ func TestOllamaLocalClientStreamingToolCalls(t *testing.T) {
 	require.NoError(t, err)
 
 	var chunks []string
-	resp, err := client.SendChatRequestStream([]Message{{Role: "user", Content: "hi"}}, nil, "", func(content string) {
+	resp, err := client.SendChatRequestStream([]Message{{Role: "user", Content: "hi"}}, nil, "", func(content string, contentType string) {
 		chunks = append(chunks, content)
 	})
 	require.NoError(t, err)

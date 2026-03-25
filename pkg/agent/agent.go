@@ -115,6 +115,11 @@ type Agent struct {
 	// Event system
 	eventBus *events.EventBus // Event bus for real-time UI updates
 
+	outputRouter *OutputRouter // Single routing layer for all output (terminal + webui)
+
+	// Security approval system (webui fallback when stdin unavailable)
+	securityApprovalMgr *SecurityApprovalManager
+
 	// Validation system
 	validator *validation.Validator // Syntax validation and async diagnostics
 
@@ -241,16 +246,21 @@ func NewAgentWithModel(model string) (*Agent, error) {
 			falseStopDetectionEnabled: true,
 			conversationPruner:        NewConversationPruner(false),
 			activePersona:             "orchestrator",
+			securityApprovalMgr:       NewSecurityApprovalManager(),
+			outputRouter:              NewOutputRouter(nil, nil),
 		}
 
-		agent.optimizer.SetLLMClient(agent.client, agent.GetProvider(), func(line string) {
-			agent.PrintLineAsync(line)
-		})
+			agent.optimizer.SetLLMClient(agent.client, agent.GetProvider(), func(line string) {
+		agent.PrintLineAsync(line)
+	})
 
-		// Load command history from configuration
-		agent.loadHistoryFromConfig()
+	// Wire output router with the agent reference now that agent exists
+	if agent.outputRouter != nil {
+		agent.outputRouter.agent = agent
+	}
 
-		// Initialize debug log file if debug enabled
+	// Load command history from configuration
+	agent.loadHistoryFromConfig()// Initialize debug log file if debug enabled
 		if agent.debug {
 			if err := agent.initDebugLogger(); err != nil {
 				fmt.Fprintf(os.Stderr, "WARNING: Failed to initialize debug logger: %v\n", err)
@@ -391,11 +401,18 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		commandHistory:            []string{},
 		historyIndex:              -1,
 		activePersona:             "orchestrator",
+		securityApprovalMgr:       NewSecurityApprovalManager(),
+		outputRouter:              NewOutputRouter(nil, nil),
 	}
 
 	agent.optimizer.SetLLMClient(agent.client, agent.GetProvider(), func(line string) {
 		agent.PrintLineAsync(line)
 	})
+
+	// Wire output router with the agent reference now that agent exists
+	if agent.outputRouter != nil {
+		agent.outputRouter.agent = agent
+	}
 
 	// Initialize debug log file if debug enabled
 	if debug {
@@ -557,6 +574,11 @@ func (a *Agent) GetConfig() *configuration.Config {
 // SetEventBus sets the event bus for real-time UI updates and initializes the validator
 func (a *Agent) SetEventBus(eventBus *events.EventBus) {
 	a.eventBus = eventBus
+	if a.outputRouter != nil {
+		a.outputRouter.SetEventBus(eventBus)
+	} else {
+		a.outputRouter = NewOutputRouter(a, eventBus)
+	}
 	// Initialize validator for syntax checking and async diagnostics
 	a.validator = validation.NewValidator(eventBus)
 	a.enablePreWriteValidation = true
@@ -565,6 +587,14 @@ func (a *Agent) SetEventBus(eventBus *events.EventBus) {
 // GetEventBus returns the current event bus
 func (a *Agent) GetEventBus() *events.EventBus {
 	return a.eventBus
+}
+
+// OutputRouter returns the current output router (nil if not initialized)
+func (a *Agent) OutputRouter() *OutputRouter { return a.outputRouter }
+
+// GetSecurityApprovalMgr returns the security approval manager
+func (a *Agent) GetSecurityApprovalMgr() *SecurityApprovalManager {
+	return a.securityApprovalMgr
 }
 
 // publishEvent publishes an event to the event bus if available
@@ -776,6 +806,29 @@ func (a *Agent) PublishQueryProgress(message string, iteration int, tokensUsed i
 // PublishToolExecution publishes tool execution events for real-time updates
 func (a *Agent) PublishToolExecution(toolName, action string, details map[string]interface{}) {
 	a.publishEvent(events.EventTypeToolExecution, events.ToolExecutionEvent(toolName, action, details))
+}
+
+// PublishToolStart publishes a rich tool start event
+func (a *Agent) PublishToolStart(toolName, toolCallID, arguments, displayName, persona string, isSubagent bool, subagentType string) {
+	a.publishEvent(events.EventTypeToolStart, events.ToolStartEvent(toolName, toolCallID, arguments, displayName, persona, isSubagent, subagentType))
+}
+
+// PublishToolEnd publishes a rich tool end event
+func (a *Agent) PublishToolEnd(toolCallID, toolName, status, result, errorMessage string, duration time.Duration) {
+	a.publishEvent(events.EventTypeToolEnd, events.ToolEndEvent(toolCallID, toolName, status, result, errorMessage, duration))
+}
+
+// PublishTodoUpdate publishes a structured todo update event
+func (a *Agent) PublishTodoUpdate(todos []map[string]interface{}) {
+	a.publishEvent(events.EventTypeTodoUpdate, events.TodoUpdateEvent(todos))
+}
+
+// PublishAgentMessage publishes a structured agent system message event.
+// This is the single unified routing point for all agent output.
+// Safe to call even when eventBus is nil (CLI-only mode) — the
+// internal publishEvent method checks for nil before publishing.
+func (a *Agent) PublishAgentMessage(category, message string, extra map[string]interface{}) {
+	a.publishEvent(events.EventTypeAgentMessage, events.AgentMessageEvent(category, message, extra))
 }
 
 // AddToHistory adds a command to the history buffer

@@ -12,6 +12,9 @@ import CommandPalette from './CommandPalette';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { ApiService, LeditInstance } from '../services/api';
 
+const INSTANCE_PID_STORAGE_KEY = 'ledit:webui:instancePid';
+const INSTANCE_SWITCH_RESET_KEY = 'ledit:webui:instanceSwitchReset';
+
 interface ToolExecution {
   id: string;
   tool: string;
@@ -200,8 +203,10 @@ const AppContent: React.FC<AppContentProps> = ({
         setInstances(data.instances || []);
         if (data.desired_host_pid && data.desired_host_pid > 0) {
           setSelectedInstancePID(data.desired_host_pid);
+          window.localStorage.setItem(INSTANCE_PID_STORAGE_KEY, String(data.desired_host_pid));
         } else if (data.active_host_pid && data.active_host_pid > 0) {
           setSelectedInstancePID(data.active_host_pid);
+          window.localStorage.setItem(INSTANCE_PID_STORAGE_KEY, String(data.active_host_pid));
         }
       } catch (error) {
         if (!cancelled) {
@@ -231,6 +236,8 @@ const AppContent: React.FC<AppContentProps> = ({
     setInstanceSwitchError(null);
     setIsSwitchingInstance(true);
     try {
+      window.localStorage.setItem(INSTANCE_PID_STORAGE_KEY, String(pid));
+      window.sessionStorage.setItem(INSTANCE_SWITCH_RESET_KEY, '1');
       await apiService.selectInstance(pid);
       // Full page reload to clear all client-side state (editor buffers,
       // CodeMirror instances, WebSocket connections, chat history, etc.)

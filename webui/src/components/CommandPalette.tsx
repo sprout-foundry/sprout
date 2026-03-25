@@ -284,6 +284,20 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
     onClose();
   }, [onClose, onViewChange, onToggleSidebar, onToggleTerminal, onOpenHotkeysConfig]);
 
+  // Compute selected flat index: skip category headers
+  const navigableIndex = useMemo(() => {
+    if (mode === 'file') return selectedIndex;
+    // Count non-category items up to selectedIndex
+    let count = 0;
+    for (let i = 0; i < flatFilteredItems.length; i++) {
+      if (!flatFilteredItems[i].isCategoryHeader) {
+        if (count === selectedIndex) return i;
+        count++;
+      }
+    }
+    return 0;
+  }, [mode, selectedIndex, flatFilteredItems]);
+
   // Handle text input changes
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -356,7 +370,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
         }
         break;
     }
-  }, [mode, flatFilteredItems, filteredFiles, selectedIndex, rawInput, executeCommand, onClose, onOpenFile]);
+  }, [mode, flatFilteredItems, filteredFiles, selectedIndex, rawInput, executeCommand, onClose, onOpenFile, navigableIndex]);
 
   // Handle overlay click to close
   const handleOverlayClick = useCallback((e: React.MouseEvent) => {
@@ -364,20 +378,6 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
       onClose();
     }
   }, [onClose]);
-
-  // Compute selected flat index: skip category headers
-  const navigableIndex = useMemo(() => {
-    if (mode === 'file') return selectedIndex;
-    // Count non-category items up to selectedIndex
-    let count = 0;
-    for (let i = 0; i < flatFilteredItems.length; i++) {
-      if (!flatFilteredItems[i].isCategoryHeader) {
-        if (count === selectedIndex) return i;
-        count++;
-      }
-    }
-    return 0;
-  }, [mode, selectedIndex, flatFilteredItems]);
 
   if (!isOpen) return null;
 

@@ -16,24 +16,25 @@ import (
 )
 
 var (
-	agentSkipPrompt        bool
-	agentModel             string
-	agentProvider          string
-	agentSessionID         string
-	agentLastSession       bool
-	agentPersona           string
-	agentDryRun            bool
-	maxIterations          int
-	agentNoStreaming       bool
-	agentSystemPromptFile  string
-	agentSystemPrompt      string
-	agentUnsafe            bool
-	agentNoSubagents       bool
-	agentResourceDirectory string
-	agentWorkflowConfig    string
-	agentNoConnectionCheck bool
-	agentTraceDatasetDir   string
-	agentPromptStdin       bool
+	agentSkipPrompt            bool
+	agentModel                 string
+	agentProvider              string
+	agentSessionID             string
+	agentLastSession           bool
+	agentPersona               string
+	agentDryRun                bool
+	maxIterations              int
+	agentNoStreaming           bool
+	agentShowReasoningTerminal bool
+	agentSystemPromptFile      string
+	agentSystemPrompt          string
+	agentUnsafe                bool
+	agentNoSubagents           bool
+	agentResourceDirectory     string
+	agentWorkflowConfig        string
+	agentNoConnectionCheck     bool
+	agentTraceDatasetDir       string
+	agentPromptStdin           bool
 )
 
 func createChatAgent() (*agent.Agent, error) {
@@ -86,6 +87,7 @@ func init() {
 	agentCmd.Flags().BoolVar(&agentDryRun, "dry-run", false, "Run tools in simulation mode (enhanced safety)")
 	agentCmd.Flags().IntVar(&maxIterations, "max-iterations", 1000, "Maximum iterations before stopping (default: 1000)")
 	agentCmd.Flags().BoolVar(&agentNoStreaming, "no-stream", false, "Disable streaming mode (useful for scripts and pipelines) (or set LEDIT_NO_STREAM=1)")
+	agentCmd.Flags().BoolVar(&agentShowReasoningTerminal, "show-reasoning-terminal", false, "Render reasoning stream chunks in terminal output (default: hidden; WebUI still receives reasoning)")
 	agentCmd.Flags().StringVar(&agentSystemPromptFile, "system-prompt", "", "File path containing custom system prompt")
 	agentCmd.Flags().StringVar(&agentSystemPrompt, "system-prompt-str", "", "Direct system prompt string")
 	agentCmd.Flags().BoolVar(&agentUnsafe, "unsafe", false, "UNSAFE MODE: Bypass most security checks (still blocks critical system operations)")
@@ -101,6 +103,10 @@ func init() {
 		// Check for LEDIT_NO_STREAM environment variable
 		if os.Getenv("LEDIT_NO_STREAM") == "1" || os.Getenv("LEDIT_NO_STREAM") == "true" {
 			agentNoStreaming = true
+		}
+		// Check for LEDIT_SHOW_REASONING_TERMINAL environment variable
+		if os.Getenv("LEDIT_SHOW_REASONING_TERMINAL") == "1" || strings.EqualFold(os.Getenv("LEDIT_SHOW_REASONING_TERMINAL"), "true") {
+			agentShowReasoningTerminal = true
 		}
 		// Check for LEDIT_NO_SUBAGENTS environment variable
 		if os.Getenv("LEDIT_NO_SUBAGENTS") == "1" || os.Getenv("LEDIT_NO_SUBAGENTS") == "true" {

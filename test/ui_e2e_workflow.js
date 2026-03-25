@@ -1,9 +1,64 @@
 const { chromium } = require('playwright');
+const http = require('http');
+const https = require('https');
 
-const BASE_URL = process.env.LEDIT_WEBUI_URL || 'http://localhost:54331';
+const DEFAULT_BASE_URLS = ['http://localhost:54421', 'http://localhost:54331'];
 
 function now() {
   return new Date().toISOString();
+}
+
+function getConfiguredUrls() {
+  const env = process.env.LEDIT_WEBUI_URL;
+  if (!env || !env.trim()) {
+    return DEFAULT_BASE_URLS;
+  }
+  return env
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function checkUrlReachable(url) {
+  return new Promise((resolve) => {
+    try {
+      const parsed = new URL(url);
+      const client = parsed.protocol === 'https:' ? https : http;
+      const req = client.request(
+        {
+          hostname: parsed.hostname,
+          port: parsed.port,
+          path: '/',
+          method: 'GET',
+          timeout: 3000,
+        },
+        (res) => {
+          resolve(res.statusCode && res.statusCode < 500);
+          res.resume();
+        }
+      );
+      req.on('error', () => resolve(false));
+      req.on('timeout', () => {
+        req.destroy();
+        resolve(false);
+      });
+      req.end();
+    } catch (_e) {
+      resolve(false);
+    }
+  });
+}
+
+async function resolveBaseUrl() {
+  const candidates = getConfiguredUrls();
+  for (const url of candidates) {
+    // eslint-disable-next-line no-await-in-loop
+    const ok = await checkUrlReachable(url);
+    if (ok) {
+      return url;
+    }
+  }
+  return candidates[0];
 }
 
 async function run() {
@@ -11,6 +66,9 @@ async function run() {
   const pageErrors = [];
   const consoleErrors = [];
   const checks = [];
+
+  const baseUrl = await resolveBaseUrl();
+  console.log(`[INFO] Using WebUI URL: ${baseUrl}`);
 
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
@@ -42,9 +100,9 @@ async function run() {
   };
 
   await check('Load WebUI shell', async () => {
-    const response = await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    const response = await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
     if (!response || !response.ok()) {
-      throw new Error(`Failed to load ${BASE_URL}`);
+      throw new Error(`Failed to load ${baseUrl}`);
     }
     await page.locator('.navigation-bar').waitFor({ state: 'visible', timeout: 10000 });
   });

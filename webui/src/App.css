@@ -681,3 +681,108 @@ html, body, #root {
     justify-content: center;
   }
 }
+
+.onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, var(--bg-primary) 78%, #000 22%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5000;
+  padding: 16px;
+}
+
+.onboarding-card {
+  width: min(520px, 100%);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.onboarding-card h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 20px;
+}
+
+.onboarding-card p {
+  margin: 0 0 8px 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.onboarding-card label {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.onboarding-card select,
+.onboarding-card input {
+  width: 100%;
+  min-height: 38px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  padding: 0 12px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+}
+
+.onboarding-note {
+  color: var(--accent-success);
+  font-size: 13px;
+  background: var(--color-success-bg);
+  border: 1px solid color-mix(in srgb, var(--accent-success) 40%, transparent);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+}
+
+.onboarding-error {
+  color: var(--accent-error);
+  font-size: 13px;
+  background: var(--color-error-bg);
+  border: 1px solid color-mix(in srgb, var(--accent-error) 40%, transparent);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+}
+
+.onboarding-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.onboarding-actions button {
+  min-height: 34px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  padding: 0 12px;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 14px;
+}
+
+.onboarding-actions button.primary {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: var(--accent-fg);
+}
+
+.onboarding-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

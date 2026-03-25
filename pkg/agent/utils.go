@@ -112,6 +112,16 @@ func (a *Agent) printLineInternalLocked(text string, manageLock bool) {
 		message += "\n"
 	}
 
+	// Route through OutputRouter (single source: publishes event + writes terminal)
+	if a.outputRouter != nil {
+		a.outputRouter.RouteAgentMessage("info", message, nil)
+		return
+	}
+
+	// Fallback for when router isn't initialized yet
+	a.PublishAgentMessage("info", message, nil)
+
+	// Terminal output: if streamingCallback is set, route through it
 	if a.streamingEnabled && a.streamingCallback != nil {
 		a.streamingCallback(message)
 		return
@@ -122,14 +132,6 @@ func (a *Agent) printLineInternalLocked(text string, manageLock bool) {
 		defer a.outputMutex.Unlock()
 	}
 
-	// In CI, avoid cursor control sequences
-	if os.Getenv("LEDIT_CI_MODE") == "1" || os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
-		fmt.Print(message)
-		return
-	}
-
-	// Clear current line, then print the message
-	fmt.Print("\r\033[K")
 	fmt.Print(message)
 }
 
@@ -257,41 +259,21 @@ func (a *Agent) LogToolCall(tc api.ToolCall, phase string) {
 }
 
 // ToolLog formats and prints a tool call message immediately for user visibility.
-// This prints synchronously (not queued) to ensure the tool call information appears
-// exactly when the operation starts, not after buffering/queuing delays.
+// Routes through OutputRouter for single-sourced event+terminal output.
 // Format: [4 - 30%] read file filename.go
 func (a *Agent) ToolLog(action string, target string) {
 	if a == nil {
 		return
 	}
 
-	// Use muted gray colors for tool call logging - both very close in darkness
-	const darkGray = "\033[90m"                  // Bright black (darker gray) for tool call info
-	const slightlyLighterGray = "\033[38;5;246m" // Slightly lighter gray for the executed portion
-	const reset = "\033[0m"
-
-	// Calculate context usage percentage
-	var contextPercent string
-	if a.maxContextTokens > 0 && a.currentContextTokens > 0 {
-		percentage := float64(a.currentContextTokens) / float64(a.maxContextTokens) * 100
-		contextPercent = fmt.Sprintf(" - %.0f%%", percentage)
-	} else {
-		contextPercent = ""
+	// Route through OutputRouter (single source: publishes event + writes terminal)
+	if a.outputRouter != nil {
+		a.outputRouter.RouteToolLog(action, target)
+		return
 	}
 
-	// Format: [4 - 30%] read file filename.go
-	iterInfo := fmt.Sprintf("[%d%s]", a.currentIteration, contextPercent)
-
-	var message string
-	if target != "" {
-		// Add newline before tool call to put it on its own line
-		// Use darker gray for tool call info and slightly lighter gray for target
-		message = fmt.Sprintf("%s%s %s%s %s%s%s\n", darkGray, iterInfo, action, reset, slightlyLighterGray, target, reset)
-	} else {
-		// Add newline before tool call to put it on its own line
-		message = fmt.Sprintf("%s%s %s%s\n", darkGray, iterInfo, action, reset)
-	}
-
-	// Print immediately - bypass the async queue to ensure it appears at the right time
-	a.printLineInternal(message)
+	// Fallback for when router isn't initialized yet
+	message := fmt.Sprintf("%s %s", action, target)
+	a.PublishAgentMessage("tool_log", message, nil)
+	fmt.Print(message + "\n")
 }

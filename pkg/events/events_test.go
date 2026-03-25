@@ -212,9 +212,10 @@ func TestFileChangedEvent(t *testing.T) {
 }
 
 func TestStreamChunkEvent(t *testing.T) {
-	event := StreamChunkEvent("hello world")
+	event := StreamChunkEvent("hello world", "assistant_text")
 
 	assert.Equal(t, "hello world", event["chunk"])
+	assert.Equal(t, "assistant_text", event["content_type"])
 }
 
 func TestMetricsUpdateEvent(t *testing.T) {
@@ -225,4 +226,21 @@ func TestMetricsUpdateEvent(t *testing.T) {
 	assert.Equal(t, 4096, event["max_context_tokens"])
 	assert.Equal(t, 3, event["iteration"])
 	assert.Equal(t, 0.15, event["total_cost"])
+}
+
+func TestAgentMessageEvent(t *testing.T) {
+	extra := map[string]interface{}{"key": "value"}
+	event := AgentMessageEvent("info", "test message", extra)
+
+	assert.Equal(t, "info", event["category"])
+	assert.Equal(t, "test message", event["message"])
+	assert.Equal(t, "value", event["key"])
+}
+
+func TestAgentMessageEventNilExtra(t *testing.T) {
+	event := AgentMessageEvent("warning", "caution", nil)
+
+	assert.Equal(t, "warning", event["category"])
+	assert.Equal(t, "caution", event["message"])
+	assert.Len(t, event, 2) // Only category and message
 }

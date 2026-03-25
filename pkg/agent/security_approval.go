@@ -1,0 +1,88 @@
+package agent
+
+import (
+	"fmt"
+	"sync"
+
+	"github.com/alantheprice/ledit/pkg/events"
+)
+
+// SecurityApprovalManager coordinates security approval requests between
+// the agent and the webui. It allows the agent to block waiting for a user
+// response from the webui when stdin is unavailable.
+type SecurityApprovalManager struct {
+	mu        sync.Mutex
+	pending   map[string]chan bool // requestID -> response channel
+}
+
+// NewSecurityApprovalManager creates a new security approval manager.
+func NewSecurityApprovalManager() *SecurityApprovalManager {
+	return &SecurityApprovalManager{
+		pending: make(map[string]chan bool),
+	}
+}
+
+// nextRequestID generates a unique request ID.
+var nextRequestID int64
+var requestIDMu sync.Mutex
+
+func generateRequestID() string {
+	requestIDMu.Lock()
+	defer requestIDMu.Unlock()
+	nextRequestID++
+	return fmt.Sprintf("sec_%d", nextRequestID)
+}
+
+// RequestApproval publishes a security approval event to the event bus and
+// blocks until the webui responds with an approval or rejection.
+// Returns true if approved, false if rejected.
+// If the event bus is nil, returns false (reject for safety).
+func (sam *SecurityApprovalManager) RequestApproval(eventBus *events.EventBus, toolName, riskLevel, reasoning string) bool {
+	if eventBus == nil {
+		return false
+	}
+
+	requestID := generateRequestID()
+	responseCh := make(chan bool, 1)
+
+	sam.mu.Lock()
+	sam.pending[requestID] = responseCh
+	sam.mu.Unlock()
+
+	defer func() {
+		sam.mu.Lock()
+		delete(sam.pending, requestID)
+		sam.mu.Unlock()
+	}()
+
+	// Publish the approval request event to the webui
+	eventBus.Publish(events.EventTypeSecurityApprovalRequest, events.SecurityApprovalRequestEvent(
+		requestID, toolName, riskLevel, reasoning,
+	))
+
+	// Block waiting for response
+	approved, ok := <-responseCh
+	if !ok {
+		return false // channel closed without response
+	}
+	return approved
+}
+
+// RespondToApproval handles a response from the webui for a pending security request.
+// Returns true if the request existed and was responded to, false otherwise.
+func (sam *SecurityApprovalManager) RespondToApproval(requestID string, approved bool) bool {
+	sam.mu.Lock()
+	ch, exists := sam.pending[requestID]
+	sam.mu.Unlock()
+
+	if !exists {
+		return false
+	}
+
+	select {
+	case ch <- approved:
+		return true
+	default:
+		return false
+	}
+}

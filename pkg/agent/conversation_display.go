@@ -2,7 +2,6 @@ package agent
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"golang.org/x/text/cases"
@@ -13,27 +12,19 @@ import (
 func (ch *ConversationHandler) displayIntermediateResponse(content string) {
 	content = strings.TrimSpace(content)
 	if len(content) > 0 {
-		if ch.agent.streamingEnabled {
-			// During streaming, content has already been displayed in real-time
-			// But we need to ensure proper spacing and formatting after tool calls
-			// Add a newline to separate from tool execution output
-			fmt.Printf("\n")
-		} else {
-			// Display thinking message for non-streaming mode
-			// In CI mode, don't use cursor control sequences
-			if os.Getenv("LEDIT_CI_MODE") == "1" || os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
-				fmt.Printf("[thought] %s\n", content)
-			} else {
-				fmt.Printf("\r\033[K[thought] %s\n", content)
-			}
+		if !ch.agent.streamingEnabled {
+			// Non-streaming mode: show thought indicator
+			ch.agent.PrintLine(fmt.Sprintf("[thought] %s", content))
 		}
+		// In streaming mode, content has already been displayed in real-time
+		// via the streaming callback, so nothing extra is needed.
 	}
 }
 
 // displayFinalResponse shows the final assistant response
 func (ch *ConversationHandler) displayFinalResponse(content string) {
 	if !ch.agent.streamingEnabled {
-		fmt.Printf("%s\n", content)
+		ch.agent.PrintLine(content)
 	}
 }
 

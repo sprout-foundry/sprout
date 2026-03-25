@@ -517,7 +517,10 @@ class ApiService {
     }>;
   }> {
     try {
-      const response = await fetch('/api/history/changelog');
+      const cacheBuster = Date.now();
+      const response = await fetch(`/api/history/changelog?_=${cacheBuster}`, {
+        cache: 'no-store',
+      });
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -543,7 +546,10 @@ class ApiService {
     }>;
   }> {
     try {
-      const response = await fetch('/api/history/changes');
+      const cacheBuster = Date.now();
+      const response = await fetch(`/api/history/changes?_=${cacheBuster}`, {
+        cache: 'no-store',
+      });
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -573,7 +579,11 @@ class ApiService {
     };
   }> {
     try {
-      const response = await fetch(`/api/history/revision?revision_id=${encodeURIComponent(revisionId)}`);
+      const cacheBuster = Date.now();
+      const response = await fetch(
+        `/api/history/revision?revision_id=${encodeURIComponent(revisionId)}&_=${cacheBuster}`,
+        { cache: 'no-store' },
+      );
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }

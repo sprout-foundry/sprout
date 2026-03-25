@@ -17,15 +17,20 @@ type UIEvent struct {
 
 // Common event types
 const (
-	EventTypeQueryStarted   = "query_started"
-	EventTypeQueryProgress  = "query_progress"
-	EventTypeQueryCompleted = "query_completed"
-	EventTypeError          = "error"
-	EventTypeToolExecution  = "tool_execution"
-	EventTypeFileChanged    = "file_changed"
-	EventTypeStreamChunk    = "stream_chunk"
-	EventTypeMetricsUpdate  = "metrics_update"
-	EventTypeValidation     = "validation"
+	EventTypeQueryStarted        = "query_started"
+	EventTypeQueryProgress       = "query_progress"
+	EventTypeQueryCompleted      = "query_completed"
+	EventTypeError               = "error"
+	EventTypeToolExecution       = "tool_execution"
+	EventTypeToolStart           = "tool_start"
+	EventTypeToolEnd             = "tool_end"
+	EventTypeTodoUpdate          = "todo_update"
+	EventTypeFileChanged         = "file_changed"
+	EventTypeStreamChunk         = "stream_chunk"
+	EventTypeMetricsUpdate       = "metrics_update"
+	EventTypeValidation          = "validation"
+	EventTypeSecurityApprovalRequest = "security_approval_request"
+	EventTypeAgentMessage        = "agent_message"
 )
 
 // EventBus manages event distribution between CLI and Web UI
@@ -155,10 +160,11 @@ func FileChangedEvent(filePath, action string, content string) map[string]interf
 	}
 }
 
-// StreamChunkEvent creates a stream chunk event
-func StreamChunkEvent(chunk string) map[string]interface{} {
+// StreamChunkEvent creates a stream chunk event with content type
+func StreamChunkEvent(chunk string, contentType string) map[string]interface{} {
 	return map[string]interface{}{
-		"chunk": chunk,
+		"chunk":        chunk,
+		"content_type": contentType,
 	}
 }
 
@@ -181,3 +187,76 @@ func ValidationEvent(filePath string, diagnostics []map[string]interface{}) map[
 		"timestamp":   time.Now().Format(time.RFC3339),
 	}
 }
+
+// ToolStartEvent creates a tool start event with rich metadata
+func ToolStartEvent(toolName, toolCallID, arguments, displayName, persona string, isSubagent bool, subagentType string) map[string]interface{} {
+	data := map[string]interface{}{
+		"tool_name":     toolName,
+		"tool_call_id":  toolCallID,
+		"arguments":     arguments,
+		"display_name":  displayName,
+	}
+	if persona != "" {
+		data["persona"] = persona
+	}
+	if isSubagent {
+		data["is_subagent"] = true
+		if subagentType != "" {
+			data["subagent_type"] = subagentType
+		}
+	}
+	return data
+}
+
+// ToolEndEvent creates a tool end event with result and status
+func ToolEndEvent(toolCallID, toolName, status, result, errorMessage string, duration time.Duration) map[string]interface{} {
+	data := map[string]interface{}{
+		"tool_call_id": toolCallID,
+		"tool_name":    toolName,
+		"status":       status, // "completed" or "failed"
+		"duration_ms":  duration.Milliseconds(),
+	}
+	if result != "" {
+		// Truncate results to 2000 chars for the WebUI - full result stays in the conversation
+		if len(result) > 2000 {
+			data["result"] = result[:2000] + "\n... (truncated)"
+		} else {
+			data["result"] = result
+		}
+	}
+	if errorMessage != "" {
+		data["error"] = errorMessage
+	}
+	return data
+}
+
+// SecurityApprovalRequestEvent creates a security approval request event for the webui
+func SecurityApprovalRequestEvent(requestID, toolName, riskLevel, reasoning string) map[string]interface{} {
+	return map[string]interface{}{
+		"request_id": requestID,
+		"tool_name":  toolName,
+		"risk_level": riskLevel,
+		"reasoning":  reasoning,
+	}
+}
+
+// TodoUpdateEvent creates a todo update event
+func TodoUpdateEvent(todos []map[string]interface{}) map[string]interface{} {
+	return map[string]interface{}{
+		"todos": todos,
+	}
+}
+
+// AgentMessageEvent creates an agent system message event.
+// category: "info", "warning", "error", "tool_log", "thought"
+func AgentMessageEvent(category, message string, extra map[string]interface{}) map[string]interface{} {
+	data := map[string]interface{}{
+		"category": category,
+		"message":  message,
+	}
+	for k, v := range extra {
+		data[k] = v
+	}
+	return data
+}
+

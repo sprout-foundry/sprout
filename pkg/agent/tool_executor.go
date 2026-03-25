@@ -52,8 +52,10 @@ func isSubagentTool(toolName string) bool {
 
 // ToolExecutor handles tool execution logic
 type ToolExecutor struct {
-	agent       *Agent
-	toolIndex   int // Counter for tool execution order within each turn
+	agent        *Agent
+	toolIndex    int    // Counter for tool execution order within each turn
+	idCounter    int64  // Atomic counter for unique tool call ID generation
+	idCounterMu  sync.Mutex
 }
 
 const maxToolFailureMessageChars = 4000 // ~1000 tokens worst-case (4 chars/token heuristic)
@@ -77,10 +79,25 @@ func (te *ToolExecutor) ExecuteTools(toolCalls []api.ToolCall) []api.Message {
 		te.agent.debugLog("[tool] Executing %d tool calls\n", len(toolCalls))
 		for _, tc := range toolCalls {
 			te.agent.LogToolCall(tc, "executing")
-			te.agent.PublishToolExecution(tc.Function.Name, "starting", map[string]interface{}{
-				"tool_call_id": tc.ID,
-				"arguments":    tc.Function.Arguments,
-			})
+			
+			// Extract persona and subagent info from subagent arguments
+			args, _, _ := parseToolArgumentsWithRepair(tc.Function.Arguments)
+			persona := ""
+			isSubagent := isSubagentTool(tc.Function.Name)
+			subagentType := "single"
+			if isSubagent {
+				if p, ok := args["persona"].(string); ok {
+					persona = p
+				}
+				if tc.Function.Name == "run_parallel_subagents" {
+					subagentType = "parallel"
+				}
+			}
+			displayName := formatToolCall(tc)
+			te.agent.PublishToolStart(
+				tc.Function.Name, tc.ID, tc.Function.Arguments,
+				displayName, persona, isSubagent, subagentType,
+			)
 		}
 	}
 
@@ -319,6 +336,9 @@ func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
 
 // executeSingleToolWithIndex executes a single tool call with a specific tool index
 func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIndex int) api.Message {
+	// Capture start time for duration tracking
+	startTime := time.Now()
+	
 	// Single canonical execution log for all tools (including MCP-prefixed tools).
 	te.agent.ToolLog("executing tool", formatToolCall(toolCall))
 	normalizedToolName := te.normalizeToolNameForScheduling(toolCall.Function.Name)
@@ -458,17 +478,17 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 	// Update circuit breaker
 	te.updateCircuitBreaker(normalizedToolName, args)
 
-	// Publish tool execution completion event for real-time UI updates
+	// Publish rich tool end event for real-time UI updates
 	if te.agent != nil {
 		status := "completed"
 		if err != nil {
 			status = "failed"
 		}
-		te.agent.PublishToolExecution(normalizedToolName, status, map[string]interface{}{
-			"tool_call_id": toolCallID,
-			"result":       modelResult,
-			"error":        err,
-		})
+		errorMsg := ""
+		if err != nil {
+			errorMsg = err.Error()
+		}
+		te.agent.PublishToolEnd(toolCallID, normalizedToolName, status, modelResult, errorMsg, time.Since(startTime))
 	}
 
 	return api.Message{
@@ -820,10 +840,15 @@ func (te *ToolExecutor) generateActionKey(toolName string, args map[string]inter
 
 // GenerateToolCallID creates a unique tool call ID if one is missing
 func (te *ToolExecutor) GenerateToolCallID(toolName string) string {
-	// Use a simple timestamp + tool name pattern to create a unique ID
+	// Use a monotonic counter to guarantee uniqueness even under parallel execution
+	te.idCounterMu.Lock()
+	te.idCounter++
+	seq := te.idCounter
+	te.idCounterMu.Unlock()
+
 	timestamp := getCurrentTime()
 	sanitizedName := strings.ReplaceAll(toolName, "_", "")
-	return fmt.Sprintf("call_%s_%d", sanitizedName, timestamp)
+	return fmt.Sprintf("call_%s_%d_%d", sanitizedName, timestamp, seq)
 }
 
 // getCurrentTime returns the current time (abstracted for testing)
@@ -971,24 +996,40 @@ func (te *ToolExecutor) emitTodoChecklistUpdate(before, after []tools.TodoItem) 
 		}
 	}
 
-	te.agent.PrintLine("")
-	te.agent.PrintLine(fmt.Sprintf("[edit] Todo update: %d total | [ ] %d pending | [~] %d in progress | [x] %d completed | [-] %d cancelled",
-		len(after), pending, inProgress, completed, cancelled))
-	if len(changed) == 0 {
-		te.agent.PrintLine("   No checklist changes detected.")
-		te.agent.PrintLine("")
-		return
+	// Publish structured todo update event for WebUI
+	var todoItems []map[string]interface{}
+	for _, t := range after {
+		todoItems = append(todoItems, map[string]interface{}{
+			"id":      t.ID,
+			"content": t.Content,
+			"status":  t.Status,
+		})
 	}
+	te.agent.PublishTodoUpdate(todoItems)
 
-	maxLines := 8
-	for i, line := range changed {
-		if i >= maxLines {
-			te.agent.PrintLine(fmt.Sprintf("   ... and %d more changes", len(changed)-maxLines))
-			break
+	// In streaming mode, skip text output — the WebUI receives structured
+	// todo_update events and does not need the inline text trace.
+	if !te.agent.IsStreamingEnabled() {
+		te.agent.PrintLine("")
+		te.agent.PrintLine(fmt.Sprintf("[edit] Todo update: %d total | [ ] %d pending | [~] %d in progress | [x] %d completed | [-] %d cancelled",
+			len(after), pending, inProgress, completed, cancelled))
+
+		if len(changed) == 0 {
+			te.agent.PrintLine("   No checklist changes detected.")
+			te.agent.PrintLine("")
+			return
 		}
-		te.agent.PrintLine("   " + line)
+
+		maxLines := 8
+		for i, line := range changed {
+			if i >= maxLines {
+				te.agent.PrintLine(fmt.Sprintf("   ... and %d more changes", len(changed)-maxLines))
+				break
+			}
+			te.agent.PrintLine("   " + line)
+		}
+		te.agent.PrintLine("")
 	}
-	te.agent.PrintLine("")
 }
 
 func todoStatusSymbol(status string) string {

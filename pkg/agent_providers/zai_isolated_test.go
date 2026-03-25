@@ -65,9 +65,9 @@ func TestZAIProviderIsolated(t *testing.T) {
 
 		start := time.Now()
 		var streamContent string
-		_, err := provider.SendChatRequestStream(messages, nil, "", func(chunk string) {
+		_, err := provider.SendChatRequestStream(messages, nil, "", func(chunk string, contentType string) {
 			streamContent += chunk
-			t.Logf("[pkg] Chunk: %q", chunk)
+			t.Logf("[pkg] Chunk (%s): %q", contentType, chunk)
 		})
 		if err != nil {
 			t.Fatalf("Streaming request failed: %v", err)
@@ -124,7 +124,7 @@ func TestZAIProviderDirect(t *testing.T) {
 	fmt.Println("[~] Testing streaming...")
 	start = time.Now()
 	var streamContent string
-	resp, err = provider.SendChatRequestStream(messages, nil, "", func(chunk string) {
+	resp, err = provider.SendChatRequestStream(messages, nil, "", func(chunk string, contentType string) {
 		streamContent += chunk
 		fmt.Printf("[thought] %s", chunk)
 	})

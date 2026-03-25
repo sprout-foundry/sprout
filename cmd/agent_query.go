@@ -308,26 +308,12 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 
 	startTime := time.Now()
 
-	// Process the query using CI output handler for clean output
-	outputHandler := console.NewCIOutputHandler(os.Stdout)
-
-	// Set up progress callback
+	// Process the query
+	// Note: streaming callback is already set by SetupAgentEvents (called once at startup).
+	// The OutputRouter's RouteStreamChunk handles both event publishing and terminal output.
+	// StatsUpdateCallback is set once; subsequent calls overwrite which is fine.
 	chatAgent.SetStatsUpdateCallback(func(totalTokens int, totalCost float64) {
-		// Update the CI output handler metrics
-		outputHandler.UpdateMetrics(
-			totalTokens,
-			chatAgent.GetCurrentContextTokens(),
-			chatAgent.GetMaxContextTokens(),
-			chatAgent.GetCurrentIteration(),
-			totalCost,
-		)
-
-		// Print progress if in CI mode
-		if outputHandler.ShouldShowProgress() {
-			outputHandler.PrintProgress()
-		}
-
-		// Also publish to event bus for web UI
+		// Publish metrics to event bus for WebUI
 		eventBus.Publish(events.EventTypeMetricsUpdate, events.MetricsUpdateEvent(
 			totalTokens,
 			chatAgent.GetCurrentContextTokens(),
@@ -336,15 +322,6 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 			totalCost,
 		))
 	})
-
-	// Replace streaming callback for direct output (unless disabled)
-	if !agentNoStreaming {
-		chatAgent.EnableStreaming(func(chunk string) {
-			outputHandler.Write([]byte(chunk))
-			eventBus.Publish(events.EventTypeStreamChunk, events.StreamChunkEvent(chunk))
-		})
-		defer chatAgent.DisableStreaming()
-	}
 
 	// Run agent processing in a goroutine to support cancellation
 	type result struct {

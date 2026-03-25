@@ -387,8 +387,9 @@ func (ws *ReactWebServer) handleAPIGitDiscard(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Discard changes (checkout from HEAD)
-	cmd := ws.gitCommand("checkout", "--", req.Path)
+	// Discard changes / restore deleted file — use git restore which works for
+	// both modified and deleted working-tree files.
+	cmd := ws.gitCommand("restore", "--", req.Path)
 	if err := cmd.Run(); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to discard changes: %v", err), http.StatusInternalServerError)
 		return

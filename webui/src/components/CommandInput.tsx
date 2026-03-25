@@ -525,15 +525,11 @@ const CommandInput: React.FC<CommandInputProps> = ({
       if (!window.confirm('A request is currently processing. Stop it and start a new session?')) {
         return;
       }
-      if (onQueue) {
-        onQueue('/clear');
-      } else {
-        commandRef('/clear');
-      }
+      commandRef('/clear');
       return;
     }
     commandRef('/clear');
-  }, [isProcessing, commandRef, onQueue]);
+  }, [isProcessing, commandRef]);
 
   const handleCompositionStart = () => {
     // Prevent Enter key from sending during IME composition

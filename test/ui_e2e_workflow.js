@@ -10,6 +10,7 @@ async function run() {
   const failures = [];
   const pageErrors = [];
   const consoleErrors = [];
+  const checks = [];
 
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
@@ -29,6 +30,7 @@ async function run() {
   });
 
   const check = async (name, fn) => {
+    checks.push(name);
     try {
       await fn();
       console.log(`[PASS] ${name}`);
@@ -45,6 +47,90 @@ async function run() {
       throw new Error(`Failed to load ${BASE_URL}`);
     }
     await page.locator('.navigation-bar').waitFor({ state: 'visible', timeout: 10000 });
+  });
+
+  await check('Provider/model change emits atomic model_change payload', async () => {
+    await page.evaluate(() => {
+      if (window.__leditWsCaptureInstalled) {
+        window.__leditWsSends = [];
+        return;
+      }
+
+      window.__leditWsSends = [];
+      window.__leditWsCaptureInstalled = true;
+      const originalSend = window.WebSocket.prototype.send;
+      window.WebSocket.prototype.send = function patchedSend(data) {
+        try {
+          window.__leditWsSends.push(typeof data === 'string' ? data : String(data));
+        } catch (_e) {}
+        return originalSend.call(this, data);
+      };
+    });
+
+    // Open settings area where provider/model selectors live.
+    await page.getByRole('button', { name: 'Settings' }).click();
+    const providerSelect = page.locator('#provider-select');
+    const modelSelect = page.locator('#model-select');
+    await providerSelect.waitFor({ state: 'visible', timeout: 8000 });
+    await modelSelect.waitFor({ state: 'visible', timeout: 8000 });
+
+    const selectedProvider = await providerSelect.inputValue();
+    const providerOptions = await providerSelect.locator('option').allTextContents();
+    if (providerOptions.length === 0) {
+      throw new Error('No provider options available');
+    }
+
+    // Pick a different provider if available, otherwise keep current.
+    const providerValues = await providerSelect.locator('option').evaluateAll((opts) =>
+      opts.map((o) => o.getAttribute('value')).filter(Boolean)
+    );
+    const targetProvider = providerValues.find((v) => v !== selectedProvider) || selectedProvider;
+    if (!targetProvider) {
+      throw new Error('No valid provider value available');
+    }
+    await providerSelect.selectOption(targetProvider);
+    await page.waitForTimeout(150);
+
+    // Force an explicit model change action.
+    const currentModel = await modelSelect.inputValue();
+    const modelValues = await modelSelect.locator('option').evaluateAll((opts) =>
+      opts.map((o) => o.getAttribute('value')).filter(Boolean)
+    );
+    const targetModel = modelValues.find((v) => v !== currentModel) || currentModel;
+    if (!targetModel) {
+      throw new Error('No model options available');
+    }
+    await modelSelect.selectOption(targetModel);
+    await page.waitForTimeout(200);
+
+    const capture = await page.evaluate(() => {
+      const raw = Array.isArray(window.__leditWsSends) ? window.__leditWsSends : [];
+      const parsed = raw
+        .map((entry) => {
+          try {
+            return JSON.parse(entry);
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean);
+      const modelChange = parsed.reverse().find((evt) => evt.type === 'model_change');
+      return modelChange || null;
+    });
+
+    if (!capture) {
+      throw new Error('No model_change websocket event captured');
+    }
+
+    if (!capture.data || typeof capture.data.provider !== 'string' || !capture.data.provider.trim()) {
+      throw new Error('model_change event missing provider field');
+    }
+    if (!capture.data.model || capture.data.model !== targetModel) {
+      throw new Error(`model_change event model mismatch (expected ${targetModel})`);
+    }
+    if (capture.data.provider !== targetProvider) {
+      throw new Error(`model_change provider mismatch (expected ${targetProvider}, got ${capture.data.provider})`);
+    }
   });
 
   await check('WebSocket connected status', async () => {
@@ -72,6 +158,50 @@ async function run() {
     }, { timeout: 15000 });
 
     await page.getByLabel('user message').filter({ hasText: prompt }).first().waitFor({ timeout: 15000 });
+  });
+
+  await check('New Session clears current chat content', async () => {
+    await page.getByRole('button', { name: 'Chat view' }).click();
+    const chatInput = page.getByTestId('command-input');
+    const sendButton = page.getByRole('button', { name: /Send message/i });
+    const prompt = `ui-e2e-clear-${Date.now()}`;
+
+    await chatInput.fill(prompt);
+    await sendButton.click();
+    await page.getByLabel('user message').filter({ hasText: prompt }).first().waitFor({ timeout: 15000 });
+
+    await page.getByRole('button', { name: /New Session/i }).click();
+
+    // Wait for /clear roundtrip to remove prior messages from rendered chat.
+    await page.waitForFunction((txt) => {
+      return !Array.from(document.querySelectorAll('[aria-label="user message"]')).some(
+        (el) => (el.textContent || '').includes(txt)
+      );
+    }, prompt, { timeout: 20000 });
+  });
+
+  await check('Instance-scoped state key is present', async () => {
+    const topInstance = page.locator('#top-instance-select');
+    await topInstance.waitFor({ state: 'visible', timeout: 8000 });
+    const pid = await topInstance.inputValue();
+    if (!pid || pid === '0') {
+      throw new Error('No active instance pid found in selector');
+    }
+
+    const keyCheck = await page.evaluate((instancePid) => {
+      const stateKey = `ledit:webui:state:v1:${instancePid}`;
+      return {
+        hasStateKey: window.localStorage.getItem(stateKey) !== null,
+        storedPid: window.localStorage.getItem('ledit:webui:instancePid'),
+      };
+    }, pid);
+
+    if (!keyCheck.hasStateKey) {
+      throw new Error(`Missing instance-scoped app state key for pid ${pid}`);
+    }
+    if (keyCheck.storedPid !== pid) {
+      throw new Error(`instancePid storage mismatch (expected ${pid}, got ${keyCheck.storedPid})`);
+    }
   });
 
   await check('View switching: Logs', async () => {
@@ -125,7 +255,7 @@ async function run() {
   await browser.close();
 
   console.log(`\n[${now()}] UI E2E workflow complete`);
-  console.log(`Checks: ${8 - failures.length}/8 passed`);
+  console.log(`Checks: ${checks.length - failures.length}/${checks.length} passed`);
 
   if (failures.length > 0) {
     console.log('Failures:');

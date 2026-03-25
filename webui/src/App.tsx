@@ -134,6 +134,16 @@ interface OnboardingState {
 }
 
 const APP_STATE_STORAGE_KEY = 'ledit:webui:state:v1';
+const INSTANCE_PID_STORAGE_KEY = 'ledit:webui:instancePid';
+const INSTANCE_SWITCH_RESET_KEY = 'ledit:webui:instanceSwitchReset';
+
+const getAppStateStorageKey = (): string => {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return `${APP_STATE_STORAGE_KEY}:default`;
+  }
+  const instancePid = window.localStorage.getItem(INSTANCE_PID_STORAGE_KEY) || 'default';
+  return `${APP_STATE_STORAGE_KEY}:${instancePid}`;
+};
 
 const parseDate = (value: unknown): Date => {
   if (value instanceof Date) {
@@ -222,7 +232,14 @@ const loadPersistedAppState = (): Partial<AppState> | null => {
   }
 
   try {
-    const raw = window.localStorage.getItem(APP_STATE_STORAGE_KEY);
+    if (window.sessionStorage?.getItem(INSTANCE_SWITCH_RESET_KEY) === '1') {
+      window.sessionStorage.removeItem(INSTANCE_SWITCH_RESET_KEY);
+      window.localStorage.removeItem(getAppStateStorageKey());
+      return null;
+    }
+
+    const storageKey = getAppStateStorageKey();
+    const raw = window.localStorage.getItem(storageKey);
     if (!raw) {
       return null;
     }
@@ -318,8 +335,9 @@ function App() {
     }
 
     try {
+      const storageKey = getAppStateStorageKey();
       window.localStorage.setItem(
-        APP_STATE_STORAGE_KEY,
+        storageKey,
         JSON.stringify({
           provider: state.provider,
           model: state.model,
@@ -400,6 +418,12 @@ function App() {
       }));
     }
   }, [apiService]);
+
+  const pendingProviderRef = useRef<string>(state.provider);
+
+  useEffect(() => {
+    pendingProviderRef.current = state.provider;
+  }, [state.provider]);
 
   const handleEvent = useCallback((event: any) => {
     // Filter out ping events and webpack dev server events early to prevent console spam
@@ -537,22 +561,29 @@ function App() {
         }
         const completedQuery = String(event.data?.query || '').trim().toLowerCase();
         const wasClearCommand = completedQuery === '/clear';
+        if (wasClearCommand) {
+          queuedMessagesRef.current = [];
+          setQueuedMessagesCount(0);
+        }
         setState(prev => ({
           ...prev,
           messages: wasClearCommand ? [] : prev.messages,
+          currentTodos: wasClearCommand ? [] : prev.currentTodos,
           isProcessing: activeRequestsRef.current > 0,
           lastError: null,
           queryProgress: null,
-          toolExecutions: prev.toolExecutions.map((tool) => {
-            if (tool.status === 'started' || tool.status === 'running') {
-              return {
-                ...tool,
-                status: 'completed',
-                endTime: tool.endTime || new Date()
-              };
-            }
-            return tool;
-          }),
+          toolExecutions: wasClearCommand
+            ? []
+            : prev.toolExecutions.map((tool) => {
+                if (tool.status === 'started' || tool.status === 'running') {
+                  return {
+                    ...tool,
+                    status: 'completed',
+                    endTime: tool.endTime || new Date()
+                  };
+                }
+                return tool;
+              }),
           logs: [...prev.logs, logEntry]
         }));
         debugLog('[OK] Query completed');
@@ -975,9 +1006,6 @@ function App() {
     const trimmedMessage = message.trim();
     const allowConcurrent = options?.allowConcurrent === true;
     if (!allowConcurrent && activeRequestsRef.current > 0) {
-      if (trimmedMessage.startsWith('/')) {
-        throw new Error('Slash commands cannot steer an active run. Use Queue.');
-      }
       setState(prev => ({
         ...prev,
         lastError: null,
@@ -1113,14 +1141,24 @@ function App() {
   
   const handleModelChange = useCallback((model: string) => {
     debugLog('Model changed to:', model);
+    const provider = pendingProviderRef.current || state.provider;
+    setState(prev => ({
+      ...prev,
+      model
+    }));
     wsService.sendEvent({
       type: 'model_change',
-      data: { model }
+      data: { provider, model }
     });
-  }, [wsService]);
+  }, [state.provider, wsService]);
 
   const handleProviderChange = useCallback((provider: string) => {
     debugLog('Provider changed to:', provider);
+    pendingProviderRef.current = provider;
+    setState(prev => ({
+      ...prev,
+      provider
+    }));
     wsService.sendEvent({
       type: 'provider_change',
       data: { provider }

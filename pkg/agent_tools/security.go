@@ -97,6 +97,10 @@ func classifyShellCommand(args map[string]interface{}) SecurityResult {
 
 // classifyChainedCommand splits and classifies chained commands
 func classifyChainedCommand(cmd string) []SecurityRisk {
+	if risk, ok := classifyReadOnlyForLoop(cmd); ok {
+		return []SecurityRisk{risk}
+	}
+
 	// Check for pipe-to-shell patterns (case-insensitive to prevent bypass)
 	cmdLower := strings.ToLower(cmd)
 	for _, pipe := range []string{"| bash", "| sh", "| /bin/bash", "| /bin/sh", "|bash", "|sh", "|/bin/bash", "|/bin/sh"} {
@@ -175,6 +179,10 @@ func classifyChainedCommand(cmd string) []SecurityRisk {
 func classifySingleCommand(cmd string) SecurityRisk {
 	cmdLower := strings.ToLower(cmd)
 
+	if risk, ok := classifyReadOnlyForLoop(cmd); ok {
+		return risk
+	}
+
 	// Command substitution ($() or backticks) - cannot fully inspect inner commands
 	if strings.Contains(cmd, "$(") || strings.ContainsAny(cmd, "`") {
 		return SecurityCaution
@@ -193,8 +201,11 @@ func classifySingleCommand(cmd string) SecurityRisk {
 		strings.Contains(cmd, "> /var/") || strings.Contains(cmd, ">> /var/") ||
 		strings.Contains(cmd, "> /opt/") || strings.Contains(cmd, ">> /opt/") ||
 		strings.Contains(cmd, "> /root/") || strings.Contains(cmd, ">> /root/") ||
-		strings.Contains(cmd, "> /boot/") || strings.Contains(cmd, ">> /boot/") ||
-		strings.Contains(cmd, "> /dev/") || strings.Contains(cmd, ">> /dev/") {
+		strings.Contains(cmd, "> /boot/") || strings.Contains(cmd, ">> /boot/") {
+		return SecurityDangerous
+	}
+	if (strings.Contains(cmd, "> /dev/") || strings.Contains(cmd, ">> /dev/")) &&
+		!strings.Contains(cmd, "> /dev/null") && !strings.Contains(cmd, ">> /dev/null") {
 		return SecurityDangerous
 	}
 
@@ -219,7 +230,7 @@ func classifySingleCommand(cmd string) SecurityRisk {
 // Rejects commands with output redirection (> or >>) unless to /tmp/.
 func isSafeShellCommand(cmd string) bool {
 	// Reject commands with output redirection that target non-tmp paths
-	if containsRedirection(cmd) && !isTmpRedirection(cmd) {
+	if containsRedirection(cmd) && !isBenignRedirection(cmd) {
 		return false
 	}
 
@@ -275,7 +286,7 @@ func isSafeShellCommand(cmd string) bool {
 		"ruby": true, "php": true, "perl": true,
 		"java": true, "javac": true,
 		"dotnet": true,
-		"gcc": true, "g++": true, "cc": true, "c++": true, "clang": true, "clang++": true, "gfortran": true,
+		"gcc":    true, "g++": true, "cc": true, "c++": true, "clang": true, "clang++": true, "gfortran": true,
 		// Node.js/npm tools
 		"npm": true, "npx": true, "tsc": true, "node": true, "pnpm": true,
 		// Shells
@@ -452,7 +463,7 @@ func isSafeShellCommand(cmd string) bool {
 	// Common workspace operations that are safe
 	safeWorkspacePrefixes := []string{
 		"mkdir -p", "touch ", "tee ", // writing to workspace, not system dirs
-		"cp ", "mv ", "ln ",          // workspace-level moves/copies/symlinks
+		"cp ", "mv ", "ln ", // workspace-level moves/copies/symlinks
 		"chmod ", "chown ", "chgrp ", // workspace permissions
 		"strip ", "install ",
 	}
@@ -468,6 +479,99 @@ func isSafeShellCommand(cmd string) bool {
 	}
 
 	return false
+}
+
+func classifyReadOnlyForLoop(cmd string) (SecurityRisk, bool) {
+	trimmed := strings.TrimSpace(cmd)
+	lower := strings.ToLower(trimmed)
+	if !strings.HasPrefix(lower, "for ") || !strings.Contains(lower, " do ") || !strings.HasSuffix(lower, "done") {
+		return SecuritySafe, false
+	}
+
+	max := SecuritySafe
+
+	for _, sub := range extractCommandSubstitutions(trimmed) {
+		risk := maxRisk(classifyChainedCommand(sub))
+		if risk > max {
+			max = risk
+		}
+	}
+
+	doIndex := strings.Index(lower, " do ")
+	doneIndex := strings.LastIndex(lower, " done")
+	if doIndex == -1 || doneIndex == -1 || doneIndex <= doIndex+4 {
+		return SecurityCaution, true
+	}
+
+	body := strings.TrimSpace(trimmed[doIndex+4 : doneIndex])
+	if body == "" {
+		return SecurityCaution, true
+	}
+
+	bodyRisk := classifyReadOnlyLoopBody(body)
+	if bodyRisk > max {
+		max = bodyRisk
+	}
+
+	return max, true
+}
+
+func classifyReadOnlyLoopBody(body string) SecurityRisk {
+	parts := strings.Split(body, ";")
+	max := SecuritySafe
+
+	for _, raw := range parts {
+		part := strings.TrimSpace(raw)
+		if part == "" {
+			continue
+		}
+		for _, branch := range strings.Split(part, "&&") {
+			for _, option := range strings.Split(branch, "||") {
+				cmd := strings.TrimSpace(option)
+				if cmd == "" {
+					continue
+				}
+				risk := classifySingleCommand(cmd)
+				if risk > max {
+					max = risk
+				}
+			}
+		}
+	}
+
+	return max
+}
+
+func extractCommandSubstitutions(cmd string) []string {
+	var subs []string
+	for i := 0; i < len(cmd); i++ {
+		if cmd[i] != '$' || i+1 >= len(cmd) || cmd[i+1] != '(' {
+			continue
+		}
+		start := i + 2
+		depth := 1
+		j := start
+		for ; j < len(cmd); j++ {
+			switch cmd[j] {
+			case '(':
+				depth++
+			case ')':
+				depth--
+				if depth == 0 {
+					sub := strings.TrimSpace(cmd[start:j])
+					if sub != "" {
+						subs = append(subs, sub)
+					}
+					i = j
+					break
+				}
+			}
+			if depth == 0 {
+				break
+			}
+		}
+	}
+	return subs
 }
 
 // containsRedirection returns true if the command contains output redirection
@@ -501,11 +605,13 @@ func containsRedirection(cmd string) bool {
 	return false
 }
 
-// isTmpRedirection returns true if output redirection targets /tmp/
-func isTmpRedirection(cmd string) bool {
+// isBenignRedirection returns true if output redirection targets known harmless sinks.
+func isBenignRedirection(cmd string) bool {
 	lower := strings.ToLower(cmd)
 	return strings.Contains(lower, "> /tmp") || strings.Contains(lower, ">> /tmp") ||
-		strings.Contains(lower, ">/tmp")
+		strings.Contains(lower, ">/tmp") ||
+		strings.Contains(lower, "> /dev/null") || strings.Contains(lower, ">> /dev/null") ||
+		strings.Contains(lower, ">/dev/null")
 }
 
 // isCautionPattern checks for caution-level patterns.
@@ -671,10 +777,14 @@ func getShellCommandRiskType(cmd string, risk SecurityRisk, isCritical bool) str
 		return "disk_destruction"
 	}
 	// Output redirection to system directories
-	for _, dir := range []string{"/etc/", "/usr/", "/bin/", "/sbin/", "/var/", "/opt/", "/boot/", "/dev/", "/root/"} {
+	for _, dir := range []string{"/etc/", "/usr/", "/bin/", "/sbin/", "/var/", "/opt/", "/boot/", "/root/"} {
 		if strings.Contains(cmd, "> "+dir) || strings.Contains(cmd, ">> "+dir) {
 			return "system_integrity"
 		}
+	}
+	if (strings.Contains(cmd, "> /dev/") || strings.Contains(cmd, ">> /dev/")) &&
+		!strings.Contains(cmd, "> /dev/null") && !strings.Contains(cmd, ">> /dev/null") {
+		return "system_integrity"
 	}
 
 	// Fall back to generic critical system operation for anything caught by isCriticalSystemOperation

@@ -29,15 +29,11 @@ import {
   ChevronDown,
   ChevronRight,
   FileCode,
-  Copy,
   AlertTriangle,
   ShieldCheck,
   FileEdit,
-  Plus,
   File,
   Check,
-  Minus,
-  Circle,
   Loader2,
 } from 'lucide-react';
 import './ContextPanel.css';
@@ -137,6 +133,8 @@ interface ContextPanelBaseProps {
   className?: string;
   style?: React.CSSProperties;
   isMobileLayout?: boolean;
+  panelWidth?: number;
+  onPanelWidthChange?: (width: number) => void;
 }
 
 // Chat-context specific props
@@ -194,12 +192,10 @@ export interface ContextPanelHandle {
 
 // ── Constants ──────────────────────────────────────────────────────
 
-const PANEL_WIDTH_KEY = 'ledit.contextPanel.width';
 const PANEL_COLLAPSED_KEY = 'ledit.contextPanel.collapsed';
 const PANEL_TAB_KEY = 'ledit.contextPanel.tab';
 const PANEL_MIN = 280;
 const PANEL_MAX = 760;
-const MOBILE_LAYOUT_MAX_WIDTH = 900;
 
 const normalizeRevision = (raw: any): Revision => {
   const files = Array.isArray(raw?.files)
@@ -223,20 +219,18 @@ const normalizeRevision = (raw: any): Revision => {
 // ── Component ──────────────────────────────────────────────────────
 
 const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, ref) => {
-  const { context } = props;
+  const { context, panelWidth: externalPanelWidth, onPanelWidthChange } = props;
 
   // ── Panel infrastructure state ───────────────────────────────────
   const [panelCollapsed, setPanelCollapsed] = useState(false);
-  const [panelWidth, setPanelWidth] = useState(360);
+  const panelWidth = externalPanelWidth ?? 360;
   const panelContainerRef = useRef<HTMLDivElement>(null);
-  const resizingRef = useRef(false);
 
   // ── Chat-specific state ──────────────────────────────────────────
   const [chatTab, setChatTab] = useState<'tools' | 'changes' | 'tasks' | 'status' | 'sessions'>('tools');
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
   const [activeToolId, setActiveToolId] = useState<string | null>(null);
   const toolRefs = useRef<Record<string, HTMLDivElement | null>>({});
-
   const [revisions, setRevisions] = useState<Revision[]>([]);
   const [expandedRevisionIds, setExpandedRevisionIds] = useState<Set<string>>(new Set());
   const [expandedRevisionFileDiffs, setExpandedRevisionFileDiffs] = useState<Set<string>>(new Set());
@@ -335,13 +329,9 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   // ── Persistence ──────────────────────────────────────────────────
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const storedWidth = Number(window.localStorage.getItem(PANEL_WIDTH_KEY));
     const storedCollapsed = window.localStorage.getItem(PANEL_COLLAPSED_KEY);
     const storedTab = window.localStorage.getItem(`${PANEL_TAB_KEY}.${context}`);
 
-    if (Number.isFinite(storedWidth) && storedWidth >= PANEL_MIN && storedWidth <= PANEL_MAX) {
-      setPanelWidth(storedWidth);
-    }
     if (storedCollapsed === '1') {
       setPanelCollapsed(true);
     }
@@ -353,11 +343,6 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       }
     }
   }, [context]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem(PANEL_WIDTH_KEY, String(Math.round(panelWidth)));
-  }, [panelWidth]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -383,19 +368,17 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   const startResize = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
     setPanelCollapsed(false);
-    resizingRef.current = true;
 
     const onMouseMove = (moveEvent: MouseEvent) => {
-      if (!resizingRef.current || !panelContainerRef.current) return;
+      if (!panelContainerRef.current) return;
       const rect = panelContainerRef.current.getBoundingClientRect();
       const rawWidth = rect.right - moveEvent.clientX;
       const maxByLayout = Math.max(PANEL_MIN, rect.width - 260);
       const clamped = Math.max(PANEL_MIN, Math.min(Math.min(PANEL_MAX, maxByLayout), rawWidth));
-      setPanelWidth(clamped);
+      onPanelWidthChange?.(clamped);
     };
 
     const onMouseUp = () => {
-      resizingRef.current = false;
       document.body.style.userSelect = '';
       document.body.style.cursor = '';
       document.removeEventListener('mousemove', onMouseMove);
@@ -406,7 +389,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     document.body.style.cursor = 'col-resize';
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
-  }, []);
+  }, [onPanelWidthChange]);
 
   const isProcessing = context === 'chat' ? props.isProcessing : false;
 
@@ -521,43 +504,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     });
   };
 
-  const toggleRevisionExpanded = (revisionId: string) => {
-    setExpandedRevisionIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(revisionId)) next.delete(revisionId);
-      else {
-        next.add(revisionId);
-        loadRevisionDetails(revisionId);
-      }
-      return next;
-    });
-  };
-
-  const toggleRevisionFileDiff = (diffKey: string) => {
-    setExpandedRevisionFileDiffs((prev) => {
-      const next = new Set(prev);
-      if (next.has(diffKey)) next.delete(diffKey);
-      else next.add(diffKey);
-      return next;
-    });
-  };
-
-  const handleRollback = useCallback(async (revisionId: string) => {
-    if (!window.confirm(`Rollback to revision ${revisionId}?\n\nThis will undo all changes after this revision.`)) return;
-    setIsLoadingHistory(true);
-    setHistoryError(null);
-    try {
-      await apiService.rollbackToRevision(revisionId);
-      window.location.reload();
-    } catch (error) {
-      console.error('Rollback failed:', error);
-      setHistoryError(error instanceof Error ? error.message : 'Rollback failed');
-    } finally {
-      setIsLoadingHistory(false);
-    }
-  }, [apiService]);
-
-  // ── Chat helpers ─────────────────────────────────────────────────
+// ── Chat helpers ─────────────────────────────────────────────────
 
   const isSubagentTool = (tool: ToolExecution) =>
     tool.tool === 'run_subagent' || tool.tool === 'run_parallel_subagents';
@@ -655,47 +602,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     return `${mins}m ${secs}s`;
   };
 
-  const summarizeRevision = (revision: Revision) => {
-    let additions = 0;
-    let deletions = 0;
-    for (const file of revision.files) {
-      additions += Number(file.lines_added || 0);
-      deletions += Number(file.lines_deleted || 0);
-    }
-    return { fileCount: revision.files.length, additions, deletions };
-  };
-
-  const getOperationText = (operation: string) => {
-    switch (operation) {
-      case 'edited': return 'Modified';
-      case 'created': return 'Created';
-      case 'deleted': return 'Deleted';
-      case 'renamed': return 'Renamed';
-      default: return operation;
-    }
-  };
-
   // ── Diff renderer ────────────────────────────────────────────────
-
-  const renderDiff = (diff: string) => {
-    const lines = stripAnsiCodes(diff).split('\n');
-    return (
-      <div className="context-panel-diff-view" role="region" aria-label="Diff view">
-        {lines.map((line, index) => {
-          let lineClass = 'context-diff';
-          if (line.startsWith('@@')) lineClass = 'context-diff context-diff-hunk';
-          else if (line.startsWith('+++') || line.startsWith('---') || line.startsWith('FILE:')) lineClass = 'context-diff context-diff-header';
-          else if (line.startsWith('+') && !line.startsWith('+++')) lineClass = 'context-diff context-diff-add';
-          else if (line.startsWith('-') && !line.startsWith('---')) lineClass = 'context-diff context-diff-del';
-          return (
-            <div key={`diff-line-${index}`} className={lineClass}>
-              {line || ' '}
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
 
   const renderGitDiffContent = (diff: string) => {
     const lines = stripAnsiCodes(diff).split('\n');
@@ -900,103 +807,6 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
                       <pre>{formatToolDetail(tool.result)}</pre>
                     </div>
                   )}
-                </div>
-              )}
-            </div>
-          );
-        })
-      )}
-    </div>
-  );
-
-  // ── Render: History Tab (Chat) ───────────────────────────────────
-
-  const renderHistoryTab = () => (
-    <div className="context-panel-tools-list">
-      <div className="history-toolbar">
-        <button className="history-refresh-btn" onClick={loadRevisionHistory} disabled={isLoadingHistory}>
-          <RotateCcw size={12} /> Refresh
-        </button>
-      </div>
-
-      {historyError && <div className="history-error-inline">{historyError}</div>}
-
-      {isLoadingHistory ? (
-        <div className="context-panel-empty">Loading revision history...</div>
-      ) : revisions.length === 0 ? (
-        <div className="context-panel-empty">No revisions found yet.</div>
-      ) : (
-        revisions.map((revision) => {
-          const summary = summarizeRevision(revision);
-          const isExpanded = expandedRevisionIds.has(revision.revision_id);
-          return (
-            <div key={revision.revision_id} className="history-item">
-              <button
-                className="history-summary"
-                onClick={() => toggleRevisionExpanded(revision.revision_id)}
-                aria-expanded={isExpanded}
-              >
-                <span className="history-expand">{isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</span>
-                <span className="history-main">
-                  <span className="history-id">{revision.revision_id}</span>
-                  <span className="history-time">{formatRelativeTime(revision.timestamp)}</span>
-                </span>
-                <span className="history-stats">
-                  <span>{summary.fileCount} files</span>
-                  {summary.additions > 0 && <span className="additions">+{summary.additions}</span>}
-                  {summary.deletions > 0 && <span className="deletions">-{summary.deletions}</span>}
-                </span>
-              </button>
-
-              {isExpanded && (
-                <div className="history-details">
-                  {revision.files.map((file, i) => {
-                    const fileKey = buildRevisionFileKey(file, i);
-                    const expandedDiffKey = `${revision.revision_id}::${fileKey}`;
-                    const isDiffExpanded = expandedRevisionFileDiffs.has(expandedDiffKey);
-                    const fileDiff = revisionDetailsById[revision.revision_id]?.[fileKey];
-
-                    return (
-                      <div key={`${revision.revision_id}-${file.path}-${i}`} className="history-file-entry">
-                        <button
-                          className="history-file-row history-file-row-interactive"
-                          onClick={() => toggleRevisionFileDiff(expandedDiffKey)}
-                          aria-expanded={isDiffExpanded}
-                        >
-                          <span className="history-expand">
-                            {isDiffExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                          </span>
-                          <span className="history-file-op">{getOperationText(file.operation)}</span>
-                          <span className="history-file-path" title={file.path}>{file.path}</span>
-                          <span className="history-file-diff">
-                            {file.lines_added > 0 && <span className="additions">+{file.lines_added}</span>}
-                            {file.lines_deleted > 0 && <span className="deletions">-{file.lines_deleted}</span>}
-                          </span>
-                        </button>
-
-                        {isDiffExpanded && (
-                          <div className="history-file-diff-panel">
-                            {revisionDetailsLoading[revision.revision_id] && !fileDiff && (
-                              <div className="context-panel-empty">Loading file diff…</div>
-                            )}
-                            {revisionDetailsError[revision.revision_id] && (
-                              <div className="history-error-inline">{revisionDetailsError[revision.revision_id]}</div>
-                            )}
-                            {!!fileDiff && (
-                              <div className="history-diff-pre">{renderDiff(fileDiff)}</div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                  <button
-                    className="history-rollback-btn"
-                    onClick={() => handleRollback(revision.revision_id)}
-                    disabled={isLoadingHistory}
-                  >
-                    <RotateCcw size={12} /> Rollback to this revision
-                  </button>
                 </div>
               )}
             </div>

@@ -13,8 +13,10 @@ type rateLimiter struct {
 	lastRequest map[string]time.Time
 	minInterval time.Duration
 	maxInterval time.Duration
-	rng         *rand.Rand
 }
+
+// globalRand is a thread-safe random number generator used for jitter.
+var globalRand = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 // newRateLimiter creates a rate limiter with the given minimum and maximum
 // intervals between requests to the same domain. Each request waits for a
@@ -25,7 +27,6 @@ func newRateLimiter(minInterval, maxInterval time.Duration) *rateLimiter {
 		lastRequest: make(map[string]time.Time),
 		minInterval: minInterval,
 		maxInterval: maxInterval,
-		rng:         rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
 
@@ -55,8 +56,12 @@ func (r *rateLimiter) wait(host string) {
 		sleepMin = 0
 	}
 	sleepMax := r.maxInterval - elapsed
-	sleepFor := sleepMin + time.Duration(r.rng.Int63n(int64(sleepMax-sleepMin)))
-
+	
+	// Generate random jitter outside the lock to avoid holding it during RNG
+	r.mu.Unlock()
+	sleepFor := sleepMin + time.Duration(globalRand.Int63n(int64(sleepMax-sleepMin)))
+	
+	r.mu.Lock()
 	r.lastRequest[host] = time.Now().Add(sleepFor)
 	r.mu.Unlock()
 	time.Sleep(sleepFor)

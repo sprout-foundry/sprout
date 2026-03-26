@@ -141,7 +141,10 @@ deploy-ui:
 verify-ui-embedded:
 	@echo "Verifying embedded UI assets are up to date..."
 	@make deploy-ui
-	@git diff --exit-code -- pkg/webui/static
+	@test -z "$$(git status --porcelain=v1 --untracked-files=all -- pkg/webui/static)" || \
+		( echo "Embedded UI assets are stale or untracked. Run 'make deploy-ui' and commit pkg/webui/static changes."; \
+		  git status --short --untracked-files=all -- pkg/webui/static; \
+		  exit 1 )
 	@echo "Embedded UI assets are up to date"
 
 # Test React web UI server

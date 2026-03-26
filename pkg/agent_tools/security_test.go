@@ -161,6 +161,11 @@ func TestClassifyShellCommandSafe(t *testing.T) {
 		{"perl -pi", "perl -pi -e 's/old/new/' file.go", SecuritySafe},
 		{"chmod workspace", "chmod 755 script.sh", SecuritySafe},
 		{"chown workspace", "chown user:group file.txt", SecuritySafe},
+		{
+			"readonly for-loop with command substitution",
+			`for f in $(find . -name "*.json"); do echo "Checking $f..."; python3 -m json.tool "$f" > /dev/null 2>&1 && echo "  Valid JSON" || echo "  INVALID JSON"; done`,
+			SecuritySafe,
+		},
 	}
 
 	for _, tt := range tests {

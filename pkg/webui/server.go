@@ -22,7 +22,10 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-//go:embed static/*
+// Embed the entire static tree so root assets like logo-mark.svg and all hashed
+// subdirectory assets are always included in go-install and test builds.
+//
+//go:embed static
 var staticFiles embed.FS
 
 // ConnectionInfo stores metadata about a WebSocket connection

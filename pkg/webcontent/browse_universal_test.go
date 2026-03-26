@@ -1,9 +1,13 @@
 package webcontent
 
 import (
+	"context"
+	"encoding/json"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestIsLocalhostURL(t *testing.T) {
@@ -89,4 +93,139 @@ func TestBrowseURL_ScreenshotRequiresPath(t *testing.T) {
 	_, err := BrowseURL("http://example.com", BrowseOptions{Action: "screenshot"})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "screenshot_path is required")
+}
+
+type fakeBrowserRenderer struct {
+	lastRunURL  string
+	lastRunOpts BrowseOptions
+	runResult   *BrowseResult
+}
+
+func (f *fakeBrowserRenderer) RenderPage(context.Context, string) (string, error) {
+	return "", nil
+}
+
+func (f *fakeBrowserRenderer) Screenshot(context.Context, string, string, int, int, string) error {
+	return nil
+}
+
+func (f *fakeBrowserRenderer) CaptureDOM(context.Context, string, int, int, string) (string, error) {
+	return "<html><body>dom</body></html>", nil
+}
+
+func (f *fakeBrowserRenderer) Run(_ context.Context, url string, opts BrowseOptions) (*BrowseResult, error) {
+	f.lastRunURL = url
+	f.lastRunOpts = opts
+	if f.runResult != nil {
+		return f.runResult, nil
+	}
+	return &BrowseResult{FinalURL: url, VisibleText: "rendered text"}, nil
+}
+
+func (f *fakeBrowserRenderer) Close() {}
+
+func withFakeGlobalBrowser(t *testing.T, renderer BrowserRenderer) {
+	t.Helper()
+	previousBrowser := globalBrowser
+	previousOnce := globalBrowserOnce
+	globalBrowser = renderer
+	globalBrowserOnce = sync.Once{}
+	globalBrowserOnce.Do(func() {
+		globalBrowser = renderer
+	})
+	t.Cleanup(func() {
+		globalBrowser = previousBrowser
+		globalBrowserOnce = previousOnce
+	})
+}
+
+func TestBrowseURL_InspectActionRunsInteractiveBrowserFlow(t *testing.T) {
+	fake := &fakeBrowserRenderer{
+		runResult: &BrowseResult{
+			FinalURL:        "http://example.com/final",
+			Title:           "Example",
+			VisibleText:     "Hello world",
+			ConsoleMessages: []string{"[log] ready"},
+			Actions:         []string{"wait_for #app", "click #launch"},
+		},
+	}
+	withFakeGlobalBrowser(t, fake)
+
+	raw, err := BrowseURL("http://example.com", BrowseOptions{
+		Action:          "inspect",
+		WaitForSelector: "#app",
+		Steps:           []BrowseStep{{Action: "click", Selector: "#launch"}},
+		CaptureSelectors: []string{
+			"#app",
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "http://example.com", fake.lastRunURL)
+	assert.Equal(t, "#app", fake.lastRunOpts.WaitForSelector)
+	assert.Len(t, fake.lastRunOpts.Steps, 1)
+	assert.Contains(t, fake.lastRunOpts.CaptureSelectors, "#app")
+	assert.True(t, fake.lastRunOpts.IncludeConsole, "inspect mode should include browser diagnostics")
+	assert.True(t, fake.lastRunOpts.CaptureStorage, "inspect mode should capture storage by default")
+	assert.True(t, fake.lastRunOpts.CaptureCookies, "inspect mode should capture cookies by default")
+
+	var result BrowseResult
+	require.NoError(t, json.Unmarshal([]byte(raw), &result))
+	assert.Equal(t, "http://example.com/final", result.FinalURL)
+	assert.Equal(t, "Example", result.Title)
+	assert.Contains(t, result.ConsoleMessages, "[log] ready")
+}
+
+func TestBrowseURL_TextActionUsesInteractiveFlowWhenAdvancedOptionsPresent(t *testing.T) {
+	fake := &fakeBrowserRenderer{
+		runResult: &BrowseResult{
+			FinalURL:    "http://example.com",
+			VisibleText: "hydrated text",
+		},
+	}
+	withFakeGlobalBrowser(t, fake)
+
+	text, err := BrowseURL("http://example.com", BrowseOptions{
+		Action:          "text",
+		WaitForSelector: "#app",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "hydrated text", text)
+	assert.True(t, fake.lastRunOpts.CaptureText)
+}
+
+func TestBrowseURL_InspectActionPreservesExtendedDebuggingOptions(t *testing.T) {
+	fake := &fakeBrowserRenderer{
+		runResult: &BrowseResult{
+			FinalURL:       "http://example.com/settings",
+			ReadyState:     "complete",
+			Cookies:        map[string]string{"session": "abc"},
+			LocalStorage:   map[string]string{"theme": "dark"},
+			SessionStorage: map[string]string{"draft": "1"},
+		},
+	}
+	withFakeGlobalBrowser(t, fake)
+
+	raw, err := BrowseURL("http://example.com", BrowseOptions{
+		Action:           "inspect",
+		WaitForSelector:  "#app",
+		ResponseMaxChars: 512,
+		Steps: []BrowseStep{
+			{Action: "navigate", Value: "http://example.com/settings"},
+			{Action: "wait_for_text", Selector: "body", Expect: "Settings"},
+			{Action: "assert_selector", Selector: "#save", Expect: "Save"},
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 512, fake.lastRunOpts.ResponseMaxChars)
+	require.Len(t, fake.lastRunOpts.Steps, 3)
+	assert.Equal(t, "navigate", fake.lastRunOpts.Steps[0].Action)
+	assert.Equal(t, "Settings", fake.lastRunOpts.Steps[1].Expect)
+	assert.Equal(t, "Save", fake.lastRunOpts.Steps[2].Expect)
+
+	var result BrowseResult
+	require.NoError(t, json.Unmarshal([]byte(raw), &result))
+	assert.Equal(t, "complete", result.ReadyState)
+	assert.Equal(t, "abc", result.Cookies["session"])
+	assert.Equal(t, "dark", result.LocalStorage["theme"])
+	assert.Equal(t, "1", result.SessionStorage["draft"])
 }

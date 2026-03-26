@@ -106,6 +106,14 @@ func TestNewConfigIncludesWebScraperPersona(t *testing.T) {
 	assert.True(t, coderPersona.Enabled)
 	assert.Contains(t, coderPersona.AllowedTools, "write_structured_file")
 	assert.Contains(t, coderPersona.AllowedTools, "patch_structured_file")
+	assert.Contains(t, coderPersona.AllowedTools, "browse_url")
+
+	debuggerPersona, ok := cfg.SubagentTypes["debugger"]
+	assert.True(t, ok, "expected debugger persona in defaults")
+	assert.True(t, debuggerPersona.Enabled)
+	assert.Contains(t, debuggerPersona.AllowedTools, "browse_url")
+
+	assert.Contains(t, persona.AllowedTools, "browse_url")
 
 	refactorPersona, ok := cfg.SubagentTypes["refactor"]
 	assert.True(t, ok, "expected refactor persona in defaults")

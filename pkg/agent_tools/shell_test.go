@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -126,4 +127,26 @@ func TestBuildShellOutputWithStatus(t *testing.T) {
 		output := buildShellOutputWithStatus(input, "echo test", 0, nil)
 		assert.Equal(t, input, output, "Should return original output unchanged")
 	})
+}
+
+func TestExecuteShellCommandDoesNotPrintPreviewDuringTests(t *testing.T) {
+	ctx := context.Background()
+
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stdout = w
+	defer func() {
+		os.Stdout = oldStdout
+	}()
+
+	output, execErr := ExecuteShellCommand(ctx, "go build /nonexistent/path")
+	require.NoError(t, execErr)
+	require.NotEmpty(t, output)
+
+	require.NoError(t, w.Close())
+	captured, readErr := io.ReadAll(r)
+	require.NoError(t, readErr)
+
+	assert.Empty(t, string(captured), "silent shell execution should not print preview output during tests")
 }

@@ -205,7 +205,9 @@ func classifySingleCommand(cmd string) SecurityRisk {
 		return SecurityDangerous
 	}
 	if (strings.Contains(cmd, "> /dev/") || strings.Contains(cmd, ">> /dev/")) &&
-		!strings.Contains(cmd, "> /dev/null") && !strings.Contains(cmd, ">> /dev/null") {
+		!strings.Contains(cmd, "> /dev/null") && !strings.Contains(cmd, ">> /dev/null") &&
+		!strings.Contains(cmd, "> /dev/stdout") && !strings.Contains(cmd, ">> /dev/stdout") &&
+		!strings.Contains(cmd, "> /dev/stderr") && !strings.Contains(cmd, ">> /dev/stderr") {
 		return SecurityDangerous
 	}
 
@@ -611,7 +613,9 @@ func isBenignRedirection(cmd string) bool {
 	return strings.Contains(lower, "> /tmp") || strings.Contains(lower, ">> /tmp") ||
 		strings.Contains(lower, ">/tmp") ||
 		strings.Contains(lower, "> /dev/null") || strings.Contains(lower, ">> /dev/null") ||
-		strings.Contains(lower, ">/dev/null")
+		strings.Contains(lower, ">/dev/null") ||
+		strings.Contains(lower, "> /dev/stdout") || strings.Contains(lower, ">> /dev/stdout") ||
+		strings.Contains(lower, "> /dev/stderr") || strings.Contains(lower, ">> /dev/stderr")
 }
 
 // isCautionPattern checks for caution-level patterns.
@@ -783,7 +787,9 @@ func getShellCommandRiskType(cmd string, risk SecurityRisk, isCritical bool) str
 		}
 	}
 	if (strings.Contains(cmd, "> /dev/") || strings.Contains(cmd, ">> /dev/")) &&
-		!strings.Contains(cmd, "> /dev/null") && !strings.Contains(cmd, ">> /dev/null") {
+		!strings.Contains(cmd, "> /dev/null") && !strings.Contains(cmd, ">> /dev/null") &&
+		!strings.Contains(cmd, "> /dev/stdout") && !strings.Contains(cmd, ">> /dev/stdout") &&
+		!strings.Contains(cmd, "> /dev/stderr") && !strings.Contains(cmd, ">> /dev/stderr") {
 		return "system_integrity"
 	}
 

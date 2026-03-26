@@ -3,6 +3,8 @@ package agent
 import (
 	"os"
 	"testing"
+
+	"github.com/alantheprice/ledit/pkg/configuration"
 )
 
 // TestNewAgent tests agent creation
@@ -118,6 +120,31 @@ func TestBasicGetters(t *testing.T) {
 	if configManager == nil {
 		t.Error("Expected GetConfigManager() to return non-nil manager")
 	}
+}
+
+func TestResolveConfiguredSystemPrompt(t *testing.T) {
+	t.Run("uses configured override when present", func(t *testing.T) {
+		cfg := &configuration.Config{SystemPromptText: "custom prompt"}
+		got := resolveConfiguredSystemPrompt(cfg, "default prompt")
+		if got != "custom prompt" {
+			t.Fatalf("expected configured prompt override, got %q", got)
+		}
+	})
+
+	t.Run("falls back to embedded prompt when blank", func(t *testing.T) {
+		cfg := &configuration.Config{SystemPromptText: "   "}
+		got := resolveConfiguredSystemPrompt(cfg, "default prompt")
+		if got != "default prompt" {
+			t.Fatalf("expected fallback prompt, got %q", got)
+		}
+	})
+
+	t.Run("falls back when config missing", func(t *testing.T) {
+		got := resolveConfiguredSystemPrompt(nil, "default prompt")
+		if got != "default prompt" {
+			t.Fatalf("expected fallback prompt, got %q", got)
+		}
+	})
 }
 
 // TestGetProjectContext - removed as getProjectContext was removed

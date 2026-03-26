@@ -226,6 +226,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to load system prompt: %w", err)
 		}
+		systemPrompt = resolveConfiguredSystemPrompt(configManager.GetConfig(), systemPrompt)
 
 		// Create agent with minimal initialization using test client
 		agent := &Agent{
@@ -250,17 +251,17 @@ func NewAgentWithModel(model string) (*Agent, error) {
 			outputRouter:              NewOutputRouter(nil, nil),
 		}
 
-			agent.optimizer.SetLLMClient(agent.client, agent.GetProvider(), func(line string) {
-		agent.PrintLineAsync(line)
-	})
+		agent.optimizer.SetLLMClient(agent.client, agent.GetProvider(), func(line string) {
+			agent.PrintLineAsync(line)
+		})
 
-	// Wire output router with the agent reference now that agent exists
-	if agent.outputRouter != nil {
-		agent.outputRouter.agent = agent
-	}
+		// Wire output router with the agent reference now that agent exists
+		if agent.outputRouter != nil {
+			agent.outputRouter.agent = agent
+		}
 
-	// Load command history from configuration
-	agent.loadHistoryFromConfig()// Initialize debug log file if debug enabled
+		// Load command history from configuration
+		agent.loadHistoryFromConfig() // Initialize debug log file if debug enabled
 		if agent.debug {
 			if err := agent.initDebugLogger(); err != nil {
 				fmt.Fprintf(os.Stderr, "WARNING: Failed to initialize debug logger: %v\n", err)
@@ -364,6 +365,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to load system prompt: %w", err)
 	}
+	systemPrompt = resolveConfiguredSystemPrompt(configManager.GetConfig(), systemPrompt)
 
 	// Clear old todos at session start
 	tools.TodoWrite([]tools.TodoItem{})
@@ -723,6 +725,16 @@ func findRepoRootFromCWD() (string, error) {
 		}
 		dir = parent
 	}
+}
+
+func resolveConfiguredSystemPrompt(cfg *configuration.Config, fallback string) string {
+	if cfg == nil {
+		return fallback
+	}
+	if prompt := strings.TrimSpace(cfg.SystemPromptText); prompt != "" {
+		return prompt
+	}
+	return fallback
 }
 
 func looksLikeProviderModelSpecifier(configManager *configuration.Manager, model string) bool {

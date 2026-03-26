@@ -492,6 +492,7 @@ function App() {
             timestamp: new Date()
           }],
           toolExecutions: [], // Clear previous tool executions
+          fileEdits: [],      // Clear previous file edits for current-run status metrics
           queryProgress: null, // Clear previous progress
           currentTodos: [],    // Clear previous todos
           logs: [...prev.logs, logEntry]
@@ -980,7 +981,13 @@ function App() {
       if (restoredMessages.length > 0) {
         setState(prev => ({
           ...prev,
-          messages: restoredMessages
+          messages: restoredMessages,
+          toolExecutions: [],
+          fileEdits: [],
+          currentTodos: [],
+          queryProgress: null,
+          lastError: null,
+          isProcessing: false,
         }));
       }
     };

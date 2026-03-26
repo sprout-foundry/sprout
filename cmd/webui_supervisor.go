@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/webui"
@@ -233,9 +232,5 @@ func isHostRecordAlive(record webUIHostRecord) bool {
 }
 
 func isProcessAlive(pid int) bool {
-	if pid <= 0 {
-		return false
-	}
-	err := syscall.Kill(pid, 0)
-	return err == nil || err == syscall.EPERM
+	return isPIDAlive(pid)
 }

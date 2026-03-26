@@ -355,6 +355,64 @@ class ApiService {
     }
   }
 
+  async getGitBranches(): Promise<{ message: string; current: string; branches: string[] }> {
+    const response = await fetch('/api/git/branches');
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return response.json();
+  }
+
+  async checkoutGitBranch(branch: string): Promise<{ message: string; branch: string }> {
+    const response = await fetch('/api/git/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ branch }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || data.message || `HTTP error! status: ${response.status}`);
+    }
+    return data;
+  }
+
+  async createGitBranch(name: string): Promise<{ message: string; branch: string }> {
+    const response = await fetch('/api/git/branch/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || data.message || `HTTP error! status: ${response.status}`);
+    }
+    return data;
+  }
+
+  async pullGit(): Promise<{ message: string; output?: string }> {
+    const response = await fetch('/api/git/pull', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || data.message || `HTTP error! status: ${response.status}`);
+    }
+    return data;
+  }
+
+  async pushGit(): Promise<{ message: string; output?: string }> {
+    const response = await fetch('/api/git/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || data.message || `HTTP error! status: ${response.status}`);
+    }
+    return data;
+  }
+
   async stageFile(path: string): Promise<{ message: string; path: string }> {
     try {
       const response = await fetch('/api/git/stage', {

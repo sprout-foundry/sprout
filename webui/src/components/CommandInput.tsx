@@ -469,9 +469,6 @@ const CommandInput: React.FC<CommandInputProps> = ({
       commandToSend = `${imagePaths}\n\n${commandToSend}`;
     }
 
-    // Save to history
-    await saveToHistory(commandToSend);
-
     // Reset history navigation
     resetHistoryNavigation();
 
@@ -481,6 +478,8 @@ const CommandInput: React.FC<CommandInputProps> = ({
     } else if (onSendCommand) {
       onSendCommand(commandToSend);
     }
+
+    void saveToHistory(commandToSend);
 
     // Clear textarea using onChange for controlled component
     updateValue('', { start: 0, end: 0 });
@@ -513,9 +512,9 @@ const CommandInput: React.FC<CommandInputProps> = ({
       commandToQueue = `${imagePaths}\n\n${commandToQueue}`;
     }
 
-    await saveToHistory(commandToQueue);
     resetHistoryNavigation();
     onQueue?.(commandToQueue);
+    void saveToHistory(commandToQueue);
     updateValue('', { start: 0, end: 0 });
 
     // Clear attached images and revoke URLs

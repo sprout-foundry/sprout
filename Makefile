@@ -1,7 +1,7 @@
 # Ledit Testing and Build Makefile
 # Provides clear commands for different types of tests and builds
 
-.PHONY: help test-unit test-integration test-e2e test-smoke test-all clean build build-version build-ui deploy-ui test-webui
+.PHONY: help test-unit test-integration test-e2e test-smoke test-all clean build build-version build-ui deploy-ui verify-ui-embedded test-webui
 
 # Default target
 help:
@@ -17,6 +17,7 @@ help:
 	@echo "  make build-version    - Build with version information"
 	@echo "  make build-ui         - Build React web UI"
 	@echo "  make deploy-ui        - Build and deploy React UI to Go static"
+	@echo "  make verify-ui-embedded - Fail if embedded UI assets are stale"
 	@echo "  make test-webui      - Test React web UI server"
 	@echo ""
 	@echo "Version Management:"
@@ -28,6 +29,7 @@ help:
 	@echo "  make test-all                     # Pre-release validation"
 	@echo "  make build-version                # Build with version info"
 	@echo "  make deploy-ui                    # Build and deploy React UI"
+	@echo "  make verify-ui-embedded          # Ensure embedded UI is current"
 	@echo "  make test-webui                   # Test React web UI server"
 
 # Unit Tests - Fast, no external dependencies
@@ -119,7 +121,7 @@ deploy-ui:
 	fi
 	@rm -rf pkg/webui/static/*
 	@# Copy root-level files (index.html, manifest.json, icons, etc.)
-	@cp webui/build/*.html webui/build/*.json webui/build/*.xml webui/build/*.png webui/build/*.ico webui/build/sw.js pkg/webui/static/ 2>/dev/null || true
+	@cp webui/build/*.html webui/build/*.json webui/build/*.xml webui/build/*.png webui/build/*.svg webui/build/*.ico webui/build/sw.js pkg/webui/static/ 2>/dev/null || true
 	@# Copy static assets directly (without the 'static/' prefix in the destination)
 	@if [ -d "webui/build/static/js" ]; then \
 		mkdir -p pkg/webui/static/js && \
@@ -135,6 +137,12 @@ deploy-ui:
 	fi
 	@echo "React web UI deployed to pkg/webui/static/"
 	@echo "Run 'make build' to create Go binary with embedded UI"
+
+verify-ui-embedded:
+	@echo "Verifying embedded UI assets are up to date..."
+	@make deploy-ui
+	@git diff --exit-code -- pkg/webui/static
+	@echo "Embedded UI assets are up to date"
 
 # Test React web UI server
 test-webui:

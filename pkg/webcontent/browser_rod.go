@@ -37,7 +37,7 @@ const browserInstrumentationScript = `
 (() => {
   if (window.__leditBrowserCaptureInstalled) return;
   window.__leditBrowserCaptureInstalled = true;
-  window.__leditBrowserCapture = { console: [], errors: [] };
+  window.__leditBrowserCapture = { console: [], errors: [], network: [] };
   const limitPush = (list, value) => {
     list.push(value);
     if (list.length > 100) list.shift();
@@ -70,15 +70,68 @@ const browserInstrumentationScript = `
       limitPush(window.__leditBrowserCapture.errors, 'Unhandled rejection: ' + stringify(event.reason));
     } catch (_err) {}
   });
+  const recordNetwork = (value) => {
+    try {
+      limitPush(window.__leditBrowserCapture.network, value);
+    } catch (_err) {}
+  };
+  if (typeof window.fetch === 'function') {
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = async function(input, init) {
+      const method = (init && init.method) || (input && input.method) || 'GET';
+      const url = typeof input === 'string' ? input : ((input && input.url) || '');
+      try {
+        const response = await originalFetch(input, init);
+        recordNetwork({ type: 'fetch', method, url, status: response.status, ok: !!response.ok, initiator: 'fetch' });
+        return response;
+      } catch (err) {
+        recordNetwork({ type: 'fetch', method, url, error: String(err), initiator: 'fetch' });
+        throw err;
+      }
+    };
+  }
+  if (typeof window.XMLHttpRequest === 'function') {
+    const OriginalXHR = window.XMLHttpRequest;
+    function WrappedXHR() {
+      const xhr = new OriginalXHR();
+      let method = 'GET';
+      let url = '';
+      const originalOpen = xhr.open;
+      xhr.open = function(m, u) {
+        method = m || 'GET';
+        url = u || '';
+        return originalOpen.apply(xhr, arguments);
+      };
+      xhr.addEventListener('loadend', function() {
+        recordNetwork({ type: 'xhr', method, url, status: xhr.status || 0, ok: xhr.status >= 200 && xhr.status < 400, initiator: 'xhr' });
+      });
+      xhr.addEventListener('error', function() {
+        recordNetwork({ type: 'xhr', method, url, error: 'network error', initiator: 'xhr' });
+      });
+      return xhr;
+    }
+    WrappedXHR.prototype = OriginalXHR.prototype;
+    window.XMLHttpRequest = WrappedXHR;
+  }
 })();
 `
+
+type browserSession struct {
+	id        string
+	incognito *rod.Browser
+	page      *rod.Page
+	mu        sync.Mutex
+	createdAt time.Time
+	lastUsed  time.Time
+}
 
 // rodRenderer implements BrowserRenderer using go-rod and Chromium.
 type rodRenderer struct {
 	browser *rod.Browser
 
-	mu     sync.Mutex
-	closed bool
+	mu       sync.Mutex
+	closed   bool
+	sessions map[string]*browserSession
 }
 
 // Compile-time interface satisfaction check.
@@ -160,6 +213,86 @@ func (r *rodRenderer) openIncognitoPage(ctx context.Context) (*rod.Browser, *rod
 	}
 
 	return incognito, page, nil
+}
+
+func newBrowserSessionID() string {
+	return fmt.Sprintf("browser_%d", time.Now().UnixNano())
+}
+
+func (r *rodRenderer) acquireSession(ctx context.Context, requestedID string) (*browserSession, error) {
+	sessionID := strings.TrimSpace(requestedID)
+	if sessionID == "" {
+		sessionID = newBrowserSessionID()
+	}
+
+	r.mu.Lock()
+	if r.sessions == nil {
+		r.sessions = make(map[string]*browserSession)
+	}
+	if existing, ok := r.sessions[sessionID]; ok {
+		r.mu.Unlock()
+		existing.mu.Lock()
+		existing.lastUsed = time.Now()
+		return existing, nil
+	}
+	r.mu.Unlock()
+
+	incognito, page, err := r.openIncognitoPage(ctx)
+	if err != nil {
+		return nil, err
+	}
+	session := &browserSession{
+		id:        sessionID,
+		incognito: incognito,
+		page:      page,
+		createdAt: time.Now(),
+		lastUsed:  time.Now(),
+	}
+
+	r.mu.Lock()
+	if r.sessions == nil {
+		r.sessions = make(map[string]*browserSession)
+	}
+	if existing, ok := r.sessions[sessionID]; ok {
+		r.mu.Unlock()
+		_ = page.Close()
+		_ = incognito.Close()
+		existing.mu.Lock()
+		existing.lastUsed = time.Now()
+		return existing, nil
+	}
+	r.sessions[sessionID] = session
+	r.mu.Unlock()
+
+	session.mu.Lock()
+	return session, nil
+}
+
+func (r *rodRenderer) closeSessionByID(sessionID string) error {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return nil
+	}
+
+	r.mu.Lock()
+	session, ok := r.sessions[sessionID]
+	if ok {
+		delete(r.sessions, sessionID)
+	}
+	r.mu.Unlock()
+	if !ok {
+		return fmt.Errorf("unknown browser session %q", sessionID)
+	}
+
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.page != nil {
+		_ = session.page.Close()
+	}
+	if session.incognito != nil {
+		_ = session.incognito.Close()
+	}
+	return nil
 }
 
 // applyViewportAndUA sets the viewport dimensions and user-agent on a page,
@@ -309,25 +442,50 @@ func (r *rodRenderer) Run(ctx context.Context, url string, opts BrowseOptions) (
 	ctx, cancel := context.WithTimeout(ctx, renderTimeout)
 	defer cancel()
 
-	incognito, page, err := r.openIncognitoPage(ctx)
-	if err != nil {
-		return nil, err
+	persistentSession := opts.PersistSession || strings.TrimSpace(opts.SessionID) != "" || opts.CloseSession
+	var (
+		page      *rod.Page
+		sessionID string
+		cleanup   func()
+	)
+	if persistentSession {
+		session, err := r.acquireSession(ctx, opts.SessionID)
+		if err != nil {
+			return nil, err
+		}
+		page = session.page
+		sessionID = session.id
+		cleanup = func() {
+			session.lastUsed = time.Now()
+			session.mu.Unlock()
+			if opts.CloseSession {
+				_ = r.closeSessionByID(session.id)
+			}
+		}
+	} else {
+		incognito, tempPage, err := r.openIncognitoPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		page = tempPage
+		cleanup = func() {
+			_ = page.Close()
+			_ = incognito.Close()
+		}
 	}
-	defer func() {
-		_ = page.Close()
-		_ = incognito.Close()
-	}()
+	defer cleanup()
 
 	if err := applyViewportAndUA(page, opts.ViewportWidth, opts.ViewportHeight, opts.UserAgent); err != nil {
 		return nil, err
 	}
 
 	var removeInstrumentation func() error
-	if opts.IncludeConsole {
-		removeInstrumentation, err = page.EvalOnNewDocument(browserInstrumentationScript)
+	if opts.IncludeConsole || opts.CaptureNetwork {
+		hook, err := page.EvalOnNewDocument(browserInstrumentationScript)
 		if err != nil {
 			return nil, fmt.Errorf("install browser instrumentation: %w", err)
 		}
+		removeInstrumentation = hook
 		defer func() {
 			if removeInstrumentation != nil {
 				_ = removeInstrumentation()
@@ -346,7 +504,7 @@ func (r *rodRenderer) Run(ctx context.Context, url string, opts BrowseOptions) (
 		return nil, err
 	}
 
-	result := &BrowseResult{}
+	result := &BrowseResult{SessionID: sessionID}
 
 	for _, step := range opts.Steps {
 		if err := executeBrowseStep(page, step, opts.WaitTimeoutMs, result); err != nil {
@@ -396,12 +554,19 @@ func (r *rodRenderer) Run(ctx context.Context, url string, opts BrowseOptions) (
 	}
 
 	if opts.IncludeConsole {
-		consoleMessages, pageErrors, err := captureBrowserDiagnostics(page)
+		consoleMessages, pageErrors, _, err := captureBrowserDiagnostics(page)
 		if err != nil {
 			return nil, err
 		}
 		result.ConsoleMessages = truncateStringSlice(consoleMessages, 40, textLimit(opts.ResponseMaxChars))
 		result.PageErrors = truncateStringSlice(pageErrors, 40, textLimit(opts.ResponseMaxChars))
+	}
+	if opts.CaptureNetwork {
+		_, _, networkRequests, err := captureBrowserDiagnostics(page)
+		if err != nil {
+			return nil, err
+		}
+		result.NetworkRequests = truncateNetworkRequests(networkRequests, 50, textLimit(opts.ResponseMaxChars))
 	}
 	if opts.CaptureCookies {
 		cookies, err := captureStorageMap(page, `() => {
@@ -626,6 +791,57 @@ func executeBrowseStep(page *rod.Page, step BrowseStep, timeoutMs int, result *B
 		}
 		record(fmt.Sprintf("assert_selector %s", step.Selector))
 		return nil
+	case "assert_text":
+		expected := strings.TrimSpace(step.Expect)
+		if expected == "" {
+			expected = strings.TrimSpace(step.Value)
+		}
+		if expected == "" {
+			return fmt.Errorf("browse step assert_text requires expect or value")
+		}
+		bodyText, err := evalToJSONString(page, `() => (document.body && (document.body.innerText || document.body.textContent)) || ''`)
+		if err != nil {
+			return fmt.Errorf("assert_text: %w", err)
+		}
+		if !strings.Contains(strings.Trim(bodyText, `"`), expected) {
+			return fmt.Errorf("assert_text missing expected text %q", expected)
+		}
+		record(fmt.Sprintf("assert_text %s", expected))
+		return nil
+	case "assert_title":
+		expected := strings.TrimSpace(step.Expect)
+		if expected == "" {
+			expected = strings.TrimSpace(step.Value)
+		}
+		if expected == "" {
+			return fmt.Errorf("browse step assert_title requires expect or value")
+		}
+		info, err := page.Info()
+		if err != nil {
+			return fmt.Errorf("assert_title page info: %w", err)
+		}
+		if !strings.Contains(info.Title, expected) {
+			return fmt.Errorf("assert_title missing expected text %q in %q", expected, info.Title)
+		}
+		record(fmt.Sprintf("assert_title %s", expected))
+		return nil
+	case "assert_url":
+		expected := strings.TrimSpace(step.Expect)
+		if expected == "" {
+			expected = strings.TrimSpace(step.Value)
+		}
+		if expected == "" {
+			return fmt.Errorf("browse step assert_url requires expect or value")
+		}
+		info, err := page.Info()
+		if err != nil {
+			return fmt.Errorf("assert_url page info: %w", err)
+		}
+		if !strings.Contains(info.URL, expected) {
+			return fmt.Errorf("assert_url missing expected text %q in %q", expected, info.URL)
+		}
+		record(fmt.Sprintf("assert_url %s", expected))
+		return nil
 	case "wait_for_text":
 		expected := strings.TrimSpace(step.Expect)
 		if expected == "" {
@@ -754,6 +970,26 @@ func captureSelectors(page *rod.Page, selectors []string, responseMaxChars int) 
 			if value != nil {
 				capture.Value = truncateForBrowseResult(*value, textLimit(responseMaxChars))
 			}
+			if state, err := first.Eval(`() => {
+				const rect = this.getBoundingClientRect();
+				const style = window.getComputedStyle(this);
+				return {
+					visible: !!(rect.width || rect.height || this.getClientRects().length) && style.visibility !== 'hidden' && style.display !== 'none',
+					enabled: !this.disabled,
+					box: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+				};
+			}`); err == nil && state != nil {
+				var parsed struct {
+					Visible bool       `json:"visible"`
+					Enabled bool       `json:"enabled"`
+					Box     ElementBox `json:"box"`
+				}
+				if err := json.Unmarshal([]byte(state.Value.JSON("", "")), &parsed); err == nil {
+					capture.Visible = parsed.Visible
+					capture.Enabled = parsed.Enabled
+					capture.BoundingBox = &parsed.Box
+				}
+			}
 			capture.Attributes = make(map[string]string)
 			for _, attr := range []string{"id", "class", "name", "role", "href", "aria-label"} {
 				v, _ := first.Attribute(attr)
@@ -789,19 +1025,20 @@ func captureStorageMap(page *rod.Page, script string) (map[string]string, error)
 	return parsed, nil
 }
 
-func captureBrowserDiagnostics(page *rod.Page) ([]string, []string, error) {
-	res, err := page.Eval(`() => window.__leditBrowserCapture || { console: [], errors: [] }`)
+func captureBrowserDiagnostics(page *rod.Page) ([]string, []string, []NetworkRequest, error) {
+	res, err := page.Eval(`() => window.__leditBrowserCapture || { console: [], errors: [], network: [] }`)
 	if err != nil {
-		return nil, nil, fmt.Errorf("capture browser diagnostics: %w", err)
+		return nil, nil, nil, fmt.Errorf("capture browser diagnostics: %w", err)
 	}
 	payload := struct {
-		Console []string `json:"console"`
-		Errors  []string `json:"errors"`
+		Console []string         `json:"console"`
+		Errors  []string         `json:"errors"`
+		Network []NetworkRequest `json:"network"`
 	}{}
 	if err := json.Unmarshal([]byte(res.Value.JSON("", "")), &payload); err != nil {
-		return nil, nil, fmt.Errorf("decode browser diagnostics: %w", err)
+		return nil, nil, nil, fmt.Errorf("decode browser diagnostics: %w", err)
 	}
-	return payload.Console, payload.Errors, nil
+	return payload.Console, payload.Errors, payload.Network, nil
 }
 
 func evalToJSONString(page *rod.Page, script string) (string, error) {
@@ -826,6 +1063,22 @@ func truncateStringSlice(values []string, maxItems int, itemLimit int) []string 
 	out := make([]string, 0, len(values))
 	for _, value := range values {
 		out = append(out, truncateForBrowseResult(value, itemLimit))
+	}
+	return out
+}
+
+func truncateNetworkRequests(values []NetworkRequest, maxItems int, itemLimit int) []NetworkRequest {
+	if len(values) > maxItems {
+		values = values[len(values)-maxItems:]
+	}
+	out := make([]NetworkRequest, 0, len(values))
+	for _, value := range values {
+		value.URL = truncateForBrowseResult(value.URL, itemLimit)
+		value.Method = truncateForBrowseResult(value.Method, 64)
+		value.Type = truncateForBrowseResult(value.Type, 64)
+		value.Initiator = truncateForBrowseResult(value.Initiator, 64)
+		value.Error = truncateForBrowseResult(value.Error, itemLimit)
+		out = append(out, value)
 	}
 	return out
 }
@@ -871,6 +1124,18 @@ func (r *rodRenderer) Close() {
 		return
 	}
 	r.closed = true
+
+	for id, session := range r.sessions {
+		session.mu.Lock()
+		if session.page != nil {
+			_ = session.page.Close()
+		}
+		if session.incognito != nil {
+			_ = session.incognito.Close()
+		}
+		session.mu.Unlock()
+		delete(r.sessions, id)
+	}
 
 	if r.browser != nil {
 		_ = r.browser.Close()

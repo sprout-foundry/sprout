@@ -89,6 +89,12 @@ Skills provide:
 - Make your code testable and maintainable
 - Add comments where logic isn't self-evident
 
+## Web App Verification
+
+- When working on web apps, localhost UIs, or JS-rendered pages, use `browse_url` directly to inspect rendered state.
+- Prefer `browse_url` over guessing from source when hydration, client routing, browser storage, cookies, selectors, or runtime behavior matter.
+- Reuse `browse_url` sessions across calls when iterating on a live app so you can inspect, interact, and verify fixes without restaging the page each time.
+
 ## When You're Unsure
 
 1. If the task description is ambiguous, make reasonable assumptions and document them

@@ -45,6 +45,15 @@ func handleBrowseURL(ctx context.Context, a *Agent, args map[string]interface{})
 	if v, ok := args["screenshot_path"].(string); ok {
 		opts.ScreenshotPath = v
 	}
+	if v, ok := args["session_id"].(string); ok {
+		opts.SessionID = v
+	}
+	if v, ok := args["persist_session"].(bool); ok {
+		opts.PersistSession = v
+	}
+	if v, ok := args["close_session"].(bool); ok {
+		opts.CloseSession = v
+	}
 	if v, ok := args["wait_for_selector"].(string); ok {
 		opts.WaitForSelector = v
 	}
@@ -59,6 +68,9 @@ func handleBrowseURL(ctx context.Context, a *Agent, args map[string]interface{})
 	}
 	if v, ok := args["include_console"].(bool); ok {
 		opts.IncludeConsole = v
+	}
+	if v, ok := args["capture_network"].(bool); ok {
+		opts.CaptureNetwork = v
 	}
 	if v, ok := args["capture_storage"].(bool); ok {
 		opts.CaptureStorage = v

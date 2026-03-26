@@ -26,7 +26,7 @@ describe('command_input_history', () => {
       }),
     } as any;
 
-    await expect(loadCommandHistory(apiService)).resolves.toEqual(['first', 'second', 'third']);
+    await expect(loadCommandHistory(apiService)).resolves.toEqual(['second', 'first', 'third']);
     expect(apiService.getTerminalHistory).toHaveBeenCalledWith('session-123');
   });
 

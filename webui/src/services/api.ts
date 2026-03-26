@@ -168,6 +168,51 @@ class ApiService {
     return response.json();
   }
 
+  async createItem(path: string, isDirectory = false): Promise<{ message: string; path: string }> {
+    const response = await fetch('/api/create', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(isDirectory ? { directory: path, path } : { path }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || data.message || 'Failed to create item');
+    }
+    return data;
+  }
+
+  async deleteItem(path: string): Promise<{ message: string; path: string }> {
+    const response = await fetch('/api/delete', {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ path }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || data.message || 'Failed to delete item');
+    }
+    return data;
+  }
+
+  async renameItem(oldPath: string, newPath: string): Promise<{ message: string; old_path: string; new_path: string }> {
+    const response = await fetch('/api/rename', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ old_path: oldPath, new_path: newPath }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || data.message || 'Failed to rename item');
+    }
+    return data;
+  }
+
   async getInstances(): Promise<{
     instances: LeditInstance[];
     current_pid: number;

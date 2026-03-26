@@ -300,32 +300,6 @@ body {
   text-overflow: ellipsis;
 }
 
-.top-instance-switcher {
-  min-width: 180px;
-  max-width: 420px;
-}
-
-.top-instance-select {
-  width: 100%;
-  min-height: 34px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-default);
-  background: var(--sidebar-select-bg);
-  color: var(--text-primary);
-  font-size: var(--text-sm);
-  font-family: var(--font-sans);
-  padding: 0 var(--space-8) 0 var(--space-4);
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%237c96b8' d='M0 0l5 5 5-5z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right var(--space-4) center;
-}
-
-.top-instance-select:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
 .mobile-overlay {
   position: fixed;
   inset: 0;
@@ -337,7 +311,7 @@ body {
   flex: 1;
   min-height: 0;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   overflow: hidden;
 }
 
@@ -346,6 +320,10 @@ body {
 }
 
 @media (max-width: 768px) {
+  .main-view-content {
+    flex-direction: row;
+  }
+
   .top-view-toolbar {
     padding: var(--space-2) var(--space-3);
     gap: var(--space-2);
@@ -366,18 +344,17 @@ body {
     max-width: 110px;
   }
 
-  .top-instance-switcher {
-    min-width: 108px;
-    max-width: 170px;
-  }
-
-  .top-instance-select {
-    min-height: 32px;
-    font-size: 12px;
-    padding-left: var(--space-3);
-  }
-
   .top-toolbar-right {
+    gap: var(--space-2);
+  }
+
+  .pane-controls {
+    padding: var(--space-2) var(--space-3);
+    gap: var(--space-2);
+  }
+
+  .pane-controls-left,
+  .pane-controls-right {
     gap: var(--space-2);
   }
 }
@@ -389,18 +366,6 @@ body {
 
   .top-toolbar-left {
     gap: var(--space-2);
-  }
-
-  .top-instance-switcher {
-    min-width: 96px;
-    max-width: 128px;
-  }
-
-  .top-instance-select {
-    min-height: 30px;
-    font-size: 11px;
-    padding-right: 22px;
-    background-position: right 7px center;
   }
 
   .top-view-group {
@@ -451,6 +416,7 @@ html, body, #root {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-width: 0;
   min-height: 0;
   overflow: hidden;
   background: var(--bg-secondary);
@@ -478,11 +444,12 @@ html, body, #root {
 /* Pane Controls */
 .pane-controls {
   display: flex;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
   background: var(--bg-tertiary);
   border-bottom: 1px solid var(--border-subtle);
-  justify-content: flex-end;
 }
 
 .pane-control-btn {
@@ -533,6 +500,24 @@ html, body, #root {
 .pane-control-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.pane-control-btn.compact {
+  width: 30px;
+  height: 28px;
+  padding: 0;
+  justify-content: center;
+  gap: 0;
+}
+
+.split-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pane-controls-mobile {
+  flex-shrink: 0;
 }
 
 /* Editor Panes Layout */
@@ -679,6 +664,10 @@ html, body, #root {
   .pane-control-btn {
     flex: 1;
     justify-content: center;
+  }
+
+  .pane-control-btn.compact {
+    flex: 0 0 auto;
   }
 }
 

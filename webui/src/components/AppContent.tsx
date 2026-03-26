@@ -1,16 +1,16 @@
 import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react';
-import { Menu, X, Columns2, Rows2, MessageSquare, FileCode2, GitBranch } from 'lucide-react';
+import { Menu, X, Columns2, Rows2 } from 'lucide-react';
 import Sidebar from './Sidebar';
-import Chat from './Chat';
-import GitView from './GitView';
 import Terminal from './Terminal';
 import EditorTabs from './EditorTabs';
-import EditorPane from './EditorPane';
+import WorkspacePane from './WorkspacePane';
+import ContextPanel, { type ContextPanelHandle } from './ContextPanel';
 import ResizeHandle from './ResizeHandle';
 import Status from './Status';
 import CommandPalette from './CommandPalette';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { ApiService, LeditInstance } from '../services/api';
+import { useGitWorkspace } from '../hooks/useGitWorkspace';
 
 const INSTANCE_PID_STORAGE_KEY = 'ledit:webui:instancePid';
 const INSTANCE_SWITCH_RESET_KEY = 'ledit:webui:instanceSwitchReset';
@@ -97,8 +97,6 @@ interface AppContentProps {
   onGitStage: (files: string[]) => Promise<void>;
   onGitUnstage: (files: string[]) => Promise<void>;
   onGitDiscard: (files: string[]) => Promise<void>;
-  selectedGitFilePath?: string | null;
-  onGitFileSelect?: (filePath: string) => void;
   onTerminalOutput: (output: string) => void;
   onTerminalExpandedChange: (expanded: boolean) => void;
   isConnected: boolean;
@@ -130,13 +128,24 @@ const AppContent: React.FC<AppContentProps> = ({
   onGitStage,
   onGitUnstage,
   onGitDiscard,
-  selectedGitFilePath,
-  onGitFileSelect,
   onTerminalOutput,
   onTerminalExpandedChange,
   isConnected
 }) => {
-  const { panes, paneLayout, activePaneId, switchPane, splitPane, closeSplit, openFile, paneSizes, updatePaneSize } = useEditorManager();
+  const {
+    panes,
+    paneLayout,
+    activePaneId,
+    activeBufferId,
+    buffers,
+    switchPane,
+    splitPane,
+    closeSplit,
+    openFile,
+    openWorkspaceBuffer,
+    paneSizes,
+    updatePaneSize
+  } = useEditorManager();
   const apiService = ApiService.getInstance();
 
   // Compute current todos: prefer state from todo_update events, fall back to parsing from TodoWrite tool executions
@@ -176,7 +185,7 @@ const AppContent: React.FC<AppContentProps> = ({
   const [instances, setInstances] = useState<LeditInstance[]>([]);
   const [selectedInstancePID, setSelectedInstancePID] = useState<number>(0);
   const [isSwitchingInstance, setIsSwitchingInstance] = useState(false);
-  const [instanceSwitchError, setInstanceSwitchError] = useState<string | null>(null);
+  const initialViewSyncRef = useRef(false);
 
   // Load hotkeys config path on mount
   useEffect(() => {
@@ -226,6 +235,52 @@ const AppContent: React.FC<AppContentProps> = ({
       }
     };
   }, [apiService, isConnected]);
+  const {
+    gitStatus,
+    commitMessage,
+    setCommitMessage,
+    selectedFiles,
+    activeDiffSelectionKey,
+    activeDiffPath,
+    activeDiff,
+    diffMode,
+    isDiffLoading,
+    diffError,
+    isGitLoading,
+    isGitActing,
+    isGeneratingCommitMessage,
+    gitActionError,
+    isReviewLoading,
+    isReviewFixing,
+    reviewError,
+    reviewFixResult,
+    reviewFixLogs,
+    reviewFixSessionID,
+    deepReview,
+    handleToggleFileSelection,
+    handleToggleSectionSelection,
+    handlePreviewGitFile,
+    handleStageFile,
+    handleUnstageFile,
+    handleDiscardFile,
+    handleSectionAction,
+    handleGitCommitClick,
+    handleGenerateCommitMessage,
+    handleRunReview,
+    handleFixFromReview,
+    handleDiffModeChange,
+  } = useGitWorkspace({
+    apiService,
+    gitRefreshToken,
+    selectedGitFilePath: null,
+    onViewChange,
+    onGitCommit,
+    onGitAICommit,
+    onGitStage,
+    onGitUnstage,
+    onGitDiscard,
+    openWorkspaceBuffer,
+  });
 
   const handleInstanceChange = useCallback(async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const pid = Number(e.target.value);
@@ -233,7 +288,6 @@ const AppContent: React.FC<AppContentProps> = ({
       return;
     }
 
-    setInstanceSwitchError(null);
     setIsSwitchingInstance(true);
     try {
       window.localStorage.setItem(INSTANCE_PID_STORAGE_KEY, String(pid));
@@ -244,10 +298,23 @@ const AppContent: React.FC<AppContentProps> = ({
       window.location.reload();
     } catch (error) {
       console.error('Failed to switch instance:', error);
-      setInstanceSwitchError('Failed to switch instance');
       setIsSwitchingInstance(false);
     }
   }, [apiService, selectedInstancePID]);
+
+  const handlePrimaryViewChange = useCallback((view: 'chat' | 'editor' | 'git') => {
+    if (view === 'chat') {
+      openWorkspaceBuffer({
+        kind: 'chat',
+        path: '__workspace/chat',
+        title: 'Chat',
+        ext: '.chat',
+        isPinned: true,
+        isClosable: false,
+      });
+    }
+    onViewChange(view);
+  }, [onViewChange, openWorkspaceBuffer]);
 
   // Listen for hotkey custom events
   useEffect(() => {
@@ -272,20 +339,20 @@ const AppContent: React.FC<AppContentProps> = ({
           setIsCommandPaletteOpen(true);
           break;
         case 'switch_to_chat':
-          onViewChange('chat');
+          handlePrimaryViewChange('chat');
           break;
         case 'switch_to_editor':
-          onViewChange('editor');
+          handlePrimaryViewChange('editor');
           break;
         case 'switch_to_git':
-          onViewChange('git');
+          handlePrimaryViewChange('git');
           break;
       }
     };
     
     window.addEventListener('ledit:hotkey', handleHotkey);
     return () => window.removeEventListener('ledit:hotkey', handleHotkey);
-  }, [onSidebarToggle, onTerminalExpandedChange, isTerminalExpanded, onViewChange]);
+  }, [handlePrimaryViewChange, onSidebarToggle, onTerminalExpandedChange, isTerminalExpanded]);
 
   // Handler to open hotkeys config in editor
   const handleOpenHotkeysConfig = useCallback(() => {
@@ -317,8 +384,25 @@ const AppContent: React.FC<AppContentProps> = ({
     return () => window.removeEventListener('ledit:open-hotkeys-config', handleOpenHotkeys);
   }, [handleOpenHotkeysConfig]);
 
+  const currentBuffer = activeBufferId ? buffers.get(activeBufferId) : null;
+  const contextPanelRef = useRef<ContextPanelHandle>(null);
+  const showContextSidebar = currentBuffer?.kind === 'chat';
   const canSplit = panes.length < 3;
   const canCloseSplit = panes.length > 1;
+
+  useEffect(() => {
+    if (initialViewSyncRef.current) {
+      return;
+    }
+    if (currentBuffer?.kind === 'chat' && state.currentView !== 'chat') {
+      initialViewSyncRef.current = true;
+      onViewChange('chat');
+      return;
+    }
+    if (currentBuffer) {
+      initialViewSyncRef.current = true;
+    }
+  }, [currentBuffer, onViewChange, state.currentView]);
 
   const handleFileClick = useCallback((filePath: string, lineNumber?: number) => {
     const segments = filePath.split('/').filter(Boolean);
@@ -326,10 +410,7 @@ const AppContent: React.FC<AppContentProps> = ({
     const extensionIndex = fileName.lastIndexOf('.');
     const fileExt = extensionIndex > 0 ? fileName.slice(extensionIndex) : '';
     const openInEditor = () => {
-      if (state.currentView !== 'editor') {
-        onViewChange('editor');
-      }
-
+      onViewChange('editor');
       openFile({
         path: filePath,
         name: fileName,
@@ -340,45 +421,38 @@ const AppContent: React.FC<AppContentProps> = ({
       });
     };
 
-    switch (state.currentView) {
-      case 'chat':
-        if (typeof lineNumber === 'number') {
-          openInEditor();
-          setTimeout(() => {
-            document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line: lineNumber } }));
-          }, 100);
-          break;
-        }
-        onInputChange(prev => prev + ` @${filePath}`);
-        setTimeout(() => {
-          const textarea = document.querySelector('textarea[placeholder*="Ask me"]');
-          if (textarea instanceof HTMLTextAreaElement) {
-            textarea.focus();
-          }
-        }, 100);
-        break;
-      case 'editor':
-        openInEditor();
-        if (typeof lineNumber === 'number') {
-          setTimeout(() => {
-            document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line: lineNumber } }));
-          }, 100);
-        }
-        break;
-      case 'git':
-        if (typeof lineNumber === 'number') {
-          openInEditor();
-          setTimeout(() => {
-            document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line: lineNumber } }));
-          }, 100);
-          break;
-        }
-        onGitFileSelect?.(filePath);
-        break;
-      default:
-        console.log('File clicked in unknown view:', state.currentView, filePath);
+    openInEditor();
+    if (typeof lineNumber === 'number') {
+      setTimeout(() => {
+        document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line: lineNumber } }));
+      }, 100);
     }
-  }, [state.currentView, onInputChange, openFile, onGitFileSelect, onViewChange]);
+  }, [onViewChange, openFile]);
+
+  const handleOpenRevisionDiff = useCallback((options: { path: string; diff: string; title: string }) => {
+    onViewChange('editor');
+    openWorkspaceBuffer({
+      kind: 'diff',
+      path: `__workspace/revision/${options.path}-${Date.now()}`,
+      title: `${options.title}: ${options.path.split('/').pop() || options.path}`,
+      ext: '.diff',
+      metadata: {
+        sourcePath: options.path,
+        diff: {
+          message: 'success',
+          path: options.path,
+          has_staged: false,
+          has_unstaged: false,
+          staged_diff: '',
+          unstaged_diff: '',
+          diff: options.diff,
+        },
+        diffMode: 'combined',
+        modeOptions: ['combined'],
+        title: options.title,
+      }
+    });
+  }, [onViewChange, openWorkspaceBuffer]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const handlePaneResize = useCallback((paneId: string) => (deltaPixels: number) => {
@@ -406,6 +480,10 @@ const AppContent: React.FC<AppContentProps> = ({
 
       <Sidebar
         isConnected={state.isConnected}
+        instances={instances}
+        selectedInstancePID={selectedInstancePID}
+        isSwitchingInstance={isSwitchingInstance}
+        onInstanceChange={handleInstanceChange}
         provider={state.provider}
         model={state.model}
         selectedModel={state.model}
@@ -422,149 +500,82 @@ const AppContent: React.FC<AppContentProps> = ({
         sidebarCollapsed={sidebarCollapsed}
         onSidebarToggle={onSidebarToggle}
         onProviderChange={onProviderChange}
+        onOpenRevisionDiff={handleOpenRevisionDiff}
+        gitPanel={{
+          gitStatus,
+          selectedFiles,
+          activeDiffSelectionKey,
+          commitMessage,
+          isLoading: isGitLoading,
+          isActing: isGitActing,
+          isGeneratingCommitMessage,
+          isReviewLoading,
+          actionError: gitActionError,
+          onCommitMessageChange: setCommitMessage,
+          onGenerateCommitMessage: handleGenerateCommitMessage,
+          onCommit: handleGitCommitClick,
+          onRunReview: handleRunReview,
+          onToggleFileSelection: handleToggleFileSelection,
+          onToggleSectionSelection: handleToggleSectionSelection,
+          onPreviewFile: handlePreviewGitFile,
+          onStageFile: handleStageFile,
+          onUnstageFile: handleUnstageFile,
+          onDiscardFile: handleDiscardFile,
+          onSectionAction: handleSectionAction,
+        }}
       />
       <div className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''} ${isTerminalExpanded ? 'terminal-expanded' : ''}`}>
-        <div className="top-view-toolbar">
-          <div className="top-toolbar-left">
-            {isMobile && (
-              <button
-                className="top-mobile-menu-btn"
-                onClick={onToggleSidebar}
-                aria-label={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-                title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-              >
-                <Menu size={16} />
-              </button>
-            )}
-          <div className="top-view-group" role="tablist" aria-label="Primary views">
-            <button
-              className={`top-view-btn ${state.currentView === 'chat' ? 'active' : ''}`}
-              onClick={() => onViewChange('chat')}
-              aria-label="Chat view"
-              title="Chat"
-              role="tab"
-              aria-selected={state.currentView === 'chat'}
-            >
-              <MessageSquare size={16} />
-            </button>
-            <button
-              className={`top-view-btn ${state.currentView === 'editor' ? 'active' : ''}`}
-              onClick={() => onViewChange('editor')}
-              aria-label="Editor view"
-              title="Editor"
-              role="tab"
-              aria-selected={state.currentView === 'editor'}
-            >
-              <FileCode2 size={16} />
-            </button>
-            <button
-              className={`top-view-btn ${state.currentView === 'git' ? 'active' : ''}`}
-              onClick={() => onViewChange('git')}
-              aria-label="Git view"
-              title="Git"
-              role="tab"
-              aria-selected={state.currentView === 'git'}
-            >
-              <GitBranch size={16} />
-            </button>
-          </div>
-          </div>
-          <div className="top-toolbar-right">
-            <div className="top-instance-switcher">
-              <select
-                id="top-instance-select"
-                value={selectedInstancePID || ''}
-                onChange={handleInstanceChange}
-                disabled={!isConnected || instances.length === 0 || isSwitchingInstance}
-                className="top-instance-select"
-                title={instances.find(i => i.pid === selectedInstancePID)?.working_dir || ''}
-              >
-                {instances.length === 0 && (
-                  <option value="">No instances</option>
-                )}
-                {instances.map((instance) => {
-                  const suffix = [
-                    instance.is_host ? 'host' : '',
-                    instance.is_current ? 'this' : '',
-                  ].filter(Boolean).join(', ');
-                  const name = instance.working_dir.split('/').filter(Boolean).slice(-2).join('/');
-                  const fullLabel = isMobile
-                    ? `pid:${instance.pid}${suffix ? ` (${suffix})` : ''}`
-                    : `${name} · pid:${instance.pid}${suffix ? ` (${suffix})` : ''}`;
-                  return (
-                    <option key={instance.id} value={instance.pid}>
-                      {fullLabel}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-          <span className="top-view-current" aria-live="polite">
-            {isSwitchingInstance ? 'switching…' : (instanceSwitchError || state.currentView)}
-          </span>
-          </div>
-        </div>
-
         <div className="main-view-content">
-        {state.currentView === 'chat' ? (
-          <>
-            <Chat
-              messages={state.messages}
-              onSendMessage={onSendMessage}
-              onQueueMessage={onQueueMessage}
-              queuedMessagesCount={queuedMessagesCount}
-              inputValue={inputValue}
-              onInputChange={onInputChange}
-              isProcessing={state.isProcessing}
-              lastError={state.lastError}
-              toolExecutions={state.toolExecutions}
-              queryProgress={state.queryProgress}
-              currentTodos={currentTodos}
-            />
-          </>
-        ) : state.currentView === 'git' ? (
-          <GitView
-            refreshToken={gitRefreshToken}
-            onCommit={onGitCommit}
-            onAICommit={onGitAICommit}
-            onStage={onGitStage}
-            onUnstage={onGitUnstage}
-            onDiscard={onGitDiscard}
-            selectedFilePath={selectedGitFilePath}
-          />
-        ) : state.currentView === 'editor' ? (
           <div className="editor-view">
-            <div className="pane-controls">
-              {canCloseSplit && (
+            {isMobile && (
+              <div className="pane-controls pane-controls-mobile">
                 <button
-                  onClick={closeSplit}
-                  className="pane-control-btn"
-                  title="Close split pane"
+                  className="top-mobile-menu-btn"
+                  onClick={onToggleSidebar}
+                  aria-label={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+                  title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
                 >
-                  <X size={14} /> Close Split
+                  <Menu size={16} />
                 </button>
-              )}
-              {canSplit && (
-                <button
-                  onClick={() => activePaneId && splitPane(activePaneId, 'vertical')}
-                  className="pane-control-btn"
-                  title="Split vertically"
-                >
-                  <Columns2 size={16} /> Split
-                </button>
-              )}
-              {canSplit && (
-                <button
-                  onClick={() => activePaneId && splitPane(activePaneId, 'horizontal')}
-                  className="pane-control-btn"
-                  title="Split horizontally"
-                >
-                  <Rows2 size={16} /> Split
-                </button>
-              )}
-            </div>
+              </div>
+            )}
 
-            <EditorTabs />
+            <EditorTabs
+              actions={(
+                <div className="split-controls">
+                  {canCloseSplit && (
+                    <button
+                      onClick={closeSplit}
+                      className="pane-control-btn compact"
+                      title="Close split pane"
+                      aria-label="Close split pane"
+                    >
+                      <X size={13} />
+                    </button>
+                  )}
+                  {canSplit && (
+                    <button
+                      onClick={() => activePaneId && splitPane(activePaneId, 'vertical')}
+                      className="pane-control-btn compact"
+                      title="Split vertically"
+                      aria-label="Split vertically"
+                    >
+                      <Columns2 size={14} />
+                    </button>
+                  )}
+                  {canSplit && (
+                    <button
+                      onClick={() => activePaneId && splitPane(activePaneId, 'horizontal')}
+                      className="pane-control-btn compact"
+                      title="Split horizontally"
+                      aria-label="Split horizontally"
+                    >
+                      <Rows2 size={14} />
+                    </button>
+                  )}
+                </div>
+              )}
+            />
 
             <div className={`editor-workspace ${paneLayout}`}>
               <div
@@ -588,6 +599,38 @@ const AppContent: React.FC<AppContentProps> = ({
                             paneId={pane.id}
                             isActive={pane.id === activePaneId}
                             onClick={() => switchPane(pane.id)}
+                            chatProps={{
+                              messages: state.messages,
+                              onSendMessage,
+                              onQueueMessage,
+                              queuedMessagesCount,
+                              inputValue,
+                              onInputChange,
+                              isProcessing: state.isProcessing,
+                              lastError: state.lastError,
+                              toolExecutions: state.toolExecutions,
+                              queryProgress: state.queryProgress,
+                              currentTodos,
+                              onToolPillClick: (toolId: string) => contextPanelRef.current?.highlightTool(toolId),
+                            }}
+                            reviewProps={{
+                              review: deepReview,
+                              reviewError,
+                              reviewFixResult,
+                              reviewFixLogs,
+                              reviewFixSessionID,
+                              isReviewLoading,
+                              isReviewFixing,
+                              onFixFromReview: handleFixFromReview,
+                            }}
+                            diffState={{
+                              activeDiffPath,
+                              activeDiff,
+                              diffMode,
+                              isDiffLoading,
+                              diffError,
+                              onDiffModeChange: handleDiffModeChange,
+                            }}
                           />
                         </EditorPaneWrapper>
                       </PaneWrapper>
@@ -604,7 +647,20 @@ const AppContent: React.FC<AppContentProps> = ({
               </div>
             </div>
           </div>
-        ) : null}
+          {showContextSidebar && (
+            <ContextPanel
+              ref={contextPanelRef}
+              context="chat"
+              toolExecutions={state.toolExecutions}
+              currentTodos={currentTodos}
+              messages={state.messages}
+              isProcessing={state.isProcessing}
+              lastError={state.lastError}
+              queryProgress={state.queryProgress}
+              isMobileLayout={isMobile}
+              onOpenRevisionDiff={handleOpenRevisionDiff}
+            />
+          )}
         </div>
         <Status isConnected={state.isConnected} position="bottom" stats={state.stats} />
       </div>
@@ -657,10 +713,22 @@ const EditorPaneWrapper: React.FC<{children: React.ReactNode, isActive?: boolean
   );
 };
 
-const EditorPaneComponent: React.FC<{paneId: string, isActive?: boolean, onClick?: () => void}> = ({ paneId, onClick }) => {
+const EditorPaneComponent: React.FC<{
+  paneId: string;
+  isActive?: boolean;
+  onClick?: () => void;
+  chatProps: React.ComponentProps<typeof WorkspacePane>['chatProps'];
+  reviewProps: React.ComponentProps<typeof WorkspacePane>['reviewProps'];
+  diffState: React.ComponentProps<typeof WorkspacePane>['diffState'];
+}> = ({ paneId, onClick, chatProps, reviewProps, diffState }) => {
   return (
     <div className="editor-pane-host" onClick={onClick}>
-      <EditorPane paneId={paneId} />
+      <WorkspacePane
+        paneId={paneId}
+        chatProps={chatProps}
+        reviewProps={reviewProps}
+        diffState={diffState}
+      />
     </div>
   );
 };

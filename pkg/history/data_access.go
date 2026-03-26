@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -271,12 +272,14 @@ func fetchAllChanges() ([]ChangeLog, error) {
 			if os.IsNotExist(err) {
 				continue // Not a valid change directory, skip.
 			}
-			return nil, fmt.Errorf("failed to read metadata for %s: %w", entry.Name(), err)
+			log.Printf("[history] skipping change %s: failed to read metadata: %v", entry.Name(), err)
+			continue
 		}
 
 		var metadata ChangeMetadata
 		if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal metadata for %s: %w", entry.Name(), err)
+			log.Printf("[history] skipping change %s: failed to parse metadata: %v", entry.Name(), err)
+			continue
 		}
 
 		safeFilename := strings.ReplaceAll(metadata.Filename, "/", "_")
@@ -284,7 +287,8 @@ func fetchAllChanges() ([]ChangeLog, error) {
 
 		originalBytes, err := filesystem.ReadFileBytes(filepath.Join(changeDir, safeFilename+originalSuffix))
 		if err != nil {
-			return nil, fmt.Errorf("failed to read original code for %s: %w", metadata.Filename, err)
+			log.Printf("[history] skipping change %s: failed to read original code for %s: %v", entry.Name(), metadata.Filename, err)
+			continue
 		}
 		// Decode base64 content
 		originalDecoded, err := base64.StdEncoding.DecodeString(string(originalBytes))
@@ -296,7 +300,8 @@ func fetchAllChanges() ([]ChangeLog, error) {
 
 		updatedBytes, err := filesystem.ReadFileBytes(filepath.Join(changeDir, safeFilename+updatedSuffix))
 		if err != nil {
-			return nil, fmt.Errorf("failed to read updated code for %s: %w", metadata.Filename, err)
+			log.Printf("[history] skipping change %s: failed to read updated code for %s: %v", entry.Name(), metadata.Filename, err)
+			continue
 		}
 		// Decode base64 content
 		updatedDecoded, err := base64.StdEncoding.DecodeString(string(updatedBytes))

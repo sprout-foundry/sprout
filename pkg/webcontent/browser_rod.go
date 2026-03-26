@@ -553,20 +553,19 @@ func (r *rodRenderer) Run(ctx context.Context, url string, opts BrowseOptions) (
 		result.VisibleText = truncateForBrowseResult(HTMLToText(html), textLimit(opts.ResponseMaxChars))
 	}
 
-	if opts.IncludeConsole {
-		consoleMessages, pageErrors, _, err := captureBrowserDiagnostics(page)
+	if opts.IncludeConsole || opts.CaptureNetwork {
+		consoleMessages, pageErrors, networkRequests, err := captureBrowserDiagnostics(page)
 		if err != nil {
 			return nil, err
 		}
-		result.ConsoleMessages = truncateStringSlice(consoleMessages, 40, textLimit(opts.ResponseMaxChars))
-		result.PageErrors = truncateStringSlice(pageErrors, 40, textLimit(opts.ResponseMaxChars))
-	}
-	if opts.CaptureNetwork {
-		_, _, networkRequests, err := captureBrowserDiagnostics(page)
-		if err != nil {
-			return nil, err
+		if opts.IncludeConsole {
+			result.ConsoleMessages = truncateStringSlice(consoleMessages, 40, textLimit(opts.ResponseMaxChars))
+			result.PageErrors = truncateStringSlice(pageErrors, 40, textLimit(opts.ResponseMaxChars))
 		}
-		result.NetworkRequests = truncateNetworkRequests(networkRequests, 50, textLimit(opts.ResponseMaxChars))
+		if opts.CaptureNetwork {
+			result.NetworkRequests = truncateNetworkRequests(markCORSBlockedRequests(networkRequests), 50, textLimit(opts.ResponseMaxChars))
+		}
+		result.CORSIssues = truncateStringSlice(detectCORSIssues(consoleMessages, pageErrors, networkRequests), 20, textLimit(opts.ResponseMaxChars))
 	}
 	if opts.CaptureCookies {
 		cookies, err := captureStorageMap(page, `() => {
@@ -1039,6 +1038,60 @@ func captureBrowserDiagnostics(page *rod.Page) ([]string, []string, []NetworkReq
 		return nil, nil, nil, fmt.Errorf("decode browser diagnostics: %w", err)
 	}
 	return payload.Console, payload.Errors, payload.Network, nil
+}
+
+func detectCORSIssues(consoleMessages []string, pageErrors []string, networkRequests []NetworkRequest) []string {
+	out := make([]string, 0)
+	seen := make(map[string]struct{})
+	add := func(value string) {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return
+		}
+		if _, ok := seen[value]; ok {
+			return
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+
+	for _, value := range append(append([]string{}, consoleMessages...), pageErrors...) {
+		lower := strings.ToLower(value)
+		if strings.Contains(lower, "cors") ||
+			strings.Contains(lower, "cross-origin") ||
+			strings.Contains(lower, "same origin policy") ||
+			strings.Contains(lower, "access-control-allow-origin") {
+			add(value)
+		}
+	}
+	for _, request := range networkRequests {
+		lower := strings.ToLower(request.Error)
+		if request.CORSBlocked ||
+			strings.Contains(lower, "cors") ||
+			strings.Contains(lower, "cross-origin") ||
+			strings.Contains(lower, "access-control-allow-origin") {
+			if request.URL != "" {
+				add(fmt.Sprintf("CORS/network failure for %s %s: %s", request.Method, request.URL, strings.TrimSpace(request.Error)))
+			} else {
+				add(strings.TrimSpace(request.Error))
+			}
+		}
+	}
+	return out
+}
+
+func markCORSBlockedRequests(values []NetworkRequest) []NetworkRequest {
+	out := make([]NetworkRequest, 0, len(values))
+	for _, value := range values {
+		combined := strings.ToLower(value.Error + " " + value.URL + " " + value.Initiator)
+		if strings.Contains(combined, "cors") ||
+			strings.Contains(combined, "cross-origin") ||
+			strings.Contains(combined, "access-control-allow-origin") {
+			value.CORSBlocked = true
+		}
+		out = append(out, value)
+	}
+	return out
 }
 
 func evalToJSONString(page *rod.Page, script string) (string, error) {

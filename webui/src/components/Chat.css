@@ -2,7 +2,9 @@
   display: flex;
   flex-direction: column;
   flex: 1;
+  min-width: 0;
   min-height: 0;
+  overflow: hidden;
 }
 
 .chat-header {
@@ -53,8 +55,11 @@
 
 .chat-container {
   flex: 1 1 auto;
+  width: 100%;
   min-width: 0;
+  min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -63,10 +68,12 @@
 
 .chat-main {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   display: flex;
   gap: 12px;
   padding: 12px;
+  overflow: hidden;
 }
 
 .side-panel-rail {
@@ -624,6 +631,7 @@
 .message {
   display: flex;
   width: 100%;
+  min-width: 0;
 }
 
 .message.user {
@@ -637,6 +645,7 @@
 .message-bubble {
   width: 100%;
   max-width: 100%;
+  min-width: 0;
   padding: 8px 10px;
   border-radius: 6px;
   position: relative;
@@ -685,7 +694,9 @@
 }
 
 .message-content {
+  min-width: 0;
   line-height: 1.6;
+  overflow-wrap: anywhere;
   word-break: break-word;
   font-size: 13px;
 }
@@ -728,6 +739,7 @@
 
 .message-content p {
   margin: 0 0 8px;
+  overflow-wrap: anywhere;
 }
 
 .message-content h1,
@@ -752,6 +764,7 @@
 
 .message-content li {
   margin: 4px 0;
+  overflow-wrap: anywhere;
 }
 
 .message-content blockquote {
@@ -761,6 +774,7 @@
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border-radius: 0 8px 8px 0;
+  overflow-wrap: anywhere;
 }
 
 .message-content a {
@@ -771,6 +785,7 @@
 
 .message-content table {
   width: 100%;
+  max-width: 100%;
   border-collapse: collapse;
   margin: 10px 0;
   font-size: 12px;
@@ -783,6 +798,8 @@
   border: 1px solid var(--border-default);
   padding: 6px 8px;
   text-align: left;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .message-content th {
@@ -814,6 +831,7 @@
   border-radius: 8px;
   padding: 10px;
   margin: 8px 0;
+  max-width: 100%;
   overflow-x: auto;
   position: relative;
 }
@@ -838,6 +856,8 @@
 }
 
 .input-container {
+  flex-shrink: 0;
+  min-width: 0;
   border-top: 1px solid var(--border-subtle);
   padding: 12px;
   background: var(--bg-secondary);

@@ -10,9 +10,6 @@ import {
   ScrollText,
   FolderCog,
   Settings,
-  ChevronLeft,
-  ChevronRight,
-  X,
   Keyboard,
   Upload,
   Trash2,
@@ -25,6 +22,7 @@ import FileTree from './FileTree';
 import SearchView from './SearchView';
 import GitSidebarPanel, { GitStatusData } from './GitSidebarPanel';
 import RevisionListPanel from './RevisionListPanel';
+import LeditLogo from './LeditLogo';
 
 type SectionTab = 'git' | 'history' | 'logs' | 'files' | 'settings' | 'search';
 
@@ -147,6 +145,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [selectedSection, setSelectedSection] = useState<SectionTab>('git');
   const [settings, setSettings] = useState<LeditSettings | null>(null);
   const apiService = ApiService.getInstance();
+  const effectiveSidebarCollapsed = !isMobile && !!sidebarCollapsed;
 
   // Load settings on mount / connection
   useEffect(() => {
@@ -275,7 +274,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     const nextWidth = clampSidebarWidth(sidebarWidthRef.current + delta);
 
     // Allow drag-to-expand behavior from collapsed mode.
-    if (sidebarCollapsed) {
+    if (effectiveSidebarCollapsed) {
       setSidebarWidth(nextWidth);
       if (delta > 0) {
         onSidebarToggle?.();
@@ -284,7 +283,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
 
     setSidebarWidth(nextWidth);
-  }, [onSidebarToggle, sidebarCollapsed]);
+  }, [effectiveSidebarCollapsed, onSidebarToggle]);
 
   const handleSidebarResizeEnd = useCallback(() => {
     setSidebarWidth(prev => {
@@ -299,7 +298,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   }, []);
 
   const handleSectionTabClick = (tab: SectionTab) => {
-    if (sidebarCollapsed) {
+    if (effectiveSidebarCollapsed) {
       // If collapsed, expand sidebar and switch to the section
       setSelectedSection(tab);
       onSidebarToggle?.();
@@ -313,7 +312,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     const handleHotkey = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (detail?.commandId === 'open_search') {
-        if (sidebarCollapsed) {
+        if (effectiveSidebarCollapsed) {
           setSelectedSection('search');
           onSidebarToggle?.();
         } else {
@@ -323,7 +322,15 @@ const Sidebar: React.FC<SidebarProps> = ({
     };
     window.addEventListener('ledit:hotkey', handleHotkey);
     return () => window.removeEventListener('ledit:hotkey', handleHotkey);
-  }, [sidebarCollapsed, onSidebarToggle]);
+  }, [effectiveSidebarCollapsed, onSidebarToggle]);
+
+  const handleLogoToggle = useCallback(() => {
+    if (isMobile) {
+      finalOnMobileMenuToggle?.();
+      return;
+    }
+    onSidebarToggle?.();
+  }, [finalOnMobileMenuToggle, isMobile, onSidebarToggle]);
 
   useEffect(() => {
     if (currentView === 'git') {
@@ -643,31 +650,19 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <div className="sidebar-resize-wrapper" style={{ flexShrink: 0 }}>
-      <div className={`sidebar ${isMobile ? 'mobile' : ''} ${finalIsMobileMenuOpen ? 'open' : 'closed'} ${sidebarCollapsed ? 'collapsed' : ''}`} style={sidebarCollapsed ? undefined : { width: `${sidebarWidth}px` }}>
-        {/* Desktop collapse button */}
-      {!isMobile && (
-        <button
-          className="desktop-collapse-btn"
-          onClick={onSidebarToggle}
-          aria-label="Toggle sidebar"
-        >
-          {sidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-        </button>
-      )}
-
-      {isMobile && (
-        <button
-          className="mobile-close-btn"
-          onClick={finalOnMobileMenuToggle}
-          aria-label="Close sidebar"
-        >
-          <X size={14} />
-        </button>
-      )}
-
+      <div className={`sidebar ${isMobile ? 'mobile' : ''} ${finalIsMobileMenuOpen ? 'open' : 'closed'} ${effectiveSidebarCollapsed ? 'collapsed' : ''}`} style={effectiveSidebarCollapsed ? undefined : { width: `${sidebarWidth}px` }}>
       {/* Pinned global header: instance selector */}
       <div className="sidebar-pinned-header">
-        {!sidebarCollapsed && (
+        <button
+          type="button"
+          className="sidebar-brand sidebar-brand-button"
+          onClick={handleLogoToggle}
+          aria-label={isMobile ? 'Close sidebar' : (effectiveSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar')}
+          title={isMobile ? 'Close sidebar' : (effectiveSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar')}
+        >
+          <LeditLogo showWordmark={false} compact />
+        </button>
+        {!effectiveSidebarCollapsed && (
           <div className="instance-selector">
             <select
               id="sidebar-instance-select"
@@ -722,7 +717,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Content Pane (only when expanded) */}
-        {!sidebarCollapsed && (
+        {!effectiveSidebarCollapsed && (
           <div className="sidebar-content-pane" role="tabpanel" id="sidebar-tabpanel">
                   <div className="content-pane-scroll">
               {renderContentPane()}

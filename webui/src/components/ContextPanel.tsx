@@ -379,13 +379,13 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   const startResize = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
     setPanelCollapsed(false);
+    const startX = e.clientX;
+    const startWidth = panelWidth;
 
     const onMouseMove = (moveEvent: MouseEvent) => {
-      if (!panelContainerRef.current) return;
-      const rect = panelContainerRef.current.getBoundingClientRect();
-      const parentEl = panelContainerRef.current.parentElement;
+      const parentEl = panelContainerRef.current?.parentElement;
       const parentWidth = parentEl ? parentEl.getBoundingClientRect().width : window.innerWidth;
-      const rawWidth = rect.right - moveEvent.clientX;
+      const rawWidth = startWidth + (startX - moveEvent.clientX);
       const maxByLayout = parentWidth - 260;
       const clamped = Math.max(PANEL_MIN, Math.min(Math.min(PANEL_MAX, maxByLayout), rawWidth));
       onPanelWidthChange?.(clamped);
@@ -402,7 +402,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     document.body.style.cursor = 'col-resize';
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
-  }, [onPanelWidthChange]);
+  }, [onPanelWidthChange, panelWidth]);
 
   const isProcessing = context === 'chat' ? props.isProcessing : false;
 

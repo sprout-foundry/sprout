@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   AlertTriangle,
   ArrowDown,
@@ -6,11 +7,11 @@ import {
   CheckCircle2,
   CheckSquare,
   GitBranch,
+  MinusSquare,
   RefreshCw,
   ShieldCheck,
   Sparkles,
   Square,
-  Undo2,
   Trash2,
   PlusSquare,
 } from 'lucide-react';
@@ -92,7 +93,7 @@ const GitSidebarPanel: React.FC<GitSidebarPanelProps> = ({
   onDiscardFile,
   onSectionAction,
 }) => {
-  const panelRef = useRef<HTMLDivElement>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -105,19 +106,23 @@ const GitSidebarPanel: React.FC<GitSidebarPanelProps> = ({
       return;
     }
 
-    const close = () => setContextMenu(null);
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (target && contextMenuRef.current?.contains(target)) {
+        return;
+      }
+      setContextMenu(null);
+    };
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setContextMenu(null);
       }
     };
 
-    window.addEventListener('click', close);
-    window.addEventListener('contextmenu', close);
+    window.addEventListener('mousedown', handlePointerDown);
     window.addEventListener('keydown', handleEscape);
     return () => {
-      window.removeEventListener('click', close);
-      window.removeEventListener('contextmenu', close);
+      window.removeEventListener('mousedown', handlePointerDown);
       window.removeEventListener('keydown', handleEscape);
     };
   }, [contextMenu]);
@@ -133,7 +138,7 @@ const GitSidebarPanel: React.FC<GitSidebarPanelProps> = ({
   const hasStagedFiles = gitStatus.staged.length > 0;
 
   return (
-    <div className="git-sidebar-panel" ref={panelRef}>
+    <div className="git-sidebar-panel">
       <div className="git-sidebar-header">
         <div className="git-sidebar-branch">
           <span className="branch-icon"><GitBranch size={14} /></span>
@@ -222,7 +227,7 @@ const GitSidebarPanel: React.FC<GitSidebarPanelProps> = ({
                       onClick={() => onSectionAction(section.id)}
                       title={section.id === 'staged' ? 'Unstage all in section' : 'Stage all in section'}
                     >
-                      {section.id === 'staged' ? <Undo2 size={14} /> : <PlusSquare size={14} />}
+                      {section.id === 'staged' ? <MinusSquare size={14} /> : <PlusSquare size={14} />}
                     </button>
                   )}
                 </div>
@@ -241,10 +246,10 @@ const GitSidebarPanel: React.FC<GitSidebarPanelProps> = ({
                         className={`git-sidebar-file-row ${isPreviewing ? 'previewing' : ''}`}
                         onContextMenu={(event) => {
                           event.preventDefault();
-                          const rect = panelRef.current?.getBoundingClientRect();
+                          event.stopPropagation();
                           setContextMenu({
-                            x: event.clientX - (rect?.left || 0),
-                            y: event.clientY - (rect?.top || 0),
+                            x: event.clientX,
+                            y: event.clientY,
                             section: section.id,
                             file,
                           });
@@ -272,7 +277,7 @@ const GitSidebarPanel: React.FC<GitSidebarPanelProps> = ({
                               title="Unstage file"
                               disabled={isActing}
                             >
-                              <Undo2 size={14} />
+                              <MinusSquare size={14} />
                             </button>
                           ) : (
                             <button
@@ -304,29 +309,33 @@ const GitSidebarPanel: React.FC<GitSidebarPanelProps> = ({
           );
         })}
       </div>
-      {contextMenu ? (
-        <div
-          className="file-tree-context-menu git-context-menu"
-          style={{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }}
-          onClick={(event) => event.stopPropagation()}
-        >
-          <button className="file-tree-context-item" onClick={() => onPreviewFile(contextMenu.section, contextMenu.file.path)}>
-            Preview diff
-          </button>
-          {contextMenu.section === 'staged' ? (
-            <button className="file-tree-context-item" onClick={() => onUnstageFile(contextMenu.file.path)}>
-              Unstage
-            </button>
-          ) : (
-            <button className="file-tree-context-item" onClick={() => onStageFile(contextMenu.file.path)}>
-              Stage
-            </button>
-          )}
-          <button className="file-tree-context-item danger" onClick={() => onDiscardFile(contextMenu.file.path)}>
-            {contextMenu.section === 'deleted' ? 'Restore' : 'Delete'}
-          </button>
-        </div>
-      ) : null}
+      {contextMenu && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              ref={contextMenuRef}
+              className="file-tree-context-menu git-context-menu"
+              style={{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button className="file-tree-context-item" onClick={() => { setContextMenu(null); onPreviewFile(contextMenu.section, contextMenu.file.path); }}>
+                Preview diff
+              </button>
+              {contextMenu.section === 'staged' ? (
+                <button className="file-tree-context-item" onClick={() => { setContextMenu(null); onUnstageFile(contextMenu.file.path); }}>
+                  Unstage
+                </button>
+              ) : (
+                <button className="file-tree-context-item" onClick={() => { setContextMenu(null); onStageFile(contextMenu.file.path); }}>
+                  Stage
+                </button>
+              )}
+              <button className="file-tree-context-item danger" onClick={() => { setContextMenu(null); onDiscardFile(contextMenu.file.path); }}>
+                {contextMenu.section === 'deleted' ? 'Restore' : 'Delete'}
+              </button>
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 };

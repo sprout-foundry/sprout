@@ -29,10 +29,12 @@ interface EditorManagerContextValue {
     metadata?: Record<string, any>;
   }) => string;
   closeBuffer: (bufferId: string) => void;
+  reorderBuffers: (sourceBufferId: string, targetBufferId: string) => void;
+  moveBufferToPane: (bufferId: string, paneId: string) => void;
   closePane: (paneId: string) => void;
   switchPane: (paneId: string) => void;
   switchToBuffer: (bufferId: string) => void;
-  splitPane: (paneId: string, direction: 'vertical' | 'horizontal') => void;
+  splitPane: (paneId: string, direction: 'vertical' | 'horizontal') => string | null;
   closeSplit: () => void;
   setPaneLayout: (layout: PaneLayout) => void;
   updateBufferContent: (bufferId: string, content: string) => void;
@@ -365,22 +367,102 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
       });
     }
 
+    const remainingBufferEntries = Array.from(buffersRef.current.values())
+      .filter((candidate) => candidate.id !== bufferId);
+    const nextPaneBuffer = buffer.paneId
+      ? remainingBufferEntries.find((candidate) => candidate.paneId === buffer.paneId)
+        || remainingBufferEntries.find((candidate) => !candidate.paneId)
+        || null
+      : null;
+
     setBuffers(prev => {
       const newBuffers = new Map(prev);
       newBuffers.delete(bufferId);
+      if (buffer.paneId && nextPaneBuffer) {
+        const replacement = newBuffers.get(nextPaneBuffer.id);
+        if (replacement) {
+          newBuffers.set(nextPaneBuffer.id, {
+            ...replacement,
+            isActive: activePaneId === buffer.paneId,
+            paneId: buffer.paneId,
+          });
+        }
+      }
       return newBuffers;
     });
 
-    // If this was the active buffer, clear the pane
-    if (bufferId === activeBufferId) {
-      activePaneId && setPanes(prev => prev.map(pane =>
-        pane.id === activePaneId
-          ? { ...pane, bufferId: null }
+    if (buffer.paneId) {
+      setPanes(prev => prev.map(pane =>
+        pane.id === buffer.paneId
+          ? { ...pane, bufferId: nextPaneBuffer?.id || null }
           : pane
       ));
-      setActiveBufferId(null);
+    }
+
+    if (bufferId === activeBufferId) {
+      if (nextPaneBuffer) {
+        setActiveBufferId(nextPaneBuffer.id);
+      } else {
+        setActiveBufferId(null);
+      }
     }
   }, [activeBufferId, activePaneId, isAutoSaveEnabled, saveBuffer]);
+
+  const reorderBuffers = useCallback((sourceBufferId: string, targetBufferId: string) => {
+    if (!sourceBufferId || !targetBufferId || sourceBufferId === targetBufferId) {
+      return;
+    }
+
+    setBuffers((prev) => {
+      const entries = Array.from(prev.entries());
+      const sourceIndex = entries.findIndex(([id]) => id === sourceBufferId);
+      const targetIndex = entries.findIndex(([id]) => id === targetBufferId);
+
+      if (sourceIndex === -1 || targetIndex === -1) {
+        return prev;
+      }
+
+      const [moved] = entries.splice(sourceIndex, 1);
+      const nextTargetIndex = entries.findIndex(([id]) => id === targetBufferId);
+      entries.splice(nextTargetIndex, 0, moved);
+      return new Map(entries);
+    });
+  }, []);
+
+  const moveBufferToPane = useCallback((bufferId: string, paneId: string) => {
+    const buffer = buffersRef.current.get(bufferId);
+    if (!buffer || buffer.paneId === paneId) {
+      return;
+    }
+
+    setBuffers((prev) => {
+      const next = new Map(prev);
+      const moved = next.get(bufferId);
+      if (!moved) {
+        return prev;
+      }
+      next.set(bufferId, {
+        ...moved,
+        paneId,
+        isActive: activePaneId === paneId,
+      });
+      return next;
+    });
+
+    setPanes((prev) => prev.map((pane) => {
+      if (pane.id === paneId) {
+        return { ...pane, bufferId };
+      }
+      if (pane.bufferId === bufferId) {
+        return { ...pane, bufferId: null };
+      }
+      return pane;
+    }));
+
+    if (activePaneId === paneId) {
+      setActiveBufferId(bufferId);
+    }
+  }, [activePaneId]);
 
   // Close a pane
   const closePane = useCallback((paneId: string) => {
@@ -410,6 +492,17 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
 
   // Switch to a different buffer in the active pane
   const switchToBuffer = useCallback((bufferId: string) => {
+    const existingBuffer = buffersRef.current.get(bufferId);
+    if (!existingBuffer) {
+      return;
+    }
+
+    if (existingBuffer.paneId && existingBuffer.paneId !== activePaneId) {
+      setActivePaneId(existingBuffer.paneId);
+      setActiveBufferId(bufferId);
+      return;
+    }
+
     setActiveBufferId(bufferId);
     setBuffers(prev => {
       const newBuffers = new Map(prev);
@@ -442,7 +535,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   // Split a pane
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const splitPane = useCallback((paneId: string, direction: 'vertical' | 'horizontal') => {
-    if (panes.length >= 3) return; // Max 3 panes
+    if (panes.length >= 3) return null; // Max 3 panes
 
     const newPaneId = `pane-${Date.now()}`;
 
@@ -467,17 +560,17 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
         [newPaneId]: 50
       });
     } else {
-      setPaneLayoutState('split-grid');
-      // For 3 panes, split evenly
-      setPaneSizes({
-        [panes[0].id]: 33.33,
-        [panes[1].id]: 33.33,
-        [newPaneId]: 33.34
-      });
+      // Preserve the original root split direction and let the caller
+      // decide how the nested split should be rendered.
+      setPaneSizes((prev) => ({
+        ...prev,
+        [newPaneId]: 50
+      }));
     }
 
     // Activate new pane
     setActivePaneId(newPaneId);
+    return newPaneId;
   }, [panes]);
 
   // Close split (reset to single pane)
@@ -553,6 +646,8 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     openFile,
     openWorkspaceBuffer,
     closeBuffer,
+    reorderBuffers,
+    moveBufferToPane,
     closePane,
     switchPane,
     switchToBuffer,

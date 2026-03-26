@@ -2,14 +2,14 @@ import React, { useRef, useEffect, useCallback, type ReactNode } from 'react';
 import {
   Terminal, BookOpen, FileEdit, Pencil, Search, Eye, FlaskConical,
   Globe, ArrowDown, ClipboardList, ScrollText, RotateCcw,
-  Wrench, Zap, Bot, Copy, AlertTriangle,
+  Wrench, Zap, Bot, AlertTriangle,
   ExternalLink, CheckCircle, Circle, Loader2, Minus
 } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import CommandInput from './CommandInput';
 import { stripAnsiCodes } from '../utils/ansi';
 import { parseMessageSegments } from '../utils/messageSegments';
+import MessageContent from './MessageContent';
+import MessageBubble from './MessageBubble';
 import './Chat.css';
 
 interface Message {
@@ -103,54 +103,8 @@ const Chat: React.FC<ChatProps> = ({
     return undefined;
   }, [toolExecutions]);
 
-  const copyToClipboard = useCallback((text: string) => {
-    navigator.clipboard.writeText(text);
-  }, []);
-
   const formatTime = (date: Date) => {
     return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
-
-  const renderContent = (content: string) => {
-    const cleaned = stripAnsiCodes(content);
-
-    return (
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          code({ inline, className, children, ...props }: any) {
-            const languageMatch = /language-(\w+)/.exec(className || '');
-            const language = languageMatch ? languageMatch[1] : '';
-
-            if (inline) {
-              return (
-                <code className="inline-code" {...props}>
-                  {children}
-                </code>
-              );
-            }
-
-            return (
-              <pre className="code-block">
-                <span className="code-language">{language || 'text'}</span>
-                <code className={className} {...props}>
-                  {children}
-                </code>
-              </pre>
-            );
-          },
-          a({ href, children, ...props }: any) {
-            return (
-              <a href={href} target="_blank" rel="noreferrer" {...props}>
-                {children}
-              </a>
-            );
-          },
-        }}
-      >
-        {cleaned}
-      </ReactMarkdown>
-    );
   };
 
   const renderMessageSegments = (content: string): ReactNode => {
@@ -165,29 +119,7 @@ const Chat: React.FC<ChatProps> = ({
               case 'text':
                 return (
                   <div key={`seg-${idx}`} className="segment-text">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        code({ inline, className, children, ...props }: any) {
-                          const languageMatch = /language-(\w+)/.exec(className || '');
-                          const language = languageMatch ? languageMatch[1] : '';
-                          if (inline) {
-                            return <code className="inline-code" {...props}>{children}</code>;
-                          }
-                          return (
-                            <pre className="code-block">
-                              <span className="code-language">{language || 'text'}</span>
-                              <code className={className} {...props}>{children}</code>
-                            </pre>
-                          );
-                        },
-                        a({ href, children, ...props }: any) {
-                          return <a href={href} target="_blank" rel="noreferrer" {...props}>{children}</a>;
-                        },
-                      }}
-                    >
-                      {segment.content}
-                    </ReactMarkdown>
+                    <MessageContent content={segment.content} />
                   </div>
                 );
 
@@ -251,7 +183,7 @@ const Chat: React.FC<ChatProps> = ({
         </div>
       );
     } catch {
-      return renderContent(content);
+      return <MessageContent content={content} />;
     }
   };
 
@@ -271,48 +203,34 @@ const Chat: React.FC<ChatProps> = ({
             </div>
           ) : (
             messages.map((message) => (
-              <div
+              <MessageBubble
                 key={message.id}
-                className={`message ${message.type}`}
-                role={message.type === 'user' ? 'user-message' : 'assistant-message'}
-                aria-label={`${message.type} message`}
+                type={message.type}
+                ariaLabel={`${message.type} message`}
+                copyText={message.content}
+                timestamp={formatTime(message.timestamp)}
               >
-                <div className="message-bubble">
-                  <button
-                    className="copy-button"
-                    onClick={() => copyToClipboard(message.content)}
-                    title="Copy message"
-                    aria-label="Copy message"
-                  >
-                    <Copy size={14} />
-                  </button>
-                  <div className="message-content">
-                    {message.type === 'assistant'
-                      ? (
-                        <>
-                          {message.reasoning && message.reasoning.trim() && (
-                            <details className="reasoning-block" open={false}>
-                              <summary className="reasoning-summary">
-                                <span className="reasoning-icon">💭</span>
-                                <span>Reasoning</span>
-                                <span className="reasoning-toggle">▶</span>
-                              </summary>
-                              <div className="reasoning-content">
-                                {renderContent(message.reasoning)}
-                              </div>
-                            </details>
-                          )}
-                          {renderMessageSegments(message.content)}
-                        </>
-                      )
-                      : renderContent(message.content)
-                    }
-                  </div>
-                  <div className="message-timestamp">
-                    {formatTime(message.timestamp)}
-                  </div>
-                </div>
-              </div>
+                {message.type === 'assistant'
+                  ? (
+                    <>
+                      {message.reasoning && message.reasoning.trim() && (
+                        <details className="reasoning-block" open={false}>
+                          <summary className="reasoning-summary">
+                            <span className="reasoning-icon">💭</span>
+                            <span>Reasoning</span>
+                            <span className="reasoning-toggle">▶</span>
+                          </summary>
+                          <div className="reasoning-content">
+                            <MessageContent content={message.reasoning} />
+                          </div>
+                        </details>
+                      )}
+                      {renderMessageSegments(message.content)}
+                    </>
+                  )
+                  : <MessageContent content={message.content} />
+                }
+              </MessageBubble>
             ))
           )}
 

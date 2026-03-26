@@ -235,7 +235,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 	// Register browse_url tool
 	registry.RegisterTool(ToolConfig{
 		Name:        "browse_url",
-		Description: "Open a URL in a headless browser. Use this directly for localhost app debugging, JS-rendered scraping, and web UI verification when you need rendered state or when Playwright/MCP is unavailable. Supports screenshots, rendered DOM/text capture, persistent browser sessions across tool calls, navigation and interaction steps, assertions, selector inspection, browser console/error capture, network request summaries, cookies/storage snapshots, and responsive testing via custom viewport sizes.",
+		Description: "Open a URL in a headless browser. Use this directly for localhost app debugging, JS-rendered scraping, and web UI verification when you need rendered state or when Playwright/MCP is unavailable. Supports screenshots, rendered DOM/text capture, persistent browser sessions across tool calls, navigation and interaction steps, assertions, selector inspection, browser console/error capture, network request summaries including CORS signals, cookies/storage snapshots, and responsive testing via custom viewport sizes.",
 		Parameters: []ParameterConfig{
 			{"url", "string", true, []string{}, "URL to browse — works with localhost URLs for testing local apps"},
 			{"action", "string", false, []string{}, "What to do: 'screenshot' (save PNG), 'dom' (return rendered HTML), 'text' (return visible text, default), or 'inspect' (return structured JSON with page state and diagnostics)"},

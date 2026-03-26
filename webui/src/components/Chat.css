@@ -979,6 +979,226 @@
   line-height: 1.5;
 }
 
+.subagent-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  background: var(--bg-tertiary);
+}
+
+.subagent-card.tool-started,
+.subagent-card.tool-running {
+  border-color: rgba(var(--accent-primary-rgb, 99, 102, 241), 0.5);
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-primary-rgb, 99, 102, 241), 0.18);
+}
+
+.subagent-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.subagent-card-title-row,
+.subagent-card-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.subagent-card-title {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--text-primary);
+  text-transform: capitalize;
+}
+
+.subagent-card-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.subagent-kind-badge,
+.subagent-task-pill,
+.subagent-current-label {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.subagent-kind-badge {
+  padding: 2px 6px;
+}
+
+.subagent-current-label {
+  padding: 2px 7px;
+  color: var(--accent-primary);
+  border-color: rgba(var(--accent-primary-rgb, 99, 102, 241), 0.35);
+}
+
+.subagent-task-pill {
+  padding: 1px 6px;
+  margin-right: 6px;
+}
+
+.subagent-prompt-preview {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  display: -webkit-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.subagent-current-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(var(--accent-primary-rgb, 99, 102, 241), 0.08);
+  border: 1px solid rgba(var(--accent-primary-rgb, 99, 102, 241), 0.18);
+}
+
+.subagent-current-text,
+.subagent-task-summary {
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.subagent-task-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 8px;
+}
+
+.subagent-task-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
+.subagent-task-name {
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.subagent-activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.subagent-activity-item {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.subagent-activity-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 5px;
+  background: var(--accent-primary);
+  flex-shrink: 0;
+}
+
+.subagent-activity-dot.spawn {
+  background: var(--accent-warning, #f59e0b);
+}
+
+.subagent-activity-body {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
+}
+
+.subagent-activity-text {
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.subagent-activity-time {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+
+.subagent-result-snippet {
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.subagent-result-snippet pre {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-primary);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.subagent-card-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.subagent-link-btn {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.subagent-link-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--border-focus);
+  background: var(--bg-elevated);
+}
+
 @media (max-width: 768px) {
   .chat-main {
     flex-direction: column;

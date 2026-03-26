@@ -289,7 +289,11 @@ func (lf *LogFlow) showCurrentSessionChanges() error {
 	fmt.Printf("==============================\r\n")
 
 	if !lf.agent.IsChangeTrackingEnabled() {
-		fmt.Printf("Change tracking is not enabled for this session\r\n")
+		if lf.agent.GetChangeTracker() == nil {
+			fmt.Printf("No tracked session has started yet\r\n")
+		} else {
+			fmt.Printf("Change tracking is disabled for this session\r\n")
+		}
 		return nil
 	}
 

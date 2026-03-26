@@ -49,7 +49,7 @@ func TestGetOptimizedToolDefinitions(t *testing.T) {
 	}
 
 	// Check that specific standard tools are present
-	requiredTools := []string{"shell_command", "read_file", "edit_file", "write_file"}
+	requiredTools := []string{"shell_command", "read_file", "edit_file", "write_file", "run_parallel_subagents"}
 	toolMap := make(map[string]bool)
 
 	for _, tool := range tools {
@@ -75,6 +75,20 @@ func TestGetOptimizedToolDefinitions(t *testing.T) {
 
 	if !foundWriteFile {
 		t.Fatal("Required tool 'write_file' not found in tool definitions")
+	}
+}
+
+func TestStaticToolDefinitionsIncludeBrowseURL(t *testing.T) {
+	allTools := api.GetToolDefinitions()
+	found := make(map[string]bool, len(allTools))
+	for _, tool := range allTools {
+		found[tool.Function.Name] = true
+	}
+
+	for _, required := range []string{"browse_url", "run_parallel_subagents"} {
+		if !found[required] {
+			t.Fatalf("expected static tool definitions to include %s", required)
+		}
 	}
 }
 

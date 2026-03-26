@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/mcp"
 )
 
 // TestDebugLog tests the debug logging functionality
@@ -163,6 +164,23 @@ func TestSuggestCorrectToolName(t *testing.T) {
 		if result != test.expected {
 			t.Errorf("suggestCorrectToolName(%q) = %q, expected %q", test.input, result, test.expected)
 		}
+	}
+}
+
+func TestSuggestCorrectToolNameResolvesLegacyMCPName(t *testing.T) {
+	agent := &Agent{
+		mcpManager: &fakeMCPManager{
+			tools: []mcp.MCPTool{{
+				Name:        "search",
+				Description: "search GitHub",
+				ServerName:  "github",
+			}},
+		},
+	}
+
+	result := agent.suggestCorrectToolName("github:search")
+	if result != "mcp_github_search" {
+		t.Fatalf("suggestCorrectToolName(%q) = %q, expected %q", "github:search", result, "mcp_github_search")
 	}
 }
 

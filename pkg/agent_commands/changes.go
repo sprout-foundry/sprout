@@ -9,6 +9,19 @@ import (
 	"github.com/alantheprice/ledit/pkg/history"
 )
 
+func getChangeTrackingStatus(chatAgent *agent.Agent) string {
+	if chatAgent == nil {
+		return "[FAIL] Disabled"
+	}
+	if chatAgent.IsChangeTrackingEnabled() {
+		return "[OK] Enabled"
+	}
+	if chatAgent.GetChangeTracker() == nil {
+		return "[i] Idle (no tracked session yet)"
+	}
+	return "[FAIL] Disabled"
+}
+
 // ChangesCommand shows tracked file changes in the current session
 type ChangesCommand struct{}
 
@@ -26,11 +39,15 @@ func (c *ChangesCommand) Description() string {
 func (c *ChangesCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	if chatAgent == nil {
 		// Gracefully handle nil agent in tests or non-interactive contexts
-		fmt.Print("[edit] Change tracking is not enabled for this session\r\n")
+		fmt.Print("[edit] No active tracked session\r\n")
 		return nil
 	}
 	if !chatAgent.IsChangeTrackingEnabled() {
-		fmt.Print("[edit] Change tracking is not enabled for this session\r\n")
+		if chatAgent.GetChangeTracker() == nil {
+			fmt.Print("[edit] No tracked session has started yet\r\n")
+		} else {
+			fmt.Print("[edit] Change tracking is disabled for this session\r\n")
+		}
 		return nil
 	}
 
@@ -67,7 +84,7 @@ func (s *StatusCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	if chatAgent == nil {
 		fmt.Print("[chart] Agent Session Status\n")
 		fmt.Println("========================")
-		fmt.Println("Change Tracking: [FAIL] Disabled")
+		fmt.Printf("Change Tracking: %s\n", getChangeTrackingStatus(chatAgent))
 		return nil
 	}
 
@@ -112,7 +129,7 @@ func (s *StatusCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	// Change tracking and files
 	fmt.Println("\n[edit] Changes:")
 	if chatAgent.IsChangeTrackingEnabled() {
-		fmt.Println("Tracking: [OK] Enabled")
+		fmt.Printf("Tracking: %s\n", getChangeTrackingStatus(chatAgent))
 		fmt.Printf("Revision: %s\n", chatAgent.GetRevisionID())
 		fmt.Printf("Files Modified: %d\n", chatAgent.GetChangeCount())
 
@@ -124,7 +141,7 @@ func (s *StatusCommand) Execute(args []string, chatAgent *agent.Agent) error {
 			}
 		}
 	} else {
-		fmt.Println("Tracking: [FAIL] Disabled")
+		fmt.Printf("Tracking: %s\n", getChangeTrackingStatus(chatAgent))
 	}
 
 	// Session

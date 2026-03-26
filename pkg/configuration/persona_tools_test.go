@@ -10,7 +10,7 @@ func TestUnknownPersonaTools(t *testing.T) {
 	}{
 		{
 			name:     "all known tools",
-			tools:    []string{"read_file", "search_files", "git", "run_parallel_subagents", "list_skills", "activate_skill"},
+			tools:    []string{"read_file", "search_files", "git", "browse_url", "run_parallel_subagents", "list_skills", "activate_skill"},
 			wantNone: true,
 		},
 		{

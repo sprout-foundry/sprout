@@ -428,7 +428,7 @@ func GetToolDefinitions() []Tool {
 				Parameters  interface{} `json:"parameters"`
 			}{
 				Name:        "browse_url",
-				Description: "Open a URL in a headless browser for screenshots, rendered DOM extraction, or visible text capture",
+				Description: "Open a URL in a headless browser for screenshots, rendered DOM extraction, visible text capture, and lightweight browser debugging flows against localhost or remote apps",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -438,8 +438,8 @@ func GetToolDefinitions() []Tool {
 						},
 						"action": map[string]interface{}{
 							"type":        "string",
-							"description": "What to do: screenshot, dom, or text",
-							"enum":        []string{"screenshot", "dom", "text"},
+							"description": "What to do: screenshot, dom, text, or inspect",
+							"enum":        []string{"screenshot", "dom", "text", "inspect"},
 						},
 						"screenshot_path": map[string]interface{}{
 							"type":        "string",
@@ -456,6 +456,84 @@ func GetToolDefinitions() []Tool {
 						"user_agent": map[string]interface{}{
 							"type":        "string",
 							"description": "Optional browser User-Agent override",
+						},
+						"wait_for_selector": map[string]interface{}{
+							"type":        "string",
+							"description": "Optional CSS selector to wait for before captures or steps",
+						},
+						"wait_timeout_ms": map[string]interface{}{
+							"type":        "integer",
+							"description": "Optional wait timeout in milliseconds",
+						},
+						"steps": map[string]interface{}{
+							"type":        "array",
+							"description": "Optional interaction steps for debugging flows",
+							"items": map[string]interface{}{
+								"type": "object",
+								"properties": map[string]interface{}{
+									"action": map[string]interface{}{
+										"type":        "string",
+										"description": "wait_for, wait_for_text, assert_selector, click, hover, type, fill, press, sleep, scroll_to, navigate, reload, back, forward, or eval",
+									},
+									"selector": map[string]interface{}{
+										"type":        "string",
+										"description": "CSS selector target for the step",
+									},
+									"value": map[string]interface{}{
+										"type":        "string",
+										"description": "Text value for fill/type steps",
+									},
+									"key": map[string]interface{}{
+										"type":        "string",
+										"description": "Keyboard key for press steps (for example Enter, Escape, ArrowDown)",
+									},
+									"millis": map[string]interface{}{
+										"type":        "integer",
+										"description": "Sleep duration or scroll offset, depending on step action",
+									},
+									"script": map[string]interface{}{
+										"type":        "string",
+										"description": "JavaScript snippet for eval steps; must return serializable data",
+									},
+									"expect": map[string]interface{}{
+										"type":        "string",
+										"description": "Expected text/content for assert_selector or wait_for_text steps",
+									},
+								},
+								"required":             []string{"action"},
+								"additionalProperties": false,
+							},
+						},
+						"capture_selectors": map[string]interface{}{
+							"type":        "array",
+							"description": "Optional CSS selectors to capture after interactions",
+							"items": map[string]interface{}{
+								"type": "string",
+							},
+						},
+						"capture_dom": map[string]interface{}{
+							"type":        "boolean",
+							"description": "Include rendered DOM in inspect output",
+						},
+						"capture_text": map[string]interface{}{
+							"type":        "boolean",
+							"description": "Include visible text in inspect output",
+						},
+						"include_console": map[string]interface{}{
+							"type":        "boolean",
+							"description": "Include browser console messages and page errors in inspect output",
+						},
+						"capture_storage": map[string]interface{}{
+							"type":        "boolean",
+							"description": "Include localStorage and sessionStorage snapshots in inspect output",
+						},
+						"capture_cookies": map[string]interface{}{
+							"type":        "boolean",
+							"description": "Include document.cookie-visible cookies in inspect output",
+						},
+						"response_max_chars": map[string]interface{}{
+							"type":        "integer",
+							"description": "Optional truncation limit applied to large text fields in inspect output",
 						},
 					},
 					"required":             []string{"url"},

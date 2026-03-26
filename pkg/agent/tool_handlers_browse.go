@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -44,6 +45,45 @@ func handleBrowseURL(ctx context.Context, a *Agent, args map[string]interface{})
 	if v, ok := args["screenshot_path"].(string); ok {
 		opts.ScreenshotPath = v
 	}
+	if v, ok := args["wait_for_selector"].(string); ok {
+		opts.WaitForSelector = v
+	}
+	if v, ok := args["wait_timeout_ms"].(float64); ok {
+		opts.WaitTimeoutMs = int(v)
+	}
+	if v, ok := args["capture_dom"].(bool); ok {
+		opts.CaptureDOM = v
+	}
+	if v, ok := args["capture_text"].(bool); ok {
+		opts.CaptureText = v
+	}
+	if v, ok := args["include_console"].(bool); ok {
+		opts.IncludeConsole = v
+	}
+	if v, ok := args["capture_storage"].(bool); ok {
+		opts.CaptureStorage = v
+	}
+	if v, ok := args["capture_cookies"].(bool); ok {
+		opts.CaptureCookies = v
+	}
+	if v, ok := args["response_max_chars"].(float64); ok {
+		opts.ResponseMaxChars = int(v)
+	}
+	if rawSelectors, ok := args["capture_selectors"].([]interface{}); ok {
+		opts.CaptureSelectors = make([]string, 0, len(rawSelectors))
+		for _, raw := range rawSelectors {
+			if selector, ok := raw.(string); ok && strings.TrimSpace(selector) != "" {
+				opts.CaptureSelectors = append(opts.CaptureSelectors, selector)
+			}
+		}
+	}
+	if rawSteps, ok := args["steps"].([]interface{}); ok {
+		steps, err := parseBrowseSteps(rawSteps)
+		if err != nil {
+			return "", err
+		}
+		opts.Steps = steps
+	}
 
 	// Validate screenshot_path for screenshot action
 	if action == "screenshot" && opts.ScreenshotPath == "" {
@@ -63,4 +103,27 @@ func handleBrowseURL(ctx context.Context, a *Agent, args map[string]interface{})
 	}
 
 	return result, nil
+}
+
+func parseBrowseSteps(rawSteps []interface{}) ([]webcontent.BrowseStep, error) {
+	steps := make([]webcontent.BrowseStep, 0, len(rawSteps))
+	for idx, rawStep := range rawSteps {
+		stepMap, ok := rawStep.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("browse_url steps[%d] must be an object", idx)
+		}
+		encoded, err := json.Marshal(stepMap)
+		if err != nil {
+			return nil, fmt.Errorf("browse_url steps[%d] marshal failed: %w", idx, err)
+		}
+		var step webcontent.BrowseStep
+		if err := json.Unmarshal(encoded, &step); err != nil {
+			return nil, fmt.Errorf("browse_url steps[%d] parse failed: %w", idx, err)
+		}
+		if strings.TrimSpace(step.Action) == "" {
+			return nil, fmt.Errorf("browse_url steps[%d] requires action", idx)
+		}
+		steps = append(steps, step)
+	}
+	return steps, nil
 }

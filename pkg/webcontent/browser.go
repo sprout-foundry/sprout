@@ -23,8 +23,59 @@ type BrowserRenderer interface {
 	// rather than text-extracted content.
 	CaptureDOM(ctx context.Context, url string, viewportWidth, viewportHeight int, userAgent string) (string, error)
 
+	// Run executes an interactive browser workflow against the given URL and returns
+	// a structured result suitable for debugging, testing, and JS-rendered scraping.
+	Run(ctx context.Context, url string, opts BrowseOptions) (*BrowseResult, error)
+
 	// Close releases any resources held by the renderer (browsers, pages, etc.)
 	Close()
+}
+
+// BrowseStep describes a single browser interaction step.
+type BrowseStep struct {
+	Action   string `json:"action"`
+	Selector string `json:"selector,omitempty"`
+	Value    string `json:"value,omitempty"`
+	Key      string `json:"key,omitempty"`
+	Millis   int    `json:"millis,omitempty"`
+	Script   string `json:"script,omitempty"`
+	Expect   string `json:"expect,omitempty"`
+}
+
+// SelectorCapture describes the captured state of a selector after page interactions.
+type SelectorCapture struct {
+	Selector   string            `json:"selector"`
+	Found      bool              `json:"found"`
+	Count      int               `json:"count"`
+	Text       string            `json:"text,omitempty"`
+	HTML       string            `json:"html,omitempty"`
+	Value      string            `json:"value,omitempty"`
+	Attributes map[string]string `json:"attributes,omitempty"`
+}
+
+// EvalResult captures the result of a script evaluation step.
+type EvalResult struct {
+	Script string `json:"script"`
+	Value  string `json:"value,omitempty"`
+	Error  string `json:"error,omitempty"`
+}
+
+// BrowseResult contains structured browser inspection output.
+type BrowseResult struct {
+	FinalURL         string            `json:"final_url"`
+	Title            string            `json:"title,omitempty"`
+	ReadyState       string            `json:"ready_state,omitempty"`
+	VisibleText      string            `json:"visible_text,omitempty"`
+	DOM              string            `json:"dom,omitempty"`
+	ScreenshotPath   string            `json:"screenshot_path,omitempty"`
+	SelectorCaptures []SelectorCapture `json:"selector_captures,omitempty"`
+	ConsoleMessages  []string          `json:"console_messages,omitempty"`
+	PageErrors       []string          `json:"page_errors,omitempty"`
+	Cookies          map[string]string `json:"cookies,omitempty"`
+	LocalStorage     map[string]string `json:"local_storage,omitempty"`
+	SessionStorage   map[string]string `json:"session_storage,omitempty"`
+	EvalResults      []EvalResult      `json:"eval_results,omitempty"`
+	Actions          []string          `json:"actions,omitempty"`
 }
 
 // BrowseOptions configures browser-based URL browsing.
@@ -37,10 +88,30 @@ type BrowseOptions struct {
 	ViewportHeight int
 	// UserAgent overrides the browser user-agent string
 	UserAgent string
-	// Action determines what to do: "screenshot", "dom", or "text" (default: "text")
+	// Action determines what to do: "screenshot", "dom", "text", or "inspect" (default: "text")
 	Action string
 	// ScreenshotPath is the file path for screenshot output (required for action="screenshot")
 	ScreenshotPath string
+	// WaitForSelector waits for a selector to appear before capturing output or running steps.
+	WaitForSelector string
+	// WaitTimeoutMs overrides the wait timeout for selector-based operations (default: 10000).
+	WaitTimeoutMs int
+	// Steps applies a series of browser interactions after navigation.
+	Steps []BrowseStep
+	// CaptureSelectors captures selector state after interactions.
+	CaptureSelectors []string
+	// CaptureDOM includes rendered DOM in inspect results.
+	CaptureDOM bool
+	// CaptureText includes visible text in inspect results.
+	CaptureText bool
+	// IncludeConsole captures browser console messages and page errors in inspect results.
+	IncludeConsole bool
+	// CaptureStorage includes localStorage/sessionStorage snapshots in inspect results.
+	CaptureStorage bool
+	// CaptureCookies includes document.cookie-visible cookies in inspect results.
+	CaptureCookies bool
+	// ResponseMaxChars bounds large string fields in structured inspect results (0 = defaults).
+	ResponseMaxChars int
 }
 
 // nopRenderer is a no-op implementation that always returns an error,
@@ -62,6 +133,10 @@ func (n *nopRenderer) Screenshot(_ context.Context, _ string, _ string, _, _ int
 
 func (n *nopRenderer) CaptureDOM(_ context.Context, _ string, _, _ int, _ string) (string, error) {
 	return "", fmt.Errorf("browser rendering not available")
+}
+
+func (n *nopRenderer) Run(_ context.Context, _ string, _ BrowseOptions) (*BrowseResult, error) {
+	return nil, fmt.Errorf("browser rendering not available")
 }
 
 func (n *nopRenderer) Close() {}

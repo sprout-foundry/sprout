@@ -2,6 +2,7 @@ package webcontent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -40,16 +41,74 @@ func BrowseURL(url string, opts BrowseOptions) (string, error) {
 		return fmt.Sprintf("Screenshot saved to: %s", opts.ScreenshotPath), nil
 
 	case "dom":
+		if hasAdvancedBrowseOptions(opts) {
+			result, err := browser.Run(ctx, url, mergeInspectDefaults(opts, false, true))
+			if err != nil {
+				return "", err
+			}
+			return result.DOM, nil
+		}
 		return browser.CaptureDOM(ctx, url, opts.ViewportWidth, opts.ViewportHeight, opts.UserAgent)
 
 	case "text", "":
+		if hasAdvancedBrowseOptions(opts) {
+			result, err := browser.Run(ctx, url, mergeInspectDefaults(opts, true, false))
+			if err != nil {
+				return "", err
+			}
+			return result.VisibleText, nil
+		}
 		html, err := browser.CaptureDOM(ctx, url, opts.ViewportWidth, opts.ViewportHeight, opts.UserAgent)
 		if err != nil {
 			return "", err
 		}
 		return HTMLToText(html), nil
 
+	case "inspect", "interact":
+		result, err := browser.Run(ctx, url, mergeInspectDefaults(opts, true, false))
+		if err != nil {
+			return "", err
+		}
+		encoded, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			return "", fmt.Errorf("marshal browse result: %w", err)
+		}
+		return string(encoded), nil
+
 	default:
-		return "", fmt.Errorf("unknown action: %s (valid: screenshot, dom, text)", opts.Action)
+		return "", fmt.Errorf("unknown action: %s (valid: screenshot, dom, text, inspect)", opts.Action)
 	}
+}
+
+func hasAdvancedBrowseOptions(opts BrowseOptions) bool {
+	return strings.TrimSpace(opts.WaitForSelector) != "" ||
+		len(opts.Steps) > 0 ||
+		len(opts.CaptureSelectors) > 0 ||
+		opts.CaptureDOM ||
+		opts.CaptureText ||
+		opts.IncludeConsole ||
+		opts.CaptureStorage ||
+		opts.CaptureCookies ||
+		opts.ResponseMaxChars > 0
+}
+
+func mergeInspectDefaults(opts BrowseOptions, captureText bool, captureDOM bool) BrowseOptions {
+	out := opts
+	if captureText {
+		out.CaptureText = true
+	}
+	if captureDOM {
+		out.CaptureDOM = true
+	}
+	if !out.CaptureText && !out.CaptureDOM && len(out.CaptureSelectors) == 0 {
+		out.CaptureText = true
+	}
+	if opts.Action == "inspect" || opts.Action == "interact" {
+		out.IncludeConsole = true
+	}
+	if opts.Action == "inspect" {
+		out.CaptureStorage = true
+		out.CaptureCookies = true
+	}
+	return out
 }

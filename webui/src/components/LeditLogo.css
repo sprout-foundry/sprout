@@ -1,0 +1,57 @@
+.ledit-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ledit-logo.compact {
+  gap: 0;
+}
+
+.ledit-logo-mark {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.ledit-logo.compact .ledit-logo-mark {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+}
+
+.ledit-logo-mark svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.ledit-logo-wordmark {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.05;
+}
+
+.ledit-logo-name {
+  color: #d8f7fb;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.ledit-logo-tag {
+  color: rgba(123, 212, 224, 0.78);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}

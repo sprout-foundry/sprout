@@ -87,9 +87,21 @@ const Chat: React.FC<ChatProps> = ({
       'view_history': <ScrollText size={14} />,
       'rollback_changes': <RotateCcw size={14} />,
       'mcp_tools': <Wrench size={14} />,
+      'run_subagent': <Bot size={14} />,
+      'run_parallel_subagents': <Bot size={14} />,
     };
     return iconMap[toolName] || <Wrench size={14} />;
   };
+
+  const findMatchingToolExecution = useCallback((toolName: string) => {
+    const normalized = toolName.split('(')[0];
+    for (let i = toolExecutions.length - 1; i >= 0; i -= 1) {
+      if (toolExecutions[i].tool === normalized) {
+        return toolExecutions[i];
+      }
+    }
+    return undefined;
+  }, [toolExecutions]);
 
   const copyToClipboard = useCallback((text: string) => {
     navigator.clipboard.writeText(text);
@@ -188,9 +200,7 @@ const Chat: React.FC<ChatProps> = ({
                     tabIndex={0}
                     aria-label={`View ${segment.toolName} execution details`}
                     onClick={() => {
-                      const matchingTool = toolExecutions.find(t =>
-                        t.tool === segment.toolName.split('(')[0]
-                      );
+                      const matchingTool = findMatchingToolExecution(segment.toolName);
                       if (matchingTool) {
                         onToolPillClick?.(matchingTool.id);
                       }
@@ -198,9 +208,7 @@ const Chat: React.FC<ChatProps> = ({
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
-                        const matchingTool = toolExecutions.find(t =>
-                          t.tool === segment.toolName.split('(')[0]
-                        );
+                        const matchingTool = findMatchingToolExecution(segment.toolName);
                         if (matchingTool) {
                           onToolPillClick?.(matchingTool.id);
                         }

@@ -60,6 +60,15 @@ interface ToolExecution {
   subagentType?: 'single' | 'parallel';
 }
 
+interface LogEntry {
+  id: string;
+  type: string;
+  timestamp: Date;
+  data: any;
+  level: 'info' | 'warning' | 'error' | 'success';
+  category: 'query' | 'tool' | 'file' | 'system' | 'stream';
+}
+
 interface RevisionFile {
   file_revision_hash?: string;
   path: string;
@@ -141,6 +150,7 @@ interface ContextPanelBaseProps {
 interface ChatContextPanelProps extends ContextPanelBaseProps {
   context: 'chat';
   toolExecutions: ToolExecution[];
+  logs: LogEntry[];
   currentTodos: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }>;
   messages: Array<{ type: string; timestamp: Date }>;
   isProcessing: boolean;
@@ -227,8 +237,9 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   const panelContainerRef = useRef<HTMLDivElement>(null);
 
   // ── Chat-specific state ──────────────────────────────────────────
-  const [chatTab, setChatTab] = useState<'tools' | 'changes' | 'tasks' | 'status' | 'sessions'>('tools');
+  const [chatTab, setChatTab] = useState<'subagents' | 'tools' | 'changes' | 'tasks' | 'status' | 'sessions'>('subagents');
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
+  const [expandedSubagents, setExpandedSubagents] = useState<Set<string>>(new Set());
   const [activeToolId, setActiveToolId] = useState<string | null>(null);
   const toolRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [revisions, setRevisions] = useState<Revision[]>([]);
@@ -300,7 +311,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   useImperativeHandle(ref, () => ({
     openTab: (tab: string) => {
       setPanelCollapsed(false);
-      if (context === 'chat' && ['tools', 'changes', 'tasks', 'status', 'sessions'].includes(tab)) {
+      if (context === 'chat' && ['subagents', 'tools', 'changes', 'tasks', 'status', 'sessions'].includes(tab)) {
         setChatTab(tab as any);
         if (tab === 'changes' && revisions.length === 0) {
           loadRevisionHistory();
@@ -336,7 +347,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       setPanelCollapsed(true);
     }
     if (storedTab) {
-      if (context === 'chat' && ['tools', 'changes', 'tasks', 'status', 'sessions'].includes(storedTab)) {
+      if (context === 'chat' && ['subagents', 'tools', 'changes', 'tasks', 'status', 'sessions'].includes(storedTab)) {
         setChatTab(storedTab as any);
       } else if (context === 'git' && ['files', 'diff', 'review'].includes(storedTab)) {
         setGitTab(storedTab as any);
@@ -372,8 +383,10 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     const onMouseMove = (moveEvent: MouseEvent) => {
       if (!panelContainerRef.current) return;
       const rect = panelContainerRef.current.getBoundingClientRect();
+      const parentEl = panelContainerRef.current.parentElement;
+      const parentWidth = parentEl ? parentEl.getBoundingClientRect().width : window.innerWidth;
       const rawWidth = rect.right - moveEvent.clientX;
-      const maxByLayout = Math.max(PANEL_MIN, rect.width - 260);
+      const maxByLayout = parentWidth - 260;
       const clamped = Math.max(PANEL_MIN, Math.min(Math.min(PANEL_MAX, maxByLayout), rawWidth));
       onPanelWidthChange?.(clamped);
     };
@@ -504,6 +517,18 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     });
   };
 
+  const toggleSubagentExpansion = (toolId: string) => {
+    setExpandedSubagents((prev) => {
+      const next = new Set(prev);
+      if (next.has(toolId)) {
+        next.delete(toolId);
+      } else {
+        next.add(toolId);
+      }
+      return next;
+    });
+  };
+
 // ── Chat helpers ─────────────────────────────────────────────────
 
   const isSubagentTool = (tool: ToolExecution) =>
@@ -518,6 +543,76 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       return undefined;
     }
   };
+
+  const getSubagentLogMessage = useCallback((log: LogEntry): string | null => {
+    if (log.type !== 'agent_message' || !log.data || typeof log.data !== 'object') {
+      return null;
+    }
+    const raw = typeof log.data.message === 'string' ? log.data.message : '';
+    if (!raw || (!raw.includes('Subagent:') && !/Spawning subagent/i.test(raw))) {
+      return null;
+    }
+    return stripAnsiCodes(raw).trim() || null;
+  }, []);
+
+  const summarizeExecutionTarget = useCallback((message: string): string => {
+    const match = message.match(/executing tool \[([^\]]+)\]/i);
+    if (!match) {
+      return message;
+    }
+    const rawTarget = match[1].trim();
+    if (!rawTarget) {
+      return message;
+    }
+    const parts = rawTarget.split(/\s+/);
+    const toolName = parts[0] || 'tool';
+    const argPreview = parts.slice(1).join(' ').trim();
+    const suffix = argPreview ? ` ${argPreview.slice(0, 56)}${argPreview.length > 56 ? '...' : ''}` : '';
+    return message.replace(/executing tool \[[^\]]+\]/i, `Running ${toolName}${suffix}`);
+  }, []);
+
+  const normalizeSubagentActivity = useCallback((rawMessage: string) => {
+    const cleaned = stripAnsiCodes(rawMessage).trim();
+    const taskMatch = cleaned.match(/^→\s+\[([^\]]+)\]\s+Subagent:\s+(.*)$/);
+    if (taskMatch) {
+      const body = summarizeExecutionTarget(taskMatch[2].trim())
+        .replace(/^\[\d+\s*-\s*\d+%\]\s*/i, '')
+        .trim();
+      return {
+        taskId: taskMatch[1],
+        label: body,
+        isSpawn: false,
+      };
+    }
+
+    const spawnMatch = cleaned.match(/Spawning subagent \[([^\]]+)\]:\s*(.*)$/i);
+    if (spawnMatch) {
+      const spawnDetails = spawnMatch[2].trim();
+      return {
+        taskId: undefined,
+        label: spawnDetails ? `Starting ${spawnMatch[1]} (${spawnDetails})` : `Starting ${spawnMatch[1]}`,
+        isSpawn: true,
+      };
+    }
+
+    const inlineMatch = cleaned.match(/^→\s+Subagent:\s+(.*)$/);
+    if (inlineMatch) {
+      const body = summarizeExecutionTarget(inlineMatch[1].trim())
+        .replace(/^\[\d+\s*-\s*\d+%\]\s*/i, '')
+        .trim();
+      return {
+        taskId: undefined,
+        label: body,
+        isSpawn: false,
+      };
+    }
+
+    return {
+      taskId: undefined,
+      label: summarizeExecutionTarget(cleaned),
+      isSpawn: false,
+    };
+  }, [summarizeExecutionTarget]);
 
   const getToolIcon = (toolName: string): ReactNode => {
     const iconMap: { [key: string]: ReactNode } = {
@@ -594,6 +689,10 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     return date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
+  const formatTime = (value: Date) => {
+    return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
   const formatDurationMs = (ms: number): string => {
     if (ms < 1000) return `${ms}ms`;
     if (ms < 60000) return `${(ms / 1000).toFixed(0)}s`;
@@ -628,11 +727,77 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
   // ── Chat computed values ─────────────────────────────────────────
 
-  const toolExecutions = context === 'chat' ? props.toolExecutions : [];
-  const currentTodos = context === 'chat' ? props.currentTodos : [];
+  const chatProps = context === 'chat' ? props as ChatContextPanelProps : null;
+  const toolExecutions = chatProps?.toolExecutions ?? [];
+  const currentTodos = chatProps?.currentTodos ?? [];
+  const subagentToolExecutions = useMemo(() => chatProps?.toolExecutions ?? [], [chatProps]);
+  const subagentLogs = useMemo(() => chatProps?.logs ?? [], [chatProps]);
+
+  const subagentRuns = useMemo(() => {
+    return subagentToolExecutions
+      .filter(isSubagentTool)
+      .map((tool) => {
+        const startMs = tool.startTime.getTime() - 500;
+        const endMs = (tool.endTime || new Date()).getTime() + 500;
+        const activities = subagentLogs
+          .filter((log) => {
+            const message = getSubagentLogMessage(log);
+            if (!message) {
+              return false;
+            }
+            const ts = log.timestamp instanceof Date ? log.timestamp.getTime() : new Date(log.timestamp).getTime();
+            return ts >= startMs && ts <= endMs;
+          })
+          .map((log) => {
+            const message = getSubagentLogMessage(log) || '';
+            const normalized = normalizeSubagentActivity(message);
+            return {
+              id: log.id,
+              timestamp: log.timestamp,
+              taskId: normalized.taskId,
+              label: normalized.label,
+              isSpawn: normalized.isSpawn,
+            };
+          })
+          .filter((item, index, items) => {
+            if (!item.label) {
+              return false;
+            }
+            const previous = items[index - 1];
+            return !previous || previous.label !== item.label;
+          });
+
+        const taskGroups = activities.reduce<Record<string, typeof activities>>((acc, item) => {
+          const key = item.taskId || '__main__';
+          if (!acc[key]) {
+            acc[key] = [];
+          }
+          acc[key].push(item);
+          return acc;
+        }, {});
+
+        const orderedTaskGroups = Object.entries(taskGroups).map(([taskId, items]) => ({
+          taskId: taskId === '__main__' ? null : taskId,
+          items,
+          latest: items[items.length - 1],
+        }));
+
+        return {
+          tool,
+          prompt: getSubagentPrompt(tool),
+          latestActivity: activities[activities.length - 1],
+          activities,
+          orderedTaskGroups,
+        };
+      });
+  }, [getSubagentLogMessage, normalizeSubagentActivity, subagentLogs, subagentToolExecutions]);
 
   const activeToolCount = toolExecutions.filter(
     (tool) => tool.status === 'started' || tool.status === 'running'
+  ).length;
+
+  const activeSubagentCount = subagentRuns.filter(
+    ({ tool }) => tool.status === 'started' || tool.status === 'running'
   ).length;
 
   const historyCounts = revisions.length;
@@ -685,7 +850,8 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
   // ── Tab definitions ──────────────────────────────────────────────
 
-  const chatPanelTabs: Array<{ id: 'tools' | 'changes' | 'tasks' | 'status' | 'sessions'; label: string; icon: ReactNode; count: string }> = [
+  const chatPanelTabs: Array<{ id: 'subagents' | 'tools' | 'changes' | 'tasks' | 'status' | 'sessions'; label: string; icon: ReactNode; count: string }> = [
+    { id: 'subagents', label: 'Subagents', icon: <Bot size={14} />, count: activeSubagentCount > 0 ? `${activeSubagentCount} active` : `${subagentRuns.length} total` },
     { id: 'tools', label: 'Tool Executions', icon: <Wrench size={14} />, count: activeToolCount > 0 ? `${activeToolCount} active` : `${toolExecutions.length} total` },
     { id: 'changes', label: 'Session Changes', icon: <History size={14} />, count: `${historyCounts} revisions` },
     { id: 'tasks', label: 'Tasks', icon: <ListTodo size={14} />, count: `${currentTodos.filter(t => t.status === 'in_progress').length || 0} active` },
@@ -816,6 +982,126 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     </div>
   );
 
+  const renderSubagentsTab = () => (
+    <div className="context-panel-tools-list">
+      {subagentRuns.length === 0 ? (
+        <div className="context-panel-empty">
+          Delegated work will appear here when the orchestrator runs `run_subagent` or `run_parallel_subagents`.
+        </div>
+      ) : (
+        subagentRuns.map(({ tool, prompt, latestActivity, activities, orderedTaskGroups }) => {
+          const expanded = expandedSubagents.has(tool.id);
+          const isParallel = tool.subagentType === 'parallel';
+          const collapsedActivities = activities.slice(-3);
+          const visibleActivities = expanded ? activities : collapsedActivities;
+
+          return (
+            <section
+              key={tool.id}
+              className={`subagent-card tool-${tool.status}`}
+            >
+              <button
+                className="subagent-card-header"
+                onClick={() => toggleSubagentExpansion(tool.id)}
+                aria-expanded={expanded}
+              >
+                <span className="subagent-card-title-row">
+                  <span className="subagent-card-icon" style={{ color: getPersonaColor(tool.persona) }}>
+                    <Bot size={14} />
+                  </span>
+                  <span className="subagent-card-title">
+                    {tool.persona || (isParallel ? 'parallel subagents' : 'subagent')}
+                  </span>
+                  {isParallel && <span className="subagent-kind-badge">parallel</span>}
+                </span>
+                <span className="subagent-card-meta">
+                  <span className="subagent-card-status">{getStatusIcon(tool.status)}</span>
+                  <span className="tool-duration">{formatDuration(tool.startTime, tool.endTime)}</span>
+                  <span className="tool-expand">
+                    {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                  </span>
+                </span>
+              </button>
+
+              {prompt && (
+                <div className="subagent-prompt-preview">
+                  {stripAnsiCodes(prompt)}
+                </div>
+              )}
+
+              {latestActivity && (
+                <div className="subagent-current-step">
+                  <span className="subagent-current-label">Now</span>
+                  <span className="subagent-current-text">{latestActivity.label}</span>
+                </div>
+              )}
+
+              {isParallel && orderedTaskGroups.filter((group) => group.taskId).length > 0 && (
+                <div className="subagent-task-groups">
+                  {orderedTaskGroups
+                    .filter((group) => group.taskId)
+                    .map((group) => (
+                      <div key={group.taskId || 'main'} className="subagent-task-card">
+                        <div className="subagent-task-name">{group.taskId}</div>
+                        <div className="subagent-task-summary">{group.latest?.label || 'Waiting...'}</div>
+                      </div>
+                    ))}
+                </div>
+              )}
+
+              {visibleActivities.length > 0 && (
+                <div className="subagent-activity-list">
+                  {visibleActivities.map((activity) => (
+                    <div key={activity.id} className="subagent-activity-item">
+                      <span className={`subagent-activity-dot ${activity.isSpawn ? 'spawn' : ''}`} />
+                      <div className="subagent-activity-body">
+                        <div className="subagent-activity-text">
+                          {activity.taskId && <span className="subagent-task-pill">{activity.taskId}</span>}
+                          <span>{activity.label}</span>
+                        </div>
+                        <div className="subagent-activity-time">
+                          {formatTime(activity.timestamp)}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {tool.result && expanded && (
+                <div className="subagent-result-snippet">
+                  <div className="tool-detail-label">
+                    <BarChart3 size={12} className="inline-icon" /> Result
+                  </div>
+                  <pre>{formatToolDetail(tool.result)}</pre>
+                </div>
+              )}
+
+              <div className="subagent-card-actions">
+                <button
+                  className="subagent-link-btn"
+                  onClick={() => {
+                    setChatTab('tools');
+                    setActiveToolId(tool.id);
+                    setExpandedTools((prev) => new Set(prev).add(tool.id));
+                    setTimeout(() => {
+                      const el = toolRefs.current[tool.id];
+                      if (el != null) {
+                        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                      }
+                    }, 100);
+                  }}
+                >
+                  View raw tool details
+                </button>
+              </div>
+            </section>
+          );
+        })
+      )}
+    </div>
+  );
+
   // ── Render: Sessions Tab (Chat) ──────────────────────────────────
 
   const renderSessionsTab = () => (
@@ -874,10 +1160,10 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
   // ── Render: Status Tab (Chat) ────────────────────────────────────
 
-  const chatMessages = context === 'chat' ? props.messages : [];
-  const chatLastError = context === 'chat' ? props.lastError : null;
-  const chatQueryProgress = context === 'chat' ? props.queryProgress : null;
-  const chatIsProcessing = context === 'chat' ? props.isProcessing : false;
+  const chatMessages = chatProps?.messages ?? [];
+  const chatLastError = chatProps?.lastError ?? null;
+  const chatQueryProgress = chatProps?.queryProgress ?? null;
+  const chatIsProcessing = chatProps?.isProcessing ?? false;
 
   const renderStatusTab = () => (
     <div className="context-panel-status">
@@ -1255,7 +1541,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   const handleTabClick = (tabId: string) => {
     setPanelCollapsed(false);
     if (context === 'chat') {
-      const id = tabId as 'tools' | 'changes' | 'tasks' | 'status' | 'sessions';
+      const id = tabId as 'subagents' | 'tools' | 'changes' | 'tasks' | 'status' | 'sessions';
       setChatTab(id);
       if (id === 'changes' && revisions.length === 0) loadRevisionHistory();
       if (id === 'sessions' && sessionsCount === 0) loadSessions();
@@ -1267,6 +1553,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   const renderTabContent = () => {
     if (context === 'chat') {
       switch (chatTab) {
+        case 'subagents': return renderSubagentsTab();
         case 'tools': return renderToolsTab();
         case 'changes': return (
           <RevisionListPanel
@@ -1277,7 +1564,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
         case 'tasks': return <div className="side-panel-tasks"><TodoPanel todos={currentTodos || []} isLoading={isProcessing && currentTodos.length === 0} /></div>;
         case 'sessions': return renderSessionsTab();
         case 'status': return renderStatusTab();
-        default: return renderToolsTab();
+        default: return renderSubagentsTab();
       }
     } else {
       switch (gitTab) {

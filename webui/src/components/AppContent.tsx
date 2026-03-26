@@ -665,6 +665,7 @@ const AppContent: React.FC<AppContentProps> = ({
               ref={contextPanelRef}
               context="chat"
               toolExecutions={state.toolExecutions}
+              logs={state.logs}
               currentTodos={currentTodos}
               messages={state.messages}
               isProcessing={state.isProcessing}

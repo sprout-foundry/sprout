@@ -17,30 +17,40 @@ const LeditLogo: React.FC<LeditLogoProps> = ({
   return (
     <div className={`ledit-logo ${compact ? 'compact' : ''} ${className}`.trim()}>
       <div className="ledit-logo-mark" aria-hidden="true">
-        <svg viewBox="0 0 36 36" role="img" aria-labelledby={logoTitleId}>
+        <svg viewBox="0 0 32 32" role="img" aria-labelledby={logoTitleId}>
           <title id={logoTitleId}>ledit logo</title>
-          <rect x="2" y="2" width="32" height="32" rx="8" fill="#122738" />
+          <rect x="0.75" y="0.75" width="30.5" height="30.5" rx="3" fill="#10212D" />
           <path
-            d="M12 8.5V27.5H21.5"
+            d="M9 8V22.6H18"
             fill="none"
-            stroke="#63d9ea"
-            strokeWidth="3.6"
+            stroke="#68E3EE"
+            strokeWidth="2.2"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
           <path
-            d="M17.5 11H25"
+            d="M14.3 8.5H21.7"
             fill="none"
-            stroke="#d8f7fb"
-            strokeWidth="2.8"
+            stroke="#F4FEFF"
+            strokeWidth="1.25"
             strokeLinecap="round"
+            opacity="0.98"
           />
           <path
-            d="M17.5 18H23"
+            d="M14.3 12.7H21"
             fill="none"
-            stroke="#d8f7fb"
-            strokeWidth="2.8"
+            stroke="#F4FEFF"
+            strokeWidth="1.25"
             strokeLinecap="round"
+            opacity="0.94"
+          />
+          <path
+            d="M14.3 16.9H18.5"
+            fill="none"
+            stroke="#F4FEFF"
+            strokeWidth="1.25"
+            strokeLinecap="round"
+            opacity="0.9"
           />
         </svg>
       </div>

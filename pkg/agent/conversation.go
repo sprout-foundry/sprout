@@ -101,6 +101,19 @@ func (a *Agent) getOptimizedToolDefinitions(messages []api.Message) []api.Tool {
 		tools = filterToolsByName(tools, makeAllowedToolSet(personaAllowlist))
 	}
 
+	if a.shouldUseDirectMultimodalImageReasoning(messages) {
+		filtered := make([]api.Tool, 0, len(tools))
+		for _, tool := range tools {
+			switch tool.Function.Name {
+			case "analyze_image_content", "analyze_ui_screenshot":
+				continue
+			default:
+				filtered = append(filtered, tool)
+			}
+		}
+		tools = filtered
+	}
+
 	// Future: Could optimize by analyzing conversation context
 	// and only returning relevant tools
 	return tools
@@ -143,6 +156,21 @@ func filterToolsByName(tools []api.Tool, allowed map[string]struct{}) []api.Tool
 		filtered = append(filtered, tool)
 	}
 	return filtered
+}
+
+func (a *Agent) shouldUseDirectMultimodalImageReasoning(messages []api.Message) bool {
+	if a == nil || a.client == nil || !a.client.SupportsVision() {
+		return false
+	}
+
+	for _, msg := range messages {
+		if msg.Role != "user" || len(msg.Images) == 0 {
+			continue
+		}
+		return true
+	}
+
+	return false
 }
 
 // ClearConversationHistory clears the conversation history

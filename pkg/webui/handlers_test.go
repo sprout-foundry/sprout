@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -48,6 +50,12 @@ func TestRootAssetHandlersServeEmbeddedFiles(t *testing.T) {
 			path:        "/icon-512.png",
 			handler:     server.handleIcon512,
 			contentType: "image/png",
+		},
+		{
+			name:        "logo mark",
+			path:        "/logo-mark.svg",
+			handler:     server.handleLogoMark,
+			contentType: "image/svg+xml",
 		},
 	}
 
@@ -108,5 +116,26 @@ func TestStaticFilesServesHashedMainBundle(t *testing.T) {
 	if !strings.HasPrefix(rec.Header().Get("Content-Type"), "text/javascript") &&
 		!strings.HasPrefix(rec.Header().Get("Content-Type"), "application/javascript") {
 		t.Fatalf("unexpected JS content type: %q", rec.Header().Get("Content-Type"))
+	}
+}
+
+func TestEmbeddedIndexReferencesAvailableRootAssets(t *testing.T) {
+	indexHTML, err := staticFiles.ReadFile("static/index.html")
+	if err != nil {
+		t.Fatalf("failed to read embedded index.html: %v", err)
+	}
+
+	html := string(indexHTML)
+	rootAssetPattern := regexp.MustCompile(`(?:href|src)="/([^"/]+\.(?:svg|png|json|xml|ico))"`)
+	matches := rootAssetPattern.FindAllStringSubmatch(html, -1)
+	if len(matches) == 0 {
+		t.Fatal("expected embedded index.html to reference at least one root asset")
+	}
+
+	for _, match := range matches {
+		assetName := path.Base(match[1])
+		if _, err := staticFiles.ReadFile("static/" + assetName); err != nil {
+			t.Fatalf("embedded index.html references missing root asset %q: %v", assetName, err)
+		}
 	}
 }

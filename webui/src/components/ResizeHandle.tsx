@@ -3,7 +3,7 @@ import './ResizeHandle.css';
 
 interface ResizeHandleProps {
   direction: 'horizontal' | 'vertical'; // Direction of the split line
-  onResize: (delta: number) => void;    // Called with pixel delta during drag
+  onResize: (delta: number, totalDelta: number) => void;    // Called with incremental and total pixel delta during drag
   onResizeEnd?: () => void;             // Called when drag ends
   onDoubleClick?: () => void;           // Called when handle is double-clicked
   className?: string;
@@ -25,6 +25,7 @@ const ResizeHandle: React.FC<ResizeHandleProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const isDraggingRef = useRef(false);
   const dragStartPos = useRef<{ x: number; y: number } | null>(null);
+  const lastDragPos = useRef<{ x: number; y: number } | null>(null);
   const handleRef = useRef<HTMLDivElement>(null);
 
   // Handle mouse down on resize handle
@@ -33,6 +34,7 @@ const ResizeHandle: React.FC<ResizeHandleProps> = ({
     isDraggingRef.current = true;
     setIsDragging(true);
     dragStartPos.current = { x: e.clientX, y: e.clientY };
+    lastDragPos.current = { x: e.clientX, y: e.clientY };
 
     // Add global event listeners for drag
     document.addEventListener('mousemove', handleMouseMove);
@@ -48,17 +50,19 @@ const ResizeHandle: React.FC<ResizeHandleProps> = ({
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isDraggingRef.current || !dragStartPos.current) return;
 
-    const deltaX = e.clientX - dragStartPos.current.x;
-    const deltaY = e.clientY - dragStartPos.current.y;
+    const deltaX = e.clientX - (lastDragPos.current?.x ?? dragStartPos.current.x);
+    const deltaY = e.clientY - (lastDragPos.current?.y ?? dragStartPos.current.y);
+    const totalDeltaX = e.clientX - dragStartPos.current.x;
+    const totalDeltaY = e.clientY - dragStartPos.current.y;
 
     // For horizontal split (vertical divider), use deltaX
     // For vertical split (horizontal divider), use deltaY
     const delta = direction === 'horizontal' ? deltaX : deltaY;
+    const totalDelta = direction === 'horizontal' ? totalDeltaX : totalDeltaY;
 
-    onResize(delta);
+    onResize(delta, totalDelta);
 
-    // Update start position for next move
-    dragStartPos.current = { x: e.clientX, y: e.clientY };
+    lastDragPos.current = { x: e.clientX, y: e.clientY };
   }, [direction, onResize]);
 
   // Handle mouse up to end drag
@@ -66,6 +70,7 @@ const ResizeHandle: React.FC<ResizeHandleProps> = ({
     isDraggingRef.current = false;
     setIsDragging(false);
     dragStartPos.current = null;
+    lastDragPos.current = null;
 
     // Remove global event listeners
     document.removeEventListener('mousemove', handleMouseMove);

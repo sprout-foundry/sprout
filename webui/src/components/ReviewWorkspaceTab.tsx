@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ShieldCheck, Loader2, Wrench } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { stripAnsiCodes } from '../utils/ansi';
+import { parseReviewGuidance, reviewGuidanceToMarkdown } from '../utils/reviewFormatting';
+import MessageBubble from './MessageBubble';
+import MessageContent from './MessageContent';
 
 interface DeepReviewResult {
   message: string;
@@ -36,6 +37,15 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
   isReviewFixing,
   onFixFromReview,
 }) => {
+  const parsedDetailedGuidance = useMemo(
+    () => parseReviewGuidance(stripAnsiCodes(review?.detailed_guidance || '')),
+    [review?.detailed_guidance]
+  );
+  const detailedGuidanceMarkdown = useMemo(
+    () => reviewGuidanceToMarkdown(parsedDetailedGuidance),
+    [parsedDetailedGuidance]
+  );
+
   return (
     <div className="chat-shell review-workspace-shell">
       <div className="chat-main review-workspace-main">
@@ -67,68 +77,60 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
 
           {review ? (
             <>
-              <div className="message assistant" role="article" aria-label="Review summary">
-                <div className="message-bubble">
-                  <div className="message-content">
-                    <div className="review-meta-strip">
-                      <span className={`review-status-pill status-${review.status}`}>{review.status}</span>
-                      {review.model ? <span>{review.model}</span> : null}
-                    </div>
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {stripAnsiCodes(review.feedback || review.review_output)}
-                    </ReactMarkdown>
-                  </div>
+              <MessageBubble
+                type="assistant"
+                ariaLabel="Review summary"
+                copyText={stripAnsiCodes(review.feedback || review.review_output)}
+              >
+                <div className="review-meta-strip">
+                  <span className={`review-status-pill status-${review.status}`}>{review.status}</span>
+                  {review.model ? <span>{review.model}</span> : null}
                 </div>
-              </div>
+                <MessageContent content={review.feedback || review.review_output} />
+              </MessageBubble>
 
               {review.detailed_guidance ? (
-                <div className="message assistant" role="article" aria-label="Detailed guidance">
-                  <div className="message-bubble">
-                    <div className="message-content">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {stripAnsiCodes(review.detailed_guidance)}
-                      </ReactMarkdown>
-                    </div>
-                  </div>
-                </div>
+                <MessageBubble
+                  type="assistant"
+                  ariaLabel="Detailed guidance"
+                  copyText={detailedGuidanceMarkdown}
+                >
+                  <MessageContent content={detailedGuidanceMarkdown} />
+                </MessageBubble>
               ) : null}
 
               {review.suggested_new_prompt ? (
-                <div className="message assistant" role="article" aria-label="Suggested prompt">
-                  <div className="message-bubble">
-                    <div className="message-content">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {stripAnsiCodes(review.suggested_new_prompt)}
-                      </ReactMarkdown>
-                    </div>
-                  </div>
-                </div>
+                <MessageBubble
+                  type="assistant"
+                  ariaLabel="Suggested prompt"
+                  copyText={stripAnsiCodes(review.suggested_new_prompt)}
+                >
+                  <MessageContent content={review.suggested_new_prompt} />
+                </MessageBubble>
               ) : null}
 
               {reviewFixLogs.length > 0 ? (
-                <div className="message assistant" role="article" aria-label="Review fix logs">
-                  <div className="message-bubble">
-                    <div className="message-content">
-                      <div className="review-meta-strip">
-                        <span>Fix session</span>
-                        {reviewFixSessionID ? <span>{reviewFixSessionID}</span> : null}
-                      </div>
-                      <pre className="workspace-diff-pre">{reviewFixLogs.join('\n')}</pre>
-                    </div>
+                <MessageBubble
+                  type="assistant"
+                  ariaLabel="Review fix logs"
+                  copyText={stripAnsiCodes(reviewFixLogs.join('\n'))}
+                >
+                  <div className="review-meta-strip">
+                    <span>Fix session</span>
+                    {reviewFixSessionID ? <span>{reviewFixSessionID}</span> : null}
                   </div>
-                </div>
+                  <pre className="plain-text-block">{stripAnsiCodes(reviewFixLogs.join('\n'))}</pre>
+                </MessageBubble>
               ) : null}
 
               {reviewFixResult ? (
-                <div className="message assistant" role="article" aria-label="Review fix result">
-                  <div className="message-bubble">
-                    <div className="message-content">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {stripAnsiCodes(reviewFixResult)}
-                      </ReactMarkdown>
-                    </div>
-                  </div>
-                </div>
+                <MessageBubble
+                  type="assistant"
+                  ariaLabel="Review fix result"
+                  copyText={stripAnsiCodes(reviewFixResult)}
+                >
+                  <MessageContent content={reviewFixResult} />
+                </MessageBubble>
               ) : null}
             </>
           ) : null}

@@ -283,6 +283,55 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
     );
   };
 
+  const renderTextareaInput = (
+    settingKey: string,
+    label: string,
+    placeholder?: string,
+    rows = 10,
+    helpText?: string,
+  ) => {
+    if (!settings) return null;
+    const persistedValue = String(getNestedValue(settings as any, settingKey) || '');
+    const value = textDrafts[settingKey] ?? persistedValue;
+    return (
+      <div className="config-item">
+        <label htmlFor={`setting-${settingKey}`}>{label}</label>
+        <textarea
+          id={`setting-${settingKey}`}
+          className="styled-input styled-textarea"
+          value={value}
+          rows={rows}
+          placeholder={placeholder}
+          onChange={(e) => {
+            const nextValue = e.target.value;
+            setTextDrafts((prev) => ({ ...prev, [settingKey]: nextValue }));
+
+            if (textSaveTimersRef.current[settingKey]) {
+              clearTimeout(textSaveTimersRef.current[settingKey]);
+            }
+
+            textSaveTimersRef.current[settingKey] = setTimeout(() => {
+              delete textSaveTimersRef.current[settingKey];
+              void updateSetting(settingKey, nextValue);
+            }, 400);
+          }}
+          onBlur={() => {
+            if (textSaveTimersRef.current[settingKey]) {
+              clearTimeout(textSaveTimersRef.current[settingKey]);
+              delete textSaveTimersRef.current[settingKey];
+            }
+
+            const draftValue = textDrafts[settingKey];
+            if (draftValue !== undefined && draftValue !== persistedValue) {
+              void updateSetting(settingKey, draftValue);
+            }
+          }}
+        />
+        {helpText && <div className="config-help">{helpText}</div>}
+      </div>
+    );
+  };
+
   /* ─── Saving indicator ─────────────────────────────────── */
 
   const renderSaving = () => {
@@ -517,12 +566,17 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
         return (
           <div className="section">
             <h4>Behavior</h4>
-            <div className="config-item">
-              {renderSelect('reasoning_effort', 'Reasoning effort', ['low', 'medium', 'high'])}
-            </div>
+            {renderSelect('reasoning_effort', 'Reasoning effort', ['low', 'medium', 'high'])}
             {renderToggle('skip_prompt', 'Skip confirmation prompt')}
             {renderToggle('enable_pre_write_validation', 'Pre-write validation')}
             {renderSelect('history_scope', 'History scope', ['session', 'project', 'global'])}
+            {renderTextareaInput(
+              'system_prompt_text',
+              'System prompt',
+              'Leave blank to use the embedded default system prompt.',
+              12,
+              'Applies to the main agent. Leave blank to use the built-in default prompt.',
+            )}
           </div>
         );
 

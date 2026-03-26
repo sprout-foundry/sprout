@@ -139,6 +139,15 @@ func truncateDiffOutput(diff string, maxBytes int) string {
 	return diff[:maxBytes] + "\n\n... [diff truncated]"
 }
 
+func gitOutputString(ws *ReactWebServer, args ...string) (string, error) {
+	cmd := ws.gitCommand(args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("%w: %s", err, strings.TrimSpace(string(output)))
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
 // handleAPIGitStatus handles git status requests
 func (ws *ReactWebServer) handleAPIGitStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -561,6 +570,149 @@ func (ws *ReactWebServer) getGitStatus() (*GitStatus, error) {
 	}
 
 	return status, nil
+}
+
+func (ws *ReactWebServer) handleAPIGitBranches(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	currentBranch, err := gitOutputString(ws, "branch", "--show-current")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to get current branch: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	branchesOutput, err := gitOutputString(ws, "for-each-ref", "--format=%(refname:short)", "refs/heads")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to list branches: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	branches := []string{}
+	for _, line := range strings.Split(branchesOutput, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		branches = append(branches, line)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":  "success",
+		"current":  currentBranch,
+		"branches": branches,
+	})
+}
+
+func (ws *ReactWebServer) handleAPIGitCheckout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Branch string `json:"branch"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	req.Branch = strings.TrimSpace(req.Branch)
+	if req.Branch == "" {
+		http.Error(w, "Branch is required", http.StatusBadRequest)
+		return
+	}
+
+	if _, err := gitOutputString(ws, "checkout", req.Branch); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to checkout branch: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "Branch checked out successfully",
+		"branch":  req.Branch,
+	})
+}
+
+func (ws *ReactWebServer) handleAPIGitCreateBranch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	req.Name = strings.TrimSpace(req.Name)
+	if req.Name == "" {
+		http.Error(w, "Branch name is required", http.StatusBadRequest)
+		return
+	}
+
+	validateCmd := ws.gitCommand("check-ref-format", "--branch", req.Name)
+	if output, err := validateCmd.CombinedOutput(); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid branch name: %s", strings.TrimSpace(string(output))), http.StatusBadRequest)
+		return
+	}
+
+	if _, err := gitOutputString(ws, "checkout", "-b", req.Name); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to create branch: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "Branch created successfully",
+		"branch":  req.Name,
+	})
+}
+
+func (ws *ReactWebServer) handleAPIGitPull(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	output, err := gitOutputString(ws, "pull", "--ff-only")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to pull: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "Pull completed",
+		"output":  output,
+	})
+}
+
+func (ws *ReactWebServer) handleAPIGitPush(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	output, err := gitOutputString(ws, "push")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to push: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "Push completed",
+		"output":  output,
+	})
 }
 
 // getAllGitFiles converts status to single file list for backward compatibility

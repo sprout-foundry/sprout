@@ -26,6 +26,18 @@ type GenericProvider struct {
 	modelsCached    bool
 }
 
+func modelInfoHasVisionTag(modelInfo *ModelInfo) bool {
+	if modelInfo == nil {
+		return false
+	}
+	for _, tag := range modelInfo.Tags {
+		if strings.EqualFold(strings.TrimSpace(tag), "vision") {
+			return true
+		}
+	}
+	return false
+}
+
 // NewGenericProvider creates a new generic provider from configuration
 func NewGenericProvider(config *ProviderConfig) (*GenericProvider, error) {
 	if err := config.Validate(); err != nil {
@@ -430,7 +442,29 @@ func (p *GenericProvider) fallbackToConfigOrCurrent() ([]api.ModelInfo, error) {
 
 // SupportsVision returns whether the provider supports vision
 func (p *GenericProvider) SupportsVision() bool {
-	return p.config.Models.SupportsVision
+	if !p.config.Models.SupportsVision {
+		return false
+	}
+
+	currentModel := strings.TrimSpace(p.model)
+	if currentModel == "" {
+		currentModel = strings.TrimSpace(p.config.Defaults.Model)
+	}
+	if currentModel == "" {
+		return false
+	}
+
+	if modelInfoHasVisionTag(p.config.GetModelInfo(currentModel)) {
+		return true
+	}
+
+	visionModel := strings.TrimSpace(p.config.Models.VisionModel)
+	if visionModel != "" && strings.EqualFold(currentModel, visionModel) {
+		return true
+	}
+
+	modelLower := strings.ToLower(currentModel)
+	return strings.Contains(modelLower, "vision") || strings.Contains(modelLower, "vl")
 }
 
 // GetVisionModel returns the vision model

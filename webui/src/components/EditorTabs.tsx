@@ -12,13 +12,20 @@ import {
   Settings,
   Terminal,
   Braces,
+  MessageSquareText,
+  GitCompareArrows,
+  ShieldCheck,
   type LucideIcon,
 } from 'lucide-react';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { EditorBuffer } from '../types/editor';
 import './EditorTabs.css';
 
-const EditorTabs: React.FC = () => {
+interface EditorTabsProps {
+  actions?: React.ReactNode;
+}
+
+const EditorTabs: React.FC<EditorTabsProps> = ({ actions }) => {
   const { buffers, activeBufferId, switchToBuffer, closeBuffer } = useEditorManager();
   const [showConfirm, setShowConfirm] = useState<{ bufferId: string; fileName: string } | null>(null);
 
@@ -66,7 +73,7 @@ const EditorTabs: React.FC = () => {
         {bufferList.length === 0 ? (
           <div className="no-tabs">
             <span className="no-tabs-icon"><FolderOpen size={20} /></span>
-            <span className="no-tabs-text">No open files</span>
+            <span className="no-tabs-text">No open tabs</span>
           </div>
         ) : (
           <div className="tabs-list">
@@ -78,17 +85,19 @@ const EditorTabs: React.FC = () => {
               >
                 <div className="tab-content">
                   <span className="tab-icon" style={{ color: getFileIconColor(buffer.file.ext) }}>
-                    {getFileIcon(buffer.file.ext)}
+                    {getBufferIcon(buffer)}
                   </span>
                   <span className="tab-name">{buffer.file.name}</span>
                   {buffer.isModified && <span className="tab-modified">●</span>}
-                  <button
-                    className="tab-close"
-                    onClick={(e) => handleTabClose(e, buffer)}
-                    title={`Close ${buffer.file.name}`}
-                  >
-                    <X size={14} />
-                  </button>
+                  {buffer.isClosable !== false && (
+                    <button
+                      className="tab-close"
+                      onClick={(e) => handleTabClose(e, buffer)}
+                      title={`Close ${buffer.file.name}`}
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -96,8 +105,9 @@ const EditorTabs: React.FC = () => {
         )}
       </div>
       <div className="tabs-actions">
+        {actions ? <div className="tabs-toolbar-actions">{actions}</div> : null}
         <span className="tab-count">
-          {bufferList.length} file{bufferList.length !== 1 ? 's' : ''} open
+          {bufferList.length} tab{bufferList.length !== 1 ? 's' : ''} open
         </span>
       </div>
 
@@ -128,6 +138,19 @@ const EditorTabs: React.FC = () => {
 };
 
 const FILE_ICON_SIZE = 16;
+
+const getBufferIcon = (buffer: EditorBuffer): ReactNode => {
+  switch (buffer.kind) {
+    case 'chat':
+      return <MessageSquareText size={FILE_ICON_SIZE} />;
+    case 'diff':
+      return <GitCompareArrows size={FILE_ICON_SIZE} />;
+    case 'review':
+      return <ShieldCheck size={FILE_ICON_SIZE} />;
+    default:
+      return getFileIcon(buffer.file.ext);
+  }
+};
 
 const getFileIcon = (ext?: string): ReactNode => {
   const Icon = getFileIconComponent(ext);
@@ -169,6 +192,9 @@ const getFileIconComponent = (ext?: string): LucideIcon => {
 };
 
 const getFileIconColor = (ext?: string): string => {
+  if (ext === '.chat') return 'var(--accent-primary)';
+  if (ext === '.diff') return '#22c55e';
+  if (ext === '.review') return '#f59e0b';
   if (!ext) return '#9ca3af';
 
   switch (ext.toLowerCase()) {

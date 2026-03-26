@@ -2,10 +2,12 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-subtle);
   padding: 0 8px;
   min-height: 40px;
+  min-width: 0;
 }
 
 .tabs-container {
@@ -14,6 +16,7 @@
   align-items: center;
   overflow-x: auto;
   overflow-y: hidden;
+  min-width: 0;
 }
 
 .tabs-list {
@@ -21,6 +24,7 @@
   align-items: flex-end;
   gap: 2px;
   padding: 0 4px;
+  min-width: max-content;
 }
 
 .tab {
@@ -134,8 +138,10 @@
 .tabs-actions {
   display: flex;
   align-items: center;
-  padding: 0 8px;
+  gap: 8px;
+  padding: 0 4px 0 8px;
   flex-shrink: 0;
+  align-self: stretch;
 }
 
 .tab-count {
@@ -144,6 +150,12 @@
   background: var(--bg-tertiary);
   padding: 4px 8px;
   border-radius: 4px;
+}
+
+.tabs-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 /* Custom scrollbar for tabs */

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import './Sidebar.css';
-import { ApiService, ProviderOption, LeditSettings } from '../services/api';
+import { ApiService, ProviderOption, LeditSettings, LeditInstance } from '../services/api';
 import SettingsPanel from './SettingsPanel';
 import { ProviderLogEntry } from '../providers';
 import { useTheme } from '../contexts/ThemeContext';
@@ -17,15 +17,23 @@ import {
   Upload,
   Trash2,
   Search,
+  GitBranch,
+  History,
   type LucideIcon,
 } from 'lucide-react';
 import FileTree from './FileTree';
 import SearchView from './SearchView';
+import GitSidebarPanel, { GitStatusData } from './GitSidebarPanel';
+import RevisionListPanel from './RevisionListPanel';
 
-type SectionTab = 'logs' | 'files' | 'settings' | 'search';
+type SectionTab = 'git' | 'history' | 'logs' | 'files' | 'settings' | 'search';
 
 interface SidebarProps {
   isConnected: boolean;
+  instances?: LeditInstance[];
+  selectedInstancePID?: number;
+  isSwitchingInstance?: boolean;
+  onInstanceChange?: (e: React.ChangeEvent<HTMLSelectElement>) => void;
   selectedModel?: string;
   onModelChange?: (model: string) => void;
   availableModels?: string[];
@@ -52,10 +60,35 @@ interface SidebarProps {
   isOpen?: boolean;
   onClose?: () => void;
   isMobile?: boolean;
+  gitPanel?: {
+    gitStatus: GitStatusData | null;
+    selectedFiles: Set<string>;
+    activeDiffSelectionKey: string | null;
+    commitMessage: string;
+    isLoading: boolean;
+    isActing: boolean;
+    isGeneratingCommitMessage: boolean;
+    isReviewLoading: boolean;
+    actionError: string | null;
+    onCommitMessageChange: (value: string) => void;
+    onGenerateCommitMessage: () => void;
+    onCommit: () => void;
+    onRunReview: () => void;
+    onToggleFileSelection: (section: 'staged' | 'modified' | 'untracked' | 'deleted', path: string) => void;
+    onToggleSectionSelection: (section: 'staged' | 'modified' | 'untracked' | 'deleted') => void;
+    onPreviewFile: (section: 'staged' | 'modified' | 'untracked' | 'deleted', path: string) => void;
+    onStageFile: (path: string) => void;
+    onUnstageFile: (path: string) => void;
+    onDiscardFile: (path: string) => void;
+    onSectionAction: (section: 'staged' | 'modified' | 'untracked' | 'deleted') => void;
+  };
+  onOpenRevisionDiff?: (options: { path: string; diff: string; title: string }) => void;
 }
 
 /** Section tab definitions */
 const SECTION_TABS: { id: SectionTab; icon: LucideIcon; label: string }[] = [
+  { id: 'git', icon: GitBranch, label: 'Git' },
+  { id: 'history', icon: History, label: 'History' },
   { id: 'files', icon: FolderCog, label: 'Files' },
   { id: 'search', icon: Search, label: 'Search' },
   { id: 'settings', icon: Settings, label: 'Settings' },
@@ -71,9 +104,14 @@ const clampSidebarWidth = (value: number): number =>
 
 const Sidebar: React.FC<SidebarProps> = ({
   isConnected,
+  instances = [],
+  selectedInstancePID = 0,
+  isSwitchingInstance = false,
+  onInstanceChange,
   selectedModel,
   onModelChange,
   availableModels,
+  currentView,
   recentFiles = [],
   recentLogs = [],
   isMobileMenuOpen,
@@ -87,7 +125,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   onProviderChange,
   isOpen = true,
   onClose,
-  isMobile = false
+  isMobile = false,
+  gitPanel,
+  onOpenRevisionDiff
 }) => {
   const { themePack, availableThemePacks, setThemePack, importTheme, removeTheme } = useTheme();
   const { applyPreset } = useHotkeys();
@@ -104,7 +144,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [selectedModelState, setSelectedModelState] = useState(model || selectedModel || '');
   const [providers, setProviders] = useState<ProviderOption[]>([]);
   const [isLoadingProviders, setIsLoadingProviders] = useState(false);
-  const [selectedSection, setSelectedSection] = useState<SectionTab>('files');
+  const [selectedSection, setSelectedSection] = useState<SectionTab>('git');
   const [settings, setSettings] = useState<LeditSettings | null>(null);
   const apiService = ApiService.getInstance();
 
@@ -284,6 +324,12 @@ const Sidebar: React.FC<SidebarProps> = ({
     window.addEventListener('ledit:hotkey', handleHotkey);
     return () => window.removeEventListener('ledit:hotkey', handleHotkey);
   }, [sidebarCollapsed, onSidebarToggle]);
+
+  useEffect(() => {
+    if (currentView === 'git') {
+      setSelectedSection('git');
+    }
+  }, [currentView]);
 
   const handleImportTheme = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -569,6 +615,12 @@ const Sidebar: React.FC<SidebarProps> = ({
   /** Render the content pane based on selected section */
   const renderContentPane = () => {
     switch (selectedSection) {
+      case 'git':
+        return gitPanel ? <GitSidebarPanel {...gitPanel} /> : <div className="empty">Git unavailable</div>;
+      case 'history':
+        return onOpenRevisionDiff ? (
+          <RevisionListPanel mode="global" allowRollback={true} onOpenDiff={onOpenRevisionDiff} />
+        ) : <div className="empty">History unavailable</div>;
       case 'logs':
         return renderLogsSection();
       case 'files':
@@ -613,13 +665,40 @@ const Sidebar: React.FC<SidebarProps> = ({
         </button>
       )}
 
-      {/* Pinned global header: status dot + instance selector */}
+      {/* Pinned global header: instance selector */}
       <div className="sidebar-pinned-header">
-        <div
-          className={`status-dot status-dot-floating ${isConnected ? 'connected' : 'disconnected'}`}
-          aria-label={isConnected ? 'Connected' : 'Disconnected'}
-          title={isConnected ? 'Connected' : 'Disconnected'}
-        />
+        {!sidebarCollapsed && (
+          <div className="instance-selector">
+            <select
+              id="sidebar-instance-select"
+              value={selectedInstancePID || ''}
+              onChange={onInstanceChange}
+              disabled={!isConnected || instances.length === 0 || isSwitchingInstance}
+              className="instance-select"
+              title={instances.find((instance) => instance.pid === selectedInstancePID)?.working_dir || ''}
+            >
+              {instances.length === 0 && (
+                <option value="">No instances</option>
+              )}
+              {instances.map((instance) => {
+                const suffix = [
+                  instance.is_host ? 'host' : '',
+                  instance.is_current ? 'this' : '',
+                ].filter(Boolean).join(', ');
+                const name = instance.working_dir.split('/').filter(Boolean).slice(-2).join('/');
+                const fullLabel = isMobile
+                  ? `pid:${instance.pid}${suffix ? ` (${suffix})` : ''}`
+                  : `${name} · pid:${instance.pid}${suffix ? ` (${suffix})` : ''}`;
+
+                return (
+                  <option key={instance.id} value={instance.pid}>
+                    {fullLabel}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Icon rail (always visible) + Content pane (only when expanded) */}

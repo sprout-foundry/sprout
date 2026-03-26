@@ -99,7 +99,7 @@ build-ui:
 		exit 1; \
 	fi
 	@# Install npm dependencies
-	@cd webui && npm install
+	@cd webui && npm ci
 	@cd webui && npm run build
 	@echo "React web UI build completed in webui/build/"
 
@@ -111,7 +111,7 @@ deploy-ui:
 		exit 1; \
 	fi
 	@# Install npm dependencies
-	@cd webui && npm install
+	@cd webui && npm ci
 	@# Build React UI
 	@cd webui && npm run build
 	@echo "React web UI build completed in webui/build/"

@@ -168,6 +168,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/asset-manifest.json", ws.handleAssetManifest)
 	mux.HandleFunc("/icon-192.png", ws.handleIcon192)
 	mux.HandleFunc("/icon-512.png", ws.handleIcon512)
+	mux.HandleFunc("/logo-mark.svg", ws.handleLogoMark)
 	mux.HandleFunc("/favicon.ico", ws.handleFavicon)
 
 	// Health check endpoint for connectivity verification

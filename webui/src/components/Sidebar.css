@@ -136,6 +136,7 @@
 
 /* Instance selector inside pinned header */
 .sidebar .instance-selector {
+  position: relative;
   flex: 1;
   min-width: 0;
   padding-left: 12px;
@@ -144,12 +145,66 @@
 
 .sidebar .instance-select {
   width: 100%;
-  min-height: 34px;
-  padding: 0 30px 0 18px;
+  min-height: 40px;
+  padding: 0 42px 0 18px;
   font-size: 12px;
-  line-height: 1;
+  line-height: 1.1;
   border-radius: 10px;
   font-weight: 560;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 34%, transparent), color-mix(in srgb, var(--sidebar-select-bg) 96%, transparent));
+  color: var(--text-primary);
+  border: 1px solid color-mix(in srgb, var(--border-default) 88%, transparent);
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 1px 2px rgba(2, 6, 23, 0.16);
+  transition: border-color 0.15s var(--ease-out), box-shadow 0.15s var(--ease-out),
+    background 0.15s var(--ease-out), color 0.15s var(--ease-out);
+  cursor: pointer;
+}
+
+/* Custom chevron arrow for the select */
+.sidebar .instance-selector::after {
+  content: '';
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 12px;
+  height: 12px;
+  pointer-events: none;
+  background: var(--text-tertiary);
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  mask-size: contain;
+  -webkit-mask-size: contain;
+  mask-repeat: no-repeat;
+  -webkit-mask-repeat: no-repeat;
+}
+
+/* Select option elements (browser-styled, limited control) */
+.sidebar .instance-select option {
+  background: var(--sidebar-select-bg);
+  color: var(--text-primary);
+}
+
+.sidebar .instance-select:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 42%, transparent), color-mix(in srgb, var(--sidebar-select-bg) 98%, transparent));
+}
+
+.sidebar .instance-select:focus,
+.sidebar .instance-select:focus-visible {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-primary-alpha), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.sidebar .instance-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .sidebar .instance-switch-status {
@@ -308,29 +363,49 @@
 /* ── Styled selects ───────────────────────────────────────────── */
 .sidebar .styled-select {
   width: 100%;
-  min-height: 30px;
-  padding: 0 var(--space-8) 0 var(--space-4);
-  background: var(--sidebar-select-bg);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
+  min-height: 36px;
+  padding: 0 38px 0 var(--space-4);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 26%, transparent), color-mix(in srgb, var(--sidebar-select-bg) 96%, transparent));
+  border: 1px solid color-mix(in srgb, var(--border-default) 90%, transparent);
+  border-radius: 10px;
   color: var(--text-primary);
   font-size: var(--text-sm);
   font-family: var(--font-sans);
-  transition: border-color 0.15s var(--ease-out), box-shadow 0.15s var(--ease-out);
+  font-weight: 550;
+  line-height: 1.2;
+  transition: border-color 0.15s var(--ease-out), box-shadow 0.15s var(--ease-out),
+    background 0.15s var(--ease-out), color 0.15s var(--ease-out);
   appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%237c96b8' d='M0 0l5 5 5-5z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right var(--space-4) center;
+  background-size: 10px 6px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 1px 2px rgba(2, 6, 23, 0.14);
+  cursor: pointer;
+}
+
+.sidebar .styled-select option {
+  background: var(--sidebar-select-bg);
+  color: var(--text-primary);
 }
 
 .sidebar .styled-select:hover:not(:disabled) {
   border-color: var(--border-strong);
+  background-image:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 34%, transparent), color-mix(in srgb, var(--sidebar-select-bg) 98%, transparent)),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23a6bedf' d='M0 0l5 5 5-5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat, no-repeat;
+  background-position: 0 0, right var(--space-4) center;
+  background-size: auto, 10px 6px;
 }
 
 .sidebar .styled-select:focus {
   outline: none;
   border-color: var(--border-focus);
-  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+  box-shadow: 0 0 0 3px var(--accent-primary-alpha), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .sidebar .styled-select:disabled {
@@ -1173,11 +1248,34 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 10px;
-  min-height: 34px;
-  border: 1px solid var(--border-default);
-  border-radius: 10px;
-  background: var(--bg-primary);
+  position: relative;
+  padding: 0 38px 0 10px;
+  min-height: 40px;
+  border: 1px solid color-mix(in srgb, var(--border-default) 90%, transparent);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 28%, transparent), color-mix(in srgb, var(--bg-primary) 94%, transparent));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 1px 2px rgba(2, 6, 23, 0.14);
+  transition: border-color 0.15s var(--ease-out), box-shadow 0.15s var(--ease-out),
+    background 0.15s var(--ease-out);
+}
+
+.git-branch-select-wrap::after {
+  content: '';
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  transform: translateY(-50%);
+  background: var(--text-tertiary);
+  pointer-events: none;
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  mask-size: contain;
+  -webkit-mask-size: contain;
+  mask-repeat: no-repeat;
+  -webkit-mask-repeat: no-repeat;
 }
 
 .git-branch-select {
@@ -1187,9 +1285,28 @@
   background: transparent;
   color: var(--text-primary);
   font: inherit;
+  font-weight: 550;
   outline: none;
   appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
   cursor: pointer;
+}
+
+.git-branch-select option {
+  background: var(--sidebar-select-bg);
+  color: var(--text-primary);
+}
+
+.git-branch-select-wrap:hover {
+  border-color: var(--border-strong);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 36%, transparent), color-mix(in srgb, var(--bg-primary) 96%, transparent));
+}
+
+.git-branch-select-wrap:focus-within {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-primary-alpha), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .git-sidebar-sync-status {

@@ -71,13 +71,14 @@ type EvalResult struct {
 }
 
 type NetworkRequest struct {
-	Type      string `json:"type,omitempty"`
-	URL       string `json:"url,omitempty"`
-	Method    string `json:"method,omitempty"`
-	Status    int    `json:"status,omitempty"`
-	OK        bool   `json:"ok,omitempty"`
-	Initiator string `json:"initiator,omitempty"`
-	Error     string `json:"error,omitempty"`
+	Type        string `json:"type,omitempty"`
+	URL         string `json:"url,omitempty"`
+	Method      string `json:"method,omitempty"`
+	Status      int    `json:"status,omitempty"`
+	OK          bool   `json:"ok,omitempty"`
+	Initiator   string `json:"initiator,omitempty"`
+	Error       string `json:"error,omitempty"`
+	CORSBlocked bool   `json:"cors_blocked,omitempty"`
 }
 
 // BrowseResult contains structured browser inspection output.
@@ -93,6 +94,7 @@ type BrowseResult struct {
 	ConsoleMessages  []string          `json:"console_messages,omitempty"`
 	PageErrors       []string          `json:"page_errors,omitempty"`
 	NetworkRequests  []NetworkRequest  `json:"network_requests,omitempty"`
+	CORSIssues       []string          `json:"cors_issues,omitempty"`
 	Cookies          map[string]string `json:"cookies,omitempty"`
 	LocalStorage     map[string]string `json:"local_storage,omitempty"`
 	SessionStorage   map[string]string `json:"session_storage,omitempty"`

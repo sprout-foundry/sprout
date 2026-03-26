@@ -137,6 +137,7 @@ func (ir *InputReader) ReadLine() (string, error) {
 
 	// Enable mouse tracking (SGR mode for extended coordinates)
 	fmt.Print(MouseTrackingSGR)
+	defer fmt.Print(MouseTrackingDisable)
 
 	// Initialize line state
 	ir.line = ""
@@ -392,11 +393,6 @@ func (ir *InputReader) ReadLine() (string, error) {
 			}
 		}
 	}
-
-	// Disable mouse tracking before exiting
-	fmt.Print(MouseTrackingDisable)
-
-	return "", fmt.Errorf("unexpected end of input")
 }
 
 func (ir *InputReader) processPendingResize(resizeCh <-chan os.Signal, parser *EscapeParser) bool {

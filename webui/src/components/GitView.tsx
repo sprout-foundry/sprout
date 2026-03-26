@@ -1,11 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  FileEdit,
-  Plus,
-  Trash2,
   RefreshCw,
-  HelpCircle,
-  File,
   XCircle,
   CheckCircle2,
   Sparkles,
@@ -13,15 +8,11 @@ import {
   ArrowUp,
   ArrowDown,
   AlertTriangle,
-  PanelLeftClose,
-  PanelLeftOpen,
-  SplitSquareHorizontal,
   ShieldCheck,
-  Check,
-  Minus,
 } from 'lucide-react';
 import './GitView.css';
 import { ApiService } from '../services/api';
+import ContextPanel from './ContextPanel';
 
 interface GitStatus {
   branch: string;
@@ -119,8 +110,6 @@ const GitView: React.FC<GitViewProps> = ({
   const [isGeneratingCommitMessage, setIsGeneratingCommitMessage] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [filesPaneWidth, setFilesPaneWidth] = useState(440);
-  const [filesPaneCollapsed, setFilesPaneCollapsed] = useState(false);
   const [isReviewLoading, setIsReviewLoading] = useState(false);
   const [isReviewFixing, setIsReviewFixing] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
@@ -128,13 +117,11 @@ const GitView: React.FC<GitViewProps> = ({
   const [reviewFixLogs, setReviewFixLogs] = useState<string[]>([]);
   const [reviewFixSessionID, setReviewFixSessionID] = useState<string | null>(null);
   const [deepReview, setDeepReview] = useState<DeepReviewResult | null>(null);
-  const [rightPanelTab, setRightPanelTab] = useState<'diff' | 'review'>('diff');
   const [isMobileLayout, setIsMobileLayout] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     return window.innerWidth <= MOBILE_LAYOUT_MAX_WIDTH;
   });
   const workspaceRef = useRef<HTMLDivElement>(null);
-  const isResizingRef = useRef(false);
   const fixPollTimeoutRef = useRef<number | null>(null);
   const fixPollIndexRef = useRef(0);
   const apiService = ApiService.getInstance();
@@ -259,83 +246,11 @@ const GitView: React.FC<GitViewProps> = ({
     setSelectedFiles(new Set());
   };
 
-  const isSectionFullySelected = (section: FileSection, files: GitFile[]) =>
-    files.length > 0 && files.every((file) => selectedFiles.has(selectionKey(section, file.path)));
-
-  const getSectionSelectedCount = (section: FileSection, files: GitFile[]) =>
-    files.reduce((count, file) => (
-      selectedFiles.has(selectionKey(section, file.path)) ? count + 1 : count
-    ), 0);
-
-  const handleToggleSectionSelect = (section: FileSection, files: GitFile[]) => {
-    if (files.length === 0) return;
-    setSelectedFiles((prev) => {
-      const next = new Set(prev);
-      const sectionKeys = files.map((file) => selectionKey(section, file.path));
-      const allSelected = sectionKeys.every((key) => next.has(key));
-      if (allSelected) {
-        sectionKeys.forEach((key) => next.delete(key));
-      } else {
-        sectionKeys.forEach((key) => next.add(key));
-      }
-      return next;
-    });
-  };
-
   const handlePreviewFile = (section: FileSection, filePath: string) => {
-    if (filesPaneCollapsed) {
-      setFilesPaneCollapsed(false);
-    }
     setActiveDiffSelectionKey(selectionKey(section, filePath));
     setActiveDiffPath(filePath);
     loadDiff(filePath);
   };
-
-  const handleStartResize = (e: React.MouseEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    if (filesPaneCollapsed) {
-      setFilesPaneCollapsed(false);
-    }
-    isResizingRef.current = true;
-
-    const onMouseMove = (moveEvent: MouseEvent) => {
-      if (!isResizingRef.current || !workspaceRef.current) return;
-      const rect = workspaceRef.current.getBoundingClientRect();
-      const raw = moveEvent.clientX - rect.left;
-      const maxWidth = Math.max(280, rect.width - 360);
-      const next = Math.max(280, Math.min(maxWidth, raw));
-      setFilesPaneWidth(next);
-    };
-
-    const onMouseUp = () => {
-      isResizingRef.current = false;
-      document.body.style.userSelect = '';
-      document.body.style.cursor = '';
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-    };
-
-    document.body.style.userSelect = 'none';
-    document.body.style.cursor = 'col-resize';
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-  };
-
-  const getVisibleDiffText = () => {
-    if (!activeDiff) {
-      return '';
-    }
-    if (diffMode === 'staged') {
-      return activeDiff.staged_diff || 'No staged diff output.';
-    }
-    if (diffMode === 'unstaged') {
-      return activeDiff.unstaged_diff || 'No unstaged diff output.';
-    }
-    return activeDiff.diff || 'No diff output.';
-  };
-
-  const visibleDiff = getVisibleDiffText();
-  const diffLines = visibleDiff.split('\n');
 
   const selectedEntries = Array.from(selectedFiles)
     .map(parseSelectionKey)
@@ -416,7 +331,6 @@ const GitView: React.FC<GitViewProps> = ({
   };
 
   const handleDeepReview = async () => {
-    setRightPanelTab('review');
     setReviewError(null);
     setReviewFixResult(null);
     setIsReviewLoading(true);
@@ -475,77 +389,6 @@ const GitView: React.FC<GitViewProps> = ({
       setIsReviewFixing(false);
     }
   };
-
-  const getStatusIcon = (status: string): React.ReactNode => {
-    switch (status) {
-      case 'M': return <FileEdit size={14} />;
-      case 'A': return <Plus size={14} />;
-      case 'D': return <Trash2 size={14} />;
-      case 'R': return <RefreshCw size={14} />;
-      case '??': return <HelpCircle size={14} />;
-      default: return <File size={14} />;
-    }
-  };
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'M': return 'Modified';
-      case 'A': return 'Added';
-      case 'D': return 'Deleted';
-      case 'R': return 'Renamed';
-      case '??': return 'Untracked';
-      default: return 'Unknown';
-    }
-  };
-
-  const FileItem: React.FC<{
-    file: GitFile;
-    section: FileSection;
-    isSelected: boolean;
-    isActive: boolean;
-    onSelect: (section: FileSection, path: string) => void;
-    onPreview: (section: FileSection, path: string) => void;
-  }> = ({ file, section, isSelected, isActive, onSelect, onPreview }) => (
-    <div
-      className={`file-item ${isSelected ? 'selected' : ''} ${isActive ? 'active-diff' : ''}`}
-      onClick={() => onSelect(section, file.path)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onSelect(section, file.path);
-        }
-      }}
-    >
-      <input
-        type="checkbox"
-        checked={isSelected}
-        onClick={(e) => e.stopPropagation()}
-        onChange={() => onSelect(section, file.path)}
-      />
-      <span className="file-icon">{getStatusIcon(file.status)}</span>
-      <span className="file-path">{file.path}</span>
-      <span className="file-status">{getStatusText(file.status)}</span>
-      {file.changes && (
-        <span className="file-changes">
-          <span className="additions">+{file.changes.additions}</span>
-          <span className="deletions">-{file.changes.deletions}</span>
-        </span>
-      )}
-      <button
-        className="file-diff-btn"
-        onClick={(e) => {
-          e.stopPropagation();
-          onPreview(section, file.path);
-        }}
-        title="Show diff"
-        type="button"
-      >
-        <SplitSquareHorizontal size={14} />
-      </button>
-    </div>
-  );
 
   if (isLoading) {
     return (
@@ -651,421 +494,81 @@ const GitView: React.FC<GitViewProps> = ({
         className="git-workspace"
         ref={workspaceRef}
         style={isMobileLayout ? undefined : {
-          gridTemplateColumns: filesPaneCollapsed
-            ? '0 8px minmax(0, 1fr)'
-            : `${filesPaneWidth}px 8px minmax(0, 1fr)`
+          gridTemplateColumns: 'minmax(200px, auto) 8px minmax(0, 1fr)'
         }}
       >
-        {/* File Sections */}
-        <div className={`git-files ${filesPaneCollapsed ? 'collapsed' : ''}`}>
-        {/* Staged Files */}
-        {gitStatus.staged.length > 0 && (
-          <div className="file-section staged">
-            <div className="file-section-header">
-              <h3>Staged Files ({gitStatus.staged.length})</h3>
-              <button
-                type="button"
-                className="section-select-btn"
-                onClick={() => handleToggleSectionSelect('staged', gitStatus.staged)}
-                title={isSectionFullySelected('staged', gitStatus.staged) ? 'Clear staged selection' : 'Select all staged files'}
-                aria-label={isSectionFullySelected('staged', gitStatus.staged) ? 'Clear staged selection' : 'Select all staged files'}
-              >
-                {isSectionFullySelected('staged', gitStatus.staged) ? <Minus size={14} /> : <Check size={14} />}
-                <span className="section-select-count">
-                  {getSectionSelectedCount('staged', gitStatus.staged)}
-                </span>
-              </button>
-            </div>
-            <div className="file-list">
-              {gitStatus.staged.map((file, index) => (
-                <FileItem
-                  key={`staged-${file.path}-${index}`}
-                  section="staged"
-                  file={file}
-                  isSelected={selectedFiles.has(selectionKey('staged', file.path))}
-                  isActive={
-                    activeDiffSelectionKey
-                      ? activeDiffSelectionKey === selectionKey('staged', file.path)
-                      : activeDiffPath === file.path
-                  }
-                  onSelect={handleFileSelect}
-                  onPreview={handlePreviewFile}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Modified Files */}
-        {gitStatus.modified.length > 0 && (
-          <div className="file-section modified">
-            <div className="file-section-header">
-              <h3>Modified Files ({gitStatus.modified.length})</h3>
-              <button
-                type="button"
-                className="section-select-btn"
-                onClick={() => handleToggleSectionSelect('modified', gitStatus.modified)}
-                title={isSectionFullySelected('modified', gitStatus.modified) ? 'Clear modified selection' : 'Select all modified files'}
-                aria-label={isSectionFullySelected('modified', gitStatus.modified) ? 'Clear modified selection' : 'Select all modified files'}
-              >
-                {isSectionFullySelected('modified', gitStatus.modified) ? <Minus size={14} /> : <Check size={14} />}
-                <span className="section-select-count">
-                  {getSectionSelectedCount('modified', gitStatus.modified)}
-                </span>
-              </button>
-            </div>
-            <div className="file-list">
-              {gitStatus.modified.map((file, index) => (
-                <FileItem
-                  key={`modified-${file.path}-${index}`}
-                  section="modified"
-                  file={file}
-                  isSelected={selectedFiles.has(selectionKey('modified', file.path))}
-                  isActive={
-                    activeDiffSelectionKey
-                      ? activeDiffSelectionKey === selectionKey('modified', file.path)
-                      : activeDiffPath === file.path
-                  }
-                  onSelect={handleFileSelect}
-                  onPreview={handlePreviewFile}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Untracked Files */}
-        {gitStatus.untracked.length > 0 && (
-          <div className="file-section untracked">
-            <div className="file-section-header">
-              <h3>Untracked Files ({gitStatus.untracked.length})</h3>
-              <button
-                type="button"
-                className="section-select-btn"
-                onClick={() => handleToggleSectionSelect('untracked', gitStatus.untracked)}
-                title={isSectionFullySelected('untracked', gitStatus.untracked) ? 'Clear untracked selection' : 'Select all untracked files'}
-                aria-label={isSectionFullySelected('untracked', gitStatus.untracked) ? 'Clear untracked selection' : 'Select all untracked files'}
-              >
-                {isSectionFullySelected('untracked', gitStatus.untracked) ? <Minus size={14} /> : <Check size={14} />}
-                <span className="section-select-count">
-                  {getSectionSelectedCount('untracked', gitStatus.untracked)}
-                </span>
-              </button>
-            </div>
-            <div className="file-list">
-              {gitStatus.untracked.map((file, index) => (
-                <FileItem
-                  key={`untracked-${file.path}-${index}`}
-                  section="untracked"
-                  file={file}
-                  isSelected={selectedFiles.has(selectionKey('untracked', file.path))}
-                  isActive={
-                    activeDiffSelectionKey
-                      ? activeDiffSelectionKey === selectionKey('untracked', file.path)
-                      : activeDiffPath === file.path
-                  }
-                  onSelect={handleFileSelect}
-                  onPreview={handlePreviewFile}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Deleted Files */}
-        {gitStatus.deleted.length > 0 && (
-          <div className="file-section deleted">
-            <div className="file-section-header">
-              <h3>Deleted Files ({gitStatus.deleted.length})</h3>
-              <button
-                type="button"
-                className="section-select-btn"
-                onClick={() => handleToggleSectionSelect('deleted', gitStatus.deleted)}
-                title={isSectionFullySelected('deleted', gitStatus.deleted) ? 'Clear deleted selection' : 'Select all deleted files'}
-                aria-label={isSectionFullySelected('deleted', gitStatus.deleted) ? 'Clear deleted selection' : 'Select all deleted files'}
-              >
-                {isSectionFullySelected('deleted', gitStatus.deleted) ? <Minus size={14} /> : <Check size={14} />}
-                <span className="section-select-count">
-                  {getSectionSelectedCount('deleted', gitStatus.deleted)}
-                </span>
-              </button>
-            </div>
-            <div className="file-list">
-              {gitStatus.deleted.map((file, index) => (
-                <FileItem
-                  key={`deleted-${file.path}-${index}`}
-                  section="deleted"
-                  file={file}
-                  isSelected={selectedFiles.has(selectionKey('deleted', file.path))}
-                  isActive={
-                    activeDiffSelectionKey
-                      ? activeDiffSelectionKey === selectionKey('deleted', file.path)
-                      : activeDiffPath === file.path
-                  }
-                  onSelect={handleFileSelect}
-                  onPreview={handlePreviewFile}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* No Changes */}
-        {gitStatus.clean && (
-          <div className="no-changes">
-            <span className="no-changes-icon"><Sparkles size={16} /></span>
-            <p>Working directory clean</p>
-          </div>
-        )}
-        </div>
-
-        <div
-          className="git-workspace-resizer"
-          onMouseDown={handleStartResize}
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Resize git file list"
+        {/* ContextPanel - Shared Side Panel Component */}
+        <ContextPanel
+          context="git"
+          deepReview={deepReview}
+          reviewError={reviewError}
+          reviewFixResult={reviewFixResult}
+          reviewFixLogs={reviewFixLogs}
+          reviewFixSessionID={reviewFixSessionID}
+          isReviewLoading={isReviewLoading}
+          isReviewFixing={isReviewFixing}
+          isDiffLoading={isDiffLoading}
+          diffError={diffError}
+          isMobileLayout={isMobileLayout}
+          diffMode={diffMode}
+          onRunReview={handleDeepReview}
+          onFixFromReview={handleFixFromReview}
+          onDiscard={handleDiscardSelected}
+          onStage={handleStageSelected}
+          stagedFiles={gitStatus.staged}
+          modifiedFiles={gitStatus.modified}
+          untrackedFiles={gitStatus.untracked}
+          deletedFiles={gitStatus.deleted}
+          selectedFiles={selectedFiles}
+          onFileSelect={handleFileSelect}
+          onPreviewFile={handlePreviewFile}
+          activeDiffSelectionKey={activeDiffSelectionKey}
+          activeDiffPath={activeDiffPath}
+          activeDiff={activeDiff}
+          onDiffModeChange={setDiffMode}
         />
 
-        {/* Combined Right Panel */}
-        <div className="git-combined-panel">
-          {/* Tab Bar */}
-          <div className="git-combined-panel-tabs">
-            <button
-              type="button"
-              className={`git-combined-panel-tab ${rightPanelTab === 'diff' ? 'active' : ''}`}
-              onClick={() => setRightPanelTab('diff')}
-            >
-              <SplitSquareHorizontal size={14} style={{ marginRight: 6 }} />
-              Diff
-            </button>
-            <button
-              type="button"
-              className={`git-combined-panel-tab ${rightPanelTab === 'review' ? 'active' : ''}`}
-              onClick={() => setRightPanelTab('review')}
-            >
-              <ShieldCheck size={14} style={{ marginRight: 6 }} />
-              Review
-            </button>
-            <div className="git-combined-panel-actions">
-              {rightPanelTab === 'diff' && activeDiffPath && (
-                <span className="git-diff-path">{activeDiffPath}</span>
-              )}
-              {rightPanelTab === 'review' && (
-                <button
-                  type="button"
-                  className="action-btn"
-                  onClick={handleDeepReview}
-                  disabled={isActing || isReviewLoading || isReviewFixing || !gitStatus.staged.length}
-                  title={gitStatus.staged.length === 0 ? 'Stage files to run Review' : 'Run Review'}
-                >
-                  {isReviewLoading ? 'Reviewing…' : (deepReview ? 'Re-run Review' : 'Start Review')}
-                </button>
-              )}
+        {/* Commit Section */}
+        <div className="git-commit">
+          <h3>Commit Changes</h3>
+          <div className="commit-form">
+            <textarea
+              value={commitMessage}
+              onChange={(e) => setCommitMessage(e.target.value)}
+              placeholder="Enter commit message..."
+              className="commit-input"
+              rows={3}
+            />
+            <div className="commit-actions">
               <button
-                type="button"
-                className="git-pane-toggle-btn"
-                onClick={() => setFilesPaneCollapsed(prev => !prev)}
-                title={filesPaneCollapsed ? 'Show file list' : 'Hide file list'}
+                onClick={handleAICommit}
+                disabled={gitStatus.staged.length === 0 || isActing || isGeneratingCommitMessage}
+                className="commit-btn ai"
               >
-                {filesPaneCollapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
+                <Sparkles size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+                {isGeneratingCommitMessage ? 'Generating…' : 'Generate Message'}
+              </button>
+              <button 
+                onClick={handleCommit}
+                disabled={!commitMessage.trim() || gitStatus.staged.length === 0 || isActing}
+                className="commit-btn primary"
+              >
+                Commit {gitStatus.staged.length} file{gitStatus.staged.length !== 1 ? 's' : ''}
               </button>
             </div>
           </div>
+        </div>
 
-          {/* Tab Content */}
-          {rightPanelTab === 'diff' ? (
-            <>
-              {activeDiff && activeDiff.has_staged && activeDiff.has_unstaged && (
-                <div className="git-diff-mode-tabs">
-                  <button
-                    type="button"
-                    className={`git-diff-mode-tab ${diffMode === 'combined' ? 'active' : ''}`}
-                    onClick={() => setDiffMode('combined')}
-                  >
-                    Combined
-                  </button>
-                  <button
-                    type="button"
-                    className={`git-diff-mode-tab ${diffMode === 'staged' ? 'active' : ''}`}
-                    onClick={() => setDiffMode('staged')}
-                  >
-                    Staged
-                  </button>
-                  <button
-                    type="button"
-                    className={`git-diff-mode-tab ${diffMode === 'unstaged' ? 'active' : ''}`}
-                    onClick={() => setDiffMode('unstaged')}
-                  >
-                    Unstaged
-                  </button>
-                </div>
-              )}
-              {isDiffLoading ? (
-                <div className="git-diff-loading">Loading diff...</div>
-              ) : diffError ? (
-                <div className="git-diff-error">{diffError}</div>
-              ) : activeDiffPath ? (
-                <pre className="git-diff-content">
-                  {diffLines.map((line, index) => {
-                    const className =
-                      line.startsWith('+++') || line.startsWith('---')
-                        ? 'diff-file'
-                        : line.startsWith('@@')
-                          ? 'diff-hunk'
-                          : line.startsWith('+')
-                            ? 'diff-add'
-                            : line.startsWith('-')
-                              ? 'diff-del'
-                              : 'diff-context';
-                    return (
-                      <div key={index} className={`diff-line ${className}`}>
-                        {line || ' '}
-                      </div>
-                    );
-                  })}
-                </pre>
-              ) : (
-                <div className="git-diff-empty">Select a file to preview its diff.</div>
-              )}
-            </>
-          ) : (
-            <div className="git-review-pane-body">
-              {isReviewLoading ? (
-                <div className="git-review-loading">
-                  <div className="spinner"></div>
-                  <p>Running /deep-review on staged changes…</p>
-                </div>
-              ) : reviewError ? (
-                <div className="git-review-error">
-                  <p>{reviewError}</p>
-                  <button
-                    type="button"
-                    className="action-btn"
-                    onClick={handleDeepReview}
-                    disabled={isReviewLoading || isReviewFixing || !gitStatus.staged.length}
-                  >
-                    Retry Review
-                  </button>
-                </div>
-              ) : deepReview ? (
-                <>
-                  <div className="git-review-meta">
-                    <span className={`git-review-status status-${(deepReview.status || '').toLowerCase()}`}>
-                      {(deepReview.status || 'unknown').toUpperCase()}
-                    </span>
-                    {deepReview.provider && deepReview.model && (
-                      <span className="git-review-model">{deepReview.provider} · {deepReview.model}</span>
-                    )}
-                  </div>
-                  <div className="git-review-section">
-                    <h4>Feedback</h4>
-                    <pre>{deepReview.feedback || 'No feedback.'}</pre>
-                  </div>
-                  {deepReview.detailed_guidance && (
-                    <div className="git-review-section">
-                      <h4>Detailed Guidance</h4>
-                      <pre>{deepReview.detailed_guidance}</pre>
-                    </div>
-                  )}
-                  {deepReview.suggested_new_prompt && (
-                    <div className="git-review-section">
-                      <h4>Suggested New Prompt</h4>
-                      <pre>{deepReview.suggested_new_prompt}</pre>
-                    </div>
-                  )}
-                  {reviewFixResult && (
-                    <div className="git-review-section">
-                      <h4>Fix Result</h4>
-                      <pre>{reviewFixResult}</pre>
-                    </div>
-                  )}
-                  {(isReviewFixing || reviewFixLogs.length > 0) && (
-                    <div className="git-review-section">
-                      <h4>
-                        Fix Progress
-                        {reviewFixSessionID ? ` (${reviewFixSessionID})` : ''}
-                      </h4>
-                      <pre>{reviewFixLogs.length ? reviewFixLogs.join('\n') : 'Waiting for progress...'}</pre>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="git-review-empty">
-                  <p>Run Review to analyze staged changes.</p>
-                  <button
-                    type="button"
-                    className="action-btn primary"
-                    onClick={handleDeepReview}
-                    disabled={isReviewLoading || isReviewFixing || !gitStatus.staged.length}
-                  >
-                    Start Review
-                  </button>
-                </div>
-              )}
-              <div className="git-review-pane-footer">
-                <button
-                  type="button"
-                  className="action-btn"
-                  onClick={() => setRightPanelTab('diff')}
-                  disabled={isReviewFixing}
-                >
-                  Accept
-                </button>
-                <button
-                  type="button"
-                  className="action-btn primary"
-                  onClick={handleFixFromReview}
-                  disabled={!deepReview || isReviewLoading || isReviewFixing}
-                >
-                  {isReviewFixing ? 'Fixing…' : 'Fix'}
-                </button>
-              </div>
+        {isGeneratingCommitMessage && (
+          <div className="git-generating-overlay" role="dialog" aria-modal="true" aria-label="Generating commit message">
+            <div className="git-generating-dialog">
+              <div className="spinner"></div>
+              <h4>Generating Commit Message</h4>
+              <p>Using staged changes to draft a commit message...</p>
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* Commit Section */}
-      <div className="git-commit">
-        <h3>Commit Changes</h3>
-        <div className="commit-form">
-          <textarea
-            value={commitMessage}
-            onChange={(e) => setCommitMessage(e.target.value)}
-            placeholder="Enter commit message..."
-            className="commit-input"
-            rows={3}
-          />
-          <div className="commit-actions">
-            <button
-              onClick={handleAICommit}
-              disabled={gitStatus.staged.length === 0 || isActing || isGeneratingCommitMessage}
-              className="commit-btn ai"
-            >
-              <Sparkles size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
-              {isGeneratingCommitMessage ? 'Generating…' : 'Generate Message'}
-            </button>
-            <button 
-              onClick={handleCommit}
-              disabled={!commitMessage.trim() || gitStatus.staged.length === 0 || isActing}
-              className="commit-btn primary"
-            >
-              Commit {gitStatus.staged.length} file{gitStatus.staged.length !== 1 ? 's' : ''}
-            </button>
           </div>
-        </div>
+        )}
       </div>
-
-      {isGeneratingCommitMessage && (
-        <div className="git-generating-overlay" role="dialog" aria-modal="true" aria-label="Generating commit message">
-          <div className="git-generating-dialog">
-            <div className="spinner"></div>
-            <h4>Generating Commit Message</h4>
-            <p>Using staged changes to draft a commit message...</p>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

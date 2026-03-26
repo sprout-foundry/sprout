@@ -1,0 +1,696 @@
+.context-panel {
+  display: flex;
+  flex-direction: row;
+  min-height: 0;
+  height: 100%;
+  width: 360px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: width 0.2s ease;
+}
+
+.context-panel.collapsed {
+  width: 52px;
+}
+
+.context-panel-resizer {
+  width: 6px;
+  min-height: 0;
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  cursor: col-resize;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.context-panel-resizer:hover {
+  background: var(--bg-surface);
+  border-color: var(--border-strong);
+}
+
+.context-panel-tools-list {
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: 2px;
+}
+
+.context-panel-empty {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  padding: 10px 8px;
+}
+
+.context-panel-status {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding: 4px 0;
+}
+
+.context-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.context-panel-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.context-panel-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.context-panel-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.context-panel-tab:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.context-panel-tab.active {
+  background: var(--primary-color);
+  color: white;
+}
+
+.context-panel-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Diff View */
+.diff-view {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.diff-mode-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.diff-mode-tab {
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.diff-mode-tab:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.diff-mode-tab.active {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: white;
+}
+
+.diff-content {
+  flex: 1;
+  overflow: auto;
+  padding: 12px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre;
+}
+
+.diff-line {
+  padding: 2px 8px;
+}
+
+.diff-file {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.diff-hunk {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.diff-add {
+  background: rgba(72, 219, 130, 0.15);
+  color: #48db82;
+}
+
+.diff-del {
+  background: rgba(236, 72, 153, 0.15);
+  color: #ec4899;
+}
+
+.diff-context {
+  color: var(--text-secondary);
+}
+
+.diff-loading, .diff-error, .diff-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: var(--text-secondary);
+}
+
+.diff-error {
+  color: #ef4444;
+}
+
+/* Review View */
+.review-view {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.review-loading, .review-error, .review-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  gap: 16px;
+}
+
+.review-loading p, .review-error p, .review-empty p {
+  color: var(--text-secondary);
+}
+
+.review-error {
+  color: #ef4444;
+}
+
+.review-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.review-status {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.review-status.status-completed {
+  background: rgba(72, 219, 130, 0.2);
+  color: #48db82;
+}
+
+.review-status.status-failed {
+  background: rgba(236, 72, 153, 0.2);
+  color: #ec4899;
+}
+
+.review-status.status-pending {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+}
+
+.review-model {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.review-section {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.review-section:last-child {
+  border-bottom: none;
+}
+
+.review-section h4 {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.review-section pre {
+  margin: 0;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-secondary);
+}
+
+.review-footer {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+}
+
+/* File List */
+.file-list {
+  flex: 1;
+  overflow: auto;
+  padding: 8px;
+}
+
+/* Context Panel prefixed variants (used by ContextPanel.tsx) */
+.context-panel-diff-view {
+  overflow-y: auto;
+  min-height: 0;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre;
+}
+
+.context-diff {
+  padding: 2px 8px;
+}
+
+.context-diff-hunk {
+  padding: 2px 8px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.context-diff-header {
+  padding: 2px 8px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.context-diff-add {
+  padding: 2px 8px;
+  background: rgba(72, 219, 130, 0.15);
+  color: #48db82;
+}
+
+.context-diff-del {
+  padding: 2px 8px;
+  background: rgba(236, 72, 153, 0.15);
+  color: #ec4899;
+}
+
+.context-diff-file {
+  padding: 2px 8px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.context-panel-diff-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.context-panel-diff-header {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+}
+
+.context-panel-diff-header h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.context-panel-diff-mode-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.context-panel-diff-mode-tab {
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.context-panel-diff-mode-tab:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.context-panel-diff-mode-tab.active {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: white;
+}
+
+.context-panel-diff-content {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+
+.context-panel-diff-loading,
+.context-panel-diff-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 14px;
+  font-size: 13px;
+}
+
+.context-panel-diff-error {
+  color: #ef4444;
+}
+
+.context-panel-spinner {
+  animation: context-spin 1s linear infinite;
+}
+
+@keyframes context-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.context-panel-review {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.review-scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding: 4px 0;
+}
+
+.review-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.review-action-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.review-action-primary {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: white;
+}
+
+.review-action-primary:hover {
+  opacity: 0.9;
+  color: white;
+}
+
+.review-fix-logs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.review-fix-log-entry {
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 4px 0;
+}
+
+.review-fix-active {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--primary-color);
+}
+
+.context-panel-file-list {
+  overflow-y: auto;
+  min-height: 0;
+  padding: 4px 0;
+}
+
+.inline-icon {
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+.tool-icon {
+  display: flex;
+  align-items: center;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.file-section {
+  margin-bottom: 16px;
+}
+
+.file-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.file-section-header h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.section-select-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.section-select-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.section-select-count {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+.file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.file-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.file-item.selected {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
+.file-item.active-diff {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: rgba(99, 102, 241, 0.5);
+}
+
+.file-item input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+.file-icon {
+  display: flex;
+  align-items: center;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.file-path {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-status {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-right: 8px;
+}
+
+.file-changes {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.file-changes .additions {
+  color: #48db82;
+}
+
+.file-changes .deletions {
+  color: #ec4899;
+}
+
+.file-diff-btn {
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.file-diff-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.no-changes {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  color: var(--text-secondary);
+  gap: 8px;
+}
+
+.no-changes-icon {
+  color: var(--primary-color);
+}
+
+/* Collapsed State */
+.file-list.collapsed {
+  display: none;
+}
+
+/* Mobile Layout */
+@media (max-width: 768px) {
+  .context-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 1000;
+    background: var(--bg-secondary);
+  }
+
+  .file-section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .section-select-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .review-footer {
+    flex-direction: column;
+  }
+
+  .review-footer button {
+    width: 100%;
+  }
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .file-path {
+    font-size: 12px;
+  }
+
+  .diff-content {
+    font-size: 11px;
+  }
+}

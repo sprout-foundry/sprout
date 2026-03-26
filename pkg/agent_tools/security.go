@@ -79,11 +79,13 @@ func classifyShellCommand(args map[string]interface{}) SecurityResult {
 	risks := classifyChainedCommand(cmd)
 	maxRisk := maxRisk(risks)
 
+	// Only DANGEROUS commands trigger blocking/prompts.
+	// CAUTION commands (build tools, package managers, etc.) are auto-allowed.
 	return SecurityResult{
-		Risk: maxRisk,
-		Reasoning: getShellCommandReasoning(cmd, maxRisk),
-		ShouldBlock: maxRisk == SecurityDangerous,
-		ShouldPrompt: maxRisk >= SecurityCaution,
+		Risk:         maxRisk,
+		Reasoning:    getShellCommandReasoning(cmd, maxRisk),
+		ShouldBlock:  maxRisk == SecurityDangerous,
+		ShouldPrompt: maxRisk == SecurityDangerous,
 	}
 }
 
@@ -194,43 +196,182 @@ func classifySingleCommand(cmd string) SecurityRisk {
 		return SecurityDangerous
 	}
 
-	if isCautionPattern(cmdLower) {
-		return SecurityCaution
-	}
-
 	if isSafeShellCommand(cmdLower) {
 		return SecuritySafe
+	}
+
+	if isCautionPattern(cmdLower) {
+		return SecurityCaution
 	}
 
 	return SecurityCaution
 }
 
-// isSafeShellCommand checks if a command is safe (read-only or workspace operations)
+// isSafeShellCommand checks if a command is safe (read-only or workspace operations).
+// Rejects commands with output redirection (> or >>) unless to /tmp/.
 func isSafeShellCommand(cmd string) bool {
-	readonlyCmds := []string{
-		"ls", "cat", "more", "less", "head", "tail", "grep", "find", "locate",
-		"ps", "top", "htop", "free", "df", "du", "env", "printenv", "uname",
-		"whoami", "id", "date", "time", "echo", "pwd", "hostname",
-		"git status", "git log", "git diff", "git show", "git branch", "git remote",
-		"go build", "go test", "go fmt", "go vet", "go list", "go mod",
-		"npm test", "npm run", "npm ls", "npm outdated", "npm view",
-		"cargo build", "cargo test", "cargo fmt", "cargo clippy", "cargo check",
-		"python -m pytest", "python -m unittest", "pytest", "unittest",
-		"ruby -e", "rake", "bundle exec",
-		"docker ps", "docker images", "docker logs", "docker inspect",
-		"kubectl get", "kubectl describe", "kubectl logs", "kubectl exec --",
-		"curl", "wget", "ping", "nslookup", "dig", "traceroute",
-		"systemctl status", "systemctl list-units", "journalctl",
-		"tar tf", "zip -l", "unzip -l", "gzip -l",
+	// Reject commands with output redirection that target non-tmp paths
+	if containsRedirection(cmd) && !isTmpRedirection(cmd) {
+		return false
 	}
 
-	for _, safe := range readonlyCmds {
-		if strings.HasPrefix(cmd, safe) {
+	// Informational git
+	safeGitPrefixes := []string{
+		"git status", "git log", "git diff", "git show", "git branch",
+		"git remote", "git config", "git stash list", "git tag",
+		"git shortlog", "git blame", "git reflog",
+	}
+	for _, prefix := range safeGitPrefixes {
+		if strings.HasPrefix(cmd, prefix+" ") || cmd == prefix {
 			return true
 		}
 	}
 
+	// List/info commands
+	safeListCommands := map[string]bool{
+		"ls": true, "ll": true, "la": true,
+		"find": true, "which": true, "whereis": true, "type": true,
+		"cat": true, "head": true, "tail": true, "less": true, "more": true, "wc": true,
+		"tree": true, "file": true, "stat": true,
+		"du": true, "df": true,
+		"ps": true, "top": true, "htop": true,
+		"uname": true, "env": true, "printenv": true, "export": true,
+		"echo": true, "pwd": true, "hostname": true, "date": true, "cal": true,
+		"whoami": true, "id": true,
+		"lsb_release": true, "lscpu": true, "free": true, "uptime": true,
+		"basename": true, "dirname": true, "realpath": true,
+		"locate": true, "time": true,
+	}
+	for c := range safeListCommands {
+		if cmd == c || strings.HasPrefix(cmd, c+" ") {
+			return true
+		}
+	}
+
+	// grep/rg/egrep (read-only)
+	if strings.HasPrefix(cmd, "grep ") || strings.HasPrefix(cmd, "egrep ") ||
+		strings.HasPrefix(cmd, "fgrep ") || strings.HasPrefix(cmd, "rg ") {
+		return true
+	}
+
+	// sed without -i (read-only)
+	if strings.HasPrefix(cmd, "sed ") && !strings.Contains(cmd, "-i") {
+		return true
+	}
+
+	// Go commands
+	safeGoPrefixes := []string{
+		"go build", "go test", "go run", "go fmt", "go vet",
+		"go mod ", "go list", "go version", "go env",
+		"go install", "go doc",
+	}
+	for _, prefix := range safeGoPrefixes {
+		if strings.HasPrefix(cmd, prefix) {
+			return true
+		}
+	}
+
+	// Build and test commands (Node.js, Rust, Python, Java, Swift, etc.)
+	safeBuildPrefixes := []string{
+		"make test", "make build", "make check", "make lint",
+		"npm run build", "npm run test", "npm run lint", "npm run check",
+		"npm test", "npm run ", "npm ls", "npm outdated", "npm view",
+		"npm pack", "npm audit",
+		"cargo build", "cargo test", "cargo check", "cargo doc", "cargo clippy",
+		"cargo fmt", "cargo metadata",
+		"yarn build", "yarn test", "yarn lint", "yarn check",
+		"pnpm build", "pnpm test", "pnpm lint",
+		"pip list", "pip3 list", "pip show", "pip3 show", "pip install", "pip3 install",
+		"python -m pytest", "python3 -m pytest",
+		"pytest",
+		"mvn test", "mvn compile", "mvn package",
+		"gradle test", "gradle build", "gradle check",
+		"bundle exec",
+		"swift build", "swift test",
+		"rustc ",
+	}
+	for _, prefix := range safeBuildPrefixes {
+		if strings.HasPrefix(cmd, prefix) {
+			return true
+		}
+	}
+
+	// Network diagnostics
+	safeNetworkPrefixes := []string{
+		"curl", "wget", "ping ", "nslookup", "dig ", "traceroute",
+		"nc -z", "nc -vz",
+	}
+	for _, prefix := range safeNetworkPrefixes {
+		if strings.HasPrefix(cmd, prefix) {
+			return true
+		}
+	}
+
+	// System info/processes
+	safeSystemPrefixes := []string{
+		"systemctl status", "systemctl list-units", "journalctl",
+		"docker ps", "docker images", "docker logs", "docker inspect",
+		"kubectl get", "kubectl describe", "kubectl logs", "kubectl exec --",
+		"tar tf", "zip -l", "unzip -l", "gzip -l",
+	}
+	for _, prefix := range safeSystemPrefixes {
+		if strings.HasPrefix(cmd, prefix) {
+			return true
+		}
+	}
+
+	// Common workspace operations that are safe
+	safeWorkspacePrefixes := []string{
+		"mkdir -p", "touch ", "tee ",  // writing to workspace, not system dirs
+		"cp ", "mv ",                   // workspace-level moves/copies
+		"chmod ", "chown ",             // workspace permissions
+	}
+	for _, prefix := range safeWorkspacePrefixes {
+		if strings.HasPrefix(cmd, prefix) {
+			return true
+		}
+	}
+
+	// Simple no-arg commands
+	if cmd == "echo" || cmd == "true" || cmd == "false" || cmd == "pwd" || cmd == "ls" {
+		return true
+	}
+
 	return false
+}
+
+// containsRedirection returns true if the command contains output redirection
+// operators (>, >>) that could write to arbitrary paths
+func containsRedirection(cmd string) bool {
+	for i := 0; i < len(cmd); i++ {
+		r := cmd[i]
+		if r == '\'' {
+			for i++; i < len(cmd) && cmd[i] != '\''; i++ {
+			}
+			continue
+		}
+		if r == '"' {
+			for i++; i < len(cmd) && cmd[i] != '"'; i++ {
+			}
+			continue
+		}
+		if r == '>' && i+1 < len(cmd) && cmd[i+1] == '>' {
+			return true
+		}
+		if r == '>' && (i+1 >= len(cmd) || cmd[i+1] != '=') {
+			if i == 0 || cmd[i-1] != '>' {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// isTmpRedirection returns true if output redirection targets /tmp/
+func isTmpRedirection(cmd string) bool {
+	lower := strings.ToLower(cmd)
+	return strings.Contains(lower, "> /tmp") || strings.Contains(lower, ">> /tmp") ||
+		strings.Contains(lower, ">/tmp")
 }
 
 // isCautionPattern checks for caution-level patterns

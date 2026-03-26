@@ -15,6 +15,14 @@ import { useGitWorkspace } from '../hooks/useGitWorkspace';
 const INSTANCE_PID_STORAGE_KEY = 'ledit:webui:instancePid';
 const INSTANCE_SWITCH_RESET_KEY = 'ledit:webui:instanceSwitchReset';
 
+const toPaneFlex = (weight: number): React.CSSProperties => ({
+  flexGrow: weight,
+  flexShrink: 1,
+  flexBasis: 0,
+  minWidth: 0,
+  minHeight: 0,
+});
+
 interface ToolExecution {
   id: string;
   tool: string;
@@ -669,7 +677,7 @@ const AppContent: React.FC<AppContentProps> = ({
 
     if (panes.length < 3 || !nestedSplit) {
       if (panes.length === 1) {
-        return renderPaneById(panes[0].id, { flex: '1 1 auto' });
+        return renderPaneById(panes[0].id, toPaneFlex(1));
       }
 
       if (panes.length === 2) {
@@ -680,13 +688,13 @@ const AppContent: React.FC<AppContentProps> = ({
 
         return (
           <>
-            {renderPaneById(firstPane.id, { flex: `0 0 ${firstPaneSize}%` })}
+            {renderPaneById(firstPane.id, toPaneFlex(firstPaneSize))}
             <ResizeHandle
               direction={splitAxis}
               onResize={handlePaneResize(firstPane.id, splitAxis)}
               onResizeEnd={handlePaneResizeEnd(firstPane.id)}
             />
-            {renderPaneById(secondPane.id, { flex: `0 0 ${secondPaneSize}%` })}
+            {renderPaneById(secondPane.id, toPaneFlex(secondPaneSize))}
           </>
         );
       }
@@ -702,7 +710,7 @@ const AppContent: React.FC<AppContentProps> = ({
 
             return (
               <React.Fragment key={pane.id}>
-                {renderPaneById(pane.id, { flex: `0 0 ${paneSize}%` })}
+                {renderPaneById(pane.id, toPaneFlex(paneSize))}
                 {showResizeHandles && !isLast && (
                   <ResizeHandle
                     direction={splitAxis}
@@ -737,27 +745,27 @@ const AppContent: React.FC<AppContentProps> = ({
     const nestedGroup = (
       <div
         className={`nested-pane-group nested-pane-group-${nestedDirection}`}
-        style={{ flex: `0 0 ${groupSize}%` }}
+        style={toPaneFlex(groupSize)}
       >
-        {renderPaneById(hostPane.id, { flex: `0 0 ${nestedSize}%` })}
+        {renderPaneById(hostPane.id, toPaneFlex(nestedSize))}
         <ResizeHandle
           direction={nestedHandleDirection}
           onResize={handlePaneResize(nestedSizeKey, nestedHandleDirection)}
           onResizeEnd={handlePaneResizeEnd(nestedSizeKey)}
         />
-        {renderPaneById(nestedPane.id, { flex: `0 0 ${100 - nestedSize}%` })}
+        {renderPaneById(nestedPane.id, toPaneFlex(100 - nestedSize))}
       </div>
     );
 
     return (
       <div className={`nested-pane-layout nested-pane-layout-${rootDirection}`}>
-        {hostIsFirst ? nestedGroup : renderPaneById(siblingPane.id, { flex: `0 0 ${100 - groupSize}%` })}
+        {hostIsFirst ? nestedGroup : renderPaneById(siblingPane.id, toPaneFlex(100 - groupSize))}
         <ResizeHandle
           direction={rootHandleDirection}
           onResize={handlePaneResize(rootSizeKey, rootHandleDirection, !hostIsFirst)}
           onResizeEnd={handlePaneResizeEnd(rootSizeKey)}
         />
-        {hostIsFirst ? renderPaneById(siblingPane.id, { flex: `0 0 ${100 - groupSize}%` }) : nestedGroup}
+        {hostIsFirst ? renderPaneById(siblingPane.id, toPaneFlex(100 - groupSize)) : nestedGroup}
       </div>
     );
   };

@@ -50,6 +50,13 @@ func handleAnalyzeUIScreenshot(ctx context.Context, a *Agent, args map[string]in
 	// This avoids passing raw HTML markup to the vision API and also avoids
 	// a redundant HEAD request pattern by checking once at the handler level.
 	effectiveImagePath := imagePath
+	fallbackCleanup := func() {}
+	defer fallbackCleanup()
+	if resolvedPath, cleanup, usedFallback := resolveVisionToolInputPath(a, imagePath); usedFallback {
+		a.debugLog("[img] Falling back to attached image for UI screenshot analysis: %s -> %s\n", imagePath, resolvedPath)
+		effectiveImagePath = resolvedPath
+		fallbackCleanup = cleanup
+	}
 	if isLocalHTMLFile(imagePath) || tools.IsHTMLInput(imagePath) {
 		a.debugLog("HTML content detected, rendering via headless browser: %s\n", imagePath)
 		screenshotPath, err := renderHTMLContent(ctx, a, imagePath, viewportWidth, viewportHeight)
@@ -202,6 +209,13 @@ func handleAnalyzeImageContent(ctx context.Context, a *Agent, args map[string]in
 
 	// Detect HTML content and render via headless browser before vision analysis.
 	effectiveImagePath := imagePath
+	fallbackCleanup := func() {}
+	defer fallbackCleanup()
+	if resolvedPath, cleanup, usedFallback := resolveVisionToolInputPath(a, imagePath); usedFallback {
+		a.debugLog("[img] Falling back to attached image for image analysis: %s -> %s\n", imagePath, resolvedPath)
+		effectiveImagePath = resolvedPath
+		fallbackCleanup = cleanup
+	}
 	if isLocalHTMLFile(imagePath) || tools.IsHTMLInput(imagePath) {
 		a.debugLog("HTML content detected, rendering via headless browser: %s\n", imagePath)
 		screenshotPath, screenshotErr := renderHTMLContent(ctx, a, imagePath, 1280, 720)
@@ -281,6 +295,13 @@ func handleAnalyzeImageContentWithImages(ctx context.Context, a *Agent, args map
 
 	// Handle HTML URLs via screenshot first
 	effectiveImagePath := imagePath
+	fallbackCleanup := func() {}
+	defer fallbackCleanup()
+	if resolvedPath, cleanup, usedFallback := resolveVisionToolInputPath(a, imagePath); usedFallback {
+		a.debugLog("[img] Falling back to attached image for multimodal analysis: %s -> %s\n", imagePath, resolvedPath)
+		effectiveImagePath = resolvedPath
+		fallbackCleanup = cleanup
+	}
 	if isLocalHTMLFile(effectiveImagePath) || tools.IsHTMLInput(effectiveImagePath) {
 		a.debugLog("HTML content detected, rendering via headless browser: %s\n", effectiveImagePath)
 		screenshotPath, screenshotErr := renderHTMLContent(ctx, a, effectiveImagePath, 1280, 720)
@@ -377,6 +398,133 @@ func handleAnalyzeImageContentWithImages(ctx context.Context, a *Agent, args map
 	}}
 
 	return images, textResult, nil
+}
+
+func resolveVisionToolInputPath(a *Agent, imagePath string) (string, func(), bool) {
+	trimmed := strings.TrimSpace(imagePath)
+	if trimmed == "" {
+		return imagePath, func() {}, false
+	}
+
+	lower := strings.ToLower(trimmed)
+	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
+		return imagePath, func() {}, false
+	}
+
+	if localFileExists(trimmed) {
+		return imagePath, func() {}, false
+	}
+
+	img, ok := latestAttachedUserImage(a)
+	if !ok {
+		return imagePath, func() {}, false
+	}
+
+	resolvedPath, cleanup, err := materializeImageDataForVisionTool(img)
+	if err != nil {
+		if a != nil {
+			a.debugLog("[WARN] Failed to materialize attached image fallback for %s: %v\n", imagePath, err)
+		}
+		return imagePath, func() {}, false
+	}
+
+	return resolvedPath, cleanup, true
+}
+
+func localFileExists(path string) bool {
+	info, err := os.Stat(path)
+	if err == nil {
+		return !info.IsDir()
+	}
+
+	if filepath.IsAbs(path) {
+		return false
+	}
+
+	absPath, absErr := filepath.Abs(path)
+	if absErr != nil {
+		return false
+	}
+	info, err = os.Stat(absPath)
+	return err == nil && !info.IsDir()
+}
+
+func latestAttachedUserImage(a *Agent) (api.ImageData, bool) {
+	if a == nil {
+		return api.ImageData{}, false
+	}
+
+	for i := len(a.messages) - 1; i >= 0; i-- {
+		msg := a.messages[i]
+		if msg.Role != "user" || len(msg.Images) == 0 {
+			continue
+		}
+		return msg.Images[0], true
+	}
+
+	return api.ImageData{}, false
+}
+
+func materializeImageDataForVisionTool(img api.ImageData) (string, func(), error) {
+	if url := strings.TrimSpace(img.URL); url != "" {
+		return url, func() {}, nil
+	}
+
+	encoded := strings.TrimSpace(img.Base64)
+	if encoded == "" {
+		return "", nil, fmt.Errorf("attached image has no URL or base64 data")
+	}
+
+	data, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to decode attached image data: %w", err)
+	}
+
+	ext, _ := console.DetectImageMagic(data)
+	if ext == "" {
+		ext = extensionForImageMIME(img.Type)
+	}
+	if ext == "" {
+		ext = ".png"
+	}
+
+	tempFile, err := os.CreateTemp("", "ledit-attached-image-*"+ext)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to create temp image file: %w", err)
+	}
+	tempPath := tempFile.Name()
+	if _, err := tempFile.Write(data); err != nil {
+		tempFile.Close()
+		_ = os.Remove(tempPath)
+		return "", nil, fmt.Errorf("failed to write temp image file: %w", err)
+	}
+	if err := tempFile.Close(); err != nil {
+		_ = os.Remove(tempPath)
+		return "", nil, fmt.Errorf("failed to close temp image file: %w", err)
+	}
+
+	return tempPath, func() {
+		_ = os.Remove(tempPath)
+	}, nil
+}
+
+func extensionForImageMIME(mimeType string) string {
+	switch strings.ToLower(strings.TrimSpace(mimeType)) {
+	case "image/png":
+		return ".png"
+	case "image/jpeg":
+		return ".jpg"
+	case "image/gif":
+		return ".gif"
+	case "image/webp":
+		return ".webp"
+	case "image/bmp":
+		return ".bmp"
+	case "image/avif":
+		return ".avif"
+	default:
+		return ""
+	}
 }
 
 func normalizeVisionToolOutput(result string, preferPlainText bool) (string, error) {

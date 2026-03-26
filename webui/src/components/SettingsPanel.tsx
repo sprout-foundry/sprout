@@ -609,6 +609,18 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
             <h4>Subagent</h4>
             {renderTextInput('subagent_provider', 'Provider', 'openai, anthropic…')}
             {renderTextInput('subagent_model', 'Model', 'gpt-4o-mini, claude-3-5-sonnet…')}
+            {renderSelect('default_subagent_persona', 'Default Persona', [
+              'general',
+              'coder',
+              'refactor',
+              'debugger',
+              'tester',
+              'code_reviewer',
+              'researcher',
+              'web_scraper',
+              'orchestrator',
+              'computer_user',
+            ])}
           </div>
         );
 

@@ -349,22 +349,11 @@ func (a *Agent) processImagesViaOCR(query string) (string, error) {
 		return query, nil
 	}
 
-	// Determine analysis mode from query context
-	var analysisMode string
-	if containsFrontendKeywords(query) {
-		analysisMode = "frontend"
-	} else {
-		analysisMode = "general"
-	}
-
-	// Create vision processor using the current provider's vision model
+	// Resolve via unified deterministic chain:
+	// active provider vision -> explicit custom fallback -> global list -> local Ollama.
 	processor, err := tools.NewVisionProcessorWithProvider(a.debug, a.clientType)
 	if err != nil {
-		// Fall back to default vision processor if current provider doesn't support vision
-		processor, err = tools.NewVisionProcessorWithMode(a.debug, analysisMode)
-		if err != nil {
-			return query, fmt.Errorf("failed to create vision processor: %w", err)
-		}
+		return query, fmt.Errorf("failed to create vision processor: %w", err)
 	}
 
 	// Process any images found in the text

@@ -267,27 +267,11 @@ func CreateOllamaClient(model string) (api.ClientInterface, error) {
 // Vision Processor Creation
 // ============================================================================
 
-// NewVisionProcessorWithMode creates a vision processor optimized for specific analysis mode
-func NewVisionProcessorWithMode(debug bool, mode string) (*VisionProcessor, error) {
-	var client api.ClientInterface
-	var err error
-
-	// Choose preferred provider/model by analysis mode, then fall back through provider vision setups.
-	switch strings.ToLower(mode) {
-	case "frontend", "design", "ui", "html", "css":
-		// Prefer a high-quality frontend vision model when available.
-		client, err = CreateVisionClientWithModel("google/gemma-3-27b-it")
-		if err != nil {
-			client, err = CreateVisionClient()
-		}
-	case "general", "text", "content", "extract", "analyze":
-		// Prefer configured provider vision models first, then Ollama as last fallback.
-		client, err = CreateVisionClient()
-	default:
-		// Default to provider-first selection with Ollama as fallback.
-		client, err = CreateVisionClient()
-	}
-
+// NewVisionProcessorWithMode creates a vision processor for image/OCR workflows.
+// Client selection is intentionally deterministic and does not vary by mode:
+// provider-vision list first, local Ollama fallback last.
+func NewVisionProcessorWithMode(debug bool, _ string) (*VisionProcessor, error) {
+	client, err := CreateVisionClient()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create vision client: %w", err)
 	}
@@ -339,7 +323,14 @@ func CreateVisionClientWithProvider(providerType api.ClientType) (api.ClientInte
 		}
 	}
 
-	return nil, fmt.Errorf("provider %s does not support vision models and no usable fallback is configured", providerType)
+	// Deterministic final fallback path shared across scenarios:
+	// run the standard provider-first list with local Ollama last.
+	globalClient, globalErr := CreateVisionClient()
+	if globalErr == nil && globalClient != nil && globalClient.SupportsVision() {
+		return globalClient, nil
+	}
+
+	return nil, fmt.Errorf("provider %s does not support vision models and no usable fallback is configured: %w", providerType, globalErr)
 }
 
 // GetVisionModelForProvider returns the appropriate vision model for a given provider

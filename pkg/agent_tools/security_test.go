@@ -256,6 +256,13 @@ func TestClassifyShellCommandCaution(t *testing.T) {
 		{"command substitution $()", "echo $(whoami)", SecurityCaution},
 		{"command substitution backtick", "echo `whoami`", SecurityCaution},
 		{"heredoc", "cat <<EOF", SecurityCaution},
+		// False-positive regression: for-loop validating JSON files (read-only + benign /dev/null)
+		{"json validation for-loop", `for f in $(find . -name "*.json"); do echo "Validating $f..."; python3 -m json.tool "$f" > /dev/null 2>&1 && echo "  ✓ Valid JSON" || echo "  ✗ Invalid JSON"; done`, SecuritySafe},
+		{"for-loop cat with /dev/null", `for f in *.log; do cat "$f" > /dev/null; done`, SecuritySafe},
+		{"for-loop grep", `for f in *.go; do grep -c TODO "$f"; done`, SecuritySafe},
+		{"redirection to /dev/null", `python3 -m json.tool "$f" > /dev/null 2>&1`, SecuritySafe},
+		{"redirection to /dev/stdout", `echo hello > /dev/stdout`, SecuritySafe},
+		{"redirection to /dev/stderr", `echo hello > /dev/stderr`, SecuritySafe},
 	}
 
 	for _, tt := range tests {

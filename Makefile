@@ -35,7 +35,15 @@ help:
 # Unit Tests - Fast, no external dependencies
 test-unit:
 	@echo "Running unit tests..."
-	go test -tags ollama_test ./pkg/... ./cmd/... -v -timeout=60s -short
+	@bash -lc 'set -o pipefail; \
+	go test -tags ollama_test ./pkg/... ./cmd/... -v -timeout=60s -short 2>&1 | tee /tmp/ledit-test-unit.log; \
+	status=$$?; \
+	if [ $$status -ne 0 ]; then \
+		echo ""; \
+		echo "Failing packages:"; \
+		grep "^FAIL[[:space:]]" /tmp/ledit-test-unit.log || true; \
+		exit $$status; \
+	fi'
 
 # Integration Tests - Mocked AI, file operations
 test-integration:

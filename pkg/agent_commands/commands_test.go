@@ -14,6 +14,10 @@ func TestIsSlashCommand(t *testing.T) {
 		{"forward slash command", "/exec ls", true},
 		{"bang prefix as command", "!ls -la", true},
 		{"bang with exec", "!exec ls", true},
+		{"unix path", "/tmp/test.log", false},
+		{"nested unix path with spaces later", "/tmp/test.log more output", false},
+		{"windows style path after slash", "/tmp\\test.log", false},
+		{"unknown slash command", "/unknown", true},
 		{"regular text", "hello world", false},
 		{"empty string", "", false},
 		{"whitespace only", "   ", false},
@@ -71,6 +75,7 @@ func TestSlashPrefixStillWorks(t *testing.T) {
 		{"slash models", "/models", true},
 		{"slash exec", "/exec ls", true},
 		{"slash commit", "/commit", true},
+		{"slash path is not command", "/var/log/system.log", false},
 	}
 
 	for _, tc := range testCases {

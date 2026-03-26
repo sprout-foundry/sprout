@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"unicode"
 
 	"github.com/alantheprice/ledit/pkg/agent"
 )
@@ -147,7 +148,35 @@ func (r *CommandRegistry) Execute(input string, chatAgent *agent.Agent) error {
 // IsSlashCommand checks if input starts with a slash or bang
 func (r *CommandRegistry) IsSlashCommand(input string) bool {
 	trimmed := strings.TrimSpace(input)
-	return strings.HasPrefix(trimmed, "/") || strings.HasPrefix(trimmed, "!")
+	if strings.HasPrefix(trimmed, "!") {
+		return len(strings.TrimSpace(trimmed[1:])) > 0
+	}
+	if !strings.HasPrefix(trimmed, "/") {
+		return false
+	}
+
+	remainder := strings.TrimSpace(trimmed[1:])
+	if remainder == "" {
+		return false
+	}
+
+	commandName := strings.Fields(remainder)[0]
+	if strings.Contains(commandName, "/") || strings.Contains(commandName, "\\") {
+		return false
+	}
+	if !isLikelySlashCommandName(commandName) {
+		return false
+	}
+	return true
+}
+
+func isLikelySlashCommandName(name string) bool {
+	for _, r := range name {
+		if !(unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' || r == '_') {
+			return false
+		}
+	}
+	return true
 }
 
 // GetCommand returns a command by name

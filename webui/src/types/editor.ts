@@ -1,5 +1,8 @@
+export type EditorBufferKind = 'file' | 'chat' | 'diff' | 'review';
+
 export interface EditorBuffer {
   id: string;
+  kind: EditorBufferKind;
   file: {
     name: string;
     path: string;
@@ -21,6 +24,9 @@ export interface EditorBuffer {
   isModified: boolean;
   isActive: boolean; // Currently displayed in an editor pane
   paneId?: string | null; // Which pane is displaying this buffer
+  isPinned?: boolean;
+  isClosable?: boolean;
+  metadata?: Record<string, any>;
 }
 
 export type PaneLayout = 'single' | 'split-vertical' | 'split-horizontal' | 'split-grid';

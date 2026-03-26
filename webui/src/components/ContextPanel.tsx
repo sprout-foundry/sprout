@@ -44,6 +44,7 @@ import './ContextPanel.css';
 import TodoPanel from './TodoPanel';
 import { ApiService } from '../services/api';
 import { stripAnsiCodes } from '../utils/ansi';
+import RevisionListPanel from './RevisionListPanel';
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -148,6 +149,7 @@ interface ChatContextPanelProps extends ContextPanelBaseProps {
   lastError: string | null;
   queryProgress: any;
   onHandleToolPillClick?: (toolId: string) => void;
+  onOpenRevisionDiff?: (options: { path: string; diff: string; title: string }) => void;
 }
 
 // Git-context specific props
@@ -230,7 +232,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   const resizingRef = useRef(false);
 
   // ── Chat-specific state ──────────────────────────────────────────
-  const [chatTab, setChatTab] = useState<'tools' | 'history' | 'tasks' | 'status' | 'sessions'>('tools');
+  const [chatTab, setChatTab] = useState<'tools' | 'changes' | 'tasks' | 'status' | 'sessions'>('tools');
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
   const [activeToolId, setActiveToolId] = useState<string | null>(null);
   const toolRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -304,9 +306,9 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   useImperativeHandle(ref, () => ({
     openTab: (tab: string) => {
       setPanelCollapsed(false);
-      if (context === 'chat' && ['tools', 'history', 'tasks', 'status', 'sessions'].includes(tab)) {
+      if (context === 'chat' && ['tools', 'changes', 'tasks', 'status', 'sessions'].includes(tab)) {
         setChatTab(tab as any);
-        if (tab === 'history' && revisions.length === 0) {
+        if (tab === 'changes' && revisions.length === 0) {
           loadRevisionHistory();
         }
         if (tab === 'sessions' && sessionsCount === 0) {
@@ -344,7 +346,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       setPanelCollapsed(true);
     }
     if (storedTab) {
-      if (context === 'chat' && ['tools', 'history', 'tasks', 'status', 'sessions'].includes(storedTab)) {
+      if (context === 'chat' && ['tools', 'changes', 'tasks', 'status', 'sessions'].includes(storedTab)) {
         setChatTab(storedTab as any);
       } else if (context === 'git' && ['files', 'diff', 'review'].includes(storedTab)) {
         setGitTab(storedTab as any);
@@ -474,7 +476,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
   useEffect(() => {
     if (context !== 'chat') return;
-    if (chatTab === 'history' && revisions.length === 0 && !isLoadingHistory) {
+    if (chatTab === 'changes' && revisions.length === 0 && !isLoadingHistory) {
       loadRevisionHistory();
     }
   }, [context, chatTab, revisions.length, isLoadingHistory, loadRevisionHistory]);
@@ -500,7 +502,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
     const openHistoryPanel = () => {
       setPanelCollapsed(false);
-      setChatTab('history');
+      setChatTab('changes');
       loadRevisionHistory();
     };
 
@@ -776,9 +778,9 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
   // ── Tab definitions ──────────────────────────────────────────────
 
-  const chatPanelTabs: Array<{ id: 'tools' | 'history' | 'tasks' | 'status' | 'sessions'; label: string; icon: ReactNode; count: string }> = [
+  const chatPanelTabs: Array<{ id: 'tools' | 'changes' | 'tasks' | 'status' | 'sessions'; label: string; icon: ReactNode; count: string }> = [
     { id: 'tools', label: 'Tool Executions', icon: <Wrench size={14} />, count: activeToolCount > 0 ? `${activeToolCount} active` : `${toolExecutions.length} total` },
-    { id: 'history', label: 'Revision History', icon: <History size={14} />, count: `${historyCounts} revisions` },
+    { id: 'changes', label: 'Session Changes', icon: <History size={14} />, count: `${historyCounts} revisions` },
     { id: 'tasks', label: 'Tasks', icon: <ListTodo size={14} />, count: `${currentTodos.filter(t => t.status === 'in_progress').length || 0} active` },
     { id: 'sessions', label: 'Sessions', icon: <Clock size={14} />, count: `${sessionsCount}` },
     { id: 'status', label: 'Status', icon: <Activity size={14} />, count: `${statusMetrics.totalMsgs} msgs` },
@@ -1443,9 +1445,9 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   const handleTabClick = (tabId: string) => {
     setPanelCollapsed(false);
     if (context === 'chat') {
-      const id = tabId as 'tools' | 'history' | 'tasks' | 'status' | 'sessions';
+      const id = tabId as 'tools' | 'changes' | 'tasks' | 'status' | 'sessions';
       setChatTab(id);
-      if (id === 'history' && revisions.length === 0) loadRevisionHistory();
+      if (id === 'changes' && revisions.length === 0) loadRevisionHistory();
       if (id === 'sessions' && sessionsCount === 0) loadSessions();
     } else {
       setGitTab(tabId as 'files' | 'diff' | 'review');
@@ -1456,7 +1458,12 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     if (context === 'chat') {
       switch (chatTab) {
         case 'tools': return renderToolsTab();
-        case 'history': return renderHistoryTab();
+        case 'changes': return (
+          <RevisionListPanel
+            mode="session"
+            onOpenDiff={(props as ChatContextPanelProps).onOpenRevisionDiff || (() => {})}
+          />
+        );
         case 'tasks': return <div className="side-panel-tasks"><TodoPanel todos={currentTodos || []} isLoading={isProcessing && currentTodos.length === 0} /></div>;
         case 'sessions': return renderSessionsTab();
         case 'status': return renderStatusTab();

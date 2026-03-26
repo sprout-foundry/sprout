@@ -18,6 +18,16 @@ interface EditorManagerContextValue {
 
   // Actions
   openFile: (file: any) => string; // Returns buffer ID
+  openWorkspaceBuffer: (options: {
+    kind: 'chat' | 'diff' | 'review';
+    path: string;
+    title: string;
+    content?: string;
+    ext?: string;
+    isPinned?: boolean;
+    isClosable?: boolean;
+    metadata?: Record<string, any>;
+  }) => string;
   closeBuffer: (bufferId: string) => void;
   closePane: (paneId: string) => void;
   switchPane: (paneId: string) => void;
@@ -49,13 +59,38 @@ interface EditorManagerProviderProps {
 }
 
 export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ children }) => {
-  const [buffers, setBuffers] = useState<Map<string, EditorBuffer>>(new Map());
+  const [buffers, setBuffers] = useState<Map<string, EditorBuffer>>(() => {
+    const chatBuffer: EditorBuffer = {
+      id: 'buffer-chat',
+      kind: 'chat',
+      file: {
+        name: 'Chat',
+        path: '__workspace/chat',
+        isDir: false,
+        size: 0,
+        modified: 0,
+        ext: '.chat'
+      },
+      content: '',
+      originalContent: '',
+      cursorPosition: { line: 0, column: 0 },
+      scrollPosition: { top: 0, left: 0 },
+      isModified: false,
+      isActive: true,
+      paneId: 'pane-1',
+      isPinned: true,
+      isClosable: false,
+      metadata: {}
+    };
+
+    return new Map([[chatBuffer.id, chatBuffer]]);
+  });
   const [panes, setPanes] = useState<EditorPane[]>([
-    { id: 'pane-1', bufferId: null, isActive: true, position: 'primary' }
+    { id: 'pane-1', bufferId: 'buffer-chat', isActive: true, position: 'primary' }
   ]);
   const [paneLayout, setPaneLayoutState] = useState<PaneLayout>('single');
   const [activePaneId, setActivePaneId] = useState<string | null>('pane-1');
-  const [activeBufferId, setActiveBufferId] = useState<string | null>(null);
+  const [activeBufferId, setActiveBufferId] = useState<string | null>('buffer-chat');
   const [isAutoSaveEnabled] = useState(true);
   const [autoSaveInterval] = useState(30000); // 30 seconds
   const [paneSizes, setPaneSizes] = useState<PaneSize>({ 'pane-1': 100 }); // Initial sizes in percentage
@@ -124,6 +159,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     const bufferId = `buffer-${Date.now()}`;
     const newBuffer: EditorBuffer = {
       id: bufferId,
+      kind: 'file',
       file: file,
       content: '',
       originalContent: '',
@@ -151,6 +187,85 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
 
     return bufferId;
   }, [activePaneId, activateBuffer, panes]);
+
+  const openWorkspaceBuffer = useCallback((options: {
+    kind: 'chat' | 'diff' | 'review';
+    path: string;
+    title: string;
+    content?: string;
+    ext?: string;
+    isPinned?: boolean;
+    isClosable?: boolean;
+    metadata?: Record<string, any>;
+  }) => {
+    const currentBuffers = buffersRef.current;
+    const existingBufferEntry = Array.from(currentBuffers.entries()).find(([_, buffer]) => buffer.file.path === options.path);
+
+    if (existingBufferEntry) {
+      const [bufferId, buffer] = existingBufferEntry;
+      setBuffers(prev => {
+        const next = new Map(prev);
+        next.set(bufferId, {
+          ...buffer,
+          kind: options.kind,
+          file: {
+            ...buffer.file,
+            name: options.title,
+            path: options.path,
+            ext: options.ext || buffer.file.ext,
+          },
+          content: options.content ?? buffer.content,
+          originalContent: options.content ?? buffer.originalContent,
+          isPinned: options.isPinned ?? buffer.isPinned,
+          isClosable: options.isClosable ?? buffer.isClosable,
+          metadata: options.metadata ?? buffer.metadata,
+        });
+        return next;
+      });
+      activateBuffer(bufferId);
+      return bufferId;
+    }
+
+    const bufferId = `buffer-${options.kind}-${Date.now()}`;
+    const newBuffer: EditorBuffer = {
+      id: bufferId,
+      kind: options.kind,
+      file: {
+        name: options.title,
+        path: options.path,
+        isDir: false,
+        size: 0,
+        modified: 0,
+        ext: options.ext,
+      },
+      content: options.content ?? '',
+      originalContent: options.content ?? '',
+      cursorPosition: { line: 0, column: 0 },
+      scrollPosition: { top: 0, left: 0 },
+      isModified: false,
+      isActive: true,
+      paneId: activePaneId,
+      isPinned: options.isPinned ?? false,
+      isClosable: options.isClosable ?? !options.isPinned,
+      metadata: options.metadata ?? {},
+    };
+
+    setBuffers(prev => {
+      const next = new Map(prev);
+      next.set(bufferId, newBuffer);
+      return next;
+    });
+
+    setPanes(prev => prev.map(pane =>
+      pane.id === activePaneId
+        ? { ...pane, bufferId }
+        : pane
+    ));
+
+    setActiveBufferId(bufferId);
+
+    return bufferId;
+  }, [activePaneId, activateBuffer]);
 
   // Update buffer content
   const updateBufferContent = useCallback((bufferId: string, content: string) => {
@@ -203,7 +318,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   // Save a buffer to the server
   const saveBuffer = useCallback(async (bufferId: string) => {
     const buffer = buffersRef.current.get(bufferId);
-    if (!buffer) return;
+    if (!buffer || buffer.kind !== 'file') return;
 
     try {
       const response = await writeFileWithConsent(buffer.file.path, buffer.content);
@@ -241,6 +356,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   const closeBuffer = useCallback((bufferId: string) => {
     const buffer = buffersRef.current.get(bufferId);
     if (!buffer) return;
+    if (buffer.isClosable === false) return;
 
     // Save before closing if modified and auto-save is enabled (fire-and-forget)
     if (buffer.isModified && isAutoSaveEnabled) {
@@ -435,6 +551,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     autoSaveInterval,
     paneSizes,
     openFile,
+    openWorkspaceBuffer,
     closeBuffer,
     closePane,
     switchPane,

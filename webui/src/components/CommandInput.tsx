@@ -79,6 +79,19 @@ const CommandInput: React.FC<CommandInputProps> = ({
     );
   }, [draftValue]);
 
+  useLayoutEffect(() => {
+    const textarea = inputRef.current;
+    if (!textarea) return;
+
+    textarea.style.height = '0px';
+    const computed = window.getComputedStyle(textarea);
+    const lineHeight = Number.parseFloat(computed.lineHeight) || 24;
+    const minHeight = lineHeight * 2 + 20;
+    const maxHeight = lineHeight * 10 + 20;
+    const nextHeight = Math.min(maxHeight, Math.max(minHeight, textarea.scrollHeight));
+    textarea.style.height = `${nextHeight}px`;
+  }, [draftValue, attachedImages.length]);
+
   // Focus input if autoFocus is true
   useEffect(() => {
     if (autoFocus && inputRef.current) {
@@ -592,7 +605,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
         placeholder={placeholder}
         disabled={disabled}
         className={`input-field autoscaling ${isHistoryMode ? 'history-mode' : ''}`}
-        rows={1}
+        rows={2}
         spellCheck={false}
         data-testid="command-input"
       />

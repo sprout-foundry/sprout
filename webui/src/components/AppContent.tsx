@@ -185,6 +185,19 @@ const AppContent: React.FC<AppContentProps> = ({
   const [instances, setInstances] = useState<LeditInstance[]>([]);
   const [selectedInstancePID, setSelectedInstancePID] = useState<number>(0);
   const [isSwitchingInstance, setIsSwitchingInstance] = useState(false);
+  const [panelWidth, setPanelWidth] = useState(() => {
+    if (typeof window === 'undefined') return 360;
+    const storedWidth = Number(window.localStorage.getItem('ledit.contextPanel.width'));
+    if (Number.isFinite(storedWidth) && storedWidth >= 260 && storedWidth <= 600) {
+      return storedWidth;
+    }
+    return 360;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('ledit.contextPanel.width', String(Math.round(panelWidth)));
+  }, [panelWidth]);
   const initialViewSyncRef = useRef(false);
 
   // Load hotkeys config path on mount
@@ -658,6 +671,8 @@ const AppContent: React.FC<AppContentProps> = ({
               lastError={state.lastError}
               queryProgress={state.queryProgress}
               isMobileLayout={isMobile}
+              panelWidth={panelWidth}
+              onPanelWidthChange={setPanelWidth}
               onOpenRevisionDiff={handleOpenRevisionDiff}
             />
           )}

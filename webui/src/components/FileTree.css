@@ -391,8 +391,8 @@
 }
 
 .file-tree .file-tree-context-menu {
-  position: absolute;
-  z-index: 20;
+  position: fixed;
+  z-index: 1400;
   min-width: 160px;
   padding: 6px;
   border-radius: var(--radius-md);

@@ -589,6 +589,14 @@ html, body, #root {
   background: var(--bg-secondary);
 }
 
+.pane-shell {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
+
 .editor-pane-host {
   display: flex;
   flex: 1;
@@ -614,6 +622,24 @@ html, body, #root {
 
 .editor-pane-wrapper.active {
   background: var(--bg-secondary);
+}
+
+.nested-pane-layout,
+.nested-pane-group {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.nested-pane-layout-row,
+.nested-pane-group-row {
+  flex-direction: row;
+}
+
+.nested-pane-layout-column,
+.nested-pane-group-column {
+  flex-direction: column;
 }
 
 .editor-pane-wrapper:not(.active)::before {

@@ -48,6 +48,12 @@ func sharedUniversalHotkeys() []HotkeyEntry {
 		{Key: "Ctrl+N", CommandID: "new_file", Description: "New file"},
 		{Key: "Cmd+N", CommandID: "new_file", Description: "New file (Mac)"},
 		{Key: "Ctrl+\\", CommandID: "split_editor_vertical", Description: "Split editor vertical"},
+		{Key: "Ctrl+1", CommandID: "focus_tab_1", Description: "Focus first tab in active split"},
+		{Key: "Cmd+1", CommandID: "focus_tab_1", Description: "Focus first tab in active split (Mac)"},
+		{Key: "Ctrl+2", CommandID: "focus_tab_2", Description: "Focus second tab in active split"},
+		{Key: "Cmd+2", CommandID: "focus_tab_2", Description: "Focus second tab in active split (Mac)"},
+		{Key: "Ctrl+3", CommandID: "focus_tab_3", Description: "Focus third tab in active split"},
+		{Key: "Cmd+3", CommandID: "focus_tab_3", Description: "Focus third tab in active split (Mac)"},
 		{Key: "Ctrl+Shift+F", CommandID: "open_search", Description: "Open search", Global: true},
 		{Key: "Cmd+Shift+F", CommandID: "open_search", Description: "Open search (Mac)", Global: true},
 	}
@@ -202,6 +208,36 @@ func DefaultHotkeyConfig() *HotkeyConfig {
 				Key:         "Ctrl+\\",
 				CommandID:   "split_editor_vertical",
 				Description: "Split editor vertical",
+			},
+			{
+				Key:         "Ctrl+1",
+				CommandID:   "focus_tab_1",
+				Description: "Focus first tab in active split",
+			},
+			{
+				Key:         "Cmd+1",
+				CommandID:   "focus_tab_1",
+				Description: "Focus first tab in active split (Mac)",
+			},
+			{
+				Key:         "Ctrl+2",
+				CommandID:   "focus_tab_2",
+				Description: "Focus second tab in active split",
+			},
+			{
+				Key:         "Cmd+2",
+				CommandID:   "focus_tab_2",
+				Description: "Focus second tab in active split (Mac)",
+			},
+			{
+				Key:         "Ctrl+3",
+				CommandID:   "focus_tab_3",
+				Description: "Focus third tab in active split",
+			},
+			{
+				Key:         "Cmd+3",
+				CommandID:   "focus_tab_3",
+				Description: "Focus third tab in active split (Mac)",
 			},
 			{
 				Key:         "Ctrl+Shift+F",

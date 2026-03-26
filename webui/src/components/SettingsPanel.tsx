@@ -76,6 +76,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
   const [activeSubTab, setActiveSubTab] = useState<SettingsSubTab>('general');
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [textDrafts, setTextDrafts] = useState<Record<string, string>>({});
 
   // MCP / Provider form state
   const [editingServer, setEditingServer] = useState<{ mode: 'add' | 'edit'; originalName?: string } | null>(null);
@@ -95,17 +96,40 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
 
   const api = ApiService.getInstance();
   const toastTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const textSaveTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
-  // Keep a ref to settings for stable callback identities (avoids focus loss on re-render)
+  // Keep a ref to settings for async mutation callbacks.
   const settingsRef = useRef(settings);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
 
   // Cleanup toast timer on unmount
   useEffect(() => {
+    const pendingTextSaveTimers = textSaveTimersRef.current;
     return () => {
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      Object.values(pendingTextSaveTimers).forEach(clearTimeout);
     };
   }, []);
+
+  useEffect(() => {
+    if (!settings) return;
+
+    setTextDrafts((prev) => {
+      let next = prev;
+      let changed = false;
+
+      Object.entries(prev).forEach(([key, draftValue]) => {
+        const persistedValue = String(getNestedValue(settings as any, key) || '');
+        if (draftValue === persistedValue) {
+          if (next === prev) next = { ...prev };
+          delete next[key];
+          changed = true;
+        }
+      });
+
+      return changed ? next : prev;
+    });
+  }, [settings]);
 
   /* ─── Toast helpers ──────────────────────────────────────── */
 
@@ -148,108 +172,116 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
     [onSettingsChanged, api, showToast],
   );
 
-  /* ─── Toggle helper ─────────────────────────────────────── */
+  /* ─── Field render helpers ──────────────────────────────── */
 
-  const Toggle = useCallback(
-    ({ settingKey, label }: { settingKey: string; label: string }) => {
-      const s = settingsRef.current;
-      if (!s) return null;
-      const checked = !!getNestedValue(s as any, settingKey);
-      return (
-        <label className="styled-toggle">
-          <input
-            type="checkbox"
-            checked={checked}
-            onChange={() => updateSetting(settingKey, !checked)}
-          />
-          <span className="toggle-track" />
-          <span className="toggle-label">{label}</span>
-        </label>
-      );
-    },
-    [updateSetting],
-  );
+  const renderToggle = (settingKey: string, label: string) => {
+    if (!settings) return null;
+    const checked = !!getNestedValue(settings as any, settingKey);
+    return (
+      <label className="styled-toggle">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={() => updateSetting(settingKey, !checked)}
+        />
+        <span className="toggle-track" />
+        <span className="toggle-label">{label}</span>
+      </label>
+    );
+  };
 
-  /* ─── Select helper ─────────────────────────────────────── */
+  const renderSelect = (settingKey: string, label: string, options: string[]) => {
+    if (!settings) return null;
+    const value = String(getNestedValue(settings as any, settingKey) || '');
+    return (
+      <div className="config-item">
+        <label htmlFor={`setting-${settingKey}`}>{label}</label>
+        <select
+          id={`setting-${settingKey}`}
+          value={value}
+          onChange={(e) => updateSetting(settingKey, e.target.value)}
+          className="styled-select"
+        >
+          {options.map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
+  };
 
-  const Select = useCallback(
-    ({ settingKey, label, options }: { settingKey: string; label: string; options: string[] }) => {
-      const s = settingsRef.current;
-      if (!s) return null;
-      const value = String(getNestedValue(s as any, settingKey) || '');
-      return (
-        <div className="config-item">
-          <label htmlFor={`setting-${settingKey}`}>{label}</label>
-          <select
-            id={`setting-${settingKey}`}
-            value={value}
-            onChange={(e) => updateSetting(settingKey, e.target.value)}
-            className="styled-select"
-          >
-            {options.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
-            ))}
-          </select>
-        </div>
-      );
-    },
-    [updateSetting],
-  );
+  const renderNumberInput = (
+    settingKey: string,
+    label: string,
+    min?: number,
+    max?: number,
+    step = 1,
+  ) => {
+    if (!settings) return null;
+    const value = getNestedValue(settings as any, settingKey);
+    return (
+      <div className="config-item">
+        <label htmlFor={`setting-${settingKey}`}>{label}</label>
+        <input
+          id={`setting-${settingKey}`}
+          type="number"
+          className="styled-input config-row-input"
+          value={value ?? ''}
+          min={min}
+          max={max}
+          step={step}
+          onChange={(e) => {
+            const v = e.target.value === '' ? 0 : Number(e.target.value);
+            updateSetting(settingKey, v);
+          }}
+        />
+      </div>
+    );
+  };
 
-  /* ─── Number input helper ───────────────────────────────── */
+  const renderTextInput = (settingKey: string, label: string, placeholder?: string) => {
+    if (!settings) return null;
+    const persistedValue = String(getNestedValue(settings as any, settingKey) || '');
+    const value = textDrafts[settingKey] ?? persistedValue;
+    return (
+      <div className="config-item">
+        <label htmlFor={`setting-${settingKey}`}>{label}</label>
+        <input
+          id={`setting-${settingKey}`}
+          type="text"
+          className="styled-input"
+          value={value}
+          placeholder={placeholder}
+          onChange={(e) => {
+            const nextValue = e.target.value;
+            setTextDrafts((prev) => ({ ...prev, [settingKey]: nextValue }));
 
-  const NumberInput = useCallback(
-    ({ settingKey, label, min, max, step = 1 }: { settingKey: string; label: string; min?: number; max?: number; step?: number }) => {
-      const s = settingsRef.current;
-      if (!s) return null;
-      const value = getNestedValue(s as any, settingKey);
-      return (
-        <div className="config-item">
-          <label htmlFor={`setting-${settingKey}`}>{label}</label>
-          <input
-            id={`setting-${settingKey}`}
-            type="number"
-            className="styled-input config-row-input"
-            value={value ?? ''}
-            min={min}
-            max={max}
-            step={step}
-            onChange={(e) => {
-              const v = e.target.value === '' ? 0 : Number(e.target.value);
-              updateSetting(settingKey, v);
-            }}
-          />
-        </div>
-      );
-    },
-    [updateSetting],
-  );
+            if (textSaveTimersRef.current[settingKey]) {
+              clearTimeout(textSaveTimersRef.current[settingKey]);
+            }
 
-  /* ─── Text input helper ─────────────────────────────────── */
+            textSaveTimersRef.current[settingKey] = setTimeout(() => {
+              delete textSaveTimersRef.current[settingKey];
+              void updateSetting(settingKey, nextValue);
+            }, 250);
+          }}
+          onBlur={() => {
+            if (textSaveTimersRef.current[settingKey]) {
+              clearTimeout(textSaveTimersRef.current[settingKey]);
+              delete textSaveTimersRef.current[settingKey];
+            }
 
-  const TextInput = useCallback(
-    ({ settingKey, label, placeholder }: { settingKey: string; label: string; placeholder?: string }) => {
-      const s = settingsRef.current;
-      if (!s) return null;
-      const value = String(getNestedValue(s as any, settingKey) || '');
-      return (
-        <div className="config-item">
-          <label htmlFor={`setting-${settingKey}`}>{label}</label>
-          <input
-            id={`setting-${settingKey}`}
-            type="text"
-            className="styled-input"
-            value={value}
-            placeholder={placeholder}
-            onChange={(e) => updateSetting(settingKey, e.target.value)}
-          />
-        </div>
-      );
-    },
-    [updateSetting],
-  );
+            const draftValue = textDrafts[settingKey];
+            if (draftValue !== undefined && draftValue !== persistedValue) {
+              void updateSetting(settingKey, draftValue);
+            }
+          }}
+        />
+      </div>
+    );
+  };
 
   /* ─── Saving indicator ─────────────────────────────────── */
 
@@ -486,19 +518,11 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
           <div className="section">
             <h4>Behavior</h4>
             <div className="config-item">
-              <Select
-                settingKey="reasoning_effort"
-                label="Reasoning effort"
-                options={['low', 'medium', 'high']}
-              />
+              {renderSelect('reasoning_effort', 'Reasoning effort', ['low', 'medium', 'high'])}
             </div>
-            <Toggle settingKey="skip_prompt" label="Skip confirmation prompt" />
-            <Toggle settingKey="enable_pre_write_validation" label="Pre-write validation" />
-            <Select
-              settingKey="history_scope"
-              label="History scope"
-              options={['session', 'project', 'global']}
-            />
+            {renderToggle('skip_prompt', 'Skip confirmation prompt')}
+            {renderToggle('enable_pre_write_validation', 'Pre-write validation')}
+            {renderSelect('history_scope', 'History scope', ['session', 'project', 'global'])}
           </div>
         );
 
@@ -507,17 +531,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
         return (
           <div className="section">
             <h4>Security</h4>
-            <NumberInput
-              settingKey="security_validation.threshold"
-              label="Validation threshold (0-2)"
-              min={0}
-              max={2}
-            />
-            <Select
-              settingKey="self_review_gate_mode"
-              label="Self-review gate"
-              options={['off', 'code', 'always']}
-            />
+            {renderNumberInput('security_validation.threshold', 'Validation threshold (0-2)', 0, 2)}
+            {renderSelect('self_review_gate_mode', 'Self-review gate', ['off', 'code', 'always'])}
           </div>
         );
 
@@ -526,30 +541,10 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
         return (
           <div className="section">
             <h4>API Timeouts</h4>
-            <NumberInput
-              settingKey="api_timeouts.connection_timeout_sec"
-              label="Connection timeout (s)"
-              min={1}
-              max={300}
-            />
-            <NumberInput
-              settingKey="api_timeouts.first_chunk_timeout_sec"
-              label="First chunk timeout (s)"
-              min={1}
-              max={600}
-            />
-            <NumberInput
-              settingKey="api_timeouts.chunk_timeout_sec"
-              label="Chunk timeout (s)"
-              min={1}
-              max={600}
-            />
-            <NumberInput
-              settingKey="api_timeouts.overall_timeout_sec"
-              label="Overall timeout (s)"
-              min={1}
-              max={3600}
-            />
+            {renderNumberInput('api_timeouts.connection_timeout_sec', 'Connection timeout (s)', 1, 300)}
+            {renderNumberInput('api_timeouts.first_chunk_timeout_sec', 'First chunk timeout (s)', 1, 600)}
+            {renderNumberInput('api_timeouts.chunk_timeout_sec', 'Chunk timeout (s)', 1, 600)}
+            {renderNumberInput('api_timeouts.overall_timeout_sec', 'Overall timeout (s)', 1, 3600)}
           </div>
         );
 
@@ -558,8 +553,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
         return (
           <div className="section">
             <h4>Subagent</h4>
-            <TextInput settingKey="subagent_provider" label="Provider" placeholder="openai, anthropic…" />
-            <TextInput settingKey="subagent_model" label="Model" placeholder="gpt-4o-mini, claude-3-5-sonnet…" />
+            {renderTextInput('subagent_provider', 'Provider', 'openai, anthropic…')}
+            {renderTextInput('subagent_model', 'Model', 'gpt-4o-mini, claude-3-5-sonnet…')}
           </div>
         );
 
@@ -568,9 +563,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
         return (
           <div className="section">
             <h4>PDF OCR</h4>
-            <Toggle settingKey="pdf_ocr_enabled" label="Enable PDF OCR" />
-            <TextInput settingKey="pdf_ocr_provider" label="Provider" placeholder="openai, anthropic…" />
-            <TextInput settingKey="pdf_ocr_model" label="Model" placeholder="gpt-4o…" />
+            {renderToggle('pdf_ocr_enabled', 'Enable PDF OCR')}
+            {renderTextInput('pdf_ocr_provider', 'Provider', 'openai, anthropic…')}
+            {renderTextInput('pdf_ocr_model', 'Model', 'gpt-4o…')}
           </div>
         );
 
@@ -585,14 +580,10 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
             <h4>MCP Configuration</h4>
 
             {/* MCP toggles */}
-            <Toggle settingKey="mcp.enabled" label="MCP enabled" />
-            <Toggle settingKey="mcp.auto_start" label="Auto-start servers" />
-            <Toggle settingKey="mcp.auto_discover" label="Auto-discover servers" />
-            <TextInput
-              settingKey="mcp.timeout"
-              label="Timeout (e.g. 30s)"
-              placeholder="30s"
-            />
+            {renderToggle('mcp.enabled', 'MCP enabled')}
+            {renderToggle('mcp.auto_start', 'Auto-start servers')}
+            {renderToggle('mcp.auto_discover', 'Auto-discover servers')}
+            {renderTextInput('mcp.timeout', 'Timeout (e.g. 30s)', '30s')}
 
             {/* Server list */}
             <div style={{ marginTop: 'var(--space-5)' }}>

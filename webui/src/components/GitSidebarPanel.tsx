@@ -14,7 +14,9 @@ import {
   Square,
   Trash2,
   PlusSquare,
+  Plus,
 } from 'lucide-react';
+import type { GitBranchesState } from '../hooks/useGitWorkspace';
 
 export interface GitFile {
   path: string;
@@ -41,6 +43,7 @@ type FileSection = 'staged' | 'modified' | 'untracked' | 'deleted';
 
 interface GitSidebarPanelProps {
   gitStatus: GitStatusData | null;
+  gitBranches: GitBranchesState;
   selectedFiles: Set<string>;
   activeDiffSelectionKey: string | null;
   commitMessage: string;
@@ -53,6 +56,11 @@ interface GitSidebarPanelProps {
   onGenerateCommitMessage: () => void;
   onCommit: () => void;
   onRunReview: () => void;
+  onCheckoutBranch: (branch: string) => void;
+  onCreateBranch: (name: string) => void;
+  onPull: () => void;
+  onPush: () => void;
+  onRefresh: () => void;
   onToggleFileSelection: (section: FileSection, path: string) => void;
   onToggleSectionSelection: (section: FileSection) => void;
   onPreviewFile: (section: FileSection, path: string) => void;
@@ -73,6 +81,7 @@ const FILE_SECTIONS: Array<{ id: FileSection; title: string }> = [
 
 const GitSidebarPanel: React.FC<GitSidebarPanelProps> = ({
   gitStatus,
+  gitBranches,
   selectedFiles,
   activeDiffSelectionKey,
   commitMessage,
@@ -85,6 +94,11 @@ const GitSidebarPanel: React.FC<GitSidebarPanelProps> = ({
   onGenerateCommitMessage,
   onCommit,
   onRunReview,
+  onCheckoutBranch,
+  onCreateBranch,
+  onPull,
+  onPush,
+  onRefresh,
   onToggleFileSelection,
   onToggleSectionSelection,
   onPreviewFile,
@@ -136,22 +150,89 @@ const GitSidebarPanel: React.FC<GitSidebarPanelProps> = ({
   }
 
   const hasStagedFiles = gitStatus.staged.length > 0;
+  const branchName = gitBranches.current || gitStatus.branch || 'detached';
+
+  const handleCreateBranch = () => {
+    const value = window.prompt('Create branch', '');
+    if (!value) {
+      return;
+    }
+    onCreateBranch(value);
+  };
 
   return (
     <div className="git-sidebar-panel">
       <div className="git-sidebar-header">
-        <div className="git-sidebar-branch">
-          <span className="branch-icon"><GitBranch size={14} /></span>
-          <span className="branch-name">{gitStatus.branch}</span>
-          {gitStatus.ahead > 0 ? <span className="ahead"><ArrowUp size={12} />{gitStatus.ahead}</span> : null}
-          {gitStatus.behind > 0 ? <span className="behind"><ArrowDown size={12} />{gitStatus.behind}</span> : null}
+        <div className="git-sidebar-toolbar-row">
+          <label className="git-branch-select-wrap" htmlFor="git-branch-select">
+            <span className="branch-icon"><GitBranch size={14} /></span>
+            <select
+              id="git-branch-select"
+              className="git-branch-select"
+              value={branchName}
+              onChange={(event) => onCheckoutBranch(event.target.value)}
+              disabled={isActing || isLoading || gitBranches.branches.length === 0}
+            >
+              {gitBranches.branches.length === 0 ? (
+                <option value={branchName}>{branchName}</option>
+              ) : (
+                gitBranches.branches.map((branch) => (
+                  <option key={branch} value={branch}>
+                    {branch}
+                  </option>
+                ))
+              )}
+            </select>
+          </label>
+          <button
+            type="button"
+            className="git-header-icon-btn"
+            onClick={handleCreateBranch}
+            disabled={isActing || isLoading}
+            title="Create branch"
+            aria-label="Create branch"
+          >
+            <Plus size={14} />
+          </button>
         </div>
-        <div className="git-sidebar-cleanliness">
-          {gitStatus.clean ? (
-            <span className="clean"><CheckCircle2 size={14} />Clean</span>
-          ) : (
-            <span className="dirty"><RefreshCw size={14} />Changes</span>
-          )}
+        <div className="git-sidebar-toolbar-row git-sidebar-toolbar-row-secondary">
+          <div className="git-sidebar-sync-status">
+            {gitStatus.clean ? (
+              <span className="clean"><CheckCircle2 size={14} />Clean</span>
+            ) : (
+              <span className="dirty"><RefreshCw size={14} />Changes</span>
+            )}
+            {gitStatus.ahead > 0 ? <span className="ahead"><ArrowUp size={12} />{gitStatus.ahead}</span> : null}
+            {gitStatus.behind > 0 ? <span className="behind"><ArrowDown size={12} />{gitStatus.behind}</span> : null}
+          </div>
+          <div className="git-sidebar-toolbar-actions">
+            <button
+              type="button"
+              className="git-header-action-btn"
+              onClick={onPull}
+              disabled={isActing || isLoading}
+            >
+              Pull
+            </button>
+            <button
+              type="button"
+              className="git-header-action-btn"
+              onClick={onPush}
+              disabled={isActing || isLoading}
+            >
+              Push
+            </button>
+            <button
+              type="button"
+              className="git-header-icon-btn"
+              onClick={onRefresh}
+              disabled={isActing || isLoading}
+              title="Refresh git status"
+              aria-label="Refresh git status"
+            >
+              <RefreshCw size={14} />
+            </button>
+          </div>
         </div>
       </div>
 

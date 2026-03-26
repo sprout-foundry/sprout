@@ -253,6 +253,7 @@ const AppContent: React.FC<AppContentProps> = ({
   }, [apiService, isConnected]);
   const {
     gitStatus,
+    gitBranches,
     commitMessage,
     setCommitMessage,
     selectedFiles,
@@ -285,6 +286,11 @@ const AppContent: React.FC<AppContentProps> = ({
     handleRunReview,
     handleFixFromReview,
     handleDiffModeChange,
+    handleCheckoutBranch,
+    handleCreateBranch,
+    handlePull,
+    handlePush,
+    refreshGitStatus,
   } = useGitWorkspace({
     apiService,
     gitRefreshToken,
@@ -790,6 +796,7 @@ const AppContent: React.FC<AppContentProps> = ({
         onOpenRevisionDiff={handleOpenRevisionDiff}
         gitPanel={{
           gitStatus,
+          gitBranches,
           selectedFiles,
           activeDiffSelectionKey,
           commitMessage,
@@ -802,6 +809,11 @@ const AppContent: React.FC<AppContentProps> = ({
           onGenerateCommitMessage: handleGenerateCommitMessage,
           onCommit: handleGitCommitClick,
           onRunReview: handleRunReview,
+          onCheckoutBranch: handleCheckoutBranch,
+          onCreateBranch: handleCreateBranch,
+          onPull: handlePull,
+          onPush: handlePush,
+          onRefresh: refreshGitStatus,
           onToggleFileSelection: handleToggleFileSelection,
           onToggleSectionSelection: handleToggleSectionSelection,
           onPreviewFile: handlePreviewGitFile,

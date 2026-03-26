@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import './Sidebar.css';
 import { ApiService, ProviderOption, LeditSettings, LeditInstance } from '../services/api';
 import SettingsPanel from './SettingsPanel';
-import { ProviderLogEntry } from '../providers';
+import type { ProviderLogEntry } from '../providers/types';
 import { useTheme } from '../contexts/ThemeContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import ResizeHandle from './ResizeHandle';
@@ -21,6 +21,7 @@ import {
 import FileTree from './FileTree';
 import SearchView from './SearchView';
 import GitSidebarPanel, { GitStatusData } from './GitSidebarPanel';
+import type { GitBranchesState } from '../hooks/useGitWorkspace';
 import RevisionListPanel from './RevisionListPanel';
 import LeditLogo from './LeditLogo';
 
@@ -60,6 +61,7 @@ interface SidebarProps {
   isMobile?: boolean;
   gitPanel?: {
     gitStatus: GitStatusData | null;
+    gitBranches: GitBranchesState;
     selectedFiles: Set<string>;
     activeDiffSelectionKey: string | null;
     commitMessage: string;
@@ -72,6 +74,11 @@ interface SidebarProps {
     onGenerateCommitMessage: () => void;
     onCommit: () => void;
     onRunReview: () => void;
+    onCheckoutBranch: (branch: string) => void;
+    onCreateBranch: (name: string) => void;
+    onPull: () => void;
+    onPush: () => void;
+    onRefresh: () => void;
     onToggleFileSelection: (section: 'staged' | 'modified' | 'untracked' | 'deleted', path: string) => void;
     onToggleSectionSelection: (section: 'staged' | 'modified' | 'untracked' | 'deleted') => void;
     onPreviewFile: (section: 'staged' | 'modified' | 'untracked' | 'deleted', path: string) => void;

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
+import { createPortal } from 'react-dom';
 import {
   FolderOpen,
   Folder,
@@ -93,7 +94,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const filesRef = useRef<FileInfo[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
-  const treeRef = useRef<HTMLDivElement>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
 
   const findFileByPath = useCallback((fileList: FileInfo[], targetPath: string): FileInfo | null => {
     for (const file of fileList) {
@@ -218,19 +219,23 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
       return;
     }
 
-    const handleClose = () => setContextMenu(null);
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (target && contextMenuRef.current?.contains(target)) {
+        return;
+      }
+      setContextMenu(null);
+    };
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setContextMenu(null);
       }
     };
 
-    window.addEventListener('click', handleClose);
-    window.addEventListener('contextmenu', handleClose);
+    window.addEventListener('mousedown', handlePointerDown);
     window.addEventListener('keydown', handleEscape);
     return () => {
-      window.removeEventListener('click', handleClose);
-      window.removeEventListener('contextmenu', handleClose);
+      window.removeEventListener('mousedown', handlePointerDown);
       window.removeEventListener('keydown', handleEscape);
     };
   }, [contextMenu]);
@@ -476,10 +481,10 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
             onClick={() => handleClick(file)}
             onContextMenu={(event) => {
               event.preventDefault();
-              const rect = treeRef.current?.getBoundingClientRect();
+              event.stopPropagation();
               setContextMenu({
-                x: event.clientX - (rect?.left || 0),
-                y: event.clientY - (rect?.top || 0),
+                x: event.clientX,
+                y: event.clientY,
                 file,
               });
             }}
@@ -554,7 +559,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
   );
 
   return (
-    <div className="file-tree" ref={treeRef}>
+    <div className="file-tree">
       <div className="file-tree-header">
         <div className="header-left">
           <span className="header-title">Files</span>
@@ -626,22 +631,26 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
         ) : null}
       </div>
 
-      {contextMenu ? (
-        <div
-          className="file-tree-context-menu"
-          style={{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }}
-          onClick={(event) => event.stopPropagation()}
-        >
-          {contextMenu.file.isDir ? (
-            <>
-              <button className="file-tree-context-item" onClick={() => handleCreateItem('file', contextMenu.file.path)}>Add file</button>
-              <button className="file-tree-context-item" onClick={() => handleCreateItem('folder', contextMenu.file.path)}>Add folder</button>
-            </>
-          ) : null}
-          <button className="file-tree-context-item" onClick={() => handleStartRename(contextMenu.file)}>Rename</button>
-          <button className="file-tree-context-item danger" onClick={() => handleDeleteTreeItem(contextMenu.file)}>Delete</button>
-        </div>
-      ) : null}
+      {contextMenu && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              ref={contextMenuRef}
+              className="file-tree-context-menu"
+              style={{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              {contextMenu.file.isDir ? (
+                <>
+                  <button className="file-tree-context-item" onClick={() => { setContextMenu(null); handleCreateItem('file', contextMenu.file.path); }}>Add file</button>
+                  <button className="file-tree-context-item" onClick={() => { setContextMenu(null); handleCreateItem('folder', contextMenu.file.path); }}>Add folder</button>
+                </>
+              ) : null}
+              <button className="file-tree-context-item" onClick={() => { setContextMenu(null); handleStartRename(contextMenu.file); }}>Rename</button>
+              <button className="file-tree-context-item danger" onClick={() => { setContextMenu(null); handleDeleteTreeItem(contextMenu.file); }}>Delete</button>
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 });

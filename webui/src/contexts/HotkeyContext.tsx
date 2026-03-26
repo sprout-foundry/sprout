@@ -24,6 +24,15 @@ interface HotkeyProviderProps {
   children: ReactNode;
 }
 
+const fallbackHotkeys: HotkeyEntry[] = [
+  { key: 'Ctrl+1', command_id: 'focus_tab_1' },
+  { key: 'Cmd+1', command_id: 'focus_tab_1' },
+  { key: 'Ctrl+2', command_id: 'focus_tab_2' },
+  { key: 'Cmd+2', command_id: 'focus_tab_2' },
+  { key: 'Ctrl+3', command_id: 'focus_tab_3' },
+  { key: 'Cmd+3', command_id: 'focus_tab_3' },
+];
+
 // Key mapping for special keys
 const keyMap: Record<string, string> = {
   'Backquote': '`',
@@ -106,6 +115,18 @@ export const HotkeyProvider: React.FC<HotkeyProviderProps> = ({ children }) => {
       let matchingHotkey: HotkeyEntry | undefined;
       if (hotkeys) {
         matchingHotkey = hotkeys.find(entry => {
+          let storedKey = entry.key;
+          if (mac) {
+            storedKey = storedKey.replace(/\bCtrl\b/g, 'Cmd');
+          } else {
+            storedKey = storedKey.replace(/\bCmd\b/g, 'Ctrl');
+          }
+          return storedKey.toLowerCase() === keyString.toLowerCase();
+        });
+      }
+
+      if (!matchingHotkey) {
+        matchingHotkey = fallbackHotkeys.find((entry) => {
           let storedKey = entry.key;
           if (mac) {
             storedKey = storedKey.replace(/\bCtrl\b/g, 'Cmd');

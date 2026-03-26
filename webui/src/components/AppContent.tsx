@@ -139,8 +139,10 @@ const AppContent: React.FC<AppContentProps> = ({
     activeBufferId,
     buffers,
     switchPane,
+    switchToBuffer,
     splitPane,
     closeSplit,
+    closeBuffer,
     openFile,
     openWorkspaceBuffer,
     paneSizes,
@@ -193,6 +195,7 @@ const AppContent: React.FC<AppContentProps> = ({
     }
     return 360;
   });
+  const [nestedSplit, setNestedSplit] = useState<{ hostPaneId: string; nestedPaneId: string; direction: 'vertical' | 'horizontal' } | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -329,6 +332,18 @@ const AppContent: React.FC<AppContentProps> = ({
     onViewChange(view);
   }, [onViewChange, openWorkspaceBuffer]);
 
+  const focusTabIndex = useCallback((index: number) => {
+    if (!activePaneId || index < 0) {
+      return;
+    }
+    const paneBuffers = Array.from(buffers.values()).filter((buffer) => buffer.paneId === activePaneId);
+    const target = paneBuffers[index];
+    if (target) {
+      switchPane(activePaneId);
+      switchToBuffer(target.id);
+    }
+  }, [activePaneId, buffers, switchPane, switchToBuffer]);
+
   // Listen for hotkey custom events
   useEffect(() => {
     const handleHotkey = (e: Event) => {
@@ -360,12 +375,26 @@ const AppContent: React.FC<AppContentProps> = ({
         case 'switch_to_git':
           handlePrimaryViewChange('git');
           break;
+        case 'focus_tab_1':
+          focusTabIndex(0);
+          break;
+        case 'focus_tab_2':
+          focusTabIndex(1);
+          break;
+        case 'focus_tab_3':
+          focusTabIndex(2);
+          break;
+        case 'close_editor':
+          if (activeBufferId) {
+            closeBuffer(activeBufferId);
+          }
+          break;
       }
     };
     
     window.addEventListener('ledit:hotkey', handleHotkey);
     return () => window.removeEventListener('ledit:hotkey', handleHotkey);
-  }, [handlePrimaryViewChange, onSidebarToggle, onTerminalExpandedChange, isTerminalExpanded]);
+  }, [activeBufferId, closeBuffer, focusTabIndex, handlePrimaryViewChange, onSidebarToggle, onTerminalExpandedChange, isTerminalExpanded]);
 
   // Handler to open hotkeys config in editor
   const handleOpenHotkeysConfig = useCallback(() => {
@@ -402,6 +431,12 @@ const AppContent: React.FC<AppContentProps> = ({
   const showContextSidebar = currentBuffer?.kind === 'chat';
   const canSplit = panes.length < 3;
   const canCloseSplit = panes.length > 1;
+
+  useEffect(() => {
+    if (panes.length < 3 && nestedSplit) {
+      setNestedSplit(null);
+    }
+  }, [nestedSplit, panes.length]);
 
   useEffect(() => {
     if (initialViewSyncRef.current) {
@@ -467,20 +502,259 @@ const AppContent: React.FC<AppContentProps> = ({
     });
   }, [onViewChange, openWorkspaceBuffer]);
 
+  const handleSplitRequest = useCallback((direction: 'vertical' | 'horizontal') => {
+    if (!activePaneId) {
+      return;
+    }
+
+    const previousPaneCount = panes.length;
+    const newPaneId = splitPane(activePaneId, direction);
+    if (!newPaneId) {
+      return;
+    }
+
+    if (previousPaneCount === 2) {
+      setNestedSplit({
+        hostPaneId: activePaneId,
+        nestedPaneId: newPaneId,
+        direction,
+      });
+      updatePaneSize(`group:${activePaneId}`, 50);
+      updatePaneSize(`nested:${activePaneId}`, 50);
+    }
+  }, [activePaneId, panes.length, splitPane, updatePaneSize]);
+
+  const handleCloseAllSplits = useCallback(() => {
+    setNestedSplit(null);
+    closeSplit();
+  }, [closeSplit]);
+
   const containerRef = useRef<HTMLDivElement>(null);
-  const handlePaneResize = useCallback((paneId: string) => (deltaPixels: number) => {
+  const dragStartSizeRef = useRef<Map<string, number>>(new Map());
+  const isPaneDraggingRef = useRef<Set<string>>(new Set());
+
+  const handlePaneResize = useCallback((sizeKey: string, axis: 'horizontal' | 'vertical', invert = false) => (_deltaPixels: number, totalDeltaPixels: number) => {
     if (!containerRef.current) return;
 
     const containerRect = containerRef.current.getBoundingClientRect();
-    const isVertical = paneLayout === 'split-vertical';
+    const isVertical = axis === 'horizontal';
     const containerSize = isVertical ? containerRect.width : containerRect.height;
-    const deltaPercent = (deltaPixels / containerSize) * 100;
-    const currentSize = paneSizes[paneId] || 50;
-    const newSize = Math.max(10, Math.min(90, currentSize + deltaPercent));
-    updatePaneSize(paneId, newSize);
-  }, [paneLayout, paneSizes, updatePaneSize]);
+    const deltaPercent = ((invert ? -totalDeltaPixels : totalDeltaPixels) / containerSize) * 100;
+
+    // Capture size at drag start to avoid accumulation bugs.
+    // Only capture on first event of each drag; leaks from interrupted
+    // drags are handled by overwriting on the next drag's first event.
+    if (!isPaneDraggingRef.current.has(sizeKey)) {
+      isPaneDraggingRef.current.add(sizeKey);
+      dragStartSizeRef.current.set(sizeKey, paneSizes[sizeKey] || 50);
+    }
+    const sizeAtDragStart = dragStartSizeRef.current.get(sizeKey)!;
+    const newSize = Math.max(10, Math.min(90, sizeAtDragStart + deltaPercent));
+    updatePaneSize(sizeKey, newSize);
+  }, [paneSizes, updatePaneSize]);
+
+  const handlePaneResizeEnd = useCallback((sizeKey: string) => () => {
+    isPaneDraggingRef.current.delete(sizeKey);
+    dragStartSizeRef.current.delete(sizeKey);
+  }, []);
 
   const showResizeHandles = panes.length > 1;
+
+  const renderSplitControls = (paneId: string) => (
+    <div className="split-controls split-controls-embedded">
+      {paneId === activePaneId && canCloseSplit && (
+        <button
+          onClick={handleCloseAllSplits}
+          className="pane-control-btn compact"
+          title="Close split panes"
+          aria-label="Close split panes"
+        >
+          <X size={13} />
+        </button>
+      )}
+      {paneId === activePaneId && canSplit && (
+        <button
+          onClick={() => handleSplitRequest('vertical')}
+          className="pane-control-btn compact"
+          title="Split vertically"
+          aria-label="Split vertically"
+        >
+          <Columns2 size={14} />
+        </button>
+      )}
+      {paneId === activePaneId && canSplit && (
+        <button
+          onClick={() => handleSplitRequest('horizontal')}
+          className="pane-control-btn compact"
+          title="Split horizontally"
+          aria-label="Split horizontally"
+        >
+          <Rows2 size={14} />
+        </button>
+      )}
+    </div>
+  );
+
+  const renderPaneById = (paneId: string, style?: React.CSSProperties) => {
+    const pane = panes.find((item) => item.id === paneId);
+    if (!pane) {
+      return null;
+    }
+
+    return (
+      <PaneWrapper key={pane.id} style={style}>
+        <div className="pane-shell">
+          <EditorTabs
+            paneId={pane.id}
+            compact
+            actions={renderSplitControls(pane.id)}
+          />
+          <EditorPaneWrapper
+            isActive={pane.id === activePaneId}
+            onClick={() => switchPane(pane.id)}
+          >
+            <EditorPaneComponent
+              paneId={pane.id}
+              isActive={pane.id === activePaneId}
+              onClick={() => switchPane(pane.id)}
+              chatProps={{
+                messages: state.messages,
+                onSendMessage,
+                onQueueMessage,
+                queuedMessagesCount,
+                inputValue,
+                onInputChange,
+                isProcessing: state.isProcessing,
+                lastError: state.lastError,
+                toolExecutions: state.toolExecutions,
+                queryProgress: state.queryProgress,
+                currentTodos,
+                onToolPillClick: (toolId: string) => contextPanelRef.current?.highlightTool(toolId),
+              }}
+              reviewProps={{
+                review: deepReview,
+                reviewError,
+                reviewFixResult,
+                reviewFixLogs,
+                reviewFixSessionID,
+                isReviewLoading,
+                isReviewFixing,
+                onFixFromReview: handleFixFromReview,
+              }}
+              diffState={{
+                activeDiffPath,
+                activeDiff,
+                diffMode,
+                isDiffLoading,
+                diffError,
+                onDiffModeChange: handleDiffModeChange,
+              }}
+            />
+          </EditorPaneWrapper>
+        </div>
+      </PaneWrapper>
+    );
+  };
+
+  const renderPaneLayout = () => {
+    if (panes.length === 0) {
+      return null;
+    }
+
+    if (panes.length < 3 || !nestedSplit) {
+      if (panes.length === 1) {
+        return renderPaneById(panes[0].id, { flex: '1 1 auto' });
+      }
+
+      if (panes.length === 2) {
+        const [firstPane, secondPane] = panes;
+        const splitAxis = paneLayout === 'split-horizontal' ? 'vertical' : 'horizontal';
+        const firstPaneSize = Math.max(10, Math.min(90, paneSizes[firstPane.id] || 50));
+        const secondPaneSize = 100 - firstPaneSize;
+
+        return (
+          <>
+            {renderPaneById(firstPane.id, { flex: `0 0 ${firstPaneSize}%` })}
+            <ResizeHandle
+              direction={splitAxis}
+              onResize={handlePaneResize(firstPane.id, splitAxis)}
+              onResizeEnd={handlePaneResizeEnd(firstPane.id)}
+            />
+            {renderPaneById(secondPane.id, { flex: `0 0 ${secondPaneSize}%` })}
+          </>
+        );
+      }
+
+      return (
+        <>
+          {panes.map((pane, index) => {
+            const paneSize = panes.length === 1
+              ? 100
+              : (paneSizes[pane.id] || (100 / panes.length));
+            const isLast = index === panes.length - 1;
+            const splitAxis = paneLayout === 'split-horizontal' ? 'vertical' : 'horizontal';
+
+            return (
+              <React.Fragment key={pane.id}>
+                {renderPaneById(pane.id, { flex: `0 0 ${paneSize}%` })}
+                {showResizeHandles && !isLast && (
+                  <ResizeHandle
+                    direction={splitAxis}
+                    onResize={handlePaneResize(pane.id, splitAxis)}
+                    onResizeEnd={handlePaneResizeEnd(pane.id)}
+                  />
+                )}
+              </React.Fragment>
+            );
+          })}
+        </>
+      );
+    }
+
+    const hostPane = panes.find((pane) => pane.id === nestedSplit.hostPaneId);
+    const nestedPane = panes.find((pane) => pane.id === nestedSplit.nestedPaneId);
+    const siblingPane = panes.find((pane) => pane.id !== nestedSplit.hostPaneId && pane.id !== nestedSplit.nestedPaneId);
+    if (!hostPane || !nestedPane || !siblingPane) {
+      return null;
+    }
+
+    const rootDirection = paneLayout === 'split-horizontal' ? 'column' : 'row';
+    const nestedDirection = nestedSplit.direction === 'horizontal' ? 'column' : 'row';
+    const hostIsFirst = panes.findIndex((pane) => pane.id === hostPane.id) < panes.findIndex((pane) => pane.id === siblingPane.id);
+    const rootSizeKey = `group:${hostPane.id}`;
+    const nestedSizeKey = `nested:${hostPane.id}`;
+    const groupSize = paneSizes[rootSizeKey] || 50;
+    const nestedSize = paneSizes[nestedSizeKey] || 50;
+    const rootHandleDirection = rootDirection === 'row' ? 'horizontal' : 'vertical';
+    const nestedHandleDirection = nestedDirection === 'row' ? 'horizontal' : 'vertical';
+
+    const nestedGroup = (
+      <div
+        className={`nested-pane-group nested-pane-group-${nestedDirection}`}
+        style={{ flex: `0 0 ${groupSize}%` }}
+      >
+        {renderPaneById(hostPane.id, { flex: `0 0 ${nestedSize}%` })}
+        <ResizeHandle
+          direction={nestedHandleDirection}
+          onResize={handlePaneResize(nestedSizeKey, nestedHandleDirection)}
+          onResizeEnd={handlePaneResizeEnd(nestedSizeKey)}
+        />
+        {renderPaneById(nestedPane.id, { flex: `0 0 ${100 - nestedSize}%` })}
+      </div>
+    );
+
+    return (
+      <div className={`nested-pane-layout nested-pane-layout-${rootDirection}`}>
+        {hostIsFirst ? nestedGroup : renderPaneById(siblingPane.id, { flex: `0 0 ${100 - groupSize}%` })}
+        <ResizeHandle
+          direction={rootHandleDirection}
+          onResize={handlePaneResize(rootSizeKey, rootHandleDirection, !hostIsFirst)}
+          onResizeEnd={handlePaneResizeEnd(rootSizeKey)}
+        />
+        {hostIsFirst ? renderPaneById(siblingPane.id, { flex: `0 0 ${100 - groupSize}%` }) : nestedGroup}
+      </div>
+    );
+  };
 
   return (
     <div className="app">
@@ -553,110 +827,12 @@ const AppContent: React.FC<AppContentProps> = ({
               </div>
             )}
 
-            <EditorTabs
-              actions={(
-                <div className="split-controls">
-                  {canCloseSplit && (
-                    <button
-                      onClick={closeSplit}
-                      className="pane-control-btn compact"
-                      title="Close split pane"
-                      aria-label="Close split pane"
-                    >
-                      <X size={13} />
-                    </button>
-                  )}
-                  {canSplit && (
-                    <button
-                      onClick={() => activePaneId && splitPane(activePaneId, 'vertical')}
-                      className="pane-control-btn compact"
-                      title="Split vertically"
-                      aria-label="Split vertically"
-                    >
-                      <Columns2 size={14} />
-                    </button>
-                  )}
-                  {canSplit && (
-                    <button
-                      onClick={() => activePaneId && splitPane(activePaneId, 'horizontal')}
-                      className="pane-control-btn compact"
-                      title="Split horizontally"
-                      aria-label="Split horizontally"
-                    >
-                      <Rows2 size={14} />
-                    </button>
-                  )}
-                </div>
-              )}
-            />
-
             <div className={`editor-workspace ${paneLayout}`}>
               <div
                 ref={containerRef}
                 className={`panes-container layout-${paneLayout}`}
               >
-                {panes.map((pane, index) => {
-                  const paneSize = panes.length === 1
-                    ? 100
-                    : (paneSizes[pane.id] || (100 / panes.length));
-                  const isLast = index === panes.length - 1;
-
-                  return (
-                    <React.Fragment key={pane.id}>
-                      <PaneWrapper style={{ flex: `0 0 ${paneSize}%` }}>
-                        <EditorPaneWrapper
-                          isActive={pane.id === activePaneId}
-                          onClick={() => switchPane(pane.id)}
-                        >
-                          <EditorPaneComponent
-                            paneId={pane.id}
-                            isActive={pane.id === activePaneId}
-                            onClick={() => switchPane(pane.id)}
-                            chatProps={{
-                              messages: state.messages,
-                              onSendMessage,
-                              onQueueMessage,
-                              queuedMessagesCount,
-                              inputValue,
-                              onInputChange,
-                              isProcessing: state.isProcessing,
-                              lastError: state.lastError,
-                              toolExecutions: state.toolExecutions,
-                              queryProgress: state.queryProgress,
-                              currentTodos,
-                              onToolPillClick: (toolId: string) => contextPanelRef.current?.highlightTool(toolId),
-                            }}
-                            reviewProps={{
-                              review: deepReview,
-                              reviewError,
-                              reviewFixResult,
-                              reviewFixLogs,
-                              reviewFixSessionID,
-                              isReviewLoading,
-                              isReviewFixing,
-                              onFixFromReview: handleFixFromReview,
-                            }}
-                            diffState={{
-                              activeDiffPath,
-                              activeDiff,
-                              diffMode,
-                              isDiffLoading,
-                              diffError,
-                              onDiffModeChange: handleDiffModeChange,
-                            }}
-                          />
-                        </EditorPaneWrapper>
-                      </PaneWrapper>
-
-                      {showResizeHandles && !isLast && (
-                        <ResizeHandle
-                          direction={paneLayout === 'split-horizontal' ? 'vertical' : 'horizontal'}
-                          onResize={handlePaneResize(pane.id)}
-                        />
-                      )}
-                    </React.Fragment>
-                  );
-                })}
+                {renderPaneLayout()}
               </div>
             </div>
           </div>

@@ -55,8 +55,8 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: var(--space-2);
-  padding: var(--space-6) var(--space-8);
+  gap: 0;
+  padding: var(--space-6) 0;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--sidebar-header-bg);
   flex-shrink: 0;
@@ -69,7 +69,42 @@
 
 .sidebar.collapsed .sidebar-pinned-header {
   justify-content: center;
-  padding: var(--space-6) var(--space-2);
+  padding: var(--space-6) 0;
+}
+
+.sidebar .sidebar-brand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  min-width: 48px;
+  align-self: stretch;
+  flex-shrink: 0;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border-subtle);
+}
+
+.sidebar .sidebar-brand-button {
+  appearance: none;
+  border-top: none;
+  border-bottom: none;
+  border-left: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.sidebar .sidebar-brand-button:hover {
+  background: color-mix(in srgb, var(--sidebar-bg) 78%, var(--sidebar-nav-btn-hover-bg));
+}
+
+.sidebar .sidebar-brand-button:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: -2px;
+}
+
+.sidebar:not(.collapsed) .sidebar-brand {
+  margin-right: 0;
 }
 
 .sidebar .status-dot {
@@ -895,38 +930,6 @@
   border-radius: var(--radius-sm);
 }
 
-/* ── Desktop collapse button ──────────────────────────────────── */
-.desktop-collapse-btn {
-  position: absolute;
-  top: var(--space-6);
-  right: var(--space-4);
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  border: 1px solid var(--border-default);
-  background: var(--bg-elevated);
-  color: var(--text-secondary);
-  cursor: pointer;
-  z-index: 101;
-  transition: all 0.15s var(--ease-out);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  padding: 0;
-}
-
-.sidebar.collapsed .desktop-collapse-btn {
-  right: 50%;
-  transform: translateX(50%);
-}
-
-.desktop-collapse-btn:hover {
-  color: var(--text-primary);
-  border-color: var(--border-strong);
-  background: var(--bg-surface);
-}
-
 .sidebar .view-switcher-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -956,21 +959,6 @@
   color: var(--accent-fg);
 }
 
-/* ── Mobile close button ──────────────────────────────────────── */
-.mobile-close-btn {
-  position: absolute;
-  top: var(--space-6);
-  right: var(--space-6);
-  width: 34px;
-  height: 34px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-default);
-  background: var(--bg-elevated);
-  color: var(--text-primary);
-  cursor: pointer;
-  z-index: 101;
-}
-
 /* ── Mobile responsive ────────────────────────────────────────── */
 @media (max-width: 768px) {
   .sidebar {
@@ -993,7 +981,7 @@
   }
 
   .sidebar .sidebar-pinned-header {
-    padding: var(--space-8);
+    padding: var(--space-8) 0;
   }
 
   .sidebar .content-pane-header {
@@ -1355,8 +1343,8 @@
 }
 
 .git-context-menu {
-  position: absolute;
-  z-index: 30;
+  position: fixed;
+  z-index: 1400;
   min-width: 160px;
   padding: 6px;
   border-radius: var(--radius-md);

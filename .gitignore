@@ -72,7 +72,6 @@ temp/
 # WebUI
 webui/build/
 webui/node_modules/
-webui/package-lock.json
 
 # Playwright test files
 playwright-report/

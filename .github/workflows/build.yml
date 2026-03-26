@@ -46,10 +46,17 @@ jobs:
 
     - name: Install Node.js dependencies
       run: |
-        cd webui && npm install
+        cd webui && npm ci
 
     - name: Build and deploy React UI
       run: make deploy-ui
+
+    - name: Commit updated UI assets
+      run: |
+        git config --global user.name "github-actions"
+        git config --global user.email "github-actions@github.com"
+        git add pkg/webui/static/
+        git diff --cached --quiet || git commit -m "chore: update embedded UI assets [skip ci]"
 
     - name: Verify embedded React UI assets are current
       run: make verify-ui-embedded
@@ -91,11 +98,19 @@ jobs:
 
     - name: Install Node.js dependencies
       run: |
-        cd webui && npm install
+        cd webui && npm ci
 
     - name: Build and deploy React UI
       shell: bash
       run: make deploy-ui
+
+    - name: Commit updated UI assets
+      shell: bash
+      run: |
+        git config --global user.name "github-actions"
+        git config --global user.email "github-actions@github.com"
+        git add pkg/webui/static/
+        git diff --cached --quiet || git commit -m "chore: update embedded UI assets [skip ci]"
 
     - name: Verify embedded React UI assets are current
       shell: bash

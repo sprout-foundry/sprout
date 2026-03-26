@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	agentpkg "github.com/alantheprice/ledit/pkg/agent"
 	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/mcp"
 )
@@ -22,27 +23,28 @@ const maxSettingsBodyBytes = 2 << 20 // 2 MiB
 // sensitive fields stripped so they are never sent to the browser.
 func sanitizedConfig(cfg *configuration.Config) map[string]interface{} {
 	out := map[string]interface{}{
-		"version":                       cfg.Version,
-		"last_used_provider":            cfg.LastUsedProvider,
-		"provider_models":               cfg.ProviderModels,
-		"provider_priority":             cfg.ProviderPriority,
-		"mcp":                           cfg.MCP,
-		"enable_pre_write_validation":   cfg.EnablePreWriteValidation,
-		"resource_directory":            cfg.ResourceDirectory,
-		"reasoning_effort":              cfg.ReasoningEffort,
-		"skip_prompt":                   cfg.SkipPrompt,
-		"api_timeouts":                  cfg.APITimeouts,
-		"custom_providers":              sanitizedCustomProviders(cfg.CustomProviders),
-		"history_scope":                 cfg.HistoryScope,
-		"self_review_gate_mode":         cfg.SelfReviewGateMode,
-		"subagent_provider":             cfg.SubagentProvider,
-		"subagent_model":                cfg.SubagentModel,
-		"subagent_types":                cfg.SubagentTypes,
-		"pdf_ocr_enabled":               cfg.PDFOCREnabled,
-		"pdf_ocr_provider":              cfg.PDFOCRProvider,
-		"pdf_ocr_model":                 cfg.PDFOCRModel,
-		"skills":                        cfg.Skills,
-		"enable_zsh_command_detection":  cfg.EnableZshCommandDetection,
+		"version":                        cfg.Version,
+		"last_used_provider":             cfg.LastUsedProvider,
+		"provider_models":                cfg.ProviderModels,
+		"provider_priority":              cfg.ProviderPriority,
+		"mcp":                            cfg.MCP,
+		"enable_pre_write_validation":    cfg.EnablePreWriteValidation,
+		"resource_directory":             cfg.ResourceDirectory,
+		"reasoning_effort":               cfg.ReasoningEffort,
+		"system_prompt_text":             cfg.SystemPromptText,
+		"skip_prompt":                    cfg.SkipPrompt,
+		"api_timeouts":                   cfg.APITimeouts,
+		"custom_providers":               sanitizedCustomProviders(cfg.CustomProviders),
+		"history_scope":                  cfg.HistoryScope,
+		"self_review_gate_mode":          cfg.SelfReviewGateMode,
+		"subagent_provider":              cfg.SubagentProvider,
+		"subagent_model":                 cfg.SubagentModel,
+		"subagent_types":                 cfg.SubagentTypes,
+		"pdf_ocr_enabled":                cfg.PDFOCREnabled,
+		"pdf_ocr_provider":               cfg.PDFOCRProvider,
+		"pdf_ocr_model":                  cfg.PDFOCRModel,
+		"skills":                         cfg.Skills,
+		"enable_zsh_command_detection":   cfg.EnableZshCommandDetection,
 		"auto_execute_detected_commands": cfg.AutoExecuteDetectedCommands,
 	}
 	return out
@@ -81,8 +83,8 @@ func writeJSONErr(w http.ResponseWriter, status int, code, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"error":   message,
-		"code":    code,
+		"error": message,
+		"code":  code,
 	})
 }
 
@@ -100,10 +102,10 @@ func (ws *ReactWebServer) getConfigManager(w http.ResponseWriter) *configuration
 // ---------------------------------------------------------------------------
 
 var validReasoningEfforts = map[string]bool{
-	"":      true,
-	"low":   true,
+	"":       true,
+	"low":    true,
 	"medium": true,
-	"high":  true,
+	"high":   true,
 }
 
 var validSelfReviewGateModes = map[string]bool{
@@ -261,6 +263,21 @@ func (ws *ReactWebServer) handleAPISettingsPut(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	if _, ok := incoming["system_prompt_text"]; ok && ws.agent != nil {
+		cfg := cm.GetConfig()
+		systemPrompt, err := agentpkg.GetEmbeddedSystemPromptWithProvider(ws.agent.GetProvider())
+		if err == nil {
+			if prompt := strings.TrimSpace(cfg.SystemPromptText); prompt != "" {
+				systemPrompt = prompt
+			}
+			ws.agent.SetBaseSystemPrompt(systemPrompt)
+			activePersona := strings.TrimSpace(ws.agent.GetActivePersona())
+			if activePersona == "" || activePersona == "orchestrator" {
+				ws.agent.SetSystemPrompt(systemPrompt)
+			}
+		}
+	}
+
 	// Return the updated (sanitized) config.
 	updated := cm.GetConfig()
 	writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -280,6 +297,10 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 			return err
 		}
 		cfg.ReasoningEffort = s
+	}
+	if v, ok := patch["system_prompt_text"]; ok {
+		s, _ := v.(string)
+		cfg.SystemPromptText = s
 	}
 	if v, ok := patch["skip_prompt"]; ok {
 		cfg.SkipPrompt, _ = v.(bool)

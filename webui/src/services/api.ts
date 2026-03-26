@@ -1149,6 +1149,7 @@ export interface ProvidersResponse {
 
 export interface LeditSettings {
   reasoning_effort: string;
+  system_prompt_text: string;
   skip_prompt: boolean;
   enable_pre_write_validation: boolean;
   enable_zsh_command_detection: boolean;

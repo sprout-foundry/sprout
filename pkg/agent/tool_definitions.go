@@ -26,10 +26,10 @@ type ParameterConfig struct {
 
 // ToolConfig holds configuration for a tool
 type ToolConfig struct {
-	Name          string             `json:"name"`
-	Description   string             `json:"description"`
-	Parameters    []ParameterConfig  `json:"parameters"`
-	Handler       ToolHandler        `json:"-"` // Function reference, not serialized
+	Name          string                `json:"name"`
+	Description   string                `json:"description"`
+	Parameters    []ParameterConfig     `json:"parameters"`
+	Handler       ToolHandler           `json:"-"` // Function reference, not serialized
 	HandlerImages ToolHandlerWithImages `json:"-"` // Optional image-returning handler (takes precedence over Handler when set)
 }
 
@@ -235,14 +235,24 @@ func newDefaultToolRegistry() *ToolRegistry {
 	// Register browse_url tool
 	registry.RegisterTool(ToolConfig{
 		Name:        "browse_url",
-		Description: "Open a URL in a headless browser. Use for: (1) taking screenshots of web pages including localhost apps, (2) capturing rendered DOM output after JavaScript execution, (3) extracting visible text from JS-rendered pages. Supports custom viewport sizes and user-agents for responsive testing.",
+		Description: "Open a URL in a headless browser. Use for: (1) taking screenshots of web pages including localhost apps, (2) capturing rendered DOM output after JavaScript execution, (3) extracting visible text from JS-rendered pages, (4) running lightweight browser-debugging flows with waits, clicks, typing, keypresses, selector captures, DOM/text snapshots, and browser console/error collection. Supports custom viewport sizes and user-agents for responsive testing.",
 		Parameters: []ParameterConfig{
 			{"url", "string", true, []string{}, "URL to browse — works with localhost URLs for testing local apps"},
-			{"action", "string", false, []string{}, "What to do: 'screenshot' (save PNG), 'dom' (return rendered HTML), 'text' (return visible text, default)"},
+			{"action", "string", false, []string{}, "What to do: 'screenshot' (save PNG), 'dom' (return rendered HTML), 'text' (return visible text, default), or 'inspect' (return structured JSON with page state and diagnostics)"},
 			{"screenshot_path", "string", false, []string{}, "File path to save screenshot (required when action=screenshot, e.g. /tmp/ledit_examples/screenshot.png)"},
 			{"viewport_width", "int", false, []string{}, "Browser viewport width in pixels (default: 1280)"},
 			{"viewport_height", "int", false, []string{}, "Browser viewport height in pixels (default: 720)"},
 			{"user_agent", "string", false, []string{}, "Override the browser User-Agent string"},
+			{"wait_for_selector", "string", false, []string{}, "Optional CSS selector to wait for before capturing output or running steps"},
+			{"wait_timeout_ms", "int", false, []string{}, "Optional selector wait timeout in milliseconds (default: 10000)"},
+			{"steps", "array", false, []string{}, "Optional interaction steps. Each step object supports action=wait_for|wait_for_text|assert_selector|click|hover|type|fill|press|sleep|scroll_to|navigate|reload|back|forward|eval plus selector/value/key/millis/script/expect fields as needed"},
+			{"capture_selectors", "array", false, []string{}, "Optional list of CSS selectors to capture after interactions (text/html/value/basic attrs)"},
+			{"capture_dom", "boolean", false, []string{}, "Include rendered DOM in inspect output"},
+			{"capture_text", "boolean", false, []string{}, "Include visible text in inspect output"},
+			{"include_console", "boolean", false, []string{}, "Include browser console messages and page errors in inspect output"},
+			{"capture_storage", "boolean", false, []string{}, "Include localStorage and sessionStorage snapshots in inspect output"},
+			{"capture_cookies", "boolean", false, []string{}, "Include document.cookie-visible cookies in inspect output"},
+			{"response_max_chars", "int", false, []string{}, "Optional per-field truncation limit for inspect output"},
 		},
 		Handler: handleBrowseURL,
 	})

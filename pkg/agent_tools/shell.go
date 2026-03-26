@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -122,8 +123,8 @@ func ExecuteShellCommandWithSafety(ctx context.Context, command string, interact
 	// For LLM tool calls, truncate output to 2 lines
 	truncatedOutput := truncateOutput(output, 2)
 
-	// Print truncated output to terminal
-	if truncatedOutput != "" {
+	// Print truncated output to terminal unless we're in tests/CI.
+	if truncatedOutput != "" && shouldPrintCapturedShellPreview() {
 		fmt.Printf("%s\n", truncatedOutput)
 	}
 
@@ -131,6 +132,19 @@ func ExecuteShellCommandWithSafety(ctx context.Context, command string, interact
 	finalOutput := buildShellOutputWithStatus(output, command, exitCode, err)
 
 	return finalOutput, nil
+}
+
+func shouldPrintCapturedShellPreview() bool {
+	if os.Getenv("CI") != "" {
+		return false
+	}
+
+	executable := filepath.Base(os.Args[0])
+	if strings.HasSuffix(executable, ".test") {
+		return false
+	}
+
+	return true
 }
 
 // truncateOutput limits output to a specified number of lines

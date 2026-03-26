@@ -251,12 +251,9 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   const toolRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [revisions, setRevisions] = useState<Revision[]>([]);
   const [expandedRevisionIds, setExpandedRevisionIds] = useState<Set<string>>(new Set());
-  const [expandedRevisionFileDiffs, setExpandedRevisionFileDiffs] = useState<Set<string>>(new Set());
   const [revisionDetailsById, setRevisionDetailsById] = useState<Record<string, Record<string, string>>>({});
   const [revisionDetailsLoading, setRevisionDetailsLoading] = useState<Record<string, boolean>>({});
-  const [revisionDetailsError, setRevisionDetailsError] = useState<Record<string, string>>({});
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-  const [historyError, setHistoryError] = useState<string | null>(null);
   const historyLoadRequestRef = useRef(0);
 
   const [sessions, setSessions] = useState<SessionEntry[]>([]);
@@ -276,11 +273,8 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   const loadRevisionHistory = useCallback(async () => {
     const requestId = ++historyLoadRequestRef.current;
     setIsLoadingHistory(true);
-    setHistoryError(null);
-    setExpandedRevisionFileDiffs(new Set());
     setRevisionDetailsById({});
     setRevisionDetailsLoading({});
-    setRevisionDetailsError({});
     try {
       const response = await apiService.getChangelog();
       if (requestId !== historyLoadRequestRef.current) return;
@@ -292,7 +286,6 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     } catch (error) {
       if (requestId !== historyLoadRequestRef.current) return;
       console.error('Failed to load revision history:', error);
-      setHistoryError('Failed to load revision history');
     } finally {
       if (requestId === historyLoadRequestRef.current) {
         setIsLoadingHistory(false);
@@ -452,11 +445,6 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     if (!revisionId || revisionDetailsById[revisionId] || revisionDetailsLoading[revisionId]) return;
 
     setRevisionDetailsLoading((prev) => ({ ...prev, [revisionId]: true }));
-    setRevisionDetailsError((prev) => {
-      const next = { ...prev };
-      delete next[revisionId];
-      return next;
-    });
 
     try {
       const response = await apiService.getRevisionDetails(revisionId);
@@ -466,10 +454,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       });
       setRevisionDetailsById((prev) => ({ ...prev, [revisionId]: detailsMap }));
     } catch (error) {
-      setRevisionDetailsError((prev) => ({
-        ...prev,
-        [revisionId]: error instanceof Error ? error.message : 'Failed to load revision details',
-      }));
+      console.error('Failed to load revision details:', error);
     } finally {
       setRevisionDetailsLoading((prev) => ({ ...prev, [revisionId]: false }));
     }
@@ -735,8 +720,11 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   // ── Chat computed values ─────────────────────────────────────────
 
   const chatProps = context === 'chat' ? props as ChatContextPanelProps : null;
-  const toolExecutions = chatProps?.toolExecutions ?? [];
+  const gitProps = context === 'git' ? props as GitContextPanelProps : null;
+  const toolExecutions = useMemo(() => chatProps?.toolExecutions ?? [], [chatProps]);
   const currentTodos = chatProps?.currentTodos ?? [];
+  const chatMessages = useMemo(() => chatProps?.messages ?? [], [chatProps]);
+  const chatFileEdits = useMemo(() => chatProps?.fileEdits ?? [], [chatProps]);
   const subagentToolExecutions = useMemo(() => chatProps?.toolExecutions ?? [], [chatProps]);
   const subagentLogs = useMemo(() => chatProps?.logs ?? [], [chatProps]);
 
@@ -814,16 +802,15 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       return { userMsgs: 0, assistantMsgs: 0, totalMsgs: 0, completedTools: 0, failedTools: 0, activeTools: 0, totalTools: 0, totalAdditions: 0, totalDeletions: 0, filesTouched: 0, topTools: [], maxToolCount: 1, duration: 0 };
     }
 
-    const msgs = props.messages;
+    const msgs = chatMessages;
     const userMsgs = msgs.filter(m => m.type === 'user').length;
     const assistantMsgs = msgs.filter(m => m.type === 'assistant').length;
     const completedTools = toolExecutions.filter(t => t.status === 'completed').length;
     const failedTools = toolExecutions.filter(t => t.status === 'error').length;
     const activeTools = toolExecutions.filter(t => t.status === 'running' || t.status === 'started').length;
 
-    const fileEdits = chatProps?.fileEdits ?? [];
-    const totalAdditions = fileEdits.reduce((sum, edit) => sum + (edit.linesAdded || 0), 0);
-    const totalDeletions = fileEdits.reduce((sum, edit) => sum + (edit.linesDeleted || 0), 0);
+    const totalAdditions = chatFileEdits.reduce((sum, edit) => sum + (edit.linesAdded || 0), 0);
+    const totalDeletions = chatFileEdits.reduce((sum, edit) => sum + (edit.linesDeleted || 0), 0);
 
     const touchedFiles = new Set<string>();
     toolExecutions.forEach(t => {
@@ -834,7 +821,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
         } catch { /* ignore */ }
       }
     });
-    fileEdits.forEach((edit) => {
+    chatFileEdits.forEach((edit) => {
       if (edit.path) {
         touchedFiles.add(edit.path);
       }
@@ -854,7 +841,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     }
 
     return { userMsgs, assistantMsgs, totalMsgs: userMsgs + assistantMsgs, completedTools, failedTools, activeTools, totalTools: toolExecutions.length, totalAdditions, totalDeletions, filesTouched: touchedFiles.size, topTools: sortedTools, maxToolCount, duration };
-  }, [context, chatProps?.fileEdits, context === 'chat' ? props.messages : null, toolExecutions]);
+  }, [chatFileEdits, chatMessages, context, toolExecutions]);
 
   // ── Tab definitions ──────────────────────────────────────────────
 
@@ -868,15 +855,14 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   ];
 
   const gitPanelTabs: Array<{ id: 'files' | 'diff' | 'review'; label: string; icon: ReactNode; count: string }> = useMemo(() => {
-    if (context !== 'git') return [];
-    const gitProps = props as GitContextPanelProps;
+    if (!gitProps) return [];
     const totalFiles = gitProps.stagedFiles.length + gitProps.modifiedFiles.length + gitProps.untrackedFiles.length + gitProps.deletedFiles.length;
     return [
       { id: 'files', label: 'Files', icon: <FileCode size={14} />, count: `${totalFiles} files` },
       { id: 'diff', label: 'Diff', icon: <FileText size={14} />, count: gitProps.activeDiffPath || 'No selection' },
       { id: 'review', label: 'Review', icon: <ShieldCheck size={14} />, count: gitProps.deepReview ? gitProps.deepReview.status : 'No review' },
     ];
-  }, [context, context === 'git' ? (props as GitContextPanelProps).stagedFiles : [], context === 'git' ? (props as GitContextPanelProps).modifiedFiles : [], context === 'git' ? (props as GitContextPanelProps).untrackedFiles : [], context === 'git' ? (props as GitContextPanelProps).deletedFiles : [], context === 'git' ? (props as GitContextPanelProps).activeDiffPath : null, context === 'git' ? (props as GitContextPanelProps).deepReview : null]);
+  }, [gitProps]);
 
   const activeTab = context === 'chat' ? (chatPanelTabs.find(t => t.id === chatTab) || chatPanelTabs[0]) : (gitPanelTabs.find(t => t.id === gitTab) || gitPanelTabs[0]);
 
@@ -1168,7 +1154,6 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
   // ── Render: Status Tab (Chat) ────────────────────────────────────
 
-  const chatMessages = chatProps?.messages ?? [];
   const chatLastError = chatProps?.lastError ?? null;
   const chatQueryProgress = chatProps?.queryProgress ?? null;
   const chatIsProcessing = chatProps?.isProcessing ?? false;

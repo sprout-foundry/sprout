@@ -120,8 +120,14 @@ func TestToolExecutorFallbacksToMCPExecution(t *testing.T) {
 	}
 }
 
-func TestToolExecutorDoesNotTranslateLegacyNames(t *testing.T) {
-	manager := &fakeMCPManager{}
+func TestToolExecutorTranslatesLegacyMCPNames(t *testing.T) {
+	manager := &fakeMCPManager{
+		tools: []mcp.MCPTool{{
+			Name:        "search",
+			Description: "search GitHub",
+			ServerName:  "github",
+		}},
+	}
 
 	agent := &Agent{
 		mcpManager:   manager,
@@ -137,11 +143,11 @@ func TestToolExecutorDoesNotTranslateLegacyNames(t *testing.T) {
 
 	msg := executor.executeSingleTool(tc)
 
-	if !strings.Contains(msg.Content, "unknown tool 'github:search'") {
-		t.Fatalf("expected unknown tool error, got: %q", msg.Content)
+	if msg.Content != "ok" {
+		t.Fatalf("expected MCP call result 'ok', got: %q", msg.Content)
 	}
-	if manager.lastServer != "" {
-		t.Fatalf("expected MCP manager not to be invoked, but CallTool captured server=%q", manager.lastServer)
+	if manager.lastServer != "github" || manager.lastTool != "search" {
+		t.Fatalf("unexpected MCP call routing: server=%q tool=%q", manager.lastServer, manager.lastTool)
 	}
 }
 

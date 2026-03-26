@@ -224,6 +224,41 @@ func (a *Agent) suggestCorrectToolName(invalidName string) string {
 		return suggestion
 	}
 
+	if a != nil {
+		if mcpToolName := a.resolveLegacyMCPToolName(invalidName); mcpToolName != "" {
+			return mcpToolName
+		}
+	}
+
+	return ""
+}
+
+func (a *Agent) resolveLegacyMCPToolName(toolName string) string {
+	if a == nil || a.mcpManager == nil {
+		return ""
+	}
+
+	trimmed := strings.TrimSpace(toolName)
+	if trimmed == "" || strings.HasPrefix(trimmed, "mcp_") || !strings.Contains(trimmed, ":") {
+		return ""
+	}
+
+	parts := strings.SplitN(trimmed, ":", 2)
+	if len(parts) != 2 {
+		return ""
+	}
+
+	serverName := strings.TrimSpace(parts[0])
+	actualToolName := strings.TrimSpace(parts[1])
+	if serverName == "" || actualToolName == "" {
+		return ""
+	}
+
+	candidate := "mcp_" + serverName + "_" + actualToolName
+	if a.isValidMCPTool(candidate) {
+		return candidate
+	}
+
 	return ""
 }
 

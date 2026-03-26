@@ -34,6 +34,13 @@ func BrowseURL(url string, opts BrowseOptions) (string, error) {
 		if opts.ScreenshotPath == "" {
 			return "", fmt.Errorf("screenshot_path is required for action=screenshot")
 		}
+		if hasAdvancedBrowseOptions(opts) {
+			_, err := browser.Run(ctx, url, opts)
+			if err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("Screenshot saved to: %s", opts.ScreenshotPath), nil
+		}
 		err := browser.Screenshot(ctx, url, opts.ScreenshotPath, opts.ViewportWidth, opts.ViewportHeight, opts.UserAgent)
 		if err != nil {
 			return "", err
@@ -82,11 +89,15 @@ func BrowseURL(url string, opts BrowseOptions) (string, error) {
 
 func hasAdvancedBrowseOptions(opts BrowseOptions) bool {
 	return strings.TrimSpace(opts.WaitForSelector) != "" ||
+		strings.TrimSpace(opts.SessionID) != "" ||
+		opts.PersistSession ||
+		opts.CloseSession ||
 		len(opts.Steps) > 0 ||
 		len(opts.CaptureSelectors) > 0 ||
 		opts.CaptureDOM ||
 		opts.CaptureText ||
 		opts.IncludeConsole ||
+		opts.CaptureNetwork ||
 		opts.CaptureStorage ||
 		opts.CaptureCookies ||
 		opts.ResponseMaxChars > 0
@@ -105,6 +116,7 @@ func mergeInspectDefaults(opts BrowseOptions, captureText bool, captureDOM bool)
 	}
 	if opts.Action == "inspect" || opts.Action == "interact" {
 		out.IncludeConsole = true
+		out.CaptureNetwork = true
 	}
 	if opts.Action == "inspect" {
 		out.CaptureStorage = true

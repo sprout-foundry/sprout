@@ -428,7 +428,7 @@ func GetToolDefinitions() []Tool {
 				Parameters  interface{} `json:"parameters"`
 			}{
 				Name:        "browse_url",
-				Description: "Open a URL in a headless browser for screenshots, rendered DOM extraction, visible text capture, and lightweight browser debugging flows against localhost or remote apps",
+				Description: "Open a URL in a headless browser for localhost app debugging, JS-rendered scraping, screenshots, rendered DOM extraction, visible text capture, persistent built-in browser sessions, interaction/assertion flows, and page diagnostics when MCP/browser automation is unavailable",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -444,6 +444,18 @@ func GetToolDefinitions() []Tool {
 						"screenshot_path": map[string]interface{}{
 							"type":        "string",
 							"description": "Output path for screenshots when action=screenshot",
+						},
+						"session_id": map[string]interface{}{
+							"type":        "string",
+							"description": "Reuse a persistent built-in browser session across multiple browse_url calls",
+						},
+						"persist_session": map[string]interface{}{
+							"type":        "boolean",
+							"description": "Keep the browser session alive after this call and return a session_id in inspect output",
+						},
+						"close_session": map[string]interface{}{
+							"type":        "boolean",
+							"description": "Close the referenced persistent browser session after this call",
 						},
 						"viewport_width": map[string]interface{}{
 							"type":        "integer",
@@ -473,7 +485,7 @@ func GetToolDefinitions() []Tool {
 								"properties": map[string]interface{}{
 									"action": map[string]interface{}{
 										"type":        "string",
-										"description": "wait_for, wait_for_text, assert_selector, click, hover, type, fill, press, sleep, scroll_to, navigate, reload, back, forward, or eval",
+										"description": "wait_for, wait_for_text, assert_selector, assert_text, assert_title, assert_url, click, hover, type, fill, press, sleep, scroll_to, navigate, reload, back, forward, or eval",
 									},
 									"selector": map[string]interface{}{
 										"type":        "string",
@@ -522,6 +534,10 @@ func GetToolDefinitions() []Tool {
 						"include_console": map[string]interface{}{
 							"type":        "boolean",
 							"description": "Include browser console messages and page errors in inspect output",
+						},
+						"capture_network": map[string]interface{}{
+							"type":        "boolean",
+							"description": "Include fetch/XHR network request summaries in inspect output",
 						},
 						"capture_storage": map[string]interface{}{
 							"type":        "boolean",

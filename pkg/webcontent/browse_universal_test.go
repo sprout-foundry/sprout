@@ -165,6 +165,7 @@ func TestBrowseURL_InspectActionRunsInteractiveBrowserFlow(t *testing.T) {
 	assert.Len(t, fake.lastRunOpts.Steps, 1)
 	assert.Contains(t, fake.lastRunOpts.CaptureSelectors, "#app")
 	assert.True(t, fake.lastRunOpts.IncludeConsole, "inspect mode should include browser diagnostics")
+	assert.True(t, fake.lastRunOpts.CaptureNetwork, "inspect mode should capture network by default")
 	assert.True(t, fake.lastRunOpts.CaptureStorage, "inspect mode should capture storage by default")
 	assert.True(t, fake.lastRunOpts.CaptureCookies, "inspect mode should capture cookies by default")
 
@@ -196,11 +197,15 @@ func TestBrowseURL_TextActionUsesInteractiveFlowWhenAdvancedOptionsPresent(t *te
 func TestBrowseURL_InspectActionPreservesExtendedDebuggingOptions(t *testing.T) {
 	fake := &fakeBrowserRenderer{
 		runResult: &BrowseResult{
+			SessionID:      "browser_123",
 			FinalURL:       "http://example.com/settings",
 			ReadyState:     "complete",
 			Cookies:        map[string]string{"session": "abc"},
 			LocalStorage:   map[string]string{"theme": "dark"},
 			SessionStorage: map[string]string{"draft": "1"},
+			NetworkRequests: []NetworkRequest{
+				{Type: "fetch", URL: "/api/settings", Method: "GET", Status: 200, OK: true},
+			},
 		},
 	}
 	withFakeGlobalBrowser(t, fake)
@@ -208,24 +213,35 @@ func TestBrowseURL_InspectActionPreservesExtendedDebuggingOptions(t *testing.T) 
 	raw, err := BrowseURL("http://example.com", BrowseOptions{
 		Action:           "inspect",
 		WaitForSelector:  "#app",
+		SessionID:        "browser_123",
+		PersistSession:   true,
 		ResponseMaxChars: 512,
 		Steps: []BrowseStep{
 			{Action: "navigate", Value: "http://example.com/settings"},
 			{Action: "wait_for_text", Selector: "body", Expect: "Settings"},
 			{Action: "assert_selector", Selector: "#save", Expect: "Save"},
+			{Action: "assert_title", Expect: "Settings"},
+			{Action: "assert_url", Expect: "/settings"},
 		},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 512, fake.lastRunOpts.ResponseMaxChars)
-	require.Len(t, fake.lastRunOpts.Steps, 3)
+	assert.Equal(t, "browser_123", fake.lastRunOpts.SessionID)
+	assert.True(t, fake.lastRunOpts.PersistSession)
+	require.Len(t, fake.lastRunOpts.Steps, 5)
 	assert.Equal(t, "navigate", fake.lastRunOpts.Steps[0].Action)
 	assert.Equal(t, "Settings", fake.lastRunOpts.Steps[1].Expect)
 	assert.Equal(t, "Save", fake.lastRunOpts.Steps[2].Expect)
+	assert.Equal(t, "Settings", fake.lastRunOpts.Steps[3].Expect)
+	assert.Equal(t, "/settings", fake.lastRunOpts.Steps[4].Expect)
 
 	var result BrowseResult
 	require.NoError(t, json.Unmarshal([]byte(raw), &result))
+	assert.Equal(t, "browser_123", result.SessionID)
 	assert.Equal(t, "complete", result.ReadyState)
 	assert.Equal(t, "abc", result.Cookies["session"])
 	assert.Equal(t, "dark", result.LocalStorage["theme"])
 	assert.Equal(t, "1", result.SessionStorage["draft"])
+	require.Len(t, result.NetworkRequests, 1)
+	assert.Equal(t, "/api/settings", result.NetworkRequests[0].URL)
 }

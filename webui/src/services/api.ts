@@ -1158,6 +1158,7 @@ export interface LeditSettings {
   self_review_gate_mode: string;
   subagent_provider: string;
   subagent_model: string;
+  default_subagent_persona: string;
   pdf_ocr_enabled: boolean;
   pdf_ocr_provider: string;
   pdf_ocr_model: string;

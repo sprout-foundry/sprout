@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
@@ -376,47 +377,26 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 			if agent.debug {
 				agent.debugLog("[UNLOCK] Unsafe mode: bypassing security validation for %s (risk: %s)\n", toolName, secResult.Risk)
 			}
-		} else if secResult.IsHardBlock {
-			return nil, "", fmt.Errorf("SECURITY_BLOCK: %s — %s", toolName, secResult.Reasoning)
 		} else if agent != nil {
 			// Check if we're running as a subagent — subagents cannot prompt
 			isSubagent := os.Getenv("LEDIT_FROM_AGENT") == "1" || os.Getenv("LEDIT_SUBAGENT") == "1"
 
-			if secResult.ShouldBlock && isSubagent {
-				// Non-interactive subagent: block DANGEROUS operations
-				return nil, "", fmt.Errorf("SECURITY_BLOCK: %s — %s (subagent cannot execute dangerous operations)", toolName, secResult.Reasoning)
-			}
-
-			// For non-subagent interactive or non-interactive with prompt support
+			// Determine if we can prompt the user interactively
 			agentConfig := agent.GetConfig()
 			logger := utils.GetLogger(agentConfig != nil && agentConfig.SkipPrompt)
+			canPrompt := logger != nil && logger.IsInteractive() && !isSubagent
 
-			if logger != nil && logger.IsInteractive() {
-				prompt := fmt.Sprintf("[WARN] Security Warning\n\nTool: %s\nRisk Level: %s\nReasoning: %s\n\nDo you want to proceed? (yes/no): ", toolName, secResult.Risk, secResult.Reasoning)
+			if canPrompt {
+				// INTERACTIVE: prompt user with detailed risk information
+				prompt := buildSecurityPrompt(toolName, args, secResult)
 				if !logger.AskForConfirmation(prompt, false, false) {
 					return nil, "", fmt.Errorf("SECURITY_REJECTED: User rejected %s — %s", toolName, secResult.Reasoning)
 				}
 			} else if secResult.ShouldBlock {
-				// Non-interactive, no logger: block DANGEROUS
+				// NON-INTERACTIVE + DANGEROUS: always block (subagents or no terminal)
 				return nil, "", fmt.Errorf("SECURITY_BLOCK: %s — %s", toolName, secResult.Reasoning)
 			}
-
-			// CAUTION in non-interactive: try webui approval if available, otherwise allow
-			if !secResult.ShouldBlock {
-				if agent.securityApprovalMgr != nil && agent.eventBus != nil {
-					if agent.debug {
-						agent.debugLog("[LOCK] Security validation: forwarding CAUTION approval request to webui for %s — %s\n", toolName, secResult.Reasoning)
-					}
-					if !agent.securityApprovalMgr.RequestApproval(agent.eventBus, toolName, secResult.Risk.String(), secResult.Reasoning) {
-						return nil, "", fmt.Errorf("SECURITY_REJECTED: User rejected %s via webui — %s", toolName, secResult.Reasoning)
-					}
-					if agent.debug {
-						agent.debugLog("[OK] Security validation: CAUTION approved via webui for %s\n", toolName)
-					}
-				} else if agent.debug {
-					agent.debugLog("[LOCK] Security validation: CAUTION auto-allowed for %s — %s\n", toolName, secResult.Reasoning)
-				}
-			}
+			// NON-INTERACTIVE + CAUTION: auto-allow
 		}
 	}
 
@@ -432,6 +412,68 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 	}
 	result, err := tool.Handler(ctx, agent, validatedArgs)
 	return nil, result, err
+}
+
+// buildSecurityPrompt constructs a detailed security approval prompt for the user
+func buildSecurityPrompt(toolName string, args map[string]interface{}, secResult tools.SecurityResult) string {
+	var sb strings.Builder
+
+	sb.WriteString(fmt.Sprintf("⚠  Security Warning — %s\n\n", secResult.Risk))
+
+	// Show the actual command/operation
+	switch toolName {
+	case "shell_command":
+		if cmd, ok := args["command"].(string); ok && cmd != "" {
+			sb.WriteString(fmt.Sprintf("Command:\n  %s\n\n", cmd))
+		}
+	case "write_file", "edit_file", "write_structured_file", "patch_structured_file":
+		if path, ok := args["path"].(string); ok && path != "" {
+			sb.WriteString(fmt.Sprintf("Target: %s\n\n", path))
+		}
+	case "git":
+		if op, ok := args["operation"].(string); ok && op != "" {
+			sb.WriteString(fmt.Sprintf("Operation: git %s\n\n", op))
+		}
+	}
+
+	if secResult.RiskType != "" {
+		sb.WriteString(fmt.Sprintf("Risk category: %s\n\n", formatRiskType(secResult.RiskType)))
+	}
+
+	sb.WriteString(fmt.Sprintf("Reasoning: %s\n\n", secResult.Reasoning))
+	sb.WriteString("Do you want to proceed? (yes/no): ")
+
+	return sb.String()
+}
+
+// formatRiskType returns a human-readable description for a risk type
+func formatRiskType(riskType string) string {
+	switch riskType {
+	case "mass_deletion":
+		return "Mass deletion — may delete all files in current directory or home"
+	case "source_code_destruction":
+		return "Source code destruction — may delete project source files"
+	case "privilege_escalation":
+		return "Privilege escalation — running with elevated permissions"
+	case "remote_code_execution":
+		return "Remote code execution — downloading and executing untrusted code"
+	case "arbitrary_code_execution":
+		return "Arbitrary code execution — executing arbitrary shell commands"
+	case "destructive_git_operation":
+		return "Destructive git operation — may rewrite published history"
+	case "disk_destruction":
+		return "Disk destruction — may destroy disk data or partition tables"
+	case "critical_system_operation":
+		return "Critical system operation — may cause irreversible system damage"
+	case "system_instability":
+		return "System instability — may crash the system or kill all processes"
+	case "insecure_permissions":
+		return "Insecure permissions — setting overly permissive file access"
+	case "system_integrity":
+		return "System integrity — writing to critical system files"
+	default:
+		return riskType
+	}
 }
 
 // handleFileSecurityError checks if an error is due to filesystem security and prompts the user

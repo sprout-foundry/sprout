@@ -1,7 +1,6 @@
 import { ApiService } from '../services/api';
 import { TerminalWebSocketService } from '../services/terminalWebSocket';
 
-const COMMAND_HISTORY_KEY = 'ledit-command-history';
 const MAX_COMMAND_HISTORY = 100;
 
 export interface CommandHistoryState {
@@ -11,21 +10,17 @@ export interface CommandHistoryState {
 }
 
 export async function loadCommandHistory(apiService: ApiService): Promise<string[]> {
-  let commands = readLocalCommandHistory();
-
   try {
     const terminalService = TerminalWebSocketService.getInstance();
     const response = await apiService.getTerminalHistory(terminalService.getSessionId() || undefined);
     if (response && Array.isArray(response.history)) {
-      const terminalCommands = response.history.filter((cmd) => cmd.trim());
-      commands = dedupeCommands([...terminalCommands, ...commands]);
-      writeLocalCommandHistory(commands);
+      return dedupeCommands(response.history);
     }
   } catch {
-    // Terminal history sync is best-effort; local history is still usable.
+    // Terminal history sync is best-effort; command input can still function without persisted history.
   }
 
-  return commands;
+  return [];
 }
 
 export async function saveCommandHistory(apiService: ApiService, commands: string[], command: string): Promise<CommandHistoryState> {
@@ -37,8 +32,6 @@ export async function saveCommandHistory(apiService: ApiService, commands: strin
     tempInput: ''
   };
 
-  writeLocalCommandHistory(nextCommands);
-
   try {
     await apiService.addTerminalHistory(trimmedCommand);
   } catch {
@@ -46,35 +39,6 @@ export async function saveCommandHistory(apiService: ApiService, commands: strin
   }
 
   return nextHistory;
-}
-
-function readLocalCommandHistory(): string[] {
-  const localHistory = localStorage.getItem(COMMAND_HISTORY_KEY);
-  if (!localHistory) {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(localHistory);
-    if (parsed && Array.isArray(parsed.commands)) {
-      return sanitizeCommands(parsed.commands);
-    }
-    if (Array.isArray(parsed)) {
-      return sanitizeCommands(parsed);
-    }
-  } catch {
-    return [];
-  }
-
-  return [];
-}
-
-function writeLocalCommandHistory(commands: string[]) {
-  localStorage.setItem(COMMAND_HISTORY_KEY, JSON.stringify({
-    commands,
-    index: -1,
-    tempInput: ''
-  }));
 }
 
 function dedupeCommands(commands: string[]): string[] {
@@ -98,8 +62,4 @@ function dedupeCommands(commands: string[]): string[] {
   });
 
   return ordered.slice(-MAX_COMMAND_HISTORY);
-}
-
-function sanitizeCommands(commands: unknown[]): string[] {
-  return commands.filter((command): command is string => typeof command === 'string' && command.trim().length > 0);
 }

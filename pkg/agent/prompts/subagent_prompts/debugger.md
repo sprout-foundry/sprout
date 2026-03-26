@@ -211,6 +211,12 @@ Fix and test:
 - Inspect variables and state
 - Step through code execution
 
+## Browser Debugging
+
+- For localhost apps, browser-only bugs, or JS-rendered pages, use `browse_url` directly.
+- `browse_url` can persist a built-in browser session across calls, inspect selectors, assert rendered text/title/url, and capture console, network, cookies, and storage state.
+- Prefer this tool over reasoning from static source when the bug depends on runtime DOM state or browser behavior.
+
 ## Reading Error Messages
 
 Error messages contain clues - learn to read them carefully:

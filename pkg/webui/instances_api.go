@@ -2,13 +2,11 @@ package webui
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -170,12 +168,4 @@ func getLeditConfigDir() string {
 		return "/data/data/com.termux/files/home/.ledit"
 	}
 	return filepath.Join(homeDir, ".ledit")
-}
-
-func isPIDAlive(pid int) bool {
-	if pid <= 0 {
-		return false
-	}
-	err := syscall.Kill(pid, 0)
-	return err == nil || errors.Is(err, syscall.EPERM)
 }

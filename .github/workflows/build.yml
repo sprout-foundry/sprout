@@ -51,6 +51,9 @@ jobs:
     - name: Build and deploy React UI
       run: make deploy-ui
 
+    - name: Verify embedded React UI assets are current
+      run: make verify-ui-embedded
+
     - name: Run unit tests
       run: make test-unit
 
@@ -93,6 +96,10 @@ jobs:
     - name: Build and deploy React UI
       shell: bash
       run: make deploy-ui
+
+    - name: Verify embedded React UI assets are current
+      shell: bash
+      run: make verify-ui-embedded
 
     - name: Set build variables
       id: set_vars

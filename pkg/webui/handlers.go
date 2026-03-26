@@ -82,6 +82,10 @@ func (ws *ReactWebServer) handleIcon512(w http.ResponseWriter, r *http.Request) 
 	ws.serveRootAsset(w, r, "icon-512.png", "image/png")
 }
 
+func (ws *ReactWebServer) handleLogoMark(w http.ResponseWriter, r *http.Request) {
+	ws.serveRootAsset(w, r, "logo-mark.svg", "image/svg+xml; charset=utf-8")
+}
+
 func (ws *ReactWebServer) handleFavicon(w http.ResponseWriter, r *http.Request) {
 	ws.serveRootAssetOptional(w, r, "favicon.ico", "image/x-icon")
 }

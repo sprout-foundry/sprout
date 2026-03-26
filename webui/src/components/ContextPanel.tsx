@@ -150,6 +150,13 @@ interface ContextPanelBaseProps {
 interface ChatContextPanelProps extends ContextPanelBaseProps {
   context: 'chat';
   toolExecutions: ToolExecution[];
+  fileEdits: Array<{
+    path: string;
+    action: string;
+    timestamp: Date;
+    linesAdded?: number;
+    linesDeleted?: number;
+  }>;
   logs: LogEntry[];
   currentTodos: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }>;
   messages: Array<{ type: string; timestamp: Date }>;
@@ -814,10 +821,9 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     const failedTools = toolExecutions.filter(t => t.status === 'error').length;
     const activeTools = toolExecutions.filter(t => t.status === 'running' || t.status === 'started').length;
 
-    const totalAdditions = revisions.reduce((sum, r) =>
-      sum + r.files.reduce((fSum, f) => fSum + (f.lines_added || 0), 0), 0);
-    const totalDeletions = revisions.reduce((sum, r) =>
-      sum + r.files.reduce((fSum, f) => fSum + (f.lines_deleted || 0), 0), 0);
+    const fileEdits = chatProps?.fileEdits ?? [];
+    const totalAdditions = fileEdits.reduce((sum, edit) => sum + (edit.linesAdded || 0), 0);
+    const totalDeletions = fileEdits.reduce((sum, edit) => sum + (edit.linesDeleted || 0), 0);
 
     const touchedFiles = new Set<string>();
     toolExecutions.forEach(t => {
@@ -828,8 +834,10 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
         } catch { /* ignore */ }
       }
     });
-    revisions.forEach(r => {
-      r.files.forEach(f => touchedFiles.add(f.path));
+    fileEdits.forEach((edit) => {
+      if (edit.path) {
+        touchedFiles.add(edit.path);
+      }
     });
 
     const toolCounts: Record<string, number> = {};
@@ -846,7 +854,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     }
 
     return { userMsgs, assistantMsgs, totalMsgs: userMsgs + assistantMsgs, completedTools, failedTools, activeTools, totalTools: toolExecutions.length, totalAdditions, totalDeletions, filesTouched: touchedFiles.size, topTools: sortedTools, maxToolCount, duration };
-  }, [context, context === 'chat' ? props.messages : null, toolExecutions, revisions]);
+  }, [context, chatProps?.fileEdits, context === 'chat' ? props.messages : null, toolExecutions]);
 
   // ── Tab definitions ──────────────────────────────────────────────
 

@@ -144,6 +144,21 @@
   color: var(--text-tertiary);
 }
 
+.sidebar .styled-textarea {
+  min-height: 180px;
+  padding: var(--space-3) var(--space-4);
+  resize: vertical;
+  line-height: 1.45;
+  font-family: var(--font-mono, var(--font-sans));
+}
+
+.sidebar .config-help {
+  margin-top: 6px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 /* ── Inline number + label row ───────────────────────────────── */
 .sidebar .config-row {
   display: flex;

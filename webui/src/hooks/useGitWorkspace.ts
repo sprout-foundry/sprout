@@ -23,6 +23,11 @@ export interface DeepReviewResult {
   model?: string;
 }
 
+export interface GitBranchesState {
+  current: string;
+  branches: string[];
+}
+
 export type FileSection = 'staged' | 'modified' | 'untracked' | 'deleted';
 
 const selectionKey = (section: FileSection, path: string): string => `${section}:${path}`;
@@ -89,6 +94,7 @@ export const useGitWorkspace = ({
   const [isGitActing, setIsGitActing] = useState(false);
   const [isGeneratingCommitMessage, setIsGeneratingCommitMessage] = useState(false);
   const [gitActionError, setGitActionError] = useState<string | null>(null);
+  const [gitBranches, setGitBranches] = useState<GitBranchesState>({ current: '', branches: [] });
   const [isReviewLoading, setIsReviewLoading] = useState(false);
   const [isReviewFixing, setIsReviewFixing] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
@@ -110,7 +116,10 @@ export const useGitWorkspace = ({
   const loadGitStatus = useCallback(async () => {
     setIsGitLoading(true);
     try {
-      const data = await apiService.getGitStatus();
+      const [data, branchData] = await Promise.all([
+        apiService.getGitStatus(),
+        apiService.getGitBranches().catch(() => ({ current: '', branches: [] })),
+      ]);
       if (data.message !== 'success') {
         throw new Error(data.message || 'Failed to load git status');
       }
@@ -136,6 +145,10 @@ export const useGitWorkspace = ({
         deleted: status.deleted || [],
         renamed: status.renamed || [],
         clean: !(status.staged?.length || status.modified?.length || status.untracked?.length || status.deleted?.length || status.renamed?.length)
+      });
+      setGitBranches({
+        current: branchData.current || status.branch || '',
+        branches: branchData.branches || [],
       });
     } catch (error) {
       console.error('Failed to load git status:', error);
@@ -423,8 +436,38 @@ export const useGitWorkspace = ({
     });
   }, [activeDiff, activeDiffPath, openWorkspaceBuffer]);
 
+  const currentBranch = gitBranches.current;
+
+  const handleCheckoutBranch = useCallback((branch: string) => {
+    if (!branch.trim() || branch === currentBranch) return;
+    runGitAction(async () => {
+      await apiService.checkoutGitBranch(branch);
+    }, `Failed to checkout ${branch}`);
+  }, [apiService, currentBranch, runGitAction]);
+
+  const handleCreateBranch = useCallback((name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    runGitAction(async () => {
+      await apiService.createGitBranch(trimmed);
+    }, `Failed to create branch ${trimmed}`);
+  }, [apiService, runGitAction]);
+
+  const handlePull = useCallback(() => {
+    runGitAction(async () => {
+      await apiService.pullGit();
+    }, 'Failed to pull changes');
+  }, [apiService, runGitAction]);
+
+  const handlePush = useCallback(() => {
+    runGitAction(async () => {
+      await apiService.pushGit();
+    }, 'Failed to push changes');
+  }, [apiService, runGitAction]);
+
   return {
     gitStatus,
+    gitBranches,
     commitMessage,
     setCommitMessage,
     selectedFiles,
@@ -463,5 +506,10 @@ export const useGitWorkspace = ({
     handleRunReview,
     handleFixFromReview,
     handleDiffModeChange,
+    handleCheckoutBranch,
+    handleCreateBranch,
+    handlePull,
+    handlePush,
+    refreshGitStatus: loadGitStatus,
   };
 };

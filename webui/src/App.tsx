@@ -8,7 +8,6 @@ import { HotkeyProvider } from './contexts/HotkeyContext';
 import './App.css';
 import { WebSocketService } from './services/websocket';
 import { ApiService, OnboardingProviderOption } from './services/api';
-import { viewRegistry, ChatViewProvider, EditorViewProvider, GitViewProvider, LogsViewProvider } from './providers';
 import { debugLog } from './utils/log';
 
 // Service Worker Registration
@@ -959,16 +958,6 @@ function App() {
       clearInterval(statsInterval);
     };
   }, [handleEvent, wsService, apiService]);
-
-  // Register content providers
-  useEffect(() => {
-    viewRegistry.register(new ChatViewProvider());
-    viewRegistry.register(new EditorViewProvider());
-    viewRegistry.register(new GitViewProvider());
-    viewRegistry.register(new LogsViewProvider());
-
-    debugLog('[OK] Content providers registered');
-  }, []);
 
   // Listen for session-restored events from Chat.tsx to populate messages
   useEffect(() => {

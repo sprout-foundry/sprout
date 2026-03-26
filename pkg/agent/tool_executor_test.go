@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 	"github.com/alantheprice/ledit/pkg/factory"
 	"github.com/alantheprice/ledit/pkg/mcp"
 )
@@ -484,5 +485,54 @@ func TestConstrainToolResultForModel_FetchURLSavesFullOutputToArchive(t *testing
 	}
 	if !strings.Contains(text, input) {
 		t.Fatalf("expected full fetch output in archived file")
+	}
+}
+
+func TestConstrainToolResultForModel_AnalyzeImageContentCompactsJSONResult(t *testing.T) {
+	longText := strings.Repeat("menu item with description\n", 400)
+	raw, err := json.Marshal(tools.ImageAnalysisResponse{
+		Success:        true,
+		ToolInvoked:    true,
+		InputResolved:  true,
+		OCRAttempted:   true,
+		InputType:      "remote_url",
+		InputPath:      "https://example.com/menu.png",
+		ExtractedText:  longText,
+		OriginalChars:  len(longText),
+		ReturnedChars:  len(longText),
+		FullOutputPath: "/tmp/vision/menu.txt",
+		Analysis: &tools.VisionAnalysis{
+			ImagePath:   "https://example.com/menu.png",
+			Description: longText,
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal OCR result: %v", err)
+	}
+
+	got := constrainToolResultForModel("analyze_image_content", nil, string(raw))
+
+	if got == string(raw) {
+		t.Fatalf("expected analyze_image_content result to be compacted")
+	}
+	if !strings.Contains(got, "analyze_image_content result:") {
+		t.Fatalf("expected compacted header, got: %q", got)
+	}
+	if !strings.Contains(got, "- full_output_path: /tmp/vision/menu.txt") {
+		t.Fatalf("expected full output path to be preserved, got: %q", got)
+	}
+	if !strings.Contains(got, "[EXCERPT TRUNCATED:") {
+		t.Fatalf("expected excerpt truncation marker, got: %q", got)
+	}
+	if strings.Count(got, "menu item with description") > 200 {
+		t.Fatalf("expected OCR text to be substantially compacted")
+	}
+}
+
+func TestConstrainToolResultForModel_AnalyzeImageContentLeavesInvalidJSONUntouched(t *testing.T) {
+	input := "not-json"
+	got := constrainToolResultForModel("analyze_image_content", nil, input)
+	if got != input {
+		t.Fatalf("expected invalid OCR payload to remain unchanged")
 	}
 }

@@ -26,13 +26,16 @@ func (ch *ConversationHandler) handleOCRCompletionGate(turn *TurnEvaluation) (ha
 	}
 
 	ch.enqueueTransientMessage(api.Message{
-		Role: "user",
+		Role:    "user",
 		Content: "OCR policy requirement: before finishing, call analyze_image_content at least once for menu/offer image or PDF sources you discovered. If OCR fails, include the failure reason in errors/missing_data and then finalize.",
 	})
 	return true, false
 }
 
 func (ch *ConversationHandler) shouldRequireOCRBeforeCompletion() bool {
+	if ch.agent != nil && ch.agent.shouldUseDirectMultimodalImageReasoning(ch.agent.messages) {
+		return false
+	}
 	if !ch.isOCRPolicyRequested() {
 		return false
 	}

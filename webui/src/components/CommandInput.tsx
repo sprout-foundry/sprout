@@ -52,6 +52,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
   const apiService = useRef(ApiService.getInstance());
   const selectionRef = useRef<{ start: number; end: number } | null>(null);
   const uploadInProgressRef = useRef<Set<string>>(new Set());
+  const isComposingRef = useRef(false);
 
   useEffect(() => {
     if (value === draftValue) {
@@ -157,6 +158,26 @@ const CommandInput: React.FC<CommandInputProps> = ({
     setDraftValue(nextValue);
     onChange?.(nextValue);
   }, [onChange]);
+
+  const currentHistoryValue = isHistoryMode && history.index >= 0
+    ? history.commands[history.commands.length - 1 - history.index] ?? ''
+    : null;
+
+  useEffect(() => {
+    if (!isHistoryMode || currentHistoryValue === null) {
+      return;
+    }
+    if (draftValue === currentHistoryValue) {
+      return;
+    }
+
+    setHistory(prev => ({
+      ...prev,
+      index: -1,
+      tempInput: draftValue,
+    }));
+    setIsHistoryMode(false);
+  }, [currentHistoryValue, draftValue, isHistoryMode]);
 
   const trackUpcomingSelection = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const textarea = inputRef.current;
@@ -298,67 +319,41 @@ const CommandInput: React.FC<CommandInputProps> = ({
 
     trackUpcomingSelection(e as React.KeyboardEvent<HTMLTextAreaElement>);
 
-    const currentValue = draftValue;
-
-    // Handle special key combinations
-    if (e.ctrlKey || e.metaKey) {
-      switch (e.key) {
-        case 'u':
-          // Clear to beginning of line (Ctrl+U)
-          e.preventDefault();
-          resetHistoryNavigation();
-          updateValue('', { start: 0, end: 0 });
-          return;
-        case 'a':
-          // Go to beginning of line (Ctrl+A)
-          e.preventDefault();
-          textarea.setSelectionRange(0, 0);
-          return;
-        case 'e':
-          // Go to end of line (Ctrl+E)
-          e.preventDefault();
-          textarea.setSelectionRange(currentValue.length, currentValue.length);
-          return;
-        case 'k':
-          // Clear line (Ctrl+K)
-          e.preventDefault();
-          resetHistoryNavigation();
-          updateValue('', { start: 0, end: 0 });
-          return;
-        case 'w':
-          // Delete previous word (Ctrl+W)
-          e.preventDefault();
-          const words = currentValue.split(' ');
-          words.pop();
-          const newInput = words.join(' ');
-          updateValue(newInput, { start: newInput.length, end: newInput.length });
-          return;
-        case 'd':
-          // Delete next character (Ctrl+D)
-          e.preventDefault();
-          const pos = textarea.selectionStart || 0;
-          if (pos < currentValue.length) {
-            const newValue = currentValue.slice(0, pos) + currentValue.slice(pos + 1);
-            updateValue(newValue, { start: pos, end: pos });
-          }
-          return;
-        case 'r':
-          // Refresh history from terminal (Ctrl+R)
-          e.preventDefault();
-          loadHistory();
-          return;
-      }
-    }
-
     switch (e.key) {
-      case 'ArrowUp':
+      case 'ArrowUp': {
+        const shouldNavigateHistory =
+          !e.altKey &&
+          !e.ctrlKey &&
+          !e.metaKey &&
+          !e.shiftKey &&
+          (isHistoryMode || draftValue.length === 0) &&
+          textarea.selectionStart === 0 &&
+          textarea.selectionEnd === 0;
+
+        if (!shouldNavigateHistory) {
+          break;
+        }
         e.preventDefault();
         navigateHistory(1);
         break;
-      case 'ArrowDown':
+      }
+      case 'ArrowDown': {
+        const shouldNavigateHistory =
+          !e.altKey &&
+          !e.ctrlKey &&
+          !e.metaKey &&
+          !e.shiftKey &&
+          isHistoryMode &&
+          textarea.selectionStart === draftValue.length &&
+          textarea.selectionEnd === draftValue.length;
+
+        if (!shouldNavigateHistory) {
+          break;
+        }
         e.preventDefault();
         navigateHistory(-1);
         break;
+      }
       case 'Tab':
         e.preventDefault();
         // Simple auto-completion could be added here
@@ -381,10 +376,16 @@ const CommandInput: React.FC<CommandInputProps> = ({
               }
             }, 0);
           } else {
+            if (isComposingRef.current) {
+              return;
+            }
             e.preventDefault();
             handleSend();
           }
         } else {
+          if (isComposingRef.current) {
+            return;
+          }
           e.preventDefault();
           handleSend();
         }
@@ -403,8 +404,8 @@ const CommandInput: React.FC<CommandInputProps> = ({
         break;
     }
 
-    // Reset history navigation when user starts typing
-    if (e.key.length === 1 && isHistoryMode) {
+    // Reset history navigation when user starts typing or deleting content
+    if ((e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete') && isHistoryMode) {
       resetHistoryNavigation();
     }
   };
@@ -562,11 +563,21 @@ const CommandInput: React.FC<CommandInputProps> = ({
   }, [isProcessing, commandRef]);
 
   const handleCompositionStart = () => {
-    // Prevent Enter key from sending during IME composition
+    isComposingRef.current = true;
   };
 
   const handleCompositionEnd = () => {
-    // Allow Enter key to send after IME composition
+    isComposingRef.current = false;
+  };
+
+  const canSend = !!draftValue.trim() && !attachedImages.some(img => !img.uploadedPath && !img.error);
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!canSend || disabled || isComposingRef.current) {
+      return;
+    }
+    handleSend();
   };
 
   const previewImage = previewImageId
@@ -574,7 +585,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
     : null;
 
   return (
-    <div className="command-input">
+    <form className="command-input" onSubmit={handleSubmit}>
       <div className="input-header">
         <div className="input-info">
           {isHistoryMode && (
@@ -721,8 +732,8 @@ const CommandInput: React.FC<CommandInputProps> = ({
           <SquarePen size={16} />
         </button>
         <button
-          onClick={handleSend}
-          disabled={disabled || !(draftValue.trim()) || attachedImages.some(img => !img.uploadedPath && !img.error)}
+          type="submit"
+          disabled={disabled || !canSend}
           className="send-button"
           data-tooltip={isProcessing ? 'Steer running request' : 'Send message'}
           aria-label="Send message"
@@ -733,7 +744,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
           <button
             type="button"
             onClick={handleQueue}
-            disabled={disabled || !(draftValue.trim()) || attachedImages.some(img => !img.uploadedPath && !img.error)}
+            disabled={disabled || !canSend}
             className="queue-button"
             data-tooltip={`Queue for after current run${queuedCount > 0 ? ` (${queuedCount} queued)` : ''}`}
             aria-label="Queue message"
@@ -751,7 +762,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
         <span><kbd>Esc</kbd> Clear</span>
         <span><kbd>Ctrl+C</kbd> Copy</span>
       </div>
-    </div>
+    </form>
   );
 };
 

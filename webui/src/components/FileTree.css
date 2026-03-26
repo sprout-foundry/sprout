@@ -5,6 +5,7 @@
   height: 100%;
   border-radius: var(--radius-lg);
   overflow: hidden;
+  position: relative;
 }
 
 .file-tree .file-tree-header {
@@ -73,12 +74,6 @@
 .file-tree .file-tree-header .create-folder-btn:hover {
   border-color: var(--accent-warning);
   color: var(--accent-warning);
-}
-
-.file-tree .file-tree-header .create-mode-input {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
 }
 
 .file-tree .file-tree-header .create-input {
@@ -318,6 +313,112 @@
 .file-tree .file-tree-item.directory .file-tree-name {
   color: var(--text-primary);
   font-weight: 550;
+}
+
+.file-tree .file-tree-inline-editor {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.file-tree .file-tree-draft-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+}
+
+.file-tree .file-tree-draft-row .create-input,
+.file-tree .file-tree-inline-editor .create-input {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+}
+
+.file-tree .create-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.file-tree .create-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  transition: all 0.12s var(--ease-out);
+}
+
+.file-tree .create-btn.create-confirm {
+  color: var(--accent-success);
+}
+
+.file-tree .create-btn.create-confirm:hover {
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.file-tree .create-btn.create-cancel {
+  color: var(--accent-error);
+}
+
+.file-tree .create-btn.create-cancel:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.file-tree .create-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.file-tree .create-error-message {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--accent-error);
+  border-radius: var(--radius-sm);
+  background: var(--color-error-bg);
+  color: var(--accent-error);
+  font-size: 12px;
+}
+
+.file-tree .file-tree-context-menu {
+  position: absolute;
+  z-index: 20;
+  min-width: 160px;
+  padding: 6px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--bg-secondary);
+  box-shadow: var(--shadow-elevated);
+}
+
+.file-tree .file-tree-context-item {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12px;
+  text-align: left;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.file-tree .file-tree-context-item:hover {
+  background: rgba(148, 163, 184, 0.1);
+}
+
+.file-tree .file-tree-context-item.danger {
+  color: var(--accent-error);
 }
 
 .file-tree .file-tree-count {

@@ -214,9 +214,9 @@ func (v *visionSupportingClient) SendChatRequest(messages []api.Message, tools [
 func (v *visionSupportingClient) SendChatRequestStream(messages []api.Message, tools []api.Tool, reasoning string, callback api.StreamCallback) (*api.ChatResponse, error) {
 	return nil, nil
 }
-func (v *visionSupportingClient) CheckConnection() error             { return nil }
-func (v *visionSupportingClient) SetDebug(debug bool)                {}
-func (v *visionSupportingClient) SetModel(model string) error        { return nil }
+func (v *visionSupportingClient) CheckConnection() error      { return nil }
+func (v *visionSupportingClient) SetDebug(debug bool)         {}
+func (v *visionSupportingClient) SetModel(model string) error { return nil }
 func (v *visionSupportingClient) GetModel() string {
 	if strings.TrimSpace(v.currentModel) != "" {
 		return v.currentModel
@@ -329,11 +329,11 @@ func TestProcessImagesInQuery_NonVisionClient_InjectsToolPrompt(t *testing.T) {
 	}
 }
 
-func TestProcessImagesInQuery_VisionProviderWithNonVisionModel_UsesMultimodalPath(t *testing.T) {
+func TestProcessImagesInQuery_VisionProviderWithNonVisionModel_LeavesQueryTextOnly(t *testing.T) {
 	query := "Pasted image saved to disk: ./.ledit/pasted-images/test_a.png\nPlease read this image."
 	a := &Agent{
 		client: &visionSupportingClient{
-			supportsVision: true,
+			supportsVision: false,
 			currentModel:   "glm-5-turbo",
 			visionModel:    "glm-4.6v",
 		},
@@ -344,10 +344,10 @@ func TestProcessImagesInQuery_VisionProviderWithNonVisionModel_UsesMultimodalPat
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(images) != 0 {
-		t.Fatalf("expected image to be skipped because test path does not exist, got %d images", len(images))
+		t.Fatalf("expected no multimodal images for non-vision model, got %d images", len(images))
 	}
-	if !strings.Contains(cleaned, "[image: test_a.png]") {
-		t.Fatalf("expected multimodal placeholder rewrite, got: %q", cleaned)
+	if cleaned != query {
+		t.Fatalf("expected non-vision query to remain unchanged, got: %q", cleaned)
 	}
 }
 

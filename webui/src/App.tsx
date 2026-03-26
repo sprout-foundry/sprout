@@ -316,7 +316,6 @@ function App() {
   const [queuedMessagesCount, setQueuedMessagesCount] = useState(0);
   const [recentFiles, setRecentFiles] = useState<Array<{ path: string; modified: boolean }>>([]);
   const [gitRefreshToken, setGitRefreshToken] = useState(0);
-  const [selectedGitFilePath, setSelectedGitFilePath] = useState<string | null>(null);
   const [onboarding, setOnboarding] = useState<OnboardingState>({
     checking: true,
     open: false,
@@ -1311,8 +1310,6 @@ function App() {
                 onGitStage={handleGitStage}
                 onGitUnstage={handleGitUnstage}
                 onGitDiscard={handleGitDiscard}
-                selectedGitFilePath={selectedGitFilePath}
-                onGitFileSelect={setSelectedGitFilePath}
                 onTerminalOutput={handleTerminalOutput}
                 onTerminalExpandedChange={setIsTerminalExpanded}
                 isConnected={state.isConnected}

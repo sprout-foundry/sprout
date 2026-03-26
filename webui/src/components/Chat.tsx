@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, type ReactNode } from 'react';
+import React, { useRef, useEffect, useCallback, type ReactNode } from 'react';
 import {
   Terminal, BookOpen, FileEdit, Pencil, Search, Eye, FlaskConical,
   Globe, ArrowDown, ClipboardList, ScrollText, RotateCcw,
@@ -10,7 +10,6 @@ import remarkGfm from 'remark-gfm';
 import CommandInput from './CommandInput';
 import { stripAnsiCodes } from '../utils/ansi';
 import { parseMessageSegments } from '../utils/messageSegments';
-import ContextPanel, { type ContextPanelHandle } from './ContextPanel';
 import './Chat.css';
 
 interface Message {
@@ -47,9 +46,8 @@ interface ChatProps {
   toolExecutions?: ToolExecution[];
   queryProgress?: any;
   currentTodos?: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }>;
+  onToolPillClick?: (toolId: string) => void;
 }
-
-const MOBILE_LAYOUT_MAX_WIDTH = 900;
 
 const Chat: React.FC<ChatProps> = ({
   messages,
@@ -62,24 +60,10 @@ const Chat: React.FC<ChatProps> = ({
   lastError = null,
   toolExecutions = [],
   queryProgress = null,
-  currentTodos = []
+  currentTodos = [],
+  onToolPillClick
 }) => {
-  const [isMobileLayout, setIsMobileLayout] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    return window.innerWidth <= MOBILE_LAYOUT_MAX_WIDTH;
-  });
   const chatContainerRef = useRef<HTMLDivElement>(null);
-  const contextPanelRef = useRef<ContextPanelHandle>(null);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const onResize = () => {
-      setIsMobileLayout(window.innerWidth <= MOBILE_LAYOUT_MAX_WIDTH);
-    };
-    onResize();
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
 
   useEffect(() => {
     if (chatContainerRef.current) {
@@ -208,7 +192,7 @@ const Chat: React.FC<ChatProps> = ({
                         t.tool === segment.toolName.split('(')[0]
                       );
                       if (matchingTool) {
-                        contextPanelRef.current?.highlightTool(matchingTool.id);
+                        onToolPillClick?.(matchingTool.id);
                       }
                     }}
                     onKeyDown={(e) => {
@@ -218,7 +202,7 @@ const Chat: React.FC<ChatProps> = ({
                           t.tool === segment.toolName.split('(')[0]
                         );
                         if (matchingTool) {
-                          contextPanelRef.current?.highlightTool(matchingTool.id);
+                          onToolPillClick?.(matchingTool.id);
                         }
                       }
                     }}
@@ -356,18 +340,6 @@ const Chat: React.FC<ChatProps> = ({
             </div>
           )}
         </div>
-
-        <ContextPanel
-          ref={contextPanelRef}
-          context="chat"
-          toolExecutions={toolExecutions}
-          currentTodos={currentTodos || []}
-          messages={messages}
-          isProcessing={isProcessing}
-          lastError={lastError}
-          queryProgress={queryProgress}
-          isMobileLayout={isMobileLayout}
-        />
       </div>
 
       <div className="input-container">

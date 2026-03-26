@@ -52,15 +52,16 @@ func isSubagentTool(toolName string) bool {
 
 // ToolExecutor handles tool execution logic
 type ToolExecutor struct {
-	agent        *Agent
-	toolIndex    int    // Counter for tool execution order within each turn
-	idCounter    int64  // Atomic counter for unique tool call ID generation
-	idCounterMu  sync.Mutex
+	agent       *Agent
+	toolIndex   int   // Counter for tool execution order within each turn
+	idCounter   int64 // Atomic counter for unique tool call ID generation
+	idCounterMu sync.Mutex
 }
 
-const maxToolFailureMessageChars = 4000 // ~1000 tokens worst-case (4 chars/token heuristic)
+const maxToolFailureMessageChars = 4000     // ~1000 tokens worst-case (4 chars/token heuristic)
 const defaultFetchURLResultMaxChars = 80000 // Raised from 60000 to 80000 (better web content coverage)
 const defaultFetchURLArchiveDir = "/tmp/ledit/downloads"
+const defaultAnalyzeImageResultExcerptChars = 4000
 
 // NewToolExecutor creates a new tool executor
 func NewToolExecutor(agent *Agent) *ToolExecutor {
@@ -79,7 +80,7 @@ func (te *ToolExecutor) ExecuteTools(toolCalls []api.ToolCall) []api.Message {
 		te.agent.debugLog("[tool] Executing %d tool calls\n", len(toolCalls))
 		for _, tc := range toolCalls {
 			te.agent.LogToolCall(tc, "executing")
-			
+
 			// Extract persona and subagent info from subagent arguments
 			args, _, _ := parseToolArgumentsWithRepair(tc.Function.Arguments)
 			persona := ""
@@ -338,7 +339,7 @@ func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
 func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIndex int) api.Message {
 	// Capture start time for duration tracking
 	startTime := time.Now()
-	
+
 	// Single canonical execution log for all tools (including MCP-prefixed tools).
 	te.agent.ToolLog("executing tool", formatToolCall(toolCall))
 	normalizedToolName := te.normalizeToolNameForScheduling(toolCall.Function.Name)
@@ -500,6 +501,10 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 }
 
 func constrainToolResultForModel(toolName string, args map[string]interface{}, result string) string {
+	if toolName == "analyze_image_content" {
+		return compactAnalyzeImageResultForModel(result)
+	}
+
 	if toolName != "fetch_url" {
 		return result
 	}
@@ -572,6 +577,86 @@ func saveFetchURLOutputToFile(args map[string]interface{}, output string) (strin
 		return "", err
 	}
 	return path, nil
+}
+
+func compactAnalyzeImageResultForModel(result string) string {
+	var parsed tools.ImageAnalysisResponse
+	if err := json.Unmarshal([]byte(result), &parsed); err != nil {
+		return result
+	}
+
+	var b strings.Builder
+	b.WriteString("analyze_image_content result:\n")
+	b.WriteString(fmt.Sprintf("- success: %t\n", parsed.Success))
+	if parsed.InputPath != "" {
+		b.WriteString(fmt.Sprintf("- input_path: %s\n", parsed.InputPath))
+	}
+	if parsed.InputType != "" {
+		b.WriteString(fmt.Sprintf("- input_type: %s\n", parsed.InputType))
+	}
+	b.WriteString(fmt.Sprintf("- ocr_attempted: %t\n", parsed.OCRAttempted))
+
+	if parsed.ErrorCode != "" {
+		b.WriteString(fmt.Sprintf("- error_code: %s\n", parsed.ErrorCode))
+	}
+	if parsed.ErrorMessage != "" {
+		b.WriteString(fmt.Sprintf("- error_message: %s\n", parsed.ErrorMessage))
+	}
+
+	excerpt := strings.TrimSpace(parsed.ExtractedText)
+	if excerpt == "" && parsed.Analysis != nil {
+		excerpt = strings.TrimSpace(parsed.Analysis.Description)
+	}
+	if excerpt != "" {
+		originalChars := parsed.OriginalChars
+		if originalChars == 0 {
+			originalChars = len(excerpt)
+		}
+		returnedChars := parsed.ReturnedChars
+		if returnedChars == 0 {
+			returnedChars = len(excerpt)
+		}
+		b.WriteString(fmt.Sprintf("- extracted_chars: %d\n", originalChars))
+		b.WriteString(fmt.Sprintf("- returned_chars: %d\n", returnedChars))
+	}
+	if parsed.OutputTruncated {
+		b.WriteString("- tool_output_truncated: true\n")
+	}
+	if parsed.FullOutputPath != "" {
+		b.WriteString(fmt.Sprintf("- full_output_path: %s\n", parsed.FullOutputPath))
+	}
+	if parsed.Analysis != nil {
+		if len(parsed.Analysis.Elements) > 0 {
+			b.WriteString(fmt.Sprintf("- detected_elements: %d\n", len(parsed.Analysis.Elements)))
+		}
+		if len(parsed.Analysis.Issues) > 0 {
+			b.WriteString(fmt.Sprintf("- issues: %s\n", strings.Join(parsed.Analysis.Issues, "; ")))
+		}
+		if len(parsed.Analysis.Suggestions) > 0 {
+			b.WriteString(fmt.Sprintf("- suggestions: %s\n", strings.Join(parsed.Analysis.Suggestions, "; ")))
+		}
+	}
+	if excerpt != "" {
+		b.WriteString("- extracted_text_excerpt:\n")
+		b.WriteString(limitAnalyzeImageExcerpt(excerpt, defaultAnalyzeImageResultExcerptChars))
+	}
+
+	return strings.TrimSpace(b.String())
+}
+
+func limitAnalyzeImageExcerpt(text string, maxChars int) string {
+	text = strings.TrimSpace(text)
+	if maxChars <= 0 || len(text) <= maxChars {
+		return text
+	}
+
+	suffix := fmt.Sprintf("\n[EXCERPT TRUNCATED: kept first %d of %d chars]", maxChars, len(text))
+	keep := maxChars - len(suffix)
+	if keep < 0 {
+		keep = maxChars
+		suffix = ""
+	}
+	return strings.TrimSpace(text[:keep]) + suffix
 }
 
 // recordToolExecutionWithIndex records tool execution data to the trace session
@@ -702,7 +787,6 @@ func (te *ToolExecutor) categorizeError(toolName string, err error) (string, str
 	// Default to execution error
 	return "execution_error", errorMsg
 }
-
 
 // tryExecuteMCPTool attempts to execute an MCP tool name using the agent's MCP manager.
 // Returns handled=false when the tool name doesn't correspond to an MCP tool.

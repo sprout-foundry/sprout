@@ -318,15 +318,15 @@ func GetToolDefinitions() []Tool {
 				Description string      `json:"description"`
 				Parameters  interface{} `json:"parameters"`
 			}{
-							Name:        "analyze_ui_screenshot",
-			Description: "Analyze UI screenshots, mockups, or HTML files for implementation guidance. Supports image files, URLs, and local HTML files (rendered via headless browser).",
-			Parameters: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"image_path": map[string]interface{}{
-						"type":        "string",
-						"description": "Path to UI screenshot, mockup, HTML file, or URL to the UI screenshot",
-					},"analysis_prompt": map[string]interface{}{
+				Name:        "analyze_ui_screenshot",
+				Description: "Analyze UI screenshots, mockups, or HTML files for implementation guidance. Supports image files, URLs, and local HTML files (rendered via headless browser).",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"image_path": map[string]interface{}{
+							"type":        "string",
+							"description": "Path to UI screenshot, mockup, HTML file, or URL to the UI screenshot",
+						}, "analysis_prompt": map[string]interface{}{
 							"type":        "string",
 							"description": "Optional custom vision prompt for analysis",
 						},
@@ -427,6 +427,49 @@ func GetToolDefinitions() []Tool {
 				Description string      `json:"description"`
 				Parameters  interface{} `json:"parameters"`
 			}{
+				Name:        "browse_url",
+				Description: "Open a URL in a headless browser for screenshots, rendered DOM extraction, or visible text capture",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"url": map[string]interface{}{
+							"type":        "string",
+							"description": "URL to browse",
+						},
+						"action": map[string]interface{}{
+							"type":        "string",
+							"description": "What to do: screenshot, dom, or text",
+							"enum":        []string{"screenshot", "dom", "text"},
+						},
+						"screenshot_path": map[string]interface{}{
+							"type":        "string",
+							"description": "Output path for screenshots when action=screenshot",
+						},
+						"viewport_width": map[string]interface{}{
+							"type":        "integer",
+							"description": "Browser viewport width in pixels",
+						},
+						"viewport_height": map[string]interface{}{
+							"type":        "integer",
+							"description": "Browser viewport height in pixels",
+						},
+						"user_agent": map[string]interface{}{
+							"type":        "string",
+							"description": "Optional browser User-Agent override",
+						},
+					},
+					"required":             []string{"url"},
+					"additionalProperties": false,
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: struct {
+				Name        string      `json:"name"`
+				Description string      `json:"description"`
+				Parameters  interface{} `json:"parameters"`
+			}{
 				Name:        "run_subagent",
 				Description: "Delegate a SINGLE implementation task to a subagent.",
 				Parameters: map[string]interface{}{
@@ -460,6 +503,31 @@ func GetToolDefinitions() []Tool {
 						},
 					},
 					"required":             []string{"prompt", "persona"},
+					"additionalProperties": false,
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: struct {
+				Name        string      `json:"name"`
+				Description string      `json:"description"`
+				Parameters  interface{} `json:"parameters"`
+			}{
+				Name:        "run_parallel_subagents",
+				Description: "Execute multiple independent subagent tasks concurrently in parallel",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"subagents": map[string]interface{}{
+							"type":        "array",
+							"description": "Array of task descriptions to run in parallel",
+							"items": map[string]interface{}{
+								"type": "string",
+							},
+						},
+					},
+					"required":             []string{"subagents"},
 					"additionalProperties": false,
 				},
 			},

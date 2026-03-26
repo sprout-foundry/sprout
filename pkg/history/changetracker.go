@@ -116,7 +116,7 @@ func PrintRevisionHistoryWithReader(inputReader *bufio.Reader) error {
 		return err
 	}
 	if len(changes) == 0 {
-		fmt.Print("No changes recorded.\n")
+		fmt.Print("No committed revisions recorded yet.\n")
 		return nil
 	}
 
@@ -124,7 +124,7 @@ func PrintRevisionHistoryWithReader(inputReader *bufio.Reader) error {
 	revisionGroups := groupChangesByRevision(changes)
 
 	if len(revisionGroups) == 0 {
-		fmt.Print("No revisions found.\n")
+		fmt.Print("No committed revisions recorded yet.\n")
 		return nil
 	}
 

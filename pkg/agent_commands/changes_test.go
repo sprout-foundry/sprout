@@ -7,6 +7,28 @@ import (
 	"github.com/alantheprice/ledit/pkg/agent"
 )
 
+func TestGetChangeTrackingStatus(t *testing.T) {
+	if got := getChangeTrackingStatus(nil); got != "[FAIL] Disabled" {
+		t.Fatalf("nil agent status = %q", got)
+	}
+
+	idleAgent := &agent.Agent{}
+	if got := getChangeTrackingStatus(idleAgent); got != "[i] Idle (no tracked session yet)" {
+		t.Fatalf("idle agent status = %q", got)
+	}
+
+	enabledAgent := &agent.Agent{}
+	enabledAgent.EnableChangeTracking("test")
+	if got := getChangeTrackingStatus(enabledAgent); got != "[OK] Enabled" {
+		t.Fatalf("enabled agent status = %q", got)
+	}
+
+	enabledAgent.DisableChangeTracking()
+	if got := getChangeTrackingStatus(enabledAgent); got != "[FAIL] Disabled" {
+		t.Fatalf("disabled tracker status = %q", got)
+	}
+}
+
 func TestLogCommand_Name(t *testing.T) {
 	cmd := &LogCommand{}
 	if cmd.Name() != "log" {

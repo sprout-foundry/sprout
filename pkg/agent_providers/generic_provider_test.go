@@ -108,6 +108,32 @@ func TestGenericProviderValidation(t *testing.T) {
 	}
 }
 
+func TestGenericProviderSupportsVisionUsesActiveModel(t *testing.T) {
+	config, err := LoadProviderConfig("./configs/zai.json")
+	if err != nil {
+		t.Fatalf("failed to load zai config: %v", err)
+	}
+
+	provider, err := NewGenericProvider(config)
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	if err := provider.SetModel("glm-5-turbo"); err != nil {
+		t.Fatalf("failed to set model: %v", err)
+	}
+	if provider.SupportsVision() {
+		t.Fatalf("glm-5-turbo should not be treated as a vision model")
+	}
+
+	if err := provider.SetModel("glm-4.6v"); err != nil {
+		t.Fatalf("failed to set model: %v", err)
+	}
+	if !provider.SupportsVision() {
+		t.Fatalf("glm-4.6v should be treated as a vision model")
+	}
+}
+
 func TestProviderFactoryValidation(t *testing.T) {
 	factory := NewProviderFactory()
 

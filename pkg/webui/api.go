@@ -611,6 +611,123 @@ func (ws *ReactWebServer) handleAPIDeleteItem(w http.ResponseWriter, r *http.Req
 	})
 }
 
+// handleAPIRenameItem handles API requests for renaming files or directories.
+func (ws *ReactWebServer) handleAPIRenameItem(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Method not allowed",
+			"code":  "method_not_allowed",
+		})
+		return
+	}
+
+	var req struct {
+		OldPath string `json:"old_path"`
+		NewPath string `json:"new_path"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": fmt.Sprintf("Invalid request body: %v", err),
+			"code":  "invalid_request_body",
+		})
+		return
+	}
+
+	if req.OldPath == "" || req.NewPath == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Old and new paths must be specified",
+			"code":  "missing_paths",
+		})
+		return
+	}
+
+	oldCanonicalPath, err := canonicalizePath(req.OldPath, ws.workspaceRoot, false)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": fmt.Sprintf("Invalid source path: %v", err),
+			"code":  "invalid_old_path",
+		})
+		return
+	}
+
+	newCanonicalPath, err := canonicalizePath(req.NewPath, ws.workspaceRoot, false)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": fmt.Sprintf("Invalid target path: %v", err),
+			"code":  "invalid_new_path",
+		})
+		return
+	}
+
+	if !isWithinWorkspace(oldCanonicalPath, ws.workspaceRoot) || !isWithinWorkspace(newCanonicalPath, ws.workspaceRoot) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Path outside workspace",
+			"code":  "path_outside_workspace",
+		})
+		return
+	}
+
+	if _, err := os.Stat(oldCanonicalPath); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": fmt.Sprintf("Source path does not exist: %v", err),
+			"code":  "source_not_found",
+		})
+		return
+	}
+
+	if _, err := os.Stat(newCanonicalPath); err == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Target path already exists",
+			"code":  "target_already_exists",
+		})
+		return
+	}
+
+	if err := os.MkdirAll(filepath.Dir(newCanonicalPath), 0755); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": fmt.Sprintf("Failed to create target parent directory: %v", err),
+			"code":  "failed_to_create_parent_directory",
+		})
+		return
+	}
+
+	if err := os.Rename(oldCanonicalPath, newCanonicalPath); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": fmt.Sprintf("Failed to rename: %v", err),
+			"code":  "failed_to_rename",
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":  "success",
+		"old_path": oldCanonicalPath,
+		"new_path": newCanonicalPath,
+	})
+}
+
 // getGitFileStatusMap runs git status --porcelain once and returns sets of modified and untracked files.
 func getGitFileStatusMap(workspaceRoot string) (modified, untracked map[string]bool) {
 	modified = make(map[string]bool)

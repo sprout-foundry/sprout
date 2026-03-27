@@ -202,6 +202,116 @@ func (ws *ReactWebServer) handleAPIStats(w http.ResponseWriter, r *http.Request)
 	json.NewEncoder(w).Encode(stats)
 }
 
+// handleAPIWorkspace handles API requests for reading and updating the active workspace root.
+func (ws *ReactWebServer) handleAPIWorkspace(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		ws.handleAPIWorkspaceGet(w, r)
+	case http.MethodPost:
+		ws.handleAPIWorkspaceSet(w, r)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (ws *ReactWebServer) handleAPIWorkspaceGet(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"daemon_root":    ws.GetDaemonRoot(),
+		"workspace_root": ws.GetWorkspaceRoot(),
+	})
+}
+
+func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)
+
+	var req struct {
+		Path string `json:"path"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	req.Path = strings.TrimSpace(req.Path)
+	if req.Path == "" {
+		http.Error(w, "Path is required", http.StatusBadRequest)
+		return
+	}
+
+	workspaceRoot, err := ws.SetWorkspaceRoot(req.Path)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to set workspace: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"daemon_root":    ws.GetDaemonRoot(),
+		"message":        "Workspace updated",
+		"workspace_root": workspaceRoot,
+	})
+}
+
+func (ws *ReactWebServer) handleAPIWorkspaceBrowse(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	daemonRoot := ws.GetDaemonRoot()
+	dir := strings.TrimSpace(r.URL.Query().Get("path"))
+	if dir == "" {
+		dir = daemonRoot
+	}
+
+	canonicalDir, err := canonicalizePath(dir, daemonRoot, false)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Invalid directory: %v", err), http.StatusBadRequest)
+		return
+	}
+	if canonicalDir != daemonRoot && !isWithinWorkspace(canonicalDir, daemonRoot) {
+		http.Error(w, "Directory outside daemon root", http.StatusForbidden)
+		return
+	}
+
+	entries, err := os.ReadDir(canonicalDir)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to read directory: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	files := make([]map[string]interface{}, 0, len(entries))
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+
+		fileInfo := map[string]interface{}{
+			"name": entry.Name(),
+			"path": filepath.Join(canonicalDir, entry.Name()),
+			"type": "file",
+		}
+		if entry.IsDir() {
+			fileInfo["type"] = "directory"
+		}
+		fileInfo["size"] = info.Size()
+		fileInfo["modified"] = info.ModTime().Unix()
+		files = append(files, fileInfo)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":        "success",
+		"path":           canonicalDir,
+		"daemon_root":    daemonRoot,
+		"workspace_root": ws.GetWorkspaceRoot(),
+		"files":          files,
+	})
+}
+
 // gatherStats collects server statistics
 func (ws *ReactWebServer) gatherStats() map[string]interface{} {
 	ws.mutex.RLock()
@@ -984,10 +1094,10 @@ func (ws *ReactWebServer) handleFileWrite(w http.ResponseWriter, r *http.Request
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success":  true,
-		"message":  "File saved successfully",
-		"path":     canonicalPath,
-		"size":     len(content),
+		"success": true,
+		"message": "File saved successfully",
+		"path":    canonicalPath,
+		"size":    len(content),
 	})
 }
 
@@ -1059,7 +1169,9 @@ func (ws *ReactWebServer) handleAPIConfig(w http.ResponseWriter, r *http.Request
 
 	// Get current configuration
 	config := map[string]interface{}{
-		"port": ws.port,
+		"port":           ws.port,
+		"daemon_root":    ws.GetDaemonRoot(),
+		"workspace_root": ws.GetWorkspaceRoot(),
 		"agent": map[string]interface{}{
 			"name":    "ledit",
 			"version": "1.0.0", // This should come from actual version info

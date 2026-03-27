@@ -27,19 +27,20 @@ func init() {
 
 // ConversationState represents the state of a conversation that can be persisted
 type ConversationState struct {
-	Messages                []api.Message `json:"messages"`
-	TaskActions             []TaskAction  `json:"task_actions"`
-	TotalCost               float64       `json:"total_cost"`
-	TotalTokens             int           `json:"total_tokens"`
-	PromptTokens            int           `json:"prompt_tokens"`
-	CompletionTokens        int           `json:"completion_tokens"`
-	EstimatedTokenResponses int           `json:"estimated_token_responses"`
-	CachedTokens            int           `json:"cached_tokens"`
-	CachedCostSavings       float64       `json:"cached_cost_savings"`
-	LastUpdated             time.Time     `json:"last_updated"`
-	SessionID               string        `json:"session_id"`
-	Name                    string        `json:"name"`              // Human-readable session name
-	WorkingDirectory        string        `json:"working_directory"` // Directory where session was created
+	Messages                []api.Message    `json:"messages"`
+	TurnCheckpoints         []TurnCheckpoint `json:"turn_checkpoints,omitempty"`
+	TaskActions             []TaskAction     `json:"task_actions"`
+	TotalCost               float64          `json:"total_cost"`
+	TotalTokens             int              `json:"total_tokens"`
+	PromptTokens            int              `json:"prompt_tokens"`
+	CompletionTokens        int              `json:"completion_tokens"`
+	EstimatedTokenResponses int              `json:"estimated_token_responses"`
+	CachedTokens            int              `json:"cached_tokens"`
+	CachedCostSavings       float64          `json:"cached_cost_savings"`
+	LastUpdated             time.Time        `json:"last_updated"`
+	SessionID               string           `json:"session_id"`
+	Name                    string           `json:"name"`              // Human-readable session name
+	WorkingDirectory        string           `json:"working_directory"` // Directory where session was created
 }
 
 // Variable to allow overriding GetStateDir for testing
@@ -213,6 +214,7 @@ func (a *Agent) SaveStateScoped(sessionID, workingDir string) error {
 
 	state := ConversationState{
 		Messages:                a.messages,
+		TurnCheckpoints:         a.copyTurnCheckpoints(),
 		TaskActions:             a.taskActions,
 		TotalCost:               a.totalCost,
 		TotalTokens:             a.totalTokens,
@@ -650,6 +652,7 @@ func (a *Agent) GenerateSessionSummary() string {
 func (a *Agent) ApplyState(state *ConversationState) {
 	// Apply saved state
 	a.messages = state.Messages
+	a.replaceTurnCheckpoints(state.TurnCheckpoints)
 	a.taskActions = state.TaskActions
 	a.totalCost = state.TotalCost
 	a.totalTokens = state.TotalTokens

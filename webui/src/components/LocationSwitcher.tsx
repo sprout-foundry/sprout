@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import './LocationSwitcher.css';
 import { FolderOpen, Monitor, RefreshCw, Loader2 } from 'lucide-react';
-import { ApiService, LeditInstance } from '../services/api';
+import { ApiService, LeditInstance, SSHHostEntry } from '../services/api';
 
 interface LocationSwitcherProps {
   isConnected: boolean;
@@ -15,13 +15,6 @@ interface LocationSwitcherProps {
 interface WorkspaceDirectory {
   name: string;
   path: string;
-}
-
-interface SSHHostEntry {
-  alias: string;
-  hostname?: string;
-  user?: string;
-  port?: string;
 }
 
 interface SwitchingState {
@@ -191,13 +184,13 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
       return;
     }
     const desktopBridge = (window as any).leditDesktop;
-    if (!desktopBridge?.listSshHosts) {
-      setSshHosts([]);
-      return;
-    }
 
     let cancelled = false;
-    desktopBridge.listSshHosts()
+    const loadHosts = desktopBridge?.listSshHosts
+      ? desktopBridge.listSshHosts()
+      : apiService.current.getSSHHosts();
+
+    loadHosts
       .then((hosts: SSHHostEntry[]) => {
         if (!cancelled) {
           setSshHosts(Array.isArray(hosts) ? hosts : []);
@@ -454,6 +447,10 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
   const handleOpenSshHost = useCallback(async (hostAlias: string) => {
     const desktopBridge = (window as any).leditDesktop;
     if (!desktopBridge?.openSshWorkspace || !hostAlias) {
+      setSwitchingState({
+        isSwitching: false,
+        error: 'SSH workspace launch from the browser UI is not implemented yet. Use the desktop app to open remote SSH workspaces.',
+      });
       return;
     }
 

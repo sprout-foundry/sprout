@@ -2,7 +2,9 @@ package utils
 
 import (
 	"fmt"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -14,6 +16,7 @@ type DiffOptimizer struct {
 	LargeFileExtensions   []string // File extensions considered as large files
 	LockFilePatterns      []string // Patterns for lock files
 	GeneratedFilePatterns []string // Patterns for generated files
+	WorkingDir            string   // Working directory for git commands (optional)
 }
 
 // NewDiffOptimizer creates a new diff optimizer with default settings
@@ -71,9 +74,21 @@ func NewDiffOptimizerForReview() *DiffOptimizer {
 type OptimizedDiffResult struct {
 	OptimizedContent string            // The optimized diff content
 	FileSummaries    map[string]string // Summary for each optimized file
+	Warnings         []string          // Warnings about suspicious optimized files
 	OriginalLines    int               // Original number of lines
 	OptimizedLines   int               // Optimized number of lines
 	BytesSaved       int               // Estimated bytes saved
+}
+
+// addDeduplicatedWarnings adds warnings to the result while deduplicating based on warningSet
+func addDeduplicatedWarnings(result *OptimizedDiffResult, warningSet map[string]struct{}, warnings []string) {
+	for _, w := range warnings {
+		if _, exists := warningSet[w]; exists {
+			continue
+		}
+		warningSet[w] = struct{}{}
+		result.Warnings = append(result.Warnings, w)
+	}
 }
 
 // OptimizeDiff optimizes a git diff by replacing large files with summaries
@@ -82,6 +97,7 @@ func (do *DiffOptimizer) OptimizeDiff(diff string) *OptimizedDiffResult {
 		return &OptimizedDiffResult{
 			OptimizedContent: diff,
 			FileSummaries:    make(map[string]string),
+			Warnings:         nil,
 		}
 	}
 
@@ -90,8 +106,10 @@ func (do *DiffOptimizer) OptimizeDiff(diff string) *OptimizedDiffResult {
 
 	result := &OptimizedDiffResult{
 		FileSummaries: make(map[string]string),
+		Warnings:      make([]string, 0, 2),
 		OriginalLines: originalLines,
 	}
+	warningSet := make(map[string]struct{})
 
 	var optimizedLines []string
 	var currentFile string
@@ -108,6 +126,7 @@ func (do *DiffOptimizer) OptimizeDiff(diff string) *OptimizedDiffResult {
 				if summary != "" {
 					result.FileSummaries[currentFile] = summary
 				}
+				addDeduplicatedWarnings(result, warningSet, do.createWarnings(currentFile))
 			}
 
 			// Start new file
@@ -133,6 +152,7 @@ func (do *DiffOptimizer) OptimizeDiff(diff string) *OptimizedDiffResult {
 		if summary != "" {
 			result.FileSummaries[currentFile] = summary
 		}
+		addDeduplicatedWarnings(result, warningSet, do.createWarnings(currentFile))
 	}
 
 	result.OptimizedContent = strings.Join(optimizedLines, "\n")
@@ -149,6 +169,14 @@ type FileChangeSummary struct {
 	ContextLines int
 	TotalLines   int
 }
+
+type fileChangeKind string
+
+const (
+	fileChangeAdded    fileChangeKind = "added"
+	fileChangeDeleted  fileChangeKind = "deleted"
+	fileChangeModified fileChangeKind = "modified"
+)
 
 // processFileDiff processes a single file's diff and returns optimized content and summary
 func (do *DiffOptimizer) processFileDiff(filename string, fileLines []string, changes *FileChangeSummary) ([]string, string) {
@@ -321,6 +349,10 @@ func (do *DiffOptimizer) updateChangeSummary(summary *FileChangeSummary, line st
 // createFileSummary creates a human-readable summary for a file
 func (do *DiffOptimizer) createFileSummary(filename string, changes *FileChangeSummary) string {
 	var summaryParts []string
+	changeKind := do.detectFileChangeKind(filename, changes)
+	fileSize := do.getFileTotalSize(filename, changeKind)
+	class := ClassifyReviewFile(filename)
+	isMetadataOnly := do.isLockFile(filename) || do.isGeneratedFile(filename) || class.IsBinary
 
 	if do.isLockFile(filename) {
 		summaryParts = append(summaryParts, "lock file")
@@ -329,8 +361,19 @@ func (do *DiffOptimizer) createFileSummary(filename string, changes *FileChangeS
 	if do.isGeneratedFile(filename) {
 		summaryParts = append(summaryParts, "generated file")
 	}
+	if class.IsBinary {
+		summaryParts = append(summaryParts, "binary file")
+	}
 
-	if changes.AddedLines > 0 || changes.DeletedLines > 0 {
+	if changeKind != "" {
+		summaryParts = append(summaryParts, string(changeKind))
+	}
+
+	if fileSize >= 0 {
+		summaryParts = append(summaryParts, fmt.Sprintf("%d bytes", fileSize))
+	}
+
+	if !isMetadataOnly && (changes.AddedLines > 0 || changes.DeletedLines > 0) {
 		summaryParts = append(summaryParts,
 			fmt.Sprintf("%d additions, %d deletions", changes.AddedLines, changes.DeletedLines))
 	}
@@ -341,6 +384,88 @@ func (do *DiffOptimizer) createFileSummary(filename string, changes *FileChangeS
 	}
 
 	return strings.Join(summaryParts, ", ")
+}
+
+func (do *DiffOptimizer) createWarnings(filename string) []string {
+	class := ClassifyReviewFile(filename)
+	if !class.IsBinary {
+		return nil
+	}
+
+	changeKind := do.detectFileChangeKind(filename, &FileChangeSummary{})
+	fileSize := do.getFileTotalSize(filename, changeKind)
+	sizeText := "unknown size"
+	if fileSize >= 0 {
+		sizeText = fmt.Sprintf("%d bytes", fileSize)
+	}
+
+	return []string{
+		fmt.Sprintf("Binary file staged: %s (%s, %s). Check in binaries only when necessary.", filename, changeKind, sizeText),
+	}
+}
+
+func (do *DiffOptimizer) detectFileChangeKind(filename string, changes *FileChangeSummary) fileChangeKind {
+	if do.stagedBlobSize(filename) >= 0 && do.headBlobSize(filename) < 0 {
+		return fileChangeAdded
+	}
+	if do.stagedBlobSize(filename) < 0 && do.headBlobSize(filename) >= 0 {
+		return fileChangeDeleted
+	}
+	if changes.AddedLines > 0 || changes.DeletedLines > 0 {
+		return fileChangeModified
+	}
+	return fileChangeModified
+}
+
+func (do *DiffOptimizer) getFileTotalSize(filename string, kind fileChangeKind) int64 {
+	switch kind {
+	case fileChangeDeleted:
+		return do.headBlobSize(filename)
+	case fileChangeAdded, fileChangeModified:
+		size := do.stagedBlobSize(filename)
+		if size >= 0 {
+			return size
+		}
+		return do.headBlobSize(filename)
+	default:
+		return do.stagedBlobSize(filename)
+	}
+}
+
+func (do *DiffOptimizer) stagedBlobSize(filename string) int64 {
+	return do.gitBlobSize(":"+filename, "")
+}
+
+func (do *DiffOptimizer) headBlobSize(filename string) int64 {
+	return do.gitBlobSize("HEAD:"+filename, "")
+}
+
+func (do *DiffOptimizer) gitBlobSize(objectSpec string, fallback string) int64 {
+	cmd := exec.Command("git", "cat-file", "-s", objectSpec)
+	if do.WorkingDir != "" {
+		cmd.Dir = do.WorkingDir
+	}
+	output, err := cmd.Output()
+	if err == nil {
+		size, parseErr := strconv.ParseInt(strings.TrimSpace(string(output)), 10, 64)
+		if parseErr == nil {
+			return size
+		}
+	}
+	if fallback != "" {
+		cmd = exec.Command("git", "cat-file", "-s", fallback)
+		if do.WorkingDir != "" {
+			cmd.Dir = do.WorkingDir
+		}
+		output, err = cmd.Output()
+		if err == nil {
+			size, parseErr := strconv.ParseInt(strings.TrimSpace(string(output)), 10, 64)
+			if parseErr == nil {
+				return size
+			}
+		}
+	}
+	return -1
 }
 
 // extractFileHeaders extracts just the essential header lines from a file diff

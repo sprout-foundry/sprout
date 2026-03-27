@@ -12,6 +12,15 @@ import (
 
 // handleIndex serves the React application
 func (ws *ReactWebServer) handleIndex(w http.ResponseWriter, r *http.Request) {
+	if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/api" {
+		http.Error(w, "API endpoint not found", http.StatusNotFound)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/ws") || strings.HasPrefix(r.URL.Path, "/terminal") {
+		http.NotFound(w, r)
+		return
+	}
+
 	data, err := staticFiles.ReadFile("static/index.html")
 	if err != nil {
 		http.NotFound(w, r)

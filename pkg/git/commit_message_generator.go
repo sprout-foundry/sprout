@@ -29,6 +29,7 @@ type CommitMessageOptions struct {
 type CommitMessageResult struct {
 	Message      string
 	ApproxTokens int
+	Warnings     []string
 }
 
 // GenerateCommitMessageFromStagedDiff generates commit text using the same two-pass
@@ -206,6 +207,7 @@ Generate a Git commit message summary. The message should follow these rules:
 	return &CommitMessageResult{
 		Message:      commitMessage,
 		ApproxTokens: approx,
+		Warnings:     append([]string(nil), optimizedDiff.Warnings...),
 	}, nil
 }
 

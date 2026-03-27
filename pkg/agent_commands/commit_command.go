@@ -460,6 +460,9 @@ retryLoop:
 		}
 		commitMessage = result.Message
 		c.printf("\n$ Tokens used: ~%d (model: %s/%s)\n", result.ApproxTokens, clientType, model)
+		for _, warning := range result.Warnings {
+			c.printf("[WARN] %s\n", warning)
+		}
 
 		// Show staged files summary and commit message (minimal, no emoji)
 		c.println("")

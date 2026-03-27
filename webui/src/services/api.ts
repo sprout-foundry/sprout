@@ -89,12 +89,22 @@ export interface OnboardingProviderOption {
   recommended_model_why: string;
 }
 
+export interface OnboardingEnvironment {
+  runtime_platform: string;
+  host_platform: string;
+  backend_mode: string;
+  has_wsl: boolean;
+  has_git_bash: boolean;
+  recommended_terminal: string;
+}
+
 export interface OnboardingStatusResponse {
   setup_required: boolean;
   reason: string;
   current_provider: string;
   current_model: string;
   providers: OnboardingProviderOption[];
+  environment?: OnboardingEnvironment;
 }
 
 export interface LeditInstance {
@@ -155,6 +165,13 @@ class ApiService {
       throw new Error(data.error || data.message || 'Failed to update workspace');
     }
     return data;
+  }
+
+  async getTerminalSessionCount(): Promise<number> {
+    const response = await fetch('/api/terminal/sessions');
+    if (!response.ok) throw new Error('Failed to fetch terminal sessions');
+    const data = await response.json();
+    return data.active_count ?? data.count ?? 0;
   }
 
   async getProviders(): Promise<{

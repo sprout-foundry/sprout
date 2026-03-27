@@ -112,58 +112,68 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 	eventCh := ws.eventBus.Subscribe(sessionID)
 	defer ws.eventBus.Unsubscribe(sessionID)
 
-	// Use separate goroutines for reading and writing
-	// This is the standard pattern for bidirectional WebSocket communication
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
+			// Use separate goroutines for reading and writing
+		// This is the standard pattern for bidirectional WebSocket communication
+		ctx, cancel := context.WithCancel(r.Context())
+		defer cancel()
 
-	// Read goroutine - handles incoming messages
-	readDone := make(chan struct{})
-	go func() {
-		defer close(readDone)
-		defer func() {
-			if r := recover(); r != nil {
-				log.Printf("WebSocket read goroutine panic recovered: %v", r)
-			}
-		}()
+		// Track last message time for dead connection detection
+		lastMessage := time.Now()
 
-		conn.SetReadLimit(512 * 1024) // 512KB max message size
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				// Set read deadline for heartbeat (60 seconds)
-				conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-
-				var msg map[string]interface{}
-				if err := conn.ReadJSON(&msg); err != nil {
-					if websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) ||
-						websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-						log.Printf("WebSocket %s closed: %v", sessionID, err)
-					} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-						// Heartbeat timeout, send ping
-						if err := safeConn.WriteJSON(map[string]interface{}{
-							"type": "ping",
-							"data": map[string]interface{}{"timestamp": time.Now().Unix()},
-						}); err != nil {
-							log.Printf("WebSocket %s ping failed: %v", sessionID, err)
-							return
-						}
-						continue
-					} else {
-						log.Printf("WebSocket %s read error: %v", sessionID, err)
-					}
-					return
+		// Read goroutine - handles incoming messages
+		readDone := make(chan struct{})
+		go func() {
+			defer close(readDone)
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("WebSocket read goroutine panic recovered: %v", r)
 				}
+			}()
 
-				// Handle incoming WebSocket messages
-				ws.handleWebSocketMessage(safeConn, msg)
+			conn.SetReadLimit(512 * 1024) // 512KB max message size
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					// Set read deadline for heartbeat (60 seconds)
+					conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+
+					var msg map[string]interface{}
+					if err := conn.ReadJSON(&msg); err != nil {
+						if websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) ||
+							websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+							log.Printf("WebSocket %s closed: %v", sessionID, err)
+						} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+							// If no message received in 120 seconds (2 heartbeat periods), connection is dead
+							if time.Since(lastMessage) > 120*time.Second {
+								log.Printf("WebSocket %s no activity for 120s, closing", sessionID)
+								return
+							}
+							// Heartbeat timeout, send ping
+							if err := safeConn.WriteJSON(map[string]interface{}{
+								"type": "ping",
+								"data": map[string]interface{}{"timestamp": time.Now().Unix()},
+							}); err != nil {
+								log.Printf("WebSocket %s ping failed: %v", sessionID, err)
+								return
+							}
+							continue
+						} else {
+							log.Printf("WebSocket %s read error: %v", sessionID, err)
+						}
+						return
+					}
+
+					// Update last message time on successful read (includes pong responses,
+					// which reset the dead connection timer).
+					lastMessage = time.Now()
+
+					// Handle incoming WebSocket messages
+					ws.handleWebSocketMessage(safeConn, msg)
+				}
 			}
-		}
-	}()
-
-	// Write loop - handles outgoing events
+		}()// Write loop - handles outgoing events
 	for {
 		select {
 		case <-ctx.Done():
@@ -197,6 +207,10 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, msg map[str
 			"type": "pong",
 			"data": map[string]interface{}{"timestamp": time.Now().Unix()},
 		})
+
+	case "pong":
+		// Client responded to ping - handled by read goroutine timestamp tracking
+		// The read goroutine updates lastMessage on any successful read
 
 	case "subscribe":
 		// Handle subscription requests for specific event types

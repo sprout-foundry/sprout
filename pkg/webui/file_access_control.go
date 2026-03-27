@@ -84,6 +84,12 @@ func (m *fileConsentManager) cleanupExpiredLocked() {
 	}
 }
 
+func (m *fileConsentManager) clearAll() {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.grants = make(map[string]fileConsentGrant)
+}
+
 func canonicalizePath(path string, workspaceRoot string, forWrite bool) (string, error) {
 	trimmed := strings.TrimSpace(path)
 	if trimmed == "" {
@@ -103,6 +109,9 @@ func canonicalizePath(path string, workspaceRoot string, forWrite bool) (string,
 	if !forWrite {
 		resolved, err := filepath.EvalSymlinks(absPath)
 		if err != nil {
+			if os.IsNotExist(err) {
+				return "", fmt.Errorf("path does not exist: %s", absPath)
+			}
 			return "", fmt.Errorf("failed to resolve path: %w", err)
 		}
 		return resolved, nil

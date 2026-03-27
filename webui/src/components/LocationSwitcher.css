@@ -154,6 +154,12 @@
   border-radius: 4px;
 }
 
+.location-switcher-subtitle {
+  padding: 0 16px 10px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
 /* ── Section Header ───────────────────────────────────────────── */
 .location-switcher-section-header {
   display: flex;
@@ -235,78 +241,6 @@
   cursor: not-allowed;
 }
 
-/* ── Breadcrumb Trail ─────────────────────────────────────────── */
-.location-switcher-breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 6px 16px;
-  font-size: 11px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  white-space: nowrap;
-  background: color-mix(in srgb, var(--bg-secondary) 30%, transparent);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.location-switcher-breadcrumb::-webkit-scrollbar {
-  height: 2px;
-}
-
-.location-switcher-breadcrumb::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.location-switcher-breadcrumb::-webkit-scrollbar-thumb {
-  background: var(--border-subtle);
-  border-radius: 2px;
-}
-
-.location-switcher-breadcrumb-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 6px;
-  background: transparent;
-  border: none;
-  border-radius: 4px;
-  color: var(--text-secondary);
-  font-size: 11px;
-  cursor: pointer;
-  transition: color 0.12s var(--ease-out), background-color 0.12s var(--ease-out);
-  white-space: nowrap;
-}
-
-.location-switcher-breadcrumb-item:hover:not(:disabled) {
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.location-switcher-breadcrumb-item:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.location-switcher-breadcrumb-item.current {
-  color: var(--text-primary);
-  font-weight: 500;
-}
-
-.location-switcher-breadcrumb-label {
-  display: inline;
-}
-
-.location-switcher-breadcrumb-ellipsis {
-  color: var(--text-tertiary);
-  font-style: italic;
-}
-
-.location-switcher-breadcrumb-separator {
-  color: var(--text-tertiary);
-  margin: 0 2px;
-  font-size: 10px;
-}
-
 /* ── Directory Loading/Error ──────────────────────────────────── */
 .location-switcher-directory-loading,
 .location-switcher-directory-error {
@@ -329,41 +263,9 @@
   flex-direction: column;
 }
 
-.location-switcher-dir-item {
-  padding-left: 20px;
-}
-
-/* ── Switch Button ────────────────────────────────────────────── */
-.location-switcher-switch-btn {
+.location-switcher-recent-list {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  width: calc(100% - 32px);
-  padding: 8px 16px;
-  margin: 6px 16px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--accent-fg);
-  background: var(--accent-primary);
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background-color 0.12s var(--ease-out), opacity 0.12s var(--ease-out);
-}
-
-.location-switcher-switch-btn:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent-primary) 90%, transparent);
-}
-
-.location-switcher-switch-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.location-switcher-switch-btn-icon {
-  font-size: 14px;
-  line-height: 1;
+  flex-direction: column;
 }
 
 /* ── Divider ──────────────────────────────────────────────────── */
@@ -375,11 +277,12 @@
 
 /* ── Item ──────────────────────────────────────────────────────── */
 .location-switcher-item {
+  position: relative;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 16px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 16px;
   font-size: 12px;
   color: var(--text-primary);
   background: transparent;
@@ -390,7 +293,7 @@
   text-align: left;
   width: 100%;
   font-family: var(--font-sans);
-  min-height: 28px;
+  min-height: 36px;
 }
 
 .location-switcher-item:hover {
@@ -410,19 +313,39 @@
   font-weight: 600;
 }
 
+.location-switcher-item-empty {
+  color: var(--text-tertiary);
+  cursor: default;
+}
+
+.location-switcher-item-empty:hover {
+  background: transparent;
+}
+
 .location-switcher-item-text {
-  min-width: 0;
-  flex: 1;
+  width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.location-switcher-item-meta {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
 }
 
 .location-switcher-item-indicator {
   color: var(--accent-primary);
   font-size: 10px;
   line-height: 1;
-  flex-shrink: 0;
+  position: absolute;
+  top: 12px;
+  right: 16px;
 }
 
 /* ── Footer ───────────────────────────────────────────────────── */

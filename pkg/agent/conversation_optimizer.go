@@ -29,6 +29,11 @@ type ShellCommandRecord struct {
 	IsTransient  bool // Commands like ls, find that become less relevant over time
 }
 
+type compactionContext struct {
+	latestUserRequest   string
+	latestAssistantNote string
+}
+
 // ConversationOptimizer manages conversation history optimization
 type ConversationOptimizer struct {
 	fileReads     map[string]*FileReadRecord     // filepath -> latest read record
@@ -236,6 +241,7 @@ func (co *ConversationOptimizer) buildLLMCompactionSummary(messages []api.Messag
 	}
 
 	n := len(messages)
+	context := co.extractCompactionContext(messages)
 
 	// Build compact text representation of the middle messages
 	var b strings.Builder
@@ -286,6 +292,8 @@ func (co *ConversationOptimizer) buildLLMCompactionSummary(messages []api.Messag
 		Content: "You are a conversation context summarizer. Summarize the following conversation segment concisely as a reference note for the AI agent continuing this session.\n\n" +
 			"Rules:\n" +
 			"- Preserve: what files were read/modified, what errors occurred, what the current state was\n" +
+			"- Explicitly preserve the latest user request that appears in the compacted segment\n" +
+			"- Explicitly state whether the work was still in progress at the end of the compacted segment\n" +
 			"- Do NOT add planning, suggestions, or \"next steps\"\n" +
 			"- Respond in English only\n" +
 			"- Keep under 400 words\n" +
@@ -321,11 +329,7 @@ func (co *ConversationOptimizer) buildLLMCompactionSummary(messages []api.Messag
 		co.printLine(fmt.Sprintf("[OK] Context compacted: %d messages → %d-word LLM summary", n, wordCount))
 	}
 
-	var result strings.Builder
-	result.WriteString("Compacted earlier conversation state:\n")
-	result.WriteString(llmSummary)
-	result.WriteString("\n\nUse newer messages for the exact current step-by-step state.")
-	return strings.TrimSpace(result.String())
+	return co.wrapCompactionSummary(messages, llmSummary, context)
 }
 
 func (co *ConversationOptimizer) buildGoCompactionSummary(messages []api.Message) string {
@@ -337,6 +341,7 @@ func (co *ConversationOptimizer) buildGoCompactionSummary(messages []api.Message
 	if limit <= 0 {
 		limit = 8
 	}
+	context := co.extractCompactionContext(messages)
 
 	entries := make([]string, 0, limit)
 	seen := make(map[string]struct{}, limit)
@@ -388,15 +393,11 @@ func (co *ConversationOptimizer) buildGoCompactionSummary(messages []api.Message
 	}
 
 	var b strings.Builder
-	b.WriteString("Compacted earlier conversation state:\n")
-	b.WriteString(fmt.Sprintf("- Summarized %d earlier messages to preserve context headroom.\n", len(messages)))
 	for _, entry := range entries {
-		b.WriteString("- ")
 		b.WriteString(entry)
 		b.WriteString("\n")
 	}
-	b.WriteString("- Use newer messages for the exact current step-by-step state.")
-	return strings.TrimSpace(b.String())
+	return co.wrapCompactionSummary(messages, strings.TrimSpace(b.String()), context)
 }
 
 func (co *ConversationOptimizer) normalizeSummaryEntry(entry string) string {
@@ -413,6 +414,70 @@ func (co *ConversationOptimizer) normalizeSummaryEntry(entry string) string {
 		entry = entry[:maxChars-3] + "..."
 	}
 	return entry
+}
+
+func (co *ConversationOptimizer) extractCompactionContext(messages []api.Message) compactionContext {
+	var context compactionContext
+	for _, msg := range messages {
+		switch msg.Role {
+		case "user":
+			context.latestUserRequest = co.normalizeSummaryEntry(msg.Content)
+		case "assistant":
+			if len(msg.ToolCalls) > 0 {
+				continue
+			}
+			content := strings.TrimSpace(msg.Content)
+			if content == "" {
+				continue
+			}
+			if looksLikeDurableAssistantState(content) {
+				context.latestAssistantNote = co.normalizeSummaryEntry(content)
+			}
+		}
+	}
+	return context
+}
+
+func (co *ConversationOptimizer) wrapCompactionSummary(messages []api.Message, body string, context compactionContext) string {
+	body = strings.TrimSpace(body)
+	if body == "" {
+		return ""
+	}
+
+	var result strings.Builder
+	result.WriteString("Compacted earlier conversation state:\n")
+	result.WriteString(fmt.Sprintf("- Summarized %d earlier messages to preserve context headroom.\n", len(messages)))
+	if context.latestUserRequest != "" {
+		result.WriteString("- Latest compacted user request: ")
+		result.WriteString(context.latestUserRequest)
+		result.WriteString("\n")
+		// Checkpoint summaries intentionally default to "still in progress" so a
+		// compacted completed turn is not mistaken for the current live task. Newer
+		// full-fidelity messages remain the source of truth for exact completion state.
+		result.WriteString("- Status at compaction time: work was still in progress; newer messages continue from this task.\n")
+	}
+	if context.latestAssistantNote != "" {
+		result.WriteString("- Latest compacted assistant state: ")
+		result.WriteString(context.latestAssistantNote)
+		result.WriteString("\n")
+	}
+
+	lines := strings.Split(body, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "- ") {
+			result.WriteString(line)
+		} else {
+			result.WriteString("- ")
+			result.WriteString(line)
+		}
+		result.WriteString("\n")
+	}
+	result.WriteString("- Use newer messages for the exact current step-by-step state.")
+	return strings.TrimSpace(result.String())
 }
 
 func looksLikeDurableAssistantState(content string) bool {

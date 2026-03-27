@@ -140,3 +140,19 @@ func TestEmbeddedIndexReferencesAvailableRootAssets(t *testing.T) {
 		}
 	}
 }
+
+func TestHandleIndexDoesNotServeAPIPaths(t *testing.T) {
+	server := NewReactWebServer(nil, events.NewEventBus(), 0)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
+	rec := httptest.NewRecorder()
+
+	server.handleIndex(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected status 404 for API path fallback, got %d", rec.Code)
+	}
+	if strings.Contains(strings.ToLower(rec.Body.String()), "<!doctype html") {
+		t.Fatal("expected API fallback to avoid serving index html")
+	}
+}

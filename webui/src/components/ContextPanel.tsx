@@ -119,6 +119,7 @@ interface DeepReviewResult {
   review_output: string;
   provider?: string;
   model?: string;
+  warnings?: string[];
 }
 
 interface StatusMetrics {
@@ -1501,6 +1502,19 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
                 <div className="review-section">
                   <h4>Feedback</h4>
                   <pre>{gitProps.deepReview.feedback}</pre>
+                </div>
+              )}
+              {gitProps.deepReview.warnings && gitProps.deepReview.warnings.length > 0 && (
+                <div className="review-section review-section-warning">
+                  <h4>Warnings</h4>
+                  <div className="review-warning-list">
+                    {gitProps.deepReview.warnings.map((warning, index) => (
+                      <div key={`${warning}-${index}`} className="review-warning-entry">
+                        <AlertTriangle size={14} />
+                        <span>{warning}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
               {gitProps.deepReview.detailed_guidance && (

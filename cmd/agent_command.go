@@ -30,6 +30,8 @@ var (
 	agentSystemPrompt          string
 	agentUnsafe                bool
 	agentNoSubagents           bool
+	agentSubagentModel         string
+	agentSubagentProvider      string
 	agentResourceDirectory     string
 	agentWorkflowConfig        string
 	agentNoConnectionCheck     bool
@@ -92,6 +94,8 @@ func init() {
 	agentCmd.Flags().StringVar(&agentSystemPrompt, "system-prompt-str", "", "Direct system prompt string")
 	agentCmd.Flags().BoolVar(&agentUnsafe, "unsafe", false, "UNSAFE MODE: Bypass most security checks (still blocks critical system operations)")
 	agentCmd.Flags().BoolVar(&agentNoSubagents, "no-subagents", false, "Disable subagent tools (run_subagent, run_parallel_subagents)")
+	agentCmd.Flags().StringVar(&agentSubagentModel, "subagent-model", "", "Model for subagent tools (persists to config; set per-session)")
+	agentCmd.Flags().StringVar(&agentSubagentProvider, "subagent-provider", "", "Provider for subagent tools (persists to config; set per-session)")
 	agentCmd.Flags().StringVar(&agentResourceDirectory, "resource-directory", "", "Optional directory (relative to current working directory) to store captured web/vision resources")
 	agentCmd.Flags().StringVar(&agentWorkflowConfig, "workflow-config", "", "JSON file that defines agent workflow steps for non-interactive runs")
 	agentCmd.Flags().StringVar(&agentTraceDatasetDir, "trace-dataset-dir", "", "Enable dataset trace mode and write to directory (also settable via LEDIT_TRACE_DATASET_DIR env var)")
@@ -197,6 +201,10 @@ Examples:
   ledit agent --no-connection-check "Quick analysis"
   LEDIT_NO_CONNECTION_CHECK=1 ledit agent "Another quick analysis"
 
+  # Set subagent model/provider (persists to config)
+  ledit agent --subagent-model "claude-haiku-4-20250514" "Fix the tests"
+  ledit agent --subagent-provider deepinfra --subagent-model "deepseek-v3" "Refactor auth"
+
   # Non-interactive run with an agent workflow
   ledit agent --workflow-config examples/agent_workflow.json
 
@@ -234,6 +242,26 @@ Examples:
 		// Disable subagents if flag is set
 		if agentNoSubagents {
 			os.Setenv("LEDIT_NO_SUBAGENTS", "1")
+		}
+
+		// Persist subagent model/provider CLI flags to config
+		if agentSubagentModel != "" || agentSubagentProvider != "" {
+			cm := chatAgent.GetConfigManager()
+			if cm != nil {
+				if err := cm.UpdateConfig(func(c *configuration.Config) error {
+					if agentSubagentModel != "" {
+						c.SetSubagentModel(agentSubagentModel)
+					}
+					if agentSubagentProvider != "" {
+						c.SetSubagentProvider(agentSubagentProvider)
+					}
+					return nil
+				}); err != nil {
+					return fmt.Errorf("failed to save subagent config: %w", err)
+				}
+			} else {
+				fmt.Fprintln(os.Stderr, "Warning: could not persist subagent config: config manager unavailable")
+			}
 		}
 
 		if agentDryRun {

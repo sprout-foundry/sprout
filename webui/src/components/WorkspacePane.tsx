@@ -38,6 +38,7 @@ interface DeepReviewResult {
   review_output: string;
   provider?: string;
   model?: string;
+  warnings?: string[];
 }
 
 interface WorkspacePaneProps {

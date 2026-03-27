@@ -278,6 +278,25 @@
   color: var(--text-secondary);
 }
 
+.review-section-warning {
+  background: color-mix(in srgb, var(--color-warning-bg) 62%, transparent);
+}
+
+.review-warning-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.review-warning-entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--accent-warning);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .review-footer {
   display: flex;
   gap: 8px;

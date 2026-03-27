@@ -2,6 +2,7 @@ package webui
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"mime"
 	"net/http"
@@ -91,11 +92,25 @@ func (ws *ReactWebServer) handleFavicon(w http.ResponseWriter, r *http.Request) 
 }
 
 func (ws *ReactWebServer) serveRootAsset(w http.ResponseWriter, r *http.Request, name string, contentType string) {
-	ws.serveEmbeddedFile(w, r, "static/"+name, contentType, false, false)
+	data, err := ws.readRootAsset(name)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	ws.writeEmbeddedBytes(w, data, contentType, false)
 }
 
 func (ws *ReactWebServer) serveRootAssetOptional(w http.ResponseWriter, r *http.Request, name string, contentType string) {
-	ws.serveEmbeddedFile(w, r, "static/"+name, contentType, true, false)
+	data, err := ws.readRootAsset(name)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			http.NotFound(w, r)
+			return
+		}
+		http.NotFound(w, r)
+		return
+	}
+	ws.writeEmbeddedBytes(w, data, contentType, false)
 }
 
 func (ws *ReactWebServer) serveEmbeddedFile(w http.ResponseWriter, r *http.Request, embeddedPath string, contentType string, optional bool, cacheable bool) {
@@ -109,6 +124,26 @@ func (ws *ReactWebServer) serveEmbeddedFile(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	ws.writeEmbeddedBytes(w, data, contentType, cacheable)
+}
+
+func (ws *ReactWebServer) readRootAsset(name string) ([]byte, error) {
+	switch name {
+	case "logo-mark.svg":
+		if len(logoMarkSVG) == 0 {
+			return nil, fs.ErrNotExist
+		}
+		return logoMarkSVG, nil
+	default:
+		data, err := staticFiles.ReadFile("static/" + name)
+		if err != nil {
+			return nil, fmt.Errorf("read root asset %q: %w", name, err)
+		}
+		return data, nil
+	}
+}
+
+func (ws *ReactWebServer) writeEmbeddedBytes(w http.ResponseWriter, data []byte, contentType string, cacheable bool) {
 	if contentType != "" {
 		w.Header().Set("Content-Type", contentType)
 	}

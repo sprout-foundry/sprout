@@ -59,6 +59,7 @@ interface FileTreeProps {
 
 interface FileTreeHandle {
   refresh: () => void;
+  revealFile: (filePath: string) => void;
 }
 
 type DraftMode = 'create-file' | 'create-folder' | 'rename';
@@ -95,6 +96,8 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
   const filesRef = useRef<FileInfo[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
+  const fileListRef = useRef<HTMLDivElement>(null);
+  const [internalSelectedFile, setInternalSelectedFile] = useState<string | null>(null);
 
   const findFileByPath = useCallback((fileList: FileInfo[], targetPath: string): FileInfo | null => {
     for (const file of fileList) {
@@ -195,6 +198,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
 
   useImperativeHandle(ref, () => ({
     refresh: refreshTree,
+    revealFile,
   }));
 
   useEffect(() => {
@@ -366,6 +370,74 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
     setFiles((prev) => updateFileChildren(prev, dirPath, children));
   }, [expandedDirs, fetchFiles, findFileByPath, updateFileChildren]);
 
+  const getAncestors = useCallback((filePath: string, dirRoot: string): string[] => {
+    const segments = filePath.split('/').filter(Boolean);
+    const ancestors: string[] = [];
+    // Build ancestor paths: e.g. "pkg/webui/server.go" -> ["pkg", "pkg/webui"]
+    for (let i = 0; i < segments.length - 1; i++) {
+      const ancestorPath = segments.slice(0, i + 1).join('/');
+      ancestors.push(ancestorPath);
+    }
+    return ancestors;
+  }, []);
+
+  const revealFile = useCallback(async (filePath: string) => {
+    // Skip empty paths
+    if (!filePath) {
+      return;
+    }
+
+    // Compute all ancestor directories
+    const ancestors = getAncestors(filePath, rootPath);
+    const newAncestors = ancestors.filter(a => !expandedDirs.has(a));
+
+    // Add new ancestors to expandedDirs
+    if (newAncestors.length > 0) {
+      setExpandedDirs((prev) => {
+        const next = new Set(prev);
+        newAncestors.forEach(a => next.add(a));
+        return next;
+      });
+    }
+
+    // Fetch children for newly expanded directories that don't have children loaded
+    // Fetch from deepest to shallowest so parent structures are in place
+    if (newAncestors.length > 0) {
+      // Sort by depth (deepest first)
+      const sortedAncestors = [...newAncestors].sort((a, b) => 
+        b.split('/').length - a.split('/').length
+      );
+
+      for (const dirPath of sortedAncestors) {
+        const dir = findFileByPath(filesRef.current, dirPath);
+        if (!dir || dir.isDir) {
+          const children = await fetchFiles(dirPath);
+          setFiles((prev) => updateFileChildren(prev, dirPath, children));
+        }
+      }
+    }
+
+    // Set the selected file
+    setInternalSelectedFile(filePath);
+
+    // Scroll the selected element into view after state updates
+    setTimeout(() => {
+      const selectedElement = fileListRef.current?.querySelector('.file-tree-item.selected');
+      if (selectedElement) {
+        // Add flash animation class
+        selectedElement.classList.add('revealed');
+        
+        // Scroll into view
+        selectedElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        
+        // Remove flash animation class after animation
+        setTimeout(() => {
+          selectedElement.classList.remove('revealed');
+        }, 1500);
+      }
+    }, 100);
+  }, [getAncestors, rootPath, expandedDirs, findFileByPath, fetchFiles, updateFileChildren]);
+
   const handleClick = useCallback(async (file: FileInfo) => {
     if (file.isDir) {
       await toggleDir(file.path);
@@ -467,7 +539,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
   const renderFileTree = (fileList: FileInfo[], depth = 0): JSX.Element[] => (
     fileList.map((file) => {
       const isExpanded = expandedDirs.has(file.path);
-      const isSelected = selectedFile === file.path;
+      const isSelected = (internalSelectedFile ?? selectedFile) === file.path;
       const hasChildren = file.isDir && Array.isArray(file.children) && file.children.length > 0;
       const isRenaming = draft?.mode === 'rename' && draft.targetPath === file.path;
 
@@ -620,7 +692,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
         </div>
       ) : null}
 
-      <div className="file-list">
+      <div className="file-list" ref={fileListRef}>
         {renderDraftRow(rootPath, 0)}
         {renderFileTree(files)}
         {files.length === 0 && !loading && !error ? (

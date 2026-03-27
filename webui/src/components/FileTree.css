@@ -510,6 +510,16 @@
 .file-tree .file-tree-item[data-ext='.css'] .file-tree-icon { color: #1572b6; }
 .file-tree .file-tree-item[data-ext='.md'] .file-tree-icon { color: #38bdf8; }
 
+/* File reveal animation */
+.file-tree .file-tree-item.revealed {
+  animation: file-reveal-flash 1.5s ease-out;
+}
+
+@keyframes file-reveal-flash {
+  0% { background-color: rgba(99, 102, 241, 0.3); }
+  100% { background-color: transparent; }
+}
+
 @media (max-width: 768px) {
   .file-tree .file-tree-header {
     padding: var(--space-2) var(--space-3);

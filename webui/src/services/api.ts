@@ -78,6 +78,15 @@ export interface OnboardingProviderOption {
   models: string[];
   requires_api_key: boolean;
   has_credential: boolean;
+  recommended: boolean;
+  description: string;
+  setup_hint: string;
+  docs_url: string;
+  signup_url: string;
+  api_key_label: string;
+  api_key_help: string;
+  recommended_model: string;
+  recommended_model_why: string;
 }
 
 export interface OnboardingStatusResponse {

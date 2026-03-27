@@ -1,0 +1,50 @@
+name: Refresh Provider Catalog
+
+on:
+  schedule:
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version-file: go.mod
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Refresh provider catalog
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          DEEPINFRA_API_KEY: ${{ secrets.DEEPINFRA_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          CHUTES_API_KEY: ${{ secrets.CHUTES_API_KEY }}
+        run: go run ./cmd/refresh_provider_catalog
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: chore/refresh-provider-catalog
+          commit-message: "chore: refresh provider catalog"
+          title: "chore: refresh provider catalog"
+          body: |
+            Automated refresh of `pkg/providercatalog/providers.json`.
+
+            This workflow queries supported providers and updates the checked-in catalog used for onboarding and stale-client model fallbacks.
+          add-paths: |
+            pkg/providercatalog/providers.json
+          delete-branch: true

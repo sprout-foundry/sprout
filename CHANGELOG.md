@@ -2,6 +2,12 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.12.6] - 2026-03-27
+
+- Merge remote-tracking branch 'origin/main' (d200414)
+- Deletes 3 files - Deletes unused macOS icon asset (8880643)
+- docs: Update changelog for v0.12.5 (4ad2b63)
+
 ## [v0.12.5] - 2026-03-27
 
 - Updates 7 files - Updates webui build and refactors panel width (733659e)

@@ -722,6 +722,97 @@ function renderLoadingPage(workspacePath) {
   `)}`;
 }
 
+function renderErrorPage(workspacePath, exitCode, signal, retriesExhausted = false) {
+  const exitInfo = [];
+  if (exitCode !== null && exitCode !== undefined) {
+    exitInfo.push(`Exit code: ${exitCode}`);
+  }
+  if (signal !== null && signal !== undefined) {
+    exitInfo.push(`Signal: ${signal}`);
+  }
+  const exitDetails = exitInfo.length > 0 ? `<div style="font-size:13px;opacity:.75;margin-bottom:16px;">${exitInfo.join(' • ')}</div>` : '';
+
+  const heading = retriesExhausted 
+    ? 'Backend process could not be restarted'
+    : 'Backend process exited unexpectedly';
+  
+  const message = retriesExhausted
+    ? 'Automatic restart failed after multiple attempts. Please close this window and try opening the workspace again.'
+    : workspacePath;
+  
+  const reloadButton = retriesExhausted
+    ? '<button id="reloadBtn" disabled style="background:#5a606b;color:#8a8f99;cursor:not-allowed;">Reload</button>'
+    : '<button id="reloadBtn">Reload</button>';
+
+  return `data:text/html;charset=UTF-8,${encodeURIComponent(`
+    <!doctype html>
+    <html>
+      <head>
+        <style>
+          button {
+            background: #4a9eff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 14px;
+            border-radius: 4px;
+            cursor: pointer;
+          }
+          button:hover {
+            background: #3a8eef;
+          }
+          button[disabled] {
+            background: #5a606b;
+            color: #8a8f99;
+            cursor: not-allowed;
+          }
+        </style>
+      </head>
+      <body style="margin:0;font-family:sans-serif;background:#1f242d;color:#d6deeb;display:flex;align-items:center;justify-content:center;height:100vh;">
+        <div style="text-align:center;">
+          <div style="font-size:18px;font-weight:600;margin-bottom:8px;">${heading}</div>
+          ${exitDetails}
+          <div style="font-size:13px;opacity:.75;margin-bottom:16px;">${message}</div>
+          ${reloadButton}
+        </div>
+        <script>
+          document.getElementById('reloadBtn').addEventListener('click', () => {
+            location.href = 'ledit://reload';
+          });
+        </script>
+      </body>
+    </html>
+  `)}`;
+}
+
+function registerExitHandler(browserWindow, port, workspaceEntry, reloadCallback) {
+  const record = instanceRegistry.get(browserWindow.id);
+  if (!record || !record.child) {
+    return;
+  }
+
+  // Store the reload callback for later use
+  record.reloadCallback = reloadCallback;
+
+  record.child.on('exit', (exitCode, signal) => {
+    // Ignore normal shutdown (SIGTERM from window close)
+    if (signal === 'SIGTERM') {
+      return;
+    }
+
+    // Only act on unexpected exits (non-zero exit code or unexpected signal)
+    if (exitCode === 0 && !signal) {
+      return;
+    }
+
+    // Log the crash
+    console.error(`Backend daemon crashed on port ${port}: exitCode=${exitCode}, signal=${signal}`);
+
+    // Show error page
+    browserWindow.loadURL(renderErrorPage(workspaceEntry.workspacePath, exitCode, signal));
+  });
+}
+
 async function createWorkspaceWindow(options = {}) {
   const backendMode = options.backendMode === 'wsl' ? 'wsl' : 'native';
   const wslDistro = options.wslDistro || null;
@@ -794,9 +885,47 @@ async function createWorkspaceWindow(options = {}) {
     shell.openExternal(url);
     return { action: 'deny' };
   });
+  
+  // Intercept reload navigation to trigger backend restart
+  browserWindow.webContents.on('will-navigate', (event, url) => {
+    if (url.startsWith('ledit://reload')) {
+      event.preventDefault();
+      // Trigger reload via the registered handler
+      const record = instanceRegistry.get(browserWindow.id);
+      if (record && record.reloadCallback) {
+        record.reloadCallback();
+      }
+    }
+  });
 
   const backend = await startBackendForWorkspace(workspaceEntry);
   instanceRegistry.set(browserWindow.id, { ...backend, ...workspaceEntry });
+  
+  // Crash loop protection: limit restart attempts
+  let crashCount = 0;
+  
+  // Register crash detection handler for the backend daemon
+  const performReload = async () => {
+    try {
+      const newBackend = await startBackendForWorkspace(workspaceEntry);
+      crashCount = 0;
+      instanceRegistry.set(browserWindow.id, { ...newBackend, ...workspaceEntry });
+      registerExitHandler(browserWindow, newBackend.port, workspaceEntry, performReload);
+      await browserWindow.loadURL(`http://127.0.0.1:${newBackend.port}`);
+    } catch (error) {
+      crashCount++;
+      if (crashCount >= 3) {
+        console.error('Backend failed to restart after 3 attempts');
+        browserWindow.loadURL(renderErrorPage(workspaceEntry.workspacePath, null, null, true));
+        return;
+      }
+      console.error('Failed to restart backend:', error);
+      browserWindow.loadURL(renderErrorPage(workspaceEntry.workspacePath, null, null));
+    }
+  };
+  
+  registerExitHandler(browserWindow, backend.port, workspaceEntry, performReload);
+  
   workspaceWindowMap.set(workspaceKey, browserWindow.id);
   addRecentWorktree(workspaceEntry);
   persistOpenWorkspaces();
@@ -821,7 +950,13 @@ async function createWorkspaceWindow(options = {}) {
     }
     const record = instanceRegistry.get(browserWindow.id);
     if (record) {
-      record.child.kill();
+      const child = record.child;
+      child.kill();
+      // Escalate to SIGKILL after 3 seconds if the process hasn't terminated
+      const killTimer = setTimeout(() => {
+        try { child.kill('SIGKILL'); } catch (_) { /* already dead */ }
+      }, 3000);
+      child.once('exit', () => clearTimeout(killTimer));
       instanceRegistry.delete(browserWindow.id);
       if (workspaceWindowMap.get(workspaceKey) === browserWindow.id) {
         workspaceWindowMap.delete(workspaceKey);
@@ -1001,5 +1136,17 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
+  }
+});
+
+app.on('will-quit', () => {
+  for (const [id, record] of instanceRegistry) {
+    const child = record.child;
+    child.kill();
+    const killTimer = setTimeout(() => {
+      try { child.kill('SIGKILL'); } catch (_) { /* already dead */ }
+    }, 3000);
+    child.once('exit', () => clearTimeout(killTimer));
+    instanceRegistry.delete(id);
   }
 });

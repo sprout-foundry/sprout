@@ -110,3 +110,40 @@ func TestHandleAPIWorkspaceBrowseIsScopedToDaemonRoot(t *testing.T) {
 		t.Fatalf("expected status 403 for path outside daemon root, got %d", rec.Code)
 	}
 }
+
+func TestHandleAPIWorkspaceSetRejectsDuringActiveQuery(t *testing.T) {
+	root := t.TempDir()
+	server := &ReactWebServer{
+		daemonRoot:      root,
+		workspaceRoot:   root,
+		terminalManager: NewTerminalManager(root),
+		activeQueries:   1, // Simulate an active query
+	}
+
+	nextRoot := filepath.Join(root, "project")
+	if err := os.Mkdir(nextRoot, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	body, _ := json.Marshal(map[string]string{"path": nextRoot})
+	req := httptest.NewRequest(http.MethodPost, "/api/workspace", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	server.handleAPIWorkspace(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected status 409, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var response map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if response["code"] != "query_in_progress" {
+		t.Fatalf("expected code query_in_progress, got %v", response["code"])
+	}
+	// Workspace should NOT have changed
+	if got := server.GetWorkspaceRoot(); got != root {
+		t.Fatalf("workspace root should not have changed, got %q", got)
+	}
+}

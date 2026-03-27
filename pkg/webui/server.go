@@ -56,6 +56,8 @@ type ReactWebServer struct {
 	activeQueries   int
 	fixReviewJobs   map[string]*gitFixReviewJob
 	fixReviewMu     sync.RWMutex
+	sshSessions     map[string]*sshWorkspaceSession
+	sshSessionsMu   sync.Mutex
 }
 
 // NewReactWebServer creates a new React web server
@@ -101,6 +103,7 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int) 
 		terminalManager: NewTerminalManager(workspaceRoot),
 		startTime:       time.Now(),
 		fixReviewJobs:   make(map[string]*gitFixReviewJob),
+		sshSessions:     make(map[string]*sshWorkspaceSession),
 	}
 }
 
@@ -134,6 +137,8 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/settings/providers", ws.handleAPISettingsProviders)
 	mux.HandleFunc("/api/settings/providers/", ws.handleAPISettingsProviders)
 	mux.HandleFunc("/api/settings/skills", ws.handleAPISettingsSkills)
+	mux.HandleFunc("/api/settings/subagent-types", ws.handleAPISettingsSubagentTypes)
+	mux.HandleFunc("/api/settings/subagent-types/", ws.handleAPISettingsSubagentTypes)
 	// Hotkeys API
 	mux.HandleFunc("/api/hotkeys", ws.handleAPIHotkeys)
 	mux.HandleFunc("/api/hotkeys/validate", ws.handleAPIHotkeysValidate)
@@ -160,6 +165,9 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/instances", ws.handleAPIInstances)
 	mux.HandleFunc("/api/instances/select", ws.handleAPIInstanceSelect)
 	mux.HandleFunc("/api/instances/ssh-hosts", ws.handleAPISSHHosts)
+	mux.HandleFunc("/api/instances/ssh-open", ws.handleAPISSHOpen)
+	mux.HandleFunc("/api/instances/ssh-sessions", ws.handleAPISSHSessions)
+	mux.HandleFunc("/api/instances/ssh-close", ws.handleAPISSHSessionDelete)
 	mux.HandleFunc("/api/history/changelog", ws.handleAPIHistoryChangelog)
 	mux.HandleFunc("/api/history/revision", ws.handleAPIHistoryRevision)
 	mux.HandleFunc("/api/history/rollback", ws.handleAPIHistoryRollback)
@@ -252,6 +260,8 @@ func (ws *ReactWebServer) Shutdown() error {
 		}
 		return true
 	})
+
+	ws.shutdownSSHSessions()
 
 	if listener != nil {
 		_ = listener.Close()

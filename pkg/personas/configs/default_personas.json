@@ -21,7 +21,11 @@
         "run_parallel_subagents",
         "mcp_tools",
         "TodoWrite",
-        "TodoRead"
+        "TodoRead",
+        "add_memory",
+        "read_memory",
+        "list_memories",
+        "delete_memory"
       ],
       "description": "Process-oriented planning and delegation persona: classify -> activate skills -> delegate -> verify",
       "enabled": true,

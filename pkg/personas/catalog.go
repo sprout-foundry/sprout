@@ -110,7 +110,7 @@ func fallbackDefinitions() map[string]Definition {
 			ID:           "orchestrator",
 			Name:         "Orchestrator",
 			Description:  "Primary orchestration persona",
-			AllowedTools: []string{"shell_command", "read_file", "write_file", "edit_file", "write_structured_file", "patch_structured_file", "search_files", "web_search", "fetch_url", "run_subagent", "run_parallel_subagents", "TodoWrite", "TodoRead"},
+			AllowedTools: []string{"shell_command", "read_file", "write_file", "edit_file", "write_structured_file", "patch_structured_file", "search_files", "web_search", "fetch_url", "run_subagent", "run_parallel_subagents", "TodoWrite", "TodoRead", "add_memory", "read_memory", "list_memories", "delete_memory"},
 			Enabled:      true,
 		},
 		"general": {

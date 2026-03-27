@@ -2,6 +2,32 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.12.4] - 2026-03-27
+
+- Adds 11 files - Adds updated webui build assets (62b2669)
+- Updates Makefile - Updates remove deploy-ui call from verify-ui-embedded (1ca54d2)
+- Updates 3 files - Updates close all splits to handle nested panes (1b9472e)
+- Updates 2 files - Updates path validation and sidebar padding (b72e6bc)
+- Deletes 4 files - Deletes unused CodeEditor component (6d5c225)
+- Adds 2 files - Adds logo mark SVG to webui (2093446)
+- Deletes 28 files - Deletes separate logo-mark.svg embedding in favor of static serving (65e02ef)
+- Adds 8 files - Adds subagent card stats, result preview, and debounced git refresh (a322dd4)
+- Deletes 16 files - Deletes old build artifacts and extracts asset helpers (121c988)
+- Updates 6 files - Updates eslint-disable comment for useCallback deps (ee11a84)
+- Deletes 14 files - Deletes outdated save error handling patterns (545dada)
+- Updates pkg/webui/server.go - Updates embed directive to include full static tree (eec7895)
+- Adds 4 files - Adds CORS issue detection to browser diagnostics (5552190)
+- Updates 11 files - Updates browse_url with persistent sessions and network capture (dc29a03)
+- Updates 10 files - Updates browse_url tool with interactive debugging capabilities (eacfa41)
+- Adds 10 files - Adds tests for command history persistence (f79c93b)
+- Adds 13 files - Adds smarter slash command detection and test output fixes (986ba83)
+- Updates 3 files - Updates logo SVG and workflow configs (ab1449e)
+- Updates pkg/webcontent/rate_limiter.go - Updates rate limiter to generate jitter outside mutex lock (9be6fd9)
+- Updates 10 files - Updates Add legacy MCP name resolution and new tools (e49b574)
+- feat: add persona selector to settings in webui (3673625)
+- Adds webui/package-lock.json - Adds npm dependency lock file (277ac4f)
+- Updates 6 files - Updates shell security checks and npm ci usage (6f51b92)
+
 ## [v0.11.17] - 2026-03-23
 
 - Updates 22 files - Updates multimodal image support for vision-capable models (4164789)

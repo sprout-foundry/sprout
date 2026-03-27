@@ -9,6 +9,7 @@ import (
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/events"
+	"github.com/alantheprice/ledit/pkg/providercatalog"
 )
 
 type providerDescriptor struct {
@@ -80,6 +81,23 @@ func (ws *ReactWebServer) modelsForProvider(providerType api.ClientType) []strin
 			modelIDs = append(modelIDs, id)
 		}
 		if len(modelIDs) > 0 {
+			return modelIDs
+		}
+	}
+
+	if provider, ok := providercatalog.FindProvider(string(providerType)); ok && len(provider.Models) > 0 {
+		modelIDs := make([]string, 0, len(provider.Models))
+		for _, model := range provider.Models {
+			id := strings.TrimSpace(model.ID)
+			if id == "" {
+				continue
+			}
+			modelIDs = append(modelIDs, id)
+		}
+		if len(modelIDs) > 0 {
+			if err != nil {
+				log.Printf("webui: using provider catalog fallback for %s after model discovery failure: %v", providerType, err)
+			}
 			return modelIDs
 		}
 	}

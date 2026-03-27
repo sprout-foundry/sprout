@@ -4,17 +4,187 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/alantheprice/ledit/pkg/providercatalog"
 )
 
 type onboardingProvider struct {
-	ID            string   `json:"id"`
-	Name          string   `json:"name"`
-	Models        []string `json:"models"`
-	RequiresAPIKey bool    `json:"requires_api_key"`
-	HasCredential bool     `json:"has_credential"`
+	ID                  string   `json:"id"`
+	Name                string   `json:"name"`
+	Models              []string `json:"models"`
+	RequiresAPIKey      bool     `json:"requires_api_key"`
+	HasCredential       bool     `json:"has_credential"`
+	Recommended         bool     `json:"recommended"`
+	Description         string   `json:"description"`
+	SetupHint           string   `json:"setup_hint"`
+	DocsURL             string   `json:"docs_url"`
+	SignupURL           string   `json:"signup_url"`
+	APIKeyLabel         string   `json:"api_key_label"`
+	APIKeyHelp          string   `json:"api_key_help"`
+	RecommendedModel    string   `json:"recommended_model"`
+	RecommendedModelWhy string   `json:"recommended_model_why"`
+}
+
+type onboardingProviderPresentation struct {
+	Description         string
+	SetupHint           string
+	DocsURL             string
+	SignupURL           string
+	APIKeyLabel         string
+	APIKeyHelp          string
+	Recommended         bool
+	RecommendedPrefixes []string
+	RecommendedModelWhy string
+}
+
+var onboardingProviderPresentations = map[string]onboardingProviderPresentation{
+	"zai": {
+		Description:         "Good first choice for coding-focused use. Z.AI also has a dedicated coding plan and remote MCP services.",
+		SetupHint:           "Use either a standard Z.AI API key or, if you already have one, a GLM Coding Plan setup.",
+		DocsURL:             "https://docs.z.ai/devpack/overview",
+		SignupURL:           "https://platform.z.ai/",
+		APIKeyLabel:         "Z.AI API Key",
+		APIKeyHelp:          "Create a key in the Z.AI API platform. Coding Plan subscriptions are separate from normal API billing.",
+		Recommended:         true,
+		RecommendedPrefixes: []string{"glm-5", "glm-4.7", "glm-4.6", "glm-4.5-air"},
+		RecommendedModelWhy: "Prefer a current GLM coding model if one is listed for your account.",
+	},
+	"minimax": {
+		Description:         "Strong coding-oriented provider with a dedicated coding plan and large context windows.",
+		SetupHint:           "MiniMax supports both normal API keys and coding-plan keys. Start with M2.5 if available.",
+		DocsURL:             "https://platform.minimax.io/docs/api-reference/api-overview",
+		SignupURL:           "https://platform.minimax.io/",
+		APIKeyLabel:         "MiniMax API Key",
+		APIKeyHelp:          "Create either a pay-as-you-go key or a coding-plan key in the MiniMax platform.",
+		Recommended:         true,
+		RecommendedPrefixes: []string{"minimax-m2.5", "minimax-m2.1", "minimax-m2"},
+		RecommendedModelWhy: "Prefer the newest M2.x coding model that your account exposes.",
+	},
+	"openrouter": {
+		Description:         "Unified gateway to many model families behind one API key and one OpenAI-compatible endpoint.",
+		SetupHint:           "Best when you want broad model choice and easy switching without managing separate vendor accounts.",
+		DocsURL:             "https://openrouter.ai/",
+		SignupURL:           "https://openrouter.ai/keys",
+		APIKeyLabel:         "OpenRouter API Key",
+		APIKeyHelp:          "Create an API key in OpenRouter, then choose a coding-focused model from the list below.",
+		Recommended:         true,
+		RecommendedPrefixes: []string{"qwen/qwen3-coder", "deepseek/deepseek-chat", "z-ai/glm", "google/gemini-2.5-pro"},
+		RecommendedModelWhy: "Prefer a coding-focused or reasoning-heavy model instead of a generic default.",
+	},
+	"deepinfra": {
+		Description:         "Simple hosted inference with broad open-model coverage and straightforward OpenAI-compatible APIs.",
+		SetupHint:           "Good fit if you want pay-as-you-go access to open models without running your own infrastructure.",
+		DocsURL:             "https://deepinfra.com/",
+		SignupURL:           "https://deepinfra.com/dash/api_keys",
+		APIKeyLabel:         "DeepInfra API Key",
+		APIKeyHelp:          "Create a DeepInfra API key, then pick one of the available coding-capable open models.",
+		Recommended:         true,
+		RecommendedPrefixes: []string{"deepseek-ai/deepseek-v3", "qwen/", "zai-org/glm-5", "meta-llama/"},
+		RecommendedModelWhy: "Prefer current open coding or reasoning models with good tool-use support.",
+	},
+	"chutes": {
+		Description:         "Low-friction hosted inference focused on open models and flexible serverless deployment.",
+		SetupHint:           "Useful if you want a simple hosted provider for public open models and fast experimentation.",
+		DocsURL:             "https://chutes.ai/",
+		SignupURL:           "https://chutes.ai/",
+		APIKeyLabel:         "Chutes API Key",
+		APIKeyHelp:          "Create a Chutes account and API key, then choose a coding-capable open model from the catalog.",
+		Recommended:         true,
+		RecommendedPrefixes: []string{"qwen/", "deepseek", "glm", "llama"},
+		RecommendedModelWhy: "Prefer strong open coding models over older generic chat defaults.",
+	},
+}
+
+var onboardingProviderOrder = map[string]int{
+	"zai":        0,
+	"minimax":    1,
+	"openrouter": 2,
+	"deepinfra":  3,
+	"chutes":     4,
+}
+
+func applyOnboardingPresentation(entry onboardingProvider) onboardingProvider {
+	if provider, ok := providercatalog.FindProvider(entry.ID); ok {
+		entry.Recommended = provider.Recommended
+		entry.Description = provider.Description
+		entry.SetupHint = provider.SetupHint
+		entry.DocsURL = provider.DocsURL
+		entry.SignupURL = provider.SignupURL
+		entry.APIKeyLabel = provider.APIKeyLabel
+		entry.APIKeyHelp = provider.APIKeyHelp
+		if provider.RecommendedModel != "" {
+			entry.RecommendedModel = provider.RecommendedModel
+		}
+		if provider.RecommendedModelWhy != "" {
+			entry.RecommendedModelWhy = provider.RecommendedModelWhy
+		}
+		if len(entry.Models) == 0 && len(provider.Models) > 0 {
+			entry.Models = make([]string, 0, len(provider.Models))
+			for _, model := range provider.Models {
+				if strings.TrimSpace(model.ID) == "" {
+					continue
+				}
+				entry.Models = append(entry.Models, model.ID)
+			}
+		}
+		if entry.RecommendedModel == "" {
+			entry.RecommendedModel = provider.DefaultModel
+		}
+	}
+
+	presentation, ok := onboardingProviderPresentations[entry.ID]
+	if !ok {
+		return entry
+	}
+
+	// The checked-in provider catalog is the primary source of onboarding metadata.
+	// Keep these hardcoded values only as fallback defaults for providers whose
+	// catalog entries are missing fields during development or refresh failures.
+	if entry.Description == "" {
+		entry.Description = presentation.Description
+	}
+	if entry.SetupHint == "" {
+		entry.SetupHint = presentation.SetupHint
+	}
+	if entry.DocsURL == "" {
+		entry.DocsURL = presentation.DocsURL
+	}
+	if entry.SignupURL == "" {
+		entry.SignupURL = presentation.SignupURL
+	}
+	if entry.APIKeyLabel == "" {
+		entry.APIKeyLabel = presentation.APIKeyLabel
+	}
+	if entry.APIKeyHelp == "" {
+		entry.APIKeyHelp = presentation.APIKeyHelp
+	}
+	if !entry.Recommended {
+		entry.Recommended = presentation.Recommended
+	}
+	if entry.RecommendedModel == "" {
+		entry.RecommendedModel = resolveRecommendedModel(entry.Models, presentation.RecommendedPrefixes)
+	}
+	if entry.RecommendedModelWhy == "" {
+		entry.RecommendedModelWhy = presentation.RecommendedModelWhy
+	}
+	return entry
+}
+
+func resolveRecommendedModel(models []string, prefixes []string) string {
+	for _, prefix := range prefixes {
+		for _, model := range models {
+			if strings.HasPrefix(strings.ToLower(strings.TrimSpace(model)), strings.ToLower(prefix)) {
+				return model
+			}
+		}
+	}
+	if len(models) > 0 {
+		return strings.TrimSpace(models[0])
+	}
+	return ""
 }
 
 func (ws *ReactWebServer) handleAPIOnboardingStatus(w http.ResponseWriter, r *http.Request) {
@@ -44,9 +214,29 @@ func (ws *ReactWebServer) handleAPIOnboardingStatus(w http.ResponseWriter, r *ht
 			RequiresAPIKey: meta.RequiresAPIKey,
 			HasCredential:  hasCredential,
 		}
+		entry = applyOnboardingPresentation(entry)
 		providers = append(providers, entry)
 		indexByID[entry.ID] = entry
 	}
+
+	sort.SliceStable(providers, func(i, j int) bool {
+		leftOrder, leftHasOrder := onboardingProviderOrder[providers[i].ID]
+		rightOrder, rightHasOrder := onboardingProviderOrder[providers[j].ID]
+		switch {
+		case leftHasOrder && rightHasOrder:
+			return leftOrder < rightOrder
+		case leftHasOrder:
+			return true
+		case rightHasOrder:
+			return false
+		case providers[i].Recommended != providers[j].Recommended:
+			return providers[i].Recommended
+		case providers[i].Name == providers[j].Name:
+			return providers[i].ID < providers[j].ID
+		default:
+			return providers[i].Name < providers[j].Name
+		}
+	})
 
 	currentProvider := strings.TrimSpace(cfg.LastUsedProvider)
 	if ws.agent != nil {

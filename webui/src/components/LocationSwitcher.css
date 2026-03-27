@@ -134,6 +134,51 @@
   white-space: pre-wrap;
 }
 
+.location-switcher-error-details {
+  padding: 10px 16px 12px;
+  background: color-mix(in srgb, var(--accent-error) 7%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent-error) 18%, transparent);
+  display: grid;
+  gap: 8px;
+}
+
+.location-switcher-error-detail-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 11px;
+  color: color-mix(in srgb, var(--text-primary) 88%, var(--accent-error));
+}
+
+.location-switcher-error-detail-label {
+  min-width: 34px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.location-switcher-error-detail-output {
+  margin: 0;
+  padding: 10px;
+  max-height: 140px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--bg-secondary) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-default) 84%, transparent);
+  border-radius: 8px;
+}
+
+.location-switcher-error-detail-path {
+  font-family: var(--font-mono, monospace);
+  word-break: break-all;
+}
+
 .location-switcher-status {
   padding: 10px 16px;
   background: color-mix(in srgb, var(--accent-primary) 10%, transparent);

@@ -686,12 +686,14 @@
     right: 0;
     bottom: 0;
     left: 0;
-    width: 100% !important;
+    width: 100vw !important;
+    min-width: 100vw;
     max-width: 100vw;
     z-index: 1000;
     background: var(--bg-secondary);
     border-radius: 0;
     border: none;
+    transition: none;
   }
 
   /* Collapsed on mobile: don't render inline — handled by TSX conditional */

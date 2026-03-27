@@ -213,6 +213,14 @@ func TestHandleAPISSHOpenRejectsMissingAlias(t *testing.T) {
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected status 400, got %d", w.Code)
 	}
+
+	var payload sshLaunchErrorDTO
+	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("failed to decode ssh-open error payload: %v", err)
+	}
+	if payload.Error == "" {
+		t.Fatalf("expected structured error payload, got %+v", payload)
+	}
 }
 
 func TestPersistedSSHSessionRegistryRoundTrip(t *testing.T) {

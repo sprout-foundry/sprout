@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ledit Launcher</title>
+    <link rel="stylesheet" href="./launcher.css" />
+  </head>
+  <body>
+    <main class="launcher-shell">
+      <section class="launcher-hero">
+        <div class="launcher-badge">Desktop Shell</div>
+        <h1>Ledit</h1>
+        <p class="launcher-subtitle">Open any folder as the working directory for its own desktop instance.</p>
+        <div class="launcher-actions">
+          <button id="open-worktree" class="launcher-btn primary">Open Folder…</button>
+          <button id="create-worktree" class="launcher-btn secondary">Create Worktree…</button>
+          <button id="open-worktree-new" class="launcher-btn">Open Folder in New Window…</button>
+        </div>
+      </section>
+
+      <section class="launcher-panel">
+        <div class="launcher-panel-header">
+          <div>
+            <h2>Recent Folders</h2>
+            <p>Each window runs its own backend with isolated config in that working directory.</p>
+          </div>
+          <span id="app-version" class="launcher-version"></span>
+        </div>
+        <div id="recent-worktrees" class="recent-worktrees"></div>
+      </section>
+    </main>
+    <div id="create-worktree-modal" class="launcher-modal hidden" aria-hidden="true">
+      <div class="launcher-modal-backdrop" data-close-modal="true"></div>
+      <section class="launcher-modal-panel" role="dialog" aria-modal="true" aria-labelledby="create-worktree-title">
+        <div class="launcher-modal-header">
+          <div>
+            <h2 id="create-worktree-title">Create Worktree</h2>
+            <p>Create a new branch-backed worktree and open it in a fresh desktop window.</p>
+          </div>
+          <button id="close-create-worktree" class="launcher-icon-btn" aria-label="Close">×</button>
+        </div>
+        <form id="create-worktree-form" class="launcher-form">
+          <label class="launcher-field">
+            <span>Repository</span>
+            <div class="launcher-inline-input">
+              <input id="create-repository-path" type="text" placeholder="/path/to/repository-or-workspace" required />
+              <button id="browse-repository" type="button" class="launcher-btn small">Browse…</button>
+            </div>
+          </label>
+          <label class="launcher-field">
+            <span>Branch Name</span>
+            <input id="create-branch-name" type="text" placeholder="feature/electron-shell" required />
+          </label>
+          <label class="launcher-field">
+            <span>Base Ref</span>
+            <input id="create-base-ref" type="text" value="HEAD" placeholder="HEAD" />
+          </label>
+          <label class="launcher-field">
+            <span>Worktree Path</span>
+            <div class="launcher-inline-input">
+              <input id="create-worktree-path" type="text" placeholder="/path/to/new-worktree" required />
+              <button id="browse-worktree-parent" type="button" class="launcher-btn small">Choose Parent…</button>
+            </div>
+          </label>
+          <p class="launcher-form-note">The target directory can be new or empty. The launcher will run <code>git worktree add -b ...</code> for you.</p>
+          <div id="create-worktree-error" class="launcher-form-error hidden"></div>
+          <div class="launcher-modal-actions">
+            <button type="button" id="cancel-create-worktree" class="launcher-btn">Cancel</button>
+            <button type="submit" id="submit-create-worktree" class="launcher-btn primary">Create and Open</button>
+          </div>
+        </form>
+      </section>
+    </div>
+    <script src="./launcher.js"></script>
+  </body>
+  </html>

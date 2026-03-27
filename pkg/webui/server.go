@@ -39,6 +39,7 @@ type ConnectionInfo struct {
 type ReactWebServer struct {
 	agent           *agent.Agent
 	eventBus        *events.EventBus
+	daemonRoot      string
 	workspaceRoot   string
 	fileConsents    *fileConsentManager
 	port            int
@@ -74,6 +75,7 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int) 
 	return &ReactWebServer{
 		agent:         agent,
 		eventBus:      eventBus,
+		daemonRoot:    workspaceRoot,
 		workspaceRoot: workspaceRoot,
 		fileConsents:  newFileConsentManager(),
 		port:          port,
@@ -120,6 +122,8 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/file", ws.handleAPIFile)
 	mux.HandleFunc("/api/file/consent", ws.handleAPIFileConsent)
 	mux.HandleFunc("/api/config", ws.handleAPIConfig)
+	mux.HandleFunc("/api/workspace", ws.handleAPIWorkspace)
+	mux.HandleFunc("/api/workspace/browse", ws.handleAPIWorkspaceBrowse)
 	// Settings API
 	mux.HandleFunc("/api/settings", ws.handleAPISettings)
 	mux.HandleFunc("/api/settings/mcp", ws.handleAPISettingsMCP)
@@ -276,6 +280,54 @@ func (ws *ReactWebServer) IsRunning() bool {
 // GetPort returns the port the web server is running on
 func (ws *ReactWebServer) GetPort() int {
 	return ws.port
+}
+
+// GetWorkspaceRoot returns the current workspace root.
+func (ws *ReactWebServer) GetWorkspaceRoot() string {
+	ws.mutex.RLock()
+	defer ws.mutex.RUnlock()
+	return ws.workspaceRoot
+}
+
+// GetDaemonRoot returns the daemon-scoped filesystem root.
+func (ws *ReactWebServer) GetDaemonRoot() string {
+	ws.mutex.RLock()
+	defer ws.mutex.RUnlock()
+	return ws.daemonRoot
+}
+
+// SetWorkspaceRoot updates the active workspace root and resets terminal state.
+func (ws *ReactWebServer) SetWorkspaceRoot(path string) (string, error) {
+	workspaceRoot, err := filepathAbsEval(path)
+	if err != nil {
+		return "", fmt.Errorf("resolve workspace root: %w", err)
+	}
+
+	info, err := os.Stat(workspaceRoot)
+	if err != nil {
+		return "", fmt.Errorf("stat workspace root: %w", err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("workspace root must be a directory")
+	}
+
+	ws.mutex.Lock()
+	defer ws.mutex.Unlock()
+
+	if !isWithinWorkspace(workspaceRoot, ws.daemonRoot) && workspaceRoot != ws.daemonRoot {
+		return "", fmt.Errorf("workspace root must stay within daemon root %s", ws.daemonRoot)
+	}
+
+	if ws.terminalManager != nil {
+		if err := ws.terminalManager.CloseAllSessions(); err != nil {
+			return "", fmt.Errorf("close terminal sessions: %w", err)
+		}
+	}
+
+	ws.workspaceRoot = workspaceRoot
+	ws.terminalManager = NewTerminalManager(workspaceRoot)
+
+	return workspaceRoot, nil
 }
 
 // countConnections returns the current number of WebSocket connections

@@ -7,7 +7,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { HotkeyProvider } from './contexts/HotkeyContext';
 import './App.css';
 import { WebSocketService } from './services/websocket';
-import { ApiService, OnboardingProviderOption } from './services/api';
+import { ApiService, OnboardingEnvironment, OnboardingProviderOption } from './services/api';
 import { debugLog } from './utils/log';
 
 // Service Worker Registration
@@ -125,11 +125,13 @@ interface OnboardingState {
   open: boolean;
   reason: string;
   providers: OnboardingProviderOption[];
+  environment: OnboardingEnvironment | null;
   provider: string;
   model: string;
   apiKey: string;
   showAllProviders: boolean;
   submitting: boolean;
+  platformActionMessage: string | null;
   error: string | null;
 }
 
@@ -322,11 +324,13 @@ function App() {
     open: false,
     reason: '',
     providers: [],
+    environment: null,
     provider: '',
     model: '',
     apiKey: '',
     showAllProviders: false,
     submitting: false,
+    platformActionMessage: null,
     error: null,
   });
 
@@ -395,6 +399,48 @@ function App() {
     return onboarding.providers.filter((p) => !p.recommended);
   }, [onboarding.providers]);
 
+  const windowsOnboardingGuidance = useMemo(() => {
+    const env = onboarding.environment;
+    if (!env) {
+      return null;
+    }
+
+    const isWindowsHost = env.host_platform === 'windows' || env.runtime_platform === 'windows';
+    if (!isWindowsHost) {
+      return null;
+    }
+
+    if (env.backend_mode === 'wsl') {
+      return {
+        tone: 'success',
+        title: 'WSL mode is already active',
+        body: 'This window is already using a WSL backend, which is the recommended setup for terminals, shell tools, and repo workflows on Windows.',
+        checklist: [
+          'Keep repos inside the WSL filesystem when practical.',
+          'Use native Windows mode only when you specifically need Windows-only tools.',
+          env.has_git_bash ? 'Git Bash is also available as a native Windows fallback.' : 'Git Bash is optional and only needed if you plan to use the native Windows backend.',
+        ],
+        canInstallWsl: false,
+        canInstallGitBash: !env.has_git_bash,
+      };
+    }
+
+    return {
+      tone: env.has_wsl ? 'warning' : 'info',
+      title: env.has_wsl ? 'Recommended: use WSL for the best Windows experience' : 'Recommended: install WSL before relying on shell-heavy workflows',
+      body: env.has_wsl
+        ? 'Native Windows mode can handle some tasks, but this app is built around Unix-style terminal behavior. WSL is the intended path.'
+        : 'This app expects Unix-style shell and terminal behavior. WSL gives the best compatibility for chat tools, shell commands, and git workflows.',
+      checklist: [
+        env.has_wsl ? 'Reopen the project through the WSL-backed desktop mode when possible.' : 'Install WSL with an Ubuntu distro, then reopen the project through the WSL-backed desktop mode.',
+        env.has_git_bash ? 'Git Bash is installed and can help with native Windows shell commands.' : 'Install Git for Windows if you want Git Bash as a native-Windows fallback for shell commands.',
+        'Expect the native Windows backend to be less complete than the WSL path for terminal behavior.',
+      ],
+      canInstallWsl: !env.has_wsl,
+      canInstallGitBash: !env.has_git_bash,
+    };
+  }, [onboarding.environment]);
+
   // Debounce connection status updates to prevent flashing
   const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastConnectionStateRef = useRef<boolean>(false);
@@ -415,11 +461,13 @@ function App() {
         open: !!status.setup_required,
         reason: status.reason || '',
         providers,
+        environment: status.environment || null,
         provider: preferredProvider,
         model: preferredModel,
         apiKey: '',
         showAllProviders: false,
         submitting: false,
+        platformActionMessage: null,
         error: null,
       });
     } catch (error) {
@@ -428,6 +476,7 @@ function App() {
         checking: false,
         open: true,
         showAllProviders: false,
+        platformActionMessage: null,
         error: error instanceof Error ? error.message : 'Failed to check setup status',
       }));
     }
@@ -1156,6 +1205,26 @@ function App() {
     }
   }, [apiService, onboarding.apiKey, onboarding.model, onboarding.provider, selectedOnboardingProvider]);
 
+  const handleInstallWsl = useCallback(async () => {
+    const desktopBridge = (window as any).leditDesktop;
+    if (!desktopBridge?.installWsl) {
+      setOnboarding((prev) => ({ ...prev, platformActionMessage: 'WSL installation is only available from the desktop app.' }));
+      return;
+    }
+    const result = await desktopBridge.installWsl();
+    setOnboarding((prev) => ({ ...prev, platformActionMessage: result?.message || 'Started WSL setup.' }));
+  }, []);
+
+  const handleInstallGitBash = useCallback(async () => {
+    const desktopBridge = (window as any).leditDesktop;
+    if (!desktopBridge?.installGitForWindows) {
+      setOnboarding((prev) => ({ ...prev, platformActionMessage: 'Git Bash installation is only available from the desktop app.' }));
+      return;
+    }
+    const result = await desktopBridge.installGitForWindows();
+    setOnboarding((prev) => ({ ...prev, platformActionMessage: result?.message || 'Started Git for Windows setup.' }));
+  }, []);
+
   
   const handleModelChange = useCallback((model: string) => {
     debugLog('Model changed to:', model);
@@ -1343,6 +1412,44 @@ function App() {
                       {onboarding.reason === 'missing_provider_credential' ? ' The selected provider is missing credentials.' : ''}
                     </p>
 
+                    {windowsOnboardingGuidance && (
+                      <div className={`onboarding-platform-panel ${windowsOnboardingGuidance.tone}`}>
+                        <div className="onboarding-platform-title">{windowsOnboardingGuidance.title}</div>
+                        <div className="onboarding-platform-body">{windowsOnboardingGuidance.body}</div>
+                        <ul className="onboarding-platform-list">
+                          {windowsOnboardingGuidance.checklist.map((item) => (
+                            <li key={item}>{item}</li>
+                          ))}
+                        </ul>
+                        <div className="onboarding-platform-actions">
+                          {windowsOnboardingGuidance.canInstallWsl && (
+                            <button
+                              type="button"
+                              className="onboarding-platform-btn"
+                              onClick={handleInstallWsl}
+                              disabled={onboarding.submitting || onboarding.checking}
+                            >
+                              Install WSL
+                            </button>
+                          )}
+                          {windowsOnboardingGuidance.canInstallGitBash && (
+                            <button
+                              type="button"
+                              className="onboarding-platform-btn"
+                              onClick={handleInstallGitBash}
+                              disabled={onboarding.submitting || onboarding.checking}
+                            >
+                              Install Git Bash
+                            </button>
+                          )}
+                        </div>
+                        <div className="onboarding-provider-links onboarding-platform-links">
+                          <a href="https://learn.microsoft.com/windows/wsl/install" target="_blank" rel="noreferrer">Install WSL</a>
+                          <a href="https://gitforwindows.org/" target="_blank" rel="noreferrer">Install Git Bash</a>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="onboarding-step-title">1. Choose an inference provider</div>
                     <div className="onboarding-provider-grid">
                       {recommendedOnboardingProviders.map((providerOption) => (
@@ -1468,6 +1575,7 @@ function App() {
                     )}
 
                     {onboarding.error && <div className="onboarding-error">{onboarding.error}</div>}
+                    {onboarding.platformActionMessage && <div className="onboarding-help">{onboarding.platformActionMessage}</div>}
 
                     <div className="onboarding-actions">
                       <button

@@ -1,0 +1,26 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="512" height="512" fill="#1a1a2a" rx="64"/>
+
+  <!-- Code brackets -->
+  <g transform="translate(256, 256)">
+    <!-- Left bracket -->
+    <path d="M -120 -80 Q -140 -80 -140 -60 L -140 60 Q -140 80 -120 80"
+          stroke="#6366f1" stroke-width="12" fill="none" stroke-linecap="round"/>
+    <!-- Right bracket -->
+    <path d="M 120 -80 Q 140 -80 140 -60 L 140 60 Q 140 80 120 80"
+          stroke="#6366f1" stroke-width="12" fill="none" stroke-linecap="round"/>
+    <!-- Code lines -->
+    <line x1="-80" y1="-20" x2="80" y2="-20" stroke="#8b5cf6" stroke-width="8" stroke-linecap="round"/>
+    <line x1="-80" y1="0" x2="60" y2="0" stroke="#8b5cf6" stroke-width="8" stroke-linecap="round"/>
+    <line x1="-80" y1="20" x2="40" y2="20" stroke="#8b5cf6" stroke-width="8" stroke-linecap="round"/>
+  </g>
+
+  <!-- AI spark -->
+  <g transform="translate(400, 100)">
+    <circle cx="0" cy="0" r="8" fill="#fbbf24"/>
+    <path d="M 0 -16 L 0 -24 M 0 16 L 0 24 M -16 0 L -24 0 M 16 0 L 24 0
+             M -11 -11 L -16 -16 M 11 -11 L 16 -16 M -11 11 L -16 16 M 11 11 L 16 16"
+          stroke="#fbbf24" stroke-width="3" stroke-linecap="round"/>
+  </g>
+</svg>

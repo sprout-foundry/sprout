@@ -373,6 +373,16 @@ const AppContent: React.FC<AppContentProps> = ({
         case 'command_palette':
           setIsCommandPaletteOpen(prev => !prev);
           break;
+        case 'new_file':
+          openWorkspaceBuffer({
+            kind: 'file',
+            path: `__workspace/untitled-${Date.now()}`,
+            title: 'Untitled',
+            ext: '',
+            isClosable: true,
+          });
+          onViewChange('editor');
+          break;
         case 'toggle_sidebar':
           onSidebarToggle();
           break;
@@ -425,7 +435,7 @@ const AppContent: React.FC<AppContentProps> = ({
     
     window.addEventListener('ledit:hotkey', handleHotkey);
     return () => window.removeEventListener('ledit:hotkey', handleHotkey);
-  }, [activeBufferId, buffers, closeBuffer, focusTabIndex, handlePrimaryViewChange, onSidebarToggle, onTerminalExpandedChange, isTerminalExpanded]);
+  }, [activeBufferId, buffers, closeBuffer, focusTabIndex, handlePrimaryViewChange, onSidebarToggle, onTerminalExpandedChange, isTerminalExpanded, openWorkspaceBuffer, onViewChange]);
 
   // Handler to open hotkeys config in editor
   const handleOpenHotkeysConfig = useCallback(() => {

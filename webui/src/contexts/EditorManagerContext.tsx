@@ -19,7 +19,7 @@ interface EditorManagerContextValue {
   // Actions
   openFile: (file: any) => string; // Returns buffer ID
   openWorkspaceBuffer: (options: {
-    kind: 'chat' | 'diff' | 'review';
+    kind: 'chat' | 'diff' | 'review' | 'file';
     path: string;
     title: string;
     content?: string;
@@ -191,7 +191,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   }, [activePaneId, activateBuffer, panes]);
 
   const openWorkspaceBuffer = useCallback((options: {
-    kind: 'chat' | 'diff' | 'review';
+    kind: 'chat' | 'diff' | 'review' | 'file';
     path: string;
     title: string;
     content?: string;

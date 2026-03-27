@@ -21,7 +21,113 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/alantheprice/ledit/pkg/utils"
 )
+
+type sshLaunchError struct {
+	Step    string
+	Message string
+	Details string
+	LogPath string
+}
+
+func (e *sshLaunchError) Error() string {
+	if e == nil {
+		return ""
+	}
+	message := strings.TrimSpace(e.Message)
+	if message == "" {
+		message = "failed to open SSH workspace"
+	}
+	if step := strings.TrimSpace(e.Step); step != "" {
+		return fmt.Sprintf("%s (%s)", message, step)
+	}
+	return message
+}
+
+type sshLaunchLogger struct {
+	path   string
+	logger *utils.Logger
+	prefix string
+}
+
+func newSSHLaunchLogger(hostAlias, remoteWorkspacePath string) (*sshLaunchLogger, error) {
+	logger := &sshLaunchLogger{
+		path:   workspaceLogPath(),
+		logger: utils.GetLogger(true),
+		prefix: fmt.Sprintf("[ssh-launch %s %s]", hostAlias, remoteWorkspacePath),
+	}
+	logger.Logf("launch started")
+	return logger, nil
+}
+
+func (l *sshLaunchLogger) Close() error {
+	return nil
+}
+
+func (l *sshLaunchLogger) Path() string {
+	if l == nil {
+		return ""
+	}
+	return l.path
+}
+
+func (l *sshLaunchLogger) Logf(format string, args ...interface{}) {
+	if l == nil || l.logger == nil {
+		return
+	}
+	l.logger.Logf("%s %s", l.prefix, fmt.Sprintf(format, args...))
+}
+
+func workspaceLogPath() string {
+	home := os.Getenv("HOME")
+	if strings.TrimSpace(home) == "" {
+		return ".ledit/workspace.log"
+	}
+	return filepath.Join(home, ".ledit", "workspace.log")
+}
+
+func newSSHLaunchFailure(step, message, details string, logger *sshLaunchLogger) error {
+	return &sshLaunchError{
+		Step:    strings.TrimSpace(step),
+		Message: strings.TrimSpace(message),
+		Details: strings.TrimSpace(details),
+		LogPath: strings.TrimSpace(func() string {
+			if logger == nil {
+				return ""
+			}
+			return logger.Path()
+		}()),
+	}
+}
+
+func trimSSHOutput(raw []byte) string {
+	text := strings.TrimSpace(string(raw))
+	if text == "" {
+		return ""
+	}
+	const maxLen = 4000
+	if len(text) > maxLen {
+		return text[:maxLen] + "\n...[truncated]"
+	}
+	return text
+}
+
+func runSSHLoggedCommand(logger *sshLaunchLogger, step, summary string, cmd *exec.Cmd) ([]byte, error) {
+	logger.Logf("%s: running %s", step, summary)
+	out, err := cmd.CombinedOutput()
+	output := trimSSHOutput(out)
+	if output != "" {
+		logger.Logf("%s output:\n%s", step, output)
+	}
+	if err != nil {
+		logger.Logf("%s error: %v", step, err)
+		return out, newSSHLaunchFailure(step, "SSH workspace setup failed", output, logger)
+	}
+	logger.Logf("%s completed", step)
+	return out, nil
+}
 
 type sshWorkspaceSession struct {
 	Key                 string
@@ -70,6 +176,12 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (*sshLaunc
 		remoteWorkspacePath = "$HOME"
 	}
 
+	logger, loggerErr := newSSHLaunchLogger(hostAlias, remoteWorkspacePath)
+	if loggerErr != nil {
+		return nil, loggerErr
+	}
+	defer logger.Close()
+
 	sessionKey := hostAlias + "::" + remoteWorkspacePath
 
 	ws.sshSessionsMu.Lock()
@@ -84,47 +196,59 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (*sshLaunc
 	ws.sshSessionsMu.Unlock()
 
 	if restored, err := ws.restorePersistedSSHSession(sessionKey); err == nil && restored != nil {
+		logger.Logf("restored existing SSH session %q", sessionKey)
 		return restored, nil
 	}
 
 	if err := ensureSSHProgramsAvailable(); err != nil {
+		logger.Logf("ssh program availability check failed: %v", err)
 		return nil, err
 	}
+	logger.Logf("ssh and scp detected locally")
 
-	remoteInfo, err := inspectRemoteSSHHost(hostAlias)
+	remoteInfo, err := inspectRemoteSSHHost(hostAlias, logger)
 	if err != nil {
 		return nil, err
 	}
+	logger.Logf("remote host detected platform=%s arch=%s", remoteInfo.Platform, remoteInfo.Arch)
 
-	localBinary, err := prepareLocalSSHBinary(remoteInfo.Platform, remoteInfo.Arch)
+	localBinary, err := prepareLocalSSHBinary(remoteInfo.Platform, remoteInfo.Arch, logger)
 	if err != nil {
 		return nil, err
 	}
+	logger.Logf("local SSH backend binary ready: %s", localBinary)
 
-	remoteBinary, err := ensureRemoteSSHBinary(hostAlias, localBinary, remoteInfo)
+	remoteBinary, err := ensureRemoteSSHBinary(hostAlias, localBinary, remoteInfo, logger)
 	if err != nil {
 		return nil, err
 	}
+	logger.Logf("remote SSH backend installed at %s", remoteBinary)
 
 	localPort, err := findFreeLocalPort()
 	if err != nil {
+		logger.Logf("failed to allocate local tunnel port: %v", err)
 		return nil, err
 	}
+	logger.Logf("allocated local tunnel port %d", localPort)
 
-	remotePort, remotePID, err := startRemoteSSHBackend(hostAlias, remoteWorkspacePath, remoteBinary)
+	remotePort, remotePID, err := startRemoteSSHBackend(hostAlias, remoteWorkspacePath, remoteBinary, logger)
 	if err != nil {
 		return nil, err
 	}
+	logger.Logf("remote SSH backend started port=%d pid=%d", remotePort, remotePID)
 
-	tunnelCmd, err := startSSHTunnel(hostAlias, localPort, remotePort)
+	tunnelCmd, err := startSSHTunnel(hostAlias, localPort, remotePort, logger)
 	if err != nil {
 		return nil, err
 	}
+	logger.Logf("ssh tunnel started local_port=%d remote_port=%d", localPort, remotePort)
 
 	if err := waitForWebHealth(localPort, 10*time.Second); err != nil {
+		logger.Logf("health check failed: %v", err)
 		_ = killProcess(tunnelCmd)
 		return nil, err
 	}
+	logger.Logf("health check passed for local port %d", localPort)
 
 	session := &sshWorkspaceSession{
 		Key:                 sessionKey,
@@ -168,7 +292,7 @@ func (ws *ReactWebServer) restorePersistedSSHSession(sessionKey string) (*sshLau
 		return nil, err
 	}
 
-	tunnelCmd, err := startSSHTunnel(persisted.HostAlias, localPort, persisted.RemotePort)
+	tunnelCmd, err := startSSHTunnel(persisted.HostAlias, localPort, persisted.RemotePort, nil)
 	if err != nil {
 		_ = removePersistedSSHSession(sessionKey)
 		return nil, err
@@ -262,7 +386,7 @@ func ensureSSHProgramsAvailable() error {
 	return nil
 }
 
-func inspectRemoteSSHHost(hostAlias string) (*remoteSSHInfo, error) {
+func inspectRemoteSSHHost(hostAlias string, logger *sshLaunchLogger) (*remoteSSHInfo, error) {
 	cmd := exec.Command("ssh",
 		"-o", "BatchMode=yes",
 		"-o", "StrictHostKeyChecking=accept-new",
@@ -270,13 +394,9 @@ func inspectRemoteSSHHost(hostAlias string) (*remoteSSHInfo, error) {
 		"bash", "-lc",
 		"uname -s; uname -m",
 	)
-	out, err := cmd.CombinedOutput()
+	out, err := runSSHLoggedCommand(logger, "inspect-remote", fmt.Sprintf("ssh %s uname -s; uname -m", hostAlias), cmd)
 	if err != nil {
-		msg := strings.TrimSpace(string(out))
-		if msg == "" {
-			msg = err.Error()
-		}
-		return nil, errors.New(msg)
+		return nil, err
 	}
 
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
@@ -330,14 +450,16 @@ func currentExecutableForSSH() (string, error) {
 	return executablePath, nil
 }
 
-func prepareLocalSSHBinary(remotePlatform, remoteArch string) (string, error) {
+func prepareLocalSSHBinary(remotePlatform, remoteArch string, logger *sshLaunchLogger) (string, error) {
 	if runtime.GOOS == remotePlatform && runtime.GOARCH == remoteArch {
+		logger.Logf("reusing current executable for matching platform %s/%s", remotePlatform, remoteArch)
 		return currentExecutableForSSH()
 	}
 
-	if artifactPath, err := ensureLocalSSHBinaryArtifact(remotePlatform, remoteArch); err == nil && artifactPath != "" {
+	if artifactPath, err := ensureLocalSSHBinaryArtifact(remotePlatform, remoteArch, logger); err == nil && artifactPath != "" {
 		return artifactPath, nil
 	}
+	logger.Logf("release artifact unavailable for %s/%s, falling back to local go build", remotePlatform, remoteArch)
 
 	goBinary, err := exec.LookPath("go")
 	if err != nil {
@@ -366,24 +488,32 @@ func prepareLocalSSHBinary(remotePlatform, remoteArch string) (string, error) {
 		"GOOS="+remotePlatform,
 		"GOARCH="+remoteArch,
 	)
-	if out, err := buildCmd.CombinedOutput(); err != nil {
-		msg := strings.TrimSpace(string(out))
-		if msg == "" {
-			msg = err.Error()
-		}
-		return "", fmt.Errorf("failed to build SSH backend for %s/%s: %s", remotePlatform, remoteArch, msg)
+	out, err := buildCmd.CombinedOutput()
+	if output := trimSSHOutput(out); output != "" {
+		logger.Logf("build-backend output:\n%s", output)
 	}
+	if err != nil {
+		logger.Logf("build-backend error: %v", err)
+		return "", newSSHLaunchFailure(
+			"build-backend",
+			fmt.Sprintf("failed to build SSH backend for %s/%s", remotePlatform, remoteArch),
+			trimSSHOutput(out),
+			logger,
+		)
+	}
+	logger.Logf("build-backend completed for %s/%s", remotePlatform, remoteArch)
 
 	return outputPath, nil
 }
 
-func ensureLocalSSHBinaryArtifact(remotePlatform, remoteArch string) (string, error) {
+func ensureLocalSSHBinaryArtifact(remotePlatform, remoteArch string, logger *sshLaunchLogger) (string, error) {
 	tag := resolvePreferredReleaseTag()
 	assetName := fmt.Sprintf("ledit-%s-%s.tar.gz", remotePlatform, remoteArch)
 	cacheDir := filepath.Join(os.TempDir(), "ledit-ssh-artifacts", strings.TrimPrefix(tag, "v"), remotePlatform+"-"+remoteArch)
 	binaryPath := filepath.Join(cacheDir, fmt.Sprintf("ledit-%s-%s", remotePlatform, remoteArch))
 
 	if info, err := os.Stat(binaryPath); err == nil && info.Mode().IsRegular() {
+		logger.Logf("using cached release artifact %s", binaryPath)
 		return binaryPath, nil
 	}
 
@@ -391,13 +521,14 @@ func ensureLocalSSHBinaryArtifact(remotePlatform, remoteArch string) (string, er
 		return "", fmt.Errorf("failed to prepare SSH artifact cache: %w", err)
 	}
 
-	downloadURL, err := resolveGitHubReleaseAssetURL(tag, assetName)
+	downloadURL, err := resolveGitHubReleaseAssetURL(tag, assetName, logger)
 	if err != nil {
 		return "", err
 	}
+	logger.Logf("resolved release artifact %s for tag %s", assetName, tag)
 
 	archivePath := filepath.Join(cacheDir, assetName)
-	if err := downloadFile(downloadURL, archivePath); err != nil {
+	if err := downloadFile(downloadURL, archivePath, logger); err != nil {
 		return "", err
 	}
 
@@ -435,9 +566,10 @@ func normalizeReleaseTagCandidate(value string) string {
 	return value
 }
 
-func resolveGitHubReleaseAssetURL(tag, assetName string) (string, error) {
+func resolveGitHubReleaseAssetURL(tag, assetName string, logger *sshLaunchLogger) (string, error) {
 	client := &http.Client{Timeout: 15 * time.Second}
 	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/%s", githubReleaseRepoOwner, githubReleaseRepoName, releaseSelector(tag))
+	logger.Logf("querying GitHub release metadata: %s", apiURL)
 	req, err := http.NewRequest(http.MethodGet, apiURL, nil)
 	if err != nil {
 		return "", err
@@ -445,11 +577,13 @@ func resolveGitHubReleaseAssetURL(tag, assetName string) (string, error) {
 	req.Header.Set("Accept", "application/vnd.github+json")
 	resp, err := client.Do(req)
 	if err != nil {
+		logger.Logf("github release query failed: %v", err)
 		return "", fmt.Errorf("failed to query GitHub releases: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		logger.Logf("github release query returned status %d", resp.StatusCode)
 		return "", fmt.Errorf("failed to resolve GitHub release asset %s for %s: %s", assetName, tag, strings.TrimSpace(string(body)))
 	}
 
@@ -477,7 +611,8 @@ func releaseSelector(tag string) string {
 	return "tags/" + tag
 }
 
-func downloadFile(url, destPath string) error {
+func downloadFile(url, destPath string, logger *sshLaunchLogger) error {
+	logger.Logf("downloading artifact %s to %s", url, destPath)
 	resp, err := http.Get(url)
 	if err != nil {
 		return fmt.Errorf("failed to download SSH artifact: %w", err)
@@ -547,7 +682,7 @@ func extractTarGzSingleFile(archivePath, destPath string) error {
 	return fmt.Errorf("artifact archive %s did not contain a binary", archivePath)
 }
 
-func ensureRemoteSSHBinary(hostAlias, localBinary string, remoteInfo *remoteSSHInfo) (string, error) {
+func ensureRemoteSSHBinary(hostAlias, localBinary string, remoteInfo *remoteSSHInfo, logger *sshLaunchLogger) (string, error) {
 	localFingerprint, err := fingerprintFile(localBinary)
 	if err != nil {
 		return "", fmt.Errorf("failed to fingerprint local executable: %w", err)
@@ -565,12 +700,8 @@ func ensureRemoteSSHBinary(hostAlias, localBinary string, remoteInfo *remoteSSHI
 		"bash", "-lc",
 		fmt.Sprintf("mkdir -p %s", shellEscapeSSH(remoteDirSSH)),
 	)
-	if out, err := mkdir.CombinedOutput(); err != nil {
-		msg := strings.TrimSpace(string(out))
-		if msg == "" {
-			msg = err.Error()
-		}
-		return "", errors.New(msg)
+	if _, err := runSSHLoggedCommand(logger, "prepare-remote-dir", fmt.Sprintf("ssh %s mkdir -p %s", hostAlias, remoteDirSSH), mkdir); err != nil {
+		return "", err
 	}
 
 	copyCmd := exec.Command("scp",
@@ -578,12 +709,8 @@ func ensureRemoteSSHBinary(hostAlias, localBinary string, remoteInfo *remoteSSHI
 		localBinary,
 		fmt.Sprintf("%s:%s.tmp", hostAlias, remoteBinarySCP),
 	)
-	if out, err := copyCmd.CombinedOutput(); err != nil {
-		msg := strings.TrimSpace(string(out))
-		if msg == "" {
-			msg = err.Error()
-		}
-		return "", errors.New(msg)
+	if _, err := runSSHLoggedCommand(logger, "upload-backend", fmt.Sprintf("scp %s %s:%s.tmp", localBinary, hostAlias, remoteBinarySCP), copyCmd); err != nil {
+		return "", err
 	}
 
 	install := exec.Command("ssh",
@@ -598,12 +725,8 @@ func ensureRemoteSSHBinary(hostAlias, localBinary string, remoteInfo *remoteSSHI
 			shellEscapeSSH(remoteBinarySSH),
 		),
 	)
-	if out, err := install.CombinedOutput(); err != nil {
-		msg := strings.TrimSpace(string(out))
-		if msg == "" {
-			msg = err.Error()
-		}
-		return "", errors.New(msg)
+	if _, err := runSSHLoggedCommand(logger, "install-backend", fmt.Sprintf("ssh %s install backend into %s", hostAlias, remoteBinarySSH), install); err != nil {
+		return "", err
 	}
 
 	return remoteBinarySSH, nil
@@ -709,7 +832,7 @@ func removePersistedSSHSession(sessionKey string) error {
 	return writePersistedSSHSessionRegistry(registry)
 }
 
-func startRemoteSSHBackend(hostAlias, remoteWorkspacePath, remoteBinary string) (int, int, error) {
+func startRemoteSSHBackend(hostAlias, remoteWorkspacePath, remoteBinary string, logger *sshLaunchLogger) (int, int, error) {
 	workspaceExpr := `"$HOME"`
 	if remoteWorkspacePath != "$HOME" {
 		workspaceExpr = shellEscapeSSH(remoteWorkspacePath)
@@ -757,13 +880,9 @@ func startRemoteSSHBackend(hostAlias, remoteWorkspacePath, remoteBinary string) 
 		"bash", "-lc",
 		script,
 	)
-	out, err := cmd.CombinedOutput()
+	out, err := runSSHLoggedCommand(logger, "start-remote-backend", fmt.Sprintf("ssh %s start remote backend", hostAlias), cmd)
 	if err != nil {
-		msg := strings.TrimSpace(string(out))
-		if msg == "" {
-			msg = err.Error()
-		}
-		return 0, 0, errors.New(msg)
+		return 0, 0, err
 	}
 
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
@@ -793,7 +912,7 @@ func sanitizeRemoteLogName(hostAlias string) string {
 	return b.String()
 }
 
-func startSSHTunnel(hostAlias string, localPort, remotePort int) (*exec.Cmd, error) {
+func startSSHTunnel(hostAlias string, localPort, remotePort int, logger *sshLaunchLogger) (*exec.Cmd, error) {
 	cmd := exec.Command("ssh",
 		"-o", "BatchMode=yes",
 		"-o", "StrictHostKeyChecking=accept-new",
@@ -808,8 +927,10 @@ func startSSHTunnel(hostAlias string, localPort, remotePort int) (*exec.Cmd, err
 	cmd.Stdout = io.Discard
 	cmd.Stderr = &stderr
 	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("failed to start SSH tunnel: %w", err)
+		logger.Logf("start-tunnel error: %v %s", err, strings.TrimSpace(stderr.String()))
+		return nil, newSSHLaunchFailure("start-tunnel", "failed to start SSH tunnel", strings.TrimSpace(stderr.String()), logger)
 	}
+	logger.Logf("start-tunnel launched pid=%d", cmd.Process.Pid)
 
 	return cmd, nil
 }

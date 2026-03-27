@@ -1,11 +1,10 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { EditorView, keymap, lineNumbers } from '@codemirror/view';
+import { EditorView, keymap, lineNumbers, highlightSpecialChars, highlightActiveLine } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
-import { defaultKeymap, indentWithTab } from '@codemirror/commands';
+import { defaultKeymap, indentWithTab, history } from '@codemirror/commands';
 import { search, searchKeymap } from '@codemirror/search';
-import { autocompletion } from '@codemirror/autocomplete';
-import { syntaxHighlighting, defaultHighlightStyle, codeFolding, foldGutter } from '@codemirror/language';
-import { bracketMatching } from '@codemirror/language';
+import { autocompletion, closeBrackets } from '@codemirror/autocomplete';
+import { syntaxHighlighting, defaultHighlightStyle, codeFolding, foldGutter, indentOnInput, bracketMatching } from '@codemirror/language';
 import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark';
 
 // Language support
@@ -349,6 +348,11 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       keymap.of(customKeymap),
       search(),
       autocompletion(),
+      closeBrackets(),
+      history(),
+      indentOnInput(),
+      highlightSpecialChars(),
+      highlightActiveLine(),
       bracketMatching(),
       syntaxHighlighting(customHighlightStyle || (themePack.editorSyntaxStyle === 'one-dark' ? oneDarkHighlightStyle : defaultHighlightStyle)),
       diffGutter(),

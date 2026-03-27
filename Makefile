@@ -130,6 +130,10 @@ deploy-ui:
 	@rm -rf pkg/webui/static/*
 	@# Copy root-level files (index.html, manifest.json, icons, etc.)
 	@cp webui/build/*.html webui/build/*.json webui/build/*.xml webui/build/*.png webui/build/*.svg webui/build/*.ico webui/build/sw.js pkg/webui/static/ 2>/dev/null || true
+	@# Ensure logo-mark.svg is present (copy from committed location if React build doesn't include it)
+	@if [ -f "pkg/webui/logo-mark.svg" ] && [ ! -f "pkg/webui/static/logo-mark.svg" ]; then \
+		cp pkg/webui/logo-mark.svg pkg/webui/static/; \
+	fi
 	@# Copy static assets directly (without the 'static/' prefix in the destination)
 	@if [ -d "webui/build/static/js" ]; then \
 		mkdir -p pkg/webui/static/js && \

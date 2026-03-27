@@ -13,8 +13,6 @@ jobs:
     permissions:
       contents: write
     env:
-      CSC_LINK: ${{ secrets.CSC_LINK }}
-      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
       APPLE_ID: ${{ secrets.APPLE_ID }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
@@ -72,9 +70,21 @@ jobs:
       run: npm ci
       working-directory: webui
 
+    - name: Prepare macOS signing certificate
+      if: matrix.os == 'macos' && secrets.CSC_LINK != ''
+      shell: bash
+      env:
+        CSC_LINK_B64: ${{ secrets.CSC_LINK }}
+      run: |
+        CERT_PATH="$RUNNER_TEMP/ledit-signing-cert.p12"
+        printf '%s' "$CSC_LINK_B64" | base64 --decode > "$CERT_PATH"
+        echo "CSC_LINK=$CERT_PATH" >> "$GITHUB_ENV"
+        echo "Prepared signing certificate at $CERT_PATH"
+
     - name: Build desktop installers
       env:
         npm_config_arch: ${{ matrix.arch }}
+        CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
       run: npm run desktop:dist
 
     - name: Verify packaged desktop bundle

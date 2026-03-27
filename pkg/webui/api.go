@@ -458,7 +458,7 @@ func (ws *ReactWebServer) handleAPICreateFile(w http.ResponseWriter, r *http.Req
 	}
 
 	// Canonicalize and validate the path
-	canonicalPath, err := canonicalizePath(targetPath, ws.workspaceRoot, false)
+	canonicalPath, err := canonicalizePath(targetPath, ws.workspaceRoot, true)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)

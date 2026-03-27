@@ -11,6 +11,16 @@ import (
 )
 
 func TestHandleAPIWorkspaceSetUpdatesWorkspaceRoot(t *testing.T) {
+	originalWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	t.Cleanup(func() {
+		if chdirErr := os.Chdir(originalWD); chdirErr != nil {
+			t.Fatalf("restore cwd: %v", chdirErr)
+		}
+	})
+
 	initialRoot := t.TempDir()
 	nextRoot := filepath.Join(initialRoot, "project")
 	if err := os.Mkdir(nextRoot, 0o755); err != nil {
@@ -46,6 +56,12 @@ func TestHandleAPIWorkspaceSetUpdatesWorkspaceRoot(t *testing.T) {
 
 	if got := server.terminalManager.workspaceRoot; got != nextRoot {
 		t.Fatalf("expected terminal manager root %q, got %q", nextRoot, got)
+	}
+
+	if got, err := os.Getwd(); err != nil {
+		t.Fatalf("getwd after workspace switch: %v", err)
+	} else if got != nextRoot {
+		t.Fatalf("expected cwd %q, got %q", nextRoot, got)
 	}
 }
 

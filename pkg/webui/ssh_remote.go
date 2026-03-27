@@ -868,7 +868,7 @@ func startRemoteSSHBackend(hostAlias, remoteWorkspacePath, remoteBinary string, 
 		fmt.Sprintf("cd %s", workspaceExpr),
 		`REMOTE_PORT="$(choose_port)"`,
 		fmt.Sprintf(`LOG_FILE="$HOME/.cache/ledit-webui/logs/%s.log"`, sanitizeRemoteLogName(hostAlias)),
-		fmt.Sprintf(`nohup env BROWSER=none %s --isolated-config agent --daemon --web-port "$REMOTE_PORT" >"$LOG_FILE" 2>&1 < /dev/null &`, shellEscapeSSH(remoteBinary)),
+		fmt.Sprintf(`nohup env BROWSER=none %s --isolated-config agent --daemon --web-port "$REMOTE_PORT" >"$LOG_FILE" 2>&1 < /dev/null &`, remoteBinary),
 		"REMOTE_PID=$!",
 		`printf "%s\n%s\n" "$REMOTE_PORT" "$REMOTE_PID"`,
 	}, "; ")

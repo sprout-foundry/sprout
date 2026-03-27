@@ -306,7 +306,8 @@ func (ws *ReactWebServer) getActiveQueryCount() int {
 	return ws.activeQueries
 }
 
-// SetWorkspaceRoot updates the active workspace root and resets terminal state.
+// SetWorkspaceRoot updates the active workspace root, changes the process cwd,
+// and resets terminal state.
 func (ws *ReactWebServer) SetWorkspaceRoot(path string) (string, error) {
 	workspaceRoot, err := filepathAbsEval(path)
 	if err != nil {
@@ -336,6 +337,10 @@ func (ws *ReactWebServer) SetWorkspaceRoot(path string) (string, error) {
 
 	if ws.fileConsents != nil {
 		ws.fileConsents.clearAll()
+	}
+
+	if err := os.Chdir(workspaceRoot); err != nil {
+		return "", fmt.Errorf("change working directory: %w", err)
 	}
 
 	ws.workspaceRoot = workspaceRoot

@@ -61,6 +61,10 @@ body {
   margin-top: 28px;
 }
 
+.launcher-actions.compact {
+  margin-top: 0;
+}
+
 .launcher-btn {
   height: 42px;
   border-radius: 10px;
@@ -95,6 +99,30 @@ body {
 
 .launcher-panel {
   padding: 44px 36px;
+}
+
+.launcher-inline-panel {
+  margin-top: 28px;
+  padding: 18px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.launcher-inline-panel-header {
+  margin-bottom: 14px;
+}
+
+.launcher-inline-panel-header h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.launcher-inline-panel-header p {
+  margin: 0;
+  color: #8fa2b9;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .launcher-panel-header {
@@ -143,9 +171,28 @@ body {
 }
 
 .recent-worktree-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 14px;
   font-weight: 600;
   color: #f5f8fc;
+}
+
+.recent-worktree-tags {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.recent-worktree-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(89, 185, 255, 0.12);
+  color: #a9d8ff;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .recent-worktree-path {
@@ -274,7 +321,24 @@ body {
   font-size: 14px;
 }
 
+.launcher-field select {
+  width: 100%;
+  height: 42px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #edf4fb;
+  font-size: 14px;
+}
+
 .launcher-field input:focus {
+  outline: none;
+  border-color: rgba(89, 185, 255, 0.7);
+  box-shadow: 0 0 0 3px rgba(89, 185, 255, 0.14);
+}
+
+.launcher-field select:focus {
   outline: none;
   border-color: rgba(89, 185, 255, 0.7);
   box-shadow: 0 0 0 3px rgba(89, 185, 255, 0.14);

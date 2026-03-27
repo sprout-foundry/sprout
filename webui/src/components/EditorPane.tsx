@@ -222,7 +222,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     } finally {
       setSaving(false);
     }
-  }, [buffer, saveBuffer, apiService, updateDiffGutter, clearDiffGutter]);
+  }, [buffer, saveBuffer, apiService]); // eslint-disable-line react-hooks/exhaustive-deps -- updateDiffGutter/clearDiffGutter are module-level functions
 
   const isExternalUpdateRef = useRef<boolean>(false);
   const lastLoadedRef = useRef<{bufferId: string, filePath: string} | null>(null);

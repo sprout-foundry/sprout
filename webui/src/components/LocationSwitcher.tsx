@@ -1,7 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import './LocationSwitcher.css';
 import { FolderOpen, Monitor, RefreshCw, Loader2 } from 'lucide-react';
-import { ApiService, LeditInstance, SSHHostEntry, SSHSessionEntry } from '../services/api';
+import {
+  ApiService,
+  LeditInstance,
+  SSHHostEntry,
+  SSHSessionEntry,
+  SSHWorkspaceOpenError,
+} from '../services/api';
 
 interface LocationSwitcherProps {
   isConnected: boolean;
@@ -21,6 +27,12 @@ interface SwitchingState {
   isSwitching: boolean;
   error: string | null;
   status: string | null;
+}
+
+interface SSHFailureState {
+  step?: string;
+  details?: string;
+  logPath?: string;
 }
 
 const RECENT_WORKSPACES_KEY = 'ledit.recentWorkspaces';
@@ -110,6 +122,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
   const [isOpeningSshHost, setIsOpeningSshHost] = useState<string | null>(null);
   const [isClosingSshSession, setIsClosingSshSession] = useState<string | null>(null);
   const [remoteWorkspacePath, setRemoteWorkspacePath] = useState('');
+  const [sshFailure, setSshFailure] = useState<SSHFailureState | null>(null);
 
   const popoverRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -145,6 +158,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
       setInputValue('');
       setSuggestions([]);
       setSuggestionsError(null);
+      setSshFailure(null);
       return;
     }
 
@@ -229,6 +243,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
         setIsOpen(false);
         setSelectedIndex(-1);
         setSwitchingState({ isSwitching: false, error: null, status: null });
+        setSshFailure(null);
       }
     };
 
@@ -275,7 +290,8 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
       try {
         const response = await fetch(`/api/workspace/browse?path=${encodeURIComponent(parentPath)}`);
         if (!response.ok) {
-          throw new Error('Failed to fetch matching folders');
+          const text = await response.text();
+          throw new Error(text || 'Failed to fetch matching folders');
         }
         const data = await response.json();
         if (cancelled) {
@@ -432,6 +448,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
       setInputValue(nextWorkspaceRoot);
       addRecentWorkspace(nextWorkspaceRoot);
       setSuggestionsError(null);
+      setSshFailure(null);
     } catch (error) {
       console.error('Failed to refresh workspace data:', error);
       setSwitchingState({
@@ -449,6 +466,9 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
     if (!isOpen) {
       setSelectedIndex(-1);
       setInputValue(workspaceRoot);
+      setSwitchingState({ isSwitching: false, error: null, status: null });
+      setSuggestionsError(null);
+      setSshFailure(null);
     }
   }, [isOpen, workspaceRoot]);
 
@@ -460,6 +480,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
     const targetRemotePath = explicitRemotePath?.trim() || remoteWorkspacePath.trim() || undefined;
 
     setIsOpeningSshHost(hostAlias);
+    setSshFailure(null);
     setSwitchingState({ isSwitching: false, error: null, status: `Connecting to ${hostAlias}…` });
     let stageIndex = 0;
     const stageMessages = [
@@ -497,6 +518,15 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
       setSwitchingState({ isSwitching: false, error: null, status: `SSH workspace ready: ${hostAlias}` });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to open SSH host';
+      if (error instanceof SSHWorkspaceOpenError) {
+        setSshFailure({
+          step: error.step,
+          details: error.details,
+          logPath: error.logPath,
+        });
+      } else {
+        setSshFailure(null);
+      }
       setSwitchingState({ isSwitching: false, error: message, status: null });
     } finally {
       window.clearInterval(stageTimer);
@@ -614,6 +644,25 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
           {switchingState.error ? (
             <div id="location-switcher-error" className="location-switcher-error" role="alert">
               {switchingState.error}
+            </div>
+          ) : null}
+          {switchingState.error && sshFailure ? (
+            <div className="location-switcher-error-details">
+              {sshFailure.step ? (
+                <div className="location-switcher-error-detail-row">
+                  <span className="location-switcher-error-detail-label">Step</span>
+                  <span>{sshFailure.step}</span>
+                </div>
+              ) : null}
+              {sshFailure.details ? (
+                <pre className="location-switcher-error-detail-output">{sshFailure.details}</pre>
+              ) : null}
+              {sshFailure.logPath ? (
+                <div className="location-switcher-error-detail-row">
+                  <span className="location-switcher-error-detail-label">Log</span>
+                  <span className="location-switcher-error-detail-path">{sshFailure.logPath}</span>
+                </div>
+              ) : null}
             </div>
           ) : null}
           {!switchingState.error && switchingState.status ? (

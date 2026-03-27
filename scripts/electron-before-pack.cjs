@@ -41,6 +41,7 @@ module.exports = async function beforePack(context) {
     env: {
       LEDIT_GOOS: platform,
       LEDIT_GOARCH: arch,
+      LEDIT_EXTRA_TARGETS: platform === 'windows' ? `linux-${arch}` : '',
     },
   });
 };

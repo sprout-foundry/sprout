@@ -72,7 +72,7 @@ async function withConsentRetry(
     `External file ${operation} requested.\n\nPath: ${consent.path}\n\nAllow this one-time access?`
   );
   if (!approved) {
-    throw new Error(`External file ${operation} canceled by user`);
+    throw new Error(`External file ${operation} canceled by user: ${consent.path}`);
   }
 
   const token = await issueConsent(path, operation);

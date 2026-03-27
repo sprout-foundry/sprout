@@ -764,14 +764,16 @@ const Sidebar: React.FC<SidebarProps> = ({
         >
           <LeditLogo showWordmark={false} compact />
         </button>
-        <LocationSwitcher
-          isConnected={isConnected}
-          instances={instances}
-          selectedInstancePID={selectedInstancePID}
-          isSwitchingInstance={isSwitchingInstance}
-          onInstanceChange={onInstanceChange}
-          sidebarCollapsed={effectiveSidebarCollapsed}
-        />
+        {!effectiveSidebarCollapsed ? (
+          <LocationSwitcher
+            isConnected={isConnected}
+            instances={instances}
+            selectedInstancePID={selectedInstancePID}
+            isSwitchingInstance={isSwitchingInstance}
+            onInstanceChange={onInstanceChange}
+            sidebarCollapsed={effectiveSidebarCollapsed}
+          />
+        ) : null}
       </div>
 
       {/* Icon rail (always visible) + Content pane (only when expanded) */}

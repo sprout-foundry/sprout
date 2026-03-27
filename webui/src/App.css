@@ -263,6 +263,25 @@ body {
   background: var(--bg-surface);
 }
 
+.top-mobile-context-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.top-mobile-context-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+  background: var(--bg-surface);
+}
+
 .top-view-btn {
   width: 34px;
   height: 34px;
@@ -687,6 +706,10 @@ html, body, #root {
   .pane-controls {
     flex-wrap: wrap;
     padding: var(--space-3);
+  }
+
+  .pane-controls-mobile {
+    justify-content: space-between;
   }
 
   .pane-control-btn {

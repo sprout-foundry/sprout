@@ -10,6 +10,8 @@ const webuiDir = join(repoRoot, 'webui');
 const targetDir = join(repoRoot, 'pkg', 'webui', 'static');
 const buildDir = join(webuiDir, 'build');
 const buildStaticDir = join(buildDir, 'static');
+const embeddedLogoPath = join(repoRoot, 'pkg', 'webui', 'logo-mark.svg');
+const targetLogoPath = join(targetDir, 'logo-mark.svg');
 
 function run(command, args, cwd) {
   const executable = process.platform === 'win32' && command === 'npm' ? 'npm.cmd' : command;
@@ -41,6 +43,10 @@ function copyBuildOutput() {
     for (const entry of readdirSync(buildStaticDir, { withFileTypes: true })) {
       cpSync(join(buildStaticDir, entry.name), join(targetDir, entry.name), { recursive: true });
     }
+  }
+
+  if (existsSync(embeddedLogoPath) && !existsSync(targetLogoPath)) {
+    cpSync(embeddedLogoPath, targetLogoPath);
   }
 }
 

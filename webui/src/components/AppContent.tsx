@@ -101,7 +101,7 @@ interface AppContentProps {
   onQueueMessage: (message: string) => void;
   queuedMessagesCount: number;
   onGitCommit: (message: string, files: string[]) => Promise<unknown>;
-  onGitAICommit: () => Promise<string>;
+  onGitAICommit: () => Promise<{ commitMessage: string; warnings?: string[] }>;
   onGitStage: (files: string[]) => Promise<void>;
   onGitUnstage: (files: string[]) => Promise<void>;
   onGitDiscard: (files: string[]) => Promise<void>;
@@ -276,6 +276,7 @@ const AppContent: React.FC<AppContentProps> = ({
     isGitActing,
     isGeneratingCommitMessage,
     gitActionError,
+    gitActionWarning,
     isReviewLoading,
     isReviewFixing,
     reviewError,
@@ -845,6 +846,7 @@ const AppContent: React.FC<AppContentProps> = ({
           isGeneratingCommitMessage,
           isReviewLoading,
           actionError: gitActionError,
+          actionWarning: gitActionWarning,
           onCommitMessageChange: setCommitMessage,
           onGenerateCommitMessage: handleGenerateCommitMessage,
           onCommit: handleGitCommitClick,

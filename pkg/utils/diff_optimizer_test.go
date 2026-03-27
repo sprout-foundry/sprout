@@ -1,6 +1,9 @@
 package utils
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -174,12 +177,171 @@ func TestDiffOptimizer_CreateFileSummary(t *testing.T) {
 		t.Error("Expected summary to mention 'lock file'")
 	}
 
-	if !strings.Contains(summary, "5 additions") {
-		t.Error("Expected summary to mention additions")
+	if !strings.Contains(summary, "modified") {
+		t.Error("Expected summary to mention modified status")
 	}
 
-	if !strings.Contains(summary, "2 deletions") {
-		t.Error("Expected summary to mention deletions")
+	if strings.Contains(summary, "additions") || strings.Contains(summary, "deletions") {
+		t.Error("Expected metadata-only summary for lock files")
+	}
+}
+
+func TestDiffOptimizer_CreateFileSummary_MetadataFromGit(t *testing.T) {
+	repo := t.TempDir()
+	runGitCommand(t, repo, "init")
+	runGitCommand(t, repo, "config", "user.email", "test@example.com")
+	runGitCommand(t, repo, "config", "user.name", "Test User")
+
+	lockPath := filepath.Join(repo, "package-lock.json")
+	initialContent := "{\"name\":\"demo\"}\n"
+	if err := os.WriteFile(lockPath, []byte(initialContent), 0o644); err != nil {
+		t.Fatalf("write initial lock file: %v", err)
+	}
+	runGitCommand(t, repo, "add", "package-lock.json")
+	runGitCommand(t, repo, "commit", "-m", "initial")
+
+	updatedContent := "{\n  \"name\": \"demo\",\n  \"lockfileVersion\": 3\n}\n"
+	if err := os.WriteFile(lockPath, []byte(updatedContent), 0o644); err != nil {
+		t.Fatalf("write updated lock file: %v", err)
+	}
+	runGitCommand(t, repo, "add", "package-lock.json")
+
+	originalWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	defer func() {
+		if chdirErr := os.Chdir(originalWD); chdirErr != nil {
+			t.Fatalf("restore cwd: %v", chdirErr)
+		}
+	}()
+	if err := os.Chdir(repo); err != nil {
+		t.Fatalf("chdir repo: %v", err)
+	}
+
+	summary := NewDiffOptimizer().createFileSummary("package-lock.json", &FileChangeSummary{
+		AddedLines:   2,
+		DeletedLines: 1,
+		TotalLines:   8,
+	})
+
+	if !strings.Contains(summary, "lock file") {
+		t.Fatalf("expected lock file marker in summary, got %q", summary)
+	}
+	if !strings.Contains(summary, "modified") {
+		t.Fatalf("expected modified marker in summary, got %q", summary)
+	}
+	if !strings.Contains(summary, "45 bytes") {
+		t.Fatalf("expected staged file size in summary, got %q", summary)
+	}
+	if strings.Contains(summary, "additions") || strings.Contains(summary, "deletions") {
+		t.Fatalf("expected metadata-only summary, got %q", summary)
+	}
+}
+
+func TestDiffOptimizer_CreateFileSummary_DeletedFileUsesHeadSize(t *testing.T) {
+	repo := t.TempDir()
+	runGitCommand(t, repo, "init")
+	runGitCommand(t, repo, "config", "user.email", "test@example.com")
+	runGitCommand(t, repo, "config", "user.name", "Test User")
+
+	genPath := filepath.Join(repo, "generated.min.js")
+	content := "const value = 1;\n"
+	if err := os.WriteFile(genPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write generated file: %v", err)
+	}
+	runGitCommand(t, repo, "add", "generated.min.js")
+	runGitCommand(t, repo, "commit", "-m", "initial")
+
+	if err := os.Remove(genPath); err != nil {
+		t.Fatalf("remove generated file: %v", err)
+	}
+	runGitCommand(t, repo, "add", "-A")
+
+	originalWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	defer func() {
+		if chdirErr := os.Chdir(originalWD); chdirErr != nil {
+			t.Fatalf("restore cwd: %v", chdirErr)
+		}
+	}()
+	if err := os.Chdir(repo); err != nil {
+		t.Fatalf("chdir repo: %v", err)
+	}
+
+	summary := NewDiffOptimizer().createFileSummary("generated.min.js", &FileChangeSummary{
+		DeletedLines: 1,
+		TotalLines:   4,
+	})
+
+	if !strings.Contains(summary, "generated file") {
+		t.Fatalf("expected generated file marker in summary, got %q", summary)
+	}
+	if !strings.Contains(summary, "deleted") {
+		t.Fatalf("expected deleted marker in summary, got %q", summary)
+	}
+	if !strings.Contains(summary, "17 bytes") {
+		t.Fatalf("expected HEAD file size in summary, got %q", summary)
+	}
+}
+
+func TestDiffOptimizer_OptimizeDiff_BinaryFileAddsWarning(t *testing.T) {
+	repo := t.TempDir()
+	runGitCommand(t, repo, "init")
+	runGitCommand(t, repo, "config", "user.email", "test@example.com")
+	runGitCommand(t, repo, "config", "user.name", "Test User")
+
+	binaryPath := filepath.Join(repo, "artifact.wasm")
+	if err := os.WriteFile(binaryPath, []byte{0x00, 0x61, 0x73, 0x6d, 0x01, 0x02, 0x03, 0x04}, 0o644); err != nil {
+		t.Fatalf("write binary file: %v", err)
+	}
+	runGitCommand(t, repo, "add", "artifact.wasm")
+
+	diffOutput := exec.Command("git", "diff", "--cached", "--binary", "--", "artifact.wasm")
+	diffOutput.Dir = repo
+	diffBytes, err := diffOutput.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git diff --cached --binary failed: %v\n%s", err, string(diffBytes))
+	}
+
+	originalWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	defer func() {
+		if chdirErr := os.Chdir(originalWD); chdirErr != nil {
+			t.Fatalf("restore cwd: %v", chdirErr)
+		}
+	}()
+	if err := os.Chdir(repo); err != nil {
+		t.Fatalf("chdir repo: %v", err)
+	}
+
+	result := NewDiffOptimizer().OptimizeDiff(string(diffBytes))
+
+	if len(result.Warnings) != 1 {
+		t.Fatalf("expected a single binary warning, got %v", result.Warnings)
+	}
+	if !strings.Contains(result.Warnings[0], "Binary file staged: artifact.wasm") {
+		t.Fatalf("expected binary warning to mention file, got %q", result.Warnings[0])
+	}
+	if !strings.Contains(result.Warnings[0], "added") {
+		t.Fatalf("expected binary warning to mention change kind, got %q", result.Warnings[0])
+	}
+	if !strings.Contains(result.FileSummaries["artifact.wasm"], "binary file") {
+		t.Fatalf("expected binary file summary, got %q", result.FileSummaries["artifact.wasm"])
+	}
+}
+
+func runGitCommand(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %s failed: %v\n%s", strings.Join(args, " "), err, string(output))
 	}
 }
 

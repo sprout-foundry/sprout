@@ -22,6 +22,7 @@ export interface DeepReviewResult {
   review_output: string;
   provider?: string;
   model?: string;
+  warnings?: string[];
 }
 
 export interface GitBranchesState {
@@ -54,7 +55,7 @@ interface UseGitWorkspaceOptions {
   selectedGitFilePath?: string | null;
   onViewChange: (view: 'chat' | 'editor' | 'git') => void;
   onGitCommit: (message: string, files: string[]) => Promise<unknown>;
-  onGitAICommit: () => Promise<string>;
+  onGitAICommit: () => Promise<{ commitMessage: string; warnings?: string[] }>;
   onGitStage: (files: string[]) => Promise<void>;
   onGitUnstage: (files: string[]) => Promise<void>;
   onGitDiscard: (files: string[]) => Promise<void>;
@@ -95,6 +96,7 @@ export const useGitWorkspace = ({
   const [isGitActing, setIsGitActing] = useState(false);
   const [isGeneratingCommitMessage, setIsGeneratingCommitMessage] = useState(false);
   const [gitActionError, setGitActionError] = useState<string | null>(null);
+  const [gitActionWarning, setGitActionWarning] = useState<string | null>(null);
   const [gitBranches, setGitBranches] = useState<GitBranchesState>({ current: '', branches: [] });
   const [isReviewLoading, setIsReviewLoading] = useState(false);
   const [isReviewFixing, setIsReviewFixing] = useState(false);
@@ -266,6 +268,7 @@ export const useGitWorkspace = ({
 
   const runGitAction = useCallback(async (action: () => Promise<unknown>, fallbackMessage: string) => {
     setGitActionError(null);
+    setGitActionWarning(null);
     setIsGitActing(true);
     try {
       await action();
@@ -374,13 +377,17 @@ export const useGitWorkspace = ({
   const handleGenerateCommitMessage = useCallback(() => {
     if (!gitStatus?.staged.length) return;
     setGitActionError(null);
+    setGitActionWarning(null);
     setIsGeneratingCommitMessage(true);
     onGitAICommit()
-      .then((generatedMessage) => {
+      .then(({ commitMessage: generatedMessage, warnings }) => {
         if (!generatedMessage || !generatedMessage.trim()) {
           throw new Error('AI returned an empty commit message');
         }
         setCommitMessage(generatedMessage.trim());
+        if (warnings && warnings.length > 0) {
+          setGitActionWarning(warnings.join(' '));
+        }
       })
       .catch((error) => {
         setGitActionError(error instanceof Error ? error.message : 'Failed to generate commit message');
@@ -392,6 +399,7 @@ export const useGitWorkspace = ({
 
   const handleRunReview = useCallback(async () => {
     setReviewError(null);
+    setGitActionWarning(null);
     setReviewFixResult(null);
     setIsReviewLoading(true);
     try {
@@ -523,6 +531,7 @@ export const useGitWorkspace = ({
     isGitActing,
     isGeneratingCommitMessage,
     gitActionError,
+    gitActionWarning,
     isReviewLoading,
     isReviewFixing,
     reviewError,

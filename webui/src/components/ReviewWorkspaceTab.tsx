@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { ShieldCheck, Loader2, Wrench } from 'lucide-react';
+import { ShieldCheck, Loader2, Wrench, AlertTriangle } from 'lucide-react';
 import MessageSegments from './MessageSegments';
 import MessageBubble from './MessageBubble';
 import { parseReviewGuidance, reviewGuidanceToMarkdown } from '../utils/reviewFormatting';
@@ -13,6 +13,7 @@ interface DeepReviewResult {
   review_output: string;
   provider?: string;
   model?: string;
+  warnings?: string[];
 }
 
 interface ReviewWorkspaceTabProps {
@@ -87,6 +88,20 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
                 </div>
                 <MessageSegments content={review.feedback || review.review_output} />
               </MessageBubble>
+
+              {review.warnings && review.warnings.length > 0 ? (
+                <MessageBubble
+                  type="assistant"
+                  ariaLabel="Review warnings"
+                  copyText={review.warnings.join('\n')}
+                >
+                  <div className="review-meta-strip review-warning-strip">
+                    <span><AlertTriangle size={14} /></span>
+                    <span>Warnings</span>
+                  </div>
+                  <MessageSegments content={review.warnings.map((warning) => `- ${warning}`).join('\n')} />
+                </MessageBubble>
+              ) : null}
 
               {review.detailed_guidance ? (
                 <MessageBubble

@@ -153,6 +153,10 @@
   color: var(--text-secondary);
 }
 
+.review-warning-strip {
+  color: var(--accent-warning);
+}
+
 .review-status-pill {
   display: inline-flex;
   align-items: center;

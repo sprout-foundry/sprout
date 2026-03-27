@@ -143,6 +143,54 @@ func TestHandleAPIInstancesRejectsInvalidMethod(t *testing.T) {
 	}
 }
 
+func TestHandleAPISSHHostsReturnsParsedEntries(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+
+	sshDir := filepath.Join(homeDir, ".ssh")
+	if err := os.MkdirAll(sshDir, 0755); err != nil {
+		t.Fatalf("failed to create ssh dir: %v", err)
+	}
+	config := `
+Host devbox
+  User alice
+  HostName devbox.internal
+  Port 2222
+
+Host *.wildcard
+  User ignored
+`
+	if err := os.WriteFile(filepath.Join(sshDir, "config"), []byte(config), 0644); err != nil {
+		t.Fatalf("failed to write ssh config: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/instances/ssh-hosts", nil)
+	w := httptest.NewRecorder()
+
+	server := &ReactWebServer{}
+	server.handleAPISSHHosts(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	var response struct {
+		Hosts []sshHostEntryDTO `json:"hosts"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(response.Hosts) != 1 {
+		t.Fatalf("expected 1 parsed host, got %d", len(response.Hosts))
+	}
+	if response.Hosts[0].Alias != "devbox" {
+		t.Fatalf("expected alias devbox, got %q", response.Hosts[0].Alias)
+	}
+	if response.Hosts[0].User != "alice" || response.Hosts[0].Hostname != "devbox.internal" || response.Hosts[0].Port != "2222" {
+		t.Fatalf("unexpected host entry: %+v", response.Hosts[0])
+	}
+}
+
 func writeJSONFile(t *testing.T, path string, v interface{}) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {

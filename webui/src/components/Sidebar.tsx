@@ -137,7 +137,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const { themePack, availableThemePacks, setThemePack, importTheme, removeTheme } = useTheme();
   const { applyPreset } = useHotkeys();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const fileTreeRef = useRef<{ refresh: () => void } | null>(null);
+  const fileTreeRef = useRef<{ refresh: () => void; revealFile: (filePath: string) => void } | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
     const stored = localStorage.getItem('ledit-sidebar-width');
@@ -329,6 +329,31 @@ const Sidebar: React.FC<SidebarProps> = ({
     };
     window.addEventListener('ledit:hotkey', handleHotkey);
     return () => window.removeEventListener('ledit:hotkey', handleHotkey);
+  }, [effectiveSidebarCollapsed, onSidebarToggle]);
+
+  // Handle reveal-in-explorer event
+  useEffect(() => {
+    const handleReveal = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      const filePath = detail?.path;
+      if (!filePath) return;
+      
+      // Switch to files tab
+      if (effectiveSidebarCollapsed) {
+        setSelectedSection('files');
+        onSidebarToggle?.();
+      } else {
+        setSelectedSection('files');
+      }
+      
+      // Give the section switch time to render, then reveal
+      setTimeout(() => {
+        fileTreeRef.current?.revealFile(filePath);
+      }, 100);
+    };
+    
+    window.addEventListener('ledit:reveal-in-explorer', handleReveal);
+    return () => window.removeEventListener('ledit:reveal-in-explorer', handleReveal);
   }, [effectiveSidebarCollapsed, onSidebarToggle]);
 
   const handleLogoToggle = useCallback(() => {

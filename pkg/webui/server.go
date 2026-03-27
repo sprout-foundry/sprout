@@ -28,6 +28,9 @@ import (
 //go:embed static
 var staticFiles embed.FS
 
+//go:embed logo-mark.svg
+var logoMarkSVG []byte
+
 // ConnectionInfo stores metadata about a WebSocket connection
 type ConnectionInfo struct {
 	SessionID   string    // Unique session ID for this connection

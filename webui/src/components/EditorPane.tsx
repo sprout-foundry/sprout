@@ -42,6 +42,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const [saving, setSaving] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [localContent, setLocalContent] = useState<string>('');
 
@@ -108,7 +109,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
 
   const loadFileRef = useRef<((filePath: string) => Promise<void>) | null>(null);
 
-  // Load file content - does NOT update buffer in context to avoid infinite loop
+  // Load file content - updates buffer in context to keep it in sync with editor
   const loadFile = useCallback(async (filePath: string) => {
     setLoading(true);
     setError(null);
@@ -124,6 +125,12 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       const content = await response.text();
 
       setLocalContent(content);
+
+      // Update buffer in context to keep it in sync with editor
+      if (buffer) {
+        updateBufferContent(buffer.id, content);
+        setBufferModified(buffer.id, content !== buffer.originalContent);
+      }
 
       // Update editor if it exists
       if (viewRef.current) {
@@ -158,7 +165,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       isExternalUpdateRef.current = false;
       setLoading(false);
     }
-  }, [apiService]);
+  }, [apiService, buffer, updateBufferContent, setBufferModified]);
 
   // Keep ref in sync
   loadFileRef.current = loadFile;
@@ -189,9 +196,12 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   const handleSave = useCallback(async () => {
     if (!buffer || !viewRef.current) return;
 
+    setSaving(true);
+    setError(null);
+
     try {
       await saveBuffer(buffer.id);
-      
+
       // Re-fetch diff after save
       if (buffer.file.path && viewRef.current) {
         try {
@@ -206,9 +216,13 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         }
       }
     } catch (err) {
-      setError('Failed to save file');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save file';
+      setError(errorMessage);
+      console.error('Save error:', errorMessage);
+    } finally {
+      setSaving(false);
     }
-  }, [buffer, saveBuffer, apiService]);
+  }, [buffer, saveBuffer, apiService, updateDiffGutter, clearDiffGutter]);
 
   const isExternalUpdateRef = useRef<boolean>(false);
   const lastLoadedRef = useRef<{bufferId: string, filePath: string} | null>(null);
@@ -448,6 +462,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         paneId={paneId}
         onGoToLine={handleGoToLine}
         onSave={handleSave}
+        saving={saving}
       />
 
       {loading && (

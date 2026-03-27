@@ -52,6 +52,23 @@ type sshHostEntryDTO struct {
 	Port     string `json:"port,omitempty"`
 }
 
+type sshLaunchRequestDTO struct {
+	HostAlias           string `json:"host_alias"`
+	RemoteWorkspacePath string `json:"remote_workspace_path,omitempty"`
+}
+
+type sshSessionEntryDTO struct {
+	Key                 string    `json:"key"`
+	HostAlias           string    `json:"host_alias"`
+	RemoteWorkspacePath string    `json:"remote_workspace_path"`
+	LocalPort           int       `json:"local_port,omitempty"`
+	RemotePort          int       `json:"remote_port"`
+	RemotePID           int       `json:"remote_pid,omitempty"`
+	URL                 string    `json:"url,omitempty"`
+	StartedAt           time.Time `json:"started_at"`
+	Active              bool      `json:"active"`
+}
+
 func (ws *ReactWebServer) handleAPIInstances(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -193,6 +210,81 @@ func (ws *ReactWebServer) handleAPISSHHosts(w http.ResponseWriter, r *http.Reque
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"hosts": hosts,
+	})
+}
+
+func (ws *ReactWebServer) handleAPISSHOpen(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req sshLaunchRequestDTO
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	result, err := ws.launchSSHWorkspace(req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "ssh workspace ready",
+		"url":     result.URL,
+		"port":    result.LocalPort,
+	})
+}
+
+func (ws *ReactWebServer) handleAPISSHSessions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	sessions, err := ws.listSSHSessions()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"sessions": sessions,
+	})
+}
+
+func (ws *ReactWebServer) handleAPISSHSessionDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Key string `json:"key"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	req.Key = strings.TrimSpace(req.Key)
+	if req.Key == "" {
+		http.Error(w, "key is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := ws.closeSSHSession(req.Key); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "ssh session closed",
+		"key":     req.Key,
 	})
 }
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import './LocationSwitcher.css';
 import { FolderOpen, Monitor, RefreshCw, Loader2 } from 'lucide-react';
-import { ApiService, LeditInstance, SSHHostEntry } from '../services/api';
+import { ApiService, LeditInstance, SSHHostEntry, SSHSessionEntry } from '../services/api';
 
 interface LocationSwitcherProps {
   isConnected: boolean;
@@ -20,6 +20,7 @@ interface WorkspaceDirectory {
 interface SwitchingState {
   isSwitching: boolean;
   error: string | null;
+  status: string | null;
 }
 
 const RECENT_WORKSPACES_KEY = 'ledit.recentWorkspaces';
@@ -96,6 +97,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
   const [switchingState, setSwitchingState] = useState<SwitchingState>({
     isSwitching: false,
     error: null,
+    status: null,
   });
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [isLoading, setIsLoading] = useState(false);
@@ -104,7 +106,10 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
   const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
   const [recentWorkspaces, setRecentWorkspaces] = useState<string[]>(() => readRecentWorkspaces());
   const [sshHosts, setSshHosts] = useState<SSHHostEntry[]>([]);
+  const [sshSessions, setSshSessions] = useState<SSHSessionEntry[]>([]);
   const [isOpeningSshHost, setIsOpeningSshHost] = useState<string | null>(null);
+  const [isClosingSshSession, setIsClosingSshSession] = useState<string | null>(null);
+  const [remoteWorkspacePath, setRemoteWorkspacePath] = useState('');
 
   const popoverRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -170,14 +175,14 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
   }, [addRecentWorkspace, isConnected]);
 
   useEffect(() => {
-    if (!switchingState.error) {
+    if (!switchingState.error && !switchingState.status) {
       return undefined;
     }
     const timer = window.setTimeout(() => {
-      setSwitchingState((prev) => ({ ...prev, error: null }));
+      setSwitchingState((prev) => ({ ...prev, error: null, status: null }));
     }, 3000);
     return () => window.clearTimeout(timer);
-  }, [switchingState.error]);
+  }, [switchingState.error, switchingState.status]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -186,20 +191,21 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
     const desktopBridge = (window as any).leditDesktop;
 
     let cancelled = false;
-    const loadHosts = desktopBridge?.listSshHosts
-      ? desktopBridge.listSshHosts()
-      : apiService.current.getSSHHosts();
-
-    loadHosts
-      .then((hosts: SSHHostEntry[]) => {
+    Promise.all([
+      (desktopBridge?.listSshHosts ? desktopBridge.listSshHosts() : apiService.current.getSSHHosts()),
+      apiService.current.getSSHSessions().catch(() => []),
+    ])
+      .then(([hosts, sessions]) => {
         if (!cancelled) {
           setSshHosts(Array.isArray(hosts) ? hosts : []);
+          setSshSessions(Array.isArray(sessions) ? sessions : []);
         }
       })
       .catch((error: unknown) => {
         if (!cancelled) {
           console.error('Failed to load SSH hosts:', error);
           setSshHosts([]);
+          setSshSessions([]);
         }
       });
 
@@ -222,7 +228,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
       ) {
         setIsOpen(false);
         setSelectedIndex(-1);
-        setSwitchingState({ isSwitching: false, error: null });
+        setSwitchingState({ isSwitching: false, error: null, status: null });
       }
     };
 
@@ -343,7 +349,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
       return;
     }
 
-    setSwitchingState({ isSwitching: true, error: null });
+    setSwitchingState({ isSwitching: true, error: null, status: 'Switching workspace…' });
 
     try {
       try {
@@ -353,7 +359,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
             `${sessionCount} terminal session${sessionCount === 1 ? ' is' : 's are'} active. Switching workspace will close ${sessionCount === 1 ? 'it' : 'them'}. Continue?`
           );
           if (!confirmed) {
-            setSwitchingState({ isSwitching: false, error: null });
+            setSwitchingState({ isSwitching: false, error: null, status: null });
             return;
           }
         }
@@ -383,14 +389,15 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
         setSwitchingState({
           isSwitching: false,
           error: 'Cannot switch while a query is running',
+          status: null,
         });
       } else {
-        setSwitchingState({ isSwitching: false, error: errorMessage });
+        setSwitchingState({ isSwitching: false, error: errorMessage, status: null });
       }
       return;
     }
 
-    setSwitchingState({ isSwitching: false, error: null });
+    setSwitchingState({ isSwitching: false, error: null, status: null });
     setIsOpen(false);
     setSelectedIndex(-1);
   }, [addRecentWorkspace, workspaceRoot]);
@@ -430,6 +437,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
       setSwitchingState({
         isSwitching: false,
         error: 'Failed to refresh workspace data',
+        status: null,
       });
     } finally {
       setIsLoading(false);
@@ -444,27 +452,72 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
     }
   }, [isOpen, workspaceRoot]);
 
-  const handleOpenSshHost = useCallback(async (hostAlias: string) => {
+  const handleOpenSshHost = useCallback(async (hostAlias: string, explicitRemotePath?: string) => {
     const desktopBridge = (window as any).leditDesktop;
-    if (!desktopBridge?.openSshWorkspace || !hostAlias) {
-      setSwitchingState({
-        isSwitching: false,
-        error: 'SSH workspace launch from the browser UI is not implemented yet. Use the desktop app to open remote SSH workspaces.',
-      });
+    if (!hostAlias) {
       return;
     }
+    const targetRemotePath = explicitRemotePath?.trim() || remoteWorkspacePath.trim() || undefined;
 
     setIsOpeningSshHost(hostAlias);
-    setSwitchingState({ isSwitching: false, error: null });
+    setSwitchingState({ isSwitching: false, error: null, status: `Connecting to ${hostAlias}…` });
+    let stageIndex = 0;
+    const stageMessages = [
+      `Connecting to ${hostAlias}…`,
+      `Preparing remote backend on ${hostAlias}…`,
+      `Starting tunnel for ${hostAlias}…`,
+    ];
+    const stageTimer = window.setInterval(() => {
+      stageIndex = Math.min(stageIndex + 1, stageMessages.length - 1);
+      setSwitchingState((prev) => ({ ...prev, status: stageMessages[stageIndex] }));
+    }, 1400);
 
     try {
-      await desktopBridge.openSshWorkspace({ hostAlias, forceNewWindow: true });
+      if (desktopBridge?.openSshWorkspace) {
+        await desktopBridge.openSshWorkspace({
+          hostAlias,
+          remoteWorkspacePath: targetRemotePath,
+          forceNewWindow: true,
+        });
+      } else {
+        const response = await apiService.current.openSSHWorkspace(
+          hostAlias,
+          targetRemotePath
+        );
+        if (!response.url) {
+          throw new Error('SSH workspace did not return a local URL');
+        }
+        const opened = window.open(response.url, '_blank', 'noopener,noreferrer');
+        if (!opened) {
+          window.location.assign(response.url);
+        }
+      }
       setIsOpen(false);
+      setSshSessions(await apiService.current.getSSHSessions().catch(() => []));
+      setSwitchingState({ isSwitching: false, error: null, status: `SSH workspace ready: ${hostAlias}` });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to open SSH host';
-      setSwitchingState({ isSwitching: false, error: message });
+      setSwitchingState({ isSwitching: false, error: message, status: null });
     } finally {
+      window.clearInterval(stageTimer);
       setIsOpeningSshHost(null);
+    }
+  }, [remoteWorkspacePath]);
+
+  const handleCloseSshSession = useCallback(async (sessionKey: string) => {
+    if (!sessionKey) {
+      return;
+    }
+    setIsClosingSshSession(sessionKey);
+    try {
+      await apiService.current.closeSSHSession(sessionKey);
+      setSshSessions(await apiService.current.getSSHSessions().catch(() => []));
+      setSwitchingState({ isSwitching: false, error: null, status: 'SSH session closed' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to close SSH session';
+      setSwitchingState({ isSwitching: false, error: message, status: null });
+    } finally {
+      setIsClosingSshSession(null);
     }
   }, []);
 
@@ -561,6 +614,11 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
           {switchingState.error ? (
             <div id="location-switcher-error" className="location-switcher-error" role="alert">
               {switchingState.error}
+            </div>
+          ) : null}
+          {!switchingState.error && switchingState.status ? (
+            <div className="location-switcher-status" role="status" aria-live="polite">
+              {switchingState.status}
             </div>
           ) : null}
 
@@ -744,6 +802,22 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
                 <div className="location-switcher-section-header" role="presentation">
                   SSH Hosts
                 </div>
+                <div className="location-switcher-ssh-input-container">
+                  <input
+                    type="text"
+                    className="location-switcher-ssh-input"
+                    value={remoteWorkspacePath}
+                    onChange={(event) => setRemoteWorkspacePath(event.target.value)}
+                    placeholder="Remote path (default: $HOME)"
+                    disabled={Boolean(isOpeningSshHost) || switchingState.isSwitching}
+                    title="Optional remote working directory"
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                </div>
+                <div className="location-switcher-subtitle">
+                  Opens the SSH workspace in a new tab. Leave blank to use the remote home directory.
+                </div>
                 {sshHosts.map((host) => {
                   const metaParts = [
                     host.user ? `${host.user}@${host.hostname || host.alias}` : (host.hostname || host.alias),
@@ -771,6 +845,45 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
                     </button>
                   );
                 })}
+              </>
+            ) : null}
+
+            {sshSessions.length > 0 ? (
+              <>
+                <div className="location-switcher-section-header" role="presentation">
+                  SSH Sessions
+                </div>
+                {sshSessions.map((session) => (
+                  <div
+                    key={`ssh-session-${session.key}`}
+                    className={`location-switcher-item location-switcher-item-session ${session.active ? 'active' : ''}`}
+                    role="option"
+                    aria-selected={false}
+                  >
+                    <span className="location-switcher-item-text">{session.host_alias}</span>
+                    <span className="location-switcher-item-meta">
+                      {session.remote_workspace_path || '$HOME'}
+                    </span>
+                    <div className="location-switcher-session-actions">
+                      <button
+                        type="button"
+                        className="location-switcher-session-btn"
+                        onClick={() => handleOpenSshHost(session.host_alias, session.remote_workspace_path)}
+                        disabled={Boolean(isOpeningSshHost) || Boolean(isClosingSshSession)}
+                      >
+                        Open
+                      </button>
+                      <button
+                        type="button"
+                        className="location-switcher-session-btn danger"
+                        onClick={() => handleCloseSshSession(session.key)}
+                        disabled={Boolean(isOpeningSshHost) || Boolean(isClosingSshSession)}
+                      >
+                        {isClosingSshSession === session.key ? 'Closing…' : 'Close'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </>
             ) : null}
           </div>

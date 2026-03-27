@@ -22,12 +22,64 @@ interface SwitchingState {
   error: string | null;
 }
 
-interface BrowseState {
-  currentPath: string;
-  directories: WorkspaceDirectory[];
-  isLoading: boolean;
-  error: string | null;
-}
+const RECENT_WORKSPACES_KEY = 'ledit.recentWorkspaces';
+const MAX_RECENT_WORKSPACES = 15;
+const MAX_SUGGESTIONS = 8;
+
+const normalizePath = (rawPath: string): string => {
+  let normalized = rawPath.trim().replace(/\/+/g, '/');
+  if (!normalized) {
+    return '';
+  }
+  if (!normalized.startsWith('/')) {
+    normalized = `/${normalized}`;
+  }
+  if (normalized.length > 1 && normalized.endsWith('/')) {
+    normalized = normalized.slice(0, -1);
+  }
+  return normalized;
+};
+
+const getPathDisplayName = (path: string): string => {
+  const normalized = normalizePath(path);
+  const segments = normalized.split('/').filter(Boolean);
+  if (segments.length <= 2) {
+    return segments.join('/') || normalized || 'No workspace';
+  }
+  return segments.slice(-2).join('/');
+};
+
+const readRecentWorkspaces = (): string[] => {
+  if (typeof window === 'undefined') {
+    return [];
+  }
+  try {
+    const raw = window.localStorage.getItem(RECENT_WORKSPACES_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .map((value) => (typeof value === 'string' ? normalizePath(value) : ''))
+      .filter(Boolean)
+      .slice(0, MAX_RECENT_WORKSPACES);
+  } catch {
+    return [];
+  }
+};
+
+const writeRecentWorkspaces = (paths: string[]) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  window.localStorage.setItem(
+    RECENT_WORKSPACES_KEY,
+    JSON.stringify(paths.slice(0, MAX_RECENT_WORKSPACES))
+  );
+};
 
 const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
   isConnected,
@@ -39,36 +91,53 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [workspaceRoot, setWorkspaceRoot] = useState('');
+  const [daemonRoot, setDaemonRoot] = useState('');
+  const [inputValue, setInputValue] = useState('');
   const [switchingState, setSwitchingState] = useState<SwitchingState>({
     isSwitching: false,
     error: null,
   });
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [isLoading, setIsLoading] = useState(false);
-
-  // Browse state for file browser
-  const [browseState, setBrowseState] = useState<BrowseState>({
-    currentPath: '',
-    directories: [],
-    isLoading: false,
-    error: null,
-  });
+  const [suggestions, setSuggestions] = useState<WorkspaceDirectory[]>([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
+  const [recentWorkspaces, setRecentWorkspaces] = useState<string[]>(() => readRecentWorkspaces());
 
   const popoverRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const pathInputRef = useRef<HTMLInputElement>(null);
   const apiService = useRef(ApiService.getInstance());
 
-  // Load workspace info and initialize browse path on mount or when connected
+  const persistRecentWorkspaces = useCallback((updater: (current: string[]) => string[]) => {
+    setRecentWorkspaces((current) => {
+      const next = updater(current)
+        .map((value) => normalizePath(value))
+        .filter(Boolean)
+        .slice(0, MAX_RECENT_WORKSPACES);
+      writeRecentWorkspaces(next);
+      return next;
+    });
+  }, []);
+
+  const addRecentWorkspace = useCallback((path: string) => {
+    const normalized = normalizePath(path);
+    if (!normalized) {
+      return;
+    }
+    persistRecentWorkspaces((current) => [
+      normalized,
+      ...current.filter((entry) => entry !== normalized),
+    ]);
+  }, [persistRecentWorkspaces]);
+
   useEffect(() => {
     if (!isConnected) {
       setWorkspaceRoot('');
-      setBrowseState({
-        currentPath: '',
-        directories: [],
-        isLoading: false,
-        error: null,
-      });
+      setDaemonRoot('');
+      setInputValue('');
+      setSuggestions([]);
+      setSuggestionsError(null);
       return;
     }
 
@@ -76,17 +145,16 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
 
     const loadData = async () => {
       try {
-        // Get workspace info
         const workspace = await apiService.current.getWorkspace();
-        if (!cancelled) {
-          setWorkspaceRoot(workspace.workspace_root || '');
-          // Initialize browse path to current workspace root
-          setBrowseState(prev => ({
-            ...prev,
-            currentPath: workspace.workspace_root || '',
-            error: null,
-          }));
+        if (cancelled) {
+          return;
         }
+        const nextWorkspaceRoot = normalizePath(workspace.workspace_root || '');
+        const nextDaemonRoot = normalizePath(workspace.daemon_root || '');
+        setWorkspaceRoot(nextWorkspaceRoot);
+        setDaemonRoot(nextDaemonRoot);
+        setInputValue(nextWorkspaceRoot);
+        addRecentWorkspace(nextWorkspaceRoot);
       } catch (error) {
         console.error('Failed to load workspace data:', error);
       }
@@ -97,65 +165,25 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [isConnected]);
+  }, [addRecentWorkspace, isConnected]);
 
-  // Load directories for current browse path
   useEffect(() => {
-    if (!browseState.currentPath || !isConnected) return;
+    if (!switchingState.error) {
+      return undefined;
+    }
+    const timer = window.setTimeout(() => {
+      setSwitchingState((prev) => ({ ...prev, error: null }));
+    }, 3000);
+    return () => window.clearTimeout(timer);
+  }, [switchingState.error]);
 
-    let cancelled = false;
-
-    const loadDirectories = async () => {
-      setBrowseState(prev => ({ ...prev, isLoading: true, error: null }));
-
-      try {
-        const response = await fetch(
-          `/api/workspace/browse?path=${encodeURIComponent(browseState.currentPath)}`
-        );
-        if (!response.ok) {
-          throw new Error('Failed to fetch directory contents');
-        }
-        const data = await response.json();
-        if (!cancelled) {
-          const directories: WorkspaceDirectory[] = (data.files || [])
-            .filter(
-              (file: any) =>
-                file.type === 'directory' &&
-                !file.name.startsWith('.')
-            )
-            .map((file: any) => ({
-              name: file.name,
-              path: file.path,
-            }));
-          setBrowseState(prev => ({
-            ...prev,
-            directories,
-            isLoading: false,
-          }));
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setBrowseState(prev => ({
-            ...prev,
-            isLoading: false,
-            error: error instanceof Error ? error.message : 'Failed to load directory',
-          }));
-        }
-      }
-    };
-
-    loadDirectories();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [browseState.currentPath, isConnected]);
-
-  // Click-outside handler
   useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+
     const handleClickOutside = (event: MouseEvent) => {
       if (
-        isOpen &&
         popoverRef.current &&
         !popoverRef.current.contains(event.target as Node) &&
         triggerRef.current &&
@@ -173,215 +201,120 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
     };
   }, [isOpen]);
 
-  // Keyboard navigation for directory list
   useEffect(() => {
-    if (!isOpen) return;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // Don't intercept if focus is in path input
-      if (document.activeElement === pathInputRef.current) {
-        if (event.key === 'Enter') {
-          event.preventDefault();
-          handlePathInputChange();
-        }
-        return;
-      }
-
-      switch (event.key) {
-        case 'Escape':
-          event.preventDefault();
-          setIsOpen(false);
-          setSelectedIndex(-1);
-          break;
-
-        case 'ArrowDown':
-          event.preventDefault();
-          setSelectedIndex((prev) => {
-            if (browseState.directories.length === 0) return -1;
-            return prev < browseState.directories.length - 1 ? prev + 1 : 0;
-          });
-          break;
-
-        case 'ArrowUp':
-          event.preventDefault();
-          setSelectedIndex((prev) => {
-            if (browseState.directories.length === 0) return -1;
-            if (prev <= 0) {
-              return browseState.directories.length - 1;
-            }
-            return prev - 1;
-          });
-          break;
-
-        case 'Enter':
-          event.preventDefault();
-          if (selectedIndex >= 0 && selectedIndex < browseState.directories.length) {
-            handleDirectoryNavigate(selectedIndex);
-          }
-          break;
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, selectedIndex, browseState.directories]);
-
-  // Reset selected index when directories change
-  useEffect(() => {
-    if (selectedIndex >= browseState.directories.length) {
-      setSelectedIndex(-1);
+    if (!isOpen || !pathInputRef.current) {
+      return;
     }
-  }, [selectedIndex, browseState.directories.length]);
-
-  // Auto-dismiss error after 3 seconds
-  useEffect(() => {
-    if (switchingState.error) {
-      const timer = setTimeout(() => {
-        setSwitchingState((prev) => ({ ...prev, error: null }));
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [switchingState.error]);
-
-  // Auto-focus path input when popover opens
-  useEffect(() => {
-    if (isOpen && pathInputRef.current) {
-      setTimeout(() => {
-        pathInputRef.current?.focus();
-      }, 50);
-    }
+    const timer = window.setTimeout(() => {
+      pathInputRef.current?.focus();
+      pathInputRef.current?.select();
+    }, 50);
+    return () => window.clearTimeout(timer);
   }, [isOpen]);
 
-  // Get trigger width for popover
+  useEffect(() => {
+    if (!isOpen || !isConnected) {
+      return;
+    }
+
+    const normalizedInput = normalizePath(inputValue);
+    if (!normalizedInput) {
+      setSuggestions([]);
+      setSuggestionsError(null);
+      setSuggestionsLoading(false);
+      return;
+    }
+
+    const endsWithSlash = inputValue.trim().endsWith('/');
+    const parentPath = endsWithSlash ? normalizedInput : normalizePath(normalizedInput.split('/').slice(0, -1).join('/')) || '/';
+    const prefix = endsWithSlash ? '' : normalizedInput.split('/').filter(Boolean).pop() || '';
+
+    let cancelled = false;
+
+    const loadSuggestions = async () => {
+      setSuggestionsLoading(true);
+      setSuggestionsError(null);
+
+      try {
+        const response = await fetch(`/api/workspace/browse?path=${encodeURIComponent(parentPath)}`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch matching folders');
+        }
+        const data = await response.json();
+        if (cancelled) {
+          return;
+        }
+
+        const nextSuggestions = (data.files || [])
+          .filter((file: any) => file.type === 'directory' && !String(file.name || '').startsWith('.'))
+          .map((file: any) => ({
+            name: String(file.name),
+            path: normalizePath(String(file.path)),
+          }))
+          .filter((entry: WorkspaceDirectory) => {
+            if (!prefix) {
+              return true;
+            }
+            return entry.name.toLowerCase().startsWith(prefix.toLowerCase());
+          })
+          .sort((a: WorkspaceDirectory, b: WorkspaceDirectory) => a.name.localeCompare(b.name))
+          .slice(0, MAX_SUGGESTIONS);
+
+        setSuggestions(nextSuggestions);
+        setSuggestionsLoading(false);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        setSuggestions([]);
+        setSuggestionsLoading(false);
+        setSuggestionsError(error instanceof Error ? error.message : 'Failed to fetch matching folders');
+      }
+    };
+
+    loadSuggestions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [inputValue, isConnected, isOpen]);
+
+  useEffect(() => {
+    const suggestionCount = suggestions.length;
+    const recentCount = recentWorkspaces.length;
+    const maxIndex = suggestionCount + recentCount - 1;
+    if (selectedIndex > maxIndex) {
+      setSelectedIndex(-1);
+    }
+  }, [recentWorkspaces.length, selectedIndex, suggestions.length]);
+
   const triggerWidth = useMemo(() => {
     if (triggerRef.current) {
       return `${triggerRef.current.offsetWidth}px`;
     }
     return undefined;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Get breadcrumb segments from current path
-  const breadcrumbSegments = useMemo(() => {
-    if (!browseState.currentPath) return [];
-    const parts = browseState.currentPath.split('/').filter(Boolean);
-    // Build cumulative paths for each segment
-    const segments: Array<{ label: string; path: string }> = [];
-    let currentPath = '';
-    for (let i = 0; i < parts.length; i++) {
-      currentPath += '/' + parts[i];
-      segments.push({
-        label: parts[i],
-        path: currentPath,
-      });
-    }
-    // Truncate to last 4 segments if too deep
-    if (segments.length > 4) {
-      const first = segments[0];
-      return [
-        first,
-        { label: '...', path: first.path },
-        ...segments.slice(-3),
-      ];
-    }
-    return segments;
-  }, [browseState.currentPath]);
+  const truncatedWorkspaceName = useMemo(() => getPathDisplayName(workspaceRoot), [workspaceRoot]);
 
-  // Navigate to a specific path
-  const navigateToPath = useCallback((path: string) => {
-    setBrowseState(prev => ({
-      ...prev,
-      currentPath: path,
-      error: null,
-    }));
-    setSelectedIndex(-1);
-  }, []);
+  const showText = !sidebarCollapsed;
 
-  // Navigate into a directory
-  const handleDirectoryNavigate = useCallback(
-    (index: number) => {
-      const dir = browseState.directories[index];
-      if (dir) {
-        navigateToPath(dir.path);
-      }
-    },
-    [browseState.directories, navigateToPath]
-  );
+  const recentWorkspaceItems = useMemo(() => {
+    return recentWorkspaces
+      .filter((path) => path !== workspaceRoot)
+      .slice(0, MAX_RECENT_WORKSPACES);
+  }, [recentWorkspaces, workspaceRoot]);
 
-  // Handle path input change
-  const handlePathInputChange = useCallback(async () => {
-    const input = pathInputRef.current;
-    if (!input || !input.value.trim()) return;
-
-    let path = input.value.trim();
-
-    // Handle ~ prefix (client-side expansion)
-    if (path.startsWith('~/')) {
-      try {
-        const homeDir = await apiService.current.getWorkspace();
-        if (homeDir.daemon_root) {
-          path = homeDir.daemon_root + path.substring(1);
-        }
-      } catch {
-        // Just use ~/ as-is, API will handle it
-      }
-    }
-
-    // Normalize path
-    path = path.replace(/\/+/g, '/');
-    if (!path.startsWith('/')) {
-      path = '/' + path;
-    }
-
-    // Check if path exists and is a directory
-    try {
-      const response = await fetch(
-        `/api/workspace/browse?path=${encodeURIComponent(path)}`
-      );
-      if (response.ok) {
-        navigateToPath(path);
-      } else {
-        // Path doesn't exist, try to switch to it anyway
-        navigateToPath(path);
-      }
-    } catch {
-      // Navigate anyway, API will handle validation
-      navigateToPath(path);
-    }
-  }, [navigateToPath]);
-
-  // Handle path input blur - resolve and update display
-  const handlePathInputBlur = useCallback(() => {
-    const input = pathInputRef.current;
-    if (!input || !input.value.trim()) return;
-
-    let path = input.value.trim();
-    if (path.startsWith('~/')) {
-      // Keep ~/ for now, API will resolve
-    }
-    path = path.replace(/\/+/g, '/');
-    if (!path.startsWith('/')) {
-      path = '/' + path;
-    }
-
-    // Update input value to normalized path
-    input.value = path;
-  }, []);
-
-  // Switch to current browse path as workspace
-  const handleSwitchToBrowsePath = useCallback(async () => {
-    if (browseState.currentPath === workspaceRoot) {
-      // Already at this workspace, nothing to do
+  const submitWorkspaceChange = useCallback(async (targetPath: string) => {
+    const normalizedTarget = normalizePath(targetPath);
+    if (!normalizedTarget || normalizedTarget === workspaceRoot) {
+      setInputValue(workspaceRoot);
       return;
     }
 
     setSwitchingState({ isSwitching: true, error: null });
 
     try {
-      // Check for active terminal sessions before switching
       try {
         const sessionCount = await apiService.current.getTerminalSessionCount();
         if (sessionCount > 0) {
@@ -394,15 +327,16 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
           }
         }
       } catch {
-        // If we can't check session count, proceed with switch
+        // Continue if session count cannot be checked.
       }
 
-      // Switch workspace
-      const response = await apiService.current.setWorkspace(browseState.currentPath);
-      setWorkspaceRoot(response.workspace_root || browseState.currentPath);
+      const response = await apiService.current.setWorkspace(normalizedTarget);
+      const nextWorkspaceRoot = normalizePath(response.workspace_root || normalizedTarget);
+      setWorkspaceRoot(nextWorkspaceRoot);
+      setInputValue(nextWorkspaceRoot);
+      addRecentWorkspace(nextWorkspaceRoot);
 
-      // Brief switching state, then reload
-      setTimeout(() => {
+      window.setTimeout(() => {
         window.location.reload();
       }, 300);
     } catch (error) {
@@ -411,7 +345,6 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
           ? error.message
           : 'Failed to switch to this folder';
 
-      // Check for query in progress error
       if (
         errorMessage.toLowerCase().includes('query') &&
         errorMessage.toLowerCase().includes('progress')
@@ -423,48 +356,44 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
       } else {
         setSwitchingState({ isSwitching: false, error: errorMessage });
       }
+      return;
     }
-  }, [browseState.currentPath, workspaceRoot]);
 
-  // Handle refresh
+    setSwitchingState({ isSwitching: false, error: null });
+    setIsOpen(false);
+    setSelectedIndex(-1);
+  }, [addRecentWorkspace, workspaceRoot]);
+
+  const handleInputSubmit = useCallback(async () => {
+    if (selectedIndex >= 0 && selectedIndex < suggestions.length) {
+      await submitWorkspaceChange(suggestions[selectedIndex].path);
+      return;
+    }
+
+    const recentIndex = selectedIndex - suggestions.length;
+    if (recentIndex >= 0 && recentIndex < recentWorkspaceItems.length) {
+      await submitWorkspaceChange(recentWorkspaceItems[recentIndex]);
+      return;
+    }
+
+    await submitWorkspaceChange(inputValue);
+  }, [inputValue, recentWorkspaceItems, selectedIndex, submitWorkspaceChange, suggestions]);
+
   const handleRefresh = useCallback(async () => {
-    if (!isConnected) return;
+    if (!isConnected) {
+      return;
+    }
 
     setIsLoading(true);
     try {
-      // Re-fetch workspace info
       const workspace = await apiService.current.getWorkspace();
-      setWorkspaceRoot(workspace.workspace_root || '');
-      setBrowseState(prev => ({
-        ...prev,
-        currentPath: workspace.workspace_root || '',
-        error: null,
-      }));
-
-      // Re-fetch workspace directories
-      if (workspace.daemon_root) {
-        const response = await fetch(
-          `/api/workspace/browse?path=${encodeURIComponent(workspace.daemon_root)}`
-        );
-        if (!response.ok) {
-          throw new Error('Failed to fetch workspace directories');
-        }
-        const data = await response.json();
-        const directories: WorkspaceDirectory[] = (data.files || [])
-          .filter(
-            (file: any) =>
-              file.type === 'directory' &&
-              !file.name.startsWith('.')
-          )
-          .map((file: any) => ({
-            name: file.name,
-            path: file.path,
-          }));
-        setBrowseState(prev => ({
-          ...prev,
-          directories,
-        }));
-      }
+      const nextWorkspaceRoot = normalizePath(workspace.workspace_root || '');
+      const nextDaemonRoot = normalizePath(workspace.daemon_root || '');
+      setWorkspaceRoot(nextWorkspaceRoot);
+      setDaemonRoot(nextDaemonRoot);
+      setInputValue(nextWorkspaceRoot);
+      addRecentWorkspace(nextWorkspaceRoot);
+      setSuggestionsError(null);
     } catch (error) {
       console.error('Failed to refresh workspace data:', error);
       setSwitchingState({
@@ -474,35 +403,62 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [isConnected]);
+  }, [addRecentWorkspace, isConnected]);
 
   const togglePopover = useCallback(() => {
     setIsOpen((prev) => !prev);
     if (!isOpen) {
       setSelectedIndex(-1);
+      setInputValue(workspaceRoot);
     }
-  }, [isOpen]);
+  }, [isOpen, workspaceRoot]);
 
-  // Get truncated workspace name (last 2 path segments)
-  const getTruncatedWorkspaceName = useCallback(
-    (path: string): string => {
-      if (!path) return 'No workspace';
-      const segments = path.split('/').filter(Boolean);
-      if (segments.length <= 2) {
-        return segments.join('/') || 'No workspace';
+  const totalWorkspaceRows = suggestions.length + recentWorkspaceItems.length;
+
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (document.activeElement !== pathInputRef.current) {
+        return;
       }
-      return segments.slice(-2).join('/');
-    },
-    []
-  );
 
-  const truncatedWorkspaceName = getTruncatedWorkspaceName(workspaceRoot);
+      switch (event.key) {
+        case 'Escape':
+          event.preventDefault();
+          setIsOpen(false);
+          setSelectedIndex(-1);
+          break;
+        case 'ArrowDown':
+          event.preventDefault();
+          if (totalWorkspaceRows === 0) {
+            return;
+          }
+          setSelectedIndex((prev) => (prev < totalWorkspaceRows - 1 ? prev + 1 : 0));
+          break;
+        case 'ArrowUp':
+          event.preventDefault();
+          if (totalWorkspaceRows === 0) {
+            return;
+          }
+          setSelectedIndex((prev) => (prev <= 0 ? totalWorkspaceRows - 1 : prev - 1));
+          break;
+        case 'Enter':
+          event.preventDefault();
+          handleInputSubmit();
+          break;
+        default:
+          break;
+      }
+    };
 
-  // Determine if we should show text (not collapsed)
-  const showText = !sidebarCollapsed;
-
-  // Check if browse path equals workspace root
-  const isBrowsePathActive = browseState.currentPath === workspaceRoot;
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleInputSubmit, isOpen, totalWorkspaceRows]);
 
   return (
     <div
@@ -520,20 +476,13 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
         disabled={!isConnected || (isLoading && !isOpen)}
         title={workspaceRoot || 'No workspace'}
       >
-        <FolderOpen
-          size={16}
-          className="location-switcher-trigger-icon"
-        />
+        <FolderOpen size={16} className="location-switcher-trigger-icon" />
         {showText && (
           <>
-            <span className="location-switcher-trigger-text">
-              {truncatedWorkspaceName}
-            </span>
-            {selectedInstancePID && (
-              <span className="location-switcher-trigger-pid">
-                pid:{selectedInstancePID}
-              </span>
-            )}
+            <span className="location-switcher-trigger-text">{truncatedWorkspaceName}</span>
+            {selectedInstancePID ? (
+              <span className="location-switcher-trigger-pid">pid:{selectedInstancePID}</span>
+            ) : null}
           </>
         )}
         {switchingState.isSwitching ? (
@@ -543,7 +492,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
         )}
       </button>
 
-      {isOpen && (
+      {isOpen ? (
         <div
           ref={popoverRef}
           className="location-switcher-popover"
@@ -552,195 +501,151 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
           }}
           role="listbox"
           aria-label="Location switcher"
-          aria-activedescendant={selectedIndex >= 0 ? `location-item-${selectedIndex}` : undefined}
           tabIndex={0}
         >
-          {/* Error Bar */}
-          {switchingState.error && (
+          {switchingState.error ? (
             <div id="location-switcher-error" className="location-switcher-error" role="alert">
               {switchingState.error}
             </div>
-          )}
+          ) : null}
 
-          {/* Content */}
           <div className="location-switcher-content">
-            {/* Workspaces Section */}
-            <div
-              className="location-switcher-section-header"
-              role="presentation"
-            >
+            <div className="location-switcher-section-header" role="presentation">
               <FolderOpen size={12} className="location-switcher-section-icon" />
-              Workspaces
+              Workspace
             </div>
 
-            {/* Path Input Bar */}
             <div className="location-switcher-path-input-container">
               <input
                 ref={pathInputRef}
                 type="text"
                 className="location-switcher-path-input"
-                value={browseState.currentPath}
-                onChange={(e) =>
-                  setBrowseState(prev => ({ ...prev, currentPath: e.target.value }))
-                }
-                onBlur={handlePathInputBlur}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handlePathInputChange();
-                  }
+                value={inputValue}
+                onChange={(event) => {
+                  setInputValue(event.target.value);
+                  setSelectedIndex(-1);
                 }}
-                placeholder="Open path..."
-                disabled={!isConnected}
-                title="Type or paste a path, then press Enter"
+                placeholder={daemonRoot ? `Path within ${daemonRoot}` : 'Open path...'}
+                disabled={!isConnected || switchingState.isSwitching}
+                title="Type a workspace path and press Enter"
+                autoComplete="off"
+                spellCheck={false}
               />
               <button
                 type="button"
                 className="location-switcher-path-input-refresh"
-                onClick={() => {
-                  setBrowseState(prev => ({ ...prev, currentPath: workspaceRoot }));
-                }}
-                disabled={!isConnected || browseState.currentPath === workspaceRoot}
-                title="Reset to current workspace"
+                onClick={handleInputSubmit}
+                disabled={!isConnected || switchingState.isSwitching || !normalizePath(inputValue)}
+                title="Switch workspace"
               >
-                <RefreshCw size={12} className={isLoading ? 'spin' : ''} />
+                {switchingState.isSwitching ? (
+                  <Loader2 size={12} className="spin" />
+                ) : (
+                  <FolderOpen size={12} />
+                )}
               </button>
             </div>
 
-            {/* Breadcrumb Trail */}
-            <nav
-              className="location-switcher-breadcrumb"
-              aria-label="Breadcrumb"
-            >
-              {breadcrumbSegments.map((segment, index) => (
-                <React.Fragment key={`breadcrumb-${index}`}>
-                  <button
-                    type="button"
-                    className={`location-switcher-breadcrumb-item ${
-                      index === breadcrumbSegments.length - 1 ? 'current' : ''
-                    }`}
-                    onClick={() => navigateToPath(segment.path)}
-                    disabled={index === breadcrumbSegments.length - 1}
-                    title={`Navigate to ${segment.path}`}
-                  >
-                    {segment.label === '...' ? (
-                      <span className="location-switcher-breadcrumb-ellipsis">...</span>
-                    ) : (
-                      <span className="location-switcher-breadcrumb-label">{segment.label}</span>
-                    )}
-                  </button>
-                  {index < breadcrumbSegments.length - 1 && (
-                    <span className="location-switcher-breadcrumb-separator" aria-hidden="true">
-                      /
-                    </span>
-                  )}
-                </React.Fragment>
-              ))}
-            </nav>
+            <div className="location-switcher-subtitle">
+              Press Enter to switch. Arrow keys select a suggestion or recent workspace.
+            </div>
 
-            {/* Directory Loading/Error State */}
-            {browseState.isLoading && (
+            {suggestionsLoading ? (
               <div className="location-switcher-directory-loading">
-                <Loader2 size={16} className="spin" />
-                <span>Loading directory...</span>
+                <Loader2 size={14} className="spin" />
+                <span>Finding folders...</span>
               </div>
-            )}
+            ) : null}
 
-            {browseState.error && (
+            {suggestionsError ? (
               <div className="location-switcher-directory-error">
-                <span>{browseState.error}</span>
+                <span>{suggestionsError}</span>
               </div>
-            )}
+            ) : null}
 
-            {/* Directory Listing */}
-            {!browseState.isLoading && !browseState.error && (
-              <div className="location-switcher-directory-list">
-                {browseState.directories.length === 0 ? (
-                  <div
-                    className="location-switcher-item"
-                    style={{ color: 'var(--text-tertiary)' }}
-                    role="option"
-                    aria-selected={false}
-                  >
-                    <span className="location-switcher-item-text">
-                      No subdirectories
-                    </span>
-                  </div>
-                ) : (
-                  browseState.directories.map((dir, index) => (
+            {!suggestionsLoading && suggestions.length > 0 ? (
+              <>
+                <div className="location-switcher-section-header" role="presentation">
+                  Suggestions
+                </div>
+                <div className="location-switcher-directory-list">
+                  {suggestions.map((dir, index) => (
                     <button
-                      key={`dir-${index}`}
+                      key={dir.path}
                       type="button"
-                      className={`location-switcher-item location-switcher-dir-item ${
-                        dir.path === workspaceRoot ? 'active' : ''
-                      } ${index === selectedIndex ? 'selected' : ''}`}
-                      onClick={() => handleDirectoryNavigate(index)}
+                      className={`location-switcher-item ${
+                        index === selectedIndex ? 'selected' : ''
+                      } ${dir.path === workspaceRoot ? 'active' : ''}`}
+                      onClick={() => submitWorkspaceChange(dir.path)}
                       role="option"
                       aria-selected={dir.path === workspaceRoot}
-                      aria-label={`Navigate to ${dir.name}`}
                     >
-                      <span className="location-switcher-item-text">{dir.name}</span>
-                      {dir.path === workspaceRoot && (
-                        <span className="location-switcher-item-indicator">●</span>
-                      )}
+                      <span className="location-switcher-item-text">
+                        {dir.name}
+                      </span>
+                      <span className="location-switcher-item-meta">{dir.path}</span>
                     </button>
-                  ))
-                )}
-              </div>
-            )}
+                  ))}
+                </div>
+              </>
+            ) : null}
 
-            {/* Switch Button */}
-            <button
-              type="button"
-              className={`location-switcher-switch-btn ${
-                isBrowsePathActive ? 'disabled' : ''
-              }`}
-              onClick={handleSwitchToBrowsePath}
-              disabled={isBrowsePathActive || switchingState.isSwitching || !isConnected}
-              title={
-                isBrowsePathActive
-                  ? 'Already selected'
-                  : 'Switch workspace to this folder'
-              }
-            >
-              {isBrowsePathActive ? (
-                <>
-                  <span className="location-switcher-switch-btn-icon">✓</span>
-                  <span>Current workspace</span>
-                </>
+            <div className="location-switcher-section-header" role="presentation">
+              Recent Workspaces
+            </div>
+
+            <div className="location-switcher-recent-list">
+              {recentWorkspaceItems.length === 0 ? (
+                <div
+                  className="location-switcher-item location-switcher-item-empty"
+                  role="option"
+                  aria-selected={false}
+                >
+                  <span className="location-switcher-item-text">
+                    No recent workspaces yet
+                  </span>
+                </div>
               ) : (
-                <>
-                  <span className="location-switcher-switch-btn-icon">→</span>
-                  <span>Switch to this folder</span>
-                </>
+                recentWorkspaceItems.map((path, index) => {
+                  const rowIndex = suggestions.length + index;
+                  return (
+                    <button
+                      key={path}
+                      type="button"
+                      className={`location-switcher-item ${
+                        rowIndex === selectedIndex ? 'selected' : ''
+                      }`}
+                      onClick={() => submitWorkspaceChange(path)}
+                      role="option"
+                      aria-selected={false}
+                    >
+                      <span className="location-switcher-item-text">
+                        {getPathDisplayName(path)}
+                      </span>
+                      <span className="location-switcher-item-meta">{path}</span>
+                    </button>
+                  );
+                })
               )}
-            </button>
+            </div>
 
             <div className="location-switcher-divider" role="separator" />
 
-            {/* Instances Section */}
-            <div
-              className="location-switcher-section-header"
-              role="presentation"
-            >
+            <div className="location-switcher-section-header" role="presentation">
               <Monitor size={12} className="location-switcher-section-icon" />
               Instances
             </div>
 
             {instances.length === 0 ? (
               <div
-                className="location-switcher-item"
-                style={{ color: 'var(--text-tertiary)' }}
+                className="location-switcher-item location-switcher-item-empty"
                 role="option"
                 aria-selected={false}
               >
-                <span className="location-switcher-item-text">
-                  No instances available
-                </span>
+                <span className="location-switcher-item-text">No instances available</span>
               </div>
             ) : (
-              instances.map((instance, index) => {
-                const offset = browseState.directories.length;
+              instances.map((instance) => {
                 const name = instance.working_dir
                   .split('/')
                   .filter(Boolean)
@@ -751,11 +656,10 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
                 return (
                   <button
                     key={`instance-${instance.id}`}
-                    id={`location-item-${offset + index}`}
                     type="button"
                     className={`location-switcher-item ${
                       instance.pid === selectedInstancePID ? 'active' : ''
-                    } ${offset + index === selectedIndex ? 'selected' : ''}`}
+                    }`}
                     onClick={() => {
                       if (onInstanceChange && instance.pid) {
                         onInstanceChange(instance.pid);
@@ -766,39 +670,36 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
                     aria-label={`Switch to instance ${label}`}
                     disabled={
                       switchingState.isSwitching ||
+                      isSwitchingInstance ||
                       !onInstanceChange ||
                       instance.is_host
                     }
                   >
                     <span className="location-switcher-item-text">{label}</span>
-                    {instance.pid === selectedInstancePID && (
+                    {instance.pid === selectedInstancePID ? (
                       <span className="location-switcher-item-indicator">●</span>
-                    )}
+                    ) : null}
                   </button>
                 );
               })
             )}
           </div>
 
-          {/* Footer */}
           <div className="location-switcher-footer">
             <button
               type="button"
               className="location-switcher-footer-refresh"
               onClick={handleRefresh}
               disabled={isLoading || !isConnected}
-              title="Refresh workspace list"
+              title="Refresh workspace data"
             >
-              <RefreshCw
-                size={14}
-                className={isLoading ? 'spin' : ''}
-              />
+              <RefreshCw size={14} className={isLoading ? 'spin' : ''} />
               Refresh
             </button>
             <span className="location-switcher-footer-esc">Esc</span>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 };

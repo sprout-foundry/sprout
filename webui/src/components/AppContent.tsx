@@ -150,6 +150,7 @@ const AppContent: React.FC<AppContentProps> = ({
     switchToBuffer,
     splitPane,
     closeSplit,
+    closePane,
     closeBuffer,
     openFile,
     openWorkspaceBuffer,
@@ -555,9 +556,15 @@ const AppContent: React.FC<AppContentProps> = ({
   }, [activePaneId, panes.length, splitPane, updatePaneSize]);
 
   const handleCloseAllSplits = useCallback(() => {
-    setNestedSplit(null);
-    closeSplit();
-  }, [closeSplit]);
+    if (nestedSplit) {
+      // When a nested split is active, close just the nested pane (3 → 2 panes)
+      closePane(nestedSplit.nestedPaneId);
+      setNestedSplit(null);
+    } else {
+      // No nested split — close all splits (2 → 1 pane)
+      closeSplit();
+    }
+  }, [closeSplit, closePane, nestedSplit]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const dragStartSizeRef = useRef<Map<string, number>>(new Map());

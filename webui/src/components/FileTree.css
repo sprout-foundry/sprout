@@ -390,7 +390,7 @@
   font-size: 12px;
 }
 
-.file-tree .file-tree-context-menu {
+.file-tree-context-menu {
   position: fixed;
   z-index: 1400;
   min-width: 160px;
@@ -401,7 +401,7 @@
   box-shadow: var(--shadow-elevated);
 }
 
-.file-tree .file-tree-context-item {
+.file-tree-context-item {
   width: 100%;
   border: none;
   background: transparent;
@@ -413,11 +413,11 @@
   cursor: pointer;
 }
 
-.file-tree .file-tree-context-item:hover {
+.file-tree-context-item:hover {
   background: rgba(148, 163, 184, 0.1);
 }
 
-.file-tree .file-tree-context-item.danger {
+.file-tree-context-item.danger {
   color: var(--accent-error);
 }
 

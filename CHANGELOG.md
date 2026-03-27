@@ -2,6 +2,31 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.12.5] - 2026-03-27
+
+- Updates 7 files - Updates webui build and refactors panel width (733659e)
+- Adds 8 files - Adds dedicated script for webui build embedding (7b7fe90)
+- Adds 9 files - Adds missing api dependency and removes unused setter (049c3b1)
+- Adds 18 files - Adds structured error responses for SSH workspace open (5e84582)
+- Adds 25 files - Adds SSH remote workspace launch and session management (7507b1f)
+- Adds 27 files - Adds memory system and mobile layout improvements (4532b06)
+- Adds 36 files - Adds subagent config flags and binary file staging warnings (856fe41)
+- Deletes 16 files - Deletes old build artifacts and adds ssh workspace support (a3abd7b)
+- Adds 14 files - Adds working directory change on workspace switch (bf0144d)
+- Adds 6 files - Adds mobile context panel drawer and app icon (37dd73f)
+- Deletes 9 files - Deletes outdated web UI build artifacts (ee0d9eb)
+- Adds 13 files - Adds turn checkpoints for context compaction (a413911)
+- Deletes 19 files - Deletes outdated static build assets (b815b09)
+- Adds 23 files - Adds backend crash recovery and location switcher component (ed232af)
+- Adds 15 files - Adds provider catalog system with onboarding enrichment (c3d28b0)
+- Deletes 9 files - Deletes stale CSS source map file (da6367d)
+- Updates 5 files - Updates context panel to use mobile drawer overlay (4e91755)
+- Updates 8 files - Updates launcher with WSL workspace support (b67c7fe)
+- Merge remote-tracking branch 'origin/main' (73f04e6)
+- Adds 39 files - Adds Electron desktop shell with workspace management (afacec9)
+- Updates 6 files - Updates web UI with new file support and SSH tunneling docs (13b59de)
+- docs: Update changelog for v0.12.4 (8344b96)
+
 ## [v0.12.4] - 2026-03-27
 
 - Adds 11 files - Adds updated webui build assets (62b2669)

@@ -490,7 +490,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
       setActivePaneId(remainingPanes[0]?.id || null);
     }
 
-    // Reset to single if we only have 1 pane left
+    // (Going from 2 → 1, not 3 → 2 — a 2-pane split is still valid)
     if (panes.length === 2) {
       setPaneLayoutState('single');
     }

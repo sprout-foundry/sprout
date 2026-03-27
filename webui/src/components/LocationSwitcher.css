@@ -1,0 +1,332 @@
+/* ================================================================
+   LocationSwitcher — Workspace + Instance Switcher Popover
+   ================================================================ */
+
+/* ── Container ────────────────────────────────────────────────── */
+.location-switcher {
+  position: relative;
+  display: inline-block;
+}
+
+/* ── Trigger Bar ──────────────────────────────────────────────── */
+.location-switcher-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px 0 12px;
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 34%, transparent), color-mix(in srgb, var(--sidebar-select-bg) 96%, transparent));
+  border: 1px solid color-mix(in srgb, var(--border-default) 88%, transparent);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 560;
+  line-height: 1.1;
+  cursor: pointer;
+  transition: border-color 0.15s var(--ease-out), box-shadow 0.15s var(--ease-out),
+    background 0.15s var(--ease-out), color 0.15s var(--ease-out);
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.location-switcher-trigger:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 42%, transparent), color-mix(in srgb, var(--sidebar-select-bg) 98%, transparent));
+}
+
+.location-switcher-trigger:focus-visible {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-primary-alpha), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.location-switcher-trigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.location-switcher-trigger-icon {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.location-switcher-trigger-text {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+
+.location-switcher-trigger-pid {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono, monospace);
+  background: color-mix(in srgb, var(--bg-secondary) 70%, transparent);
+  padding: 2px 6px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.location-switcher-trigger-chevron {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  pointer-events: none;
+  background: var(--text-tertiary);
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  mask-size: contain;
+  -webkit-mask-size: contain;
+  mask-repeat: no-repeat;
+  -webkit-mask-repeat: no-repeat;
+  transition: transform 0.15s var(--ease-out);
+}
+
+.location-switcher-trigger[aria-expanded="true"] .location-switcher-trigger-chevron {
+  transform: rotate(180deg);
+}
+
+/* ── Popover ──────────────────────────────────────────────────── */
+.location-switcher-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 280px;
+  max-width: 420px;
+  width: var(--trigger-width, 100%);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.25),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  z-index: 100;
+  overflow: hidden;
+  animation: location-switcher-popover-fade-in 0.12s ease-out;
+}
+
+@keyframes location-switcher-popover-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Error Bar ────────────────────────────────────────────────── */
+.location-switcher-error {
+  padding: 10px 16px;
+  background: color-mix(in srgb, var(--accent-error) 12%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent-error) 25%, transparent);
+  color: var(--accent-error);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+/* ── Popover Content ──────────────────────────────────────────── */
+.location-switcher-content {
+  max-height: 320px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.location-switcher-content::-webkit-scrollbar {
+  width: 5px;
+}
+
+.location-switcher-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.location-switcher-content::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 4px;
+}
+
+/* ── Section Header ───────────────────────────────────────────── */
+.location-switcher-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+}
+
+.location-switcher-section-icon {
+  flex-shrink: 0;
+}
+
+/* ── Divider ──────────────────────────────────────────────────── */
+.location-switcher-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 4px 0;
+}
+
+/* ── Item ──────────────────────────────────────────────────────── */
+.location-switcher-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 16px;
+  font-size: 12px;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.12s var(--ease-out);
+  text-align: left;
+  width: 100%;
+  font-family: var(--font-sans);
+  min-height: 28px;
+}
+
+.location-switcher-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.location-switcher-item.selected {
+  background: var(--accent-primary-alpha, rgba(14, 165, 233, 0.15));
+}
+
+.location-switcher-item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+.location-switcher-item.active {
+  font-weight: 600;
+}
+
+.location-switcher-item-text {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.location-switcher-item-indicator {
+  color: var(--accent-primary);
+  font-size: 10px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* ── Footer ───────────────────────────────────────────────────── */
+.location-switcher-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--bg-secondary) 60%, transparent);
+}
+
+.location-switcher-footer-refresh {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: color 0.12s var(--ease-out);
+}
+
+.location-switcher-footer-refresh:hover {
+  color: var(--text-primary);
+}
+
+.location-switcher-footer-refresh:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.location-switcher-footer-esc {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  background: color-mix(in srgb, var(--bg-secondary) 70%, transparent);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border-subtle);
+}
+
+/* ── Spinner Animation ────────────────────────────────────────── */
+.location-switcher .spin {
+  animation: location-switcher-spin 1s linear infinite;
+}
+
+@keyframes location-switcher-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Collapsed Mode ───────────────────────────────────────────── */
+.location-switcher.collapsed .location-switcher-trigger-text,
+.location-switcher.collapsed .location-switcher-trigger-pid {
+  display: none;
+}
+
+.location-switcher.collapsed .location-switcher-trigger {
+  justify-content: center;
+  padding: 0;
+  width: 40px;
+  height: 40px;
+}
+
+.location-switcher.collapsed .location-switcher-trigger-icon {
+  color: var(--text-secondary);
+}
+
+/* ── Loading State ────────────────────────────────────────────── */
+.location-switcher.loading .location-switcher-trigger {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+/* ── Mobile Responsive ────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .location-switcher-popover {
+    min-width: 240px;
+    max-width: 320px;
+  }
+
+  .location-switcher-item {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+
+  .location-switcher-section-header {
+    padding: 12px 14px 6px;
+  }
+
+  .location-switcher-footer {
+    padding: 10px 14px;
+  }
+}

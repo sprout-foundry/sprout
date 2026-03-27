@@ -1,0 +1,331 @@
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(87, 203, 255, 0.18), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(94, 234, 212, 0.12), transparent 24%),
+    #171b22;
+  color: #e5edf7;
+  min-height: 100vh;
+}
+
+.launcher-shell {
+  display: grid;
+  grid-template-columns: minmax(280px, 420px) minmax(420px, 1fr);
+  min-height: 100vh;
+}
+
+.launcher-hero {
+  padding: 56px 40px;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(23, 27, 34, 0.82), rgba(15, 18, 24, 0.92));
+}
+
+.launcher-badge {
+  display: inline-flex;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(95, 226, 255, 0.12);
+  color: #8be9fd;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.launcher-hero h1 {
+  margin: 18px 0 10px;
+  font-size: 46px;
+  line-height: 1;
+}
+
+.launcher-subtitle {
+  margin: 0;
+  color: #9bb0c7;
+  font-size: 16px;
+  line-height: 1.5;
+  max-width: 28ch;
+}
+
+.launcher-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.launcher-btn {
+  height: 42px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #e5edf7;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.launcher-btn.primary {
+  background: linear-gradient(180deg, #59b9ff, #318dff);
+  border-color: rgba(132, 192, 255, 0.6);
+  color: white;
+}
+
+.launcher-btn.secondary {
+  background: linear-gradient(180deg, rgba(94, 234, 212, 0.22), rgba(34, 197, 94, 0.16));
+  border-color: rgba(94, 234, 212, 0.34);
+}
+
+.launcher-btn:hover {
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+.launcher-btn.small {
+  height: 38px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+.launcher-panel {
+  padding: 44px 36px;
+}
+
+.launcher-panel-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+
+.launcher-panel-header h2 {
+  margin: 0 0 6px;
+  font-size: 18px;
+}
+
+.launcher-panel-header p {
+  margin: 0;
+  color: #8fa2b9;
+  font-size: 13px;
+}
+
+.launcher-version {
+  color: #77879b;
+  font-size: 12px;
+}
+
+.recent-worktrees {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.recent-worktree {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.recent-worktree-meta {
+  min-width: 0;
+}
+
+.recent-worktree-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f5f8fc;
+}
+
+.recent-worktree-path {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #8fa2b9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.recent-worktree-actions {
+  display: inline-flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.recent-worktree-btn {
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #d7e3ef;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.recent-worktree-empty {
+  padding: 24px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  color: #8fa2b9;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.launcher-modal.hidden,
+.hidden {
+  display: none;
+}
+
+.launcher-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+}
+
+.launcher-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(7, 10, 14, 0.62);
+  backdrop-filter: blur(8px);
+}
+
+.launcher-modal-panel {
+  position: relative;
+  width: min(720px, calc(100vw - 40px));
+  margin: 56px auto;
+  padding: 24px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(28, 34, 43, 0.96), rgba(19, 24, 31, 0.98));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+
+.launcher-modal-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.launcher-modal-header h2 {
+  margin: 0 0 6px;
+  font-size: 22px;
+}
+
+.launcher-modal-header p {
+  margin: 0;
+  color: #8fa2b9;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.launcher-icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: #dbe7f4;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.launcher-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.launcher-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.launcher-field span {
+  font-size: 13px;
+  font-weight: 600;
+  color: #dce7f3;
+}
+
+.launcher-field input {
+  width: 100%;
+  height: 42px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #edf4fb;
+  font-size: 14px;
+}
+
+.launcher-field input:focus {
+  outline: none;
+  border-color: rgba(89, 185, 255, 0.7);
+  box-shadow: 0 0 0 3px rgba(89, 185, 255, 0.14);
+}
+
+.launcher-inline-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.launcher-form-note {
+  margin: 0;
+  color: #8fa2b9;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.launcher-form-error {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(255, 89, 94, 0.12);
+  border: 1px solid rgba(255, 89, 94, 0.22);
+  color: #ffb6b8;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.launcher-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+@media (max-width: 900px) {
+  .launcher-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .launcher-hero {
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .launcher-modal-panel {
+    width: calc(100vw - 24px);
+    margin: 12px auto;
+    padding: 18px;
+  }
+
+  .launcher-inline-input {
+    grid-template-columns: 1fr;
+  }
+}

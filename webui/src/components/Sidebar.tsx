@@ -25,6 +25,7 @@ import GitSidebarPanel, { GitStatusData } from './GitSidebarPanel';
 import type { GitBranchesState } from '../hooks/useGitWorkspace';
 import RevisionListPanel from './RevisionListPanel';
 import LeditLogo from './LeditLogo';
+import FileBrowser, { type FileNode } from './FileBrowser';
 
 type SectionTab = 'git' | 'history' | 'logs' | 'files' | 'settings' | 'search';
 
@@ -157,6 +158,12 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [isLoadingProviders, setIsLoadingProviders] = useState(false);
   const [selectedSection, setSelectedSection] = useState<SectionTab>('git');
   const [settings, setSettings] = useState<LeditSettings | null>(null);
+  const [workspacePath, setWorkspacePath] = useState('');
+  const [daemonRoot, setDaemonRoot] = useState('');
+  const [workspaceStatus, setWorkspaceStatus] = useState<string | null>(null);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [isUpdatingWorkspace, setIsUpdatingWorkspace] = useState(false);
+  const [isWorkspaceBrowserOpen, setIsWorkspaceBrowserOpen] = useState(false);
   const apiService = ApiService.getInstance();
   const effectiveSidebarCollapsed = !isMobile && !!sidebarCollapsed;
 
@@ -166,6 +173,18 @@ const Sidebar: React.FC<SidebarProps> = ({
     let cancelled = false;
     apiService.getSettings().then((s) => {
       if (!cancelled) setSettings(s);
+    }).catch(() => { /* silent */ });
+    return () => { cancelled = true; };
+  }, [isConnected, apiService]);
+
+  useEffect(() => {
+    if (!isConnected) return;
+    let cancelled = false;
+    apiService.getWorkspace().then((response) => {
+      if (!cancelled) {
+        setDaemonRoot(response.daemon_root || '');
+        setWorkspacePath(response.workspace_root || '');
+      }
     }).catch(() => { /* silent */ });
     return () => { cancelled = true; };
   }, [isConnected, apiService]);
@@ -282,6 +301,39 @@ const Sidebar: React.FC<SidebarProps> = ({
       console.error('Failed to apply hotkey preset:', err);
     }
   };
+
+  const handleWorkspaceApply = useCallback(async () => {
+    const trimmedPath = workspacePath.trim();
+    if (!trimmedPath) {
+      setWorkspaceError('Workspace path is required.');
+      setWorkspaceStatus(null);
+      return;
+    }
+
+    setIsUpdatingWorkspace(true);
+    setWorkspaceError(null);
+    setWorkspaceStatus(null);
+
+    try {
+      const response = await apiService.setWorkspace(trimmedPath);
+      setDaemonRoot(response.daemon_root || daemonRoot);
+      setWorkspaceStatus(`Workspace set to ${response.workspace_root}. Reloading…`);
+      window.setTimeout(() => {
+        window.location.reload();
+      }, 250);
+    } catch (error) {
+      setWorkspaceError(error instanceof Error ? error.message : 'Failed to update workspace.');
+    } finally {
+      setIsUpdatingWorkspace(false);
+    }
+  }, [apiService, daemonRoot, workspacePath]);
+
+  const handleWorkspaceBrowseSelect = useCallback((file: FileNode) => {
+    setWorkspacePath(file.path);
+    setWorkspaceError(null);
+    setWorkspaceStatus(null);
+    setIsWorkspaceBrowserOpen(false);
+  }, []);
 
   const handleSidebarResize = useCallback((delta: number) => {
     const nextWidth = clampSidebarWidth(sidebarWidthRef.current + delta);
@@ -561,6 +613,63 @@ const Sidebar: React.FC<SidebarProps> = ({
     return (
       <>
         <div className="section">
+          <h4>Workspace</h4>
+          <div className="config-item">
+            <label htmlFor="workspace-path-input">Working Directory:</label>
+            <input
+              id="workspace-path-input"
+              className="styled-input"
+              type="text"
+              value={workspacePath}
+              onChange={(e) => {
+                setWorkspacePath(e.target.value);
+                if (workspaceError) {
+                  setWorkspaceError(null);
+                }
+                if (workspaceStatus) {
+                  setWorkspaceStatus(null);
+                }
+              }}
+              placeholder="/path/to/project"
+              disabled={!isConnected || isUpdatingWorkspace}
+              spellCheck={false}
+            />
+            <div className="workspace-actions">
+              <button
+                type="button"
+                className="config-btn"
+                onClick={() => setIsWorkspaceBrowserOpen(true)}
+                disabled={!isConnected || isUpdatingWorkspace}
+              >
+                Browse…
+              </button>
+              <button
+                type="button"
+                className="config-btn"
+                onClick={handleWorkspaceApply}
+                disabled={!isConnected || isUpdatingWorkspace}
+              >
+                {isUpdatingWorkspace ? 'Applying…' : 'Apply'}
+              </button>
+            </div>
+            <div className="config-item-help">
+              Update the daemon workspace root and reload files, git, search, and terminal views.
+            </div>
+            {daemonRoot && (
+              <div className="config-item-help">
+                Browse is limited to the daemon root: <code>{daemonRoot}</code>
+              </div>
+            )}
+            {workspaceError && (
+              <div className="config-item-error">{workspaceError}</div>
+            )}
+            {workspaceStatus && (
+              <div className="config-item-status">{workspaceStatus}</div>
+            )}
+          </div>
+        </div>
+
+        <div className="section">
           <h4>Appearance</h4>
           <div className="config-item">
             <label htmlFor="theme-select">Theme Pack:</label>
@@ -835,6 +944,14 @@ const Sidebar: React.FC<SidebarProps> = ({
           className="sidebar-resize-handle"
         />
       )}
+      <FileBrowser
+        isOpen={isWorkspaceBrowserOpen}
+        initialPath={workspacePath || daemonRoot || '/'}
+        allowDirectories={true}
+        browseEndpoint="/api/workspace/browse"
+        onSelect={handleWorkspaceBrowseSelect}
+        onCancel={() => setIsWorkspaceBrowserOpen(false)}
+      />
     </div>
   );
 };

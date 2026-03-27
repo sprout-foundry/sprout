@@ -1,20 +1,27 @@
 {
+  "private": true,
+  "main": "desktop/main.js",
   "dependencies": {
     "@codemirror/fold": "^0.19.4",
     "@codemirror/language": "^6.12.1",
     "@playwright/test": "^1.57.0",
     "ws": "^8.18.3"
   },
+  "devDependencies": {
+    "electron": "^37.2.0",
+    "electron-builder": "^26.0.12"
+  },
   "name": "ledit",
   "version": "1.0.0",
   "description": "`ledit` is an AI-powered code editing and assistance tool designed to streamline software development by leveraging Large Language Models (LLMs) to understand your entire workspace, generate code, and orchestrate complex features.",
-  "main": "playwright.config.js",
-  "directories": {
-    "doc": "docs",
-    "example": "examples",
-    "test": "test"
-  },
   "scripts": {
+    "build:webui:embed": "cd webui && ./build.sh",
+    "build:desktop:backend": "node scripts/build-electron-backend.mjs",
+    "build:desktop": "npm run build:webui:embed && npm run build:desktop:backend",
+    "desktop:dev": "npm run build:webui:embed && npm run build:desktop:backend && electron .",
+    "desktop:dir": "electron-builder --dir",
+    "desktop:dist": "electron-builder",
+    "desktop:verify": "node scripts/verify-electron-package.mjs",
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:webui-e2e": "node test/ui_e2e_workflow.js"
   },
@@ -23,10 +30,87 @@
     "url": "git+https://github.com/alantheprice/ledit.git"
   },
   "keywords": [],
-  "author": "",
+  "author": "Alan Price",
   "license": "ISC",
+  "homepage": "https://github.com/alantheprice/ledit#readme",
+  "productName": "Ledit",
+  "build": {
+    "appId": "dev.alantheprice.ledit",
+    "productName": "Ledit",
+    "executableName": "ledit",
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "protocols": [
+      {
+        "name": "Ledit Workspace",
+        "schemes": [
+          "ledit"
+        ]
+      }
+    ],
+    "directories": {
+      "buildResources": "desktop/resources",
+      "output": "desktop/dist/releases"
+    },
+    "files": [
+      "desktop/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "desktop/dist/backend/",
+        "to": "backend/",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "beforePack": "scripts/electron-before-pack.cjs",
+    "afterSign": "scripts/electron-after-sign.cjs",
+    "asar": true,
+    "mac": {
+      "icon": "desktop/resources/icon.png",
+      "category": "public.app-category.developer-tools",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "desktop/resources/entitlements.mac.plist",
+      "entitlementsInherit": "desktop/resources/entitlements.mac.inherit.plist",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "icon": "desktop/resources/icon.ico",
+      "target": [
+        "nsis",
+        "zip"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "shortcutName": "Ledit"
+    },
+    "linux": {
+      "icon": "desktop/resources/icons/png",
+      "desktop": {
+        "entry": {
+          "Name": "Ledit",
+          "GenericName": "AI Code Editor",
+          "Comment": "AI-powered code editing desktop application",
+          "StartupWMClass": "Ledit"
+        }
+      },
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm"
+      ],
+      "category": "Development"
+    }
+  },
   "bugs": {
     "url": "https://github.com/alantheprice/ledit/issues"
-  },
-  "homepage": "https://github.com/alantheprice/ledit#readme"
+  }
 }

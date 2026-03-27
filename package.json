@@ -15,7 +15,7 @@
   "version": "1.0.0",
   "description": "`ledit` is an AI-powered code editing and assistance tool designed to streamline software development by leveraging Large Language Models (LLMs) to understand your entire workspace, generate code, and orchestrate complex features.",
   "scripts": {
-    "build:webui:embed": "cd webui && ./build.sh",
+    "build:webui:embed": "node scripts/build-webui-embed.mjs",
     "build:desktop:backend": "node scripts/build-electron-backend.mjs",
     "build:desktop": "npm run build:webui:embed && npm run build:desktop:backend",
     "desktop:dev": "npm run build:webui:embed && npm run build:desktop:backend && electron .",

@@ -8,8 +8,8 @@ on:
 
 jobs:
   build-desktop:
-    name: Build Desktop (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    name: Build Desktop (${{ matrix.label }})
+    runs-on: ${{ matrix.runs_on }}
     permissions:
       contents: write
     env:
@@ -21,7 +21,31 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - label: linux-x64
+            os: linux
+            arch: x64
+            runs_on: ubuntu-latest
+          - label: linux-arm64
+            os: linux
+            arch: arm64
+            runs_on: ubuntu-24.04-arm
+          - label: macos-x64
+            os: macos
+            arch: x64
+            runs_on: macos-15-intel
+          - label: macos-arm64
+            os: macos
+            arch: arm64
+            runs_on: macos-latest
+          - label: windows-x64
+            os: windows
+            arch: x64
+            runs_on: windows-latest
+          - label: windows-arm64
+            os: windows
+            arch: arm64
+            runs_on: windows-11-arm
 
     steps:
     - name: Checkout code
@@ -49,6 +73,8 @@ jobs:
       working-directory: webui
 
     - name: Build desktop installers
+      env:
+        npm_config_arch: ${{ matrix.arch }}
       run: npm run desktop:dist
 
     - name: Verify packaged desktop bundle
@@ -72,6 +98,6 @@ jobs:
     - name: Upload workflow artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: desktop-${{ matrix.os }}
+        name: desktop-${{ matrix.label }}
         path: desktop/dist/releases/
         if-no-files-found: error

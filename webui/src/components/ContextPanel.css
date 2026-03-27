@@ -1,6 +1,6 @@
 .context-panel {
   display: flex;
-  flex-direction: row;
+  flex-direction: row-reverse;
   min-height: 0;
   height: 100%;
   width: 360px;
@@ -674,6 +674,7 @@
 /* Mobile Layout */
 @media (max-width: 768px) {
   .context-panel {
+    flex-direction: row-reverse;
     border-radius: 0;
     border: none;
   }
@@ -703,7 +704,7 @@
   }
 
   .side-panel-rail {
-    border-right: 1px solid var(--border-subtle);
+    border-left: 1px solid var(--border-subtle);
   }
 
   .file-section-header {

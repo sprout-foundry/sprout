@@ -19,10 +19,17 @@ const Terminal: React.FC<TerminalProps> = ({
   isExpanded: externalIsExpanded = false,
   onToggleExpand,
 }) => {
+  const getCollapsedHeight = useCallback(() => {
+    if (typeof window === 'undefined') {
+      return 42;
+    }
+    return window.innerWidth <= 768 ? 34 : 42;
+  }, []);
   const [isExpanded, setIsExpanded] = useState(externalIsExpanded);
   const [hasActivated, setHasActivated] = useState(externalIsExpanded);
   const [terminalHeight, setTerminalHeight] = useState(400);
   const [isResizingVertical, setIsResizingVertical] = useState(false);
+  const [collapsedHeight, setCollapsedHeight] = useState(getCollapsedHeight);
 
   // Split pane state
   const [panes, setPanes] = useState<{ id: string }[]>(() => [{ id: newPaneId() }]);
@@ -51,12 +58,26 @@ const Terminal: React.FC<TerminalProps> = ({
   }, [externalIsExpanded]);
 
   useEffect(() => {
-    const reservedHeight = isExpanded ? terminalHeight : 42;
+    const reservedHeight = isExpanded ? terminalHeight : collapsedHeight;
     document.documentElement.style.setProperty('--ledit-terminal-reserved-height', `${reservedHeight}px`);
     return () => {
-      document.documentElement.style.setProperty('--ledit-terminal-reserved-height', '42px');
+      document.documentElement.style.setProperty('--ledit-terminal-reserved-height', `${collapsedHeight}px`);
     };
-  }, [isExpanded, terminalHeight]);
+  }, [collapsedHeight, isExpanded, terminalHeight]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const updateCollapsedHeight = () => {
+      setCollapsedHeight(getCollapsedHeight());
+    };
+
+    updateCollapsedHeight();
+    window.addEventListener('resize', updateCollapsedHeight);
+    return () => window.removeEventListener('resize', updateCollapsedHeight);
+  }, [getCollapsedHeight]);
 
   const toggleExpanded = useCallback(() => {
     setIsExpanded(prev => {

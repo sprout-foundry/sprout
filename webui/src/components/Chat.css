@@ -1291,10 +1291,17 @@
 @media (max-width: 768px) {
   .chat-main {
     flex-direction: column;
+    gap: 8px;
+    padding: 8px;
   }
 
   .chat-header {
     padding: 10px 12px;
+  }
+
+  .chat-container {
+    padding: 10px 10px calc(126px + env(safe-area-inset-bottom, 0px));
+    gap: 8px;
   }
 
   .message-bubble {
@@ -1311,8 +1318,18 @@
   }
 
   .input-container {
-    padding: 8px 10px;
-    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    position: sticky;
+    bottom: 0;
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
+    border-top: none;
+    background: linear-gradient(
+      180deg,
+      transparent 0%,
+      color-mix(in srgb, var(--bg-secondary) 88%, transparent) 18%,
+      var(--bg-secondary) 42%,
+      var(--bg-secondary) 100%
+    );
+    backdrop-filter: blur(12px);
   }
 }
 
@@ -1327,7 +1344,7 @@
     align-items: center;
     justify-content: center;
     position: fixed;
-    bottom: 80px;
+    bottom: calc(var(--ledit-terminal-reserved-height) + 84px + env(safe-area-inset-bottom, 0px));
     right: 12px;
     width: 40px;
     height: 40px;

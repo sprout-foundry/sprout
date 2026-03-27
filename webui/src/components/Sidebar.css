@@ -69,7 +69,7 @@
 
 .sidebar.collapsed .sidebar-pinned-header {
   justify-content: center;
-  padding: var(--space-6) 0;
+  padding: var(--space-4) 0;
 }
 
 .sidebar .sidebar-brand {
@@ -84,6 +84,13 @@
   border-right: 1px solid var(--border-subtle);
 }
 
+.sidebar.collapsed .sidebar-brand {
+  width: 100%;
+  min-width: 0;
+  border-right: none;
+  background: transparent;
+}
+
 .sidebar .sidebar-brand-button {
   appearance: none;
   border-top: none;
@@ -92,6 +99,10 @@
   color: inherit;
   cursor: pointer;
   padding: 0;
+}
+
+.sidebar.collapsed .sidebar-brand-button {
+  width: 100%;
 }
 
 .sidebar .sidebar-brand-button:hover {
@@ -1117,6 +1128,11 @@
 
 /* ── Mobile responsive ────────────────────────────────────────── */
 @media (max-width: 768px) {
+  .sidebar-resize-wrapper {
+    position: relative;
+    z-index: 1001;
+  }
+
   .sidebar {
     position: fixed;
     top: 0;

@@ -9,37 +9,64 @@ import process from 'node:process';
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const backendOutDir = join(repoRoot, 'desktop', 'dist', 'backend');
 
-const platform = process.env.LEDIT_GOOS || ({
+const defaultPlatform = ({
   darwin: 'darwin',
   linux: 'linux',
   win32: 'windows',
 }[process.platform] || process.platform);
 
-const arch = process.env.LEDIT_GOARCH || ({
+const defaultArch = ({
   arm64: 'arm64',
   x64: 'amd64',
 }[process.arch] || process.arch);
 
-const binaryName = platform === 'windows' ? 'ledit.exe' : 'ledit';
-const outputDir = join(backendOutDir, `${platform}-${arch}`);
-const outputPath = join(outputDir, binaryName);
+const primaryTarget = {
+  platform: process.env.LEDIT_GOOS || defaultPlatform,
+  arch: process.env.LEDIT_GOARCH || defaultArch,
+};
 
-rmSync(outputDir, { recursive: true, force: true });
-mkdirSync(outputDir, { recursive: true });
+const extraTargets = String(process.env.LEDIT_EXTRA_TARGETS || '')
+  .split(',')
+  .map((item) => item.trim())
+  .filter(Boolean)
+  .map((item) => {
+    const [platform, arch] = item.split('-');
+    if (!platform || !arch) {
+      throw new Error(`Invalid LEDIT_EXTRA_TARGETS entry: ${item}`);
+    }
+    return { platform, arch };
+  });
 
-const result = spawnSync('go', ['build', '-o', outputPath, '.'], {
-  cwd: repoRoot,
-  stdio: 'inherit',
-  env: {
-    ...process.env,
-    GOOS: platform,
-    GOARCH: arch,
-    CGO_ENABLED: process.env.CGO_ENABLED || '0',
-  },
-});
-
-if (result.status !== 0) {
-  process.exit(result.status ?? 1);
+if (process.platform === 'win32' && extraTargets.length === 0) {
+  extraTargets.push({ platform: 'linux', arch: defaultArch });
 }
 
-console.log(`Built desktop backend: ${outputPath}`);
+const targets = [primaryTarget, ...extraTargets].filter((target, index, array) =>
+  array.findIndex((candidate) => candidate.platform === target.platform && candidate.arch === target.arch) === index
+);
+
+for (const target of targets) {
+  const binaryName = target.platform === 'windows' ? 'ledit.exe' : 'ledit';
+  const outputDir = join(backendOutDir, `${target.platform}-${target.arch}`);
+  const outputPath = join(outputDir, binaryName);
+
+  rmSync(outputDir, { recursive: true, force: true });
+  mkdirSync(outputDir, { recursive: true });
+
+  const result = spawnSync('go', ['build', '-o', outputPath, '.'], {
+    cwd: repoRoot,
+    stdio: 'inherit',
+    env: {
+      ...process.env,
+      GOOS: target.platform,
+      GOARCH: target.arch,
+      CGO_ENABLED: process.env.CGO_ENABLED || '0',
+    },
+  });
+
+  if (result.status !== 0) {
+    process.exit(result.status ?? 1);
+  }
+
+  console.log(`Built desktop backend: ${outputPath}`);
+}

@@ -17,6 +17,25 @@
           <button id="create-worktree" class="launcher-btn secondary">Create Worktree…</button>
           <button id="open-worktree-new" class="launcher-btn">Open Folder in New Window…</button>
         </div>
+        <section id="wsl-launcher-panel" class="launcher-inline-panel hidden" aria-label="WSL workspace launcher">
+          <div class="launcher-inline-panel-header">
+            <h2>WSL</h2>
+            <p>Run the backend inside WSL while keeping the desktop shell on Windows.</p>
+          </div>
+          <label class="launcher-field">
+            <span>Distro</span>
+            <select id="wsl-distro-select"></select>
+          </label>
+          <label class="launcher-field">
+            <span>Workspace Path</span>
+            <input id="wsl-workspace-path" type="text" placeholder="/home/you/project" />
+          </label>
+          <div class="launcher-actions compact">
+            <button id="open-wsl-workspace" class="launcher-btn primary">Open WSL Folder</button>
+            <button id="open-wsl-workspace-new" class="launcher-btn">Open WSL Folder in New Window</button>
+          </div>
+          <p id="wsl-launcher-error" class="launcher-form-error hidden"></p>
+        </section>
       </section>
 
       <section class="launcher-panel">

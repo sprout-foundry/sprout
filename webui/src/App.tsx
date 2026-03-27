@@ -135,6 +135,7 @@ interface OnboardingState {
 const APP_STATE_STORAGE_KEY = 'ledit:webui:state:v1';
 const INSTANCE_PID_STORAGE_KEY = 'ledit:webui:instancePid';
 const INSTANCE_SWITCH_RESET_KEY = 'ledit:webui:instanceSwitchReset';
+const MAX_PERSISTED_LOGS = 1000;
 
 const getAppStateStorageKey = (): string => {
   if (typeof window === 'undefined' || !window.localStorage) {
@@ -343,7 +344,7 @@ function App() {
           queryCount: state.queryCount,
           currentView: state.currentView,
           messages: state.messages.slice(-200),
-          logs: state.logs.slice(-300),
+          logs: state.logs.slice(-MAX_PERSISTED_LOGS),
           toolExecutions: state.toolExecutions.slice(-200),
           fileEdits: state.fileEdits.slice(-100)
         })
@@ -363,8 +364,8 @@ function App() {
     state.fileEdits
   ]);
 
-  // Memoize recent logs to prevent unnecessary Sidebar remounts
-  const recentLogs = useMemo(() => state.logs.slice(-10), [state.logs]);
+  // Keep a larger client-side log buffer available to the sidebar logs view.
+  const recentLogs = useMemo(() => state.logs.slice(-MAX_PERSISTED_LOGS), [state.logs]);
 
   // Memoize stats to prevent unnecessary Sidebar remounts
   const stats = useMemo(() => ({

@@ -31,6 +31,7 @@ type ConversationHandler struct {
 	transientMessagesMu        sync.Mutex
 	transientMessages          []api.Message
 	pendingUserMessage         string
+	queryStartIndex           int
 	turnHistory                []TurnEvaluation
 	ocrEnforcementAttempts     int
 	tentativeRejectionCount     int
@@ -96,6 +97,7 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 	}
 
 	// Add user message with optional multimodal images
+	ch.queryStartIndex = len(ch.agent.messages)
 	userMessage := api.Message{
 		Role:    "user",
 		Content: ch.prepareUserInputForModel(processedQuery),
@@ -672,6 +674,8 @@ func (ch *ConversationHandler) finalizeConversation() (string, error) {
 		}
 	}
 
+	ch.maybeCheckpointCompletedTurn()
+
 	// Publish query completed event
 	duration := time.Since(ch.conversationStartTime)
 	completedEvent := events.QueryCompletedEvent(
@@ -700,6 +704,34 @@ func (ch *ConversationHandler) finalizeConversation() (string, error) {
 	}
 
 	return "", fmt.Errorf("no assistant response found")
+}
+
+func (ch *ConversationHandler) maybeCheckpointCompletedTurn() {
+	if ch == nil || ch.agent == nil {
+		return
+	}
+	if ch.queryStartIndex < 0 || ch.queryStartIndex >= len(ch.agent.messages) {
+		return
+	}
+
+	reason := ch.agent.GetLastRunTerminationReason()
+	if reason != RunTerminationCompleted && reason != RunTerminationMaxIterations {
+		return
+	}
+
+	endIndex := len(ch.agent.messages) - 1
+	hasAssistant := false
+	for i := ch.queryStartIndex; i <= endIndex; i++ {
+		if ch.agent.messages[i].Role == "assistant" {
+			hasAssistant = true
+			break
+		}
+	}
+	if !hasAssistant {
+		return
+	}
+
+	ch.agent.RecordTurnCheckpointAsync(ch.queryStartIndex, endIndex)
 }
 
 func (ch *ConversationHandler) runSelfReviewGate() error {

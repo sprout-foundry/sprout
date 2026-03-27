@@ -374,9 +374,21 @@ const AppContent: React.FC<AppContentProps> = ({
         case 'toggle_terminal':
           onTerminalExpandedChange(!isTerminalExpanded);
           break;
-        case 'toggle_explorer':
-          onSidebarToggle();
+        case 'toggle_explorer': {
+          // Reveal the active file's path in the file tree explorer
+          const activeBuffer = activeBufferId ? buffers.get(activeBufferId) : null;
+          const filePath = activeBuffer?.file?.path && !activeBuffer.file.isDir && activeBuffer.kind === 'file'
+            ? activeBuffer.file.path
+            : null;
+          
+          if (filePath) {
+            window.dispatchEvent(new CustomEvent('ledit:reveal-in-explorer', { detail: { path: filePath } }));
+          } else {
+            // No active file — just toggle sidebar to files
+            onSidebarToggle();
+          }
           break;
+        }
         case 'quick_open':
           setIsCommandPaletteOpen(true);
           break;
@@ -408,7 +420,7 @@ const AppContent: React.FC<AppContentProps> = ({
     
     window.addEventListener('ledit:hotkey', handleHotkey);
     return () => window.removeEventListener('ledit:hotkey', handleHotkey);
-  }, [activeBufferId, closeBuffer, focusTabIndex, handlePrimaryViewChange, onSidebarToggle, onTerminalExpandedChange, isTerminalExpanded]);
+  }, [activeBufferId, buffers, closeBuffer, focusTabIndex, handlePrimaryViewChange, onSidebarToggle, onTerminalExpandedChange, isTerminalExpanded]);
 
   // Handler to open hotkeys config in editor
   const handleOpenHotkeysConfig = useCallback(() => {

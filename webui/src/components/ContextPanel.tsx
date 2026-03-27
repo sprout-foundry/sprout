@@ -669,6 +669,75 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     }
   };
 
+  const truncateText = (value: string, maxLength: number) => {
+    if (value.length <= maxLength) {
+      return value;
+    }
+    return `${value.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
+  };
+
+  const extractResultSummary = useCallback((value: unknown): string | null => {
+    if (typeof value === 'string') {
+      const cleaned = stripAnsiCodes(value).replace(/\s+/g, ' ').trim();
+      return cleaned || null;
+    }
+
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      return String(value);
+    }
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const summary = extractResultSummary(item);
+        if (summary) {
+          return summary;
+        }
+      }
+      return null;
+    }
+
+    if (value && typeof value === 'object') {
+      const record = value as Record<string, unknown>;
+      const priorityKeys = ['summary', 'result', 'response', 'output', 'final_answer', 'message', 'content'];
+      for (const key of priorityKeys) {
+        if (key in record) {
+          const summary = extractResultSummary(record[key]);
+          if (summary) {
+            return summary;
+          }
+        }
+      }
+
+      for (const nestedValue of Object.values(record)) {
+        const summary = extractResultSummary(nestedValue);
+        if (summary) {
+          return summary;
+        }
+      }
+    }
+
+    return null;
+  }, []);
+
+  const getSubagentResultPreview = useCallback((rawResult?: string): string | undefined => {
+    if (!rawResult) {
+      return undefined;
+    }
+
+    const cleaned = stripAnsiCodes(rawResult).trim();
+    if (!cleaned) {
+      return undefined;
+    }
+
+    try {
+      const parsed = JSON.parse(cleaned);
+      const summary = extractResultSummary(parsed);
+      return summary ? truncateText(summary, 220) : truncateText(formatToolDetail(cleaned).replace(/\s+/g, ' ').trim(), 220);
+    } catch {
+      return truncateText(cleaned.replace(/\s+/g, ' ').trim(), 220);
+    }
+  }, [extractResultSummary]);
+
   const formatRelativeTime = (value: string) => {
     const date = new Date(value);
     const diffMs = Date.now() - date.getTime();
@@ -988,6 +1057,10 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
           const isParallel = tool.subagentType === 'parallel';
           const collapsedActivities = activities.slice(-3);
           const visibleActivities = expanded ? activities : collapsedActivities;
+          const taskCount = orderedTaskGroups.filter((group) => group.taskId).length;
+          const hiddenActivityCount = Math.max(0, activities.length - visibleActivities.length);
+          const resultPreview = getSubagentResultPreview(tool.result);
+          const lastUpdatedAt = latestActivity?.timestamp || tool.endTime || tool.startTime;
 
           return (
             <section
@@ -1022,6 +1095,14 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
                   {stripAnsiCodes(prompt)}
                 </div>
               )}
+
+              <div className="subagent-card-stats">
+                <span className="subagent-stat-chip">{activities.length} {activities.length === 1 ? 'update' : 'updates'}</span>
+                {isParallel && taskCount > 0 && (
+                  <span className="subagent-stat-chip">{taskCount} {taskCount === 1 ? 'task' : 'tasks'}</span>
+                )}
+                <span className="subagent-stat-chip">Updated {formatTime(lastUpdatedAt)}</span>
+              </div>
 
               {latestActivity && (
                 <div className="subagent-current-step">
@@ -1062,6 +1143,21 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
                 </div>
               )}
 
+              {hiddenActivityCount > 0 && !expanded && (
+                <div className="subagent-collapsed-note">
+                  Showing the latest {visibleActivities.length} of {activities.length} updates
+                </div>
+              )}
+
+              {resultPreview && (
+                <div className="subagent-result-preview">
+                  <div className="tool-detail-label">
+                    <BarChart3 size={12} className="inline-icon" /> Result preview
+                  </div>
+                  <div className="subagent-result-preview-text">{resultPreview}</div>
+                </div>
+              )}
+
               {tool.result && expanded && (
                 <div className="subagent-result-snippet">
                   <div className="tool-detail-label">
@@ -1072,6 +1168,14 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
               )}
 
               <div className="subagent-card-actions">
+                {activities.length > 3 && (
+                  <button
+                    className="subagent-link-btn"
+                    onClick={() => toggleSubagentExpansion(tool.id)}
+                  >
+                    {expanded ? 'Show fewer updates' : 'Show all updates'}
+                  </button>
+                )}
                 <button
                   className="subagent-link-btn"
                   onClick={() => {

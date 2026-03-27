@@ -2,6 +2,7 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { stripAnsiCodes } from '../utils/ansi';
+import { flattenMarkdownText, isMarkdownCodeBlock } from '../utils/markdownCode';
 
 interface MessageContentProps {
   content: string;
@@ -11,11 +12,13 @@ const MessageContent: React.FC<MessageContentProps> = ({ content }) => (
   <ReactMarkdown
     remarkPlugins={[remarkGfm]}
     components={{
-      code({ inline, className, children, ...props }: any) {
+      code({ className, children, ...props }: any) {
         const languageMatch = /language-(\w+)/.exec(className || '');
         const language = languageMatch ? languageMatch[1] : '';
+        const codeText = flattenMarkdownText(children);
+        const isBlockCode = isMarkdownCodeBlock(className, codeText);
 
-        if (inline) {
+        if (!isBlockCode) {
           return (
             <code className="inline-code" {...props}>
               {children}

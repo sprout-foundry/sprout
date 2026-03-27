@@ -117,6 +117,9 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 
 	logger.LogProcessStep(fmt.Sprintf("Optimized diff: %d -> %d lines, %d bytes saved",
 		optimizedDiff.OriginalLines, optimizedDiff.OptimizedLines, optimizedDiff.BytesSaved))
+	for _, warning := range optimizedDiff.Warnings {
+		logger.LogUserInteraction(fmt.Sprintf("[WARN] %s", warning))
+	}
 
 	// Create the unified code review service
 	service := codereview.NewCodeReviewService(cfg, logger)

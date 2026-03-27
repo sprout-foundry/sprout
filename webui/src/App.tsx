@@ -1283,9 +1283,12 @@ function App() {
     }
   }, []);
 
-  const handleGitAICommit = useCallback(async (): Promise<string> => {
+  const handleGitAICommit = useCallback(async (): Promise<{ commitMessage: string; warnings?: string[] }> => {
     const response = await apiService.generateCommitMessage();
-    return response.commit_message || '';
+    return {
+      commitMessage: response.commit_message || '',
+      warnings: response.warnings || [],
+    };
   }, [apiService]);
 
   const handleGitStage = useCallback(async (files: string[]) => {

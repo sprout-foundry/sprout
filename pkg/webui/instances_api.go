@@ -1,6 +1,7 @@
 package webui
 
 import (
+	"bufio"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -42,6 +43,13 @@ type webUIHostRecordDTO struct {
 type desiredHostRecordDTO struct {
 	PID       int       `json:"pid"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type sshHostEntryDTO struct {
+	Alias    string `json:"alias"`
+	Hostname string `json:"hostname,omitempty"`
+	User     string `json:"user,omitempty"`
+	Port     string `json:"port,omitempty"`
 }
 
 func (ws *ReactWebServer) handleAPIInstances(w http.ResponseWriter, r *http.Request) {
@@ -154,6 +162,137 @@ func (ws *ReactWebServer) handleAPIInstanceSelect(w http.ResponseWriter, r *http
 		"message": "instance selection updated",
 		"pid":     req.PID,
 	})
+}
+
+func (ws *ReactWebServer) handleAPISSHHosts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		http.Error(w, "Failed to determine home directory", http.StatusInternalServerError)
+		return
+	}
+
+	hostsMap := make(map[string]*sshHostEntryDTO)
+	parseSSHConfigFile(filepath.Join(homeDir, ".ssh", "config"), hostsMap, make(map[string]struct{}))
+
+	hosts := make([]sshHostEntryDTO, 0, len(hostsMap))
+	for _, host := range hostsMap {
+		if host == nil {
+			continue
+		}
+		hosts = append(hosts, *host)
+	}
+	sort.Slice(hosts, func(i, j int) bool {
+		return hosts[i].Alias < hosts[j].Alias
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"hosts": hosts,
+	})
+}
+
+func parseSSHConfigFile(filePath string, hostsMap map[string]*sshHostEntryDTO, visited map[string]struct{}) {
+	if strings.TrimSpace(filePath) == "" {
+		return
+	}
+
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		absPath = filePath
+	}
+	if _, seen := visited[absPath]; seen {
+		return
+	}
+	visited[absPath] = struct{}{}
+
+	file, err := os.Open(absPath)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+
+	baseDir := filepath.Dir(absPath)
+	scanner := bufio.NewScanner(file)
+	currentAliases := []string{}
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+
+		key := strings.ToLower(fields[0])
+		value := strings.TrimSpace(line[len(fields[0]):])
+		value = strings.TrimSpace(value)
+
+		switch key {
+		case "include":
+			for _, pattern := range strings.Fields(value) {
+				includePath := pattern
+				if strings.HasPrefix(includePath, "~/") {
+					if homeDir, homeErr := os.UserHomeDir(); homeErr == nil {
+						includePath = filepath.Join(homeDir, includePath[2:])
+					}
+				} else if !filepath.IsAbs(includePath) {
+					includePath = filepath.Join(baseDir, includePath)
+				}
+
+				matches, globErr := filepath.Glob(includePath)
+				if globErr != nil || len(matches) == 0 {
+					parseSSHConfigFile(includePath, hostsMap, visited)
+					continue
+				}
+				for _, match := range matches {
+					parseSSHConfigFile(match, hostsMap, visited)
+				}
+			}
+		case "host":
+			currentAliases = currentAliases[:0]
+			for _, alias := range strings.Fields(value) {
+				if alias == "" || strings.ContainsAny(alias, "*?!") {
+					continue
+				}
+				currentAliases = append(currentAliases, alias)
+				if _, exists := hostsMap[alias]; !exists {
+					hostsMap[alias] = &sshHostEntryDTO{Alias: alias}
+				}
+			}
+		case "hostname", "user", "port":
+			if len(currentAliases) == 0 {
+				continue
+			}
+			for _, alias := range currentAliases {
+				entry := hostsMap[alias]
+				if entry == nil {
+					continue
+				}
+				switch key {
+				case "hostname":
+					if entry.Hostname == "" {
+						entry.Hostname = value
+					}
+				case "user":
+					if entry.User == "" {
+						entry.User = value
+					}
+				case "port":
+					if entry.Port == "" {
+						entry.Port = value
+					}
+				}
+			}
+		}
+	}
 }
 
 func getLeditConfigDir() string {

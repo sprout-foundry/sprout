@@ -887,6 +887,7 @@ func (ws *ReactWebServer) handleAPIGitCommitMessage(w http.ResponseWriter, r *ht
 		"commit_message": commitMessage,
 		"provider":       ws.agent.GetProvider(),
 		"model":          ws.agent.GetModel(),
+		"warnings":       result.Warnings,
 	})
 }
 
@@ -932,6 +933,7 @@ func (ws *ReactWebServer) handleAPIGitDeepReview(w http.ResponseWriter, r *http.
 
 	logger := utils.GetLogger(true)
 	optimizer := utils.NewDiffOptimizerForReview()
+	optimizer.WorkingDir = ws.workspaceRoot
 	optimizedDiff := optimizer.OptimizeDiff(stagedDiff)
 
 	service := codereview.NewCodeReviewService(cfg, logger)
@@ -1006,6 +1008,7 @@ func (ws *ReactWebServer) handleAPIGitDeepReview(w http.ResponseWriter, r *http.
 		"review_output":        reviewOutput,
 		"provider":             ws.agent.GetProvider(),
 		"model":                ws.agent.GetModel(),
+		"warnings":             optimizedDiff.Warnings,
 	})
 }
 

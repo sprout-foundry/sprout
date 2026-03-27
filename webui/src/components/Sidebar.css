@@ -1341,7 +1341,8 @@
 .git-sidebar-commit-box,
 .git-sidebar-file-section,
 .git-sidebar-bulk-actions,
-.git-sidebar-error {
+.git-sidebar-error,
+.git-sidebar-warning {
   background: var(--bg-secondary);
   border: 1px solid var(--border-subtle);
   border-radius: 10px;
@@ -1355,11 +1356,18 @@
 }
 
 .git-sidebar-cleanliness,
-.git-sidebar-error {
+.git-sidebar-error,
+.git-sidebar-warning {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 12px;
+}
+
+.git-sidebar-warning {
+  color: var(--accent-warning);
+  background: color-mix(in srgb, var(--color-warning-bg) 78%, var(--bg-secondary));
+  border-color: color-mix(in srgb, var(--accent-warning) 35%, var(--border-subtle));
 }
 
 .git-sidebar-toolbar-row {

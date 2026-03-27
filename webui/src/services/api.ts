@@ -119,6 +119,13 @@ export interface LeditInstance {
   is_current: boolean;
 }
 
+export interface SSHHostEntry {
+  alias: string;
+  hostname?: string;
+  user?: string;
+  port?: string;
+}
+
 export interface WorkspaceResponse {
   daemon_root: string;
   workspace_root: string;
@@ -279,6 +286,15 @@ class ApiService {
       throw new Error('Failed to fetch instances');
     }
     return response.json();
+  }
+
+  async getSSHHosts(): Promise<SSHHostEntry[]> {
+    const response = await fetch('/api/instances/ssh-hosts');
+    if (!response.ok) {
+      throw new Error('Failed to fetch SSH hosts');
+    }
+    const data = await response.json();
+    return Array.isArray(data.hosts) ? data.hosts : [];
   }
 
   async selectInstance(pid: number): Promise<{ message: string; pid: number }> {
@@ -572,6 +588,7 @@ class ApiService {
     commit_message: string;
     provider?: string;
     model?: string;
+    warnings?: string[];
   }> {
     try {
       const response = await fetch('/api/git/commit-message', {
@@ -598,6 +615,7 @@ class ApiService {
     review_output: string;
     provider?: string;
     model?: string;
+    warnings?: string[];
   }> {
     try {
       const response = await fetch('/api/git/deep-review', {

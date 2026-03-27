@@ -52,6 +52,7 @@ interface GitSidebarPanelProps {
   isGeneratingCommitMessage: boolean;
   isReviewLoading: boolean;
   actionError: string | null;
+  actionWarning: string | null;
   onCommitMessageChange: (value: string) => void;
   onGenerateCommitMessage: () => void;
   onCommit: () => void;
@@ -94,6 +95,7 @@ const GitSidebarPanel: React.FC<GitSidebarPanelProps> = ({
   isGeneratingCommitMessage,
   isReviewLoading,
   actionError,
+  actionWarning,
   onCommitMessageChange,
   onGenerateCommitMessage,
   onCommit,
@@ -315,6 +317,13 @@ const GitSidebarPanel: React.FC<GitSidebarPanelProps> = ({
         <div className="git-sidebar-error">
           <AlertTriangle size={14} />
           <span>{actionError}</span>
+        </div>
+      ) : null}
+
+      {actionWarning ? (
+        <div className="git-sidebar-warning">
+          <AlertTriangle size={14} />
+          <span>{actionWarning}</span>
         </div>
       ) : null}
 

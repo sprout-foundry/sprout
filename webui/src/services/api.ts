@@ -138,6 +138,34 @@ export interface SSHSessionEntry {
   active: boolean;
 }
 
+export interface SSHOpenResponse {
+  message: string;
+  url: string;
+  port: number;
+}
+
+export interface SSHOpenErrorPayload {
+  error: string;
+  step?: string;
+  details?: string;
+  log_path?: string;
+}
+
+export class SSHWorkspaceOpenError extends Error {
+  step?: string;
+  details?: string;
+  logPath?: string;
+
+  constructor(payload: SSHOpenErrorPayload) {
+    const baseMessage = payload.error || 'Failed to open SSH workspace';
+    super(payload.step ? `${baseMessage} (${payload.step})` : baseMessage);
+    this.name = 'SSHWorkspaceOpenError';
+    this.step = payload.step;
+    this.details = payload.details;
+    this.logPath = payload.log_path;
+  }
+}
+
 export interface WorkspaceResponse {
   daemon_root: string;
   workspace_root: string;
@@ -309,7 +337,7 @@ class ApiService {
     return Array.isArray(data.hosts) ? data.hosts : [];
   }
 
-  async openSSHWorkspace(hostAlias: string, remoteWorkspacePath?: string): Promise<{ message: string; url: string; port: number }> {
+  async openSSHWorkspace(hostAlias: string, remoteWorkspacePath?: string): Promise<SSHOpenResponse> {
     const response = await fetch('/api/instances/ssh-open', {
       method: 'POST',
       headers: {
@@ -332,7 +360,12 @@ class ApiService {
     }
 
     if (!response.ok) {
-      throw new Error(data.error || data.message || 'Failed to open SSH workspace');
+      throw new SSHWorkspaceOpenError({
+        error: data.error || data.message || 'Failed to open SSH workspace',
+        step: data.step,
+        details: data.details,
+        log_path: data.log_path,
+      });
     }
 
     return data;

@@ -3,6 +3,7 @@ package webui
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -67,6 +68,13 @@ type sshSessionEntryDTO struct {
 	URL                 string    `json:"url,omitempty"`
 	StartedAt           time.Time `json:"started_at"`
 	Active              bool      `json:"active"`
+}
+
+type sshLaunchErrorDTO struct {
+	Error   string `json:"error"`
+	Step    string `json:"step,omitempty"`
+	Details string `json:"details,omitempty"`
+	LogPath string `json:"log_path,omitempty"`
 }
 
 func (ws *ReactWebServer) handleAPIInstances(w http.ResponseWriter, r *http.Request) {
@@ -215,19 +223,27 @@ func (ws *ReactWebServer) handleAPISSHHosts(w http.ResponseWriter, r *http.Reque
 
 func (ws *ReactWebServer) handleAPISSHOpen(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeSSHJSONError(w, http.StatusMethodNotAllowed, sshLaunchErrorDTO{Error: "Method not allowed"})
 		return
 	}
 
 	var req sshLaunchRequestDTO
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeSSHJSONError(w, http.StatusBadRequest, sshLaunchErrorDTO{Error: "Invalid JSON"})
 		return
 	}
 
 	result, err := ws.launchSSHWorkspace(req)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		payload := sshLaunchErrorDTO{Error: err.Error()}
+		var launchErr *sshLaunchError
+		if errors.As(err, &launchErr) {
+			payload.Error = launchErr.Message
+			payload.Step = launchErr.Step
+			payload.Details = launchErr.Details
+			payload.LogPath = launchErr.LogPath
+		}
+		writeSSHJSONError(w, http.StatusBadRequest, payload)
 		return
 	}
 
@@ -237,6 +253,12 @@ func (ws *ReactWebServer) handleAPISSHOpen(w http.ResponseWriter, r *http.Reques
 		"url":     result.URL,
 		"port":    result.LocalPort,
 	})
+}
+
+func writeSSHJSONError(w http.ResponseWriter, status int, payload sshLaunchErrorDTO) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(payload)
 }
 
 func (ws *ReactWebServer) handleAPISSHSessions(w http.ResponseWriter, r *http.Request) {

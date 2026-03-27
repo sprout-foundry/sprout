@@ -11,5 +11,7 @@ contextBridge.exposeInMainWorld('leditDesktop', {
   openWorkspace: (options) => ipcRenderer.invoke('desktop:openWorkspace', options),
   openWorktree: (options) => ipcRenderer.invoke('desktop:openWorktree', options),
   createWorktree: (options) => ipcRenderer.invoke('desktop:createWorktree', options),
+  installWsl: () => ipcRenderer.invoke('desktop:installWsl'),
+  installGitForWindows: () => ipcRenderer.invoke('desktop:installGitForWindows'),
   appVersion: () => ipcRenderer.invoke('desktop:appVersion'),
 });

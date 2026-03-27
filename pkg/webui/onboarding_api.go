@@ -33,11 +33,11 @@ type onboardingProvider struct {
 }
 
 type onboardingEnvironment struct {
-	RuntimePlatform    string `json:"runtime_platform"`
-	HostPlatform       string `json:"host_platform"`
-	BackendMode        string `json:"backend_mode"`
-	HasWSL             bool   `json:"has_wsl"`
-	HasGitBash         bool   `json:"has_git_bash"`
+	RuntimePlatform     string `json:"runtime_platform"`
+	HostPlatform        string `json:"host_platform"`
+	BackendMode         string `json:"backend_mode"`
+	HasWSL              bool   `json:"has_wsl"`
+	HasGitBash          bool   `json:"has_git_bash"`
 	RecommendedTerminal string `json:"recommended_terminal"`
 }
 
@@ -228,11 +228,11 @@ func detectOnboardingEnvironment() onboardingEnvironment {
 	}
 
 	return onboardingEnvironment{
-		RuntimePlatform:    runtime.GOOS,
-		HostPlatform:       hostPlatform,
-		BackendMode:        backendMode,
-		HasWSL:             hasWSL,
-		HasGitBash:         hasGitBash,
+		RuntimePlatform:     runtime.GOOS,
+		HostPlatform:        hostPlatform,
+		BackendMode:         backendMode,
+		HasWSL:              hasWSL,
+		HasGitBash:          hasGitBash,
 		RecommendedTerminal: recommendedTerminal,
 	}
 }

@@ -250,7 +250,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     }
     return false;
   });
-  const [panelWidth] = useState(360);
+  const panelWidth = 360;
   const panelContainerRef = useRef<HTMLDivElement>(null);
 
   // ── Chat-specific state ──────────────────────────────────────────

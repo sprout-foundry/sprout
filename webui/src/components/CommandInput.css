@@ -514,6 +514,7 @@
 @media (max-width: 768px) {
   .command-input {
     border-radius: 12px;
+    min-height: 52px;
   }
 
   .keyboard-hints {
@@ -522,5 +523,6 @@
 
   .input-field {
     font-size: 16px;
+    padding: 12px 14px 48px 14px;
   }
 }

@@ -214,6 +214,7 @@ const PANEL_COLLAPSED_KEY = 'ledit.contextPanel.collapsed';
 const PANEL_TAB_KEY = 'ledit.contextPanel.tab';
 const PANEL_MIN = 280;
 const PANEL_MAX = 760;
+const MOBILE_LAYOUT_MAX_WIDTH = 768;
 
 const normalizeRevision = (raw: any): Revision => {
   const files = Array.isArray(raw?.files)
@@ -237,11 +238,17 @@ const normalizeRevision = (raw: any): Revision => {
 // ── Component ──────────────────────────────────────────────────────
 
 const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, ref) => {
-  const { context, panelWidth: externalPanelWidth, onPanelWidthChange } = props;
+  const { context, onPanelWidthChange } = props;
 
   // ── Panel infrastructure state ───────────────────────────────────
-  const [panelCollapsed, setPanelCollapsed] = useState(false);
-  const panelWidth = externalPanelWidth ?? 360;
+  const [panelCollapsed, setPanelCollapsed] = useState(() => {
+    // On mobile, default to collapsed
+    if (typeof window !== 'undefined' && window.innerWidth <= MOBILE_LAYOUT_MAX_WIDTH) {
+      return true;
+    }
+    return false;
+  });
+  const [panelWidth, setPanelWidth] = useState(360);
   const panelContainerRef = useRef<HTMLDivElement>(null);
 
   // ── Chat-specific state ──────────────────────────────────────────
@@ -1607,49 +1614,51 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
           aria-label="Resize context panel"
         />
       )}
-      <aside
-        className={`context-panel ${panelCollapsed ? 'collapsed' : ''}`}
-        aria-label="Context panel"
-        style={panelCollapsed || isMobileLayout ? undefined : { width: `${panelWidth}px` }}
-        ref={panelContainerRef}
-      >
-        <div className="side-panel-rail">
-          {tabs.map((tab) => (
+      {isMobileLayout && panelCollapsed ? null : (
+        <aside
+          className={`context-panel ${panelCollapsed ? 'collapsed' : ''}${isMobileLayout ? ' context-panel-mobile' : ''}`}
+          aria-label="Context panel"
+          style={!panelCollapsed && !isMobileLayout ? { width: `${panelWidth}px` } : undefined}
+          ref={panelContainerRef}
+        >
+          <div className="side-panel-rail">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                className={`side-rail-btn ${activeTabId === tab.id ? 'active' : ''}`}
+                onClick={() => handleTabClick(tab.id)}
+                title={tab.label}
+                aria-label={tab.label}
+                aria-pressed={activeTabId === tab.id}
+              >
+                {tab.icon}
+              </button>
+            ))}
             <button
-              key={tab.id}
-              className={`side-rail-btn ${activeTabId === tab.id ? 'active' : ''}`}
-              onClick={() => handleTabClick(tab.id)}
-              title={tab.label}
-              aria-label={tab.label}
-              aria-pressed={activeTabId === tab.id}
+              className="side-collapse-btn"
+              onClick={() => setPanelCollapsed((prev) => !prev)}
+              title={panelCollapsed ? 'Expand panel' : 'Collapse panel'}
             >
-              {tab.icon}
+              {panelCollapsed ? <PanelRightOpen size={14} /> : <PanelRightClose size={14} />}
             </button>
-          ))}
-          <button
-            className="side-collapse-btn"
-            onClick={() => setPanelCollapsed((prev) => !prev)}
-            title={panelCollapsed ? 'Expand panel' : 'Collapse panel'}
-          >
-            {panelCollapsed ? <PanelRightOpen size={14} /> : <PanelRightClose size={14} />}
-          </button>
-        </div>
-
-        {!panelCollapsed && (
-          <div className="side-panel-content">
-            <div className="side-panel-header">
-              <div className="side-panel-title">
-                {activeTab.icon}
-                <h4>{activeTab.label}</h4>
-              </div>
-              <span className="tool-count">{activeTab.count}</span>
-            </div>
-            <div className="side-panel-body">
-              {renderTabContent()}
-            </div>
           </div>
-        )}
-      </aside>
+
+          {!panelCollapsed && (
+            <div className="side-panel-content">
+              <div className="side-panel-header">
+                <div className="side-panel-title">
+                  {activeTab.icon}
+                  <h4>{activeTab.label}</h4>
+                </div>
+                <span className="tool-count">{activeTab.count}</span>
+              </div>
+              <div className="side-panel-body">
+                {renderTabContent()}
+              </div>
+            </div>
+          )}
+        </aside>
+      )}
     </>
   );
 });

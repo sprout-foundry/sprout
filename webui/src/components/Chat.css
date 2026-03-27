@@ -4,6 +4,7 @@
   flex: 1;
   min-width: 0;
   min-height: 0;
+  height: 0; /* force flex child to not exceed available space */
   overflow: hidden;
 }
 
@@ -863,6 +864,7 @@
   background: var(--bg-secondary);
   position: relative;
   z-index: 1001;
+  flex-shrink: 0;
 }
 
 @media (max-width: 1400px) {
@@ -1291,11 +1293,6 @@
     flex-direction: column;
   }
 
-  .context-panel {
-    width: 100% !important;
-    max-height: 280px;
-  }
-
   .chat-header {
     padding: 10px 12px;
   }
@@ -1311,6 +1308,46 @@
   .tool-duration,
   .tool-expand {
     display: none;
+  }
+
+  .input-container {
+    padding: 8px 10px;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* ── Mobile context panel toggle ────────────────────────────── */
+.context-panel-mobile-toggle {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .context-panel-mobile-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    bottom: 80px;
+    right: 12px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1px solid var(--border-focus);
+    background: var(--sidebar-nav-btn-active-bg);
+    color: var(--accent-fg);
+    cursor: pointer;
+    box-shadow: var(--shadow-elevated);
+    z-index: 500;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .context-panel-mobile-toggle:hover {
+    transform: scale(1.08);
+    box-shadow: 0 12px 28px rgba(2, 6, 23, 0.52);
+  }
+
+  .context-panel-mobile-toggle:active {
+    transform: scale(0.95);
   }
 }
 

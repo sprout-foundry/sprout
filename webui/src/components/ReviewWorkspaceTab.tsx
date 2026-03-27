@@ -1,9 +1,8 @@
 import React, { useMemo } from 'react';
 import { ShieldCheck, Loader2, Wrench } from 'lucide-react';
-import { stripAnsiCodes } from '../utils/ansi';
-import { parseReviewGuidance, reviewGuidanceToMarkdown } from '../utils/reviewFormatting';
+import MessageSegments from './MessageSegments';
 import MessageBubble from './MessageBubble';
-import MessageContent from './MessageContent';
+import { parseReviewGuidance, reviewGuidanceToMarkdown } from '../utils/reviewFormatting';
 
 interface DeepReviewResult {
   message: string;
@@ -38,7 +37,7 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
   onFixFromReview,
 }) => {
   const parsedDetailedGuidance = useMemo(
-    () => parseReviewGuidance(stripAnsiCodes(review?.detailed_guidance || '')),
+    () => parseReviewGuidance(review?.detailed_guidance || ''),
     [review?.detailed_guidance]
   );
   const detailedGuidanceMarkdown = useMemo(
@@ -80,13 +79,13 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
               <MessageBubble
                 type="assistant"
                 ariaLabel="Review summary"
-                copyText={stripAnsiCodes(review.feedback || review.review_output)}
+                copyText={review.feedback || review.review_output}
               >
                 <div className="review-meta-strip">
                   <span className={`review-status-pill status-${review.status}`}>{review.status}</span>
                   {review.model ? <span>{review.model}</span> : null}
                 </div>
-                <MessageContent content={review.feedback || review.review_output} />
+                <MessageSegments content={review.feedback || review.review_output} />
               </MessageBubble>
 
               {review.detailed_guidance ? (
@@ -95,7 +94,7 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
                   ariaLabel="Detailed guidance"
                   copyText={detailedGuidanceMarkdown}
                 >
-                  <MessageContent content={detailedGuidanceMarkdown} />
+                  <MessageSegments content={detailedGuidanceMarkdown} />
                 </MessageBubble>
               ) : null}
 
@@ -103,9 +102,9 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
                 <MessageBubble
                   type="assistant"
                   ariaLabel="Suggested prompt"
-                  copyText={stripAnsiCodes(review.suggested_new_prompt)}
+                  copyText={review.suggested_new_prompt}
                 >
-                  <MessageContent content={review.suggested_new_prompt} />
+                  <MessageSegments content={review.suggested_new_prompt} />
                 </MessageBubble>
               ) : null}
 
@@ -113,13 +112,13 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
                 <MessageBubble
                   type="assistant"
                   ariaLabel="Review fix logs"
-                  copyText={stripAnsiCodes(reviewFixLogs.join('\n'))}
+                  copyText={reviewFixLogs.join('\n')}
                 >
                   <div className="review-meta-strip">
                     <span>Fix session</span>
                     {reviewFixSessionID ? <span>{reviewFixSessionID}</span> : null}
                   </div>
-                  <pre className="plain-text-block">{stripAnsiCodes(reviewFixLogs.join('\n'))}</pre>
+                  <MessageSegments content={reviewFixLogs.join('\n')} />
                 </MessageBubble>
               ) : null}
 
@@ -127,9 +126,9 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
                 <MessageBubble
                   type="assistant"
                   ariaLabel="Review fix result"
-                  copyText={stripAnsiCodes(reviewFixResult)}
+                  copyText={reviewFixResult}
                 >
-                  <MessageContent content={reviewFixResult} />
+                  <MessageSegments content={reviewFixResult} />
                 </MessageBubble>
               ) : null}
             </>

@@ -63,7 +63,11 @@ interface GitSidebarPanelProps {
   onRefresh: () => void;
   onToggleFileSelection: (section: FileSection, path: string) => void;
   onToggleSectionSelection: (section: FileSection) => void;
+  onClearSelection: () => void;
   onPreviewFile: (section: FileSection, path: string) => void;
+  onStageSelected: () => void;
+  onUnstageSelected: () => void;
+  onDiscardSelected: () => void;
   onStageFile: (path: string) => void;
   onUnstageFile: (path: string) => void;
   onDiscardFile: (path: string) => void;
@@ -101,7 +105,11 @@ const GitSidebarPanel: React.FC<GitSidebarPanelProps> = ({
   onRefresh,
   onToggleFileSelection,
   onToggleSectionSelection,
+  onClearSelection,
   onPreviewFile,
+  onStageSelected,
+  onUnstageSelected,
+  onDiscardSelected,
   onStageFile,
   onUnstageFile,
   onDiscardFile,
@@ -151,6 +159,33 @@ const GitSidebarPanel: React.FC<GitSidebarPanelProps> = ({
 
   const hasStagedFiles = gitStatus.staged.length > 0;
   const branchName = gitBranches.current || gitStatus.branch || 'detached';
+  const visibleSections = FILE_SECTIONS.filter((section) => gitStatus[section.id].length > 0);
+  const hiddenSectionCount = FILE_SECTIONS.length - visibleSections.length;
+  const selectedEntries = Array.from(selectedFiles)
+    .map((key) => {
+      const separator = key.indexOf(':');
+      if (separator <= 0) return null;
+      const section = key.slice(0, separator) as FileSection;
+      const path = key.slice(separator + 1);
+      if (!path) return null;
+      return { section, path };
+    })
+    .filter((entry): entry is { section: FileSection; path: string } => entry !== null);
+  const stageSelectedCount = new Set(
+    selectedEntries
+      .filter((entry) => entry.section !== 'staged')
+      .map((entry) => entry.path)
+  ).size;
+  const unstageSelectedCount = new Set(
+    selectedEntries
+      .filter((entry) => entry.section === 'staged')
+      .map((entry) => entry.path)
+  ).size;
+  const discardSelectedCount = new Set(
+    selectedEntries
+      .filter((entry) => entry.section === 'modified' || entry.section === 'deleted')
+      .map((entry) => entry.path)
+  ).size;
 
   const handleCreateBranch = () => {
     const value = window.prompt('Create branch', '');
@@ -283,8 +318,61 @@ const GitSidebarPanel: React.FC<GitSidebarPanelProps> = ({
         </div>
       ) : null}
 
+      {selectedEntries.length > 0 ? (
+        <div className="git-sidebar-selection-bar">
+          <div className="git-sidebar-selection-summary">
+            <CheckSquare size={14} />
+            <span>{selectedEntries.length} selected</span>
+          </div>
+          <div className="git-sidebar-selection-actions">
+            {stageSelectedCount > 0 && (
+              <button
+                className="sidebar-action-btn compact"
+                onClick={onStageSelected}
+                disabled={isActing}
+              >
+                <PlusSquare size={13} />
+                Stage {stageSelectedCount}
+              </button>
+            )}
+            {unstageSelectedCount > 0 && (
+              <button
+                className="sidebar-action-btn compact"
+                onClick={onUnstageSelected}
+                disabled={isActing}
+              >
+                <MinusSquare size={13} />
+                Unstage {unstageSelectedCount}
+              </button>
+            )}
+            {discardSelectedCount > 0 && (
+              <button
+                className="sidebar-action-btn compact danger"
+                onClick={onDiscardSelected}
+                disabled={isActing}
+              >
+                <Trash2 size={13} />
+                {selectedEntries.some((entry) => entry.section === 'deleted') ? 'Restore/Discard' : 'Discard'} {discardSelectedCount}
+              </button>
+            )}
+            <button
+              className="sidebar-action-btn compact ghost"
+              onClick={onClearSelection}
+              disabled={isActing}
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <div className="git-sidebar-file-sections">
-        {FILE_SECTIONS.map((section) => {
+        {hiddenSectionCount > 0 ? (
+          <div className="git-sidebar-hidden-sections-note">
+            Hiding {hiddenSectionCount} empty {hiddenSectionCount === 1 ? 'section' : 'sections'}
+          </div>
+        ) : null}
+        {visibleSections.map((section) => {
           const files = gitStatus[section.id];
           const allSelected = files.length > 0 && files.every((file) => selectedFiles.has(selectionKey(section.id, file.path)));
           return (
@@ -313,79 +401,75 @@ const GitSidebarPanel: React.FC<GitSidebarPanelProps> = ({
                   )}
                 </div>
               </div>
-              {files.length === 0 ? (
-                <div className="git-sidebar-empty-group">No files</div>
-              ) : (
-                <div className="git-sidebar-file-list">
-                  {files.map((file) => {
-                    const key = selectionKey(section.id, file.path);
-                    const isSelected = selectedFiles.has(key);
-                    const isPreviewing = activeDiffSelectionKey === key;
-                    return (
-                      <div
-                        key={key}
-                        className={`git-sidebar-file-row ${isPreviewing ? 'previewing' : ''}`}
-                        onContextMenu={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          setContextMenu({
-                            x: event.clientX,
-                            y: event.clientY,
-                            section: section.id,
-                            file,
-                          });
-                        }}
+              <div className="git-sidebar-file-list">
+                {files.map((file) => {
+                  const key = selectionKey(section.id, file.path);
+                  const isSelected = selectedFiles.has(key);
+                  const isPreviewing = activeDiffSelectionKey === key;
+                  return (
+                    <div
+                      key={key}
+                      className={`git-sidebar-file-row ${isPreviewing ? 'previewing' : ''} ${isSelected ? 'selected' : ''}`}
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setContextMenu({
+                          x: event.clientX,
+                          y: event.clientY,
+                          section: section.id,
+                          file,
+                        });
+                      }}
+                    >
+                      <label className="git-sidebar-file-select">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => onToggleFileSelection(section.id, file.path)}
+                        />
+                      </label>
+                      <button
+                        className="git-sidebar-file-open"
+                        onClick={() => onPreviewFile(section.id, file.path)}
                       >
-                        <label className="git-sidebar-file-select">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => onToggleFileSelection(section.id, file.path)}
-                          />
-                        </label>
-                        <button
-                          className="git-sidebar-file-open"
-                          onClick={() => onPreviewFile(section.id, file.path)}
-                        >
-                          <span className="git-sidebar-file-path">{file.path}</span>
-                          <span className="git-sidebar-file-status">{file.status}</span>
-                        </button>
-                        <div className="git-sidebar-row-actions">
-                          {section.id === 'staged' ? (
-                            <button
-                              className="git-row-icon-btn"
-                              onClick={() => onUnstageFile(file.path)}
-                              title="Unstage file"
-                              disabled={isActing}
-                            >
-                              <MinusSquare size={14} />
-                            </button>
-                          ) : (
-                            <button
-                              className="git-row-icon-btn"
-                              onClick={() => onStageFile(file.path)}
-                              title="Stage file"
-                              disabled={isActing}
-                            >
-                              <PlusSquare size={14} />
-                            </button>
-                          )}
-                          {(section.id === 'modified' || section.id === 'untracked' || section.id === 'deleted') && (
-                            <button
-                              className="git-row-icon-btn danger"
-                              onClick={() => onDiscardFile(file.path)}
-                              title={section.id === 'deleted' ? 'Restore file' : 'Discard file changes'}
-                              disabled={isActing}
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          )}
-                        </div>
+                        <span className="git-sidebar-file-path">{file.path}</span>
+                        <span className="git-sidebar-file-status">{file.status}</span>
+                      </button>
+                      <div className="git-sidebar-row-actions">
+                        {section.id === 'staged' ? (
+                          <button
+                            className="git-row-icon-btn"
+                            onClick={() => onUnstageFile(file.path)}
+                            title="Unstage file"
+                            disabled={isActing}
+                          >
+                            <MinusSquare size={14} />
+                          </button>
+                        ) : (
+                          <button
+                            className="git-row-icon-btn"
+                            onClick={() => onStageFile(file.path)}
+                            title="Stage file"
+                            disabled={isActing}
+                          >
+                            <PlusSquare size={14} />
+                          </button>
+                        )}
+                        {(section.id === 'modified' || section.id === 'untracked' || section.id === 'deleted') && (
+                          <button
+                            className="git-row-icon-btn danger"
+                            onClick={() => onDiscardFile(file.path)}
+                            title={section.id === 'deleted' ? 'Restore file' : 'Discard file changes'}
+                            disabled={isActing}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </div>
-                    );
-                  })}
-                </div>
-              )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           );
         })}

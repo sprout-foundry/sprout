@@ -317,8 +317,7 @@ const AppContent: React.FC<AppContentProps> = ({
     openWorkspaceBuffer,
   });
 
-  const handleInstanceChange = useCallback(async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const pid = Number(e.target.value);
+  const handleInstanceChange = useCallback(async (pid: number) => {
     if (!Number.isFinite(pid) || pid <= 0 || pid === selectedInstancePID) {
       return;
     }

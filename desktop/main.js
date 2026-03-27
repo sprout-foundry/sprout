@@ -277,6 +277,51 @@ function runWslCommand(args, options = {}) {
   });
 }
 
+function commandExists(command) {
+  const probe = spawnSync(command, ['--version'], {
+    stdio: 'ignore',
+    windowsHide: true,
+  });
+  return probe.status === 0;
+}
+
+function startDetached(command, args) {
+  const child = spawn(command, args, {
+    detached: true,
+    stdio: 'ignore',
+    windowsHide: false,
+  });
+  child.unref();
+}
+
+function installWslFromDesktop() {
+  if (process.platform !== 'win32') {
+    return { ok: false, message: 'WSL installation is only available from the Windows desktop app.' };
+  }
+
+  if (commandExists('wsl.exe')) {
+    startDetached('wsl.exe', ['--install', '-d', 'Ubuntu']);
+    return { ok: true, message: 'Started the WSL installer. Windows may prompt for elevation and a restart.' };
+  }
+
+  shell.openExternal('https://learn.microsoft.com/windows/wsl/install');
+  return { ok: true, message: 'Opened the WSL installation guide in your browser.' };
+}
+
+function installGitForWindowsFromDesktop() {
+  if (process.platform !== 'win32') {
+    return { ok: false, message: 'Git for Windows installation is only available from the Windows desktop app.' };
+  }
+
+  if (commandExists('winget')) {
+    startDetached('winget', ['install', '--id', 'Git.Git', '-e', '--source', 'winget']);
+    return { ok: true, message: 'Started the Git for Windows installation through winget.' };
+  }
+
+  shell.openExternal('https://gitforwindows.org/');
+  return { ok: true, message: 'Opened the Git for Windows download page in your browser.' };
+}
+
 function toWslPath(pathValue, distro) {
   if (!pathValue) {
     return '';
@@ -658,7 +703,7 @@ async function startBackendForWorkspace(workspaceEntry) {
 
     const backendBinary = ensureWslBackendBinary(distro);
     const workspaceWslPath = toWslPath(workspaceEntry.workspacePath, distro);
-    const command = `cd ${shellEscape(workspaceWslPath)} && LEDIT_DESKTOP=1 BROWSER=none ${shellEscape(backendBinary)} --isolated-config agent --daemon --web-port ${shellEscape(String(port))}`;
+    const command = `cd ${shellEscape(workspaceWslPath)} && LEDIT_DESKTOP=1 LEDIT_HOST_PLATFORM=windows LEDIT_DESKTOP_BACKEND_MODE=wsl BROWSER=none ${shellEscape(backendBinary)} --isolated-config agent --daemon --web-port ${shellEscape(String(port))}`;
     const child = spawn('wsl.exe', ['-d', distro, '--', 'bash', '-lc', command], {
       env: {
         ...process.env,
@@ -687,11 +732,13 @@ async function startBackendForWorkspace(workspaceEntry) {
 
   const child = spawn(binaryPath, ['--isolated-config', 'agent', '--daemon', '--web-port', String(port)], {
     cwd: workspaceEntry.workspacePath,
-    env: {
-      ...process.env,
-      LEDIT_DESKTOP: '1',
-      BROWSER: 'none',
-    },
+      env: {
+        ...process.env,
+        LEDIT_DESKTOP: '1',
+        LEDIT_HOST_PLATFORM: process.platform === 'win32' ? 'windows' : process.platform,
+        LEDIT_DESKTOP_BACKEND_MODE: 'native',
+        BROWSER: 'none',
+      },
     stdio: 'ignore',
     windowsHide: true,
   });
@@ -1110,6 +1157,8 @@ ipcMain.handle('desktop:createWorktree', async (_event, options = {}) => {
   });
   return browserWindow ? { ok: true, workspacePath } : null;
 });
+ipcMain.handle('desktop:installWsl', async () => installWslFromDesktop());
+ipcMain.handle('desktop:installGitForWindows', async () => installGitForWindowsFromDesktop());
 
 app.whenReady().then(async () => {
   isAppReady = true;

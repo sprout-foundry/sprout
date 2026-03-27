@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('leditDesktop', {
   platform: process.platform,
   listRecentWorktrees: () => ipcRenderer.invoke('desktop:listRecentWorktrees'),
+  listWslDistros: () => ipcRenderer.invoke('desktop:listWslDistros'),
   pickRepository: () => ipcRenderer.invoke('desktop:pickRepository'),
   pickWorkspace: () => ipcRenderer.invoke('desktop:pickWorkspace'),
   pickWorktree: () => ipcRenderer.invoke('desktop:pickWorktree'),

@@ -2,6 +2,12 @@ const recentContainer = document.getElementById('recent-worktrees');
 const openWorktreeButton = document.getElementById('open-worktree');
 const createWorktreeButton = document.getElementById('create-worktree');
 const openWorktreeNewButton = document.getElementById('open-worktree-new');
+const wslPanel = document.getElementById('wsl-launcher-panel');
+const wslDistroSelect = document.getElementById('wsl-distro-select');
+const wslWorkspacePathInput = document.getElementById('wsl-workspace-path');
+const openWslWorkspaceButton = document.getElementById('open-wsl-workspace');
+const openWslWorkspaceNewButton = document.getElementById('open-wsl-workspace-new');
+const wslLauncherErrorNode = document.getElementById('wsl-launcher-error');
 const versionNode = document.getElementById('app-version');
 const createModal = document.getElementById('create-worktree-modal');
 const createForm = document.getElementById('create-worktree-form');
@@ -59,6 +65,16 @@ function clearCreateError() {
   createErrorNode.classList.add('hidden');
 }
 
+function showWslError(message) {
+  wslLauncherErrorNode.textContent = message;
+  wslLauncherErrorNode.classList.remove('hidden');
+}
+
+function clearWslError() {
+  wslLauncherErrorNode.textContent = '';
+  wslLauncherErrorNode.classList.add('hidden');
+}
+
 function openCreateModal() {
   clearCreateError();
   createModal.classList.remove('hidden');
@@ -98,9 +114,16 @@ function renderRecentWorktrees(entries) {
   for (const entry of entries) {
     const row = document.createElement('div');
     row.className = 'recent-worktree';
+    const tags = [];
+    if (entry.backendMode === 'wsl') {
+      tags.push('<span class="recent-worktree-tag">WSL</span>');
+      if (entry.wslDistro) {
+        tags.push(`<span class="recent-worktree-tag">${entry.wslDistro}</span>`);
+      }
+    }
     row.innerHTML = `
       <div class="recent-worktree-meta">
-        <div class="recent-worktree-name">${entry.name}</div>
+        <div class="recent-worktree-name">${entry.name}<span class="recent-worktree-tags">${tags.join('')}</span></div>
         <div class="recent-worktree-path">${entry.path}</div>
       </div>
       <div class="recent-worktree-actions">
@@ -116,6 +139,8 @@ function renderRecentWorktrees(entries) {
       await window.leditDesktop.openWorkspace({
         workspacePath: button.getAttribute('data-open'),
         forceNewWindow: false,
+        backendMode: entry.backendMode,
+        wslDistro: entry.wslDistro,
       });
     });
   });
@@ -125,6 +150,8 @@ function renderRecentWorktrees(entries) {
       await window.leditDesktop.openWorkspace({
         workspacePath: button.getAttribute('data-open-new'),
         forceNewWindow: true,
+        backendMode: entry.backendMode,
+        wslDistro: entry.wslDistro,
       });
     });
   });
@@ -136,6 +163,48 @@ async function openViaPicker(forceNewWindow) {
     return;
   }
   await window.leditDesktop.openWorkspace({ workspacePath, forceNewWindow });
+}
+
+async function setupWslLauncher() {
+  if (window.leditDesktop.platform !== 'win32') {
+    return;
+  }
+
+  const distros = await window.leditDesktop.listWslDistros();
+  if (!distros.length) {
+    return;
+  }
+
+  wslDistroSelect.innerHTML = distros
+    .map((distro) => `<option value="${distro}">${distro}</option>`)
+    .join('');
+  wslPanel.classList.remove('hidden');
+}
+
+async function openWslWorkspace(forceNewWindow) {
+  clearWslError();
+  const workspacePath = wslWorkspacePathInput.value.trim();
+  const wslDistro = wslDistroSelect.value.trim();
+
+  if (!workspacePath) {
+    showWslError('A WSL workspace path is required.');
+    return;
+  }
+  if (!wslDistro) {
+    showWslError('Choose a WSL distro first.');
+    return;
+  }
+
+  try {
+    await window.leditDesktop.openWorkspace({
+      workspacePath,
+      forceNewWindow,
+      backendMode: 'wsl',
+      wslDistro,
+    });
+  } catch (error) {
+    showWslError(error?.message || String(error));
+  }
 }
 
 async function browseRepository() {
@@ -165,6 +234,8 @@ async function browseWorktreeParent() {
 openWorktreeButton.addEventListener('click', () => openViaPicker(false));
 createWorktreeButton.addEventListener('click', () => openCreateModal());
 openWorktreeNewButton.addEventListener('click', () => openViaPicker(true));
+openWslWorkspaceButton.addEventListener('click', () => openWslWorkspace(false));
+openWslWorkspaceNewButton.addEventListener('click', () => openWslWorkspace(true));
 browseRepositoryButton.addEventListener('click', () => browseRepository());
 browseWorktreeParentButton.addEventListener('click', () => browseWorktreeParent());
 closeCreateWorktreeButton.addEventListener('click', () => closeCreateModal());
@@ -231,6 +302,7 @@ createForm.addEventListener('submit', async (event) => {
 
 Promise.all([
   refreshRecentWorktrees(),
+  setupWslLauncher(),
   window.leditDesktop.appVersion(),
 ]).then(([, version]) => {
   versionNode.textContent = `v${version}`;

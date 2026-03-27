@@ -1,13 +1,7 @@
-import React, { useRef, useEffect, useCallback, type ReactNode } from 'react';
-import {
-  Terminal, BookOpen, FileEdit, Pencil, Search, Eye, FlaskConical,
-  Globe, ArrowDown, ClipboardList, ScrollText, RotateCcw,
-  Wrench, Zap, Bot, AlertTriangle,
-  ExternalLink, CheckCircle, Circle, Loader2, Minus
-} from 'lucide-react';
+import React, { useRef, useEffect, useCallback } from 'react';
+import { Zap, Bot, AlertTriangle } from 'lucide-react';
 import CommandInput from './CommandInput';
-import { stripAnsiCodes } from '../utils/ansi';
-import { parseMessageSegments } from '../utils/messageSegments';
+import MessageSegments from './MessageSegments';
 import MessageContent from './MessageContent';
 import MessageBubble from './MessageBubble';
 import './Chat.css';
@@ -71,28 +65,6 @@ const Chat: React.FC<ChatProps> = ({
     }
   }, [messages, toolExecutions, queryProgress, isProcessing]);
 
-  const getToolIcon = (toolName: string): ReactNode => {
-    const iconMap: { [key: string]: ReactNode } = {
-      'shell_command': <Terminal size={14} />,
-      'read_file': <BookOpen size={14} />,
-      'write_file': <Pencil size={14} />,
-      'edit_file': <FileEdit size={14} />,
-      'search_files': <Search size={14} />,
-      'analyze_ui_screenshot': <Eye size={14} />,
-      'analyze_image_content': <FlaskConical size={14} />,
-      'web_search': <Globe size={14} />,
-      'fetch_url': <ArrowDown size={14} />,
-      'TodoWrite': <ClipboardList size={14} />,
-      'TodoRead': <ClipboardList size={14} />,
-      'view_history': <ScrollText size={14} />,
-      'rollback_changes': <RotateCcw size={14} />,
-      'mcp_tools': <Wrench size={14} />,
-      'run_subagent': <Bot size={14} />,
-      'run_parallel_subagents': <Bot size={14} />,
-    };
-    return iconMap[toolName] || <Wrench size={14} />;
-  };
-
   const findMatchingToolExecution = useCallback((toolName: string) => {
     const normalized = toolName.split('(')[0];
     for (let i = toolExecutions.length - 1; i >= 0; i -= 1) {
@@ -105,86 +77,6 @@ const Chat: React.FC<ChatProps> = ({
 
   const formatTime = (date: Date) => {
     return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
-
-  const renderMessageSegments = (content: string): ReactNode => {
-    try {
-      const cleaned = stripAnsiCodes(content);
-      const segments = parseMessageSegments(cleaned);
-
-      return (
-        <div className="message-segments">
-          {segments.map((segment, idx) => {
-            switch (segment.type) {
-              case 'text':
-                return (
-                  <div key={`seg-${idx}`} className="segment-text">
-                    <MessageContent content={segment.content} />
-                  </div>
-                );
-
-              case 'tool_call':
-                return (
-                  <div
-                    key={`seg-${idx}`}
-                    className="segment-tool-call"
-                    role="button"
-                    tabIndex={0}
-                    aria-label={`View ${segment.toolName} execution details`}
-                    onClick={() => {
-                      const matchingTool = findMatchingToolExecution(segment.toolName);
-                      if (matchingTool) {
-                        onToolPillClick?.(matchingTool.id);
-                      }
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        const matchingTool = findMatchingToolExecution(segment.toolName);
-                        if (matchingTool) {
-                          onToolPillClick?.(matchingTool.id);
-                        }
-                      }
-                    }}
-                  >
-                    <span className="tool-pill-icon">{getToolIcon(segment.toolName.split('(')[0])}</span>
-                    <span className="tool-pill-name">{segment.summary || segment.toolName}</span>
-                    <ExternalLink size={10} className="tool-pill-link-icon" />
-                  </div>
-                );
-
-              case 'todo_update':
-                return (
-                  <div key={`seg-${idx}`} className="segment-todo-summary">
-                    {segment.todos.map((todo, todoIdx) => (
-                      <span key={`todo-${todoIdx}`} className={`inline-todo inline-todo-${todo.status}`}>
-                        <span className="inline-todo-icon">
-                          {todo.status === 'completed' ? <CheckCircle size={10} /> :
-                           todo.status === 'in_progress' ? <Loader2 size={10} /> :
-                           todo.status === 'cancelled' ? <Minus size={10} /> :
-                           <Circle size={10} />}
-                        </span>
-                        {todo.content}
-                      </span>
-                    ))}
-                  </div>
-                );
-
-              case 'progress':
-                return null;
-
-              case 'result':
-                return null;
-
-              default:
-                return null;
-            }
-          })}
-        </div>
-      );
-    } catch {
-      return <MessageContent content={content} />;
-    }
   };
 
   return (
@@ -210,7 +102,7 @@ const Chat: React.FC<ChatProps> = ({
                 copyText={message.content}
                 timestamp={formatTime(message.timestamp)}
               >
-                {message.type === 'assistant'
+                  {message.type === 'assistant'
                   ? (
                     <>
                       {message.reasoning && message.reasoning.trim() && (
@@ -225,7 +117,15 @@ const Chat: React.FC<ChatProps> = ({
                           </div>
                         </details>
                       )}
-                      {renderMessageSegments(message.content)}
+                      <MessageSegments
+                        content={message.content}
+                        onToolClick={(toolName) => {
+                          const matchingTool = findMatchingToolExecution(toolName);
+                          if (matchingTool) {
+                            onToolPillClick?.(matchingTool.id);
+                          }
+                        }}
+                      />
                     </>
                   )
                   : <MessageContent content={message.content} />

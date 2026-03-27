@@ -128,19 +128,11 @@ func (ws *ReactWebServer) serveEmbeddedFile(w http.ResponseWriter, r *http.Reque
 }
 
 func (ws *ReactWebServer) readRootAsset(name string) ([]byte, error) {
-	switch name {
-	case "logo-mark.svg":
-		if len(logoMarkSVG) == 0 {
-			return nil, fs.ErrNotExist
-		}
-		return logoMarkSVG, nil
-	default:
-		data, err := staticFiles.ReadFile("static/" + name)
-		if err != nil {
-			return nil, fmt.Errorf("read root asset %q: %w", name, err)
-		}
-		return data, nil
+	data, err := staticFiles.ReadFile("static/" + name)
+	if err != nil {
+		return nil, fmt.Errorf("read root asset %q: %w", name, err)
 	}
+	return data, nil
 }
 
 func (ws *ReactWebServer) writeEmbeddedBytes(w http.ResponseWriter, data []byte, contentType string, cacheable bool) {

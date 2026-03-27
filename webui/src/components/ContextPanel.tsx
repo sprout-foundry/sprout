@@ -40,6 +40,7 @@ import './ContextPanel.css';
 import TodoPanel from './TodoPanel';
 import { ApiService } from '../services/api';
 import { stripAnsiCodes } from '../utils/ansi';
+import { getSubagentResultPreview, formatToolDetail } from '../utils/resultSummary';
 import RevisionListPanel from './RevisionListPanel';
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -659,84 +660,6 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     if (duration < 60000) return `${(duration / 1000).toFixed(1)}s`;
     return `${(duration / 60000).toFixed(1)}m`;
   };
-
-  const formatToolDetail = (content: string) => {
-    try {
-      const parsed = JSON.parse(content);
-      return JSON.stringify(parsed, null, 2);
-    } catch {
-      return content;
-    }
-  };
-
-  const truncateText = (value: string, maxLength: number) => {
-    if (value.length <= maxLength) {
-      return value;
-    }
-    return `${value.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
-  };
-
-  const extractResultSummary = useCallback((value: unknown): string | null => {
-    if (typeof value === 'string') {
-      const cleaned = stripAnsiCodes(value).replace(/\s+/g, ' ').trim();
-      return cleaned || null;
-    }
-
-    if (typeof value === 'number' || typeof value === 'boolean') {
-      return String(value);
-    }
-
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        const summary = extractResultSummary(item);
-        if (summary) {
-          return summary;
-        }
-      }
-      return null;
-    }
-
-    if (value && typeof value === 'object') {
-      const record = value as Record<string, unknown>;
-      const priorityKeys = ['summary', 'result', 'response', 'output', 'final_answer', 'message', 'content'];
-      for (const key of priorityKeys) {
-        if (key in record) {
-          const summary = extractResultSummary(record[key]);
-          if (summary) {
-            return summary;
-          }
-        }
-      }
-
-      for (const nestedValue of Object.values(record)) {
-        const summary = extractResultSummary(nestedValue);
-        if (summary) {
-          return summary;
-        }
-      }
-    }
-
-    return null;
-  }, []);
-
-  const getSubagentResultPreview = useCallback((rawResult?: string): string | undefined => {
-    if (!rawResult) {
-      return undefined;
-    }
-
-    const cleaned = stripAnsiCodes(rawResult).trim();
-    if (!cleaned) {
-      return undefined;
-    }
-
-    try {
-      const parsed = JSON.parse(cleaned);
-      const summary = extractResultSummary(parsed);
-      return summary ? truncateText(summary, 220) : truncateText(formatToolDetail(cleaned).replace(/\s+/g, ' ').trim(), 220);
-    } catch {
-      return truncateText(cleaned.replace(/\s+/g, ' ').trim(), 220);
-    }
-  }, [extractResultSummary]);
 
   const formatRelativeTime = (value: string) => {
     const date = new Date(value);

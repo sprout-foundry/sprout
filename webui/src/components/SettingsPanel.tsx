@@ -607,8 +607,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
         return (
           <div className="section">
             <h4>Subagent</h4>
-            {renderTextInput('subagent_provider', 'Provider', 'openai, anthropic…')}
-            {renderTextInput('subagent_model', 'Model', 'gpt-4o-mini, claude-3-5-sonnet…')}
+            {renderTextInput('subagent_provider', 'Provider', 'zai, minimax, openrouter…')}
+            {renderTextInput('subagent_model', 'Model', 'GLM-4.6, MiniMax-M2.5, qwen/qwen3-coder…')}
             {renderSelect('default_subagent_persona', 'Default Persona', [
               'general',
               'coder',
@@ -630,8 +630,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
           <div className="section">
             <h4>PDF OCR</h4>
             {renderToggle('pdf_ocr_enabled', 'Enable PDF OCR')}
-            {renderTextInput('pdf_ocr_provider', 'Provider', 'openai, anthropic…')}
-            {renderTextInput('pdf_ocr_model', 'Model', 'gpt-4o…')}
+            {renderTextInput('pdf_ocr_provider', 'Provider', 'zai, minimax, openrouter…')}
+            {renderTextInput('pdf_ocr_model', 'Model', 'GLM-4.6V, MiniMax-VL, qwen-vl…')}
           </div>
         );
 

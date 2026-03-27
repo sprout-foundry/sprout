@@ -735,6 +735,15 @@ html, body, #root {
   line-height: 1.45;
 }
 
+.onboarding-step-title {
+  margin-top: 6px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .onboarding-card label {
   color: var(--text-secondary);
   font-size: 12px;
@@ -769,6 +778,105 @@ html, body, #root {
   background-size: auto, 12px;
 }
 
+.onboarding-provider-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.onboarding-provider-card {
+  width: 100%;
+  text-align: left;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-elevated) 88%, transparent), color-mix(in srgb, var(--bg-surface) 92%, transparent));
+  color: var(--text-primary);
+  padding: 14px;
+  cursor: pointer;
+}
+
+.onboarding-provider-card.selected {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-primary) 55%, transparent);
+}
+
+.onboarding-provider-card-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.onboarding-provider-name {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.onboarding-provider-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-primary) 16%, transparent);
+  color: var(--accent-primary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.onboarding-provider-description {
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.onboarding-toggle-btn {
+  align-self: flex-start;
+  min-height: 32px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 0 10px;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.onboarding-provider-summary {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: color-mix(in srgb, var(--bg-elevated) 88%, transparent);
+  padding: 10px 12px;
+}
+
+.onboarding-provider-summary-title {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.onboarding-provider-summary-body {
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.onboarding-provider-links {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.onboarding-provider-links a {
+  color: var(--accent-primary);
+  font-size: 13px;
+  text-decoration: none;
+}
+
 .onboarding-note {
   color: var(--accent-success);
   font-size: 13px;
@@ -776,6 +884,23 @@ html, body, #root {
   border: 1px solid color-mix(in srgb, var(--accent-success) 40%, transparent);
   border-radius: var(--radius-md);
   padding: 8px 10px;
+}
+
+.onboarding-help {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.onboarding-inline-action {
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 0;
+  text-decoration: underline;
 }
 
 .onboarding-error {

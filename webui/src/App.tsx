@@ -128,6 +128,7 @@ interface OnboardingState {
   provider: string;
   model: string;
   apiKey: string;
+  showAllProviders: boolean;
   submitting: boolean;
   error: string | null;
 }
@@ -324,6 +325,7 @@ function App() {
     provider: '',
     model: '',
     apiKey: '',
+    showAllProviders: false,
     submitting: false,
     error: null,
   });
@@ -385,6 +387,14 @@ function App() {
     return onboarding.providers.find((p) => p.id === onboarding.provider) || null;
   }, [onboarding.provider, onboarding.providers]);
 
+  const recommendedOnboardingProviders = useMemo(() => {
+    return onboarding.providers.filter((p) => p.recommended);
+  }, [onboarding.providers]);
+
+  const advancedOnboardingProviders = useMemo(() => {
+    return onboarding.providers.filter((p) => !p.recommended);
+  }, [onboarding.providers]);
+
   // Debounce connection status updates to prevent flashing
   const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastConnectionStateRef = useRef<boolean>(false);
@@ -394,9 +404,12 @@ function App() {
     try {
       const status = await apiService.getOnboardingStatus();
       const providers = Array.isArray(status.providers) ? status.providers : [];
-      const preferredProvider = status.current_provider || providers[0]?.id || '';
+      const preferredProvider = status.current_provider
+        || providers.find((p) => p.recommended)?.id
+        || providers[0]?.id
+        || '';
       const providerInfo = providers.find((p) => p.id === preferredProvider) || providers[0];
-      const preferredModel = status.current_model || providerInfo?.models?.[0] || '';
+      const preferredModel = status.current_model || providerInfo?.recommended_model || providerInfo?.models?.[0] || '';
       setOnboarding({
         checking: false,
         open: !!status.setup_required,
@@ -405,6 +418,7 @@ function App() {
         provider: preferredProvider,
         model: preferredModel,
         apiKey: '',
+        showAllProviders: false,
         submitting: false,
         error: null,
       });
@@ -413,6 +427,7 @@ function App() {
         ...prev,
         checking: false,
         open: true,
+        showAllProviders: false,
         error: error instanceof Error ? error.message : 'Failed to check setup status',
       }));
     }
@@ -1090,7 +1105,7 @@ function App() {
       return {
         ...prev,
         provider: providerID,
-        model: provider?.models?.[0] || '',
+        model: provider?.recommended_model || provider?.models?.[0] || '',
         apiKey: '',
         error: null,
       };
@@ -1316,26 +1331,78 @@ function App() {
                   <div className="onboarding-card">
                     <h2>Set Up Ledit</h2>
                     <p>
-                      Finish provider setup before using chat and tools.
+                      Finish AI setup before using chat and tools.
                       {onboarding.reason === 'provider_not_configured' ? ' No provider is configured yet.' : ''}
                       {onboarding.reason === 'missing_provider_credential' ? ' The selected provider is missing credentials.' : ''}
                     </p>
 
-                    <label htmlFor="onboarding-provider">Provider</label>
-                    <select
-                      id="onboarding-provider"
-                      value={onboarding.provider}
-                      onChange={(e) => handleOnboardingProviderChange(e.target.value)}
-                      disabled={onboarding.submitting || onboarding.checking}
-                    >
-                      {onboarding.providers.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                          {p.requires_api_key && !p.has_credential ? ' (API key required)' : ''}
-                        </option>
+                    <div className="onboarding-step-title">1. Choose an inference provider</div>
+                    <div className="onboarding-provider-grid">
+                      {recommendedOnboardingProviders.map((providerOption) => (
+                        <button
+                          key={providerOption.id}
+                          type="button"
+                          className={`onboarding-provider-card ${onboarding.provider === providerOption.id ? 'selected' : ''}`}
+                          onClick={() => handleOnboardingProviderChange(providerOption.id)}
+                          disabled={onboarding.submitting || onboarding.checking}
+                        >
+                          <div className="onboarding-provider-card-topline">
+                            <span className="onboarding-provider-name">{providerOption.name}</span>
+                            <span className="onboarding-provider-badge">Recommended</span>
+                          </div>
+                          <div className="onboarding-provider-description">{providerOption.description}</div>
+                        </button>
                       ))}
-                    </select>
+                    </div>
 
+                    {advancedOnboardingProviders.length > 0 && (
+                      <>
+                        <button
+                          type="button"
+                          className="onboarding-toggle-btn"
+                          onClick={() => setOnboarding((prev) => ({ ...prev, showAllProviders: !prev.showAllProviders }))}
+                          disabled={onboarding.submitting || onboarding.checking}
+                        >
+                          {onboarding.showAllProviders ? 'Hide other providers' : 'Show other providers'}
+                        </button>
+
+                        {onboarding.showAllProviders && (
+                          <>
+                            <label htmlFor="onboarding-provider">Other Providers</label>
+                            <select
+                              id="onboarding-provider"
+                              value={onboarding.provider}
+                              onChange={(e) => handleOnboardingProviderChange(e.target.value)}
+                              disabled={onboarding.submitting || onboarding.checking}
+                            >
+                              {onboarding.providers.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.name}
+                                  {p.requires_api_key && !p.has_credential ? ' (API key required)' : ''}
+                                </option>
+                              ))}
+                            </select>
+                          </>
+                        )}
+                      </>
+                    )}
+
+                    {selectedOnboardingProvider && (
+                      <div className="onboarding-provider-summary">
+                        <div className="onboarding-provider-summary-title">{selectedOnboardingProvider.name}</div>
+                        <div className="onboarding-provider-summary-body">{selectedOnboardingProvider.setup_hint || selectedOnboardingProvider.description}</div>
+                        <div className="onboarding-provider-links">
+                          {selectedOnboardingProvider.docs_url && (
+                            <a href={selectedOnboardingProvider.docs_url} target="_blank" rel="noreferrer">Docs</a>
+                          )}
+                          {selectedOnboardingProvider.signup_url && (
+                            <a href={selectedOnboardingProvider.signup_url} target="_blank" rel="noreferrer">Get API access</a>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="onboarding-step-title">2. Choose a model</div>
                     <label htmlFor="onboarding-model">Model</label>
                     <input
                       id="onboarding-model"
@@ -1351,9 +1418,30 @@ function App() {
                       ))}
                     </datalist>
 
+                    {selectedOnboardingProvider?.recommended_model && (
+                      <div className="onboarding-note">
+                        Recommended model: <strong>{selectedOnboardingProvider.recommended_model}</strong>
+                        {selectedOnboardingProvider.recommended_model_why ? ` — ${selectedOnboardingProvider.recommended_model_why}` : ''}
+                        {onboarding.model !== selectedOnboardingProvider.recommended_model && (
+                          <>
+                            {' '}
+                            <button
+                              type="button"
+                              className="onboarding-inline-action"
+                              onClick={() => setOnboarding((prev) => ({ ...prev, model: selectedOnboardingProvider.recommended_model, error: null }))}
+                              disabled={onboarding.submitting || onboarding.checking}
+                            >
+                              Use recommended model
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+
                     {selectedOnboardingProvider?.requires_api_key && !selectedOnboardingProvider?.has_credential && (
                       <>
-                        <label htmlFor="onboarding-api-key">API Key</label>
+                        <div className="onboarding-step-title">3. Add your API key</div>
+                        <label htmlFor="onboarding-api-key">{selectedOnboardingProvider.api_key_label || 'API Key'}</label>
                         <input
                           id="onboarding-api-key"
                           type="password"
@@ -1362,6 +1450,9 @@ function App() {
                           placeholder="Paste API key"
                           disabled={onboarding.submitting || onboarding.checking}
                         />
+                        {selectedOnboardingProvider.api_key_help && (
+                          <div className="onboarding-help">{selectedOnboardingProvider.api_key_help}</div>
+                        )}
                       </>
                     )}
 

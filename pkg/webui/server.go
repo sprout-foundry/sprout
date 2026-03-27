@@ -19,6 +19,7 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	"github.com/alantheprice/ledit/pkg/events"
+	"github.com/alantheprice/ledit/pkg/providercatalog"
 	"github.com/gorilla/websocket"
 )
 
@@ -71,6 +72,8 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int) 
 	if err != nil {
 		workspaceRoot = "."
 	}
+
+	providercatalog.RefreshFromRemoteAsync("")
 
 	return &ReactWebServer{
 		agent:         agent,
@@ -296,6 +299,13 @@ func (ws *ReactWebServer) GetDaemonRoot() string {
 	return ws.daemonRoot
 }
 
+// getActiveQueryCount returns the current number of active queries.
+func (ws *ReactWebServer) getActiveQueryCount() int {
+	ws.mutex.RLock()
+	defer ws.mutex.RUnlock()
+	return ws.activeQueries
+}
+
 // SetWorkspaceRoot updates the active workspace root and resets terminal state.
 func (ws *ReactWebServer) SetWorkspaceRoot(path string) (string, error) {
 	workspaceRoot, err := filepathAbsEval(path)
@@ -322,6 +332,10 @@ func (ws *ReactWebServer) SetWorkspaceRoot(path string) (string, error) {
 		if err := ws.terminalManager.CloseAllSessions(); err != nil {
 			return "", fmt.Errorf("close terminal sessions: %w", err)
 		}
+	}
+
+	if ws.fileConsents != nil {
+		ws.fileConsents.clearAll()
 	}
 
 	ws.workspaceRoot = workspaceRoot
@@ -358,6 +372,9 @@ func filepathAbsEval(path string) (string, error) {
 	resolved, err := filepath.EvalSymlinks(abs)
 	if err != nil {
 		if os.IsNotExist(err) {
+			// Fallback to unresolved absolute path. This is safe because callers
+			// (e.g., SetWorkspaceRoot via isWithinWorkspace) validate the path
+			// is within the workspace before it's used.
 			return abs, nil
 		}
 		return "", err
@@ -366,13 +383,13 @@ func filepathAbsEval(path string) (string, error) {
 }
 
 // FindAvailablePort finds an available port starting from a base port
-func FindAvailablePort(basePort int) int {
+func FindAvailablePort(basePort int) (int, error) {
 	port := basePort
 	for port < basePort+100 {
 		if CheckPortAvailable(port) {
-			return port
+			return port, nil
 		}
 		port++
 	}
-	return basePort + 100 // Return last attempt even if not available
+	return 0, fmt.Errorf("no available port found in range %d-%d", basePort, basePort+99)
 }

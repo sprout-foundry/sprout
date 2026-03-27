@@ -121,3 +121,7 @@ For signed macOS builds, configure these CI secrets:
 - Windows and Linux packaging now uses branded installer/application icons. macOS signing/notarization is scaffolded, but a proper `.icns` generated on a macOS host is still the remaining native-branding gap.
 - Deep links can target a workspace with `ledit://open?path=/absolute/path/to/worktree` or `ledit://open?workspace=/absolute/path/to/worktree`.
 - Native open events can now target either a worktree directory or a file inside a worktree; the desktop app resolves the containing Git root before opening the workspace window.
+
+## Productization
+
+The current productization backlog and suggested execution order live in [`docs/PRODUCT_BACKLOG.md`](/home/alanp/dev/personal/ledit/docs/PRODUCT_BACKLOG.md).

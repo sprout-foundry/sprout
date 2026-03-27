@@ -108,6 +108,7 @@ run-prompt.md
 !webui/public/icon-192.png
 !webui/public/icon-512.png
 !pkg/webui/static/**
+!pkg/webui/logo-mark.svg
 
 # Windows ADS metadata artifacts
 *:Zone.Identifier

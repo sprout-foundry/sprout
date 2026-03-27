@@ -6,6 +6,7 @@ import {
   ArrowDownToLine,
   Sun,
   Moon,
+  Loader2,
 } from 'lucide-react';
 import './EditorToolbar.css';
 
@@ -13,12 +14,14 @@ interface EditorToolbarProps {
   paneId: string;
   onGoToLine: (line: number) => void;
   onSave: () => void;
+  saving?: boolean;
 }
 
 const EditorToolbar: React.FC<EditorToolbarProps> = ({
   paneId: _paneId,
   onGoToLine,
-  onSave
+  onSave,
+  saving = false,
 }) => {
   const { theme, themePack, toggleTheme } = useTheme();
   const [showGoToLine, setShowGoToLine] = useState(false);
@@ -70,8 +73,13 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
           className="toolbar-button"
           onClick={onSave}
           title="Save file (Ctrl+S)"
+          disabled={saving}
         >
-          <span className="toolbar-icon"><Save size={16} /></span>
+          {saving ? (
+            <span className="toolbar-icon"><Loader2 size={16} className="spinner" /></span>
+          ) : (
+            <span className="toolbar-icon"><Save size={16} /></span>
+          )}
         </button>
 
         {/* Theme Toggle */}

@@ -34,9 +34,28 @@
   color: var(--toolbar-hover-fg, #fff);
 }
 
+.toolbar-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .toolbar-button.active {
   background: var(--accent-bg, #0e7490);
   color: var(--accent-fg, #fff);
+}
+
+/* Spinner animation */
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .toolbar-icon {

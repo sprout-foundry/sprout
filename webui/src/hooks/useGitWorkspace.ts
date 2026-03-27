@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiService } from '../services/api';
+import { WebSocketService } from '../services/websocket';
 import { GitStatusData } from '../components/GitSidebarPanel';
 
 export interface GitDiffResponse {
@@ -162,6 +163,43 @@ export const useGitWorkspace = ({
   useEffect(() => {
     loadGitStatus();
   }, [loadGitStatus, gitRefreshToken]);
+
+  // Debounced git status refresh on file change WebSocket events.
+  // When files are written (editor save, agent edits, search replace), the git
+  // panel should reflect the new status. Uses a 2s debounce to coalesce rapid
+  // agent edits into a single refresh.
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const wsService = WebSocketService.getInstance();
+
+    const handleFileChanged = (event: any) => {
+      if (event?.type !== 'file_changed') return;
+
+      const action = event.data?.action || '';
+      // Skip git-level actions — those already trigger explicit refreshes
+      // via runGitAction → loadGitStatus.
+      if (action.startsWith('git_')) return;
+
+      // Only refresh on actual file content changes
+      if (!['write', 'edit', 'created', 'deleted'].includes(action)) return;
+
+      if (debounceTimerRef.current !== null) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      debounceTimerRef.current = setTimeout(() => {
+        debounceTimerRef.current = null;
+        loadGitStatus();
+      }, 2000);
+    };
+
+    wsService.onEvent(handleFileChanged);
+    return () => {
+      wsService.removeEvent(handleFileChanged);
+      if (debounceTimerRef.current !== null) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [loadGitStatus]);
 
   const loadDiff = useCallback(async (filePath: string) => {
     setIsDiffLoading(true);

@@ -17,6 +17,7 @@ func (a *Agent) ExportState() ([]byte, error) {
 
 	state := AgentState{
 		Messages:                a.messages,
+		TurnCheckpoints:         a.copyTurnCheckpoints(),
 		PreviousSummary:         a.previousSummary,
 		CompactSummary:          compactSummary, // Store 5K-limited summary for continuity
 		TaskActions:             a.taskActions,
@@ -39,6 +40,7 @@ func (a *Agent) ImportState(data []byte) error {
 		return err
 	}
 	a.messages = state.Messages
+	a.replaceTurnCheckpoints(state.TurnCheckpoints)
 	// Prefer compact summary for continuity, fallback to legacy summary
 	if state.CompactSummary != "" {
 		a.previousSummary = state.CompactSummary
@@ -179,6 +181,7 @@ func (a *Agent) SetSessionName(name string) {
 			return
 		}
 	}
+	a.shiftTurnCheckpoints(1)
 	a.messages = append([]api.Message{{Role: "system", Content: pattern + name}}, a.messages...)
 }
 

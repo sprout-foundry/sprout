@@ -57,6 +57,8 @@ type Agent struct {
 	cachedCostSavings       float64                        // Track cost savings from cached tokens
 	previousSummary         string                         // Summary of previous actions for continuity
 	sessionID               string                         // Unique session identifier
+	turnCheckpoints         []TurnCheckpoint               // Completed-turn summaries used when context gets tight
+	checkpointMu            sync.RWMutex                   // Protects background checkpoint compaction
 	optimizer               *ConversationOptimizer         // Conversation optimization
 	configManager           *configuration.Manager         // Configuration management
 	currentContextTokens    int                            // Current context size being sent to model

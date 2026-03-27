@@ -82,6 +82,35 @@ func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 		historyTokens := ch.apiClient.estimateRequestTokens(historyOnlyMessages, tools)
 
 		if ch.agent.conversationPruner.ShouldPrune(historyTokens, ch.agent.maxContextTokens, ch.agent.GetProvider(), true) {
+			if ch.agent.HasTurnCheckpoints() {
+				checkpointedMessages := ch.agent.BuildCheckpointCompactedMessages(optimizedMessages)
+				if len(checkpointedMessages) != len(optimizedMessages) {
+					checkpointHistory := []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
+					checkpointHistory = append(checkpointHistory, checkpointedMessages...)
+					checkpointHistory = collapseSystemMessagesToFront(checkpointHistory)
+					checkpointHistory = ch.sanitizeToolMessages(checkpointHistory)
+					checkpointTokens := ch.apiClient.estimateRequestTokens(checkpointHistory, tools)
+					if checkpointTokens < historyTokens {
+						if ch.agent.debug {
+							ch.agent.PrintLineAsync(fmt.Sprintf("[~] Switched older completed turns to checkpoints: %d -> %d history tokens",
+								historyTokens, checkpointTokens))
+						}
+						optimizedMessages = checkpointedMessages
+						historyOnlyMessages = checkpointHistory
+						historyTokens = checkpointTokens
+					}
+				}
+			}
+			if !ch.agent.conversationPruner.ShouldPrune(historyTokens, ch.agent.maxContextTokens, ch.agent.GetProvider(), true) {
+				allMessages = []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
+				allMessages = append(allMessages, optimizedMessages...)
+				allMessages = appendPendingTransient(allMessages)
+				allMessages = collapseSystemMessagesToFront(allMessages)
+				allMessages = ch.sanitizeToolMessages(allMessages)
+				currentTokens = ch.apiClient.estimateRequestTokens(allMessages, tools)
+				goto validatePayload
+			}
+
 			if ch.agent.debug {
 				contextUsage := float64(historyTokens) / float64(ch.agent.maxContextTokens)
 				ch.agent.PrintLineAsync(fmt.Sprintf("[~] Context pruning triggered: %d/%d tokens (%.1f%%, history only)",
@@ -146,6 +175,7 @@ func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 	}
 
 	// DeepSeek-specific validation (including DeepSeek model families behind proxy providers)
+validatePayload:
 	if strings.EqualFold(ch.agent.GetProvider(), "deepseek") || strings.Contains(strings.ToLower(ch.agent.GetModel()), "deepseek") {
 		ch.validateDeepSeekToolCalls(allMessages)
 	}

@@ -135,6 +135,7 @@ func (ws *ReactWebServer) handleAPIRestoreSession(w http.ResponseWriter, r *http
 	// Marshal state to JSON
 	stateData, err := agent.ExportStateToJSON(&agent.ConversationState{
 		Messages:                state.Messages,
+		TurnCheckpoints:         state.TurnCheckpoints,
 		TotalCost:               state.TotalCost,
 		TotalTokens:             state.TotalTokens,
 		PromptTokens:            state.PromptTokens,

@@ -177,6 +177,7 @@ func (a *Agent) shouldUseDirectMultimodalImageReasoning(messages []api.Message) 
 func (a *Agent) ClearConversationHistory() {
 	// Keep messages empty; system prompt is added during prepareMessages
 	a.messages = []api.Message{}
+	a.clearTurnCheckpoints()
 	a.currentIteration = 0
 	a.previousSummary = ""
 

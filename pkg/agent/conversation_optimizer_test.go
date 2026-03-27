@@ -206,6 +206,59 @@ func TestCompactConversationRewritesOldMiddleHistory(t *testing.T) {
 	}
 }
 
+func TestCompactConversationPreservesLatestCompactedTaskContext(t *testing.T) {
+	optimizer := NewConversationOptimizer(true, false)
+
+	messages := []api.Message{
+		{Role: "system", Content: "System prompt"},
+		{Role: "user", Content: "Initial setup question"},
+		{Role: "assistant", Content: "I will inspect the current implementation first."},
+	}
+
+	for i := 0; i < 10; i++ {
+		messages = append(messages, api.Message{
+			Role:    "assistant",
+			Content: "Reviewed the current implementation details and intermediate state.",
+		})
+	}
+
+	activeTask := "Will the multi-instance workflow work safely without leaking state between folders?"
+	messages = append(messages,
+		api.Message{Role: "user", Content: activeTask},
+		api.Message{Role: "assistant", Content: "I am tracing the multi-instance code paths and verifying isolation now."},
+	)
+
+	for i := 0; i < 14; i++ {
+		messages = append(messages, api.Message{
+			Role:    "assistant",
+			Content: "Verified another part of the instance-switching and workspace-isolation flow.",
+		})
+	}
+
+	compacted := optimizer.CompactConversation(messages)
+	if len(compacted) >= len(messages) {
+		t.Fatalf("expected compacted history to shrink message count, got %d -> %d", len(messages), len(compacted))
+	}
+
+	var summary string
+	for _, msg := range compacted {
+		if msg.Role == "assistant" && containsString(msg.Content, "Compacted earlier conversation state:") {
+			summary = msg.Content
+			break
+		}
+	}
+
+	if summary == "" {
+		t.Fatalf("expected compacted conversation summary message")
+	}
+	if !containsString(summary, "Latest compacted user request: "+activeTask) {
+		t.Fatalf("expected compacted summary to preserve the latest compacted user request, got: %s", summary)
+	}
+	if !containsString(summary, "Status at compaction time: work was still in progress") {
+		t.Fatalf("expected compacted summary to mark the task as still in progress, got: %s", summary)
+	}
+}
+
 func TestFileReadDetection(t *testing.T) {
 	optimizer := NewConversationOptimizer(true, false)
 

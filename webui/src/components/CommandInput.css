@@ -8,7 +8,7 @@
   box-shadow: var(--shadow-subtle);
   transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
   position: relative;
-  min-height: 122px;
+  min-height: 110px;
 }
 
 .command-input:focus-within {
@@ -20,9 +20,10 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  min-height: 0;
   padding: 8px 12px 0;
-  border-bottom: 1px solid var(--border-subtle);
-  margin-bottom: 6px;
+  border-bottom: none;
+  margin-bottom: 0;
 }
 
 .input-info {
@@ -68,7 +69,7 @@
   line-height: 1.55;
   resize: none;
   outline: none;
-  padding: 12px 16px 20px 16px;
+  padding: 14px 16px 12px 16px;
   min-height: 56px;
   flex: 0 0 auto;
   overflow-y: auto;
@@ -96,7 +97,7 @@
 
 .input-actions {
   position: absolute;
-  bottom: 12px;
+  bottom: 10px;
   right: 12px;
   display: flex;
   gap: 6px;
@@ -495,16 +496,18 @@
 
 .keyboard-hints {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
-  padding: 6px 12px 8px;
-  background: var(--bg-tertiary);
-  border-top: 1px solid var(--border-subtle);
+  padding: 0 12px 10px;
+  background: transparent;
+  border-top: none;
   font-size: 10px;
   color: var(--text-tertiary);
+  opacity: 0.9;
 }
 
 .keyboard-hints kbd {
-  background: var(--bg-elevated);
+  background: color-mix(in srgb, var(--bg-elevated) 76%, transparent);
   padding: 2px 5px;
   border-radius: 4px;
   border: 1px solid var(--border-default);
@@ -513,8 +516,13 @@
 
 @media (max-width: 768px) {
   .command-input {
+    min-height: 0;
     border-radius: 12px;
-    min-height: 52px;
+    box-shadow: 0 10px 24px rgba(2, 6, 23, 0.26);
+  }
+
+  .input-header {
+    padding: 6px 10px 0;
   }
 
   .keyboard-hints {
@@ -523,6 +531,20 @@
 
   .input-field {
     font-size: 16px;
-    padding: 12px 14px 48px 14px;
+    min-height: 44px;
+    padding: 10px 12px 44px 12px;
+  }
+
+  .input-actions {
+    right: 10px;
+    bottom: 8px;
+    gap: 4px;
+  }
+
+  .send-button,
+  .queue-button,
+  .new-session-button {
+    padding: 7px;
+    border-radius: 7px;
   }
 }

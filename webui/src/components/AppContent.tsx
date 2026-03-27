@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react';
-import { Menu, X, Columns2, Rows2 } from 'lucide-react';
+import { Menu, X, Columns2, Rows2, PanelRightOpen } from 'lucide-react';
 import Sidebar from './Sidebar';
 import Terminal from './Terminal';
 import EditorTabs from './EditorTabs';
@@ -882,6 +882,16 @@ const AppContent: React.FC<AppContentProps> = ({
                 >
                   <Menu size={16} />
                 </button>
+                {showContextSidebar && (
+                  <button
+                    className="top-mobile-context-btn"
+                    onClick={() => contextPanelRef.current?.openTab('subagents')}
+                    aria-label="Open context panel"
+                    title="Open context panel"
+                  >
+                    <PanelRightOpen size={16} />
+                  </button>
+                )}
               </div>
             )}
 

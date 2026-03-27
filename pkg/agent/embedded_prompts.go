@@ -43,6 +43,12 @@ func GetEmbeddedSystemPrompt() (string, error) {
 		promptContent = promptContent + contextFiles
 	}
 
+	// Add memories (user preferences and learned patterns)
+	memories := LoadMemoriesForPrompt()
+	if memories != "" {
+		promptContent = promptContent + memories
+	}
+
 	// Add MCP server summary if available
 	// TODO: Implement mcpServerSummary when needed
 	mcpServerSummary := ""

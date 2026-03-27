@@ -23,6 +23,7 @@ import { useHotkeys } from '../contexts/HotkeyContext';
 import { useTheme } from '../contexts/ThemeContext';
 import EditorToolbar from './EditorToolbar';
 import ImageViewer from './ImageViewer';
+import SvgPreview from './SvgPreview';
 import { readFileWithConsent } from '../services/fileAccess';
 import { getEditorKeymap } from '../utils/editorHotkeys';
 import { diffGutter, updateDiffGutter, clearDiffGutter } from '../extensions/diffGutter';
@@ -31,6 +32,8 @@ import {
   File,
   Loader2,
   AlertTriangle,
+  Eye,
+  Columns2,
 } from 'lucide-react';
 import './EditorPane.css';
 
@@ -52,7 +55,9 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     updateBufferContent,
     updateBufferCursor,
     saveBuffer,
-    setBufferModified
+    setBufferModified,
+    splitPane,
+    openWorkspaceBuffer,
   } = useEditorManager();
 
   const { theme, themePack, customHighlightStyle } = useTheme();
@@ -64,7 +69,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
 
   // Image extensions that should be viewed as images
   const IMAGE_EXTENSIONS = new Set([
-    '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg', '.ico', '.tiff', '.tif', '.avif'
+    '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.ico', '.tiff', '.tif', '.avif'
   ]);
 
   const isImageFile = (ext?: string): boolean => {
@@ -94,6 +99,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         return [json()];
       case '.html':
       case '.htm':
+      case '.svg':
         return [html()];
       case '.css':
         return [css()];
@@ -246,6 +252,24 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       lastLoadedRef.current = null;
       currentBufferIdRef.current = null;
       if (viewRef.current) {
+        clearDiffGutter(viewRef.current);
+      }
+      return;
+    }
+
+    if (buffer.kind !== 'file') {
+      const nextContent = buffer.content || '';
+      setLocalContent(nextContent);
+      setError(null);
+      lastLoadedRef.current = { bufferId: buffer.id, filePath: buffer.file.path };
+      if (viewRef.current) {
+        viewRef.current.dispatch({
+          changes: {
+            from: 0,
+            to: viewRef.current.state.doc.length,
+            insert: nextContent
+          }
+        });
         clearDiffGutter(viewRef.current);
       }
       return;
@@ -443,6 +467,48 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
 
   // Detect if this is an image file
   const imageFile = buffer && buffer.file && !buffer.file.isDir && isImageFile(buffer.file.ext);
+  const isSvgFile = buffer?.kind === 'file' && buffer?.file?.ext?.toLowerCase() === '.svg';
+  const isSvgPreviewBuffer = buffer?.metadata?.previewKind === 'svg';
+
+  const openSvgPreview = () => {
+    if (!buffer) return;
+
+    openWorkspaceBuffer({
+      kind: 'review',
+      path: `__workspace/svg-preview:${buffer.file.path}`,
+      title: `${buffer.file.name} Preview`,
+      content: localContent || buffer.content || '',
+      ext: '.svg.preview',
+      metadata: {
+        previewKind: 'svg',
+        sourcePath: buffer.file.path,
+        sourceName: buffer.file.name,
+      }
+    });
+  };
+
+  const openSvgPreviewInSplit = () => {
+    if (!buffer) return;
+
+    const newPaneId = splitPane(paneId, 'vertical');
+    if (!newPaneId) {
+      openSvgPreview();
+      return;
+    }
+
+    openWorkspaceBuffer({
+      kind: 'review',
+      path: `__workspace/svg-preview:${buffer.file.path}`,
+      title: `${buffer.file.name} Preview`,
+      content: localContent || buffer.content || '',
+      ext: '.svg.preview',
+      metadata: {
+        previewKind: 'svg',
+        sourcePath: buffer.file.path,
+        sourceName: buffer.file.name,
+      }
+    });
+  };
 
   if (imageFile) {
     return (
@@ -456,6 +522,26 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     );
   }
 
+  if (isSvgPreviewBuffer) {
+    return (
+      <div className="editor-pane">
+        <EditorToolbar
+          paneId={paneId}
+          onGoToLine={handleGoToLine}
+          onSave={handleSave}
+          saving={false}
+          showGoToLine={false}
+          showSave={false}
+        />
+        <SvgPreview
+          content={buffer.content || ''}
+          fileName={buffer.metadata?.sourceName || buffer.file.name}
+          sourcePath={buffer.metadata?.sourcePath}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="editor-pane">
       <EditorToolbar
@@ -463,6 +549,20 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         onGoToLine={handleGoToLine}
         onSave={handleSave}
         saving={saving}
+        actions={isSvgFile ? [
+          {
+            id: 'svg-preview',
+            title: 'Open SVG preview',
+            icon: <Eye size={16} />,
+            onClick: openSvgPreview,
+          },
+          {
+            id: 'svg-preview-split',
+            title: 'Open SVG preview in split',
+            icon: <Columns2 size={16} />,
+            onClick: openSvgPreviewInSplit,
+          }
+        ] : []}
       />
 
       {loading && (

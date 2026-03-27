@@ -11,6 +11,7 @@ import {
   FolderCog,
   Settings,
   Keyboard,
+  Download,
   Upload,
   Trash2,
   Search,
@@ -81,7 +82,11 @@ interface SidebarProps {
     onRefresh: () => void;
     onToggleFileSelection: (section: 'staged' | 'modified' | 'untracked' | 'deleted', path: string) => void;
     onToggleSectionSelection: (section: 'staged' | 'modified' | 'untracked' | 'deleted') => void;
+    onClearSelection: () => void;
     onPreviewFile: (section: 'staged' | 'modified' | 'untracked' | 'deleted', path: string) => void;
+    onStageSelected: () => void;
+    onUnstageSelected: () => void;
+    onDiscardSelected: () => void;
     onStageFile: (path: string) => void;
     onUnstageFile: (path: string) => void;
     onDiscardFile: (path: string) => void;
@@ -103,6 +108,7 @@ const SECTION_TABS: { id: SectionTab; icon: LucideIcon; label: string }[] = [
 const SIDEBAR_MIN_WIDTH = 200;
 const SIDEBAR_MAX_WIDTH = 600;
 const SIDEBAR_DEFAULT_WIDTH = 288;
+const MAX_LOG_ROWS = 1000;
 
 const clampSidebarWidth = (value: number): number =>
   Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, value));
@@ -427,36 +433,97 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   const logsContainerRef = useRef<HTMLDivElement>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const shouldAutoScrollLogsRef = useRef(true);
+
+  const buildLogTimestamp = useCallback((value: Date | string) => {
+    const date = new Date(value);
+    return date.toLocaleTimeString('en-US', {
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    }) + '.' + date.getMilliseconds().toString().padStart(3, '0');
+  }, []);
+
+  const getRenderedLogLines = useCallback((entries: typeof normalizedRecentLogs) => {
+    return entries
+      .map((log) => {
+        const message = formatLogLine(log);
+        if (!message) {
+          return null;
+        }
+
+        return `${buildLogTimestamp(log.timestamp)} [${log.type}] ${message}`;
+      })
+      .filter((line): line is string => Boolean(line));
+  }, [buildLogTimestamp]);
 
   // Auto-scroll to bottom when logs change
   useEffect(() => {
-    if (logsEndRef.current) {
+    if (shouldAutoScrollLogsRef.current && logsEndRef.current) {
       logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [normalizedRecentLogs.length]);
 
   /** Logs section: terminal-style log output */
   const renderLogsSection = () => {
-    // Cap at last 500 logs
-    const displayLogs = normalizedRecentLogs.slice(-500);
+    const displayLogs = normalizedRecentLogs.slice(-MAX_LOG_ROWS);
+    const renderedLines = getRenderedLogLines(displayLogs);
 
-    if (displayLogs.length === 0) {
+    const handleLogsScroll = () => {
+      const container = logsContainerRef.current;
+      if (!container) {
+        return;
+      }
+      const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+      shouldAutoScrollLogsRef.current = distanceFromBottom < 24;
+    };
+
+    const downloadLogs = (format: 'txt' | 'json') => {
+      const content = format === 'json'
+        ? JSON.stringify(displayLogs, null, 2)
+        : renderedLines.join('\n');
+      const blob = new Blob([content], { type: format === 'json' ? 'application/json' : 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      anchor.href = url;
+      anchor.download = `ledit-logs-${timestamp}.${format}`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(url);
+    };
+
+    if (renderedLines.length === 0) {
       return <div className="empty">No logs yet</div>;
     }
 
     return (
-      <div className="terminal-logs" ref={logsContainerRef}>
+      <div className="logs-pane">
+        <div className="logs-toolbar">
+          <div className="logs-toolbar-summary">
+            <span>{renderedLines.length} rows</span>
+            <span>buffered up to {MAX_LOG_ROWS}</span>
+          </div>
+          <div className="logs-toolbar-actions">
+            <button className="logs-toolbar-btn" onClick={() => downloadLogs('txt')} title="Download visible logs as text">
+              <Download size={13} />
+              TXT
+            </button>
+            <button className="logs-toolbar-btn" onClick={() => downloadLogs('json')} title="Download visible logs as JSON">
+              <Download size={13} />
+              JSON
+            </button>
+          </div>
+        </div>
+        <div className="terminal-logs" ref={logsContainerRef} onScroll={handleLogsScroll}>
         {displayLogs.map((log) => {
           const message = formatLogLine(log);
           // Skip empty log lines
           if (!message) return null;
 
-          const timestamp = new Date(log.timestamp).toLocaleTimeString('en-US', {
-            hour12: false,
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
-          }) + '.' + new Date(log.timestamp).getMilliseconds().toString().padStart(3, '0');
+          const timestamp = buildLogTimestamp(log.timestamp);
 
           return (
             <div key={log.id} className={`term-log-line term-log-${log.level}`}>
@@ -467,6 +534,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           );
         })}
         <div ref={logsEndRef} />
+        </div>
       </div>
     );
   };

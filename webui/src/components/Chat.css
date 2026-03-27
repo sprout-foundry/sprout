@@ -1116,6 +1116,25 @@
   -webkit-line-clamp: 3;
 }
 
+.subagent-card-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.subagent-stat-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
 .subagent-current-step {
   display: flex;
   align-items: center;
@@ -1206,6 +1225,28 @@
   color: var(--text-tertiary);
 }
 
+.subagent-collapsed-note {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  padding-left: 16px;
+}
+
+.subagent-result-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-secondary) 82%, transparent);
+  border: 1px solid var(--border-subtle);
+}
+
+.subagent-result-preview-text {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
 .subagent-result-snippet {
   padding-top: 10px;
   border-top: 1px solid var(--border-subtle);
@@ -1224,7 +1265,9 @@
 
 .subagent-card-actions {
   display: flex;
+  gap: 8px;
   justify-content: flex-end;
+  flex-wrap: wrap;
 }
 
 .subagent-link-btn {

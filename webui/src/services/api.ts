@@ -126,6 +126,18 @@ export interface SSHHostEntry {
   port?: string;
 }
 
+export interface SSHSessionEntry {
+  key: string;
+  host_alias: string;
+  remote_workspace_path: string;
+  local_port?: number;
+  remote_port: number;
+  remote_pid?: number;
+  url?: string;
+  started_at: string;
+  active: boolean;
+}
+
 export interface WorkspaceResponse {
   daemon_root: string;
   workspace_root: string;
@@ -295,6 +307,67 @@ class ApiService {
     }
     const data = await response.json();
     return Array.isArray(data.hosts) ? data.hosts : [];
+  }
+
+  async openSSHWorkspace(hostAlias: string, remoteWorkspacePath?: string): Promise<{ message: string; url: string; port: number }> {
+    const response = await fetch('/api/instances/ssh-open', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        host_alias: hostAlias,
+        remote_workspace_path: remoteWorkspacePath,
+      }),
+    });
+
+    const text = await response.text();
+    let data: any = {};
+    if (text) {
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = { message: text };
+      }
+    }
+
+    if (!response.ok) {
+      throw new Error(data.error || data.message || 'Failed to open SSH workspace');
+    }
+
+    return data;
+  }
+
+  async getSSHSessions(): Promise<SSHSessionEntry[]> {
+    const response = await fetch('/api/instances/ssh-sessions');
+    if (!response.ok) {
+      throw new Error('Failed to fetch SSH sessions');
+    }
+    const data = await response.json();
+    return Array.isArray(data.sessions) ? data.sessions : [];
+  }
+
+  async closeSSHSession(key: string): Promise<{ message: string; key: string }> {
+    const response = await fetch('/api/instances/ssh-close', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ key }),
+    });
+    const text = await response.text();
+    let data: any = {};
+    if (text) {
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = { message: text };
+      }
+    }
+    if (!response.ok) {
+      throw new Error(data.error || data.message || 'Failed to close SSH session');
+    }
+    return data;
   }
 
   async selectInstance(pid: number): Promise<{ message: string; pid: number }> {
@@ -1053,6 +1126,56 @@ class ApiService {
       return await response.json();
     } catch (error) {
       console.error('Failed to update skills:', error);
+      throw error;
+    }
+  }
+
+  // ── Subagent Types API ──────────────────────────────────────────
+
+  async getSubagentTypes(): Promise<{
+    subagent_types: Record<string, {
+      id: string;
+      name: string;
+      description: string;
+      provider: string;
+      model: string;
+      system_prompt: string;
+      system_prompt_text?: string;
+      allowed_tools: string[];
+      aliases: string[];
+      enabled: boolean;
+    }>;
+    available_providers: Array<{ id: string; name: string; models: string[] }>;
+    current_provider: string;
+    current_model: string;
+  }> {
+    try {
+      const response = await fetch('/api/settings/subagent-types');
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to get subagent types:', error);
+      throw error;
+    }
+  }
+
+  async updateSubagentType(
+    name: string,
+    updates: { provider?: string; model?: string },
+  ): Promise<{ success: boolean; type: any }> {
+    try {
+      const response = await fetch(`/api/settings/subagent-types/${encodeURIComponent(name)}/`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || `HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to update subagent type:', error);
       throw error;
     }
   }

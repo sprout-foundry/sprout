@@ -191,6 +191,145 @@ Host *.wildcard
 	}
 }
 
+func TestHandleAPISSHOpenRejectsInvalidMethod(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/instances/ssh-open", nil)
+	w := httptest.NewRecorder()
+
+	server := &ReactWebServer{}
+	server.handleAPISSHOpen(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status 405, got %d", w.Code)
+	}
+}
+
+func TestHandleAPISSHOpenRejectsMissingAlias(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/instances/ssh-open", bytes.NewReader([]byte(`{"host_alias":""}`)))
+	w := httptest.NewRecorder()
+
+	server := &ReactWebServer{}
+	server.handleAPISSHOpen(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", w.Code)
+	}
+}
+
+func TestPersistedSSHSessionRegistryRoundTrip(t *testing.T) {
+	t.Setenv("LEDIT_CONFIG", t.TempDir())
+
+	session := &sshWorkspaceSession{
+		Key:                 "devbox::$HOME",
+		HostAlias:           "devbox",
+		RemoteWorkspacePath: "$HOME",
+		RemotePort:          55421,
+		RemotePID:           4321,
+		StartedAt:           time.Now().UTC().Truncate(time.Second),
+	}
+
+	if err := persistSSHSession(session); err != nil {
+		t.Fatalf("persistSSHSession failed: %v", err)
+	}
+
+	persisted, err := readPersistedSSHSession(session.Key)
+	if err != nil {
+		t.Fatalf("readPersistedSSHSession failed: %v", err)
+	}
+	if persisted == nil {
+		t.Fatalf("expected persisted session, got nil")
+	}
+	if persisted.HostAlias != session.HostAlias || persisted.RemoteWorkspacePath != session.RemoteWorkspacePath || persisted.RemotePort != session.RemotePort || persisted.RemotePID != session.RemotePID {
+		t.Fatalf("unexpected persisted session: %+v", persisted)
+	}
+
+	if err := removePersistedSSHSession(session.Key); err != nil {
+		t.Fatalf("removePersistedSSHSession failed: %v", err)
+	}
+
+	persisted, err = readPersistedSSHSession(session.Key)
+	if err != nil {
+		t.Fatalf("readPersistedSSHSession after delete failed: %v", err)
+	}
+	if persisted != nil {
+		t.Fatalf("expected persisted session to be removed, got %+v", persisted)
+	}
+}
+
+func TestHandleAPISSHSessionsReturnsPersistedEntries(t *testing.T) {
+	t.Setenv("LEDIT_CONFIG", t.TempDir())
+
+	if err := writePersistedSSHSessionRegistry(map[string]persistedSSHWorkspaceSession{
+		"devbox::$HOME": {
+			Key:                 "devbox::$HOME",
+			HostAlias:           "devbox",
+			RemoteWorkspacePath: "$HOME",
+			RemotePort:          55421,
+			RemotePID:           4321,
+			StartedAt:           time.Now().UTC().Truncate(time.Second),
+		},
+	}); err != nil {
+		t.Fatalf("writePersistedSSHSessionRegistry failed: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/instances/ssh-sessions", nil)
+	w := httptest.NewRecorder()
+
+	server := &ReactWebServer{sshSessions: make(map[string]*sshWorkspaceSession)}
+	server.handleAPISSHSessions(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	var response struct {
+		Sessions []sshSessionEntryDTO `json:"sessions"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(response.Sessions) != 1 {
+		t.Fatalf("expected 1 ssh session, got %d", len(response.Sessions))
+	}
+	if response.Sessions[0].HostAlias != "devbox" {
+		t.Fatalf("expected host alias devbox, got %q", response.Sessions[0].HostAlias)
+	}
+}
+
+func TestHandleAPISSHSessionDeleteRemovesPersistedEntry(t *testing.T) {
+	t.Setenv("LEDIT_CONFIG", t.TempDir())
+
+	if err := writePersistedSSHSessionRegistry(map[string]persistedSSHWorkspaceSession{
+		"devbox::$HOME": {
+			Key:                 "devbox::$HOME",
+			HostAlias:           "devbox",
+			RemoteWorkspacePath: "$HOME",
+			RemotePort:          55421,
+			RemotePID:           4321,
+			StartedAt:           time.Now().UTC().Truncate(time.Second),
+		},
+	}); err != nil {
+		t.Fatalf("writePersistedSSHSessionRegistry failed: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/instances/ssh-close", bytes.NewReader([]byte(`{"key":"devbox::$HOME"}`)))
+	w := httptest.NewRecorder()
+
+	server := &ReactWebServer{sshSessions: make(map[string]*sshWorkspaceSession)}
+	server.handleAPISSHSessionDelete(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	persisted, err := readPersistedSSHSession("devbox::$HOME")
+	if err != nil {
+		t.Fatalf("readPersistedSSHSession failed: %v", err)
+	}
+	if persisted != nil {
+		t.Fatalf("expected persisted session to be deleted, got %+v", persisted)
+	}
+}
+
 func writeJSONFile(t *testing.T, path string, v interface{}) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {

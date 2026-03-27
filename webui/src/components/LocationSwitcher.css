@@ -134,6 +134,16 @@
   white-space: pre-wrap;
 }
 
+.location-switcher-status {
+  padding: 10px 16px;
+  background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent-primary) 22%, transparent);
+  color: var(--accent-primary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
 /* ── Popover Content ──────────────────────────────────────────── */
 .location-switcher-content {
   max-height: 420px;
@@ -238,6 +248,38 @@
 
 .location-switcher-path-input-refresh:disabled {
   opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.location-switcher-ssh-input-container {
+  padding: 8px 16px 4px;
+}
+
+.location-switcher-ssh-input {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-family: var(--font-mono, monospace);
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  outline: none;
+  transition: border-color 0.12s var(--ease-out), box-shadow 0.12s var(--ease-out);
+}
+
+.location-switcher-ssh-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.location-switcher-ssh-input:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px var(--accent-primary-alpha);
+}
+
+.location-switcher-ssh-input:disabled {
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
@@ -346,6 +388,44 @@
   position: absolute;
   top: 12px;
   right: 16px;
+}
+
+.location-switcher-item-session {
+  gap: 8px;
+}
+
+.location-switcher-session-actions {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  margin-top: 2px;
+}
+
+.location-switcher-session-btn {
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background-color 0.12s var(--ease-out), color 0.12s var(--ease-out), border-color 0.12s var(--ease-out);
+}
+
+.location-switcher-session-btn:hover:not(:disabled) {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.location-switcher-session-btn.danger:hover:not(:disabled) {
+  color: var(--accent-error);
+  border-color: color-mix(in srgb, var(--accent-error) 50%, var(--border-default));
+}
+
+.location-switcher-session-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ── Footer ───────────────────────────────────────────────────── */

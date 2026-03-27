@@ -707,6 +707,35 @@
     border-left: 1px solid var(--border-subtle);
   }
 
+  .side-collapse-btn {
+    display: none;
+  }
+
+  .side-panel-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .context-panel-mobile-close {
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-elevated);
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+
+  .context-panel-mobile-close:hover {
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+    background: var(--bg-surface);
+  }
+
   .file-section-header {
     flex-direction: column;
     align-items: flex-start;

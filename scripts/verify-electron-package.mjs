@@ -64,6 +64,19 @@ if (backendPlatforms.length === 0) {
   fail(`No backend platform directories found under ${backendRoot}`);
 }
 
+const requiredTargets = [
+  'linux-amd64',
+  'linux-arm64',
+  'darwin-amd64',
+  'darwin-arm64',
+];
+
+for (const target of requiredTargets) {
+  if (!backendPlatforms.includes(target)) {
+    fail(`Missing bundled remote backend target ${target} under ${backendRoot}`);
+  }
+}
+
 const backendExecutables = [];
 for (const platformDir of backendPlatforms) {
   const candidateDir = join(backendRoot, platformDir);

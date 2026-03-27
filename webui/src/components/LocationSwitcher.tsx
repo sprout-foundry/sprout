@@ -17,6 +17,13 @@ interface WorkspaceDirectory {
   path: string;
 }
 
+interface SSHHostEntry {
+  alias: string;
+  hostname?: string;
+  user?: string;
+  port?: string;
+}
+
 interface SwitchingState {
   isSwitching: boolean;
   error: string | null;
@@ -103,6 +110,8 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
   const [recentWorkspaces, setRecentWorkspaces] = useState<string[]>(() => readRecentWorkspaces());
+  const [sshHosts, setSshHosts] = useState<SSHHostEntry[]>([]);
+  const [isOpeningSshHost, setIsOpeningSshHost] = useState<string | null>(null);
 
   const popoverRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -176,6 +185,35 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
     }, 3000);
     return () => window.clearTimeout(timer);
   }, [switchingState.error]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+    const desktopBridge = (window as any).leditDesktop;
+    if (!desktopBridge?.listSshHosts) {
+      setSshHosts([]);
+      return;
+    }
+
+    let cancelled = false;
+    desktopBridge.listSshHosts()
+      .then((hosts: SSHHostEntry[]) => {
+        if (!cancelled) {
+          setSshHosts(Array.isArray(hosts) ? hosts : []);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          console.error('Failed to load SSH hosts:', error);
+          setSshHosts([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -412,6 +450,26 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
       setInputValue(workspaceRoot);
     }
   }, [isOpen, workspaceRoot]);
+
+  const handleOpenSshHost = useCallback(async (hostAlias: string) => {
+    const desktopBridge = (window as any).leditDesktop;
+    if (!desktopBridge?.openSshWorkspace || !hostAlias) {
+      return;
+    }
+
+    setIsOpeningSshHost(hostAlias);
+    setSwitchingState({ isSwitching: false, error: null });
+
+    try {
+      await desktopBridge.openSshWorkspace({ hostAlias, forceNewWindow: true });
+      setIsOpen(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to open SSH host';
+      setSwitchingState({ isSwitching: false, error: message });
+    } finally {
+      setIsOpeningSshHost(null);
+    }
+  }, []);
 
   const totalWorkspaceRows = suggestions.length + recentWorkspaceItems.length;
 
@@ -683,6 +741,41 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
                 );
               })
             )}
+
+            {sshHosts.length > 0 ? (
+              <>
+                <div className="location-switcher-section-header" role="presentation">
+                  SSH Hosts
+                </div>
+                {sshHosts.map((host) => {
+                  const metaParts = [
+                    host.user ? `${host.user}@${host.hostname || host.alias}` : (host.hostname || host.alias),
+                    host.port ? `:${host.port}` : '',
+                  ].filter(Boolean);
+                  return (
+                    <button
+                      key={`ssh-${host.alias}`}
+                      type="button"
+                      className="location-switcher-item"
+                      onClick={() => handleOpenSshHost(host.alias)}
+                      role="option"
+                      aria-selected={false}
+                      disabled={Boolean(isOpeningSshHost) || switchingState.isSwitching}
+                    >
+                      <span className="location-switcher-item-text">{host.alias}</span>
+                      <span className="location-switcher-item-meta">
+                        {metaParts.join('')}
+                      </span>
+                      {isOpeningSshHost === host.alias ? (
+                        <span className="location-switcher-item-indicator">
+                          <Loader2 size={10} className="spin" />
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </>
+            ) : null}
           </div>
 
           <div className="location-switcher-footer">

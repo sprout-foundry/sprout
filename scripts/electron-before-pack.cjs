@@ -35,13 +35,19 @@ function mapElectronArch(arch) {
 module.exports = async function beforePack(context) {
   const platform = context.electronPlatformName;
   const arch = mapElectronArch(context.arch);
+  const extraTargets = [
+    'linux-amd64',
+    'linux-arm64',
+    'darwin-amd64',
+    'darwin-arm64',
+  ].filter((target) => target !== `${platform}-${arch}`);
 
   run('npm', ['run', 'build:webui:embed']);
   run('node', ['scripts/build-electron-backend.mjs'], {
     env: {
       LEDIT_GOOS: platform,
       LEDIT_GOARCH: arch,
-      LEDIT_EXTRA_TARGETS: platform === 'windows' ? `linux-${arch}` : '',
+      LEDIT_EXTRA_TARGETS: extraTargets.join(','),
     },
   });
 };

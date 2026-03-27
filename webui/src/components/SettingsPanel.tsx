@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import './SettingsPanel.css';
-import { ApiService, LeditSettings } from '../services/api';
+import { ApiService, LeditSettings, ProviderOption } from '../services/api';
 import {
   Pencil,
   Plus,
@@ -8,6 +8,19 @@ import {
 } from 'lucide-react';
 
 /* ─── Types ──────────────────────────────────────────────────── */
+
+interface SubagentTypeEntry {
+  id: string;
+  name: string;
+  description: string;
+  provider: string;
+  model: string;
+  system_prompt: string;
+  system_prompt_text?: string;
+  allowed_tools: string[];
+  aliases: string[];
+  enabled: boolean;
+}
 
 type SettingsSubTab =
   | 'general'
@@ -94,6 +107,11 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
   const [providerVisionModel, setProviderVisionModel] = useState('');
   const [providerModelContextSizes, setProviderModelContextSizes] = useState<string>('');
 
+  // Subagent providers/models for dropdowns
+  const [subagentProviders, setSubagentProviders] = useState<ProviderOption[]>([]);
+  const [subagentTypes, setSubagentTypes] = useState<Record<string, SubagentTypeEntry>>({});
+  const [subagentSavingPersona, setSubagentSavingPersona] = useState<string | null>(null);
+
   const api = ApiService.getInstance();
   const toastTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const textSaveTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -130,6 +148,23 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
       return changed ? next : prev;
     });
   }, [settings]);
+
+  // Fetch subagent types + providers when subagents tab is activated
+  useEffect(() => {
+    if (activeSubTab !== 'subagents') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await api.getSubagentTypes();
+        if (cancelled) return;
+        setSubagentProviders((data.available_providers || []) as ProviderOption[]);
+        setSubagentTypes((data.subagent_types || {}) as Record<string, SubagentTypeEntry>);
+      } catch {
+        // Silently fail — dropdowns will just be empty
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeSubTab]);
 
   /* ─── Toast helpers ──────────────────────────────────────── */
 
@@ -603,12 +638,60 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
         );
 
       /* ── Subagents ──────────────────────────────────────── */
-      case 'subagents':
+      case 'subagents': {
+        const currentSubProvider = String(getNestedValue(settings as any, 'subagent_provider') || '');
+        const currentSubModel = String(getNestedValue(settings as any, 'subagent_model') || '');
+
+        // Get models for the currently selected provider
+        const selectedProvider = subagentProviders.find(p => p.id === currentSubProvider);
+        const availableModels = selectedProvider?.models || [];
+
+        // Sort personas for display
+        const personaEntries = Object.entries(subagentTypes)
+          .filter(([, v]) => v.enabled)
+          .sort(([a], [b]) => a.localeCompare(b));
+
         return (
           <div className="section">
-            <h4>Subagent</h4>
-            {renderTextInput('subagent_provider', 'Provider', 'zai, minimax, openrouter…')}
-            {renderTextInput('subagent_model', 'Model', 'GLM-4.6, MiniMax-M2.5, qwen/qwen3-coder…')}
+            <h4>Default Subagent</h4>
+
+            {/* Provider dropdown */}
+            <div className="config-item">
+              <label htmlFor="subagent-provider-select">Provider</label>
+              <select
+                id="subagent-provider-select"
+                className="styled-select"
+                value={currentSubProvider}
+                onChange={(e) => {
+                  updateSetting('subagent_provider', e.target.value);
+                  // Also clear model since it may not exist on the new provider
+                  updateSetting('subagent_model', '');
+                }}
+              >
+                <option value="">Default (inherit from main agent)</option>
+                {subagentProviders.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Model dropdown */}
+            <div className="config-item">
+              <label htmlFor="subagent-model-select">Model</label>
+              <select
+                id="subagent-model-select"
+                className="styled-select"
+                value={currentSubModel}
+                onChange={(e) => updateSetting('subagent_model', e.target.value)}
+              >
+                <option value="">Default (use provider's default model)</option>
+                {availableModels.map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Default persona dropdown */}
             {renderSelect('default_subagent_persona', 'Default Persona', [
               'general',
               'coder',
@@ -621,8 +704,92 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
               'orchestrator',
               'computer_user',
             ])}
+
+            {/* ── Per-persona model mapping ──────────────── */}
+            <div style={{ marginTop: 'var(--space-5)' }}>
+              <h4>Per-Persona Overrides</h4>
+              <div className="config-help" style={{ marginBottom: 'var(--space-4)' }}>
+                Set a specific provider and/or model for individual personas. Empty values inherit from the default subagent settings above.
+              </div>
+
+              {personaEntries.length === 0 && (
+                <div className="settings-empty">No personas available</div>
+              )}
+
+              <div className="persona-mapping-list">
+                {personaEntries.map(([personaId, persona]) => {
+                  const isSaving = subagentSavingPersona === personaId;
+                  const personaProvider = persona.provider || '';
+                  const personaModelsForProvider = subagentProviders.find(p => p.id === personaProvider)?.models || [];
+
+                  return (
+                    <div key={personaId} className="persona-mapping-row">
+                      <span className="persona-mapping-name" title={persona.description}>
+                        {persona.name}
+                      </span>
+                      <select
+                        className="styled-select persona-mapping-select"
+                        value={personaProvider}
+                        onChange={async (e) => {
+                          setSubagentSavingPersona(personaId);
+                          try {
+                            await api.updateSubagentType(personaId, {
+                              provider: e.target.value,
+                              model: '', // clear model when provider changes
+                            });
+                            setSubagentTypes(prev => ({
+                              ...prev,
+                              [personaId]: { ...prev[personaId], provider: e.target.value, model: '' },
+                            }));
+                            showToast(`${persona.name}: provider updated`, 'success');
+                          } catch {
+                            showToast(`Failed to update ${persona.name}`, 'error');
+                          } finally {
+                            setSubagentSavingPersona(null);
+                          }
+                        }}
+                        disabled={isSaving}
+                      >
+                        <option value="">Default</option>
+                        {subagentProviders.map(p => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                      <select
+                        className="styled-select persona-mapping-select"
+                        value={persona.model || ''}
+                        onChange={async (e) => {
+                          setSubagentSavingPersona(personaId);
+                          try {
+                            await api.updateSubagentType(personaId, {
+                              model: e.target.value,
+                            });
+                            setSubagentTypes(prev => ({
+                              ...prev,
+                              [personaId]: { ...prev[personaId], model: e.target.value },
+                            }));
+                            showToast(`${persona.name}: model updated`, 'success');
+                          } catch {
+                            showToast(`Failed to update ${persona.name}`, 'error');
+                          } finally {
+                            setSubagentSavingPersona(null);
+                          }
+                        }}
+                        disabled={isSaving || personaProvider === ''}
+                      >
+                        <option value="">Default</option>
+                        {personaModelsForProvider.map(m => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         );
+      }
 
       /* ── PDF OCR ─────────────────────────────────────────── */
       case 'pdf-ocr':

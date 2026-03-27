@@ -35,6 +35,7 @@ import {
   File,
   Check,
   Loader2,
+  X,
 } from 'lucide-react';
 import './ContextPanel.css';
 import TodoPanel from './TodoPanel';
@@ -1664,7 +1665,20 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
                   {activeTab.icon}
                   <h4>{activeTab.label}</h4>
                 </div>
-                <span className="tool-count">{activeTab.count}</span>
+                <div className="side-panel-header-actions">
+                  <span className="tool-count">{activeTab.count}</span>
+                  {isMobileLayout ? (
+                    <button
+                      type="button"
+                      className="context-panel-mobile-close"
+                      onClick={() => setPanelCollapsed(true)}
+                      aria-label="Close context panel"
+                      title="Close context panel"
+                    >
+                      <X size={14} />
+                    </button>
+                  ) : null}
+                </div>
               </div>
               <div className="side-panel-body">
                 {renderTabContent()}

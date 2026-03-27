@@ -60,7 +60,10 @@ func TestCheckPortAvailable(t *testing.T) {
 // TestFindAvailablePort verifies port finding logic
 func TestFindAvailablePort(t *testing.T) {
 	// Get available port
-	port := FindAvailablePort(54421)
+	port, err := FindAvailablePort(54421)
+	if err != nil {
+		t.Fatalf("FindAvailablePort failed: %v", err)
+	}
 
 	if port < 54421 || port > 54421+100 {
 		t.Errorf("Expected port in range [54421, 54521], got %d", port)
@@ -109,8 +112,14 @@ func TestMultipleServersOnDifferentPorts(t *testing.T) {
 	eventBus2 := events.NewEventBus()
 
 	// Find two different ports
-	port1 := FindAvailablePort(54421)
-	port2 := FindAvailablePort(port1 + 1)
+	port1, err := FindAvailablePort(54421)
+	if err != nil {
+		t.Fatalf("FindAvailablePort failed for port1: %v", err)
+	}
+	port2, err := FindAvailablePort(port1 + 1)
+	if err != nil {
+		t.Fatalf("FindAvailablePort failed for port2: %v", err)
+	}
 
 	if port1 == port2 {
 		t.Fatalf("Expected different ports, got same port %d", port1)

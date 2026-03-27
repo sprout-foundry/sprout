@@ -897,6 +897,13 @@ function App() {
         }));
         break;
 
+      case 'workspace_changed':
+        logEntry.category = 'system';
+        logEntry.level = 'info';
+        debugLog('[workspace] Workspace changed:', event.data);
+        window.location.reload();
+        break;
+
       default:
         // Handle any unknown event types
         logEntry.level = 'warning';

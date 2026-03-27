@@ -4,6 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -26,6 +30,15 @@ type onboardingProvider struct {
 	APIKeyHelp          string   `json:"api_key_help"`
 	RecommendedModel    string   `json:"recommended_model"`
 	RecommendedModelWhy string   `json:"recommended_model_why"`
+}
+
+type onboardingEnvironment struct {
+	RuntimePlatform    string `json:"runtime_platform"`
+	HostPlatform       string `json:"host_platform"`
+	BackendMode        string `json:"backend_mode"`
+	HasWSL             bool   `json:"has_wsl"`
+	HasGitBash         bool   `json:"has_git_bash"`
+	RecommendedTerminal string `json:"recommended_terminal"`
 }
 
 type onboardingProviderPresentation struct {
@@ -187,6 +200,72 @@ func resolveRecommendedModel(models []string, prefixes []string) string {
 	return ""
 }
 
+func detectOnboardingEnvironment() onboardingEnvironment {
+	hostPlatform := strings.TrimSpace(os.Getenv("LEDIT_HOST_PLATFORM"))
+	if hostPlatform == "" {
+		hostPlatform = runtime.GOOS
+	}
+
+	backendMode := strings.TrimSpace(os.Getenv("LEDIT_DESKTOP_BACKEND_MODE"))
+	if backendMode == "" {
+		backendMode = "native"
+	}
+
+	hasWSL := backendMode == "wsl"
+	if !hasWSL && hostPlatform == "windows" {
+		_, err := exec.LookPath("wsl.exe")
+		hasWSL = err == nil
+	}
+
+	hasGitBash := hasGitBashShell()
+	recommendedTerminal := "system"
+	if hostPlatform == "windows" {
+		if backendMode == "wsl" || hasWSL {
+			recommendedTerminal = "wsl"
+		} else if hasGitBash {
+			recommendedTerminal = "git-bash"
+		}
+	}
+
+	return onboardingEnvironment{
+		RuntimePlatform:    runtime.GOOS,
+		HostPlatform:       hostPlatform,
+		BackendMode:        backendMode,
+		HasWSL:             hasWSL,
+		HasGitBash:         hasGitBash,
+		RecommendedTerminal: recommendedTerminal,
+	}
+}
+
+func hasGitBashShell() bool {
+	if _, err := exec.LookPath("bash"); err == nil {
+		return true
+	}
+
+	programFiles := []string{
+		strings.TrimSpace(os.Getenv("ProgramFiles")),
+		strings.TrimSpace(os.Getenv("ProgramW6432")),
+		strings.TrimSpace(os.Getenv("ProgramFiles(x86)")),
+	}
+
+	for _, root := range programFiles {
+		if root == "" {
+			continue
+		}
+		candidates := []string{
+			filepath.Join(root, "Git", "bin", "bash.exe"),
+			filepath.Join(root, "Git", "usr", "bin", "bash.exe"),
+		}
+		for _, candidate := range candidates {
+			if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 func (ws *ReactWebServer) handleAPIOnboardingStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -267,6 +346,7 @@ func (ws *ReactWebServer) handleAPIOnboardingStatus(w http.ResponseWriter, r *ht
 		"current_provider": currentProvider,
 		"current_model":    currentModel,
 		"providers":        providers,
+		"environment":      detectOnboardingEnvironment(),
 	})
 }
 

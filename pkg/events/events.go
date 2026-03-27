@@ -31,6 +31,7 @@ const (
 	EventTypeValidation          = "validation"
 	EventTypeSecurityApprovalRequest = "security_approval_request"
 	EventTypeAgentMessage        = "agent_message"
+	EventTypeWorkspaceChanged    = "workspace_changed"
 )
 
 // EventBus manages event distribution between CLI and Web UI
@@ -258,5 +259,14 @@ func AgentMessageEvent(category, message string, extra map[string]interface{}) m
 		data[k] = v
 	}
 	return data
+}
+
+// WorkspaceChangedEvent creates a workspace changed event
+func WorkspaceChangedEvent(daemonRoot, workspaceRoot, previousWorkspaceRoot string) map[string]interface{} {
+	return map[string]interface{}{
+		"daemon_root":             daemonRoot,
+		"workspace_root":          workspaceRoot,
+		"previous_workspace_root": previousWorkspaceRoot,
+	}
 }
 

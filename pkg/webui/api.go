@@ -240,10 +240,34 @@ func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// Check if there's an active query - reject workspace changes while queries are running
+	if ws.hasActiveQuery() {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error":          "cannot change workspace while an agent query is active. Wait for the query to complete before switching.",
+			"code":           "query_in_progress",
+			"active_queries": ws.getActiveQueryCount(),
+		})
+		return
+	}
+
+	// Capture the previous workspace root before setting the new one
+	previousWorkspaceRoot := ws.GetWorkspaceRoot()
+
 	workspaceRoot, err := ws.SetWorkspaceRoot(req.Path)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to set workspace: %v", err), http.StatusBadRequest)
 		return
+	}
+
+	// Broadcast workspace change event to all WebSocket clients
+	if ws.eventBus != nil {
+		ws.eventBus.Publish(events.EventTypeWorkspaceChanged, events.WorkspaceChangedEvent(
+			ws.GetDaemonRoot(),
+			workspaceRoot,
+			previousWorkspaceRoot,
+		))
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1279,11 +1303,15 @@ func (ws *ReactWebServer) handleAPITerminalSessions(w http.ResponseWriter, r *ht
 
 	// Build detailed info for each session
 	sessions := []map[string]interface{}{}
+	activeCount := 0
 	for _, sessionID := range sessionIDs {
 		session, exists := ws.terminalManager.GetSession(sessionID)
 		if exists {
 			session.mutex.RLock()
 			size := session.Size
+			if session.Active {
+				activeCount++
+			}
 			sessions = append(sessions, map[string]interface{}{
 				"id":        sessionID,
 				"active":    session.Active,
@@ -1296,8 +1324,9 @@ func (ws *ReactWebServer) handleAPITerminalSessions(w http.ResponseWriter, r *ht
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"sessions": sessions,
-		"count":    len(sessions),
+		"sessions":     sessions,
+		"count":        len(sessions),
+		"active_count": activeCount,
 	})
 }
 

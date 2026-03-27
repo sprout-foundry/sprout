@@ -10,6 +10,7 @@
   - [Overview](#overview)
   - [Features](#features)
     - [Web UI](#web-ui)
+    - [SSH Tunneling (Remote Web UI Access)](#ssh-tunneling-remote-web-ui-access)
   - [Installation](#installation)
     - [Prerequisites](#prerequisites)
     - [From Source (Preferred Method)](#from-source-preferred-method)
@@ -96,6 +97,8 @@ Safety: Currently there are very few, and limited safety checks in place. Use at
 
 When you start `ledit` in interactive mode, the Web UI is available at `http://localhost:54421` (or the next available port if 54421 is in use). The terminal will display the URL on startup.
 
+The Web UI binds to `127.0.0.1` (localhost) only — it is **not** accessible from other machines on the network by default. To access it from a remote machine, see [SSH Tunneling](#ssh-tunneling-remote-web-ui-access) below.
+
 ```bash
 # Start with Web UI (default)
 ledit
@@ -105,8 +108,73 @@ ledit --no-web-ui
 ledit agent --no-web-ui "Analyze this code"
 
 # Use a custom port
-ledit agent --web-ui-port 8080
+ledit agent --web-port 8080
+
+# Daemon mode — keep the Web UI running without an interactive prompt
+ledit agent -d
+ledit agent --daemon
 ```
+
+### SSH Tunneling (Remote Web UI Access)
+
+The Web UI binds to `127.0.0.1` (localhost only) for security, so it is not directly accessible from other machines. To access the Web UI from your local browser when `ledit` is running on a remote server, use SSH port forwarding to create a secure tunnel.
+
+**Quick Start:**
+
+```bash
+# Forward local port 54421 to the same port on the remote server
+ssh -L 54421:127.0.0.1:54421 user@remote-server
+
+# Then open in your local browser:
+# http://localhost:54421
+```
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `-L` | Local port forwarding (binds a local port to a remote address) |
+| `-N` | Don't execute a remote command (useful when you only need the tunnel) |
+| `-f` | Run SSH in the background after authenticating |
+| `-T` | Disable pseudo-terminal allocation |
+
+**Common Scenarios:**
+
+```bash
+# 1. Tunnel in the background — run once, keep it open
+ssh -fN -L 54421:127.0.0.1:54421 user@remote-server
+# Open http://localhost:54421 in your browser
+# Kill the tunnel when done: kill $(lsof -t -i:54421)
+
+# 2. If the remote ledit is on a custom port
+ssh -L 54421:127.0.0.1:8080 user@remote-server
+
+# 3. Different local port (avoid conflicts)
+ssh -L 9090:127.0.0.1:54421 user@remote-server
+# Open http://localhost:9090 in your browser
+
+# 4. Jump host / bastion
+ssh -J bastion.example.com -L 54421:127.0.0.1:54421 user@internal-server
+
+# 5. Attach to an existing tmux/screen session and start ledit
+ssh -t -L 54421:127.0.0.1:54421 user@remote-server "tmux attach -t ledit"
+```
+
+**Tips:**
+
+- The tunnel only works while the SSH connection is alive. If you close the terminal, the tunnel closes (unless you used `-f`).
+- Make sure `ledit` is already running on the remote server before opening the URL (or use `--daemon` mode).
+- If the port is already in use locally, choose a different local port (scenario 3).
+- You can add SSH config entries to `~/.ssh/config` to simplify frequent tunnels:
+
+```ssh-config
+Host ledit-remote
+    HostName remote-server.example.com
+    User youruser
+    LocalForward 54421 127.0.0.1:54421
+```
+
+Then simply run `ssh -fN ledit-remote` to establish the tunnel.
 
 ## Installation
 

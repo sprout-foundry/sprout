@@ -478,7 +478,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     if (!buffer) return;
 
     openWorkspaceBuffer({
-      kind: 'review',
+      kind: 'file',
       path: `__workspace/svg-preview:${buffer.file.path}`,
       title: `${buffer.file.name} Preview`,
       content: localContent || buffer.content || '',
@@ -501,7 +501,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     }
 
     openWorkspaceBuffer({
-      kind: 'review',
+      kind: 'file',
       path: `__workspace/svg-preview:${buffer.file.path}`,
       title: `${buffer.file.name} Preview`,
       content: localContent || buffer.content || '',

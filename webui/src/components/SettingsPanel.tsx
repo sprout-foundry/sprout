@@ -164,7 +164,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
       }
     })();
     return () => { cancelled = true; };
-  }, [activeSubTab]);
+  }, [activeSubTab, api]);
 
   /* ─── Toast helpers ──────────────────────────────────────── */
 

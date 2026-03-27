@@ -12,6 +12,47 @@ const windowStateWriteTimers = new Map();
 const pendingOpenTargets = [];
 let isAppReady = false;
 
+function shellEscape(value) {
+  return `'${String(value).replace(/'/g, `'\\''`)}'`;
+}
+
+function normalizeWorkspaceEntry(entry) {
+  if (!entry) {
+    return null;
+  }
+
+  if (typeof entry === 'string') {
+    return {
+      workspacePath: entry,
+      backendMode: 'native',
+      wslDistro: null,
+    };
+  }
+
+  if (typeof entry.workspacePath !== 'string' || !entry.workspacePath.trim()) {
+    return null;
+  }
+
+  return {
+    workspacePath: entry.workspacePath,
+    backendMode: entry.backendMode === 'wsl' ? 'wsl' : 'native',
+    wslDistro: typeof entry.wslDistro === 'string' && entry.wslDistro.trim() ? entry.wslDistro.trim() : null,
+  };
+}
+
+function getWorkspaceKey(entry) {
+  const normalized = normalizeWorkspaceEntry(entry);
+  if (!normalized) {
+    return '';
+  }
+
+  return JSON.stringify({
+    workspacePath: normalized.workspacePath,
+    backendMode: normalized.backendMode,
+    wslDistro: normalized.wslDistro || '',
+  });
+}
+
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
   app.quit();
@@ -54,15 +95,26 @@ function writeDesktopState(state) {
 }
 
 function addRecentWorktree(worktreePath) {
+  const normalizedEntry = normalizeWorkspaceEntry(worktreePath);
+  if (!normalizedEntry) {
+    return;
+  }
+
   const state = readDesktopState();
-  const recent = [worktreePath, ...(state.recentWorktrees || []).filter((item) => item !== worktreePath)].slice(0, 10);
+  const normalizedKey = getWorkspaceKey(normalizedEntry);
+  const recent = [
+    normalizedEntry,
+    ...(state.recentWorktrees || [])
+      .map((item) => normalizeWorkspaceEntry(item))
+      .filter((item) => item && getWorkspaceKey(item) !== normalizedKey),
+  ].slice(0, 10);
   writeDesktopState({ ...state, recentWorktrees: recent });
 }
 
 function persistOpenWorkspaces() {
   const state = readDesktopState();
   const openWorkspaces = Array.from(instanceRegistry.values())
-    .map((entry) => entry.workspacePath)
+    .map((entry) => normalizeWorkspaceEntry(entry))
     .filter(Boolean);
   writeDesktopState({
     ...state,
@@ -71,30 +123,24 @@ function persistOpenWorkspaces() {
 }
 
 function getRecentWorktrees() {
-  return (readDesktopState().recentWorktrees || []).filter((entry) => {
-    try {
-      return fs.statSync(entry).isDirectory();
-    } catch {
-      return false;
-    }
-  });
+  return (readDesktopState().recentWorktrees || [])
+    .map((entry) => normalizeWorkspaceEntry(entry))
+    .filter(Boolean);
 }
 
 function getRecentWorktreeEntries() {
   return getRecentWorktrees().map((entry) => ({
-    path: entry,
-    name: path.basename(entry),
+    path: entry.workspacePath,
+    name: path.basename(entry.workspacePath),
+    backendMode: entry.backendMode,
+    wslDistro: entry.wslDistro,
   }));
 }
 
 function getRestorableWorktrees() {
-  return (readDesktopState().openWorktrees || []).filter((entry) => {
-    try {
-      return fs.statSync(entry).isDirectory();
-    } catch {
-      return false;
-    }
-  });
+  return (readDesktopState().openWorktrees || [])
+    .map((entry) => normalizeWorkspaceEntry(entry))
+    .filter(Boolean);
 }
 
 function extractWorkspacePathFromOpenTarget(candidate) {
@@ -193,15 +239,75 @@ function scheduleWindowBoundsPersist(worktreePath, browserWindow) {
 }
 
 function resolveBackendBinary() {
-  const platform = process.platform === 'win32' ? 'windows' : process.platform;
+  const platform = arguments[0] || (process.platform === 'win32' ? 'windows' : process.platform);
   const arch = process.arch === 'x64' ? 'amd64' : process.arch;
-  const binaryName = process.platform === 'win32' ? 'ledit.exe' : 'ledit';
+  const binaryName = platform === 'windows' ? 'ledit.exe' : 'ledit';
 
   if (app.isPackaged) {
     return path.join(process.resourcesPath, 'backend', `${platform}-${arch}`, binaryName);
   }
 
   return path.join(app.getAppPath(), 'desktop', 'dist', 'backend', `${platform}-${arch}`, binaryName);
+}
+
+function listWslDistros() {
+  if (process.platform !== 'win32') {
+    return [];
+  }
+
+  const result = spawnSync('wsl.exe', ['-l', '-q'], {
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  if (result.status !== 0) {
+    return [];
+  }
+
+  return result.stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function runWslCommand(args, options = {}) {
+  return spawnSync('wsl.exe', args, {
+    encoding: 'utf8',
+    windowsHide: true,
+    ...options,
+  });
+}
+
+function toWslPath(pathValue, distro) {
+  if (!pathValue) {
+    return '';
+  }
+  if (pathValue.startsWith('/')) {
+    return pathValue;
+  }
+
+  const result = runWslCommand(['-d', distro, '--', 'wslpath', '-a', pathValue]);
+  if (result.status !== 0) {
+    throw new Error(result.stderr?.trim() || result.stdout?.trim() || `Failed to translate ${pathValue} to a WSL path.`);
+  }
+
+  return result.stdout.trim();
+}
+
+function ensureWslBackendBinary(distro) {
+  const sourceBinary = resolveBackendBinary('linux');
+  if (!fs.existsSync(sourceBinary)) {
+    throw new Error(`WSL backend binary not found: ${sourceBinary}`);
+  }
+
+  const sourceWslPath = toWslPath(sourceBinary, distro);
+  const remoteDir = '$HOME/.cache/ledit-desktop/backend';
+  const remotePath = `${remoteDir}/ledit`;
+  const command = `mkdir -p ${remoteDir} && cp ${shellEscape(sourceWslPath)} ${shellEscape(remotePath)} && chmod +x ${shellEscape(remotePath)} && printf '%s' ${shellEscape(remotePath)}`;
+  const result = runWslCommand(['-d', distro, '--', 'bash', '-lc', command]);
+  if (result.status !== 0) {
+    throw new Error(result.stderr?.trim() || result.stdout?.trim() || 'Failed to stage the WSL backend binary.');
+  }
+  return result.stdout.trim() || remotePath.replace('$HOME', '~');
 }
 
 function findFreePort() {
@@ -470,9 +576,11 @@ function createLauncherWindow() {
 
 function buildMenu() {
   const recentItems = getRecentWorktrees().map((worktreePath) => ({
-    label: worktreePath,
+    label: worktreePath.backendMode === 'wsl'
+      ? `${worktreePath.workspacePath} (${worktreePath.wslDistro || 'WSL'})`
+      : worktreePath.workspacePath,
     click: () => {
-      createWorkspaceWindow({ workspacePath: worktreePath }).catch((error) => {
+      createWorkspaceWindow({ ...worktreePath }).catch((error) => {
         dialog.showErrorBox('Failed to Open Folder', String(error?.message || error));
       });
     },
@@ -538,8 +646,39 @@ function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-async function startBackendForWorkspace(workspacePath) {
+async function startBackendForWorkspace(workspaceEntry) {
   const port = await findFreePort();
+  const backendMode = workspaceEntry.backendMode === 'wsl' ? 'wsl' : 'native';
+
+  if (backendMode === 'wsl') {
+    const distro = workspaceEntry.wslDistro;
+    if (!distro) {
+      throw new Error('A WSL distro is required for WSL-backed workspaces.');
+    }
+
+    const backendBinary = ensureWslBackendBinary(distro);
+    const workspaceWslPath = toWslPath(workspaceEntry.workspacePath, distro);
+    const command = `cd ${shellEscape(workspaceWslPath)} && LEDIT_DESKTOP=1 BROWSER=none ${shellEscape(backendBinary)} --isolated-config agent --daemon --web-port ${shellEscape(String(port))}`;
+    const child = spawn('wsl.exe', ['-d', distro, '--', 'bash', '-lc', command], {
+      env: {
+        ...process.env,
+      },
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+
+    child.unref();
+
+    try {
+      await waitForHealth(port);
+    } catch (error) {
+      child.kill();
+      throw error;
+    }
+
+    return { child, port };
+  }
+
   const binaryPath = resolveBackendBinary();
 
   if (!fs.existsSync(binaryPath)) {
@@ -547,7 +686,7 @@ async function startBackendForWorkspace(workspacePath) {
   }
 
   const child = spawn(binaryPath, ['--isolated-config', 'agent', '--daemon', '--web-port', String(port)], {
-    cwd: workspacePath,
+    cwd: workspaceEntry.workspacePath,
     env: {
       ...process.env,
       LEDIT_DESKTOP: '1',
@@ -584,9 +723,11 @@ function renderLoadingPage(workspacePath) {
 }
 
 async function createWorkspaceWindow(options = {}) {
+  const backendMode = options.backendMode === 'wsl' ? 'wsl' : 'native';
+  const wslDistro = options.wslDistro || null;
   let workspacePath = options.workspacePath || null;
 
-  if (!workspacePath) {
+  if (!workspacePath && backendMode === 'native') {
     workspacePath = await promptForWorkspace(BrowserWindow.getFocusedWindow() || null);
   }
 
@@ -594,12 +735,22 @@ async function createWorkspaceWindow(options = {}) {
     return null;
   }
 
-  workspacePath = resolveWorkspaceDirectory(workspacePath);
+  if (backendMode === 'native') {
+    workspacePath = resolveWorkspaceDirectory(workspacePath);
+  }
+
   if (!workspacePath) {
     throw new Error('Selected working directory does not exist.');
   }
 
-  const existingWindowId = workspaceWindowMap.get(workspacePath);
+  const workspaceEntry = {
+    workspacePath,
+    backendMode,
+    wslDistro,
+  };
+  const workspaceKey = getWorkspaceKey(workspaceEntry);
+
+  const existingWindowId = workspaceWindowMap.get(workspaceKey);
   if (existingWindowId && !options.forceNewWindow) {
     const existing = BrowserWindow.fromId(existingWindowId);
     if (existing) {
@@ -609,7 +760,7 @@ async function createWorkspaceWindow(options = {}) {
     }
   }
 
-  const savedBounds = getSavedWindowBounds(workspacePath);
+  const savedBounds = getSavedWindowBounds(workspaceKey);
 
   const browserWindow = new BrowserWindow({
     width: savedBounds?.width || 1600,
@@ -621,7 +772,9 @@ async function createWorkspaceWindow(options = {}) {
     minHeight: 700,
     show: false,
     backgroundColor: '#1f242d',
-    title: `Ledit · ${path.basename(workspacePath)}`,
+    title: backendMode === 'wsl'
+      ? `Ledit · ${path.basename(workspacePath)} (${wslDistro || 'WSL'})`
+      : `Ledit · ${path.basename(workspacePath)}`,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -642,36 +795,36 @@ async function createWorkspaceWindow(options = {}) {
     return { action: 'deny' };
   });
 
-  const backend = await startBackendForWorkspace(workspacePath);
-  instanceRegistry.set(browserWindow.id, { ...backend, workspacePath });
-  workspaceWindowMap.set(workspacePath, browserWindow.id);
-  addRecentWorktree(workspacePath);
+  const backend = await startBackendForWorkspace(workspaceEntry);
+  instanceRegistry.set(browserWindow.id, { ...backend, ...workspaceEntry });
+  workspaceWindowMap.set(workspaceKey, browserWindow.id);
+  addRecentWorktree(workspaceEntry);
   persistOpenWorkspaces();
   buildMenu();
   if (launcherWindow && !launcherWindow.isDestroyed()) {
     launcherWindow.close();
   }
 
-  browserWindow.on('move', () => scheduleWindowBoundsPersist(workspacePath, browserWindow));
-  browserWindow.on('resize', () => scheduleWindowBoundsPersist(workspacePath, browserWindow));
-  browserWindow.on('maximize', () => scheduleWindowBoundsPersist(workspacePath, browserWindow));
-  browserWindow.on('unmaximize', () => scheduleWindowBoundsPersist(workspacePath, browserWindow));
+  browserWindow.on('move', () => scheduleWindowBoundsPersist(workspaceKey, browserWindow));
+  browserWindow.on('resize', () => scheduleWindowBoundsPersist(workspaceKey, browserWindow));
+  browserWindow.on('maximize', () => scheduleWindowBoundsPersist(workspaceKey, browserWindow));
+  browserWindow.on('unmaximize', () => scheduleWindowBoundsPersist(workspaceKey, browserWindow));
   browserWindow.on('close', () => {
-    writeWindowBounds(workspacePath, browserWindow);
+    writeWindowBounds(workspaceKey, browserWindow);
   });
 
   browserWindow.on('closed', () => {
-    const timer = windowStateWriteTimers.get(workspacePath);
+    const timer = windowStateWriteTimers.get(workspaceKey);
     if (timer) {
       clearTimeout(timer);
-      windowStateWriteTimers.delete(workspacePath);
+      windowStateWriteTimers.delete(workspaceKey);
     }
     const record = instanceRegistry.get(browserWindow.id);
     if (record) {
       record.child.kill();
       instanceRegistry.delete(browserWindow.id);
-      if (workspaceWindowMap.get(record.workspacePath) === browserWindow.id) {
-        workspaceWindowMap.delete(record.workspacePath);
+      if (workspaceWindowMap.get(workspaceKey) === browserWindow.id) {
+        workspaceWindowMap.delete(workspaceKey);
       }
       persistOpenWorkspaces();
       buildMenu();
@@ -698,7 +851,7 @@ async function restorePreviousSession() {
   let opened = 0;
   for (const workspacePath of restorable) {
     try {
-      const result = await createWorkspaceWindow({ workspacePath, forceNewWindow: true });
+      const result = await createWorkspaceWindow({ ...workspacePath, forceNewWindow: true });
       if (result) {
         opened += 1;
       }
@@ -784,6 +937,7 @@ app.on('open-url', (event, url) => {
 });
 
 ipcMain.handle('desktop:listRecentWorktrees', async () => getRecentWorktreeEntries());
+ipcMain.handle('desktop:listWslDistros', async () => listWslDistros());
 ipcMain.handle('desktop:pickRepository', async () => promptForRepository(BrowserWindow.getFocusedWindow() || launcherWindow || null));
 ipcMain.handle('desktop:pickWorkspace', async () => promptForWorkspace(BrowserWindow.getFocusedWindow() || launcherWindow || null));
 ipcMain.handle('desktop:pickWorktree', async () => promptForWorkspace(BrowserWindow.getFocusedWindow() || launcherWindow || null));
@@ -796,6 +950,8 @@ ipcMain.handle('desktop:openWorkspace', async (_event, options = {}) => {
   const browserWindow = await createWorkspaceWindow({
     workspacePath,
     forceNewWindow: Boolean(options.forceNewWindow),
+    backendMode: options.backendMode,
+    wslDistro: options.wslDistro,
   });
   return browserWindow ? { ok: true } : null;
 });

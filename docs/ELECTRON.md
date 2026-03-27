@@ -8,6 +8,7 @@ This repo can be wrapped in an Electron desktop shell without replacing the exis
 - Each desktop window launches its own `ledit` backend on a unique localhost port.
 - Each window is bound to a working directory path.
 - The Go backend still serves the existing embedded web UI and WebSocket APIs.
+- On Windows, a workspace window can also run its backend inside a selected WSL distro instead of as a native Windows process.
 
 ## Why Git Worktrees
 
@@ -26,6 +27,17 @@ git worktree add ../feature-xyz -b feature-xyz
 Then open that directory from the desktop shell.
 
 The launcher can also create a new worktree for you by running `git worktree add -b <branch> <path> <base-ref>` and then opening it in a new window.
+
+## Windows + WSL
+
+On Windows, the launcher now exposes a WSL section when installed distros are detected. That mode:
+
+- keeps the Electron shell on Windows
+- stages the bundled Linux backend into the chosen distro
+- launches `ledit` inside WSL
+- keeps the backend working directory, Git, terminal, and file operations inside that distro
+
+Use a Linux path such as `/home/you/project` for WSL-backed windows. Recent entries remember whether they were opened natively or through WSL, including the selected distro.
 
 ## Development
 
@@ -69,6 +81,7 @@ The packaging flow keeps the existing app architecture intact:
 - Each workspace window launches the existing Go backend on its own localhost port.
 - The backend still serves the embedded web UI and current WebSocket/HTTP APIs.
 - `electron-builder` runs a `beforePack` hook that rebuilds the embedded web UI and the correct platform backend automatically, so the packaged app does not depend on a manual prebuild step.
+- Windows packaging also includes the matching Linux backend so WSL-backed windows can launch without an external install.
 - `desktop:verify` checks that the unpacked app includes the Electron app bundle and bundled Go backend before release artifacts are published.
 - Windows and Linux installer assets now use checked-in desktop icons from [`desktop/resources`](/home/alanp/dev/personal/ledit-electron/desktop/resources).
 - The desktop app now registers a `ledit://` protocol and handles OS open-file events by routing them into the existing multi-window worktree launcher.

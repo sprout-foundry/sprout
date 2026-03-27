@@ -25,6 +25,7 @@ interface FileBrowserProps {
   onCancel: () => void;
   allowDirectories?: boolean;
   allowedExtensions?: string[];
+  browseEndpoint?: string;
 }
 
 const FileBrowser: React.FC<FileBrowserProps> = ({
@@ -33,7 +34,8 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
   onSelect,
   onCancel,
   allowDirectories = false,
-  allowedExtensions = []
+  allowedExtensions = [],
+  browseEndpoint = '/api/browse'
 }) => {
   const [currentPath, setCurrentPath] = useState(initialPath);
   const [pathInput, setPathInput] = useState(initialPath);
@@ -56,7 +58,7 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
 
     try {
       // Use the actual API to browse files
-      const response = await fetch(`/api/browse?path=${encodeURIComponent(path)}`);
+      const response = await fetch(`${browseEndpoint}?path=${encodeURIComponent(path)}`);
       if (!response.ok) {
         throw new Error(`Failed to browse directory: ${response.statusText}`);
       }
@@ -89,7 +91,7 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [browseEndpoint]);
 
   useEffect(() => {
     if (isOpen) {

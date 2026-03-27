@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 echo "🏗️  Building React Web UI..."
 
 # Check if node_modules exists
@@ -13,12 +15,17 @@ npm run build
 
 # Copy build to the pkg/webui/static directory for embedding
 echo "📁 Copying build assets to Go package..."
-rm -rf ../pkg/webui/static/*
-cp -r build/* ../pkg/webui/static/
-# Move nested static contents up one level to avoid double nesting
-if [ -d "../pkg/webui/static/static" ]; then
-    mv ../pkg/webui/static/static/* ../pkg/webui/static/
-    rmdir ../pkg/webui/static/static
+target_dir="../pkg/webui/static"
+mkdir -p "$target_dir"
+
+# Clear the previous embedded bundle while keeping the target directory itself.
+find "$target_dir" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+
+# Copy root-level build assets first, then flatten CRA's nested static assets
+# into the Go-embedded layout expected by /static/* handlers.
+find build -mindepth 1 -maxdepth 1 ! -name static -exec cp -R {} "$target_dir"/ \;
+if [ -d "build/static" ]; then
+    cp -R build/static/. "$target_dir"/
 fi
 
 echo "✅ React Web UI build completed!"

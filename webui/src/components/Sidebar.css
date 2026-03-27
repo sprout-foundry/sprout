@@ -387,6 +387,87 @@
   cursor: pointer;
 }
 
+.sidebar .styled-input {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 var(--space-4);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 26%, transparent), color-mix(in srgb, var(--sidebar-select-bg) 96%, transparent));
+  border: 1px solid color-mix(in srgb, var(--border-default) 90%, transparent);
+  border-radius: 10px;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-family: var(--font-sans);
+  font-weight: 500;
+  line-height: 1.2;
+  transition: border-color 0.15s var(--ease-out), box-shadow 0.15s var(--ease-out),
+    background 0.15s var(--ease-out), color 0.15s var(--ease-out);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 1px 2px rgba(2, 6, 23, 0.14);
+}
+
+.sidebar .styled-input:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+.sidebar .styled-input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-primary-alpha), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.sidebar .styled-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.sidebar .workspace-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.sidebar .config-btn {
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s var(--ease-out), background 0.15s var(--ease-out), opacity 0.15s var(--ease-out);
+}
+
+.sidebar .config-btn:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--bg-surface);
+}
+
+.sidebar .config-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.sidebar .config-item-help,
+.sidebar .config-item-status,
+.sidebar .config-item-error {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.sidebar .config-item-help {
+  color: var(--text-tertiary);
+}
+
+.sidebar .config-item-status {
+  color: var(--accent-success);
+}
+
+.sidebar .config-item-error {
+  color: var(--accent-error);
+}
+
 .sidebar .styled-select option {
   background: var(--sidebar-select-bg);
   color: var(--text-primary);

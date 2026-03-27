@@ -326,6 +326,18 @@ func (tm *TerminalManager) CloseSession(sessionID string) error {
 	return nil
 }
 
+// CloseAllSessions closes all known terminal sessions and returns the first error encountered.
+func (tm *TerminalManager) CloseAllSessions() error {
+	sessionIDs := tm.ListSessions()
+	var firstErr error
+	for _, sessionID := range sessionIDs {
+		if err := tm.CloseSession(sessionID); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
 // monitorSession monitors a terminal session and handles output
 func (tm *TerminalManager) monitorSession(session *TerminalSession) {
 	defer func() {

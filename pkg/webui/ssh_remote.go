@@ -698,7 +698,7 @@ func ensureRemoteSSHBinary(hostAlias, localBinary string, remoteInfo *remoteSSHI
 		"-o", "StrictHostKeyChecking=accept-new",
 		hostAlias,
 		"bash", "-lc",
-		fmt.Sprintf("mkdir -p %s", shellEscapeSSH(remoteDirSSH)),
+		fmt.Sprintf("mkdir -p %s", remoteDirSSH),
 	)
 	if _, err := runSSHLoggedCommand(logger, "prepare-remote-dir", fmt.Sprintf("ssh %s mkdir -p %s", hostAlias, remoteDirSSH), mkdir); err != nil {
 		return "", err
@@ -720,9 +720,9 @@ func ensureRemoteSSHBinary(hostAlias, localBinary string, remoteInfo *remoteSSHI
 		"bash", "-lc",
 		fmt.Sprintf(
 			"mv %s %s && chmod +x %s",
-			shellEscapeSSH(remoteBinarySSH+".tmp"),
-			shellEscapeSSH(remoteBinarySSH),
-			shellEscapeSSH(remoteBinarySSH),
+			remoteBinarySSH+".tmp",
+			remoteBinarySSH,
+			remoteBinarySSH,
 		),
 	)
 	if _, err := runSSHLoggedCommand(logger, "install-backend", fmt.Sprintf("ssh %s install backend into %s", hostAlias, remoteBinarySSH), install); err != nil {

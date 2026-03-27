@@ -264,7 +264,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
         onToggleTerminal();
         break;
       case 'new_file':
-        onViewChange('editor');
+        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'new_file' } }));
         break;
       case 'switch_to_chat':
         onViewChange('chat');

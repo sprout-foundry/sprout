@@ -4,7 +4,7 @@
   flex: 1;
   min-width: 0;
   min-height: 0;
-  height: 0; /* force flex child to not exceed available space */
+  height: 100%;
   overflow: hidden;
 }
 

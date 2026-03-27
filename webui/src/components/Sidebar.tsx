@@ -72,6 +72,7 @@ interface SidebarProps {
     isGeneratingCommitMessage: boolean;
     isReviewLoading: boolean;
     actionError: string | null;
+    actionWarning: string | null;
     onCommitMessageChange: (value: string) => void;
     onGenerateCommitMessage: () => void;
     onCommit: () => void;

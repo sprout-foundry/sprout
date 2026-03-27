@@ -25,6 +25,13 @@ const primaryTarget = {
   arch: process.env.LEDIT_GOARCH || defaultArch,
 };
 
+const remoteTargets = [
+  { platform: 'linux', arch: 'amd64' },
+  { platform: 'linux', arch: 'arm64' },
+  { platform: 'darwin', arch: 'amd64' },
+  { platform: 'darwin', arch: 'arm64' },
+];
+
 const extraTargets = String(process.env.LEDIT_EXTRA_TARGETS || '')
   .split(',')
   .map((item) => item.trim())
@@ -37,8 +44,12 @@ const extraTargets = String(process.env.LEDIT_EXTRA_TARGETS || '')
     return { platform, arch };
   });
 
-if (process.platform === 'win32' && extraTargets.length === 0) {
-  extraTargets.push({ platform: 'linux', arch: defaultArch });
+if (extraTargets.length === 0) {
+  extraTargets.push(
+    ...remoteTargets.filter((target) =>
+      !(target.platform === primaryTarget.platform && target.arch === primaryTarget.arch)
+    )
+  );
 }
 
 const targets = [primaryTarget, ...extraTargets].filter((target, index, array) =>

@@ -322,6 +322,12 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     const buffer = buffersRef.current.get(bufferId);
     if (!buffer || buffer.kind !== 'file') return;
 
+    // Prevent saving virtual workspace buffers (untitled, previews, etc.)
+    if (buffer.file.path.startsWith('__workspace/')) {
+      setBufferModified(bufferId, false);
+      return;
+    }
+
     try {
       const response = await writeFileWithConsent(buffer.file.path, buffer.content);
 
@@ -348,7 +354,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
       console.error('Failed to save buffer:', bufferId, error);
       throw error;
     }
-  }, []);
+  }, [setBufferModified]);
 
   // Save all modified buffers
   const saveAllBuffers = useCallback(async () => {

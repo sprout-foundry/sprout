@@ -100,6 +100,11 @@ export interface LeditInstance {
   is_current: boolean;
 }
 
+export interface WorkspaceResponse {
+  daemon_root: string;
+  workspace_root: string;
+}
+
 class ApiService {
   private static instance: ApiService;
 
@@ -118,6 +123,29 @@ class ApiService {
       throw new Error('Failed to fetch stats');
     }
     return response.json();
+  }
+
+  async getWorkspace(): Promise<WorkspaceResponse> {
+    const response = await fetch('/api/workspace');
+    if (!response.ok) {
+      throw new Error('Failed to fetch workspace');
+    }
+    return response.json();
+  }
+
+  async setWorkspace(path: string): Promise<{ message: string; daemon_root: string; workspace_root: string }> {
+    const response = await fetch('/api/workspace', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ path }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || data.message || 'Failed to update workspace');
+    }
+    return data;
   }
 
   async getProviders(): Promise<{

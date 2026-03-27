@@ -327,7 +327,13 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
 
       if (response.ok) {
         const data = await response.json();
-        if (data.message === 'File saved successfully') {
+        // Check for validation errors (hotkeys config)
+        if (data.success === false) {
+          console.error('Save validation failed:', data);
+          throw new Error(data.error || 'Save validation failed');
+        }
+        // Check for success message
+        if (data.message === 'File saved successfully' || data.success === true) {
           setBuffers(prev => {
             const newBuffers = new Map(prev);
             const buf = newBuffers.get(bufferId);

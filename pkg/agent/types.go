@@ -27,13 +27,22 @@ type ShellCommandResult struct {
 	TruncatedLines  int    // Approximate number of lines omitted from the middle
 }
 
+// TurnCheckpoint stores a compact summary for a completed user turn while
+// preserving the original full messages for cache-efficient reuse until needed.
+type TurnCheckpoint struct {
+	StartIndex int    `json:"start_index"`
+	EndIndex   int    `json:"end_index"`
+	Summary    string `json:"summary"`
+}
+
 // AgentState represents the state of an agent that can be persisted
 type AgentState struct {
-	Messages        []api.Message `json:"messages"`
-	PreviousSummary string        `json:"previous_summary"`
-	CompactSummary  string        `json:"compact_summary"` // New: 5K limit summary for continuity
-	TaskActions     []TaskAction  `json:"task_actions"`
-	SessionID       string        `json:"session_id"`
+	Messages        []api.Message    `json:"messages"`
+	TurnCheckpoints []TurnCheckpoint `json:"turn_checkpoints,omitempty"`
+	PreviousSummary string           `json:"previous_summary"`
+	CompactSummary  string           `json:"compact_summary"` // New: 5K limit summary for continuity
+	TaskActions     []TaskAction     `json:"task_actions"`
+	SessionID       string           `json:"session_id"`
 	// Token and cost metrics
 	TotalTokens             int     `json:"total_tokens"`
 	TotalCost               float64 `json:"total_cost"`

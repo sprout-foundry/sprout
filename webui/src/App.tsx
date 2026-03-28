@@ -87,6 +87,7 @@ interface AppState {
     linesAdded?: number;
     linesDeleted?: number;
   }>;
+  subagentActivities: SubagentActivity[];
 }
 
 interface ToolExecution {
@@ -109,6 +110,7 @@ interface Message {
   content: string;
   timestamp: Date;
   reasoning?: string;  // Chain-of-thought content from content_type: "reasoning"
+  toolRefs?: Array<{ toolId: string; toolName: string; label: string }>;
 }
 
 interface LogEntry {
@@ -118,6 +120,22 @@ interface LogEntry {
   data: any;
   level: 'info' | 'warning' | 'error' | 'success';
   category: 'query' | 'tool' | 'file' | 'system' | 'stream';
+}
+
+interface SubagentActivity {
+  id: string;
+  toolCallId: string;
+  toolName: string;
+  phase: 'spawn' | 'output' | 'complete';
+  message: string;
+  timestamp: Date;
+  taskId?: string;
+  persona?: string;
+  isParallel?: boolean;
+  provider?: string;
+  model?: string;
+  taskCount?: number;
+  failures?: number;
 }
 
 interface OnboardingState {
@@ -257,7 +275,8 @@ const loadPersistedAppState = (): Partial<AppState> | null => {
       messages: Array.isArray(parsed.messages)
         ? parsed.messages.map((message: any) => ({
             ...message,
-            timestamp: parseDate(message?.timestamp)
+            timestamp: parseDate(message?.timestamp),
+            toolRefs: Array.isArray(message?.toolRefs) ? message.toolRefs : undefined
           }))
         : [],
       logs: Array.isArray(parsed.logs)
@@ -278,7 +297,8 @@ const loadPersistedAppState = (): Partial<AppState> | null => {
             ...edit,
             timestamp: parseDate(edit?.timestamp)
           }))
-        : []
+        : [],
+      subagentActivities: []
     };
   } catch (error) {
     console.warn('Failed to load persisted app state:', error);
@@ -301,6 +321,7 @@ function App() {
       stats: {},
       currentTodos: [],
       fileEdits: [],
+      subagentActivities: [],
       ...persisted,
       isConnected: false,
       isProcessing: false,
@@ -558,6 +579,7 @@ function App() {
           }],
           toolExecutions: [], // Clear previous tool executions
           fileEdits: [],      // Clear previous file edits for current-run status metrics
+          subagentActivities: [],
           queryProgress: null, // Clear previous progress
           currentTodos: [],    // Clear previous todos
           logs: [...prev.logs, logEntry]
@@ -687,7 +709,22 @@ function App() {
               persona: updated[existingIdx].persona || persona,
               subagentType: updated[existingIdx].subagentType || subagentType,
             };
-            return { ...prev, toolExecutions: updated, logs: [...prev.logs, logEntry] };
+            const messages = [...prev.messages];
+            for (let i = messages.length - 1; i >= 0; i -= 1) {
+              const msg = messages[i];
+              if (msg.type !== 'assistant') continue;
+              const toolRefs = Array.isArray(msg.toolRefs) ? [...msg.toolRefs] : [];
+              if (!toolRefs.some((ref) => ref.toolId === updated[existingIdx].id)) {
+                toolRefs.push({
+                  toolId: updated[existingIdx].id,
+                  toolName,
+                  label: displayName,
+                });
+                messages[i] = { ...msg, toolRefs };
+              }
+              break;
+            }
+            return { ...prev, messages, toolExecutions: updated, logs: [...prev.logs, logEntry] };
           }
 
           // Add new tool execution from rich start event
@@ -702,8 +739,25 @@ function App() {
             persona,
             subagentType,
           };
+          const messages = [...prev.messages];
+          for (let i = messages.length - 1; i >= 0; i -= 1) {
+            const msg = messages[i];
+            if (msg.type !== 'assistant') continue;
+            const toolRefs = Array.isArray(msg.toolRefs) ? [...msg.toolRefs] : [];
+            if (!toolRefs.some((ref) => ref.toolId === newTool.id)) {
+              toolRefs.push({
+                toolId: newTool.id,
+                toolName,
+                label: displayName,
+              });
+              messages[i] = { ...msg, toolRefs };
+            }
+            break;
+          }
+
           return {
             ...prev,
+            messages,
             toolExecutions: [...prev.toolExecutions, newTool],
             logs: [...prev.logs, logEntry]
           };
@@ -765,6 +819,38 @@ function App() {
         debugLog('[tool] Tool end:', event.data?.tool_name, event.data?.status);
         break;
 
+      case 'subagent_activity':
+        logEntry.category = 'tool';
+        logEntry.level = 'info';
+        setState(prev => {
+          const activity: SubagentActivity = {
+            id: String(event.id || `${Date.now()}-${Math.random()}`),
+            toolCallId: String(event.data?.tool_call_id || ''),
+            toolName: String(event.data?.tool_name || 'run_subagent'),
+            phase: event.data?.phase === 'spawn' || event.data?.phase === 'complete' ? event.data.phase : 'output',
+            message: String(event.data?.message || '').trim(),
+            timestamp: new Date(),
+            taskId: typeof event.data?.task_id === 'string' ? event.data.task_id : undefined,
+            persona: typeof event.data?.persona === 'string' ? event.data.persona : undefined,
+            isParallel: event.data?.is_parallel === true,
+            provider: typeof event.data?.provider === 'string' ? event.data.provider : undefined,
+            model: typeof event.data?.model === 'string' ? event.data.model : undefined,
+            taskCount: typeof event.data?.task_count === 'number' ? event.data.task_count : undefined,
+            failures: typeof event.data?.failures === 'number' ? event.data.failures : undefined,
+          };
+
+          if (!activity.message) {
+            return { ...prev, logs: [...prev.logs, logEntry] };
+          }
+
+          return {
+            ...prev,
+            subagentActivities: [...prev.subagentActivities, activity].slice(-500),
+            logs: [...prev.logs, logEntry]
+          };
+        });
+        break;
+
       case 'agent_message':
         {
           // Handle agent system messages from the backend
@@ -820,7 +906,7 @@ function App() {
               return { ...prev, logs: [...prev.logs, logEntry] };
             });
           } else if ((category === 'warning' || category === 'error') && !suppressInChat) {
-            // Warning/error messages: append to the current assistant message's reasoning field
+            // Warning/error messages are operational notices, not model reasoning.
             logEntry.category = 'system';
             logEntry.level = category === 'error' ? 'error' : 'warning';
 
@@ -828,20 +914,18 @@ function App() {
               const newMessages = [...prev.messages];
               const lastMessage = newMessages[newMessages.length - 1];
               if (lastMessage && lastMessage.type === 'assistant') {
-                // Append with emoji prefix to separate from LLM content
                 const prefixedMsg = category === 'error'
-                  ? `⚠️ ${cleanedMsg}`
-                  : `📝 ${cleanedMsg}`;
+                  ? `\n\nWarning: ${cleanedMsg}`
+                  : `\n\nNote: ${cleanedMsg}`;
                 newMessages[newMessages.length - 1] = {
                   ...lastMessage,
-                  reasoning: (lastMessage.reasoning || '') + prefixedMsg + '\n'
+                  content: (lastMessage.content || '') + prefixedMsg
                 };
               }
               return { ...prev, messages: newMessages, logs: [...prev.logs, logEntry] };
             });
           } else if (category === 'info_rendered' && cleanedMsg && !suppressInChat) {
-            // Meaningful info messages (auto-classified by pattern):
-            // render them in the reasoning section so the user can see them
+            // Meaningful info messages should render in chat, but not inside reasoning.
             logEntry.category = 'system';
             logEntry.level = 'info';
 
@@ -851,7 +935,7 @@ function App() {
               if (lastMessage && lastMessage.type === 'assistant') {
                 newMessages[newMessages.length - 1] = {
                   ...lastMessage,
-                  reasoning: (lastMessage.reasoning || '') + `ℹ️ ${cleanedMsg}\n`
+                  content: (lastMessage.content || '') + `\n\nInfo: ${cleanedMsg}`
                 };
               }
               return { ...prev, messages: newMessages, logs: [...prev.logs, logEntry] };
@@ -1056,6 +1140,7 @@ function App() {
           messages: restoredMessages,
           toolExecutions: [],
           fileEdits: [],
+          subagentActivities: [],
           currentTodos: [],
           queryProgress: null,
           lastError: null,

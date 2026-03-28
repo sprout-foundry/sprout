@@ -8,15 +8,155 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
+	"github.com/alantheprice/ledit/pkg/events"
 )
 
 const (
 	MAX_SUBAGENT_OUTPUT_SIZE  = 10 * 1024 * 1024 // 10MB
 	MAX_SUBAGENT_CONTEXT_SIZE = 1024 * 1024      // 1MB
 	MAX_PARALLEL_SUBAGENTS    = 5
+	BATCH_SIZE                = 50              // Number of lines to batch before publishing
 )
+
+// MILESTONE_PHASES defines phases that trigger immediate publish without batching
+var MILESTONE_PHASES = []string{"spawn", "complete", "step"}
+
+// subagentBatchBuffer holds buffered output for a subagent task
+type subagentBatchBuffer struct {
+	lines      []string
+	lineCount  int
+	taskID     string
+	persona    string
+	isParallel bool
+}
+
+// Global batch buffer manager
+var (
+	batchBuffers = make(map[string]*subagentBatchBuffer)
+	bufferMu     sync.Mutex
+)
+
+// flushSubagentBatch publishes buffered lines and clears the buffer
+func flushSubagentBatch(buffer *subagentBatchBuffer, a *Agent, toolCallID, toolName string) {
+	if len(buffer.lines) == 0 {
+		return
+	}
+
+	// Publish all buffered lines as a batch
+	batchMessage := strings.Join(buffer.lines, "\n")
+	details := map[string]interface{}{
+		"task_id":     buffer.taskID,
+		"persona":     buffer.persona,
+		"is_parallel": buffer.isParallel,
+		"batch_size":  len(buffer.lines),
+	}
+
+	a.publishEvent(events.EventTypeSubagentActivity, events.SubagentActivityEvent(toolCallID, toolName, "output", batchMessage, details))
+}
+
+// cleanupSubagentBatch flushes any remaining buffered output for a task
+func cleanupSubagentBatch(taskID string, a *Agent, toolCallID, toolName string) {
+	bufferMu.Lock()
+	defer bufferMu.Unlock()
+
+	if buffer, exists := batchBuffers[taskID]; exists {
+		if len(buffer.lines) > 0 {
+			flushSubagentBatch(buffer, a, toolCallID, toolName)
+		}
+		// Remove the buffer to free memory
+		delete(batchBuffers, taskID)
+	}
+}
+
+func publishSubagentActivity(ctx context.Context, a *Agent, phase, message string, details map[string]interface{}) {
+	if a == nil {
+		return
+	}
+	message = strings.TrimSpace(stripAnsiCodes(message))
+	if message == "" {
+		return
+	}
+	toolCallID, toolName := toolExecutionMetadataFromContext(ctx)
+
+	// Check if this is a milestone phase - publish immediately
+	isMilestone := false
+	for _, milestone := range MILESTONE_PHASES {
+		if phase == milestone {
+			isMilestone = true
+			break
+		}
+	}
+
+	// Extract task ID from details for batching
+	taskID := ""
+	if tid, ok := details["task_id"]; ok {
+		if tidStr, ok := tid.(string); ok {
+			taskID = tidStr
+		}
+	}
+
+	// If milestone phase, publish immediately without batching
+	if isMilestone {
+		// Clean up any pending batch buffers before publishing milestone
+		if taskID != "" {
+			cleanupSubagentBatch(taskID, a, toolCallID, toolName)
+		}
+		a.publishEvent(events.EventTypeSubagentActivity, events.SubagentActivityEvent(toolCallID, toolName, phase, message, details))
+		return
+	}
+
+	// For output lines, use batching
+	bufferMu.Lock()
+
+	// Get or create buffer for this task
+	if taskID == "" {
+		taskID = toolCallID
+	}
+
+	buffer, exists := batchBuffers[taskID]
+	if !exists {
+		// Extract persona and is_parallel safely
+		persona := ""
+		if p, ok := details["persona"]; ok {
+			if pStr, ok := p.(string); ok {
+				persona = pStr
+			}
+		}
+		isParallel := false
+		if p, ok := details["is_parallel"]; ok {
+			if pBool, ok := p.(bool); ok {
+				isParallel = pBool
+			}
+		}
+
+		buffer = &subagentBatchBuffer{
+			lines:      make([]string, 0, BATCH_SIZE),
+			lineCount:  0,
+			taskID:     taskID,
+			persona:    persona,
+			isParallel: isParallel,
+		}
+		batchBuffers[taskID] = buffer
+	}
+
+	// Add line to buffer
+	buffer.lines = append(buffer.lines, message)
+	buffer.lineCount++
+
+	// Check if batch is full - clear buffer first, then flush
+	if buffer.lineCount >= BATCH_SIZE {
+		buffer.lines = buffer.lines[:0]
+		buffer.lineCount = 0
+		bufferMu.Unlock()
+		flushSubagentBatch(buffer, a, toolCallID, toolName)
+		bufferMu.Lock()
+	}
+
+	bufferMu.Unlock()
+}
 
 // Tool handler implementations for subagent operations
 
@@ -504,6 +644,12 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 			return
 		}
 
+		publishSubagentActivity(ctx, a, "output", cleanLine, map[string]interface{}{
+			"task_id":     taskID,
+			"persona":     persona,
+			"is_parallel": false,
+		})
+
 		// Format: → Subagent: <output>
 		// For parallel subagents: → [task-id] Subagent: <output>
 		var prefix string
@@ -524,6 +670,12 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	if displayModel == "" {
 		displayModel = "default"
 	}
+	publishSubagentActivity(ctx, a, "spawn", fmt.Sprintf("Starting %s", persona), map[string]interface{}{
+		"persona":     persona,
+		"provider":    displayProvider,
+		"model":       displayModel,
+		"is_parallel": false,
+	})
 	fmt.Fprintf(os.Stderr, "[~] Spawning subagent [%s]: provider=%s, model=%s\n", persona, displayProvider, displayModel)
 
 	resultMap, err := tools.RunSubagent(enhancedPrompt.String(), model, provider, streamCallback, systemPromptPath, systemPromptText, persona)
@@ -630,6 +782,18 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	if ec, ok := resultMap["exit_code"]; ok {
 		exitCode = ec
 	}
+	completionMessage := "Subagent completed"
+	if exitCode != "0" {
+		completionMessage = fmt.Sprintf("Subagent failed (exit code %s)", exitCode)
+	}
+	publishSubagentActivity(ctx, a, "complete", completionMessage, map[string]interface{}{
+		"persona":     persona,
+		"exit_code":   exitCode,
+		"is_parallel": false,
+	})
+
+	// Flush any remaining buffered output before completing
+	flushAllSubagentBuffers(a)
 
 	// Check if subagent exceeded token budget
 	budgetExceeded := false
@@ -824,6 +988,11 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 			return
 		}
 
+		publishSubagentActivity(ctx, a, "output", cleanLine, map[string]interface{}{
+			"task_id":     taskID,
+			"is_parallel": true,
+		})
+
 		// Format: → [task-id] Subagent: <output>
 		var prefix string
 		if taskID != "" && taskID != "task-0" {
@@ -843,12 +1012,38 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 	if displayModel == "" {
 		displayModel = "default"
 	}
+	publishSubagentActivity(ctx, a, "spawn", fmt.Sprintf("Starting %d parallel subagents", len(parallelTasks)), map[string]interface{}{
+		"provider":    displayProvider,
+		"model":       displayModel,
+		"is_parallel": true,
+		"task_count":  len(parallelTasks),
+	})
 	fmt.Fprintf(os.Stderr, "[~] Spawning %d parallel subagents: provider=%s, model=%s\n", len(parallelTasks), displayProvider, displayModel)
 
 	resultMap, err := tools.RunParallelSubagents(parallelTasks, false, streamCallback)
 	if err != nil {
 		a.debugLog("Parallel subagents spawn error: %v\n", err)
 		return "", err
+	}
+	failedCount := 0
+	for _, result := range resultMap {
+		if result["exit_code"] != "0" {
+			failedCount++
+		}
+	}
+	completionMessage := fmt.Sprintf("Parallel subagents completed (%d tasks)", len(resultMap))
+	if failedCount > 0 {
+		completionMessage = fmt.Sprintf("Parallel subagents finished with %d failure(s)", failedCount)
+	}
+	publishSubagentActivity(ctx, a, "complete", completionMessage, map[string]interface{}{
+		"is_parallel": true,
+		"task_count":  len(resultMap),
+		"failures":    failedCount,
+	})
+
+	// Clean up any remaining batch buffers for all tasks
+	for taskID := range resultMap {
+		cleanupSubagentBatch(taskID, a, "", "")
 	}
 
 	// Track costs from all parallel subagents
@@ -911,6 +1106,9 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 			}
 		}
 	}
+
+	// Flush any remaining buffered output for parallel subagents
+	flushAllSubagentBuffers(a)
 
 	// For non-subagent context (primary agent), check if any subagent failed
 	// and add a clear message to prevent retry loops
@@ -1011,7 +1209,23 @@ func isPathInWorkspace(path, workspaceDir string) bool {
 // isPathInTmp checks if a path is in /tmp/ for temporary file access
 func isPathInTmp(path string) bool {
 	// Check for /tmp/ or /var/folders/.../T/ (macOS temp dir) or any path containing tmp
-	return strings.Contains(path, "/tmp/") || 
-		   strings.Contains(path, "/var/folders/.../T/") ||
-		   strings.Contains(strings.ToLower(path), "/tmp/")
+	return strings.Contains(path, "/tmp/") ||
+		strings.Contains(path, "/var/folders/.../T/") ||
+		strings.Contains(strings.ToLower(path), "/tmp/")
+}
+
+// flushAllSubagentBuffers flushes all pending batch buffers
+func flushAllSubagentBuffers(a *Agent) {
+	bufferMu.Lock()
+	defer bufferMu.Unlock()
+
+	for taskID, buffer := range batchBuffers {
+		if len(buffer.lines) > 0 {
+			toolCallID := taskID
+			toolName := "subagent"
+			flushSubagentBatch(buffer, a, toolCallID, toolName)
+			// Delete buffer immediately after flushing to prevent memory leak
+			delete(batchBuffers, taskID)
+		}
+	}
 }

@@ -42,6 +42,10 @@ type ReactWebServer struct {
 	eventBus        *events.EventBus
 	daemonRoot      string
 	workspaceRoot   string
+	sshHostAlias    string
+	sshSessionKey   string
+	sshLauncherURL  string
+	sshHomePath     string
 	fileConsents    *fileConsentManager
 	port            int
 	server          *http.Server
@@ -78,12 +82,16 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int) 
 	providercatalog.RefreshFromRemoteAsync("")
 
 	return &ReactWebServer{
-		agent:         agent,
-		eventBus:      eventBus,
-		daemonRoot:    workspaceRoot,
-		workspaceRoot: workspaceRoot,
-		fileConsents:  newFileConsentManager(),
-		port:          port,
+		agent:          agent,
+		eventBus:       eventBus,
+		daemonRoot:     workspaceRoot,
+		workspaceRoot:  workspaceRoot,
+		sshHostAlias:   strings.TrimSpace(os.Getenv("LEDIT_SSH_HOST_ALIAS")),
+		sshSessionKey:  strings.TrimSpace(os.Getenv("LEDIT_SSH_SESSION_KEY")),
+		sshLauncherURL: strings.TrimSpace(os.Getenv("LEDIT_SSH_LAUNCHER_URL")),
+		sshHomePath:    strings.TrimSpace(os.Getenv("LEDIT_SSH_HOME")),
+		fileConsents:   newFileConsentManager(),
+		port:           port,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				// Allow localhost connections only.
@@ -166,6 +174,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/instances/select", ws.handleAPIInstanceSelect)
 	mux.HandleFunc("/api/instances/ssh-hosts", ws.handleAPISSHHosts)
 	mux.HandleFunc("/api/instances/ssh-open", ws.handleAPISSHOpen)
+	mux.HandleFunc("/api/instances/ssh-browse", ws.handleAPISSHBrowse)
 	mux.HandleFunc("/api/instances/ssh-sessions", ws.handleAPISSHSessions)
 	mux.HandleFunc("/api/instances/ssh-close", ws.handleAPISSHSessionDelete)
 	mux.HandleFunc("/api/history/changelog", ws.handleAPIHistoryChangelog)

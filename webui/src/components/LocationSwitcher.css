@@ -215,6 +215,57 @@
   color: var(--text-tertiary);
 }
 
+.location-switcher-remote-context {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 10px;
+  padding: 10px 16px 8px;
+  margin-bottom: 4px;
+  background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent-primary) 18%, transparent);
+}
+
+.location-switcher-remote-badge {
+  align-self: start;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-primary) 18%, transparent);
+  color: var(--accent-primary);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.location-switcher-remote-host {
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.location-switcher-remote-meta {
+  grid-column: 2;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.location-switcher-remote-link {
+  grid-column: 2;
+  justify-self: start;
+  color: var(--accent-primary);
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.location-switcher-remote-link:hover {
+  text-decoration: underline;
+}
+
 /* ── Section Header ───────────────────────────────────────────── */
 .location-switcher-section-header {
   display: flex;
@@ -328,6 +379,34 @@
   cursor: not-allowed;
 }
 
+.location-switcher-ssh-select {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  outline: none;
+}
+
+.location-switcher-ssh-select:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px var(--accent-primary-alpha);
+}
+
+.location-switcher-ssh-suggestions,
+.location-switcher-session-suggestions {
+  padding-bottom: 6px;
+}
+
+.location-switcher-ssh-actions {
+  display: flex;
+  justify-content: flex-start;
+  padding: 0 16px 10px;
+}
+
 /* ── Directory Loading/Error ──────────────────────────────────── */
 .location-switcher-directory-loading,
 .location-switcher-directory-error {
@@ -437,6 +516,52 @@
 
 .location-switcher-item-session {
   gap: 8px;
+}
+
+.location-switcher-session-retarget {
+  width: 100%;
+}
+
+.location-switcher-session-hint,
+.location-switcher-session-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 4px 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.location-switcher-session-error {
+  color: var(--accent-error);
+}
+
+.location-switcher-session-input {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--bg-secondary) 72%, transparent);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  outline: none;
+  transition: border-color 0.12s var(--ease-out), box-shadow 0.12s var(--ease-out);
+}
+
+.location-switcher-session-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.location-switcher-session-input:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px var(--accent-primary-alpha);
+}
+
+.location-switcher-session-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .location-switcher-session-actions {

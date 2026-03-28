@@ -2,6 +2,11 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.13.0] - 2026-03-28
+
+- Updates pkg/webui/ssh_remote.go - Updates const block alignment (cb8912d)
+- Adds 46 files - Adds multi-window client isolation to WebUI (f362df0)
+
 ## [v0.12.7] - 2026-03-28
 
 - Adds 13 files - Adds token-based summarization gate and config path handling (134dc74)

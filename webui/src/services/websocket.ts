@@ -1,4 +1,5 @@
 import { debugLog } from '../utils/log';
+import { appendClientIdToUrl } from './clientSession';
 
 type EventCallback = (event: any) => void;
 
@@ -62,7 +63,7 @@ class WebSocketService {
 
     debugLog('Connecting to WebSocket:', wsUrl);
 
-    this.ws = new WebSocket(wsUrl);
+    this.ws = new WebSocket(appendClientIdToUrl(wsUrl));
 
     this.ws.onopen = () => {
       debugLog('WebSocket connected');

@@ -55,9 +55,13 @@ type GitFile struct {
 }
 
 func (ws *ReactWebServer) gitCommand(args ...string) *exec.Cmd {
+	return ws.gitCommandForWorkspace(ws.workspaceRoot, args...)
+}
+
+func (ws *ReactWebServer) gitCommandForWorkspace(workspaceRoot string, args ...string) *exec.Cmd {
 	cmd := exec.Command("git", args...)
-	if strings.TrimSpace(ws.workspaceRoot) != "" {
-		cmd.Dir = ws.workspaceRoot
+	if strings.TrimSpace(workspaceRoot) != "" {
+		cmd.Dir = workspaceRoot
 	}
 	return cmd
 }
@@ -118,7 +122,11 @@ func containsPath(files []GitFile, path string) bool {
 }
 
 func (ws *ReactWebServer) gitDiffAllowExitOne(args ...string) (string, error) {
-	cmd := ws.gitCommand(args...)
+	return ws.gitDiffAllowExitOneForWorkspace(ws.workspaceRoot, args...)
+}
+
+func (ws *ReactWebServer) gitDiffAllowExitOneForWorkspace(workspaceRoot string, args ...string) (string, error) {
+	cmd := ws.gitCommandForWorkspace(workspaceRoot, args...)
 	output, err := cmd.CombinedOutput()
 	if err == nil {
 		return string(output), nil
@@ -141,7 +149,11 @@ func truncateDiffOutput(diff string, maxBytes int) string {
 }
 
 func gitOutputString(ws *ReactWebServer, args ...string) (string, error) {
-	cmd := ws.gitCommand(args...)
+	return gitOutputStringForWorkspace(ws, ws.workspaceRoot, args...)
+}
+
+func gitOutputStringForWorkspace(ws *ReactWebServer, workspaceRoot string, args ...string) (string, error) {
+	cmd := ws.gitCommandForWorkspace(workspaceRoot, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("%w: %s", err, strings.TrimSpace(string(output)))
@@ -156,7 +168,7 @@ func (ws *ReactWebServer) handleAPIGitStatus(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	status, err := ws.getGitStatus()
+	status, err := ws.getGitStatusForWorkspace(ws.getWorkspaceRootForRequest(r))
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to get git status: %v", err), http.StatusInternalServerError)
 		return
@@ -172,6 +184,7 @@ func (ws *ReactWebServer) handleAPIGitStatus(w http.ResponseWriter, r *http.Requ
 
 // handleAPIGitDiff handles git diff requests for a specific file
 func (ws *ReactWebServer) handleAPIGitDiff(w http.ResponseWriter, r *http.Request) {
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -183,7 +196,7 @@ func (ws *ReactWebServer) handleAPIGitDiff(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	status, err := ws.getGitStatus()
+	status, err := ws.getGitStatusForWorkspace(workspaceRoot)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to validate path: %v", err), http.StatusInternalServerError)
 		return
@@ -193,13 +206,13 @@ func (ws *ReactWebServer) handleAPIGitDiff(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	stagedDiff, err := ws.gitDiffAllowExitOne("diff", "--cached", "--", reqPath)
+	stagedDiff, err := ws.gitDiffAllowExitOneForWorkspace(workspaceRoot, "diff", "--cached", "--", reqPath)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to get staged diff: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	unstagedDiff, err := ws.gitDiffAllowExitOne("diff", "--", reqPath)
+	unstagedDiff, err := ws.gitDiffAllowExitOneForWorkspace(workspaceRoot, "diff", "--", reqPath)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to get unstaged diff: %v", err), http.StatusInternalServerError)
 		return
@@ -207,7 +220,7 @@ func (ws *ReactWebServer) handleAPIGitDiff(w http.ResponseWriter, r *http.Reques
 
 	// For untracked files, generate a synthetic diff against /dev/null.
 	if strings.TrimSpace(stagedDiff) == "" && strings.TrimSpace(unstagedDiff) == "" && containsPath(status.Untracked, reqPath) {
-		untrackedDiff, untrackedErr := ws.gitDiffAllowExitOne("diff", "--no-index", "--", "/dev/null", reqPath)
+		untrackedDiff, untrackedErr := ws.gitDiffAllowExitOneForWorkspace(workspaceRoot, "diff", "--no-index", "--", "/dev/null", reqPath)
 		if untrackedErr == nil {
 			unstagedDiff = untrackedDiff
 		}
@@ -253,6 +266,7 @@ func (ws *ReactWebServer) handleAPIGitDiff(w http.ResponseWriter, r *http.Reques
 
 // handleAPIGitStage handles staging a file
 func (ws *ReactWebServer) handleAPIGitStage(w http.ResponseWriter, r *http.Request) {
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -277,7 +291,7 @@ func (ws *ReactWebServer) handleAPIGitStage(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	status, err := ws.getGitStatus()
+	status, err := ws.getGitStatusForWorkspace(workspaceRoot)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to validate path: %v", err), http.StatusInternalServerError)
 		return
@@ -288,16 +302,13 @@ func (ws *ReactWebServer) handleAPIGitStage(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Stage the file
-	cmd := ws.gitCommand("add", "--", req.Path)
+	cmd := ws.gitCommandForWorkspace(workspaceRoot, "add", "--", req.Path)
 	if err := cmd.Run(); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to stage file: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	// Publish event
-	if ws.eventBus != nil {
-		ws.eventBus.Publish(events.EventTypeFileChanged, events.FileChangedEvent(req.Path, "git_stage", ""))
-	}
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent(req.Path, "git_stage", ""))
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -308,6 +319,7 @@ func (ws *ReactWebServer) handleAPIGitStage(w http.ResponseWriter, r *http.Reque
 
 // handleAPIGitUnstage handles unstaging a file
 func (ws *ReactWebServer) handleAPIGitUnstage(w http.ResponseWriter, r *http.Request) {
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -332,7 +344,7 @@ func (ws *ReactWebServer) handleAPIGitUnstage(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	status, err := ws.getGitStatus()
+	status, err := ws.getGitStatusForWorkspace(workspaceRoot)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to validate path: %v", err), http.StatusInternalServerError)
 		return
@@ -343,16 +355,13 @@ func (ws *ReactWebServer) handleAPIGitUnstage(w http.ResponseWriter, r *http.Req
 	}
 
 	// Unstage the file
-	cmd := ws.gitCommand("reset", "HEAD", "--", req.Path)
+	cmd := ws.gitCommandForWorkspace(workspaceRoot, "reset", "HEAD", "--", req.Path)
 	if err := cmd.Run(); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to unstage file: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	// Publish event
-	if ws.eventBus != nil {
-		ws.eventBus.Publish(events.EventTypeFileChanged, events.FileChangedEvent(req.Path, "git_unstage", ""))
-	}
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent(req.Path, "git_unstage", ""))
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -363,6 +372,7 @@ func (ws *ReactWebServer) handleAPIGitUnstage(w http.ResponseWriter, r *http.Req
 
 // handleAPIGitDiscard handles discarding changes to a file
 func (ws *ReactWebServer) handleAPIGitDiscard(w http.ResponseWriter, r *http.Request) {
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -387,7 +397,7 @@ func (ws *ReactWebServer) handleAPIGitDiscard(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	status, err := ws.getGitStatus()
+	status, err := ws.getGitStatusForWorkspace(workspaceRoot)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to validate path: %v", err), http.StatusInternalServerError)
 		return
@@ -399,16 +409,13 @@ func (ws *ReactWebServer) handleAPIGitDiscard(w http.ResponseWriter, r *http.Req
 
 	// Discard changes / restore deleted file — use git restore which works for
 	// both modified and deleted working-tree files.
-	cmd := ws.gitCommand("restore", "--", req.Path)
+	cmd := ws.gitCommandForWorkspace(workspaceRoot, "restore", "--", req.Path)
 	if err := cmd.Run(); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to discard changes: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	// Publish event
-	if ws.eventBus != nil {
-		ws.eventBus.Publish(events.EventTypeFileChanged, events.FileChangedEvent(req.Path, "git_discard", ""))
-	}
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent(req.Path, "git_discard", ""))
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -425,16 +432,13 @@ func (ws *ReactWebServer) handleAPIGitStageAll(w http.ResponseWriter, r *http.Re
 	}
 
 	// Stage all changes
-	cmd := ws.gitCommand("add", "-A")
+	cmd := ws.gitCommandForWorkspace(ws.getWorkspaceRootForRequest(r), "add", "-A")
 	if err := cmd.Run(); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to stage all: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	// Publish event
-	if ws.eventBus != nil {
-		ws.eventBus.Publish(events.EventTypeFileChanged, events.FileChangedEvent("", "git_stage_all", ""))
-	}
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent("", "git_stage_all", ""))
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -450,16 +454,13 @@ func (ws *ReactWebServer) handleAPIGitUnstageAll(w http.ResponseWriter, r *http.
 	}
 
 	// Unstage all changes
-	cmd := ws.gitCommand("reset", "HEAD")
+	cmd := ws.gitCommandForWorkspace(ws.getWorkspaceRootForRequest(r), "reset", "HEAD")
 	if err := cmd.Run(); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to unstage all: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	// Publish event
-	if ws.eventBus != nil {
-		ws.eventBus.Publish(events.EventTypeFileChanged, events.FileChangedEvent("", "git_unstage_all", ""))
-	}
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent("", "git_unstage_all", ""))
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -469,8 +470,12 @@ func (ws *ReactWebServer) handleAPIGitUnstageAll(w http.ResponseWriter, r *http.
 
 // getGitStatus parses git status output
 func (ws *ReactWebServer) getGitStatus() (*GitStatus, error) {
+	return ws.getGitStatusForWorkspace(ws.workspaceRoot)
+}
+
+func (ws *ReactWebServer) getGitStatusForWorkspace(workspaceRoot string) (*GitStatus, error) {
 	// Check if we're in a git repository
-	cmd := ws.gitCommand("rev-parse", "--git-dir")
+	cmd := ws.gitCommandForWorkspace(workspaceRoot, "rev-parse", "--git-dir")
 	if err := cmd.Run(); err != nil {
 		// Not in a git repository
 		return &GitStatus{
@@ -485,14 +490,14 @@ func (ws *ReactWebServer) getGitStatus() (*GitStatus, error) {
 	status := &GitStatus{}
 
 	// Get current branch
-	cmd = ws.gitCommand("branch", "--show-current")
+	cmd = ws.gitCommandForWorkspace(workspaceRoot, "branch", "--show-current")
 	output, err := cmd.Output()
 	if err == nil {
 		status.Branch = strings.TrimSpace(string(output))
 	}
 
 	// Get ahead/behind info
-	cmd = ws.gitCommand("rev-list", "--count", "--left-right", "@{u}...HEAD")
+	cmd = ws.gitCommandForWorkspace(workspaceRoot, "rev-list", "--count", "--left-right", "@{u}...HEAD")
 	output, err = cmd.Output()
 	if err == nil {
 		parts := strings.Fields(string(output))
@@ -504,7 +509,7 @@ func (ws *ReactWebServer) getGitStatus() (*GitStatus, error) {
 
 	// Get staged changes.
 	// Use tab-separated parsing so file names with spaces are preserved.
-	cmd = ws.gitCommand("diff", "--name-status", "--cached")
+	cmd = ws.gitCommandForWorkspace(workspaceRoot, "diff", "--name-status", "--cached")
 	output, err = cmd.Output()
 	if err == nil {
 		for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
@@ -520,7 +525,7 @@ func (ws *ReactWebServer) getGitStatus() (*GitStatus, error) {
 
 	// Get unstaged changes.
 	// Use tab-separated parsing so file names with spaces are preserved.
-	cmd = ws.gitCommand("diff", "--name-status")
+	cmd = ws.gitCommandForWorkspace(workspaceRoot, "diff", "--name-status")
 	output, err = cmd.Output()
 	if err == nil {
 		for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
@@ -555,7 +560,7 @@ func (ws *ReactWebServer) getGitStatus() (*GitStatus, error) {
 	}
 
 	// Get untracked files
-	cmd = ws.gitCommand("ls-files", "--others", "--exclude-standard")
+	cmd = ws.gitCommandForWorkspace(workspaceRoot, "ls-files", "--others", "--exclude-standard")
 	output, err = cmd.Output()
 	if err == nil {
 		for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
@@ -579,13 +584,14 @@ func (ws *ReactWebServer) handleAPIGitBranches(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	currentBranch, err := gitOutputString(ws, "branch", "--show-current")
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	currentBranch, err := gitOutputStringForWorkspace(ws, workspaceRoot, "branch", "--show-current")
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to get current branch: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	branchesOutput, err := gitOutputString(ws, "for-each-ref", "--format=%(refname:short)", "refs/heads")
+	branchesOutput, err := gitOutputStringForWorkspace(ws, workspaceRoot, "for-each-ref", "--format=%(refname:short)", "refs/heads")
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to list branches: %v", err), http.StatusInternalServerError)
 		return
@@ -628,7 +634,7 @@ func (ws *ReactWebServer) handleAPIGitCheckout(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if _, err := gitOutputString(ws, "checkout", req.Branch); err != nil {
+	if _, err := gitOutputStringForWorkspace(ws, ws.getWorkspaceRootForRequest(r), "checkout", req.Branch); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to checkout branch: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -660,13 +666,14 @@ func (ws *ReactWebServer) handleAPIGitCreateBranch(w http.ResponseWriter, r *htt
 		return
 	}
 
-	validateCmd := ws.gitCommand("check-ref-format", "--branch", req.Name)
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	validateCmd := ws.gitCommandForWorkspace(workspaceRoot, "check-ref-format", "--branch", req.Name)
 	if output, err := validateCmd.CombinedOutput(); err != nil {
 		http.Error(w, fmt.Sprintf("Invalid branch name: %s", strings.TrimSpace(string(output))), http.StatusBadRequest)
 		return
 	}
 
-	if _, err := gitOutputString(ws, "checkout", "-b", req.Name); err != nil {
+	if _, err := gitOutputStringForWorkspace(ws, workspaceRoot, "checkout", "-b", req.Name); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to create branch: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -684,7 +691,7 @@ func (ws *ReactWebServer) handleAPIGitPull(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	output, err := gitOutputString(ws, "pull", "--ff-only")
+	output, err := gitOutputStringForWorkspace(ws, ws.getWorkspaceRootForRequest(r), "pull", "--ff-only")
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to pull: %v", err), http.StatusInternalServerError)
 		return
@@ -703,7 +710,7 @@ func (ws *ReactWebServer) handleAPIGitPush(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	output, err := gitOutputString(ws, "push")
+	output, err := gitOutputStringForWorkspace(ws, ws.getWorkspaceRootForRequest(r), "push")
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to push: %v", err), http.StatusInternalServerError)
 		return
@@ -750,7 +757,8 @@ func (ws *ReactWebServer) handleAPIGitCommit(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Check if there are staged changes
-	cmd := ws.gitCommand("diff", "--cached", "--quiet")
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	cmd := ws.gitCommandForWorkspace(workspaceRoot, "diff", "--cached", "--quiet")
 	if err := cmd.Run(); err != nil {
 		// Exit code 1 means there ARE differences (staged changes)
 		// Exit code 0 means no differences
@@ -761,17 +769,14 @@ func (ws *ReactWebServer) handleAPIGitCommit(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Create the commit
-	cmd = ws.gitCommand("commit", "-m", req.Message)
+	cmd = ws.gitCommandForWorkspace(workspaceRoot, "commit", "-m", req.Message)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to create commit: %v\nOutput: %s", err, string(output)), http.StatusInternalServerError)
 		return
 	}
 
-	// Publish event
-	if ws.eventBus != nil {
-		ws.eventBus.Publish(events.EventTypeFileChanged, events.FileChangedEvent("", "git_commit", req.Message))
-	}
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent("", "git_commit", req.Message))
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -788,19 +793,22 @@ func (ws *ReactWebServer) handleAPIGitCommitMessage(w http.ResponseWriter, r *ht
 		return
 	}
 
-	if ws.agent == nil {
+	clientID := ws.resolveClientID(r)
+	agentInst, err := ws.getClientAgent(clientID)
+	if err != nil || agentInst == nil {
 		http.Error(w, "Agent is not available", http.StatusServiceUnavailable)
 		return
 	}
 
 	// Verify staged changes exist (exit code 1 means there are staged changes).
-	checkCmd := ws.gitCommand("diff", "--cached", "--quiet", "--exit-code")
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	checkCmd := ws.gitCommandForWorkspace(workspaceRoot, "diff", "--cached", "--quiet", "--exit-code")
 	if err := checkCmd.Run(); err == nil {
 		http.Error(w, "No staged changes to generate commit message", http.StatusBadRequest)
 		return
 	}
 
-	diffCmd := ws.gitCommand("diff", "--staged")
+	diffCmd := ws.gitCommandForWorkspace(workspaceRoot, "diff", "--staged")
 	diffOutput, err := diffCmd.CombinedOutput()
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to get staged diff: %v", err), http.StatusInternalServerError)
@@ -813,7 +821,7 @@ func (ws *ReactWebServer) handleAPIGitCommitMessage(w http.ResponseWriter, r *ht
 		return
 	}
 
-	configManager := ws.agent.GetConfigManager()
+	configManager := agentInst.GetConfigManager()
 	if configManager == nil {
 		http.Error(w, "Agent configuration is unavailable", http.StatusServiceUnavailable)
 		return
@@ -832,14 +840,14 @@ func (ws *ReactWebServer) handleAPIGitCommitMessage(w http.ResponseWriter, r *ht
 	}
 
 	// Match /commit flow: detect branch and staged file actions.
-	branchOutput, err := ws.gitCommand("rev-parse", "--abbrev-ref", "HEAD").CombinedOutput()
+	branchOutput, err := ws.gitCommandForWorkspace(workspaceRoot, "rev-parse", "--abbrev-ref", "HEAD").CombinedOutput()
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to get branch name: %v", err), http.StatusInternalServerError)
 		return
 	}
 	branch := strings.TrimSpace(string(branchOutput))
 
-	stagedFilesOutput, err := ws.gitCommand("diff", "--cached", "--name-status").CombinedOutput()
+	stagedFilesOutput, err := ws.gitCommandForWorkspace(workspaceRoot, "diff", "--cached", "--name-status").CombinedOutput()
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to get staged file status: %v", err), http.StatusInternalServerError)
 		return
@@ -886,8 +894,8 @@ func (ws *ReactWebServer) handleAPIGitCommitMessage(w http.ResponseWriter, r *ht
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"message":        "Commit message generated",
 		"commit_message": commitMessage,
-		"provider":       ws.agent.GetProvider(),
-		"model":          ws.agent.GetModel(),
+		"provider":       agentInst.GetProvider(),
+		"model":          agentInst.GetModel(),
 		"warnings":       result.Warnings,
 	})
 }
@@ -900,19 +908,22 @@ func (ws *ReactWebServer) handleAPIGitDeepReview(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if ws.agent == nil {
+	clientID := ws.resolveClientID(r)
+	agentInst, err := ws.getClientAgent(clientID)
+	if err != nil || agentInst == nil {
 		http.Error(w, "Agent is not available", http.StatusServiceUnavailable)
 		return
 	}
 
 	// Exit code 1 means staged changes exist.
-	checkCmd := ws.gitCommand("diff", "--cached", "--quiet", "--exit-code")
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	checkCmd := ws.gitCommandForWorkspace(workspaceRoot, "diff", "--cached", "--quiet", "--exit-code")
 	if err := checkCmd.Run(); err == nil {
 		http.Error(w, "No staged changes found", http.StatusBadRequest)
 		return
 	}
 
-	diffCmd := ws.gitCommand("diff", "--cached")
+	diffCmd := ws.gitCommandForWorkspace(workspaceRoot, "diff", "--cached")
 	stagedDiffBytes, err := diffCmd.Output()
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to get staged diff: %v", err), http.StatusInternalServerError)
@@ -934,14 +945,14 @@ func (ws *ReactWebServer) handleAPIGitDeepReview(w http.ResponseWriter, r *http.
 
 	logger := utils.GetLogger(true)
 	optimizer := utils.NewDiffOptimizerForReview()
-	optimizer.WorkingDir = ws.workspaceRoot
+	optimizer.WorkingDir = workspaceRoot
 	optimizedDiff := optimizer.OptimizeDiff(stagedDiff)
 
 	service := codereview.NewCodeReviewService(cfg, logger)
 	agentClient := service.GetDefaultAgentClient()
 
-	activeProvider := strings.TrimSpace(ws.agent.GetProvider())
-	activeModel := strings.TrimSpace(ws.agent.GetModel())
+	activeProvider := strings.TrimSpace(agentInst.GetProvider())
+	activeModel := strings.TrimSpace(agentInst.GetModel())
 	if activeProvider != "" {
 		if sessionClient, err := factory.CreateProviderClient(api.ClientType(activeProvider), activeModel); err == nil {
 			agentClient = sessionClient
@@ -958,11 +969,11 @@ func (ws *ReactWebServer) handleAPIGitDeepReview(w http.ResponseWriter, r *http.
 		Config:           cfg,
 		Logger:           logger,
 		AgentClient:      agentClient,
-		ProjectType:      ws.gitReviewDetectProjectType(),
-		CommitMessage:    ws.gitReviewExtractStagedChangesSummary(),
+		ProjectType:      ws.gitReviewDetectProjectType(workspaceRoot),
+		CommitMessage:    ws.gitReviewExtractStagedChangesSummary(workspaceRoot),
 		KeyComments:      gitReviewExtractKeyCommentsFromDiff(stagedDiff),
 		ChangeCategories: gitReviewCategorizeChanges(stagedDiff),
-		FullFileContext:  ws.gitReviewExtractFileContextForChanges(stagedDiff),
+		FullFileContext:  ws.gitReviewExtractFileContextForChanges(workspaceRoot, stagedDiff),
 	}
 
 	if len(optimizedDiff.FileSummaries) > 0 {
@@ -1007,8 +1018,8 @@ func (ws *ReactWebServer) handleAPIGitDeepReview(w http.ResponseWriter, r *http.
 		"detailed_guidance":    reviewResponse.DetailedGuidance,
 		"suggested_new_prompt": reviewResponse.NewPrompt,
 		"review_output":        reviewOutput,
-		"provider":             ws.agent.GetProvider(),
-		"model":                ws.agent.GetModel(),
+		"provider":             agentInst.GetProvider(),
+		"model":                agentInst.GetModel(),
 		"warnings":             optimizedDiff.Warnings,
 	})
 }
@@ -1017,10 +1028,6 @@ func (ws *ReactWebServer) handleAPIGitDeepReview(w http.ResponseWriter, r *http.
 func (ws *ReactWebServer) handleAPIGitDeepReviewFix(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	if ws.agent == nil {
-		http.Error(w, "Agent is not available", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -1037,7 +1044,7 @@ func (ws *ReactWebServer) handleAPIGitDeepReviewFix(w http.ResponseWriter, r *ht
 		return
 	}
 
-	job, _, err := ws.startFixReviewJob(reviewOutput)
+	job, _, err := ws.startFixReviewJob(reviewOutput, ws.resolveClientID(r))
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to start fix workflow: %v", err), http.StatusInternalServerError)
 		return
@@ -1068,10 +1075,6 @@ func (ws *ReactWebServer) handleAPIGitDeepReviewFixStart(w http.ResponseWriter, 
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if ws.agent == nil {
-		http.Error(w, "Agent is not available", http.StatusServiceUnavailable)
-		return
-	}
 
 	var req struct {
 		ReviewOutput string `json:"review_output"`
@@ -1086,7 +1089,7 @@ func (ws *ReactWebServer) handleAPIGitDeepReviewFixStart(w http.ResponseWriter, 
 		return
 	}
 
-	job, _, err := ws.startFixReviewJob(reviewOutput)
+	job, _, err := ws.startFixReviewJob(reviewOutput, ws.resolveClientID(r))
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to start fix workflow: %v", err), http.StatusInternalServerError)
 		return
@@ -1144,9 +1147,16 @@ func (ws *ReactWebServer) handleAPIGitDeepReviewFixStatus(w http.ResponseWriter,
 	})
 }
 
-func (ws *ReactWebServer) startFixReviewJob(reviewOutput string) (*gitFixReviewJob, string, error) {
+func (ws *ReactWebServer) startFixReviewJob(reviewOutput, clientID string) (*gitFixReviewJob, string, error) {
 	fixInstructions := "First validate that all of these review items are valid issues, then use subagents to address any of the valid issues. When they are resolved, use a code review subagent to review the solution and fix any issues that come out of it of it and iterate through the process until the issues are resolved."
 	prompt := fmt.Sprintf("Use this deep review output as input:\n\n%s\n\n%s", reviewOutput, fixInstructions)
+
+	provider := ""
+	model := ""
+	if agentInst, err := ws.getClientAgent(clientID); err == nil && agentInst != nil {
+		provider = strings.TrimSpace(agentInst.GetProvider())
+		model = strings.TrimSpace(agentInst.GetModel())
+	}
 
 	jobID := fmt.Sprintf("review-fix-%d", time.Now().UnixNano())
 	sessionID := fmt.Sprintf("review-fix-session-%d", time.Now().UnixNano())
@@ -1163,12 +1173,12 @@ func (ws *ReactWebServer) startFixReviewJob(reviewOutput string) (*gitFixReviewJ
 	ws.fixReviewJobs[jobID] = job
 	ws.fixReviewMu.Unlock()
 
-	go ws.runFixReviewJob(job, prompt)
+	go ws.runFixReviewJob(job, prompt, provider, model)
 
 	return job, prompt, nil
 }
 
-func (ws *ReactWebServer) runFixReviewJob(job *gitFixReviewJob, prompt string) {
+func (ws *ReactWebServer) runFixReviewJob(job *gitFixReviewJob, prompt, provider, model string) {
 	reviewAgent, err := agent.NewAgentWithModel("")
 	if err != nil {
 		job.setError(fmt.Sprintf("Failed to initialize isolated agent: %v", err))
@@ -1177,12 +1187,12 @@ func (ws *ReactWebServer) runFixReviewJob(job *gitFixReviewJob, prompt string) {
 	defer reviewAgent.Shutdown()
 
 	reviewAgent.SetSessionID(job.SessionID)
-	if provider := strings.TrimSpace(ws.agent.GetProvider()); provider != "" {
+	if provider = strings.TrimSpace(provider); provider != "" {
 		if err := reviewAgent.SetProvider(api.ClientType(provider)); err != nil {
 			job.appendLog(fmt.Sprintf("Warning: failed to set provider %s: %v", provider, err))
 		}
 	}
-	if model := strings.TrimSpace(ws.agent.GetModel()); model != "" {
+	if model = strings.TrimSpace(model); model != "" {
 		if err := reviewAgent.SetModel(model); err != nil {
 			job.appendLog(fmt.Sprintf("Warning: failed to set model %s: %v", model, err))
 		}
@@ -1292,7 +1302,7 @@ func (j *gitFixReviewJob) snapshot(since int) (status string, logs []string, nex
 	return j.Status, chunk, total, j.Result, j.Error
 }
 
-func (ws *ReactWebServer) gitReviewDetectProjectType() string {
+func (ws *ReactWebServer) gitReviewDetectProjectType(workspaceRoot string) string {
 	projectMarkers := []struct {
 		name string
 		file string
@@ -1307,15 +1317,15 @@ func (ws *ReactWebServer) gitReviewDetectProjectType() string {
 	}
 
 	for _, marker := range projectMarkers {
-		if _, err := os.Stat(filepath.Join(ws.workspaceRoot, marker.file)); err == nil {
+		if _, err := os.Stat(filepath.Join(workspaceRoot, marker.file)); err == nil {
 			return marker.name
 		}
 	}
 	return ""
 }
 
-func (ws *ReactWebServer) gitReviewExtractStagedChangesSummary() string {
-	cmd := ws.gitCommand("diff", "--cached", "--stat")
+func (ws *ReactWebServer) gitReviewExtractStagedChangesSummary(workspaceRoot string) string {
+	cmd := ws.gitCommandForWorkspace(workspaceRoot, "diff", "--cached", "--stat")
 	output, err := cmd.Output()
 	if err != nil {
 		return ""
@@ -1423,7 +1433,7 @@ func gitReviewCategorizeChanges(diff string) string {
 	return strings.Join(linesOut, "\n")
 }
 
-func (ws *ReactWebServer) gitReviewExtractFileContextForChanges(diff string) string {
+func (ws *ReactWebServer) gitReviewExtractFileContextForChanges(workspaceRoot, diff string) string {
 	lines := strings.Split(diff, "\n")
 	changedFiles := make(map[string]bool)
 
@@ -1438,11 +1448,11 @@ func (ws *ReactWebServer) gitReviewExtractFileContextForChanges(diff string) str
 
 	contextParts := make([]string, 0, len(changedFiles))
 	for relPath := range changedFiles {
-		if !ws.gitReviewIsValidRepoFilePath(relPath) || gitReviewShouldSkipFileForContext(relPath) {
+		if !ws.gitReviewIsValidRepoFilePath(workspaceRoot, relPath) || gitReviewShouldSkipFileForContext(relPath) {
 			continue
 		}
 
-		absPath := filepath.Join(ws.workspaceRoot, relPath)
+		absPath := filepath.Join(workspaceRoot, relPath)
 		if _, err := os.Stat(absPath); os.IsNotExist(err) {
 			continue
 		}
@@ -1504,20 +1514,19 @@ func gitReviewShouldSkipFileForContext(filePath string) bool {
 	return strings.Contains(filePath, "vendor/") || strings.Contains(filePath, ".git/")
 }
 
-func (ws *ReactWebServer) gitReviewIsValidRepoFilePath(relPath string) bool {
+func (ws *ReactWebServer) gitReviewIsValidRepoFilePath(workspaceRoot, relPath string) bool {
 	if strings.Contains(relPath, "..") {
 		return false
 	}
 
 	cleanRel := filepath.Clean(relPath)
-	absPath, err := filepath.Abs(filepath.Join(ws.workspaceRoot, cleanRel))
+	absPath, err := filepath.Abs(filepath.Join(workspaceRoot, cleanRel))
 	if err != nil {
 		return false
 	}
-	absRoot, err := filepath.Abs(ws.workspaceRoot)
+	absRoot, err := filepath.Abs(workspaceRoot)
 	if err != nil {
 		return false
 	}
-
 	return strings.HasPrefix(absPath, absRoot+string(filepath.Separator)) || absPath == absRoot
 }

@@ -1,8 +1,11 @@
 import React, { useMemo } from 'react';
-import { ShieldCheck, Loader2, Wrench, AlertTriangle } from 'lucide-react';
+import { ShieldCheck, Loader2, Wrench } from 'lucide-react';
 import MessageSegments from './MessageSegments';
 import MessageBubble from './MessageBubble';
+import MessageContent from './MessageContent';
+import InlinePillRow, { type InlinePillItem } from './InlinePillRow';
 import { parseReviewGuidance, reviewGuidanceToMarkdown } from '../utils/reviewFormatting';
+import { stripAnsiCodes } from '../utils/ansi';
 
 interface DeepReviewResult {
   message: string;
@@ -45,12 +48,29 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
     () => reviewGuidanceToMarkdown(parsedDetailedGuidance),
     [parsedDetailedGuidance]
   );
-  const fixLogPreview = useMemo(() => {
-    if (reviewFixLogs.length === 0) {
-      return '';
+  const reviewMetaItems = useMemo<InlinePillItem[]>(() => {
+    if (!review) {
+      return [];
     }
-    return reviewFixLogs.slice(-6).join('\n');
+    const items: InlinePillItem[] = [
+      {
+        id: 'status',
+        label: review.status,
+        tone: review.status === 'approved' ? 'success' : review.status === 'rejected' ? 'danger' : 'warning',
+      },
+    ];
+    if (review.model) {
+      items.push({ id: 'model', label: review.model, mono: true });
+    }
+    if (review.provider) {
+      items.push({ id: 'provider', label: review.provider, mono: true });
+    }
+    return items;
+  }, [review]);
+  const fixLogPreview = useMemo(() => {
+    return compactReviewFixLogs(reviewFixLogs).slice(-8);
   }, [reviewFixLogs]);
+  const formattedFixLogs = useMemo(() => compactReviewFixLogs(reviewFixLogs), [reviewFixLogs]);
 
   return (
     <div className="chat-shell review-workspace-shell">
@@ -88,10 +108,7 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
                 ariaLabel="Review summary"
                 copyText={review.feedback || review.review_output}
               >
-                <div className="review-meta-strip">
-                  <span className={`review-status-pill status-${review.status}`}>{review.status}</span>
-                  {review.model ? <span>{review.model}</span> : null}
-                </div>
+                <InlinePillRow ariaLabel="Review metadata" items={reviewMetaItems} className="review-pill-row" />
                 <MessageSegments content={review.feedback || review.review_output} />
               </MessageBubble>
 
@@ -101,10 +118,11 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
                   ariaLabel="Review warnings"
                   copyText={review.warnings.join('\n')}
                 >
-                  <div className="review-meta-strip review-warning-strip">
-                    <span><AlertTriangle size={14} /></span>
-                    <span>Warnings</span>
-                  </div>
+                  <InlinePillRow
+                    ariaLabel="Review warning metadata"
+                    items={[{ id: 'warnings', label: 'Warnings', tone: 'warning' }]}
+                    className="review-pill-row review-warning-strip"
+                  />
                   <MessageSegments content={review.warnings.map((warning) => `- ${warning}`).join('\n')} />
                 </MessageBubble>
               ) : null}
@@ -136,13 +154,17 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
                                 {entry.evidence ? (
                                   <div className="review-guidance-row">
                                     <span className="review-guidance-label">Evidence</span>
-                                    <p>{entry.evidence}</p>
+                                    <div className="review-guidance-copy">
+                                      <MessageContent content={entry.evidence} />
+                                    </div>
                                   </div>
                                 ) : null}
                                 {entry.suggestion ? (
                                   <div className="review-guidance-row">
                                     <span className="review-guidance-label">Next Step</span>
-                                    <p>{entry.suggestion}</p>
+                                    <div className="review-guidance-copy">
+                                      <MessageContent content={entry.suggestion} />
+                                    </div>
                                   </div>
                                 ) : null}
                                 {Object.entries(entry)
@@ -152,7 +174,9 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
                                       <span className="review-guidance-label">
                                         {key.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())}
                                       </span>
-                                      <p>{String(value)}</p>
+                                      <div className="review-guidance-copy">
+                                        <MessageContent content={String(value)} />
+                                      </div>
                                     </div>
                                   ))}
                               </article>
@@ -183,21 +207,37 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
                   ariaLabel="Review fix logs"
                   copyText={reviewFixLogs.join('\n')}
                 >
-                  <div className="review-meta-strip">
-                    <span>Fix session</span>
-                    {reviewFixSessionID ? <span>{reviewFixSessionID}</span> : null}
-                  </div>
-                  <details className="review-details-block">
-                    <summary className="review-details-summary">
+                  <InlinePillRow
+                    ariaLabel="Fix workflow metadata"
+                    items={[
+                      { id: 'fix-session', label: 'Fix session' },
+                      ...(reviewFixSessionID ? [{ id: 'fix-session-id', label: reviewFixSessionID, mono: true as const }] : []),
+                    ]}
+                    className="review-pill-row"
+                  />
+                  <details className="reasoning-block review-disclosure">
+                    <summary className="reasoning-summary review-details-summary">
                       <span>Fix workflow logs</span>
                       <span>{reviewFixLogs.length} entries</span>
                     </summary>
-                    <div className="review-details-content">
-                      <MessageSegments content={reviewFixLogs.join('\n')} />
+                    <div className="reasoning-content review-details-content">
+                      <div className="review-fix-log-list">
+                        {formattedFixLogs.map((log, index) => (
+                          <div key={`${index}-${log.slice(0, 24)}`} className="review-fix-log-item">
+                            {log}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </details>
                   <div className="review-fix-preview">
-                    <MessageSegments content={fixLogPreview} />
+                    <div className="review-fix-log-list review-fix-log-preview">
+                      {fixLogPreview.map((log, index) => (
+                        <div key={`${index}-${log.slice(0, 24)}`} className="review-fix-log-item">
+                          {log}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </MessageBubble>
               ) : null}
@@ -208,11 +248,11 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
                   ariaLabel="Review fix result"
                   copyText={reviewFixResult}
                 >
-                  <details className="review-details-block" open>
-                    <summary className="review-details-summary">
+                  <details className="reasoning-block review-disclosure" open>
+                    <summary className="reasoning-summary review-details-summary">
                       <span>Fix result</span>
                     </summary>
-                    <div className="review-details-content">
+                    <div className="reasoning-content review-details-content">
                       <MessageSegments content={reviewFixResult} />
                     </div>
                   </details>
@@ -235,6 +275,38 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
       </div>
     </div>
   );
+};
+
+const HTMLISH_LINE_PATTERN = /^(<!DOCTYPE|<\/?(html|head|body|div|span|title|meta|link|script|header|section|p|ul|li)\b|<!--|\*\/|\/\*|<\w+)/i;
+
+const compactReviewFixLogs = (logs: string[]): string[] => {
+  const compacted: string[] = [];
+  let pendingHtmlCount = 0;
+
+  const flushHtml = () => {
+    if (pendingHtmlCount > 0) {
+      compacted.push(`HTML error payload suppressed (${pendingHtmlCount} lines)`);
+      pendingHtmlCount = 0;
+    }
+  };
+
+  logs.forEach((raw) => {
+    const cleaned = stripAnsiCodes(String(raw || '')).replace(/\s+/g, ' ').trim();
+    if (!cleaned) {
+      return;
+    }
+
+    if (HTMLISH_LINE_PATTERN.test(cleaned)) {
+      pendingHtmlCount += 1;
+      return;
+    }
+
+    flushHtml();
+    compacted.push(cleaned);
+  });
+
+  flushHtml();
+  return compacted;
 };
 
 export default ReviewWorkspaceTab;

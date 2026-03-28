@@ -35,7 +35,6 @@ import {
   File,
   Check,
   Loader2,
-  X,
 } from 'lucide-react';
 import './ContextPanel.css';
 import TodoPanel from './TodoPanel';
@@ -163,6 +162,7 @@ interface ContextPanelBaseProps {
   isMobileLayout?: boolean;
   panelWidth?: number;
   onPanelWidthChange?: (width: number) => void;
+  onMobileOpenChange?: (open: boolean) => void;
 }
 
 // Chat-context specific props
@@ -225,6 +225,7 @@ export type ContextPanelProps = ChatContextPanelProps | GitContextPanelProps;
 export interface ContextPanelHandle {
   openTab: (tab: string) => void;
   highlightTool: (toolId: string) => void;
+  closePanel: () => void;
 }
 
 // ── Constants ──────────────────────────────────────────────────────
@@ -257,7 +258,7 @@ const normalizeRevision = (raw: any): Revision => {
 // ── Component ──────────────────────────────────────────────────────
 
 const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, ref) => {
-  const { context, onPanelWidthChange } = props;
+  const { context, onPanelWidthChange, onMobileOpenChange, panelWidth: requestedPanelWidth } = props;
 
   // ── Panel infrastructure state ───────────────────────────────────
   const [panelCollapsed, setPanelCollapsed] = useState(() => {
@@ -267,7 +268,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     }
     return false;
   });
-  const panelWidth = 360;
+  const panelWidth = typeof requestedPanelWidth === 'number' ? requestedPanelWidth : 360;
   const panelContainerRef = useRef<HTMLDivElement>(null);
 
   // ── Chat-specific state ──────────────────────────────────────────
@@ -362,6 +363,9 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
         }
       }, 100);
     },
+    closePanel: () => {
+      setPanelCollapsed(true);
+    },
   }), [context, revisions.length, sessionsCount, loadRevisionHistory, loadSessions]);
 
   // ── Persistence ──────────────────────────────────────────────────
@@ -386,6 +390,13 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     if (typeof window === 'undefined') return;
     window.localStorage.setItem(PANEL_COLLAPSED_KEY, panelCollapsed ? '1' : '0');
   }, [panelCollapsed]);
+
+  useEffect(() => {
+    if (!props.isMobileLayout) {
+      return;
+    }
+    onMobileOpenChange?.(!panelCollapsed);
+  }, [panelCollapsed, props.isMobileLayout, onMobileOpenChange]);
 
   // Persist active tab
   useEffect(() => {
@@ -1704,17 +1715,6 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
                 </div>
                 <div className="side-panel-header-actions">
                   <span className="tool-count">{activeTab.count}</span>
-                  {isMobileLayout ? (
-                    <button
-                      type="button"
-                      className="context-panel-mobile-close"
-                      onClick={() => setPanelCollapsed(true)}
-                      aria-label="Close context panel"
-                      title="Close context panel"
-                    >
-                      <X size={14} />
-                    </button>
-                  ) : null}
                 </div>
               </div>
               <div className="side-panel-body">

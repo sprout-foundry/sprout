@@ -1416,6 +1416,39 @@
   gap: 6px;
 }
 
+.message-tool-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 2px 0 6px;
+}
+
+.message-tool-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--bg-tertiary) 78%, transparent);
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+  line-height: 1.6;
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+
+.message-tool-link:hover {
+  color: var(--text-primary);
+  border-color: var(--border-focus);
+  background: var(--bg-elevated);
+}
+
+.message-tool-link:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
 .segment-text {
   /* prose markdown rendered normally */
 }

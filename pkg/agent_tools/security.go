@@ -83,14 +83,16 @@ func classifyShellCommand(args map[string]interface{}) SecurityResult {
 
 	risks := classifyChainedCommand(cmd)
 	maxRisk := maxRisk(risks)
+	isPrivilegedInstall := containsPrivilegedPackageInstall(cmd)
 
 	// Only DANGEROUS commands trigger blocking/prompts.
-	// CAUTION commands (build tools, package managers, etc.) are auto-allowed.
+	// Exception: privileged package installation is CAUTION but still prompts.
+	shouldPrompt := maxRisk == SecurityDangerous || isPrivilegedInstall
 	return SecurityResult{
 		Risk:         maxRisk,
 		Reasoning:    getShellCommandReasoning(cmd, maxRisk),
 		ShouldBlock:  maxRisk == SecurityDangerous,
-		ShouldPrompt: maxRisk == SecurityDangerous,
+		ShouldPrompt: shouldPrompt,
 		RiskType:     getShellCommandRiskType(cmd, maxRisk, isCriticalSystemOperation("shell_command", args)),
 	}
 }
@@ -209,6 +211,10 @@ func classifySingleCommand(cmd string) SecurityRisk {
 		!strings.Contains(cmd, "> /dev/stdout") && !strings.Contains(cmd, ">> /dev/stdout") &&
 		!strings.Contains(cmd, "> /dev/stderr") && !strings.Contains(cmd, ">> /dev/stderr") {
 		return SecurityDangerous
+	}
+
+	if isPrivilegedPackageInstall(cmdLower) {
+		return SecurityCaution
 	}
 
 	if isDangerousPattern(cmdLower) {
@@ -640,7 +646,7 @@ func isDangerousPattern(cmd string) bool {
 	if strings.HasPrefix(cmd, "eval ") || cmd == "eval" {
 		return true
 	}
-	if strings.HasPrefix(cmd, "sudo ") {
+	if strings.HasPrefix(cmd, "sudo ") && !isPrivilegedPackageInstall(cmd) {
 		return true
 	}
 	if strings.Contains(cmd, "chmod 777") || strings.Contains(cmd, "chmod 666") {
@@ -701,12 +707,61 @@ func isDangerousPattern(cmd string) bool {
 	return false
 }
 
+func isPrivilegedPackageInstall(cmd string) bool {
+	normalized := strings.TrimSpace(strings.ToLower(cmd))
+	installPrefixes := []string{
+		"sudo apt-get install",
+		"sudo apt install",
+		"sudo yum install",
+		"sudo dnf install",
+		"sudo brew install",
+		"sudo snap install",
+		"sudo flatpak install",
+		"sudo apk add",
+	}
+	for _, prefix := range installPrefixes {
+		if normalized == prefix || strings.HasPrefix(normalized, prefix+" ") {
+			return true
+		}
+	}
+	return false
+}
+
+func containsPrivilegedPackageInstall(cmd string) bool {
+	for _, risk := range classifyChainedCommand(cmd) {
+		if risk == SecurityCaution {
+			// Continue to exact command scan below.
+		}
+	}
+	parts := strings.FieldsFunc(cmd, func(r rune) bool {
+		return r == ';' || r == '|'
+	})
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		subparts := strings.Split(part, "&&")
+		for _, sub := range subparts {
+			for _, candidate := range strings.Split(sub, "||") {
+				if isPrivilegedPackageInstall(candidate) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 // getShellCommandReasoning returns a human-readable reasoning string
 func getShellCommandReasoning(cmd string, risk SecurityRisk) string {
 	switch risk {
 	case SecuritySafe:
 		return "Read-only or safe workspace operation"
 	case SecurityCaution:
+		if containsPrivilegedPackageInstall(cmd) {
+			return "Privileged package installation requested - review before continuing"
+		}
 		return "Potentially risky operation - review carefully"
 	case SecurityDangerous:
 		return "Dangerous operation detected - may cause data loss or system damage"

@@ -17,21 +17,22 @@ type UIEvent struct {
 
 // Common event types
 const (
-	EventTypeQueryStarted        = "query_started"
-	EventTypeQueryProgress       = "query_progress"
-	EventTypeQueryCompleted      = "query_completed"
-	EventTypeError               = "error"
-	EventTypeToolExecution       = "tool_execution"
-	EventTypeToolStart           = "tool_start"
-	EventTypeToolEnd             = "tool_end"
-	EventTypeTodoUpdate          = "todo_update"
-	EventTypeFileChanged         = "file_changed"
-	EventTypeStreamChunk         = "stream_chunk"
-	EventTypeMetricsUpdate       = "metrics_update"
-	EventTypeValidation          = "validation"
+	EventTypeQueryStarted            = "query_started"
+	EventTypeQueryProgress           = "query_progress"
+	EventTypeQueryCompleted          = "query_completed"
+	EventTypeError                   = "error"
+	EventTypeToolExecution           = "tool_execution"
+	EventTypeToolStart               = "tool_start"
+	EventTypeToolEnd                 = "tool_end"
+	EventTypeSubagentActivity        = "subagent_activity"
+	EventTypeTodoUpdate              = "todo_update"
+	EventTypeFileChanged             = "file_changed"
+	EventTypeStreamChunk             = "stream_chunk"
+	EventTypeMetricsUpdate           = "metrics_update"
+	EventTypeValidation              = "validation"
 	EventTypeSecurityApprovalRequest = "security_approval_request"
-	EventTypeAgentMessage        = "agent_message"
-	EventTypeWorkspaceChanged    = "workspace_changed"
+	EventTypeAgentMessage            = "agent_message"
+	EventTypeWorkspaceChanged        = "workspace_changed"
 )
 
 // EventBus manages event distribution between CLI and Web UI
@@ -192,10 +193,10 @@ func ValidationEvent(filePath string, diagnostics []map[string]interface{}) map[
 // ToolStartEvent creates a tool start event with rich metadata
 func ToolStartEvent(toolName, toolCallID, arguments, displayName, persona string, isSubagent bool, subagentType string) map[string]interface{} {
 	data := map[string]interface{}{
-		"tool_name":     toolName,
-		"tool_call_id":  toolCallID,
-		"arguments":     arguments,
-		"display_name":  displayName,
+		"tool_name":    toolName,
+		"tool_call_id": toolCallID,
+		"arguments":    arguments,
+		"display_name": displayName,
 	}
 	if persona != "" {
 		data["persona"] = persona
@@ -261,6 +262,21 @@ func AgentMessageEvent(category, message string, extra map[string]interface{}) m
 	return data
 }
 
+// SubagentActivityEvent creates a structured subagent activity event.
+// phase is typically "spawn", "output", or "complete".
+func SubagentActivityEvent(toolCallID, toolName, phase, message string, details map[string]interface{}) map[string]interface{} {
+	data := map[string]interface{}{
+		"tool_call_id": toolCallID,
+		"tool_name":    toolName,
+		"phase":        phase,
+		"message":      message,
+	}
+	for k, v := range details {
+		data[k] = v
+	}
+	return data
+}
+
 // WorkspaceChangedEvent creates a workspace changed event
 func WorkspaceChangedEvent(daemonRoot, workspaceRoot, previousWorkspaceRoot string) map[string]interface{} {
 	return map[string]interface{}{
@@ -269,4 +285,3 @@ func WorkspaceChangedEvent(daemonRoot, workspaceRoot, previousWorkspaceRoot stri
 		"previous_workspace_root": previousWorkspaceRoot,
 	}
 }
-

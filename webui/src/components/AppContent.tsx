@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react';
-import { Menu, X, Columns2, Rows2, PanelRightOpen } from 'lucide-react';
+import { Menu, X, Columns2, Rows2, PanelRightOpen, PanelRightClose } from 'lucide-react';
 import Sidebar from './Sidebar';
 import Terminal from './Terminal';
 import EditorTabs from './EditorTabs';
@@ -116,6 +116,7 @@ interface AppContentProps {
   onProviderChange: (provider: string) => void;
   onSendMessage: (message: string) => void;
   onQueueMessage: (message: string) => void;
+  onStopProcessing: () => void;
   queuedMessagesCount: number;
   onGitCommit: (message: string, files: string[]) => Promise<unknown>;
   onGitAICommit: () => Promise<{ commitMessage: string; warnings?: string[] }>;
@@ -147,6 +148,7 @@ const AppContent: React.FC<AppContentProps> = ({
   onProviderChange,
   onSendMessage,
   onQueueMessage,
+  onStopProcessing,
   queuedMessagesCount,
   onGitCommit,
   onGitAICommit,
@@ -209,6 +211,7 @@ const AppContent: React.FC<AppContentProps> = ({
 
   // Command palette state
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [isContextPanelMobileOpen, setIsContextPanelMobileOpen] = useState(false);
   const [hotkeysConfigPath, setHotkeysConfigPath] = useState<string | null>(null);
   const [instances, setInstances] = useState<LeditInstance[]>([]);
   const [selectedInstancePID, setSelectedInstancePID] = useState<number>(0);
@@ -221,6 +224,7 @@ const AppContent: React.FC<AppContentProps> = ({
     }
     return 360;
   });
+
   const [nestedSplit, setNestedSplit] = useState<{ hostPaneId: string; nestedPaneId: string; direction: 'vertical' | 'horizontal' } | null>(null);
 
   useEffect(() => {
@@ -252,12 +256,15 @@ const AppContent: React.FC<AppContentProps> = ({
           return;
         }
         setInstances(data.instances || []);
-        if (data.desired_host_pid && data.desired_host_pid > 0) {
-          setSelectedInstancePID(data.desired_host_pid);
-          window.localStorage.setItem(INSTANCE_PID_STORAGE_KEY, String(data.desired_host_pid));
-        } else if (data.active_host_pid && data.active_host_pid > 0) {
-          setSelectedInstancePID(data.active_host_pid);
-          window.localStorage.setItem(INSTANCE_PID_STORAGE_KEY, String(data.active_host_pid));
+        const currentPort = Number(window.location.port || 0);
+        const currentInstance =
+          (data.instances || []).find((instance) => instance.port === currentPort) ||
+          (data.instances || []).find((instance) => instance.is_current) ||
+          (data.instances || []).find((instance) => instance.pid === data.active_host_pid);
+        const nextPID = currentInstance?.pid || 0;
+        if (nextPID > 0) {
+          setSelectedInstancePID(nextPID);
+          window.localStorage.setItem(INSTANCE_PID_STORAGE_KEY, String(nextPID));
         }
       } catch (error) {
         if (!cancelled) {
@@ -342,17 +349,21 @@ const AppContent: React.FC<AppContentProps> = ({
 
     setIsSwitchingInstance(true);
     try {
+      const targetInstance = instances.find((instance) => instance.pid === pid);
+      if (!targetInstance || !targetInstance.port) {
+        throw new Error('Selected instance is unavailable');
+      }
+
       window.localStorage.setItem(INSTANCE_PID_STORAGE_KEY, String(pid));
       window.sessionStorage.setItem(INSTANCE_SWITCH_RESET_KEY, '1');
-      await apiService.selectInstance(pid);
-      // Full page reload to clear all client-side state (editor buffers,
-      // CodeMirror instances, WebSocket connections, chat history, etc.)
-      window.location.reload();
+      const nextURL = new URL(window.location.href);
+      nextURL.port = String(targetInstance.port);
+      window.location.assign(nextURL.toString());
     } catch (error) {
       console.error('Failed to switch instance:', error);
       setIsSwitchingInstance(false);
     }
-  }, [apiService, selectedInstancePID]);
+  }, [instances, selectedInstancePID]);
 
   const handlePrimaryViewChange = useCallback((view: 'chat' | 'editor' | 'git') => {
     if (view === 'chat') {
@@ -489,6 +500,12 @@ const AppContent: React.FC<AppContentProps> = ({
   const showContextSidebar = currentBuffer?.kind === 'chat';
   const canSplit = panes.length < 3;
   const canCloseSplit = panes.length > 1;
+
+  useEffect(() => {
+    if (!isMobile || !showContextSidebar) {
+      setIsContextPanelMobileOpen(false);
+    }
+  }, [isMobile, showContextSidebar]);
 
   useEffect(() => {
     if (panes.length < 3 && nestedSplit) {
@@ -693,6 +710,7 @@ const AppContent: React.FC<AppContentProps> = ({
                 toolExecutions: state.toolExecutions,
                 queryProgress: state.queryProgress,
                 currentTodos,
+                onStopProcessing,
                 onToolPillClick: (toolId: string) => contextPanelRef.current?.highlightTool(toolId),
               }}
               reviewProps={{
@@ -902,11 +920,17 @@ const AppContent: React.FC<AppContentProps> = ({
                 {showContextSidebar && (
                   <button
                     className="top-mobile-context-btn"
-                    onClick={() => contextPanelRef.current?.openTab('subagents')}
-                    aria-label="Open context panel"
-                    title="Open context panel"
+                    onClick={() => {
+                      if (isContextPanelMobileOpen) {
+                        contextPanelRef.current?.closePanel();
+                        return;
+                      }
+                      contextPanelRef.current?.openTab('subagents');
+                    }}
+                    aria-label={isContextPanelMobileOpen ? 'Close context panel' : 'Open context panel'}
+                    title={isContextPanelMobileOpen ? 'Close context panel' : 'Open context panel'}
                   >
-                    <PanelRightOpen size={16} />
+                    {isContextPanelMobileOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
                   </button>
                 )}
               </div>
@@ -935,6 +959,7 @@ const AppContent: React.FC<AppContentProps> = ({
               lastError={state.lastError}
               queryProgress={state.queryProgress}
               isMobileLayout={isMobile}
+              onMobileOpenChange={setIsContextPanelMobileOpen}
               panelWidth={panelWidth}
               onPanelWidthChange={setPanelWidth}
               onOpenRevisionDiff={handleOpenRevisionDiff}

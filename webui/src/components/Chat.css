@@ -1,4 +1,5 @@
 .chat-shell {
+  --chat-input-height: 0px;
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -1300,7 +1301,7 @@
   }
 
   .chat-container {
-    padding: 10px 10px calc(126px + env(safe-area-inset-bottom, 0px));
+    padding: 10px 10px calc(var(--chat-input-height, 0px) + 12px);
     gap: 8px;
   }
 
@@ -1438,10 +1439,41 @@
   transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
 }
 
+.message-tool-links-compact .message-tool-link {
+  padding: 0 6px;
+  min-height: 20px;
+  color: var(--accent-primary);
+  background: transparent;
+  border-color: color-mix(in srgb, var(--accent-primary) 22%, var(--border-subtle));
+  font-size: 10.5px;
+}
+
+.message-tool-link-mono {
+  font-family: var(--font-mono);
+}
+
+.message-tool-link-success {
+  color: var(--accent-success);
+}
+
+.message-tool-link-warning {
+  color: var(--accent-warning);
+}
+
+.message-tool-link-danger {
+  color: var(--accent-error);
+}
+
 .message-tool-link:hover {
   color: var(--text-primary);
   border-color: var(--border-focus);
   background: var(--bg-elevated);
+}
+
+.message-tool-links-compact .message-tool-link:hover {
+  color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
+  border-color: color-mix(in srgb, var(--accent-primary) 40%, var(--border-subtle));
 }
 
 .message-tool-link:focus-visible {

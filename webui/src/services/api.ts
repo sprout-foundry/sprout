@@ -510,6 +510,17 @@ class ApiService {
     }
   }
 
+  async stopQuery(): Promise<void> {
+    const response = await fetch('/api/query/stop', {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(errText || 'Failed to stop query');
+    }
+  }
+
   async checkHealth(): Promise<boolean> {
     try {
       const response = await fetch('/');

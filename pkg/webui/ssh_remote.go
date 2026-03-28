@@ -716,13 +716,6 @@ func resolveGitHubReleaseAssetURL(tag, assetName string, logger *sshLaunchLogger
 	return url, nil
 }
 
-func releaseSelector(tag string) string {
-	if tag == "" || tag == "latest" {
-		return "latest"
-	}
-	return "tags/" + tag
-}
-
 func downloadFile(url, destPath string, logger *sshLaunchLogger) error {
 	logger.Logf("downloading artifact %s to %s", url, destPath)
 	resp, err := http.Get(url)

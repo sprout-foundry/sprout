@@ -157,6 +157,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [selectedModelState, setSelectedModelState] = useState(model || selectedModel || '');
   const [providers, setProviders] = useState<ProviderOption[]>([]);
   const [isLoadingProviders, setIsLoadingProviders] = useState(false);
+  const hasHydratedProviderStateRef = useRef(false);
   const [selectedSection, setSelectedSection] = useState<SectionTab>('git');
   const [settings, setSettings] = useState<LeditSettings | null>(null);
   const apiService = ApiService.getInstance();
@@ -202,11 +203,24 @@ const Sidebar: React.FC<SidebarProps> = ({
         const data = await apiService.getProviders();
         if (data.providers && data.providers.length > 0) {
           setProviders(data.providers);
-          if (data.current_provider) {
-            setSelectedProvider(data.current_provider);
-          }
-          if (data.current_model) {
-            setSelectedModelState(data.current_model);
+          if (!hasHydratedProviderStateRef.current) {
+            const initialProvider = (provider && provider !== 'unknown')
+              ? provider
+              : data.current_provider || data.providers[0]?.id || '';
+            if (initialProvider) {
+              setSelectedProvider(initialProvider);
+            }
+
+            const initialModel = (model && model !== 'unknown')
+              ? model
+              : (selectedModel && selectedModel !== 'unknown')
+                ? selectedModel
+                : data.current_model || '';
+            if (initialModel) {
+              setSelectedModelState(initialModel);
+            }
+
+            hasHydratedProviderStateRef.current = true;
           }
         }
       } catch (error) {
@@ -217,21 +231,21 @@ const Sidebar: React.FC<SidebarProps> = ({
     };
 
     fetchProviders();
-  }, [apiService, isConnected]);
+  }, [apiService, isConnected, model, provider, selectedModel]);
 
   useEffect(() => {
     if (!provider || provider === 'unknown') {
       return;
     }
     setSelectedProvider(provider);
-  }, [provider, providers]);
+  }, [provider]);
 
   useEffect(() => {
     if (!model || model === 'unknown') {
       return;
     }
     setSelectedModelState(model);
-  }, [model, providers, selectedProvider]);
+  }, [model]);
 
   useEffect(() => {
     if (!selectedProvider) {

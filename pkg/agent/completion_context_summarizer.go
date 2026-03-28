@@ -133,14 +133,13 @@ func (ccs *CompletionContextSummarizer) extractFilesModified(messages []api.Mess
 }
 
 // ApplyCompletionSummarization replaces detailed execution logs with compact summaries
-// to prevent context contamination in follow-up questions
-func (ccs *CompletionContextSummarizer) ApplyCompletionSummarization(messages []api.Message) []api.Message {
+// only when the conversation has crossed the same pruning gate as normal context compaction.
+func (ccs *CompletionContextSummarizer) ApplyCompletionSummarization(messages []api.Message, currentTokens, maxTokens int, provider string, isAgenticFlow bool) []api.Message {
 	if len(messages) <= 3 {
 		return messages // Keep short conversations intact
 	}
 
-	// Apply summarization to prevent context contamination in follow-up questions
-	if !ccs.ShouldApplySummarization(messages) {
+	if !ccs.ShouldApplySummarization(messages, currentTokens, maxTokens, provider, isAgenticFlow) {
 		return messages
 	}
 
@@ -177,9 +176,14 @@ func (ccs *CompletionContextSummarizer) ApplyCompletionSummarization(messages []
 	return summarizedMessages
 }
 
-// ShouldApplySummarization determines if summarization should be applied
-func (ccs *CompletionContextSummarizer) ShouldApplySummarization(messages []api.Message) bool {
-	// Always apply summarization for conversations longer than 3 messages
-	// to prevent context contamination in follow-up questions
-	return len(messages) > 3
+// ShouldApplySummarization determines if summarization should be applied.
+// It intentionally mirrors the same context-pressure gate used for normal
+// pruning so summaries are not introduced while there is still ample headroom.
+func (ccs *CompletionContextSummarizer) ShouldApplySummarization(messages []api.Message, currentTokens, maxTokens int, provider string, isAgenticFlow bool) bool {
+	if len(messages) <= 3 || maxTokens <= 0 {
+		return false
+	}
+
+	pruner := NewConversationPruner(false)
+	return pruner.ShouldPrune(currentTokens, maxTokens, provider, isAgenticFlow)
 }

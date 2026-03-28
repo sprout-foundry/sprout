@@ -1,3 +1,5 @@
+import { clientFetch } from './clientSession';
+
 interface StatsResponse {
   // Basic info
   provider: string;
@@ -198,7 +200,7 @@ class ApiService {
   }
 
   async getStats(): Promise<StatsResponse> {
-    const response = await fetch('/api/stats');
+    const response = await clientFetch('/api/stats');
     if (!response.ok) {
       throw new Error('Failed to fetch stats');
     }
@@ -206,7 +208,7 @@ class ApiService {
   }
 
   async getWorkspace(): Promise<WorkspaceResponse> {
-    const response = await fetch('/api/workspace');
+    const response = await clientFetch('/api/workspace');
     if (!response.ok) {
       throw new Error('Failed to fetch workspace');
     }
@@ -214,7 +216,7 @@ class ApiService {
   }
 
   async setWorkspace(path: string): Promise<WorkspaceResponse & { message: string }> {
-    const response = await fetch('/api/workspace', {
+    const response = await clientFetch('/api/workspace', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -229,7 +231,7 @@ class ApiService {
   }
 
   async getTerminalSessionCount(): Promise<number> {
-    const response = await fetch('/api/terminal/sessions');
+    const response = await clientFetch('/api/terminal/sessions');
     if (!response.ok) throw new Error('Failed to fetch terminal sessions');
     const data = await response.json();
     return data.active_count ?? data.count ?? 0;
@@ -240,7 +242,7 @@ class ApiService {
     current_provider?: string;
     current_model?: string;
   }> {
-    const response = await fetch('/api/providers');
+    const response = await clientFetch('/api/providers');
     if (!response.ok) {
       throw new Error('Failed to fetch providers');
     }
@@ -248,7 +250,7 @@ class ApiService {
   }
 
   async getOnboardingStatus(): Promise<OnboardingStatusResponse> {
-    const response = await fetch('/api/onboarding/status', { cache: 'no-store' });
+    const response = await clientFetch('/api/onboarding/status', { cache: 'no-store' });
     if (!response.ok) {
       const text = await response.text();
       throw new Error(text || 'Failed to fetch onboarding status');
@@ -261,7 +263,7 @@ class ApiService {
     model?: string;
     api_key?: string;
   }): Promise<{ success: boolean; message: string; provider: string; model: string }> {
-    const response = await fetch('/api/onboarding/complete', {
+    const response = await clientFetch('/api/onboarding/complete', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -276,7 +278,7 @@ class ApiService {
   }
 
   async getFiles(): Promise<FilesResponse> {
-    const response = await fetch('/api/files');
+    const response = await clientFetch('/api/files');
     if (!response.ok) {
       throw new Error('Failed to fetch files');
     }
@@ -284,7 +286,7 @@ class ApiService {
   }
 
   async createItem(path: string, isDirectory = false): Promise<{ message: string; path: string }> {
-    const response = await fetch('/api/create', {
+    const response = await clientFetch('/api/create', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -299,7 +301,7 @@ class ApiService {
   }
 
   async deleteItem(path: string): Promise<{ message: string; path: string }> {
-    const response = await fetch('/api/delete', {
+    const response = await clientFetch('/api/delete', {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
@@ -314,7 +316,7 @@ class ApiService {
   }
 
   async renameItem(oldPath: string, newPath: string): Promise<{ message: string; old_path: string; new_path: string }> {
-    const response = await fetch('/api/rename', {
+    const response = await clientFetch('/api/rename', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -335,7 +337,7 @@ class ApiService {
     active_host_port: number;
     desired_host_pid: number;
   }> {
-    const response = await fetch('/api/instances');
+    const response = await clientFetch('/api/instances');
     if (!response.ok) {
       throw new Error('Failed to fetch instances');
     }
@@ -343,7 +345,7 @@ class ApiService {
   }
 
   async getSSHHosts(): Promise<SSHHostEntry[]> {
-    const response = await fetch('/api/instances/ssh-hosts');
+    const response = await clientFetch('/api/instances/ssh-hosts');
     if (!response.ok) {
       throw new Error('Failed to fetch SSH hosts');
     }
@@ -352,7 +354,7 @@ class ApiService {
   }
 
   async openSSHWorkspace(hostAlias: string, remoteWorkspacePath?: string): Promise<SSHOpenResponse> {
-    const response = await fetch('/api/instances/ssh-open', {
+    const response = await clientFetch('/api/instances/ssh-open', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -386,7 +388,7 @@ class ApiService {
   }
 
   async getSSHSessions(): Promise<SSHSessionEntry[]> {
-    const response = await fetch('/api/instances/ssh-sessions');
+    const response = await clientFetch('/api/instances/ssh-sessions');
     if (!response.ok) {
       throw new Error('Failed to fetch SSH sessions');
     }
@@ -398,7 +400,7 @@ class ApiService {
     hostAlias: string,
     path?: string
   ): Promise<{ path: string; home_path?: string; files: SSHBrowseEntry[] }> {
-    const response = await fetch('/api/instances/ssh-browse', {
+    const response = await clientFetch('/api/instances/ssh-browse', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -431,7 +433,7 @@ class ApiService {
   }
 
   async closeSSHSession(key: string): Promise<{ message: string; key: string }> {
-    const response = await fetch('/api/instances/ssh-close', {
+    const response = await clientFetch('/api/instances/ssh-close', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -454,7 +456,7 @@ class ApiService {
   }
 
   async selectInstance(pid: number): Promise<{ message: string; pid: number }> {
-    const response = await fetch('/api/instances/select', {
+    const response = await clientFetch('/api/instances/select', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -468,7 +470,7 @@ class ApiService {
   }
 
   async sendQuery(query: string): Promise<void> {
-    const response = await fetch('/api/query', {
+    const response = await clientFetch('/api/query', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -484,7 +486,7 @@ class ApiService {
   async uploadImage(file: File | Blob): Promise<{ path: string; filename: string }> {
     const formData = new FormData();
     formData.append('image', file);
-    const response = await fetch('/api/upload/image', {
+    const response = await clientFetch('/api/upload/image', {
       method: 'POST',
       body: formData,
     });
@@ -496,7 +498,7 @@ class ApiService {
   }
 
   async steerQuery(query: string): Promise<void> {
-    const response = await fetch('/api/query/steer', {
+    const response = await clientFetch('/api/query/steer', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -511,7 +513,7 @@ class ApiService {
   }
 
   async stopQuery(): Promise<void> {
-    const response = await fetch('/api/query/stop', {
+    const response = await clientFetch('/api/query/stop', {
       method: 'POST',
     });
 
@@ -523,7 +525,7 @@ class ApiService {
 
   async checkHealth(): Promise<boolean> {
     try {
-      const response = await fetch('/');
+      const response = await clientFetch('/');
       return response.ok;
     } catch {
       return false;
@@ -534,7 +536,7 @@ class ApiService {
   async getTerminalHistory(sessionId?: string): Promise<{ history: string[]; count: number }> {
     try {
       const url = sessionId ? `/api/terminal/history?session_id=${encodeURIComponent(sessionId)}` : '/api/terminal/history';
-      const response = await fetch(url);
+      const response = await clientFetch(url);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -548,7 +550,7 @@ class ApiService {
   // Add command to terminal history
   async addTerminalHistory(command: string): Promise<{ message: string; command: string }> {
     try {
-      const response = await fetch('/api/terminal/history', {
+      const response = await clientFetch('/api/terminal/history', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -581,7 +583,7 @@ class ApiService {
     files: Array<{ path: string; status: string; staged?: boolean }>;
   }> {
     try {
-      const response = await fetch('/api/git/status');
+      const response = await clientFetch('/api/git/status');
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -593,7 +595,7 @@ class ApiService {
   }
 
   async getGitBranches(): Promise<{ message: string; current: string; branches: string[] }> {
-    const response = await fetch('/api/git/branches');
+    const response = await clientFetch('/api/git/branches');
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
@@ -601,7 +603,7 @@ class ApiService {
   }
 
   async checkoutGitBranch(branch: string): Promise<{ message: string; branch: string }> {
-    const response = await fetch('/api/git/checkout', {
+    const response = await clientFetch('/api/git/checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ branch }),
@@ -614,7 +616,7 @@ class ApiService {
   }
 
   async createGitBranch(name: string): Promise<{ message: string; branch: string }> {
-    const response = await fetch('/api/git/branch/create', {
+    const response = await clientFetch('/api/git/branch/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name }),
@@ -627,7 +629,7 @@ class ApiService {
   }
 
   async pullGit(): Promise<{ message: string; output?: string }> {
-    const response = await fetch('/api/git/pull', {
+    const response = await clientFetch('/api/git/pull', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     });
@@ -639,7 +641,7 @@ class ApiService {
   }
 
   async pushGit(): Promise<{ message: string; output?: string }> {
-    const response = await fetch('/api/git/push', {
+    const response = await clientFetch('/api/git/push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     });
@@ -652,7 +654,7 @@ class ApiService {
 
   async stageFile(path: string): Promise<{ message: string; path: string }> {
     try {
-      const response = await fetch('/api/git/stage', {
+      const response = await clientFetch('/api/git/stage', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path }),
@@ -669,7 +671,7 @@ class ApiService {
 
   async unstageFile(path: string): Promise<{ message: string; path: string }> {
     try {
-      const response = await fetch('/api/git/unstage', {
+      const response = await clientFetch('/api/git/unstage', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path }),
@@ -686,7 +688,7 @@ class ApiService {
 
   async discardChanges(path: string): Promise<{ message: string; path: string }> {
     try {
-      const response = await fetch('/api/git/discard', {
+      const response = await clientFetch('/api/git/discard', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path }),
@@ -703,7 +705,7 @@ class ApiService {
 
   async stageAll(): Promise<{ message: string }> {
     try {
-      const response = await fetch('/api/git/stage-all', {
+      const response = await clientFetch('/api/git/stage-all', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -719,7 +721,7 @@ class ApiService {
 
   async unstageAll(): Promise<{ message: string }> {
     try {
-      const response = await fetch('/api/git/unstage-all', {
+      const response = await clientFetch('/api/git/unstage-all', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -735,7 +737,7 @@ class ApiService {
 
   async createCommit(message: string): Promise<{ message: string; commit: string }> {
     try {
-      const response = await fetch('/api/git/commit', {
+      const response = await clientFetch('/api/git/commit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message }),
@@ -758,7 +760,7 @@ class ApiService {
     warnings?: string[];
   }> {
     try {
-      const response = await fetch('/api/git/commit-message', {
+      const response = await clientFetch('/api/git/commit-message', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -785,7 +787,7 @@ class ApiService {
     warnings?: string[];
   }> {
     try {
-      const response = await fetch('/api/git/deep-review', {
+      const response = await clientFetch('/api/git/deep-review', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -805,7 +807,7 @@ class ApiService {
     result: string;
   }> {
     try {
-      const response = await fetch('/api/git/deep-review/fix', {
+      const response = await clientFetch('/api/git/deep-review/fix', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ review_output: reviewOutput }),
@@ -827,7 +829,7 @@ class ApiService {
     session_id: string;
   }> {
     try {
-      const response = await fetch('/api/git/deep-review/fix/start', {
+      const response = await clientFetch('/api/git/deep-review/fix/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ review_output: reviewOutput }),
@@ -854,7 +856,7 @@ class ApiService {
     error: string;
   }> {
     try {
-      const response = await fetch(`/api/git/deep-review/fix/status?job_id=${encodeURIComponent(jobId)}&since=${since}`);
+      const response = await clientFetch(`/api/git/deep-review/fix/status?job_id=${encodeURIComponent(jobId)}&since=${since}`);
       if (!response.ok) {
         const text = await response.text();
         throw new Error(text || `HTTP error! status: ${response.status}`);
@@ -876,7 +878,7 @@ class ApiService {
     diff: string;
   }> {
     try {
-      const response = await fetch(`/api/git/diff?path=${encodeURIComponent(path)}`);
+      const response = await clientFetch(`/api/git/diff?path=${encodeURIComponent(path)}`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -904,7 +906,7 @@ class ApiService {
   }> {
     try {
       const cacheBuster = Date.now();
-      const response = await fetch(`/api/history/changelog?_=${cacheBuster}`, {
+      const response = await clientFetch(`/api/history/changelog?_=${cacheBuster}`, {
         cache: 'no-store',
       });
       if (!response.ok) {
@@ -933,7 +935,7 @@ class ApiService {
   }> {
     try {
       const cacheBuster = Date.now();
-      const response = await fetch(`/api/history/changes?_=${cacheBuster}`, {
+      const response = await clientFetch(`/api/history/changes?_=${cacheBuster}`, {
         cache: 'no-store',
       });
       if (!response.ok) {
@@ -966,7 +968,7 @@ class ApiService {
   }> {
     try {
       const cacheBuster = Date.now();
-      const response = await fetch(
+      const response = await clientFetch(
         `/api/history/revision?revision_id=${encodeURIComponent(revisionId)}&_=${cacheBuster}`,
         { cache: 'no-store' },
       );
@@ -982,7 +984,7 @@ class ApiService {
 
   async rollbackToRevision(revisionId: string): Promise<{ message: string; revision_id: string }> {
     try {
-      const response = await fetch('/api/history/rollback', {
+      const response = await clientFetch('/api/history/rollback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ revision_id: revisionId }),
@@ -1015,7 +1017,7 @@ class ApiService {
       const params = new URLSearchParams();
       if (scope) params.set('scope', scope);
       const url = `/api/sessions${params.toString() ? '?' + params.toString() : ''}`;
-      const response = await fetch(url);
+      const response = await clientFetch(url);
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
@@ -1034,7 +1036,7 @@ class ApiService {
     working_directory?: string;
   }> {
     try {
-      const response = await fetch('/api/sessions/restore', {
+      const response = await clientFetch('/api/sessions/restore', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: sessionId }),
@@ -1051,7 +1053,7 @@ class ApiService {
 
   async getSettings(): Promise<LeditSettings> {
     try {
-      const response = await fetch('/api/settings');
+      const response = await clientFetch('/api/settings');
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
@@ -1062,7 +1064,7 @@ class ApiService {
 
   async updateSettings(settings: Record<string, any>): Promise<{ message: string }> {
     try {
-      const response = await fetch('/api/settings', {
+      const response = await clientFetch('/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings),
@@ -1077,7 +1079,7 @@ class ApiService {
 
   async getMCPSettings(): Promise<any> {
     try {
-      const response = await fetch('/api/settings/mcp');
+      const response = await clientFetch('/api/settings/mcp');
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
@@ -1088,7 +1090,7 @@ class ApiService {
 
   async updateMCPSettings(settings: any): Promise<{ message: string }> {
     try {
-      const response = await fetch('/api/settings/mcp', {
+      const response = await clientFetch('/api/settings/mcp', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings),
@@ -1103,7 +1105,7 @@ class ApiService {
 
   async addMCPServer(server: any): Promise<{ message: string }> {
     try {
-      const response = await fetch('/api/settings/mcp/servers/', {
+      const response = await clientFetch('/api/settings/mcp/servers/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(server),
@@ -1118,7 +1120,7 @@ class ApiService {
 
   async updateMCPServer(name: string, server: any): Promise<{ message: string }> {
     try {
-      const response = await fetch(`/api/settings/mcp/servers/${encodeURIComponent(name)}`, {
+      const response = await clientFetch(`/api/settings/mcp/servers/${encodeURIComponent(name)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(server),
@@ -1133,7 +1135,7 @@ class ApiService {
 
   async deleteMCPServer(name: string): Promise<{ message: string }> {
     try {
-      const response = await fetch(`/api/settings/mcp/servers/${encodeURIComponent(name)}`, {
+      const response = await clientFetch(`/api/settings/mcp/servers/${encodeURIComponent(name)}`, {
         method: 'DELETE',
       });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -1146,7 +1148,7 @@ class ApiService {
 
   async getCustomProviders(): Promise<any> {
     try {
-      const response = await fetch('/api/settings/providers');
+      const response = await clientFetch('/api/settings/providers');
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
@@ -1157,7 +1159,7 @@ class ApiService {
 
   async addCustomProvider(provider: any): Promise<{ message: string }> {
     try {
-      const response = await fetch('/api/settings/providers', {
+      const response = await clientFetch('/api/settings/providers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(provider),
@@ -1172,7 +1174,7 @@ class ApiService {
 
   async updateCustomProvider(name: string, provider: any): Promise<{ message: string }> {
     try {
-      const response = await fetch(`/api/settings/providers/${encodeURIComponent(name)}`, {
+      const response = await clientFetch(`/api/settings/providers/${encodeURIComponent(name)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(provider),
@@ -1187,7 +1189,7 @@ class ApiService {
 
   async deleteCustomProvider(name: string): Promise<{ message: string }> {
     try {
-      const response = await fetch(`/api/settings/providers/${encodeURIComponent(name)}`, {
+      const response = await clientFetch(`/api/settings/providers/${encodeURIComponent(name)}`, {
         method: 'DELETE',
       });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -1200,7 +1202,7 @@ class ApiService {
 
   async getSkills(): Promise<any> {
     try {
-      const response = await fetch('/api/settings/skills');
+      const response = await clientFetch('/api/settings/skills');
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
@@ -1211,7 +1213,7 @@ class ApiService {
 
   async updateSkills(skills: any): Promise<{ message: string }> {
     try {
-      const response = await fetch('/api/settings/skills', {
+      const response = await clientFetch('/api/settings/skills', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(skills),
@@ -1244,7 +1246,7 @@ class ApiService {
     current_model: string;
   }> {
     try {
-      const response = await fetch('/api/settings/subagent-types');
+      const response = await clientFetch('/api/settings/subagent-types');
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
@@ -1258,7 +1260,7 @@ class ApiService {
     updates: { provider?: string; model?: string },
   ): Promise<{ success: boolean; type: any }> {
     try {
-      const response = await fetch(`/api/settings/subagent-types/${encodeURIComponent(name)}/`, {
+      const response = await clientFetch(`/api/settings/subagent-types/${encodeURIComponent(name)}/`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
@@ -1278,7 +1280,7 @@ class ApiService {
 
   async getHotkeys(): Promise<HotkeyConfig> {
     try {
-      const response = await fetch('/api/hotkeys');
+      const response = await clientFetch('/api/hotkeys');
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
@@ -1289,7 +1291,7 @@ class ApiService {
 
   async updateHotkeys(config: HotkeyConfig): Promise<{ success: boolean; config: HotkeyConfig }> {
     try {
-      const response = await fetch('/api/hotkeys', {
+      const response = await clientFetch('/api/hotkeys', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config),
@@ -1304,7 +1306,7 @@ class ApiService {
 
   async validateHotkeys(config: HotkeyConfig): Promise<{ valid: boolean; config: HotkeyConfig }> {
     try {
-      const response = await fetch('/api/hotkeys/validate', {
+      const response = await clientFetch('/api/hotkeys/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config),
@@ -1319,7 +1321,7 @@ class ApiService {
 
   async applyHotkeyPreset(preset: string): Promise<{ success: boolean; preset: string; config: HotkeyConfig }> {
     try {
-      const response = await fetch('/api/hotkeys/preset', {
+      const response = await clientFetch('/api/hotkeys/preset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ preset }),
@@ -1373,7 +1375,7 @@ class ApiService {
       if (options?.max_results) params.set('max_results', String(options.max_results));
       if (options?.context_lines != null) params.set('context_lines', String(options.context_lines));
 
-      const response = await fetch(`/api/search?${params}`);
+      const response = await clientFetch(`/api/search?${params}`);
       if (!response.ok) {
         throw new Error(`Search failed: ${response.statusText}`);
       }
@@ -1408,7 +1410,7 @@ class ApiService {
     preview: boolean;
   }> {
     try {
-      const response = await fetch('/api/search/replace', {
+      const response = await clientFetch('/api/search/replace', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),

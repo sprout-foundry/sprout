@@ -497,12 +497,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 			return "", fmt.Errorf("failed to resolve absolute path for %s: %w", filePath, err)
 		}
 
-		// Get workspace directory (current working directory)
-		workspaceDir, err := os.Getwd()
-		if err != nil {
-			return "", fmt.Errorf("failed to get workspace directory: %w", err)
-		}
-		absWorkspaceDir, err := filepath.Abs(workspaceDir)
+		absWorkspaceDir, err := filepath.Abs(a.currentWorkspaceRoot())
 		if err != nil {
 			return "", fmt.Errorf("failed to resolve absolute workspace path: %w", err)
 		}

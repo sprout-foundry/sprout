@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+
+	"github.com/alantheprice/ledit/pkg/filesystem"
 )
 
 // ExecuteShellCommand executes a shell command with safety checks
@@ -35,8 +37,10 @@ func ExecuteShellCommandWithSafety(ctx context.Context, command string, interact
 	}
 	cmd := exec.CommandContext(ctx, shell, "-c", command)
 
-	// Explicitly set working directory to current directory
-	if wd, err := os.Getwd(); err == nil {
+	// Explicitly set working directory to the workspace carried on the context.
+	if wd := filesystem.WorkspaceRootFromContext(ctx); wd != "" {
+		cmd.Dir = wd
+	} else if wd, err := os.Getwd(); err == nil {
 		cmd.Dir = wd
 	}
 

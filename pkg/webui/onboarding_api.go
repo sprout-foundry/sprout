@@ -272,14 +272,14 @@ func (ws *ReactWebServer) handleAPIOnboardingStatus(w http.ResponseWriter, r *ht
 		return
 	}
 
-	cm := ws.getConfigManager(w)
+	cm := ws.getConfigManager(r, w)
 	if cm == nil {
 		return
 	}
 
 	cfg := cm.GetConfig()
 	apiKeys := cm.GetAPIKeys()
-	descriptors := ws.listProviders()
+	descriptors := ws.listProviders(ws.resolveClientID(r))
 	providers := make([]onboardingProvider, 0, len(descriptors))
 	indexByID := make(map[string]onboardingProvider, len(descriptors))
 
@@ -318,14 +318,14 @@ func (ws *ReactWebServer) handleAPIOnboardingStatus(w http.ResponseWriter, r *ht
 	})
 
 	currentProvider := strings.TrimSpace(cfg.LastUsedProvider)
-	if ws.agent != nil {
-		if provider := strings.TrimSpace(ws.agent.GetProvider()); provider != "" && provider != "unknown" {
+	if clientAgent, err := ws.getClientAgent(ws.resolveClientID(r)); err == nil && clientAgent != nil {
+		if provider := strings.TrimSpace(clientAgent.GetProvider()); provider != "" && provider != "unknown" {
 			currentProvider = provider
 		}
 	}
 	currentModel := strings.TrimSpace(cfg.GetModelForProvider(currentProvider))
-	if ws.agent != nil {
-		if model := strings.TrimSpace(ws.agent.GetModel()); model != "" && model != "unknown" {
+	if clientAgent, err := ws.getClientAgent(ws.resolveClientID(r)); err == nil && clientAgent != nil {
+		if model := strings.TrimSpace(clientAgent.GetModel()); model != "" && model != "unknown" {
 			currentModel = model
 		}
 	}
@@ -356,12 +356,14 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 		return
 	}
 
-	if ws.agent == nil {
+	clientID := ws.resolveClientID(r)
+	clientAgent, err := ws.getClientAgent(clientID)
+	if err != nil || clientAgent == nil {
 		writeJSONError(w, http.StatusServiceUnavailable, "Agent is not available")
 		return
 	}
 
-	cm := ws.getConfigManager(w)
+	cm := ws.getConfigManager(r, w)
 	if cm == nil {
 		return
 	}
@@ -407,23 +409,24 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 		}
 	}
 
-	if err := ws.agent.SetProvider(providerType); err != nil {
+	if err := clientAgent.SetProvider(providerType); err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	if req.Model != "" {
-		if err := ws.agent.SetModel(req.Model); err != nil {
+		if err := clientAgent.SetModel(req.Model); err != nil {
 			writeJSONError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 	}
 
-	ws.publishProviderState()
+	_ = ws.syncAgentStateForClient(clientID)
+	ws.publishProviderState(clientID)
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success":  true,
 		"message":  "Onboarding completed",
-		"provider": ws.agent.GetProvider(),
-		"model":    ws.agent.GetModel(),
+		"provider": clientAgent.GetProvider(),
+		"model":    clientAgent.GetModel(),
 	})
 }

@@ -1,4 +1,5 @@
 import { debugLog } from '../utils/log';
+import { appendClientIdToUrl } from './clientSession';
 
 type TerminalEventCallback = (event: any) => void;
 
@@ -76,7 +77,7 @@ class TerminalWebSocketService {
 
     debugLog('Connecting to Terminal WebSocket:', wsUrl);
 
-    this.ws = new WebSocket(wsUrl);
+    this.ws = new WebSocket(appendClientIdToUrl(wsUrl));
 
     this.ws.onopen = () => {
       debugLog('Terminal WebSocket connected');

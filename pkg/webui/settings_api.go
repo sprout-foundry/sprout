@@ -88,13 +88,16 @@ func writeJSONErr(w http.ResponseWriter, status int, code, message string) {
 	})
 }
 
-// getConfigManager safely returns the config manager, or sends a 503 and returns nil.
-func (ws *ReactWebServer) getConfigManager(w http.ResponseWriter) *configuration.Manager {
-	if ws.agent == nil || ws.agent.GetConfigManager() == nil {
+// getConfigManager safely resolves the config manager from the request client's
+// live agent, or sends a 503 and returns nil.
+func (ws *ReactWebServer) getConfigManager(r *http.Request, w http.ResponseWriter) *configuration.Manager {
+	clientID := ws.resolveClientID(r)
+	agentInst, err := ws.getClientAgent(clientID)
+	if err != nil || agentInst == nil || agentInst.GetConfigManager() == nil {
 		writeJSONErr(w, http.StatusServiceUnavailable, "config_unavailable", "Configuration manager is not available")
 		return nil
 	}
-	return ws.agent.GetConfigManager()
+	return agentInst.GetConfigManager()
 }
 
 // ---------------------------------------------------------------------------
@@ -244,7 +247,7 @@ func (ws *ReactWebServer) handleAPISettingsSubagentTypes(w http.ResponseWriter, 
 func (ws *ReactWebServer) handleAPISettingsGet(w http.ResponseWriter, r *http.Request) {
 	// Guard removed — the router already selected GET.
 
-	cm := ws.getConfigManager(w)
+	cm := ws.getConfigManager(r, w)
 	if cm == nil {
 		return
 	}
@@ -259,7 +262,7 @@ func (ws *ReactWebServer) handleAPISettingsGet(w http.ResponseWriter, r *http.Re
 
 func (ws *ReactWebServer) handleAPISettingsPut(w http.ResponseWriter, r *http.Request) {
 
-	cm := ws.getConfigManager(w)
+	cm := ws.getConfigManager(r, w)
 	if cm == nil {
 		return
 	}
@@ -279,18 +282,18 @@ func (ws *ReactWebServer) handleAPISettingsPut(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if _, ok := incoming["system_prompt_text"]; ok && ws.agent != nil {
+	if _, ok := incoming["system_prompt_text"]; ok {
 		cfg := cm.GetConfig()
-		systemPrompt, err := agentpkg.GetEmbeddedSystemPromptWithProvider(ws.agent.GetProvider())
+		providerForPrompt := ""
+		if reqAgent, err := ws.getClientAgent(ws.resolveClientID(r)); err == nil && reqAgent != nil {
+			providerForPrompt = reqAgent.GetProvider()
+		}
+		systemPrompt, err := agentpkg.GetEmbeddedSystemPromptWithProvider(providerForPrompt)
 		if err == nil {
 			if prompt := strings.TrimSpace(cfg.SystemPromptText); prompt != "" {
 				systemPrompt = prompt
 			}
-			ws.agent.SetBaseSystemPrompt(systemPrompt)
-			activePersona := strings.TrimSpace(ws.agent.GetActivePersona())
-			if activePersona == "" || activePersona == "orchestrator" {
-				ws.agent.SetSystemPrompt(systemPrompt)
-			}
+			ws.applySystemPromptToLiveAgents(systemPrompt)
 		}
 	}
 
@@ -442,12 +445,41 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 	return nil
 }
 
+func (ws *ReactWebServer) applySystemPromptToLiveAgents(systemPrompt string) {
+	if strings.TrimSpace(systemPrompt) == "" {
+		return
+	}
+
+	ws.mutex.RLock()
+	agents := make([]*agentpkg.Agent, 0, len(ws.clientContexts))
+	seen := make(map[*agentpkg.Agent]struct{})
+	for _, ctx := range ws.clientContexts {
+		if ctx == nil || ctx.Agent == nil {
+			continue
+		}
+		if _, exists := seen[ctx.Agent]; exists {
+			continue
+		}
+		agents = append(agents, ctx.Agent)
+		seen[ctx.Agent] = struct{}{}
+	}
+	ws.mutex.RUnlock()
+
+	for _, agentInst := range agents {
+		agentInst.SetBaseSystemPrompt(systemPrompt)
+		activePersona := strings.TrimSpace(agentInst.GetActivePersona())
+		if activePersona == "" || activePersona == "orchestrator" {
+			agentInst.SetSystemPrompt(systemPrompt)
+		}
+	}
+}
+
 // ---------------------------------------------------------------------------
 // GET /api/settings/mcp
 // ---------------------------------------------------------------------------
 
 func (ws *ReactWebServer) handleAPISettingsMCPGet(w http.ResponseWriter, r *http.Request) {
-	cm := ws.getConfigManager(w)
+	cm := ws.getConfigManager(r, w)
 	if cm == nil {
 		return
 	}
@@ -461,7 +493,7 @@ func (ws *ReactWebServer) handleAPISettingsMCPGet(w http.ResponseWriter, r *http
 // ---------------------------------------------------------------------------
 
 func (ws *ReactWebServer) handleAPISettingsMCPPut(w http.ResponseWriter, r *http.Request) {
-	cm := ws.getConfigManager(w)
+	cm := ws.getConfigManager(r, w)
 	if cm == nil {
 		return
 	}
@@ -514,7 +546,7 @@ func (ws *ReactWebServer) handleAPISettingsMCPPut(w http.ResponseWriter, r *http
 // ---------------------------------------------------------------------------
 
 func (ws *ReactWebServer) handleAPISettingsMCPServersPost(w http.ResponseWriter, r *http.Request) {
-	cm := ws.getConfigManager(w)
+	cm := ws.getConfigManager(r, w)
 	if cm == nil {
 		return
 	}
@@ -571,7 +603,7 @@ func (ws *ReactWebServer) handleAPISettingsMCPServersPut(w http.ResponseWriter, 
 		return
 	}
 
-	cm := ws.getConfigManager(w)
+	cm := ws.getConfigManager(r, w)
 	if cm == nil {
 		return
 	}
@@ -624,7 +656,7 @@ func (ws *ReactWebServer) handleAPISettingsMCPServersDelete(w http.ResponseWrite
 		return
 	}
 
-	cm := ws.getConfigManager(w)
+	cm := ws.getConfigManager(r, w)
 	if cm == nil {
 		return
 	}
@@ -655,7 +687,7 @@ func (ws *ReactWebServer) handleAPISettingsMCPServersDelete(w http.ResponseWrite
 // ---------------------------------------------------------------------------
 
 func (ws *ReactWebServer) handleAPISettingsProvidersGet(w http.ResponseWriter, r *http.Request) {
-	cm := ws.getConfigManager(w)
+	cm := ws.getConfigManager(r, w)
 	if cm == nil {
 		return
 	}
@@ -671,7 +703,7 @@ func (ws *ReactWebServer) handleAPISettingsProvidersGet(w http.ResponseWriter, r
 // ---------------------------------------------------------------------------
 
 func (ws *ReactWebServer) handleAPISettingsProvidersPost(w http.ResponseWriter, r *http.Request) {
-	cm := ws.getConfigManager(w)
+	cm := ws.getConfigManager(r, w)
 	if cm == nil {
 		return
 	}
@@ -730,7 +762,7 @@ func (ws *ReactWebServer) handleAPISettingsProvidersPut(w http.ResponseWriter, r
 		return
 	}
 
-	cm := ws.getConfigManager(w)
+	cm := ws.getConfigManager(r, w)
 	if cm == nil {
 		return
 	}
@@ -788,7 +820,7 @@ func (ws *ReactWebServer) handleAPISettingsProvidersDelete(w http.ResponseWriter
 		return
 	}
 
-	cm := ws.getConfigManager(w)
+	cm := ws.getConfigManager(r, w)
 	if cm == nil {
 		return
 	}
@@ -819,7 +851,7 @@ func (ws *ReactWebServer) handleAPISettingsProvidersDelete(w http.ResponseWriter
 // ---------------------------------------------------------------------------
 
 func (ws *ReactWebServer) handleAPISettingsSkillsGet(w http.ResponseWriter, r *http.Request) {
-	cm := ws.getConfigManager(w)
+	cm := ws.getConfigManager(r, w)
 	if cm == nil {
 		return
 	}
@@ -835,7 +867,7 @@ func (ws *ReactWebServer) handleAPISettingsSkillsGet(w http.ResponseWriter, r *h
 // ---------------------------------------------------------------------------
 
 func (ws *ReactWebServer) handleAPISettingsSkillsPut(w http.ResponseWriter, r *http.Request) {
-	cm := ws.getConfigManager(w)
+	cm := ws.getConfigManager(r, w)
 	if cm == nil {
 		return
 	}
@@ -910,7 +942,7 @@ func (ws *ReactWebServer) handleAPISettingsSkillsPut(w http.ResponseWriter, r *h
 // ---------------------------------------------------------------------------
 
 func (ws *ReactWebServer) handleAPISettingsSubagentTypesGet(w http.ResponseWriter, r *http.Request) {
-	cm := ws.getConfigManager(w)
+	cm := ws.getConfigManager(r, w)
 	if cm == nil {
 		return
 	}
@@ -918,7 +950,7 @@ func (ws *ReactWebServer) handleAPISettingsSubagentTypesGet(w http.ResponseWrite
 	cfg := cm.GetConfig()
 
 	// Get available providers (same format as /api/providers)
-	providers := ws.listProviders()
+	providers := ws.listProviders(ws.resolveClientID(r))
 
 	// Get current subagent provider and model from config
 	currentProvider := cfg.GetSubagentProvider()
@@ -943,7 +975,7 @@ func (ws *ReactWebServer) handleAPISettingsSubagentTypesPut(w http.ResponseWrite
 		return
 	}
 
-	cm := ws.getConfigManager(w)
+	cm := ws.getConfigManager(r, w)
 	if cm == nil {
 		return
 	}
@@ -1020,7 +1052,7 @@ func (ws *ReactWebServer) handleAPISettingsSubagentTypesDelete(w http.ResponseWr
 		return
 	}
 
-	cm := ws.getConfigManager(w)
+	cm := ws.getConfigManager(r, w)
 	if cm == nil {
 		return
 	}

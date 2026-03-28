@@ -1,3 +1,5 @@
+import { clientFetch } from './clientSession';
+
 const consentTokenHeader = 'X-Ledit-Consent-Token';
 
 interface ConsentRequiredError {
@@ -42,7 +44,7 @@ async function parseConsentRequired(response: Response): Promise<ConsentRequired
 }
 
 async function issueConsent(path: string, operation: 'read' | 'write'): Promise<string> {
-  const response = await fetch('/api/file/consent', {
+  const response = await clientFetch('/api/file/consent', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ path, operation }),
@@ -83,11 +85,11 @@ export async function readFileWithConsent(filePath: string): Promise<Response> {
   const baseUrl = `/api/file?path=${encodeURIComponent(filePath)}`;
 
   return withConsentRetry(
-    () => fetch(baseUrl),
+    () => clientFetch(baseUrl),
     filePath,
     'read',
     (token) =>
-      fetch(baseUrl, {
+      clientFetch(baseUrl, {
         headers: { [consentTokenHeader]: token },
       })
   );
@@ -98,7 +100,7 @@ export async function writeFileWithConsent(filePath: string, content: string): P
 
   return withConsentRetry(
     () =>
-      fetch(baseUrl, {
+      clientFetch(baseUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -108,7 +110,7 @@ export async function writeFileWithConsent(filePath: string, content: string): P
     filePath,
     'write',
     (token) =>
-      fetch(baseUrl, {
+      clientFetch(baseUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/alantheprice/ledit/pkg/filesystem"
 )
 
 // StreamCallback is a function that receives streamed output from subagents
@@ -206,9 +208,11 @@ func RunSubagent(prompt, model, provider string, streamCallback StreamCallback, 
 	// Pass the prompt via stdin (child reads it with --prompt-stdin)
 	cmd.Stdin = promptReader
 
-	// Explicitly set working directory to current directory to ensure subagent
-	// runs in the same location as the parent process
-	if wd, err := os.Getwd(); err == nil {
+	// Explicitly set working directory to the caller workspace so subagents do not
+	// depend on the process-global cwd.
+	if wd := filesystem.WorkspaceRootFromContext(ctx); wd != "" {
+		cmd.Dir = wd
+	} else if wd, err := os.Getwd(); err == nil {
 		cmd.Dir = wd
 	}
 
@@ -551,9 +555,11 @@ func spawnSubagent(task ParallelSubagentTask, noTimeout bool, callerMethod strin
 	// Pass the prompt via stdin (child reads it with --prompt-stdin)
 	cmd.Stdin = promptReader
 
-	// Explicitly set working directory to current directory to ensure subagent
-	// runs in the same location as the parent process
-	if wd, err := os.Getwd(); err == nil {
+	// Explicitly set working directory to the caller workspace so subagents do not
+	// depend on the process-global cwd.
+	if wd := filesystem.WorkspaceRootFromContext(ctx); wd != "" {
+		cmd.Dir = wd
+	} else if wd, err := os.Getwd(); err == nil {
 		cmd.Dir = wd
 	}
 

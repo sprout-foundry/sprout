@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alantheprice/ledit/pkg/agent"
 	agent_commands "github.com/alantheprice/ledit/pkg/agent_commands"
 	"github.com/alantheprice/ledit/pkg/console"
 	"github.com/alantheprice/ledit/pkg/events"
@@ -27,16 +28,21 @@ const (
 	consentTokenHeader   = "X-Ledit-Consent-Token"
 )
 
-func (ws *ReactWebServer) incrementActiveQueries() {
+func (ws *ReactWebServer) incrementActiveQueries(clientID string) {
 	ws.mutex.Lock()
 	ws.activeQueries++
+	ctx := ws.getOrCreateClientContextLocked(clientID)
+	ctx.ActiveQuery = true
 	ws.mutex.Unlock()
 }
 
-func (ws *ReactWebServer) decrementActiveQueries() {
+func (ws *ReactWebServer) decrementActiveQueries(clientID string) {
 	ws.mutex.Lock()
 	if ws.activeQueries > 0 {
 		ws.activeQueries--
+	}
+	if ctx := ws.clientContexts[clientID]; ctx != nil {
+		ctx.ActiveQuery = false
 	}
 	ws.mutex.Unlock()
 }
@@ -45,6 +51,19 @@ func (ws *ReactWebServer) hasActiveQuery() bool {
 	ws.mutex.RLock()
 	defer ws.mutex.RUnlock()
 	return ws.activeQueries > 0
+}
+
+func (ws *ReactWebServer) publishClientEvent(clientID, eventType string, data map[string]interface{}) {
+	if ws.eventBus == nil {
+		return
+	}
+	if data == nil {
+		data = map[string]interface{}{}
+	}
+	if strings.TrimSpace(clientID) != "" {
+		data["client_id"] = clientID
+	}
+	ws.eventBus.Publish(eventType, data)
 }
 
 // handleAPIQuery handles API queries to the agent
@@ -73,6 +92,17 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 	}
 
 	log.Printf("handleAPIQuery: processing query: %s", query.Query)
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	clientID := ws.resolveClientID(r)
+	if ws.hasActiveQueryForClient(clientID) {
+		http.Error(w, "A query is already running for this window", http.StatusConflict)
+		return
+	}
+	clientAgent, err := ws.getClientAgent(clientID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to initialize client agent: %v", err), http.StatusInternalServerError)
+		return
+	}
 
 	// Increment query count
 	ws.mutex.Lock()
@@ -80,55 +110,51 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 	ws.mutex.Unlock()
 
 	// Run the query asynchronously. The web UI consumes progress and completion via WebSocket.
-	ws.incrementActiveQueries()
+	ws.incrementActiveQueries(clientID)
 	go func() {
-		defer ws.decrementActiveQueries()
+		defer ws.decrementActiveQueries(clientID)
 		startedAt := time.Now()
 		registry := agent_commands.NewCommandRegistry()
 
 		if registry.IsSlashCommand(query.Query) {
 			log.Printf("handleAPIQuery: executing slash command: %s", query.Query)
-			if ws.eventBus != nil {
-				ws.eventBus.Publish(events.EventTypeQueryStarted, events.QueryStartedEvent(
-					query.Query,
-					ws.agent.GetProvider(),
-					ws.agent.GetModel(),
-				))
-			}
+			ws.publishClientEvent(clientID, events.EventTypeQueryStarted, events.QueryStartedEvent(
+				query.Query,
+				clientAgent.GetProvider(),
+				clientAgent.GetModel(),
+			))
 
-			err := registry.Execute(query.Query, ws.agent)
+			clientAgent.SetWorkspaceRoot(workspaceRoot)
+			err := registry.Execute(query.Query, clientAgent)
+			_ = ws.syncAgentStateForClient(clientID)
 			if err != nil {
 				log.Printf("handleAPIQuery: slash command error: %v", err)
-				if ws.eventBus != nil {
-					ws.eventBus.Publish(events.EventTypeError, events.ErrorEvent("Slash command failed", err))
-				}
+				ws.publishClientEvent(clientID, events.EventTypeError, events.ErrorEvent("Slash command failed", err))
 				return
 			}
 
-			if ws.eventBus != nil {
-				trimmed := strings.TrimSpace(query.Query)
-				ws.eventBus.Publish(events.EventTypeStreamChunk, events.StreamChunkEvent(
-					fmt.Sprintf("Executed command: `%s`\n", trimmed),
-					"assistant_text",
-				))
-				ws.eventBus.Publish(events.EventTypeQueryCompleted, events.QueryCompletedEvent(
-					query.Query,
-					fmt.Sprintf("Executed command: %s", trimmed),
-					0,
-					0,
-					time.Since(startedAt),
-				))
-			}
+			trimmed := strings.TrimSpace(query.Query)
+			ws.publishClientEvent(clientID, events.EventTypeStreamChunk, events.StreamChunkEvent(
+				fmt.Sprintf("Executed command: `%s`\n", trimmed),
+				"assistant_text",
+			))
+			ws.publishClientEvent(clientID, events.EventTypeQueryCompleted, events.QueryCompletedEvent(
+				query.Query,
+				fmt.Sprintf("Executed command: %s", trimmed),
+				0,
+				0,
+				time.Since(startedAt),
+			))
 			return
 		}
 
 		log.Printf("handleAPIQuery: calling ProcessQuery")
-		_, err := ws.agent.ProcessQuery(query.Query)
+		clientAgent.SetWorkspaceRoot(workspaceRoot)
+		_, err := clientAgent.ProcessQuery(query.Query)
+		_ = ws.syncAgentStateForClient(clientID)
 		if err != nil {
 			log.Printf("handleAPIQuery: ProcessQuery error: %v", err)
-			if ws.eventBus != nil {
-				ws.eventBus.Publish(events.EventTypeError, events.ErrorEvent("Query failed", err))
-			}
+			ws.publishClientEvent(clientID, events.EventTypeError, events.ErrorEvent("Query failed", err))
 		}
 	}()
 
@@ -169,12 +195,19 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if !ws.hasActiveQuery() {
+	clientID := ws.resolveClientID(r)
+	if !ws.hasActiveQueryForClient(clientID) {
 		http.Error(w, "No active query to steer", http.StatusConflict)
 		return
 	}
 
-	if err := ws.agent.InjectInputContext(query.Query); err != nil {
+	clientAgent, err := ws.getClientAgent(clientID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to access client agent: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	if err := clientAgent.InjectInputContext(query.Query); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to steer active query: %v", err), http.StatusConflict)
 		return
 	}
@@ -196,12 +229,19 @@ func (ws *ReactWebServer) handleAPIQueryStop(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if !ws.hasActiveQuery() {
+	clientID := ws.resolveClientID(r)
+	if !ws.hasActiveQueryForClient(clientID) {
 		http.Error(w, "No active query to stop", http.StatusConflict)
 		return
 	}
 
-	ws.agent.TriggerInterrupt()
+	clientAgent, err := ws.getClientAgent(clientID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to access client agent: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	clientAgent.TriggerInterrupt()
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
@@ -219,7 +259,7 @@ func (ws *ReactWebServer) handleAPIStats(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	stats := ws.gatherStats()
+	stats := ws.gatherStatsForClientID(ws.resolveClientID(r))
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stats)
@@ -237,23 +277,24 @@ func (ws *ReactWebServer) handleAPIWorkspace(w http.ResponseWriter, r *http.Requ
 	}
 }
 
-func (ws *ReactWebServer) handleAPIWorkspaceGet(w http.ResponseWriter, _ *http.Request) {
+func (ws *ReactWebServer) handleAPIWorkspaceGet(w http.ResponseWriter, r *http.Request) {
+	clientCtx := ws.getClientContextForRequest(r)
 	response := map[string]interface{}{
 		"daemon_root":    ws.GetDaemonRoot(),
-		"workspace_root": ws.GetWorkspaceRoot(),
+		"workspace_root": clientCtx.WorkspaceRoot,
 	}
-	if ws.sshHostAlias != "" {
+	if clientCtx.SSHHostAlias != "" {
 		sshContext := map[string]interface{}{
-			"host_alias":  ws.sshHostAlias,
-			"session_key": ws.sshSessionKey,
+			"host_alias":  clientCtx.SSHHostAlias,
+			"session_key": clientCtx.SSHSessionKey,
 			"is_remote":   true,
 			"launch_mode": "ssh",
 		}
-		if ws.sshLauncherURL != "" {
-			sshContext["launcher_url"] = ws.sshLauncherURL
+		if clientCtx.SSHLauncherURL != "" {
+			sshContext["launcher_url"] = clientCtx.SSHLauncherURL
 		}
-		if ws.sshHomePath != "" {
-			sshContext["home_path"] = ws.sshHomePath
+		if clientCtx.SSHHomePath != "" {
+			sshContext["home_path"] = clientCtx.SSHHomePath
 		}
 		response["ssh_context"] = sshContext
 	}
@@ -279,35 +320,34 @@ func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// Check if there's an active query - reject workspace changes while queries are running
-	if ws.hasActiveQuery() {
+	clientID := ws.resolveClientID(r)
+
+	// Reject workspace changes only for the window that currently owns an active run.
+	if ws.hasActiveQueryForClient(clientID) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusConflict)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"error":          "cannot change workspace while an agent query is active. Wait for the query to complete before switching.",
 			"code":           "query_in_progress",
-			"active_queries": ws.getActiveQueryCount(),
+			"active_queries": 1,
 		})
 		return
 	}
 
 	// Capture the previous workspace root before setting the new one
-	previousWorkspaceRoot := ws.GetWorkspaceRoot()
+	previousWorkspaceRoot := ws.getWorkspaceRootForRequest(r)
 
-	workspaceRoot, err := ws.SetWorkspaceRoot(req.Path)
+	workspaceRoot, err := ws.setClientWorkspaceRoot(clientID, req.Path)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to set workspace: %v", err), http.StatusBadRequest)
 		return
 	}
 
-	// Broadcast workspace change event to all WebSocket clients
-	if ws.eventBus != nil {
-		ws.eventBus.Publish(events.EventTypeWorkspaceChanged, events.WorkspaceChangedEvent(
-			ws.GetDaemonRoot(),
-			workspaceRoot,
-			previousWorkspaceRoot,
-		))
-	}
+	ws.publishClientEvent(clientID, events.EventTypeWorkspaceChanged, map[string]interface{}{
+		"daemon_root":             ws.GetDaemonRoot(),
+		"workspace_root":          workspaceRoot,
+		"previous_workspace_root": previousWorkspaceRoot,
+	})
 
 	w.Header().Set("Content-Type", "application/json")
 	response := map[string]interface{}{
@@ -315,18 +355,19 @@ func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.R
 		"message":        "Workspace updated",
 		"workspace_root": workspaceRoot,
 	}
-	if ws.sshHostAlias != "" {
+	clientCtx := ws.getClientContextForRequest(r)
+	if clientCtx.SSHHostAlias != "" {
 		sshContext := map[string]interface{}{
-			"host_alias":  ws.sshHostAlias,
-			"session_key": ws.sshSessionKey,
+			"host_alias":  clientCtx.SSHHostAlias,
+			"session_key": clientCtx.SSHSessionKey,
 			"is_remote":   true,
 			"launch_mode": "ssh",
 		}
-		if ws.sshLauncherURL != "" {
-			sshContext["launcher_url"] = ws.sshLauncherURL
+		if clientCtx.SSHLauncherURL != "" {
+			sshContext["launcher_url"] = clientCtx.SSHLauncherURL
 		}
-		if ws.sshHomePath != "" {
-			sshContext["home_path"] = ws.sshHomePath
+		if clientCtx.SSHHomePath != "" {
+			sshContext["home_path"] = clientCtx.SSHHomePath
 		}
 		response["ssh_context"] = sshContext
 	}
@@ -386,17 +427,30 @@ func (ws *ReactWebServer) handleAPIWorkspaceBrowse(w http.ResponseWriter, r *htt
 		"message":        "success",
 		"path":           canonicalDir,
 		"daemon_root":    daemonRoot,
-		"workspace_root": ws.GetWorkspaceRoot(),
+		"workspace_root": ws.getWorkspaceRootForRequest(r),
 		"files":          files,
 	})
 }
 
 // gatherStats collects server statistics
-func (ws *ReactWebServer) gatherStats() map[string]interface{} {
+func (ws *ReactWebServer) gatherStats(r *http.Request) map[string]interface{} {
+	return ws.gatherStatsForClientID(ws.resolveClientID(r))
+}
+
+func (ws *ReactWebServer) gatherStatsForClientID(clientID string) map[string]interface{} {
 	ws.mutex.RLock()
 	defer ws.mutex.RUnlock()
 
 	uptime := time.Since(ws.startTime)
+	terminalSessions := 0
+	for _, clientCtx := range ws.clientContexts {
+		if clientCtx != nil && clientCtx.Terminal != nil {
+			terminalSessions += clientCtx.Terminal.SessionCount()
+		}
+	}
+	if terminalSessions == 0 && ws.terminalManager != nil {
+		terminalSessions = ws.terminalManager.SessionCount()
+	}
 
 	// Get agent stats if available
 	stats := map[string]interface{}{
@@ -404,40 +458,62 @@ func (ws *ReactWebServer) gatherStats() map[string]interface{} {
 		"connections":       ws.countConnections(),
 		"queries":           ws.queryCount,
 		"query_count":       ws.queryCount,
-		"terminal_sessions": ws.terminalManager.SessionCount(),
+		"terminal_sessions": terminalSessions,
 		"server_time":       time.Now().Unix(),
 		"start_time":        ws.startTime.Unix(),
 		"uptime_formatted":  uptime.String(),
 		"uptime":            uptime.String(),
 	}
 
+	clientCtx := ws.clientContexts[clientID]
+	if clientCtx == nil {
+		clientCtx = ws.clientContexts[defaultWebClientID]
+	}
+
+	var agentInst *agent.Agent
+	if clientCtx != nil {
+		agentInst = clientCtx.Agent
+	}
+
 	// Add agent-specific stats if available
-	if ws.agent != nil {
-		stats["provider"] = ws.agent.GetProvider()
-		stats["model"] = ws.agent.GetModel()
-		stats["session_id"] = ws.agent.GetSessionID()
-		stats["total_tokens"] = ws.agent.GetTotalTokens()
-		stats["prompt_tokens"] = ws.agent.GetPromptTokens()
-		stats["completion_tokens"] = ws.agent.GetCompletionTokens()
-		stats["cached_tokens"] = ws.agent.GetCachedTokens()
+	if agentInst != nil {
+		stats["provider"] = agentInst.GetProvider()
+		stats["model"] = agentInst.GetModel()
+		stats["session_id"] = agentInst.GetSessionID()
+		stats["total_tokens"] = agentInst.GetTotalTokens()
+		stats["prompt_tokens"] = agentInst.GetPromptTokens()
+		stats["completion_tokens"] = agentInst.GetCompletionTokens()
+		stats["cached_tokens"] = agentInst.GetCachedTokens()
 		stats["cache_efficiency"] = float64(0)
-		if totalTokens := ws.agent.GetTotalTokens(); totalTokens > 0 {
-			stats["cache_efficiency"] = float64(ws.agent.GetCachedTokens()) / float64(totalTokens) * 100
+		if totalTokens := agentInst.GetTotalTokens(); totalTokens > 0 {
+			stats["cache_efficiency"] = float64(agentInst.GetCachedTokens()) / float64(totalTokens) * 100
 		}
-		stats["cached_cost_savings"] = ws.agent.GetCachedCostSavings()
-		stats["current_context_tokens"] = ws.agent.GetCurrentContextTokens()
-		stats["max_context_tokens"] = ws.agent.GetMaxContextTokens()
+		stats["cached_cost_savings"] = agentInst.GetCachedCostSavings()
+		stats["current_context_tokens"] = agentInst.GetCurrentContextTokens()
+		stats["max_context_tokens"] = agentInst.GetMaxContextTokens()
 		stats["context_usage_percent"] = float64(0)
-		if maxTokens := ws.agent.GetMaxContextTokens(); maxTokens > 0 {
-			stats["context_usage_percent"] = float64(ws.agent.GetCurrentContextTokens()) / float64(maxTokens) * 100
+		if maxTokens := agentInst.GetMaxContextTokens(); maxTokens > 0 {
+			stats["context_usage_percent"] = float64(agentInst.GetCurrentContextTokens()) / float64(maxTokens) * 100
 		}
-		stats["context_warning_issued"] = ws.agent.GetContextWarningIssued()
-		stats["total_cost"] = ws.agent.GetTotalCost()
-		stats["last_tps"] = ws.agent.GetLastTPS()
-		stats["current_iteration"] = ws.agent.GetCurrentIteration()
-		stats["max_iterations"] = ws.agent.GetMaxIterations()
-		stats["streaming_enabled"] = ws.agent.IsStreamingEnabled()
-		stats["debug_mode"] = ws.agent.IsDebugMode()
+		stats["context_warning_issued"] = agentInst.GetContextWarningIssued()
+		stats["total_cost"] = agentInst.GetTotalCost()
+		stats["last_tps"] = agentInst.GetLastTPS()
+		stats["current_iteration"] = agentInst.GetCurrentIteration()
+		stats["max_iterations"] = agentInst.GetMaxIterations()
+		stats["streaming_enabled"] = agentInst.IsStreamingEnabled()
+		stats["debug_mode"] = agentInst.IsDebugMode()
+	}
+	if clientCtx != nil && len(clientCtx.AgentState) > 0 {
+		var clientState agent.AgentState
+		if err := json.Unmarshal(clientCtx.AgentState, &clientState); err == nil {
+			stats["session_id"] = clientState.SessionID
+			stats["total_tokens"] = clientState.TotalTokens
+			stats["prompt_tokens"] = clientState.PromptTokens
+			stats["completion_tokens"] = clientState.CompletionTokens
+			stats["cached_tokens"] = clientState.CachedTokens
+			stats["cached_cost_savings"] = clientState.CachedCostSavings
+			stats["total_cost"] = clientState.TotalCost
+		}
 	}
 
 	return stats
@@ -450,17 +526,18 @@ func (ws *ReactWebServer) handleAPIBrowse(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	// Get directory from query parameter
 	dir := strings.TrimSpace(r.URL.Query().Get("path"))
 	if dir == "" {
 		dir = "."
 	}
-	canonicalDir, err := canonicalizePath(dir, ws.workspaceRoot, false)
+	canonicalDir, err := canonicalizePath(dir, workspaceRoot, false)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Invalid directory: %v", err), http.StatusBadRequest)
 		return
 	}
-	if !isWithinWorkspace(canonicalDir, ws.workspaceRoot) {
+	if !isWithinWorkspace(canonicalDir, workspaceRoot) {
 		http.Error(w, "Directory outside workspace", http.StatusForbidden)
 		return
 	}
@@ -508,6 +585,7 @@ func (ws *ReactWebServer) handleAPIBrowse(w http.ResponseWriter, r *http.Request
 
 // handleAPIFiles handles API requests for file listing
 func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request) {
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	if r.Method != http.MethodGet {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -529,7 +607,7 @@ func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request)
 	if dir == "" {
 		dir = "."
 	}
-	canonicalDir, err := canonicalizePath(dir, ws.workspaceRoot, false)
+	canonicalDir, err := canonicalizePath(dir, workspaceRoot, false)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
@@ -539,7 +617,7 @@ func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request)
 		})
 		return
 	}
-	if !isWithinWorkspace(canonicalDir, ws.workspaceRoot) {
+	if !isWithinWorkspace(canonicalDir, workspaceRoot) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
@@ -565,8 +643,8 @@ func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request)
 	var modifiedSet, untrackedSet map[string]bool
 	var ignoreRules *ignore.GitIgnore
 	if includeGitStatus {
-		modifiedSet, untrackedSet = getGitFileStatusMap(ws.workspaceRoot)
-		ignoreRules = filediscovery.GetIgnoreRules(ws.workspaceRoot)
+		modifiedSet, untrackedSet = getGitFileStatusMap(workspaceRoot)
+		ignoreRules = filediscovery.GetIgnoreRules(workspaceRoot)
 	}
 
 	// Convert to JSON response
@@ -578,7 +656,7 @@ func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request)
 		}
 
 		absPath := filepath.Join(canonicalDir, entry.Name())
-		relPath, _ := filepath.Rel(ws.workspaceRoot, absPath)
+		relPath, _ := filepath.Rel(workspaceRoot, absPath)
 
 		fileInfo := map[string]interface{}{
 			"name":     entry.Name(),
@@ -590,7 +668,7 @@ func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request)
 		}
 
 		if includeGitStatus {
-			gitStatus := getGitStatusForEntry(relPath, entry.IsDir(), modifiedSet, untrackedSet, ignoreRules, ws.workspaceRoot)
+			gitStatus := getGitStatusForEntry(relPath, entry.IsDir(), modifiedSet, untrackedSet, ignoreRules, workspaceRoot)
 			if gitStatus != "" {
 				fileInfo["git_status"] = gitStatus
 			}
@@ -610,6 +688,7 @@ func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request)
 
 // handleAPICreateFile handles API requests for creating new files
 func (ws *ReactWebServer) handleAPICreateFile(w http.ResponseWriter, r *http.Request) {
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -647,7 +726,7 @@ func (ws *ReactWebServer) handleAPICreateFile(w http.ResponseWriter, r *http.Req
 	}
 
 	// Canonicalize and validate the path
-	canonicalPath, err := canonicalizePath(targetPath, ws.workspaceRoot, true)
+	canonicalPath, err := canonicalizePath(targetPath, workspaceRoot, true)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
@@ -658,7 +737,7 @@ func (ws *ReactWebServer) handleAPICreateFile(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if !isWithinWorkspace(canonicalPath, ws.workspaceRoot) {
+	if !isWithinWorkspace(canonicalPath, workspaceRoot) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
@@ -726,6 +805,7 @@ func (ws *ReactWebServer) handleAPICreateFile(w http.ResponseWriter, r *http.Req
 
 // handleAPIDeleteItem handles API requests for deleting files or directories
 func (ws *ReactWebServer) handleAPIDeleteItem(w http.ResponseWriter, r *http.Request) {
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	if r.Method != http.MethodDelete {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -761,7 +841,7 @@ func (ws *ReactWebServer) handleAPIDeleteItem(w http.ResponseWriter, r *http.Req
 	}
 
 	// Canonicalize and validate the path
-	canonicalPath, err := canonicalizePath(req.Path, ws.workspaceRoot, false)
+	canonicalPath, err := canonicalizePath(req.Path, workspaceRoot, false)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
@@ -772,7 +852,7 @@ func (ws *ReactWebServer) handleAPIDeleteItem(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if !isWithinWorkspace(canonicalPath, ws.workspaceRoot) {
+	if !isWithinWorkspace(canonicalPath, workspaceRoot) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
@@ -802,6 +882,7 @@ func (ws *ReactWebServer) handleAPIDeleteItem(w http.ResponseWriter, r *http.Req
 
 // handleAPIRenameItem handles API requests for renaming files or directories.
 func (ws *ReactWebServer) handleAPIRenameItem(w http.ResponseWriter, r *http.Request) {
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	if r.Method != http.MethodPost {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -837,7 +918,7 @@ func (ws *ReactWebServer) handleAPIRenameItem(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	oldCanonicalPath, err := canonicalizePath(req.OldPath, ws.workspaceRoot, false)
+	oldCanonicalPath, err := canonicalizePath(req.OldPath, workspaceRoot, false)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
@@ -848,7 +929,7 @@ func (ws *ReactWebServer) handleAPIRenameItem(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	newCanonicalPath, err := canonicalizePath(req.NewPath, ws.workspaceRoot, false)
+	newCanonicalPath, err := canonicalizePath(req.NewPath, workspaceRoot, false)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
@@ -859,7 +940,7 @@ func (ws *ReactWebServer) handleAPIRenameItem(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if !isWithinWorkspace(oldCanonicalPath, ws.workspaceRoot) || !isWithinWorkspace(newCanonicalPath, ws.workspaceRoot) {
+	if !isWithinWorkspace(oldCanonicalPath, workspaceRoot) || !isWithinWorkspace(newCanonicalPath, workspaceRoot) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1022,6 +1103,8 @@ func (ws *ReactWebServer) handleAPIFile(w http.ResponseWriter, r *http.Request) 
 
 // handleFileRead handles file read operations
 func (ws *ReactWebServer) handleFileRead(w http.ResponseWriter, r *http.Request) {
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	fileConsents := ws.getFileConsentManagerForRequest(r)
 	// Get file path from query parameter
 	path := r.URL.Query().Get("path")
 	if path == "" {
@@ -1029,7 +1112,7 @@ func (ws *ReactWebServer) handleFileRead(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	canonicalPath, err := canonicalizePath(path, ws.workspaceRoot, false)
+	canonicalPath, err := canonicalizePath(path, workspaceRoot, false)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Invalid file path: %v", err), http.StatusBadRequest)
 		return
@@ -1047,12 +1130,12 @@ func (ws *ReactWebServer) handleFileRead(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if !isWithinWorkspace(canonicalPath, ws.workspaceRoot) && !isAppConfigPath(canonicalPath) {
+	if !isWithinWorkspace(canonicalPath, workspaceRoot) && !isAppConfigPath(canonicalPath) {
 		consentToken := strings.TrimSpace(r.Header.Get(consentTokenHeader))
 		if consentToken == "" {
 			consentToken = strings.TrimSpace(r.URL.Query().Get("consent_token"))
 		}
-		if !ws.fileConsents.consume(consentToken, canonicalPath, "read") {
+		if !fileConsents.consume(consentToken, canonicalPath, "read") {
 			ws.writeExternalPathConsentRequired(w, canonicalPath, "read")
 			return
 		}
@@ -1084,6 +1167,8 @@ func (ws *ReactWebServer) handleFileRead(w http.ResponseWriter, r *http.Request)
 
 // handleFileWrite handles file write operations
 func (ws *ReactWebServer) handleFileWrite(w http.ResponseWriter, r *http.Request) {
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	fileConsents := ws.getFileConsentManagerForRequest(r)
 	// Get file path from query parameter
 	path := r.URL.Query().Get("path")
 	if path == "" {
@@ -1091,18 +1176,18 @@ func (ws *ReactWebServer) handleFileWrite(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	canonicalPath, err := canonicalizePath(path, ws.workspaceRoot, true)
+	canonicalPath, err := canonicalizePath(path, workspaceRoot, true)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Invalid file path: %v", err), http.StatusBadRequest)
 		return
 	}
 
-	if !isWithinWorkspace(canonicalPath, ws.workspaceRoot) && !isAppConfigPath(canonicalPath) {
+	if !isWithinWorkspace(canonicalPath, workspaceRoot) && !isAppConfigPath(canonicalPath) {
 		consentToken := strings.TrimSpace(r.Header.Get(consentTokenHeader))
 		if consentToken == "" {
 			consentToken = strings.TrimSpace(r.URL.Query().Get("consent_token"))
 		}
-		if !ws.fileConsents.consume(consentToken, canonicalPath, "write") {
+		if !fileConsents.consume(consentToken, canonicalPath, "write") {
 			ws.writeExternalPathConsentRequired(w, canonicalPath, "write")
 			return
 		}
@@ -1167,9 +1252,7 @@ func (ws *ReactWebServer) handleFileWrite(w http.ResponseWriter, r *http.Request
 	}
 
 	// Publish file change event
-	if ws.eventBus != nil {
-		ws.eventBus.Publish(events.EventTypeFileChanged, events.FileChangedEvent(canonicalPath, "write", string(content)))
-	}
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent(canonicalPath, "write", string(content)))
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1181,6 +1264,8 @@ func (ws *ReactWebServer) handleFileWrite(w http.ResponseWriter, r *http.Request
 }
 
 func (ws *ReactWebServer) handleAPIFileConsent(w http.ResponseWriter, r *http.Request) {
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	fileConsents := ws.getFileConsentManagerForRequest(r)
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -1202,18 +1287,18 @@ func (ws *ReactWebServer) handleAPIFileConsent(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	canonicalPath, err := canonicalizePath(req.Path, ws.workspaceRoot, operation == "write")
+	canonicalPath, err := canonicalizePath(req.Path, workspaceRoot, operation == "write")
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Invalid file path: %v", err), http.StatusBadRequest)
 		return
 	}
 
-	if isWithinWorkspace(canonicalPath, ws.workspaceRoot) || isAppConfigPath(canonicalPath) {
+	if isWithinWorkspace(canonicalPath, workspaceRoot) || isAppConfigPath(canonicalPath) {
 		http.Error(w, "Path does not require external consent", http.StatusBadRequest)
 		return
 	}
 
-	token, expiresAt, err := ws.fileConsents.issue(canonicalPath, operation, defaultConsentTTL)
+	token, expiresAt, err := fileConsents.issue(canonicalPath, operation, defaultConsentTTL)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to create consent token: %v", err), http.StatusInternalServerError)
 		return
@@ -1246,11 +1331,12 @@ func (ws *ReactWebServer) handleAPIConfig(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	clientCtx := ws.getClientContextForRequest(r)
 	// Get current configuration
 	config := map[string]interface{}{
 		"port":           ws.port,
 		"daemon_root":    ws.GetDaemonRoot(),
-		"workspace_root": ws.GetWorkspaceRoot(),
+		"workspace_root": clientCtx.WorkspaceRoot,
 		"agent": map[string]interface{}{
 			"name":    "ledit",
 			"version": "1.0.0", // This should come from actual version info
@@ -1279,6 +1365,7 @@ func (ws *ReactWebServer) handleTerminalHistory(w http.ResponseWriter, r *http.R
 }
 
 func (ws *ReactWebServer) handleTerminalHistoryGet(w http.ResponseWriter, r *http.Request) {
+	terminalManager := ws.getTerminalManagerForRequest(r)
 
 	// Get session ID from query parameter (optional)
 	sessionID := r.URL.Query().Get("session_id")
@@ -1295,7 +1382,7 @@ func (ws *ReactWebServer) handleTerminalHistoryGet(w http.ResponseWriter, r *htt
 	}
 
 	// Get history from terminal manager
-	history, err := ws.terminalManager.GetHistory(sessionID)
+	history, err := terminalManager.GetHistory(sessionID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to get history: %v", err), http.StatusInternalServerError)
 		return
@@ -1310,6 +1397,7 @@ func (ws *ReactWebServer) handleTerminalHistoryGet(w http.ResponseWriter, r *htt
 }
 
 func (ws *ReactWebServer) handleTerminalHistoryPost(w http.ResponseWriter, r *http.Request) {
+	terminalManager := ws.getTerminalManagerForRequest(r)
 	var req struct {
 		SessionID string `json:"session_id"`
 		Command   string `json:"command"`
@@ -1337,7 +1425,7 @@ func (ws *ReactWebServer) handleTerminalHistoryPost(w http.ResponseWriter, r *ht
 		return
 	}
 
-	if err := ws.terminalManager.AddToHistory(req.SessionID, command); err != nil {
+	if err := terminalManager.AddToHistory(req.SessionID, command); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to add history: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -1353,14 +1441,15 @@ func (ws *ReactWebServer) handleTerminalHistoryPost(w http.ResponseWriter, r *ht
 
 // handleAPITerminalSessions returns list of active terminal sessions
 func (ws *ReactWebServer) handleAPITerminalSessions(w http.ResponseWriter, r *http.Request) {
+	terminalManager := ws.getTerminalManagerForRequest(r)
 	// Get list of session IDs
-	sessionIDs := ws.terminalManager.ListSessions()
+	sessionIDs := terminalManager.ListSessions()
 
 	// Build detailed info for each session
 	sessions := []map[string]interface{}{}
 	activeCount := 0
 	for _, sessionID := range sessionIDs {
-		session, exists := ws.terminalManager.GetSession(sessionID)
+		session, exists := terminalManager.GetSession(sessionID)
 		if exists {
 			session.mutex.RLock()
 			size := session.Size

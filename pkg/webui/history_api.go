@@ -46,8 +46,8 @@ const maxRevisions = 100
 
 // relativeFilePath converts an absolute or workspace-relative path to a relative path
 // from the workspace root for display purposes.
-func (ws *ReactWebServer) relativeFilePath(path string) string {
-	rel, err := filepath.Rel(ws.workspaceRoot, path)
+func (ws *ReactWebServer) relativeFilePath(workspaceRoot, path string) string {
+	rel, err := filepath.Rel(workspaceRoot, path)
 	if err != nil || strings.HasPrefix(rel, "..") {
 		return path
 	}
@@ -55,7 +55,7 @@ func (ws *ReactWebServer) relativeFilePath(path string) string {
 }
 
 // buildChangelogEntry converts a history.RevisionGroup into a ChangelogEntry with relative file paths
-func (ws *ReactWebServer) buildChangelogEntry(group history.RevisionGroup) ChangelogEntry {
+func (ws *ReactWebServer) buildChangelogEntry(workspaceRoot string, group history.RevisionGroup) ChangelogEntry {
 	files := make([]FileRevision, 0, len(group.Changes))
 	for _, change := range group.Changes {
 		operation := "edited"
@@ -76,7 +76,7 @@ func (ws *ReactWebServer) buildChangelogEntry(group history.RevisionGroup) Chang
 
 		files = append(files, FileRevision{
 			FileRevisionHash: change.FileRevisionHash,
-			Path:             ws.relativeFilePath(change.Filename),
+			Path:             ws.relativeFilePath(workspaceRoot, change.Filename),
 			Operation:        operation,
 			LinesAdded:       linesAdded,
 			LinesDeleted:     linesDeleted,
@@ -92,13 +92,13 @@ func (ws *ReactWebServer) buildChangelogEntry(group history.RevisionGroup) Chang
 }
 
 // revisionGroupArrayToEntry converts a array of RevisionGroup to ChangelogEntry array
-func (ws *ReactWebServer) convertRevisionGroups(revisionGroups []history.RevisionGroup, limit int) []ChangelogEntry {
+func (ws *ReactWebServer) convertRevisionGroups(workspaceRoot string, revisionGroups []history.RevisionGroup, limit int) []ChangelogEntry {
 	if len(revisionGroups) > limit {
 		revisionGroups = revisionGroups[:limit]
 	}
 	revisions := make([]ChangelogEntry, 0, len(revisionGroups))
 	for _, group := range revisionGroups {
-		revisions = append(revisions, ws.buildChangelogEntry(group))
+		revisions = append(revisions, ws.buildChangelogEntry(workspaceRoot, group))
 	}
 	return revisions
 }
@@ -117,7 +117,7 @@ func (ws *ReactWebServer) handleAPIHistoryChangelog(w http.ResponseWriter, r *ht
 		return
 	}
 
-	revisions := ws.convertRevisionGroups(revisionGroups, maxRevisions)
+	revisions := ws.convertRevisionGroups(ws.getWorkspaceRootForRequest(r), revisionGroups, maxRevisions)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -154,18 +154,15 @@ func (ws *ReactWebServer) handleAPIHistoryRollback(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Publish event
-	if ws.eventBus != nil {
-		ws.eventBus.Publish("rollback", map[string]interface{}{
+	ws.publishClientEvent(ws.resolveClientID(r), "rollback", map[string]interface{}{
+		"revision_id": req.RevisionID,
+		"timestamp":   fmt.Sprintf("%d", 123), // Dummy timestamp
+		"data": map[string]interface{}{
+			"action":      "rollback",
+			"path":        "multiple",
 			"revision_id": req.RevisionID,
-			"timestamp":   fmt.Sprintf("%d", 123), // Dummy timestamp
-			"data": map[string]interface{}{
-				"action":      "rollback",
-				"path":        "multiple",
-				"revision_id": req.RevisionID,
-			},
-		})
-	}
+		},
+	})
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -188,7 +185,7 @@ func (ws *ReactWebServer) handleAPIHistoryChanges(w http.ResponseWriter, r *http
 		return
 	}
 
-	changes := ws.convertRevisionGroups(revisionGroups, maxRevisions)
+	changes := ws.convertRevisionGroups(ws.getWorkspaceRootForRequest(r), revisionGroups, maxRevisions)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -244,7 +241,7 @@ func (ws *ReactWebServer) handleAPIHistoryRevision(w http.ResponseWriter, r *htt
 
 			files = append(files, FileRevisionDetail{
 				FileRevisionHash: change.FileRevisionHash,
-				Path:             ws.relativeFilePath(change.Filename),
+				Path:             ws.relativeFilePath(ws.getWorkspaceRootForRequest(r), change.Filename),
 				Operation:        operation,
 				LinesAdded:       linesAdded,
 				LinesDeleted:     linesDeleted,

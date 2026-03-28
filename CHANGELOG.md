@@ -2,6 +2,14 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.12.7] - 2026-03-28
+
+- Adds 13 files - Adds token-based summarization gate and config path handling (134dc74)
+- Adds 21 files - Adds remote SSH directory browsing support (b389b19)
+- Adds 2 files - Adds web UI application icon (c834edd)
+- Updates pkg/webui/ssh_remote.go - Updates SSH path escaping in remote commands (75a2ec1)
+- docs: Update changelog for v0.12.6 (cb7a8c8)
+
 ## [v0.12.6] - 2026-03-27
 
 - Merge remote-tracking branch 'origin/main' (d200414)

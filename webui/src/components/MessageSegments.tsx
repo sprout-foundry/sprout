@@ -6,7 +6,9 @@ import MessageContent from './MessageContent';
 
 interface MessageSegmentsProps {
   content: string;
+  toolRefs?: Array<{ toolId: string; toolName: string; label: string }>;
   onToolClick?: (toolName: string) => void;
+  onToolRefClick?: (toolId: string) => void;
 }
 
 const getToolIcon = (toolName: string): ReactNode => {
@@ -31,13 +33,25 @@ const getToolIcon = (toolName: string): ReactNode => {
   return iconMap[toolName] || <Wrench size={14} />;
 };
 
-const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, onToolClick }) => {
+const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, toolRefs = [], onToolClick, onToolRefClick }) => {
   let segments: MessageSegment[];
   try {
     segments = parseMessageSegments(stripAnsiCodes(content));
   } catch {
     return <MessageContent content={content} />;
   }
+
+  const remainingRefs = [...toolRefs];
+
+  const claimMatchingToolRef = (segmentToolName: string) => {
+    const normalizedSegmentName = segmentToolName.split('(')[0].trim();
+    const matchIndex = remainingRefs.findIndex((ref) => ref.toolName === normalizedSegmentName);
+    if (matchIndex < 0) {
+      return null;
+    }
+    const [match] = remainingRefs.splice(matchIndex, 1);
+    return match;
+  };
 
   return (
     <div className="message-segments">
@@ -51,22 +65,35 @@ const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, onToolClick 
             );
 
           case 'tool_call':
+            const matchingRef = claimMatchingToolRef(segment.toolName);
+            const toolLabel = matchingRef?.toolName || segment.summary || segment.toolName;
             return (
               <div
                 key={`seg-${idx}`}
                 className="segment-tool-call"
-                role={onToolClick ? 'button' : undefined}
-                tabIndex={onToolClick ? 0 : undefined}
-                onClick={() => onToolClick?.(segment.toolName)}
+                role={matchingRef || onToolClick ? 'button' : undefined}
+                tabIndex={matchingRef || onToolClick ? 0 : undefined}
+                onClick={() => {
+                  if (matchingRef) {
+                    onToolRefClick?.(matchingRef.toolId);
+                    return;
+                  }
+                  onToolClick?.(segment.toolName);
+                }}
                 onKeyDown={(e) => {
-                  if (onToolClick && (e.key === 'Enter' || e.key === ' ')) {
+                  if ((matchingRef || onToolClick) && (e.key === 'Enter' || e.key === ' ')) {
                     e.preventDefault();
-                    onToolClick(segment.toolName);
+                    if (matchingRef) {
+                      onToolRefClick?.(matchingRef.toolId);
+                      return;
+                    }
+                    onToolClick?.(segment.toolName);
                   }
                 }}
+                title={matchingRef ? `Open ${matchingRef.toolName} details` : undefined}
               >
                 <span className="tool-pill-icon">{getToolIcon(segment.toolName.split('(')[0])}</span>
-                <span className="tool-pill-name">{segment.summary || segment.toolName}</span>
+                <span className="tool-pill-name">{toolLabel}</span>
                 <ExternalLink size={10} className="tool-pill-link-icon" />
               </div>
             );

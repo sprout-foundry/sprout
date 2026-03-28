@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useState, useLayoutEffect } from 'react';
 import { Zap, Bot, AlertTriangle } from 'lucide-react';
 import CommandInput from './CommandInput';
 import MessageSegments from './MessageSegments';
@@ -42,6 +42,7 @@ interface ChatProps {
   queryProgress?: any;
   currentTodos?: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }>;
   onToolPillClick?: (toolId: string) => void;
+  onStopProcessing?: () => void;
 }
 
 const Chat: React.FC<ChatProps> = ({
@@ -56,15 +57,63 @@ const Chat: React.FC<ChatProps> = ({
   toolExecutions = [],
   queryProgress = null,
   currentTodos = [],
-  onToolPillClick
+  onToolPillClick,
+  onStopProcessing
 }) => {
+  const AUTO_SCROLL_THRESHOLD_PX = 96;
+  const chatShellRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const inputContainerRef = useRef<HTMLDivElement>(null);
+  const shouldAutoScrollRef = useRef(true);
+  const [inputContainerHeight, setInputContainerHeight] = useState(0);
+
+  const isNearBottom = useCallback((node: HTMLDivElement) => {
+    const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight;
+    return distanceFromBottom <= AUTO_SCROLL_THRESHOLD_PX;
+  }, [AUTO_SCROLL_THRESHOLD_PX]);
+
+  useLayoutEffect(() => {
+    const node = inputContainerRef.current;
+    if (!node) {
+      return;
+    }
+
+    const updateHeight = () => {
+      setInputContainerHeight(node.getBoundingClientRect().height);
+    };
+
+    updateHeight();
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateHeight);
+      return () => window.removeEventListener('resize', updateHeight);
+    }
+
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(node);
+    window.addEventListener('resize', updateHeight);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateHeight);
+    };
+  }, []);
 
   useEffect(() => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    const node = chatContainerRef.current;
+    if (!node || !shouldAutoScrollRef.current) {
+      return;
     }
+
+    node.scrollTop = node.scrollHeight;
   }, [messages, toolExecutions, queryProgress, isProcessing]);
+
+  const handleChatScroll = useCallback(() => {
+    const node = chatContainerRef.current;
+    if (!node) {
+      return;
+    }
+    shouldAutoScrollRef.current = isNearBottom(node);
+  }, [isNearBottom]);
 
   const findMatchingToolExecution = useCallback((toolName: string) => {
     const normalized = toolName.split('(')[0];
@@ -80,32 +129,14 @@ const Chat: React.FC<ChatProps> = ({
     return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  const renderInlineToolRefs = (message: Message) => {
-    if (!message.toolRefs || message.toolRefs.length === 0) {
-      return null;
-    }
-
-    return (
-      <div className="message-tool-links" aria-label="Tools used for this response">
-        {message.toolRefs.map((ref) => (
-          <button
-            key={ref.toolId}
-            className="message-tool-link"
-            type="button"
-            onClick={() => onToolPillClick?.(ref.toolId)}
-            title={`Open ${ref.toolName} details`}
-          >
-            {ref.label || ref.toolName}
-          </button>
-        ))}
-      </div>
-    );
-  };
-
   return (
-    <div className="chat-shell">
+    <div
+      className="chat-shell"
+      ref={chatShellRef}
+      style={{ '--chat-input-height': `${inputContainerHeight}px` } as React.CSSProperties}
+    >
       <div className="chat-main">
-        <div className="chat-container" ref={chatContainerRef}>
+        <div className="chat-container" ref={chatContainerRef} onScroll={handleChatScroll}>
           {messages.length === 0 ? (
             <div className="welcome-message">
               <div className="welcome-icon"><Bot size={32} /></div>
@@ -140,9 +171,10 @@ const Chat: React.FC<ChatProps> = ({
                           </div>
                         </details>
                       )}
-                      {renderInlineToolRefs(message)}
                       <MessageSegments
                         content={message.content}
+                        toolRefs={message.toolRefs}
+                        onToolRefClick={(toolId) => onToolPillClick?.(toolId)}
                         onToolClick={(toolName) => {
                           const matchingTool = findMatchingToolExecution(toolName);
                           if (matchingTool) {
@@ -192,12 +224,13 @@ const Chat: React.FC<ChatProps> = ({
         </div>
       </div>
 
-      <div className="input-container">
+      <div className="input-container" ref={inputContainerRef}>
         <CommandInput
           value={inputValue}
           onChange={onInputChange}
           onSend={onSendMessage}
           onQueue={onQueueMessage}
+          onStop={onStopProcessing}
           placeholder="Ask me anything about your code..."
           multiline={true}
           autoFocus={true}

@@ -57,6 +57,7 @@ interface WorkspacePaneProps {
     queryProgress?: any;
     currentTodos?: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }>;
     onToolPillClick?: (toolId: string) => void;
+    onStopProcessing?: () => void;
   };
   reviewProps: {
     review: DeepReviewResult | null;

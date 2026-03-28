@@ -189,6 +189,29 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 	})
 }
 
+// handleAPIQueryStop interrupts the currently running query loop.
+func (ws *ReactWebServer) handleAPIQueryStop(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if !ws.hasActiveQuery() {
+		http.Error(w, "No active query to stop", http.StatusConflict)
+		return
+	}
+
+	ws.agent.TriggerInterrupt()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"accepted":  true,
+		"mode":      "stop",
+		"timestamp": time.Now().Unix(),
+	})
+}
+
 // handleAPIStats handles API requests for server statistics
 func (ws *ReactWebServer) handleAPIStats(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

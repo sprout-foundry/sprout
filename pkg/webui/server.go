@@ -124,6 +124,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/terminal", ws.handleTerminalWebSocket)
 	mux.HandleFunc("/api/query", ws.handleAPIQuery)
 	mux.HandleFunc("/api/query/steer", ws.handleAPIQuerySteer)
+	mux.HandleFunc("/api/query/stop", ws.handleAPIQueryStop)
 	mux.HandleFunc("/api/stats", ws.handleAPIStats)
 	mux.HandleFunc("/api/providers", ws.handleAPIProviders)
 	mux.HandleFunc("/api/onboarding/status", ws.handleAPIOnboardingStatus)

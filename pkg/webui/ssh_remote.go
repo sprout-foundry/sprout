@@ -262,8 +262,10 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (*sshLaunc
 
 	if err := waitForWebHealth(localPort, 10*time.Second); err != nil {
 		logger.Logf("health check failed: %v", err)
+		details := collectSSHHealthFailureDetails(hostAlias, remotePID, err, logger)
 		_ = killProcess(tunnelCmd)
-		return nil, err
+		_ = stopRemoteSSHBackend(hostAlias, remotePID)
+		return nil, newSSHLaunchFailure("health-check", "failed to connect to SSH workspace", details, logger)
 	}
 	logger.Logf("health check passed for local port %d", localPort)
 
@@ -977,6 +979,63 @@ func sanitizeRemoteLogName(hostAlias string) string {
 		return "ssh"
 	}
 	return b.String()
+}
+
+func collectSSHHealthFailureDetails(hostAlias string, remotePID int, probeErr error, logger *sshLaunchLogger) string {
+	sections := make([]string, 0, 3)
+	if probeErr != nil {
+		sections = append(sections, fmt.Sprintf("Local health probe failed: %v", probeErr))
+	}
+
+	remoteDetails := inspectRemoteSSHBackendFailure(hostAlias, remotePID, logger)
+	if remoteDetails != "" {
+		sections = append(sections, remoteDetails)
+	}
+
+	return strings.TrimSpace(strings.Join(sections, "\n\n"))
+}
+
+func inspectRemoteSSHBackendFailure(hostAlias string, remotePID int, logger *sshLaunchLogger) string {
+	hostAlias = strings.TrimSpace(hostAlias)
+	if hostAlias == "" {
+		return ""
+	}
+
+	script := strings.Join([]string{
+		"set +e",
+		fmt.Sprintf("REMOTE_PID=%d", remotePID),
+		fmt.Sprintf(`LOG_FILE="$HOME/.cache/ledit-webui/logs/%s.log"`, sanitizeRemoteLogName(hostAlias)),
+		`if [ "$REMOTE_PID" -gt 0 ] && kill -0 "$REMOTE_PID" >/dev/null 2>&1; then`,
+		`  echo "Remote backend PID: $REMOTE_PID (running)"`,
+		"else",
+		`  echo "Remote backend PID: $REMOTE_PID (not running)"`,
+		"fi",
+		`echo "Remote log: $LOG_FILE"`,
+		`if [ -f "$LOG_FILE" ]; then`,
+		`  echo "--- remote log tail ---"`,
+		`  tail -n 80 "$LOG_FILE" 2>/dev/null || cat "$LOG_FILE" 2>/dev/null || true`,
+		"else",
+		`  echo "Remote log file not found"`,
+		"fi",
+	}, "\n")
+
+	cmd := newSSHCommand(hostAlias, script)
+	out, err := cmd.CombinedOutput()
+	output := trimSSHOutput(out)
+	if err != nil {
+		if output != "" {
+			logger.Logf("inspect-remote-failure output:\n%s", output)
+		}
+		logger.Logf("inspect-remote-failure error: %v", err)
+		if output == "" {
+			output = err.Error()
+		}
+		return fmt.Sprintf("Remote diagnostics failed: %s", output)
+	}
+	if output != "" {
+		logger.Logf("inspect-remote-failure output:\n%s", output)
+	}
+	return output
 }
 
 func startSSHTunnel(hostAlias string, localPort, remotePort int, logger *sshLaunchLogger) (*exec.Cmd, error) {

@@ -766,7 +766,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <div className="sidebar-resize-wrapper" style={{ flexShrink: 0 }}>
-      <div className={`sidebar ${isMobile ? 'mobile' : ''} ${finalIsMobileMenuOpen ? 'open' : 'closed'} ${effectiveSidebarCollapsed ? 'collapsed' : ''}`} style={effectiveSidebarCollapsed ? undefined : { width: `${sidebarWidth}px` }}>
+      <div className={`sidebar ${isMobile ? 'mobile' : ''} ${finalIsMobileMenuOpen ? 'open' : 'closed'} ${effectiveSidebarCollapsed ? 'collapsed' : ''}`} style={effectiveSidebarCollapsed ? undefined : (isMobile ? undefined : { width: `${sidebarWidth}px` })}>
       {/* Pinned global header: instance selector */}
       <div className="sidebar-pinned-header">
         <button

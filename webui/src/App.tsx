@@ -1213,6 +1213,28 @@ function App() {
     setQueuedMessagesCount(queuedMessagesRef.current.length);
   }, []);
 
+  const handleStopProcessing = useCallback(async () => {
+    try {
+      await apiService.stopQuery();
+      setState(prev => ({
+        ...prev,
+        lastError: null,
+      }));
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Failed to stop query';
+      setState(prev => ({
+        ...prev,
+        lastError: errorMsg,
+        messages: [...prev.messages, {
+          id: Date.now().toString(),
+          type: 'assistant',
+          content: `[FAIL] Error: ${errorMsg}`,
+          timestamp: new Date()
+        }]
+      }));
+    }
+  }, [apiService]);
+
   useEffect(() => {
     if (state.isProcessing || activeRequestsRef.current > 0) {
       return;
@@ -1480,6 +1502,7 @@ function App() {
                 onProviderChange={handleProviderChange}
                 onSendMessage={handleSendMessage}
                 onQueueMessage={handleQueueMessage}
+                onStopProcessing={handleStopProcessing}
                 queuedMessagesCount={queuedMessagesCount}
                 onGitCommit={handleGitCommit}
                 onGitAICommit={handleGitAICommit}

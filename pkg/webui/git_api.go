@@ -31,6 +31,7 @@ type gitFixReviewJob struct {
 	Error     string
 	StartedAt time.Time
 	UpdatedAt time.Time
+	streamBuf strings.Builder
 	mutex     sync.RWMutex
 }
 
@@ -1189,15 +1190,12 @@ func (ws *ReactWebServer) runFixReviewJob(job *gitFixReviewJob, prompt string) {
 
 	reviewAgent.SetStreamingEnabled(true)
 	reviewAgent.SetStreamingCallback(func(text string) {
-		trimmed := strings.TrimSpace(text)
-		if trimmed == "" {
-			return
-		}
-		job.appendLog(trimmed)
+		job.appendStreamText(text)
 	})
 
 	job.appendLog("Running fix workflow with full agentic path...")
 	result, err := reviewAgent.ProcessQuery(prompt)
+	job.flushStreamBuffer()
 	if err != nil {
 		job.setError(err.Error())
 		return
@@ -1208,6 +1206,49 @@ func (ws *ReactWebServer) runFixReviewJob(job *gitFixReviewJob, prompt string) {
 func (j *gitFixReviewJob) appendLog(line string) {
 	j.mutex.Lock()
 	defer j.mutex.Unlock()
+	j.Logs = append(j.Logs, line)
+	if len(j.Logs) > 2000 {
+		j.Logs = j.Logs[len(j.Logs)-2000:]
+	}
+	j.UpdatedAt = time.Now()
+}
+
+func (j *gitFixReviewJob) appendStreamText(text string) {
+	j.mutex.Lock()
+	defer j.mutex.Unlock()
+
+	j.streamBuf.WriteString(text)
+	raw := j.streamBuf.String()
+	if raw == "" {
+		return
+	}
+
+	parts := strings.Split(raw, "\n")
+	for _, part := range parts[:len(parts)-1] {
+		line := strings.TrimSpace(part)
+		if line == "" {
+			continue
+		}
+		j.Logs = append(j.Logs, line)
+	}
+
+	j.streamBuf.Reset()
+	j.streamBuf.WriteString(parts[len(parts)-1])
+	if len(j.Logs) > 2000 {
+		j.Logs = j.Logs[len(j.Logs)-2000:]
+	}
+	j.UpdatedAt = time.Now()
+}
+
+func (j *gitFixReviewJob) flushStreamBuffer() {
+	j.mutex.Lock()
+	defer j.mutex.Unlock()
+
+	line := strings.TrimSpace(j.streamBuf.String())
+	j.streamBuf.Reset()
+	if line == "" {
+		return
+	}
 	j.Logs = append(j.Logs, line)
 	if len(j.Logs) > 2000 {
 		j.Logs = j.Logs[len(j.Logs)-2000:]

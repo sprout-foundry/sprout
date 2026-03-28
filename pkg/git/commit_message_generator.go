@@ -44,14 +44,21 @@ func GenerateCommitMessageFromStagedDiff(client api.ClientInterface, opts Commit
 	}
 
 	primaryAction := "Updates"
+	actionCounts := make(map[string]int)
 	fileActions := make([]string, 0, len(opts.FileChanges))
 	for _, change := range opts.FileChanges {
 		action := actionFromStatus(change.Status)
-		if primaryAction == "Updates" {
-			primaryAction = action
-		}
+		actionCounts[action]++
 		if strings.TrimSpace(change.Path) != "" {
 			fileActions = append(fileActions, fmt.Sprintf("%s %s", action, change.Path))
+		}
+	}
+	// Use a specific action only when all files share the same change type.
+	// For mixed change types (adds + updates + deletes), fall back to "Updates".
+	if len(actionCounts) == 1 {
+		for action := range actionCounts {
+			primaryAction = action
+			break
 		}
 	}
 	fileActionsSummary := fmt.Sprintf("%s %d files", primaryAction, len(opts.FileChanges))

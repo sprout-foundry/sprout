@@ -31,12 +31,12 @@ type ConversationHandler struct {
 	transientMessagesMu        sync.Mutex
 	transientMessages          []api.Message
 	pendingUserMessage         string
-	queryStartIndex           int
+	queryStartIndex            int
 	turnHistory                []TurnEvaluation
 	ocrEnforcementAttempts     int
-	tentativeRejectionCount     int
-	traceSession              interface{} // Using interface{} to avoid circular import
-	currentTurnRecord         *trace.TurnRecord // Temporary storage for current turn, updated with response data later
+	tentativeRejectionCount    int
+	traceSession               interface{}       // Using interface{} to avoid circular import
+	currentTurnRecord          *trace.TurnRecord // Temporary storage for current turn, updated with response data later
 }
 
 // NewConversationHandler creates a new conversation handler
@@ -71,6 +71,7 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 
 	// Reset streaming buffer for new query
 	ch.agent.streamingBuffer.Reset()
+	ch.agent.reasoningBuffer.Reset()
 
 	// Enable change tracking
 	ch.agent.EnableChangeTracking(userQuery)
@@ -260,15 +261,15 @@ func (ch *ConversationHandler) recordTurnStart(originalQuery, processedQuery str
 		RunID:              traceSession.GetRunID(),
 		TurnIndex:          ch.agent.currentIteration,
 		SystemPrompt:       ch.agent.systemPrompt,
-		UserPrompt:         processedQuery,     // What model sees (after truncation)
-		UserPromptOriginal: originalQuery,      // What user typed (before truncation)
-		MessagesSent:       ch.agent.messages,  // Messages array as sent to provider
-		RawResponse:        "",                 // Will be set later
-		ParsedToolCalls:    []api.ToolCall{},   // Will be set later
-		ParserErrors:       []string{},         // Will be set later
-		FallbackUsed:       false,              // Will be set later
-		FallbackOutput:     "",                 // Will be set later
-		MachineLabels:      []string{},         // Empty initially
+		UserPrompt:         processedQuery,    // What model sees (after truncation)
+		UserPromptOriginal: originalQuery,     // What user typed (before truncation)
+		MessagesSent:       ch.agent.messages, // Messages array as sent to provider
+		RawResponse:        "",                // Will be set later
+		ParsedToolCalls:    []api.ToolCall{},  // Will be set later
+		ParserErrors:       []string{},        // Will be set later
+		FallbackUsed:       false,             // Will be set later
+		FallbackOutput:     "",                // Will be set later
+		MachineLabels:      []string{},        // Empty initially
 		Timestamp:          time.Now().Format(time.RFC3339),
 	}
 
@@ -329,6 +330,9 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	turn.FinishReason = choice.FinishReason
 
 	reasoningContent := choice.Message.ReasoningContent
+	if ch.agent.streamingEnabled && len(ch.agent.reasoningBuffer.String()) > 0 {
+		reasoningContent = ch.agent.reasoningBuffer.String()
+	}
 	turn.ReasoningSnippet = abbreviate(reasoningContent, 280)
 
 	// Ensure tool calls always carry IDs so downstream sanitization can keep results

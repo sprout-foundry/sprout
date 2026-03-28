@@ -413,7 +413,8 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 		}
 
 		registry := GetToolRegistry()
-		images, result, err := registry.ExecuteTool(ctx, normalizedToolName, args, te.agent)
+		execCtx := withToolExecutionMetadata(ctx, toolCallID, normalizedToolName)
+		images, result, err := registry.ExecuteTool(execCtx, normalizedToolName, args, te.agent)
 
 		if err != nil && strings.Contains(err.Error(), "unknown tool") {
 			if fallbackResult, fallbackErr, handled := te.tryExecuteMCPTool(normalizedToolName, args); handled {

@@ -12,6 +12,7 @@ interface Message {
   content: string;
   timestamp: Date;
   reasoning?: string;  // Chain-of-thought content from content_type: "reasoning"
+  toolRefs?: Array<{ toolId: string; toolName: string; label: string }>;
 }
 
 interface ToolExecution {
@@ -79,6 +80,28 @@ const Chat: React.FC<ChatProps> = ({
     return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  const renderInlineToolRefs = (message: Message) => {
+    if (!message.toolRefs || message.toolRefs.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="message-tool-links" aria-label="Tools used for this response">
+        {message.toolRefs.map((ref) => (
+          <button
+            key={ref.toolId}
+            className="message-tool-link"
+            type="button"
+            onClick={() => onToolPillClick?.(ref.toolId)}
+            title={`Open ${ref.toolName} details`}
+          >
+            {ref.label || ref.toolName}
+          </button>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className="chat-shell">
       <div className="chat-main">
@@ -117,6 +140,7 @@ const Chat: React.FC<ChatProps> = ({
                           </div>
                         </details>
                       )}
+                      {renderInlineToolRefs(message)}
                       <MessageSegments
                         content={message.content}
                         onToolClick={(toolName) => {

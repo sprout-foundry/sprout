@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useLayoutEffect, memo } from 'react';
-import { ScrollText, X, Send, SquarePen, ListPlus, Plus } from 'lucide-react';
+import { ScrollText, X, Send, SquarePen, ListPlus, Plus, Square } from 'lucide-react';
 import './CommandInput.css';
 import { ApiService } from '../services/api';
 import { CommandHistoryState, loadCommandHistory, saveCommandHistory } from './command_input_history';
@@ -16,6 +16,7 @@ interface CommandInputProps {
   autoFocus?: boolean;
   isProcessing?: boolean;
   queuedCount?: number;
+  onStop?: () => void;
 }
 
 const CommandInput: React.FC<CommandInputProps> = ({
@@ -30,6 +31,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
   autoFocus = false,
   isProcessing = false,
   queuedCount = 0,
+  onStop,
 }) => {
   const [draftValue, setDraftValue] = useState(value);
   const [history, setHistory] = useState<CommandHistoryState>({
@@ -739,6 +741,18 @@ const CommandInput: React.FC<CommandInputProps> = ({
         >
           <Send size={16} />
         </button>
+        {isProcessing && (
+          <button
+            type="button"
+            onClick={onStop}
+            disabled={disabled}
+            className="stop-button"
+            data-tooltip="Stop processing"
+            aria-label="Stop processing"
+          >
+            <Square size={15} />
+          </button>
+        )}
         {isProcessing && (
           <button
             type="button"

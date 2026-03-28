@@ -2,6 +2,12 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.13.2] - 2026-03-28
+
+- Merge remote-tracking branch 'origin/main' (7852976)
+- Updates pkg/webui/ssh_remote.go - Updates GitHub release URL resolution to direct downloads (bd0db47)
+- docs: Update changelog for v0.13.1 (038b557)
+
 ## [v0.13.1] - 2026-03-28
 
 - Merge remote-tracking branch 'origin/main' (13956b9)

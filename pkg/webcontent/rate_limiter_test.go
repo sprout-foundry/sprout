@@ -64,8 +64,9 @@ func TestRateLimiter_SleepAfterElapsedBetweenMinMax(t *testing.T) {
 	start := time.Now()
 	rl.wait("example.com")
 	elapsed := time.Since(start)
-	// Should return immediately or near-immediately, no sleep needed
-	assert.Less(t, elapsed, 50*time.Millisecond,
+	// Should return immediately or near-immediately, no sleep needed.
+	// Use 100ms to tolerate CI scheduling jitter (observed ~50ms overhead).
+	assert.Less(t, elapsed, 100*time.Millisecond,
 		"should not need to sleep since elapsed is within range")
 }
 

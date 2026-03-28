@@ -177,8 +177,8 @@ type sshRemoteEntry struct {
 }
 
 const (
-	githubReleaseRepoOwner = "alantheprice"
-	githubReleaseRepoName  = "ledit"
+	githubReleaseRepoOwner  = "alantheprice"
+	githubReleaseRepoName   = "ledit"
 	sshLaunchHealthTimeout  = 30 * time.Second
 	sshRestoreHealthTimeout = 12 * time.Second
 )

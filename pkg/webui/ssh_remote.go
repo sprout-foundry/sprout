@@ -555,6 +555,8 @@ func prepareLocalSSHBinary(remotePlatform, remoteArch string, logger *sshLaunchL
 			logger.Logf("no release tag for current build; attempting latest artifact as cross-arch fallback for %s/%s", remotePlatform, remoteArch)
 			if latestPath, latestErr := ensureLocalSSHBinaryArtifactForTag("latest", remotePlatform, remoteArch, logger); latestErr == nil && latestPath != "" {
 				return latestPath, nil
+			} else if latestErr != nil {
+				return "", fmt.Errorf("remote host requires %s/%s, but this machine is %s/%s and Go is not available to build a matching backend (latest artifact fallback failed: %w)", remotePlatform, remoteArch, runtime.GOOS, runtime.GOARCH, latestErr)
 			}
 		}
 		return "", fmt.Errorf("remote host requires %s/%s, but this machine is %s/%s and Go is not available to build a matching backend", remotePlatform, remoteArch, runtime.GOOS, runtime.GOARCH)
@@ -570,6 +572,8 @@ func prepareLocalSSHBinary(remotePlatform, remoteArch string, logger *sshLaunchL
 			logger.Logf("source tree unavailable; attempting latest artifact as cross-arch fallback for %s/%s", remotePlatform, remoteArch)
 			if latestPath, latestErr := ensureLocalSSHBinaryArtifactForTag("latest", remotePlatform, remoteArch, logger); latestErr == nil && latestPath != "" {
 				return latestPath, nil
+			} else if latestErr != nil {
+				return "", fmt.Errorf("cannot build matching SSH backend for %s/%s because the ledit source tree is not available next to %s (latest artifact fallback failed: %w)", remotePlatform, remoteArch, executablePath, latestErr)
 			}
 		}
 		return "", fmt.Errorf("cannot build matching SSH backend for %s/%s because the ledit source tree is not available next to %s", remotePlatform, remoteArch, executablePath)
@@ -698,41 +702,18 @@ func isDirtyOrDevVersion(value string) bool {
 }
 
 func resolveGitHubReleaseAssetURL(tag, assetName string, logger *sshLaunchLogger) (string, error) {
-	client := &http.Client{Timeout: 15 * time.Second}
-	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/%s", githubReleaseRepoOwner, githubReleaseRepoName, releaseSelector(tag))
-	logger.Logf("querying GitHub release metadata: %s", apiURL)
-	req, err := http.NewRequest(http.MethodGet, apiURL, nil)
-	if err != nil {
-		return "", err
+	if strings.TrimSpace(assetName) == "" {
+		return "", errors.New("artifact name is required")
 	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	resp, err := client.Do(req)
-	if err != nil {
-		logger.Logf("github release query failed: %v", err)
-		return "", fmt.Errorf("failed to query GitHub releases: %w", err)
+	tag = strings.TrimSpace(tag)
+	if tag == "" || tag == "latest" {
+		url := fmt.Sprintf("https://github.com/%s/%s/releases/latest/download/%s", githubReleaseRepoOwner, githubReleaseRepoName, assetName)
+		logger.Logf("resolved latest release download URL: %s", url)
+		return url, nil
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-		logger.Logf("github release query returned status %d", resp.StatusCode)
-		return "", fmt.Errorf("failed to resolve GitHub release asset %s for %s: %s", assetName, tag, strings.TrimSpace(string(body)))
-	}
-
-	var payload struct {
-		Assets []struct {
-			Name string `json:"name"`
-			URL  string `json:"browser_download_url"`
-		} `json:"assets"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return "", err
-	}
-	for _, asset := range payload.Assets {
-		if asset.Name == assetName && strings.TrimSpace(asset.URL) != "" {
-			return asset.URL, nil
-		}
-	}
-	return "", fmt.Errorf("release %s does not contain asset %s", tag, assetName)
+	url := fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/%s", githubReleaseRepoOwner, githubReleaseRepoName, tag, assetName)
+	logger.Logf("resolved tagged release download URL: %s", url)
+	return url, nil
 }
 
 func releaseSelector(tag string) string {

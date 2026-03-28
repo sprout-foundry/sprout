@@ -32,6 +32,7 @@ var staticFiles embed.FS
 // ConnectionInfo stores metadata about a WebSocket connection
 type ConnectionInfo struct {
 	SessionID   string    // Unique session ID for this connection
+	ClientID    string    // WebUI client/window identifier
 	Type        string    // "webui" or "terminal"
 	ConnectedAt time.Time // When the connection was established
 }
@@ -47,6 +48,7 @@ type ReactWebServer struct {
 	sshLauncherURL  string
 	sshHomePath     string
 	fileConsents    *fileConsentManager
+	clientContexts  map[string]*webClientContext
 	port            int
 	server          *http.Server
 	listener        net.Listener
@@ -58,10 +60,12 @@ type ReactWebServer struct {
 	startTime       time.Time
 	queryCount      int
 	activeQueries   int
+	activeQueryClientID string
 	fixReviewJobs   map[string]*gitFixReviewJob
 	fixReviewMu     sync.RWMutex
 	sshSessions     map[string]*sshWorkspaceSession
 	sshSessionsMu   sync.Mutex
+	workspaceExecMu sync.Mutex
 }
 
 // NewReactWebServer creates a new React web server
@@ -91,6 +95,7 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int) 
 		sshLauncherURL: strings.TrimSpace(os.Getenv("LEDIT_SSH_LAUNCHER_URL")),
 		sshHomePath:    strings.TrimSpace(os.Getenv("LEDIT_SSH_HOME")),
 		fileConsents:   newFileConsentManager(),
+		clientContexts: make(map[string]*webClientContext),
 		port:           port,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
@@ -330,44 +335,7 @@ func (ws *ReactWebServer) getActiveQueryCount() int {
 // SetWorkspaceRoot updates the active workspace root, changes the process cwd,
 // and resets terminal state.
 func (ws *ReactWebServer) SetWorkspaceRoot(path string) (string, error) {
-	workspaceRoot, err := filepathAbsEval(path)
-	if err != nil {
-		return "", fmt.Errorf("resolve workspace root: %w", err)
-	}
-
-	info, err := os.Stat(workspaceRoot)
-	if err != nil {
-		return "", fmt.Errorf("stat workspace root: %w", err)
-	}
-	if !info.IsDir() {
-		return "", fmt.Errorf("workspace root must be a directory")
-	}
-
-	ws.mutex.Lock()
-	defer ws.mutex.Unlock()
-
-	if !isWithinWorkspace(workspaceRoot, ws.daemonRoot) && workspaceRoot != ws.daemonRoot {
-		return "", fmt.Errorf("workspace root must stay within daemon root %s", ws.daemonRoot)
-	}
-
-	if ws.terminalManager != nil {
-		if err := ws.terminalManager.CloseAllSessions(); err != nil {
-			return "", fmt.Errorf("close terminal sessions: %w", err)
-		}
-	}
-
-	if ws.fileConsents != nil {
-		ws.fileConsents.clearAll()
-	}
-
-	if err := os.Chdir(workspaceRoot); err != nil {
-		return "", fmt.Errorf("change working directory: %w", err)
-	}
-
-	ws.workspaceRoot = workspaceRoot
-	ws.terminalManager = NewTerminalManager(workspaceRoot)
-
-	return workspaceRoot, nil
+	return ws.setClientWorkspaceRoot(defaultWebClientID, path)
 }
 
 // countConnections returns the current number of WebSocket connections

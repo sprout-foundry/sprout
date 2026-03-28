@@ -179,6 +179,8 @@ type sshRemoteEntry struct {
 const (
 	githubReleaseRepoOwner = "alantheprice"
 	githubReleaseRepoName  = "ledit"
+	sshLaunchHealthTimeout  = 30 * time.Second
+	sshRestoreHealthTimeout = 12 * time.Second
 )
 
 func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (*sshLaunchResult, error) {
@@ -260,7 +262,7 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (*sshLaunc
 	}
 	logger.Logf("ssh tunnel started local_port=%d remote_port=%d", localPort, remotePort)
 
-	if err := waitForWebHealth(localPort, 10*time.Second); err != nil {
+	if err := waitForWebHealth(localPort, sshLaunchHealthTimeout); err != nil {
 		logger.Logf("health check failed: %v", err)
 		details := collectSSHHealthFailureDetails(hostAlias, remotePID, err, logger)
 		_ = killProcess(tunnelCmd)
@@ -317,7 +319,7 @@ func (ws *ReactWebServer) restorePersistedSSHSession(sessionKey string) (*sshLau
 		return nil, err
 	}
 
-	if err := waitForWebHealth(localPort, 6*time.Second); err != nil {
+	if err := waitForWebHealth(localPort, sshRestoreHealthTimeout); err != nil {
 		_ = killProcess(tunnelCmd)
 		_ = removePersistedSSHSession(sessionKey)
 		return nil, err
@@ -533,14 +535,15 @@ func currentExecutableForSSH() (string, error) {
 }
 
 func prepareLocalSSHBinary(remotePlatform, remoteArch string, logger *sshLaunchLogger) (string, error) {
-	if runtime.GOOS == remotePlatform && runtime.GOARCH == remoteArch {
-		logger.Logf("reusing current executable for matching platform %s/%s", remotePlatform, remoteArch)
-		return currentExecutableForSSH()
-	}
-
 	if artifactPath, err := ensureLocalSSHBinaryArtifact(remotePlatform, remoteArch, logger); err == nil && artifactPath != "" {
 		return artifactPath, nil
 	}
+
+	if runtime.GOOS == remotePlatform && runtime.GOARCH == remoteArch {
+		logger.Logf("release artifact unavailable for %s/%s, reusing current executable", remotePlatform, remoteArch)
+		return currentExecutableForSSH()
+	}
+
 	logger.Logf("release artifact unavailable for %s/%s, falling back to local go build", remotePlatform, remoteArch)
 
 	goBinary, err := exec.LookPath("go")
@@ -590,6 +593,9 @@ func prepareLocalSSHBinary(remotePlatform, remoteArch string, logger *sshLaunchL
 
 func ensureLocalSSHBinaryArtifact(remotePlatform, remoteArch string, logger *sshLaunchLogger) (string, error) {
 	tag := resolvePreferredReleaseTag()
+	if strings.TrimSpace(tag) == "" {
+		return "", errors.New("no release tag available for current build")
+	}
 	assetName := fmt.Sprintf("ledit-%s-%s.tar.gz", remotePlatform, remoteArch)
 	cacheDir := filepath.Join(os.TempDir(), "ledit-ssh-artifacts", strings.TrimPrefix(tag, "v"), remotePlatform+"-"+remoteArch)
 	binaryPath := filepath.Join(cacheDir, fmt.Sprintf("ledit-%s-%s", remotePlatform, remoteArch))
@@ -634,7 +640,7 @@ func resolvePreferredReleaseTag() string {
 			}
 		}
 	}
-	return "latest"
+	return ""
 }
 
 func normalizeReleaseTagCandidate(value string) string {
@@ -774,6 +780,22 @@ func ensureRemoteSSHBinary(hostAlias, localBinary string, remoteInfo *remoteSSHI
 	remoteBinarySSH := remoteDirSSH + "/ledit"
 	remoteUploadSCP := fmt.Sprintf(".ledit-ssh-upload-%s.tmp", localFingerprint)
 
+	// Fast path: if the fingerprinted backend already exists and executes,
+	// skip upload/install and reuse it directly.
+	checkExisting := newSSHCommand(hostAlias, fmt.Sprintf("[ -x %s ] && %s version", shellEscapeSSH(remoteBinarySSH), shellEscapeSSH(remoteBinarySSH)))
+	if out, err := checkExisting.CombinedOutput(); err == nil {
+		if output := trimSSHOutput(out); output != "" {
+			logger.Logf("reuse-backend output:\n%s", output)
+		}
+		logger.Logf("reuse-backend found executable at %s", remoteBinarySSH)
+		return remoteBinarySSH, nil
+	} else {
+		if output := trimSSHOutput(out); output != "" {
+			logger.Logf("reuse-backend miss for %s:\n%s", remoteBinarySSH, output)
+		}
+		logger.Logf("reuse-backend check failed, proceeding with install")
+	}
+
 	mkdir := newSSHCommand(hostAlias, fmt.Sprintf("mkdir -p %s", shellEscapeSSH(remoteDirSSH)))
 	if _, err := runSSHLoggedCommand(logger, "prepare-remote-dir", fmt.Sprintf("ssh %s mkdir -p %s", hostAlias, remoteDirSSH), mkdir); err != nil {
 		return "", err
@@ -796,6 +818,17 @@ func ensureRemoteSSHBinary(hostAlias, localBinary string, remoteInfo *remoteSSHI
 	))
 	if _, err := runSSHLoggedCommand(logger, "install-backend", fmt.Sprintf("ssh %s install backend into %s", hostAlias, remoteBinarySSH), install); err != nil {
 		return "", err
+	}
+
+	// Verify the uploaded backend can execute on the remote host.
+	verify := newSSHCommand(hostAlias, fmt.Sprintf("%s version", shellEscapeSSH(remoteBinarySSH)))
+	if _, err := runSSHLoggedCommand(logger, "verify-backend", fmt.Sprintf("ssh %s verify backend executable %s", hostAlias, remoteBinarySSH), verify); err != nil {
+		return "", newSSHLaunchFailure(
+			"verify-backend",
+			"uploaded SSH backend is not executable on remote host",
+			err.Error(),
+			logger,
+		)
 	}
 
 	return remoteBinarySSH, nil
@@ -1065,6 +1098,11 @@ func waitForWebHealth(port int, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	client := &http.Client{Timeout: 800 * time.Millisecond}
 	var lastErr error
+	const pollInterval = 250 * time.Millisecond
+
+	// Give the remote daemon and SSH tunnel a brief warm-up window to avoid
+	// failing on initial connection-reset bursts while the backend binds.
+	time.Sleep(300 * time.Millisecond)
 
 	for time.Now().Before(deadline) {
 		resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/health", port))
@@ -1077,7 +1115,7 @@ func waitForWebHealth(port int, timeout time.Duration) error {
 		} else {
 			lastErr = err
 		}
-		time.Sleep(250 * time.Millisecond)
+		time.Sleep(pollInterval)
 	}
 
 	if lastErr == nil {

@@ -11,16 +11,6 @@ import (
 )
 
 func TestHandleAPIWorkspaceSetUpdatesWorkspaceRoot(t *testing.T) {
-	originalWD, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	t.Cleanup(func() {
-		if chdirErr := os.Chdir(originalWD); chdirErr != nil {
-			t.Fatalf("restore cwd: %v", chdirErr)
-		}
-	})
-
 	initialRoot := t.TempDir()
 	nextRoot := filepath.Join(initialRoot, "project")
 	if err := os.Mkdir(nextRoot, 0o755); err != nil {
@@ -58,11 +48,6 @@ func TestHandleAPIWorkspaceSetUpdatesWorkspaceRoot(t *testing.T) {
 		t.Fatalf("expected terminal manager root %q, got %q", nextRoot, got)
 	}
 
-	if got, err := os.Getwd(); err != nil {
-		t.Fatalf("getwd after workspace switch: %v", err)
-	} else if got != nextRoot {
-		t.Fatalf("expected cwd %q, got %q", nextRoot, got)
-	}
 }
 
 func TestHandleAPIWorkspaceGetReturnsCurrentRoot(t *testing.T) {
@@ -133,7 +118,16 @@ func TestHandleAPIWorkspaceSetRejectsDuringActiveQuery(t *testing.T) {
 		daemonRoot:      root,
 		workspaceRoot:   root,
 		terminalManager: NewTerminalManager(root),
-		activeQueries:   1, // Simulate an active query
+		activeQueries:   1,
+		clientContexts: map[string]*webClientContext{
+			"client-a": {
+				WorkspaceRoot: root,
+				Terminal:      NewTerminalManager(root),
+				FileConsents:  newFileConsentManager(),
+				AgentState:    emptyAgentStateSnapshot(),
+				ActiveQuery:   true,
+			},
+		},
 	}
 
 	nextRoot := filepath.Join(root, "project")
@@ -143,6 +137,7 @@ func TestHandleAPIWorkspaceSetRejectsDuringActiveQuery(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]string{"path": nextRoot})
 	req := httptest.NewRequest(http.MethodPost, "/api/workspace", bytes.NewReader(body))
+	req.Header.Set(webClientIDHeader, "client-a")
 	rec := httptest.NewRecorder()
 
 	server.handleAPIWorkspace(rec, req)

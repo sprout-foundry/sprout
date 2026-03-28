@@ -197,7 +197,7 @@ func (a *Agent) autoSaveState() {
 		a.sessionID = fmt.Sprintf("session_%d", time.Now().Unix())
 	}
 
-	if err := a.SaveStateScoped(a.sessionID, ""); err != nil {
+	if err := a.SaveStateScoped(a.sessionID, a.currentWorkspaceRoot()); err != nil {
 		if a.debug {
 			a.debugLog("[WARN] Failed to write state file for auto-save: %v\n", err)
 		}

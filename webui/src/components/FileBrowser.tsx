@@ -6,6 +6,7 @@ import {
   X,
   FolderOpen,
 } from 'lucide-react';
+import { clientFetch } from '../services/clientSession';
 import './FileBrowser.css';
 
 export interface FileNode {
@@ -58,7 +59,7 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
 
     try {
       // Use the actual API to browse files
-      const response = await fetch(`${browseEndpoint}?path=${encodeURIComponent(path)}`);
+      const response = await clientFetch(`${browseEndpoint}?path=${encodeURIComponent(path)}`);
       if (!response.ok) {
         throw new Error(`Failed to browse directory: ${response.statusText}`);
       }

@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/filediscovery"
 	"github.com/alantheprice/ledit/pkg/events"
+	"github.com/alantheprice/ledit/pkg/filediscovery"
 	ignore "github.com/sabhiram/go-gitignore"
 )
 
@@ -95,6 +95,7 @@ func (ws *ReactWebServer) handleAPIQuerySearch(w http.ResponseWriter, r *http.Re
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 
 	query := r.URL.Query().Get("query")
 	if query == "" {
@@ -137,14 +138,14 @@ func (ws *ReactWebServer) handleAPIQuerySearch(w http.ResponseWriter, r *http.Re
 	exclude := r.URL.Query().Get("exclude")
 
 	// Get ignore rules
-	ignoreRules := filediscovery.GetIgnoreRules(ws.workspaceRoot)
+	ignoreRules := filediscovery.GetIgnoreRules(workspaceRoot)
 
 	// Build include/exclude patterns
 	includePatterns := parsePatterns(include)
 	excludePatterns := parsePatterns(exclude)
 
 	// Perform search
-	results, totalMatches, totalFiles, truncated, err := ws.performSearch(ctx, query, caseSensitive, wholeWord, isRegex,
+	results, totalMatches, totalFiles, truncated, err := ws.performSearch(ctx, workspaceRoot, query, caseSensitive, wholeWord, isRegex,
 		includePatterns, excludePatterns, maxResults, contextLines, ignoreRules)
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
@@ -169,7 +170,7 @@ func (ws *ReactWebServer) handleAPIQuerySearch(w http.ResponseWriter, r *http.Re
 }
 
 // performSearch performs the actual search across workspace files
-func (ws *ReactWebServer) performSearch(ctx context.Context, query string, caseSensitive, wholeWord, isRegex bool,
+func (ws *ReactWebServer) performSearch(ctx context.Context, workspaceRoot, query string, caseSensitive, wholeWord, isRegex bool,
 	includePatterns, excludePatterns []string, maxResults, contextLines int, ignoreRules *ignore.GitIgnore) (
 	[]SearchResult, int, int, bool, error) {
 
@@ -185,7 +186,7 @@ func (ws *ReactWebServer) performSearch(ctx context.Context, query string, caseS
 	}
 
 	// Walk the workspace directory
-	err = filepath.WalkDir(ws.workspaceRoot, func(path string, d os.DirEntry, err error) error {
+	err = filepath.WalkDir(workspaceRoot, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil // Skip inaccessible paths
 		}
@@ -207,7 +208,7 @@ func (ws *ReactWebServer) performSearch(ctx context.Context, query string, caseS
 
 			// Check gitignore rules
 			if ignoreRules != nil {
-				relPath, _ := filepath.Rel(ws.workspaceRoot, path)
+				relPath, _ := filepath.Rel(workspaceRoot, path)
 				if ignoreRules.MatchesPath(relPath) {
 					return filepath.SkipDir
 				}
@@ -233,7 +234,7 @@ func (ws *ReactWebServer) performSearch(ctx context.Context, query string, caseS
 
 		// Check gitignore for files
 		if ignoreRules != nil {
-			relPath, _ := filepath.Rel(ws.workspaceRoot, path)
+			relPath, _ := filepath.Rel(workspaceRoot, path)
 			if ignoreRules.MatchesPath(relPath) {
 				return nil
 			}
@@ -247,7 +248,7 @@ func (ws *ReactWebServer) performSearch(ctx context.Context, query string, caseS
 		}
 
 		if matchCount > 0 {
-			relPath, _ := filepath.Rel(ws.workspaceRoot, path)
+			relPath, _ := filepath.Rel(workspaceRoot, path)
 			results = append(results, SearchResult{
 				File:       relPath,
 				Matches:    fileResults,
@@ -359,6 +360,7 @@ func (ws *ReactWebServer) handleAPIQuerySearchReplace(w http.ResponseWriter, r *
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxSearchBodyBytes)
 
@@ -383,8 +385,8 @@ func (ws *ReactWebServer) handleAPIQuerySearchReplace(w http.ResponseWriter, r *
 
 	// Validate files are within workspace
 	for _, file := range req.Files {
-		canonicalPath, err := canonicalizePath(file, ws.workspaceRoot, false)
-		if err != nil || !isWithinWorkspace(canonicalPath, ws.workspaceRoot) {
+		canonicalPath, err := canonicalizePath(file, workspaceRoot, false)
+		if err != nil || !isWithinWorkspace(canonicalPath, workspaceRoot) {
 			http.Error(w, fmt.Sprintf("File outside workspace: %s", file), http.StatusBadRequest)
 			return
 		}
@@ -398,7 +400,7 @@ func (ws *ReactWebServer) handleAPIQuerySearchReplace(w http.ResponseWriter, r *
 	}
 
 	// Perform replace
-	changes, err := ws.performReplace(req, pattern)
+	changes, err := ws.performReplace(ws.resolveClientID(r), workspaceRoot, req, pattern)
 	if err != nil {
 		log.Printf("handleAPIQuerySearchReplace: replace error: %v", err)
 		http.Error(w, fmt.Sprintf("Replace failed: %v", err), http.StatusInternalServerError)
@@ -416,14 +418,14 @@ func (ws *ReactWebServer) handleAPIQuerySearchReplace(w http.ResponseWriter, r *
 }
 
 // performReplace performs the search and replace operation
-func (ws *ReactWebServer) performReplace(req ReplaceRequest, pattern *regexp.Regexp) ([]ReplaceFileChange, error) {
+func (ws *ReactWebServer) performReplace(clientID, workspaceRoot string, req ReplaceRequest, pattern *regexp.Regexp) ([]ReplaceFileChange, error) {
 	var changes []ReplaceFileChange
 
 	for _, filePath := range req.Files {
 		// Resolve relative path against workspace root
 		absFilePath := filePath
 		if !filepath.IsAbs(filePath) {
-			absFilePath = filepath.Join(ws.workspaceRoot, filePath)
+			absFilePath = filepath.Join(workspaceRoot, filePath)
 		}
 
 		// Open file
@@ -482,9 +484,7 @@ func (ws *ReactWebServer) performReplace(req ReplaceRequest, pattern *regexp.Reg
 				}
 
 				// Publish file change event
-				if ws.eventBus != nil {
-					ws.eventBus.Publish(events.EventTypeFileChanged, events.FileChangedEvent(absFilePath, "write", newContent))
-				}
+				ws.publishClientEvent(clientID, events.EventTypeFileChanged, events.FileChangedEvent(absFilePath, "write", newContent))
 			}
 
 			changes = append(changes, change)

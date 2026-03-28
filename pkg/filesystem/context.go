@@ -1,23 +1,54 @@
 package filesystem
 
-import "context"
-
-// securityContextKey is the type for context keys related to security
-type securityContextKey string
-
-const (
-	// securityBypassKey is the context key that stores whether to bypass security checks
-	securityBypassKey securityContextKey = "security-bypass"
+import (
+	"context"
+	"strings"
 )
 
-// WithSecurityBypass returns a new context that allows security checks to be bypassed.
-// This should only be used when the user has explicitly approved the operation.
-func WithSecurityBypass(ctx context.Context) context.Context {
-	return context.WithValue(ctx, securityBypassKey, true)
+type workspaceRootContextKey string
+
+const (
+	workspaceRootContextKeyValue  workspaceRootContextKey = "workspace_root"
+	securityBypassContextKeyValue workspaceRootContextKey = "security_bypass"
+)
+
+// WithWorkspaceRoot stores an explicit workspace root on the context so file and
+// process operations do not depend on the process-global cwd.
+func WithWorkspaceRoot(ctx context.Context, workspaceRoot string) context.Context {
+	workspaceRoot = strings.TrimSpace(workspaceRoot)
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if workspaceRoot == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, workspaceRootContextKeyValue, workspaceRoot)
 }
 
-// SecurityBypassEnabled returns true if security bypass is enabled in the context.
-// This indicates that the user has explicitly approved bypassing security restrictions.
+// WorkspaceRootFromContext returns the explicit workspace root carried on ctx, if any.
+func WorkspaceRootFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	value, _ := ctx.Value(workspaceRootContextKeyValue).(string)
+	return strings.TrimSpace(value)
+}
+
+// WithSecurityBypass marks a context as having explicit user approval for file
+// access outside the workspace root.
+func WithSecurityBypass(ctx context.Context) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, securityBypassContextKeyValue, true)
+}
+
+// SecurityBypassEnabled reports whether the context carries an explicit
+// filesystem security bypass approval.
 func SecurityBypassEnabled(ctx context.Context) bool {
-	return ctx.Value(securityBypassKey) == true
+	if ctx == nil {
+		return false
+	}
+	enabled, _ := ctx.Value(securityBypassContextKeyValue).(bool)
+	return enabled
 }

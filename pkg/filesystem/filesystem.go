@@ -185,20 +185,29 @@ func SafeResolvePathWithBypass(ctx context.Context, filePath string) (string, er
 	// Clean the path
 	cleanPath := filepath.Clean(filePath)
 
-	// Get absolute paths
-	absPath, err := filepath.Abs(cleanPath)
+	workspaceRoot := WorkspaceRootFromContext(ctx)
+	if workspaceRoot == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return "", fmt.Errorf("failed to get current working directory: %w", err)
+		}
+		workspaceRoot = cwd
+	}
+
+	cwdAbs, err := filepath.Abs(workspaceRoot)
+	if err != nil {
+		return "", fmt.Errorf("failed to get absolute path for workspace root: %w", err)
+	}
+
+	// Resolve relative paths against the explicit workspace root instead of the
+	// process-global cwd.
+	absPath := cleanPath
+	if !filepath.IsAbs(absPath) {
+		absPath = filepath.Join(cwdAbs, cleanPath)
+	}
+	absPath, err = filepath.Abs(absPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to get absolute path: %w", err)
-	}
-
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", fmt.Errorf("failed to get current working directory: %w", err)
-	}
-
-	cwdAbs, err := filepath.Abs(cwd)
-	if err != nil {
-		return "", fmt.Errorf("failed to get absolute path for cwd: %w", err)
 	}
 
 	// Resolve symlinks to their targets
@@ -275,8 +284,25 @@ func SafeResolvePathForWriteWithBypass(ctx context.Context, filePath string) (st
 	// Clean the path
 	cleanPath := filepath.Clean(filePath)
 
-	// Get absolute paths
-	absPath, err := filepath.Abs(cleanPath)
+	workspaceRoot := WorkspaceRootFromContext(ctx)
+	if workspaceRoot == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return "", fmt.Errorf("failed to get current working directory: %w", err)
+		}
+		workspaceRoot = cwd
+	}
+
+	cwdAbs, err := filepath.Abs(workspaceRoot)
+	if err != nil {
+		return "", fmt.Errorf("failed to get absolute path for workspace root: %w", err)
+	}
+
+	absPath := cleanPath
+	if !filepath.IsAbs(absPath) {
+		absPath = filepath.Join(cwdAbs, cleanPath)
+	}
+	absPath, err = filepath.Abs(absPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to get absolute path: %w", err)
 	}
@@ -284,16 +310,6 @@ func SafeResolvePathForWriteWithBypass(ctx context.Context, filePath string) (st
 	// Allow all /tmp/* operations without security checks
 	if isInTmpPath(absPath) {
 		return absPath, nil
-	}
-
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", fmt.Errorf("failed to get current working directory: %w", err)
-	}
-
-	cwdAbs, err := filepath.Abs(cwd)
-	if err != nil {
-		return "", fmt.Errorf("failed to get absolute path for cwd: %w", err)
 	}
 
 	// Get the parent directory and resolve it (file may not exist yet)

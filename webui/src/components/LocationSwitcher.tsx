@@ -9,6 +9,7 @@ import {
   SSHSessionEntry,
   SSHWorkspaceOpenError,
 } from '../services/api';
+import { clientFetch } from '../services/clientSession';
 
 interface LocationSwitcherProps {
   isConnected: boolean;
@@ -641,7 +642,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
       setSuggestionsError(null);
 
       try {
-        const response = await fetch(`/api/workspace/browse?path=${encodeURIComponent(parentPath)}`);
+        const response = await clientFetch(`/api/workspace/browse?path=${encodeURIComponent(parentPath)}`);
         if (!response.ok) {
           const text = await response.text();
           throw new Error(text || 'Failed to fetch matching folders');

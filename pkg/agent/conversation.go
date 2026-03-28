@@ -278,11 +278,7 @@ func (a *Agent) buildNonVisionImageToolPrompt(query string, paths []string) stri
 // processImagesAsMultimodal extracts pasted-image references from the query,
 // reads each file, and returns the image data for multimodal embedding.
 func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string, error) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		a.debugLog("[WARN] Failed to get working directory for image resolution: %v\n", err)
-		return nil, query, nil
-	}
+	cwd := a.currentWorkspaceRoot()
 
 	var images []api.ImageData
 	totalBytes := 0

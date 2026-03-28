@@ -183,6 +183,8 @@ const (
 	sshRestoreHealthTimeout = 12 * time.Second
 )
 
+var errNoReleaseTagForArtifact = errors.New("no release tag available for current build")
+
 func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (*sshLaunchResult, error) {
 	hostAlias := strings.TrimSpace(req.HostAlias)
 	if hostAlias == "" {
@@ -535,7 +537,8 @@ func currentExecutableForSSH() (string, error) {
 }
 
 func prepareLocalSSHBinary(remotePlatform, remoteArch string, logger *sshLaunchLogger) (string, error) {
-	if artifactPath, err := ensureLocalSSHBinaryArtifact(remotePlatform, remoteArch, logger); err == nil && artifactPath != "" {
+	artifactPath, artifactErr := ensureLocalSSHBinaryArtifact(remotePlatform, remoteArch, logger)
+	if artifactErr == nil && artifactPath != "" {
 		return artifactPath, nil
 	}
 
@@ -548,6 +551,12 @@ func prepareLocalSSHBinary(remotePlatform, remoteArch string, logger *sshLaunchL
 
 	goBinary, err := exec.LookPath("go")
 	if err != nil {
+		if errors.Is(artifactErr, errNoReleaseTagForArtifact) {
+			logger.Logf("no release tag for current build; attempting latest artifact as cross-arch fallback for %s/%s", remotePlatform, remoteArch)
+			if latestPath, latestErr := ensureLocalSSHBinaryArtifactForTag("latest", remotePlatform, remoteArch, logger); latestErr == nil && latestPath != "" {
+				return latestPath, nil
+			}
+		}
 		return "", fmt.Errorf("remote host requires %s/%s, but this machine is %s/%s and Go is not available to build a matching backend", remotePlatform, remoteArch, runtime.GOOS, runtime.GOARCH)
 	}
 
@@ -557,6 +566,12 @@ func prepareLocalSSHBinary(remotePlatform, remoteArch string, logger *sshLaunchL
 	}
 	repoRoot := filepath.Dir(executablePath)
 	if _, err := os.Stat(filepath.Join(repoRoot, "go.mod")); err != nil {
+		if errors.Is(artifactErr, errNoReleaseTagForArtifact) {
+			logger.Logf("source tree unavailable; attempting latest artifact as cross-arch fallback for %s/%s", remotePlatform, remoteArch)
+			if latestPath, latestErr := ensureLocalSSHBinaryArtifactForTag("latest", remotePlatform, remoteArch, logger); latestErr == nil && latestPath != "" {
+				return latestPath, nil
+			}
+		}
 		return "", fmt.Errorf("cannot build matching SSH backend for %s/%s because the ledit source tree is not available next to %s", remotePlatform, remoteArch, executablePath)
 	}
 
@@ -594,10 +609,18 @@ func prepareLocalSSHBinary(remotePlatform, remoteArch string, logger *sshLaunchL
 func ensureLocalSSHBinaryArtifact(remotePlatform, remoteArch string, logger *sshLaunchLogger) (string, error) {
 	tag := resolvePreferredReleaseTag()
 	if strings.TrimSpace(tag) == "" {
-		return "", errors.New("no release tag available for current build")
+		return "", errNoReleaseTagForArtifact
 	}
+	return ensureLocalSSHBinaryArtifactForTag(tag, remotePlatform, remoteArch, logger)
+}
+
+func ensureLocalSSHBinaryArtifactForTag(tag, remotePlatform, remoteArch string, logger *sshLaunchLogger) (string, error) {
 	assetName := fmt.Sprintf("ledit-%s-%s.tar.gz", remotePlatform, remoteArch)
-	cacheDir := filepath.Join(os.TempDir(), "ledit-ssh-artifacts", strings.TrimPrefix(tag, "v"), remotePlatform+"-"+remoteArch)
+	cacheTag := strings.TrimPrefix(tag, "v")
+	if strings.TrimSpace(cacheTag) == "" {
+		cacheTag = "latest"
+	}
+	cacheDir := filepath.Join(os.TempDir(), "ledit-ssh-artifacts", cacheTag, remotePlatform+"-"+remoteArch)
 	binaryPath := filepath.Join(cacheDir, fmt.Sprintf("ledit-%s-%s", remotePlatform, remoteArch))
 
 	if info, err := os.Stat(binaryPath); err == nil && info.Mode().IsRegular() {
@@ -631,12 +654,22 @@ func ensureLocalSSHBinaryArtifact(remotePlatform, remoteArch string, logger *ssh
 
 func resolvePreferredReleaseTag() string {
 	if info, ok := debug.ReadBuildInfo(); ok {
-		if tag := normalizeReleaseTagCandidate(info.Main.Version); tag != "" {
+		mainVersion := strings.TrimSpace(info.Main.Version)
+		if tag := normalizeReleaseTagCandidate(mainVersion); tag != "" {
 			return tag
 		}
 		for _, setting := range info.Settings {
 			if (setting.Key == "vcs.tag" || setting.Key == "gitTag") && normalizeReleaseTagCandidate(setting.Value) != "" {
 				return normalizeReleaseTagCandidate(setting.Value)
+			}
+		}
+
+		if isDirtyOrDevVersion(mainVersion) {
+			return "latest"
+		}
+		for _, setting := range info.Settings {
+			if setting.Key == "vcs.modified" && strings.EqualFold(strings.TrimSpace(setting.Value), "true") {
+				return "latest"
 			}
 		}
 	}
@@ -652,6 +685,16 @@ func normalizeReleaseTagCandidate(value string) string {
 		return ""
 	}
 	return value
+}
+
+func isDirtyOrDevVersion(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	return strings.Contains(value, "-0.") ||
+		strings.Contains(value, "+dirty") ||
+		strings.Contains(value, "(devel)")
 }
 
 func resolveGitHubReleaseAssetURL(tag, assetName string, logger *sshLaunchLogger) (string, error) {

@@ -205,21 +205,9 @@ func (ws *ReactWebServer) shouldForwardEventToConnection(event events.UIEvent, c
 		return targetClientID == clientID
 	}
 
-	switch event.Type {
-	case events.EventTypeQueryStarted,
-		events.EventTypeQueryProgress,
-		events.EventTypeQueryCompleted,
-		events.EventTypeToolStart,
-		events.EventTypeToolEnd,
-		events.EventTypeSubagentActivity,
-		events.EventTypeTodoUpdate,
-		events.EventTypeStreamChunk,
-		events.EventTypeAgentMessage,
-		events.EventTypeMetricsUpdate:
-		return false
-	default:
-		return true
-	}
+	// Backward compatibility: when event metadata is missing client_id,
+	// forward the event instead of dropping it so chat/tool streams remain visible.
+	return true
 }
 
 // handleWebSocketMessage processes incoming WebSocket messages

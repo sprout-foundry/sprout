@@ -211,6 +211,7 @@ func (ac *APIClient) SendWithRetry(messages []api.Message, tools []api.Tool, rea
 
 	// Reset streaming buffer
 	ac.agent.streamingBuffer.Reset()
+	ac.agent.reasoningBuffer.Reset()
 
 	for retry := 0; retry <= ac.maxRetries; retry++ {
 		if ac.agent.debug {
@@ -380,7 +381,11 @@ func (ac *APIClient) sendStreamingRequest(messages []api.Message, tools []api.To
 		if sanitizedContent != content && ac.agent.debug {
 			ac.agent.debugLog("[clean] Sanitized streaming content, removed ANSI codes\n")
 		}
-		ac.agent.streamingBuffer.WriteString(sanitizedContent)
+		if contentType == "reasoning" {
+			ac.agent.reasoningBuffer.WriteString(sanitizedContent)
+		} else {
+			ac.agent.streamingBuffer.WriteString(sanitizedContent)
+		}
 
 		// Route through OutputRouter (single source: publishes event + writes terminal)
 		// This replaces the old dual-write pattern of PublishStreamChunk + streamingCallback

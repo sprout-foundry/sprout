@@ -115,3 +115,17 @@ run-prompt.md
 
 # Local scratch artifacts
 html_scraped_example_whitespace.txt
+
+# Test output and analysis files
+json_output.txt
+output.txt
+e2e_tests/test_results_analysis.txt
+
+# Development planning documents (ephemeral)
+PLAN.md
+TODO.md
+TODO_STATUS.md
+
+# Temporary/example files
+hello.py
+go_modules_best_practices.md

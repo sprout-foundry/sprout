@@ -42,6 +42,8 @@ interface Message {
   type: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  reasoning?: string;
+  toolRefs?: Array<{ toolId: string; toolName: string; label: string }>;
 }
 
 interface LogEntry {
@@ -73,6 +75,21 @@ interface AppState {
     timestamp: Date;
     linesAdded?: number;
     linesDeleted?: number;
+  }>;
+  subagentActivities: Array<{
+    id: string;
+    toolCallId: string;
+    toolName: string;
+    phase: 'spawn' | 'output' | 'complete';
+    message: string;
+    timestamp: Date;
+    taskId?: string;
+    persona?: string;
+    isParallel?: boolean;
+    provider?: string;
+    model?: string;
+    taskCount?: number;
+    failures?: number;
   }>;
 }
 
@@ -911,6 +928,7 @@ const AppContent: React.FC<AppContentProps> = ({
               toolExecutions={state.toolExecutions}
               fileEdits={state.fileEdits}
               logs={state.logs}
+              subagentActivities={state.subagentActivities}
               currentTodos={currentTodos}
               messages={state.messages}
               isProcessing={state.isProcessing}

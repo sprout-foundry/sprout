@@ -1,9 +1,0 @@
-🚀 Processing: What does this Go file do?
-Test response from mock provider🏁 Model finish reason: stop - Response appears incomplete, requesting continuation
-Test response from mock providerTest response from mock provider
-[CI Summary]
-├─ Total Iterations: 0
-├─ Total Tokens: 0
-├─ Total Cost: $0.0000
-├─ Elapsed Time: 0s
-└─ Operations: 0

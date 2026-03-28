@@ -59,7 +59,12 @@ func (r *rateLimiter) wait(host string) {
 	
 	// Generate random jitter outside the lock to avoid holding it during RNG
 	r.mu.Unlock()
-	sleepFor := sleepMin + time.Duration(globalRand.Int63n(int64(sleepMax-sleepMin)))
+	var sleepFor time.Duration
+	if delta := sleepMax - sleepMin; delta > 0 {
+		sleepFor = sleepMin + time.Duration(globalRand.Int63n(int64(delta)))
+	} else {
+		sleepFor = sleepMin
+	}
 	
 	r.mu.Lock()
 	r.lastRequest[host] = time.Now().Add(sleepFor)

@@ -678,6 +678,7 @@ func (a *Agent) ApplyState(state *ConversationState) {
 
 	// Clear streaming buffer to prevent old content from interfering
 	a.streamingBuffer.Reset()
+	a.reasoningBuffer.Reset()
 
 	// Reset shell command history to prevent stale cache issues
 	if a.shellCommandHistory == nil {

@@ -71,6 +71,22 @@ interface LogEntry {
   category: 'query' | 'tool' | 'file' | 'system' | 'stream';
 }
 
+interface SubagentActivity {
+  id: string;
+  toolCallId: string;
+  toolName: string;
+  phase: 'spawn' | 'output' | 'complete';
+  message: string;
+  timestamp: Date;
+  taskId?: string;
+  persona?: string;
+  isParallel?: boolean;
+  provider?: string;
+  model?: string;
+  taskCount?: number;
+  failures?: number;
+}
+
 interface RevisionFile {
   file_revision_hash?: string;
   path: string;
@@ -161,6 +177,7 @@ interface ChatContextPanelProps extends ContextPanelBaseProps {
     linesDeleted?: number;
   }>;
   logs: LogEntry[];
+  subagentActivities: SubagentActivity[];
   currentTodos: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }>;
   messages: Array<{ type: string; timestamp: Date }>;
   isProcessing: boolean;
@@ -728,14 +745,33 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   const chatFileEdits = useMemo(() => chatProps?.fileEdits ?? [], [chatProps]);
   const subagentToolExecutions = useMemo(() => chatProps?.toolExecutions ?? [], [chatProps]);
   const subagentLogs = useMemo(() => chatProps?.logs ?? [], [chatProps]);
+  const subagentActivities = useMemo(() => chatProps?.subagentActivities ?? [], [chatProps]);
 
   const subagentRuns = useMemo(() => {
     return subagentToolExecutions
       .filter(isSubagentTool)
       .map((tool) => {
+        const structuredActivities = subagentActivities
+          .filter((activity) => {
+            if (activity.toolCallId) {
+              return activity.toolCallId === tool.id;
+            }
+            const ts = activity.timestamp instanceof Date ? activity.timestamp.getTime() : new Date(activity.timestamp).getTime();
+            const startMs = tool.startTime.getTime() - 500;
+            const endMs = (tool.endTime || new Date()).getTime() + 500;
+            return ts >= startMs && ts <= endMs;
+          })
+          .map((activity) => ({
+            id: activity.id,
+            timestamp: activity.timestamp,
+            taskId: activity.taskId,
+            label: activity.message,
+            isSpawn: activity.phase === 'spawn',
+          }));
+
         const startMs = tool.startTime.getTime() - 500;
         const endMs = (tool.endTime || new Date()).getTime() + 500;
-        const activities = subagentLogs
+        const fallbackActivities = subagentLogs
           .filter((log) => {
             const message = getSubagentLogMessage(log);
             if (!message) {
@@ -762,6 +798,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
             const previous = items[index - 1];
             return !previous || previous.label !== item.label;
           });
+        const activities = structuredActivities.length > 0 ? structuredActivities : fallbackActivities;
 
         const taskGroups = activities.reduce<Record<string, typeof activities>>((acc, item) => {
           const key = item.taskId || '__main__';
@@ -786,7 +823,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
           orderedTaskGroups,
         };
       });
-  }, [getSubagentLogMessage, normalizeSubagentActivity, subagentLogs, subagentToolExecutions]);
+  }, [getSubagentLogMessage, normalizeSubagentActivity, subagentActivities, subagentLogs, subagentToolExecutions]);
 
   const activeToolCount = toolExecutions.filter(
     (tool) => tool.status === 'started' || tool.status === 'running'

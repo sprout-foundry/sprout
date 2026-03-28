@@ -144,6 +144,13 @@ type Agent struct {
 	// all subsequent requests in the session are allowed without re-prompting
 	securityBypassApproved bool
 	securityBypassMu       sync.RWMutex
+
+	// Subagent output batching - buffer events to reduce event bus traffic
+	subagentBatchBuffer     []string            // Buffered subagent output lines
+	subagentBatchCount      int                 // Number of lines in buffer
+	subagentBatchMutex      sync.Mutex          // Protect batch buffer
+	subagentBatchSize       int                 // Flush threshold (default 50)
+	subagentBatchMilestones map[string]struct{} // Milestone phases that force immediate flush
 }
 
 func isDebugEnvEnabled() bool {

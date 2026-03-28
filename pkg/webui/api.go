@@ -1024,7 +1024,7 @@ func (ws *ReactWebServer) handleFileRead(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if !isWithinWorkspace(canonicalPath, ws.workspaceRoot) {
+	if !isWithinWorkspace(canonicalPath, ws.workspaceRoot) && !isAppConfigPath(canonicalPath) {
 		consentToken := strings.TrimSpace(r.Header.Get(consentTokenHeader))
 		if consentToken == "" {
 			consentToken = strings.TrimSpace(r.URL.Query().Get("consent_token"))
@@ -1074,7 +1074,7 @@ func (ws *ReactWebServer) handleFileWrite(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if !isWithinWorkspace(canonicalPath, ws.workspaceRoot) {
+	if !isWithinWorkspace(canonicalPath, ws.workspaceRoot) && !isAppConfigPath(canonicalPath) {
 		consentToken := strings.TrimSpace(r.Header.Get(consentTokenHeader))
 		if consentToken == "" {
 			consentToken = strings.TrimSpace(r.URL.Query().Get("consent_token"))
@@ -1185,7 +1185,7 @@ func (ws *ReactWebServer) handleAPIFileConsent(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if isWithinWorkspace(canonicalPath, ws.workspaceRoot) {
+	if isWithinWorkspace(canonicalPath, ws.workspaceRoot) || isAppConfigPath(canonicalPath) {
 		http.Error(w, "Path does not require external consent", http.StatusBadRequest)
 		return
 	}

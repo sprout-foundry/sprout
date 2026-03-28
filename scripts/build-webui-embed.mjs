@@ -20,6 +20,7 @@ function run(command, args, cwd) {
     cwd,
     stdio: 'inherit',
     env: process.env,
+    shell: process.platform === 'win32',
   });
   if (result.error) {
     console.error(`Command failed to start: ${executable} ${args.join(' ')}`);

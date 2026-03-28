@@ -171,3 +171,65 @@ func isWithinWorkspace(path, workspaceRoot string) bool {
 	}
 	return !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && rel != ".."
 }
+
+// isAppConfigPath returns true if the path is inside the ledit configuration
+// directory (e.g. ~/.ledit/ or ~/.config/ledit/). These are workspace-owned
+// config files and should never trigger the external-path consent prompt.
+func isAppConfigPath(path string) bool {
+	configDir, err := getConfigDir()
+	if err != nil || configDir == "" {
+		return false
+	}
+	absConfDir, err := filepath.Abs(configDir)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(absConfDir, path)
+	if err != nil {
+		return false
+	}
+	if rel == "." {
+		return true
+	}
+	return !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && rel != ".."
+}
+
+// getConfigDir returns the ledit configuration directory, memoized across calls.
+// It uses the same logic as configuration.GetConfigDir but is kept in the webui
+// package to avoid pulling in the full configuration import graph.
+var configDirCache string
+var configDirErr error
+var configDirOnce sync.Once
+
+func getConfigDir() (string, error) {
+	configDirOnce.Do(func() {
+		configDirCache, configDirErr = resolveConfigDir()
+	})
+	return configDirCache, configDirErr
+}
+
+func resolveConfigDir() (string, error) {
+	if d := strings.TrimSpace(os.Getenv("LEDIT_CONFIG")); d != "" {
+		abs, err := filepath.Abs(d)
+		if err != nil {
+			return "", err
+		}
+		return abs, nil
+	}
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+
+	configHome := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME"))
+	if configHome != "" {
+		abs, err := filepath.Abs(configHome)
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(abs, "ledit"), nil
+	}
+
+	return filepath.Join(homeDir, ".ledit"), nil
+}

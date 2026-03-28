@@ -15,12 +15,23 @@ const targetLogoPath = join(targetDir, 'logo-mark.svg');
 
 function run(command, args, cwd) {
   const executable = process.platform === 'win32' && command === 'npm' ? 'npm.cmd' : command;
+  console.log(`↪ ${executable} ${args.join(' ')} (cwd: ${cwd})`);
   const result = spawnSync(executable, args, {
     cwd,
     stdio: 'inherit',
     env: process.env,
   });
+  if (result.error) {
+    console.error(`Command failed to start: ${executable} ${args.join(' ')}`);
+    console.error(result.error);
+    process.exit(1);
+  }
+  if (result.signal) {
+    console.error(`Command terminated by signal ${result.signal}: ${executable} ${args.join(' ')}`);
+    process.exit(1);
+  }
   if (result.status !== 0) {
+    console.error(`Command failed with exit code ${result.status ?? 1}: ${executable} ${args.join(' ')}`);
     process.exit(result.status ?? 1);
   }
 }

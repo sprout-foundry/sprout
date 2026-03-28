@@ -58,6 +58,11 @@ type sshLaunchRequestDTO struct {
 	RemoteWorkspacePath string `json:"remote_workspace_path,omitempty"`
 }
 
+type sshBrowseRequestDTO struct {
+	HostAlias string `json:"host_alias"`
+	Path      string `json:"path,omitempty"`
+}
+
 type sshSessionEntryDTO struct {
 	Key                 string    `json:"key"`
 	HostAlias           string    `json:"host_alias"`
@@ -252,6 +257,33 @@ func (ws *ReactWebServer) handleAPISSHOpen(w http.ResponseWriter, r *http.Reques
 		"message": "ssh workspace ready",
 		"url":     result.URL,
 		"port":    result.LocalPort,
+	})
+}
+
+func (ws *ReactWebServer) handleAPISSHBrowse(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeSSHJSONError(w, http.StatusMethodNotAllowed, sshLaunchErrorDTO{Error: "Method not allowed"})
+		return
+	}
+
+	var req sshBrowseRequestDTO
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeSSHJSONError(w, http.StatusBadRequest, sshLaunchErrorDTO{Error: "Invalid JSON"})
+		return
+	}
+
+	entries, resolvedPath, homePath, err := browseSSHDirectory(strings.TrimSpace(req.HostAlias), strings.TrimSpace(req.Path))
+	if err != nil {
+		writeSSHJSONError(w, http.StatusBadRequest, sshLaunchErrorDTO{Error: err.Error()})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":   "ssh directory entries loaded",
+		"path":      resolvedPath,
+		"home_path": homePath,
+		"files":     entries,
 	})
 }
 

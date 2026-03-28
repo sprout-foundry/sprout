@@ -129,6 +129,16 @@ func runSSHLoggedCommand(logger *sshLaunchLogger, step, summary string, cmd *exe
 	return out, nil
 }
 
+func newSSHCommand(hostAlias, script string, extraArgs ...string) *exec.Cmd {
+	baseArgs := []string{
+		"-o", "BatchMode=yes",
+		"-o", "StrictHostKeyChecking=accept-new",
+	}
+	baseArgs = append(baseArgs, extraArgs...)
+	baseArgs = append(baseArgs, hostAlias, fmt.Sprintf("bash -lc %s", shellEscapeSSH(script)))
+	return exec.Command("ssh", baseArgs...)
+}
+
 type sshWorkspaceSession struct {
 	Key                 string
 	HostAlias           string
@@ -158,6 +168,12 @@ type sshLaunchResult struct {
 type remoteSSHInfo struct {
 	Platform string
 	Arch     string
+}
+
+type sshRemoteEntry struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+	Type string `json:"type"`
 }
 
 const (
@@ -231,7 +247,8 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (*sshLaunc
 	}
 	logger.Logf("allocated local tunnel port %d", localPort)
 
-	remotePort, remotePID, err := startRemoteSSHBackend(hostAlias, remoteWorkspacePath, remoteBinary, logger)
+	launcherURL := fmt.Sprintf("http://127.0.0.1:%d", ws.port)
+	remotePort, remotePID, err := startRemoteSSHBackend(hostAlias, sessionKey, launcherURL, remoteWorkspacePath, remoteBinary, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -386,14 +403,77 @@ func ensureSSHProgramsAvailable() error {
 	return nil
 }
 
+func browseSSHDirectory(hostAlias, requestedPath string) ([]sshRemoteEntry, string, string, error) {
+	hostAlias = strings.TrimSpace(hostAlias)
+	if hostAlias == "" {
+		return nil, "", "", errors.New("SSH host alias is required")
+	}
+	if err := ensureSSHProgramsAvailable(); err != nil {
+		return nil, "", "", err
+	}
+
+	targetPath := strings.TrimSpace(requestedPath)
+	if targetPath == "" {
+		targetPath = "$HOME"
+	}
+
+	pythonSnippet := strings.Join([]string{
+		"import json, os, sys",
+		"target = os.path.abspath(os.path.expanduser(sys.argv[1]))",
+		"home = os.path.abspath(os.path.expanduser('~'))",
+		"if not os.path.isdir(target):",
+		"    print(f'directory not found: {target}', file=sys.stderr)",
+		"    raise SystemExit(1)",
+		"entries = []",
+		"for name in sorted(os.listdir(target), key=str.lower):",
+		"    if name.startswith('.'):",
+		"        continue",
+		"    path = os.path.join(target, name)",
+		"    if os.path.isdir(path):",
+		"        entries.append({'name': name, 'path': path, 'type': 'directory'})",
+		"print(json.dumps({'path': target, 'home_path': home, 'files': entries}))",
+	}, "\n")
+
+	script := strings.Join([]string{
+		"set -e",
+		fmt.Sprintf("TARGET_INPUT=%s", shellEscapeSSH(targetPath)),
+		`if [ "$TARGET_INPUT" = '$HOME' ]; then`,
+		`  TARGET_INPUT="$HOME"`,
+		"fi",
+		`if command -v python3 >/dev/null 2>&1; then`,
+		fmt.Sprintf("  python3 - \"$TARGET_INPUT\" <<'PY'\n%s\nPY", pythonSnippet),
+		`elif command -v python >/dev/null 2>&1; then`,
+		fmt.Sprintf("  python - \"$TARGET_INPUT\" <<'PY'\n%s\nPY", pythonSnippet),
+		"else",
+		`  echo "python3 or python is required on the remote host" >&2`,
+		"  exit 1",
+		"fi",
+	}, "\n")
+
+	cmd := newSSHCommand(hostAlias, script)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		details := trimSSHOutput(out)
+		if details == "" {
+			details = err.Error()
+		}
+		return nil, "", "", errors.New(details)
+	}
+
+	var payload struct {
+		Path     string           `json:"path"`
+		HomePath string           `json:"home_path"`
+		Files    []sshRemoteEntry `json:"files"`
+	}
+	if err := json.Unmarshal(out, &payload); err != nil {
+		return nil, "", "", fmt.Errorf("failed to decode ssh directory listing: %w", err)
+	}
+
+	return payload.Files, strings.TrimSpace(payload.Path), strings.TrimSpace(payload.HomePath), nil
+}
+
 func inspectRemoteSSHHost(hostAlias string, logger *sshLaunchLogger) (*remoteSSHInfo, error) {
-	cmd := exec.Command("ssh",
-		"-o", "BatchMode=yes",
-		"-o", "StrictHostKeyChecking=accept-new",
-		hostAlias,
-		"bash", "-lc",
-		"uname -s; uname -m",
-	)
+	cmd := newSSHCommand(hostAlias, "uname -s; uname -m")
 	out, err := runSSHLoggedCommand(logger, "inspect-remote", fmt.Sprintf("ssh %s uname -s; uname -m", hostAlias), cmd)
 	if err != nil {
 		return nil, err
@@ -689,17 +769,10 @@ func ensureRemoteSSHBinary(hostAlias, localBinary string, remoteInfo *remoteSSHI
 	}
 
 	remoteDirSSH := fmt.Sprintf("$HOME/.cache/ledit-webui/backend/%s/%s-%s", localFingerprint, remoteInfo.Platform, remoteInfo.Arch)
-	remoteDirSCP := fmt.Sprintf("~/.cache/ledit-webui/backend/%s/%s-%s", localFingerprint, remoteInfo.Platform, remoteInfo.Arch)
 	remoteBinarySSH := remoteDirSSH + "/ledit"
-	remoteBinarySCP := remoteDirSCP + "/ledit"
+	remoteUploadSCP := fmt.Sprintf(".ledit-ssh-upload-%s.tmp", localFingerprint)
 
-	mkdir := exec.Command("ssh",
-		"-o", "BatchMode=yes",
-		"-o", "StrictHostKeyChecking=accept-new",
-		hostAlias,
-		"bash", "-lc",
-		fmt.Sprintf("mkdir -p %s", remoteDirSSH),
-	)
+	mkdir := newSSHCommand(hostAlias, fmt.Sprintf("mkdir -p %s", shellEscapeSSH(remoteDirSSH)))
 	if _, err := runSSHLoggedCommand(logger, "prepare-remote-dir", fmt.Sprintf("ssh %s mkdir -p %s", hostAlias, remoteDirSSH), mkdir); err != nil {
 		return "", err
 	}
@@ -707,24 +780,18 @@ func ensureRemoteSSHBinary(hostAlias, localBinary string, remoteInfo *remoteSSHI
 	copyCmd := exec.Command("scp",
 		"-q",
 		localBinary,
-		fmt.Sprintf("%s:%s.tmp", hostAlias, remoteBinarySCP),
+		fmt.Sprintf("%s:%s", hostAlias, remoteUploadSCP),
 	)
-	if _, err := runSSHLoggedCommand(logger, "upload-backend", fmt.Sprintf("scp %s %s:%s.tmp", localBinary, hostAlias, remoteBinarySCP), copyCmd); err != nil {
+	if _, err := runSSHLoggedCommand(logger, "upload-backend", fmt.Sprintf("scp %s %s:%s", localBinary, hostAlias, remoteUploadSCP), copyCmd); err != nil {
 		return "", err
 	}
 
-	install := exec.Command("ssh",
-		"-o", "BatchMode=yes",
-		"-o", "StrictHostKeyChecking=accept-new",
-		hostAlias,
-		"bash", "-lc",
-		fmt.Sprintf(
-			"mv %s %s && chmod +x %s",
-			remoteBinarySSH+".tmp",
-			remoteBinarySSH,
-			remoteBinarySSH,
-		),
-	)
+	install := newSSHCommand(hostAlias, fmt.Sprintf(
+		"mv %s %s && chmod +x %s",
+		`"$HOME/`+remoteUploadSCP+`"`,
+		shellEscapeSSH(remoteBinarySSH),
+		shellEscapeSSH(remoteBinarySSH),
+	))
 	if _, err := runSSHLoggedCommand(logger, "install-backend", fmt.Sprintf("ssh %s install backend into %s", hostAlias, remoteBinarySSH), install); err != nil {
 		return "", err
 	}
@@ -832,7 +899,7 @@ func removePersistedSSHSession(sessionKey string) error {
 	return writePersistedSSHSessionRegistry(registry)
 }
 
-func startRemoteSSHBackend(hostAlias, remoteWorkspacePath, remoteBinary string, logger *sshLaunchLogger) (int, int, error) {
+func startRemoteSSHBackend(hostAlias, sessionKey, launcherURL, remoteWorkspacePath, remoteBinary string, logger *sshLaunchLogger) (int, int, error) {
 	workspaceExpr := `"$HOME"`
 	if remoteWorkspacePath != "$HOME" {
 		workspaceExpr = shellEscapeSSH(remoteWorkspacePath)
@@ -868,18 +935,18 @@ func startRemoteSSHBackend(hostAlias, remoteWorkspacePath, remoteBinary string, 
 		fmt.Sprintf("cd %s", workspaceExpr),
 		`REMOTE_PORT="$(choose_port)"`,
 		fmt.Sprintf(`LOG_FILE="$HOME/.cache/ledit-webui/logs/%s.log"`, sanitizeRemoteLogName(hostAlias)),
-		fmt.Sprintf(`nohup env BROWSER=none %s --isolated-config agent --daemon --web-port "$REMOTE_PORT" >"$LOG_FILE" 2>&1 < /dev/null &`, remoteBinary),
+		fmt.Sprintf(
+			`nohup env BROWSER=none LEDIT_SSH_HOST_ALIAS=%s LEDIT_SSH_SESSION_KEY=%s LEDIT_SSH_LAUNCHER_URL=%s LEDIT_SSH_HOME="$HOME" %s --isolated-config agent --daemon --web-port "$REMOTE_PORT" >"$LOG_FILE" 2>&1 < /dev/null &`,
+			shellEscapeSSH(hostAlias),
+			shellEscapeSSH(sessionKey),
+			shellEscapeSSH(launcherURL),
+			shellEscapeSSH(remoteBinary),
+		),
 		"REMOTE_PID=$!",
 		`printf "%s\n%s\n" "$REMOTE_PORT" "$REMOTE_PID"`,
-	}, "; ")
+	}, "\n")
 
-	cmd := exec.Command("ssh",
-		"-o", "BatchMode=yes",
-		"-o", "StrictHostKeyChecking=accept-new",
-		hostAlias,
-		"bash", "-lc",
-		script,
-	)
+	cmd := newSSHCommand(hostAlias, script)
 	out, err := runSSHLoggedCommand(logger, "start-remote-backend", fmt.Sprintf("ssh %s start remote backend", hostAlias), cmd)
 	if err != nil {
 		return 0, 0, err
@@ -987,13 +1054,7 @@ func stopRemoteSSHBackend(hostAlias string, remotePID int) error {
 		return nil
 	}
 
-	cmd := exec.Command("ssh",
-		"-o", "BatchMode=yes",
-		"-o", "StrictHostKeyChecking=accept-new",
-		hostAlias,
-		"bash", "-lc",
-		fmt.Sprintf("kill %d >/dev/null 2>&1 || true", remotePID),
-	)
+	cmd := newSSHCommand(hostAlias, fmt.Sprintf("kill %d >/dev/null 2>&1 || true", remotePID))
 	if out, err := cmd.CombinedOutput(); err != nil {
 		msg := strings.TrimSpace(string(out))
 		if msg == "" {

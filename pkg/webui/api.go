@@ -215,11 +215,27 @@ func (ws *ReactWebServer) handleAPIWorkspace(w http.ResponseWriter, r *http.Requ
 }
 
 func (ws *ReactWebServer) handleAPIWorkspaceGet(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	response := map[string]interface{}{
 		"daemon_root":    ws.GetDaemonRoot(),
 		"workspace_root": ws.GetWorkspaceRoot(),
-	})
+	}
+	if ws.sshHostAlias != "" {
+		sshContext := map[string]interface{}{
+			"host_alias":  ws.sshHostAlias,
+			"session_key": ws.sshSessionKey,
+			"is_remote":   true,
+			"launch_mode": "ssh",
+		}
+		if ws.sshLauncherURL != "" {
+			sshContext["launcher_url"] = ws.sshLauncherURL
+		}
+		if ws.sshHomePath != "" {
+			sshContext["home_path"] = ws.sshHomePath
+		}
+		response["ssh_context"] = sshContext
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.Request) {
@@ -271,11 +287,27 @@ func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.R
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	response := map[string]interface{}{
 		"daemon_root":    ws.GetDaemonRoot(),
 		"message":        "Workspace updated",
 		"workspace_root": workspaceRoot,
-	})
+	}
+	if ws.sshHostAlias != "" {
+		sshContext := map[string]interface{}{
+			"host_alias":  ws.sshHostAlias,
+			"session_key": ws.sshSessionKey,
+			"is_remote":   true,
+			"launch_mode": "ssh",
+		}
+		if ws.sshLauncherURL != "" {
+			sshContext["launcher_url"] = ws.sshLauncherURL
+		}
+		if ws.sshHomePath != "" {
+			sshContext["home_path"] = ws.sshHomePath
+		}
+		response["ssh_context"] = sshContext
+	}
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 func (ws *ReactWebServer) handleAPIWorkspaceBrowse(w http.ResponseWriter, r *http.Request) {

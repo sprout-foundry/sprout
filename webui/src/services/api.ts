@@ -144,6 +144,12 @@ export interface SSHOpenResponse {
   port: number;
 }
 
+export interface SSHBrowseEntry {
+  name: string;
+  path: string;
+  type: string;
+}
+
 export interface SSHOpenErrorPayload {
   error: string;
   step?: string;
@@ -169,6 +175,14 @@ export class SSHWorkspaceOpenError extends Error {
 export interface WorkspaceResponse {
   daemon_root: string;
   workspace_root: string;
+  ssh_context?: {
+    host_alias: string;
+    session_key?: string;
+    is_remote: boolean;
+    launch_mode?: string;
+    launcher_url?: string;
+    home_path?: string;
+  };
 }
 
 class ApiService {
@@ -199,7 +213,7 @@ class ApiService {
     return response.json();
   }
 
-  async setWorkspace(path: string): Promise<{ message: string; daemon_root: string; workspace_root: string }> {
+  async setWorkspace(path: string): Promise<WorkspaceResponse & { message: string }> {
     const response = await fetch('/api/workspace', {
       method: 'POST',
       headers: {
@@ -378,6 +392,42 @@ class ApiService {
     }
     const data = await response.json();
     return Array.isArray(data.sessions) ? data.sessions : [];
+  }
+
+  async browseSSHDirectory(
+    hostAlias: string,
+    path?: string
+  ): Promise<{ path: string; home_path?: string; files: SSHBrowseEntry[] }> {
+    const response = await fetch('/api/instances/ssh-browse', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        host_alias: hostAlias,
+        path,
+      }),
+    });
+
+    const text = await response.text();
+    let data: any = {};
+    if (text) {
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = { message: text };
+      }
+    }
+
+    if (!response.ok) {
+      throw new Error(data.error || data.message || 'Failed to browse SSH directory');
+    }
+
+    return {
+      path: typeof data.path === 'string' ? data.path : '',
+      home_path: typeof data.home_path === 'string' ? data.home_path : undefined,
+      files: Array.isArray(data.files) ? data.files : [],
+    };
   }
 
   async closeSSHSession(key: string): Promise<{ message: string; key: string }> {

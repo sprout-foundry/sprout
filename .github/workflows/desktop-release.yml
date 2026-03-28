@@ -71,11 +71,15 @@ jobs:
       working-directory: webui
 
     - name: Prepare macOS signing certificate
-      if: matrix.os == 'macos' && secrets.CSC_LINK != ''
+      if: matrix.os == 'macos'
       shell: bash
       env:
         CSC_LINK_B64: ${{ secrets.CSC_LINK }}
       run: |
+        if [ -z "$CSC_LINK_B64" ]; then
+          echo "No CSC_LINK secret configured; skipping macOS signing certificate setup."
+          exit 0
+        fi
         CERT_PATH="$RUNNER_TEMP/ledit-signing-cert.p12"
         printf '%s' "$CSC_LINK_B64" | base64 --decode > "$CERT_PATH"
         echo "CSC_LINK=$CERT_PATH" >> "$GITHUB_ENV"

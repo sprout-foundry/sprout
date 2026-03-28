@@ -2,6 +2,12 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.13.3] - 2026-03-28
+
+- Merge remote-tracking branch 'origin/main' (ade9765)
+- Updates 3 files - Updates rate limiter jitter logic and removes unused code (d3ab96a)
+- docs: Update changelog for v0.13.2 (92d7f22)
+
 ## [v0.13.2] - 2026-03-28
 
 - Merge remote-tracking branch 'origin/main' (7852976)

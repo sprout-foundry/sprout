@@ -8,6 +8,7 @@ import { HotkeyProvider } from './contexts/HotkeyContext';
 import './App.css';
 import { WebSocketService } from './services/websocket';
 import { ApiService, OnboardingEnvironment, OnboardingProviderOption } from './services/api';
+import { clientFetch, getWebUIClientId } from './services/clientSession';
 import { debugLog } from './utils/log';
 
 // Service Worker Registration
@@ -531,6 +532,9 @@ function App() {
     // Determine log level and category based on event type
     switch(event.type) {
       case 'connection_status':
+        if (event.data?.client_id && event.data.client_id !== getWebUIClientId()) {
+          break;
+        }
         logEntry.category = 'system';
         logEntry.level = event.data.connected ? 'success' : 'warning';
         const incomingSessionId = typeof event.data?.session_id === 'string' ? event.data.session_id : null;
@@ -1034,7 +1038,9 @@ function App() {
         logEntry.category = 'system';
         logEntry.level = 'info';
         debugLog('[workspace] Workspace changed:', event.data);
-        window.location.reload();
+        if (!event.data?.client_id || event.data.client_id === getWebUIClientId()) {
+          window.location.reload();
+        }
         break;
 
       default:
@@ -1369,7 +1375,7 @@ function App() {
   const handleGitCommit = useCallback(async (message: string, files: string[]) => {
     debugLog('Git commit:', message, files);
     try {
-      const response = await fetch('/api/git/commit', {
+      const response = await clientFetch('/api/git/commit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message, files })
@@ -1402,7 +1408,7 @@ function App() {
     debugLog('Git stage:', files);
     try {
       for (const file of files) {
-        const response = await fetch('/api/git/stage', {
+        const response = await clientFetch('/api/git/stage', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ path: file })
@@ -1422,7 +1428,7 @@ function App() {
     debugLog('Git unstage:', files);
     try {
       for (const file of files) {
-        const response = await fetch('/api/git/unstage', {
+        const response = await clientFetch('/api/git/unstage', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ path: file })
@@ -1442,7 +1448,7 @@ function App() {
     debugLog('Git discard:', files);
     try {
       for (const file of files) {
-        const response = await fetch('/api/git/discard', {
+        const response = await clientFetch('/api/git/discard', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ path: file })

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useHotkeys } from '../contexts/HotkeyContext';
+import { clientFetch } from '../services/clientSession';
 import './CommandPalette.css';
 
 interface CommandPaletteProps {
@@ -180,7 +181,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
           visited.add(dir);
           visitedDirs += 1;
 
-          const response = await fetch(`/api/browse?path=${encodeURIComponent(dir)}`);
+          const response = await clientFetch(`/api/browse?path=${encodeURIComponent(dir)}`);
           if (!response.ok) continue;
 
           const data = await response.json();

@@ -77,6 +77,7 @@ type Agent struct {
 	toolCallGuidanceAdded   bool                           // Prevent repeating tool call guidance
 	activeSkills            []string                       // Currently activated skills (by ID)
 	activePersona           string                         // Currently active persona ID (direct agent or subagent env)
+	workspaceRoot           string                         // Explicit workspace root for this agent instance
 
 	// Input injection handling
 	inputInjectionChan  chan string        // Channel for injecting new user input
@@ -151,6 +152,8 @@ type Agent struct {
 	subagentBatchMutex      sync.Mutex          // Protect batch buffer
 	subagentBatchSize       int                 // Flush threshold (default 50)
 	subagentBatchMilestones map[string]struct{} // Milestone phases that force immediate flush
+	eventMetadataMu         sync.RWMutex
+	eventMetadata           map[string]interface{}
 }
 
 func isDebugEnvEnabled() bool {
@@ -215,6 +218,14 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		return nil, fmt.Errorf("failed to initialize configuration: %w", err)
 	}
 
+	workspaceRoot, err := os.Getwd()
+	if err != nil {
+		workspaceRoot = "."
+	}
+	if absWorkspaceRoot, absErr := filepath.Abs(workspaceRoot); absErr == nil {
+		workspaceRoot = absWorkspaceRoot
+	}
+
 	var clientType api.ClientType
 	var finalModel string
 
@@ -256,6 +267,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 			falseStopDetectionEnabled: true,
 			conversationPruner:        NewConversationPruner(false),
 			activePersona:             "orchestrator",
+			workspaceRoot:             workspaceRoot,
 			securityApprovalMgr:       NewSecurityApprovalManager(),
 			outputRouter:              NewOutputRouter(nil, nil),
 		}
@@ -412,6 +424,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		commandHistory:            []string{},
 		historyIndex:              -1,
 		activePersona:             "orchestrator",
+		workspaceRoot:             workspaceRoot,
 		securityApprovalMgr:       NewSecurityApprovalManager(),
 		outputRouter:              NewOutputRouter(nil, nil),
 	}
@@ -600,6 +613,70 @@ func (a *Agent) GetEventBus() *events.EventBus {
 	return a.eventBus
 }
 
+// SetWorkspaceRoot records the logical workspace root for this agent instance.
+func (a *Agent) SetWorkspaceRoot(workspaceRoot string) {
+	a.workspaceRoot = strings.TrimSpace(workspaceRoot)
+}
+
+// GetWorkspaceRoot returns the logical workspace root for this agent instance.
+func (a *Agent) GetWorkspaceRoot() string {
+	return strings.TrimSpace(a.workspaceRoot)
+}
+
+// currentWorkspaceRoot resolves the agent workspace, falling back to the process cwd.
+func (a *Agent) currentWorkspaceRoot() string {
+	if root := strings.TrimSpace(a.workspaceRoot); root != "" {
+		return root
+	}
+	if wd, err := os.Getwd(); err == nil {
+		return wd
+	}
+	return "."
+}
+
+// SetEventMetadata attaches metadata that should be merged into all emitted UI events.
+func (a *Agent) SetEventMetadata(metadata map[string]interface{}) {
+	a.eventMetadataMu.Lock()
+	defer a.eventMetadataMu.Unlock()
+	if len(metadata) == 0 {
+		a.eventMetadata = nil
+		return
+	}
+	cloned := make(map[string]interface{}, len(metadata))
+	for k, v := range metadata {
+		cloned[k] = v
+	}
+	a.eventMetadata = cloned
+}
+
+func (a *Agent) decorateEventPayload(data interface{}) interface{} {
+	if data == nil {
+		return data
+	}
+
+	a.eventMetadataMu.RLock()
+	defer a.eventMetadataMu.RUnlock()
+	if len(a.eventMetadata) == 0 {
+		return data
+	}
+
+	payload, ok := data.(map[string]interface{})
+	if !ok {
+		return data
+	}
+
+	cloned := make(map[string]interface{}, len(payload)+len(a.eventMetadata))
+	for k, v := range payload {
+		cloned[k] = v
+	}
+	for k, v := range a.eventMetadata {
+		if _, exists := cloned[k]; !exists {
+			cloned[k] = v
+		}
+	}
+	return cloned
+}
+
 // OutputRouter returns the current output router (nil if not initialized)
 func (a *Agent) OutputRouter() *OutputRouter { return a.outputRouter }
 
@@ -611,7 +688,7 @@ func (a *Agent) GetSecurityApprovalMgr() *SecurityApprovalManager {
 // publishEvent publishes an event to the event bus if available
 func (a *Agent) publishEvent(eventType string, data interface{}) {
 	if a.eventBus != nil {
-		a.eventBus.Publish(eventType, data)
+		a.eventBus.Publish(eventType, a.decorateEventPayload(data))
 	}
 }
 

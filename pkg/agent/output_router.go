@@ -104,9 +104,13 @@ func (r *OutputRouter) getStreamingCallback() (func(string), *sync.Mutex) {
 func (r *OutputRouter) publish(eventType string, data interface{}) {
 	r.mu.RLock()
 	bus := r.eventBus
+	agent := r.agent
 	r.mu.RUnlock()
 	if bus == nil {
 		return
+	}
+	if agent != nil {
+		data = agent.decorateEventPayload(data)
 	}
 	bus.Publish(eventType, data)
 }

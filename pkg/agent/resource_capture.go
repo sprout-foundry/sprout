@@ -47,11 +47,7 @@ func (a *Agent) resourceDirectory() string {
 		return ""
 	}
 
-	wd, err := os.Getwd()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(wd, cleaned)
+	return filepath.Join(a.currentWorkspaceRoot(), cleaned)
 }
 
 func (a *Agent) captureWebText(kind, source, text string) {
@@ -114,9 +110,7 @@ func (a *Agent) captureVisionInputAndOutput(imagePath, rawResult string) {
 	if meta.FullOutputPath != "" {
 		fullPath := meta.FullOutputPath
 		if strings.HasPrefix(fullPath, "./") || strings.HasPrefix(fullPath, "../") {
-			if wd, err := os.Getwd(); err == nil {
-				fullPath = filepath.Join(wd, filepath.FromSlash(strings.TrimPrefix(meta.FullOutputPath, "./")))
-			}
+			fullPath = filepath.Join(a.currentWorkspaceRoot(), filepath.FromSlash(strings.TrimPrefix(meta.FullOutputPath, "./")))
 		}
 		if info, err := os.Stat(fullPath); err == nil && !info.IsDir() {
 			a.appendResourceCaptureLogWithMeta("saved_full_text", imagePath, meta.FullOutputPath, info.Size(), "", map[string]interface{}{

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -30,7 +29,7 @@ func (ws *ReactWebServer) handleAPISessions(w http.ResponseWriter, r *http.Reque
 
 	if scope == "current" {
 		// Get sessions for current working directory
-		workingDir, _ := os.Getwd()
+		workingDir := ws.getWorkspaceRootForRequest(r)
 		sessionInfos, err := agent.ListSessionsWithTimestampsScoped(workingDir)
 		if err != nil {
 			log.Printf("handleAPISessions: failed to list scoped sessions: %v", err)
@@ -56,15 +55,12 @@ func (ws *ReactWebServer) handleAPISessions(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Get current session ID
-	currentSessionID := ""
-	if ws.agent != nil {
-		currentSessionID = ws.agent.GetSessionID()
-	}
+	currentSessionID := ws.getCurrentSessionIDForRequest(r)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message":           "success",
-		"sessions":          sessions,
+		"message":            "success",
+		"sessions":           sessions,
 		"current_session_id": currentSessionID,
 	})
 }
@@ -123,19 +119,21 @@ func (ws *ReactWebServer) handleAPIRestoreSession(w http.ResponseWriter, r *http
 	}
 
 	sessionID := strings.TrimSpace(req.SessionID)
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 
 	// Load the session state
-	state, err := agent.LoadStateWithoutAgentScoped(sessionID, ws.workspaceRoot)
+	state, err := agent.LoadStateWithoutAgentScoped(sessionID, workspaceRoot)
 	if err != nil {
 		log.Printf("handleAPIRestoreSession: failed to load session %s: %v", sessionID, err)
 		http.Error(w, fmt.Sprintf("Failed to load session: %v", err), http.StatusBadRequest)
 		return
 	}
 
-	// Marshal state to JSON
-	stateData, err := agent.ExportStateToJSON(&agent.ConversationState{
+	// Build a live agent snapshot for this client
+	stateData, err := json.Marshal(agent.AgentState{
 		Messages:                state.Messages,
 		TurnCheckpoints:         state.TurnCheckpoints,
+		TaskActions:             state.TaskActions,
 		TotalCost:               state.TotalCost,
 		TotalTokens:             state.TotalTokens,
 		PromptTokens:            state.PromptTokens,
@@ -144,8 +142,6 @@ func (ws *ReactWebServer) handleAPIRestoreSession(w http.ResponseWriter, r *http
 		CachedTokens:            state.CachedTokens,
 		CachedCostSavings:       state.CachedCostSavings,
 		SessionID:               state.SessionID,
-		Name:                    state.Name,
-		WorkingDirectory:        state.WorkingDirectory,
 	})
 	if err != nil {
 		log.Printf("handleAPIRestoreSession: failed to marshal state: %v", err)
@@ -153,24 +149,19 @@ func (ws *ReactWebServer) handleAPIRestoreSession(w http.ResponseWriter, r *http
 		return
 	}
 
-	// Import state into agent
-	if ws.agent != nil {
-		if err := ws.agent.ImportState(stateData); err != nil {
-			log.Printf("handleAPIRestoreSession: failed to import state: %v", err)
-			http.Error(w, "Failed to import session state", http.StatusInternalServerError)
-			return
-		}
+	clientID := ws.resolveClientID(r)
+	ws.setAgentStateForClient(clientID, stateData)
+	if clientAgent, err := ws.getClientAgent(clientID); err == nil && clientAgent != nil {
+		_ = clientAgent.ImportState(stateData)
+		clientAgent.SetWorkspaceRoot(workspaceRoot)
 	}
 
-	// Publish connection_status event to notify frontend of session change
-	if ws.eventBus != nil {
-		ws.eventBus.Publish("connection_status", map[string]interface{}{
-			"connected":     true,
-			"session_id":    state.SessionID,
-			"restored":      true,
-			"message_count": len(state.Messages),
-		})
-	}
+	ws.publishClientEvent(clientID, "connection_status", map[string]interface{}{
+		"connected":     true,
+		"session_id":    state.SessionID,
+		"restored":      true,
+		"message_count": len(state.Messages),
+	})
 
 	// Return success response including messages so the frontend can populate the chat
 	w.Header().Set("Content-Type", "application/json")

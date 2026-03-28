@@ -377,8 +377,8 @@ func writeFileContent(ctx context.Context, a *Agent, path, content, toolName str
 	}
 
 	// Publish file change event for web UI auto-sync
-	if err == nil && a.eventBus != nil {
-		a.eventBus.Publish(events.EventTypeFileChanged, events.FileChangedEvent(path, "write", content))
+	if err == nil {
+		a.publishEvent(events.EventTypeFileChanged, events.FileChangedEvent(path, "write", content))
 		a.debugLog("Published file_changed event: %s (write)\n", path)
 	}
 
@@ -472,13 +472,13 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 	}
 
 	// Publish file change event for web UI auto-sync
-	if err == nil && a.eventBus != nil {
+	if err == nil {
 		var eventContent string
 		if eventContent, err = tools.ReadFile(ctx, path); err == nil {
-			a.eventBus.Publish(events.EventTypeFileChanged, events.FileChangedEvent(path, "edit", eventContent))
+			a.publishEvent(events.EventTypeFileChanged, events.FileChangedEvent(path, "edit", eventContent))
 			a.debugLog("Published file_changed event: %s (edit)\n", path)
 		} else {
-			a.eventBus.Publish(events.EventTypeFileChanged, events.FileChangedEvent(path, "edit", ""))
+			a.publishEvent(events.EventTypeFileChanged, events.FileChangedEvent(path, "edit", ""))
 			a.debugLog("Published file_changed event: %s (edit, no content)\n", path)
 		}
 

@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	agentpkg "github.com/alantheprice/ledit/pkg/agent"
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/events"
 	"github.com/alantheprice/ledit/pkg/providercatalog"
@@ -24,12 +25,13 @@ func (ws *ReactWebServer) handleAPIProviders(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	providers := ws.listProviders()
+	clientID := ws.resolveClientID(r)
+	providers := ws.listProviders(clientID)
 	currentProvider := ""
 	currentModel := ""
-	if ws.agent != nil {
-		currentProvider = strings.TrimSpace(ws.agent.GetProvider())
-		currentModel = strings.TrimSpace(ws.agent.GetModel())
+	if agentInst, err := ws.getClientAgent(clientID); err == nil && agentInst != nil {
+		currentProvider = strings.TrimSpace(agentInst.GetProvider())
+		currentModel = strings.TrimSpace(agentInst.GetModel())
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -40,18 +42,19 @@ func (ws *ReactWebServer) handleAPIProviders(w http.ResponseWriter, r *http.Requ
 	})
 }
 
-func (ws *ReactWebServer) listProviders() []providerDescriptor {
-	if ws.agent == nil || ws.agent.GetConfigManager() == nil {
+func (ws *ReactWebServer) listProviders(clientID string) []providerDescriptor {
+	agentInst, err := ws.getClientAgent(clientID)
+	if err != nil || agentInst == nil || agentInst.GetConfigManager() == nil {
 		return []providerDescriptor{}
 	}
 
-	configManager := ws.agent.GetConfigManager()
+	configManager := agentInst.GetConfigManager()
 	providerTypes := configManager.GetAvailableProviders()
 	descriptors := make([]providerDescriptor, 0, len(providerTypes))
 
 	for _, providerType := range providerTypes {
 		providerID := string(providerType)
-		models := ws.modelsForProvider(providerType)
+		models := ws.modelsForProvider(providerType, agentInst)
 		descriptors = append(descriptors, providerDescriptor{
 			ID:     providerID,
 			Name:   api.GetProviderName(providerType),
@@ -69,7 +72,7 @@ func (ws *ReactWebServer) listProviders() []providerDescriptor {
 	return descriptors
 }
 
-func (ws *ReactWebServer) modelsForProvider(providerType api.ClientType) []string {
+func (ws *ReactWebServer) modelsForProvider(providerType api.ClientType, agentInst *agentpkg.Agent) []string {
 	models, err := api.GetModelsForProvider(providerType)
 	if err == nil && len(models) > 0 {
 		modelIDs := make([]string, 0, len(models))
@@ -102,13 +105,13 @@ func (ws *ReactWebServer) modelsForProvider(providerType api.ClientType) []strin
 		}
 	}
 
-	if ws.agent == nil || ws.agent.GetConfigManager() == nil {
+	if agentInst == nil || agentInst.GetConfigManager() == nil {
 		return []string{}
 	}
 
-	fallback := strings.TrimSpace(ws.agent.GetConfigManager().GetModelForProvider(providerType))
-	if fallback == "" && ws.agent.GetProviderType() == providerType {
-		fallback = strings.TrimSpace(ws.agent.GetModel())
+	fallback := strings.TrimSpace(agentInst.GetConfigManager().GetModelForProvider(providerType))
+	if fallback == "" && agentInst.GetProviderType() == providerType {
+		fallback = strings.TrimSpace(agentInst.GetModel())
 	}
 	if fallback == "" {
 		if err != nil {
@@ -122,13 +125,19 @@ func (ws *ReactWebServer) modelsForProvider(providerType api.ClientType) []strin
 	return []string{fallback}
 }
 
-func (ws *ReactWebServer) publishProviderState() {
-	if ws.agent == nil || ws.eventBus == nil {
+func (ws *ReactWebServer) publishProviderState(clientID string) {
+	if ws.eventBus == nil {
 		return
 	}
 
-	stats := ws.gatherStats()
-	stats["provider"] = ws.agent.GetProvider()
-	stats["model"] = ws.agent.GetModel()
+	agentInst, err := ws.getClientAgent(clientID)
+	if err != nil || agentInst == nil {
+		return
+	}
+
+	stats := ws.gatherStatsForClientID(clientID)
+	stats["provider"] = agentInst.GetProvider()
+	stats["model"] = agentInst.GetModel()
+	stats["client_id"] = clientID
 	ws.eventBus.Publish(events.EventTypeMetricsUpdate, stats)
 }

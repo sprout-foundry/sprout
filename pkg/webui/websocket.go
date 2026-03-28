@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/alantheprice/ledit/pkg/events"
 	"github.com/gorilla/websocket"
 )
 
@@ -85,10 +86,12 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 
 	// Generate unique session ID for this connection
 	sessionID := fmt.Sprintf("ws_%d", time.Now().UnixNano())
+	clientID := ws.resolveClientID(r)
 
 	// Store the underlying connection with metadata
 	ws.connections.Store(conn, &ConnectionInfo{
 		SessionID:   sessionID,
+		ClientID:    clientID,
 		Type:        "webui",
 		ConnectedAt: time.Now(),
 	})
@@ -99,7 +102,7 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 	// Send initial connection status
 	safeConn.WriteJSON(map[string]interface{}{
 		"type": "connection_status",
-		"data": map[string]interface{}{"connected": true, "session_id": sessionID},
+		"data": map[string]interface{}{"connected": true, "session_id": sessionID, "client_id": clientID},
 	})
 
 	// Set up close handler to send disconnect status
@@ -112,68 +115,68 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 	eventCh := ws.eventBus.Subscribe(sessionID)
 	defer ws.eventBus.Unsubscribe(sessionID)
 
-			// Use separate goroutines for reading and writing
-		// This is the standard pattern for bidirectional WebSocket communication
-		ctx, cancel := context.WithCancel(r.Context())
-		defer cancel()
+	// Use separate goroutines for reading and writing
+	// This is the standard pattern for bidirectional WebSocket communication
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
 
-		// Track last message time for dead connection detection
-		lastMessage := time.Now()
+	// Track last message time for dead connection detection
+	lastMessage := time.Now()
 
-		// Read goroutine - handles incoming messages
-		readDone := make(chan struct{})
-		go func() {
-			defer close(readDone)
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("WebSocket read goroutine panic recovered: %v", r)
-				}
-			}()
-
-			conn.SetReadLimit(512 * 1024) // 512KB max message size
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				default:
-					// Set read deadline for heartbeat (60 seconds)
-					conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-
-					var msg map[string]interface{}
-					if err := conn.ReadJSON(&msg); err != nil {
-						if websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) ||
-							websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-							log.Printf("WebSocket %s closed: %v", sessionID, err)
-						} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-							// If no message received in 120 seconds (2 heartbeat periods), connection is dead
-							if time.Since(lastMessage) > 120*time.Second {
-								log.Printf("WebSocket %s no activity for 120s, closing", sessionID)
-								return
-							}
-							// Heartbeat timeout, send ping
-							if err := safeConn.WriteJSON(map[string]interface{}{
-								"type": "ping",
-								"data": map[string]interface{}{"timestamp": time.Now().Unix()},
-							}); err != nil {
-								log.Printf("WebSocket %s ping failed: %v", sessionID, err)
-								return
-							}
-							continue
-						} else {
-							log.Printf("WebSocket %s read error: %v", sessionID, err)
-						}
-						return
-					}
-
-					// Update last message time on successful read (includes pong responses,
-					// which reset the dead connection timer).
-					lastMessage = time.Now()
-
-					// Handle incoming WebSocket messages
-					ws.handleWebSocketMessage(safeConn, msg)
-				}
+	// Read goroutine - handles incoming messages
+	readDone := make(chan struct{})
+	go func() {
+		defer close(readDone)
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("WebSocket read goroutine panic recovered: %v", r)
 			}
-		}()// Write loop - handles outgoing events
+		}()
+
+		conn.SetReadLimit(512 * 1024) // 512KB max message size
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				// Set read deadline for heartbeat (60 seconds)
+				conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+
+				var msg map[string]interface{}
+				if err := conn.ReadJSON(&msg); err != nil {
+					if websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) ||
+						websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+						log.Printf("WebSocket %s closed: %v", sessionID, err)
+					} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+						// If no message received in 120 seconds (2 heartbeat periods), connection is dead
+						if time.Since(lastMessage) > 120*time.Second {
+							log.Printf("WebSocket %s no activity for 120s, closing", sessionID)
+							return
+						}
+						// Heartbeat timeout, send ping
+						if err := safeConn.WriteJSON(map[string]interface{}{
+							"type": "ping",
+							"data": map[string]interface{}{"timestamp": time.Now().Unix()},
+						}); err != nil {
+							log.Printf("WebSocket %s ping failed: %v", sessionID, err)
+							return
+						}
+						continue
+					} else {
+						log.Printf("WebSocket %s read error: %v", sessionID, err)
+					}
+					return
+				}
+
+				// Update last message time on successful read (includes pong responses,
+				// which reset the dead connection timer).
+				lastMessage = time.Now()
+
+				// Handle incoming WebSocket messages
+				ws.handleWebSocketMessage(safeConn, msg, clientID)
+			}
+		}
+	}() // Write loop - handles outgoing events
 	for {
 		select {
 		case <-ctx.Done():
@@ -181,6 +184,9 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 			return
 
 		case event := <-eventCh:
+			if !ws.shouldForwardEventToConnection(event, clientID) {
+				continue
+			}
 			if err := safeConn.WriteJSON(event); err != nil {
 				log.Printf("WebSocket %s write error: %v", sessionID, err)
 				return
@@ -193,8 +199,31 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 	}
 }
 
+func (ws *ReactWebServer) shouldForwardEventToConnection(event events.UIEvent, clientID string) bool {
+	data, _ := event.Data.(map[string]interface{})
+	if targetClientID, _ := data["client_id"].(string); strings.TrimSpace(targetClientID) != "" {
+		return targetClientID == clientID
+	}
+
+	switch event.Type {
+	case events.EventTypeQueryStarted,
+		events.EventTypeQueryProgress,
+		events.EventTypeQueryCompleted,
+		events.EventTypeToolStart,
+		events.EventTypeToolEnd,
+		events.EventTypeSubagentActivity,
+		events.EventTypeTodoUpdate,
+		events.EventTypeStreamChunk,
+		events.EventTypeAgentMessage,
+		events.EventTypeMetricsUpdate:
+		return false
+	default:
+		return true
+	}
+}
+
 // handleWebSocketMessage processes incoming WebSocket messages
-func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, msg map[string]interface{}) {
+func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, msg map[string]interface{}, clientID string) {
 	msgType, ok := msg["type"].(string)
 	if !ok {
 		return
@@ -224,7 +253,7 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, msg map[str
 	case "request_stats":
 		// Send current stats immediately
 		go func() {
-			stats := ws.gatherStats()
+			stats := ws.gatherStatsForClientID(clientID)
 			safeConn.WriteJSON(map[string]interface{}{
 				"type": "stats_update",
 				"data": stats,
@@ -232,18 +261,19 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, msg map[str
 		}()
 
 	case "provider_change":
-		go ws.handleProviderChangeMessage(safeConn, msg)
+		go ws.handleProviderChangeMessage(safeConn, msg, clientID)
 
 	case "model_change":
-		go ws.handleModelChangeMessage(safeConn, msg)
+		go ws.handleModelChangeMessage(safeConn, msg, clientID)
 
 	case "security_approval_response":
-		go ws.handleSecurityApprovalResponse(safeConn, msg)
+		go ws.handleSecurityApprovalResponse(safeConn, msg, clientID)
 	}
 }
 
-func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, msg map[string]interface{}) {
-	if ws.agent == nil || ws.agent.GetConfigManager() == nil {
+func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, msg map[string]interface{}, clientID string) {
+	clientAgent, err := ws.getClientAgent(clientID)
+	if err != nil || clientAgent == nil || clientAgent.GetConfigManager() == nil {
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
 			"data": map[string]string{"message": "Agent is not available"},
@@ -270,7 +300,7 @@ func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, msg ma
 		return
 	}
 
-	providerType, err := ws.agent.GetConfigManager().MapStringToClientType(providerName)
+	providerType, err := clientAgent.GetConfigManager().MapStringToClientType(providerName)
 	if err != nil {
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
@@ -279,7 +309,15 @@ func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, msg ma
 		return
 	}
 
-	if err := ws.agent.SetProvider(providerType); err != nil {
+	if ws.hasActiveQueryForClient(clientID) {
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": "Cannot change provider while this window has an active run"},
+		})
+		return
+	}
+
+	if err := clientAgent.SetProvider(providerType); err != nil {
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
 			"data": map[string]string{"message": err.Error()},
@@ -287,11 +325,13 @@ func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, msg ma
 		return
 	}
 
-	ws.publishProviderState()
+	_ = ws.syncAgentStateForClient(clientID)
+	ws.publishProviderState(clientID)
 }
 
-func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, msg map[string]interface{}) {
-	if ws.agent == nil {
+func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, msg map[string]interface{}, clientID string) {
+	clientAgent, err := ws.getClientAgent(clientID)
+	if err != nil || clientAgent == nil {
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
 			"data": map[string]string{"message": "Agent is not available"},
@@ -318,14 +358,22 @@ func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, msg map[s
 		return
 	}
 
-	previousProvider := ws.agent.GetProviderType()
-	previousModel := ws.agent.GetModel()
+	if ws.hasActiveQueryForClient(clientID) {
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": "Cannot change model while this window has an active run"},
+		})
+		return
+	}
+
+	previousProvider := clientAgent.GetProviderType()
+	previousModel := clientAgent.GetModel()
 	providerChanged := false
 
 	if providerName, _ := data["provider"].(string); strings.TrimSpace(providerName) != "" {
-		providerType, err := ws.agent.GetConfigManager().MapStringToClientType(providerName)
-		if err == nil && providerType != ws.agent.GetProviderType() {
-			if err := ws.agent.SetProvider(providerType); err != nil {
+		providerType, err := clientAgent.GetConfigManager().MapStringToClientType(providerName)
+		if err == nil && providerType != clientAgent.GetProviderType() {
+			if err := clientAgent.SetProvider(providerType); err != nil {
 				_ = safeConn.WriteJSON(map[string]interface{}{
 					"type": "error",
 					"data": map[string]string{"message": err.Error()},
@@ -336,12 +384,12 @@ func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, msg map[s
 		}
 	}
 
-	if err := ws.agent.SetModel(modelName); err != nil {
+	if err := clientAgent.SetModel(modelName); err != nil {
 		if providerChanged && previousProvider != "" {
-			if rollbackErr := ws.agent.SetProvider(previousProvider); rollbackErr != nil {
+			if rollbackErr := clientAgent.SetProvider(previousProvider); rollbackErr != nil {
 				log.Printf("webui: failed to rollback provider change after model switch failure: provider=%s model=%s rollback_err=%v", previousProvider, previousModel, rollbackErr)
 			} else if strings.TrimSpace(previousModel) != "" {
-				if rollbackModelErr := ws.agent.SetModel(previousModel); rollbackModelErr != nil {
+				if rollbackModelErr := clientAgent.SetModel(previousModel); rollbackModelErr != nil {
 					log.Printf("webui: provider rollback succeeded but failed to restore model %q: %v", previousModel, rollbackModelErr)
 				}
 			}
@@ -353,14 +401,16 @@ func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, msg map[s
 		return
 	}
 
-	ws.publishProviderState()
+	_ = ws.syncAgentStateForClient(clientID)
+	ws.publishProviderState(clientID)
 }
 
 // handleSecurityApprovalResponse processes security approval responses from the webui.
 // The webui sends a { "type": "security_approval_response", "data": { "request_id": "...", "approved": true/false } }
 // message when the user approves or rejects a security warning.
-func (ws *ReactWebServer) handleSecurityApprovalResponse(safeConn *SafeConn, msg map[string]interface{}) {
-	if ws.agent == nil {
+func (ws *ReactWebServer) handleSecurityApprovalResponse(safeConn *SafeConn, msg map[string]interface{}, clientID string) {
+	clientAgent, err := ws.getClientAgent(clientID)
+	if err != nil || clientAgent == nil {
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
 			"data": map[string]string{"message": "Agent is not available"},
@@ -388,7 +438,7 @@ func (ws *ReactWebServer) handleSecurityApprovalResponse(safeConn *SafeConn, msg
 
 	approved, _ := data["approved"].(bool)
 
-	mgr := ws.agent.GetSecurityApprovalMgr()
+	mgr := clientAgent.GetSecurityApprovalMgr()
 	if mgr == nil {
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
@@ -428,11 +478,12 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 
 	// Generate session ID
 	sessionID := fmt.Sprintf("terminal_%d", time.Now().UnixNano())
+	terminalManager := ws.getTerminalManagerForRequest(r)
 
 	log.Printf("Terminal WebSocket connection starting: %s", sessionID)
 
 	// Create terminal session
-	session, err := ws.terminalManager.CreateSession(sessionID)
+	session, err := terminalManager.CreateSession(sessionID)
 	if err != nil {
 		log.Printf("Failed to create terminal session: %v", err)
 		safeConn.WriteJSON(map[string]interface{}{
@@ -561,7 +612,7 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 				}
 
 				fmt.Printf("Terminal WebSocket: Received input command for session %s: %q\n", sessionID, input)
-				if err := ws.terminalManager.ExecuteCommand(sessionID, input); err != nil {
+				if err := terminalManager.ExecuteCommand(sessionID, input); err != nil {
 					safeConn.WriteJSON(map[string]interface{}{
 						"type": "error",
 						"data": map[string]string{
@@ -582,7 +633,7 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 					continue
 				}
 
-				if err := ws.terminalManager.WriteRawInput(sessionID, input); err != nil {
+				if err := terminalManager.WriteRawInput(sessionID, input); err != nil {
 					safeConn.WriteJSON(map[string]interface{}{
 						"type": "error",
 						"data": map[string]string{
@@ -596,7 +647,7 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 				if data, ok := msg["data"].(map[string]interface{}); ok {
 					if rows, ok := data["rows"].(float64); ok {
 						if cols, ok := data["cols"].(float64); ok {
-							err := ws.terminalManager.ResizeTerminal(sessionID, uint16(rows), uint16(cols))
+							err := terminalManager.ResizeTerminal(sessionID, uint16(rows), uint16(cols))
 							if err != nil {
 								log.Printf("Failed to resize terminal %s: %v", sessionID, err)
 							} else {
@@ -637,7 +688,7 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 			case "close":
 				log.Printf("Terminal %s close requested", sessionID)
 				cancel() // Ensure goroutines stop
-				ws.terminalManager.CloseSession(sessionID)
+				terminalManager.CloseSession(sessionID)
 				return
 			}
 		}

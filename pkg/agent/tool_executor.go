@@ -413,7 +413,7 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 		}
 
 		registry := GetToolRegistry()
-		execCtx := withToolExecutionMetadata(ctx, toolCallID, normalizedToolName)
+		execCtx := withToolExecutionMetadata(ctx, toolCallID, normalizedToolName, te.agent.GetWorkspaceRoot())
 		images, result, err := registry.ExecuteTool(execCtx, normalizedToolName, args, te.agent)
 
 		if err != nil && strings.Contains(err.Error(), "unknown tool") {

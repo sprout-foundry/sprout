@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import './FileTree.css';
 import { ApiService } from '../services/api';
+import { clientFetch } from '../services/clientSession';
 
 interface FileInfo {
   name: string;
@@ -128,7 +129,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
 
   const fetchFiles = useCallback(async (path: string): Promise<FileInfo[]> => {
     try {
-      const response = await fetch(`/api/files?path=${encodeURIComponent(path)}`);
+      const response = await clientFetch(`/api/files?path=${encodeURIComponent(path)}`);
       if (!response.ok) {
         throw new Error(`Failed to fetch files: ${response.statusText}`);
       }

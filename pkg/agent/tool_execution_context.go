@@ -1,6 +1,10 @@
 package agent
 
-import "context"
+import (
+	"context"
+
+	"github.com/alantheprice/ledit/pkg/filesystem"
+)
 
 type toolExecutionContextKey string
 
@@ -9,9 +13,10 @@ const (
 	toolExecutionContextKeyToolName   toolExecutionContextKey = "tool_name"
 )
 
-func withToolExecutionMetadata(ctx context.Context, toolCallID, toolName string) context.Context {
+func withToolExecutionMetadata(ctx context.Context, toolCallID, toolName, workspaceRoot string) context.Context {
 	ctx = context.WithValue(ctx, toolExecutionContextKeyToolCallID, toolCallID)
 	ctx = context.WithValue(ctx, toolExecutionContextKeyToolName, toolName)
+	ctx = filesystem.WithWorkspaceRoot(ctx, workspaceRoot)
 	return ctx
 }
 

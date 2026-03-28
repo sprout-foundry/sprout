@@ -2,6 +2,12 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.13.1] - 2026-03-28
+
+- Merge remote-tracking branch 'origin/main' (13956b9)
+- Updates 2 files - Updates SSH artifact fallback and websocket compatibility (ab5838c)
+- docs: Update changelog for v0.13.0 (100c2ae)
+
 ## [v0.13.0] - 2026-03-28
 
 - Updates pkg/webui/ssh_remote.go - Updates const block alignment (cb8912d)

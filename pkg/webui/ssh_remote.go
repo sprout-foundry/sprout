@@ -332,10 +332,37 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (result *s
 	ws.setSSHLaunchStatus(sessionKey, "health-check", "Waiting for SSH workspace health check...", true, "")
 	if err := waitForWebHealth(localPort, sshLaunchHealthTimeout); err != nil {
 		logger.Logf("health check failed: %v", err)
-		details := collectSSHHealthFailureDetails(hostAlias, remotePID, err, logger)
-		_ = killProcess(tunnelCmd)
-		_ = stopRemoteSSHBackend(hostAlias, remotePID)
-		return nil, newSSHLaunchFailure("health-check", "failed to connect to SSH workspace", details, logger)
+		if isRetryableSSHHealthError(err) {
+			logger.Logf("health check failed with retryable error; restarting tunnel once")
+			_ = killProcess(tunnelCmd)
+
+			retryLocalPort, portErr := findFreeLocalPort()
+			if portErr != nil {
+				logger.Logf("retry health: failed to allocate retry local port: %v", portErr)
+			} else {
+				logger.Logf("retry health: allocated retry local tunnel port %d", retryLocalPort)
+				retryTunnelCmd, retryTunnelErr := startSSHTunnel(hostAlias, retryLocalPort, remotePort, logger)
+				if retryTunnelErr != nil {
+					logger.Logf("retry health: failed to start retry tunnel: %v", retryTunnelErr)
+				} else {
+					if retryErr := waitForWebHealth(retryLocalPort, 12*time.Second); retryErr == nil {
+						logger.Logf("health check passed on retry local port %d", retryLocalPort)
+						localPort = retryLocalPort
+						tunnelCmd = retryTunnelCmd
+					} else {
+						logger.Logf("retry health check failed: %v", retryErr)
+						_ = killProcess(retryTunnelCmd)
+					}
+				}
+			}
+		}
+
+		if pingErr := waitForWebHealth(localPort, 1500*time.Millisecond); pingErr != nil {
+			details := collectSSHHealthFailureDetails(hostAlias, remotePort, remotePID, err, logger)
+			_ = killProcess(tunnelCmd)
+			_ = stopRemoteSSHBackend(hostAlias, remotePID)
+			return nil, newSSHLaunchFailure("health-check", "failed to connect to SSH workspace", details, logger)
+		}
 	}
 	logger.Logf("health check passed for local port %d", localPort)
 
@@ -1065,9 +1092,9 @@ func removePersistedSSHSession(sessionKey string) error {
 }
 
 func startRemoteSSHBackend(hostAlias, sessionKey, launcherURL, remoteWorkspacePath, remoteBinary string, logger *sshLaunchLogger) (int, int, error) {
-	workspaceExpr := `"$HOME"`
-	if remoteWorkspacePath != "$HOME" {
-		workspaceExpr = shellEscapeSSH(remoteWorkspacePath)
+	workspaceRaw := strings.TrimSpace(remoteWorkspacePath)
+	if workspaceRaw == "" {
+		workspaceRaw = "$HOME"
 	}
 
 	script := strings.Join([]string{
@@ -1097,16 +1124,38 @@ func startRemoteSSHBackend(hostAlias, sessionKey, launcherURL, remoteWorkspacePa
 		"  exit 1",
 		"}",
 		`mkdir -p "$HOME/.cache/ledit-webui/logs"`,
-		fmt.Sprintf("cd %s", workspaceExpr),
+		fmt.Sprintf("WORKSPACE_RAW=%s", shellEscapeSSH(workspaceRaw)),
+		`WORKSPACE_PATH="$WORKSPACE_RAW"`,
+		`case "$WORKSPACE_PATH" in`,
+		`  '$HOME'|'${HOME}') WORKSPACE_PATH="$HOME" ;;`,
+		`  '$HOME/'*) WORKSPACE_PATH="$HOME/${WORKSPACE_PATH#\$HOME/}" ;;`,
+		`  '${HOME}/'*) WORKSPACE_PATH="$HOME/${WORKSPACE_PATH#\${HOME}/}" ;;`,
+		`  '~') WORKSPACE_PATH="$HOME" ;;`,
+		`  '~/'*) WORKSPACE_PATH="$HOME/${WORKSPACE_PATH#~/}" ;;`,
+		`esac`,
+		`if ! cd "$WORKSPACE_PATH" 2>/dev/null; then`,
+		`  echo "remote workspace path is not accessible: $WORKSPACE_RAW" >&2`,
+		`  exit 1`,
+		`fi`,
 		`REMOTE_PORT="$(choose_port)"`,
 		fmt.Sprintf(`LOG_FILE="$HOME/.cache/ledit-webui/logs/%s.log"`, sanitizeRemoteLogName(hostAlias)),
+		`if [ -w "$PWD" ]; then`,
 		fmt.Sprintf(
-			`nohup env BROWSER=none LEDIT_SSH_HOST_ALIAS=%s LEDIT_SSH_SESSION_KEY=%s LEDIT_SSH_LAUNCHER_URL=%s LEDIT_SSH_HOME="$HOME" %s --isolated-config agent --daemon --web-port "$REMOTE_PORT" >"$LOG_FILE" 2>&1 < /dev/null &`,
+			`  nohup env BROWSER=none LEDIT_SSH_HOST_ALIAS=%s LEDIT_SSH_SESSION_KEY=%s LEDIT_SSH_LAUNCHER_URL=%s LEDIT_SSH_HOME="$HOME" %s --isolated-config agent --daemon --web-port "$REMOTE_PORT" >"$LOG_FILE" 2>&1 < /dev/null &`,
 			shellEscapeSSH(hostAlias),
 			shellEscapeSSH(sessionKey),
 			shellEscapeSSH(launcherURL),
 			shellEscapeSSH(remoteBinary),
 		),
+		`else`,
+		fmt.Sprintf(
+			`  nohup env BROWSER=none LEDIT_SSH_HOST_ALIAS=%s LEDIT_SSH_SESSION_KEY=%s LEDIT_SSH_LAUNCHER_URL=%s LEDIT_SSH_HOME="$HOME" %s agent --daemon --web-port "$REMOTE_PORT" >"$LOG_FILE" 2>&1 < /dev/null &`,
+			shellEscapeSSH(hostAlias),
+			shellEscapeSSH(sessionKey),
+			shellEscapeSSH(launcherURL),
+			shellEscapeSSH(remoteBinary),
+		),
+		`fi`,
 		"REMOTE_PID=$!",
 		`printf "%s\n%s\n" "$REMOTE_PORT" "$REMOTE_PID"`,
 	}, "\n")
@@ -1144,13 +1193,13 @@ func sanitizeRemoteLogName(hostAlias string) string {
 	return b.String()
 }
 
-func collectSSHHealthFailureDetails(hostAlias string, remotePID int, probeErr error, logger *sshLaunchLogger) string {
+func collectSSHHealthFailureDetails(hostAlias string, remotePort, remotePID int, probeErr error, logger *sshLaunchLogger) string {
 	sections := make([]string, 0, 3)
 	if probeErr != nil {
 		sections = append(sections, fmt.Sprintf("Local health probe failed: %v", probeErr))
 	}
 
-	remoteDetails := inspectRemoteSSHBackendFailure(hostAlias, remotePID, logger)
+	remoteDetails := inspectRemoteSSHBackendFailure(hostAlias, remotePort, remotePID, logger)
 	if remoteDetails != "" {
 		sections = append(sections, remoteDetails)
 	}
@@ -1158,7 +1207,7 @@ func collectSSHHealthFailureDetails(hostAlias string, remotePID int, probeErr er
 	return strings.TrimSpace(strings.Join(sections, "\n\n"))
 }
 
-func inspectRemoteSSHBackendFailure(hostAlias string, remotePID int, logger *sshLaunchLogger) string {
+func inspectRemoteSSHBackendFailure(hostAlias string, remotePort, remotePID int, logger *sshLaunchLogger) string {
 	hostAlias = strings.TrimSpace(hostAlias)
 	if hostAlias == "" {
 		return ""
@@ -1166,13 +1215,28 @@ func inspectRemoteSSHBackendFailure(hostAlias string, remotePID int, logger *ssh
 
 	script := strings.Join([]string{
 		"set +e",
+		fmt.Sprintf("REMOTE_PORT=%d", remotePort),
 		fmt.Sprintf("REMOTE_PID=%d", remotePID),
 		fmt.Sprintf(`LOG_FILE="$HOME/.cache/ledit-webui/logs/%s.log"`, sanitizeRemoteLogName(hostAlias)),
+		`echo "Remote backend port: $REMOTE_PORT"`,
 		`if [ "$REMOTE_PID" -gt 0 ] && kill -0 "$REMOTE_PID" >/dev/null 2>&1; then`,
 		`  echo "Remote backend PID: $REMOTE_PID (running)"`,
 		"else",
 		`  echo "Remote backend PID: $REMOTE_PID (not running)"`,
 		"fi",
+		`if [ "$REMOTE_PORT" -gt 0 ]; then`,
+		`  if command -v ss >/dev/null 2>&1; then`,
+		`    echo "--- remote listener (ss) ---"`,
+		`    ss -ltn 2>/dev/null | grep -E "[:.]$REMOTE_PORT[[:space:]]" || true`,
+		`  elif command -v netstat >/dev/null 2>&1; then`,
+		`    echo "--- remote listener (netstat) ---"`,
+		`    netstat -ltn 2>/dev/null | grep -E "[:.]$REMOTE_PORT[[:space:]]" || true`,
+		`  fi`,
+		`  if command -v curl >/dev/null 2>&1; then`,
+		`    echo "--- remote health probe ---"`,
+		`    curl -sS -i --max-time 2 "http://127.0.0.1:$REMOTE_PORT/health" || true`,
+		`  fi`,
+		`fi`,
 		`echo "Remote log: $LOG_FILE"`,
 		`if [ -f "$LOG_FILE" ]; then`,
 		`  echo "--- remote log tail ---"`,
@@ -1205,6 +1269,8 @@ func startSSHTunnel(hostAlias string, localPort, remotePort int, logger *sshLaun
 	cmd := exec.Command("ssh",
 		"-o", "BatchMode=yes",
 		"-o", "StrictHostKeyChecking=accept-new",
+		"-o", "ConnectTimeout=10",
+		"-o", "ConnectionAttempts=1",
 		"-o", "ServerAliveInterval=15",
 		"-o", "ServerAliveCountMax=3",
 		"-o", "ExitOnForwardFailure=yes",
@@ -1222,6 +1288,17 @@ func startSSHTunnel(hostAlias string, localPort, remotePort int, logger *sshLaun
 	logger.Logf("start-tunnel launched pid=%d", cmd.Process.Pid)
 
 	return cmd, nil
+}
+
+func isRetryableSSHHealthError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(strings.TrimSpace(err.Error()))
+	return strings.Contains(msg, "connection reset by peer") ||
+		strings.Contains(msg, "connection refused") ||
+		strings.Contains(msg, "unexpected eof") ||
+		strings.Contains(msg, "eof")
 }
 
 func waitForWebHealth(port int, timeout time.Duration) error {

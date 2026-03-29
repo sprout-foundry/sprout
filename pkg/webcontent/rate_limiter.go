@@ -56,7 +56,7 @@ func (r *rateLimiter) wait(host string) {
 		sleepMin = 0
 	}
 	sleepMax := r.maxInterval - elapsed
-	
+
 	// Generate random jitter outside the lock to avoid holding it during RNG
 	r.mu.Unlock()
 	var sleepFor time.Duration
@@ -65,7 +65,7 @@ func (r *rateLimiter) wait(host string) {
 	} else {
 		sleepFor = sleepMin
 	}
-	
+
 	r.mu.Lock()
 	r.lastRequest[host] = time.Now().Add(sleepFor)
 	r.mu.Unlock()

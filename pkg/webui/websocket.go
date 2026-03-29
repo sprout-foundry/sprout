@@ -205,9 +205,9 @@ func (ws *ReactWebServer) shouldForwardEventToConnection(event events.UIEvent, c
 		return targetClientID == clientID
 	}
 
-	// Backward compatibility: when event metadata is missing client_id,
-	// forward the event instead of dropping it so chat/tool streams remain visible.
-	return true
+	// Untargeted events should not leak across client windows.
+	// Only allow explicit global events without a client_id.
+	return event.Type == events.EventTypeMetricsUpdate
 }
 
 // handleWebSocketMessage processes incoming WebSocket messages

@@ -1193,12 +1193,14 @@ func (ws *ReactWebServer) stopSSHSessionLocked(key string) {
 	session := ws.sshSessions[key]
 	if session == nil {
 		_ = removePersistedSSHSession(key)
+		ws.clearClientSSHContextForSessionKey(key)
 		return
 	}
 	_ = killProcess(session.TunnelCmd)
 	_ = stopRemoteSSHBackend(session.HostAlias, session.RemotePID)
 	_ = removePersistedSSHSession(key)
 	delete(ws.sshSessions, key)
+	ws.clearClientSSHContextForSessionKey(key)
 }
 
 func (ws *ReactWebServer) watchSSHSession(key string, session *sshWorkspaceSession, cmd *exec.Cmd) {

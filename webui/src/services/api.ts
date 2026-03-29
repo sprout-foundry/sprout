@@ -216,6 +216,10 @@ class ApiService {
     if (!response.ok) {
       throw new Error('Failed to fetch workspace');
     }
+    const contentType = response.headers.get('Content-Type') || '';
+    if (!contentType.includes('application/json')) {
+      throw new Error('Workspace API returned non-JSON response');
+    }
     return response.json();
   }
 

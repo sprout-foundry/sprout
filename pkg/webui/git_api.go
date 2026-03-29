@@ -585,6 +585,20 @@ func (ws *ReactWebServer) handleAPIGitBranches(w http.ResponseWriter, r *http.Re
 	}
 
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+
+	// Return an empty success response when the workspace isn't a git repository
+	// instead of a 500, to avoid spurious console errors in the client.
+	checkCmd := ws.gitCommandForWorkspace(workspaceRoot, "rev-parse", "--git-dir")
+	if err := checkCmd.Run(); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"message":  "not_git_repo",
+			"current":  "",
+			"branches": []string{},
+		})
+		return
+	}
+
 	currentBranch, err := gitOutputStringForWorkspace(ws, workspaceRoot, "branch", "--show-current")
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to get current branch: %v", err), http.StatusInternalServerError)

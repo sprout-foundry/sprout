@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -81,6 +80,15 @@ type sshLaunchErrorDTO struct {
 	Step    string `json:"step,omitempty"`
 	Details string `json:"details,omitempty"`
 	LogPath string `json:"log_path,omitempty"`
+}
+
+type sshLaunchStatusDTO struct {
+	Key        string    `json:"key"`
+	Step       string    `json:"step"`
+	Status     string    `json:"status"`
+	InProgress bool      `json:"in_progress"`
+	LastError  string    `json:"last_error,omitempty"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 func (ws *ReactWebServer) handleAPIInstances(w http.ResponseWriter, r *http.Request) {
@@ -254,12 +262,49 @@ func (ws *ReactWebServer) handleAPISSHOpen(w http.ResponseWriter, r *http.Reques
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	proxyPath := result.ProxyBase + "/"
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"message":    "ssh workspace ready",
 		"url":        result.URL,
 		"port":       result.LocalPort,
-		"proxy_url":  fmt.Sprintf("http://127.0.0.1:%d%s/", ws.port, result.ProxyBase),
+		// Keep SSH navigation same-origin so PWA/service-worker/session storage
+		// continue to work consistently on mobile browsers.
+		"proxy_url":  proxyPath,
 		"proxy_base": result.ProxyBase,
+	})
+}
+
+func (ws *ReactWebServer) handleAPISSHLaunchStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeSSHJSONError(w, http.StatusMethodNotAllowed, sshLaunchErrorDTO{Error: "Method not allowed"})
+		return
+	}
+
+	hostAlias := strings.TrimSpace(r.URL.Query().Get("host_alias"))
+	if hostAlias == "" {
+		writeSSHJSONError(w, http.StatusBadRequest, sshLaunchErrorDTO{Error: "host_alias is required"})
+		return
+	}
+
+	remoteWorkspacePath := strings.TrimSpace(r.URL.Query().Get("remote_workspace_path"))
+	if remoteWorkspacePath == "" {
+		remoteWorkspacePath = "$HOME"
+	}
+
+	status := ws.getSSHLaunchStatus(hostAlias + "::" + remoteWorkspacePath)
+	if status == nil {
+		writeSSHJSONError(w, http.StatusNotFound, sshLaunchErrorDTO{Error: "No SSH launch status available"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(sshLaunchStatusDTO{
+		Key:        status.Key,
+		Step:       status.Step,
+		Status:     status.Status,
+		InProgress: status.InProgress,
+		LastError:  status.LastError,
+		UpdatedAt:  status.UpdatedAt,
 	})
 }
 

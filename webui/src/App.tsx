@@ -155,17 +155,38 @@ interface OnboardingState {
   error: string | null;
 }
 
-const APP_STATE_STORAGE_KEY = 'ledit:webui:state:v1';
+const APP_STATE_STORAGE_KEY = 'ledit:webui:state:v2';
 const INSTANCE_PID_STORAGE_KEY = 'ledit:webui:instancePid';
 const INSTANCE_SWITCH_RESET_KEY = 'ledit:webui:instanceSwitchReset';
 const MAX_PERSISTED_LOGS = 1000;
 
+const getUIContextScope = (): string => {
+  if (typeof window === 'undefined') {
+    return 'local';
+  }
+
+  const path = window.location.pathname || '/';
+  if (!path.startsWith('/ssh/')) {
+    return 'local';
+  }
+
+  // Path shape: /ssh/{encodedSessionKey}/...
+  const parts = path.split('/').filter(Boolean);
+  const encodedSessionKey = parts.length >= 2 ? parts[1] : '';
+  if (!encodedSessionKey) {
+    return 'ssh:unknown';
+  }
+
+  return `ssh:${encodedSessionKey}`;
+};
+
 const getAppStateStorageKey = (): string => {
   if (typeof window === 'undefined' || !window.localStorage) {
-    return `${APP_STATE_STORAGE_KEY}:default`;
+    return `${APP_STATE_STORAGE_KEY}:default:local`;
   }
   const instancePid = window.localStorage.getItem(INSTANCE_PID_STORAGE_KEY) || 'default';
-  return `${APP_STATE_STORAGE_KEY}:${instancePid}`;
+  const scope = getUIContextScope();
+  return `${APP_STATE_STORAGE_KEY}:${instancePid}:${scope}`;
 };
 
 const parseDate = (value: unknown): Date => {

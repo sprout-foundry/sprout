@@ -55,10 +55,13 @@ class WebSocketService {
       this.reconnectTimeout = null;
     }
 
-    // Use environment variable if provided, otherwise use relative URL
+    // Use environment variable if provided, otherwise use relative URL.
+    // When running via the SSH proxy the LEDIT_PROXY_BASE global is injected
+    // into the page so WebSocket traffic routes through the same origin.
     const wsUrl = process.env.REACT_APP_WS_URL || (() => {
+      const proxyBase = (window as any).LEDIT_PROXY_BASE || '';
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      return `${protocol}//${window.location.host}/ws`;
+      return `${protocol}//${window.location.host}${proxyBase}/ws`;
     })();
 
     debugLog('Connecting to WebSocket:', wsUrl);

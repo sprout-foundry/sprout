@@ -2,6 +2,11 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.14.1] - 2026-03-29
+
+- Updates 6 files - Updates installation scripts and adds Termux support (99eacd8)
+- docs: Update changelog for v0.14.0 (1de9dee)
+
 ## [v0.14.0] - 2026-03-29
 
 - Updates 6 files - Updates app state storage to scope by SSH context (2fc2551)

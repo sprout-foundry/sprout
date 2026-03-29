@@ -257,6 +257,10 @@ func openBrowser(url string) error {
 	var cmd *exec.Cmd
 
 	switch {
+	case isCommandAvailable("termux-open-url"):
+		cmd = exec.Command("termux-open-url", url)
+	case isCommandAvailable("termux-open"):
+		cmd = exec.Command("termux-open", url)
 	case isCommandAvailable("xdg-open"):
 		cmd = exec.Command("xdg-open", url)
 	case isCommandAvailable("open"):

@@ -234,6 +234,8 @@ func (c *ShellCommand) gatherEnvironmentalContext() (string, error) {
 	if shell == "" {
 		if runtime.GOOS == "windows" {
 			shell = "cmd.exe"
+		} else if shellPath, err := exec.LookPath("sh"); err == nil {
+			shell = shellPath
 		} else {
 			shell = "/bin/sh"
 		}

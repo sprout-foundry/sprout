@@ -12,8 +12,11 @@
     - [Web UI](#web-ui)
     - [SSH Tunneling (Remote Web UI Access)](#ssh-tunneling-remote-web-ui-access)
   - [Installation](#installation)
+    - [Quick Install](#quick-install)
     - [Prerequisites](#prerequisites)
-    - [From Source (Preferred Method)](#from-source-preferred-method)
+    - [Install Options](#install-options)
+    - [Uninstall](#uninstall)
+    - [From Source](#from-source)
   - [Getting Started](#getting-started)
   - [Configuration](#configuration)
     - [`config.json` settings](#configjson-settings)
@@ -210,38 +213,87 @@ Then simply run `ssh -fN ledit-remote` to establish the tunnel.
 
 ## Installation
 
-To get started with `ledit`, the preferred method is to install it via `go install`.
+### Quick Install
+
+**Linux / macOS:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/alantheprice/ledit/main/scripts/install.sh | sh
+```
+
+**Windows (PowerShell):**
+```powershell
+irm https://raw.githubusercontent.com/alantheprice/ledit/main/scripts/install.ps1 | iex
+```
 
 ### Prerequisites
 
-- Go 1.25.0+
-- Git (for version control integration)
+- **Linux / macOS**: `curl`, `tar`
+- **Windows**: PowerShell 5.1+, `curl` (included with Windows 10+)
 
-### From Source (Preferred Method)
+### Install Options
 
-Make sure you have Go installed and configured.
-
-**For public access (recommended):**
+**Install a specific version:**
 ```bash
-go install github.com/alantheprice/ledit@latest
+# Linux / macOS
+LEDIT_VERSION=v0.14.0 curl -fsSL https://raw.githubusercontent.com/alantheprice/ledit/main/scripts/install.sh | sh
+
+# Windows
+$env:LEDIT_VERSION="v0.14.0"; irm https://raw.githubusercontent.com/alantheprice/ledit/main/scripts/install.ps1 | iex
 ```
 
-**For private repository access:**
+**Install to a custom directory:**
 ```bash
-# Clone the repository first
+# Linux / macOS
+LEDIT_INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/alantheprice/ledit/main/scripts/install.sh | sh
+
+# Windows
+$env:LEDIT_INSTALL_DIR="C:\Tools\ledit"; irm https://raw.githubusercontent.com/alantheprice/ledit/main/scripts/install.ps1 | iex
+```
+
+**Install locally from script (without piping):**
+```bash
+# Linux / macOS
+curl -fsSL -o install.sh https://raw.githubusercontent.com/alantheprice/ledit/main/scripts/install.sh
+sh install.sh
+
+# Windows
+Invoke-WebRequest -Uri https://raw.githubusercontent.com/alantheprice/ledit/main/scripts/install.ps1 -OutFile install.ps1
+.\install.ps1
+```
+
+### Uninstall
+
+```bash
+# Linux / macOS
+curl -fsSL https://raw.githubusercontent.com/alantheprice/ledit/main/scripts/install.sh | sh -s -- --uninstall
+
+# Windows
+irm https://raw.githubusercontent.com/alantheprice/ledit/main/scripts/install.ps1 -OutFile install.ps1; .\install.ps1 -Uninstall
+```
+
+> **Note:** The install script downloads pre-built binaries from GitHub Releases. If no binary is available for your platform, see [From Source](#from-source) below.
+
+### From Source
+
+If you prefer to build from source or a pre-built binary is not available for your platform:
+
+**Prerequisites:** Go 1.25.0+, Git
+
+```bash
+# Public repository (recommended)
+go install github.com/alantheprice/ledit@latest
+
+# Private repository
 git clone https://github.com/alantheprice/ledit.git
 cd ledit
 go install
 ```
 
-This will install the `ledit` executable in your `GOPATH/bin` directory (e.g., `~/go/bin` on Linux/macOS).
-
-**Note on PATH:** If `ledit` is not found after installation, you may need to add your `GOPATH/bin` directory to your system's PATH environment variable. For example, you can add the following line to your shell's configuration file (e.g., `.bashrc`, `.zshrc`, or `.profile`):
+This installs the `ledit` executable to your `GOPATH/bin` directory (e.g., `~/go/bin`). If `ledit` is not found, add it to your PATH:
 
 ```bash
 export PATH=$PATH:$(go env GOPATH)/bin
 ```
-After adding this, restart your terminal or run `source ~/.bashrc` (or your respective config file) for the changes to take effect.
 
 ## Getting Started
 

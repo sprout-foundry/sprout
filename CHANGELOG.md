@@ -2,6 +2,10 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.13.5] - 2026-03-29
+
+- Updates pkg/webui/static/js/main.1f94b90d.js.map - Updates web UI static assets (bd0eb8d)
+
 ## [v0.13.3] - 2026-03-28
 
 - Merge remote-tracking branch 'origin/main' (ade9765)

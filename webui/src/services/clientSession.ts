@@ -43,6 +43,25 @@ export function appendClientIdToUrl(input: string): string {
   return url.toString();
 }
 
+/**
+ * When running via the SSH proxy, parse the host alias from LEDIT_PROXY_BASE.
+ * The session key embedded in the proxy base has the form "{hostAlias}::{remotePath}".
+ * Returns null when not in a proxy session.
+ */
+export function getSSHProxyContext(): { hostAlias: string; remotePath: string } | null {
+  const proxyBase = getProxyBase(); // e.g. "/ssh/mac-mini%3A%3A%24HOME"
+  if (!proxyBase) return null;
+  const match = proxyBase.match(/^\/ssh\/([^/]+)/);
+  if (!match) return null;
+  const sessionKey = decodeURIComponent(match[1]); // "mac-mini::$HOME"
+  const idx = sessionKey.indexOf('::');
+  if (idx < 0) return null;
+  return {
+    hostAlias: sessionKey.slice(0, idx),
+    remotePath: sessionKey.slice(idx + 2),
+  };
+}
+
 export async function clientFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const headers = new Headers(init?.headers || {});
   headers.set(WEBUI_CLIENT_ID_HEADER, getWebUIClientId());

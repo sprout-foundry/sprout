@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import './LocationSwitcher.css';
-import { FolderOpen, Monitor, RefreshCw, Loader2 } from 'lucide-react';
+import { FolderOpen, Monitor, RefreshCw, Loader2, Server } from 'lucide-react';
 import {
   ApiService,
   SSHBrowseEntry,
@@ -9,7 +9,7 @@ import {
   SSHSessionEntry,
   SSHWorkspaceOpenError,
 } from '../services/api';
-import { clientFetch } from '../services/clientSession';
+import { clientFetch, getSSHProxyContext } from '../services/clientSession';
 
 interface LocationSwitcherProps {
   isConnected: boolean;
@@ -292,8 +292,12 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
   const [sshSessionSuggestionsError, setSshSessionSuggestionsError] = useState<Record<string, string | null>>({});
   const [sshHomePaths, setSshHomePaths] = useState<Record<string, string>>({});
 
+  const [isSshPanelOpen, setIsSshPanelOpen] = useState(false);
+
   const popoverRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const sshBtnRef = useRef<HTMLButtonElement>(null);
+  const sshPanelRef = useRef<HTMLDivElement>(null);
   const pathInputRef = useRef<HTMLInputElement>(null);
   const apiService = useRef(ApiService.getInstance());
 
@@ -411,10 +415,27 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
           }
           addRemoteRecentWorkspace(nextRemoteContext.hostAlias, nextWorkspaceRoot);
         } else {
-          setRemoteContext(null);
-          addRecentWorkspace(nextWorkspaceRoot);
+          // ssh_context absent — fall back to the proxy base injected when
+          // serving the SSH proxy page (covers older remote binaries).
+          const proxyCtx = getSSHProxyContext();
+          if (proxyCtx) {
+            const nextRemoteContext = { hostAlias: proxyCtx.hostAlias };
+            setRemoteContext(nextRemoteContext);
+            addRemoteRecentWorkspace(proxyCtx.hostAlias, nextWorkspaceRoot);
+          } else {
+            setRemoteContext(null);
+            addRecentWorkspace(nextWorkspaceRoot);
+          }
         }
       } catch (error) {
+        // Even when the workspace API fails (e.g. older remote binary that
+        // doesn't expose /api/workspace correctly), we can still detect the
+        // SSH context from the proxy base that the local server injected.
+        const proxyCtx = getSSHProxyContext();
+        if (proxyCtx) {
+          setRemoteContext({ hostAlias: proxyCtx.hostAlias });
+          addRemoteRecentWorkspace(proxyCtx.hostAlias, '');
+        }
         console.error('Failed to load workspace data:', error);
       }
     };
@@ -442,7 +463,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
   }, [switchingState.error, switchingState.status, isOpeningSshHost]);
 
   useEffect(() => {
-    if (!isOpen) {
+    if (!isOpen && !isSshPanelOpen) {
       return;
     }
     const desktopBridge = (window as any).leditDesktop;
@@ -477,10 +498,10 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [isOpen]);
+  }, [isOpen, isSshPanelOpen]);
 
   useEffect(() => {
-    if (!isOpen || remoteContext || sshHosts.length === 0 || !selectedSshBrowseHost) {
+    if ((!isOpen && !isSshPanelOpen) || remoteContext || sshHosts.length === 0 || !selectedSshBrowseHost) {
       setSshPathSuggestions([]);
       setSshPathSuggestionsLoading(false);
       setSshPathSuggestionsError(null);
@@ -531,10 +552,10 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [apiService, isOpen, remoteContext, remoteWorkspacePath, selectedSshBrowseHost, sshHosts.length]);
+  }, [apiService, isOpen, isSshPanelOpen, remoteContext, remoteWorkspacePath, selectedSshBrowseHost, sshHosts.length]);
 
   useEffect(() => {
-    if (!isOpen || remoteContext || !focusedSshSessionKey) {
+    if ((!isOpen && !isSshPanelOpen) || remoteContext || !focusedSshSessionKey) {
       return;
     }
 
@@ -590,24 +611,30 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [focusedSshSessionKey, isOpen, remoteContext, sshSessionPathDrafts, sshSessions]);
+  }, [focusedSshSessionKey, isOpen, isSshPanelOpen, remoteContext, sshSessionPathDrafts, sshSessions]);
 
   useEffect(() => {
-    if (!isOpen) {
+    if (!isOpen && !isSshPanelOpen) {
       return undefined;
     }
 
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        popoverRef.current &&
-        !popoverRef.current.contains(event.target as Node) &&
-        triggerRef.current &&
-        !triggerRef.current.contains(event.target as Node)
-      ) {
+      const target = event.target as Node;
+      const inWorkspacePopover = popoverRef.current?.contains(target);
+      const inTrigger = triggerRef.current?.contains(target);
+      const inSshPanel = sshPanelRef.current?.contains(target);
+      const inSshBtn = sshBtnRef.current?.contains(target);
+
+      if (!inWorkspacePopover && !inTrigger) {
         setIsOpen(false);
         setSelectedIndex(-1);
-        setSwitchingState({ isSwitching: false, error: null, status: null });
-        setSshFailure(null);
+        if (!inSshPanel && !inSshBtn) {
+          setSwitchingState({ isSwitching: false, error: null, status: null });
+          setSshFailure(null);
+        }
+      }
+      if (!inSshPanel && !inSshBtn) {
+        setIsSshPanelOpen(false);
       }
     };
 
@@ -615,7 +642,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isOpen]);
+  }, [isOpen, isSshPanelOpen]);
 
   useEffect(() => {
     if (!isOpen || !pathInputRef.current) {
@@ -656,6 +683,14 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
         if (!response.ok) {
           const text = await response.text();
           throw new Error(text || 'Failed to fetch matching folders');
+        }
+        const contentType = response.headers.get('Content-Type') || '';
+        if (!contentType.includes('application/json')) {
+          // Remote backend returned non-JSON (e.g. old binary serving index.html).
+          // Skip suggestions silently — no error displayed.
+          setSuggestions([]);
+          setSuggestionsLoading(false);
+          return;
         }
         const data = await response.json();
         if (cancelled) {
@@ -862,7 +897,14 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
         }
         addRemoteRecentWorkspace(nextRemoteContext.hostAlias, nextWorkspaceRoot);
       } else {
-        addRecentWorkspace(nextWorkspaceRoot);
+        const proxyCtx = getSSHProxyContext();
+        if (proxyCtx) {
+          const nextRemoteContext = { hostAlias: proxyCtx.hostAlias };
+          setRemoteContext(nextRemoteContext);
+          addRemoteRecentWorkspace(proxyCtx.hostAlias, nextWorkspaceRoot);
+        } else {
+          addRecentWorkspace(nextWorkspaceRoot);
+        }
       }
       setSuggestionsError(null);
       setSshFailure(null);
@@ -880,6 +922,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
 
   const togglePopover = useCallback(() => {
     setIsOpen((prev) => !prev);
+    setIsSshPanelOpen(false);
     if (!isOpen) {
       setSelectedIndex(-1);
       setInputValue(workspaceRoot);
@@ -889,6 +932,13 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
       setFocusedSshSessionKey(null);
     }
   }, [isOpen, workspaceRoot]);
+
+  const toggleSshPanel = useCallback(() => {
+    setIsSshPanelOpen((prev) => !prev);
+    setIsOpen(false);
+    setSwitchingState({ isSwitching: false, error: null, status: null });
+    setSshFailure(null);
+  }, []);
 
   const handleOpenSshHost = useCallback(async (hostAlias: string, explicitRemotePath?: string) => {
     const desktopBridge = (window as any).leditDesktop;
@@ -929,11 +979,8 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
         if (!targetUrl) {
           throw new Error('SSH workspace did not return a local URL');
         }
-        const windowTarget = `ledit-ssh-${hostAlias.replace(/[^a-z0-9_-]+/gi, '-').toLowerCase()}`;
-        const opened = window.open(targetUrl, windowTarget);
-        if (!opened) {
-          window.location.assign(targetUrl);
-        }
+        // Navigate the current tab to the proxy URL — same origin, no new tab.
+        window.location.assign(targetUrl);
       }
       setIsOpen(false);
       setSshSessions(await apiService.current.getSSHSessions().catch(() => []));
@@ -1043,6 +1090,25 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
         switchingState.isSwitching || isLoading ? 'loading' : ''
       }`}
     >
+      {/* ── Host / connection indicator button (icon only) ── */}
+      <button
+        ref={sshBtnRef}
+        type="button"
+        className={`location-host-btn ${remoteContext ? 'ssh-active' : ''}`}
+        onClick={toggleSshPanel}
+        aria-expanded={isSshPanelOpen}
+        aria-haspopup="listbox"
+        disabled={!isConnected}
+        title={remoteContext ? `SSH: ${remoteContext.hostAlias} — click to manage` : 'Local — click to connect via SSH'}
+      >
+        {remoteContext ? (
+          <Server size={13} className="location-host-btn-icon" />
+        ) : (
+          <Monitor size={13} className="location-host-btn-icon" />
+        )}
+      </button>
+
+      {/* ── Workspace picker button ── */}
       <button
         ref={triggerRef}
         type="button"
@@ -1053,14 +1119,9 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
         disabled={!isConnected || (isLoading && !isOpen)}
         title={workspaceRoot || 'No workspace'}
       >
-        <FolderOpen size={16} className="location-switcher-trigger-icon" />
+        <FolderOpen size={14} className="location-switcher-trigger-icon" />
         {showText && (
-          <>
-            <span className="location-switcher-trigger-text">{triggerWorkspaceName}</span>
-            {selectedInstancePID ? (
-              <span className="location-switcher-trigger-pid">pid:{selectedInstancePID}</span>
-            ) : null}
-          </>
+          <span className="location-switcher-trigger-text">{triggerWorkspaceName}</span>
         )}
         {switchingState.isSwitching ? (
           <Loader2 size={12} className="spin" />
@@ -1068,6 +1129,352 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
           <span className="location-switcher-trigger-chevron" />
         )}
       </button>
+
+      {/* ── SSH panel popover ── */}
+      {isSshPanelOpen ? (
+        <div
+          ref={sshPanelRef}
+          className="location-switcher-popover location-ssh-panel"
+          role="listbox"
+          aria-label="SSH connection panel"
+          tabIndex={0}
+        >
+          {switchingState.error ? (
+            <div className="location-switcher-error" role="alert">{switchingState.error}</div>
+          ) : null}
+          {switchingState.error && sshFailure ? (
+            <div className="location-switcher-error-details">
+              {sshFailure.step ? (
+                <div className="location-switcher-error-detail-row">
+                  <span className="location-switcher-error-detail-label">Step</span>
+                  <span>{sshFailure.step}</span>
+                </div>
+              ) : null}
+              {sshFailure.details ? (
+                <pre className="location-switcher-error-detail-output">{sshFailure.details}</pre>
+              ) : null}
+              {sshFailure.logPath ? (
+                <div className="location-switcher-error-detail-row">
+                  <span className="location-switcher-error-detail-label">Log</span>
+                  <span className="location-switcher-error-detail-path">{sshFailure.logPath}</span>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          {!switchingState.error && switchingState.status ? (
+            <div className="location-switcher-status" role="status" aria-live="polite">
+              {switchingState.status}
+            </div>
+          ) : null}
+
+          <div className="location-switcher-content">
+            {/* Active SSH connection status */}
+            {remoteContext ? (
+              <>
+                <div className="location-switcher-section-header" role="presentation">
+                  <Server size={12} className="location-switcher-section-icon" />
+                  SSH connection
+                </div>
+                <div className="location-ssh-connected-row">
+                  <div className="location-ssh-connected-info">
+                    <div className="location-ssh-connected-host">{remoteContext.hostAlias}</div>
+                    <div className="location-ssh-connected-path">
+                      {collapseHomePath(workspaceRoot, remoteContext.homePath)}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="location-switcher-session-btn danger"
+                    onClick={() => {
+                      window.location.assign(remoteContext.launcherUrl || window.location.origin + '/');
+                    }}
+                    disabled={Boolean(isClosingSshSession)}
+                  >
+                    Return to local
+                  </button>
+                </div>
+              </>
+            ) : null}
+
+            {/* SSH Hosts */}
+            {sshHosts.length > 0 ? (
+              <>
+                <div className="location-switcher-section-header" role="presentation">
+                  {sshHosts.length === 1 ? (
+                    <>SSH — <strong>{sshHosts[0].alias}</strong></>
+                  ) : (
+                    'SSH Hosts'
+                  )}
+                </div>
+                {sshHosts.length > 1 ? (
+                  <div className="location-switcher-ssh-input-container">
+                    <select
+                      className="location-switcher-ssh-select"
+                      value={selectedSshBrowseHost}
+                      onChange={(event) => setSelectedSshBrowseHost(event.target.value)}
+                      disabled={Boolean(isOpeningSshHost) || switchingState.isSwitching}
+                      title="Choose SSH host"
+                    >
+                      {sshHosts.map((host) => (
+                        <option key={`ssh-suggest-${host.alias}`} value={host.alias}>
+                          {host.alias}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
+                <div className="location-switcher-ssh-connect-row">
+                  <input
+                    type="text"
+                    className="location-switcher-ssh-input"
+                    value={remoteWorkspacePath}
+                    onChange={(event) => setRemoteWorkspacePath(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && selectedSshBrowseHost) {
+                        handleOpenSshHost(selectedSshBrowseHost);
+                      }
+                    }}
+                    placeholder="Remote path (default: $HOME)"
+                    disabled={Boolean(isOpeningSshHost) || switchingState.isSwitching}
+                    title="Optional remote working directory"
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  <button
+                    type="button"
+                    className="location-switcher-session-btn primary"
+                    onClick={() => handleOpenSshHost(selectedSshBrowseHost)}
+                    disabled={!selectedSshBrowseHost || Boolean(isOpeningSshHost) || switchingState.isSwitching}
+                  >
+                    {isOpeningSshHost ? <Loader2 size={12} className="spin" /> : 'Connect'}
+                  </button>
+                  <button
+                    type="button"
+                    className="location-switcher-session-btn"
+                    onClick={() => addSSHFavoriteWorkspace(selectedSshBrowseHost, remoteWorkspacePath)}
+                    disabled={
+                      !selectedSshBrowseHost ||
+                      !normalizePath(remoteWorkspacePath) ||
+                      Boolean(isOpeningSshHost) ||
+                      switchingState.isSwitching
+                    }
+                    title="Save this path as a favorite"
+                  >
+                    Save
+                  </button>
+                </div>
+                {selectedHostFavorites.length > 0 ? (
+                  <>
+                    <div className="location-switcher-section-header" role="presentation">
+                      SSH Favorites
+                    </div>
+                    <div className="location-switcher-directory-list">
+                      {selectedHostFavorites.map((path) => (
+                        <div
+                          key={`ssh-favorite-${selectedSshBrowseHost}-${path}`}
+                          className="location-switcher-item location-switcher-item-session"
+                        >
+                          <span className="location-switcher-item-text">{getPathDisplayName(path)}</span>
+                          <span className="location-switcher-item-meta">
+                            {collapseHomePath(path, sshHomePaths[selectedSshBrowseHost])}
+                          </span>
+                          <div className="location-switcher-session-actions">
+                            <button
+                              type="button"
+                              className="location-switcher-session-btn"
+                              onClick={() => handleOpenSshHost(selectedSshBrowseHost, path)}
+                              disabled={Boolean(isOpeningSshHost) || switchingState.isSwitching}
+                            >
+                              Connect
+                            </button>
+                            <button
+                              type="button"
+                              className="location-switcher-session-btn"
+                              onClick={() => setRemoteWorkspacePath(path)}
+                              disabled={Boolean(isOpeningSshHost) || switchingState.isSwitching}
+                            >
+                              Fill
+                            </button>
+                            <button
+                              type="button"
+                              className="location-switcher-session-btn danger"
+                              onClick={() => removeSSHFavoriteWorkspace(selectedSshBrowseHost, path)}
+                              disabled={Boolean(isOpeningSshHost) || switchingState.isSwitching}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
+                {sshPathSuggestionsLoading ? (
+                  <div className="location-switcher-directory-loading">
+                    <Loader2 size={14} className="spin" />
+                    <span>Finding remote folders on {selectedSshBrowseHost}...</span>
+                  </div>
+                ) : null}
+                {sshPathSuggestionsError ? (
+                  <div className="location-switcher-directory-error">
+                    <span>{sshPathSuggestionsError}</span>
+                  </div>
+                ) : null}
+                {!sshPathSuggestionsLoading && sshPathSuggestions.length > 0 ? (
+                  <div className="location-switcher-directory-list location-switcher-ssh-suggestions">
+                    {sshPathSuggestions.map((dir) => (
+                      <button
+                        key={`ssh-suggestion-${selectedSshBrowseHost}-${dir.path}`}
+                        type="button"
+                        className="location-switcher-item"
+                        onClick={() => setRemoteWorkspacePath(dir.path)}
+                      >
+                        <span className="location-switcher-item-text">{dir.name}</span>
+                        <span className="location-switcher-item-meta">
+                          {collapseHomePath(dir.path, sshHomePaths[selectedSshBrowseHost])}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              !remoteContext ? (
+                <div className="location-switcher-item location-switcher-item-empty" role="option" aria-selected={false}>
+                  <span className="location-switcher-item-text">No SSH hosts found in ~/.ssh/config</span>
+                </div>
+              ) : null
+            )}
+
+            {/* Active SSH sessions */}
+            {sshSessions.length > 0 ? (
+              <>
+                <div className="location-switcher-section-header" role="presentation">
+                  SSH Sessions
+                </div>
+                {sshSessions.map((session) => (
+                  <div
+                    key={`ssh-session-${session.key}`}
+                    className={`location-switcher-item location-switcher-item-session ${session.active ? 'active' : ''}`}
+                    role="option"
+                    aria-selected={false}
+                  >
+                    <span className="location-switcher-item-text">{session.host_alias}</span>
+                    <span className="location-switcher-item-meta">
+                      {collapseHomePath(
+                        session.remote_workspace_path || '$HOME',
+                        sshHomePaths[session.host_alias]
+                      )}
+                    </span>
+                    <div className="location-switcher-session-retarget">
+                      <input
+                        type="text"
+                        className="location-switcher-session-input"
+                        value={sshSessionPathDrafts[session.key] ?? ''}
+                        onChange={(event) => updateSshSessionPathDraft(session.key, event.target.value)}
+                        onFocus={() => setFocusedSshSessionKey(session.key)}
+                        placeholder={`Open another path on ${session.host_alias}`}
+                        disabled={Boolean(isOpeningSshHost) || Boolean(isClosingSshSession)}
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                      {focusedSshSessionKey === session.key && sshSessionSuggestionsLoading[session.key] ? (
+                        <div className="location-switcher-session-hint">
+                          <Loader2 size={12} className="spin" />
+                          <span>Finding remote folders...</span>
+                        </div>
+                      ) : null}
+                      {focusedSshSessionKey === session.key && sshSessionSuggestionsError[session.key] ? (
+                        <div className="location-switcher-session-error">
+                          {sshSessionSuggestionsError[session.key]}
+                        </div>
+                      ) : null}
+                      {focusedSshSessionKey === session.key && (sshSessionSuggestions[session.key] || []).length > 0 ? (
+                        <div className="location-switcher-directory-list location-switcher-session-suggestions">
+                          {(sshSessionSuggestions[session.key] || []).map((dir) => (
+                            <button
+                              key={`ssh-session-suggestion-${session.key}-${dir.path}`}
+                              type="button"
+                              className="location-switcher-item"
+                              onClick={() => updateSshSessionPathDraft(session.key, dir.path)}
+                            >
+                              <span className="location-switcher-item-text">{dir.name}</span>
+                              <span className="location-switcher-item-meta">
+                                {collapseHomePath(dir.path, sshHomePaths[session.host_alias])}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="location-switcher-session-actions">
+                      <button
+                        type="button"
+                        className="location-switcher-session-btn"
+                        onClick={() => handleOpenSshHost(session.host_alias, session.remote_workspace_path)}
+                        disabled={Boolean(isOpeningSshHost) || Boolean(isClosingSshSession)}
+                      >
+                        Open
+                      </button>
+                      <button
+                        type="button"
+                        className="location-switcher-session-btn"
+                        onClick={() => handleOpenSshHost(session.host_alias, getSshSessionTargetPath(session))}
+                        disabled={
+                          Boolean(isOpeningSshHost) ||
+                          Boolean(isClosingSshSession) ||
+                          !getSshSessionTargetPath(session)
+                        }
+                      >
+                        Open Path
+                      </button>
+                      <button
+                        type="button"
+                        className="location-switcher-session-btn"
+                        onClick={() => {
+                          const targetPath = getSshSessionTargetPath(session);
+                          if (targetPath) {
+                            addSSHFavoriteWorkspace(session.host_alias, targetPath);
+                          }
+                        }}
+                        disabled={
+                          Boolean(isOpeningSshHost) ||
+                          Boolean(isClosingSshSession) ||
+                          !getSshSessionTargetPath(session)
+                        }
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        className="location-switcher-session-btn danger"
+                        onClick={() => handleCloseSshSession(session.key)}
+                        disabled={Boolean(isOpeningSshHost) || Boolean(isClosingSshSession)}
+                      >
+                        {isClosingSshSession === session.key ? 'Closing…' : 'Close'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </>
+            ) : null}
+          </div>
+
+          <div className="location-switcher-footer">
+            <button
+              type="button"
+              className="location-switcher-footer-refresh"
+              onClick={handleRefresh}
+              disabled={isLoading || !isConnected}
+              title="Refresh SSH data"
+            >
+              <RefreshCw size={14} className={isLoading ? 'spin' : ''} />
+              Refresh
+            </button>
+            <span className="location-switcher-footer-esc">Esc</span>
+          </div>
+        </div>
+      ) : null}
 
       {isOpen ? (
         <div
@@ -1387,275 +1794,6 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
                     );
                   })
                 )}
-              </>
-            ) : null}
-
-            {!remoteContext && sshHosts.length > 0 ? (
-              <>
-                <div className="location-switcher-section-header" role="presentation">
-                  SSH Hosts
-                </div>
-                {sshHosts.length > 1 ? (
-                  <div className="location-switcher-ssh-input-container">
-                    <select
-                      className="location-switcher-ssh-select"
-                      value={selectedSshBrowseHost}
-                      onChange={(event) => setSelectedSshBrowseHost(event.target.value)}
-                      disabled={Boolean(isOpeningSshHost) || switchingState.isSwitching}
-                      title="Choose which SSH host to use for path suggestions"
-                    >
-                      {sshHosts.map((host) => (
-                        <option key={`ssh-suggest-${host.alias}`} value={host.alias}>
-                          Suggest paths from {host.alias}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : null}
-                <div className="location-switcher-ssh-input-container">
-                  <input
-                    type="text"
-                    className="location-switcher-ssh-input"
-                    value={remoteWorkspacePath}
-                    onChange={(event) => setRemoteWorkspacePath(event.target.value)}
-                    placeholder="Remote path (default: $HOME)"
-                    disabled={Boolean(isOpeningSshHost) || switchingState.isSwitching}
-                    title="Optional remote working directory"
-                    autoComplete="off"
-                    spellCheck={false}
-                  />
-                </div>
-                <div className="location-switcher-subtitle">
-                  Opens the SSH workspace in a new tab. Leave blank to use the remote home directory.
-                </div>
-                <div className="location-switcher-ssh-actions">
-                  <button
-                    type="button"
-                    className="location-switcher-session-btn"
-                    onClick={() => addSSHFavoriteWorkspace(selectedSshBrowseHost, remoteWorkspacePath)}
-                    disabled={
-                      !selectedSshBrowseHost ||
-                      !normalizePath(remoteWorkspacePath) ||
-                      Boolean(isOpeningSshHost) ||
-                      switchingState.isSwitching
-                    }
-                  >
-                    Save Path
-                  </button>
-                </div>
-                {selectedHostFavorites.length > 0 ? (
-                  <>
-                    <div className="location-switcher-section-header" role="presentation">
-                      SSH Favorites
-                    </div>
-                    <div className="location-switcher-directory-list">
-                      {selectedHostFavorites.map((path) => (
-                        <div
-                          key={`ssh-favorite-${selectedSshBrowseHost}-${path}`}
-                          className="location-switcher-item location-switcher-item-session"
-                        >
-                          <span className="location-switcher-item-text">{getPathDisplayName(path)}</span>
-                          <span className="location-switcher-item-meta">
-                            {collapseHomePath(path, sshHomePaths[selectedSshBrowseHost])}
-                          </span>
-                          <div className="location-switcher-session-actions">
-                            <button
-                              type="button"
-                              className="location-switcher-session-btn"
-                              onClick={() => handleOpenSshHost(selectedSshBrowseHost, path)}
-                              disabled={Boolean(isOpeningSshHost) || switchingState.isSwitching}
-                            >
-                              Open
-                            </button>
-                            <button
-                              type="button"
-                              className="location-switcher-session-btn"
-                              onClick={() => setRemoteWorkspacePath(path)}
-                              disabled={Boolean(isOpeningSshHost) || switchingState.isSwitching}
-                            >
-                              Fill
-                            </button>
-                            <button
-                              type="button"
-                              className="location-switcher-session-btn danger"
-                              onClick={() => removeSSHFavoriteWorkspace(selectedSshBrowseHost, path)}
-                              disabled={Boolean(isOpeningSshHost) || switchingState.isSwitching}
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                ) : null}
-                {sshPathSuggestionsLoading ? (
-                  <div className="location-switcher-directory-loading">
-                    <Loader2 size={14} className="spin" />
-                    <span>Finding remote folders on {selectedSshBrowseHost}...</span>
-                  </div>
-                ) : null}
-                {sshPathSuggestionsError ? (
-                  <div className="location-switcher-directory-error">
-                    <span>{sshPathSuggestionsError}</span>
-                  </div>
-                ) : null}
-                {!sshPathSuggestionsLoading && sshPathSuggestions.length > 0 ? (
-                  <div className="location-switcher-directory-list location-switcher-ssh-suggestions">
-                    {sshPathSuggestions.map((dir) => (
-                      <button
-                        key={`ssh-suggestion-${selectedSshBrowseHost}-${dir.path}`}
-                        type="button"
-                        className="location-switcher-item"
-                        onClick={() => setRemoteWorkspacePath(dir.path)}
-                      >
-                        <span className="location-switcher-item-text">{dir.name}</span>
-                        <span className="location-switcher-item-meta">
-                          {collapseHomePath(dir.path, sshHomePaths[selectedSshBrowseHost])}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-                {sshHosts.map((host) => {
-                  const metaParts = [
-                    host.user ? `${host.user}@${host.hostname || host.alias}` : (host.hostname || host.alias),
-                    host.port ? `:${host.port}` : '',
-                  ].filter(Boolean);
-                  return (
-                    <button
-                      key={`ssh-${host.alias}`}
-                      type="button"
-                      className="location-switcher-item"
-                      onClick={() => handleOpenSshHost(host.alias)}
-                      role="option"
-                      aria-selected={false}
-                      disabled={Boolean(isOpeningSshHost) || switchingState.isSwitching}
-                    >
-                      <span className="location-switcher-item-text">{host.alias}</span>
-                      <span className="location-switcher-item-meta">
-                        {metaParts.join('')}
-                      </span>
-                      {isOpeningSshHost === host.alias ? (
-                        <span className="location-switcher-item-indicator">
-                          <Loader2 size={10} className="spin" />
-                        </span>
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </>
-            ) : null}
-
-            {!remoteContext && sshSessions.length > 0 ? (
-              <>
-                <div className="location-switcher-section-header" role="presentation">
-                  SSH Sessions
-                </div>
-                {sshSessions.map((session) => (
-                  <div
-                    key={`ssh-session-${session.key}`}
-                    className={`location-switcher-item location-switcher-item-session ${session.active ? 'active' : ''}`}
-                    role="option"
-                    aria-selected={false}
-                  >
-                    <span className="location-switcher-item-text">{session.host_alias}</span>
-                    <span className="location-switcher-item-meta">
-                      {collapseHomePath(
-                        session.remote_workspace_path || '$HOME',
-                        sshHomePaths[session.host_alias]
-                      )}
-                    </span>
-                    <div className="location-switcher-session-retarget">
-                      <input
-                        type="text"
-                        className="location-switcher-session-input"
-                        value={sshSessionPathDrafts[session.key] ?? ''}
-                        onChange={(event) => updateSshSessionPathDraft(session.key, event.target.value)}
-                        onFocus={() => setFocusedSshSessionKey(session.key)}
-                        placeholder={`Open another path on ${session.host_alias}`}
-                        disabled={Boolean(isOpeningSshHost) || Boolean(isClosingSshSession)}
-                        autoComplete="off"
-                        spellCheck={false}
-                      />
-                      {focusedSshSessionKey === session.key && sshSessionSuggestionsLoading[session.key] ? (
-                        <div className="location-switcher-session-hint">
-                          <Loader2 size={12} className="spin" />
-                          <span>Finding remote folders...</span>
-                        </div>
-                      ) : null}
-                      {focusedSshSessionKey === session.key && sshSessionSuggestionsError[session.key] ? (
-                        <div className="location-switcher-session-error">
-                          {sshSessionSuggestionsError[session.key]}
-                        </div>
-                      ) : null}
-                      {focusedSshSessionKey === session.key && (sshSessionSuggestions[session.key] || []).length > 0 ? (
-                        <div className="location-switcher-directory-list location-switcher-session-suggestions">
-                          {(sshSessionSuggestions[session.key] || []).map((dir) => (
-                            <button
-                              key={`ssh-session-suggestion-${session.key}-${dir.path}`}
-                              type="button"
-                              className="location-switcher-item"
-                              onClick={() => updateSshSessionPathDraft(session.key, dir.path)}
-                            >
-                              <span className="location-switcher-item-text">{dir.name}</span>
-                              <span className="location-switcher-item-meta">
-                                {collapseHomePath(dir.path, sshHomePaths[session.host_alias])}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                    <div className="location-switcher-session-actions">
-                      <button
-                        type="button"
-                        className="location-switcher-session-btn"
-                        onClick={() => handleOpenSshHost(session.host_alias, session.remote_workspace_path)}
-                        disabled={Boolean(isOpeningSshHost) || Boolean(isClosingSshSession)}
-                      >
-                        Open
-                      </button>
-                      <button
-                        type="button"
-                        className="location-switcher-session-btn"
-                        onClick={() => handleOpenSshHost(session.host_alias, getSshSessionTargetPath(session))}
-                        disabled={
-                          Boolean(isOpeningSshHost) ||
-                          Boolean(isClosingSshSession) ||
-                          !getSshSessionTargetPath(session)
-                        }
-                      >
-                        Open Path
-                      </button>
-                      <button
-                        type="button"
-                        className="location-switcher-session-btn"
-                        onClick={() => {
-                          const targetPath = getSshSessionTargetPath(session);
-                          if (targetPath) {
-                            addSSHFavoriteWorkspace(session.host_alias, targetPath);
-                          }
-                        }}
-                        disabled={
-                          Boolean(isOpeningSshHost) ||
-                          Boolean(isClosingSshSession) ||
-                          !getSshSessionTargetPath(session)
-                        }
-                      >
-                        Save
-                      </button>
-                      <button
-                        type="button"
-                        className="location-switcher-session-btn danger"
-                        onClick={() => handleCloseSshSession(session.key)}
-                        disabled={Boolean(isOpeningSshHost) || Boolean(isClosingSshSession)}
-                      >
-                        {isClosingSshSession === session.key ? 'Closing…' : 'Close'}
-                      </button>
-                    </div>
-                  </div>
-                ))}
               </>
             ) : null}
           </div>

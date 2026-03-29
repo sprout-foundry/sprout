@@ -106,7 +106,7 @@ func (ws *ReactWebServer) getOrCreateClientContextLocked(clientID string) *webCl
 			Terminal:       ws.terminalManager,
 			FileConsents:   ws.fileConsents,
 			AgentState:     emptyAgentStateSnapshot(),
-			LastSeenAt: time.Now(),
+			LastSeenAt:     time.Now(),
 		}
 		if ctx.Terminal == nil {
 			ctx.Terminal = NewTerminalManager(ctx.WorkspaceRoot)

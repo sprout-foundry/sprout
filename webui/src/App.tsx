@@ -280,19 +280,6 @@ const loadPersistedAppState = (): Partial<AppState> | null => {
             toolRefs: Array.isArray(message?.toolRefs) ? message.toolRefs : undefined
           }))
         : [],
-      logs: Array.isArray(parsed.logs)
-        ? parsed.logs.map((log: any) => ({
-            ...log,
-            timestamp: parseDate(log?.timestamp)
-          }))
-        : [],
-      toolExecutions: Array.isArray(parsed.toolExecutions)
-        ? parsed.toolExecutions.map((tool: any) => ({
-            ...tool,
-            startTime: parseDate(tool?.startTime),
-            endTime: tool?.endTime ? parseDate(tool.endTime) : undefined
-          }))
-        : [],
       fileEdits: Array.isArray(parsed.fileEdits)
         ? parsed.fileEdits.map((edit: any) => ({
             ...edit,
@@ -361,24 +348,30 @@ function App() {
       return;
     }
 
+    const storageKey = getAppStateStorageKey();
+    // Only persist what is needed to restore the chat view. Logs and
+    // toolExecutions are ephemeral — they are large and re-populated by
+    // the WebSocket stream, so storing them wastes quota unnecessarily.
+    const persistPayload = (messageCount: number) => JSON.stringify({
+      provider: state.provider,
+      model: state.model,
+      sessionId: state.sessionId,
+      queryCount: state.queryCount,
+      currentView: state.currentView,
+      messages: state.messages.slice(-messageCount),
+      fileEdits: state.fileEdits.slice(-50),
+    });
     try {
-      const storageKey = getAppStateStorageKey();
-      window.localStorage.setItem(
-        storageKey,
-        JSON.stringify({
-          provider: state.provider,
-          model: state.model,
-          sessionId: state.sessionId,
-          queryCount: state.queryCount,
-          currentView: state.currentView,
-          messages: state.messages.slice(-200),
-          logs: state.logs.slice(-MAX_PERSISTED_LOGS),
-          toolExecutions: state.toolExecutions.slice(-200),
-          fileEdits: state.fileEdits.slice(-100)
-        })
-      );
-    } catch (error) {
-      console.warn('Failed to persist app state:', error);
+      window.localStorage.setItem(storageKey, persistPayload(100));
+    } catch {
+      // QuotaExceededError: retry with fewer messages, then give up gracefully.
+      try {
+        window.localStorage.setItem(storageKey, persistPayload(20));
+      } catch {
+        try {
+          window.localStorage.removeItem(storageKey);
+        } catch { /* nothing more we can do */ }
+      }
     }
   }, [
     state.provider,
@@ -387,9 +380,7 @@ function App() {
     state.queryCount,
     state.currentView,
     state.messages,
-    state.logs,
-    state.toolExecutions,
-    state.fileEdits
+    state.fileEdits,
   ]);
 
   // Keep a larger client-side log buffer available to the sidebar logs view.
@@ -1524,9 +1515,9 @@ function App() {
                   <div className="onboarding-card">
                     <h2>Set Up Ledit</h2>
                     <p>
-                      Finish AI setup before using chat and tools.
-                      {onboarding.reason === 'provider_not_configured' ? ' No provider is configured yet.' : ''}
-                      {onboarding.reason === 'missing_provider_credential' ? ' The selected provider is missing credentials.' : ''}
+                      {onboarding.reason === 'missing_provider_credential'
+                        ? 'The selected provider is missing credentials.'
+                        : 'Choose a provider and model to get started.'}
                     </p>
 
                     {windowsOnboardingGuidance && (
@@ -1577,11 +1568,7 @@ function App() {
                           onClick={() => handleOnboardingProviderChange(providerOption.id)}
                           disabled={onboarding.submitting || onboarding.checking}
                         >
-                          <div className="onboarding-provider-card-topline">
-                            <span className="onboarding-provider-name">{providerOption.name}</span>
-                            <span className="onboarding-provider-badge">Recommended</span>
-                          </div>
-                          <div className="onboarding-provider-description">{providerOption.description}</div>
+                          <span className="onboarding-provider-name">{providerOption.name}</span>
                         </button>
                       ))}
                     </div>

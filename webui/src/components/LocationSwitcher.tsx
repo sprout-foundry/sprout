@@ -237,7 +237,12 @@ const writeSSHFavoriteWorkspaces = (value: Record<string, string[]>) => {
   if (typeof window === 'undefined') {
     return;
   }
-  window.localStorage.setItem(SSH_FAVORITE_WORKSPACES_KEY, JSON.stringify(value));
+  try {
+    window.localStorage.setItem(SSH_FAVORITE_WORKSPACES_KEY, JSON.stringify(value));
+  } catch {
+    // QuotaExceededError: storage is full; the favorites won't persist this session
+    // but shouldn't crash the UI.
+  }
 };
 
 const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
@@ -425,11 +430,16 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
     if (!switchingState.error && !switchingState.status) {
       return undefined;
     }
+    // Never auto-clear while an SSH launch is in progress — the status messages
+    // are actively updated by the stage interval and should not be wiped early.
+    if (isOpeningSshHost) {
+      return undefined;
+    }
     const timer = window.setTimeout(() => {
       setSwitchingState((prev) => ({ ...prev, error: null, status: null }));
     }, 3000);
     return () => window.clearTimeout(timer);
-  }, [switchingState.error, switchingState.status]);
+  }, [switchingState.error, switchingState.status, isOpeningSshHost]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -913,13 +923,16 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
           hostAlias,
           targetRemotePath
         );
-        if (!response.url) {
+        // Prefer the same-origin proxy URL so the browser stays on the same
+        // port/origin, preserving PWA installation and service-worker scope.
+        const targetUrl = response.proxy_url || response.url;
+        if (!targetUrl) {
           throw new Error('SSH workspace did not return a local URL');
         }
         const windowTarget = `ledit-ssh-${hostAlias.replace(/[^a-z0-9_-]+/gi, '-').toLowerCase()}`;
-        const opened = window.open(response.url, windowTarget);
+        const opened = window.open(targetUrl, windowTarget);
         if (!opened) {
-          window.location.assign(response.url);
+          window.location.assign(targetUrl);
         }
       }
       setIsOpen(false);

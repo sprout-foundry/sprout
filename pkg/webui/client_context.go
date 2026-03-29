@@ -1,6 +1,7 @@
 package webui
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -384,4 +385,78 @@ func (ws *ReactWebServer) hasActiveQueryForClient(clientID string) bool {
 	defer ws.mutex.RUnlock()
 	ctx := ws.clientContexts[clientID]
 	return ctx != nil && ctx.ActiveQuery
+}
+
+func (ws *ReactWebServer) cleanupInactiveClientContexts(maxIdle time.Duration) int {
+	if maxIdle <= 0 {
+		return 0
+	}
+
+	now := time.Now()
+	connectedClientIDs := make(map[string]struct{})
+	ws.connections.Range(func(_, value interface{}) bool {
+		info, ok := value.(*ConnectionInfo)
+		if !ok || info == nil {
+			return true
+		}
+		if clientID := strings.TrimSpace(info.ClientID); clientID != "" {
+			connectedClientIDs[clientID] = struct{}{}
+		}
+		return true
+	})
+
+	type staleContext struct {
+		id       string
+		terminal *TerminalManager
+	}
+
+	stale := make([]staleContext, 0)
+
+	ws.mutex.Lock()
+	for clientID, ctx := range ws.clientContexts {
+		if clientID == defaultWebClientID || ctx == nil {
+			continue
+		}
+		if _, connected := connectedClientIDs[clientID]; connected {
+			continue
+		}
+		if ctx.ActiveQuery {
+			continue
+		}
+		if ctx.LastSeenAt.IsZero() || now.Sub(ctx.LastSeenAt) < maxIdle {
+			continue
+		}
+		delete(ws.clientContexts, clientID)
+		stale = append(stale, staleContext{id: clientID, terminal: ctx.Terminal})
+	}
+	ws.lastClientContextCleanupAt = now
+	ws.lastClientContextCleanupRemoved = len(stale)
+	ws.totalClientContextsRemoved += len(stale)
+	ws.mutex.Unlock()
+
+	for _, clientCtx := range stale {
+		if clientCtx.terminal != nil {
+			_ = clientCtx.terminal.CloseAllSessions()
+		}
+	}
+
+	return len(stale)
+}
+
+func (ws *ReactWebServer) startClientContextCleanupWorker(ctx context.Context, interval, maxIdle time.Duration) {
+	if interval <= 0 || maxIdle <= 0 {
+		return
+	}
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			ws.cleanupInactiveClientContexts(maxIdle)
+		}
+	}
 }

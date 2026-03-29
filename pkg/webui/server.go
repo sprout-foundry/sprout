@@ -66,7 +66,15 @@ type ReactWebServer struct {
 	sshSessions         map[string]*sshWorkspaceSession
 	sshSessionsMu       sync.Mutex
 	workspaceExecMu     sync.Mutex
+	lastClientContextCleanupAt      time.Time
+	lastClientContextCleanupRemoved int
+	totalClientContextsRemoved      int
 }
+
+const (
+	clientContextCleanupInterval = 5 * time.Minute
+	clientContextMaxIdle         = 30 * time.Minute
+)
 
 // NewReactWebServer creates a new React web server
 func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int) *ReactWebServer {
@@ -246,6 +254,8 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 			log.Printf("Web server error: %v", err)
 		}
 	}()
+
+	go ws.startClientContextCleanupWorker(ctx, clientContextCleanupInterval, clientContextMaxIdle)
 
 	// Wait for context cancellation
 	go func() {

@@ -203,6 +203,28 @@ class ApiService {
     return ApiService.instance;
   }
 
+  private parseWorkspacePayload(text: string): any {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      return {};
+    }
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      return { message: trimmed };
+    }
+  }
+
+  private isHTMLResponseBody(text: string): boolean {
+    const trimmed = text.trim().toLowerCase();
+    return (
+      trimmed.startsWith('<!doctype html') ||
+      trimmed.startsWith('<html') ||
+      trimmed.startsWith('<head') ||
+      trimmed.startsWith('<body')
+    );
+  }
+
   async getStats(): Promise<StatsResponse> {
     const response = await clientFetch('/api/stats');
     if (!response.ok) {
@@ -213,14 +235,22 @@ class ApiService {
 
   async getWorkspace(): Promise<WorkspaceResponse> {
     const response = await clientFetch('/api/workspace');
+    const text = await response.text();
+    const data = this.parseWorkspacePayload(text);
+
     if (!response.ok) {
-      throw new Error('Failed to fetch workspace');
+      throw new Error(data.error || data.message || 'Failed to fetch workspace');
     }
-    const contentType = response.headers.get('Content-Type') || '';
-    if (!contentType.includes('application/json')) {
-      throw new Error('Workspace API returned non-JSON response');
+
+    if (this.isHTMLResponseBody(text)) {
+      throw new Error('Workspace API returned HTML response');
     }
-    return response.json();
+
+    if (data && typeof data === 'object' && 'workspace_root' in data && 'daemon_root' in data) {
+      return data as WorkspaceResponse;
+    }
+
+    throw new Error('Workspace API returned malformed response');
   }
 
   async setWorkspace(path: string): Promise<WorkspaceResponse & { message: string }> {
@@ -231,11 +261,29 @@ class ApiService {
       },
       body: JSON.stringify({ path }),
     });
-    const data = await response.json();
+
+    const text = await response.text();
+    const data = this.parseWorkspacePayload(text);
+
     if (!response.ok) {
       throw new Error(data.error || data.message || 'Failed to update workspace');
     }
-    return data;
+
+    if (this.isHTMLResponseBody(text)) {
+      throw new Error('Workspace API returned HTML response');
+    }
+
+    if (data && typeof data === 'object' && 'workspace_root' in data && 'daemon_root' in data) {
+      return data as WorkspaceResponse & { message: string };
+    }
+
+    // Some remote/proxy setups respond to workspace set with a non-JSON success body.
+    // Fall back to querying current workspace so switching can continue.
+    const workspace = await this.getWorkspace();
+    return {
+      ...workspace,
+      message: data.message || 'Workspace updated',
+    };
   }
 
   async getTerminalSessionCount(): Promise<number> {

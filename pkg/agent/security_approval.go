@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/alantheprice/ledit/pkg/events"
@@ -37,7 +38,7 @@ func generateRequestID() string {
 // blocks until the webui responds with an approval or rejection.
 // Returns true if approved, false if rejected.
 // If the event bus is nil, returns false (reject for safety).
-func (sam *SecurityApprovalManager) RequestApproval(eventBus *events.EventBus, toolName, riskLevel, reasoning string) bool {
+func (sam *SecurityApprovalManager) RequestApproval(eventBus *events.EventBus, clientID, toolName, riskLevel, reasoning string) bool {
 	if eventBus == nil {
 		return false
 	}
@@ -56,9 +57,13 @@ func (sam *SecurityApprovalManager) RequestApproval(eventBus *events.EventBus, t
 	}()
 
 	// Publish the approval request event to the webui
-	eventBus.Publish(events.EventTypeSecurityApprovalRequest, events.SecurityApprovalRequestEvent(
+	payload := events.SecurityApprovalRequestEvent(
 		requestID, toolName, riskLevel, reasoning,
-	))
+	)
+	if trimmedClientID := strings.TrimSpace(clientID); trimmedClientID != "" {
+		payload["client_id"] = trimmedClientID
+	}
+	eventBus.Publish(events.EventTypeSecurityApprovalRequest, payload)
 
 	// Block waiting for response
 	approved, ok := <-responseCh

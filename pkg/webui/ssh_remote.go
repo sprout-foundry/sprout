@@ -637,9 +637,16 @@ func ensureLocalSSHBinaryArtifactForTag(tag, remotePlatform, remoteArch string, 
 	cacheDir := filepath.Join(os.TempDir(), "ledit-ssh-artifacts", cacheTag, remotePlatform+"-"+remoteArch)
 	binaryPath := filepath.Join(cacheDir, fmt.Sprintf("ledit-%s-%s", remotePlatform, remoteArch))
 
+	hasCachedBinary := false
 	if info, err := os.Stat(binaryPath); err == nil && info.Mode().IsRegular() {
-		logger.Logf("using cached release artifact %s", binaryPath)
-		return binaryPath, nil
+		hasCachedBinary = true
+		// Keep strict cache hits for fixed tags, but always refresh "latest" so
+		// we do not pin stale artifacts after new releases are published.
+		if strings.TrimSpace(tag) != "latest" {
+			logger.Logf("using cached release artifact %s", binaryPath)
+			return binaryPath, nil
+		}
+		logger.Logf("refreshing cached latest release artifact %s", binaryPath)
 	}
 
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {
@@ -648,16 +655,28 @@ func ensureLocalSSHBinaryArtifactForTag(tag, remotePlatform, remoteArch string, 
 
 	downloadURL, err := resolveGitHubReleaseAssetURL(tag, assetName, logger)
 	if err != nil {
+		if hasCachedBinary {
+			logger.Logf("failed to resolve %q artifact URL; using stale cached artifact %s (error: %v)", tag, binaryPath, err)
+			return binaryPath, nil
+		}
 		return "", err
 	}
 	logger.Logf("resolved release artifact %s for tag %s", assetName, tag)
 
 	archivePath := filepath.Join(cacheDir, assetName)
 	if err := downloadFile(downloadURL, archivePath, logger); err != nil {
+		if hasCachedBinary {
+			logger.Logf("failed to download %q artifact; using stale cached artifact %s (error: %v)", tag, binaryPath, err)
+			return binaryPath, nil
+		}
 		return "", err
 	}
 
 	if err := extractTarGzSingleFile(archivePath, binaryPath); err != nil {
+		if hasCachedBinary {
+			logger.Logf("failed to extract %q artifact; using stale cached artifact %s (error: %v)", tag, binaryPath, err)
+			return binaryPath, nil
+		}
 		return "", err
 	}
 	if err := os.Chmod(binaryPath, 0755); err != nil {
@@ -677,15 +696,6 @@ func resolvePreferredReleaseTag() string {
 				return normalizeReleaseTagCandidate(setting.Value)
 			}
 		}
-
-		if isDirtyOrDevVersion(mainVersion) {
-			return "latest"
-		}
-		for _, setting := range info.Settings {
-			if setting.Key == "vcs.modified" && strings.EqualFold(strings.TrimSpace(setting.Value), "true") {
-				return "latest"
-			}
-		}
 	}
 	return ""
 }
@@ -699,16 +709,6 @@ func normalizeReleaseTagCandidate(value string) string {
 		return ""
 	}
 	return value
-}
-
-func isDirtyOrDevVersion(value string) bool {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return false
-	}
-	return strings.Contains(value, "-0.") ||
-		strings.Contains(value, "+dirty") ||
-		strings.Contains(value, "(devel)")
 }
 
 func resolveGitHubReleaseAssetURL(tag, assetName string, logger *sshLaunchLogger) (string, error) {
@@ -803,7 +803,17 @@ func ensureRemoteSSHBinary(hostAlias, localBinary string, remoteInfo *remoteSSHI
 		return "", fmt.Errorf("failed to fingerprint local executable: %w", err)
 	}
 
-	remoteDirSSH := fmt.Sprintf("$HOME/.cache/ledit-webui/backend/%s/%s-%s", localFingerprint, remoteInfo.Platform, remoteInfo.Arch)
+	homeCmd := newSSHCommand(hostAlias, `printf "%s" "$HOME"`)
+	homeOut, err := runSSHLoggedCommand(logger, "resolve-remote-home", fmt.Sprintf("ssh %s print $HOME", hostAlias), homeCmd)
+	if err != nil {
+		return "", err
+	}
+	remoteHome := strings.TrimSpace(string(homeOut))
+	if remoteHome == "" {
+		return "", newSSHLaunchFailure("resolve-remote-home", "failed to resolve remote home directory", "remote $HOME was empty", logger)
+	}
+
+	remoteDirSSH := fmt.Sprintf("%s/.cache/ledit-webui/backend/%s/%s-%s", remoteHome, localFingerprint, remoteInfo.Platform, remoteInfo.Arch)
 	remoteBinarySSH := remoteDirSSH + "/ledit"
 	remoteUploadSCP := fmt.Sprintf(".ledit-ssh-upload-%s.tmp", localFingerprint)
 

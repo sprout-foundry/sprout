@@ -59,7 +59,7 @@ Safety: Currently there are very few, and limited safety checks in place. Use at
 - **Leaked Credentials Check**: Automatically scans files for common security concerns like API keys, passwords, database/service URLs, SSH private keys, AWS credentials. This helps prevent accidental exposure of sensitive information.
 - **Search Grounding**: Augments prompts with fresh information from the web using the `WebSearch` tool.
 - **Interactive and Automated Modes**: Confirm each change manually, or run in a fully automated mode with `--skip-prompt`.
-- **Multi-Provider LLM Support**: Works with OpenAI, DeepInfra, OpenRouter, Z.AI, Ollama (local/Turbo), DeepSeek, Chutes, LMStudio, and custom providers.
+- **Multi-Provider LLM Support**: Works with OpenAI, DeepInfra, OpenRouter, Z.AI, Ollama (local/Turbo), DeepSeek, Chutes, LMStudio, Mistral, Minimax, and custom providers.
   - Gemini models available through OpenRouter integration.
   - Z.AI Coding Plan support via `--provider zai` with models like `GLM-4.6`.
 - **MCP Server Integration**: Connect to Model Context Protocol (MCP) servers to extend functionality with external tools and services like GitHub.
@@ -70,7 +70,37 @@ Safety: Currently there are very few, and limited safety checks in place. Use at
 - **Todo Tracking**: Built-in todo management for breaking down tasks during workflows.
 - **TPS Monitoring**: Tracks tokens-per-second for performance analysis across providers.
 - **Interactive UI**: Rich terminal UI with streaming output, progress bars, and slash command support (via `--ui` or LEDIT_UI=1).
-- **Tool Suite**: Built-in tools for editing, reading/writing files, web search, vision analysis, shell execution (allowlisted), and user interaction.
+- **Tool Suite**: Built-in tools for editing, reading/writing files, web search, vision analysis, shell execution (allowlisted), user interaction, URL browsing, structured file operations, git operations, memory management, skill loading, change history, and self-review.
+- **Persistent Memory System**: Save and recall information across conversations. Memories are stored as markdown files in `~/.ledit/memories/` and loaded into the system prompt automatically.
+- **Specification Extraction and Scope Validation**: Automatically extracts canonical specifications from conversations and validates changes against requirements to prevent scope creep.
+- **Context Compaction**: Intelligent conversation pruning and summarization to maintain context within token limits during long sessions.
+- **PDF Analysis**: Extract and analyze content from PDF files using vision-capable models or Python-based OCR.
+- **Headless Browser Integration**: Browse, screenshot, and extract content from web pages including SPAs, with rate limiting and caching.
+- **Dataset Tracing**: Record runs, turns, tool calls, and artifacts to JSONL files for training dataset generation (`--trace-dataset-dir`).
+- **SSH Remote Workspace**: Launch `ledit` on a remote server and access the full Web UI from your local browser via SSH tunneling, including remote directory browsing.
+- **Isolated Config Mode**: `--isolated-config` flag creates per-project configuration clones at `./.ledit/` for independent project settings.
+- **Multi-Window Client Isolation**: Web UI supports multiple browser windows/tabs with isolated client contexts.
+- **Subagent Configuration**: Configure separate provider/model for subagents via `--subagent-provider` and `--subagent-model` flags or config settings.
+- **Provider Catalog System**: Built-in provider catalog with model lists, costs, and recommended models. Refreshes from remote source.
+- **Comprehensive Tool Suite**: Extensive built-in tools for all development tasks:
+  - **`edit_file`** - Edit files with intelligent context
+  - **`read_file`** - Read file contents with optional line ranges
+  - **`write_file`** - Create or overwrite files
+  - **`search_files`** - Search text in files using patterns
+  - **`shell_command`** - Execute shell commands (allowlisted)
+  - **`browse_url`** - Open URLs in headless browser for screenshot/DOM/text extraction with SPA support
+  - **`write_structured_file`** - Write schema-validated JSON/YAML files
+  - **`patch_structured_file`** - Apply JSON Patch operations to JSON/YAML files
+  - **`git`** - Execute git write operations (requires approval)
+  - **`add_memory`** / **`read_memory`** / **`list_memories`** / **`delete_memory`** - Persistent memory system across conversations
+  - **`list_skills`** / **`activate_skill`** - Skill management for loading instruction bundles
+  - **`view_history`** / **`rollback_changes`** - Change history viewing and rollback
+  - **`self_review`** - Review agent's work against canonical specification
+  - **`analyze_ui_screenshot`** - Analyze UI screenshots, mockups, or HTML files for implementation guidance
+  - **`analyze_image_content`** - Extract text/code from images
+  - **`todo_write`** / **`todo_read`** - Todo management for breaking down tasks
+  - **`web_search`** - Real-time web search for grounding knowledge
+  - **`vision_analysis`** - Vision-capable model analysis for images and PDFs
 
 ### Web UI
 
@@ -84,6 +114,8 @@ Safety: Currently there are very few, and limited safety checks in place. Use at
 - **Search & Replace**: Workspace-wide search with case-sensitive, whole-word, and regex options. Search results link directly to the editor.
 - **Change History**: Browse changelogs, view file revisions with diffs, and rollback changes — all from the browser.
 - **Settings Panel**: Configure providers, models, MCP servers, skills, and other settings without touching config files.
+- **Memory Management**: View, create, edit, and delete persistent memories from the browser.
+- **Provider Catalog**: Browse available providers and models directly in settings.
 - **Command Palette**: Quick-access command palette (`Ctrl+Shift+P`) for fast navigation and actions (Go to File, toggle views, etc.).
 - **Multi-Instance Support**: Multiple `ledit` sessions can share a single Web UI server. Switch between instances from the UI.
 - **Session Management**: Save and restore chat sessions from the browser.
@@ -182,7 +214,7 @@ To get started with `ledit`, the preferred method is to install it via `go insta
 
 ### Prerequisites
 
-- Go 1.24.0+
+- Go 1.25.0+
 - Git (for version control integration)
 
 ### From Source (Preferred Method)
@@ -311,6 +343,7 @@ The configuration uses a flat structure focused on provider and model management
   "max_concurrent_requests": 5,
   "request_delay_ms": 100,
   "enable_security_checks": true,
+  "enable_pre_write_validation": false,
   "code_style": {
     "indentation_type": "spaces",
     "indentation_size": 4,
@@ -325,7 +358,16 @@ The configuration uses a flat structure focused on provider and model management
     "overall_timeout_sec": 600
   },
   "preferences": {},
-  "custom_providers": {}
+  "custom_providers": {},
+  "resource_directory": "",
+  "reasoning_effort": "",
+  "self_review_gate_mode": "off",
+  "subagent_provider": "",
+  "subagent_model": "",
+  "pdf_ocr_enabled": true,
+  "pdf_ocr_provider": "ollama",
+  "pdf_ocr_model": "glm-ocr",
+  "history_scope": "workspace"
 }
 ```
 
@@ -443,7 +485,8 @@ The `.ledit/` directory is automatically created when you first run `ledit` comm
 
 - **`ledit mcp`**: Manage MCP servers (see MCP section).
 - **`ledit custom`**: Manage custom OpenAI-compatible providers.
-- **`ledit diag`**: Show diagnostic information about configuration.
+- **`ledit diag`**: Show diagnostic information about configuration and environment.
+- **`ledit version`**: Print version, build, and platform information.
 - **`ledit plan [idea]`**: Planning and execution mode with todo creation.
 - **`ledit skill`**: Manage agent skills and conventions.
 - **`ledit export-training`**: Export session data to training formats (sharegpt, openai, alpaca).
@@ -463,6 +506,10 @@ ledit agent --last-session "resume previous session"
 ledit agent --persona coder "implement feature"
 ledit agent --persona debugger "fix this bug"
 ledit agent --persona code_reviewer "review my code"
+ledit agent --persona researcher "analyze codebase and external sources"
+ledit agent --persona web_scraper "extract structured content from web pages"
+ledit agent --persona refactor "refactor code while preserving behavior"
+ledit agent --persona computer_user "execute system administration tasks"
 ```
 
 **Performance & Safety:**
@@ -521,6 +568,46 @@ In interactive `ledit` or `ledit agent`, use `/` for commands (tab-complete):
 - `/custom`: Manage custom providers.
 - `/diag`: Show diagnostic information.
 
+### Agent Personas
+
+`ledit` supports 10 specialized personas, each optimized for different types of tasks:
+
+| Persona | Aliases | Description |
+|---------|---------|-------------|
+| `orchestrator` | `orchestration` | Process-oriented planning and delegation |
+| `general` | `default` | General-purpose tasks |
+| `coder` | - | Feature implementation and production code |
+| `refactor` | - | Behavior-preserving refactoring specialist |
+| `debugger` | - | Bug investigation and root cause analysis |
+| `tester` | - | Unit test writing and test coverage |
+| `code_reviewer` | `reviewer` | Code review and security review |
+| `researcher` | - | Combined local codebase analysis and external research |
+| `web_scraper` | `web-scraper`, `scraper` | Web extraction and structured content collection |
+| `computer_user` | `sysadmin`, `ops` | System administration and engineering execution |
+
+**Using Personas:**
+
+```bash
+ledit agent --persona coder "implement feature"
+ledit agent --persona debugger "fix this bug"
+ledit agent --persona code_reviewer "review my code"
+ledit agent --persona researcher "analyze codebase and external sources"
+ledit agent --persona web_scraper "extract structured content from web pages"
+ledit agent --persona refactor "refactor code while preserving behavior"
+ledit agent --persona computer_user "execute system administration tasks"
+```
+
+### Memory System
+
+The memory system persists learned information across all conversations. Memories are markdown files stored in `~/.ledit/memories/` and automatically loaded into the system prompt.
+
+- **`add_memory`** — Save new memories with descriptive names
+- **`read_memory`** — Read a specific memory
+- **`list_memories`** — List all saved memories  
+- **`delete_memory`** — Delete a memory
+
+Memories are useful for storing project conventions, user preferences, and patterns discovered during work.
+
 **Help:**
 - `/help`: Show usage and all slash commands.
 
@@ -559,32 +646,50 @@ See CONTRIBUTING.md for guidelines. Run `go test ./...` before PRs.
   - `agent/`: Core agent orchestration and conversation handling
   - `agent_api/`: LLM provider integrations and API clients
   - `agent_commands/`: CLI command implementations (commit, shell, etc.)
+  - `agent_providers/`: Generic provider factory and configuration
   - `agent_tools/`: Built-in tools (file operations, web search, shell execution)
   - `commands/`: Command utilities and helpers (sessions)
   - `codereview/`: Code review functionality
   - `configuration/`: Configuration management and API keys
-  - `console/`: Terminal UI and streaming interfaces
+  - `console/`: Terminal UI, streaming, ANI handling, mouse support
+  - `credentials/`: Credential store for API key management
   - `events/`: Event bus system
+  - `factory/`: Provider client factory
   - `filediscovery/`: File discovery and indexing
+  - `filesystem/`: Workspace filesystem context and security
   - `git/`: Git integration
   - `history/`: Change tracking and rollback functionality
   - `index/`: Workspace indexing
+  - `interfaces/`: Common interfaces and abstractions
+  - `logging/`: Structured logging with process step tracking
   - `mcp/`: Model Context Protocol client implementation
+  - `model_settings/`: Model-specific parameter resolution
   - `personas/`: Agent persona definitions
   - `prompts/`: Prompt templates
+  - `providercatalog/`: Provider catalog with model lists and costs
+  - `pythonruntime/`: Python runtime detection and validation
   - `security/`: Credential scanning and safety checks
+  - `spec/`: Specification extraction and scope validation
+  - `text/`: Text processing utilities
   - `tools/`: Tool registry and execution framework
+  - `trace/`: Dataset tracing to JSONL files
+  - `training/`: Training data export (ShareGPT, OpenAI, Alpaca)
+  - `types/`: Common type definitions
+  - `ui/`: Terminal UI framework with themes and dropdowns
   - `utils/`: Utility functions and helpers
+  - `validation/`: Code validation (gofmt/goimports for Go)
   - `webcontent/`: Web content fetching
   - `webui/`: React-based Web UI server (embedded assets, WebSocket API, Git/Settings/Search/History APIs, terminal management)
+  - `zsh/`: Zsh command detection and auto-execution
 - **.ledit/** (project-local):
   - `config.json`: Local overrides.
   - `leditignore`: Ignore patterns (augments `.gitignore`).
   - `changes/`: Per-change diff logs with original and updated files.
+  - `memories/`: Persistent memory storage (markdown files).
   - `revisions/`: Per-session directories with instructions and LLM responses.
   - `runlogs/`: JSONL workflow traces.
   - `workspace.log`: Verbose execution log.
-- **Global (~/.ledit/)**: `config.json` (global config), `api_keys.json`, `mcp_config.json`.
+- **Global (~/.ledit/)**: `config.json` (global config), `api_keys.json`, `mcp_config.json`, `memories/`.
 - **Tests**: Unit tests in each `pkg/` subdirectory, `integration_tests/`, `e2e_tests/`, `smoke_tests/`.
 
 ## License

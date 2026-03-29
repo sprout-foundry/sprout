@@ -65,6 +65,8 @@ type ReactWebServer struct {
 	fixReviewMu         sync.RWMutex
 	sshSessions         map[string]*sshWorkspaceSession
 	sshSessionsMu       sync.Mutex
+	sshLaunchStatuses   map[string]*sshLaunchStatus
+	sshLaunchStatusMu   sync.RWMutex
 	workspaceExecMu     sync.Mutex
 	lastClientContextCleanupAt      time.Time
 	lastClientContextCleanupRemoved int
@@ -125,6 +127,7 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int) 
 		startTime:       time.Now(),
 		fixReviewJobs:   make(map[string]*gitFixReviewJob),
 		sshSessions:     make(map[string]*sshWorkspaceSession),
+		sshLaunchStatuses: make(map[string]*sshLaunchStatus),
 	}
 }
 
@@ -191,6 +194,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/instances/select", ws.handleAPIInstanceSelect)
 	mux.HandleFunc("/api/instances/ssh-hosts", ws.handleAPISSHHosts)
 	mux.HandleFunc("/api/instances/ssh-open", ws.handleAPISSHOpen)
+	mux.HandleFunc("/api/instances/ssh-launch-status", ws.handleAPISSHLaunchStatus)
 	mux.HandleFunc("/api/instances/ssh-browse", ws.handleAPISSHBrowse)
 	mux.HandleFunc("/api/instances/ssh-sessions", ws.handleAPISSHSessions)
 	mux.HandleFunc("/api/instances/ssh-close", ws.handleAPISSHSessionDelete)

@@ -2,6 +2,13 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.14.0] - 2026-03-29
+
+- Updates 6 files - Updates app state storage to scope by SSH context (2fc2551)
+- Updates 28 files - Updates client metadata propagation and stale context cleanup (4bfa2b7)
+- Updates 12 files - Updates client isolation and chat completion handling (41dd054)
+- docs: Update changelog for v0.13.5 (1497044)
+
 ## [v0.13.5] - 2026-03-29
 
 - Updates pkg/webui/static/js/main.1f94b90d.js.map - Updates web UI static assets (bd0eb8d)

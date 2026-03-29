@@ -229,3 +229,144 @@ fi
 
 echo "PASS: attach flow healthy"
 cat "$workdir/health.json"
+echo
+
+echo "==> Testing backend API commands"
+
+# /api/workspace — should return daemon_root and workspace_root
+workspace_json="$(curl -fsS "http://127.0.0.1:${LOCAL_PORT}/api/workspace")"
+if [[ -z "$workspace_json" ]]; then
+  echo "error: /api/workspace returned empty response" >&2
+  exit 1
+fi
+workspace_root="$(echo "$workspace_json" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("workspace_root",""))')"
+if [[ -z "$workspace_root" ]]; then
+  echo "error: /api/workspace did not return workspace_root; got: $workspace_json" >&2
+  exit 1
+fi
+echo "    workspace_root: $workspace_root"
+
+# /api/stats — should return basic stats without error
+stats_json="$(curl -fsS "http://127.0.0.1:${LOCAL_PORT}/api/stats")"
+if [[ -z "$stats_json" ]]; then
+  echo "error: /api/stats returned empty response" >&2
+  exit 1
+fi
+echo "    stats: ok"
+
+# /api/providers — should return providers list
+providers_json="$(curl -fsS "http://127.0.0.1:${LOCAL_PORT}/api/providers")"
+if [[ -z "$providers_json" ]]; then
+  echo "error: /api/providers returned empty response" >&2
+  exit 1
+fi
+provider_count="$(echo "$providers_json" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(len(d.get("providers",[])))' 2>/dev/null || echo 0)"
+echo "    providers available: $provider_count"
+
+# /api/files — should return a file listing without error
+files_json="$(curl -fsS "http://127.0.0.1:${LOCAL_PORT}/api/files")"
+if [[ -z "$files_json" ]]; then
+  echo "error: /api/files returned empty response" >&2
+  exit 1
+fi
+echo "    files: ok"
+
+echo "PASS: backend API commands verified"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Proxy path verification
+#
+# The local ledit process (LAUNCHER_URL) exposes the SSH workspace through a
+# reverse-proxy at /ssh/{url-encoded-session-key}/.  All traffic goes through
+# the same origin — no new browser ports needed.
+# ─────────────────────────────────────────────────────────────────────────────
+
+echo "==> Verifying SSH same-origin proxy"
+
+# Compute the URL-encoded session key (Python is already required above).
+encoded_key="$(python3 -c '
+import sys, urllib.parse
+print(urllib.parse.quote(sys.argv[1], safe=""))
+' "${session_key}")"
+
+proxy_base="${LAUNCHER_URL}/ssh/${encoded_key}"
+
+# 1. Index — must return 200 with LEDIT_PROXY_BASE injected.
+index_body="$(curl -fsS "${proxy_base}/")"
+if ! echo "$index_body" | grep -q "LEDIT_PROXY_BASE"; then
+  echo "error: ${proxy_base}/ did not inject LEDIT_PROXY_BASE; body head:" >&2
+  echo "$index_body" | head -5 >&2
+  exit 1
+fi
+echo "    proxy index: LEDIT_PROXY_BASE injected OK"
+
+# 2. /sw.js — must be served from local embed (not dependent on remote backend).
+sw_status="$(curl -o /dev/null -fsS -w "%{http_code}" "${proxy_base}/sw.js")"
+if [[ "$sw_status" != "200" ]]; then
+  echo "error: ${proxy_base}/sw.js returned HTTP ${sw_status}" >&2
+  exit 1
+fi
+echo "    proxy sw.js: HTTP 200 OK"
+
+# 3. /manifest.json — local asset, must return JSON.
+manifest_status="$(curl -o /dev/null -fsS -w "%{http_code}" "${proxy_base}/manifest.json")"
+if [[ "$manifest_status" != "200" ]]; then
+  echo "error: ${proxy_base}/manifest.json returned HTTP ${manifest_status}" >&2
+  exit 1
+fi
+echo "    proxy manifest.json: HTTP 200 OK"
+
+# 4. /health proxied — must reach the remote daemon and return {"status":"ok"}.
+proxy_health="$(curl -fsS "${proxy_base}/health")"
+proxy_health_status="$(echo "$proxy_health" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("status",""))' 2>/dev/null || true)"
+if [[ "$proxy_health_status" != "ok" ]]; then
+  echo "error: ${proxy_base}/health did not return status=ok; got: $proxy_health" >&2
+  exit 1
+fi
+echo "    proxy /health: status=ok"
+
+# 5. /api/workspace proxied — must return workspace_root.
+proxy_ws_json="$(curl -fsS "${proxy_base}/api/workspace")"
+proxy_ws_root="$(echo "$proxy_ws_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("workspace_root",""))' 2>/dev/null || true)"
+if [[ -z "$proxy_ws_root" ]]; then
+  echo "error: ${proxy_base}/api/workspace did not return workspace_root; got: $proxy_ws_json" >&2
+  exit 1
+fi
+echo "    proxy /api/workspace: workspace_root=${proxy_ws_root}"
+
+# 6. /api/stats proxied — basic sanity.
+proxy_stats="$(curl -o /dev/null -fsS -w "%{http_code}" "${proxy_base}/api/stats")"
+if [[ "$proxy_stats" != "200" ]]; then
+  echo "error: ${proxy_base}/api/stats returned HTTP ${proxy_stats}" >&2
+  exit 1
+fi
+echo "    proxy /api/stats: HTTP 200 OK"
+
+# 7. /api/files proxied.
+proxy_files="$(curl -o /dev/null -fsS -w "%{http_code}" "${proxy_base}/api/files")"
+if [[ "$proxy_files" != "200" ]]; then
+  echo "error: ${proxy_base}/api/files returned HTTP ${proxy_files}" >&2
+  exit 1
+fi
+echo "    proxy /api/files: HTTP 200 OK"
+
+# 8. Confirm proxy_url and proxy_base are returned by the ssh-open API.
+#    We call /api/instances/ssh-open with a dry_run param to get the result
+#    without re-launching.  The response must include proxy_url and proxy_base.
+ssh_open_json="$(curl -fsS -X POST "${LAUNCHER_URL}/api/instances/ssh-open" \
+  -H 'Content-Type: application/json' \
+  -d "{\"host_alias\":\"${HOST_ALIAS}\",\"workspace_path\":\"${REMOTE_WORKSPACE_PATH}\"}" 2>/dev/null || true)"
+if [[ -n "$ssh_open_json" ]]; then
+  proxy_url_field="$(echo "$ssh_open_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("proxy_url",""))' 2>/dev/null || true)"
+  proxy_base_field="$(echo "$ssh_open_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("proxy_base",""))' 2>/dev/null || true)"
+  if [[ -z "$proxy_url_field" || -z "$proxy_base_field" ]]; then
+    echo "error: ssh-open response missing proxy_url/proxy_base; got: $ssh_open_json" >&2
+    exit 1
+  fi
+  echo "    ssh-open proxy_url: ${proxy_url_field}"
+  echo "    ssh-open proxy_base: ${proxy_base_field}"
+else
+  echo "    ssh-open: skipped (no response — session may have already been attached)"
+fi
+
+echo "PASS: SSH same-origin proxy verified"

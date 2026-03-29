@@ -2,6 +2,16 @@ export const WEBUI_CLIENT_ID_HEADER = 'X-Ledit-Client-ID';
 export const WEBUI_CLIENT_ID_QUERY_PARAM = 'client_id';
 const WEBUI_CLIENT_ID_STORAGE_KEY = 'ledit.webuiClientId';
 
+/**
+ * When the app is loaded via the SSH proxy path (e.g. /ssh/{key}/) the server
+ * injects `window.LEDIT_PROXY_BASE` so that API and WebSocket calls are routed
+ * through the local server's reverse proxy instead of hitting a different port.
+ */
+export function getProxyBase(): string {
+  if (typeof window === 'undefined') return '';
+  return (window as any).LEDIT_PROXY_BASE || '';
+}
+
 export function getWebUIClientId(): string {
   if (typeof window === 'undefined') {
     return 'default';
@@ -36,6 +46,13 @@ export function appendClientIdToUrl(input: string): string {
 export async function clientFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const headers = new Headers(init?.headers || {});
   headers.set(WEBUI_CLIENT_ID_HEADER, getWebUIClientId());
-  return fetch(input, { ...init, headers });
+  // If we're running behind the SSH proxy, prefix relative API paths so they
+  // route through the local server's reverse proxy to the remote backend.
+  const proxyBase = getProxyBase();
+  let url: RequestInfo | URL = input;
+  if (proxyBase && typeof url === 'string' && url.startsWith('/')) {
+    url = proxyBase + url;
+  }
+  return fetch(url, { ...init, headers });
 }
 

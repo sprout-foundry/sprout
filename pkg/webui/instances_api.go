@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -254,9 +255,11 @@ func (ws *ReactWebServer) handleAPISSHOpen(w http.ResponseWriter, r *http.Reques
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"message": "ssh workspace ready",
-		"url":     result.URL,
-		"port":    result.LocalPort,
+		"message":    "ssh workspace ready",
+		"url":        result.URL,
+		"port":       result.LocalPort,
+		"proxy_url":  fmt.Sprintf("http://127.0.0.1:%d%s/", ws.port, result.ProxyBase),
+		"proxy_base": result.ProxyBase,
 	})
 }
 

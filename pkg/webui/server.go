@@ -39,33 +39,33 @@ type ConnectionInfo struct {
 
 // ReactWebServer provides the React web UI
 type ReactWebServer struct {
-	agent           *agent.Agent
-	eventBus        *events.EventBus
-	daemonRoot      string
-	workspaceRoot   string
-	sshHostAlias    string
-	sshSessionKey   string
-	sshLauncherURL  string
-	sshHomePath     string
-	fileConsents    *fileConsentManager
-	clientContexts  map[string]*webClientContext
-	port            int
-	server          *http.Server
-	listener        net.Listener
-	upgrader        websocket.Upgrader
-	connections     sync.Map // map[*websocket.Conn]*ConnectionInfo
-	terminalManager *TerminalManager
-	isRunning       bool
-	mutex           sync.RWMutex
-	startTime       time.Time
-	queryCount      int
-	activeQueries   int
+	agent               *agent.Agent
+	eventBus            *events.EventBus
+	daemonRoot          string
+	workspaceRoot       string
+	sshHostAlias        string
+	sshSessionKey       string
+	sshLauncherURL      string
+	sshHomePath         string
+	fileConsents        *fileConsentManager
+	clientContexts      map[string]*webClientContext
+	port                int
+	server              *http.Server
+	listener            net.Listener
+	upgrader            websocket.Upgrader
+	connections         sync.Map // map[*websocket.Conn]*ConnectionInfo
+	terminalManager     *TerminalManager
+	isRunning           bool
+	mutex               sync.RWMutex
+	startTime           time.Time
+	queryCount          int
+	activeQueries       int
 	activeQueryClientID string
-	fixReviewJobs   map[string]*gitFixReviewJob
-	fixReviewMu     sync.RWMutex
-	sshSessions     map[string]*sshWorkspaceSession
-	sshSessionsMu   sync.Mutex
-	workspaceExecMu sync.Mutex
+	fixReviewJobs       map[string]*gitFixReviewJob
+	fixReviewMu         sync.RWMutex
+	sshSessions         map[string]*sshWorkspaceSession
+	sshSessionsMu       sync.Mutex
+	workspaceExecMu     sync.Mutex
 }
 
 // NewReactWebServer creates a new React web server
@@ -125,6 +125,9 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	// Setup routes
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", ws.handleIndex)
+	// /ssh/{encodedSessionKey}/ is a reverse proxy to the SSH tunnel backend.
+	// Registered before /ws and /terminal so the ServeMux prefix match works.
+	mux.HandleFunc("/ssh/", ws.handleSSHProxy)
 	mux.HandleFunc("/ws", ws.handleWebSocket)
 	mux.HandleFunc("/terminal", ws.handleTerminalWebSocket)
 	mux.HandleFunc("/api/query", ws.handleAPIQuery)

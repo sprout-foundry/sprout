@@ -136,8 +136,32 @@ func newSSHCommand(hostAlias, script string, extraArgs ...string) *exec.Cmd {
 		"-o", "StrictHostKeyChecking=accept-new",
 	}
 	baseArgs = append(baseArgs, extraArgs...)
-	baseArgs = append(baseArgs, hostAlias, fmt.Sprintf("bash -lc %s", shellEscapeSSH(script)))
+	baseArgs = append(baseArgs, hostAlias, fmt.Sprintf("sh -lc %s", shellEscapeSSH(script)))
 	return exec.Command("ssh", baseArgs...)
+}
+
+func localSSHCacheRoot() string {
+	if tempBase := strings.TrimSpace(os.TempDir()); tempBase != "" {
+		candidate := filepath.Join(tempBase, "ledit-ssh-cache")
+		if err := os.MkdirAll(candidate, 0755); err == nil {
+			return candidate
+		}
+	}
+
+	home := strings.TrimSpace(os.Getenv("HOME"))
+	if home != "" {
+		for _, base := range []string{
+			filepath.Join(home, ".cache"),
+			filepath.Join(home, ".ledit", "cache"),
+		} {
+			candidate := filepath.Join(base, "ledit-ssh-cache")
+			if err := os.MkdirAll(candidate, 0755); err == nil {
+				return candidate
+			}
+		}
+	}
+
+	return filepath.Join(".", "ledit-ssh-cache")
 }
 
 type sshWorkspaceSession struct {
@@ -589,7 +613,7 @@ func prepareLocalSSHBinary(remotePlatform, remoteArch string, logger *sshLaunchL
 		return "", fmt.Errorf("cannot build matching SSH backend for %s/%s because the ledit source tree is not available next to %s", remotePlatform, remoteArch, executablePath)
 	}
 
-	cacheDir := filepath.Join(os.TempDir(), "ledit-ssh-builds")
+	cacheDir := filepath.Join(localSSHCacheRoot(), "builds")
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to prepare SSH build cache: %w", err)
 	}
@@ -634,7 +658,7 @@ func ensureLocalSSHBinaryArtifactForTag(tag, remotePlatform, remoteArch string, 
 	if strings.TrimSpace(cacheTag) == "" {
 		cacheTag = "latest"
 	}
-	cacheDir := filepath.Join(os.TempDir(), "ledit-ssh-artifacts", cacheTag, remotePlatform+"-"+remoteArch)
+	cacheDir := filepath.Join(localSSHCacheRoot(), "artifacts", cacheTag, remotePlatform+"-"+remoteArch)
 	binaryPath := filepath.Join(cacheDir, fmt.Sprintf("ledit-%s-%s", remotePlatform, remoteArch))
 
 	hasCachedBinary := false

@@ -77,6 +77,11 @@ detect_os() {
     esac
 }
 
+# Detect whether we are running inside Termux on Android.
+is_termux() {
+    [ -n "${TERMUX_VERSION:-}" ] || [ -d "/data/data/com.termux/files/usr" ]
+}
+
 # Detect architecture
 detect_arch() {
     local arch
@@ -104,6 +109,18 @@ get_install_dir() {
     if [ -n "${LEDIT_INSTALL_DIR:-}" ]; then
         echo "$LEDIT_INSTALL_DIR"
         return
+    fi
+
+    # In Termux we must install inside the app prefix, not /usr/local/bin.
+    if is_termux; then
+        if [ -n "${PREFIX:-}" ] && [ -d "${PREFIX}/bin" ]; then
+            echo "${PREFIX}/bin"
+            return
+        fi
+        if [ -d "/data/data/com.termux/files/usr/bin" ]; then
+            echo "/data/data/com.termux/files/usr/bin"
+            return
+        fi
     fi
 
     # Prefer /usr/local/bin (with sudo) if it's in PATH, since it's the standard location
@@ -155,6 +172,31 @@ download_release() {
 
     # Only print the URL to stdout (captured by caller)
     echo "$download_url"
+}
+
+# Prefer source install in Termux to avoid binary compatibility issues.
+install_from_source_termux() {
+    local version="$1"
+    local install_dir="$2"
+
+    if ! command -v go >/dev/null 2>&1; then
+        return 1
+    fi
+
+    local module_ref
+    module_ref="github.com/alantheprice/ledit@${version}"
+    if [ -z "$version" ]; then
+        module_ref="github.com/alantheprice/ledit@latest"
+    fi
+
+    log_info "Termux detected; installing from source via go install (${module_ref})"
+    if GOBIN="$install_dir" go install "$module_ref"; then
+        log_success "Installed via go install to $install_dir/ledit"
+        return 0
+    fi
+
+    log_warn "go install failed in Termux; falling back to release tarball"
+    return 1
 }
 
 # Install the binary
@@ -227,14 +269,16 @@ remove_old_versions() {
 
 # Print uninstall instructions
 print_uninstall_instructions() {
+    local install_dir="$1"
     echo ""
     log_info "To uninstall ledit:"
     echo ""
     echo "  # Remove the binary"
-    echo "  sudo rm -f /usr/local/bin/ledit"
-    echo ""
-    echo "  # Or if installed to a different location:"
-    echo "  rm -f \"\$LEDIT_INSTALL_DIR/ledit\""
+    if [ -w "$install_dir" ]; then
+        echo "  rm -f \"$install_dir/ledit\""
+    else
+        echo "  sudo rm -f \"$install_dir/ledit\""
+    fi
     echo ""
 }
 
@@ -262,7 +306,7 @@ main() {
         if [ -n "${LEDIT_INSTALL_DIR:-}" ]; then
             install_dir="$LEDIT_INSTALL_DIR"
         else
-            install_dir="/usr/local/bin"
+            install_dir=$(get_install_dir)
         fi
         
         local binary_path="${install_dir}/ledit"
@@ -284,7 +328,7 @@ main() {
             log_warn "ledit not found at $binary_path"
         fi
         
-        print_uninstall_instructions
+        print_uninstall_instructions "$install_dir"
         exit 0
     fi
     
@@ -311,6 +355,16 @@ main() {
     local install_dir
     install_dir=$(get_install_dir)
     log_info "Installing to: $install_dir"
+
+    if is_termux; then
+        mkdir -p "$install_dir"
+        if install_from_source_termux "$version" "$install_dir"; then
+            verify_installation "$install_dir"
+            print_success "$install_dir" "$version"
+            print_uninstall_instructions "$install_dir"
+            exit 0
+        fi
+    fi
     
     # Remove old versions if they exist
     remove_old_versions "$install_dir"
@@ -330,7 +384,7 @@ main() {
     print_success "$install_dir" "$version"
     
     # Print uninstall instructions
-    print_uninstall_instructions
+    print_uninstall_instructions "$install_dir"
     
     # Cleanup is handled by trap
 }

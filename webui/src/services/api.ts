@@ -163,6 +163,15 @@ export interface SSHOpenErrorPayload {
   log_path?: string;
 }
 
+export interface SSHLaunchStatus {
+  key: string;
+  step: string;
+  status: string;
+  in_progress: boolean;
+  last_error?: string;
+  updated_at: string;
+}
+
 export class SSHWorkspaceOpenError extends Error {
   step?: string;
   details?: string;
@@ -192,6 +201,8 @@ export interface WorkspaceResponse {
 }
 
 class ApiService {
+  private static readonly SSH_OPEN_TIMEOUT_MS = 90_000;
+
   private static instance: ApiService;
 
   private constructor() {}
@@ -410,16 +421,34 @@ class ApiService {
   }
 
   async openSSHWorkspace(hostAlias: string, remoteWorkspacePath?: string): Promise<SSHOpenResponse> {
-    const response = await clientFetch('/api/instances/ssh-open', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        host_alias: hostAlias,
-        remote_workspace_path: remoteWorkspacePath,
-      }),
-    });
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), ApiService.SSH_OPEN_TIMEOUT_MS);
+
+    let response: Response;
+    try {
+      response = await clientFetch('/api/instances/ssh-open', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          host_alias: hostAlias,
+          remote_workspace_path: remoteWorkspacePath,
+        }),
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw new SSHWorkspaceOpenError({
+          error: 'SSH workspace launch timed out. Check SSH connectivity and ~/.ledit/workspace.log for details.',
+          step: 'launch-timeout',
+          details: `No response from /api/instances/ssh-open after ${Math.round(ApiService.SSH_OPEN_TIMEOUT_MS / 1000)} seconds.`,
+        });
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
 
     const text = await response.text();
     let data: any = {};
@@ -441,6 +470,21 @@ class ApiService {
     }
 
     return data;
+  }
+
+  async getSSHLaunchStatus(hostAlias: string, remoteWorkspacePath?: string): Promise<SSHLaunchStatus> {
+    const params = new URLSearchParams();
+    params.set('host_alias', hostAlias);
+    if (remoteWorkspacePath) {
+      params.set('remote_workspace_path', remoteWorkspacePath);
+    }
+
+    const response = await clientFetch(`/api/instances/ssh-launch-status?${params.toString()}`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || data.message || 'Failed to fetch SSH launch status');
+    }
+    return data as SSHLaunchStatus;
   }
 
   async getSSHSessions(): Promise<SSHSessionEntry[]> {

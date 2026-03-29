@@ -973,16 +973,21 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
     setIsOpeningSshHost(hostAlias);
     setSshFailure(null);
     setSwitchingState({ isSwitching: false, error: null, status: `Connecting to ${hostAlias}…` });
-    let stageIndex = 0;
-    const stageMessages = [
-      `Connecting to ${hostAlias}…`,
-      `Preparing remote backend on ${hostAlias}…`,
-      `Starting tunnel for ${hostAlias}…`,
-    ];
-    const stageTimer = window.setInterval(() => {
-      stageIndex = Math.min(stageIndex + 1, stageMessages.length - 1);
-      setSwitchingState((prev) => ({ ...prev, status: stageMessages[stageIndex] }));
-    }, 1400);
+    let statusPollCancelled = false;
+    const pollLaunchStatus = async () => {
+      try {
+        const launchStatus = await apiService.current.getSSHLaunchStatus(hostAlias, targetRemotePath);
+        if (!statusPollCancelled && launchStatus?.status) {
+          setSwitchingState((prev) => ({ ...prev, status: launchStatus.status }));
+        }
+      } catch {
+        // Ignore transient status polling failures while launch is in-flight.
+      }
+    };
+    const statusPollTimer = window.setInterval(() => {
+      void pollLaunchStatus();
+    }, 1000);
+    void pollLaunchStatus();
 
     try {
       if (desktopBridge?.openSshWorkspace) {
@@ -1021,7 +1026,8 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
       }
       setSwitchingState({ isSwitching: false, error: message, status: null });
     } finally {
-      window.clearInterval(stageTimer);
+      statusPollCancelled = true;
+      window.clearInterval(statusPollTimer);
       setIsOpeningSshHost(null);
     }
   }, [remoteWorkspacePath]);

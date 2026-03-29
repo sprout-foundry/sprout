@@ -101,13 +101,42 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 			)
 			go webUISup.Run(ctx)
 		} else {
-			// Explicit port override keeps direct startup behavior.
+			// Explicit port override keeps direct startup behavior, but in daemon mode
+			// we fail fast if the requested port cannot be bound.
+			startErrCh := make(chan error, 1)
 			go func() {
 				if err := webServer.Start(ctx); err != nil && ctx.Err() == nil {
+					select {
+					case startErrCh <- err:
+					default:
+					}
 					// Only log error if not due to context cancellation
 					fmt.Fprintf(os.Stderr, "[WARN] Web UI failed to start: %v\n", err)
 				}
 			}()
+
+			startupDeadline := time.NewTimer(1500 * time.Millisecond)
+			defer startupDeadline.Stop()
+			startupPoll := time.NewTicker(50 * time.Millisecond)
+			defer startupPoll.Stop()
+
+		loop:
+			for {
+				if webServer.IsRunning() {
+					break
+				}
+
+				select {
+				case startErr := <-startErrCh:
+					return fmt.Errorf("web UI failed to start on port %d: %w", port, startErr)
+				case <-startupDeadline.C:
+					if !webServer.IsRunning() {
+						return fmt.Errorf("web UI failed to start on port %d", port)
+					}
+					break loop
+				case <-startupPoll.C:
+				}
+			}
 		}
 
 		// Give web server a moment to start

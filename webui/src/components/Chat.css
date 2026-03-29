@@ -908,6 +908,31 @@
   background: var(--color-error-bg);
   color: var(--accent-error);
   border-color: var(--accent-error);
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.error-actions {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 4px;
+}
+
+.error-recovery-btn {
+  border: 1px solid color-mix(in srgb, var(--accent-error) 35%, var(--border-default));
+  background: color-mix(in srgb, var(--bg-tertiary) 88%, transparent);
+  color: var(--text-primary);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s var(--ease-out), background 0.15s var(--ease-out);
+}
+
+.error-recovery-btn:hover {
+  border-color: var(--accent-error);
+  background: color-mix(in srgb, var(--bg-secondary) 94%, transparent);
 }
 
 .tool-count {

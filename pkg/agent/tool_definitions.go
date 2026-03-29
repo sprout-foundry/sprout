@@ -447,7 +447,7 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 				if agent.debug {
 					agent.debugLog("[APPROVAL] Requesting security approval via webui for %s (risk: %s)\n", toolName, secResult.Risk)
 				}
-				if !mgr.RequestApproval(agent.GetEventBus(), toolName, secResult.Risk.String(), secResult.Reasoning) {
+				if !mgr.RequestApproval(agent.GetEventBus(), agent.GetEventClientID(), toolName, secResult.Risk.String(), secResult.Reasoning) {
 					return nil, "", fmt.Errorf("SECURITY_REJECTED: User rejected %s — %s", toolName, secResult.Reasoning)
 				}
 			} else if secResult.ShouldBlock {

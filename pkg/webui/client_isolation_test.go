@@ -62,6 +62,9 @@ func TestMultiWindowClientIsolationForWorkspaceSessionAndModel(t *testing.T) {
 	if agentA == agentB {
 		t.Fatal("expected distinct live agents per client")
 	}
+	if !agentA.IsStreamingEnabled() || !agentB.IsStreamingEnabled() {
+		t.Fatal("expected WebUI client agents to have streaming enabled")
+	}
 
 	const modelA = "window-a-model"
 	if err := agentA.SetModel(modelA); err != nil {

@@ -9,6 +9,7 @@ import './App.css';
 import { WebSocketService } from './services/websocket';
 import { ApiService, OnboardingEnvironment, OnboardingProviderOption } from './services/api';
 import { clientFetch, getWebUIClientId } from './services/clientSession';
+import { ensureCompletedAssistantMessage } from './utils/chatCompletion';
 import { debugLog } from './utils/log';
 
 // Service Worker Registration
@@ -641,32 +642,44 @@ function App() {
           activeRequestsRef.current -= 1;
         }
         const completedQuery = String(event.data?.query || '').trim().toLowerCase();
+        const completedResponse = event.data?.response;
         const wasClearCommand = completedQuery === '/clear';
         if (wasClearCommand) {
           queuedMessagesRef.current = [];
           setQueuedMessagesCount(0);
         }
-        setState(prev => ({
-          ...prev,
-          messages: wasClearCommand ? [] : prev.messages,
-          currentTodos: wasClearCommand ? [] : prev.currentTodos,
-          isProcessing: activeRequestsRef.current > 0,
-          lastError: null,
-          queryProgress: null,
-          toolExecutions: wasClearCommand
+        setState(prev => {
+          const nextMessages = wasClearCommand
             ? []
-            : prev.toolExecutions.map((tool) => {
-                if (tool.status === 'started' || tool.status === 'running') {
-                  return {
-                    ...tool,
-                    status: 'completed',
-                    endTime: tool.endTime || new Date()
-                  };
-                }
-                return tool;
-              }),
-          logs: [...prev.logs, logEntry]
-        }));
+            : ensureCompletedAssistantMessage(prev.messages, completedResponse, (responseText) => ({
+                id: Date.now().toString(),
+                type: 'assistant',
+                content: responseText,
+                timestamp: new Date()
+              }));
+
+          return {
+            ...prev,
+            messages: nextMessages,
+            currentTodos: wasClearCommand ? [] : prev.currentTodos,
+            isProcessing: activeRequestsRef.current > 0,
+            lastError: null,
+            queryProgress: null,
+            toolExecutions: wasClearCommand
+              ? []
+              : prev.toolExecutions.map((tool) => {
+                  if (tool.status === 'started' || tool.status === 'running') {
+                    return {
+                      ...tool,
+                      status: 'completed',
+                      endTime: tool.endTime || new Date()
+                    };
+                  }
+                  return tool;
+                }),
+            logs: [...prev.logs, logEntry]
+          };
+        });
         debugLog('[OK] Query completed');
         break;
 

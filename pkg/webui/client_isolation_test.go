@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"os"
 	"path/filepath"
 	"testing"
@@ -202,5 +203,139 @@ func TestActiveQueryIsolationAllowsOtherWindowWorkspaceSwitch(t *testing.T) {
 	}
 	if got := ws.getWorkspaceRootForRequest(reqB); got != clientBTarget {
 		t.Fatalf("clientB workspace should move to target, got %q want %q", got, clientBTarget)
+	}
+}
+
+func TestSetClientWorkspaceRootResetsAgentSessionState(t *testing.T) {
+	daemonRoot := t.TempDir()
+	startWorkspace := filepath.Join(daemonRoot, "start")
+	nextWorkspace := filepath.Join(daemonRoot, "next")
+	if err := os.MkdirAll(startWorkspace, 0o755); err != nil {
+		t.Fatalf("mkdir start workspace: %v", err)
+	}
+	if err := os.MkdirAll(nextWorkspace, 0o755); err != nil {
+		t.Fatalf("mkdir next workspace: %v", err)
+	}
+
+	ws := NewReactWebServer(nil, events.NewEventBus(), 0)
+	ws.daemonRoot = daemonRoot
+	ws.workspaceRoot = daemonRoot
+
+	clientID := "window-reset"
+	if _, err := ws.setClientWorkspaceRoot(clientID, startWorkspace); err != nil {
+		t.Fatalf("set start workspace: %v", err)
+	}
+
+	agentInst, err := ws.getClientAgent(clientID)
+	if err != nil {
+		t.Fatalf("get client agent: %v", err)
+	}
+	if agentInst == nil {
+		t.Fatal("expected non-nil agent before workspace reset")
+	}
+
+	snapshot, _ := json.Marshal(agent.AgentState{SessionID: "session-before-reset", Messages: []api.Message{{Role: "user", Content: "hello"}}})
+	ws.setAgentStateForClient(clientID, snapshot)
+	ws.setClientQueryActive(clientID, true)
+
+	if _, err := ws.setClientWorkspaceRoot(clientID, nextWorkspace); err != nil {
+		t.Fatalf("set next workspace: %v", err)
+	}
+
+	ws.mutex.RLock()
+	ctx := ws.clientContexts[clientID]
+	ws.mutex.RUnlock()
+	if ctx == nil {
+		t.Fatal("expected client context after workspace reset")
+	}
+	if ctx.Agent != nil {
+		t.Fatal("expected live agent to be cleared on workspace reset")
+	}
+	if ctx.CurrentSessionID != "" {
+		t.Fatalf("expected current session id to be cleared, got %q", ctx.CurrentSessionID)
+	}
+	if ctx.ActiveQuery {
+		t.Fatal("expected active query flag to be cleared on workspace reset")
+	}
+
+	var state agent.AgentState
+	if err := json.Unmarshal(ctx.AgentState, &state); err != nil {
+		t.Fatalf("decode agent snapshot: %v", err)
+	}
+	if state.SessionID != "" {
+		t.Fatalf("expected empty session id in reset snapshot, got %q", state.SessionID)
+	}
+	if len(state.Messages) != 0 {
+		t.Fatalf("expected empty messages after reset snapshot, got %d", len(state.Messages))
+	}
+}
+
+func TestShouldForwardEventToConnectionRequiresClientIDExceptGlobal(t *testing.T) {
+	ws := NewReactWebServer(nil, events.NewEventBus(), 0)
+
+	targeted := events.UIEvent{
+		Type: events.EventTypeQueryProgress,
+		Data: map[string]interface{}{"client_id": "client-a"},
+	}
+	if !ws.shouldForwardEventToConnection(targeted, "client-a") {
+		t.Fatal("expected targeted event to be forwarded to matching client")
+	}
+	if ws.shouldForwardEventToConnection(targeted, "client-b") {
+		t.Fatal("expected targeted event to be blocked for non-matching client")
+	}
+
+	untargeted := events.UIEvent{
+		Type: events.EventTypeQueryProgress,
+		Data: map[string]interface{}{"message": "no client metadata"},
+	}
+	if ws.shouldForwardEventToConnection(untargeted, "client-a") {
+		t.Fatal("expected untargeted non-global event to be blocked")
+	}
+
+	global := events.UIEvent{
+		Type: events.EventTypeMetricsUpdate,
+		Data: map[string]interface{}{"uptime": "1m"},
+	}
+	if !ws.shouldForwardEventToConnection(global, "client-a") {
+		t.Fatal("expected global metrics update to be forwarded without client metadata")
+	}
+}
+
+func TestStopSSHSessionLockedClearsMatchingClientSSHContext(t *testing.T) {
+	ws := NewReactWebServer(nil, events.NewEventBus(), 0)
+	ws.clientContexts = map[string]*webClientContext{
+		"client-a": {
+			WorkspaceRoot:  "/tmp/a",
+			SSHHostAlias:   "host-a",
+			SSHSessionKey:  "host-a::$HOME",
+			SSHLauncherURL: "http://launcher-a",
+			SSHHomePath:    "/home/a",
+			AgentState:     emptyAgentStateSnapshot(),
+		},
+		"client-b": {
+			WorkspaceRoot:  "/tmp/b",
+			SSHHostAlias:   "host-b",
+			SSHSessionKey:  "host-b::$HOME",
+			SSHLauncherURL: "http://launcher-b",
+			SSHHomePath:    "/home/b",
+			AgentState:     emptyAgentStateSnapshot(),
+		},
+	}
+
+	ws.stopSSHSessionLocked("host-a::$HOME")
+
+	ws.mutex.RLock()
+	ctxA := ws.clientContexts["client-a"]
+	ctxB := ws.clientContexts["client-b"]
+	ws.mutex.RUnlock()
+
+	if ctxA == nil || ctxB == nil {
+		t.Fatal("expected both client contexts to remain allocated")
+	}
+	if !reflect.DeepEqual([]string{ctxA.SSHHostAlias, ctxA.SSHSessionKey, ctxA.SSHLauncherURL, ctxA.SSHHomePath}, []string{"", "", "", ""}) {
+		t.Fatalf("expected client-a SSH context to be cleared, got host=%q key=%q launcher=%q home=%q", ctxA.SSHHostAlias, ctxA.SSHSessionKey, ctxA.SSHLauncherURL, ctxA.SSHHomePath)
+	}
+	if ctxB.SSHSessionKey != "host-b::$HOME" {
+		t.Fatalf("expected client-b SSH context to remain unchanged, got %q", ctxB.SSHSessionKey)
 	}
 }

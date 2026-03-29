@@ -580,13 +580,11 @@ func prepareLocalSSHBinary(remotePlatform, remoteArch string, logger *sshLaunchL
 	}
 	repoRoot := filepath.Dir(executablePath)
 	if _, err := os.Stat(filepath.Join(repoRoot, "go.mod")); err != nil {
-		if errors.Is(artifactErr, errNoReleaseTagForArtifact) {
-			logger.Logf("source tree unavailable; attempting latest artifact as cross-arch fallback for %s/%s", remotePlatform, remoteArch)
-			if latestPath, latestErr := ensureLocalSSHBinaryArtifactForTag("latest", remotePlatform, remoteArch, logger); latestErr == nil && latestPath != "" {
-				return latestPath, nil
-			} else if latestErr != nil {
-				return "", fmt.Errorf("cannot build matching SSH backend for %s/%s because the ledit source tree is not available next to %s (latest artifact fallback failed: %w)", remotePlatform, remoteArch, executablePath, latestErr)
-			}
+		logger.Logf("source tree unavailable; attempting latest artifact as cross-arch fallback for %s/%s", remotePlatform, remoteArch)
+		if latestPath, latestErr := ensureLocalSSHBinaryArtifactForTag("latest", remotePlatform, remoteArch, logger); latestErr == nil && latestPath != "" {
+			return latestPath, nil
+		} else if latestErr != nil {
+			return "", fmt.Errorf("cannot build matching SSH backend for %s/%s because the ledit source tree is not available next to %s (latest artifact fallback failed: %w)", remotePlatform, remoteArch, executablePath, latestErr)
 		}
 		return "", fmt.Errorf("cannot build matching SSH backend for %s/%s because the ledit source tree is not available next to %s", remotePlatform, remoteArch, executablePath)
 	}

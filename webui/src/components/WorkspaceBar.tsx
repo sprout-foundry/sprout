@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Monitor, Server } from 'lucide-react';
 import { ApiService } from '../services/api';
-import { clientFetch, getSSHProxyContext } from '../services/clientSession';
+import { getSSHProxyContext } from '../services/clientSession';
 
 interface WorkspaceBarProps {
   isConnected: boolean;

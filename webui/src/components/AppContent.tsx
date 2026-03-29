@@ -1,6 +1,7 @@
 import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import { Menu, X, Columns2, Rows2, PanelRightOpen, PanelRightClose } from 'lucide-react';
 import Sidebar from './Sidebar';
+import WorkspaceBar from './WorkspaceBar';
 import Terminal from './Terminal';
 import EditorTabs from './EditorTabs';
 import WorkspacePane from './WorkspacePane';
@@ -905,6 +906,11 @@ const AppContent: React.FC<AppContentProps> = ({
         }}
       />
       <div className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''} ${isTerminalExpanded ? 'terminal-expanded' : ''}`}>
+        <WorkspaceBar
+          isConnected={state.isConnected}
+          isMobile={isMobile}
+          isMobileMenuOpen={isSidebarOpen}
+        />
         <div className="main-view-content">
           <div className="editor-view">
             {isMobile && (

@@ -957,10 +957,10 @@ func (ws *ReactWebServer) handleAPISettingsSubagentTypesGet(w http.ResponseWrite
 	currentModel := cfg.GetSubagentModel()
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"subagent_types":       cfg.SubagentTypes,
-		"available_providers":  providers,
-		"current_provider":     currentProvider,
-		"current_model":        currentModel,
+		"subagent_types":      cfg.SubagentTypes,
+		"available_providers": providers,
+		"current_provider":    currentProvider,
+		"current_model":       currentModel,
 	})
 }
 

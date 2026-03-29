@@ -64,7 +64,9 @@ func (srv *ReactWebServer) handleSSHProxy(w http.ResponseWriter, r *http.Request
 	}
 
 	tunnelPort := session.LocalPort
-	proxyBase := "/ssh/" + encodedKey
+	// Re-encode the session key so LEDIT_PROXY_BASE is consistently
+	// percent-encoded, matching what launchSSHWorkspace returns as ProxyBase.
+	proxyBase := "/ssh/" + url.PathEscape(sessionKey)
 
 	// WebSocket upgrade — proxy to the tunnel.
 	if strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {

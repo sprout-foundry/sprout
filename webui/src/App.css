@@ -210,6 +210,63 @@ body {
   min-height: 0;
 }
 
+/* ── Workspace bar ────────────────────────────────────────────── */
+.workspace-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 35px;
+  min-height: 35px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+  overflow: hidden;
+  font-size: 12px;
+}
+
+.workspace-bar--remote .workspace-bar-icon--remote {
+  color: var(--accent-primary);
+}
+
+.workspace-bar-host {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.workspace-bar-icon {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.workspace-bar-host-name {
+  white-space: nowrap;
+}
+
+.workspace-bar--remote .workspace-bar-host-name {
+  color: var(--accent-primary);
+}
+
+.workspace-bar-sep {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+  font-size: 11px;
+}
+
+.workspace-bar-path {
+  color: var(--text-secondary);
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
 .top-view-toolbar {
   display: flex;
   align-items: center;

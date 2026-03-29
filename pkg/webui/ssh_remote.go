@@ -134,6 +134,10 @@ func newSSHCommand(hostAlias, script string, extraArgs ...string) *exec.Cmd {
 	baseArgs := []string{
 		"-o", "BatchMode=yes",
 		"-o", "StrictHostKeyChecking=accept-new",
+		"-o", "ConnectTimeout=10",
+		"-o", "ConnectionAttempts=1",
+		"-o", "ServerAliveInterval=10",
+		"-o", "ServerAliveCountMax=2",
 	}
 	baseArgs = append(baseArgs, extraArgs...)
 	baseArgs = append(baseArgs, hostAlias, fmt.Sprintf("sh -lc %s", shellEscapeSSH(script)))
@@ -206,6 +210,15 @@ type sshRemoteEntry struct {
 	Type string `json:"type"`
 }
 
+type sshLaunchStatus struct {
+	Key        string
+	Step       string
+	Status     string
+	InProgress bool
+	LastError  string
+	UpdatedAt  time.Time
+}
+
 const (
 	githubReleaseRepoOwner  = "alantheprice"
 	githubReleaseRepoName   = "ledit"
@@ -215,7 +228,7 @@ const (
 
 var errNoReleaseTagForArtifact = errors.New("no release tag available for current build")
 
-func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (*sshLaunchResult, error) {
+func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (result *sshLaunchResult, err error) {
 	hostAlias := strings.TrimSpace(req.HostAlias)
 	if hostAlias == "" {
 		return nil, errors.New("SSH host alias is required")
@@ -233,11 +246,20 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (*sshLaunc
 	defer logger.Close()
 
 	sessionKey := hostAlias + "::" + remoteWorkspacePath
+	ws.setSSHLaunchStatus(sessionKey, "connecting", fmt.Sprintf("Connecting to %s...", hostAlias), true, "")
+	defer func() {
+		if err != nil {
+			ws.setSSHLaunchStatus(sessionKey, "failed", "SSH workspace launch failed", false, err.Error())
+			return
+		}
+		ws.setSSHLaunchStatus(sessionKey, "ready", fmt.Sprintf("SSH workspace ready: %s", hostAlias), false, "")
+	}()
 
 	ws.sshSessionsMu.Lock()
 	if existing := ws.sshSessions[sessionKey]; existing != nil {
+		ws.setSSHLaunchStatus(sessionKey, "reusing-session", fmt.Sprintf("Reusing existing session for %s...", hostAlias), true, "")
 		if err := waitForWebHealth(existing.LocalPort, 2*time.Second); err == nil {
-			result := &sshLaunchResult{
+			result = &sshLaunchResult{
 				URL:       existing.URL,
 				LocalPort: existing.LocalPort,
 				ProxyBase: "/ssh/" + url.PathEscape(sessionKey),
@@ -245,39 +267,46 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (*sshLaunc
 			ws.sshSessionsMu.Unlock()
 			return result, nil
 		}
+		ws.setSSHLaunchStatus(sessionKey, "discarding-stale-session", fmt.Sprintf("Discarding stale session for %s...", hostAlias), true, "")
 		ws.stopSSHSessionLocked(sessionKey)
 	}
 	ws.sshSessionsMu.Unlock()
 
 	if restored, err := ws.restorePersistedSSHSession(sessionKey); err == nil && restored != nil {
+		ws.setSSHLaunchStatus(sessionKey, "restored-session", fmt.Sprintf("Restored existing session for %s", hostAlias), false, "")
 		logger.Logf("restored existing SSH session %q", sessionKey)
 		return restored, nil
 	}
 
+	ws.setSSHLaunchStatus(sessionKey, "checking-local-tools", "Checking local SSH tools...", true, "")
 	if err := ensureSSHProgramsAvailable(); err != nil {
 		logger.Logf("ssh program availability check failed: %v", err)
 		return nil, err
 	}
 	logger.Logf("ssh and scp detected locally")
 
+	ws.setSSHLaunchStatus(sessionKey, "inspecting-remote", fmt.Sprintf("Inspecting remote host %s...", hostAlias), true, "")
 	remoteInfo, err := inspectRemoteSSHHost(hostAlias, logger)
 	if err != nil {
 		return nil, err
 	}
 	logger.Logf("remote host detected platform=%s arch=%s", remoteInfo.Platform, remoteInfo.Arch)
 
+	ws.setSSHLaunchStatus(sessionKey, "preparing-local-backend", "Preparing local backend binary...", true, "")
 	localBinary, err := prepareLocalSSHBinary(remoteInfo.Platform, remoteInfo.Arch, logger)
 	if err != nil {
 		return nil, err
 	}
 	logger.Logf("local SSH backend binary ready: %s", localBinary)
 
+	ws.setSSHLaunchStatus(sessionKey, "installing-remote-backend", fmt.Sprintf("Installing backend on %s...", hostAlias), true, "")
 	remoteBinary, err := ensureRemoteSSHBinary(hostAlias, localBinary, remoteInfo, logger)
 	if err != nil {
 		return nil, err
 	}
 	logger.Logf("remote SSH backend installed at %s", remoteBinary)
 
+	ws.setSSHLaunchStatus(sessionKey, "allocating-local-port", "Allocating local tunnel port...", true, "")
 	localPort, err := findFreeLocalPort()
 	if err != nil {
 		logger.Logf("failed to allocate local tunnel port: %v", err)
@@ -286,18 +315,21 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (*sshLaunc
 	logger.Logf("allocated local tunnel port %d", localPort)
 
 	launcherURL := fmt.Sprintf("http://127.0.0.1:%d", ws.port)
+	ws.setSSHLaunchStatus(sessionKey, "starting-remote-backend", fmt.Sprintf("Starting remote backend on %s...", hostAlias), true, "")
 	remotePort, remotePID, err := startRemoteSSHBackend(hostAlias, sessionKey, launcherURL, remoteWorkspacePath, remoteBinary, logger)
 	if err != nil {
 		return nil, err
 	}
 	logger.Logf("remote SSH backend started port=%d pid=%d", remotePort, remotePID)
 
+	ws.setSSHLaunchStatus(sessionKey, "starting-tunnel", fmt.Sprintf("Starting tunnel for %s...", hostAlias), true, "")
 	tunnelCmd, err := startSSHTunnel(hostAlias, localPort, remotePort, logger)
 	if err != nil {
 		return nil, err
 	}
 	logger.Logf("ssh tunnel started local_port=%d remote_port=%d", localPort, remotePort)
 
+	ws.setSSHLaunchStatus(sessionKey, "health-check", "Waiting for SSH workspace health check...", true, "")
 	if err := waitForWebHealth(localPort, sshLaunchHealthTimeout); err != nil {
 		logger.Logf("health check failed: %v", err)
 		details := collectSSHHealthFailureDetails(hostAlias, remotePID, err, logger)
@@ -328,11 +360,44 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (*sshLaunc
 
 	go ws.watchSSHSession(sessionKey, session, tunnelCmd)
 
-	return &sshLaunchResult{
+	result = &sshLaunchResult{
 		URL:       session.URL,
 		LocalPort: session.LocalPort,
 		ProxyBase: "/ssh/" + url.PathEscape(sessionKey),
-	}, nil
+	}
+	return result, nil
+}
+
+func (ws *ReactWebServer) setSSHLaunchStatus(sessionKey, step, status string, inProgress bool, lastErr string) {
+	sessionKey = strings.TrimSpace(sessionKey)
+	if sessionKey == "" {
+		return
+	}
+	ws.sshLaunchStatusMu.Lock()
+	defer ws.sshLaunchStatusMu.Unlock()
+	ws.sshLaunchStatuses[sessionKey] = &sshLaunchStatus{
+		Key:        sessionKey,
+		Step:       strings.TrimSpace(step),
+		Status:     strings.TrimSpace(status),
+		InProgress: inProgress,
+		LastError:  strings.TrimSpace(lastErr),
+		UpdatedAt:  time.Now(),
+	}
+}
+
+func (ws *ReactWebServer) getSSHLaunchStatus(sessionKey string) *sshLaunchStatus {
+	sessionKey = strings.TrimSpace(sessionKey)
+	if sessionKey == "" {
+		return nil
+	}
+	ws.sshLaunchStatusMu.RLock()
+	defer ws.sshLaunchStatusMu.RUnlock()
+	status := ws.sshLaunchStatuses[sessionKey]
+	if status == nil {
+		return nil
+	}
+	copy := *status
+	return &copy
 }
 
 func (ws *ReactWebServer) restorePersistedSSHSession(sessionKey string) (*sshLaunchResult, error) {
@@ -863,6 +928,10 @@ func ensureRemoteSSHBinary(hostAlias, localBinary string, remoteInfo *remoteSSHI
 	}
 
 	copyCmd := exec.Command("scp",
+		"-o", "BatchMode=yes",
+		"-o", "StrictHostKeyChecking=accept-new",
+		"-o", "ConnectTimeout=10",
+		"-o", "ConnectionAttempts=1",
 		"-q",
 		localBinary,
 		fmt.Sprintf("%s:%s", hostAlias, remoteUploadSCP),

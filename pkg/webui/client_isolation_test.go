@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	api "github.com/alantheprice/ledit/pkg/agent_api"
@@ -16,6 +17,11 @@ import (
 )
 
 func TestMultiWindowClientIsolationForWorkspaceSessionAndModel(t *testing.T) {
+	isolatedHome := t.TempDir()
+	t.Setenv("HOME", isolatedHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
+	t.Setenv("USERPROFILE", isolatedHome)
+
 	daemonRoot := t.TempDir()
 	workspaceA := filepath.Join(daemonRoot, "workspace-a")
 	workspaceB := filepath.Join(daemonRoot, "workspace-b")
@@ -337,5 +343,80 @@ func TestStopSSHSessionLockedClearsMatchingClientSSHContext(t *testing.T) {
 	}
 	if ctxB.SSHSessionKey != "host-b::$HOME" {
 		t.Fatalf("expected client-b SSH context to remain unchanged, got %q", ctxB.SSHSessionKey)
+	}
+}
+
+func TestCleanupInactiveClientContextsRemovesOnlyStaleInactiveDisconnectedClients(t *testing.T) {
+	daemonRoot := t.TempDir()
+
+	ws := NewReactWebServer(nil, events.NewEventBus(), 0)
+	ws.daemonRoot = daemonRoot
+	ws.workspaceRoot = daemonRoot
+
+	old := time.Now().Add(-2 * time.Hour)
+	recent := time.Now().Add(-5 * time.Minute)
+
+	ws.clientContexts = map[string]*webClientContext{
+		defaultWebClientID: {
+			WorkspaceRoot: daemonRoot,
+			LastSeenAt:    old,
+			AgentState:    emptyAgentStateSnapshot(),
+		},
+		"stale-client": {
+			WorkspaceRoot: filepath.Join(daemonRoot, "stale"),
+			LastSeenAt:    old,
+			Terminal:      NewTerminalManager(daemonRoot),
+			AgentState:    emptyAgentStateSnapshot(),
+		},
+		"recent-client": {
+			WorkspaceRoot: filepath.Join(daemonRoot, "recent"),
+			LastSeenAt:    recent,
+			Terminal:      NewTerminalManager(daemonRoot),
+			AgentState:    emptyAgentStateSnapshot(),
+		},
+		"active-client": {
+			WorkspaceRoot: filepath.Join(daemonRoot, "active"),
+			LastSeenAt:    old,
+			Terminal:      NewTerminalManager(daemonRoot),
+			ActiveQuery:   true,
+			AgentState:    emptyAgentStateSnapshot(),
+		},
+		"connected-client": {
+			WorkspaceRoot: filepath.Join(daemonRoot, "connected"),
+			LastSeenAt:    old,
+			Terminal:      NewTerminalManager(daemonRoot),
+			AgentState:    emptyAgentStateSnapshot(),
+		},
+	}
+
+	ws.connections.Store("conn-1", &ConnectionInfo{ClientID: "connected-client", Type: "webui"})
+
+	removed := ws.cleanupInactiveClientContexts(30 * time.Minute)
+	if removed != 1 {
+		t.Fatalf("expected 1 stale client to be removed, got %d", removed)
+	}
+
+	ws.mutex.RLock()
+	_, hasDefault := ws.clientContexts[defaultWebClientID]
+	_, hasStale := ws.clientContexts["stale-client"]
+	_, hasRecent := ws.clientContexts["recent-client"]
+	_, hasActive := ws.clientContexts["active-client"]
+	_, hasConnected := ws.clientContexts["connected-client"]
+	ws.mutex.RUnlock()
+
+	if !hasDefault {
+		t.Fatal("default client context should never be removed")
+	}
+	if hasStale {
+		t.Fatal("stale inactive disconnected client should be removed")
+	}
+	if !hasRecent {
+		t.Fatal("recent client should not be removed")
+	}
+	if !hasActive {
+		t.Fatal("active-query client should not be removed")
+	}
+	if !hasConnected {
+		t.Fatal("connected client should not be removed")
 	}
 }

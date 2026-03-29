@@ -7,13 +7,16 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"sync"
 
 	"github.com/alantheprice/ledit/pkg/events"
 )
 
 // Validator provides syntax and import validation
 type Validator struct {
-	eventBus *events.EventBus
+	eventBus      *events.EventBus
+	metadataMu    sync.RWMutex
+	eventMetadata map[string]interface{}
 }
 
 // Diagnostic represents a validation issue
@@ -40,6 +43,44 @@ func NewValidator(eventBus *events.EventBus) *Validator {
 	return &Validator{
 		eventBus: eventBus,
 	}
+}
+
+// SetEventMetadata attaches metadata merged into validation events.
+func (v *Validator) SetEventMetadata(metadata map[string]interface{}) {
+	v.metadataMu.Lock()
+	defer v.metadataMu.Unlock()
+	if len(metadata) == 0 {
+		v.eventMetadata = nil
+		return
+	}
+	cloned := make(map[string]interface{}, len(metadata))
+	for k, val := range metadata {
+		cloned[k] = val
+	}
+	v.eventMetadata = cloned
+}
+
+func (v *Validator) decorateEventPayload(payload map[string]interface{}) map[string]interface{} {
+	if payload == nil {
+		payload = map[string]interface{}{}
+	}
+
+	v.metadataMu.RLock()
+	defer v.metadataMu.RUnlock()
+	if len(v.eventMetadata) == 0 {
+		return payload
+	}
+
+	cloned := make(map[string]interface{}, len(payload)+len(v.eventMetadata))
+	for k, val := range payload {
+		cloned[k] = val
+	}
+	for k, val := range v.eventMetadata {
+		if _, exists := cloned[k]; !exists {
+			cloned[k] = val
+		}
+	}
+	return cloned
 }
 
 // ValidateSyntax checks if Go code has valid syntax using gofmt
@@ -99,10 +140,11 @@ func (v *Validator) RunValidation(ctx context.Context, path, content string) Val
 
 	// Publish to event bus
 	if v.eventBus != nil {
-		v.eventBus.Publish(events.EventTypeValidation, map[string]interface{}{
+		payload := v.decorateEventPayload(map[string]interface{}{
 			"file_path":   path,
 			"diagnostics": toDiagnosticsMap(result.Diagnostics),
 		})
+		v.eventBus.Publish(events.EventTypeValidation, payload)
 	}
 
 	return result

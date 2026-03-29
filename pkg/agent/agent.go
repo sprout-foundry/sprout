@@ -605,6 +605,11 @@ func (a *Agent) SetEventBus(eventBus *events.EventBus) {
 	}
 	// Initialize validator for syntax checking and async diagnostics
 	a.validator = validation.NewValidator(eventBus)
+	a.eventMetadataMu.RLock()
+	if len(a.eventMetadata) > 0 {
+		a.validator.SetEventMetadata(a.eventMetadata)
+	}
+	a.eventMetadataMu.RUnlock()
 	a.enablePreWriteValidation = true
 }
 
@@ -640,6 +645,9 @@ func (a *Agent) SetEventMetadata(metadata map[string]interface{}) {
 	defer a.eventMetadataMu.Unlock()
 	if len(metadata) == 0 {
 		a.eventMetadata = nil
+		if a.validator != nil {
+			a.validator.SetEventMetadata(nil)
+		}
 		return
 	}
 	cloned := make(map[string]interface{}, len(metadata))
@@ -647,6 +655,22 @@ func (a *Agent) SetEventMetadata(metadata map[string]interface{}) {
 		cloned[k] = v
 	}
 	a.eventMetadata = cloned
+	if a.validator != nil {
+		a.validator.SetEventMetadata(cloned)
+	}
+}
+
+// GetEventClientID returns the bound client_id from event metadata, if present.
+func (a *Agent) GetEventClientID() string {
+	a.eventMetadataMu.RLock()
+	defer a.eventMetadataMu.RUnlock()
+	if len(a.eventMetadata) == 0 {
+		return ""
+	}
+	if clientID, ok := a.eventMetadata["client_id"].(string); ok {
+		return strings.TrimSpace(clientID)
+	}
+	return ""
 }
 
 func (a *Agent) decorateEventPayload(data interface{}) interface{} {

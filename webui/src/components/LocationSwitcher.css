@@ -221,6 +221,12 @@
   white-space: pre-wrap;
 }
 
+.location-switcher-error-actions {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-start;
+}
+
 .location-switcher-error-details {
   padding: 10px 16px 12px;
   background: color-mix(in srgb, var(--accent-error) 7%, transparent);

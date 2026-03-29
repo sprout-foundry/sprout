@@ -129,6 +129,18 @@ const Chat: React.FC<ChatProps> = ({
     return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  const handleReloadWithoutSSHPath = useCallback(() => {
+    const { origin, pathname } = window.location;
+    if (pathname.startsWith('/ssh/')) {
+      window.location.assign(`${origin}/`);
+      return;
+    }
+    window.location.reload();
+  }, []);
+
+  const showExpiredSessionRecovery =
+    !!lastError && lastError.toLowerCase().includes('ssh session not found or expired');
+
   return (
     <div
       className="chat-shell"
@@ -218,6 +230,17 @@ const Chat: React.FC<ChatProps> = ({
               <div className="error-content">
                 <div className="error-icon"><AlertTriangle size={14} /></div>
                 <div className="error-text">{lastError}</div>
+                {showExpiredSessionRecovery ? (
+                  <div className="error-actions">
+                    <button
+                      type="button"
+                      className="error-recovery-btn"
+                      onClick={handleReloadWithoutSSHPath}
+                    >
+                      Reload Without SSH Path
+                    </button>
+                  </div>
+                ) : null}
               </div>
             </div>
           )}

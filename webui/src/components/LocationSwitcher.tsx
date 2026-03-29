@@ -836,6 +836,15 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
           ? error.message
           : 'Failed to switch to this folder';
 
+      if (errorMessage.includes('HTML response')) {
+        setSwitchingState({
+          isSwitching: false,
+          error: 'Remote workspace API is unavailable on this backend. Update the remote ledit binary.',
+          status: null,
+        });
+        return;
+      }
+
       if (
         errorMessage.toLowerCase().includes('query') &&
         errorMessage.toLowerCase().includes('progress')
@@ -939,6 +948,20 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
     setSwitchingState({ isSwitching: false, error: null, status: null });
     setSshFailure(null);
   }, []);
+
+  const handleReloadWithoutSSHPath = useCallback(() => {
+    const { origin, pathname } = window.location;
+    if (pathname.startsWith('/ssh/')) {
+      window.location.assign(`${origin}/`);
+      return;
+    }
+    window.location.reload();
+  }, []);
+
+  const showExpiredSessionRecovery = useMemo(() => {
+    const message = switchingState.error?.toLowerCase() || '';
+    return message.includes('ssh session not found or expired');
+  }, [switchingState.error]);
 
   const handleOpenSshHost = useCallback(async (hostAlias: string, explicitRemotePath?: string) => {
     const desktopBridge = (window as any).leditDesktop;
@@ -1140,7 +1163,20 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
           tabIndex={0}
         >
           {switchingState.error ? (
-            <div className="location-switcher-error" role="alert">{switchingState.error}</div>
+            <div className="location-switcher-error" role="alert">
+              <div>{switchingState.error}</div>
+              {showExpiredSessionRecovery ? (
+                <div className="location-switcher-error-actions">
+                  <button
+                    type="button"
+                    className="location-switcher-session-btn"
+                    onClick={handleReloadWithoutSSHPath}
+                  >
+                    Reload Without SSH Path
+                  </button>
+                </div>
+              ) : null}
+            </div>
           ) : null}
           {switchingState.error && sshFailure ? (
             <div className="location-switcher-error-details">
@@ -1489,7 +1525,18 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
         >
           {switchingState.error ? (
             <div id="location-switcher-error" className="location-switcher-error" role="alert">
-              {switchingState.error}
+              <div>{switchingState.error}</div>
+              {showExpiredSessionRecovery ? (
+                <div className="location-switcher-error-actions">
+                  <button
+                    type="button"
+                    className="location-switcher-session-btn"
+                    onClick={handleReloadWithoutSSHPath}
+                  >
+                    Reload Without SSH Path
+                  </button>
+                </div>
+              ) : null}
             </div>
           ) : null}
           {switchingState.error && sshFailure ? (

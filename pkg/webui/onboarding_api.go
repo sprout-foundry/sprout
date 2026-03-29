@@ -319,14 +319,34 @@ func (ws *ReactWebServer) handleAPIOnboardingStatus(w http.ResponseWriter, r *ht
 
 	currentProvider := strings.TrimSpace(cfg.LastUsedProvider)
 	if clientAgent, err := ws.getClientAgent(ws.resolveClientID(r)); err == nil && clientAgent != nil {
-		if provider := strings.TrimSpace(clientAgent.GetProvider()); provider != "" && provider != "unknown" {
+		if provider := strings.TrimSpace(clientAgent.GetProvider()); provider != "" && provider != "unknown" && provider != "test" {
 			currentProvider = provider
+		}
+	}
+	if currentProvider == "" || currentProvider == "test" {
+		for _, provider := range providers {
+			if provider.ID == "test" {
+				continue
+			}
+			if !provider.RequiresAPIKey || provider.HasCredential {
+				currentProvider = provider.ID
+				break
+			}
 		}
 	}
 	currentModel := strings.TrimSpace(cfg.GetModelForProvider(currentProvider))
 	if clientAgent, err := ws.getClientAgent(ws.resolveClientID(r)); err == nil && clientAgent != nil {
 		if model := strings.TrimSpace(clientAgent.GetModel()); model != "" && model != "unknown" {
 			currentModel = model
+		}
+	}
+	if currentModel == "" {
+		if p, ok := indexByID[currentProvider]; ok {
+			if strings.TrimSpace(p.RecommendedModel) != "" {
+				currentModel = strings.TrimSpace(p.RecommendedModel)
+			} else if len(p.Models) > 0 {
+				currentModel = strings.TrimSpace(p.Models[0])
+			}
 		}
 	}
 

@@ -459,10 +459,16 @@ func (ws *ReactWebServer) gatherStatsForClientID(clientID string) map[string]int
 		"queries":           ws.queryCount,
 		"query_count":       ws.queryCount,
 		"terminal_sessions": terminalSessions,
+		"client_context_count": len(ws.clientContexts),
+		"client_context_cleanup_removed_last": ws.lastClientContextCleanupRemoved,
+		"client_context_cleanup_removed_total": ws.totalClientContextsRemoved,
 		"server_time":       time.Now().Unix(),
 		"start_time":        ws.startTime.Unix(),
 		"uptime_formatted":  uptime.String(),
 		"uptime":            uptime.String(),
+	}
+	if !ws.lastClientContextCleanupAt.IsZero() {
+		stats["client_context_cleanup_last_unix"] = ws.lastClientContextCleanupAt.Unix()
 	}
 
 	clientCtx := ws.clientContexts[clientID]

@@ -148,12 +148,12 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 			return
 		}
 
-		log.Printf("handleAPIQuery: calling ProcessQuery")
+		log.Printf("handleAPIQuery: calling ProcessQueryWithContinuity")
 		clientAgent.SetWorkspaceRoot(workspaceRoot)
-		_, err := clientAgent.ProcessQuery(query.Query)
+		_, err := clientAgent.ProcessQueryWithContinuity(query.Query)
 		_ = ws.syncAgentStateForClient(clientID)
 		if err != nil {
-			log.Printf("handleAPIQuery: ProcessQuery error: %v", err)
+			log.Printf("handleAPIQuery: ProcessQueryWithContinuity error: %v", err)
 			ws.publishClientEvent(clientID, events.EventTypeError, events.ErrorEvent("Query failed", err))
 		}
 	}()

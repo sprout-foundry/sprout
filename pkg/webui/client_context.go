@@ -294,6 +294,7 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 		ws.mutex.RUnlock()
 		agentInst.SetWorkspaceRoot(workspaceRoot)
 		agentInst.SetEventMetadata(map[string]interface{}{"client_id": clientID})
+		agentInst.EnableStreaming(func(string) {})
 		return agentInst, nil
 	}
 	ws.mutex.RUnlock()
@@ -306,6 +307,7 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 		ws.mutex.Unlock()
 		agentInst.SetWorkspaceRoot(workspaceRoot)
 		agentInst.SetEventMetadata(map[string]interface{}{"client_id": clientID})
+		agentInst.EnableStreaming(func(string) {})
 		return agentInst, nil
 	}
 	workspaceRoot := ctx.WorkspaceRoot
@@ -328,6 +330,7 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 	created.SetEventBus(ws.eventBus)
 	created.SetWorkspaceRoot(workspaceRoot)
 	created.SetEventMetadata(map[string]interface{}{"client_id": clientID})
+	created.EnableStreaming(func(string) {})
 	if len(snapshot) > 0 {
 		if err := created.ImportState(snapshot); err != nil {
 			return nil, err

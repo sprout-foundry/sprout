@@ -12,6 +12,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -163,6 +164,11 @@ type persistedSSHWorkspaceSession struct {
 type sshLaunchResult struct {
 	URL       string
 	LocalPort int
+	// ProxyBase is the path prefix served by the local server that proxies
+	// all traffic to this SSH session's tunnel (e.g. /ssh/ai-worker%3A%3A%24HOME).
+	// Using this URL keeps the browser on the same origin, preserving PWA
+	// functionality and avoiding cross-origin storage isolation.
+	ProxyBase string
 }
 
 type remoteSSHInfo struct {
@@ -207,7 +213,11 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (*sshLaunc
 	ws.sshSessionsMu.Lock()
 	if existing := ws.sshSessions[sessionKey]; existing != nil {
 		if err := waitForWebHealth(existing.LocalPort, 2*time.Second); err == nil {
-			result := &sshLaunchResult{URL: existing.URL, LocalPort: existing.LocalPort}
+			result := &sshLaunchResult{
+				URL:       existing.URL,
+				LocalPort: existing.LocalPort,
+				ProxyBase: "/ssh/" + url.PathEscape(sessionKey),
+			}
 			ws.sshSessionsMu.Unlock()
 			return result, nil
 		}
@@ -297,6 +307,7 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (*sshLaunc
 	return &sshLaunchResult{
 		URL:       session.URL,
 		LocalPort: session.LocalPort,
+		ProxyBase: "/ssh/" + url.PathEscape(sessionKey),
 	}, nil
 }
 
@@ -347,6 +358,7 @@ func (ws *ReactWebServer) restorePersistedSSHSession(sessionKey string) (*sshLau
 	return &sshLaunchResult{
 		URL:       session.URL,
 		LocalPort: session.LocalPort,
+		ProxyBase: "/ssh/" + url.PathEscape(sessionKey),
 	}, nil
 }
 

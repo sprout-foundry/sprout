@@ -128,6 +128,34 @@ func (ws *ReactWebServer) getClientContextForRequest(r *http.Request) *webClient
 	return ws.getOrCreateClientContext(ws.resolveClientID(r))
 }
 
+func (ws *ReactWebServer) clearClientSSHContextForSessionKey(sessionKey string) {
+	sessionKey = strings.TrimSpace(sessionKey)
+	if sessionKey == "" {
+		return
+	}
+
+	ws.mutex.Lock()
+	defer ws.mutex.Unlock()
+
+	for clientID, ctx := range ws.clientContexts {
+		if ctx == nil || strings.TrimSpace(ctx.SSHSessionKey) != sessionKey {
+			continue
+		}
+		ctx.SSHHostAlias = ""
+		ctx.SSHSessionKey = ""
+		ctx.SSHLauncherURL = ""
+		ctx.SSHHomePath = ""
+		ctx.LastSeenAt = time.Now()
+
+		if clientID == defaultWebClientID {
+			ws.sshHostAlias = ""
+			ws.sshSessionKey = ""
+			ws.sshLauncherURL = ""
+			ws.sshHomePath = ""
+		}
+	}
+}
+
 func (ws *ReactWebServer) getWorkspaceRootForRequest(r *http.Request) string {
 	return ws.getClientContextForRequest(r).WorkspaceRoot
 }
@@ -189,9 +217,10 @@ func (ws *ReactWebServer) setClientWorkspaceRoot(clientID, path string) (string,
 	ctx.SSHLauncherURL = ""
 	ctx.SSHHomePath = ""
 	ctx.Terminal = NewTerminalManager(workspaceRoot)
-	if ctx.Agent != nil {
-		ctx.Agent.SetWorkspaceRoot(workspaceRoot)
-	}
+	ctx.Agent = nil
+	ctx.AgentState = emptyAgentStateSnapshot()
+	ctx.CurrentSessionID = ""
+	ctx.ActiveQuery = false
 	if ctx.FileConsents == nil {
 		ctx.FileConsents = newFileConsentManager()
 	}

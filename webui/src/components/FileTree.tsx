@@ -162,7 +162,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
         });
     } catch (err) {
       if (err instanceof Error && err.message.includes('Unexpected token')) {
-        throw new Error('Backend not connected. Start with: ./ledit agent --web-port 54421');
+        throw new Error('Backend not connected. Start with: ./ledit agent');
       }
       throw err instanceof Error ? err : new Error('Unknown error');
     }

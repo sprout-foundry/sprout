@@ -233,6 +233,46 @@ const AppContent: React.FC<AppContentProps> = ({
     window.localStorage.setItem('ledit.contextPanel.width', String(Math.round(panelWidth)));
   }, [panelWidth]);
   const initialViewSyncRef = useRef(false);
+  const initialWorkspaceAppliedRef = useRef(false);
+
+  // Apply LEDIT_INITIAL_WORKSPACE on first mount (injected by SSH proxy).
+  // Best-effort: if the switch fails, the user can manually switch later.
+  useEffect(() => {
+    if (initialWorkspaceAppliedRef.current || !isConnected) {
+      return;
+    }
+    initialWorkspaceAppliedRef.current = true;
+
+    const initialWorkspace: string | undefined = (window as any).LEDIT_INITIAL_WORKSPACE;
+    delete (window as any).LEDIT_INITIAL_WORKSPACE;
+    if (!initialWorkspace || typeof initialWorkspace !== 'string') {
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const workspace = await apiService.getWorkspace();
+        if (cancelled) {
+          return;
+        }
+        const currentRoot = (workspace.workspace_root || '').replace(/\/+$/, '');
+        const targetRoot = initialWorkspace.replace(/\/+$/, '');
+        if (currentRoot === targetRoot) {
+          return;
+        }
+        await apiService.setWorkspace(targetRoot);
+      } catch (err) {
+        // Best-effort: don't surface errors to the user.
+        console.debug('[workspace] Auto-switch failed (best-effort):', err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isConnected, apiService]);
 
   // Load hotkeys config path on mount
   useEffect(() => {

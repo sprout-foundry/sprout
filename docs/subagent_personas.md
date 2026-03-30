@@ -417,59 +417,8 @@ Subagent personas are configured in `.ledit/subagents.json`:
 /subagent-persona web_researcher disable
 ```
 
-## Implementation Status
-
-### Completed ✅
-
-1. **Step 1: Define personas** - ✅ Complete
-   - Documented 6 personas with clear purposes and use cases
-   - Defined strengths, typical tasks, and configuration recommendations
-
-2. **Step 2: Create system prompts** - ✅ Complete
-   - Created specialized system prompts for all 6 personas
-   - Prompts focus on positive guidance without artificial restrictions
-   - Prompts allow agents to exercise judgment and do what's needed
-
-3. **Step 3: Implement configuration structure** - ✅ Complete
-   - Added `SubagentType` struct to configuration
-   - Added helper methods for retrieving persona configuration
-   - Added default personas in `NewConfig()`
-
-4. **Step 4: Update subagent tools** - ✅ Complete
-   - Added `persona` parameter to `run_subagent` tool
-   - Implemented persona-specific provider/model resolution
-   - Integrated with existing `--system-prompt` flag
-
-5. **Step 5: Implement slash commands** - ✅ Complete
-   - `/subagent-personas` - List all available personas
-   - `/subagent-persona <name>` - Show persona details
-   - `/subagent-persona <name> enable/disable` - Enable/disable personas
-   - `/subagent-persona <name> provider <provider>` - Set provider for persona
-   - `/subagent-persona <name> model <model>` - Set model for persona
-
-6. **Step 6: Add persona selection logic** - ✅ Complete
-   - Added persona selection guide to main system prompt
-   - Documented when to use each persona
-   - Provided examples of persona usage
-   - Updated main documentation
-
-### Remaining ⏭️
-
-7. **Step 7: Test and validate each persona**
-   - Test each persona with real-world tasks
-   - Verify system prompts load correctly
-   - Validate persona-specific configurations work as expected
-
-## System Prompts Created
-
-- ✅ `pkg/agent/prompts/subagent_prompts/coder.md` - Implementation focus
-- ✅ `pkg/agent/prompts/subagent_prompts/tester.md` - Unit testing focus
-- ✅ `pkg/agent/prompts/subagent_prompts/qa_engineer.md` - Test planning and integration testing
-- ✅ `pkg/agent/prompts/subagent_prompts/code_reviewer.md` - Security and quality review
-- ✅ `pkg/agent/prompts/subagent_prompts/debugger.md` - Bug investigation and fixes
-- ✅ `pkg/agent/prompts/subagent_prompts/web_researcher.md` - Documentation and research
-
 ## See Also
 
-- [Subagent Prompts README](../pkg/agent/prompts/subagent_prompts/README.md) - Quick reference for all personas
-- [Main System Prompt](../pkg/agent/prompts/system_prompt.md) - Includes persona selection guide
+- [Subagent Prompts README](../pkg/agent/prompts/subagent_prompts/README.md) — Quick reference for all personas
+- [Main System Prompt](../pkg/agent/prompts/system_prompt.md) — Includes persona selection guide
+- [CLI Reference](CLI_REFERENCE.md) — Full CLI documentation including persona flags

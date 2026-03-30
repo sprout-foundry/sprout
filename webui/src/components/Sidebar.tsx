@@ -93,6 +93,8 @@ interface SidebarProps {
     onUnstageFile: (path: string) => void;
     onDiscardFile: (path: string) => void;
     onSectionAction: (section: 'staged' | 'modified' | 'untracked' | 'deleted') => void;
+    onOpenFile?: (path: string) => void;
+    workspaceRoot?: string;
   };
   onOpenRevisionDiff?: (options: { path: string; diff: string; title: string }) => void;
 }
@@ -561,6 +563,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       <FileTree
         ref={fileTreeRef as any}
         rootPath="."
+        workspaceRoot={gitPanel?.workspaceRoot}
         onFileSelect={(file) => onFileClick?.(file.path)}
         onItemCreated={() => {
           fileTreeRef.current?.refresh();

@@ -421,6 +421,12 @@
   color: var(--accent-error);
 }
 
+.file-tree-context-separator {
+  height: 1px;
+  margin: 4px 8px;
+  background: var(--border-color, #e2e8f0);
+}
+
 .file-tree .file-tree-count {
   color: var(--text-tertiary);
   font-size: 10px;

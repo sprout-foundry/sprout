@@ -11,8 +11,7 @@ import (
 )
 
 // prepareMessages prepares and optimizes the message list for API submission.
-// Pruning must run against the same payload shape that will actually be sent,
-// including transient messages and tool definitions.
+// Context reduction is checkpoint-compaction-only; no pruning.
 func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 	var optimizedMessages []api.Message
 	ch.transientMessagesMu.Lock()
@@ -31,10 +30,6 @@ func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 	} else {
 		optimizedMessages = ch.agent.messages
 	}
-
-	// Sanitize before pruning so token estimates and pruning decisions are based on valid message chains.
-	optimizedMessages = ch.sanitizeToolMessages(optimizedMessages)
-	optimizedMessages = ch.removeOrphanedToolResults(optimizedMessages)
 
 	// One-shot context refresh injected after provider/model switches that required strict syntax normalization.
 	if switchRefresh := ch.agent.consumePendingSwitchContextRefresh(); switchRefresh != "" {
@@ -62,130 +57,89 @@ func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 	allMessages = append(allMessages, optimizedMessages...)
 	allMessages = appendPendingTransient(allMessages)
 	allMessages = collapseSystemMessagesToFront(allMessages)
-	allMessages = ch.sanitizeToolMessages(allMessages)
 
-	// Check context limits. Pruning trigger is based on persisted history only
-	// (system + optimized messages) so transient guard-rail messages don't cause
-	// premature pruning of real conversation history.
+	// Check context limits — compaction-only, no pruning.
 	currentTokens := ch.apiClient.estimateRequestTokens(allMessages, tools)
 	if ch.agent.maxContextTokens > 0 {
-		// Create pruner if needed
-		if ch.agent.conversationPruner == nil {
-			ch.agent.conversationPruner = NewConversationPruner(ch.agent.debug)
-		}
+		// Compaction threshold: trigger at 87% to compact before API errors occur.
+		compactionThreshold := int(float64(ch.agent.maxContextTokens) * PruningConfig.Default.StandardPercent)
+		if currentTokens > compactionThreshold && ch.agent.HasTurnCheckpoints() {
+			checkpointedMessages, remainingCheckpoints := ch.agent.BuildCheckpointCompactedMessages(optimizedMessages)
+			if len(checkpointedMessages) != len(optimizedMessages) {
+				// Persist checkpointed messages so future iterations see the compacted history.
+				ch.agent.messages = checkpointedMessages
+				// Persist adjusted remaining checkpoints so indices stay valid against the compacted array.
+				ch.agent.replaceTurnCheckpoints(remainingCheckpoints)
 
-		// Build a history-only payload (no transient messages) to decide whether pruning is needed.
-		historyOnlyMessages := []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
-		historyOnlyMessages = append(historyOnlyMessages, optimizedMessages...)
-		historyOnlyMessages = collapseSystemMessagesToFront(historyOnlyMessages)
-		historyOnlyMessages = ch.sanitizeToolMessages(historyOnlyMessages)
-		historyTokens := ch.apiClient.estimateRequestTokens(historyOnlyMessages, tools)
+				checkpointHistory := []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
+				checkpointHistory = append(checkpointHistory, checkpointedMessages...)
+				checkpointHistory = collapseSystemMessagesToFront(checkpointHistory)
+				optimizedMessages = checkpointedMessages
 
-		if ch.agent.conversationPruner.ShouldPrune(historyTokens, ch.agent.maxContextTokens, ch.agent.GetProvider(), true) {
-			if ch.agent.HasTurnCheckpoints() {
-				checkpointedMessages := ch.agent.BuildCheckpointCompactedMessages(optimizedMessages)
-				if len(checkpointedMessages) != len(optimizedMessages) {
-					checkpointHistory := []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
-					checkpointHistory = append(checkpointHistory, checkpointedMessages...)
-					checkpointHistory = collapseSystemMessagesToFront(checkpointHistory)
-					checkpointHistory = ch.sanitizeToolMessages(checkpointHistory)
-					checkpointTokens := ch.apiClient.estimateRequestTokens(checkpointHistory, tools)
-					if checkpointTokens < historyTokens {
-						if ch.agent.debug {
-							ch.agent.PrintLineAsync(fmt.Sprintf("[~] Switched older completed turns to checkpoints: %d -> %d history tokens",
-								historyTokens, checkpointTokens))
-						}
-						optimizedMessages = checkpointedMessages
-						historyOnlyMessages = checkpointHistory
-						historyTokens = checkpointTokens
-					}
-				}
-			}
-			if !ch.agent.conversationPruner.ShouldPrune(historyTokens, ch.agent.maxContextTokens, ch.agent.GetProvider(), true) {
 				allMessages = []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
 				allMessages = append(allMessages, optimizedMessages...)
 				allMessages = appendPendingTransient(allMessages)
 				allMessages = collapseSystemMessagesToFront(allMessages)
-				allMessages = ch.sanitizeToolMessages(allMessages)
 				currentTokens = ch.apiClient.estimateRequestTokens(allMessages, tools)
-				goto validatePayload
-			}
 
-			if ch.agent.debug {
-				contextUsage := float64(historyTokens) / float64(ch.agent.maxContextTokens)
-				ch.agent.PrintLineAsync(fmt.Sprintf("[~] Context pruning triggered: %d/%d tokens (%.1f%%, history only)",
-					historyTokens, ch.agent.maxContextTokens, contextUsage*100))
-			}
-
-			prunedMessages := optimizedMessages
-			for pass := 0; pass < 2; pass++ {
-				// Apply pruning to persisted messages based on history token count.
-				prunedMessages = ch.agent.conversationPruner.PruneConversation(prunedMessages, historyTokens, ch.agent.maxContextTokens, ch.agent.optimizer, ch.agent.GetProvider(), true)
-
-				// Rebuild history-only estimate to check if we're below threshold
-				historyOnlyMessages = []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
-				historyOnlyMessages = append(historyOnlyMessages, prunedMessages...)
-				historyOnlyMessages = collapseSystemMessagesToFront(historyOnlyMessages)
-				historyOnlyMessages = ch.sanitizeToolMessages(historyOnlyMessages)
-				historyTokens = ch.apiClient.estimateRequestTokens(historyOnlyMessages, tools)
-
-				if !ch.agent.conversationPruner.ShouldPrune(historyTokens, ch.agent.maxContextTokens, ch.agent.GetProvider(), true) {
-					break
-				}
 				if ch.agent.debug {
-					ch.agent.PrintLineAsync(fmt.Sprintf("[~] Context still high after prune pass %d: %d/%d tokens", pass+1, historyTokens, ch.agent.maxContextTokens))
+					ch.agent.PrintLineAsync(fmt.Sprintf("[~] Switched older completed turns to checkpoints; now %d tokens",
+						currentTokens))
 				}
 			}
+		}
 
-			// Persist pruned history so future iterations don't re-trigger on stale counts
-			ch.agent.messages = prunedMessages
-			optimizedMessages = prunedMessages
+		// If checkpoint compaction wasn't enough and an LLM-equipped optimizer is available,
+		// try structural compaction as a second-pass fallback.
+		if currentTokens > compactionThreshold && ch.agent.optimizer != nil && ch.agent.optimizer.IsEnabled() {
+			llmCompacted := ch.agent.optimizer.CompactConversation(optimizedMessages)
+			if len(llmCompacted) < len(optimizedMessages) {
+				llmHistory := []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
+				llmHistory = append(llmHistory, llmCompacted...)
+				llmHistory = collapseSystemMessagesToFront(llmHistory)
+				llmTokens := ch.apiClient.estimateRequestTokens(llmHistory, tools)
+				if llmTokens < currentTokens {
+					ch.agent.messages = llmCompacted
+					ch.agent.clearTurnCheckpoints()
+					optimizedMessages = llmCompacted
 
-			// Rebuild full payload with transients after pruning
-			allMessages = []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
-			allMessages = append(allMessages, prunedMessages...)
-			allMessages = appendPendingTransient(allMessages)
-			allMessages = collapseSystemMessagesToFront(allMessages)
-			allMessages = ch.sanitizeToolMessages(allMessages)
-			currentTokens = ch.apiClient.estimateRequestTokens(allMessages, tools)
+					allMessages = []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
+					allMessages = append(allMessages, optimizedMessages...)
+					allMessages = appendPendingTransient(allMessages)
+					allMessages = collapseSystemMessagesToFront(allMessages)
+					currentTokens = llmTokens
 
-			// Safety net: if the full payload (with transients) still exceeds max,
-			// do one more prune pass targeting the full payload size.
-			if currentTokens > ch.agent.maxContextTokens {
-				if ch.agent.debug {
-					ch.agent.PrintLineAsync(fmt.Sprintf("[~] Full payload exceeds max after history prune: %d/%d tokens, pruning once more",
-						currentTokens, ch.agent.maxContextTokens))
+					if ch.agent.debug {
+						ch.agent.PrintLineAsync(fmt.Sprintf("[~] LLM structural compaction applied; now %d tokens",
+							currentTokens))
+					}
 				}
-				prunedMessages = ch.agent.conversationPruner.PruneConversation(prunedMessages, currentTokens, ch.agent.maxContextTokens, ch.agent.optimizer, ch.agent.GetProvider(), true)
-				ch.agent.messages = prunedMessages
-
-				allMessages = []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
-				allMessages = append(allMessages, prunedMessages...)
-				allMessages = appendPendingTransient(allMessages)
-				allMessages = collapseSystemMessagesToFront(allMessages)
-				allMessages = ch.sanitizeToolMessages(allMessages)
-				currentTokens = ch.apiClient.estimateRequestTokens(allMessages, tools)
 			}
+		}
 
-			if ch.agent.debug {
-				ch.agent.PrintLineAsync(fmt.Sprintf("[OK] Context after pruning: %d tokens (%.1f%%)",
-					currentTokens, float64(currentTokens)/float64(ch.agent.maxContextTokens)*100))
-			}
+		// If still over limit and no compaction could help, warn but proceed (no pruning fallback).
+		if currentTokens > compactionThreshold {
+			ch.agent.PrintLineAsync(fmt.Sprintf("[WARN] Context over limit after compaction: %d/%d tokens; proceeding without pruning",
+				currentTokens, ch.agent.maxContextTokens))
 		}
 	}
 
-	// DeepSeek-specific validation (including DeepSeek model families behind proxy providers)
-validatePayload:
+	// Sanitize tool message chains — required for providers with strict tool call
+	// format requirements (Minimax error 2013, DeepSeek tool flow). This removes
+	// orphaned tool results that can result from compaction or optimization dedup.
+	allMessages = ch.sanitizeToolMessages(allMessages)
+
+	// DeepSeek-specific validation (diagnostic logging — sanitizeToolMessages above is the fix)
 	if strings.EqualFold(ch.agent.GetProvider(), "deepseek") || strings.Contains(strings.ToLower(ch.agent.GetModel()), "deepseek") {
 		ch.validateDeepSeekToolCalls(allMessages)
 	}
 
-	// Minimax-specific validation (including Minimax model families behind proxy providers)
+	// Minimax-specific validation (diagnostic logging — sanitizeToolMessages above is the fix)
 	if strings.EqualFold(ch.agent.GetProvider(), "minimax") || strings.Contains(strings.ToLower(ch.agent.GetModel()), "minimax") {
 		ch.validateMinimaxToolCalls(allMessages)
 	}
 
-	// Final safeguard: remove any orphaned tool results before sending to API
+	// Final safety net: remove any orphaned tool results before sending to API
 	allMessages = ch.removeOrphanedToolResults(allMessages)
 	ch.transientMessagesMu.Lock()
 	ch.transientMessages = nil

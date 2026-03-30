@@ -112,7 +112,7 @@ interface Message {
   content: string;
   timestamp: Date;
   reasoning?: string;  // Chain-of-thought content from content_type: "reasoning"
-  toolRefs?: Array<{ toolId: string; toolName: string; label: string }>;
+  toolRefs?: Array<{ toolId: string; toolName: string; label: string; parallel?: boolean }>;
 }
 
 interface LogEntry {
@@ -289,19 +289,20 @@ const loadPersistedAppState = (): Partial<AppState> | null => {
     }
 
     const parsed = JSON.parse(raw);
-    return {
-      provider: typeof parsed.provider === 'string' ? parsed.provider : 'unknown',
-      model: typeof parsed.model === 'string' ? parsed.model : 'unknown',
-      sessionId: typeof parsed.sessionId === 'string' ? parsed.sessionId : null,
-      queryCount: typeof parsed.queryCount === 'number' ? parsed.queryCount : 0,
-      currentView: ['chat', 'editor', 'git'].includes(parsed.currentView) ? parsed.currentView : 'chat',
-      messages: Array.isArray(parsed.messages)
+    const parsedMessages: Message[] = Array.isArray(parsed.messages)
         ? parsed.messages.map((message: any) => ({
             ...message,
             timestamp: parseDate(message?.timestamp),
             toolRefs: Array.isArray(message?.toolRefs) ? message.toolRefs : undefined
           }))
-        : [],
+        : [];
+      return {
+      provider: typeof parsed.provider === 'string' ? parsed.provider : 'unknown',
+      model: typeof parsed.model === 'string' ? parsed.model : 'unknown',
+      sessionId: typeof parsed.sessionId === 'string' ? parsed.sessionId : null,
+      queryCount: typeof parsed.queryCount === 'number' ? parsed.queryCount : 0,
+      currentView: ['chat', 'editor', 'git'].includes(parsed.currentView) ? parsed.currentView : 'chat',
+      messages: [],
       fileEdits: Array.isArray(parsed.fileEdits)
         ? parsed.fileEdits.map((edit: any) => ({
             ...edit,
@@ -670,7 +671,7 @@ function App() {
           setQueuedMessagesCount(0);
         }
         setState(prev => {
-          const nextMessages = wasClearCommand
+          let nextMessages = wasClearCommand
             ? []
             : ensureCompletedAssistantMessage(prev.messages, completedResponse, (responseText) => ({
                 id: Date.now().toString(),
@@ -678,6 +679,28 @@ function App() {
                 content: responseText,
                 timestamp: new Date()
               }));
+
+          // Deduplication: some thinking models emit their entire response via the
+          // reasoning_content field with no separate content field. The backend fallback
+          // (GetResponse) copies reasoning→content so conversation history is intact, and
+          // ensureCompletedAssistantMessage then fills message.content from that same text.
+          // This causes the identical text to appear in both the Reasoning dropdown and the
+          // main chat area. When they match, clear reasoning so the answer shows only once
+          // in the main chat (not in a collapsed dropdown that users have to expand).
+          if (!wasClearCommand && nextMessages.length > 0) {
+            const lastMsg = nextMessages[nextMessages.length - 1] as Message;
+            if (
+              lastMsg.type === 'assistant' &&
+              lastMsg.reasoning?.trim() &&
+              lastMsg.content?.trim() &&
+              lastMsg.content === lastMsg.reasoning
+            ) {
+              nextMessages = [
+                ...nextMessages.slice(0, -1),
+                { ...lastMsg, reasoning: undefined },
+              ];
+            }
+          }
 
           return {
             ...prev,
@@ -748,6 +771,7 @@ function App() {
                   toolId: updated[existingIdx].id,
                   toolName,
                   label: displayName,
+                  parallel: subagentType === 'parallel' || undefined,
                 });
                 messages[i] = { ...msg, toolRefs };
               }
@@ -778,6 +802,7 @@ function App() {
                 toolId: newTool.id,
                 toolName,
                 label: displayName,
+                parallel: subagentType === 'parallel' || undefined,
               });
               messages[i] = { ...msg, toolRefs };
             }

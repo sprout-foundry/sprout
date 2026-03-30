@@ -83,9 +83,9 @@ The packaging flow keeps the existing app architecture intact:
 - `electron-builder` runs a `beforePack` hook that rebuilds the embedded web UI and the correct platform backend automatically, so the packaged app does not depend on a manual prebuild step.
 - Windows packaging also includes the matching Linux backend so WSL-backed windows can launch without an external install.
 - `desktop:verify` checks that the unpacked app includes the Electron app bundle and bundled Go backend before release artifacts are published.
-- Windows and Linux installer assets now use checked-in desktop icons from [`desktop/resources`](/home/alanp/dev/personal/ledit-electron/desktop/resources).
+- Windows and Linux installer assets now use checked-in desktop icons from `desktop/resources/`.
 - The desktop app now registers a `ledit://` protocol and handles OS open-file events by routing them into the existing multi-window worktree launcher.
-- macOS signing/notarization is scaffolded via [`scripts/electron-after-sign.cjs`](/home/alanp/dev/personal/ledit-electron/scripts/electron-after-sign.cjs) and hardened-runtime entitlements in [`desktop/resources/entitlements.mac.plist`](/home/alanp/dev/personal/ledit-electron/desktop/resources/entitlements.mac.plist).
+- macOS signing/notarization is scaffolded via `scripts/electron-after-sign.cjs` and hardened-runtime entitlements in `desktop/resources/entitlements.mac.plist`.
 
 ## Cross-Platform CI
 
@@ -101,7 +101,7 @@ Each runner should:
 2. run `npm ci` in the repo root and `webui/`
 3. run `npm run desktop:dist`
 
-This repo now includes [`desktop-release.yml`](/home/alanp/dev/personal/ledit-electron/.github/workflows/desktop-release.yml) to produce platform-native desktop installers on Linux, macOS, and Windows.
+This repo now includes a `desktop-release.yml` workflow to produce platform-native desktop installers on Linux, macOS, and Windows.
 
 For signed macOS builds, configure these CI secrets:
 
@@ -124,4 +124,4 @@ For signed macOS builds, configure these CI secrets:
 
 ## Productization
 
-The current productization backlog and suggested execution order live in [`docs/PRODUCT_BACKLOG.md`](/home/alanp/dev/personal/ledit/docs/PRODUCT_BACKLOG.md).
+The current productization backlog and suggested execution order live in [docs/PRODUCT_BACKLOG.md](PRODUCT_BACKLOG.md).

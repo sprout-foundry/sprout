@@ -27,6 +27,7 @@ import {
 import './FileTree.css';
 import { ApiService } from '../services/api';
 import { clientFetch } from '../services/clientSession';
+import { copyToClipboard } from '../utils/clipboard';
 
 interface FileInfo {
   name: string;
@@ -56,6 +57,7 @@ interface FileTreeProps {
   onRefresh?: () => void;
   onItemCreated?: () => void;
   onDeleteItem?: (path: string) => void;
+  workspaceRoot?: string;
 }
 
 interface FileTreeHandle {
@@ -83,9 +85,11 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
   rootPath = '.',
   onRefresh,
   onItemCreated,
-  onDeleteItem
+  onDeleteItem,
+  workspaceRoot,
 }, ref) => {
   const apiService = ApiService.getInstance();
+
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set([rootPath]));
   const [loading, setLoading] = useState<boolean>(false);
@@ -719,6 +723,17 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
                 </>
               ) : null}
               <button className="file-tree-context-item" onClick={() => { setContextMenu(null); handleStartRename(contextMenu.file); }}>Rename</button>
+              {!contextMenu.file.isDir && (
+                <>
+                  <div className="file-tree-context-separator" />
+                  <button className="file-tree-context-item" onClick={() => { copyToClipboard(contextMenu.file.path); setContextMenu(null); }}>Copy relative path</button>
+                  {workspaceRoot && (
+                    <button className="file-tree-context-item" onClick={() => { copyToClipboard(`${workspaceRoot.replace(/\/+$/, '')}/${contextMenu.file.path}`); setContextMenu(null); }}>Copy absolute path</button>
+                  )}
+                  <button className="file-tree-context-item" onClick={() => { setContextMenu(null); onFileSelect(contextMenu.file); }}>Open in editor</button>
+                  <div className="file-tree-context-separator" />
+                </>
+              )}
               <button className="file-tree-context-item danger" onClick={() => { setContextMenu(null); handleDeleteTreeItem(contextMenu.file); }}>Delete</button>
             </div>,
             document.body

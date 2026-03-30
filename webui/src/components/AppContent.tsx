@@ -226,6 +226,8 @@ const AppContent: React.FC<AppContentProps> = ({
     return 360;
   });
 
+  const [workspaceRoot, setWorkspaceRoot] = useState('');
+
   const [nestedSplit, setNestedSplit] = useState<{ hostPaneId: string; nestedPaneId: string; direction: 'vertical' | 'horizontal' } | null>(null);
 
   useEffect(() => {
@@ -234,6 +236,14 @@ const AppContent: React.FC<AppContentProps> = ({
   }, [panelWidth]);
   const initialViewSyncRef = useRef(false);
   const initialWorkspaceAppliedRef = useRef(false);
+
+  // Fetch workspace root when connected (for absolute path copy, etc.)
+  useEffect(() => {
+    if (!isConnected) return;
+    apiService.getWorkspace().then((ws) => {
+      setWorkspaceRoot((ws.workspace_root || '').replace(/\/+$/, ''));
+    }).catch(() => {});
+  }, [isConnected, apiService]);
 
   // Apply LEDIT_INITIAL_WORKSPACE on first mount (injected by SSH proxy).
   // Best-effort: if the switch fails, the user can manually switch later.
@@ -943,6 +953,8 @@ const AppContent: React.FC<AppContentProps> = ({
           onUnstageFile: handleUnstageFile,
           onDiscardFile: handleDiscardFile,
           onSectionAction: handleSectionAction,
+          onOpenFile: handleFileClick,
+          workspaceRoot,
         }}
       />
       <div className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''} ${isTerminalExpanded ? 'terminal-expanded' : ''}`}>

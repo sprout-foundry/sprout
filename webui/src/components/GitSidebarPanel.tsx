@@ -17,6 +17,7 @@ import {
   Plus,
 } from 'lucide-react';
 import type { GitBranchesState } from '../hooks/useGitWorkspace';
+import { copyToClipboard } from '../utils/clipboard';
 
 export interface GitFile {
   path: string;
@@ -53,6 +54,7 @@ interface GitSidebarPanelProps {
   isReviewLoading: boolean;
   actionError: string | null;
   actionWarning: string | null;
+  workspaceRoot?: string;
   onCommitMessageChange: (value: string) => void;
   onGenerateCommitMessage: () => void;
   onCommit: () => void;
@@ -73,6 +75,7 @@ interface GitSidebarPanelProps {
   onUnstageFile: (path: string) => void;
   onDiscardFile: (path: string) => void;
   onSectionAction: (section: FileSection) => void;
+  onOpenFile?: (path: string) => void;
 }
 
 const selectionKey = (section: FileSection, path: string): string => `${section}:${path}`;
@@ -96,6 +99,7 @@ const GitSidebarPanel: React.FC<GitSidebarPanelProps> = ({
   isReviewLoading,
   actionError,
   actionWarning,
+  workspaceRoot,
   onCommitMessageChange,
   onGenerateCommitMessage,
   onCommit,
@@ -116,6 +120,7 @@ const GitSidebarPanel: React.FC<GitSidebarPanelProps> = ({
   onUnstageFile,
   onDiscardFile,
   onSectionAction,
+  onOpenFile,
 }) => {
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<{
@@ -494,6 +499,15 @@ const GitSidebarPanel: React.FC<GitSidebarPanelProps> = ({
               <button className="file-tree-context-item" onClick={() => { setContextMenu(null); onPreviewFile(contextMenu.section, contextMenu.file.path); }}>
                 Preview diff
               </button>
+              {onOpenFile && contextMenu.section !== 'deleted' && (
+                <button className="file-tree-context-item" onClick={() => { setContextMenu(null); onOpenFile(contextMenu.file.path); }}>Open in editor</button>
+              )}
+              <div className="file-tree-context-separator" />
+              <button className="file-tree-context-item" onClick={() => { copyToClipboard(contextMenu.file.path); setContextMenu(null); }}>Copy relative path</button>
+              {workspaceRoot && (
+                <button className="file-tree-context-item" onClick={() => { copyToClipboard(`${workspaceRoot.replace(/\/+$/, '')}/${contextMenu.file.path}`); setContextMenu(null); }}>Copy absolute path</button>
+              )}
+              <div className="file-tree-context-separator" />
               {contextMenu.section === 'staged' ? (
                 <button className="file-tree-context-item" onClick={() => { setContextMenu(null); onUnstageFile(contextMenu.file.path); }}>
                   Unstage

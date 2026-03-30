@@ -444,6 +444,29 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
   const isProcessing = context === 'chat' ? props.isProcessing : false;
 
+  // Live duration: updates every 1s while the agent is processing
+  // so the status tab shows a ticking clock instead of a frozen time.
+  const [liveDurationMs, setLiveDurationMs] = useState<number | null>(null);
+
+  // Stable primitives for the effect dependency array (avoids interval teardown on every render).
+  // We only care about whether there's at least one message and its timestamp.
+  const msgArr: Array<{ timestamp: Date }> = ('messages' in props) ? (props as any).messages : [];
+  const messageCount = msgArr.length;
+  const firstMessageTs = messageCount > 0
+    ? (msgArr[0].timestamp instanceof Date ? msgArr[0].timestamp.getTime() : new Date(msgArr[0].timestamp).getTime())
+    : 0;
+
+  useEffect(() => {
+    if (!isProcessing || messageCount === 0) {
+      return undefined;
+    }
+
+    const tick = () => setLiveDurationMs(Date.now() - firstMessageTs);
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => { clearInterval(id); setLiveDurationMs(null); };
+  }, [isProcessing, messageCount, firstMessageTs]);
+
   const handleRestoreSession = useCallback(async (sessionId: string) => {
     if (isProcessing) {
       setSessionRestoreError('Wait for current request to finish.');
@@ -1286,12 +1309,16 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
             <span className="status-metric-value">{statusMetrics.assistantMsgs}</span>
             <span className="status-metric-label">Assistant</span>
           </div>
-          {statusMetrics.duration > 0 && (
-            <div className="status-metric status-metric-wide">
-              <span className="status-metric-value">{formatDurationMs(statusMetrics.duration)}</span>
-              <span className="status-metric-label">Duration</span>
-            </div>
-          )}
+          {(() => {
+                const displayMs = liveDurationMs ?? statusMetrics.duration;
+                if (!displayMs || isNaN(displayMs) || displayMs <= 0) return null;
+                return (
+                  <div className="status-metric status-metric-wide">
+                    <span className="status-metric-value">{formatDurationMs(displayMs)}</span>
+                    <span className="status-metric-label">Duration</span>
+                  </div>
+                );
+              })()}
         </div>
       </div>
 

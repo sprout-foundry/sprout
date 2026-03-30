@@ -502,10 +502,14 @@ const GitSidebarPanel: React.FC<GitSidebarPanelProps> = ({
               {onOpenFile && contextMenu.section !== 'deleted' && (
                 <button className="file-tree-context-item" onClick={() => { setContextMenu(null); onOpenFile(contextMenu.file.path); }}>Open in editor</button>
               )}
-              <div className="file-tree-context-separator" />
-              <button className="file-tree-context-item" onClick={() => { copyToClipboard(contextMenu.file.path); setContextMenu(null); }}>Copy relative path</button>
-              {workspaceRoot && (
-                <button className="file-tree-context-item" onClick={() => { copyToClipboard(`${workspaceRoot.replace(/\/+$/, '')}/${contextMenu.file.path}`); setContextMenu(null); }}>Copy absolute path</button>
+              {contextMenu.section !== 'deleted' && (
+                <>
+                  <div className="file-tree-context-separator" />
+                  <button className="file-tree-context-item" onClick={() => { copyToClipboard(contextMenu.file.path); setContextMenu(null); }}>Copy relative path</button>
+                  {workspaceRoot && (
+                    <button className="file-tree-context-item" onClick={() => { copyToClipboard(`${workspaceRoot.replace(/\/+$/, '')}/${contextMenu.file.path}`); setContextMenu(null); }}>Copy absolute path</button>
+                  )}
+                </>
               )}
               <div className="file-tree-context-separator" />
               {contextMenu.section === 'staged' ? (

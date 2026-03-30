@@ -6,6 +6,7 @@ interface HotkeyContextValue {
   loadHotkeys: () => Promise<void>;
   applyPreset: (preset: string) => Promise<void>;
   hotkeyForCommand: (commandId: string) => string | null;
+  isLoaded: boolean;
 }
 
 const apiService = ApiService.getInstance();
@@ -31,6 +32,26 @@ const fallbackHotkeys: HotkeyEntry[] = [
   { key: 'Cmd+2', command_id: 'focus_tab_2' },
   { key: 'Ctrl+3', command_id: 'focus_tab_3' },
   { key: 'Cmd+3', command_id: 'focus_tab_3' },
+  { key: 'Ctrl+4', command_id: 'focus_tab_4' },
+  { key: 'Cmd+4', command_id: 'focus_tab_4' },
+  { key: 'Ctrl+5', command_id: 'focus_tab_5' },
+  { key: 'Cmd+5', command_id: 'focus_tab_5' },
+  { key: 'Ctrl+6', command_id: 'focus_tab_6' },
+  { key: 'Cmd+6', command_id: 'focus_tab_6' },
+  { key: 'Ctrl+7', command_id: 'focus_tab_7' },
+  { key: 'Cmd+7', command_id: 'focus_tab_7' },
+  { key: 'Ctrl+8', command_id: 'focus_tab_8' },
+  { key: 'Cmd+8', command_id: 'focus_tab_8' },
+  { key: 'Ctrl+9', command_id: 'focus_tab_9' },
+  { key: 'Cmd+9', command_id: 'focus_tab_9' },
+  { key: 'Ctrl+S', command_id: 'save_file', global: true },
+  { key: 'Cmd+S', command_id: 'save_file', global: true },
+  { key: 'Ctrl+Shift+S', command_id: 'save_all_files', global: true },
+  { key: 'Cmd+Shift+S', command_id: 'save_all_files', global: true },
+  { key: 'Ctrl+W', command_id: 'close_editor', global: false },
+  { key: 'Cmd+W', command_id: 'close_editor', global: false },
+  { key: 'Ctrl+Tab', command_id: 'focus_next_tab', global: false },
+  { key: 'Ctrl+Shift+Tab', command_id: 'focus_prev_tab', global: false },
 ];
 
 // Key mapping for special keys
@@ -62,7 +83,7 @@ const keyMap: Record<string, string> = {
 };
 
 // Build normalized key string from KeyboardEvent
-function buildKeyString(event: KeyboardEvent): string {
+export function buildKeyString(event: KeyboardEvent): string {
   const parts: string[] = [];
 
   if (event.metaKey) parts.push('Cmd');
@@ -183,7 +204,8 @@ export const HotkeyProvider: React.FC<HotkeyProviderProps> = ({ children }) => {
     loadHotkeys,
     applyPreset,
     hotkeyForCommand,
-  }), [hotkeys, loadHotkeys, applyPreset, hotkeyForCommand]);
+    isLoaded,
+  }), [hotkeys, loadHotkeys, applyPreset, hotkeyForCommand, isLoaded]);
 
   return (
     <HotkeyContext.Provider value={value}>

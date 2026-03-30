@@ -174,6 +174,8 @@ const AppContent: React.FC<AppContentProps> = ({
     closeBuffer,
     openFile,
     openWorkspaceBuffer,
+    saveBuffer,
+    saveAllBuffers,
     paneSizes,
     updatePaneSize
   } = useEditorManager();
@@ -442,6 +444,28 @@ const AppContent: React.FC<AppContentProps> = ({
     }
   }, [activePaneId, buffers, switchPane, switchToBuffer]);
 
+  const handleSplitRequest = useCallback((direction: 'vertical' | 'horizontal') => {
+    if (!activePaneId) {
+      return;
+    }
+
+    const previousPaneCount = panes.length;
+    const newPaneId = splitPane(activePaneId, direction);
+    if (!newPaneId) {
+      return;
+    }
+
+    if (previousPaneCount === 2) {
+      setNestedSplit({
+        hostPaneId: activePaneId,
+        nestedPaneId: newPaneId,
+        direction,
+      });
+      updatePaneSize(`group:${activePaneId}`, 50);
+      updatePaneSize(`nested:${activePaneId}`, 50);
+    }
+  }, [activePaneId, panes.length, splitPane, updatePaneSize]);
+
   // Listen for hotkey custom events
   useEffect(() => {
     const handleHotkey = (e: Event) => {
@@ -509,12 +533,83 @@ const AppContent: React.FC<AppContentProps> = ({
             closeBuffer(activeBufferId);
           }
           break;
+        case 'save_file':
+          if (activeBufferId) {
+            saveBuffer(activeBufferId).catch(err => {
+              console.error('Failed to save buffer:', activeBufferId, err);
+            });
+          }
+          break;
+        case 'save_all_files':
+          saveAllBuffers().catch(err => {
+            console.error('Failed to save all buffers:', err);
+          });
+          break;
+        case 'split_editor_vertical':
+          handleSplitRequest('vertical');
+          break;
+        case 'split_editor_horizontal':
+          handleSplitRequest('horizontal');
+          break;
+        case 'close_all_editors': {
+          const closableBuffers = Array.from(buffers.values()).filter(b => b.isClosable !== false);
+          for (const buf of closableBuffers) {
+            closeBuffer(buf.id);
+          }
+          break;
+        }
+        case 'close_other_editors': {
+          if (!activeBufferId || !activePaneId) break;
+          const othersInPane = Array.from(buffers.values()).filter(
+            b => b.paneId === activePaneId && b.id !== activeBufferId && b.isClosable !== false
+          );
+          for (const buf of othersInPane) {
+            closeBuffer(buf.id);
+          }
+          break;
+        }
+        case 'focus_tab_4':
+          focusTabIndex(3);
+          break;
+        case 'focus_tab_5':
+          focusTabIndex(4);
+          break;
+        case 'focus_tab_6':
+          focusTabIndex(5);
+          break;
+        case 'focus_tab_7':
+          focusTabIndex(6);
+          break;
+        case 'focus_tab_8':
+          focusTabIndex(7);
+          break;
+        case 'focus_tab_9':
+          focusTabIndex(8);
+          break;
+        case 'focus_next_tab': {
+          if (!activePaneId) break;
+          const nextBuffers = Array.from(buffers.values()).filter(b => b.paneId === activePaneId);
+          const currentIdx = nextBuffers.findIndex(b => b.id === activeBufferId);
+          if (currentIdx < nextBuffers.length - 1) {
+            switchToBuffer(nextBuffers[currentIdx + 1].id);
+          }
+          break;
+        }
+        case 'focus_prev_tab': {
+          if (!activePaneId) break;
+          const prevBuffers = Array.from(buffers.values()).filter(b => b.paneId === activePaneId);
+          const currentIdx = prevBuffers.findIndex(b => b.id === activeBufferId);
+          if (currentIdx > 0) {
+            switchToBuffer(prevBuffers[currentIdx - 1].id);
+          }
+          break;
+        }
       }
     };
     
     window.addEventListener('ledit:hotkey', handleHotkey);
     return () => window.removeEventListener('ledit:hotkey', handleHotkey);
-  }, [activeBufferId, buffers, closeBuffer, focusTabIndex, handlePrimaryViewChange, onSidebarToggle, onTerminalExpandedChange, isTerminalExpanded, openWorkspaceBuffer, onViewChange]);
+  }, [activeBufferId, activePaneId, buffers, closeBuffer, focusTabIndex, handlePrimaryViewChange, handleSplitRequest, isTerminalExpanded, onSidebarToggle, onTerminalExpandedChange, onViewChange, openWorkspaceBuffer, saveAllBuffers, saveBuffer, switchToBuffer]);
 
   // Handler to open hotkeys config in editor
   const handleOpenHotkeysConfig = useCallback(() => {
@@ -627,28 +722,6 @@ const AppContent: React.FC<AppContentProps> = ({
       }
     });
   }, [onViewChange, openWorkspaceBuffer]);
-
-  const handleSplitRequest = useCallback((direction: 'vertical' | 'horizontal') => {
-    if (!activePaneId) {
-      return;
-    }
-
-    const previousPaneCount = panes.length;
-    const newPaneId = splitPane(activePaneId, direction);
-    if (!newPaneId) {
-      return;
-    }
-
-    if (previousPaneCount === 2) {
-      setNestedSplit({
-        hostPaneId: activePaneId,
-        nestedPaneId: newPaneId,
-        direction,
-      });
-      updatePaneSize(`group:${activePaneId}`, 50);
-      updatePaneSize(`nested:${activePaneId}`, 50);
-    }
-  }, [activePaneId, panes.length, splitPane, updatePaneSize]);
 
   const handleCloseAllSplits = useCallback(() => {
     if (nestedSplit) {

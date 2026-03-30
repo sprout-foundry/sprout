@@ -178,6 +178,10 @@ type sshWorkspaceSession struct {
 	URL                 string
 	TunnelCmd           *exec.Cmd
 	StartedAt           time.Time
+	// ReusedDaemon is true when this session connected to an existing daemon
+	// that was not started by this launch.  When set, closing the session
+	// kills only the local tunnel — never the remote daemon process.
+	ReusedDaemon bool
 }
 
 type persistedSSHWorkspaceSession struct {
@@ -224,6 +228,12 @@ const (
 	githubReleaseRepoName   = "ledit"
 	sshLaunchHealthTimeout  = 30 * time.Second
 	sshRestoreHealthTimeout = 12 * time.Second
+
+	// DaemonPort is the unified fixed port used by all ledit daemons
+	// (both local and SSH-launched remote).  All daemons on a given host
+	// share this port — the launcher detects an existing daemon and
+	// reuses it rather than starting a duplicate.
+	DaemonPort = 54000
 )
 
 var errNoReleaseTagForArtifact = errors.New("no release tag available for current build")
@@ -316,11 +326,15 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (result *s
 
 	launcherURL := fmt.Sprintf("http://127.0.0.1:%d", ws.port)
 	ws.setSSHLaunchStatus(sessionKey, "starting-remote-backend", fmt.Sprintf("Starting remote backend on %s...", hostAlias), true, "")
-	remotePort, remotePID, err := startRemoteSSHBackend(hostAlias, sessionKey, launcherURL, remoteWorkspacePath, remoteBinary, logger)
+	remotePort, remotePID, reusedDaemon, err := startRemoteSSHBackend(hostAlias, sessionKey, launcherURL, remoteWorkspacePath, remoteBinary, logger)
 	if err != nil {
 		return nil, err
 	}
-	logger.Logf("remote SSH backend started port=%d pid=%d", remotePort, remotePID)
+	if reusedDaemon {
+		logger.Logf("reusing existing remote daemon port=%d pid=%d", remotePort, remotePID)
+	} else {
+		logger.Logf("remote SSH backend started port=%d pid=%d", remotePort, remotePID)
+	}
 
 	ws.setSSHLaunchStatus(sessionKey, "starting-tunnel", fmt.Sprintf("Starting tunnel for %s...", hostAlias), true, "")
 	tunnelCmd, err := startSSHTunnel(hostAlias, localPort, remotePort, logger)
@@ -360,7 +374,10 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (result *s
 		if pingErr := waitForWebHealth(localPort, 1500*time.Millisecond); pingErr != nil {
 			details := collectSSHHealthFailureDetails(hostAlias, remotePort, remotePID, err, logger)
 			_ = killProcess(tunnelCmd)
-			_ = stopRemoteSSHBackend(hostAlias, remotePID)
+			// Don't kill a reused daemon — it was running before us.
+			if !reusedDaemon {
+				_ = stopRemoteSSHBackend(hostAlias, remotePID)
+			}
 			return nil, newSSHLaunchFailure("health-check", "failed to connect to SSH workspace", details, logger)
 		}
 	}
@@ -376,6 +393,7 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (result *s
 		URL:                 fmt.Sprintf("http://127.0.0.1:%d", localPort),
 		TunnelCmd:           tunnelCmd,
 		StartedAt:           time.Now(),
+		ReusedDaemon:        reusedDaemon,
 	}
 
 	ws.sshSessionsMu.Lock()
@@ -442,7 +460,15 @@ func (ws *ReactWebServer) restorePersistedSSHSession(sessionKey string) (*sshLau
 		return nil, err
 	}
 
-	tunnelCmd, err := startSSHTunnel(persisted.HostAlias, localPort, persisted.RemotePort, nil)
+	// SSH remote daemons always listen on the fixed daemon port.
+	// Ignore the persisted remote port — it may be stale from a pre-fix
+	// session that used a random port.
+	remotePort := DaemonPort
+	if persisted.RemotePort != DaemonPort {
+		_ = removePersistedSSHSession(sessionKey)
+	}
+
+	tunnelCmd, err := startSSHTunnel(persisted.HostAlias, localPort, remotePort, nil)
 	if err != nil {
 		_ = removePersistedSSHSession(sessionKey)
 		return nil, err
@@ -459,15 +485,18 @@ func (ws *ReactWebServer) restorePersistedSSHSession(sessionKey string) (*sshLau
 		HostAlias:           persisted.HostAlias,
 		RemoteWorkspacePath: persisted.RemoteWorkspacePath,
 		LocalPort:           localPort,
-		RemotePort:          persisted.RemotePort,
+		RemotePort:          DaemonPort,
 		RemotePID:           persisted.RemotePID,
 		URL:                 fmt.Sprintf("http://127.0.0.1:%d", localPort),
 		TunnelCmd:           tunnelCmd,
 		StartedAt:           persisted.StartedAt,
+		ReusedDaemon:        true,
 	}
 
 	ws.sshSessionsMu.Lock()
 	ws.sshSessions[sessionKey] = session
+	// Re-persist with the corrected remote port so future restores work cleanly.
+	_ = persistSSHSession(session)
 	ws.sshSessionsMu.Unlock()
 	go ws.watchSSHSession(sessionKey, session, tunnelCmd)
 
@@ -1091,38 +1120,59 @@ func removePersistedSSHSession(sessionKey string) error {
 	return writePersistedSSHSessionRegistry(registry)
 }
 
-func startRemoteSSHBackend(hostAlias, sessionKey, launcherURL, remoteWorkspacePath, remoteBinary string, logger *sshLaunchLogger) (int, int, error) {
+func startRemoteSSHBackend(hostAlias, sessionKey, launcherURL, remoteWorkspacePath, remoteBinary string, logger *sshLaunchLogger) (remotePort int, remotePID int, reused bool, err error) {
 	workspaceRaw := strings.TrimSpace(remoteWorkspacePath)
 	if workspaceRaw == "" {
 		workspaceRaw = "$HOME"
 	}
 
+	// SSH remote daemons use a fixed port so that multiple SSH sessions
+	// to the same host can detect and reuse an existing daemon instead of
+	// launching duplicates.
+
 	script := strings.Join([]string{
 		"set -e",
-		"choose_port() {",
-		"  if command -v python3 >/dev/null 2>&1; then",
-		"    python3 - <<'PY'",
-		"import socket",
-		"s = socket.socket()",
-		`s.bind(("127.0.0.1", 0))`,
-		"print(s.getsockname()[1])",
-		"s.close()",
-		"PY",
-		"    return",
-		"  fi",
-		"  if command -v python >/dev/null 2>&1; then",
-		"    python - <<'PY'",
-		"import socket",
-		"s = socket.socket()",
-		`s.bind(("127.0.0.1", 0))`,
-		"print(s.getsockname()[1])",
-		"s.close()",
-		"PY",
-		"    return",
-		"  fi",
-		`  echo "python3 or python is required on the remote host" >&2`,
-		"  exit 1",
-		"}",
+		`DAEMON_PORT=` + fmt.Sprintf("%d", DaemonPort),
+		"",
+		"# check_existing_daemon: health-probe port DAEMON_PORT and return PID if healthy.",
+		`check_existing_daemon() {`,
+		`  if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then`,
+		`    return 1`,
+		`  fi`,
+		`  local resp=""`,
+		`  if command -v curl >/dev/null 2>&1; then`,
+		`    resp=$(curl -sf -m 3 "http://127.0.0.1:$DAEMON_PORT/health" 2>/dev/null) || return 1`,
+		`  else`,
+		`    resp=$(wget -qO- -T 3 "http://127.0.0.1:$DAEMON_PORT/health" 2>/dev/null) || return 1`,
+		`  fi`,
+		`  # Look for a JSON response with a "port" field to confirm ledit.`,
+		`  case "$resp" in`,
+		`    *'"port":'*"status":"ok"*) ;;`,
+		`    *) return 1 ;;`,
+		`  esac`,
+		`  # Find the PID listening on the daemon port.`,
+		`  local pid=""`,
+		`  if command -v lsof >/dev/null 2>&1; then`,
+		`    pid=$(lsof -ti tcp:$DAEMON_PORT -sTCP:LISTEN 2>/dev/null | head -1)`,
+		`  elif command -v ss >/dev/null 2>&1; then`,
+		`    pid=$(ss -tlnpH "sport = :$DAEMON_PORT" 2>/dev/null | grep -oP 'pid=\K[0-9]+' | head -1)`,
+		`  elif command -v netstat >/dev/null 2>&1; then`,
+		`    pid=$(netstat -tlnp 2>/dev/null | grep ":$DAEMON_PORT " | grep -oP ' LISTEN[^ ]* \\d+/[^ ]*' | grep -oP '\\d+' | head -1)`,
+		`  elif command -v fuser >/dev/null 2>&1; then`,
+		`    pid=$(fuser "$DAEMON_PORT/tcp" 2>/dev/null | head -1)`,
+		`  fi`,
+		`  [ -n "$pid" ] && [ "$pid" -gt 0 ] 2>/dev/null && echo "$pid"`,
+		`  return 0`,
+		`}`,
+		"",
+		"# Try to reuse an existing daemon on this host.",
+		`EXISTING_PID=$(check_existing_daemon || true)`,
+		`if [ -n "$EXISTING_PID" ]; then`,
+		`  printf "%s\\n%s\\nreused\\n" "$DAEMON_PORT" "$EXISTING_PID"`,
+		`  exit 0`,
+		`fi`,
+		"",
+		"# No existing daemon — start one.",
 		`mkdir -p "$HOME/.cache/ledit-webui/logs"`,
 		fmt.Sprintf("WORKSPACE_RAW=%s", shellEscapeSSH(workspaceRaw)),
 		`WORKSPACE_PATH="$WORKSPACE_RAW"`,
@@ -1133,49 +1183,50 @@ func startRemoteSSHBackend(hostAlias, sessionKey, launcherURL, remoteWorkspacePa
 		`  '~') WORKSPACE_PATH="$HOME" ;;`,
 		`  '~/'*) WORKSPACE_PATH="$HOME/${WORKSPACE_PATH#~/}" ;;`,
 		`esac`,
-		`if ! cd "$WORKSPACE_PATH" 2>/dev/null; then`,
-		`  echo "remote workspace path is not accessible: $WORKSPACE_RAW" >&2`,
+		// Validate the workspace path is accessible without cd-ing into it.
+		// The daemon runs host-level from $HOME to support multi-workspace.
+		`test -d "$WORKSPACE_PATH" || { echo "remote workspace path is not accessible: $WORKSPACE_RAW" >&2; exit 1; }`,
+		fmt.Sprintf(`LOG_FILE="$HOME/.cache/ledit-webui/logs/%s.log"`, sanitizeRemoteLogName(hostAlias)),
+		// Launch the daemon from $HOME (not the workspace directory) using
+		// the user's main config.  No --isolated-config — this is a host-level
+		// daemon that serves multiple workspaces via per-client context.
+		// Explicitly cd to $HOME to ensure daemonRoot is the user's home,
+		// regardless of what the SSH login shell's profile does.
+		fmt.Sprintf(
+			`cd "$HOME" 2>/dev/null || cd /tmp; `+
+				`nohup env BROWSER=none LEDIT_SSH_HOST_ALIAS=%s LEDIT_SSH_SESSION_KEY=%s LEDIT_SSH_LAUNCHER_URL=%s LEDIT_SSH_HOME="$HOME" %s agent --daemon --web-port "$DAEMON_PORT" >"$LOG_FILE" 2>&1 < /dev/null &`,
+			shellEscapeSSH(hostAlias),
+			shellEscapeSSH(sessionKey),
+			shellEscapeSSH(launcherURL),
+			shellEscapeSSH(remoteBinary),
+		),
+		"REMOTE_PID=$!",
+		`# Verify the daemon started successfully.`,
+		`sleep 1`,
+		`if ! kill -0 "$REMOTE_PID" 2>/dev/null; then`,
+		`  echo "ERROR: ledit daemon failed to start on port $DAEMON_PORT — another daemon may already be running on this host" >&2`,
 		`  exit 1`,
 		`fi`,
-		`REMOTE_PORT="$(choose_port)"`,
-		fmt.Sprintf(`LOG_FILE="$HOME/.cache/ledit-webui/logs/%s.log"`, sanitizeRemoteLogName(hostAlias)),
-		`if [ -w "$PWD" ]; then`,
-		fmt.Sprintf(
-			`  nohup env BROWSER=none LEDIT_SSH_HOST_ALIAS=%s LEDIT_SSH_SESSION_KEY=%s LEDIT_SSH_LAUNCHER_URL=%s LEDIT_SSH_HOME="$HOME" %s --isolated-config agent --daemon --web-port "$REMOTE_PORT" >"$LOG_FILE" 2>&1 < /dev/null &`,
-			shellEscapeSSH(hostAlias),
-			shellEscapeSSH(sessionKey),
-			shellEscapeSSH(launcherURL),
-			shellEscapeSSH(remoteBinary),
-		),
-		`else`,
-		fmt.Sprintf(
-			`  nohup env BROWSER=none LEDIT_SSH_HOST_ALIAS=%s LEDIT_SSH_SESSION_KEY=%s LEDIT_SSH_LAUNCHER_URL=%s LEDIT_SSH_HOME="$HOME" %s agent --daemon --web-port "$REMOTE_PORT" >"$LOG_FILE" 2>&1 < /dev/null &`,
-			shellEscapeSSH(hostAlias),
-			shellEscapeSSH(sessionKey),
-			shellEscapeSSH(launcherURL),
-			shellEscapeSSH(remoteBinary),
-		),
-		`fi`,
-		"REMOTE_PID=$!",
-		`printf "%s\n%s\n" "$REMOTE_PORT" "$REMOTE_PID"`,
+		`printf "%s\n%s\nnew\n" "$DAEMON_PORT" "$REMOTE_PID"`,
 	}, "\n")
 
 	cmd := newSSHCommand(hostAlias, script)
 	out, err := runSSHLoggedCommand(logger, "start-remote-backend", fmt.Sprintf("ssh %s start remote backend", hostAlias), cmd)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, false, err
 	}
 
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
 	if len(lines) < 2 {
-		return 0, 0, fmt.Errorf("failed to determine remote backend port for %s", hostAlias)
+		return 0, 0, false, fmt.Errorf("failed to determine remote backend port for %s", hostAlias)
 	}
-	remotePort, err := strconv.Atoi(strings.TrimSpace(lines[0]))
+	remotePort, err = strconv.Atoi(strings.TrimSpace(lines[0]))
 	if err != nil || remotePort <= 0 {
-		return 0, 0, fmt.Errorf("invalid remote web port for %s", hostAlias)
+		return 0, 0, false, fmt.Errorf("invalid remote web port for %s", hostAlias)
 	}
-	remotePID, _ := strconv.Atoi(strings.TrimSpace(lines[1]))
-	return remotePort, remotePID, nil
+	remotePID, _ = strconv.Atoi(strings.TrimSpace(lines[1]))
+	wasReused := len(lines) >= 3 && strings.TrimSpace(lines[2]) == "reused"
+	return remotePort, remotePID, wasReused, nil
 }
 
 func sanitizeRemoteLogName(hostAlias string) string {
@@ -1377,7 +1428,11 @@ func (ws *ReactWebServer) stopSSHSessionLocked(key string) {
 		return
 	}
 	_ = killProcess(session.TunnelCmd)
-	_ = stopRemoteSSHBackend(session.HostAlias, session.RemotePID)
+	// Never kill a remote daemon that was running before we connected —
+	// other SSH sessions or the user may still depend on it.
+	if !session.ReusedDaemon {
+		_ = stopRemoteSSHBackend(session.HostAlias, session.RemotePID)
+	}
 	_ = removePersistedSSHSession(key)
 	delete(ws.sshSessions, key)
 	ws.clearClientSSHContextForSessionKey(key)
@@ -1392,7 +1447,10 @@ func (ws *ReactWebServer) watchSSHSession(key string, session *sshWorkspaceSessi
 	defer ws.sshSessionsMu.Unlock()
 	current := ws.sshSessions[key]
 	if current != nil && current == session {
-		_ = stopRemoteSSHBackend(session.HostAlias, session.RemotePID)
+		// Never kill a remote daemon that was running before we connected.
+		if !session.ReusedDaemon {
+			_ = stopRemoteSSHBackend(session.HostAlias, session.RemotePID)
+		}
 		_ = removePersistedSSHSession(key)
 		delete(ws.sshSessions, key)
 	}

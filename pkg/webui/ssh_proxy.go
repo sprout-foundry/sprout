@@ -29,6 +29,26 @@ var sshProxyUpgrader = websocket.Upgrader{
 	WriteBufferSize: 65536,
 }
 
+// resolveInitialWorkspace expands shell-like home references in a workspace path
+// so the frontend receives a concrete path it can pass to the backend API.
+//   "$HOME"   → "$HOME"   (kept as-is; parsed by BROWSER=none frontend context)
+//   "${HOME}"  → "${HOME}"  (kept as-is)
+//   "~/..."   → "$HOME/..."
+//   everything else → original
+// The actual expansion of $HOME happens on the remote ledit daemon side;
+// this function only handles ~/ shortcuts that the frontend needs to resolve
+// to send a valid absolute path to the setWorkspace API.
+func resolveInitialWorkspace(path string) string {
+	if strings.HasPrefix(path, "~/") {
+		rest := strings.TrimPrefix(path, "~/")
+		if rest != "" {
+			return "$HOME/" + rest
+		}
+		return "$HOME"
+	}
+	return path
+}
+
 // handleSSHProxy is the catch-all handler for /ssh/{encodedKey}/{rest…}.
 // It routes:
 //   - root / index paths → local index.html with LEDIT_PROXY_BASE injected
@@ -77,7 +97,7 @@ func (srv *ReactWebServer) handleSSHProxy(w http.ResponseWriter, r *http.Request
 	// Static assets served locally (no round-trip to the remote backend).
 	switch {
 	case rest == "/" || rest == "" || rest == "/index.html":
-		sshServeIndexWithBase(w, proxyBase)
+		sshServeIndexWithBase(w, proxyBase, resolveInitialWorkspace(session.RemoteWorkspacePath))
 		return
 	case strings.HasPrefix(rest, "/static/"):
 		// Reuse the existing handler by rewriting URL.Path temporarily.
@@ -139,18 +159,24 @@ func (srv *ReactWebServer) handleSSHProxy(w http.ResponseWriter, r *http.Request
 }
 
 // sshServeIndexWithBase reads the embedded index.html and injects a small
-// inline script that sets window.LEDIT_PROXY_BASE before the </head> tag.
-func sshServeIndexWithBase(w http.ResponseWriter, proxyBase string) {
+// inline script that sets window.LEDIT_PROXY_BASE and window.LEDIT_INITIAL_WORKSPACE
+// before the </head> tag.
+func sshServeIndexWithBase(w http.ResponseWriter, proxyBase, initialWorkspace string) {
 	data, err := staticFiles.ReadFile("static/index.html")
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
-	// JSON-encode proxyBase so any characters that require escaping in a JS
+	// JSON-encode the values so any characters that require escaping in a JS
 	// string literal are handled correctly.
 	proxyBaseJSON, _ := json.Marshal(proxyBase)
-	script := []byte("<script>window.LEDIT_PROXY_BASE=" + string(proxyBaseJSON) + ";</script>")
+	initialWorkspaceJSON, _ := json.Marshal(initialWorkspace)
+	script := []byte(
+		"<script>window.LEDIT_PROXY_BASE=" + string(proxyBaseJSON) +
+			";window.LEDIT_INITIAL_WORKSPACE=" + string(initialWorkspaceJSON) +
+			";</script>",
+	)
 	data = bytes.Replace(data, []byte("</head>"), append(script, []byte("</head>")...), 1)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

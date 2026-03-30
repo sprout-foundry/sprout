@@ -1825,7 +1825,15 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
                           instance.pid === selectedInstancePID ? 'active' : ''
                         }`}
                         onClick={() => {
-                          if (onInstanceChange && instance.pid) {
+                          if (!onInstanceChange || !instance.pid) return;
+                          const confirmed = window.confirm(
+                            `Switch to instance ${instance.pid}?\n\n` +
+                            `Workspace: ${instance.working_dir}\n` +
+                            `Port: ${instance.port}\n\n` +
+                            `This will navigate this tab to a different ledit instance. ` +
+                            `Chat history and open files will not transfer.`
+                          );
+                          if (confirmed) {
                             onInstanceChange(instance.pid);
                           }
                         }}
@@ -1835,8 +1843,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
                         disabled={
                           switchingState.isSwitching ||
                           isSwitchingInstance ||
-                          !onInstanceChange ||
-                          instance.is_host
+                          !onInstanceChange
                         }
                       >
                         <span className="location-switcher-item-text">{label}</span>

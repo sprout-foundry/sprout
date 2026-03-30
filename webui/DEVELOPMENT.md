@@ -23,20 +23,20 @@ go build -o ledit
 ```bash
 # Terminal 1: Start the Go backend
 cd /path/to/ledit
-./ledit agent --web-port 54421
+./ledit agent --web-port 54000
 
 # Terminal 2: Start the React development server
 cd webui
 npm install
 npm start
 # React dev server will run on http://localhost:3000
-# It will proxy API/WebSocket calls to the backend on port 54421
+# It will proxy API/WebSocket calls to the backend on port 54000
 ```
 
 ## Architecture
 
 ### Backend (Go)
-- **Port**: 54421 (default, auto-finds if occupied)
+- **Port**: 54000 (default, auto-finds if occupied)
 - **WebSocket Endpoints**:
   - `/ws` - Main event WebSocket
   - `/terminal` - Terminal WebSocket
@@ -88,15 +88,15 @@ npm start
 
 ### `.env` (Web UI)
 ```
-REACT_APP_WS_URL=ws://localhost:54421
-REACT_APP_TERMINAL_WS_URL=ws://localhost:54421
-REACT_APP_API_URL=http://localhost:54421
+REACT_APP_WS_URL=ws://localhost:54000
+REACT_APP_TERMINAL_WS_URL=ws://localhost:54000
+REACT_APP_API_URL=http://localhost:54000
 ```
 
 ### `package.json` proxy
 ```json
 {
-  "proxy": "http://localhost:54421"
+  "proxy": "http://localhost:54000"
 }
 ```
 

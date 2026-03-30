@@ -249,7 +249,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         {!paneConnected && (
           <div className="terminal-status-inline">
             <TriangleAlert size={14} className="inline-block mr-1 align-text-bottom" />
-            Backend not connected. Start with: <code>./ledit agent --web-port 54421</code>
+            Backend not connected. Start with: <code>./ledit agent</code>
           </div>
         )}
       </div>

@@ -21,7 +21,7 @@ func TestHandleAPIInstancesFiltersStaleAndReturnsHostMetadata(t *testing.T) {
 		"active": {
 			ID:         "active",
 			PID:        currentPID,
-			Port:       54421,
+			Port:       54000,
 			WorkingDir: "/tmp/project-a",
 			StartTime:  now.Add(-2 * time.Minute),
 			LastPing:   now,
@@ -29,7 +29,7 @@ func TestHandleAPIInstancesFiltersStaleAndReturnsHostMetadata(t *testing.T) {
 		"stale": {
 			ID:         "stale",
 			PID:        999999,
-			Port:       54421,
+			Port:       54000,
 			WorkingDir: "/tmp/project-b",
 			StartTime:  now.Add(-10 * time.Minute),
 			LastPing:   now.Add(-1 * time.Hour),
@@ -38,7 +38,7 @@ func TestHandleAPIInstancesFiltersStaleAndReturnsHostMetadata(t *testing.T) {
 	writeJSONFile(t, filepath.Join(getLeditConfigDir(), "instances.json"), instances)
 	writeJSONFile(t, filepath.Join(getLeditConfigDir(), "webui_host.json"), webUIHostRecordDTO{
 		PID:       currentPID,
-		Port:      54421,
+		Port:      54000,
 		StartedAt: now.Add(-2 * time.Minute),
 		UpdatedAt: now,
 	})
@@ -79,8 +79,8 @@ func TestHandleAPIInstancesFiltersStaleAndReturnsHostMetadata(t *testing.T) {
 	if response.ActiveHostPID != currentPID {
 		t.Fatalf("expected active host pid %d, got %d", currentPID, response.ActiveHostPID)
 	}
-	if response.ActiveHostPort != 54421 {
-		t.Fatalf("expected active host port 54421, got %d", response.ActiveHostPort)
+	if response.ActiveHostPort != 54000 {
+		t.Fatalf("expected active host port 54000, got %d", response.ActiveHostPort)
 	}
 	if response.DesiredHostPID != currentPID {
 		t.Fatalf("expected desired host pid %d, got %d", currentPID, response.DesiredHostPID)

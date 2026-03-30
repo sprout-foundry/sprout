@@ -78,71 +78,89 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		// Connect agent to event bus for real-time UI updates
 		chatAgent.SetEventBus(eventBus)
 
-		// Determine port: fixed default on 54421, unless explicitly overridden.
+		// Determine port strategy.
+		//
+		// Daemon mode (no explicit port): use the single-port supervisor on
+		// the unified daemon port (54000) so all daemons compete for one
+		// stable port.  This is the "primary" instance users bookmark.
+		//
+		// Non-daemon interactive (no explicit port): each instance gets its
+		// own unique port so browser windows can connect independently.
+		// We scan from 54001 (DaemonPort+1) for a free port.
+		//
+		// Explicit --web-port N: always start directly on that port,
+		// regardless of daemon mode.
 		port := webPort
 		if port == 0 {
-			port = defaultWebUIPort
-		}
-
-		webServer = webui.NewReactWebServer(chatAgent, eventBus, port)
-		startInstanceTracker(ctx, port, chatAgent)
-
-		// Default mode uses single-port leadership/failover on 54421.
-		if webPort == 0 {
-			webUISup = newWebUISupervisor(
-				webServer,
-				port,
-				func(activePort int) {
-					fmt.Printf("\n[web] Web UI available at http://localhost:%d\n", activePort)
-				},
-				func(activePort int) {
-					fmt.Printf("\n[web] Reusing active Web UI at http://localhost:%d\n", activePort)
-				},
-			)
-			go webUISup.Run(ctx)
-		} else {
-			// Explicit port override keeps direct startup behavior, but in daemon mode
-			// we fail fast if the requested port cannot be bound.
-			startErrCh := make(chan error, 1)
-			go func() {
-				if err := webServer.Start(ctx); err != nil && ctx.Err() == nil {
-					select {
-					case startErrCh <- err:
-					default:
-					}
-					// Only log error if not due to context cancellation
-					fmt.Fprintf(os.Stderr, "[WARN] Web UI failed to start: %v\n", err)
-				}
-			}()
-
-			startupDeadline := time.NewTimer(1500 * time.Millisecond)
-			defer startupDeadline.Stop()
-			startupPoll := time.NewTicker(50 * time.Millisecond)
-			defer startupPoll.Stop()
-
-		loop:
-			for {
-				if webServer.IsRunning() {
-					break
-				}
-
-				select {
-				case startErr := <-startErrCh:
-					return fmt.Errorf("web UI failed to start on port %d: %w", port, startErr)
-				case <-startupDeadline.C:
-					if !webServer.IsRunning() {
-						return fmt.Errorf("web UI failed to start on port %d", port)
-					}
-					break loop
-				case <-startupPoll.C:
+			if daemonMode {
+				port = webui.DaemonPort
+			} else {
+				// Non-daemon: find a free dynamic port.
+				dynamicPort, dynErr := webui.FindAvailablePort(webui.DaemonPort + 1)
+				if dynErr != nil {
+					fmt.Fprintf(os.Stderr, "[WARN] Could not find a dynamic port: %v; web UI disabled\n", dynErr)
+					enableWebUI = false
+				} else {
+					port = dynamicPort
 				}
 			}
 		}
 
-		// Give web server a moment to start
-		time.Sleep(100 * time.Millisecond)
-		if webServer.IsRunning() && webPort != 0 {
-			fmt.Printf("\n[web] Web UI available at http://localhost:%d\n", webServer.GetPort())
+		if enableWebUI {
+			webServer = webui.NewReactWebServer(chatAgent, eventBus, port)
+			startInstanceTracker(ctx, port, chatAgent)
+
+			// Daemon mode without explicit port → single-port supervisor.
+			if webPort == 0 && daemonMode {
+				webUISup = newWebUISupervisor(
+					webServer,
+					port,
+					func(activePort int) {
+						fmt.Printf("\n[web] Web UI available at http://localhost:%d\n", activePort)
+					},
+					func(activePort int) {
+						fmt.Printf("\n[web] Reusing active Web UI at http://localhost:%d\n", activePort)
+					},
+				)
+				go webUISup.Run(ctx)
+			} else {
+				// Explicit port OR non-daemon dynamic port: start directly.
+				startErrCh := make(chan error, 1)
+				go func() {
+					if err := webServer.Start(ctx); err != nil && ctx.Err() == nil {
+						select {
+						case startErrCh <- err:
+						default:
+						}
+						fmt.Fprintf(os.Stderr, "[WARN] Web UI failed to start: %v\n", err)
+					}
+				}()
+
+				startupDeadline := time.NewTimer(1500 * time.Millisecond)
+				defer startupDeadline.Stop()
+				startupPoll := time.NewTicker(50 * time.Millisecond)
+				defer startupPoll.Stop()
+
+			loop:
+				for {
+					if webServer.IsRunning() {
+						break
+					}
+
+					select {
+					case startErr := <-startErrCh:
+						return fmt.Errorf("web UI failed to start on port %d: %w", port, startErr)
+					case <-startupDeadline.C:
+						if !webServer.IsRunning() {
+							return fmt.Errorf("web UI failed to start on port %d", port)
+						}
+						break loop
+					case <-startupPoll.C:
+					}
+				}
+
+				fmt.Printf("\n[web] Web UI available at http://localhost:%d\n", webServer.GetPort())
+			}
 		}
 	}
 

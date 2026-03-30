@@ -13,7 +13,6 @@ import (
 )
 
 const (
-	defaultWebUIPort      = 54421
 	hostHeartbeatInterval = 1 * time.Second
 	hostStaleAfter        = 4 * time.Second
 )
@@ -43,7 +42,7 @@ type webUISupervisor struct {
 
 func newWebUISupervisor(ws *webui.ReactWebServer, port int, announceStart func(port int), announceAttach func(port int)) *webUISupervisor {
 	if port <= 0 {
-		port = defaultWebUIPort
+		port = webui.DaemonPort
 	}
 	return &webUISupervisor{
 		webServer:        ws,

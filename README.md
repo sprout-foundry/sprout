@@ -63,7 +63,7 @@ go install github.com/alantheprice/ledit@latest
 ## Getting Started
 
 ```bash
-# Start interactive agent mode (Web UI opens at http://localhost:54421)
+# Start interactive agent mode (Web UI opens at http://localhost:54000)
 ledit
 
 # Run a specific task

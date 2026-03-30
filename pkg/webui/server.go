@@ -81,7 +81,7 @@ const (
 // NewReactWebServer creates a new React web server
 func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int) *ReactWebServer {
 	if port == 0 {
-		port = 54421
+		port = DaemonPort
 	}
 
 	workspaceRoot, err := os.Getwd()
@@ -93,12 +93,20 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int) 
 		workspaceRoot = "."
 	}
 
+	// daemonRoot is the user's home directory — this scopes daemon-level
+	// storage (sessions, SSH tunnels, config) to the user rather than a
+	// specific project workspace.
+	daemonRoot, err := os.UserHomeDir()
+	if err != nil {
+		daemonRoot = workspaceRoot
+	}
+
 	providercatalog.RefreshFromRemoteAsync("")
 
 	return &ReactWebServer{
 		agent:          agent,
 		eventBus:       eventBus,
-		daemonRoot:     workspaceRoot,
+		daemonRoot:     daemonRoot,
 		workspaceRoot:  workspaceRoot,
 		sshHostAlias:   strings.TrimSpace(os.Getenv("LEDIT_SSH_HOST_ALIAS")),
 		sshSessionKey:  strings.TrimSpace(os.Getenv("LEDIT_SSH_SESSION_KEY")),
@@ -239,6 +247,15 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", ws.server.Addr)
 	if err != nil {
 		return fmt.Errorf("failed to bind web server on %s: %w", ws.server.Addr, err)
+	}
+
+	// When the configured port is 0, the OS assigns a random free port.
+	// Capture the actual port from the listener so GetPort() and logging
+	// report the real value.
+	if ws.port == 0 {
+		actualPort := listener.Addr().(*net.TCPAddr).Port
+		ws.port = actualPort
+		ws.server.Addr = fmt.Sprintf("127.0.0.1:%d", actualPort)
 	}
 
 	ws.mutex.Lock()

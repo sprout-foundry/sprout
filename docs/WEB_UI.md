@@ -25,7 +25,7 @@
 
 ## Accessing the Web UI
 
-When you start `ledit` in interactive mode, the Web UI is available at `http://localhost:54421` (or the next available port). The terminal displays the URL on startup.
+When you start `ledit` in interactive mode, the Web UI is available at `http://localhost:54000` (or the next available port). The terminal displays the URL on startup.
 
 The Web UI binds to `127.0.0.1` (localhost) only — not directly accessible from other machines. See [SSH Tunneling](#ssh-tunneling-remote-web-ui-access) for remote access.
 
@@ -51,29 +51,29 @@ The Web UI binds to `127.0.0.1` (localhost only) for security. To access it from
 ### Quick Start
 
 ```bash
-# Forward local port 54421 to the same port on the remote server
-ssh -L 54421:127.0.0.1:54421 user@remote-server
-# Then open http://localhost:54421 in your local browser
+# Forward local port 54000 to the same port on the remote server
+ssh -L 54000:127.0.0.1:54000 user@remote-server
+# Then open http://localhost:54000 in your local browser
 ```
 
 ### Common Scenarios
 
 ```bash
 # Tunnel in the background
-ssh -fN -L 54421:127.0.0.1:54421 user@remote-server
-# Kill when done: kill $(lsof -t -i:54421)
+ssh -fN -L 54000:127.0.0.1:54000 user@remote-server
+# Kill when done: kill $(lsof -t -i:54000)
 
 # Remote ledit on a custom port
-ssh -L 54421:127.0.0.1:8080 user@remote-server
+ssh -L 54000:127.0.0.1:8080 user@remote-server
 
 # Different local port (avoid conflicts)
-ssh -L 9090:127.0.0.1:54421 user@remote-server
+ssh -L 9090:127.0.0.1:54000 user@remote-server
 
 # Jump host / bastion
-ssh -J bastion.example.com -L 54421:127.0.0.1:54421 user@internal-server
+ssh -J bastion.example.com -L 54000:127.0.0.1:54000 user@internal-server
 
 # Attach to existing tmux session and start ledit
-ssh -t -L 54421:127.0.0.1:54421 user@remote-server "tmux attach -t ledit"
+ssh -t -L 54000:127.0.0.1:54000 user@remote-server "tmux attach -t ledit"
 ```
 
 ### Tips
@@ -86,7 +86,7 @@ ssh -t -L 54421:127.0.0.1:54421 user@remote-server "tmux attach -t ledit"
 Host ledit-remote
     HostName remote-server.example.com
     User youruser
-    LocalForward 54421 127.0.0.1:54421
+    LocalForward 54000 127.0.0.1:54000
 ```
 
 Then: `ssh -fN ledit-remote`

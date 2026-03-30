@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useCallback, useState, useLayoutEffect } from 'react';
-import { Zap, Bot, AlertTriangle } from 'lucide-react';
+import { Zap, Bot, AlertTriangle, BrainCircuit } from 'lucide-react';
 import CommandInput from './CommandInput';
 import MessageSegments from './MessageSegments';
 import MessageContent from './MessageContent';
@@ -12,7 +12,7 @@ interface Message {
   content: string;
   timestamp: Date;
   reasoning?: string;  // Chain-of-thought content from content_type: "reasoning"
-  toolRefs?: Array<{ toolId: string; toolName: string; label: string }>;
+  toolRefs?: Array<{ toolId: string; toolName: string; label: string; parallel?: boolean }>;
 }
 
 interface ToolExecution {
@@ -58,7 +58,7 @@ const Chat: React.FC<ChatProps> = ({
   queryProgress = null,
   currentTodos = [],
   onToolPillClick,
-  onStopProcessing
+  onStopProcessing,
 }) => {
   const AUTO_SCROLL_THRESHOLD_PX = 96;
   const chatShellRef = useRef<HTMLDivElement>(null);
@@ -174,7 +174,7 @@ const Chat: React.FC<ChatProps> = ({
                       {message.reasoning && message.reasoning.trim() && (
                         <details className="reasoning-block" open={false}>
                           <summary className="reasoning-summary">
-                            <span className="reasoning-icon">💭</span>
+                            <BrainCircuit size={13} className="reasoning-icon" />
                             <span>Reasoning</span>
                             <span className="reasoning-toggle">▶</span>
                           </summary>

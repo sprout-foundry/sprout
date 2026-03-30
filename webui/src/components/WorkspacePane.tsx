@@ -27,7 +27,7 @@ interface Message {
   content: string;
   timestamp: Date;
   reasoning?: string;
-  toolRefs?: Array<{ toolId: string; toolName: string; label: string }>;
+  toolRefs?: Array<{ toolId: string; toolName: string; label: string; parallel?: boolean }>;
 }
 
 interface DeepReviewResult {

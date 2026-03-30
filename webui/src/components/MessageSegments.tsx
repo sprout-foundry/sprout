@@ -6,7 +6,7 @@ import MessageContent from './MessageContent';
 
 interface MessageSegmentsProps {
   content: string;
-  toolRefs?: Array<{ toolId: string; toolName: string; label: string }>;
+  toolRefs?: Array<{ toolId: string; toolName: string; label: string; parallel?: boolean }>;
   onToolClick?: (toolName: string) => void;
   onToolRefClick?: (toolId: string) => void;
 }
@@ -33,6 +33,28 @@ const getToolIcon = (toolName: string): ReactNode => {
   return iconMap[toolName] || <Wrench size={14} />;
 };
 
+const SHORT_TOOL_NAMES: { [key: string]: string } = {
+  'read_file': 'read',
+  'write_file': 'write',
+  'edit_file': 'edit',
+  'shell_command': 'shell',
+  'search_files': 'search',
+  'analyze_ui_screenshot': 'screenshot',
+  'analyze_image_content': 'image',
+  'web_search': 'web',
+  'fetch_url': 'fetch',
+  'TodoWrite': 'todo',
+  'TodoRead': 'todo',
+  'view_history': 'history',
+  'rollback_changes': 'rollback',
+  'mcp_tools': 'mcp',
+  'run_subagent': 'subagent',
+  'run_parallel_subagents': 'subagents',
+};
+
+const getShortToolName = (toolName: string): string =>
+  SHORT_TOOL_NAMES[toolName] ?? toolName;
+
 const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, toolRefs = [], onToolClick, onToolRefClick }) => {
   let segments: MessageSegment[];
   try {
@@ -41,15 +63,15 @@ const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, toolRefs = [
     return <MessageContent content={content} />;
   }
 
-  const remainingRefs = [...toolRefs];
+  const unclaimedRefs = [...toolRefs];
 
   const claimMatchingToolRef = (segmentToolName: string) => {
     const normalizedSegmentName = segmentToolName.split('(')[0].trim();
-    const matchIndex = remainingRefs.findIndex((ref) => ref.toolName === normalizedSegmentName);
+    const matchIndex = unclaimedRefs.findIndex((ref) => ref.toolName === normalizedSegmentName);
     if (matchIndex < 0) {
       return null;
     }
-    const [match] = remainingRefs.splice(matchIndex, 1);
+    const [match] = unclaimedRefs.splice(matchIndex, 1);
     return match;
   };
 
@@ -66,7 +88,7 @@ const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, toolRefs = [
 
           case 'tool_call':
             const matchingRef = claimMatchingToolRef(segment.toolName);
-            const toolLabel = matchingRef?.toolName || segment.summary || segment.toolName;
+            const baseName = segment.toolName.split('(')[0];
             return (
               <div
                 key={`seg-${idx}`}
@@ -90,10 +112,10 @@ const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, toolRefs = [
                     onToolClick?.(segment.toolName);
                   }
                 }}
-                title={matchingRef ? `Open ${matchingRef.toolName} details` : undefined}
+                title={matchingRef ? matchingRef.label : segment.summary || segment.toolName}
               >
-                <span className="tool-pill-icon">{getToolIcon(segment.toolName.split('(')[0])}</span>
-                <span className="tool-pill-name">{toolLabel}</span>
+                <span className="tool-pill-icon">{getToolIcon(baseName)}</span>
+                <span className="tool-pill-name">{getShortToolName(baseName)}</span>
                 <ExternalLink size={10} className="tool-pill-link-icon" />
               </div>
             );

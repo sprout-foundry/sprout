@@ -35,13 +35,6 @@ var PruningConfig = struct {
 	// Threshold definitions
 	Default PruningThresholds
 
-	// Aggressive optimization settings
-	Aggressive struct {
-		RecentMessagesToKeep int // Messages from end to preserve during aggressive pruning
-		TruncateAt           int // Character limit for truncation during aggressive pruning
-		FileReadAgeThreshold int // Message age below which old file reads are summarized
-	}
-
 	// Structural compaction settings
 	Structural struct {
 		RecentMessagesToKeep int // Recent live message chain to preserve intact
@@ -66,17 +59,6 @@ var PruningConfig = struct {
 		MinMessages:        5,
 		RecentMessages:     15,
 		SlidingWindow:      30,
-	},
-
-	// Aggressive optimization settings
-	Aggressive: struct {
-		RecentMessagesToKeep int
-		TruncateAt           int
-		FileReadAgeThreshold int
-	}{
-		RecentMessagesToKeep: 8,    // Keep last 8 messages during aggressive mode
-		TruncateAt:           1200, // Truncate at 1200 characters
-		FileReadAgeThreshold: 12,   // Summarize file reads older than 12 messages
 	},
 
 	Structural: struct {
@@ -557,7 +539,7 @@ func (cp *ConversationPruner) pruneAdaptive(messages []api.Message, currentToken
 		if optimizer == nil {
 			return cp.pruneByImportance(messages, provider, maxTokens)
 		}
-		return optimizer.AggressiveOptimization(messages)
+		return cp.pruneByImportance(messages, provider, maxTokens)
 	} else if hasLongHistory && hasManyToolCalls && contextUsage > 0.80 {
 		// Long technical conversation - use hybrid approach (only above 80% context)
 		if cp.debug {

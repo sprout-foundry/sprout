@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
 	"sync"
 
@@ -106,6 +107,65 @@ func NewManagerSilent() (*Manager, error) {
 		lastSaved: cloneConfig(config),
 		loaded:    true,
 	}, nil
+}
+
+// NewManagerWithConfig creates a new configuration manager from an explicit
+// Config and optional API key set.  The manager will persist saves to the same
+// location that config.Save()/Load() would use for the current env.  Pass nil
+// for apiKeys to skip key loading.
+func NewManagerWithConfig(cfg *Config, apiKeys *APIKeys) *Manager {
+	return &Manager{
+		config:    cfg,
+		apiKeys:   apiKeys,
+		lastSaved: cloneConfig(cfg),
+		loaded:    true,
+	}
+}
+
+// NewManagerWithDir creates a configuration Manager fully backed by configDir.
+// If no config file exists in configDir a fresh default one is written so that
+// subsequent Load/Save calls operate deterministically.
+//
+// This is intended for tests and tooling that need a hermetic config
+// environment without touching the caller's real ~/.ledit.
+func NewManagerWithDir(configDir string) (*Manager, error) {
+	if err := os.MkdirAll(configDir, 0700); err != nil {
+		return nil, fmt.Errorf("failed to create config directory %q: %w", configDir, err)
+	}
+
+	// Temporarily point the configuration layer at configDir.
+	prev, ok := os.LookupEnv("LEDIT_CONFIG")
+	os.Setenv("LEDIT_CONFIG", configDir)
+	defer func() {
+		if ok {
+			os.Setenv("LEDIT_CONFIG", prev)
+		} else {
+			os.Unsetenv("LEDIT_CONFIG")
+		}
+	}()
+
+	// Ensure a config file exists so Load() doesn't fall through to the real
+	// user home directory.
+	configPath := filepath.Join(configDir, ConfigFileName)
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		cfg := NewConfig()
+		cfg.LastUsedProvider = "test" // predictable default for tests
+		if err := cfg.Save(); err != nil {
+			return nil, fmt.Errorf("failed to write default config to %q: %w", configDir, err)
+		}
+	}
+
+	config, err := Load()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load config from %q: %w", configDir, err)
+	}
+
+	apiKeys, err := LoadAPIKeys()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load API keys from %q: %w", configDir, err)
+	}
+
+	return NewManagerWithConfig(config, apiKeys), nil
 }
 
 // GetConfig returns the current configuration

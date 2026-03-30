@@ -73,7 +73,6 @@ type Agent struct {
 	mcpInitMu               sync.Mutex                     // Protect concurrent initialization
 	circuitBreaker          *CircuitBreakerState           // Track repetitive actions
 	conversationPruner      *ConversationPruner            // Automatic conversation pruning
-	completionSummarizer    *CompletionContextSummarizer   // Completion context summarization
 	toolCallGuidanceAdded   bool                           // Prevent repeating tool call guidance
 	activeSkills            []string                       // Currently activated skills (by ID)
 	activePersona           string                         // Currently active persona ID (direct agent or subagent env)
@@ -420,7 +419,6 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		interruptCancel:           interruptCancel,
 		falseStopDetectionEnabled: true,
 		conversationPruner:        NewConversationPruner(debug),
-		completionSummarizer:      NewCompletionContextSummarizer(debug),
 		commandHistory:            []string{},
 		historyIndex:              -1,
 		activePersona:             "orchestrator",

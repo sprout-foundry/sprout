@@ -242,18 +242,10 @@ func TestAggressivePruningUsesStructuralCompaction(t *testing.T) {
 		})
 	}
 
+	// After removing AggressiveOptimization, the adaptive strategy at critical context
+	// usage falls through to pruneByImportance, which still shrinks the message list.
 	out := pruner.PruneConversation(messages, 97000, 100000, optimizer, "anthropic", false)
 	if len(out) >= len(messages) {
-		t.Fatalf("expected aggressive pruning to shrink message count, got %d -> %d", len(messages), len(out))
-	}
-
-	foundSummary := false
-	for _, msg := range out {
-		if msg.Role == "assistant" && strings.Contains(msg.Content, "Compacted earlier conversation state:") {
-			foundSummary = true
-		}
-	}
-	if !foundSummary {
-		t.Fatalf("expected structural compaction summary in aggressive pruning output")
+		t.Fatalf("expected pruning to shrink message count, got %d -> %d", len(messages), len(out))
 	}
 }

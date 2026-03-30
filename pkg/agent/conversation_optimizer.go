@@ -233,6 +233,131 @@ func (co *ConversationOptimizer) adjustCompactionBoundary(messages []api.Message
 	return recentStart
 }
 
+// buildActionableSummary creates a more detailed, actionable summary of a turn,
+// designed for per-turn checkpoint use. It extracts the user's original request,
+// actions taken (tool results), what the assistant reported, and current state.
+// Kept under ~300 words.
+func (co *ConversationOptimizer) buildActionableSummary(messages []api.Message) string {
+	if len(messages) == 0 {
+		return ""
+	}
+
+	var userRequest string
+	var actions []string
+	var assistantNotes []string
+	var fileChanges []string
+	maxEntries := 12
+
+	for _, msg := range messages {
+		switch msg.Role {
+		case "user":
+			if userRequest == "" {
+				userRequest = msg.Content
+			}
+		case "assistant":
+			if len(msg.ToolCalls) > 0 {
+				summary := summarizeAssistantToolCalls(msg)
+				if summary != "" && len(actions) < maxEntries {
+					actions = append(actions, summary)
+				}
+				continue
+			}
+			content := strings.TrimSpace(msg.Content)
+			if content == "" {
+				continue
+			}
+			if len(assistantNotes) < 5 {
+				assistantNotes = append(assistantNotes, content)
+			}
+		case "tool":
+			summary, _ := summarizeToolMessage(msg)
+			if summary == "" {
+				continue
+			}
+			// Detect file-changing tools from the content prefix
+			header := strings.Split(msg.Content, "\n")[0]
+			isFileChange := strings.Contains(header, "Tool call result for edit_file:") ||
+				strings.Contains(header, "Tool call result for write_file:") ||
+				strings.Contains(header, "Tool call result for write_structured_file:") ||
+				strings.Contains(header, "Tool call result for patch_structured_file:")
+			if isFileChange {
+				if len(fileChanges) < maxEntries {
+					fileChanges = append(fileChanges, summary)
+				}
+			} else {
+				if len(actions) < maxEntries {
+					actions = append(actions, summary)
+				}
+			}
+		}
+	}
+
+	var b strings.Builder
+
+	// User's original request
+	if userRequest != "" {
+		if len(userRequest) > 300 {
+			userRequest = userRequest[:297] + "..."
+		}
+		b.WriteString("User request: ")
+		b.WriteString(userRequest)
+		b.WriteString("\n\n")
+	}
+
+	// Actions taken
+	if len(actions) > 0 || len(fileChanges) > 0 {
+		b.WriteString("Actions taken:")
+		b.WriteString("\n")
+		for _, action := range actions {
+			b.WriteString("- ")
+			b.WriteString(action)
+			b.WriteString("\n")
+		}
+		for _, fc := range fileChanges {
+			b.WriteString("- ")
+			b.WriteString(fc)
+			b.WriteString(" [file change]")
+			b.WriteString("\n")
+		}
+		b.WriteString("\n")
+	}
+
+	// Assistant notes about state
+	if len(assistantNotes) > 0 {
+		b.WriteString("State notes:")
+		b.WriteString("\n")
+		for _, note := range assistantNotes {
+			if len(note) > 200 {
+				note = note[:197] + "..."
+			}
+			b.WriteString("- ")
+			b.WriteString(note)
+			b.WriteString("\n")
+		}
+		b.WriteString("\n")
+	}
+
+	// Files changed summary
+	if len(fileChanges) > 0 {
+		b.WriteString("Files modified in this turn:")
+		b.WriteString("\n")
+		for _, fc := range fileChanges {
+			b.WriteString("- ")
+			b.WriteString(fc)
+			b.WriteString("\n")
+		}
+	}
+
+	result := strings.TrimSpace(b.String())
+	// Keep under ~300 words
+	words := strings.Fields(result)
+	if len(words) > 300 {
+		trimmed := strings.Join(words[:297], " ") + "..."
+		result = trimmed
+	}
+	return result
+}
+
 // buildLLMCompactionSummary generates a compaction summary using the LLM.
 // It falls back to buildGoCompactionSummary if the LLM client is unavailable or the call fails.
 func (co *ConversationOptimizer) buildLLMCompactionSummary(messages []api.Message) string {
@@ -477,6 +602,7 @@ func (co *ConversationOptimizer) wrapCompactionSummary(messages []api.Message, b
 		result.WriteString("\n")
 	}
 	result.WriteString("- Use newer messages for the exact current step-by-step state.")
+
 	return strings.TrimSpace(result.String())
 }
 
@@ -726,88 +852,4 @@ func (co *ConversationOptimizer) IsEnabled() bool {
 	return co.enabled
 }
 
-// AggressiveOptimization performs more aggressive optimization when approaching context limits
-func (co *ConversationOptimizer) AggressiveOptimization(messages []api.Message) []api.Message {
-	if !co.enabled {
-		return messages
-	}
 
-	messages = co.CompactConversation(messages)
-
-	optimized := make([]api.Message, 0, len(messages))
-
-	// Always keep system message and recent messages (more context)
-	systemMsg := messages[0]
-	optimized = append(optimized, systemMsg)
-
-	// Keep the original user query (usually index 1)
-	if len(messages) > 1 {
-		optimized = append(optimized, messages[1])
-	}
-
-	// For middle messages, apply moderate summarization (less aggressive)
-	recentThreshold := len(messages) - PruningConfig.Aggressive.RecentMessagesToKeep
-	if recentThreshold < 2 {
-		recentThreshold = 2
-	}
-
-	for i := 2; i < recentThreshold; i++ {
-		msg := messages[i]
-
-		// Only summarize file reads that are old (more than defined age threshold)
-		messageAge := len(messages) - i
-		if msg.Role == "tool" && strings.Contains(msg.Content, "Tool call result for read_file:") && messageAge > PruningConfig.Aggressive.FileReadAgeThreshold {
-			summary := co.createAggressiveSummary(msg)
-			rewritten := msg
-			rewritten.Content = summary
-			optimized = append(optimized, rewritten)
-		} else if msg.Role == "tool" && strings.Contains(msg.Content, "Tool call result for shell_command:") {
-			// Still summarize shell commands but less aggressively
-			summary := co.createAggressiveSummary(msg)
-			rewritten := msg
-			rewritten.Content = summary
-			optimized = append(optimized, rewritten)
-		} else {
-			// Keep non-tool messages but truncate if very long (higher threshold)
-			content := msg.Content
-			if len(content) > PruningConfig.Aggressive.TruncateAt {
-				content = content[:PruningConfig.Aggressive.TruncateAt] + "... [TRUNCATED for context limit]"
-			}
-			rewritten := msg
-			rewritten.Content = content
-			optimized = append(optimized, rewritten)
-		}
-	}
-
-	// Always keep recent messages completely intact
-	for i := recentThreshold; i < len(messages); i++ {
-		optimized = append(optimized, messages[i])
-	}
-
-	return optimized
-}
-
-// createAggressiveSummary creates very compact summaries for tool results
-func (co *ConversationOptimizer) createAggressiveSummary(msg api.Message) string {
-	content := msg.Content
-
-	if strings.Contains(content, "Tool call result for read_file:") {
-		filePath := co.extractFilePath(content)
-		return fmt.Sprintf("Tool call result for read_file: %s\n[COMPACT] File read (%d chars)",
-			filePath, len(content))
-	}
-
-	if strings.Contains(content, "Tool call result for shell_command:") {
-		command := co.extractShellCommand(content)
-		return fmt.Sprintf("Tool call result for shell_command: %s\n[COMPACT] Command executed (%d chars output)",
-			command, len(content))
-	}
-
-	// Generic tool result summary
-	lines := strings.Split(content, "\n")
-	if len(lines) > 0 {
-		return fmt.Sprintf("%s\n[COMPACT] Tool result (%d chars)", lines[0], len(content))
-	}
-
-	return "[COMPACT] Tool result"
-}

@@ -49,13 +49,6 @@ func GetEmbeddedSystemPrompt() (string, error) {
 		promptContent = promptContent + memories
 	}
 
-	// Add MCP server summary if available
-	// TODO: Implement mcpServerSummary when needed
-	mcpServerSummary := ""
-	if mcpServerSummary != "" {
-		promptContent = promptContent + "\n" + mcpServerSummary
-	}
-
 	return promptContent, nil
 }
 

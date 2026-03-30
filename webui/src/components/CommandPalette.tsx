@@ -52,6 +52,11 @@ const COMMAND_DEFINITIONS: Array<{ id: string; label: string; category: string }
   { id: 'toggle_sidebar', label: 'Toggle Sidebar', category: 'View' },
   { id: 'toggle_terminal', label: 'Toggle Terminal', category: 'View' },
   { id: 'split_editor_vertical', label: 'Split Editor Vertical', category: 'View' },
+  { id: 'split_editor_horizontal', label: 'Split Editor Horizontal', category: 'View' },
+  { id: 'close_all_editors', label: 'Close All Editors', category: 'File' },
+  { id: 'close_other_editors', label: 'Close Other Editors', category: 'File' },
+  { id: 'focus_next_tab', label: 'Focus Next Tab', category: 'Navigation' },
+  { id: 'focus_prev_tab', label: 'Focus Previous Tab', category: 'Navigation' },
   // Navigation
   { id: 'switch_to_chat', label: 'Switch to Chat', category: 'Navigation' },
   { id: 'switch_to_editor', label: 'Switch to Editor', category: 'Navigation' },
@@ -279,6 +284,33 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
       case 'open_hotkeys_config':
         onOpenHotkeysConfig();
         break;
+      case 'split_editor_vertical':
+        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'split_editor_vertical' } }));
+        break;
+      case 'split_editor_horizontal':
+        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'split_editor_horizontal' } }));
+        break;
+      case 'close_editor':
+        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'close_editor' } }));
+        break;
+      case 'save_file':
+        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'save_file' } }));
+        break;
+      case 'save_all_files':
+        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'save_all_files' } }));
+        break;
+      case 'close_all_editors':
+        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'close_all_editors' } }));
+        break;
+      case 'close_other_editors':
+        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'close_other_editors' } }));
+        break;
+      case 'focus_next_tab':
+        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'focus_next_tab' } }));
+        break;
+      case 'focus_prev_tab':
+        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'focus_prev_tab' } }));
+        break;
       default:
         break;
     }
@@ -382,7 +414,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
 
   if (!isOpen) return null;
 
-  const displayValue = mode === 'command' ? rawInput : rawInput;
+  const displayValue = rawInput;
   const placeholder = mode === 'command'
     ? 'Type a command...'
     : 'Search files by name...';

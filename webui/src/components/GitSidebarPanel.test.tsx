@@ -334,4 +334,15 @@ describe('GitSidebarPanel context menu – clipboard & editor actions', () => {
     const texts = getContextMenuTexts();
     expect(texts).not.toContain('Open in editor');
   });
+
+  it('"Copy relative path" and "Copy absolute path" do NOT appear for deleted files', async () => {
+    await renderGitPanel({ workspaceRoot: '/home/user/project' });
+
+    fireContextMenuOnGitFile('old.txt');
+    await flushPromises();
+
+    const texts = getContextMenuTexts();
+    expect(texts).not.toContain('Copy relative path');
+    expect(texts).not.toContain('Copy absolute path');
+  });
 });

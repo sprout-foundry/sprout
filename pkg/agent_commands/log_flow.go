@@ -329,11 +329,8 @@ func (lf *LogFlow) showChangeStatistics() error {
 		fmt.Printf("  Changes: %d\r\n\r\n", changeCount)
 	}
 
-	// TODO: Add more comprehensive statistics
-	// - Total revisions across all sessions
-	// - Most frequently changed files
-	// - Change patterns over time
-	fmt.Printf("[WIP] Extended statistics coming soon!\r\n")
+	// NOTE: Extended statistics (total revisions, frequent files, change patterns)
+	// are tracked as a future enhancement.
 
 	return nil
 }

@@ -41,7 +41,7 @@ export async function saveCommandHistory(apiService: ApiService, commands: strin
   return nextHistory;
 }
 
-function dedupeCommands(commands: string[]): string[] {
+export function dedupeCommands(commands: string[]): string[] {
   const unique = new Set<string>();
   const ordered: string[] = [];
 

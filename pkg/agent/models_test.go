@@ -136,31 +136,3 @@ func TestIsProviderAvailable(t *testing.T) {
 		t.Error("Expected DeepSeek to be unavailable when API key is not set")
 	}
 }
-
-// TestDetermineProviderForModel tests model-to-provider determination
-// TODO: Update this test to work with the new architecture
-/*
-func TestDetermineProviderForModel(t *testing.T) {
-	// Set test API key
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("OPENROUTER_API_KEY", "test-key")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-	}()
-
-	agent, err := NewAgent()
-	if err != nil {
-		t.Skipf("Skipping test due to connection error: %v", err)
-	}
-
-	// Test with an unknown model (should fail)
-	_, err = agent.determineProviderForModel("nonexistent-model")
-	if err == nil {
-		t.Error("Expected error when determining provider for nonexistent model")
-	}
-}
-*/

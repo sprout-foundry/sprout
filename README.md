@@ -4,7 +4,7 @@
 
 ## Table of Contents
 
-- [Ledit - LLM-Powered Code Editing and Assistance Tool](#ledit---llm-powered-code-editing-and-assistance-tool)
+- [Ledit - AI-Powered Code Editing and Assistance Tool](#ledit---ai-powered-code-editing-and-assistance-tool)
   - [Table of Contents](#table-of-contents)
   - [Disclaimer](#disclaimer)
   - [Overview](#overview)
@@ -19,11 +19,16 @@
     - [From Source](#from-source)
   - [Getting Started](#getting-started)
   - [Configuration](#configuration)
+    - [Environment Variables](#environment-variables)
     - [`config.json` settings](#configjson-settings)
+    - [Zsh Command Detection](#zsh-command-detection)
   - [Usage and Commands](#usage-and-commands)
     - [Workspace Initialization](#workspace-initialization)
     - [Basic Editing and Interaction](#basic-editing-and-interaction)
+    - [Advanced Agent Flags](#advanced-agent-flags)
     - [Slash Commands in Interactive Mode](#slash-commands-in-interactive-mode)
+    - [Agent Personas](#agent-personas)
+    - [Memory System](#memory-system)
     - [Ignoring Files](#ignoring-files)
   - [MCP Server Integration](#mcp-server-integration)
   - [Contributing](#contributing)
@@ -280,13 +285,7 @@ If you prefer to build from source or a pre-built binary is not available for yo
 **Prerequisites:** Go 1.25.0+, Git
 
 ```bash
-# Public repository (recommended)
 go install github.com/alantheprice/ledit@latest
-
-# Private repository
-git clone https://github.com/alantheprice/ledit.git
-cd ledit
-go install
 ```
 
 This installs the `ledit` executable to your `GOPATH/bin` directory (e.g., `~/go/bin`). If `ledit` is not found, add it to your PATH:
@@ -396,13 +395,6 @@ The configuration uses a flat structure focused on provider and model management
   "request_delay_ms": 100,
   "enable_security_checks": true,
   "enable_pre_write_validation": false,
-  "code_style": {
-    "indentation_type": "spaces",
-    "indentation_size": 4,
-    "quote_style": "double",
-    "line_endings": "unix",
-    "import_style": "grouped"
-  },
   "api_timeouts": {
     "connection_timeout_sec": 30,
     "first_chunk_timeout_sec": 60,

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, useLayoutEffect, memo 
 import { ScrollText, X, Send, SquarePen, ListPlus, Plus, Square } from 'lucide-react';
 import './CommandInput.css';
 import { ApiService } from '../services/api';
-import { CommandHistoryState, loadCommandHistory, saveCommandHistory } from './command_input_history';
+import { CommandHistoryState, dedupeCommands, loadCommandHistory, saveCommandHistory } from './command_input_history';
 
 interface CommandInputProps {
   value?: string;
@@ -140,9 +140,21 @@ const CommandInput: React.FC<CommandInputProps> = ({
 
   const saveToHistory = useCallback(async (command: string) => {
     if (!command.trim()) return;
-    const newHistory = await saveCommandHistory(apiService.current, history.commands, command);
-    setHistory(newHistory);
-  }, [history.commands]);
+    const trimmedCommand = command.trim();
+    // Synchronously update local history state so ArrowUp works immediately
+    // (before the async server sync below completes)
+    setHistory(prev => ({
+      commands: dedupeCommands([...prev.commands, trimmedCommand]),
+      index: -1,
+      tempInput: ''
+    }));
+    // Async server sync — best-effort, does not block navigation
+    try {
+      await apiService.current.addTerminalHistory(trimmedCommand);
+    } catch {
+      // History sync failures should not block sending commands.
+    }
+  }, []);
 
   const resetHistoryNavigation = () => {
     setHistory(prev => ({
@@ -329,8 +341,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
           !e.metaKey &&
           !e.shiftKey &&
           (isHistoryMode || draftValue.length === 0) &&
-          textarea.selectionStart === 0 &&
-          textarea.selectionEnd === 0;
+          (isHistoryMode || (textarea.selectionStart === 0 && textarea.selectionEnd === 0));
 
         if (!shouldNavigateHistory) {
           break;

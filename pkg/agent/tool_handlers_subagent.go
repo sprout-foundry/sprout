@@ -488,18 +488,22 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		}
 	}
 
+	// Resolve workspace root once for all file validations
+	absWorkspaceDir, err := filepath.Abs(a.currentWorkspaceRoot())
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve absolute workspace path: %w", err)
+	}
+
 	// Validate each file path before proceeding
 	for _, filePath := range files {
 		// Clean the path to eliminate any . or redundant separators
 		cleanedPath := filepath.Clean(filePath)
-		absPath, err := filepath.Abs(cleanedPath)
-		if err != nil {
-			return "", fmt.Errorf("failed to resolve absolute path for %s: %w", filePath, err)
-		}
-
-		absWorkspaceDir, err := filepath.Abs(a.currentWorkspaceRoot())
-		if err != nil {
-			return "", fmt.Errorf("failed to resolve absolute workspace path: %w", err)
+		var absPath string
+		if filepath.IsAbs(cleanedPath) {
+			absPath = cleanedPath
+		} else {
+			// Resolve relative paths against the workspace root, not the process cwd
+			absPath = filepath.Join(absWorkspaceDir, cleanedPath)
 		}
 
 		// Verify the file is within the workspace or in /tmp/ for testing

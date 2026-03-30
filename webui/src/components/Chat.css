@@ -1677,7 +1677,10 @@
 }
 
 .reasoning-icon {
-  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
 }
 
 .reasoning-toggle {

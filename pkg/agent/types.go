@@ -30,9 +30,10 @@ type ShellCommandResult struct {
 // TurnCheckpoint stores a compact summary for a completed user turn while
 // preserving the original full messages for cache-efficient reuse until needed.
 type TurnCheckpoint struct {
-	StartIndex int    `json:"start_index"`
-	EndIndex   int    `json:"end_index"`
-	Summary    string `json:"summary"`
+	StartIndex        int    `json:"start_index"`
+	EndIndex          int    `json:"end_index"`
+	Summary           string `json:"summary"`
+	ActionableSummary string `json:"actionable_summary,omitempty"`
 }
 
 // AgentState represents the state of an agent that can be persisted

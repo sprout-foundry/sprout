@@ -15,9 +15,9 @@ import (
 // File size constants for read operations
 const (
 	// defaultMaxFileSize is the maximum file size (in bytes) for reading files
-	// Files larger than this will be truncated with a warning
-	// ~50,000 tokens at 4 chars/token heuristic (~39% of 128K context window)
-	defaultMaxFileSize = 200 * 1024 // 200KB default (raised from 100KB)
+	// Files larger than this will be truncated with head+tail and a warning
+	// ~20,000 tokens at 4 chars/token heuristic (~15% of 128K context window)
+	defaultMaxFileSize = 80 * 1024 // 80KB default
 
 	// lineRangeMaxSize is the maximum file size (in bytes) when a line range is requested
 	// This is larger to ensure we can read enough content for accurate line counts
@@ -81,15 +81,54 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 
 	var content []byte
 	var truncated bool
+	var headLines, tailLines int
 
-	if info.Size() > int64(maxFileSize) {
-		// For very large files, read only the maximum size and truncate
-		content = make([]byte, maxFileSize)
-		n, err := file.Read(content)
+	if startLine > 0 || endLine > 0 {
+		// For line-range reads, just read up to maxFileSize (could be lineRangeMaxSize)
+		content, err = io.ReadAll(file)
+		if err != nil {
+			return "", fmt.Errorf("failed to read file %s: %w", cleanPath, err)
+		}
+		if int64(len(content)) > int64(maxFileSize) {
+			content = content[:maxFileSize]
+			truncated = true
+		}
+	} else if info.Size() > int64(maxFileSize) {
+		// Head+tail truncation: read 60% from start, 40% from end
+		headSize := maxFileSize * 60 / 100
+		tailSize := maxFileSize - headSize
+
+		head := make([]byte, headSize)
+		n, err := file.Read(head)
 		if err != nil && err != io.EOF {
 			return "", fmt.Errorf("failed to read file %s: %w", cleanPath, err)
 		}
-		content = content[:n]
+		head = head[:n]
+		headLines = strings.Count(string(head), "\n")
+
+		// Seek to position for tail
+		tailOffset := info.Size() - int64(tailSize)
+		if tailOffset < 0 {
+			tailOffset = 0
+		}
+		if _, err := file.Seek(tailOffset, io.SeekStart); err != nil {
+			return "", fmt.Errorf("failed to seek in file %s: %w", cleanPath, err)
+		}
+
+		tail := make([]byte, tailSize)
+		n, err = file.Read(tail)
+		if err != nil && err != io.EOF {
+			return "", fmt.Errorf("failed to read file %s: %w", cleanPath, err)
+		}
+		tail = tail[:n]
+		tailLines = strings.Count(string(tail), "\n")
+
+		omittedKB := (info.Size() - int64(headSize) - int64(tailSize)) / 1024
+		if omittedKB < 1 {
+			omittedKB = 1
+		}
+
+		content = []byte(string(head) + "\n\n... [~" + fmt.Sprintf("%d", omittedKB) + "KB omitted] ...\n\n" + string(tail))
 		truncated = true
 	} else {
 		// For smaller files, read all content
@@ -139,15 +178,16 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 		return fmt.Sprintf("Lines %d-%d of %s:\n%s", startLine, endLine, cleanPath, fileContent), nil
 	}
 
-	// Add truncation warning if file was truncated
-	if truncated {
-		actualSizeKB := info.Size() / 1024
-		if info.Size()%1024 > 0 {
-			actualSizeKB++
+	// Add truncation warning if file was truncated (head+tail mode only)
+	if truncated && (headLines > 0 || tailLines > 0) {
+		shownKB := maxFileSize / 1024
+		omittedKB := (info.Size() - int64(maxFileSize)) / 1024
+		if omittedKB < 1 {
+			omittedKB = 1
 		}
-		limitKB := maxFileSize / 1024
-		fileContent = fmt.Sprintf("[WARN] File truncated (file is %d bytes, exceeds %dKB limit). Showing first %dKB of %s. Use line range to read specific sections or adjust LEDIT_READ_FILE_MAX_BYTES.\n%s\n\n[Content truncated]",
-			info.Size(), limitKB, limitKB, cleanPath, fileContent)
+		fileContent = fmt.Sprintf("[WARN] File truncated — total %d bytes (%dKB). Showing ~%dKB: first %d lines and last %d lines, ~%dKB omitted. Use view_range parameter to read specific line ranges, e.g. view_range=[1,50]",
+			info.Size(), info.Size()/1024+1, shownKB, headLines, tailLines, omittedKB)
+		fileContent += "\n" + string(content)
 	}
 
 	return fileContent, nil

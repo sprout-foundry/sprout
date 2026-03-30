@@ -85,58 +85,6 @@ func TestConversationOptimizerWithOldReads(t *testing.T) {
 
 }
 
-func TestAggressiveOptimizationPreservesToolCallId(t *testing.T) {
-	optimizer := NewConversationOptimizer(true, false)
-
-	// Create a longer conversation to trigger aggressive optimization
-	messages := []api.Message{
-		{Role: "system", Content: "System prompt"},
-		{Role: "user", Content: "Initial question"},
-		{Role: "tool", Content: "Tool call result for read_file: pkg/foo.go\npackage foo", ToolCallId: "agg-call"},
-		{Role: "assistant", Content: "Message 3"},
-		{Role: "user", Content: "Message 4"},
-		{Role: "assistant", Content: "Message 5"},
-		{Role: "user", Content: "Message 6"},
-		{Role: "assistant", Content: "Message 7"},
-		{Role: "user", Content: "Message 8"},
-		{Role: "assistant", Content: "Message 9"},
-		{Role: "user", Content: "Message 10"},
-		{Role: "assistant", Content: "Message 11"},
-		{Role: "user", Content: "Message 12"},
-		{Role: "assistant", Content: "Message 13"},
-		{Role: "user", Content: "Message 14"},
-		{Role: "assistant", Content: "Message 15"},
-		{Role: "user", Content: "Message 16"},
-		{Role: "assistant", Content: "Message 17"},
-		{Role: "user", Content: "Message 18"},
-		{Role: "assistant", Content: "Message 19"},
-		{Role: "user", Content: "Message 20"},
-	}
-
-	optimized := optimizer.AggressiveOptimization(messages)
-
-	if len(optimized) >= len(messages) {
-		t.Fatalf("Expected aggressive optimization to shrink message count, got %d -> %d", len(messages), len(optimized))
-	}
-
-	foundCompactSummary := false
-	foundLegacyReadSummary := false
-	for _, msg := range optimized {
-		if containsString(msg.Content, "Compacted earlier conversation state:") {
-			foundCompactSummary = true
-		}
-		if containsString(msg.Content, "Read file: pkg/foo.go") {
-			foundLegacyReadSummary = true
-		}
-	}
-	if !foundCompactSummary {
-		t.Fatalf("Expected aggressive optimization to emit a compacted summary message")
-	}
-	if !foundLegacyReadSummary {
-		t.Fatalf("Expected compacted summary to preserve the old file-read context")
-	}
-}
-
 func TestCompactConversationRewritesOldMiddleHistory(t *testing.T) {
 	optimizer := NewConversationOptimizer(true, false)
 

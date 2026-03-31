@@ -3,7 +3,7 @@ import { ScrollText, X, Send, SquarePen, ListPlus, Plus, Square } from 'lucide-r
 import QueuedMessagesPanel from './QueuedMessagesPanel';
 import './CommandInput.css';
 import { ApiService } from '../services/api';
-import { CommandHistoryState, dedupeCommands, loadCommandHistory, saveCommandHistory } from './command_input_history';
+import { CommandHistoryState, dedupeCommands, loadCommandHistory } from './command_input_history';
 
 interface CommandInputProps {
   value?: string;

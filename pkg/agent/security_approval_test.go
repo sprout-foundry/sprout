@@ -33,7 +33,7 @@ func TestSecurityApprovalManager_BasicApproval(t *testing.T) {
 		mgr.RespondToApproval(requestID, true)
 	}()
 
-	approved := mgr.RequestApproval(eb, "", "shell_command", "CAUTION", "potentially risky operation")
+	approved := mgr.RequestApproval(eb, "", "shell_command", "CAUTION", "potentially risky operation", nil)
 	if !approved {
 		t.Error("expected approval to be true")
 	}
@@ -53,7 +53,7 @@ func TestSecurityApprovalManager_Rejection(t *testing.T) {
 		mgr.RespondToApproval(requestID, false)
 	}()
 
-	approved := mgr.RequestApproval(eb, "", "shell_command", "DANGEROUS", "rm -rf /")
+	approved := mgr.RequestApproval(eb, "", "shell_command", "DANGEROUS", "rm -rf /", nil)
 	if approved {
 		t.Error("expected approval to be false (rejected)")
 	}
@@ -61,7 +61,7 @@ func TestSecurityApprovalManager_Rejection(t *testing.T) {
 
 func TestSecurityApprovalManager_NilEventBus(t *testing.T) {
 	mgr := NewSecurityApprovalManager()
-	approved := mgr.RequestApproval(nil, "", "shell_command", "CAUTION", "test")
+	approved := mgr.RequestApproval(nil, "", "shell_command", "CAUTION", "test", nil)
 	if approved {
 		t.Error("expected false when event bus is nil")
 	}
@@ -82,7 +82,7 @@ func TestSecurityApprovalManager_ConcurrentRequests(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			results[idx] = mgr.RequestApproval(eb, "", "shell_command", "CAUTION", "test")
+			results[idx] = mgr.RequestApproval(eb, "", "shell_command", "CAUTION", "test", nil)
 		}(i)
 	}
 
@@ -143,7 +143,7 @@ func TestSecurityApprovalManager_RequestEventData(t *testing.T) {
 	// Use a timeout so tests don't hang forever
 	done := make(chan bool, 1)
 	go func() {
-		approved := mgr.RequestApproval(eb, "", "shell_command", "CAUTION", "potentially risky operation - review carefully")
+		approved := mgr.RequestApproval(eb, "", "shell_command", "CAUTION", "potentially risky operation - review carefully", nil)
 		done <- approved
 	}()
 
@@ -178,7 +178,46 @@ func TestSecurityApprovalManager_RequestEventIncludesClientIDWhenProvided(t *tes
 		mgr.RespondToApproval(requestID, true)
 	}()
 
-	approved := mgr.RequestApproval(eb, "client-123", "shell_command", "CAUTION", "test")
+	approved := mgr.RequestApproval(eb, "client-123", "shell_command", "CAUTION", "test", nil)
+	if !approved {
+		t.Error("expected approval")
+	}
+}
+
+func TestSecurityApprovalManager_RequestApprovalExtraFields(t *testing.T) {
+	eb := events.NewEventBus()
+	mgr := NewSecurityApprovalManager()
+
+	eventCh := eb.Subscribe("test_sub")
+	defer eb.Unsubscribe("test_sub")
+
+	go func() {
+		event := <-eventCh
+		data, ok := event.Data.(map[string]interface{})
+		if !ok {
+			t.Error("expected data to be map[string]interface{}")
+			return
+		}
+		// Verify standard fields are present
+		if data["tool_name"] != "shell_command" {
+			t.Errorf("expected tool_name shell_command, got %v", data["tool_name"])
+		}
+		// Verify extra fields are merged
+		if data["command"] != "rm -rf /tmp/test" {
+			t.Errorf("expected command 'rm -rf /tmp/test', got %v", data["command"])
+		}
+		if data["risk_type"] != "source_code_destruction" {
+			t.Errorf("expected risk_type 'source_code_destruction', got %v", data["risk_type"])
+		}
+		requestID, _ := data["request_id"].(string)
+		mgr.RespondToApproval(requestID, true)
+	}()
+
+	extra := map[string]interface{}{
+		"command":   "rm -rf /tmp/test",
+		"risk_type": "source_code_destruction",
+	}
+	approved := mgr.RequestApproval(eb, "client-456", "shell_command", "DANGEROUS", "dangerous", extra)
 	if !approved {
 		t.Error("expected approval")
 	}

@@ -183,6 +183,28 @@ interface ChatContextPanelProps extends ContextPanelBaseProps {
   isProcessing: boolean;
   lastError: string | null;
   queryProgress: any;
+  stats?: {
+    provider?: string;
+    model?: string;
+    total_tokens?: number;
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    cached_tokens?: number;
+    current_context_tokens?: number;
+    max_context_tokens?: number;
+    context_usage_percent?: number;
+    cache_efficiency?: number;
+    total_cost?: number;
+    cached_cost_savings?: number;
+    last_tps?: number;
+    current_iteration?: number;
+    max_iterations?: number;
+    streaming_enabled?: boolean;
+    debug_mode?: boolean;
+    context_warning_issued?: boolean;
+    uptime?: string;
+    query_count?: number;
+  };
   onHandleToolPillClick?: (toolId: string) => void;
   onOpenRevisionDiff?: (options: { path: string; diff: string; title: string }) => void;
 }
@@ -745,6 +767,18 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     return `${mins}m ${secs}s`;
   };
 
+  const formatTokens = (tokens: number): string => {
+    if (!Number.isFinite(tokens) || tokens < 0) return '—';
+    if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`;
+    if (tokens >= 1000) return `${(tokens / 1000).toFixed(1)}K`;
+    return tokens.toString();
+  };
+
+  const formatCost = (cost: number): string => {
+    if (!Number.isFinite(cost)) return '—';
+    return `$${cost.toFixed(4)}`;
+  };
+
   // ── Diff renderer ────────────────────────────────────────────────
 
   const renderGitDiffContent = (diff: string) => {
@@ -780,6 +814,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   const subagentToolExecutions = useMemo(() => chatProps?.toolExecutions ?? [], [chatProps]);
   const subagentLogs = useMemo(() => chatProps?.logs ?? [], [chatProps]);
   const subagentActivities = useMemo(() => chatProps?.subagentActivities ?? [], [chatProps]);
+  const chatStats = chatProps?.stats ?? null;
 
   const subagentRuns = useMemo(() => {
     return subagentToolExecutions
@@ -1381,6 +1416,80 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
             <div className="status-metric">
               <span className="status-metric-value">{revisions.length}</span>
               <span className="status-metric-label">Revisions</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="status-section">
+        <div className="status-section-title">
+          <BarChart3 size={12} /> Token Usage
+        </div>
+        <div className="status-metrics-grid">
+          <div className="status-metric">
+            <span className="status-metric-value">{chatStats ? formatTokens(chatStats.total_tokens || 0) : '—'}</span>
+            <span className="status-metric-label">Total</span>
+          </div>
+          <div className="status-metric">
+            <span className="status-metric-value">{chatStats ? formatTokens(chatStats.prompt_tokens || 0) : '—'}</span>
+            <span className="status-metric-label">Prompt</span>
+          </div>
+          <div className="status-metric">
+            <span className="status-metric-value">{chatStats ? formatTokens(chatStats.completion_tokens || 0) : '—'}</span>
+            <span className="status-metric-label">Completion</span>
+          </div>
+          {(chatStats?.cached_tokens || 0) > 0 && (
+            <div className="status-metric">
+              <span className="status-metric-value">{formatTokens(chatStats?.cached_tokens || 0)}</span>
+              <span className="status-metric-label">Cached</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="status-section">
+        <div className="status-section-title">
+          <Activity size={12} /> Context Window
+        </div>
+        <div className="status-metrics-grid">
+          <div className="status-metric">
+            <span className="status-metric-value">
+              {chatStats?.context_usage_percent != null ? `${chatStats.context_usage_percent.toFixed(1)}%` : '—'}
+            </span>
+            <span className="status-metric-label">Used</span>
+          </div>
+          <div className="status-metric">
+            <span className="status-metric-value">{chatStats ? formatTokens(chatStats.current_context_tokens || 0) : '—'}</span>
+            <span className="status-metric-label">Current</span>
+          </div>
+          <div className="status-metric">
+            <span className="status-metric-value">{chatStats ? formatTokens(chatStats.max_context_tokens || 0) : '—'}</span>
+            <span className="status-metric-label">Max</span>
+          </div>
+        </div>
+        {chatStats && chatStats.context_usage_percent != null && (
+          <div className="status-context-bar">
+            <div
+              className={`status-context-bar-fill ${chatStats.context_usage_percent > 90 ? 'critical' : chatStats.context_usage_percent > 75 ? 'high' : ''}`}
+              style={{ width: `${Math.max(0, Math.min(100, chatStats.context_usage_percent))}%` }}
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="status-section">
+        <div className="status-section-title">
+          <Activity size={12} /> Costs
+        </div>
+        <div className="status-metrics-grid">
+          <div className="status-metric">
+            <span className="status-metric-value">{chatStats ? formatCost(chatStats.total_cost || 0) : '—'}</span>
+            <span className="status-metric-label">Total Cost</span>
+          </div>
+          {(chatStats?.cached_cost_savings || 0) > 0 && (
+            <div className="status-metric">
+              <span className="status-metric-value">{formatCost(chatStats?.cached_cost_savings || 0)}</span>
+              <span className="status-metric-label">Cache Savings</span>
             </div>
           )}
         </div>

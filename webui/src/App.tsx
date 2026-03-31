@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import ErrorBoundary from './components/ErrorBoundary';
 import AppContent from './components/AppContent';
 import UIManager from './components/UIManager';
+import SecurityApprovalDialog from './components/SecurityApprovalDialog';
 import { EditorManagerProvider } from './contexts/EditorManagerContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { HotkeyProvider } from './contexts/HotkeyContext';
@@ -92,6 +93,14 @@ interface AppState {
     linesDeleted?: number;
   }>;
   subagentActivities: SubagentActivity[];
+  securityApproval: {
+    requestId: string;
+    toolName: string;
+    riskLevel: string;
+    reasoning: string;
+    command?: string;
+    riskType?: string;
+  } | null;
 }
 
 interface ToolExecution {
@@ -340,6 +349,7 @@ function App() {
       isProcessing: false,
       lastError: null,
       queryProgress: null,
+      securityApproval: null,
     };
   });
 
@@ -1096,6 +1106,29 @@ function App() {
         }
         break;
 
+      case 'security_approval_request':
+        logEntry.category = 'system';
+        logEntry.level = 'info';
+        // Only respond to requests targeting this client
+        if (event.data?.client_id && event.data.client_id !== getWebUIClientId()) {
+          debugLog('[sec] Security approval request skipped – different client:', event.data.client_id);
+          break;
+        }
+        setState(prev => ({
+          ...prev,
+          securityApproval: {
+            requestId: String(event.data?.request_id || ''),
+            toolName: String(event.data?.tool_name || 'unknown'),
+            riskLevel: String(event.data?.risk_level || 'DANGEROUS'),
+            reasoning: String(event.data?.reasoning || ''),
+            command: typeof event.data?.command === 'string' ? event.data.command : undefined,
+            riskType: typeof event.data?.risk_type === 'string' ? event.data.risk_type : undefined,
+          },
+          logs: [...prev.logs, logEntry],
+        }));
+        debugLog('[sec] Security approval request:', event.data?.tool_name, event.data?.risk_level);
+        break;
+
       default:
         // Handle any unknown event types
         logEntry.level = 'warning';
@@ -1791,6 +1824,23 @@ function App() {
                     </div>
                   </div>
                 </div>
+              )}
+              {state.securityApproval && (
+                <SecurityApprovalDialog
+                  requestId={state.securityApproval.requestId}
+                  toolName={state.securityApproval.toolName}
+                  riskLevel={state.securityApproval.riskLevel as 'SAFE' | 'CAUTION' | 'DANGEROUS'}
+                  reasoning={state.securityApproval.reasoning}
+                  command={state.securityApproval.command}
+                  riskType={state.securityApproval.riskType}
+                  onRespond={(requestId, approved) => {
+                    wsService.sendEvent({
+                      type: 'security_approval_response',
+                      data: { request_id: requestId, approved },
+                    });
+                    setState(prev => ({ ...prev, securityApproval: null }));
+                  }}
+                />
               )}
             </UIManager>
           </EditorManagerProvider>

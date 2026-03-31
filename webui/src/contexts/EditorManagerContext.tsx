@@ -103,8 +103,15 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     buffersRef.current = buffers;
   }, [buffers]);
 
+  // Keep a ref to the latest activePaneId so callbacks don't read stale closure values
+  const activePaneIdRef = useRef(activePaneId);
+  useEffect(() => {
+    activePaneIdRef.current = activePaneId;
+  }, [activePaneId]);
+
   // Activate a buffer (display in active pane)
   const activateBuffer = useCallback((bufferId: string) => {
+    const currentActivePane = activePaneIdRef.current;
     setActiveBufferId(bufferId);
 
     // Update buffers
@@ -112,27 +119,27 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
       const newBuffers = new Map(prev);
       const buffer = newBuffers.get(bufferId);
       if (buffer) {
-        // Deactivate previous active buffer for this pane
-        if (activePaneId) {
+        // Deactivate previous active buffer for this pane, but keep paneId
+        if (currentActivePane) {
           Array.from(newBuffers.entries()).forEach(([id, buf]) => {
-            if (buf.paneId === activePaneId && id !== bufferId) {
-              newBuffers.set(id, { ...buf, isActive: false, paneId: undefined });
+            if (buf.paneId === currentActivePane && id !== bufferId) {
+              newBuffers.set(id, { ...buf, isActive: false });
             }
           });
         }
         // Activate new buffer
-        newBuffers.set(bufferId, { ...buffer, isActive: true, paneId: activePaneId });
+        newBuffers.set(bufferId, { ...buffer, isActive: true, paneId: currentActivePane });
       }
       return newBuffers;
     });
 
     // Update pane
     setPanes(prev => prev.map(pane =>
-      pane.id === activePaneId
+      pane.id === currentActivePane
         ? { ...pane, bufferId }
         : pane
     ));
-  }, [activePaneId]);
+  }, []);
 
   // Open a file in an editor pane
   const openFile = useCallback((file: any) => {
@@ -174,6 +181,12 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
 
     setBuffers(prev => {
       const newBuffers = new Map(prev);
+      // Deactivate previous buffer in the active pane, but keep paneId
+      newBuffers.forEach((existing, key) => {
+        if (key !== bufferId && existing.paneId === activePaneId) {
+          newBuffers.set(key, { ...existing, isActive: false });
+        }
+      });
       newBuffers.set(bufferId, newBuffer);
       return newBuffers;
     });
@@ -270,6 +283,12 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
 
     setBuffers(prev => {
       const next = new Map(prev);
+      // Deactivate previous buffer(s) in the target pane, but keep paneId
+      next.forEach((existing, key) => {
+        if (key !== bufferId && existing.paneId === targetPaneId) {
+          next.set(key, { ...existing, isActive: false });
+        }
+      });
       next.set(bufferId, newBuffer);
       return next;
     });
@@ -528,31 +547,36 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
       return;
     }
 
-    if (existingBuffer.paneId && existingBuffer.paneId !== activePaneId) {
+    const currentPaneId = activePaneIdRef.current;
+
+    if (existingBuffer.paneId && existingBuffer.paneId !== currentPaneId) {
       setActivePaneId(existingBuffer.paneId);
       setActiveBufferId(bufferId);
+      setPanes(prev => prev.map(pane =>
+        pane.id === existingBuffer.paneId ? { ...pane, bufferId } : pane
+      ));
       return;
     }
 
     setActiveBufferId(bufferId);
     setBuffers(prev => {
       const newBuffers = new Map(prev);
-      // Deactivate all buffers in this pane, activate the target
+      // Deactivate all buffers in this pane, activate the target (keep paneId)
       Array.from(newBuffers.entries()).forEach(([id, buf]) => {
-        if (buf.paneId === activePaneId) {
+        if (buf.paneId === currentPaneId) {
           newBuffers.set(id, { ...buf, isActive: id === bufferId });
         }
       });
       const buffer = newBuffers.get(bufferId);
       if (buffer) {
-        newBuffers.set(bufferId, { ...buffer, isActive: true, paneId: activePaneId });
+        newBuffers.set(bufferId, { ...buffer, isActive: true, paneId: currentPaneId });
       }
       return newBuffers;
     });
     setPanes(prev => prev.map(pane =>
-      pane.id === activePaneId ? { ...pane, bufferId } : pane
+      pane.id === currentPaneId ? { ...pane, bufferId } : pane
     ));
-  }, [activePaneId]);
+  }, []);
 
   // Switch to a different pane
   const switchPane = useCallback((paneId: string) => {

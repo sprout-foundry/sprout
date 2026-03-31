@@ -37,6 +37,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import './ContextPanel.css';
+import { showThemedConfirm } from './ThemedDialog';
 import TodoPanel from './TodoPanel';
 import { ApiService } from '../services/api';
 import { stripAnsiCodes } from '../utils/ansi';
@@ -498,7 +499,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       setSessionRestoreError('This is the current session.');
       return;
     }
-    if (!window.confirm(`Restore session ${sessionId}?\n\nThis will replace the current conversation.`)) {
+    if (!(await showThemedConfirm(`Restore session ${sessionId}?\n\nThis will replace the current conversation.`, { title: 'Restore Session', type: 'warning' }))) {
       return;
     }
     setIsLoadingSessions(true);

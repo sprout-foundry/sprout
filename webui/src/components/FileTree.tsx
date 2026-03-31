@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
+import { showThemedConfirm } from './ThemedDialog';
 import {
   FolderOpen,
   Folder,
@@ -330,7 +331,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
   }, [handleCancelDraft, handleConfirmDraft]);
 
   const handleDeleteTreeItem = useCallback(async (file: FileInfo) => {
-    if (!window.confirm(`Delete "${file.name}"?\n\nThis action cannot be undone.`)) {
+    if (!(await showThemedConfirm(`Delete "${file.name}"?\n\nThis action cannot be undone.`, { title: 'Confirm Delete', type: 'danger' }))) {
       return;
     }
 

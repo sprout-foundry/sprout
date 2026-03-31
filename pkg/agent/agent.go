@@ -262,7 +262,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 			messages:                  []api.Message{},
 			systemPrompt:              systemPrompt,
 			baseSystemPrompt:          systemPrompt,
-			maxIterations:             1000,
+			maxIterations:             0, // 0 means unlimited
 			totalCost:                 0.0,
 			clientType:                clientType,
 			debug:                     isDebugEnvEnabled(),
@@ -416,7 +416,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		messages:                  []api.Message{},
 		systemPrompt:              systemPrompt,
 		baseSystemPrompt:          systemPrompt,
-		maxIterations:             1000,
+		maxIterations:             0, // 0 means unlimited
 		totalCost:                 0.0,
 		clientType:                clientType,
 		debug:                     debug,

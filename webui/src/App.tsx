@@ -12,6 +12,8 @@ import { clientFetch, getWebUIClientId } from './services/clientSession';
 import { ensureCompletedAssistantMessage } from './utils/chatCompletion';
 import { debugLog } from './utils/log';
 
+let _lastWorkspaceReloadTime = 0;
+
 // Service Worker Registration
 const registerServiceWorker = async () => {
   if (!('serviceWorker' in navigator)) {
@@ -1087,7 +1089,10 @@ function App() {
         logEntry.level = 'info';
         debugLog('[workspace] Workspace changed:', event.data);
         if (!event.data?.client_id || event.data.client_id === getWebUIClientId()) {
-          window.location.reload();
+          if (Date.now() - _lastWorkspaceReloadTime > 2000) {
+            _lastWorkspaceReloadTime = Date.now();
+            window.location.reload();
+          }
         }
         break;
 

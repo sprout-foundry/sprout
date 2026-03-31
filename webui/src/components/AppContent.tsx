@@ -24,6 +24,15 @@ const toPaneFlex = (weight: number): React.CSSProperties => ({
   minHeight: 0,
 });
 
+/** Expand a leading `$HOME` or `${HOME}` token in a workspace path using the remote home directory. */
+function expandHomeInPath(path: string, homePath: string | null): string {
+  if (!homePath) return path;
+  if (path === '$HOME' || path === '${HOME}') return homePath;
+  if (path.startsWith('$HOME/')) return homePath + path.slice(5);
+  if (path.startsWith('${HOME}/')) return homePath + path.slice(7);
+  return path;
+}
+
 interface ToolExecution {
   id: string;
   tool: string;
@@ -277,8 +286,13 @@ const AppContent: React.FC<AppContentProps> = ({
         if (cancelled) {
           return;
         }
+        // Expand $HOME references using the remote home path from ssh_context,
+        // so literal "$HOME" never reaches the backend's setWorkspace API.
+        const sshContext = workspace.ssh_context as { home_path?: string } | undefined;
+        const homePath = sshContext?.home_path || null;
+        const expandedInitial = expandHomeInPath(initialWorkspace, homePath);
         const currentRoot = (workspace.workspace_root || '').replace(/\/+$/, '');
-        const targetRoot = initialWorkspace.replace(/\/+$/, '');
+        const targetRoot = expandedInitial.replace(/\/+$/, '');
         if (currentRoot === targetRoot) {
           return;
         }

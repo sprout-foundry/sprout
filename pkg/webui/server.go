@@ -392,8 +392,35 @@ func CheckPortAvailable(port int) bool {
 	return true // Port is free
 }
 
+// expandHomeVar expands only $HOME and ${HOME} references in a path string.
+// This is more restrictive than os.ExpandEnv (which expands all env vars)
+// and avoids surprising behavior from arbitrary environment variable expansion.
+func expandHomeVar(path string) string {
+	home := os.Getenv("HOME")
+	if home == "" {
+		return path
+	}
+	path = strings.ReplaceAll(path, "${HOME}", home)
+	path = strings.ReplaceAll(path, "$HOME", home)
+	return path
+}
+
 func filepathAbsEval(path string) (string, error) {
-	abs, err := filepath.Abs(path)
+	// Expand $HOME / ${HOME} and tilde in the path.
+	expanded := expandHomeVar(path)
+	if strings.HasPrefix(expanded, "~/") || expanded == "~" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("resolve home directory: %w", err)
+		}
+		if expanded == "~" {
+			expanded = home
+		} else {
+			expanded = filepath.Join(home, expanded[2:])
+		}
+	}
+
+	abs, err := filepath.Abs(expanded)
 	if err != nil {
 		return "", err
 	}

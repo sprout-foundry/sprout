@@ -1,0 +1,210 @@
+.queue-panel {
+  background: var(--bg-secondary, #1a1a2e);
+  border: 1px solid var(--border-default, #2a2a3e);
+  border-radius: 10px;
+  max-height: 280px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  font-size: 13px;
+  z-index: 100;
+}
+
+.queue-panel.empty {
+  max-height: auto;
+}
+
+.queue-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-default, #2a2a3e);
+  background: var(--bg-elevated, #1e1e32);
+  flex-shrink: 0;
+}
+
+.queue-panel-title {
+  font-weight: 600;
+  color: var(--text-primary, #e0e0e0);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.queue-panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.queue-panel-clear {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary, #888);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.queue-panel-clear:hover {
+  color: var(--accent-error, #ff5555);
+  background: rgba(255, 85, 85, 0.1);
+}
+
+.queue-panel-close {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary, #888);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, background 0.15s;
+}
+
+.queue-panel-close:hover {
+  color: var(--text-primary, #e0e0e0);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.queue-panel-empty {
+  padding: 16px 12px;
+  text-align: center;
+  color: var(--text-secondary, #888);
+  font-style: italic;
+  font-size: 12px;
+}
+
+.queue-panel-list {
+  overflow-y: auto;
+  flex: 1;
+  padding: 4px 0;
+}
+
+.queue-panel-item {
+  display: flex;
+  align-items: flex-start;
+  padding: 6px 10px;
+  gap: 8px;
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.04));
+  transition: background 0.15s;
+}
+
+.queue-panel-item:last-child {
+  border-bottom: none;
+}
+
+.queue-panel-item:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.queue-panel-item-index {
+  color: var(--text-secondary, #666);
+  font-size: 11px;
+  font-weight: 600;
+  min-width: 18px;
+  padding-top: 2px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.queue-panel-item-content {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.queue-panel-item-text {
+  color: var(--text-primary, #ccc);
+  word-break: break-word;
+  line-height: 1.4;
+  display: block;
+  white-space: pre-wrap;
+}
+
+.queue-panel-edit-textarea {
+  width: 100%;
+  background: var(--bg-primary, #0d0d1a);
+  border: 1px solid var(--accent-primary, #6c63ff);
+  border-radius: 6px;
+  color: var(--text-primary, #e0e0e0);
+  padding: 6px 8px;
+  font-size: 12px;
+  font-family: inherit;
+  resize: vertical;
+  line-height: 1.4;
+  outline: none;
+}
+
+.queue-panel-edit-textarea:focus {
+  box-shadow: 0 0 0 2px rgba(108, 99, 255, 0.2);
+}
+
+.queue-panel-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.queue-panel-item:hover .queue-panel-item-actions,
+.queue-panel-item:focus-within .queue-panel-item-actions {
+  opacity: 1;
+}
+
+/* Always show action buttons on touch/hover-capable devices */
+@media (hover: none) and (pointer: coarse) {
+  .queue-panel-item-actions {
+    opacity: 0.6;
+  }
+
+  .queue-panel-item-actions:active {
+    opacity: 1;
+  }
+}
+
+.queue-panel-action {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary, #888);
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, background 0.15s;
+}
+
+.queue-panel-action:hover:not(:disabled) {
+  color: var(--text-primary, #e0e0e0);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.queue-panel-action:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.queue-panel-action.danger:hover {
+  color: var(--accent-error, #ff5555);
+  background: rgba(255, 85, 85, 0.1);
+}
+
+.queue-panel-action.save:hover {
+  color: var(--accent-primary, #6c63ff);
+  background: rgba(108, 99, 255, 0.1);
+}
+
+.queue-panel-action.cancel:hover {
+  color: var(--text-primary, #e0e0e0);
+  background: rgba(255, 255, 255, 0.08);
+}

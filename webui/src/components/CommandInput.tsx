@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useLayoutEffect, memo } from 'react';
 import { ScrollText, X, Send, SquarePen, ListPlus, Plus, Square } from 'lucide-react';
+import QueuedMessagesPanel from './QueuedMessagesPanel';
 import './CommandInput.css';
 import { ApiService } from '../services/api';
 import { CommandHistoryState, dedupeCommands, loadCommandHistory, saveCommandHistory } from './command_input_history';
@@ -15,7 +16,11 @@ interface CommandInputProps {
   multiline?: boolean;
   autoFocus?: boolean;
   isProcessing?: boolean;
-  queuedCount?: number;
+  queuedMessages?: string[];
+  onRemoveQueuedMessage?: (index: number) => void;
+  onEditQueuedMessage?: (index: number, newText: string) => void;
+  onReorderQueuedMessage?: (fromIndex: number, toIndex: number) => void;
+  onClearQueuedMessages?: () => void;
   onStop?: () => void;
 }
 
@@ -30,10 +35,15 @@ const CommandInput: React.FC<CommandInputProps> = ({
   multiline = true,
   autoFocus = false,
   isProcessing = false,
-  queuedCount = 0,
+  queuedMessages = [],
+  onRemoveQueuedMessage,
+  onEditQueuedMessage,
+  onReorderQueuedMessage,
+  onClearQueuedMessages,
   onStop,
 }) => {
   const [draftValue, setDraftValue] = useState(value);
+  const [queuePanelCollapsed, setQueuePanelCollapsed] = useState(false);
   const [history, setHistory] = useState<CommandHistoryState>({
     commands: [],
     index: -1,
@@ -764,20 +774,35 @@ const CommandInput: React.FC<CommandInputProps> = ({
             <Square size={15} />
           </button>
         )}
-        {isProcessing && (
+        {(isProcessing || queuedMessages.length > 0) && (
           <button
             type="button"
-            onClick={handleQueue}
-            disabled={disabled || !canSend}
+            onClick={isProcessing ? handleQueue : () => setQueuePanelCollapsed(prev => !prev)}
+            disabled={disabled || (!canSend && isProcessing)}
             className="queue-button"
-            data-tooltip={`Queue for after current run${queuedCount > 0 ? ` (${queuedCount} queued)` : ''}`}
+            data-tooltip={isProcessing
+              ? `Queue for after current run${queuedMessages.length > 0 ? ` (${queuedMessages.length} queued)` : ''}`
+              : `${queuedMessages.length > 0 ? `${queuedMessages.length} queued message${queuedMessages.length !== 1 ? 's' : ''}` : 'No queued messages'}`}
             aria-label="Queue message"
           >
             <ListPlus size={16} />
-            {queuedCount > 0 && <span className="queue-count">{queuedCount}</span>}
+            {queuedMessages.length > 0 && <span className="queue-count">{queuedMessages.length}</span>}
           </button>
         )}
       </div>
+
+      {(queuedMessages.length > 0) && onEditQueuedMessage && (
+        queuePanelCollapsed ? null : (
+          <QueuedMessagesPanel
+            messages={queuedMessages}
+            onRemove={onRemoveQueuedMessage ?? (() => {})}
+            onEdit={onEditQueuedMessage}
+            onReorder={onReorderQueuedMessage ?? (() => {})}
+            onClear={onClearQueuedMessages ?? (() => {})}
+            onClose={() => setQueuePanelCollapsed(true)}
+          />
+        )
+      )}
 
       <div className="keyboard-hints">
         <span><kbd>Enter</kbd> Send</span>

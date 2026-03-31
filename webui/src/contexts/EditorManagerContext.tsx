@@ -141,6 +141,53 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     ));
   }, []);
 
+  // Switch to a different buffer in the active pane
+  const switchToBuffer = useCallback((bufferId: string) => {
+    const existingBuffer = buffersRef.current.get(bufferId);
+    if (!existingBuffer) {
+      return;
+    }
+
+    const currentPaneId = activePaneIdRef.current;
+
+    if (existingBuffer.paneId && existingBuffer.paneId !== currentPaneId) {
+      setActivePaneId(existingBuffer.paneId);
+      setActiveBufferId(bufferId);
+      setBuffers(prev => {
+        const next = new Map(prev);
+        Array.from(next.entries()).forEach(([id, buf]) => {
+          if (buf.paneId === existingBuffer.paneId) {
+            next.set(id, { ...buf, isActive: id === bufferId });
+          }
+        });
+        return next;
+      });
+      setPanes(prev => prev.map(pane =>
+        pane.id === existingBuffer.paneId ? { ...pane, bufferId } : pane
+      ));
+      return;
+    }
+
+    setActiveBufferId(bufferId);
+    setBuffers(prev => {
+      const newBuffers = new Map(prev);
+      // Deactivate all buffers in this pane, activate the target (keep paneId)
+      Array.from(newBuffers.entries()).forEach(([id, buf]) => {
+        if (buf.paneId === currentPaneId) {
+          newBuffers.set(id, { ...buf, isActive: id === bufferId });
+        }
+      });
+      const buffer = newBuffers.get(bufferId);
+      if (buffer) {
+        newBuffers.set(bufferId, { ...buffer, isActive: true, paneId: currentPaneId });
+      }
+      return newBuffers;
+    });
+    setPanes(prev => prev.map(pane =>
+      pane.id === currentPaneId ? { ...pane, bufferId } : pane
+    ));
+  }, []);
+
   // Open a file in an editor pane
   const openFile = useCallback((file: any) => {
     const filePath = file.path;
@@ -201,7 +248,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     setActiveBufferId(bufferId);
 
     return bufferId;
-  }, [activateBuffer, panes]);
+  }, [activateBuffer, panes, switchToBuffer]);
 
   // Helper to find the rightmost pane for chat placement
   const getRightmostPane = useCallback((paneList: EditorPane[]) => {
@@ -547,53 +594,6 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
       setPaneLayoutState('single');
     }
   }, [panes, activePaneId, closeBuffer]);
-
-  // Switch to a different buffer in the active pane
-  const switchToBuffer = useCallback((bufferId: string) => {
-    const existingBuffer = buffersRef.current.get(bufferId);
-    if (!existingBuffer) {
-      return;
-    }
-
-    const currentPaneId = activePaneIdRef.current;
-
-    if (existingBuffer.paneId && existingBuffer.paneId !== currentPaneId) {
-      setActivePaneId(existingBuffer.paneId);
-      setActiveBufferId(bufferId);
-      setBuffers(prev => {
-        const next = new Map(prev);
-        Array.from(next.entries()).forEach(([id, buf]) => {
-          if (buf.paneId === existingBuffer.paneId) {
-            next.set(id, { ...buf, isActive: id === bufferId });
-          }
-        });
-        return next;
-      });
-      setPanes(prev => prev.map(pane =>
-        pane.id === existingBuffer.paneId ? { ...pane, bufferId } : pane
-      ));
-      return;
-    }
-
-    setActiveBufferId(bufferId);
-    setBuffers(prev => {
-      const newBuffers = new Map(prev);
-      // Deactivate all buffers in this pane, activate the target (keep paneId)
-      Array.from(newBuffers.entries()).forEach(([id, buf]) => {
-        if (buf.paneId === currentPaneId) {
-          newBuffers.set(id, { ...buf, isActive: id === bufferId });
-        }
-      });
-      const buffer = newBuffers.get(bufferId);
-      if (buffer) {
-        newBuffers.set(bufferId, { ...buffer, isActive: true, paneId: currentPaneId });
-      }
-      return newBuffers;
-    });
-    setPanes(prev => prev.map(pane =>
-      pane.id === currentPaneId ? { ...pane, bufferId } : pane
-    ));
-  }, []);
 
   // Switch to a different pane
   const switchPane = useCallback((paneId: string) => {

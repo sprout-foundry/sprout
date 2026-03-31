@@ -347,8 +347,7 @@ function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isTerminalExpanded, setIsTerminalExpanded] = useState(false);
   const activeRequestsRef = useRef(0);
-  const queuedMessagesRef = useRef<string[]>([]);
-  const [queuedMessagesCount, setQueuedMessagesCount] = useState(0);
+  const [queuedMessages, setQueuedMessages] = useState<string[]>([]);
   const [recentFiles, setRecentFiles] = useState<Array<{ path: string; modified: boolean }>>([]);
   const [gitRefreshToken, setGitRefreshToken] = useState(0);
   const [onboarding, setOnboarding] = useState<OnboardingState>({
@@ -667,8 +666,7 @@ function App() {
         const completedResponse = event.data?.response;
         const wasClearCommand = completedQuery === '/clear';
         if (wasClearCommand) {
-          queuedMessagesRef.current = [];
-          setQueuedMessagesCount(0);
+          setQueuedMessages([]);
         }
         setState(prev => {
           let nextMessages = wasClearCommand
@@ -1265,8 +1263,33 @@ function App() {
   const handleQueueMessage = useCallback((message: string) => {
     const trimmed = message.trim();
     if (!trimmed) return;
-    queuedMessagesRef.current.push(trimmed);
-    setQueuedMessagesCount(queuedMessagesRef.current.length);
+    setQueuedMessages(prev => [...prev, trimmed]);
+  }, []);
+
+  const handleRemoveQueuedMessage = useCallback((index: number) => {
+    setQueuedMessages(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const handleEditQueuedMessage = useCallback((index: number, newText: string) => {
+    const trimmed = newText.trim();
+    if (!trimmed) {
+      setQueuedMessages(prev => prev.filter((_, i) => i !== index));
+      return;
+    }
+    setQueuedMessages(prev => prev.map((msg, i) => i === index ? trimmed : msg));
+  }, []);
+
+  const handleReorderQueuedMessage = useCallback((fromIndex: number, toIndex: number) => {
+    setQueuedMessages(prev => {
+      const next = [...prev];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
+  }, []);
+
+  const handleClearQueuedMessages = useCallback(() => {
+    setQueuedMessages([]);
   }, []);
 
   const handleStopProcessing = useCallback(async () => {
@@ -1295,26 +1318,26 @@ function App() {
     if (state.isProcessing || activeRequestsRef.current > 0) {
       return;
     }
-    if (queuedMessagesRef.current.length === 0) {
-      return;
-    }
-
-    const next = queuedMessagesRef.current.shift();
-    setQueuedMessagesCount(queuedMessagesRef.current.length);
-    if (!next) return;
-
-    handleSendMessage(next).catch((error) => {
-      const errorMsg = error instanceof Error ? error.message : 'Failed to send queued message';
-      setState(prev => ({
-        ...prev,
-        lastError: `Failed to send queued message: ${errorMsg}`,
-        messages: [...prev.messages, {
-          id: Date.now().toString(),
-          type: 'assistant',
-          content: `[FAIL] Error: ${errorMsg}`,
-          timestamp: new Date()
-        }]
-      }));
+    setQueuedMessages(prev => {
+      if (prev.length === 0) return prev;
+      const [next, ...rest] = prev;
+      // Use microtask to avoid setState-during-render
+      queueMicrotask(() => {
+        handleSendMessage(next).catch((error) => {
+          const errorMsg = error instanceof Error ? error.message : 'Failed to send queued message';
+          setState(s => ({
+            ...s,
+            lastError: `Failed to send queued message: ${errorMsg}`,
+            messages: [...s.messages, {
+              id: Date.now().toString(),
+              type: 'assistant',
+              content: `[FAIL] Error: ${errorMsg}`,
+              timestamp: new Date()
+            }]
+          }));
+        });
+      });
+      return rest;
     });
   }, [state.isProcessing, handleSendMessage]);
 
@@ -1559,7 +1582,11 @@ function App() {
                 onSendMessage={handleSendMessage}
                 onQueueMessage={handleQueueMessage}
                 onStopProcessing={handleStopProcessing}
-                queuedMessagesCount={queuedMessagesCount}
+                queuedMessages={queuedMessages}
+                onRemoveQueuedMessage={handleRemoveQueuedMessage}
+                onEditQueuedMessage={handleEditQueuedMessage}
+                onReorderQueuedMessage={handleReorderQueuedMessage}
+                onClearQueuedMessages={handleClearQueuedMessages}
                 onGitCommit={handleGitCommit}
                 onGitAICommit={handleGitAICommit}
                 onGitStage={handleGitStage}

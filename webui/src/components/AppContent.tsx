@@ -118,7 +118,11 @@ interface AppContentProps {
   onSendMessage: (message: string) => void;
   onQueueMessage: (message: string) => void;
   onStopProcessing: () => void;
-  queuedMessagesCount: number;
+  queuedMessages: string[];
+  onRemoveQueuedMessage: (index: number) => void;
+  onEditQueuedMessage: (index: number, newText: string) => void;
+  onReorderQueuedMessage: (fromIndex: number, toIndex: number) => void;
+  onClearQueuedMessages: () => void;
   onGitCommit: (message: string, files: string[]) => Promise<unknown>;
   onGitAICommit: () => Promise<{ commitMessage: string; warnings?: string[] }>;
   onGitStage: (files: string[]) => Promise<void>;
@@ -150,7 +154,11 @@ const AppContent: React.FC<AppContentProps> = ({
   onSendMessage,
   onQueueMessage,
   onStopProcessing,
-  queuedMessagesCount,
+  queuedMessages,
+  onRemoveQueuedMessage,
+  onEditQueuedMessage,
+  onReorderQueuedMessage,
+  onClearQueuedMessages,
   onGitCommit,
   onGitAICommit,
   onGitStage,
@@ -826,7 +834,11 @@ const AppContent: React.FC<AppContentProps> = ({
                 messages: state.messages,
                 onSendMessage,
                 onQueueMessage,
-                queuedMessagesCount,
+                queuedMessages,
+                onRemoveQueuedMessage,
+                onEditQueuedMessage,
+                onReorderQueuedMessage,
+                onClearQueuedMessages,
                 inputValue,
                 onInputChange,
                 isProcessing: state.isProcessing,

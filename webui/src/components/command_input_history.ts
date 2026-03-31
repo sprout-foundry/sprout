@@ -1,5 +1,4 @@
 import { ApiService } from '../services/api';
-import { TerminalWebSocketService } from '../services/terminalWebSocket';
 
 const MAX_COMMAND_HISTORY = 100;
 
@@ -11,13 +10,12 @@ export interface CommandHistoryState {
 
 export async function loadCommandHistory(apiService: ApiService): Promise<string[]> {
   try {
-    const terminalService = TerminalWebSocketService.getInstance();
-    const response = await apiService.getTerminalHistory(terminalService.getSessionId() || undefined);
+    const response = await apiService.getTerminalHistory();
     if (response && Array.isArray(response.history)) {
       return dedupeCommands(response.history);
     }
   } catch {
-    // Terminal history sync is best-effort; command input can still function without persisted history.
+    // History sync is best-effort; command input can still function without persisted history.
   }
 
   return [];

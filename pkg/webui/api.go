@@ -1371,13 +1371,9 @@ func (ws *ReactWebServer) handleTerminalHistory(w http.ResponseWriter, r *http.R
 }
 
 func (ws *ReactWebServer) handleTerminalHistoryGet(w http.ResponseWriter, r *http.Request) {
-	terminalManager := ws.getTerminalManagerForRequest(r)
-
-	// Get session ID from query parameter (optional)
-	sessionID := r.URL.Query().Get("session_id")
-
-	// If no session ID provided, return empty history
-	if sessionID == "" {
+	clientID := ws.resolveClientID(r)
+	clientAgent, err := ws.getClientAgent(clientID)
+	if err != nil || clientAgent == nil {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"history":    []string{},
@@ -1387,26 +1383,19 @@ func (ws *ReactWebServer) handleTerminalHistoryGet(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Get history from terminal manager
-	history, err := terminalManager.GetHistory(sessionID)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to get history: %v", err), http.StatusInternalServerError)
-		return
-	}
-
+	history := clientAgent.GetHistory()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"history":    history,
-		"session_id": sessionID,
+		"session_id": "",
 		"count":      len(history),
 	})
 }
 
 func (ws *ReactWebServer) handleTerminalHistoryPost(w http.ResponseWriter, r *http.Request) {
-	terminalManager := ws.getTerminalManagerForRequest(r)
+	r.Body = http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)
 	var req struct {
-		SessionID string `json:"session_id"`
-		Command   string `json:"command"`
+		Command string `json:"command"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -1420,28 +1409,25 @@ func (ws *ReactWebServer) handleTerminalHistoryPost(w http.ResponseWriter, r *ht
 		return
 	}
 
-	if req.SessionID == "" {
+	clientID := ws.resolveClientID(r)
+	clientAgent, err := ws.getClientAgent(clientID)
+	if err != nil || clientAgent == nil {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"message":    "Command accepted without active terminal session",
-			"command":    command,
-			"session_id": "",
-			"stored":     false,
+			"message": "No active agent session",
+			"command": command,
+			"stored":  false,
 		})
 		return
 	}
 
-	if err := terminalManager.AddToHistory(req.SessionID, command); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to add history: %v", err), http.StatusInternalServerError)
-		return
-	}
+	clientAgent.AddToHistory(command)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message":    "History updated",
-		"command":    command,
-		"session_id": req.SessionID,
-		"stored":     true,
+		"message": "History updated",
+		"command": command,
+		"stored":  true,
 	})
 }
 

@@ -176,8 +176,11 @@ func (a *Agent) Shutdown() {
 		return
 	}
 
-	// Save command history to configuration before shutdown
+	// Save command history to configuration before shutdown.
+	// Lock historyMu to avoid racing with concurrent AddToHistory calls.
+	a.historyMu.Lock()
 	a.saveHistoryToConfig()
+	a.historyMu.Unlock()
 
 	// Stop MCP servers (best-effort)
 	if a.mcpManager != nil {
@@ -1053,11 +1056,13 @@ func (a *Agent) GetHistorySize() int {
 	return len(a.commandHistory)
 }
 
-// GetHistory returns the command history
+// GetHistory returns a defensive copy of the command history.
 func (a *Agent) GetHistory() []string {
 	a.historyMu.Lock()
 	defer a.historyMu.Unlock()
-	return a.commandHistory
+	result := make([]string, len(a.commandHistory))
+	copy(result, a.commandHistory)
+	return result
 }
 
 // loadHistoryFromConfig loads command history from the configuration

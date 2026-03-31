@@ -37,8 +37,13 @@ func (a *Agent) GetConfigManager() *configuration.Manager {
 	return a.configManager
 }
 
-// SetMaxIterations sets the maximum number of iterations for the agent
+// SetMaxIterations sets the maximum number of iterations for the agent.
+// A value of 0 means unlimited (no iteration cap per prompt).
+// Negative values are clamped to 0 (unlimited).
 func (a *Agent) SetMaxIterations(max int) {
+	if max < 0 {
+		max = 0
+	}
 	a.maxIterations = max
 }
 
@@ -110,7 +115,7 @@ func (a *Agent) GetContextWarningIssued() bool {
 	return a.contextWarningIssued
 }
 
-// GetMaxIterations returns the maximum iterations allowed
+// GetMaxIterations returns the maximum iterations allowed (0 means unlimited)
 func (a *Agent) GetMaxIterations() int {
 	return a.maxIterations
 }

@@ -228,8 +228,8 @@ func (r *AgentWorkflowRuntime) validate(prefix string) error {
 	if r.ReasoningEffort == "" && strings.TrimSpace(rawReasoning) != "" {
 		return fmt.Errorf("%s.reasoning_effort must be one of: low, medium, high", prefix)
 	}
-	if r.MaxIterations != nil && *r.MaxIterations <= 0 {
-		return fmt.Errorf("%s.max_iterations must be > 0", prefix)
+	if r.MaxIterations != nil && *r.MaxIterations < 0 {
+		return fmt.Errorf("%s.max_iterations must be >= 0", prefix)
 	}
 
 	return nil

@@ -108,8 +108,12 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 
 	// Main conversation loop
 	completed := false
-	for ch.agent.currentIteration = 0; ch.agent.currentIteration < ch.agent.maxIterations; ch.agent.currentIteration++ {
-		ch.agent.debugLog("[~] Iteration %d/%d - Messages: %d\n", ch.agent.currentIteration, ch.agent.maxIterations, len(ch.agent.messages))
+	for ch.agent.currentIteration = 0; ch.agent.maxIterations == 0 || ch.agent.currentIteration < ch.agent.maxIterations; ch.agent.currentIteration++ {
+		if ch.agent.maxIterations > 0 {
+			ch.agent.debugLog("[~] Iteration %d/%d - Messages: %d\n", ch.agent.currentIteration, ch.agent.maxIterations, len(ch.agent.messages))
+		} else {
+			ch.agent.debugLog("[~] Iteration %d/unlimited - Messages: %d\n", ch.agent.currentIteration, len(ch.agent.messages))
+		}
 
 		// Record turn data if trace session is enabled
 		if ch.traceSession != nil {
@@ -202,7 +206,7 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 	}
 
 	ch.agent.debugLog("[GO] Exited conversation loop - Iteration: %d, Messages: %d\n", ch.agent.currentIteration, len(ch.agent.messages))
-	if !completed && ch.agent.currentIteration >= ch.agent.maxIterations {
+	if !completed && ch.agent.maxIterations > 0 && ch.agent.currentIteration >= ch.agent.maxIterations {
 		ch.agent.lastRunTerminationReason = RunTerminationMaxIterations
 		ch.agent.PrintLineAsync(fmt.Sprintf("[WARN] Reached maximum iterations (%d) before the task completed.", ch.agent.maxIterations))
 	}

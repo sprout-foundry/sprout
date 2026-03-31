@@ -962,13 +962,16 @@ func limitVisionOutputText(text string) (string, bool, int) {
 	return strings.TrimSpace(trimmed[:keep]) + suffix, true, original
 }
 
-func persistVisionFullText(sourcePath, fullText string) (string, error) {
+// persistVisionFullTextWithRoot persists full vision text to a file rooted at workspaceRoot.
+// If workspaceRoot is empty, it falls back to os.Getwd() for the CWD-based output dir.
+// The relative path for display also uses workspaceRoot (or os.Getwd() as fallback).
+func persistVisionFullTextWithRoot(sourcePath, fullText, workspaceRoot string) (string, error) {
 	fullText = strings.TrimSpace(fullText)
 	if fullText == "" {
 		return "", fmt.Errorf("full text is empty")
 	}
 
-	dir := resolveVisionOutputDirectory()
+	dir := resolveVisionOutputDirectoryWithRoot(workspaceRoot)
 	if dir == "" {
 		return "", fmt.Errorf("vision output directory unavailable")
 	}
@@ -989,9 +992,13 @@ func persistVisionFullText(sourcePath, fullText string) (string, error) {
 		return "", fmt.Errorf("failed to write full vision output: %w", err)
 	}
 
-	wd, err := os.Getwd()
-	if err != nil {
-		return fullPath, nil
+	wd := workspaceRoot
+	if wd == "" {
+		var err error
+		wd, err = os.Getwd()
+		if err != nil {
+			return fullPath, nil
+		}
 	}
 	rel, err := filepath.Rel(wd, fullPath)
 	if err != nil {
@@ -1004,7 +1011,15 @@ func persistVisionFullText(sourcePath, fullText string) (string, error) {
 	return "./" + rel, nil
 }
 
-func resolveVisionOutputDirectory() string {
+// persistVisionFullText persists full vision text to a file using os.Getwd() for directory resolution.
+// Kept for backward compatibility; new code should prefer persistVisionFullTextWithRoot.
+func persistVisionFullText(sourcePath, fullText string) (string, error) {
+	return persistVisionFullTextWithRoot(sourcePath, fullText, "")
+}
+
+// resolveVisionOutputDirectoryWithRoot resolves the vision output directory using the given
+// workspace root. If workspaceRoot is empty, it falls back to os.Getwd().
+func resolveVisionOutputDirectoryWithRoot(workspaceRoot string) string {
 	raw := strings.TrimSpace(os.Getenv("LEDIT_RESOURCE_DIRECTORY"))
 	if raw == "" {
 		raw = ".ledit_ocr_outputs"
@@ -1016,11 +1031,21 @@ func resolveVisionOutputDirectory() string {
 		}
 		cleaned = strings.TrimLeft(cleaned, `/\`)
 	}
-	wd, err := os.Getwd()
-	if err != nil {
-		return ""
+	wd := workspaceRoot
+	if wd == "" {
+		var err error
+		wd, err = os.Getwd()
+		if err != nil {
+			return ""
+		}
 	}
 	return filepath.Join(wd, cleaned)
+}
+
+// resolveVisionOutputDirectory resolves the vision output directory using os.Getwd().
+// Kept for backward compatibility; new code should prefer resolveVisionOutputDirectoryWithRoot.
+func resolveVisionOutputDirectory() string {
+	return resolveVisionOutputDirectoryWithRoot("")
 }
 
 func sanitizeVisionFileComponent(input string) string {

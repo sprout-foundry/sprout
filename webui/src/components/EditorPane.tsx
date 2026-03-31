@@ -274,6 +274,19 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       return;
     }
 
+    // Skip loading virtual workspace buffers — they have no on-disk file.
+    if (buffer.file.path.startsWith('__workspace/')) {
+      const nextContent = buffer.content || '';
+      setLocalContent(nextContent);
+      setError(null);
+      lastLoadedRef.current = { bufferId: buffer.id, filePath: buffer.file.path };
+      currentBufferIdRef.current = buffer.id;
+      if (viewRef.current) {
+        clearDiffGutter(viewRef.current);
+      }
+      return;
+    }
+
     // Skip if same buffer already tracked
     if (currentBufferIdRef.current === buffer.id) {
       return;

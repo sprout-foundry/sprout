@@ -826,10 +826,6 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
       } else {
         addRecentWorkspace(nextWorkspaceRoot);
       }
-
-      window.setTimeout(() => {
-        window.location.reload();
-      }, 300);
     } catch (error) {
       const errorMessage =
         error instanceof Error

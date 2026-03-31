@@ -24,6 +24,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { ApiService } from '../services/api';
+import { showThemedConfirm, showThemedAlert } from './ThemedDialog';
 import './FileEditsPanel.css';
 
 interface FileEdit {
@@ -140,7 +141,7 @@ const FileEditsPanel: React.FC<FileEditsPanelProps> = ({ edits, onFileClick }) =
   }, [openHistory]);
 
   const handleRollback = async (revisionId: string) => {
-    if (!window.confirm(`Rollback to revision ${revisionId}?\n\nThis will undo all changes made after this revision.`)) {
+    if (!(await showThemedConfirm(`Rollback to revision ${revisionId}?\n\nThis will undo all changes made after this revision.`, { title: 'Confirm Rollback', type: 'danger' }))) {
       return;
     }
 
@@ -149,7 +150,7 @@ const FileEditsPanel: React.FC<FileEditsPanelProps> = ({ edits, onFileClick }) =
 
     try {
       await apiService.rollbackToRevision(revisionId);
-      alert(`Successfully rolled back to revision ${revisionId}`);
+      await showThemedAlert(`Successfully rolled back to revision ${revisionId}`, { title: 'Rollback Complete', type: 'success' });
       setShowHistory(false);
       window.location.reload();
     } catch (error) {

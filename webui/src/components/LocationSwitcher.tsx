@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import './LocationSwitcher.css';
 import { FolderOpen, Monitor, RefreshCw, Loader2, Server } from 'lucide-react';
+import { showThemedConfirm } from './ThemedDialog';
 import {
   ApiService,
   SSHBrowseEntry,
@@ -793,8 +794,9 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
       try {
         const sessionCount = await apiService.current.getTerminalSessionCount();
         if (sessionCount > 0) {
-          const confirmed = window.confirm(
-            `${sessionCount} terminal session${sessionCount === 1 ? ' is' : 's are'} active. Switching workspace will close ${sessionCount === 1 ? 'it' : 'them'}. Continue?`
+          const confirmed = await showThemedConfirm(
+            `${sessionCount} terminal session${sessionCount === 1 ? ' is' : 's are'} active. Switching workspace will close ${sessionCount === 1 ? 'it' : 'them'}. Continue?`,
+            { title: 'Active Terminal Sessions', type: 'warning' }
           );
           if (!confirmed) {
             setSwitchingState({ isSwitching: false, error: null, status: null });
@@ -1820,14 +1822,15 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
                         className={`location-switcher-item ${
                           instance.pid === selectedInstancePID ? 'active' : ''
                         }`}
-                        onClick={() => {
+                        onClick={async () => {
                           if (!onInstanceChange || !instance.pid) return;
-                          const confirmed = window.confirm(
+                          const confirmed = await showThemedConfirm(
                             `Switch to instance ${instance.pid}?\n\n` +
                             `Workspace: ${instance.working_dir}\n` +
                             `Port: ${instance.port}\n\n` +
                             `This will navigate this tab to a different ledit instance. ` +
-                            `Chat history and open files will not transfer.`
+                            `Chat history and open files will not transfer.`,
+                            { title: 'Switch Instance', type: 'info' }
                           );
                           if (confirmed) {
                             onInstanceChange(instance.pid);

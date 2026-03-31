@@ -447,7 +447,19 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 				if agent.debug {
 					agent.debugLog("[APPROVAL] Requesting security approval via webui for %s (risk: %s)\n", toolName, secResult.Risk)
 				}
-				if !mgr.RequestApproval(agent.GetEventBus(), agent.GetEventClientID(), toolName, secResult.Risk.String(), secResult.Reasoning) {
+
+				// Build optional extra fields for richer webui display
+				approvalExtra := make(map[string]interface{})
+				if toolName == "shell_command" {
+					if cmd, ok := args["command"].(string); ok && cmd != "" {
+						approvalExtra["command"] = cmd
+					}
+				}
+				if secResult.RiskType != "" {
+					approvalExtra["risk_type"] = secResult.RiskType
+				}
+
+				if !mgr.RequestApproval(agent.GetEventBus(), agent.GetEventClientID(), toolName, secResult.Risk.String(), secResult.Reasoning, approvalExtra) {
 					return nil, "", fmt.Errorf("SECURITY_REJECTED: User rejected %s — %s", toolName, secResult.Reasoning)
 				}
 			} else if secResult.ShouldBlock {

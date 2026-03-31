@@ -78,6 +78,11 @@ type Agent struct {
 	activePersona           string                         // Currently active persona ID (direct agent or subagent env)
 	workspaceRoot           string                         // Explicit workspace root for this agent instance
 
+	// Session-scoped provider/model overrides (webui sessions)
+	// When set, these take precedence over config values and don't persist
+	sessionProvider api.ClientType // Session-scoped provider override
+	sessionModel   string         // Session-scoped model override
+
 	// Input injection handling
 	inputInjectionChan  chan string        // Channel for injecting new user input
 	inputInjectionMutex sync.Mutex         // Mutex for input injection operations

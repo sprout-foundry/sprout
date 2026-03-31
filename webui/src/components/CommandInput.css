@@ -4,7 +4,7 @@
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: 14px;
-  overflow: hidden;
+  overflow: visible;
   box-shadow: var(--shadow-subtle);
   transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
   position: relative;

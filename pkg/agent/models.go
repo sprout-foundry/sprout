@@ -12,6 +12,10 @@ import (
 
 // GetModel gets the current model being used by the agent
 func (a *Agent) GetModel() string {
+	// Check session override first
+	if a.sessionModel != "" {
+		return a.sessionModel
+	}
 	// Use the interface method to get the model
 	if a.client == nil {
 		return "unknown"
@@ -21,6 +25,10 @@ func (a *Agent) GetModel() string {
 
 // GetProvider returns the current provider name
 func (a *Agent) GetProvider() string {
+	// Check session override first
+	if a.sessionProvider != "" {
+		return string(a.sessionProvider)
+	}
 	if a.client == nil {
 		return "unknown"
 	}
@@ -29,6 +37,10 @@ func (a *Agent) GetProvider() string {
 
 // GetProviderType returns the current provider type
 func (a *Agent) GetProviderType() api.ClientType {
+	// Check session override first
+	if a.sessionProvider != "" {
+		return a.sessionProvider
+	}
 	return a.clientType
 }
 
@@ -125,7 +137,8 @@ func (a *Agent) getDefaultModelFromFactory(provider api.ClientType) string {
 	return ""
 }
 
-// SetProvider switches to a specific provider with its default or current model
+// SetProvider switches to a specific provider with its default or current model.
+// For webui sessions, use SetProviderForSession instead which doesn't persist to config.
 func (a *Agent) SetProvider(provider api.ClientType) error {
 	prevProvider := a.GetProvider()
 	prevModel := a.GetModel()
@@ -185,7 +198,90 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 	// Get the actual model being used (might be different due to fallback)
 	actualModel := newClient.GetModel()
 
-	// Save to configuration
+	// Store in session fields (not config) - this allows session-scoped changes
+	// without affecting other sessions or persisting to config
+	a.sessionProvider = provider
+	a.sessionModel = actualModel
+
+	// Update context limits for the new model
+	a.maxContextTokens = a.getModelContextLimit()
+	a.currentContextTokens = 0
+	a.normalizeConversationForCurrentModelSyntax(prevProvider, prevModel)
+
+	// Notify user if model was different due to fallback
+	if actualModel != model {
+		fmt.Fprintf(os.Stderr, "[info] Using model: %s (requested: %s)\n", actualModel, model)
+	}
+
+	if a.debug {
+		a.debugLog("[OK] Switched to provider %s with model %s\n", api.GetProviderName(provider), actualModel)
+	}
+
+	return nil
+}
+
+// SetProviderPersisted switches to a specific provider and persists the choice to config.
+// This is intended for CLI use where the selection should be saved.
+func (a *Agent) SetProviderPersisted(provider api.ClientType) error {
+	prevProvider := a.GetProvider()
+	prevModel := a.GetModel()
+	availableModels, _ := a.getModelsForProvider(provider)
+
+	// Get the configured model for this provider
+	model := a.configManager.GetModelForProvider(provider)
+	if model == "" {
+		// If no model configured, try to get default model from provider factory
+		if defaultModel := a.getDefaultModelFromFactory(provider); defaultModel != "" {
+			model = defaultModel
+			if a.debug {
+				a.debugLog("[search] Using default model %s from factory for provider %s\n", model, api.GetProviderName(provider))
+			}
+		} else {
+			// If no factory default, try to get the first available model from the provider API
+			if len(availableModels) > 0 {
+				// Find a suitable default model
+				model = a.selectDefaultModel(availableModels, provider)
+				if a.debug {
+					a.debugLog("[search] Auto-selected model %s from API for provider %s\n", model, api.GetProviderName(provider))
+				}
+			} else {
+				// No models available from API and no model specified
+				return fmt.Errorf("no models available from provider %v - please specify a model explicitly", api.GetProviderName(provider))
+			}
+		}
+	} else if resolvedModel, ok := resolveModelIDForProvider(model, availableModels); ok {
+		model = resolvedModel
+	} else if len(availableModels) > 0 {
+		fallbackModel := a.selectDefaultModel(availableModels, provider)
+		if fallbackModel == "" {
+			fallbackModel = availableModels[0].ID
+		}
+		fmt.Fprintf(os.Stderr, "[info] Configured model %s is not available for %s. Using %s.\n", model, api.GetProviderName(provider), fallbackModel)
+		model = fallbackModel
+	}
+
+	// Create a new client with the specified provider
+	newClient, err := factory.CreateProviderClient(provider, model)
+	if err != nil {
+		return fmt.Errorf("failed to create client for provider %s: %w", api.GetProviderName(provider), err)
+	}
+
+	// Set debug mode on the new client
+	newClient.SetDebug(a.debug)
+
+	// Check connection
+	if err := newClient.CheckConnection(); err != nil {
+		return fmt.Errorf("connection check failed for provider %s: %w", api.GetProviderName(provider), err)
+	}
+
+	// Switch to the new client
+	a.client = newClient
+	a.clientType = provider
+
+	// Get the actual model being used (might be different due to fallback)
+	actualModel := newClient.GetModel()
+
+	// Save to configuration (persisted for CLI use)
 	if err := a.configManager.SetProvider(provider); err != nil {
 		return fmt.Errorf("failed to save provider: %w", err)
 	}
@@ -223,7 +319,9 @@ func resolveModelIDForProvider(model string, models []api.ModelInfo) (string, bo
 	return "", false
 }
 
-// SetModel changes the current model and persists the choice
+// SetModel changes the current model for the session.
+// This is the session-scoped version that doesn't persist to config.
+// For CLI use with persistence, use SetModelPersisted.
 func (a *Agent) SetModel(model string) error {
 	prevProvider := a.GetProvider()
 	prevModel := a.GetModel()
@@ -273,18 +371,71 @@ func (a *Agent) SetModel(model string) error {
 		return fmt.Errorf("model %s failed connection check: %w", model, err)
 	}
 
-	// Save the selection
-	if err := a.configManager.SetProvider(a.clientType); err != nil {
-		// Log warning but don't fail - this is not critical
-		if a.debug {
-			a.debugLog("[WARN] Failed to save provider: %v\n", err)
+	// Store in session fields (not config) - this allows session-scoped changes
+	a.sessionModel = model
+
+	// Update context limits for the new model
+	a.maxContextTokens = a.getModelContextLimit()
+	a.currentContextTokens = 0
+	a.normalizeConversationForCurrentModelSyntax(prevProvider, prevModel)
+
+	return nil
+}
+
+// SetModelPersisted changes the current model and persists the choice to config.
+// This is intended for CLI use where the selection should be saved.
+func (a *Agent) SetModelPersisted(model string) error {
+	prevProvider := a.GetProvider()
+	prevModel := a.GetModel()
+
+	// Try to set the model directly first - this allows testing unknown models
+	// Only validate against known models if the direct setting fails
+	err := a.client.SetModel(model)
+	if err != nil {
+		// If direct setting failed, try to find the model in the known list
+		// This provides better error messages and handles case sensitivity
+		models, getModelErr := a.getModelsForProvider(a.clientType)
+		if getModelErr != nil {
+			return fmt.Errorf("failed to set model '%s' on provider %s and couldn't get available models: %w (original error: %v)",
+				model, api.GetProviderName(a.clientType), getModelErr, err)
+		}
+
+		// Check if the model exists in the known list (case-insensitive)
+		modelFound := false
+		for _, m := range models {
+			if strings.EqualFold(m.ID, model) {
+				modelFound = true
+				// Use the exact model ID from the provider's list
+				model = m.ID
+				// Try again with the exact model ID
+				if retryErr := a.client.SetModel(model); retryErr != nil {
+					return fmt.Errorf("model '%s' found in list but failed to set: %w", model, retryErr)
+				}
+				break
+			}
+		}
+
+		if !modelFound {
+			return fmt.Errorf("model '%s' not found for provider %s and failed to set directly: %w",
+				model, api.GetProviderName(a.clientType), err)
 		}
 	}
-	if err := a.configManager.SetModelForProvider(a.clientType, model); err != nil {
-		// Log warning but don't fail - this is not critical
-		if a.debug {
-			a.debugLog("[WARN] Failed to save model: %v\n", err)
+
+	// Verify the model works by checking connection
+	if err := a.client.CheckConnection(); err != nil {
+		// Revert to previous model if connection check fails
+		if prevModel := a.client.GetModel(); prevModel != "" {
+			_ = a.client.SetModel(prevModel)
 		}
+		return fmt.Errorf("model %s failed connection check: %w", model, err)
+	}
+
+	// Save the selection to config (persisted for CLI use)
+	if err := a.configManager.SetProvider(a.clientType); err != nil {
+		return fmt.Errorf("failed to save provider: %w", err)
+	}
+	if err := a.configManager.SetModelForProvider(a.clientType, model); err != nil {
+		return fmt.Errorf("failed to save model: %w", err)
 	}
 
 	// Update context limits for the new model
@@ -311,4 +462,16 @@ func (a *Agent) getModelsForProvider(provider api.ClientType) ([]api.ModelInfo, 
 func (a *Agent) isProviderAvailable(provider api.ClientType) bool {
 	// Use the unified IsProviderAvailable function
 	return api.IsProviderAvailable(provider)
+}
+
+// ClearSessionOverrides clears any session-scoped provider/model overrides.
+// This should be called when a webui session ends to restore config-based behavior.
+func (a *Agent) ClearSessionOverrides() {
+	a.sessionProvider = ""
+	a.sessionModel = ""
+}
+
+// HasSessionOverrides returns true if there are session-scoped provider/model overrides
+func (a *Agent) HasSessionOverrides() bool {
+	return a.sessionProvider != "" || a.sessionModel != ""
 }

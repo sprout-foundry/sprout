@@ -426,13 +426,13 @@ func applyWorkflowRuntimeOverrides(chatAgent *agent.Agent, runtime AgentWorkflow
 		if err != nil {
 			return fmt.Errorf("invalid provider %q: %w", runtime.Provider, err)
 		}
-		if err := chatAgent.SetProvider(api.ClientType(clientType)); err != nil {
+		if err := chatAgent.SetProviderPersisted(api.ClientType(clientType)); err != nil {
 			return fmt.Errorf("failed to set provider %q: %w", runtime.Provider, err)
 		}
 	}
 
 	if runtime.Model != "" {
-		if err := chatAgent.SetModel(runtime.Model); err != nil {
+		if err := chatAgent.SetModelPersisted(runtime.Model); err != nil {
 			return fmt.Errorf("failed to set model %q: %w", runtime.Model, err)
 		}
 	}
@@ -519,7 +519,7 @@ func prepareWorkflowRuntimeRestorer(chatAgent *agent.Agent, cfg *AgentWorkflowCo
 			}
 		}
 		if snapshot.Model != "" && strings.TrimSpace(chatAgent.GetModel()) != snapshot.Model {
-			if err := chatAgent.SetModel(snapshot.Model); err != nil {
+			if err := chatAgent.SetModelPersisted(snapshot.Model); err != nil {
 				restoreErrors = append(restoreErrors, fmt.Sprintf("failed to restore model %q: %v", snapshot.Model, err))
 			}
 		}

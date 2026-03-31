@@ -52,14 +52,14 @@ func (a *Agent) ApplyPersona(personaID string) error {
 			return fmt.Errorf("invalid persona provider %q: %w", persona.Provider, err)
 		}
 		if providerType != a.clientType {
-			if err := a.SetProvider(providerType); err != nil {
+			if err := a.SetProviderPersisted(providerType); err != nil {
 				return fmt.Errorf("failed switching to persona provider %q: %w", persona.Provider, err)
 			}
 		}
 	}
 
 	if model := strings.TrimSpace(persona.Model); model != "" {
-		if err := a.SetModel(model); err != nil {
+		if err := a.SetModelPersisted(model); err != nil {
 			return fmt.Errorf("failed setting persona model %q: %w", model, err)
 		}
 	}

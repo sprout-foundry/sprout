@@ -725,10 +725,10 @@ func (m *ModelsCommand) calculateFuzzyScore(model api.ModelInfo, query string) i
 	return score
 }
 
-// setModel sets the specified model for the agent
+// setModel sets the specified model for the agent (persisted for CLI use)
 func (m *ModelsCommand) setModel(modelID string, chatAgent *agent.Agent) error {
 	// Let the agent handle provider determination and switching automatically
-	err := chatAgent.SetModel(modelID)
+	err := chatAgent.SetModelPersisted(modelID)
 	if err != nil {
 		return fmt.Errorf("failed to set model: %w", err)
 	}

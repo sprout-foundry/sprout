@@ -72,7 +72,7 @@ func TestSetProviderFallsBackWhenConfiguredCustomModelIsInvalid(t *testing.T) {
 		t.Fatalf("failed to create agent: %v", err)
 	}
 
-	if err := agent.SetProvider(api.ClientType("ai-worker")); err != nil {
+	if err := agent.SetProviderPersisted(api.ClientType("ai-worker")); err != nil {
 		t.Fatalf("expected provider switch to recover from invalid configured model, got error: %v", err)
 	}
 

@@ -233,8 +233,8 @@ func (p *ProvidersCommand) setProvider(providerName string, configManager *confi
 	// Switch to the provider
 	fmt.Printf("[~] Switching to %s...\n", getProviderDisplayName(provider))
 
-	// Switch the agent to the new provider
-	err = chatAgent.SetProvider(provider)
+	// Switch the agent to the new provider (persisted for CLI use)
+	err = chatAgent.SetProviderPersisted(provider)
 	if err != nil {
 		return fmt.Errorf("failed to switch to provider %s: %w", getProviderDisplayName(provider), err)
 	}

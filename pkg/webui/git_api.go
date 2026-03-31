@@ -2,8 +2,11 @@
 package webui
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -23,16 +26,18 @@ import (
 )
 
 type gitFixReviewJob struct {
-	ID        string
-	SessionID string
-	Status    string
-	Logs      []string
-	Result    string
-	Error     string
-	StartedAt time.Time
-	UpdatedAt time.Time
-	streamBuf strings.Builder
-	mutex     sync.RWMutex
+	ID            string
+	SessionID     string
+	ClientID      string
+	WorkspaceRoot string
+	Status        string
+	Logs          []string
+	Result        string
+	Error         string
+	StartedAt     time.Time
+	UpdatedAt     time.Time
+	streamBuf     strings.Builder
+	mutex         sync.RWMutex
 }
 
 // GitStatus represents the git status response
@@ -1146,6 +1151,15 @@ func (ws *ReactWebServer) handleAPIGitDeepReviewFixStatus(w http.ResponseWriter,
 		return
 	}
 
+	// Authorization: only the client that started the job can query its status.
+	// Jobs with an empty ClientID pre-date access control (backward compat)
+	// and are accessible by any client. No new jobs should have empty ClientID.
+	requestClientID := ws.resolveClientID(r)
+	if job.ClientID != "" && job.ClientID != requestClientID {
+		http.Error(w, "job not found", http.StatusNotFound)
+		return
+	}
+
 	status, logs, next, result, jobErr := job.snapshot(since)
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1167,38 +1181,58 @@ func (ws *ReactWebServer) startFixReviewJob(reviewOutput, clientID string) (*git
 
 	provider := ""
 	model := ""
+	workspaceRoot := ""
 	if agentInst, err := ws.getClientAgent(clientID); err == nil && agentInst != nil {
 		provider = strings.TrimSpace(agentInst.GetProvider())
 		model = strings.TrimSpace(agentInst.GetModel())
+		workspaceRoot = agentInst.GetWorkspaceRoot()
 	}
 
-	jobID := fmt.Sprintf("review-fix-%d", time.Now().UnixNano())
-	sessionID := fmt.Sprintf("review-fix-session-%d", time.Now().UnixNano())
+	jobID := generateCryptoID("rfx")
+	sessionID := generateCryptoID("rfxs")
 	job := &gitFixReviewJob{
-		ID:        jobID,
-		SessionID: sessionID,
-		Status:    "running",
-		Logs:      []string{"Starting isolated fix session..."},
-		StartedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		ID:            jobID,
+		SessionID:     sessionID,
+		ClientID:      clientID,
+		WorkspaceRoot: workspaceRoot,
+		Status:        "running",
+		Logs:          []string{"Starting isolated fix session..."},
+		StartedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
 	}
 
 	ws.fixReviewMu.Lock()
 	ws.fixReviewJobs[jobID] = job
 	ws.fixReviewMu.Unlock()
 
-	go ws.runFixReviewJob(job, prompt, provider, model)
+	go ws.runFixReviewJob(job, prompt, provider, model, workspaceRoot)
 
 	return job, prompt, nil
 }
 
-func (ws *ReactWebServer) runFixReviewJob(job *gitFixReviewJob, prompt, provider, model string) {
+func generateCryptoID(prefix string) string {
+	b := make([]byte, 12)
+	if _, err := rand.Read(b); err != nil {
+		// crypto/rand failure is extremely rare but if it happens,
+		// fall back to a time-based ID rather than returning all zeros.
+		log.Printf("[WARN] crypto/rand.Read failed: %v, falling back to time-based ID", err)
+		return fmt.Sprintf("%s-%024x", prefix, time.Now().UnixNano())
+	}
+	return fmt.Sprintf("%s-%s", prefix, hex.EncodeToString(b))
+}
+
+func (ws *ReactWebServer) runFixReviewJob(job *gitFixReviewJob, prompt, provider, model, workspaceRoot string) {
 	reviewAgent, err := agent.NewAgentWithModel("")
 	if err != nil {
 		job.setError(fmt.Sprintf("Failed to initialize isolated agent: %v", err))
 		return
 	}
 	defer reviewAgent.Shutdown()
+
+	// Set the workspace root to the client's workspace, not the daemon process CWD.
+	if strings.TrimSpace(workspaceRoot) != "" {
+		reviewAgent.SetWorkspaceRoot(workspaceRoot)
+	}
 
 	reviewAgent.SetSessionID(job.SessionID)
 	if provider = strings.TrimSpace(provider); provider != "" {

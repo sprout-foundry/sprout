@@ -104,6 +104,19 @@ func normalizeGitPath(path string) string {
 	return cleaned
 }
 
+// makeGitRelativePath converts absolute paths to workspace-relative paths
+// for git operations. If the path is already relative or outside the
+// workspace, it is returned unchanged.
+func makeGitRelativePath(path, workspaceRoot string) string {
+	if filepath.IsAbs(path) {
+		rel, err := filepath.Rel(workspaceRoot, path)
+		if err == nil && !strings.HasPrefix(rel, "..") {
+			return filepath.ToSlash(rel)
+		}
+	}
+	return path
+}
+
 func pathExistsInGitStatus(path string, status *GitStatus) bool {
 	if status == nil {
 		return false
@@ -201,6 +214,9 @@ func (ws *ReactWebServer) handleAPIGitDiff(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Convert absolute paths to workspace-relative for git operations.
+	reqPath = makeGitRelativePath(reqPath, workspaceRoot)
+
 	status, err := ws.getGitStatusForWorkspace(workspaceRoot)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to validate path: %v", err), http.StatusInternalServerError)
@@ -296,6 +312,9 @@ func (ws *ReactWebServer) handleAPIGitStage(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// Convert absolute paths to workspace-relative for git operations.
+	req.Path = makeGitRelativePath(req.Path, workspaceRoot)
+
 	status, err := ws.getGitStatusForWorkspace(workspaceRoot)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to validate path: %v", err), http.StatusInternalServerError)
@@ -349,6 +368,9 @@ func (ws *ReactWebServer) handleAPIGitUnstage(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// Convert absolute paths to workspace-relative for git operations.
+	req.Path = makeGitRelativePath(req.Path, workspaceRoot)
+
 	status, err := ws.getGitStatusForWorkspace(workspaceRoot)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to validate path: %v", err), http.StatusInternalServerError)
@@ -401,6 +423,9 @@ func (ws *ReactWebServer) handleAPIGitDiscard(w http.ResponseWriter, r *http.Req
 		http.Error(w, "Invalid path", http.StatusBadRequest)
 		return
 	}
+
+	// Convert absolute paths to workspace-relative for git operations.
+	req.Path = makeGitRelativePath(req.Path, workspaceRoot)
 
 	status, err := ws.getGitStatusForWorkspace(workspaceRoot)
 	if err != nil {

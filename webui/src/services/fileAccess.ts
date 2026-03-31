@@ -1,4 +1,5 @@
 import { clientFetch } from './clientSession';
+import { showThemedConfirm } from '../components/ThemedDialog';
 
 const consentTokenHeader = 'X-Ledit-Consent-Token';
 
@@ -70,8 +71,9 @@ async function withConsentRetry(
     return initial;
   }
 
-  const approved = window.confirm(
-    `External file ${operation} requested.\n\nPath: ${consent.path}\n\nAllow this one-time access?`
+  const approved = await showThemedConfirm(
+    `External file ${operation} requested.\n\nPath: ${consent.path}\n\nAllow this one-time access?`,
+    { title: 'External File Access', type: 'warning' }
   );
   if (!approved) {
     throw new Error(`External file ${operation} canceled by user: ${consent.path}`);

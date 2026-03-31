@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, RotateCcw } from 'lucide-react';
+import { showThemedConfirm } from './ThemedDialog';
 import { ApiService } from '../services/api';
 
 interface RevisionFile {
@@ -218,7 +219,7 @@ const RevisionListPanel: React.FC<RevisionListPanelProps> = ({ mode, onOpenDiff,
                   <button
                     className="history-rollback-btn"
                     onClick={async () => {
-                      if (!window.confirm(`Rollback to revision ${revision.revision_id}?`)) return;
+                      if (!(await showThemedConfirm(`Rollback to revision ${revision.revision_id}?`, { title: 'Confirm Rollback', type: 'danger' }))) return;
                       await apiService.rollbackToRevision(revision.revision_id);
                       await loadRevisions();
                     }}

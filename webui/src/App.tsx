@@ -296,13 +296,13 @@ const loadPersistedAppState = (): Partial<AppState> | null => {
             toolRefs: Array.isArray(message?.toolRefs) ? message.toolRefs : undefined
           }))
         : [];
-      return {
+    return {
       provider: typeof parsed.provider === 'string' ? parsed.provider : 'unknown',
       model: typeof parsed.model === 'string' ? parsed.model : 'unknown',
       sessionId: typeof parsed.sessionId === 'string' ? parsed.sessionId : null,
       queryCount: typeof parsed.queryCount === 'number' ? parsed.queryCount : 0,
       currentView: ['chat', 'editor', 'git'].includes(parsed.currentView) ? parsed.currentView : 'chat',
-      messages: [],
+      messages: parsedMessages,
       fileEdits: Array.isArray(parsed.fileEdits)
         ? parsed.fileEdits.map((edit: any) => ({
             ...edit,

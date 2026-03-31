@@ -190,6 +190,18 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     return bufferId;
   }, [activePaneId, activateBuffer, panes]);
 
+  // Helper to find the rightmost pane for chat placement
+  const getRightmostPane = useCallback((paneList: EditorPane[]) => {
+    if (paneList.length === 0) return null;
+    // Position order: primary=0, secondary=1, tertiary=2
+    const positionOrder: Record<string, number> = { 'primary': 0, 'secondary': 1, 'tertiary': 2 };
+    return paneList.reduce((rightmost, pane) => {
+      const rightmostOrder = positionOrder[rightmost.position as string] ?? 0;
+      const paneOrder = positionOrder[pane.position as string] ?? 0;
+      return paneOrder > rightmostOrder ? pane : rightmost;
+    }, paneList[0]);
+  }, []);
+
   const openWorkspaceBuffer = useCallback((options: {
     kind: 'chat' | 'diff' | 'review' | 'file';
     path: string;
@@ -228,6 +240,10 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
       return bufferId;
     }
 
+    // For chat buffers, place them in the rightmost pane for better UX with context panel
+    const targetPane = options.kind === 'chat' ? getRightmostPane(panes) : panes.find(p => p.id === activePaneId);
+    const targetPaneId = targetPane?.id ?? activePaneId;
+
     const bufferId = `buffer-${options.kind}-${Date.now()}`;
     const newBuffer: EditorBuffer = {
       id: bufferId,
@@ -246,7 +262,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
       scrollPosition: { top: 0, left: 0 },
       isModified: false,
       isActive: true,
-      paneId: activePaneId,
+      paneId: targetPaneId,
       isPinned: options.isPinned ?? false,
       isClosable: options.isClosable ?? !options.isPinned,
       metadata: options.metadata ?? {},
@@ -258,16 +274,19 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
       return next;
     });
 
+    // Assign buffer to target pane and activate that pane
     setPanes(prev => prev.map(pane =>
-      pane.id === activePaneId
+      pane.id === targetPaneId
         ? { ...pane, bufferId }
         : pane
     ));
 
+    // Switch to the target pane and activate the buffer
+    setActivePaneId(targetPaneId);
     setActiveBufferId(bufferId);
 
     return bufferId;
-  }, [activePaneId, activateBuffer]);
+  }, [activePaneId, activateBuffer, getRightmostPane, panes]);
 
   // Update buffer content
   const updateBufferContent = useCallback((bufferId: string, content: string) => {

@@ -1092,6 +1092,7 @@ const AppContent: React.FC<AppContentProps> = ({
             <ContextPanel
               ref={contextPanelRef}
               context="chat"
+              stats={state.stats}
               toolExecutions={state.toolExecutions}
               fileEdits={state.fileEdits}
               logs={state.logs}

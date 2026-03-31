@@ -643,4 +643,72 @@ describe('paneId preservation fix', () => {
     expect(ctx().buffers.get('buffer-chat')).toBeDefined();
     expect(ctx().buffers.size).toBe(bufferCountBefore);
   });
+
+  // -----------------------------------------------------------------------
+  // 8. openFile cross-pane reactivation switches pane and activates correctly
+  // -----------------------------------------------------------------------
+  it('openFile for cross-pane existing buffer switches pane and activates correctly', async () => {
+    renderProvider();
+
+    const file1 = makeFile('/test/cross-pane-1.txt', 'cross-pane-1.txt');
+    const file2 = makeFile('/test/cross-pane-2.txt', 'cross-pane-2.txt');
+
+    const pane1Id = ctx().activePaneId; // 'pane-1'
+
+    // Open file1 in pane-1, then file2 (deactivates file1)
+    let buf1Id: string;
+    await actAndUpdateWithDelay(() => { buf1Id = ctx().openFile(file1); });
+    await actAndUpdateWithDelay(() => { ctx().openFile(file2); });
+
+    expect(ctx().buffers.get(buf1Id!).paneId).toBe(pane1Id);
+    expect(ctx().buffers.get(buf1Id!).isActive).toBe(false);
+
+    // Split pane to create pane-2 and open file3 there
+    let pane2Id: string;
+    await actAndUpdateWithDelay(() => {
+      pane2Id = ctx().splitPane(pane1Id!, 'vertical');
+    });
+    expect(ctx().activePaneId).toBe(pane2Id);
+
+    const file3 = makeFile('/test/cross-pane-3.txt', 'cross-pane-3.txt');
+    await actAndUpdateWithDelay(() => { ctx().openFile(file3); });
+
+    // Now openFile for file1 (which is in pane-1) from pane-2 context
+    // This should switch to pane-1, activate file1, and set pane.bufferId
+    let sameId: string;
+    await actAndUpdateWithDelay(() => { sameId = ctx().openFile(file1); });
+
+    // Should return the same buffer id
+    expect(sameId).toBe(buf1Id);
+
+    // activePaneId should now be pane-1
+    expect(ctx().activePaneId).toBe(pane1Id);
+
+    // pane-1's bufferId should point to buf1
+    const pane1 = ctx().panes.find((p) => p.id === pane1Id);
+    expect(pane1.bufferId).toBe(buf1Id);
+
+    // buf1 should be active
+    expect(ctx().buffers.get(buf1Id!).isActive).toBe(true);
+    expect(ctx().buffers.get(buf1Id!).paneId).toBe(pane1Id);
+
+    // file2 (also in pane-1) should be deactivated but keep its paneId
+    const file2Buffer = Array.from(ctx().buffers.values()).find(
+      (b) => b.file.path === '/test/cross-pane-2.txt',
+    );
+    expect(file2Buffer.isActive).toBe(false);
+    expect(file2Buffer.paneId).toBe(pane1Id);
+
+    // --- pane-2's state should be completely unaffected by the cross-pane switch ---
+    const file3Buffer = Array.from(ctx().buffers.values()).find(
+      (b) => b.file.path === '/test/cross-pane-3.txt',
+    );
+    expect(file3Buffer).toBeDefined();
+    expect(file3Buffer.isActive).toBe(true);
+    expect(file3Buffer.paneId).toBe(pane2Id);
+
+    const pane2 = ctx().panes.find((p) => p.id === pane2Id);
+    expect(pane2).toBeDefined();
+    expect(pane2.bufferId).toBe(file3Buffer.id);
+  });
 });

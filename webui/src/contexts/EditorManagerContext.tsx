@@ -147,15 +147,15 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
 
     // Check if file is already open in a buffer
     const currentBuffers = buffersRef.current;
+    const currentActivePane = activePaneIdRef.current;
     const existingBuffer = Array.from(currentBuffers.entries()).find(([_, buffer]) => buffer.file.path === filePath);
     if (existingBuffer) {
       const [bufferId, buffer] = existingBuffer;
-      // If buffer is already in a pane, switch to that pane instead of moving it
+      // If buffer is already in a pane, switch to that pane and activate properly
       if (buffer.paneId) {
         const pane = panes.find(p => p.id === buffer.paneId);
         if (pane) {
-          setActivePaneId(buffer.paneId);
-          setActiveBufferId(bufferId);
+          switchToBuffer(bufferId);
           return bufferId;
         }
       }
@@ -176,14 +176,14 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
       scrollPosition: { top: 0, left: 0 },
       isModified: false,
       isActive: true,
-      paneId: activePaneId
+      paneId: currentActivePane
     };
 
     setBuffers(prev => {
       const newBuffers = new Map(prev);
       // Deactivate previous buffer in the active pane, but keep paneId
       newBuffers.forEach((existing, key) => {
-        if (key !== bufferId && existing.paneId === activePaneId) {
+        if (key !== bufferId && existing.paneId === currentActivePane) {
           newBuffers.set(key, { ...existing, isActive: false });
         }
       });
@@ -193,7 +193,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
 
     // Assign to active pane
     setPanes(prev => prev.map(pane =>
-      pane.id === activePaneId
+      pane.id === currentActivePane
         ? { ...pane, bufferId }
         : pane
     ));
@@ -201,7 +201,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     setActiveBufferId(bufferId);
 
     return bufferId;
-  }, [activePaneId, activateBuffer, panes]);
+  }, [activateBuffer, panes]);
 
   // Helper to find the rightmost pane for chat placement
   const getRightmostPane = useCallback((paneList: EditorPane[]) => {
@@ -417,13 +417,15 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
       });
     }
 
-    const remainingBufferEntries = Array.from(buffersRef.current.values())
+    const remain = Array.from(buffersRef.current.values())
       .filter((candidate) => candidate.id !== bufferId);
     const nextPaneBuffer = buffer.paneId
-      ? remainingBufferEntries.find((candidate) => candidate.paneId === buffer.paneId)
-        || remainingBufferEntries.find((candidate) => !candidate.paneId)
+      ? remain.find((candidate) => candidate.paneId === buffer.paneId)
+        || remain.find((candidate) => !candidate.paneId)
         || null
       : null;
+
+    const currentActivePane = activePaneIdRef.current;
 
     setBuffers(prev => {
       const newBuffers = new Map(prev);
@@ -433,7 +435,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
         if (replacement) {
           newBuffers.set(nextPaneBuffer.id, {
             ...replacement,
-            isActive: activePaneId === buffer.paneId,
+            isActive: currentActivePane === buffer.paneId,
             paneId: buffer.paneId,
           });
         }
@@ -456,7 +458,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
         setActiveBufferId(null);
       }
     }
-  }, [activeBufferId, activePaneId, isAutoSaveEnabled, saveBuffer]);
+  }, [activeBufferId, isAutoSaveEnabled, saveBuffer]);
 
   const reorderBuffers = useCallback((sourceBufferId: string, targetBufferId: string) => {
     if (!sourceBufferId || !targetBufferId || sourceBufferId === targetBufferId) {
@@ -487,6 +489,12 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
 
     setBuffers((prev) => {
       const next = new Map(prev);
+      // Deactivate previous active buffer in destination pane
+      next.forEach((existing, key) => {
+        if (key !== bufferId && existing.paneId === paneId) {
+          next.set(key, { ...existing, isActive: false });
+        }
+      });
       const moved = next.get(bufferId);
       if (!moved) {
         return prev;
@@ -552,6 +560,15 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     if (existingBuffer.paneId && existingBuffer.paneId !== currentPaneId) {
       setActivePaneId(existingBuffer.paneId);
       setActiveBufferId(bufferId);
+      setBuffers(prev => {
+        const next = new Map(prev);
+        Array.from(next.entries()).forEach(([id, buf]) => {
+          if (buf.paneId === existingBuffer.paneId) {
+            next.set(id, { ...buf, isActive: id === bufferId });
+          }
+        });
+        return next;
+      });
       setPanes(prev => prev.map(pane =>
         pane.id === existingBuffer.paneId ? { ...pane, bufferId } : pane
       ));

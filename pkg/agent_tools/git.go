@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/alantheprice/ledit/pkg/filesystem"
 )
 
 // GitOperationType defines the type of git operation
@@ -75,7 +77,7 @@ func ExecuteGitOperation(ctx context.Context, op GitOperation, sessionID string,
 	}
 
 	// Execute the git command
-	return executeGitCommand(op.Operation, op.Args)
+	return executeGitCommand(ctx, op.Operation, op.Args)
 }
 
 // PromptForGitApprovalStdin prompts for git approval using stdin
@@ -112,7 +114,7 @@ func buildGitCommand(op GitOperationType, args string) string {
 }
 
 // executeGitCommand executes a git command
-func executeGitCommand(op GitOperationType, args string) (string, error) {
+func executeGitCommand(ctx context.Context, op GitOperationType, args string) (string, error) {
 	var cmdArgs []string
 
 	// Handle special case: branch_delete becomes "branch" (with -d or -D in args)
@@ -131,6 +133,12 @@ func executeGitCommand(op GitOperationType, args string) (string, error) {
 
 	// Execute the command
 	cmd := exec.Command("git", cmdArgs...)
+
+	// Set working directory from the workspace on context (multi-window daemon support)
+	if wd := filesystem.WorkspaceRootFromContext(ctx); wd != "" {
+		cmd.Dir = wd
+	}
+
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("git command failed: %w\nOutput: %s", err, string(output))

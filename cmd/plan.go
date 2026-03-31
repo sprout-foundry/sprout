@@ -166,7 +166,7 @@ func createPlanningAgent() (*agent.Agent, error) {
 	}
 
 	chatAgent.SetSystemPrompt(planningPrompt)
-	chatAgent.SetMaxIterations(1000)
+	// maxIterations defaults to 0 (unlimited) — no per-prompt cap
 
 	return chatAgent, nil
 }

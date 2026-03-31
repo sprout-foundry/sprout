@@ -137,7 +137,7 @@ func TestLoadAgentWorkflowConfigValidation(t *testing.T) {
 
 	t.Run("invalid max iterations", func(t *testing.T) {
 		path := filepath.Join(dir, "invalid-max-iterations.json")
-		content := `{"steps":[{"prompt":"hi","max_iterations":0}]}`
+		content := `{"steps":[{"prompt":"hi","max_iterations":-1}]}`
 		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 			t.Fatalf("write config: %v", err)
 		}

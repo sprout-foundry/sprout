@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
+	"github.com/alantheprice/ledit/pkg/filesystem"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
@@ -111,6 +112,13 @@ func handleSearchFiles(ctx context.Context, a *Agent, args map[string]interface{
 	root := "."
 	if v, ok := args["directory"].(string); ok && strings.TrimSpace(v) != "" {
 		root = v
+	}
+	// In daemon multi-window mode, process CWD is unreliable.  Resolve
+	// relative roots against the per-agent workspace propagated via context.
+	if !filepath.IsAbs(root) {
+		if wd := filesystem.WorkspaceRootFromContext(ctx); wd != "" {
+			root = filepath.Join(wd, root)
+		}
 	}
 
 	glob := ""

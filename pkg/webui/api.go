@@ -505,7 +505,11 @@ func (ws *ReactWebServer) gatherStatsForClientID(clientID string) map[string]int
 		stats["total_cost"] = agentInst.GetTotalCost()
 		stats["last_tps"] = agentInst.GetLastTPS()
 		stats["current_iteration"] = agentInst.GetCurrentIteration()
+		if agentInst.GetMaxIterations() == 0 {
+		stats["max_iterations"] = "unlimited"
+	} else {
 		stats["max_iterations"] = agentInst.GetMaxIterations()
+	}
 		stats["streaming_enabled"] = agentInst.IsStreamingEnabled()
 		stats["debug_mode"] = agentInst.IsDebugMode()
 	}

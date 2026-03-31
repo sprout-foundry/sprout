@@ -662,11 +662,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
                 id="subagent-provider-select"
                 className="styled-select"
                 value={currentSubProvider}
-                onChange={(e) => {
-                  updateSetting('subagent_provider', e.target.value);
-                  // Also clear model since it may not exist on the new provider
-                  updateSetting('subagent_model', '');
-                }}
+                onChange={(e) => updateSetting('subagent_provider', e.target.value)}
               >
                 <option value="">Default (inherit from main agent)</option>
                 {subagentProviders.map(p => (

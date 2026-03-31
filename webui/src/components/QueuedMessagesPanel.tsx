@@ -106,7 +106,7 @@ const QueuedMessagesPanel: React.FC<QueuedMessagesPanelProps> = ({
       </div>
       <div className="queue-panel-list">
         {messages.map((msg, index) => (
-          <div           key={index}className="queue-panel-item">
+          <div key={index} className="queue-panel-item">
             <span className="queue-panel-item-index">{index + 1}</span>
             <div className="queue-panel-item-content">
               {editingIndex === index ? (

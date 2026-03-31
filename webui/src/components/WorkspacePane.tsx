@@ -48,7 +48,11 @@ interface WorkspacePaneProps {
     messages: Message[];
     onSendMessage: (message: string) => void;
     onQueueMessage: (message: string) => void;
-    queuedMessagesCount: number;
+    queuedMessages: string[];
+    onRemoveQueuedMessage: (index: number) => void;
+    onEditQueuedMessage: (index: number, newText: string) => void;
+    onReorderQueuedMessage: (fromIndex: number, toIndex: number) => void;
+    onClearQueuedMessages: () => void;
     inputValue: string;
     onInputChange: (value: string) => void;
     isProcessing?: boolean;

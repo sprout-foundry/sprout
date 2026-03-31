@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useLayoutEffect, memo } from 'react';
 import { ScrollText, X, Send, SquarePen, ListPlus, Plus, Square } from 'lucide-react';
 import QueuedMessagesPanel from './QueuedMessagesPanel';
+import { showThemedConfirm } from './ThemedDialog';
 import './CommandInput.css';
 import { ApiService } from '../services/api';
 import { CommandHistoryState, dedupeCommands, loadCommandHistory } from './command_input_history';
@@ -573,9 +574,9 @@ const CommandInput: React.FC<CommandInputProps> = ({
     }, 100);
   }, [onSend, onSendCommand, updateValue]);
 
-  const handleNewSession = useCallback(() => {
+  const handleNewSession = useCallback(async () => {
     if (isProcessing) {
-      if (!window.confirm('A request is currently processing. Stop it and start a new session?')) {
+      if (!(await showThemedConfirm('A request is currently processing. Stop it and start a new session?', { title: 'Stop Processing', type: 'warning' }))) {
         return;
       }
       commandRef('/clear');

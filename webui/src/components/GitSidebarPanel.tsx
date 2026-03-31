@@ -16,6 +16,7 @@ import {
   PlusSquare,
   Plus,
 } from 'lucide-react';
+import { showThemedPrompt } from './ThemedDialog';
 import type { GitBranchesState } from '../hooks/useGitWorkspace';
 import { copyToClipboard } from '../utils/clipboard';
 
@@ -194,8 +195,8 @@ const GitSidebarPanel: React.FC<GitSidebarPanelProps> = ({
       .map((entry) => entry.path)
   ).size;
 
-  const handleCreateBranch = () => {
-    const value = window.prompt('Create branch', '');
+  const handleCreateBranch = async () => {
+    const value = await showThemedPrompt('Enter a name for the new branch:', { title: 'Create Branch', defaultValue: '', placeholder: 'branch-name' });
     if (!value) {
       return;
     }

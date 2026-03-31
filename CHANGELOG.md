@@ -2,6 +2,16 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.14.4] - 2026-03-31
+
+- Updates 6 files - Updates editor buffer switching function order (37e7170)
+- Updates 12 files - Updates cross-pane buffer switching and activation logic (4c5ea5b)
+- Updates 17 files - Updates security approval dialog and themed dialogs (e86d26f)
+- Updates 2 files - Updates workspace reload debouncing to prevent duplicates (c961226)
+- Updates 15 files - Updates default max iterations to unlimited and fixes workspace handling (6c1bd2b)
+- Updates 8 files - Updates agent to support session-scoped provider/model overrides (645cf86)
+- Updates 14 files - Fix message loading, improve panel positioning, allow inherit for sub... (5b4d017)
+
 ## [v0.14.1] - 2026-03-29
 
 - Updates 6 files - Updates installation scripts and adds Termux support (99eacd8)

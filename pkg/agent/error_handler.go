@@ -79,7 +79,11 @@ func (eh *ErrorHandler) buildInteractiveErrorResponse(apiErr error, toolsExecute
 	response += "**Progress So Far:**\n"
 	response += fmt.Sprintf("- Tools executed: %d\n", toolsExecuted)
 	response += fmt.Sprintf("- Total tokens used: %s\n", eh.formatTokenCount(eh.agent.totalTokens))
-	response += fmt.Sprintf("- Current iteration: %d/%d\n\n", eh.agent.currentIteration, eh.agent.maxIterations)
+	if eh.agent.maxIterations == 0 {
+		response += fmt.Sprintf("- Current iteration: %d (unlimited)\n\n", eh.agent.currentIteration)
+	} else {
+		response += fmt.Sprintf("- Current iteration: %d/%d\n\n", eh.agent.currentIteration, eh.agent.maxIterations)
+	}
 
 	// Add recovery options
 	response += "[~] **Your conversation context is preserved.** You can:\n"

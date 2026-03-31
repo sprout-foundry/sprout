@@ -1004,29 +1004,23 @@ func (ws *ReactWebServer) handleAPISettingsSubagentTypesPut(w http.ResponseWrite
 			if !ok {
 				return fmt.Errorf("provider must be a string")
 			}
-			trimmed := strings.TrimSpace(s)
-			if trimmed == "" {
-				return fmt.Errorf("provider cannot be empty")
-			}
-			existing.Provider = trimmed
+			// Empty string means "inherit from default subagent settings"
+			existing.Provider = strings.TrimSpace(s)
 		}
 		if v, ok := raw["model"]; ok {
 			s, ok := v.(string)
 			if !ok {
 				return fmt.Errorf("model must be a string")
 			}
-			trimmed := strings.TrimSpace(s)
-			if trimmed == "" {
-				return fmt.Errorf("model cannot be empty")
-			}
-			existing.Model = trimmed
+			// Empty string means "inherit from default subagent settings"
+			existing.Model = strings.TrimSpace(s)
 		}
 		cfg.SubagentTypes[name] = existing
 		return nil
 	})
 	if err != nil {
 		errMsg := err.Error()
-		if strings.Contains(errMsg, "cannot be empty") || strings.Contains(errMsg, "must be a string") {
+		if strings.Contains(errMsg, "must be a string") {
 			writeJSONError(w, http.StatusBadRequest, errMsg)
 		} else {
 			writeJSONError(w, http.StatusNotFound, errMsg)

@@ -14,6 +14,9 @@ class TerminalWebSocketService {
   private isConnected = false;
   private eventHandler: TerminalEventCallback | null = null;
   private pingInterval: NodeJS.Timeout | null = null;
+  private lastPongTime = Date.now();
+  private pongWatchdogInterval: NodeJS.Timeout | null = null;
+  private maxPongAge = 60000;
   private intentionalClose = false;
   private reconnectTimeout: NodeJS.Timeout | null = null;
 
@@ -41,7 +44,31 @@ class TerminalWebSocketService {
   }
 
   private handlePong() {
-    // Got pong response, connection is alive
+    this.lastPongTime = Date.now();
+    debugLog('Terminal pong received');
+  }
+
+  private startPongWatchdog() {
+    this.stopPongWatchdog();
+    // Check every 30s whether we've received a pong within maxPongAge.
+    // If the server stops responding to pings but the TCP connection stays
+    // alive (half-open, common during Chrome tab pause), this detects the
+    // dead connection and forces a reconnect.
+    this.pongWatchdogInterval = setInterval(() => {
+      if (Date.now() - this.lastPongTime > this.maxPongAge) {
+        debugLog('[terminal] Pong watchdog: no pong received in', this.maxPongAge, 'ms — connection appears dead, reconnecting');
+        if (!this.intentionalClose) {
+          this.resetAndReconnect();
+        }
+      }
+    }, 30000);
+  }
+
+  private stopPongWatchdog() {
+    if (this.pongWatchdogInterval) {
+      clearInterval(this.pongWatchdogInterval);
+      this.pongWatchdogInterval = null;
+    }
   }
 
   static getInstance(): TerminalWebSocketService {
@@ -66,6 +93,9 @@ class TerminalWebSocketService {
 
     // Reset intentionalClose flag (e.g. if disconnect() was called but we manually reconnect)
     this.intentionalClose = false;
+    // Reset pong timestamp so the watchdog doesn't immediately trigger
+    // during the brief window between connect() and onopen.
+    this.lastPongTime = Date.now();
 
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
@@ -97,13 +127,16 @@ class TerminalWebSocketService {
       debugLog('Terminal WebSocket connected');
       this.reconnectAttempts = 0;
       this.isConnected = true;
+      this.lastPongTime = Date.now();
       this.startPingInterval();
+      this.startPongWatchdog();
       this.notifyCallbacks({ type: 'connection_status', data: { connected: true } });
     };
 
     this.ws.onclose = (event) => {
       debugLog('Terminal WebSocket disconnected:', event);
       this.stopPingInterval();
+      this.stopPongWatchdog();
       this.isConnected = false;
       // Only clear sessionId on intentional close.
       // On unexpected disconnect, keep it so we can reattach.
@@ -171,6 +204,7 @@ class TerminalWebSocketService {
       this.reconnectTimeout = null;
     }
     this.stopPingInterval();
+    this.stopPongWatchdog();
     if (this.ws) {
       this.ws.onclose = null;
       this.ws.onerror = null;
@@ -356,6 +390,7 @@ class TerminalWebSocketService {
       this.reconnectTimeout = null;
     }
     this.stopPingInterval();
+    this.stopPongWatchdog();
     if (this.ws) {
       // Neutralize handlers so the async onclose (from ws.close()) doesn't
       // fire and null the sessionId that we need to preserve for resume().
@@ -385,6 +420,7 @@ class TerminalWebSocketService {
       this.reconnectTimeout = null;
     }
     this.stopPingInterval();
+    this.stopPongWatchdog();
     if (this.ws) {
       this.ws.onclose = null;  // Neutralize old handler to prevent double-connect
       this.ws.onerror = null;

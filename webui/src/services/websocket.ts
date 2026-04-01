@@ -12,6 +12,8 @@ class WebSocketService {
   private reconnectDelay = 2000;
   private pingInterval: NodeJS.Timeout | null = null;
   private lastPongTime = Date.now();
+  private pongWatchdogInterval: NodeJS.Timeout | null = null;
+  private maxPongAge = 60000;
   private intentionalClose = false;
   private reconnectTimeout: NodeJS.Timeout | null = null;
   private wasConnectedBefore = false;
@@ -45,6 +47,30 @@ class WebSocketService {
 
   private handlePong() {
     this.lastPongTime = Date.now();
+    debugLog('Pong received');
+  }
+
+  private startPongWatchdog() {
+    this.stopPongWatchdog();
+    // Check every 30s whether we've received a pong within maxPongAge.
+    // If the server stops responding to pings but the TCP connection stays
+    // alive (half-open, common during Chrome tab pause), this detects the
+    // dead connection and forces a reconnect.
+    this.pongWatchdogInterval = setInterval(() => {
+      if (Date.now() - this.lastPongTime > this.maxPongAge) {
+        debugLog('Pong watchdog: no pong received in', this.maxPongAge, 'ms — connection appears dead, reconnecting');
+        if (!this.intentionalClose) {
+          this.resetAndReconnect();
+        }
+      }
+    }, 30000);
+  }
+
+  private stopPongWatchdog() {
+    if (this.pongWatchdogInterval) {
+      clearInterval(this.pongWatchdogInterval);
+      this.pongWatchdogInterval = null;
+    }
   }
 
   connect() {
@@ -56,6 +82,9 @@ class WebSocketService {
     // Explicitly reset intentional close flag when the application
     // requests a new connection, so auto-reconnect works after connect().
     this.intentionalClose = false;
+    // Reset pong timestamp so the watchdog doesn't immediately trigger
+    // during the brief window between connect() and onopen.
+    this.lastPongTime = Date.now();
 
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
       return;
@@ -86,6 +115,7 @@ class WebSocketService {
       this.reconnectAttempts = 0;
       this.lastPongTime = Date.now();
       this.startPingInterval();
+      this.startPongWatchdog();
       this.notifyCallbacks({ type: 'connection_status', data: { connected: true } });
 
       // Fire the reconnect callback so the application can sync state
@@ -98,6 +128,7 @@ class WebSocketService {
     this.ws.onclose = (event) => {
       debugLog('WebSocket disconnected:', event);
       this.stopPingInterval();
+      this.stopPongWatchdog();
       this.notifyCallbacks({ type: 'connection_status', data: { connected: false } });
 
       // Only reconnect if not intentionally closed and not already reconnecting
@@ -154,6 +185,7 @@ class WebSocketService {
       this.reconnectTimeout = null;
     }
     this.stopPingInterval();
+    this.stopPongWatchdog();
     if (this.ws) {
       this.ws.onclose = null;
       this.ws.onerror = null;
@@ -176,6 +208,7 @@ class WebSocketService {
       this.reconnectTimeout = null;
     }
     this.stopPingInterval();
+    this.stopPongWatchdog();
     if (this.ws) {
       this.ws.onclose = null;
       this.ws.onerror = null;
@@ -196,6 +229,7 @@ class WebSocketService {
       this.reconnectTimeout = null;
     }
     this.stopPingInterval();
+    this.stopPongWatchdog();
     if (this.ws) {
       this.ws.onclose = null;  // Neutralize old handler to prevent double-connect
       this.ws.onerror = null;

@@ -364,6 +364,7 @@ function App() {
   const [isTerminalExpanded, setIsTerminalExpanded] = useState(false);
   const activeRequestsRef = useRef(0);
   const reconnectSafetyTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastHiddenTimeRef = useRef<number>(Date.now());
   const [queuedMessages, setQueuedMessages] = useState<string[]>([]);
   const [recentFiles, setRecentFiles] = useState<Array<{ path: string; modified: boolean }>>([]);
   const [gitRefreshToken, setGitRefreshToken] = useState(0);
@@ -1226,10 +1227,19 @@ function App() {
     // which causes WebSocket ping intervals to be skipped and the server to close
     // the connection due to read deadline timeout.
     const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        // Tab became visible - trigger immediate reconnect if not connected
-        if (!wsService.isConnected()) {
-          debugLog('[visibility] Tab visible again, reconnecting WebSocket');
+      if (document.hidden) {
+        // Track when the tab was hidden so we can detect long background periods
+        lastHiddenTimeRef.current = Date.now();
+      } else {
+        // Tab became visible
+        const hiddenDuration = Date.now() - lastHiddenTimeRef.current;
+        // Reconnect if: (a) not connected at all, or (b) was hidden for more
+        // than 30s. Chrome throttles timers to ~1/min in background tabs, so
+        // after 30s the ping interval may have been skipped and the connection
+        // could be half-open even though readyState still says OPEN.
+        if (!wsService.isConnected() || hiddenDuration > 30000) {
+          debugLog('[visibility] Tab visible again, reconnecting WebSocket',
+            hiddenDuration > 30000 ? `(hidden for ${Math.round(hiddenDuration / 1000)}s, forcing reconnect)` : '');
           wsService.resetAndReconnect();
         }
       }

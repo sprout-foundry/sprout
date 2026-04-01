@@ -139,7 +139,7 @@ func TryZshCommandExecution(ctx context.Context, chatAgent *agent.Agent, query s
 			err,
 		)
 		// Command execution failed - ask user if they want to send to LLM instead
-		fmt.Print("The command failed. Send this query to the AI assistant instead? [Y/n] ")
+		fmt.Print("The command failed. Send this query to the Assistant instead? [Y/n] ")
 
 		// Read response
 		reader := bufio.NewReader(os.Stdin)

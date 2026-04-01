@@ -9,6 +9,7 @@ import React, {
 import { X, TriangleAlert } from 'lucide-react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { ClipboardAddon } from '@xterm/addon-clipboard';
 import '@xterm/xterm/css/xterm.css';
 import { TerminalWebSocketService } from '../services/terminalWebSocket';
 import { useTheme } from '../contexts/ThemeContext';
@@ -120,8 +121,27 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         theme: getTerminalTheme(),
       });
 
+      // Safety net: prevent browser DevTools from opening on Ctrl+Shift+C /
+      // Cmd+Shift+C when the terminal has focus.  Without this the browser
+      // may process the shortcut before xterm does, opening the element
+      // inspector instead of copying.  Same treatment for Ctrl+Shift+V /
+      // Cmd+Shift+V (paste).
+      term.attachCustomKeyEventHandler((event: KeyboardEvent): boolean => {
+        if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'c') {
+          return true;
+        }
+        if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'v') {
+          return true;
+        }
+        return false;
+      });
+
       const fitAddon = new FitAddon();
       term.loadAddon(fitAddon);
+
+      const clipboardAddon = new ClipboardAddon();
+      term.loadAddon(clipboardAddon);
+
       term.open(xtermContainerRef.current);
 
       xtermRef.current = term;

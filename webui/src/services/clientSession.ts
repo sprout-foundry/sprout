@@ -1,6 +1,7 @@
 export const WEBUI_CLIENT_ID_HEADER = 'X-Ledit-Client-ID';
 export const WEBUI_CLIENT_ID_QUERY_PARAM = 'client_id';
 const WEBUI_CLIENT_ID_STORAGE_KEY = 'ledit.webuiClientId';
+const WEBUI_WORKSPACE_PATH_STORAGE_KEY = 'ledit.workspaceTabPath';
 
 /**
  * When the app is loaded via the SSH proxy path (e.g. /ssh/{key}/) the server
@@ -12,43 +13,75 @@ export function getProxyBase(): string {
   return (window as any).LEDIT_PROXY_BASE || '';
 }
 
+/**
+ * Returns the per-tab client ID used to isolate server-side state (workspace,
+ * agent session, terminal sessions, WebSocket events) between browser tabs.
+ *
+ * Uses sessionStorage exclusively so that each tab gets a unique client_id.
+ * sessionStorage survives normal page reloads (F5) within the same tab but
+ * is isolated across tabs — fixing the bug where all tabs shared one context.
+ *
+ * For Chrome tab-discard recovery:
+ * - The workspace path is persisted separately in localStorage so the tab
+ *   can restore the correct workspace after discard (chat history is lost but
+ *   workspace is correct).
+ * - The client_id is regenerated (fresh server context) because the old one
+ *   may have been cleaned up by the server's idle-context gc.
+ */
 export function getWebUIClientId(): string {
   if (typeof window === 'undefined') {
     return 'default';
   }
 
-  // Check sessionStorage first (survives refresh/reload within same tab).
-  // Always sync to localStorage so the client_id survives tab discard,
-  // which clears sessionStorage but preserves localStorage.
   let existing = window.sessionStorage.getItem(WEBUI_CLIENT_ID_STORAGE_KEY);
   if (existing) {
-    window.localStorage.setItem(WEBUI_CLIENT_ID_STORAGE_KEY, existing);
     return existing;
   }
 
-  // SessionStorage is empty — fall back to localStorage (survives tab discard).
-  // When Chrome discards/freezes a tab, sessionStorage is cleared but
-  // localStorage is preserved. This allows the same client_id to be
-  // recovered so server-side context (chat history, terminal sessions)
-  // can be reattached.
-  // NOTE: This means if the user opens a second tab at the same origin,
-  // both tabs will share the same client_id (and server context). This is
-  // acceptable because ledit is typically used in a single tab, and sharing
-  // context after tab discard is better than losing it entirely.
-  const persisted = window.localStorage.getItem(WEBUI_CLIENT_ID_STORAGE_KEY);
-  if (persisted) {
-    window.sessionStorage.setItem(WEBUI_CLIENT_ID_STORAGE_KEY, persisted);
-    return persisted;
-  }
-
-  // First ever load — generate new ID and save to both storage locations
+  // Generate a new ID — each tab gets its own unique client_id.
   const generated =
     typeof window.crypto?.randomUUID === 'function'
       ? window.crypto.randomUUID()
       : `webui-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   window.sessionStorage.setItem(WEBUI_CLIENT_ID_STORAGE_KEY, generated);
-  window.localStorage.setItem(WEBUI_CLIENT_ID_STORAGE_KEY, generated);
+
+  // Clean up any stale client_id from localStorage to avoid future confusion.
+  window.localStorage.removeItem(WEBUI_CLIENT_ID_STORAGE_KEY);
+
   return generated;
+}
+
+/**
+ * Persist the workspace path for Chrome tab-discard recovery.
+ * Called whenever the workspace changes (via the workspace-changed listener).
+ * Stored in localStorage (per-origin) so it survives sessionStorage clearing
+ * when Chrome discards a background tab.
+ */
+export function persistTabWorkspacePath(workspacePath: string): void {
+  if (typeof window === 'undefined' || !workspacePath) {
+    return;
+  }
+  try {
+    window.localStorage.setItem(WEBUI_WORKSPACE_PATH_STORAGE_KEY, workspacePath);
+  } catch {
+    // QuotaExceededError — ignore silently
+  }
+}
+
+/**
+ * Retrieve the last-known workspace path for this origin.
+ * Used after a tab discard to auto-restore the correct workspace
+ * even though the client_id (and thus server context) is new.
+ */
+export function getTabWorkspacePath(): string {
+  if (typeof window === 'undefined') {
+    return '';
+  }
+  try {
+    return window.localStorage.getItem(WEBUI_WORKSPACE_PATH_STORAGE_KEY) || '';
+  } catch {
+    return '';
+  }
 }
 
 export function appendClientIdToUrl(input: string): string {

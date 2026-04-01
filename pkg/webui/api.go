@@ -104,10 +104,22 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 	log.Printf("handleAPIQuery: processing query: %s", query.Query)
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	clientID := ws.resolveClientID(r)
-	if ws.hasActiveQueryForClient(clientID) {
-		http.Error(w, "A query is already running for this window", http.StatusConflict)
+	chatID := ws.resolveChatID(r, clientID)
+
+	ws.mutex.RLock()
+	ctx := ws.clientContexts[clientID]
+	if ctx == nil {
+		ws.mutex.RUnlock()
+		http.Error(w, "Client context not found", http.StatusBadRequest)
 		return
 	}
+	if ctx.hasActiveQueryForChat(chatID) {
+		ws.mutex.RUnlock()
+		http.Error(w, "A query is already running for this chat", http.StatusConflict)
+		return
+	}
+	ws.mutex.RUnlock()
+
 	clientAgent, err := ws.getClientAgent(clientID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to initialize client agent: %v", err), http.StatusInternalServerError)
@@ -122,9 +134,24 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 	// Run the query asynchronously. The web UI consumes progress and completion via WebSocket.
 	// Store CurrentQuery atomically with ActiveQuery so that stats responses
 	// include it on reconnect without a TOCTOU window.
-	ws.incrementActiveQueriesWithQuery(clientID, query.Query)
+	ws.mutex.Lock()
+	ws.queryCount++
+	ws.activeQueries++
+	if ctx := ws.clientContexts[clientID]; ctx != nil {
+		ctx.setChatQueryActive(chatID, true, query.Query)
+	}
+	ws.mutex.Unlock()
 	go func() {
-		defer ws.decrementActiveQueries(clientID)
+		defer func() {
+			ws.mutex.Lock()
+			if ws.activeQueries > 0 {
+				ws.activeQueries--
+			}
+			if ctx := ws.clientContexts[clientID]; ctx != nil {
+				ctx.setChatQueryActive(chatID, false, "")
+			}
+			ws.mutex.Unlock()
+		}()
 		startedAt := time.Now()
 		registry := agent_commands.NewCommandRegistry()
 
@@ -138,7 +165,7 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 
 			clientAgent.SetWorkspaceRoot(workspaceRoot)
 			err := registry.Execute(query.Query, clientAgent)
-			_ = ws.syncAgentStateForClient(clientID)
+			_ = ws.syncAgentStateForClientWithChat(clientID, chatID)
 			if err != nil {
 				log.Printf("handleAPIQuery: slash command error: %v", err)
 				ws.publishClientEvent(clientID, events.EventTypeError, events.ErrorEvent("Slash command failed", err))
@@ -163,7 +190,7 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 		log.Printf("handleAPIQuery: calling ProcessQueryWithContinuity")
 		clientAgent.SetWorkspaceRoot(workspaceRoot)
 		_, err := clientAgent.ProcessQueryWithContinuity(query.Query)
-		_ = ws.syncAgentStateForClient(clientID)
+		_ = ws.syncAgentStateForClientWithChat(clientID, chatID)
 		if err != nil {
 			log.Printf("handleAPIQuery: ProcessQueryWithContinuity error: %v", err)
 			ws.publishClientEvent(clientID, events.EventTypeError, events.ErrorEvent("Query failed", err))
@@ -175,6 +202,7 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"accepted":  true,
 		"query":     query.Query,
+		"chat_id":   chatID,
 		"timestamp": time.Now().Unix(),
 	})
 }
@@ -272,12 +300,25 @@ func (ws *ReactWebServer) handleAPIStats(w http.ResponseWriter, r *http.Request)
 	}
 
 	clientID := ws.resolveClientID(r)
+	chatID := ws.resolveChatID(r, clientID)
 	// Ensure the client context exists before gathering stats and build the
 	// response under the lock — getOrCreateClientContextLocked may mutate the
 	// map, and the subsequent read must observe a consistent snapshot.
 	ws.mutex.Lock()
 	ws.getOrCreateClientContextLocked(clientID)
 	stats := ws.gatherStatsForClientIDLocked(clientID)
+	// Add chat session info to the stats response
+	if ctx := ws.clientContexts[clientID]; ctx != nil {
+		stats["active_chat_id"] = ctx.getActiveChatID()
+		stats["chat_session_count"] = len(ctx.ChatSessions)
+		if cs := ctx.getChatSession(chatID); cs != nil {
+			stats["chat_id"] = chatID
+			stats["chat_is_processing"] = cs.ActiveQuery
+			if cs.ActiveQuery && cs.CurrentQuery != "" {
+				stats["chat_current_query"] = cs.CurrentQuery
+			}
+		}
+	}
 	ws.mutex.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")

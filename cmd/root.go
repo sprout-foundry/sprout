@@ -18,13 +18,13 @@ var isolatedConfig bool
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "ledit",
-	Short: "AI agent for code analysis and editing (interactive mode when run without arguments)",
+	Short: "Agent for code analysis and editing (interactive mode when run without arguments)",
 	Long: `Ledit is a command-line tool that leverages Large Language Models (LLMs)
 to automate and assist in software development tasks. It features a modern CLI
 with automatic web UI startup for rich interactive experiences.
 
 Available commands:
-  agent  - AI agent mode with modern CLI + Web UI
+  agent  - Agent mode with modern CLI + Web UI
   plan   - Interactive planning mode for refining ideas and generating detailed plans
   shell  - Generate shell scripts from natural language descriptions
   commit - Generate commit messages

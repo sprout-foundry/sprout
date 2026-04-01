@@ -216,6 +216,13 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	// Session API
 	mux.HandleFunc("/api/sessions", ws.handleAPISessions)
 	mux.HandleFunc("/api/sessions/restore", ws.handleAPIRestoreSession)
+	// Chat sessions API (multi-chat support within a tab)
+	mux.HandleFunc("/api/chat-sessions", ws.handleAPIChatSessions)
+	mux.HandleFunc("/api/chat-sessions/create", ws.handleAPIChatSessionsCreate)
+	mux.HandleFunc("/api/chat-sessions/delete", ws.handleAPIChatSessionsDelete)
+	mux.HandleFunc("/api/chat-sessions/rename", ws.handleAPIChatSessionsRename)
+	mux.HandleFunc("/api/chat-sessions/switch", ws.handleAPIChatSessionsSwitch)
+	mux.HandleFunc("/api/chat-sessions/compact", ws.handleAPIChatSessionsCompact)
 	// Search API
 	mux.HandleFunc("/api/search", ws.handleAPIQuerySearch)
 	mux.HandleFunc("/api/search/replace", ws.handleAPIQuerySearchReplace)

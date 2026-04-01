@@ -156,8 +156,8 @@ func availablePersonaCompletions(cfg *configuration.Config, toComplete string) [
 // agentCmd represents the agent command
 var agentCmd = &cobra.Command{
 	Use:   "agent [intent]",
-	Short: "AI agent for code analysis and editing (default when running 'ledit' alone)",
-	Long: `AI agent mode for intelligent code analysis and editing with modern CLI + Web UI.
+	Short: "Agent for code analysis and editing (default when running 'ledit' alone)",
+	Long: `Agent mode for intelligent code analysis and editing with modern CLI + Web UI.
 
 Features:
 • Clean CLI output with automatic web UI startup

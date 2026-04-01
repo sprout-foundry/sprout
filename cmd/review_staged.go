@@ -143,7 +143,7 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 			return
 		}
 
-		logger.LogUserInteraction("\n--- AI Code Review ---")
+		logger.LogUserInteraction("\n--- Code Review ---")
 		logger.LogUserInteraction(fmt.Sprintf("Status: %s", strings.ToUpper(reviewResponse.Status)))
 		logger.LogUserInteraction(fmt.Sprintf("Feedback:\n%s", reviewResponse.Feedback))
 

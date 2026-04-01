@@ -33,10 +33,16 @@ type webClientContext struct {
 	CurrentQuery    string
 	ActiveQuery      bool
 	LastSeenAt       time.Time
+
+	// Multi-chat support: one client context (tab) can have multiple
+	// independent chat sessions, each with its own agent state.
+	ChatSessions  map[string]*chatSession
+	DefaultChatID string
+	nextChatNumber int
 }
 
 func newWebClientContext(workspaceRoot, sshHostAlias, sshSessionKey, sshLauncherURL, sshHomePath string) *webClientContext {
-	return &webClientContext{
+	ctx := &webClientContext{
 		WorkspaceRoot:  workspaceRoot,
 		SSHHostAlias:   strings.TrimSpace(sshHostAlias),
 		SSHSessionKey:  strings.TrimSpace(sshSessionKey),
@@ -47,6 +53,8 @@ func newWebClientContext(workspaceRoot, sshHostAlias, sshSessionKey, sshLauncher
 		AgentState:     emptyAgentStateSnapshot(),
 		LastSeenAt:     time.Now(),
 	}
+	ctx.ensureDefaultChatSession()
+	return ctx
 }
 
 func emptyAgentStateSnapshot() []byte {
@@ -111,6 +119,9 @@ func (ws *ReactWebServer) getOrCreateClientContextLocked(clientID string) *webCl
 		if len(ctx.AgentState) == 0 {
 			ctx.AgentState = emptyAgentStateSnapshot()
 		}
+		// Ensure multi-chat is initialized (handles migration from old contexts
+		// that were created before chat sessions were added).
+		ctx.ensureDefaultChatSession()
 		return ctx
 	}
 
@@ -135,6 +146,7 @@ func (ws *ReactWebServer) getOrCreateClientContextLocked(clientID string) *webCl
 			ctx.FileConsents = newFileConsentManager()
 			ws.fileConsents = ctx.FileConsents
 		}
+		ctx.ensureDefaultChatSession()
 	} else {
 		ctx = newWebClientContext(ws.workspaceRoot, ws.sshHostAlias, ws.sshSessionKey, ws.sshLauncherURL, ws.sshHomePath)
 	}
@@ -241,9 +253,15 @@ func (ws *ReactWebServer) setClientWorkspaceRoot(clientID, path string) (string,
 	ctx.CurrentSessionID = ""
 	ctx.ActiveQuery = false
 	ctx.CurrentQuery = ""
+	// Reset chat sessions on workspace change — keep only the default,
+	// which starts fresh.
+	ctx.ChatSessions = nil
+	ctx.DefaultChatID = ""
+	ctx.nextChatNumber = 0
 	if ctx.FileConsents == nil {
 		ctx.FileConsents = newFileConsentManager()
 	}
+	ctx.ensureDefaultChatSession()
 	ctx.LastSeenAt = time.Now()
 
 	if clientID == defaultWebClientID {
@@ -286,17 +304,12 @@ func (ws *ReactWebServer) setAgentStateForClient(clientID string, snapshot []byt
 	if len(snapshot) == 0 {
 		snapshot = emptyAgentStateSnapshot()
 	}
-	sessionID := ""
-	var state agent.AgentState
-	if err := json.Unmarshal(snapshot, &state); err == nil {
-		sessionID = strings.TrimSpace(state.SessionID)
-	}
 
 	ws.mutex.Lock()
 	defer ws.mutex.Unlock()
 	ctx := ws.getOrCreateClientContextLocked(clientID)
-	ctx.AgentState = append([]byte(nil), snapshot...)
-	ctx.CurrentSessionID = sessionID
+	// Update both the top-level state (backward compat) and the active chat session.
+	ctx.setChatSessionState(ctx.getActiveChatID(), snapshot)
 	ctx.LastSeenAt = time.Now()
 }
 
@@ -330,7 +343,9 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 		return agentInst, nil
 	}
 	workspaceRoot := ctx.WorkspaceRoot
-	snapshot := append([]byte(nil), ctx.AgentState...)
+	// Use the active chat session's state for the new agent.
+	// Falls back to top-level AgentState for backward compat.
+	snapshot := append([]byte(nil), ctx.getChatSessionState(ctx.getActiveChatID())...)
 	ws.mutex.Unlock()
 
 	var created *agent.Agent
@@ -386,8 +401,8 @@ func (ws *ReactWebServer) syncAgentStateForClient(clientID string) error {
 	ws.mutex.Lock()
 	defer ws.mutex.Unlock()
 	ctx := ws.getOrCreateClientContextLocked(clientID)
-	ctx.AgentState = append([]byte(nil), snapshot...)
-	ctx.CurrentSessionID = strings.TrimSpace(agentInst.GetSessionID())
+	// Sync to the active chat session as well as the top-level state.
+	ctx.setChatSessionState(ctx.getActiveChatID(), snapshot)
 	ctx.LastSeenAt = time.Now()
 	if clientID == defaultWebClientID {
 		ws.workspaceRoot = ctx.WorkspaceRoot

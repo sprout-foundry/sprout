@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useCallback, useState, useLayoutEffect, useMemo } from 'react';
-import { Zap, Bot, AlertTriangle, BrainCircuit, Wrench } from 'lucide-react';
+import { Zap, Bot, AlertTriangle, BrainCircuit, Wrench, Cpu } from 'lucide-react';
 import CommandInput from './CommandInput';
 import MessageSegments from './MessageSegments';
 import MessageContent from './MessageContent';
@@ -178,6 +178,32 @@ const Chat: React.FC<ChatProps> = ({
     return liveActivities.length > 0 ? liveActivities[liveActivities.length - 1] : null;
   }, [subagentActivities]);
 
+  // Group recent output lines per tool call for the live feed
+  const activeSubagentOutputGroups = useMemo(() => {
+    const outputActivities = subagentActivities.filter(a => a.phase === 'output' && a.message);
+    if (outputActivities.length === 0) return [];
+
+    // Group by toolCallId, keep the most recent group(s)
+    const groups: Record<string, { toolCallId: string; persona?: string; isParallel?: boolean; lines: string[] }> = {};
+    for (const activity of outputActivities) {
+      const key = activity.toolCallId || '_default';
+      if (!groups[key]) {
+        groups[key] = {
+          toolCallId: key,
+          persona: activity.persona,
+          isParallel: activity.isParallel,
+          lines: [],
+        };
+      }
+      groups[key].lines.push(activity.message);
+    }
+
+    // Return groups sorted by most recent activity, with at most 8 lines each
+    return Object.values(groups)
+      .sort((a, b) => b.lines.length - a.lines.length)
+      .map(g => ({ ...g, lines: g.lines.slice(-8) }));
+  }, [subagentActivities]);
+
   const getToolLabel = useCallback((tool: ToolExecution) => {
     if (tool.tool === 'run_subagent') {
       try {
@@ -274,14 +300,35 @@ const Chat: React.FC<ChatProps> = ({
                     <span className="live-activity-text">{getToolLabel(latestActiveTool)}</span>
                   </div>
                 )}
-                {latestSubagentActivity && latestSubagentActivity.message && (
-                  <div
-                    className="live-activity-subagent-msg"
-                    title={stripAnsiCodes(latestSubagentActivity.message)}
-                  >
-                    {stripAnsiCodes(latestSubagentActivity.message)}
+                {latestSubagentActivity && (
+                  <div className="live-activity-subagent-header">
+                    <Cpu size={13} className="live-activity-subagent-icon" />
+                    <span className="live-activity-subagent-label">
+                      {latestSubagentActivity.isParallel ? 'Parallel ' : ''}
+                      {latestSubagentActivity.persona || 'subagent'}
+                    </span>
+                    {latestSubagentActivity.provider && (
+                      <span className="live-activity-subagent-model">
+                        {latestSubagentActivity.provider}/{latestSubagentActivity.model}
+                      </span>
+                    )}
+                    <span className="live-activity-subagent-spinner" />
                   </div>
                 )}
+                {activeSubagentOutputGroups.length > 0 && activeSubagentOutputGroups.slice(0, 1).map((group) => (
+                  <div key={group.toolCallId} className="live-activity-output-log">
+                    {group.lines.map((line, i) => (
+                      <div
+                        key={`${group.toolCallId}-${i}`}
+                        className="live-activity-output-line"
+                        title={stripAnsiCodes(line)}
+                      >
+                        <span className="live-activity-line-chevron">&rsaquo;</span>
+                        <span className="live-activity-line-text">{stripAnsiCodes(line)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
               </div>
             ) : (
               <div className="processing-indicator">

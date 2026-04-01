@@ -300,6 +300,8 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   const [expandedSubagents, setExpandedSubagents] = useState<Set<string>>(new Set());
   const [activeToolId, setActiveToolId] = useState<string | null>(null);
   const toolRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const liveActivityListRef = useRef<HTMLDivElement | null>(null);
+  const liveActivityScrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [revisions, setRevisions] = useState<Revision[]>([]);
   const [expandedRevisionIds, setExpandedRevisionIds] = useState<Set<string>>(new Set());
   const [revisionDetailsById, setRevisionDetailsById] = useState<Record<string, Record<string, string>>>({});
@@ -815,6 +817,24 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   const subagentToolExecutions = useMemo(() => chatProps?.toolExecutions ?? [], [chatProps]);
   const subagentLogs = useMemo(() => chatProps?.logs ?? [], [chatProps]);
   const subagentActivities = useMemo(() => chatProps?.subagentActivities ?? [], [chatProps]);
+
+  // Auto-scroll live subagent activity lists to the bottom (debounced)
+  useEffect(() => {
+    const el = liveActivityListRef.current;
+    if (!el) return;
+    if (liveActivityScrollTimeoutRef.current) {
+      clearTimeout(liveActivityScrollTimeoutRef.current);
+    }
+    liveActivityScrollTimeoutRef.current = setTimeout(() => {
+      el.scrollTop = el.scrollHeight;
+    }, 150);
+    return () => {
+      if (liveActivityScrollTimeoutRef.current) {
+        clearTimeout(liveActivityScrollTimeoutRef.current);
+      }
+    };
+  }, [subagentActivities.length]);
+
   const chatStats = chatProps?.stats ?? null;
 
   const subagentRuns = useMemo(() => {
@@ -1092,9 +1112,12 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
         </div>
       ) : (
         subagentRuns.map(({ tool, prompt, latestActivity, activities, orderedTaskGroups }) => {
-          const expanded = expandedSubagents.has(tool.id);
+          const isActive = tool.status === 'started' || tool.status === 'running';
+          // Auto-expand active subagents so users can see real-time output
+          const expanded = expandedSubagents.has(tool.id) || isActive;
           const isParallel = tool.subagentType === 'parallel';
-          const collapsedActivities = activities.slice(-3);
+          // Show more activities when active or expanded
+          const collapsedActivities = activities.slice(isActive ? -10 : -3);
           const visibleActivities = expanded ? activities : collapsedActivities;
           const taskCount = orderedTaskGroups.filter((group) => group.taskId).length;
           const hiddenActivityCount = Math.max(0, activities.length - visibleActivities.length);
@@ -1164,7 +1187,10 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
               )}
 
               {visibleActivities.length > 0 && (
-                <div className="subagent-activity-list">
+                <div
+                  ref={isActive ? liveActivityListRef : undefined}
+                  className={`subagent-activity-list ${isActive ? 'subagent-activity-live' : ''}`}
+                >
                   {visibleActivities.map((activity) => (
                     <div key={activity.id} className="subagent-activity-item">
                       <span className={`subagent-activity-dot ${activity.isSpawn ? 'spawn' : ''}`} />

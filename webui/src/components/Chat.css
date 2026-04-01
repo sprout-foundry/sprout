@@ -944,6 +944,111 @@
   opacity: 0.85;
 }
 
+/* Subagent live header with persona badge */
+.live-activity-subagent-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0 4px;
+  min-width: 0;
+}
+
+.live-activity-subagent-icon {
+  flex-shrink: 0;
+  color: var(--accent-primary);
+  animation: pulse-opacity 1.5s ease-in-out infinite;
+}
+
+.live-activity-subagent-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+.live-activity-subagent-model {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
+}
+
+.live-activity-subagent-spinner {
+  flex-shrink: 0;
+  margin-left: auto;
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid var(--text-tertiary);
+  border-top-color: var(--accent-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* Scrolling output log */
+.live-activity-output-log {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 4px;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 6px;
+  max-height: 140px;
+  overflow-y: auto;
+  font-family: var(--font-mono, 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace);
+  font-size: 11px;
+  line-height: 1.5;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-subtle) transparent;
+}
+
+.live-activity-output-log::-webkit-scrollbar {
+  width: 4px;
+}
+
+.live-activity-output-log::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.live-activity-output-log::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 2px;
+}
+
+.live-activity-output-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.live-activity-line-chevron {
+  flex-shrink: 0;
+  color: var(--accent-primary);
+  opacity: 0.5;
+  font-size: 12px;
+  line-height: 1;
+  user-select: none;
+}
+
+.live-activity-line-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 @keyframes pulse-opacity {
   0%, 100% { opacity: 0.5; }
   50% { opacity: 1; }
@@ -1278,6 +1383,27 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* When a subagent is actively running, show the activity list as a scrolling log */
+.subagent-activity-list.subagent-activity-live {
+  max-height: 300px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-subtle) transparent;
+}
+
+.subagent-activity-list.subagent-activity-live::-webkit-scrollbar {
+  width: 4px;
+}
+
+.subagent-activity-list.subagent-activity-live::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.subagent-activity-list.subagent-activity-live::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 2px;
 }
 
 .subagent-activity-item {

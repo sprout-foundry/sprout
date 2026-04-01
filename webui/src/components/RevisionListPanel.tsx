@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, RotateCcw } from 'lucide-react';
 import { showThemedConfirm } from './ThemedDialog';
 import { ApiService } from '../services/api';
@@ -78,28 +78,49 @@ const RevisionListPanel: React.FC<RevisionListPanelProps> = ({ mode, onOpenDiff,
   const [loadingById, setLoadingById] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const detailAbortRef = useRef<AbortController | null>(null);
+
+  // Abort pending requests on unmount
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      detailAbortRef.current?.abort();
+    };
+  }, []);
 
   const loadRevisions = useCallback(async () => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const { signal } = controller;
+
     setIsLoading(true);
     setError(null);
     try {
       let rawItems: any[] = [];
       if (mode === 'global') {
         const response = await apiService.getChangelog();
+        if (signal.aborted) return;
         rawItems = response.revisions || [];
       } else {
         const response = await apiService.getChanges();
+        if (signal.aborted) return;
         rawItems = response.changes || [];
       }
+      if (signal.aborted) return;
       const normalized = (rawItems || []).map(normalizeRevision).sort((a, b) => {
         return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
       });
       setRevisions(normalized);
       setExpandedRevisionIds(normalized.length > 0 ? new Set([normalized[0].revision_id]) : new Set());
     } catch (loadError) {
+      if (signal.aborted) return;
       setError(loadError instanceof Error ? loadError.message : 'Failed to load revisions');
     } finally {
-      setIsLoading(false);
+      if (!signal.aborted) {
+        setIsLoading(false);
+      }
     }
   }, [apiService, mode]);
 
@@ -111,16 +132,25 @@ const RevisionListPanel: React.FC<RevisionListPanelProps> = ({ mode, onOpenDiff,
     if (revisionDetailsById[revisionId] || loadingById[revisionId]) {
       return;
     }
+    // Cancel any pending detail load for this revision
+    detailAbortRef.current?.abort();
+    const controller = new AbortController();
+    detailAbortRef.current = controller;
+    const { signal } = controller;
+
     setLoadingById((prev) => ({ ...prev, [revisionId]: true }));
     try {
       const response = await apiService.getRevisionDetails(revisionId);
+      if (signal.aborted) return;
       const detailMap: Record<string, string> = {};
       (response.revision?.files || []).forEach((file: RevisionDetailFile, index: number) => {
         detailMap[buildRevisionFileKey(file, index)] = file.diff || '';
       });
       setRevisionDetailsById((prev) => ({ ...prev, [revisionId]: detailMap }));
     } finally {
-      setLoadingById((prev) => ({ ...prev, [revisionId]: false }));
+      if (!signal.aborted) {
+        setLoadingById((prev) => ({ ...prev, [revisionId]: false }));
+      }
     }
   }, [apiService, loadingById, revisionDetailsById]);
 

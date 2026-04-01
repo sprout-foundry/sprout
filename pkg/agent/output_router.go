@@ -158,11 +158,20 @@ func (r *OutputRouter) RouteStreamChunk(chunk string, contentType string) {
 
 // RouteAgentMessage routes an agent system message.
 // category: "info", "warning", "error", "tool_log", "thought"
+// RouteAgentMessage routes a message for display in both the WebUI and terminal.
 func (r *OutputRouter) RouteAgentMessage(category, message string, extra map[string]interface{}) {
 	// Always publish to event bus for WebUI (when active)
 	r.publish(events.EventTypeAgentMessage, events.AgentMessageEvent(category, message, extra))
 
 	// Terminal output: always write to terminal
+	r.writeTerminalMessage(message)
+}
+
+// RouteTerminalOnly writes a message directly to the terminal without publishing
+// to the event bus. Use this for output that is already published via a
+// separate, more specific event type (e.g., subagent output lines that are
+// published as subagent_activity events).
+func (r *OutputRouter) RouteTerminalOnly(message string) {
 	r.writeTerminalMessage(message)
 }
 

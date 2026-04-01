@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/configuration"
@@ -30,6 +31,7 @@ const (
 )
 
 var (
+	pathMu       sync.RWMutex
 	changesDir   string = projectChangesDir
 	revisionsDir string = projectRevisionsDir
 )
@@ -71,13 +73,18 @@ type ChangeLog struct {
 // InitializeHistoryPaths configures the history storage paths based on configuration
 // This should be called at application startup to ensure correct path resolution
 func InitializeHistoryPaths(config *configuration.Config) {
+	var cDir, rDir string
+
 	if config == nil {
 		// Try to load config if not provided
 		cfg, err := configuration.Load()
 		if err != nil {
-			// Use default project-scoped paths if config fails to load
-			changesDir = projectChangesDir
-			revisionsDir = projectRevisionsDir
+			cDir = projectChangesDir
+			rDir = projectRevisionsDir
+			pathMu.Lock()
+			changesDir = cDir
+			revisionsDir = rDir
+			pathMu.Unlock()
 			return
 		}
 		config = cfg
@@ -89,34 +96,60 @@ func InitializeHistoryPaths(config *configuration.Config) {
 		configDir, err := configuration.GetConfigDir()
 		if err != nil {
 			// Fallback to project-scoped if global config dir fails
-			changesDir = projectChangesDir
-			revisionsDir = projectRevisionsDir
-			return
+			cDir = projectChangesDir
+			rDir = projectRevisionsDir
+		} else {
+			cDir = filepath.Join(configDir, "changes")
+			rDir = filepath.Join(configDir, "revisions")
 		}
-		changesDir = filepath.Join(configDir, "changes")
-		revisionsDir = filepath.Join(configDir, "revisions")
 	} else {
 		// Default to project-scoped history (historyScope == "project" or empty)
-		changesDir = projectChangesDir
-		revisionsDir = projectRevisionsDir
+		cDir = projectChangesDir
+		rDir = projectRevisionsDir
 	}
+
+	pathMu.Lock()
+	changesDir = cDir
+	revisionsDir = rDir
+	pathMu.Unlock()
+}
+
+// setPathsForTesting sets changesDir and revisionsDir while holding the mutex.
+// This is intended for use only in tests to avoid data races detected by -race.
+func setPathsForTesting(cDir, rDir string) {
+	pathMu.Lock()
+	changesDir = cDir
+	revisionsDir = rDir
+	pathMu.Unlock()
+}
+
+// getPathsForTesting reads changesDir and revisionsDir while holding the mutex.
+// This is intended for use only in tests to avoid data races detected by -race.
+func getPathsForTesting() (string, string) {
+	pathMu.RLock()
+	defer pathMu.RUnlock()
+	return changesDir, revisionsDir
 }
 
 // GetChangesDir returns the current changes directory path
 func GetChangesDir() string {
+	pathMu.RLock()
+	defer pathMu.RUnlock()
 	return changesDir
 }
 
 // GetRevisionsDir returns the current revisions directory path
 func GetRevisionsDir() string {
+	pathMu.RLock()
+	defer pathMu.RUnlock()
 	return revisionsDir
 }
 
 func ensureChangesDirs() error {
-	if err := filesystem.EnsureDir(changesDir); err != nil {
+	if err := filesystem.EnsureDir(GetChangesDir()); err != nil {
 		return fmt.Errorf("failed to create changes directory: %w", err)
 	}
-	if err := filesystem.EnsureDir(revisionsDir); err != nil {
+	if err := filesystem.EnsureDir(GetRevisionsDir()); err != nil {
 		return fmt.Errorf("failed to create revisions directory: %w", err)
 	}
 	return nil
@@ -130,7 +163,7 @@ func RecordBaseRevision(requestHash, instructions, response string, conversation
 	}
 
 	revisionID := requestHash
-	revisionPath := filepath.Join(revisionsDir, revisionID)
+	revisionPath := filepath.Join(GetRevisionsDir(), revisionID)
 	if err := filesystem.EnsureDir(revisionPath); err != nil {
 		return "", fmt.Errorf("failed to create revision directory: %w", err)
 	}
@@ -163,7 +196,7 @@ func RecordChangeWithDetails(baseRevisionID string, filename, originalCode, newC
 	}
 
 	fileRevisionHash := utils.GenerateFileRevisionHash(filename, newCode)
-	changeDir := filepath.Join(changesDir, fileRevisionHash)
+	changeDir := filepath.Join(GetChangesDir(), fileRevisionHash)
 	if err := filesystem.EnsureDir(changeDir); err != nil {
 		return fmt.Errorf("failed to create change directory: %w", err)
 	}
@@ -216,7 +249,7 @@ func RecordChange(baseRevisionID string, filename, originalCode, newCode, descri
 
 // updateChangeStatus updates the status of a change record.
 func updateChangeStatus(fileRevisionHash, status string) error {
-	changeDir := filepath.Join(changesDir, fileRevisionHash)
+	changeDir := filepath.Join(GetChangesDir(), fileRevisionHash)
 	metadataPath := filepath.Join(changeDir, metadataFile)
 
 	metadataBytes, err := filesystem.ReadFileBytes(metadataPath)
@@ -251,7 +284,7 @@ func fetchAllChanges() ([]ChangeLog, error) {
 
 	var changes []ChangeLog
 
-	entries, err := os.ReadDir(changesDir)
+	entries, err := os.ReadDir(GetChangesDir())
 	if err != nil {
 		if os.IsNotExist(err) {
 			return []ChangeLog{}, nil
@@ -264,7 +297,7 @@ func fetchAllChanges() ([]ChangeLog, error) {
 			continue
 		}
 
-		changeDir := filepath.Join(changesDir, entry.Name())
+		changeDir := filepath.Join(GetChangesDir(), entry.Name())
 		metadataPath := filepath.Join(changeDir, metadataFile)
 
 		metadataBytes, err := filesystem.ReadFileBytes(metadataPath)
@@ -312,7 +345,7 @@ func fetchAllChanges() ([]ChangeLog, error) {
 		newCode := string(updatedDecoded)
 
 		// Fetch instructions and response from revisions directory
-		revisionPath := filepath.Join(revisionsDir, metadata.RequestHash)
+		revisionPath := filepath.Join(GetRevisionsDir(), metadata.RequestHash)
 		instructionsBytes, err := filesystem.ReadFileBytes(filepath.Join(revisionPath, "instructions.txt"))
 		var instructions string
 		if err == nil {

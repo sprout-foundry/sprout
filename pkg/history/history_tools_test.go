@@ -2,6 +2,7 @@ package history
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -23,8 +24,7 @@ func TestBase64Encoding(t *testing.T) {
 	defer os.Chdir(oldDir)
 
 	// Ensure we're using project-scoped paths for this test
-	changesDir = projectChangesDir
-	revisionsDir = projectRevisionsDir
+	setPathsForTesting(projectChangesDir, projectRevisionsDir)
 
 	// Test data
 	originalCode := "func main() {\n\tfmt.Println(\"Hello, World!\")\n}"
@@ -44,7 +44,7 @@ func TestBase64Encoding(t *testing.T) {
 	}
 
 	// Verify that the stored files are base64 encoded
-	changeDir := filepath.Join(".ledit/changes")
+	changeDir := filepath.Join(projectChangesDir)
 	entries, err := os.ReadDir(changeDir)
 	if err != nil {
 		t.Fatalf("Failed to read changes directory: %v", err)
@@ -123,8 +123,7 @@ func TestHistoryFiltering(t *testing.T) {
 	defer os.Chdir(oldDir)
 
 	// Ensure we're using project-scoped paths for this test
-	changesDir = projectChangesDir
-	revisionsDir = projectRevisionsDir
+	setPathsForTesting(projectChangesDir, projectRevisionsDir)
 
 	// Create multiple changes with different timestamps
 	now := time.Now()
@@ -219,8 +218,7 @@ func TestRollback(t *testing.T) {
 	defer os.Chdir(oldDir)
 
 	// Ensure we're using project-scoped paths for this test
-	changesDir = projectChangesDir
-	revisionsDir = projectRevisionsDir
+	setPathsForTesting(projectChangesDir, projectRevisionsDir)
 
 	// Create a test file
 	testFile := "rollback_test.txt"
@@ -331,11 +329,10 @@ func TestBackwardCompatibility(t *testing.T) {
 	defer os.Chdir(oldDir)
 
 	// Ensure we're using project-scoped paths for this test
-	changesDir = projectChangesDir
-	revisionsDir = projectRevisionsDir
+	setPathsForTesting(projectChangesDir, projectRevisionsDir)
 
 	// Create the changes directory structure manually
-	changeDir := ".ledit/changes/test_change"
+	changeDir := projectChangesDir + "/test_change"
 	err := filesystem.EnsureDir(changeDir)
 	if err != nil {
 		t.Fatalf("Failed to create change directory: %v", err)
@@ -352,7 +349,7 @@ func TestBackwardCompatibility(t *testing.T) {
 		Description:      "Test backward compatibility",
 	}
 
-	metadataBytes, err := jsonMarshalIndent(metadata, "", "  ")
+	metadataBytes, err := json.MarshalIndent(metadata, "", "  ")
 	if err != nil {
 		t.Fatalf("Failed to marshal metadata: %v", err)
 	}
@@ -394,18 +391,4 @@ func TestBackwardCompatibility(t *testing.T) {
 	if change.NewCode != plainNew {
 		t.Errorf("New code should be readable from plain text. Expected: %s, Got: %s", plainNew, change.NewCode)
 	}
-}
-
-// Helper function for JSON marshaling (to match the existing code style)
-func jsonMarshalIndent(v interface{}, prefix, indent string) ([]byte, error) {
-	return []byte(`{
-  "version": 1,
-  "filename": "test.go",
-  "file_revision_hash": "test_change",
-  "request_hash": "test_request",
-  "timestamp": "` + time.Now().Format(time.RFC3339) + `",
-  "status": "active",
-  "note": "",
-  "description": "Test backward compatibility"
-}`), nil
 }

@@ -11,15 +11,10 @@ import (
 // TestRecordChangeWithDetails_FullLifecycle tests the complete lifecycle of RecordChangeWithDetails.
 func TestRecordChangeWithDetails_FullLifecycle(t *testing.T) {
 	tmpDir := t.TempDir()
-	oldChangesDir := changesDir
-	oldRevisionsDir := revisionsDir
-	defer func() {
-		changesDir = oldChangesDir
-		revisionsDir = oldRevisionsDir
-	}()
+	oldChanges, oldRevisions := getPathsForTesting()
+	defer setPathsForTesting(oldChanges, oldRevisions)
 
-	changesDir = filepath.Join(tmpDir, "changes")
-	revisionsDir = filepath.Join(tmpDir, "revisions")
+	setPathsForTesting(filepath.Join(tmpDir, "changes"), filepath.Join(tmpDir, "revisions"))
 
 	// First record the base revision
 	revisionID := "test-revision-lifecycle"
@@ -94,15 +89,10 @@ func TestRecordChangeWithDetails_FullLifecycle(t *testing.T) {
 // TestRecordChangeWithDetails_Base64Encoding tests that file contents are base64 encoded.
 func TestRecordChangeWithDetails_Base64Encoding(t *testing.T) {
 	tmpDir := t.TempDir()
-	oldChangesDir := changesDir
-	oldRevisionsDir := revisionsDir
-	defer func() {
-		changesDir = oldChangesDir
-		revisionsDir = oldRevisionsDir
-	}()
+	oldChanges, oldRevisions := getPathsForTesting()
+	defer setPathsForTesting(oldChanges, oldRevisions)
 
-	changesDir = filepath.Join(tmpDir, "changes")
-	revisionsDir = filepath.Join(tmpDir, "revisions")
+	setPathsForTesting(filepath.Join(tmpDir, "changes"), filepath.Join(tmpDir, "revisions"))
 
 	// First record the base revision
 	revisionID := "test-revision-base64"
@@ -124,7 +114,8 @@ func TestRecordChangeWithDetails_Base64Encoding(t *testing.T) {
 	}
 
 	// Find the change directory
-	entries, err := os.ReadDir(changesDir)
+	currentChanges, _ := getPathsForTesting()
+	entries, err := os.ReadDir(currentChanges)
 	if err != nil {
 		t.Fatalf("failed to read changes dir: %v", err)
 	}
@@ -137,7 +128,7 @@ func TestRecordChangeWithDetails_Base64Encoding(t *testing.T) {
 	safeFilename := filepath.Base(filename) // test.go -> test.go
 
 	// Read the original file and verify it's base64 encoded
-	originalPath := filepath.Join(changesDir, changeDir, safeFilename+".original")
+	originalPath := filepath.Join(currentChanges, changeDir, safeFilename+".original")
 	originalBytes, err := os.ReadFile(originalPath)
 	if err != nil {
 		t.Fatalf("failed to read original file: %v", err)
@@ -154,7 +145,7 @@ func TestRecordChangeWithDetails_Base64Encoding(t *testing.T) {
 	}
 
 	// Read the updated file and verify it's base64 encoded
-	updatedPath := filepath.Join(changesDir, changeDir, safeFilename+".updated")
+	updatedPath := filepath.Join(currentChanges, changeDir, safeFilename+".updated")
 	updatedBytes, err := os.ReadFile(updatedPath)
 	if err != nil {
 		t.Fatalf("failed to read updated file: %v", err)
@@ -174,15 +165,10 @@ func TestRecordChangeWithDetails_Base64Encoding(t *testing.T) {
 // TestRecordChangeWithDetails_MetadataFields tests that all metadata fields are correctly stored.
 func TestRecordChangeWithDetails_MetadataFields(t *testing.T) {
 	tmpDir := t.TempDir()
-	oldChangesDir := changesDir
-	oldRevisionsDir := revisionsDir
-	defer func() {
-		changesDir = oldChangesDir
-		revisionsDir = oldRevisionsDir
-	}()
+	oldChanges, oldRevisions := getPathsForTesting()
+	defer setPathsForTesting(oldChanges, oldRevisions)
 
-	changesDir = filepath.Join(tmpDir, "changes")
-	revisionsDir = filepath.Join(tmpDir, "revisions")
+	setPathsForTesting(filepath.Join(tmpDir, "changes"), filepath.Join(tmpDir, "revisions"))
 
 	// First record the base revision
 	revisionID := "test-revision-metadata"
@@ -207,7 +193,8 @@ func TestRecordChangeWithDetails_MetadataFields(t *testing.T) {
 	}
 
 	// Find the change directory
-	entries, err := os.ReadDir(changesDir)
+	currentChanges, _ := getPathsForTesting()
+	entries, err := os.ReadDir(currentChanges)
 	if err != nil {
 		t.Fatalf("failed to read changes dir: %v", err)
 	}
@@ -217,7 +204,7 @@ func TestRecordChangeWithDetails_MetadataFields(t *testing.T) {
 	}
 
 	changeDir := entries[0].Name()
-	metadataPath := filepath.Join(changesDir, changeDir, metadataFile)
+	metadataPath := filepath.Join(currentChanges, changeDir, metadataFile)
 
 	// Read and parse metadata
 	metadataBytes, err := os.ReadFile(metadataPath)
@@ -263,15 +250,10 @@ func TestRecordChangeWithDetails_MetadataFields(t *testing.T) {
 // TestRecordChangeWithDetails_SpecialCharactersInFilename tests that special characters in filenames are handled.
 func TestRecordChangeWithDetails_SpecialCharactersInFilename(t *testing.T) {
 	tmpDir := t.TempDir()
-	oldChangesDir := changesDir
-	oldRevisionsDir := revisionsDir
-	defer func() {
-		changesDir = oldChangesDir
-		revisionsDir = oldRevisionsDir
-	}()
+	oldChanges, oldRevisions := getPathsForTesting()
+	defer setPathsForTesting(oldChanges, oldRevisions)
 
-	changesDir = filepath.Join(tmpDir, "changes")
-	revisionsDir = filepath.Join(tmpDir, "revisions")
+	setPathsForTesting(filepath.Join(tmpDir, "changes"), filepath.Join(tmpDir, "revisions"))
 
 	// First record the base revision
 	revisionID := "test-revision-special-filename"
@@ -293,7 +275,8 @@ func TestRecordChangeWithDetails_SpecialCharactersInFilename(t *testing.T) {
 	}
 
 	// Find the change directory
-	entries, err := os.ReadDir(changesDir)
+	currentChanges, _ := getPathsForTesting()
+	entries, err := os.ReadDir(currentChanges)
 	if err != nil {
 		t.Fatalf("failed to read changes dir: %v", err)
 	}
@@ -306,8 +289,8 @@ func TestRecordChangeWithDetails_SpecialCharactersInFilename(t *testing.T) {
 
 	// Verify files exist with sanitized filename (path separators replaced with _)
 	safeFilename := "path_to_my-file_v2.0.go" // path separators replaced
-	originalPath := filepath.Join(changesDir, changeDir, safeFilename+".original")
-	updatedPath := filepath.Join(changesDir, changeDir, safeFilename+".updated")
+	originalPath := filepath.Join(currentChanges, changeDir, safeFilename+".original")
+	updatedPath := filepath.Join(currentChanges, changeDir, safeFilename+".updated")
 
 	if _, err := os.Stat(originalPath); os.IsNotExist(err) {
 		t.Errorf("original file does not exist: %s", originalPath)
@@ -320,15 +303,10 @@ func TestRecordChangeWithDetails_SpecialCharactersInFilename(t *testing.T) {
 // TestRecordChangeWithDetails_EmptyDetails tests that RecordChangeWithDetails handles empty optional fields.
 func TestRecordChangeWithDetails_EmptyDetails(t *testing.T) {
 	tmpDir := t.TempDir()
-	oldChangesDir := changesDir
-	oldRevisionsDir := revisionsDir
-	defer func() {
-		changesDir = oldChangesDir
-		revisionsDir = oldRevisionsDir
-	}()
+	oldChanges, oldRevisions := getPathsForTesting()
+	defer setPathsForTesting(oldChanges, oldRevisions)
 
-	changesDir = filepath.Join(tmpDir, "changes")
-	revisionsDir = filepath.Join(tmpDir, "revisions")
+	setPathsForTesting(filepath.Join(tmpDir, "changes"), filepath.Join(tmpDir, "revisions"))
 
 	// First record the base revision
 	revisionID := "test-revision-empty-details"
@@ -378,15 +356,10 @@ func TestRecordChangeWithDetails_EmptyDetails(t *testing.T) {
 // TestRecordChangeWithDetails_MultipleChanges tests that multiple changes can be recorded for the same revision.
 func TestRecordChangeWithDetails_MultipleChanges(t *testing.T) {
 	tmpDir := t.TempDir()
-	oldChangesDir := changesDir
-	oldRevisionsDir := revisionsDir
-	defer func() {
-		changesDir = oldChangesDir
-		revisionsDir = oldRevisionsDir
-	}()
+	oldChanges, oldRevisions := getPathsForTesting()
+	defer setPathsForTesting(oldChanges, oldRevisions)
 
-	changesDir = filepath.Join(tmpDir, "changes")
-	revisionsDir = filepath.Join(tmpDir, "revisions")
+	setPathsForTesting(filepath.Join(tmpDir, "changes"), filepath.Join(tmpDir, "revisions"))
 
 	// First record the base revision
 	revisionID := "test-revision-multiple"
@@ -453,15 +426,10 @@ func TestRecordChangeWithDetails_MultipleChanges(t *testing.T) {
 // TestRecordChangeWithDetails_ConversationIntegration tests that RecordChangeWithDetails works with conversation history.
 func TestRecordChangeWithDetails_ConversationIntegration(t *testing.T) {
 	tmpDir := t.TempDir()
-	oldChangesDir := changesDir
-	oldRevisionsDir := revisionsDir
-	defer func() {
-		changesDir = oldChangesDir
-		revisionsDir = oldRevisionsDir
-	}()
+	oldChanges, oldRevisions := getPathsForTesting()
+	defer setPathsForTesting(oldChanges, oldRevisions)
 
-	changesDir = filepath.Join(tmpDir, "changes")
-	revisionsDir = filepath.Join(tmpDir, "revisions")
+	setPathsForTesting(filepath.Join(tmpDir, "changes"), filepath.Join(tmpDir, "revisions"))
 
 	// First record the base revision with conversation
 	revisionID := "test-revision-conversation-integration"

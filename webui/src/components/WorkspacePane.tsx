@@ -2,9 +2,11 @@ import React from 'react';
 import { File } from 'lucide-react';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import Chat from './Chat';
+import ChatTabBar from './ChatTabBar';
 import EditorPane from './EditorPane';
 import DiffWorkspaceTab from './DiffWorkspaceTab';
 import ReviewWorkspaceTab from './ReviewWorkspaceTab';
+import type { ChatSession } from '../services/chatSessions';
 import './WorkspacePane.css';
 
 interface ToolExecution {
@@ -58,6 +60,14 @@ interface WorkspacePaneProps {
     currentTodos?: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }>;
     onToolPillClick?: (toolId: string) => void;
     onStopProcessing?: () => void;
+    chatTabBarProps?: {
+      sessions: ChatSession[];
+      activeChatId: string;
+      onSwitch: (id: string) => void;
+      onCreate: () => void;
+      onDelete: (id: string) => void;
+      onRename: (id: string, name: string) => void;
+    };
   };
   reviewProps: {
     review: DeepReviewResult | null;
@@ -96,8 +106,18 @@ const WorkspacePane: React.FC<WorkspacePaneProps> = ({ paneId, chatProps, review
   }
 
   switch (buffer.kind) {
-    case 'chat':
-      return <Chat {...chatProps} />;
+    case 'chat': {
+      const { chatTabBarProps, ...chatOnlyProps } = chatProps;
+      if (chatTabBarProps) {
+        return (
+          <div className="chat-with-tab-bar">
+            <ChatTabBar {...chatTabBarProps} />
+            <Chat {...chatOnlyProps} />
+          </div>
+        );
+      }
+      return <Chat {...chatOnlyProps} />;
+    }
     case 'diff': {
       const diffPath = buffer.metadata?.sourcePath;
       const isActiveDiff = diffState.activeDiffPath === diffPath;

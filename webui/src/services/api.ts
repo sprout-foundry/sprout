@@ -902,7 +902,10 @@ class ApiService {
     }
   }
 
-  async fixFromDeepReview(reviewOutput: string): Promise<{
+  async fixFromDeepReview(
+    reviewOutput: string,
+    options?: { fixPrompt?: string; selectedItems?: string[] }
+  ): Promise<{
     message: string;
     result: string;
   }> {
@@ -910,7 +913,11 @@ class ApiService {
       const response = await clientFetch('/api/git/deep-review/fix', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ review_output: reviewOutput }),
+        body: JSON.stringify({
+          review_output: reviewOutput,
+          fix_prompt: options?.fixPrompt || '',
+          selected_items: options?.selectedItems || [],
+        }),
       });
       if (!response.ok) {
         const text = await response.text();
@@ -923,7 +930,10 @@ class ApiService {
     }
   }
 
-  async startFixFromDeepReview(reviewOutput: string): Promise<{
+  async startFixFromDeepReview(
+    reviewOutput: string,
+    options?: { fixPrompt?: string; selectedItems?: string[] }
+  ): Promise<{
     message: string;
     job_id: string;
     session_id: string;
@@ -932,7 +942,11 @@ class ApiService {
       const response = await clientFetch('/api/git/deep-review/fix/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ review_output: reviewOutput }),
+        body: JSON.stringify({
+          review_output: reviewOutput,
+          fix_prompt: options?.fixPrompt || '',
+          selected_items: options?.selectedItems || [],
+        }),
       });
       if (!response.ok) {
         const text = await response.text();

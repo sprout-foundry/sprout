@@ -861,6 +861,7 @@ const AppContent: React.FC<AppContentProps> = ({
                 queryProgress: state.queryProgress,
                 currentTodos,
                 onStopProcessing,
+                subagentActivities: state.subagentActivities,
                 onToolPillClick: (toolId: string) => contextPanelRef.current?.highlightTool(toolId),
               }}
               reviewProps={{

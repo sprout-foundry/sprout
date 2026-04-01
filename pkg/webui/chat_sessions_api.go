@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -130,7 +131,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsCreate(w http.ResponseWriter, r *
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
 		ctx.nextChatNumber++
-		name = "Chat " + itoa(ctx.nextChatNumber)
+		name = "Chat " + strconv.Itoa(ctx.nextChatNumber)
 	}
 
 	cs := newChatSession(chatID, name)
@@ -198,31 +199,33 @@ func (ws *ReactWebServer) handleAPIChatSessionsDelete(w http.ResponseWriter, r *
 		return
 	}
 
-	if !ctx.deleteChatSession(chatID) {
+	cs, exists := ctx.ChatSessions[chatID]
+	if !exists {
 		ws.mutex.Unlock()
-		// Check if the chat existed at all
-		ws.mutex.RLock()
-		_, existed := ctx.ChatSessions[chatID]
-		ws.mutex.RUnlock()
-
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		if !existed {
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": "Chat session not found",
-				"code":  "chat_session_not_found",
-				"id":    chatID,
-			})
-		} else {
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": "Cannot delete a chat session with an active query",
-				"code":  "chat_session_active_query",
-				"id":    chatID,
-			})
-		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Chat session not found",
+			"code":  "chat_session_not_found",
+			"id":    chatID,
+		})
 		return
 	}
-
+	cs.mu.Lock()
+	isActive := cs.ActiveQuery
+	cs.mu.Unlock()
+	if isActive {
+		ws.mutex.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Cannot delete a chat session with an active query",
+			"code":  "chat_session_active_query",
+			"id":    chatID,
+		})
+		return
+	}
+	delete(ctx.ChatSessions, chatID)
 	ws.mutex.Unlock()
 
 	log.Printf("handleAPIChatSessionsDelete: deleted chat session %s for client %s", chatID, clientID)
@@ -341,17 +344,41 @@ func (ws *ReactWebServer) handleAPIChatSessionsSwitch(w http.ResponseWriter, r *
 		return
 	}
 
+	// Refuse to switch if the CURRENTLY ACTIVE chat has a running query.
+	// All chats share a single agent instance, so switching mid-query would
+	// corrupt agent state and cause events to be routed to the wrong chat.
+	currentActiveID := ctx.getActiveChatID()
+	if currentChat := ctx.getChatSession(currentActiveID); currentChat != nil {
+		currentChat.mu.Lock()
+		isQuerying := currentChat.ActiveQuery
+		currentChat.mu.Unlock()
+		if isQuerying && currentActiveID != chatID {
+			ws.mutex.Unlock()
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Cannot switch chat while a query is active. Wait for the query to complete.",
+				"code":  "query_in_progress",
+			})
+			return
+		}
+	}
+
 	// Update the active chat ID
 	ctx.DefaultChatID = chatID
 
 	// Sync the top-level agent state to match the active chat session for
 	// backward compatibility with code that reads ctx.AgentState.
+	cs.mu.Lock()
 	snapshot := cs.AgentState
 	if len(snapshot) == 0 {
 		snapshot = emptyAgentStateSnapshot()
 	}
+	currentSessionID := cs.CurrentSessionID
+	cs.mu.Unlock()
+
 	ctx.AgentState = append([]byte(nil), snapshot...)
-	ctx.CurrentSessionID = cs.CurrentSessionID
+	ctx.CurrentSessionID = currentSessionID
 
 	// Also update the live agent if one exists for this client, so that
 	// subsequent queries use the switched chat's state.
@@ -405,6 +432,28 @@ func (ws *ReactWebServer) handleAPIChatSessionsCompact(w http.ResponseWriter, r 
 	}
 
 	// Sync state for this chat session
+	// Refuse to compact a non-active chat — the agent instance holds state
+	// for the active chat only. Compacting a different chat would overwrite
+	// its state with the active chat's state.
+	ws.mutex.RLock()
+	ctx := ws.clientContexts[clientID]
+	var activeID string
+	if ctx != nil {
+		activeID = ctx.getActiveChatID()
+	}
+	ws.mutex.RUnlock()
+
+	if chatID != "" && activeID != "" && chatID != activeID {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Cannot compact a non-active chat session. Switch to that chat first.",
+			"code":  "cannot_compact_non_active",
+			"id":    chatID,
+		})
+		return
+	}
+
 	if err := ws.syncAgentStateForClientWithChat(clientID, chatID); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to sync chat state: %v", err), http.StatusInternalServerError)
 		return

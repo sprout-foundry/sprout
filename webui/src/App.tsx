@@ -12,6 +12,8 @@ import { ApiService, OnboardingEnvironment, OnboardingProviderOption } from './s
 import { clientFetch, getWebUIClientId } from './services/clientSession';
 import { ensureCompletedAssistantMessage } from './utils/chatCompletion';
 import { debugLog } from './utils/log';
+import { listChatSessions, createChatSession, deleteChatSession, renameChatSession, switchChatSession } from './services/chatSessions';
+import type { ChatSession } from './services/chatSessions';
 
 let _lastWorkspaceReloadTime = 0;
 
@@ -383,6 +385,21 @@ function App() {
     error: null,
   });
 
+  // Multi-chat state
+  const [chatSessionsList, setChatSessionsList] = useState<ChatSession[]>([]);
+  const [activeChatId, setActiveChatId] = useState<string>('default');
+  const [chatMessages, setChatMessages] = useState<Record<string, Message[]>>({});
+  const [chatToolExecutions, setChatToolExecutions] = useState<Record<string, ToolExecution[]>>({});
+  const [chatSubagentActivities, setChatSubagentActivities] = useState<Record<string, SubagentActivity[]>>({});
+  const [chatCurrentTodos, setChatCurrentTodos] = useState<Record<string, AppState['currentTodos']>>({});
+  const [chatQueryProgress, setChatQueryProgress] = useState<Record<string, any>>({});
+  const [chatErrors, setChatErrors] = useState<Record<string, string | null>>({});
+  const [chatFileEdits, setChatFileEdits] = useState<Record<string, AppState['fileEdits']>>({});
+  const currentQueryChatIdRef = useRef<string>('default');
+  const activeChatIdRef = useRef(activeChatId);
+  activeChatIdRef.current = activeChatId;
+  const [chatSessionsEnabled, setChatSessionsEnabled] = useState(true);
+
   useEffect(() => {
     if (typeof window === 'undefined' || !window.localStorage) {
       return;
@@ -436,6 +453,9 @@ function App() {
   const handleSidebarToggle = useCallback(() => {
     setSidebarCollapsed(prev => !prev);
   }, []);
+
+  // ── Multi-chat: derived state is computed on-demand by event handlers ──
+  // using activeChatIdRef for chat-scoped guards (see handleEvent).
 
   const wsService = WebSocketService.getInstance();
   const apiService = ApiService.getInstance();
@@ -497,6 +517,166 @@ function App() {
   // Debounce connection status updates to prevent flashing
   const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastConnectionStateRef = useRef<boolean>(false);
+
+  // ── Multi-chat management functions ──────────────────────────────
+
+  const loadChatSessions = useCallback(async () => {
+    try {
+      const resp = await listChatSessions();
+      const activeId = resp.active_chat_id || 'default';
+      setChatSessionsList(resp.chat_sessions || []);
+      setActiveChatId(activeId);
+      setChatSessionsEnabled(true);
+    } catch {
+      // Backend doesn't support chat sessions – fall back to single-chat mode.
+      debugLog('[chat-sessions] API unavailable, using single-chat mode');
+      setChatSessionsEnabled(false);
+    }
+  }, []);
+
+  const handleCreateChat = useCallback(async () => {
+    try {
+      const resp = await createChatSession();
+      const newSession = resp.chat_session;
+      if (!newSession) return;
+      setChatSessionsList(prev => [...prev, newSession]);
+      // Initialize empty state for the new chat
+      setChatMessages(prev => ({ ...prev, [newSession.id]: [] }));
+      setChatToolExecutions(prev => ({ ...prev, [newSession.id]: [] }));
+      setChatSubagentActivities(prev => ({ ...prev, [newSession.id]: [] }));
+      setChatCurrentTodos(prev => ({ ...prev, [newSession.id]: [] }));
+      setChatQueryProgress(prev => ({ ...prev, [newSession.id]: null }));
+      setChatErrors(prev => ({ ...prev, [newSession.id]: null }));
+      setChatFileEdits(prev => ({ ...prev, [newSession.id]: [] }));
+      // Switch to the new chat
+      setActiveChatId(newSession.id);
+      currentQueryChatIdRef.current = newSession.id;
+      // Tell backend to switch
+      try { await switchChatSession(newSession.id); } catch { /* non-fatal */ }
+      // Reset processing state
+      setState(prev => ({
+        ...prev,
+        isProcessing: false,
+        lastError: null,
+        toolExecutions: [],
+        subagentActivities: [],
+        currentTodos: [],
+        queryProgress: null,
+      }));
+    } catch (error) {
+      console.error('[chat-sessions] Failed to create chat:', error);
+    }
+  }, []);
+
+  const handleSwitchChat = useCallback(async (id: string) => {
+    const savedActiveId = activeChatIdRef.current;
+    if (id === savedActiveId) return;
+    // Save current chat's ephemeral state before switching
+    setChatMessages(prev => ({ ...prev, [savedActiveId]: state.messages }));
+    setChatToolExecutions(prev => ({ ...prev, [savedActiveId]: state.toolExecutions }));
+    setChatSubagentActivities(prev => ({ ...prev, [savedActiveId]: state.subagentActivities }));
+    setChatCurrentTodos(prev => ({ ...prev, [savedActiveId]: state.currentTodos }));
+    setChatQueryProgress(prev => ({ ...prev, [savedActiveId]: state.queryProgress }));
+    setChatErrors(prev => ({ ...prev, [savedActiveId]: state.lastError }));
+    setChatFileEdits(prev => ({ ...prev, [savedActiveId]: state.fileEdits }));
+
+    setActiveChatId(id);
+    currentQueryChatIdRef.current = id;
+
+    // Load the target chat's messages from local cache or fetch from backend
+    const cachedMessages = chatMessages[id];
+    if (cachedMessages) {
+      setState(prev => ({
+        ...prev,
+        messages: cachedMessages,
+        toolExecutions: chatToolExecutions[id] || [],
+        subagentActivities: chatSubagentActivities[id] || [],
+        currentTodos: chatCurrentTodos[id] || [],
+        queryProgress: chatQueryProgress[id] || null,
+        lastError: chatErrors[id] ?? null,
+        fileEdits: chatFileEdits[id] || [],
+        isProcessing: false,
+      }));
+    } else {
+      // Fetch from backend
+      try {
+        const resp = await switchChatSession(id);
+        const msgs = resp.chat_session?.messages || [];
+        const restoredMessages: Message[] = msgs
+          .filter((m: any) => m.role === 'user' || m.role === 'assistant')
+          .map((m: any, i: number) => ({
+            id: `switched-${i}`,
+            type: m.role as 'user' | 'assistant',
+            content: typeof m.content === 'string' ? m.content : '',
+            timestamp: new Date(),
+            ...(m.reasoning_content ? { reasoning: m.reasoning_content } : {}),
+          }));
+        setChatMessages(prev => ({ ...prev, [id]: restoredMessages }));
+        setState(prev => ({
+          ...prev,
+          messages: restoredMessages,
+          toolExecutions: [],
+          subagentActivities: [],
+          currentTodos: [],
+          queryProgress: null,
+          lastError: null,
+          fileEdits: [],
+          isProcessing: false,
+        }));
+      } catch (error) {
+        console.error('[chat-sessions] Failed to switch chat:', error);
+        setState(prev => ({
+          ...prev,
+          messages: [],
+          toolExecutions: [],
+          subagentActivities: [],
+          currentTodos: [],
+          queryProgress: null,
+          lastError: null,
+          fileEdits: [],
+          isProcessing: false,
+        }));
+      }
+    }
+
+    // Update session list
+    setChatSessionsList(prev =>
+      prev.map(s => ({ ...s, is_active: s.id === id }))
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- state.* values are read synchronously in click handler; activeChatIdRef provides fresh activeChatId.
+  }, [activeChatId]);
+
+  const handleDeleteChat = useCallback(async (id: string) => {
+    const session = chatSessionsList.find(s => s.id === id);
+    if (!session || session.is_default || session.is_active) return;
+    try {
+      await deleteChatSession(id);
+      // Remove from local state
+      setChatSessionsList(prev => prev.filter(s => s.id !== id));
+      setChatMessages(prev => { const next = { ...prev }; delete next[id]; return next; });
+      setChatToolExecutions(prev => { const next = { ...prev }; delete next[id]; return next; });
+      setChatSubagentActivities(prev => { const next = { ...prev }; delete next[id]; return next; });
+      setChatCurrentTodos(prev => { const next = { ...prev }; delete next[id]; return next; });
+      setChatQueryProgress(prev => { const next = { ...prev }; delete next[id]; return next; });
+      setChatErrors(prev => { const next = { ...prev }; delete next[id]; return next; });
+      setChatFileEdits(prev => { const next = { ...prev }; delete next[id]; return next; });
+    } catch (error) {
+      console.error('[chat-sessions] Failed to delete chat:', error);
+    }
+  }, [chatSessionsList]);
+
+  const handleRenameChat = useCallback(async (id: string, name: string) => {
+    try {
+      const resp = await renameChatSession(id, name);
+      if (resp.chat_session) {
+        setChatSessionsList(prev =>
+          prev.map(s => s.id === id ? { ...s, name: resp.chat_session.name } : s)
+        );
+      }
+    } catch (error) {
+      console.error('[chat-sessions] Failed to rename chat:', error);
+    }
+  }, []);
 
   const refreshOnboardingStatus = useCallback(async () => {
     setOnboarding((prev) => ({ ...prev, checking: true, error: null }));
@@ -614,34 +794,52 @@ function App() {
           clearTimeout(reconnectSafetyTimerRef.current);
           reconnectSafetyTimerRef.current = null;
         }
+        // Capture the chat_id for this query so subsequent events route correctly.
+        // If the backend provides chat_id in the event, use it; otherwise use
+        // the currently active chat ID.
+        const queryChatId = event.data?.chat_id || activeChatIdRef.current || 'default';
+        currentQueryChatIdRef.current = queryChatId;
         const startedQuery = event.data?.query || '';
-        setState(prev => ({
-          ...prev,
-          isProcessing: true,
-          lastError: null,
-          queryCount: prev.queryCount + 1,
-          messages: [...prev.messages, {
-            id: Date.now().toString(),
-            type: 'user',
-            content: startedQuery,
-            timestamp: new Date()
-          }],
-          toolExecutions: [], // Clear previous tool executions
-          fileEdits: [],      // Clear previous file edits for current-run status metrics
-          subagentActivities: [],
-          queryProgress: null, // Clear previous progress
-          currentTodos: [],    // Clear previous todos
-          logs: [...prev.logs, logEntry]
-        }));
-        debugLog('[>>] Query started:', startedQuery);
+        const isForActiveChat = queryChatId === activeChatIdRef.current;
+        if (isForActiveChat) {
+          setState(prev => ({
+            ...prev,
+            isProcessing: true,
+            lastError: null,
+            queryCount: prev.queryCount + 1,
+            messages: [...prev.messages, {
+              id: Date.now().toString(),
+              type: 'user',
+              content: startedQuery,
+              timestamp: new Date()
+            }],
+            toolExecutions: [], // Clear previous tool executions
+            fileEdits: [],      // Clear previous file edits for current-run status metrics
+            subagentActivities: [],
+            queryProgress: null, // Clear previous progress
+            currentTodos: [],    // Clear previous todos
+            logs: [...prev.logs, logEntry]
+          }));
+        }
+        // Update session list to mark this chat as having an active query
+        setChatSessionsList(prev =>
+          prev.map(s => ({ ...s, active_query: s.id === queryChatId ? true : s.active_query }))
+        );
+        debugLog('[>>] Query started:', startedQuery, '(chat:', queryChatId, ')');
         break;
 
       case 'query_progress':
-        setState(prev => ({
-          ...prev,
-          queryProgress: event.data
-        }));
-        debugLog('[>>] Query progress:', event.data);
+        {
+          const progressChatId = currentQueryChatIdRef.current;
+          if (currentQueryChatIdRef.current === activeChatIdRef.current) {
+            setState(prev => ({
+              ...prev,
+              queryProgress: event.data
+            }));
+          }
+          setChatQueryProgress(prev => ({ ...prev, [progressChatId]: event.data }));
+          debugLog('[>>] Query progress:', event.data);
+        }
         break;
 
       case 'stream_chunk':
@@ -651,7 +849,8 @@ function App() {
         const chunkContent = event.data.chunk || '';
         const chunkType = event.data.content_type || 'assistant_text';
         
-        setState(prev => {
+        if (currentQueryChatIdRef.current === activeChatIdRef.current) {
+          setState(prev => {
           const newMessages = [...prev.messages];
           const lastMessage = newMessages[newMessages.length - 1];
           if (lastMessage && lastMessage.type === 'assistant') {
@@ -686,6 +885,7 @@ function App() {
             messages: newMessages
           };
         });
+        }
         break;
 
       case 'query_completed':
@@ -706,7 +906,10 @@ function App() {
         if (wasClearCommand) {
           setQueuedMessages([]);
         }
-        setState(prev => {
+        // Only mutate the active view state if this query was for the currently active chat.
+        // Per-chat cleanup (chatQueryProgress, chatSessionsList) always runs.
+        if (currentQueryChatIdRef.current === activeChatIdRef.current) {
+          setState(prev => {
           let nextMessages = wasClearCommand
             ? []
             : ensureCompletedAssistantMessage(prev.messages, completedResponse, (responseText) => ({
@@ -760,13 +963,23 @@ function App() {
             logs: [...prev.logs, logEntry]
           };
         });
+        }
+        // Per-chat state updates on query completion (always runs)
+        {
+          const completedChatId = currentQueryChatIdRef.current;
+          setChatQueryProgress(prev => ({ ...prev, [completedChatId]: null }));
+          setChatSessionsList(prev =>
+            prev.map(s => ({ ...s, active_query: s.id === completedChatId ? false : s.active_query }))
+          );
+        }
         debugLog('[OK] Query completed');
         break;
 
       case 'tool_start':
         logEntry.category = 'tool';
         logEntry.level = 'info';
-        setState(prev => {
+        if (currentQueryChatIdRef.current === activeChatIdRef.current) {
+          setState(prev => {
           const toolCallID = String(event.data?.tool_call_id || '');
           const toolName = String(event.data?.tool_name || 'unknown_tool');
           const rawArgs = event.data?.arguments != null ? String(event.data.arguments) : undefined;
@@ -852,13 +1065,15 @@ function App() {
             logs: [...prev.logs, logEntry]
           };
         });
+        }
         debugLog('[tool] Tool start:', event.data?.tool_name);
         break;
 
       case 'tool_end':
         logEntry.category = 'tool';
         logEntry.level = event.data?.status === 'failed' ? 'error' : 'info';
-        setState(prev => {
+        if (currentQueryChatIdRef.current === activeChatIdRef.current) {
+          setState(prev => {
           const toolCallID = String(event.data?.tool_call_id || '');
           const status: ToolExecution['status'] = event.data?.status === 'failed' ? 'error' : 'completed';
           const result = event.data?.result != null ? String(event.data.result) : undefined;
@@ -906,40 +1121,43 @@ function App() {
 
           return { ...prev, toolExecutions: updatedExecutions, logs: [...prev.logs, logEntry] };
         });
+        }
         debugLog('[tool] Tool end:', event.data?.tool_name, event.data?.status);
         break;
 
       case 'subagent_activity':
         logEntry.category = 'tool';
         logEntry.level = 'info';
-        setState(prev => {
-          const activity: SubagentActivity = {
-            id: String(event.id || `${Date.now()}-${Math.random()}`),
-            toolCallId: String(event.data?.tool_call_id || ''),
-            toolName: String(event.data?.tool_name || 'run_subagent'),
-            phase: event.data?.phase === 'spawn' || event.data?.phase === 'complete' || event.data?.phase === 'step' ? event.data.phase : 'output',
-            message: String(event.data?.message || '').trim(),
-            timestamp: new Date(),
-            taskId: typeof event.data?.task_id === 'string' ? event.data.task_id : undefined,
-            persona: typeof event.data?.persona === 'string' ? event.data.persona : undefined,
-            isParallel: event.data?.is_parallel === true,
-            provider: typeof event.data?.provider === 'string' ? event.data.provider : undefined,
-            model: typeof event.data?.model === 'string' ? event.data.model : undefined,
-            taskCount: typeof event.data?.task_count === 'number' ? event.data.task_count : undefined,
-            failures: typeof event.data?.failures === 'number' ? event.data.failures : undefined,
-            tool: typeof event.data?.tool === 'string' ? event.data.tool : undefined,
-          };
+        if (currentQueryChatIdRef.current === activeChatIdRef.current) {
+          setState(prev => {
+            const activity: SubagentActivity = {
+              id: String(event.id || `${Date.now()}-${Math.random()}`),
+              toolCallId: String(event.data?.tool_call_id || ''),
+              toolName: String(event.data?.tool_name || 'run_subagent'),
+              phase: event.data?.phase === 'spawn' || event.data?.phase === 'complete' || event.data?.phase === 'step' ? event.data.phase : 'output',
+              message: String(event.data?.message || '').trim(),
+              timestamp: new Date(),
+              taskId: typeof event.data?.task_id === 'string' ? event.data.task_id : undefined,
+              persona: typeof event.data?.persona === 'string' ? event.data.persona : undefined,
+              isParallel: event.data?.is_parallel === true,
+              provider: typeof event.data?.provider === 'string' ? event.data.provider : undefined,
+              model: typeof event.data?.model === 'string' ? event.data.model : undefined,
+              taskCount: typeof event.data?.task_count === 'number' ? event.data.task_count : undefined,
+              failures: typeof event.data?.failures === 'number' ? event.data.failures : undefined,
+              tool: typeof event.data?.tool === 'string' ? event.data.tool : undefined,
+            };
 
-          if (!activity.message) {
-            return { ...prev, logs: [...prev.logs, logEntry] };
-          }
+            if (!activity.message) {
+              return { ...prev, logs: [...prev.logs, logEntry] };
+            }
 
-          return {
-            ...prev,
-            subagentActivities: [...prev.subagentActivities, activity].slice(-500),
-            logs: [...prev.logs, logEntry]
-          };
-        });
+            return {
+              ...prev,
+              subagentActivities: [...prev.subagentActivities, activity].slice(-500),
+              logs: [...prev.logs, logEntry]
+            };
+          });
+        }
         break;
 
       case 'agent_message':
@@ -974,7 +1192,8 @@ function App() {
             const toolTarget = String(event.data?.target || '');
             const parsedToolName = extractToolNameFromToolLogTarget(toolTarget);
 
-            setState(prev => {
+            if (currentQueryChatIdRef.current === activeChatIdRef.current) {
+              setState(prev => {
               // Best effort: if this log says a tool is executing, mark its
               // most recent started row as running (without adding a duplicate row).
               if (/^executing tool$/i.test(toolAction) && parsedToolName) {
@@ -996,41 +1215,46 @@ function App() {
 
               return { ...prev, logs: [...prev.logs, logEntry] };
             });
+            }
           } else if ((category === 'warning' || category === 'error') && !suppressInChat) {
             // Warning/error messages are operational notices, not model reasoning.
             logEntry.category = 'system';
             logEntry.level = category === 'error' ? 'error' : 'warning';
 
-            setState(prev => {
-              const newMessages = [...prev.messages];
-              const lastMessage = newMessages[newMessages.length - 1];
-              if (lastMessage && lastMessage.type === 'assistant') {
-                const prefixedMsg = category === 'error'
-                  ? `\n\nWarning: ${cleanedMsg}`
-                  : `\n\nNote: ${cleanedMsg}`;
-                newMessages[newMessages.length - 1] = {
-                  ...lastMessage,
-                  content: (lastMessage.content || '') + prefixedMsg
-                };
-              }
-              return { ...prev, messages: newMessages, logs: [...prev.logs, logEntry] };
-            });
+            if (currentQueryChatIdRef.current === activeChatIdRef.current) {
+              setState(prev => {
+                const newMessages = [...prev.messages];
+                const lastMessage = newMessages[newMessages.length - 1];
+                if (lastMessage && lastMessage.type === 'assistant') {
+                  const prefixedMsg = category === 'error'
+                    ? `\n\nWarning: ${cleanedMsg}`
+                    : `\n\nNote: ${cleanedMsg}`;
+                  newMessages[newMessages.length - 1] = {
+                    ...lastMessage,
+                    content: (lastMessage.content || '') + prefixedMsg
+                  };
+                }
+                return { ...prev, messages: newMessages, logs: [...prev.logs, logEntry] };
+              });
+            }
           } else if (category === 'info_rendered' && cleanedMsg && !suppressInChat) {
             // Meaningful info messages should render in chat, but not inside reasoning.
             logEntry.category = 'system';
             logEntry.level = 'info';
 
-            setState(prev => {
-              const newMessages = [...prev.messages];
-              const lastMessage = newMessages[newMessages.length - 1];
-              if (lastMessage && lastMessage.type === 'assistant') {
-                newMessages[newMessages.length - 1] = {
-                  ...lastMessage,
-                  content: (lastMessage.content || '') + `\n\nInfo: ${cleanedMsg}`
-                };
-              }
-              return { ...prev, messages: newMessages, logs: [...prev.logs, logEntry] };
-            });
+            if (currentQueryChatIdRef.current === activeChatIdRef.current) {
+              setState(prev => {
+                const newMessages = [...prev.messages];
+                const lastMessage = newMessages[newMessages.length - 1];
+                if (lastMessage && lastMessage.type === 'assistant') {
+                  newMessages[newMessages.length - 1] = {
+                    ...lastMessage,
+                    content: (lastMessage.content || '') + `\n\nInfo: ${cleanedMsg}`
+                  };
+                }
+                return { ...prev, messages: newMessages, logs: [...prev.logs, logEntry] };
+              });
+            }
           }
           // For plain 'info' (unclassified): silently skip rendering in WebUI.
           // These include blank lines, iteration markers, context pruning messages, etc.
@@ -1042,17 +1266,20 @@ function App() {
         logEntry.category = 'tool';
         logEntry.level = 'info';
         const normalizedTodos = normalizeTodoList(event.data?.todos);
-        setState(prev => ({
-          ...prev,
-          currentTodos: normalizedTodos,
-          logs: [...prev.logs, logEntry]
-        }));
+        if (currentQueryChatIdRef.current === activeChatIdRef.current) {
+          setState(prev => ({
+            ...prev,
+            currentTodos: normalizedTodos,
+            logs: [...prev.logs, logEntry]
+          }));
+        }
         break;
 
       case 'file_changed':
         logEntry.category = 'file';
         logEntry.level = 'info';
-        setState(prev => {
+        if (currentQueryChatIdRef.current === activeChatIdRef.current) {
+          setState(prev => {
           const newLogs = [...prev.logs, logEntry];
 
           // Track file edits
@@ -1069,6 +1296,7 @@ function App() {
 
           return { ...prev, logs: newLogs, fileEdits: updatedFileEdits };
         });
+        }
         debugLog('[edit] File changed:', event.data.path);
         break;
 
@@ -1090,19 +1318,21 @@ function App() {
           activeRequestsRef.current -= 1;
         }
         const errorMessage = event.data?.message || 'Unknown error';
-        setState(prev => ({
-          ...prev,
-          isProcessing: activeRequestsRef.current > 0,
-          queryProgress: null,
-          lastError: errorMessage,
-          messages: [...prev.messages, {
-            id: Date.now().toString(),
-            type: 'assistant',
-            content: `[FAIL] Error: ${errorMessage}`,
-            timestamp: new Date()
-          }],
-          logs: [...prev.logs, logEntry]
-        }));
+        if (currentQueryChatIdRef.current === activeChatIdRef.current) {
+          setState(prev => ({
+            ...prev,
+            isProcessing: activeRequestsRef.current > 0,
+            queryProgress: null,
+            lastError: errorMessage,
+            messages: [...prev.messages, {
+              id: Date.now().toString(),
+              type: 'assistant',
+              content: `[FAIL] Error: ${errorMessage}`,
+              timestamp: new Date()
+            }],
+            logs: [...prev.logs, logEntry]
+          }));
+        }
         console.error('[FAIL] Error event:', event.data);
         break;
 
@@ -1165,6 +1395,7 @@ function App() {
         }));
         debugLog('[?] Unknown event type:', event.type, event.data);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -1178,6 +1409,9 @@ function App() {
     // Initialize WebSocket connection
     wsService.connect();
     wsService.onEvent(handleEvent);
+
+    // Load chat sessions (multi-chat support)
+    loadChatSessions().catch(console.error);
 
     // Load initial stats
     const loadStats = () => {
@@ -1448,7 +1682,7 @@ function App() {
         wakeLock.release().catch(() => {});
       }
     };
-  }, [handleEvent, wsService, apiService]);
+  }, [handleEvent, wsService, apiService, loadChatSessions]);
 
   // Listen for session-restored events from Chat.tsx to populate messages
   useEffect(() => {
@@ -1491,6 +1725,7 @@ function App() {
     if (!message.trim()) return;
     const trimmedMessage = message.trim();
     const allowConcurrent = options?.allowConcurrent === true;
+    const chatId = chatSessionsEnabled ? activeChatId : undefined;
     if (!allowConcurrent && activeRequestsRef.current > 0) {
       setState(prev => ({
         ...prev,
@@ -1502,7 +1737,7 @@ function App() {
           timestamp: new Date()
         }]
       }));
-      await apiService.steerQuery(trimmedMessage);
+      await apiService.steerQuery(trimmedMessage, chatId);
       setInputValue('');
       return;
     }
@@ -1516,8 +1751,8 @@ function App() {
     }));
 
     try {
-      debugLog('[>>] Sending message:', trimmedMessage);
-      await apiService.sendQuery(trimmedMessage);
+      debugLog('[>>] Sending message:', trimmedMessage, '(chat:', chatId || 'default', ')');
+      await apiService.sendQuery(trimmedMessage, chatId);
       setInputValue('');
       debugLog('[OK] Message sent successfully');
     } catch (error) {
@@ -1538,7 +1773,7 @@ function App() {
         }]
       }));
     }
-  }, [apiService]);
+  }, [apiService, chatSessionsEnabled, activeChatId]);
 
   const handleQueueMessage = useCallback((message: string) => {
     const trimmed = message.trim();
@@ -1573,8 +1808,9 @@ function App() {
   }, []);
 
   const handleStopProcessing = useCallback(async () => {
+    const chatId = chatSessionsEnabled ? currentQueryChatIdRef.current : undefined;
     try {
-      await apiService.stopQuery();
+      await apiService.stopQuery(chatId);
       // Optimistically clear processing state – the backend accepted the stop.
       // query_completed may or may not follow (query may already be finishing),
       // so we reset here to avoid a stuck "processing" indicator.
@@ -1611,7 +1847,7 @@ function App() {
         activeRequestsRef.current -= 1;
       }
     }
-  }, [apiService]);
+  }, [apiService, chatSessionsEnabled]);
 
   useEffect(() => {
     if (state.isProcessing || activeRequestsRef.current > 0) {
@@ -1894,6 +2130,12 @@ function App() {
                 onTerminalOutput={handleTerminalOutput}
                 onTerminalExpandedChange={setIsTerminalExpanded}
                 isConnected={state.isConnected}
+                chatSessions={chatSessionsEnabled ? chatSessionsList : []}
+                activeChatId={activeChatId}
+                onSwitchChat={handleSwitchChat}
+                onCreateChat={handleCreateChat}
+                onDeleteChat={handleDeleteChat}
+                onRenameChat={handleRenameChat}
               />
               {onboarding.open && (
                 <div className="onboarding-overlay" role="dialog" aria-modal="true" aria-label="Set up ledit">

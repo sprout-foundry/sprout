@@ -164,7 +164,64 @@
   font-size: 12px;
   color: var(--text-tertiary);
   text-align: center;
-  font-style: italic;
+}
+
+/* Loading indicator (shown while files are being pre-fetched) */
+.command-palette-loading {
+  padding: 8px 16px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+/* Filter bar for Commands / Files / All chips */
+.command-palette-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.filter-chip {
+  padding: 2px 10px;
+  font-size: 11px;
+  font-family: var(--font-sans);
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 0.1s ease, color 0.1s ease;
+  white-space: nowrap;
+}
+
+.filter-chip:hover {
+  background: var(--bg-surface);
+}
+
+.filter-chip.active {
+  color: var(--accent-fg);
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+/* Highlight matched characters inside command/file labels */
+.command-palette-label mark,
+.command-palette-file-path mark {
+  color: inherit;
+  font-weight: 600;
+  background: none;
+  text-decoration: underline;
+  text-decoration-color: var(--accent-primary);
+  text-underline-offset: 2px;
+}
+
+.command-palette-selected .command-palette-label mark,
+.command-palette-selected .command-palette-file-path mark {
+  color: inherit;
+  text-decoration-color: rgba(255, 255, 255, 0.5);
 }
 
 /* Scrollbar Styling */

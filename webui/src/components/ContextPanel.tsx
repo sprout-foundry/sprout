@@ -75,7 +75,7 @@ interface SubagentActivity {
   id: string;
   toolCallId: string;
   toolName: string;
-  phase: 'spawn' | 'output' | 'complete';
+  phase: 'spawn' | 'output' | 'complete' | 'step';
   message: string;
   timestamp: Date;
   taskId?: string;
@@ -85,6 +85,7 @@ interface SubagentActivity {
   model?: string;
   taskCount?: number;
   failures?: number;
+  tool?: string;
 }
 
 interface RevisionFile {

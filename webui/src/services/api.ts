@@ -1003,6 +1003,61 @@ class ApiService {
     }
   }
 
+  async getGitLog(limit = 30, offset = 0, options?: { signal?: AbortSignal }): Promise<{
+    message: string;
+    commits: Array<{
+      hash: string;
+      short_hash: string;
+      author: string;
+      date: string;
+      message: string;
+      ref_names?: string;
+    }>;
+    offset: number;
+    limit: number;
+    total: number;
+  }> {
+    try {
+      const params = new URLSearchParams({
+        limit: String(limit),
+        offset: String(offset),
+      });
+      const response = await clientFetch(`/api/git/log?${params}`, options ? { signal: options.signal } : undefined);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to get git log:', error);
+      throw error;
+    }
+  }
+
+  async getGitCommitDetail(hash: string): Promise<{
+    message: string;
+    hash: string;
+    short_hash: string;
+    author: string;
+    date: string;
+    subject: string;
+    ref_names?: string;
+    files: Array<{ path: string; status: string }>;
+    diff: string;
+    stats: string;
+  }> {
+    try {
+      const response = await clientFetch(`/api/git/commit/show?hash=${encodeURIComponent(hash)}`);
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || `HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to get commit detail:', error);
+      throw error;
+    }
+  }
+
   // History and Rollback API methods
   async getChangelog(): Promise<{
     message: string;

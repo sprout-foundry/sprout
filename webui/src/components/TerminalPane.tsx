@@ -147,7 +147,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
 
     // Manage WebSocket connection lifecycle
     useEffect(() => {
-      if (!isActive || !isConnected) {
+      if (!isActive) {
         if (eventHandlerRef.current && terminalWSRef.current) {
           terminalWSRef.current.removeEvent(eventHandlerRef.current);
           terminalWSRef.current.disconnect();
@@ -159,7 +159,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         return;
       }
 
-      // Each pane gets its own independent WebSocket connection / PTY session
+      // Connect regardless of main WS state - terminal has its own independent connection
       const service = TerminalWebSocketService.createInstance();
       terminalWSRef.current = service;
 
@@ -168,9 +168,29 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
           if (!event.data.connected) {
             setPaneConnected(false);
             onConnectionChange?.(false);
-            xtermRef.current?.writeln('\r\nTerminal disconnected');
+            if (event.data.reattach) {
+              // Will auto-reattach - show softer message
+              xtermRef.current?.writeln('\r\x1b[33m⏳ Reconnecting to terminal session...\x1b[0m');
+            } else {
+              xtermRef.current?.writeln('\r\nTerminal disconnected');
+            }
           }
         } else if (event.type === 'session_ready') {
+          setPaneConnected(true);
+          onConnectionChange?.(true);
+          requestAnimationFrame(() => {
+            sendResize();
+            xtermRef.current?.focus();
+          });
+        } else if (event.type === 'session_restored') {
+          // Reattached to existing tmux session - display scrollback
+          const scrollback = event.data.scrollback || '';
+          if (xtermRef.current) {
+            xtermRef.current.clear();
+            if (scrollback) {
+              xtermRef.current.write(scrollback);
+            }
+          }
           setPaneConnected(true);
           onConnectionChange?.(true);
           requestAnimationFrame(() => {
@@ -194,7 +214,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         terminalWSRef.current = null;
         eventHandlerRef.current = null;
       };
-    }, [isActive, isConnected, sendResize, onConnectionChange]);
+    }, [isActive, sendResize, onConnectionChange]);
 
     // Resize observer
     useEffect(() => {

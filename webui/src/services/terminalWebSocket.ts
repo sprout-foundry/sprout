@@ -8,7 +8,7 @@ class TerminalWebSocketService {
   private ws: WebSocket | null = null;
   private callbacks: TerminalEventCallback[] = [];
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
+  private maxReconnectAttempts = 20;
   private reconnectDelay = 1000;
   private sessionId: string | null = null;
   private isConnected = false;
@@ -57,12 +57,15 @@ class TerminalWebSocketService {
       debugLog('Terminal WebSocket already connected');
       return;
     }
-    
+
     // Don't connect if connecting
     if (this.ws && this.ws.readyState === WebSocket.CONNECTING) {
       debugLog('Terminal WebSocket already connecting');
       return;
     }
+
+    // Reset intentionalClose flag (e.g. if disconnect() was called but we manually reconnect)
+    this.intentionalClose = false;
 
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
@@ -72,11 +75,17 @@ class TerminalWebSocketService {
     // Use environment variable if provided, otherwise use relative URL.
     // When running via the SSH proxy the LEDIT_PROXY_BASE global is injected
     // into the page so WebSocket traffic routes through the same origin.
-    const wsUrl = process.env.REACT_APP_TERMINAL_WS_URL || (() => {
+    let wsUrl = process.env.REACT_APP_TERMINAL_WS_URL || (() => {
       const proxyBase = (window as any).LEDIT_PROXY_BASE || '';
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       return `${protocol}//${window.location.host}${proxyBase}/terminal`;
     })();
+
+    // On reconnect, pass preserved sessionId so server can reattach
+    if (this.sessionId && this.reconnectAttempts > 0) {
+      const separator = wsUrl.includes('?') ? '&' : '?';
+      wsUrl = `${wsUrl}${separator}reattach=${encodeURIComponent(this.sessionId)}`;
+    }
 
     debugLog('Connecting to Terminal WebSocket:', wsUrl);
 
@@ -94,14 +103,19 @@ class TerminalWebSocketService {
       debugLog('Terminal WebSocket disconnected:', event);
       this.stopPingInterval();
       this.isConnected = false;
-      this.sessionId = null;
-      this.notifyCallbacks({ type: 'connection_status', data: { connected: false } });
+      // Only clear sessionId on intentional close.
+      // On unexpected disconnect, keep it so we can reattach.
+      if (!this.intentionalClose) {
+        // Keep sessionId for reattach - don't null it
+        this.notifyCallbacks({ type: 'connection_status', data: { connected: false, reattach: this.sessionId } });
+      } else {
+        this.sessionId = null;
+        this.notifyCallbacks({ type: 'connection_status', data: { connected: false } });
+      }
 
-      // Only reconnect if not intentionally closed
       if (!this.intentionalClose && this.reconnectAttempts < this.maxReconnectAttempts) {
         this.reconnectAttempts++;
         this.reconnectTimeout = setTimeout(() => {
-          debugLog(`Attempting terminal reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
           this.reconnectTimeout = null;
           this.connect();
         }, this.reconnectDelay * this.reconnectAttempts);
@@ -268,6 +282,16 @@ class TerminalWebSocketService {
 
   getSessionId(): string | null {
     return this.sessionId;
+  }
+
+  /** Returns the preserved sessionId for reattach, or null. */
+  getSessionIdForReattach(): string | null {
+    return this.sessionId;
+  }
+
+  /** Clear persisted session after a successful reattach. */
+  clearPersistedSession() {
+    this.sessionId = null;
   }
 }
 

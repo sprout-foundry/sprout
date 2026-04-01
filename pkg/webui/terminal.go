@@ -1,6 +1,7 @@
 package webui
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -13,6 +14,9 @@ import (
 
 	"github.com/creack/pty"
 )
+
+// tmuxSessionPrefix is prepended to session IDs when creating tmux session names.
+const tmuxSessionPrefix = "ledit_"
 
 // shellExists checks if a shell binary exists in PATH.
 func shellExists(name string) bool {
@@ -34,6 +38,8 @@ type TerminalSession struct {
 	HistoryIndex int
 	OutputCh     chan []byte
 	Size         *pty.Winsize // Terminal size for resizing
+	TmuxBacked   bool         // Whether this session uses tmux for persistence
+	monitorDone  chan struct{} // Close to signal the monitor goroutine to stop
 }
 
 // TerminalManager manages terminal sessions
@@ -41,17 +47,51 @@ type TerminalManager struct {
 	sessions      map[string]*TerminalSession
 	mutex         sync.RWMutex
 	workspaceRoot string
+	tmuxAvailable bool
+	tmuxCheckOnce sync.Once
 }
 
 // NewTerminalManager creates a new terminal manager
 func NewTerminalManager(workspaceRoot string) *TerminalManager {
-	return &TerminalManager{
+	tm := &TerminalManager{
 		sessions:      make(map[string]*TerminalSession),
 		workspaceRoot: workspaceRoot,
 	}
+	// Check tmux availability once (Unix only)
+	tm.tmuxCheckOnce.Do(func() {
+		if runtime.GOOS != "windows" {
+			tm.tmuxAvailable = shellExists("tmux")
+			if tm.tmuxAvailable {
+				fmt.Printf("TerminalManager: tmux detected, terminal persistence enabled\n")
+			} else {
+				fmt.Printf("TerminalManager: tmux not found, terminal persistence disabled (install tmux for persistence)\n")
+			}
+		}
+	})
+	return tm
 }
 
-// CreateSession creates a new terminal session with PTY support
+// TmuxSessionName returns the tmux session name for a given session ID.
+func (tm *TerminalManager) TmuxSessionName(sessionID string) string {
+	return tmuxSessionPrefix + sessionID
+}
+
+// IsTmuxAvailable returns whether tmux was found at startup.
+func (tm *TerminalManager) IsTmuxAvailable() bool {
+	return tm.tmuxAvailable
+}
+
+// HasSession checks if a session exists (for reattach).
+func (tm *TerminalManager) HasSession(sessionID string) bool {
+	tm.mutex.RLock()
+	defer tm.mutex.RUnlock()
+	_, exists := tm.sessions[sessionID]
+	return exists
+}
+
+// CreateSession creates a new terminal session with PTY support.
+// When tmux is available on Unix, the session is backed by a tmux server
+// so it can survive WebSocket disconnections and be reattached.
 func (tm *TerminalManager) CreateSession(sessionID string) (*TerminalSession, error) {
 	tm.mutex.Lock()
 	defer tm.mutex.Unlock()
@@ -62,33 +102,115 @@ func (tm *TerminalManager) CreateSession(sessionID string) (*TerminalSession, er
 	}
 
 	// Determine shell based on OS with better fallback logic
-	var shell string
-	var shellArgs []string
-
 	switch runtime.GOOS {
 	case "windows":
 		// On Windows, fallback to basic exec approach
 		return tm.createWindowsSession(sessionID)
 	default:
-		// Unix-like systems - use PTY
-		// Prefer user's configured shell ($SHELL), then fall back to bash/zsh/sh
-		userShell := os.Getenv("SHELL")
-		switch {
-		case userShell != "":
-			shell = userShell
-			shellArgs = []string{"--login"}
-		case shellExists("bash"):
-			shell = "bash"
-			shellArgs = []string{"--login"}
-		case shellExists("zsh"):
-			shell = "zsh"
-			shellArgs = []string{"--login"}
-		case shellExists("sh"):
-			shell = "sh"
-			shellArgs = []string{"-l"}
-		default:
-			return nil, fmt.Errorf("no suitable shell found")
+		// Unix-like systems - try tmux first, then raw PTY
+		if tm.tmuxAvailable {
+			return tm.createTmuxSession(sessionID)
 		}
+		return tm.createUnixSession(sessionID)
+	}
+}
+
+// createTmuxSession creates a tmux-backed terminal session for persistence.
+func (tm *TerminalManager) createTmuxSession(sessionID string) (*TerminalSession, error) {
+	tmuxName := tm.TmuxSessionName(sessionID)
+
+	// Determine the shell to use
+	shell, shellArgs, err := tm.resolveShell()
+	if err != nil {
+		return nil, err
+	}
+
+	// Default terminal size
+	defaultSize := &pty.Winsize{
+		Rows: 24,
+		Cols: 80,
+	}
+
+	// Create the detached tmux session with the user's shell
+	createArgs := []string{
+		"new-session",
+		"-d",
+		"-s", tmuxName,
+		"-x", fmt.Sprintf("%d", defaultSize.Cols),
+		"-y", fmt.Sprintf("%d", defaultSize.Rows),
+		shell,
+	}
+	createArgs = append(createArgs, shellArgs...)
+	createCmd := exec.Command("tmux", createArgs...)
+	if strings.TrimSpace(tm.workspaceRoot) != "" {
+		createCmd.Dir = tm.workspaceRoot
+	}
+	// Inherit useful env vars for the shell inside tmux
+	createCmd.Env = append(os.Environ(),
+		"TERM=xterm-256color",
+		"COLORTERM=truecolor",
+		"FORCE_COLOR=1",
+		"SHELL="+shell,
+		"LEDIT_WEB_TERMINAL=1",
+	)
+
+	if output, err := createCmd.CombinedOutput(); err != nil {
+		fmt.Printf("TerminalManager: tmux new-session failed for %s: %v, output: %s\n", tmuxName, err, string(output))
+		return nil, fmt.Errorf("failed to create tmux session: %w", err)
+	}
+
+	// Set environment variable inside tmux session for child processes
+	setEnvCmd := exec.Command("tmux", "set-environment", "-t", tmuxName, "LEDIT_WEB_TERMINAL", "1")
+	_ = setEnvCmd.Run() // Best effort
+
+	// Now attach to the tmux session to get a PTY we can read/write
+	ctx, cancel := context.WithCancel(context.Background())
+
+	attachCmd := exec.CommandContext(ctx, "tmux", "attach-session", "-t", tmuxName)
+	if strings.TrimSpace(tm.workspaceRoot) != "" {
+		attachCmd.Dir = tm.workspaceRoot
+	}
+	attachCmd.Env = append(os.Environ(),
+		"TERM=xterm-256color",
+	)
+
+	ptyFile, err := pty.StartWithSize(attachCmd, defaultSize)
+	if err != nil {
+		cancel()
+		// Clean up the tmux session
+		killCmd := exec.Command("tmux", "kill-session", "-t", tmuxName)
+		_ = killCmd.Run()
+		return nil, fmt.Errorf("failed to attach to tmux session: %w", err)
+	}
+
+	// Create session
+	session := &TerminalSession{
+		ID:          sessionID,
+		Command:     attachCmd,
+		Pty:         ptyFile,
+		Output:      ptyFile,
+		Cancel:      cancel,
+		Active:      true,
+		LastUsed:    time.Now(),
+		OutputCh:    make(chan []byte, 10000),
+		Size:        defaultSize,
+		TmuxBacked:  true,
+		monitorDone: make(chan struct{}),
+	}
+
+	tm.sessions[sessionID] = session
+
+	// Start monitoring the session
+	go tm.monitorSession(session)
+
+	return session, nil
+}
+
+// createUnixSession creates a raw PTY terminal session (fallback when tmux is unavailable).
+func (tm *TerminalManager) createUnixSession(sessionID string) (*TerminalSession, error) {
+	shell, shellArgs, err := tm.resolveShell()
+	if err != nil {
+		return nil, err
 	}
 
 	// Create context for the command
@@ -124,15 +246,17 @@ func (tm *TerminalManager) CreateSession(sessionID string) (*TerminalSession, er
 
 	// Create session
 	session := &TerminalSession{
-		ID:       sessionID,
-		Command:  cmd,
-		Pty:      ptyFile,
-		Output:   ptyFile, // PTY handles both input and output
-		Cancel:   cancel,
-		Active:   true,
-		LastUsed: time.Now(),
-		OutputCh: make(chan []byte, 100),
-		Size:     defaultSize,
+		ID:          sessionID,
+		Command:     cmd,
+		Pty:         ptyFile,
+		Output:      ptyFile, // PTY handles both input and output
+		Cancel:      cancel,
+		Active:      true,
+		LastUsed:    time.Now(),
+		OutputCh:    make(chan []byte, 10000),
+		Size:        defaultSize,
+		TmuxBacked:  false,
+		monitorDone: make(chan struct{}),
 	}
 
 	tm.sessions[sessionID] = session
@@ -141,6 +265,23 @@ func (tm *TerminalManager) CreateSession(sessionID string) (*TerminalSession, er
 	go tm.monitorSession(session)
 
 	return session, nil
+}
+
+// resolveShell determines which shell to use on Unix systems.
+func (tm *TerminalManager) resolveShell() (shell string, shellArgs []string, err error) {
+	userShell := os.Getenv("SHELL")
+	switch {
+	case userShell != "":
+		return userShell, []string{"--login"}, nil
+	case shellExists("bash"):
+		return "bash", []string{"--login"}, nil
+	case shellExists("zsh"):
+		return "zsh", []string{"--login"}, nil
+	case shellExists("sh"):
+		return "sh", []string{"-l"}, nil
+	default:
+		return "", nil, fmt.Errorf("no suitable shell found")
+	}
 }
 
 // createWindowsSession creates a fallback session for Windows (non-PTY)
@@ -173,13 +314,15 @@ func (tm *TerminalManager) createWindowsSession(sessionID string) (*TerminalSess
 
 	// Create a basic session (Windows fallback)
 	session := &TerminalSession{
-		ID:       sessionID,
-		Command:  cmd,
-		Output:   stdout, // Limited functionality on Windows
-		Cancel:   cancel,
-		Active:   true,
-		LastUsed: time.Now(),
-		OutputCh: make(chan []byte, 100),
+		ID:          sessionID,
+		Command:     cmd,
+		Output:      stdout, // Limited functionality on Windows
+		Cancel:      cancel,
+		Active:      true,
+		LastUsed:    time.Now(),
+		OutputCh:    make(chan []byte, 10000),
+		TmuxBacked:  false,
+		monitorDone: make(chan struct{}),
 	}
 
 	// For Windows, we'll store stdin separately in the PTY field for compatibility
@@ -188,6 +331,124 @@ func (tm *TerminalManager) createWindowsSession(sessionID string) (*TerminalSess
 	}
 
 	return session, nil
+}
+
+// ReattachSession reattaches to an existing tmux-backed session.
+// It returns the scrollback buffer content for immediate display on the client.
+// If the tmux session was killed externally, the stale entry is cleaned up and an error is returned.
+func (tm *TerminalManager) ReattachSession(sessionID string, maxScrollback int) (string, error) {
+	tm.mutex.Lock()
+	defer tm.mutex.Unlock()
+
+	session, exists := tm.sessions[sessionID]
+	if !exists {
+		return "", fmt.Errorf("session %s does not exist", sessionID)
+	}
+
+	session.mutex.Lock()
+	defer session.mutex.Unlock()
+
+	if !session.TmuxBacked {
+		return "", fmt.Errorf("session %s is not tmux-backed and cannot be reattached", sessionID)
+	}
+
+	tmuxName := tm.TmuxSessionName(sessionID)
+
+	// Check if tmux session still exists
+	hasSession := exec.Command("tmux", "has-session", "-t", tmuxName)
+	if err := hasSession.Run(); err != nil {
+		// Tmux session was killed externally — clean up stale entry
+		fmt.Printf("TerminalManager: tmux session %s no longer exists, cleaning up\n", tmuxName)
+		session.Active = false
+		delete(tm.sessions, sessionID)
+		return "", fmt.Errorf("tmux session %s no longer exists (killed externally)", tmuxName)
+	}
+
+	// Stop the old monitor goroutine
+	if session.monitorDone != nil {
+		select {
+		case <-session.monitorDone:
+			// Already stopped
+		default:
+			close(session.monitorDone)
+		}
+	}
+
+	// Cancel old attach command and close old PTY
+	if session.Cancel != nil {
+		session.Cancel()
+	}
+	if session.Pty != nil {
+		session.Pty.Close()
+	}
+	// Wait for old command to finish (non-blocking)
+	if session.Command != nil && session.Command.Process != nil {
+		_, _ = session.Command.Process.Wait()
+	}
+
+	// Capture scrollback with escape sequences for proper rendering
+	scrollback, err := tm.captureScrollback(tmuxName, maxScrollback)
+	if err != nil {
+		fmt.Printf("TerminalManager: warning: failed to capture scrollback for %s: %v\n", tmuxName, err)
+		// Non-fatal: continue with reattach even if scrollback capture fails
+	}
+
+	// Create new PTY by attaching to the tmux session
+	ctx, cancel := context.WithCancel(context.Background())
+
+	attachCmd := exec.CommandContext(ctx, "tmux", "attach-session", "-t", tmuxName)
+	if strings.TrimSpace(tm.workspaceRoot) != "" {
+		attachCmd.Dir = tm.workspaceRoot
+	}
+	attachCmd.Env = append(os.Environ(),
+		"TERM=xterm-256color",
+	)
+
+	ptyFile, err := pty.StartWithSize(attachCmd, session.Size)
+	if err != nil {
+		cancel()
+		// Tmux session might have died between has-session check and attach
+		session.Active = false
+		delete(tm.sessions, sessionID)
+		killCmd := exec.Command("tmux", "kill-session", "-t", tmuxName)
+		_ = killCmd.Run()
+		return "", fmt.Errorf("failed to reattach to tmux session: %w", err)
+	}
+
+	// Replace session fields with new PTY
+	session.Command = attachCmd
+	session.Pty = ptyFile
+	session.Output = ptyFile
+	session.Cancel = cancel
+	session.Active = true
+	session.LastUsed = time.Now()
+	session.OutputCh = make(chan []byte, 10000)
+	session.monitorDone = make(chan struct{})
+
+	// Start a new monitor goroutine
+	go tm.monitorSession(session)
+
+	return scrollback, nil
+}
+
+// captureScrollback captures the scrollback buffer from a tmux session.
+func (tm *TerminalManager) captureScrollback(tmuxName string, maxLines int) (string, error) {
+	if maxLines <= 0 {
+		maxLines = 2000
+	}
+	captureCmd := exec.Command("tmux", "capture-pane",
+		"-t", tmuxName,
+		"-p",
+		"-S", fmt.Sprintf("-%d", maxLines),
+		"-e", // include escape sequences
+	)
+	var stdout, stderr bytes.Buffer
+	captureCmd.Stdout = &stdout
+	captureCmd.Stderr = &stderr
+	if err := captureCmd.Run(); err != nil {
+		return "", fmt.Errorf("tmux capture-pane failed: %w: %s", err, stderr.String())
+	}
+	return stdout.String(), nil
 }
 
 // GetSession retrieves a terminal session
@@ -297,7 +558,8 @@ func isControlOnlyCommand(command string) bool {
 	return true
 }
 
-// CloseSession closes a terminal session
+// CloseSession closes a terminal session and cleans up associated resources.
+// For tmux-backed sessions, the tmux server session is also killed.
 func (tm *TerminalManager) CloseSession(sessionID string) error {
 	tm.mutex.Lock()
 	defer tm.mutex.Unlock()
@@ -307,7 +569,17 @@ func (tm *TerminalManager) CloseSession(sessionID string) error {
 		return fmt.Errorf("session %s not found", sessionID)
 	}
 
-	// Cancel the context
+	// Stop the monitor goroutine
+	session.mutex.Lock()
+	if session.monitorDone != nil {
+		select {
+		case <-session.monitorDone:
+		default:
+			close(session.monitorDone)
+		}
+	}
+
+	// Cancel the context (kills the attach process, not the tmux session)
 	session.Cancel()
 
 	// Close PTY
@@ -321,9 +593,70 @@ func (tm *TerminalManager) CloseSession(sessionID string) error {
 	}
 
 	session.Active = false
+	tmuxBacked := session.TmuxBacked
+	session.mutex.Unlock()
+
+	// Kill the tmux session if this was tmux-backed
+	if tmuxBacked {
+		tmuxName := tm.TmuxSessionName(sessionID)
+		killCmd := exec.Command("tmux", "kill-session", "-t", tmuxName)
+		if err := killCmd.Run(); err != nil {
+			// The tmux session might have been killed externally already.
+			// This is not an error condition — just log it.
+			fmt.Printf("TerminalManager: failed to kill tmux session %s (may already be dead): %v\n", tmuxName, err)
+		}
+	}
+
 	delete(tm.sessions, sessionID)
 
 	return nil
+}
+
+// DetachFromSession detaches the WebSocket from a session without destroying it.
+// For tmux-backed sessions, the tmux session stays alive for future reattach.
+// For raw PTY sessions, this is equivalent to CloseSession (they can't survive disconnect).
+func (tm *TerminalManager) DetachFromSession(sessionID string) error {
+	tm.mutex.RLock()
+	session, exists := tm.sessions[sessionID]
+	tm.mutex.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("session %s not found", sessionID)
+	}
+
+	session.mutex.RLock()
+	tmuxBacked := session.TmuxBacked
+	session.mutex.RUnlock()
+
+	if tmuxBacked {
+		// For tmux-backed sessions: stop the monitor goroutine, cancel the attach
+		// process, and close the PTY — but keep the tmux server session alive.
+		session.mutex.Lock()
+		if session.monitorDone != nil {
+			select {
+			case <-session.monitorDone:
+			default:
+				close(session.monitorDone)
+			}
+		}
+		if session.Cancel != nil {
+			session.Cancel()
+		}
+		if session.Pty != nil {
+			session.Pty.Close()
+		}
+		if session.Command != nil && session.Command.Process != nil {
+			_, _ = session.Command.Process.Wait()
+		}
+		session.Active = false
+		session.mutex.Unlock()
+
+		fmt.Printf("TerminalManager: detached from tmux-backed session %s (tmux session preserved for reattach)\n", sessionID)
+		return nil
+	}
+
+	// For raw PTY sessions: close completely since they can't survive disconnect
+	return tm.CloseSession(sessionID)
 }
 
 // CloseAllSessions closes all known terminal sessions and returns the first error encountered.
@@ -350,8 +683,22 @@ func (tm *TerminalManager) monitorSession(session *TerminalSession) {
 		}
 	}()
 
+	// Signal that this goroutine has stopped.
+	defer func() {
+		if session.monitorDone != nil {
+			select {
+			case <-session.monitorDone:
+				// Already closed (by Detach/Close/Reattach)
+			default:
+				close(session.monitorDone)
+			}
+		}
+	}()
+
 	// Start goroutine to read from PTY (single stream for both stdout and stderr)
+	readDone := make(chan struct{})
 	go func() {
+		defer close(readDone)
 		buf := make([]byte, 1024)
 		for {
 			session.mutex.RLock()
@@ -359,10 +706,15 @@ func (tm *TerminalManager) monitorSession(session *TerminalSession) {
 				session.mutex.RUnlock()
 				break
 			}
+			outputReader := session.Output
 			session.mutex.RUnlock()
 
+			if outputReader == nil {
+				break
+			}
+
 			// Read from PTY (handles both stdout and stderr)
-			n, err := session.Output.Read(buf)
+			n, err := outputReader.Read(buf)
 			if err != nil {
 				if err != io.EOF {
 					fmt.Printf("Terminal session %s PTY read error: %v\n", session.ID, err)
@@ -380,6 +732,9 @@ func (tm *TerminalManager) monitorSession(session *TerminalSession) {
 				select {
 				case session.OutputCh <- output:
 					// Output sent successfully
+				case <-session.monitorDone:
+					// Monitor was asked to stop
+					return
 				default:
 					// Channel is full, skip this output
 					fmt.Printf("Terminal %s output channel full, dropping data\n", session.ID)
@@ -388,10 +743,17 @@ func (tm *TerminalManager) monitorSession(session *TerminalSession) {
 		}
 	}()
 
-	// Wait for the command to finish
-	session.Command.Wait()
+	// Wait for either the command to finish, the read goroutine to stop, or monitor to be cancelled
+	select {
+	case <-readDone:
+		// Read goroutine finished
+	case <-session.monitorDone:
+		// Monitor was asked to stop (detach/reattach/close)
+		return
+	}
 
-	// Mark session as inactive
+	// Mark session as inactive only if the command exited on its own
+	// (not if we were cancelled externally by detach/reattach)
 	session.mutex.Lock()
 	session.Active = false
 	session.mutex.Unlock()
@@ -567,7 +929,8 @@ func (tm *TerminalManager) ResetHistoryIndex(sessionID string) error {
 	return nil
 }
 
-// ResizeTerminal resizes the terminal for the given session
+// ResizeTerminal resizes the terminal for the given session.
+// For tmux-backed sessions, the tmux pane is also resized.
 func (tm *TerminalManager) ResizeTerminal(sessionID string, rows, cols uint16) error {
 	session, exists := tm.GetSession(sessionID)
 	if !exists {
@@ -594,6 +957,25 @@ func (tm *TerminalManager) ResizeTerminal(sessionID string, rows, cols uint16) e
 	// Resize the PTY
 	if err := pty.Setsize(session.Pty, newSize); err != nil {
 		return fmt.Errorf("failed to resize PTY: %w", err)
+	}
+
+	// For tmux-backed sessions, also resize the tmux pane
+	if session.TmuxBacked {
+		tmuxName := tm.TmuxSessionName(sessionID)
+		// Note: we release the lock on session before calling tmux,
+		// but we can't here because of the defer. So run it in a goroutine.
+		go func() {
+			resizeCmd := exec.Command("tmux", "resize-pane",
+				"-t", tmuxName,
+				"-x", fmt.Sprintf("%d", cols),
+				"-y", fmt.Sprintf("%d", rows),
+			)
+			if err := resizeCmd.Run(); err != nil {
+				// Non-fatal: the PTY resize already happened, tmux adjust may
+				// not be critical in all cases
+				fmt.Printf("TerminalManager: failed to resize tmux pane %s: %v\n", tmuxName, err)
+			}
+		}()
 	}
 
 	// Update the stored size

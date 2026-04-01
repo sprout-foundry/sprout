@@ -139,7 +139,7 @@ interface SubagentActivity {
   id: string;
   toolCallId: string;
   toolName: string;
-  phase: 'spawn' | 'output' | 'complete';
+  phase: 'spawn' | 'output' | 'complete' | 'step';
   message: string;
   timestamp: Date;
   taskId?: string;
@@ -149,6 +149,7 @@ interface SubagentActivity {
   model?: string;
   taskCount?: number;
   failures?: number;
+  tool?: string;
 }
 
 interface OnboardingState {
@@ -195,9 +196,12 @@ const getAppStateStorageKey = (): string => {
   if (typeof window === 'undefined' || !window.localStorage) {
     return `${APP_STATE_STORAGE_KEY}:default:local`;
   }
-  const instancePid = window.localStorage.getItem(INSTANCE_PID_STORAGE_KEY) || 'default';
+  // Use the per-tab client ID (sessionStorage) to isolate persistence across tabs.
+  // localStorage is shared across tabs of the same origin, but sessionStorage is
+  // per-tab, so including client_id ensures each tab has its own persistence key.
+  const clientId = getWebUIClientId();
   const scope = getUIContextScope();
-  return `${APP_STATE_STORAGE_KEY}:${instancePid}:${scope}`;
+  return `${APP_STATE_STORAGE_KEY}:${clientId}:${scope}`;
 };
 
 const parseDate = (value: unknown): Date => {
@@ -577,6 +581,13 @@ function App() {
           // Debounce the state update
           connectionTimeoutRef.current = setTimeout(() => {
             lastConnectionStateRef.current = newConnectionState;
+            if (!newConnectionState) {
+              // On disconnect, reset processing state. Any in-flight query may have
+              // completed while we were disconnected and the query_completed event
+              // was lost. When the backend sends query_started on reconnect (if
+              // still running), isProcessing will go back to true via the WS event.
+              activeRequestsRef.current = 0;
+            }
             setState(prev => ({
               ...prev,
               // NOTE:
@@ -584,6 +595,7 @@ function App() {
               // not a chat session id. It changes on reconnect and must never clear chat state.
               sessionId: prev.sessionId || incomingSessionId,
               isConnected: newConnectionState,
+              isProcessing: newConnectionState ? prev.isProcessing : false,
               logs: [...prev.logs, logEntry]
             }));
           }, 300); // Wait 300ms to confirm the connection state is stable
@@ -891,7 +903,7 @@ function App() {
             id: String(event.id || `${Date.now()}-${Math.random()}`),
             toolCallId: String(event.data?.tool_call_id || ''),
             toolName: String(event.data?.tool_name || 'run_subagent'),
-            phase: event.data?.phase === 'spawn' || event.data?.phase === 'complete' ? event.data.phase : 'output',
+            phase: event.data?.phase === 'spawn' || event.data?.phase === 'complete' || event.data?.phase === 'step' ? event.data.phase : 'output',
             message: String(event.data?.message || '').trim(),
             timestamp: new Date(),
             taskId: typeof event.data?.task_id === 'string' ? event.data.task_id : undefined,
@@ -901,6 +913,7 @@ function App() {
             model: typeof event.data?.model === 'string' ? event.data.model : undefined,
             taskCount: typeof event.data?.task_count === 'number' ? event.data.task_count : undefined,
             failures: typeof event.data?.failures === 'number' ? event.data.failures : undefined,
+            tool: typeof event.data?.tool === 'string' ? event.data.tool : undefined,
           };
 
           if (!activity.message) {
@@ -1191,9 +1204,57 @@ function App() {
     const checkMobile = () => {
       setIsMobile(window.innerWidth <= 768);
     };
-    
+
     checkMobile();
     window.addEventListener('resize', checkMobile);
+
+    // Visibility change handling: reconnect WebSocket when tab becomes visible
+    // again after being backgrounded. Browsers throttle timers in background tabs,
+    // which causes WebSocket ping intervals to be skipped and the server to close
+    // the connection due to read deadline timeout.
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        // Tab became visible - trigger immediate reconnect if not connected
+        if (!wsService.isConnected()) {
+          debugLog('[visibility] Tab visible again, reconnecting WebSocket');
+          wsService.disconnect(); // Reset reconnect state
+          wsService.connect();
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Wake lock: request a screen wake lock when the page is visible to prevent
+    // the browser from aggressively throttling timers (which breaks WebSocket
+    // heartbeats). This is particularly important for PWA usage where users may
+    // have the app open in a separate window.
+    let wakeLock: any = null;
+    const requestWakeLock = async () => {
+      if (document.hidden) return;
+      try {
+        const nav = navigator as any;
+        if (nav.wakeLock) {
+          wakeLock = await nav.wakeLock.request('screen');
+          debugLog('[wakelock] Acquired screen wake lock');
+          wakeLock.addEventListener('release', () => {
+            debugLog('[wakelock] Screen wake lock released');
+            wakeLock = null;
+          });
+        }
+      } catch {
+        // Wake lock may fail (e.g., low battery, user preference) - that's OK
+      }
+    };
+
+    // Request wake lock on visibility restore as well (wake locks are released
+    // when the page becomes hidden)
+    const handleVisibilityWakeLock = () => {
+      if (!document.hidden) {
+        requestWakeLock();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityWakeLock);
+    requestWakeLock();
 
     // Cleanup
     return () => {
@@ -1204,7 +1265,13 @@ function App() {
       wsService.removeEvent(handleEvent);
       wsService.disconnect();
       window.removeEventListener('resize', checkMobile);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener('visibilitychange', handleVisibilityWakeLock);
       clearInterval(statsInterval);
+      // Release wake lock
+      if (wakeLock) {
+        wakeLock.release().catch(() => {});
+      }
     };
   }, [handleEvent, wsService, apiService]);
 
@@ -1333,22 +1400,41 @@ function App() {
   const handleStopProcessing = useCallback(async () => {
     try {
       await apiService.stopQuery();
+      // Optimistically clear processing state – the backend accepted the stop.
+      // query_completed may or may not follow (query may already be finishing),
+      // so we reset here to avoid a stuck "processing" indicator.
+      if (activeRequestsRef.current > 0) {
+        activeRequestsRef.current -= 1;
+      }
       setState(prev => ({
         ...prev,
+        isProcessing: activeRequestsRef.current > 0,
         lastError: null,
       }));
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Failed to stop query';
+      // If the backend says "No active query to stop", it means the query has
+      // already completed on the backend side. Trust the backend and reset our
+      // local processing state to prevent a stuck indicator (stop button visible
+      // when nothing is actually running).
+      const isAlreadyDone = errorMsg.includes('No active query to stop');
       setState(prev => ({
         ...prev,
-        lastError: errorMsg,
-        messages: [...prev.messages, {
-          id: Date.now().toString(),
-          type: 'assistant',
-          content: `[FAIL] Error: ${errorMsg}`,
-          timestamp: new Date()
-        }]
+        ...(isAlreadyDone
+          ? { isProcessing: false, lastError: null }
+          : {
+              lastError: errorMsg,
+              messages: [...prev.messages, {
+                id: Date.now().toString(),
+                type: 'assistant',
+                content: `[FAIL] Error: ${errorMsg}`,
+                timestamp: new Date()
+              }],
+            }),
       }));
+      if (isAlreadyDone && activeRequestsRef.current > 0) {
+        activeRequestsRef.current -= 1;
+      }
     }
   }, [apiService]);
 

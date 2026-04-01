@@ -16,7 +16,7 @@ var shellCmd = &cobra.Command{
 	Short: "Generate shell scripts from natural language descriptions",
 	Long: `Generate shell scripts from natural language descriptions with full environmental context.
 
-This command uses AI to generate complete, executable shell scripts based on your description.
+This command uses AI (LLM's) to generate complete, executable shell scripts based on your description.
 The generated scripts are tailored to your current environment (OS, shell, available tools, etc.)
 and include proper error handling and best practices.
 

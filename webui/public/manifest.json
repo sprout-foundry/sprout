@@ -1,7 +1,7 @@
 {
-  "name": "ledit - AI Code Editor",
+  "name": "ledit - Agentic Code Editor",
   "short_name": "ledit",
-  "description": "AI-powered code editing and assistance tool",
+  "description": "Agentic code editing and light IDE tool",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#1a1a2a",

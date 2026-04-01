@@ -265,10 +265,23 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       document.addEventListener('freeze', handleTerminalFreeze);
       document.addEventListener('resume', handleTerminalResume);
 
+      // pageshow: detect bfcache restore and tab-discard recovery.
+      // Chrome can restore a frozen/discarded tab from the back-forward cache
+      // without firing visibilitychange or resume events.
+      const handleTerminalPageShow = (event: PageTransitionEvent) => {
+        if (event.persisted && terminalWSRef.current) {
+          debugLog('[terminal:lifecycle] Page restored from bfcache, reconnecting terminal WS');
+          terminalWSRef.current.resetAndReconnect();
+        }
+      };
+      window.addEventListener('pageshow', handleTerminalPageShow);
+
       return () => {
         document.removeEventListener('visibilitychange', handleTerminalVisibility);
         document.removeEventListener('freeze', handleTerminalFreeze);
         document.removeEventListener('resume', handleTerminalResume);
+        window.removeEventListener('pageshow', handleTerminalPageShow);
+
         service.removeEvent(handler);
         service.disconnect();
         terminalWSRef.current = null;

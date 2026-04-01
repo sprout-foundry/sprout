@@ -53,6 +53,23 @@ func emptyAgentStateSnapshot() []byte {
 	return data
 }
 
+// touchClientLastSeen updates the LastSeenAt timestamp for a client context
+// without creating a new context if one doesn't exist. Used by WebSocket
+// read goroutines to keep the client context alive during active connections.
+func (ws *ReactWebServer) touchClientLastSeen(clientID string) {
+	clientID = strings.TrimSpace(clientID)
+	if clientID == "" {
+		clientID = defaultWebClientID
+	}
+
+	ws.mutex.Lock()
+	defer ws.mutex.Unlock()
+
+	if ctx := ws.clientContexts[clientID]; ctx != nil {
+		ctx.LastSeenAt = time.Now()
+	}
+}
+
 func (ws *ReactWebServer) resolveClientID(r *http.Request) string {
 	if r == nil {
 		return defaultWebClientID

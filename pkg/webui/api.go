@@ -36,6 +36,15 @@ func (ws *ReactWebServer) incrementActiveQueries(clientID string) {
 	ws.mutex.Unlock()
 }
 
+func (ws *ReactWebServer) incrementActiveQueriesWithQuery(clientID, currentQuery string) {
+	ws.mutex.Lock()
+	ws.activeQueries++
+	ctx := ws.getOrCreateClientContextLocked(clientID)
+	ctx.ActiveQuery = true
+	ctx.CurrentQuery = currentQuery
+	ws.mutex.Unlock()
+}
+
 func (ws *ReactWebServer) decrementActiveQueries(clientID string) {
 	ws.mutex.Lock()
 	if ws.activeQueries > 0 {
@@ -43,6 +52,7 @@ func (ws *ReactWebServer) decrementActiveQueries(clientID string) {
 	}
 	if ctx := ws.clientContexts[clientID]; ctx != nil {
 		ctx.ActiveQuery = false
+		ctx.CurrentQuery = ""
 	}
 	ws.mutex.Unlock()
 }
@@ -94,39 +104,66 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 	log.Printf("handleAPIQuery: processing query: %s", query.Query)
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	clientID := ws.resolveClientID(r)
-	if ws.hasActiveQueryForClient(clientID) {
-		http.Error(w, "A query is already running for this window", http.StatusConflict)
+	chatID := ws.resolveChatID(r, clientID)
+
+	ws.mutex.RLock()
+	ctx := ws.clientContexts[clientID]
+	if ctx == nil {
+		ws.mutex.RUnlock()
+		http.Error(w, "Client context not found", http.StatusBadRequest)
 		return
 	}
-	clientAgent, err := ws.getClientAgent(clientID)
+	if ctx.hasActiveQueryForChat(chatID) {
+		ws.mutex.RUnlock()
+		http.Error(w, "A query is already running for this chat", http.StatusConflict)
+		return
+	}
+	ws.mutex.RUnlock()
+
+	clientAgent, err := ws.getChatAgent(clientID, chatID)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("failed to initialize client agent: %v", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("failed to initialize chat agent: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	// Increment query count
+	// Store CurrentQuery atomically with ActiveQuery so that stats responses
+	// include it on reconnect without a TOCTOU window.
 	ws.mutex.Lock()
 	ws.queryCount++
+	ws.activeQueries++
+	if ctx := ws.clientContexts[clientID]; ctx != nil {
+		ctx.setChatQueryActive(chatID, true, query.Query)
+	}
 	ws.mutex.Unlock()
 
 	// Run the query asynchronously. The web UI consumes progress and completion via WebSocket.
-	ws.incrementActiveQueries(clientID)
 	go func() {
-		defer ws.decrementActiveQueries(clientID)
+		defer func() {
+			ws.mutex.Lock()
+			if ws.activeQueries > 0 {
+				ws.activeQueries--
+			}
+			if ctx := ws.clientContexts[clientID]; ctx != nil {
+				ctx.setChatQueryActive(chatID, false, "")
+			}
+			ws.mutex.Unlock()
+		}()
 		startedAt := time.Now()
 		registry := agent_commands.NewCommandRegistry()
 
 		if registry.IsSlashCommand(query.Query) {
 			log.Printf("handleAPIQuery: executing slash command: %s", query.Query)
-			ws.publishClientEvent(clientID, events.EventTypeQueryStarted, events.QueryStartedEvent(
+			queryEventData := events.QueryStartedEvent(
 				query.Query,
 				clientAgent.GetProvider(),
 				clientAgent.GetModel(),
-			))
+			)
+			queryEventData["chat_id"] = chatID
+			ws.publishClientEvent(clientID, events.EventTypeQueryStarted, queryEventData)
 
 			clientAgent.SetWorkspaceRoot(workspaceRoot)
 			err := registry.Execute(query.Query, clientAgent)
-			_ = ws.syncAgentStateForClient(clientID)
+			_ = ws.syncAgentStateForClientWithChat(clientID, chatID)
 			if err != nil {
 				log.Printf("handleAPIQuery: slash command error: %v", err)
 				ws.publishClientEvent(clientID, events.EventTypeError, events.ErrorEvent("Slash command failed", err))
@@ -151,7 +188,7 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 		log.Printf("handleAPIQuery: calling ProcessQueryWithContinuity")
 		clientAgent.SetWorkspaceRoot(workspaceRoot)
 		_, err := clientAgent.ProcessQueryWithContinuity(query.Query)
-		_ = ws.syncAgentStateForClient(clientID)
+		_ = ws.syncAgentStateForClientWithChat(clientID, chatID)
 		if err != nil {
 			log.Printf("handleAPIQuery: ProcessQueryWithContinuity error: %v", err)
 			ws.publishClientEvent(clientID, events.EventTypeError, events.ErrorEvent("Query failed", err))
@@ -163,6 +200,7 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"accepted":  true,
 		"query":     query.Query,
+		"chat_id":   chatID,
 		"timestamp": time.Now().Unix(),
 	})
 }
@@ -196,14 +234,20 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 	}
 
 	clientID := ws.resolveClientID(r)
-	if !ws.hasActiveQueryForClient(clientID) {
+	chatID := ws.resolveChatID(r, clientID)
+
+	ws.mutex.RLock()
+	ctx := ws.clientContexts[clientID]
+	if ctx == nil || !ctx.hasActiveQueryForChat(chatID) {
+		ws.mutex.RUnlock()
 		http.Error(w, "No active query to steer", http.StatusConflict)
 		return
 	}
+	ws.mutex.RUnlock()
 
-	clientAgent, err := ws.getClientAgent(clientID)
+	clientAgent, err := ws.getChatAgent(clientID, chatID)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to access client agent: %v", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Failed to access chat agent: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -230,14 +274,20 @@ func (ws *ReactWebServer) handleAPIQueryStop(w http.ResponseWriter, r *http.Requ
 	}
 
 	clientID := ws.resolveClientID(r)
-	if !ws.hasActiveQueryForClient(clientID) {
+	chatID := ws.resolveChatID(r, clientID)
+
+	ws.mutex.RLock()
+	ctx := ws.clientContexts[clientID]
+	if ctx == nil || !ctx.hasActiveQueryForChat(chatID) {
+		ws.mutex.RUnlock()
 		http.Error(w, "No active query to stop", http.StatusConflict)
 		return
 	}
+	ws.mutex.RUnlock()
 
-	clientAgent, err := ws.getClientAgent(clientID)
+	clientAgent, err := ws.getChatAgent(clientID, chatID)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to access client agent: %v", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Failed to access chat agent: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -259,7 +309,29 @@ func (ws *ReactWebServer) handleAPIStats(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	stats := ws.gatherStatsForClientID(ws.resolveClientID(r))
+	clientID := ws.resolveClientID(r)
+	chatID := ws.resolveChatID(r, clientID)
+	// Ensure the client context exists before gathering stats and build the
+	// response under the lock — getOrCreateClientContextLocked may mutate the
+	// map, and the subsequent read must observe a consistent snapshot.
+	ws.mutex.Lock()
+	ws.getOrCreateClientContextLocked(clientID)
+	stats := ws.gatherStatsForClientIDLocked(clientID)
+	// Add chat session info to the stats response
+	if ctx := ws.clientContexts[clientID]; ctx != nil {
+		stats["active_chat_id"] = ctx.getActiveChatID()
+		stats["chat_session_count"] = len(ctx.ChatSessions)
+		if cs := ctx.getChatSession(chatID); cs != nil {
+			cs.mu.Lock()
+			stats["chat_id"] = chatID
+			stats["chat_is_processing"] = cs.ActiveQuery
+			if cs.ActiveQuery && cs.CurrentQuery != "" {
+				stats["chat_current_query"] = cs.CurrentQuery
+			}
+			cs.mu.Unlock()
+		}
+	}
+	ws.mutex.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stats)
@@ -439,8 +511,13 @@ func (ws *ReactWebServer) gatherStats(r *http.Request) map[string]interface{} {
 
 func (ws *ReactWebServer) gatherStatsForClientID(clientID string) map[string]interface{} {
 	ws.mutex.RLock()
-	defer ws.mutex.RUnlock()
+	stats := ws.gatherStatsForClientIDLocked(clientID)
+	ws.mutex.RUnlock()
+	return stats
+}
 
+// gatherStatsForClientIDLocked gathers stats assuming ws.mutex is already held.
+func (ws *ReactWebServer) gatherStatsForClientIDLocked(clientID string) map[string]interface{} {
 	uptime := time.Since(ws.startTime)
 	terminalSessions := 0
 	for _, clientCtx := range ws.clientContexts {
@@ -476,6 +553,15 @@ func (ws *ReactWebServer) gatherStatsForClientID(clientID string) map[string]int
 		clientCtx = ws.clientContexts[defaultWebClientID]
 	}
 
+	// Report whether this client currently has an active query.
+	// The frontend uses this during reconnect to immediately restore (or
+	// clear) the processing indicator instead of relying on a 3-second
+	// safety timer.
+	stats["is_processing"] = clientCtx != nil && clientCtx.ActiveQuery
+	if clientCtx != nil && clientCtx.ActiveQuery && clientCtx.CurrentQuery != "" {
+		stats["current_query"] = clientCtx.CurrentQuery
+	}
+
 	var agentInst *agent.Agent
 	if clientCtx != nil {
 		agentInst = clientCtx.Agent
@@ -505,7 +591,11 @@ func (ws *ReactWebServer) gatherStatsForClientID(clientID string) map[string]int
 		stats["total_cost"] = agentInst.GetTotalCost()
 		stats["last_tps"] = agentInst.GetLastTPS()
 		stats["current_iteration"] = agentInst.GetCurrentIteration()
-		stats["max_iterations"] = agentInst.GetMaxIterations()
+		if agentInst.GetMaxIterations() == 0 {
+			stats["max_iterations"] = "unlimited"
+		} else {
+			stats["max_iterations"] = agentInst.GetMaxIterations()
+		}
 		stats["streaming_enabled"] = agentInst.IsStreamingEnabled()
 		stats["debug_mode"] = agentInst.IsDebugMode()
 	}
@@ -802,6 +892,8 @@ func (ws *ReactWebServer) handleAPICreateFile(w http.ResponseWriter, r *http.Req
 		file.Close()
 	}
 
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent(canonicalPath, "created", ""))
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"message": "success",
@@ -878,6 +970,8 @@ func (ws *ReactWebServer) handleAPIDeleteItem(w http.ResponseWriter, r *http.Req
 		})
 		return
 	}
+
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent(canonicalPath, "deleted", ""))
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -995,6 +1089,9 @@ func (ws *ReactWebServer) handleAPIRenameItem(w http.ResponseWriter, r *http.Req
 		})
 		return
 	}
+
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent(oldCanonicalPath, "deleted", ""))
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent(newCanonicalPath, "created", ""))
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1516,6 +1613,7 @@ func (ws *ReactWebServer) handleUploadImage(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 
 	// Read the entire body once into a buffer
 	r.Body = http.MaxBytesReader(w, r.Body, console.MaxPastedImageSize)
@@ -1542,7 +1640,7 @@ func (ws *ReactWebServer) handleUploadImage(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Save the image
-	relativePath, err := console.SavePastedImage(data)
+	relativePath, err := console.SavePastedImage(data, workspaceRoot)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to save image: %v", err), http.StatusInternalServerError)
 		return

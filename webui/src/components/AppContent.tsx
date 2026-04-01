@@ -12,6 +12,7 @@ import CommandPalette from './CommandPalette';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { ApiService, LeditInstance } from '../services/api';
 import { useGitWorkspace } from '../hooks/useGitWorkspace';
+import type { ChatSession } from '../services/chatSessions';
 
 const INSTANCE_PID_STORAGE_KEY = 'ledit:webui:instancePid';
 const INSTANCE_SWITCH_RESET_KEY = 'ledit:webui:instanceSwitchReset';
@@ -127,6 +128,12 @@ interface AppContentProps {
   onTerminalOutput: (output: string) => void;
   onTerminalExpandedChange: (expanded: boolean) => void;
   isConnected: boolean;
+  chatSessions?: ChatSession[];
+  activeChatId?: string | null;
+  onSwitchChat?: (id: string) => void;
+  onCreateChat?: () => void;
+  onDeleteChat?: (id: string) => void;
+  onRenameChat?: (id: string, name: string) => void;
 }
 
 const AppContent: React.FC<AppContentProps> = ({
@@ -158,7 +165,13 @@ const AppContent: React.FC<AppContentProps> = ({
   onGitDiscard,
   onTerminalOutput,
   onTerminalExpandedChange,
-  isConnected
+  isConnected,
+  chatSessions,
+  activeChatId,
+  onSwitchChat,
+  onCreateChat,
+  onDeleteChat,
+  onRenameChat,
 }) => {
   const {
     panes,
@@ -713,6 +726,16 @@ const AppContent: React.FC<AppContentProps> = ({
                 currentTodos,
                 onStopProcessing,
                 onToolPillClick: (toolId: string) => contextPanelRef.current?.highlightTool(toolId),
+                ...(chatSessions && chatSessions.length > 0 && activeChatId && onSwitchChat && onCreateChat && onDeleteChat && onRenameChat ? {
+                  chatTabBarProps: {
+                    sessions: chatSessions,
+                    activeChatId,
+                    onSwitch: onSwitchChat,
+                    onCreate: onCreateChat,
+                    onDelete: onDeleteChat,
+                    onRename: onRenameChat,
+                  }
+                } : {}),
               }}
               reviewProps={{
                 review: deepReview,

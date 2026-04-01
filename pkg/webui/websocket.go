@@ -148,9 +148,13 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 						websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 						log.Printf("WebSocket %s closed: %v", sessionID, err)
 					} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-						// If no message received in 120 seconds (2 heartbeat periods), connection is dead
-						if time.Since(lastMessage) > 120*time.Second {
-							log.Printf("WebSocket %s no activity for 120s, closing", sessionID)
+						// If no message received in 180 seconds (3 minutes), connection is dead.
+						// Chrome pauses background tabs aggressively, freezing timers and
+						// throttling network. 3 minutes gives enough time for the pong
+						// watchdog on the client side to detect the issue and proactively
+						// reconnect before the server kills the connection.
+						if time.Since(lastMessage) > 180*time.Second {
+							log.Printf("WebSocket %s no activity for 180s, closing", sessionID)
 							return
 						}
 						// Heartbeat timeout, send ping
@@ -171,6 +175,12 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 				// Update last message time on successful read (includes pong responses,
 				// which reset the dead connection timer).
 				lastMessage = time.Now()
+
+				// Touch the client context so it stays alive while the WebSocket
+				// is active. Without this, a long-lived WebSocket connection in a
+				// paused Chrome tab could have its client context garbage-collected
+				// by the idle cleanup worker because no HTTP requests arrive.
+				ws.touchClientLastSeen(clientID)
 
 				// Handle incoming WebSocket messages
 				ws.handleWebSocketMessage(safeConn, msg, clientID)
@@ -260,7 +270,16 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, msg map[str
 }
 
 func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, msg map[string]interface{}, clientID string) {
-	clientAgent, err := ws.getClientAgent(clientID)
+	// Use the active chat's agent for provider changes.
+	activeChatID := ""
+	ws.mutex.RLock()
+	var ctx *webClientContext
+	if ctx = ws.clientContexts[clientID]; ctx != nil {
+		activeChatID = ctx.getActiveChatID()
+	}
+	ws.mutex.RUnlock()
+
+	clientAgent, err := ws.getChatAgent(clientID, activeChatID)
 	if err != nil || clientAgent == nil || clientAgent.GetConfigManager() == nil {
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
@@ -297,10 +316,11 @@ func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, msg ma
 		return
 	}
 
-	if ws.hasActiveQueryForClient(clientID) {
+	// Check active query for the active chat, not the global client
+	if ctx != nil && activeChatID != "" && ctx.hasActiveQueryForChat(activeChatID) {
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
-			"data": map[string]string{"message": "Cannot change provider while this window has an active run"},
+			"data": map[string]string{"message": "Cannot change provider while this chat has an active run"},
 		})
 		return
 	}
@@ -318,7 +338,16 @@ func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, msg ma
 }
 
 func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, msg map[string]interface{}, clientID string) {
-	clientAgent, err := ws.getClientAgent(clientID)
+	// Use the active chat's agent for model changes.
+	activeChatID := ""
+	ws.mutex.RLock()
+	var ctx *webClientContext
+	if ctx = ws.clientContexts[clientID]; ctx != nil {
+		activeChatID = ctx.getActiveChatID()
+	}
+	ws.mutex.RUnlock()
+
+	clientAgent, err := ws.getChatAgent(clientID, activeChatID)
 	if err != nil || clientAgent == nil {
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
@@ -346,10 +375,11 @@ func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, msg map[s
 		return
 	}
 
-	if ws.hasActiveQueryForClient(clientID) {
+	// Check active query for the active chat, not the global client
+	if ctx != nil && activeChatID != "" && ctx.hasActiveQueryForChat(activeChatID) {
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
-			"data": map[string]string{"message": "Cannot change model while this window has an active run"},
+			"data": map[string]string{"message": "Cannot change model while this chat has an active run"},
 		})
 		return
 	}
@@ -397,7 +427,16 @@ func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, msg map[s
 // The webui sends a { "type": "security_approval_response", "data": { "request_id": "...", "approved": true/false } }
 // message when the user approves or rejects a security warning.
 func (ws *ReactWebServer) handleSecurityApprovalResponse(safeConn *SafeConn, msg map[string]interface{}, clientID string) {
-	clientAgent, err := ws.getClientAgent(clientID)
+	// Route to the currently active chat's agent, since the security dialog
+	// is always shown in the context of the active chat view.
+	activeChatID := ""
+	ws.mutex.RLock()
+	if ctx := ws.clientContexts[clientID]; ctx != nil {
+		activeChatID = ctx.getActiveChatID()
+	}
+	ws.mutex.RUnlock()
+
+	clientAgent, err := ws.getChatAgent(clientID, activeChatID)
 	if err != nil || clientAgent == nil {
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
@@ -446,7 +485,9 @@ func (ws *ReactWebServer) handleSecurityApprovalResponse(safeConn *SafeConn, msg
 	log.Printf("Security approval response received: request_id=%s approved=%v", requestID, approved)
 }
 
-// handleTerminalWebSocket handles terminal WebSocket connections
+// handleTerminalWebSocket handles terminal WebSocket connections.
+// Supports both creating new sessions and reattaching to existing tmux-backed sessions.
+// The client can request reattachment by passing ?reattach=<sessionID> in the URL.
 func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -464,21 +505,67 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 	safeConn := NewSafeConn(conn)
 	defer safeConn.Close()
 
-	// Generate session ID
-	sessionID := fmt.Sprintf("terminal_%d", time.Now().UnixNano())
 	terminalManager := ws.getTerminalManagerForRequest(r)
 
-	log.Printf("Terminal WebSocket connection starting: %s", sessionID)
+	// Check if client wants to reattach to an existing session
+	reattachID := strings.TrimSpace(r.URL.Query().Get("reattach"))
+	var sessionID string
+	var session *TerminalSession
 
-	// Create terminal session
-	session, err := terminalManager.CreateSession(sessionID)
-	if err != nil {
-		log.Printf("Failed to create terminal session: %v", err)
-		safeConn.WriteJSON(map[string]interface{}{
-			"type": "error",
-			"data": map[string]string{"message": "Failed to create terminal session"},
-		})
-		return
+	if reattachID != "" && terminalManager.HasSession(reattachID) {
+		// Try to reattach to the existing session
+		scrollback, err := terminalManager.ReattachSession(reattachID, 2000)
+		if err != nil {
+			log.Printf("Failed to reattach to session %s: %v, creating new session", reattachID, err)
+			// Fall through to create new session
+		} else {
+			sessionID = reattachID
+			session, _ = terminalManager.GetSession(sessionID)
+
+			// Send session_restored message with scrollback
+			if err := safeConn.WriteJSON(map[string]interface{}{
+				"type": "session_restored",
+				"data": map[string]interface{}{
+					"session_id":  sessionID,
+					"scrollback":  scrollback,
+					"tmux_backed": true,
+				},
+			}); err != nil {
+				log.Printf("Terminal %s FAILED to send session_restored: %v", sessionID, err)
+			} else {
+				log.Printf("Terminal %s reattached successfully (scrollback: %d bytes)", sessionID, len(scrollback))
+			}
+		}
+	}
+
+	// Create new session if not reattaching
+	if session == nil {
+		sessionID = fmt.Sprintf("terminal_%d", time.Now().UnixNano())
+		log.Printf("Terminal WebSocket connection starting: %s", sessionID)
+
+		session, err = terminalManager.CreateSession(sessionID)
+		if err != nil {
+			log.Printf("Failed to create terminal session: %v", err)
+			safeConn.WriteJSON(map[string]interface{}{
+				"type": "error",
+				"data": map[string]string{"message": "Failed to create terminal session"},
+			})
+			return
+		}
+
+		// Send session created message
+		msg := map[string]interface{}{
+			"type": "session_created",
+			"data": map[string]string{"session_id": sessionID},
+		}
+		msgBytes, _ := json.Marshal(msg)
+		log.Printf("Terminal %s message bytes: %s", sessionID, string(msgBytes))
+
+		if err := safeConn.WriteJSON(msg); err != nil {
+			log.Printf("Terminal %s FAILED to send session_created: %v", sessionID, err)
+		} else {
+			log.Printf("Terminal %s successfully sent session_created", sessionID)
+		}
 	}
 
 	// Store the underlying connection with metadata
@@ -488,21 +575,6 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 		ConnectedAt: time.Now(),
 	})
 	defer ws.connections.Delete(conn)
-
-	// Send session created message
-	log.Printf("Terminal %s about to send session_created message", sessionID)
-	msg := map[string]interface{}{
-		"type": "session_created",
-		"data": map[string]string{"session_id": sessionID},
-	}
-	msgBytes, _ := json.Marshal(msg)
-	log.Printf("Terminal %s message bytes: %s", sessionID, string(msgBytes))
-
-	if err := safeConn.WriteJSON(msg); err != nil {
-		log.Printf("Terminal %s FAILED to send session_created: %v", sessionID, err)
-	} else {
-		log.Printf("Terminal %s successfully sent session_created", sessionID)
-	}
 
 	// Use context for proper cleanup coordination
 	ctx, cancel := context.WithCancel(r.Context())
@@ -564,8 +636,12 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 			return
 
 		default:
-			// Set read deadline for heartbeat
-			conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+			// Set read deadline for heartbeat.
+			// Allows 90 seconds per individual read attempt. Chrome pauses
+			// background tabs aggressively; the freeze→resume lifecycle
+			// handlers on the client side should reconnect sooner than this,
+			// but we give extra headroom to avoid premature disconnects.
+			conn.SetReadDeadline(time.Now().Add(90 * time.Second))
 
 			var msg map[string]interface{}
 			if err := conn.ReadJSON(&msg); err != nil {
@@ -578,6 +654,10 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 				} else {
 					log.Printf("Terminal %s read error: %v", sessionID, err)
 				}
+				// On WebSocket disconnect, detach from session instead of closing it.
+				// For tmux-backed sessions, this preserves the tmux session for reattach.
+				// For raw PTY sessions, DetachFromSession will close them completely.
+				terminalManager.DetachFromSession(sessionID)
 				return
 			}
 

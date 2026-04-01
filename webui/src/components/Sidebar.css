@@ -1859,6 +1859,28 @@
   cursor: not-allowed;
 }
 
+/* Secondary (nested) tab bar — smaller, no bottom indicator */
+.git-sidebar-tab-bar-secondary .git-sidebar-tab {
+  padding: 6px 10px;
+  font-size: 11px;
+  gap: 4px;
+}
+
+.git-sidebar-tab-bar-secondary .git-sidebar-tab.active {
+  box-shadow: none;
+  background: color-mix(in srgb, var(--accent-primary) 12%, var(--bg-elevated));
+  color: var(--accent-primary);
+}
+
+/* ── History pane (wrapper for git-log + revisions sub-content) ── */
+.history-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 8px;
+}
+
 /* ── Git History Panel ────────────────────────────────────────── */
 
 .git-history-panel {

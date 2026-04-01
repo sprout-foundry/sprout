@@ -28,7 +28,7 @@ import GitHistoryPanel from './GitHistoryPanel';
 import LeditLogo from './LeditLogo';
 import LocationSwitcher from './LocationSwitcher';
 
-type SectionTab = 'git' | 'history' | 'logs' | 'files' | 'settings' | 'search';
+type SectionTab = 'git' | 'logs' | 'files' | 'settings' | 'search';
 
 interface SidebarProps {
   isConnected: boolean;
@@ -114,7 +114,6 @@ interface SidebarProps {
 /** Section tab definitions */
 const SECTION_TABS: { id: SectionTab; icon: LucideIcon; label: string }[] = [
   { id: 'git', icon: GitBranch, label: 'Git' },
-  { id: 'history', icon: History, label: 'History' },
   { id: 'files', icon: FolderCog, label: 'Files' },
   { id: 'search', icon: Search, label: 'Search' },
   { id: 'settings', icon: Settings, label: 'Settings' },
@@ -174,6 +173,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const hasHydratedProviderStateRef = useRef(false);
   const [selectedSection, setSelectedSection] = useState<SectionTab>('git');
   const [historySubTab, setHistorySubTab] = useState<'git-log' | 'revisions'>('git-log');
+  const [gitSubTab, setGitSubTab] = useState<'changes' | 'history'>('changes');
   const [settings, setSettings] = useState<LeditSettings | null>(null);
   const apiService = ApiService.getInstance();
   const effectiveSidebarCollapsed = !isMobile && !!sidebarCollapsed;
@@ -404,6 +404,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   useEffect(() => {
     if (currentView === 'git') {
       setSelectedSection('git');
+      setGitSubTab('changes');
     }
   }, [currentView]);
 
@@ -754,52 +755,97 @@ const Sidebar: React.FC<SidebarProps> = ({
   /** Render the content pane based on selected section */
   const renderContentPane = () => {
     switch (selectedSection) {
-      case 'git':
-        return gitPanel ? <GitSidebarPanel {...gitPanel} /> : <div className="empty">Git unavailable</div>;
-      case 'history': {
+      case 'git': {
         const hasGitLog = !!gitPanel?.apiService && !!gitPanel?.openWorkspaceBuffer;
         const hasRevisions = !!onOpenRevisionDiff;
+        const hasHistoryContent = hasGitLog || hasRevisions;
+
+        // Clamp historySubTab to a valid available option so the active tab indicator
+        // always matches the rendered content (avoids showing inactive tab for active content).
+        const effectiveHistorySubTab: 'git-log' | 'revisions' = hasGitLog
+          ? historySubTab
+          : hasRevisions
+            ? 'revisions'
+            : historySubTab;
+
         return (
-          <div className="history-pane">
-            {(hasGitLog || hasRevisions) && (
-              <div className="git-sidebar-tab-bar">
-                {hasGitLog && (
-                  <button
-                    type="button"
-                    className={`git-sidebar-tab ${historySubTab === 'git-log' ? 'active' : ''}`}
-                    onClick={() => setHistorySubTab('git-log')}
-                  >
-                    <GitBranch size={14} />
-                    <span>Git Log</span>
-                  </button>
-                )}
-                {hasRevisions && (
-                  <button
-                    type="button"
-                    className={`git-sidebar-tab ${historySubTab === 'revisions' ? 'active' : ''}`}
-                    onClick={() => setHistorySubTab('revisions')}
-                  >
-                    <History size={14} />
-                    <span>Revisions</span>
-                  </button>
-                )}
+          <>
+            {/* Sub-tab bar: Changes / History */}
+            {gitPanel && (
+              <div className="git-sidebar-tab-bar" role="tablist" aria-label="Git sub-sections">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={gitSubTab === 'changes'}
+                  className={`git-sidebar-tab ${gitSubTab === 'changes' ? 'active' : ''}`}
+                  onClick={() => setGitSubTab('changes')}
+                >
+                  <GitBranch size={14} />
+                  <span>Changes</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={gitSubTab === 'history'}
+                  className={`git-sidebar-tab ${gitSubTab === 'history' ? 'active' : ''}`}
+                  disabled={!hasHistoryContent}
+                  onClick={() => setGitSubTab('history')}
+                >
+                  <History size={14} />
+                  <span>History</span>
+                </button>
               </div>
             )}
-            {historySubTab === 'git-log' ? (
-              hasGitLog
-                ? <GitHistoryPanel
+
+            {/* Changes sub-tab: working tree panel */}
+            {gitSubTab === 'changes' ? (
+              gitPanel ? <GitSidebarPanel {...gitPanel} /> : <div className="empty">Git unavailable</div>
+            ) : (
+              /* History sub-tab: git-log + revisions */
+              <div className="history-pane">
+                {hasHistoryContent && (
+                  <div className="git-sidebar-tab-bar git-sidebar-tab-bar-secondary" role="tablist" aria-label="History sub-sections">
+                    {hasGitLog && (
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={effectiveHistorySubTab === 'git-log'}
+                        className={`git-sidebar-tab ${effectiveHistorySubTab === 'git-log' ? 'active' : ''}`}
+                        onClick={() => setHistorySubTab('git-log')}
+                      >
+                        <GitBranch size={14} />
+                        <span>Git Log</span>
+                      </button>
+                    )}
+                    {hasRevisions && (
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={effectiveHistorySubTab === 'revisions'}
+                        className={`git-sidebar-tab ${effectiveHistorySubTab === 'revisions' ? 'active' : ''}`}
+                        onClick={() => setHistorySubTab('revisions')}
+                      >
+                        <History size={14} />
+                        <span>Revisions</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+                {effectiveHistorySubTab === 'git-log' ? (
+                  <GitHistoryPanel
                     apiService={gitPanel!.apiService!}
                     isActing={false}
                     onRefresh={gitPanel!.onRefresh}
                     openWorkspaceBuffer={gitPanel!.openWorkspaceBuffer!}
                   />
-                : <div className="empty">Git log unavailable</div>
-            ) : (
-              hasRevisions
-                ? <RevisionListPanel mode="global" allowRollback={true} onOpenDiff={onOpenRevisionDiff} />
-                : <div className="empty">Revisions unavailable</div>
+                ) : (
+                  hasRevisions
+                    ? <RevisionListPanel mode="global" allowRollback={true} onOpenDiff={onOpenRevisionDiff} />
+                    : <div className="empty">Git log unavailable</div>
+                )}
+              </div>
             )}
-          </div>
+          </>
         );
       }
       case 'logs':

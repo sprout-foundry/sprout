@@ -363,6 +363,7 @@ function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isTerminalExpanded, setIsTerminalExpanded] = useState(false);
   const activeRequestsRef = useRef(0);
+  const reconnectSafetyTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [queuedMessages, setQueuedMessages] = useState<string[]>([]);
   const [recentFiles, setRecentFiles] = useState<Array<{ path: string; modified: boolean }>>([]);
   const [gitRefreshToken, setGitRefreshToken] = useState(0);
@@ -606,6 +607,12 @@ function App() {
       case 'query_started':
         logEntry.category = 'query';
         logEntry.level = 'info';
+        // Cancel the reconnect safety timer – a real query_started proves the
+        // backend is (still) processing, so we should NOT clear isProcessing.
+        if (reconnectSafetyTimerRef.current) {
+          clearTimeout(reconnectSafetyTimerRef.current);
+          reconnectSafetyTimerRef.current = null;
+        }
         const startedQuery = event.data?.query || '';
         setState(prev => ({
           ...prev,
@@ -683,6 +690,12 @@ function App() {
       case 'query_completed':
         logEntry.category = 'query';
         logEntry.level = 'success';
+        // Cancel the reconnect safety timer – query_completed arrives, so the
+        // backend is done processing and will update isProcessing itself.
+        if (reconnectSafetyTimerRef.current) {
+          clearTimeout(reconnectSafetyTimerRef.current);
+          reconnectSafetyTimerRef.current = null;
+        }
         if (activeRequestsRef.current > 0) {
           activeRequestsRef.current -= 1;
         }
@@ -1217,12 +1230,69 @@ function App() {
         // Tab became visible - trigger immediate reconnect if not connected
         if (!wsService.isConnected()) {
           debugLog('[visibility] Tab visible again, reconnecting WebSocket');
-          wsService.disconnect(); // Reset reconnect state
-          wsService.connect();
+          wsService.resetAndReconnect();
         }
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Page Lifecycle: when Chrome freezes a background tab (before potential discard),
+    // proactively close the WebSocket so the server gets a clean close frame and can
+    // properly detach from backend sessions (tmux, query state). Without this, the
+    // TCP connection dies silently and the server only notices after a read-timeout,
+    // leaving orphan sessions.
+    const handleFreeze = () => {
+      debugLog('[lifecycle] Page freezing, proactively closing WebSocket');
+      wsService.freeze();
+    };
+    document.addEventListener('freeze', handleFreeze);
+
+    // When Chrome unfreezes a tab (resume), proactively reconnect the WebSocket.
+    // After a freeze+disconnect, reconnectAttempts is at max (from disconnect()),
+    // so auto-reconnect would never fire. We must use resetAndReconnect() to clear
+    // that state and trigger a fresh connection attempt.
+    const handleResume = () => {
+      debugLog('[lifecycle] Page resumed from freeze, reconnecting WebSocket');
+      wsService.resetAndReconnect();
+    };
+    document.addEventListener('resume', handleResume);
+
+    // pageshow: detect bfcache restore and tab-discard recovery.
+    // Chrome can restore a frozen/discarded tab from the back-forward cache
+    // (or re-navigate to it) without firing visibilitychange or resume.
+    // event.persisted === true means the page was restored from bfcache.
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        debugLog('[lifecycle] Page restored from bfcache, reconnecting WebSocket');
+        wsService.resetAndReconnect();
+      }
+    };
+    window.addEventListener('pageshow', handlePageShow);
+
+    // Register a reconnect callback so that after the WebSocket successfully
+    // reconnects we can request fresh state from the backend and check for a
+    // stuck processing indicator.
+    wsService.onReconnect(() => {
+      debugLog('[lifecycle] WebSocket reconnected after disconnect, requesting fresh stats');
+      wsService.sendEvent({ type: 'request_stats' });
+
+      // Safety timer: if no query_started or query_completed event arrives
+      // within 3 seconds of reconnecting, the backend likely finished the
+      // query while we were disconnected. Clear the stuck processing state.
+      if (reconnectSafetyTimerRef.current) {
+        clearTimeout(reconnectSafetyTimerRef.current);
+      }
+      reconnectSafetyTimerRef.current = setTimeout(() => {
+        reconnectSafetyTimerRef.current = null;
+        setState(prev => {
+          if (prev.isProcessing) {
+            debugLog('[lifecycle] No query events after reconnect – clearing stuck processing state');
+            return { ...prev, isProcessing: false };
+          }
+          return prev;
+        });
+      }, 3000);
+    });
 
     // Wake lock: request a screen wake lock when the page is visible to prevent
     // the browser from aggressively throttling timers (which breaks WebSocket
@@ -1262,10 +1332,19 @@ function App() {
       if (connectionTimeoutRef.current) {
         clearTimeout(connectionTimeoutRef.current);
       }
+      // Clear the reconnect safety timer
+      if (reconnectSafetyTimerRef.current) {
+        clearTimeout(reconnectSafetyTimerRef.current);
+        reconnectSafetyTimerRef.current = null;
+      }
       wsService.removeEvent(handleEvent);
+      wsService.onReconnect(null); // Unregister reconnect callback
       wsService.disconnect();
       window.removeEventListener('resize', checkMobile);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener('freeze', handleFreeze);
+      document.removeEventListener('resume', handleResume);
+      window.removeEventListener('pageshow', handlePageShow);
       document.removeEventListener('visibilitychange', handleVisibilityWakeLock);
       clearInterval(statsInterval);
       // Release wake lock

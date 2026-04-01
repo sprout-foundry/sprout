@@ -17,16 +17,37 @@ export function getWebUIClientId(): string {
     return 'default';
   }
 
+  // Check sessionStorage first (survives refresh/reload within same tab).
+  // Always sync to localStorage so the client_id survives tab discard,
+  // which clears sessionStorage but preserves localStorage.
   let existing = window.sessionStorage.getItem(WEBUI_CLIENT_ID_STORAGE_KEY);
   if (existing) {
+    window.localStorage.setItem(WEBUI_CLIENT_ID_STORAGE_KEY, existing);
     return existing;
   }
 
+  // SessionStorage is empty — fall back to localStorage (survives tab discard).
+  // When Chrome discards/freezes a tab, sessionStorage is cleared but
+  // localStorage is preserved. This allows the same client_id to be
+  // recovered so server-side context (chat history, terminal sessions)
+  // can be reattached.
+  // NOTE: This means if the user opens a second tab at the same origin,
+  // both tabs will share the same client_id (and server context). This is
+  // acceptable because ledit is typically used in a single tab, and sharing
+  // context after tab discard is better than losing it entirely.
+  const persisted = window.localStorage.getItem(WEBUI_CLIENT_ID_STORAGE_KEY);
+  if (persisted) {
+    window.sessionStorage.setItem(WEBUI_CLIENT_ID_STORAGE_KEY, persisted);
+    return persisted;
+  }
+
+  // First ever load — generate new ID and save to both storage locations
   const generated =
     typeof window.crypto?.randomUUID === 'function'
       ? window.crypto.randomUUID()
       : `webui-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   window.sessionStorage.setItem(WEBUI_CLIENT_ID_STORAGE_KEY, generated);
+  window.localStorage.setItem(WEBUI_CLIENT_ID_STORAGE_KEY, generated);
   return generated;
 }
 

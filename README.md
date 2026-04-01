@@ -6,7 +6,7 @@ AI-powered code editing and assistance tool. Leverages LLMs to understand your w
 
 ## Features
 
-- **AI Agent** with smart workspace context, self-correction, and multi-step orchestration
+- **Coding Agent** with smart workspace context, self-correction, and multi-step orchestration
 - **10 specialized personas** (coder, debugger, reviewer, researcher, etc.)
 - **Web UI** with chat, code editor, terminal, file browser, Git UI, and more
 - **Multi-provider LLM support** — OpenAI, DeepInfra, OpenRouter, Z.AI, Ollama, DeepSeek, Mistral, Minimax, LMStudio, and custom providers

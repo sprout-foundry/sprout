@@ -10,6 +10,14 @@ import { WebSocketService } from './services/websocket';
 import { ApiService, OnboardingEnvironment, OnboardingProviderOption } from './services/api';
 import { clientFetch, getWebUIClientId } from './services/clientSession';
 import { ensureCompletedAssistantMessage } from './utils/chatCompletion';
+import {
+  type ChatSession,
+  listChatSessions,
+  createChatSession,
+  deleteChatSession,
+  renameChatSession,
+  switchChatSession,
+} from './services/chatSessions';
 import { debugLog } from './utils/log';
 
 // Service Worker Registration
@@ -90,6 +98,8 @@ interface AppState {
     linesDeleted?: number;
   }>;
   subagentActivities: SubagentActivity[];
+  activeChatId: string | null;
+  chatSessions: ChatSession[];
 }
 
 interface ToolExecution {
@@ -338,6 +348,8 @@ function App() {
       isProcessing: false,
       lastError: null,
       queryProgress: null,
+      activeChatId: null,
+      chatSessions: [],
     };
   });
 
@@ -348,6 +360,8 @@ function App() {
   const [isTerminalExpanded, setIsTerminalExpanded] = useState(false);
   const activeRequestsRef = useRef(0);
   const queuedMessagesRef = useRef<string[]>([]);
+  const activeChatIdRef = useRef<string | null>(null);
+  activeChatIdRef.current = state.activeChatId;
   const [queuedMessagesCount, setQueuedMessagesCount] = useState(0);
   const [recentFiles, setRecentFiles] = useState<Array<{ path: string; modified: boolean }>>([]);
   const [gitRefreshToken, setGitRefreshToken] = useState(0);
@@ -524,11 +538,100 @@ function App() {
     pendingProviderRef.current = state.provider;
   }, [state.provider]);
 
+  const loadChatSessions = useCallback(async () => {
+    try {
+      const response = await listChatSessions();
+      setState(prev => ({
+        ...prev,
+        chatSessions: response.chat_sessions,
+        activeChatId: prev.activeChatId || response.active_chat_id || null,
+      }));
+    } catch (error) {
+      debugLog('[chat] Failed to load chat sessions:', error);
+    }
+  }, []);
+
+  const handleSwitchChat = useCallback(async (id: string) => {
+    try {
+      const response = await switchChatSession(id);
+      const restoredMessages: Message[] = response.chat_session.messages
+        .filter((m) => m.role === 'user' || m.role === 'assistant')
+        .map((m, i) => ({
+          id: `chat-${id}-${i}`,
+          type: m.role as 'user' | 'assistant',
+          content: typeof m.content === 'string' ? m.content : '',
+          timestamp: new Date(),
+          ...(m.reasoning_content ? { reasoning: m.reasoning_content } : {}),
+        }));
+      setState(prev => ({
+        ...prev,
+        activeChatId: response.active_chat_id,
+        messages: restoredMessages,
+        isProcessing: false,
+        toolExecutions: [],
+        fileEdits: [],
+        subagentActivities: [],
+        currentTodos: [],
+        queryProgress: null,
+        lastError: null,
+      }));
+      // Refresh session list to reflect updated active state
+      const sessionsResp = await listChatSessions();
+      setState(prev => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
+    } catch (error) {
+      debugLog('[chat] Failed to switch chat session:', error);
+    }
+  }, []);
+
+  const handleCreateChat = useCallback(async () => {
+    try {
+      const response = await createChatSession();
+      await handleSwitchChat(response.chat_session.id);
+    } catch (error) {
+      debugLog('[chat] Failed to create chat session:', error);
+    }
+  }, [handleSwitchChat]);
+
+  const handleDeleteChat = useCallback(async (id: string) => {
+    try {
+      await deleteChatSession(id);
+      if (id === activeChatIdRef.current) {
+        const sessionsResp = await listChatSessions();
+        if (sessionsResp.chat_sessions.length > 0) {
+          await handleSwitchChat(sessionsResp.active_chat_id);
+        } else {
+          setState(prev => ({ ...prev, chatSessions: [], activeChatId: null, messages: [] }));
+        }
+      } else {
+        const sessionsResp = await listChatSessions();
+        setState(prev => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
+      }
+    } catch (error) {
+      debugLog('[chat] Failed to delete chat session:', error);
+    }
+  }, [handleSwitchChat]);
+
+  const handleRenameChat = useCallback(async (id: string, name: string) => {
+    try {
+      await renameChatSession(id, name);
+      const sessionsResp = await listChatSessions();
+      setState(prev => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
+    } catch (error) {
+      debugLog('[chat] Failed to rename chat session:', error);
+    }
+  }, []);
+
   const handleEvent = useCallback((event: any) => {
     // Filter out ping events and webpack dev server events early to prevent console spam
     const filteredEvents = ['liveReload', 'reconnect', 'overlay', 'hash', 'ok', 'hot', 'ping'];
     if (filteredEvents.includes(event.type)) {
       return; // Don't process these events
+    }
+
+    // Per-chat event filtering: only process message events for the active chat
+    const perChatEvents = new Set(['query_started', 'stream_chunk', 'query_completed', 'query_progress', 'tool_start', 'tool_end', 'todo_update', 'subagent_activity', 'agent_message', 'error']);
+    if (perChatEvents.has(event.type) && event.data?.chat_id && activeChatIdRef.current && event.data.chat_id !== activeChatIdRef.current) {
+      return; // event is for a different chat session
     }
 
     debugLog('[msg] Received event:', event.type, event.data);
@@ -1148,6 +1251,9 @@ function App() {
     // Load initial files
     loadFiles();
 
+    // Load initial chat sessions
+    loadChatSessions();
+
     // Set up periodic stats updates
     const statsInterval = setInterval(loadStats, 5000); // Update every 5 seconds
 
@@ -1170,7 +1276,7 @@ function App() {
       window.removeEventListener('resize', checkMobile);
       clearInterval(statsInterval);
     };
-  }, [handleEvent, wsService, apiService]);
+  }, [handleEvent, wsService, apiService, loadChatSessions]);
 
   // Listen for session-restored events from Chat.tsx to populate messages
   useEffect(() => {
@@ -1224,7 +1330,7 @@ function App() {
           timestamp: new Date()
         }]
       }));
-      await apiService.steerQuery(trimmedMessage);
+      await apiService.steerQuery(trimmedMessage, activeChatIdRef.current ?? undefined);
       setInputValue('');
       return;
     }
@@ -1239,7 +1345,7 @@ function App() {
 
     try {
       debugLog('[>>] Sending message:', trimmedMessage);
-      await apiService.sendQuery(trimmedMessage);
+      await apiService.sendQuery(trimmedMessage, activeChatIdRef.current ?? undefined);
       setInputValue('');
       debugLog('[OK] Message sent successfully');
     } catch (error) {
@@ -1568,6 +1674,12 @@ function App() {
                 onTerminalOutput={handleTerminalOutput}
                 onTerminalExpandedChange={setIsTerminalExpanded}
                 isConnected={state.isConnected}
+                chatSessions={state.chatSessions}
+                activeChatId={state.activeChatId}
+                onSwitchChat={handleSwitchChat}
+                onCreateChat={handleCreateChat}
+                onDeleteChat={handleDeleteChat}
+                onRenameChat={handleRenameChat}
               />
               {onboarding.open && (
                 <div className="onboarding-overlay" role="dialog" aria-modal="true" aria-label="Set up ledit">

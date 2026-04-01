@@ -73,15 +73,11 @@ type Agent struct {
 	mcpInitMu               sync.Mutex                     // Protect concurrent initialization
 	circuitBreaker          *CircuitBreakerState           // Track repetitive actions
 	conversationPruner      *ConversationPruner            // Automatic conversation pruning
+	completionSummarizer    *CompletionContextSummarizer   // Completion context summarization
 	toolCallGuidanceAdded   bool                           // Prevent repeating tool call guidance
 	activeSkills            []string                       // Currently activated skills (by ID)
 	activePersona           string                         // Currently active persona ID (direct agent or subagent env)
 	workspaceRoot           string                         // Explicit workspace root for this agent instance
-
-	// Session-scoped provider/model overrides (webui sessions)
-	// When set, these take precedence over config values and don't persist
-	sessionProvider api.ClientType // Session-scoped provider override
-	sessionModel   string         // Session-scoped model override
 
 	// Input injection handling
 	inputInjectionChan  chan string        // Channel for injecting new user input
@@ -98,9 +94,8 @@ type Agent struct {
 	asyncOutput         chan string        // Buffered channel for async PrintLine calls
 
 	// Command history for interactive mode
-	historyMu       sync.Mutex // Protects commandHistory and historyIndex
-	commandHistory  []string   // History of entered commands
-	historyIndex    int        // Current position in history for navigation
+	commandHistory  []string  // History of entered commands
+	historyIndex    int       // Current position in history for navigation
 	asyncOutputOnce sync.Once // Ensure async worker initializes once
 	asyncBufferSize int       // Optional override for async output buffer (tests)
 
@@ -181,11 +176,8 @@ func (a *Agent) Shutdown() {
 		return
 	}
 
-	// Save command history to configuration before shutdown.
-	// Lock historyMu to avoid racing with concurrent AddToHistory calls.
-	a.historyMu.Lock()
+	// Save command history to configuration before shutdown
 	a.saveHistoryToConfig()
-	a.historyMu.Unlock()
 
 	// Stop MCP servers (best-effort)
 	if a.mcpManager != nil {
@@ -262,7 +254,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 			messages:                  []api.Message{},
 			systemPrompt:              systemPrompt,
 			baseSystemPrompt:          systemPrompt,
-			maxIterations:             0, // 0 means unlimited
+			maxIterations:             1000,
 			totalCost:                 0.0,
 			clientType:                clientType,
 			debug:                     isDebugEnvEnabled(),
@@ -416,7 +408,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		messages:                  []api.Message{},
 		systemPrompt:              systemPrompt,
 		baseSystemPrompt:          systemPrompt,
-		maxIterations:             0, // 0 means unlimited
+		maxIterations:             1000,
 		totalCost:                 0.0,
 		clientType:                clientType,
 		debug:                     debug,
@@ -428,6 +420,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		interruptCancel:           interruptCancel,
 		falseStopDetectionEnabled: true,
 		conversationPruner:        NewConversationPruner(debug),
+		completionSummarizer:      NewCompletionContextSummarizer(debug),
 		commandHistory:            []string{},
 		historyIndex:              -1,
 		activePersona:             "orchestrator",
@@ -711,20 +704,6 @@ func (a *Agent) decorateEventPayload(data interface{}) interface{} {
 // OutputRouter returns the current output router (nil if not initialized)
 func (a *Agent) OutputRouter() *OutputRouter { return a.outputRouter }
 
-// PrintTerminalOnly writes text to the terminal without publishing to the event bus.
-// Use this for output already published via a more specific event type.
-func (a *Agent) PrintTerminalOnly(text string) {
-	if a == nil || a.outputRouter == nil {
-		// Fallback: just print
-		if !strings.HasSuffix(text, "\n") {
-			text += "\n"
-		}
-		fmt.Print(text)
-		return
-	}
-	a.outputRouter.RouteTerminalOnly(text)
-}
-
 // GetSecurityApprovalMgr returns the security approval manager
 func (a *Agent) GetSecurityApprovalMgr() *SecurityApprovalManager {
 	return a.securityApprovalMgr
@@ -982,9 +961,6 @@ func (a *Agent) AddToHistory(command string) {
 		return
 	}
 
-	a.historyMu.Lock()
-	defer a.historyMu.Unlock()
-
 	// Remove from history if it already exists (to avoid duplicates)
 	for i, cmd := range a.commandHistory {
 		if cmd == command {
@@ -1005,15 +981,11 @@ func (a *Agent) AddToHistory(command string) {
 	a.historyIndex = -1
 
 	// Save history to configuration for persistence
-	// saveHistoryToConfig reads commandHistory/historyIndex directly;
-	// caller (AddToHistory) already holds historyMu.
 	a.saveHistoryToConfig()
 }
 
 // GetHistoryCommand returns the command at the given index from history
 func (a *Agent) GetHistoryCommand(index int) string {
-	a.historyMu.Lock()
-	defer a.historyMu.Unlock()
 	if index < 0 || index >= len(a.commandHistory) {
 		return ""
 	}
@@ -1024,9 +996,6 @@ func (a *Agent) GetHistoryCommand(index int) string {
 // direction: 1 for up (older), -1 for down (newer)
 // currentIndex: current position in the input line
 func (a *Agent) NavigateHistory(direction int, currentIndex int) (string, int) {
-	a.historyMu.Lock()
-	defer a.historyMu.Unlock()
-
 	if len(a.commandHistory) == 0 {
 		return "", currentIndex
 	}
@@ -1063,25 +1032,17 @@ func (a *Agent) NavigateHistory(direction int, currentIndex int) (string, int) {
 
 // ResetHistoryIndex resets the history navigation index
 func (a *Agent) ResetHistoryIndex() {
-	a.historyMu.Lock()
-	defer a.historyMu.Unlock()
 	a.historyIndex = -1
 }
 
 // GetHistorySize returns the number of commands in history
 func (a *Agent) GetHistorySize() int {
-	a.historyMu.Lock()
-	defer a.historyMu.Unlock()
 	return len(a.commandHistory)
 }
 
-// GetHistory returns a defensive copy of the command history.
+// GetHistory returns the command history
 func (a *Agent) GetHistory() []string {
-	a.historyMu.Lock()
-	defer a.historyMu.Unlock()
-	result := make([]string, len(a.commandHistory))
-	copy(result, a.commandHistory)
-	return result
+	return a.commandHistory
 }
 
 // loadHistoryFromConfig loads command history from the configuration
@@ -1098,17 +1059,14 @@ func (a *Agent) loadHistoryFromConfig() {
 	pathKey := a.historyPathKey()
 	if len(config.CommandHistoryByPath) > 0 {
 		if history, ok := config.CommandHistoryByPath[pathKey]; ok && len(history) > 0 {
-			a.historyMu.Lock()
 			a.commandHistory = append([]string(nil), history...)
 			a.historyIndex = -1
-			a.historyMu.Unlock()
 			return
 		}
 	}
 }
 
-// saveHistoryToConfig saves command history to the configuration.
-// Caller must hold historyMu if concurrent access is possible.
+// saveHistoryToConfig saves command history to the configuration
 func (a *Agent) saveHistoryToConfig() {
 	if a.configManager == nil {
 		return
@@ -1137,11 +1095,11 @@ func (a *Agent) saveHistoryToConfig() {
 }
 
 func (a *Agent) historyPathKey() string {
-	root := a.currentWorkspaceRoot()
-	if strings.TrimSpace(root) == "" || root == "." {
+	wd, err := os.Getwd()
+	if err != nil || strings.TrimSpace(wd) == "" {
 		return "unknown"
 	}
-	cleaned := filepath.Clean(root)
+	cleaned := filepath.Clean(wd)
 	abs, err := filepath.Abs(cleaned)
 	if err == nil && strings.TrimSpace(abs) != "" {
 		return filepath.Clean(abs)

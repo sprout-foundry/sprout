@@ -18,65 +18,11 @@ const (
 	MAX_SUBAGENT_OUTPUT_SIZE  = 10 * 1024 * 1024 // 10MB
 	MAX_SUBAGENT_CONTEXT_SIZE = 1024 * 1024      // 1MB
 	MAX_PARALLEL_SUBAGENTS    = 5
-	// BATCH_SIZE controls how many subagent output lines are buffered before
-// publishing a single subagent_activity event. 5 balances responsiveness
-// with event count reduction (~80% fewer events than per-line).
-	BATCH_SIZE = 5
+	BATCH_SIZE                = 50 // Number of lines to batch before publishing
 )
 
 // MILESTONE_PHASES defines phases that trigger immediate publish without batching
 var MILESTONE_PHASES = []string{"spawn", "complete", "step"}
-
-// Patterns that represent structural/operational output from the subagent
-// engine (not meaningful user-facing content). Lines matching these are
-// suppressed from the webui activity feed to keep it clean.
-var subagentNoisePatterns = []*regexp.Regexp{
-	// Iteration markers: [1 - 12%], [2 - 14%], etc.
-	// This also covers tool execution logs prefixed with iteration markers,
-	// since those start with the same pattern.
-	regexp.MustCompile(`^\[\d+\s*-\s*\d+%\]`),
-	// Bare tool execution logs (already conveyed via tool_start/tool_end events)
-	regexp.MustCompile(`^executing tool\b`),
-	// Context management messages
-	regexp.MustCompile(`(?i)^\[~\]\s*(?:context|markers|checkpoint|compaction|pruning|turn)\b`),
-	regexp.MustCompile(`(?i)^\[~\]\s*switched`),
-	// Warning about context limits (repetitive)
-	regexp.MustCompile(`(?i)^warning.*context.*(over|pruning|limit|window)`),
-	// Stderr prefix noise
-	regexp.MustCompile(`^STDERR:\s*$`),
-}
-
-// Patterns that represent meaningful milestones in subagent execution.
-// Lines matching these are published as immediate "step" events.
-var subagentStepPatterns = []*regexp.Regexp{
-	// File operations
-	regexp.MustCompile(`(?i)^(created|modified|deleted|updated|wrote|wrote file to):\s`),
-	// Build/test outcomes
-	regexp.MustCompile(`(?i)^(build|tests?):\s.*\b(passed|failed)\b`),
-	// Todo list operations
-	regexp.MustCompile(`(?i)^Todo(Write|Read).*todos?=\d`),
-	// Subagent outcomes
-	regexp.MustCompile(`(?i)^(subagent|self-review|review).*\b(completed|passed|failed)\b`),
-	// Agent messages
-	regexp.MustCompile(`^\[OK\]`),
-	regexp.MustCompile(`^\[FAIL\]`),
-}
-
-// Pre-compiled regex for detecting tool calls in output
-var toolCallPattern = regexp.MustCompile(`(?i)executing tool\s+\[([^\]]+)\]`)
-
-// Pre-compiled regex patterns used by extractSubagentSummary
-var (
-	summaryPassedRe         = regexp.MustCompile(`(\d+)\s+passed`)
-	summaryFailedRe         = regexp.MustCompile(`(\d+)\s+failed`)
-	summaryTodoRe           = regexp.MustCompile(`(Added|Marked|Created|Updated|Completed|Removed)\s+(\d+)\s+todos?`)
-	summaryCmdRe            = regexp.MustCompile(`(?:command|Running):\s+([^\n]+)`)
-	summaryTotalTokensRe    = regexp.MustCompile(`total_tokens=(\d+)`)
-	summaryPromptTokensRe   = regexp.MustCompile(`prompt_tokens=(\d+)`)
-	summaryCompletionTokensRe = regexp.MustCompile(`completion_tokens=(\d+)`)
-	summaryTotalCostRe      = regexp.MustCompile(`total_cost=([\d.]+)`)
-	summaryCachedTokensRe   = regexp.MustCompile(`cached_tokens=(\d+)`)
-)
 
 // subagentBatchBuffer holds buffered output for a subagent task
 type subagentBatchBuffer struct {
@@ -109,10 +55,6 @@ func flushSubagentBatch(buffer *subagentBatchBuffer, a *Agent, toolCallID, toolN
 	}
 
 	a.publishEvent(events.EventTypeSubagentActivity, events.SubagentActivityEvent(toolCallID, toolName, "output", batchMessage, details))
-
-	// Reset buffer
-	buffer.lines = buffer.lines[:0]
-	buffer.lineCount = 0
 }
 
 // cleanupSubagentBatch flushes any remaining buffered output for a task
@@ -138,31 +80,6 @@ func publishSubagentActivity(ctx context.Context, a *Agent, phase, message strin
 		return
 	}
 	toolCallID, toolName := toolExecutionMetadataFromContext(ctx)
-
-	// For "output" phase, filter out structural noise that is not useful
-	// in the webui activity feed. These are internal engine messages that
-	// don't convey meaningful progress to the user.
-	if phase == "output" {
-		for _, pattern := range subagentNoisePatterns {
-			if pattern.MatchString(message) {
-				return
-			}
-		}
-
-		// Check if this line represents a meaningful step/milestone.
-		// If so, publish it as an immediate "step" event instead of
-		// batching it with other output lines.
-		for _, stepPattern := range subagentStepPatterns {
-			if stepPattern.MatchString(message) {
-				// Extract tool call if present for the step event
-				if matches := toolCallPattern.FindStringSubmatch(message); len(matches) > 1 {
-					details["tool"] = matches[1]
-				}
-				publishSubagentActivity(ctx, a, "step", message, details)
-				return
-			}
-		}
-	}
 
 	// Check if this is a milestone phase - publish immediately
 	isMilestone := false
@@ -229,15 +146,13 @@ func publishSubagentActivity(ctx context.Context, a *Agent, phase, message strin
 	buffer.lines = append(buffer.lines, message)
 	buffer.lineCount++
 
-	// Flush if batch is full
-	shouldFlush := buffer.lineCount >= BATCH_SIZE
-
-	if shouldFlush {
-		// Flush while still holding the lock to prevent data race with concurrent goroutines
-		// (e.g., stdout/stderr in RunSubagent both call the same callback)
-		flushSubagentBatch(buffer, a, toolCallID, toolName)
+	// Check if batch is full - clear buffer first, then flush
+	if buffer.lineCount >= BATCH_SIZE {
+		buffer.lines = buffer.lines[:0]
+		buffer.lineCount = 0
 		bufferMu.Unlock()
-		return
+		flushSubagentBatch(buffer, a, toolCallID, toolName)
+		bufferMu.Lock()
 	}
 
 	bufferMu.Unlock()
@@ -305,6 +220,19 @@ func extractFilePathsFromPrompt(prompt string) []string {
 func extractSubagentSummary(stdout string) map[string]string {
 	summary := make(map[string]string)
 
+	// Pre-compile regex patterns once (outside the loop)
+	passedRe := regexp.MustCompile(`(\d+)\s+passed`)
+	failedRe := regexp.MustCompile(`(\d+)\s+failed`)
+	todoRe := regexp.MustCompile(`(Added|Marked|Created|Updated|Completed|Removed)\s+(\d+)\s+todos?`)
+	cmdRe := regexp.MustCompile(`(?:command|Running):\s+([^\n]+)`)
+
+	// Compile metrics regex patterns once
+	totalTokensRe := regexp.MustCompile(`total_tokens=(\d+)`)
+	promptTokensRe := regexp.MustCompile(`prompt_tokens=(\d+)`)
+	completionTokensRe := regexp.MustCompile(`completion_tokens=(\d+)`)
+	totalCostRe := regexp.MustCompile(`total_cost=([\d.]+)`)
+	cachedTokensRe := regexp.MustCompile(`cached_tokens=(\d+)`)
+
 	lines := strings.Split(stdout, "\n")
 
 	var fileChanges []string
@@ -340,12 +268,14 @@ func extractSubagentSummary(stdout string) map[string]string {
 			// Extract file operations (fast ASCII checks)
 			switch firstChar {
 			case 'C', 'c':
-				if strings.HasPrefix(trimmedLine, "Created:") {
+				if strings.HasPrefix(trimmedLine, "Created:") || strings.HasPrefix(trimmedLine, "Wrote") {
 					file := strings.TrimSpace(trimmedLine[8:])
+					if strings.HasPrefix(trimmedLine, "Created:") {
+						file = strings.TrimSpace(trimmedLine[8:])
+					} else if strings.HasPrefix(trimmedLine, "Wrote") {
+						file = strings.TrimSpace(trimmedLine[6:])
+					}
 					fileChanges = append(fileChanges, "Created: "+file)
-				} else if strings.HasPrefix(trimmedLine, "Wrote") {
-					file := strings.TrimSpace(trimmedLine[6:])
-					fileChanges = append(fileChanges, "Wrote: "+file)
 				}
 			case 'M', 'm':
 				if strings.HasPrefix(trimmedLine, "Modified:") {
@@ -369,19 +299,19 @@ func extractSubagentSummary(stdout string) map[string]string {
 			case 'S', 's':
 				if strings.HasPrefix(trimmedLine, "SUBAGENT_METRICS:") {
 					// Parse the metrics using pre-compiled regex
-					if matches := summaryTotalTokensRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
+					if matches := totalTokensRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
 						summary["subagent_total_tokens"] = matches[1]
 					}
-					if matches := summaryPromptTokensRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
+					if matches := promptTokensRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
 						summary["subagent_prompt_tokens"] = matches[1]
 					}
-					if matches := summaryCompletionTokensRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
+					if matches := completionTokensRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
 						summary["subagent_completion_tokens"] = matches[1]
 					}
-					if matches := summaryTotalCostRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
+					if matches := totalCostRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
 						summary["subagent_total_cost"] = matches[1]
 					}
-					if matches := summaryCachedTokensRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
+					if matches := cachedTokensRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
 						summary["subagent_cached_tokens"] = matches[1]
 					}
 					continue // Skip further processing for metrics lines
@@ -406,17 +336,17 @@ func extractSubagentSummary(stdout string) map[string]string {
 				}
 
 				// Extract test counts using pre-compiled regex
-				if matches := summaryPassedRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
+				if matches := passedRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
 					fmt.Sscanf(matches[1], "%d", &testPassCount)
 				}
-				if matches := summaryFailedRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
+				if matches := failedRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
 					fmt.Sscanf(matches[1], "%d", &testFailCount)
 				}
 			}
 
 			// Extract todo list operations
 			if strings.Contains(trimmedLine, "TodoWrite") || strings.Contains(trimmedLine, "todo list") {
-				if matches := summaryTodoRe.FindStringSubmatch(trimmedLine); len(matches) > 2 {
+				if matches := todoRe.FindStringSubmatch(trimmedLine); len(matches) > 2 {
 					todosCreated = append(todosCreated, matches[0])
 				}
 			}
@@ -430,7 +360,7 @@ func extractSubagentSummary(stdout string) map[string]string {
 					}
 				}
 				if strings.Contains(trimmedLine, "Executing command") || strings.Contains(trimmedLine, "Running") {
-					if matches := summaryCmdRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
+					if matches := cmdRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
 						commandsExecuted = append(commandsExecuted, strings.TrimSpace(matches[1]))
 					}
 				}
@@ -550,7 +480,11 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 				}
 			}
 			// Update filesStr to include auto-extracted files
-			filesStr = strings.Join(files, ",")
+			if filesStr != "" {
+				filesStr = strings.Join(files, ",")
+			} else {
+				filesStr = strings.Join(files, ",")
+			}
 		}
 	}
 
@@ -723,10 +657,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		}
 
 		message := fmt.Sprintf("%s→ %sSubagent: %s%s\n", subagentGray, prefix, cleanLine, reset)
-		// Write to terminal only; output is already published via publishSubagentActivity
-		// above, so we skip the event bus to avoid sending a redundant agent_message event
-		// that the WebUI would silently discard anyway.
-		a.PrintTerminalOnly(message)
+		a.printLineInternal(message)
 	}
 
 	// Print the provider/model being used for this subagent
@@ -1068,10 +999,7 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 		}
 
 		message := fmt.Sprintf("%s→ %sSubagent: %s%s\n", subagentGray, prefix, cleanLine, reset)
-		// Write to terminal only; output is already published via publishSubagentActivity
-		// above, so we skip the event bus to avoid sending a redundant agent_message event
-		// that the WebUI would silently discard anyway.
-		a.PrintTerminalOnly(message)
+		a.printLineInternal(message)
 	}
 
 	// Print the provider/model being used for these parallel subagents
@@ -1277,22 +1205,12 @@ func isPathInWorkspace(path, workspaceDir string) bool {
 	return strings.HasPrefix(path, workspaceDir+string(filepath.Separator))
 }
 
-// isPathInTmp checks if a path is in a system temp directory (e.g. /tmp, or macOS /var/folders/.../T/)
-// Returns true for paths like /tmp/file, /tmp/, /TMP/file, etc.
-// Returns false for the bare /tmp directory or paths not in a tmp directory.
+// isPathInTmp checks if a path is in /tmp/ for temporary file access
 func isPathInTmp(path string) bool {
-	if path == "" {
-		return false
-	}
-	// Check if the original path ends with a separator (e.g., "/tmp/" means "inside /tmp")
-	hasTrailingSep := len(path) > 1 && (path[len(path)-1] == '/' || path[len(path)-1] == filepath.Separator)
-	lower := strings.ToLower(filepath.Clean(path))
-	tmpDir := strings.ToLower(filepath.Clean(os.TempDir()))
-	if lower == tmpDir {
-		// "/tmp" alone (no trailing sep) is the directory itself, not a file inside it
-		return hasTrailingSep
-	}
-	return strings.HasPrefix(lower, tmpDir+string(filepath.Separator))
+	// Check for /tmp/ or /var/folders/.../T/ (macOS temp dir) or any path containing tmp
+	return strings.Contains(path, "/tmp/") ||
+		strings.Contains(path, "/var/folders/.../T/") ||
+		strings.Contains(strings.ToLower(path), "/tmp/")
 }
 
 // flushAllSubagentBuffers flushes all pending batch buffers

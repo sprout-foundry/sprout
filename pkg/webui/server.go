@@ -39,35 +39,35 @@ type ConnectionInfo struct {
 
 // ReactWebServer provides the React web UI
 type ReactWebServer struct {
-	agent               *agent.Agent
-	eventBus            *events.EventBus
-	daemonRoot          string
-	workspaceRoot       string
-	sshHostAlias        string
-	sshSessionKey       string
-	sshLauncherURL      string
-	sshHomePath         string
-	fileConsents        *fileConsentManager
-	clientContexts      map[string]*webClientContext
-	port                int
-	server              *http.Server
-	listener            net.Listener
-	upgrader            websocket.Upgrader
-	connections         sync.Map // map[*websocket.Conn]*ConnectionInfo
-	terminalManager     *TerminalManager
-	isRunning           bool
-	mutex               sync.RWMutex
-	startTime           time.Time
-	queryCount          int
-	activeQueries       int
-	activeQueryClientID string
-	fixReviewJobs       map[string]*gitFixReviewJob
-	fixReviewMu         sync.RWMutex
-	sshSessions         map[string]*sshWorkspaceSession
-	sshSessionsMu       sync.Mutex
-	sshLaunchStatuses   map[string]*sshLaunchStatus
-	sshLaunchStatusMu   sync.RWMutex
-	workspaceExecMu     sync.Mutex
+	agent                           *agent.Agent
+	eventBus                        *events.EventBus
+	daemonRoot                      string
+	workspaceRoot                   string
+	sshHostAlias                    string
+	sshSessionKey                   string
+	sshLauncherURL                  string
+	sshHomePath                     string
+	fileConsents                    *fileConsentManager
+	clientContexts                  map[string]*webClientContext
+	port                            int
+	server                          *http.Server
+	listener                        net.Listener
+	upgrader                        websocket.Upgrader
+	connections                     sync.Map // map[*websocket.Conn]*ConnectionInfo
+	terminalManager                 *TerminalManager
+	isRunning                       bool
+	mutex                           sync.RWMutex
+	startTime                       time.Time
+	queryCount                      int
+	activeQueries                   int
+	activeQueryClientID             string
+	fixReviewJobs                   map[string]*gitFixReviewJob
+	fixReviewMu                     sync.RWMutex
+	sshSessions                     map[string]*sshWorkspaceSession
+	sshSessionsMu                   sync.Mutex
+	sshLaunchStatuses               map[string]*sshLaunchStatus
+	sshLaunchStatusMu               sync.RWMutex
+	workspaceExecMu                 sync.Mutex
 	lastClientContextCleanupAt      time.Time
 	lastClientContextCleanupRemoved int
 	totalClientContextsRemoved      int
@@ -81,7 +81,7 @@ const (
 // NewReactWebServer creates a new React web server
 func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int) *ReactWebServer {
 	if port == 0 {
-		port = DaemonPort
+		port = 54421
 	}
 
 	workspaceRoot, err := os.Getwd()
@@ -93,20 +93,12 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int) 
 		workspaceRoot = "."
 	}
 
-	// daemonRoot is the user's home directory — this scopes daemon-level
-	// storage (sessions, SSH tunnels, config) to the user rather than a
-	// specific project workspace.
-	daemonRoot, err := os.UserHomeDir()
-	if err != nil {
-		daemonRoot = workspaceRoot
-	}
-
 	providercatalog.RefreshFromRemoteAsync("")
 
 	return &ReactWebServer{
 		agent:          agent,
 		eventBus:       eventBus,
-		daemonRoot:     daemonRoot,
+		daemonRoot:     workspaceRoot,
 		workspaceRoot:  workspaceRoot,
 		sshHostAlias:   strings.TrimSpace(os.Getenv("LEDIT_SSH_HOST_ALIAS")),
 		sshSessionKey:  strings.TrimSpace(os.Getenv("LEDIT_SSH_SESSION_KEY")),
@@ -131,10 +123,10 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int) 
 				return host == "localhost" || host == "127.0.0.1"
 			},
 		},
-		terminalManager: NewTerminalManager(workspaceRoot),
-		startTime:       time.Now(),
-		fixReviewJobs:   make(map[string]*gitFixReviewJob),
-		sshSessions:     make(map[string]*sshWorkspaceSession),
+		terminalManager:   NewTerminalManager(workspaceRoot),
+		startTime:         time.Now(),
+		fixReviewJobs:     make(map[string]*gitFixReviewJob),
+		sshSessions:       make(map[string]*sshWorkspaceSession),
 		sshLaunchStatuses: make(map[string]*sshLaunchStatus),
 	}
 }
@@ -198,8 +190,6 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/git/branch/create", ws.handleAPIGitCreateBranch)
 	mux.HandleFunc("/api/git/pull", ws.handleAPIGitPull)
 	mux.HandleFunc("/api/git/push", ws.handleAPIGitPush)
-	mux.HandleFunc("/api/git/log", ws.handleAPIGitLog)
-	mux.HandleFunc("/api/git/commit/show", ws.handleAPIGitCommitShow)
 	mux.HandleFunc("/api/instances", ws.handleAPIInstances)
 	mux.HandleFunc("/api/instances/select", ws.handleAPIInstanceSelect)
 	mux.HandleFunc("/api/instances/ssh-hosts", ws.handleAPISSHHosts)
@@ -216,13 +206,6 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	// Session API
 	mux.HandleFunc("/api/sessions", ws.handleAPISessions)
 	mux.HandleFunc("/api/sessions/restore", ws.handleAPIRestoreSession)
-	// Chat sessions API (multi-chat support within a tab)
-	mux.HandleFunc("/api/chat-sessions", ws.handleAPIChatSessions)
-	mux.HandleFunc("/api/chat-sessions/create", ws.handleAPIChatSessionsCreate)
-	mux.HandleFunc("/api/chat-sessions/delete", ws.handleAPIChatSessionsDelete)
-	mux.HandleFunc("/api/chat-sessions/rename", ws.handleAPIChatSessionsRename)
-	mux.HandleFunc("/api/chat-sessions/switch", ws.handleAPIChatSessionsSwitch)
-	mux.HandleFunc("/api/chat-sessions/compact", ws.handleAPIChatSessionsCompact)
 	// Search API
 	mux.HandleFunc("/api/search", ws.handleAPIQuerySearch)
 	mux.HandleFunc("/api/search/replace", ws.handleAPIQuerySearchReplace)
@@ -258,15 +241,6 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to bind web server on %s: %w", ws.server.Addr, err)
 	}
 
-	// When the configured port is 0, the OS assigns a random free port.
-	// Capture the actual port from the listener so GetPort() and logging
-	// report the real value.
-	if ws.port == 0 {
-		actualPort := listener.Addr().(*net.TCPAddr).Port
-		ws.port = actualPort
-		ws.server.Addr = fmt.Sprintf("127.0.0.1:%d", actualPort)
-	}
-
 	ws.mutex.Lock()
 	if ws.isRunning {
 		ws.mutex.Unlock()
@@ -286,9 +260,6 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	}()
 
 	go ws.startClientContextCleanupWorker(ctx, clientContextCleanupInterval, clientContextMaxIdle)
-
-	// Start terminal session cleanup worker (every 5 minutes, timeout 30 minutes)
-	ws.terminalManager.StartCleanupWorker(ctx, 5*time.Minute, 30*time.Minute)
 
 	// Wait for context cancellation
 	go func() {
@@ -404,35 +375,8 @@ func CheckPortAvailable(port int) bool {
 	return true // Port is free
 }
 
-// expandHomeVar expands only $HOME and ${HOME} references in a path string.
-// This is more restrictive than os.ExpandEnv (which expands all env vars)
-// and avoids surprising behavior from arbitrary environment variable expansion.
-func expandHomeVar(path string) string {
-	home := os.Getenv("HOME")
-	if home == "" {
-		return path
-	}
-	path = strings.ReplaceAll(path, "${HOME}", home)
-	path = strings.ReplaceAll(path, "$HOME", home)
-	return path
-}
-
 func filepathAbsEval(path string) (string, error) {
-	// Expand $HOME / ${HOME} and tilde in the path.
-	expanded := expandHomeVar(path)
-	if strings.HasPrefix(expanded, "~/") || expanded == "~" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("resolve home directory: %w", err)
-		}
-		if expanded == "~" {
-			expanded = home
-		} else {
-			expanded = filepath.Join(home, expanded[2:])
-		}
-	}
-
-	abs, err := filepath.Abs(expanded)
+	abs, err := filepath.Abs(path)
 	if err != nil {
 		return "", err
 	}

@@ -2,7 +2,6 @@ import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react'
 import { Menu, X, Columns2, Rows2, PanelRightOpen, PanelRightClose } from 'lucide-react';
 import Sidebar from './Sidebar';
 import WorkspaceBar from './WorkspaceBar';
-import ChatTabBar from './ChatTabBar';
 import Terminal from './Terminal';
 import EditorTabs from './EditorTabs';
 import WorkspacePane from './WorkspacePane';
@@ -12,7 +11,6 @@ import Status from './Status';
 import CommandPalette from './CommandPalette';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { ApiService, LeditInstance } from '../services/api';
-import type { ChatSession } from '../services/chatSessions';
 import { useGitWorkspace } from '../hooks/useGitWorkspace';
 
 const INSTANCE_PID_STORAGE_KEY = 'ledit:webui:instancePid';
@@ -25,19 +23,6 @@ const toPaneFlex = (weight: number): React.CSSProperties => ({
   minWidth: 0,
   minHeight: 0,
 });
-
-// eslint-disable-next-line no-template-curly-in-string
-/** Expand a leading `$HOME` or `${HOME}` token in a workspace path using the remote home directory. */
-function expandHomeInPath(path: string, homePath: string | null): string {
-  if (!homePath) return path;
-  // eslint-disable-next-line no-template-curly-in-string
-  if (path === '$HOME' || path === '${HOME}') return homePath;
-  // eslint-disable-next-line no-template-curly-in-string
-  if (path.startsWith('$HOME/')) return homePath + path.slice(5);
-  // eslint-disable-next-line no-template-curly-in-string
-  if (path.startsWith('${HOME}/')) return homePath + path.slice(7);
-  return path;
-}
 
 interface ToolExecution {
   id: string;
@@ -96,7 +81,7 @@ interface AppState {
     id: string;
     toolCallId: string;
     toolName: string;
-    phase: 'spawn' | 'output' | 'complete' | 'step';
+    phase: 'spawn' | 'output' | 'complete';
     message: string;
     timestamp: Date;
     taskId?: string;
@@ -133,11 +118,7 @@ interface AppContentProps {
   onSendMessage: (message: string) => void;
   onQueueMessage: (message: string) => void;
   onStopProcessing: () => void;
-  queuedMessages: string[];
-  onRemoveQueuedMessage: (index: number) => void;
-  onEditQueuedMessage: (index: number, newText: string) => void;
-  onReorderQueuedMessage: (fromIndex: number, toIndex: number) => void;
-  onClearQueuedMessages: () => void;
+  queuedMessagesCount: number;
   onGitCommit: (message: string, files: string[]) => Promise<unknown>;
   onGitAICommit: () => Promise<{ commitMessage: string; warnings?: string[] }>;
   onGitStage: (files: string[]) => Promise<void>;
@@ -146,12 +127,6 @@ interface AppContentProps {
   onTerminalOutput: (output: string) => void;
   onTerminalExpandedChange: (expanded: boolean) => void;
   isConnected: boolean;
-  chatSessions: ChatSession[];
-  activeChatId: string;
-  onSwitchChat: (id: string) => void;
-  onCreateChat: () => void;
-  onDeleteChat: (id: string) => void;
-  onRenameChat: (id: string, name: string) => void;
 }
 
 const AppContent: React.FC<AppContentProps> = ({
@@ -175,11 +150,7 @@ const AppContent: React.FC<AppContentProps> = ({
   onSendMessage,
   onQueueMessage,
   onStopProcessing,
-  queuedMessages,
-  onRemoveQueuedMessage,
-  onEditQueuedMessage,
-  onReorderQueuedMessage,
-  onClearQueuedMessages,
+  queuedMessagesCount,
   onGitCommit,
   onGitAICommit,
   onGitStage,
@@ -187,13 +158,7 @@ const AppContent: React.FC<AppContentProps> = ({
   onGitDiscard,
   onTerminalOutput,
   onTerminalExpandedChange,
-  isConnected,
-  chatSessions,
-  activeChatId,
-  onSwitchChat,
-  onCreateChat,
-  onDeleteChat,
-  onRenameChat,
+  isConnected
 }) => {
   const {
     panes,
@@ -209,8 +174,6 @@ const AppContent: React.FC<AppContentProps> = ({
     closeBuffer,
     openFile,
     openWorkspaceBuffer,
-    saveBuffer,
-    saveAllBuffers,
     paneSizes,
     updatePaneSize
   } = useEditorManager();
@@ -263,8 +226,6 @@ const AppContent: React.FC<AppContentProps> = ({
     return 360;
   });
 
-  const [workspaceRoot, setWorkspaceRoot] = useState('');
-
   const [nestedSplit, setNestedSplit] = useState<{ hostPaneId: string; nestedPaneId: string; direction: 'vertical' | 'horizontal' } | null>(null);
 
   useEffect(() => {
@@ -272,108 +233,6 @@ const AppContent: React.FC<AppContentProps> = ({
     window.localStorage.setItem('ledit.contextPanel.width', String(Math.round(panelWidth)));
   }, [panelWidth]);
   const initialViewSyncRef = useRef(false);
-  const initialWorkspaceAppliedRef = useRef(false);
-
-  // Fetch workspace root when connected (for absolute path copy, etc.)
-  useEffect(() => {
-    if (!isConnected) return;
-    apiService.getWorkspace().then((ws) => {
-      setWorkspaceRoot((ws.workspace_root || '').replace(/\/+$/, ''));
-    }).catch(() => {});
-  }, [isConnected, apiService]);
-
-  // Persist workspace path to localStorage for Chrome tab-discard recovery.
-  // Each tab persists its own workspace so that after a discard (which
-  // clears sessionStorage and forces a new client_id), the tab can restore
-  // the correct workspace via the getTabWorkspacePath mechanism.
-  useEffect(() => {
-    if (!isConnected || !workspaceRoot) return;
-    try {
-      window.localStorage.setItem('ledit.workspaceTabPath', workspaceRoot);
-    } catch {
-      // QuotaExceededError — ignore
-    }
-  }, [isConnected, workspaceRoot]);
-
-  // On first connect, check if this is a tab-discard recovery: the workspace
-  // path saved in localStorage may differ from the server's default workspace.
-  // If the saved path exists and differs, switch to it so the user gets their
-  // workspace back even though the client_id (and thus server context) is new.
-  const workspaceRestoreAppliedRef = useRef(false);
-  useEffect(() => {
-    if (workspaceRestoreAppliedRef.current || !isConnected) {
-      return;
-    }
-    workspaceRestoreAppliedRef.current = true;
-
-    const savedPath = (() => {
-      try {
-        return window.localStorage.getItem('ledit.workspaceTabPath') || '';
-      } catch {
-        return '';
-      }
-    })();
-    if (!savedPath) return;
-
-    let cancelled = false;
-    (async () => {
-      try {
-        const current = await apiService.getWorkspace();
-        if (cancelled) return;
-        const currentRoot = (current.workspace_root || '').replace(/\/+$/, '');
-        const targetRoot = savedPath.replace(/\/+$/, '');
-        if (currentRoot === targetRoot) return;
-        await apiService.setWorkspace(targetRoot);
-      } catch {
-        // Best-effort — if restore fails the user can switch manually
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [isConnected, apiService]);
-
-  // Apply LEDIT_INITIAL_WORKSPACE on first mount (injected by SSH proxy).
-  // Best-effort: if the switch fails, the user can manually switch later.
-  useEffect(() => {
-    if (initialWorkspaceAppliedRef.current || !isConnected) {
-      return;
-    }
-    initialWorkspaceAppliedRef.current = true;
-
-    const initialWorkspace: string | undefined = (window as any).LEDIT_INITIAL_WORKSPACE;
-    delete (window as any).LEDIT_INITIAL_WORKSPACE;
-    if (!initialWorkspace || typeof initialWorkspace !== 'string') {
-      return;
-    }
-
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const workspace = await apiService.getWorkspace();
-        if (cancelled) {
-          return;
-        }
-        // Expand $HOME references using the remote home path from ssh_context,
-        // so literal "$HOME" never reaches the backend's setWorkspace API.
-        const sshContext = workspace.ssh_context as { home_path?: string } | undefined;
-        const homePath = sshContext?.home_path || null;
-        const expandedInitial = expandHomeInPath(initialWorkspace, homePath);
-        const currentRoot = (workspace.workspace_root || '').replace(/\/+$/, '');
-        const targetRoot = expandedInitial.replace(/\/+$/, '');
-        if (currentRoot === targetRoot) {
-          return;
-        }
-        await apiService.setWorkspace(targetRoot);
-      } catch (err) {
-        // Best-effort: don't surface errors to the user.
-        console.debug('[workspace] Auto-switch failed (best-effort):', err);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isConnected, apiService]);
 
   // Load hotkeys config path on mount
   useEffect(() => {
@@ -533,28 +392,6 @@ const AppContent: React.FC<AppContentProps> = ({
     }
   }, [activePaneId, buffers, switchPane, switchToBuffer]);
 
-  const handleSplitRequest = useCallback((direction: 'vertical' | 'horizontal') => {
-    if (!activePaneId) {
-      return;
-    }
-
-    const previousPaneCount = panes.length;
-    const newPaneId = splitPane(activePaneId, direction);
-    if (!newPaneId) {
-      return;
-    }
-
-    if (previousPaneCount === 2) {
-      setNestedSplit({
-        hostPaneId: activePaneId,
-        nestedPaneId: newPaneId,
-        direction,
-      });
-      updatePaneSize(`group:${activePaneId}`, 50);
-      updatePaneSize(`nested:${activePaneId}`, 50);
-    }
-  }, [activePaneId, panes.length, splitPane, updatePaneSize]);
-
   // Listen for hotkey custom events
   useEffect(() => {
     const handleHotkey = (e: Event) => {
@@ -622,83 +459,12 @@ const AppContent: React.FC<AppContentProps> = ({
             closeBuffer(activeBufferId);
           }
           break;
-        case 'save_file':
-          if (activeBufferId) {
-            saveBuffer(activeBufferId).catch(err => {
-              console.error('Failed to save buffer:', activeBufferId, err);
-            });
-          }
-          break;
-        case 'save_all_files':
-          saveAllBuffers().catch(err => {
-            console.error('Failed to save all buffers:', err);
-          });
-          break;
-        case 'split_editor_vertical':
-          handleSplitRequest('vertical');
-          break;
-        case 'split_editor_horizontal':
-          handleSplitRequest('horizontal');
-          break;
-        case 'close_all_editors': {
-          const closableBuffers = Array.from(buffers.values()).filter(b => b.isClosable !== false);
-          for (const buf of closableBuffers) {
-            closeBuffer(buf.id);
-          }
-          break;
-        }
-        case 'close_other_editors': {
-          if (!activeBufferId || !activePaneId) break;
-          const othersInPane = Array.from(buffers.values()).filter(
-            b => b.paneId === activePaneId && b.id !== activeBufferId && b.isClosable !== false
-          );
-          for (const buf of othersInPane) {
-            closeBuffer(buf.id);
-          }
-          break;
-        }
-        case 'focus_tab_4':
-          focusTabIndex(3);
-          break;
-        case 'focus_tab_5':
-          focusTabIndex(4);
-          break;
-        case 'focus_tab_6':
-          focusTabIndex(5);
-          break;
-        case 'focus_tab_7':
-          focusTabIndex(6);
-          break;
-        case 'focus_tab_8':
-          focusTabIndex(7);
-          break;
-        case 'focus_tab_9':
-          focusTabIndex(8);
-          break;
-        case 'focus_next_tab': {
-          if (!activePaneId) break;
-          const nextBuffers = Array.from(buffers.values()).filter(b => b.paneId === activePaneId);
-          const currentIdx = nextBuffers.findIndex(b => b.id === activeBufferId);
-          if (currentIdx < nextBuffers.length - 1) {
-            switchToBuffer(nextBuffers[currentIdx + 1].id);
-          }
-          break;
-        }
-        case 'focus_prev_tab': {
-          if (!activePaneId) break;
-          const prevBuffers = Array.from(buffers.values()).filter(b => b.paneId === activePaneId);
-          const currentIdx = prevBuffers.findIndex(b => b.id === activeBufferId);
-          if (currentIdx > 0) {
-            switchToBuffer(prevBuffers[currentIdx - 1].id);
-          }
-          break;
-        }
       }
     };
     
     window.addEventListener('ledit:hotkey', handleHotkey);
     return () => window.removeEventListener('ledit:hotkey', handleHotkey);
-  }, [activeBufferId, activePaneId, buffers, closeBuffer, focusTabIndex, handlePrimaryViewChange, handleSplitRequest, isTerminalExpanded, onSidebarToggle, onTerminalExpandedChange, onViewChange, openWorkspaceBuffer, saveAllBuffers, saveBuffer, switchToBuffer]);
+  }, [activeBufferId, buffers, closeBuffer, focusTabIndex, handlePrimaryViewChange, onSidebarToggle, onTerminalExpandedChange, isTerminalExpanded, openWorkspaceBuffer, onViewChange]);
 
   // Handler to open hotkeys config in editor
   const handleOpenHotkeysConfig = useCallback(() => {
@@ -812,6 +578,28 @@ const AppContent: React.FC<AppContentProps> = ({
     });
   }, [onViewChange, openWorkspaceBuffer]);
 
+  const handleSplitRequest = useCallback((direction: 'vertical' | 'horizontal') => {
+    if (!activePaneId) {
+      return;
+    }
+
+    const previousPaneCount = panes.length;
+    const newPaneId = splitPane(activePaneId, direction);
+    if (!newPaneId) {
+      return;
+    }
+
+    if (previousPaneCount === 2) {
+      setNestedSplit({
+        hostPaneId: activePaneId,
+        nestedPaneId: newPaneId,
+        direction,
+      });
+      updatePaneSize(`group:${activePaneId}`, 50);
+      updatePaneSize(`nested:${activePaneId}`, 50);
+    }
+  }, [activePaneId, panes.length, splitPane, updatePaneSize]);
+
   const handleCloseAllSplits = useCallback(() => {
     if (nestedSplit) {
       // When a nested split is active, close just the nested pane (3 → 2 panes)
@@ -915,11 +703,7 @@ const AppContent: React.FC<AppContentProps> = ({
                 messages: state.messages,
                 onSendMessage,
                 onQueueMessage,
-                queuedMessages,
-                onRemoveQueuedMessage,
-                onEditQueuedMessage,
-                onReorderQueuedMessage,
-                onClearQueuedMessages,
+                queuedMessagesCount,
                 inputValue,
                 onInputChange,
                 isProcessing: state.isProcessing,
@@ -928,7 +712,6 @@ const AppContent: React.FC<AppContentProps> = ({
                 queryProgress: state.queryProgress,
                 currentTodos,
                 onStopProcessing,
-                subagentActivities: state.subagentActivities,
                 onToolPillClick: (toolId: string) => contextPanelRef.current?.highlightTool(toolId),
               }}
               reviewProps={{
@@ -1120,19 +903,6 @@ const AppContent: React.FC<AppContentProps> = ({
           onUnstageFile: handleUnstageFile,
           onDiscardFile: handleDiscardFile,
           onSectionAction: handleSectionAction,
-          onOpenFile: handleFileClick,
-          workspaceRoot,
-          apiService,
-          openWorkspaceBuffer: openWorkspaceBuffer as (options: {
-            kind: 'chat' | 'diff' | 'review';
-            path: string;
-            title: string;
-            content?: string;
-            ext?: string;
-            isPinned?: boolean;
-            isClosable?: boolean;
-            metadata?: Record<string, any>;
-          }) => string,
         }}
       />
       <div className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''} ${isTerminalExpanded ? 'terminal-expanded' : ''}`}>
@@ -1141,16 +911,6 @@ const AppContent: React.FC<AppContentProps> = ({
           isMobile={isMobile}
           isMobileMenuOpen={isSidebarOpen}
         />
-        {chatSessions.length > 0 && (
-          <ChatTabBar
-            sessions={chatSessions}
-            activeChatId={activeChatId}
-            onSwitch={onSwitchChat}
-            onCreate={onCreateChat}
-            onDelete={onDeleteChat}
-            onRename={onRenameChat}
-          />
-        )}
         <div className="main-view-content">
           <div className="editor-view">
             {isMobile && (
@@ -1195,7 +955,6 @@ const AppContent: React.FC<AppContentProps> = ({
             <ContextPanel
               ref={contextPanelRef}
               context="chat"
-              stats={state.stats}
               toolExecutions={state.toolExecutions}
               fileEdits={state.fileEdits}
               logs={state.logs}

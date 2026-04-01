@@ -12,8 +12,8 @@ import (
 // the agent and the webui. It allows the agent to block waiting for a user
 // response from the webui when stdin is unavailable.
 type SecurityApprovalManager struct {
-	mu        sync.Mutex
-	pending   map[string]chan bool // requestID -> response channel
+	mu      sync.Mutex
+	pending map[string]chan bool // requestID -> response channel
 }
 
 // NewSecurityApprovalManager creates a new security approval manager.
@@ -38,8 +38,7 @@ func generateRequestID() string {
 // blocks until the webui responds with an approval or rejection.
 // Returns true if approved, false if rejected.
 // If the event bus is nil, returns false (reject for safety).
-// Optional extra fields (e.g. "command" for shell_command) can be passed in extra.
-func (sam *SecurityApprovalManager) RequestApproval(eventBus *events.EventBus, clientID, toolName, riskLevel, reasoning string, extra map[string]interface{}) bool {
+func (sam *SecurityApprovalManager) RequestApproval(eventBus *events.EventBus, clientID, toolName, riskLevel, reasoning string) bool {
 	if eventBus == nil {
 		return false
 	}
@@ -63,10 +62,6 @@ func (sam *SecurityApprovalManager) RequestApproval(eventBus *events.EventBus, c
 	)
 	if trimmedClientID := strings.TrimSpace(clientID); trimmedClientID != "" {
 		payload["client_id"] = trimmedClientID
-	}
-	// Merge optional extra fields (e.g. the shell command for display in the webui)
-	for k, v := range extra {
-		payload[k] = v
 	}
 	eventBus.Publish(events.EventTypeSecurityApprovalRequest, payload)
 

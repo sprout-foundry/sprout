@@ -1,10 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback, useLayoutEffect, memo } from 'react';
 import { ScrollText, X, Send, SquarePen, ListPlus, Plus, Square } from 'lucide-react';
-import QueuedMessagesPanel from './QueuedMessagesPanel';
-import { showThemedConfirm } from './ThemedDialog';
 import './CommandInput.css';
 import { ApiService } from '../services/api';
-import { CommandHistoryState, dedupeCommands, loadCommandHistory } from './command_input_history';
+import { CommandHistoryState, dedupeCommands, loadCommandHistory, saveCommandHistory } from './command_input_history';
 
 interface CommandInputProps {
   value?: string;
@@ -17,11 +15,7 @@ interface CommandInputProps {
   multiline?: boolean;
   autoFocus?: boolean;
   isProcessing?: boolean;
-  queuedMessages?: string[];
-  onRemoveQueuedMessage?: (index: number) => void;
-  onEditQueuedMessage?: (index: number, newText: string) => void;
-  onReorderQueuedMessage?: (fromIndex: number, toIndex: number) => void;
-  onClearQueuedMessages?: () => void;
+  queuedCount?: number;
   onStop?: () => void;
 }
 
@@ -36,15 +30,10 @@ const CommandInput: React.FC<CommandInputProps> = ({
   multiline = true,
   autoFocus = false,
   isProcessing = false,
-  queuedMessages = [],
-  onRemoveQueuedMessage,
-  onEditQueuedMessage,
-  onReorderQueuedMessage,
-  onClearQueuedMessages,
+  queuedCount = 0,
   onStop,
 }) => {
   const [draftValue, setDraftValue] = useState(value);
-  const [queuePanelCollapsed, setQueuePanelCollapsed] = useState(false);
   const [history, setHistory] = useState<CommandHistoryState>({
     commands: [],
     index: -1,
@@ -574,9 +563,9 @@ const CommandInput: React.FC<CommandInputProps> = ({
     }, 100);
   }, [onSend, onSendCommand, updateValue]);
 
-  const handleNewSession = useCallback(async () => {
+  const handleNewSession = useCallback(() => {
     if (isProcessing) {
-      if (!(await showThemedConfirm('A request is currently processing. Stop it and start a new session?', { title: 'Stop Processing', type: 'warning' }))) {
+      if (!window.confirm('A request is currently processing. Stop it and start a new session?')) {
         return;
       }
       commandRef('/clear');
@@ -775,35 +764,20 @@ const CommandInput: React.FC<CommandInputProps> = ({
             <Square size={15} />
           </button>
         )}
-        {(isProcessing || queuedMessages.length > 0) && (
+        {isProcessing && (
           <button
             type="button"
-            onClick={isProcessing ? handleQueue : () => setQueuePanelCollapsed(prev => !prev)}
-            disabled={disabled || (!canSend && isProcessing)}
+            onClick={handleQueue}
+            disabled={disabled || !canSend}
             className="queue-button"
-            data-tooltip={isProcessing
-              ? `Queue for after current run${queuedMessages.length > 0 ? ` (${queuedMessages.length} queued)` : ''}`
-              : `${queuedMessages.length > 0 ? `${queuedMessages.length} queued message${queuedMessages.length !== 1 ? 's' : ''}` : 'No queued messages'}`}
+            data-tooltip={`Queue for after current run${queuedCount > 0 ? ` (${queuedCount} queued)` : ''}`}
             aria-label="Queue message"
           >
             <ListPlus size={16} />
-            {queuedMessages.length > 0 && <span className="queue-count">{queuedMessages.length}</span>}
+            {queuedCount > 0 && <span className="queue-count">{queuedCount}</span>}
           </button>
         )}
       </div>
-
-      {(queuedMessages.length > 0) && onEditQueuedMessage && (
-        queuePanelCollapsed ? null : (
-          <QueuedMessagesPanel
-            messages={queuedMessages}
-            onRemove={onRemoveQueuedMessage ?? (() => {})}
-            onEdit={onEditQueuedMessage}
-            onReorder={onReorderQueuedMessage ?? (() => {})}
-            onClear={onClearQueuedMessages ?? (() => {})}
-            onClose={() => setQueuePanelCollapsed(true)}
-          />
-        )
-      )}
 
       <div className="keyboard-hints">
         <span><kbd>Enter</kbd> Send</span>

@@ -144,7 +144,7 @@ export interface SSHOpenResponse {
   message: string;
   url: string;
   port: number;
-  /** Same-origin proxy URL (e.g. http://127.0.0.1:54000/ssh/{key}/).
+  /** Same-origin proxy URL served by the local ledit server (e.g. http://127.0.0.1:54421/ssh/{key}/).
    *  Prefer this over `url` to keep the browser on the same origin for PWA compatibility. */
   proxy_url?: string;
   proxy_base?: string;
@@ -569,9 +569,8 @@ class ApiService {
     return response.json();
   }
 
-  async sendQuery(query: string, chatId?: string): Promise<void> {
-    const url = chatId ? `/api/query?chat_id=${encodeURIComponent(chatId)}` : '/api/query';
-    const response = await clientFetch(url, {
+  async sendQuery(query: string): Promise<void> {
+    const response = await clientFetch('/api/query', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -598,9 +597,8 @@ class ApiService {
     return response.json();
   }
 
-  async steerQuery(query: string, chatId?: string): Promise<void> {
-    const url = chatId ? `/api/query/steer?chat_id=${encodeURIComponent(chatId)}` : '/api/query/steer';
-    const response = await clientFetch(url, {
+  async steerQuery(query: string): Promise<void> {
+    const response = await clientFetch('/api/query/steer', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -614,9 +612,8 @@ class ApiService {
     }
   }
 
-  async stopQuery(chatId?: string): Promise<void> {
-    const url = chatId ? `/api/query/stop?chat_id=${encodeURIComponent(chatId)}` : '/api/query/stop';
-    const response = await clientFetch(url, {
+  async stopQuery(): Promise<void> {
+    const response = await clientFetch('/api/query/stop', {
       method: 'POST',
     });
 
@@ -905,10 +902,7 @@ class ApiService {
     }
   }
 
-  async fixFromDeepReview(
-    reviewOutput: string,
-    options?: { fixPrompt?: string; selectedItems?: string[] }
-  ): Promise<{
+  async fixFromDeepReview(reviewOutput: string): Promise<{
     message: string;
     result: string;
   }> {
@@ -916,11 +910,7 @@ class ApiService {
       const response = await clientFetch('/api/git/deep-review/fix', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          review_output: reviewOutput,
-          fix_prompt: options?.fixPrompt || '',
-          selected_items: options?.selectedItems || [],
-        }),
+        body: JSON.stringify({ review_output: reviewOutput }),
       });
       if (!response.ok) {
         const text = await response.text();
@@ -933,10 +923,7 @@ class ApiService {
     }
   }
 
-  async startFixFromDeepReview(
-    reviewOutput: string,
-    options?: { fixPrompt?: string; selectedItems?: string[] }
-  ): Promise<{
+  async startFixFromDeepReview(reviewOutput: string): Promise<{
     message: string;
     job_id: string;
     session_id: string;
@@ -945,11 +932,7 @@ class ApiService {
       const response = await clientFetch('/api/git/deep-review/fix/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          review_output: reviewOutput,
-          fix_prompt: options?.fixPrompt || '',
-          selected_items: options?.selectedItems || [],
-        }),
+        body: JSON.stringify({ review_output: reviewOutput }),
       });
       if (!response.ok) {
         const text = await response.text();
@@ -1002,61 +985,6 @@ class ApiService {
       return await response.json();
     } catch (error) {
       console.error('Failed to get git diff:', error);
-      throw error;
-    }
-  }
-
-  async getGitLog(limit = 30, offset = 0, options?: { signal?: AbortSignal }): Promise<{
-    message: string;
-    commits: Array<{
-      hash: string;
-      short_hash: string;
-      author: string;
-      date: string;
-      message: string;
-      ref_names?: string;
-    }>;
-    offset: number;
-    limit: number;
-    total: number;
-  }> {
-    try {
-      const params = new URLSearchParams({
-        limit: String(limit),
-        offset: String(offset),
-      });
-      const response = await clientFetch(`/api/git/log?${params}`, options ? { signal: options.signal } : undefined);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      return await response.json();
-    } catch (error) {
-      console.error('Failed to get git log:', error);
-      throw error;
-    }
-  }
-
-  async getGitCommitDetail(hash: string): Promise<{
-    message: string;
-    hash: string;
-    short_hash: string;
-    author: string;
-    date: string;
-    subject: string;
-    ref_names?: string;
-    files: Array<{ path: string; status: string }>;
-    diff: string;
-    stats: string;
-  }> {
-    try {
-      const response = await clientFetch(`/api/git/commit/show?hash=${encodeURIComponent(hash)}`);
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || `HTTP error! status: ${response.status}`);
-      }
-      return await response.json();
-    } catch (error) {
-      console.error('Failed to get commit detail:', error);
       throw error;
     }
   }

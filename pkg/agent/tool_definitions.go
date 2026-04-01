@@ -367,7 +367,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 	registry.RegisterTool(ToolConfig{
 		Name:        "list_memories",
 		Description: "List all saved memories. Returns memory names and their first lines (titles). Memories persist across all conversations.",
-		Parameters: []ParameterConfig{},
+		Parameters:  []ParameterConfig{},
 		Handler:     handleListMemories,
 	})
 
@@ -447,19 +447,7 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 				if agent.debug {
 					agent.debugLog("[APPROVAL] Requesting security approval via webui for %s (risk: %s)\n", toolName, secResult.Risk)
 				}
-
-				// Build optional extra fields for richer webui display
-				approvalExtra := make(map[string]interface{})
-				if toolName == "shell_command" {
-					if cmd, ok := args["command"].(string); ok && cmd != "" {
-						approvalExtra["command"] = cmd
-					}
-				}
-				if secResult.RiskType != "" {
-					approvalExtra["risk_type"] = secResult.RiskType
-				}
-
-				if !mgr.RequestApproval(agent.GetEventBus(), agent.GetEventClientID(), toolName, secResult.Risk.String(), secResult.Reasoning, approvalExtra) {
+				if !mgr.RequestApproval(agent.GetEventBus(), agent.GetEventClientID(), toolName, secResult.Risk.String(), secResult.Reasoning) {
 					return nil, "", fmt.Errorf("SECURITY_REJECTED: User rejected %s — %s", toolName, secResult.Reasoning)
 				}
 			} else if secResult.ShouldBlock {

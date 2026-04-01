@@ -259,7 +259,14 @@ func (ws *ReactWebServer) handleAPIStats(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	stats := ws.gatherStatsForClientID(ws.resolveClientID(r))
+	clientID := ws.resolveClientID(r)
+	// Ensure the client context exists before gathering stats.
+	// Without this, a brand-new tab that sends /api/stats before any other
+	// request would hit the defaultWebClientID fallback and see another
+	// client's provider/model/session_id.
+	ws.getOrCreateClientContextLocked(clientID)
+
+	stats := ws.gatherStatsForClientIDLocked(clientID)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stats)
@@ -434,13 +441,28 @@ func (ws *ReactWebServer) handleAPIWorkspaceBrowse(w http.ResponseWriter, r *htt
 
 // gatherStats collects server statistics
 func (ws *ReactWebServer) gatherStats(r *http.Request) map[string]interface{} {
-	return ws.gatherStatsForClientID(ws.resolveClientID(r))
+	clientID := ws.resolveClientID(r)
+	// Ensure context exists before reading stats (fallback-free).
+	func() {
+		ws.mutex.Lock()
+		defer ws.mutex.Unlock()
+		ws.getOrCreateClientContextLocked(clientID)
+	}()
+	return ws.gatherStatsForClientID(clientID)
 }
 
+// gatherStatsForClientID gathers stats for a specific clientID.
+// The caller must not rely on the defaultWebClientID fallback —
+// callers should ensure the client context exists first.
 func (ws *ReactWebServer) gatherStatsForClientID(clientID string) map[string]interface{} {
 	ws.mutex.RLock()
-	defer ws.mutex.RUnlock()
+	stats := ws.gatherStatsForClientIDLocked(clientID)
+	ws.mutex.RUnlock()
+	return stats
+}
 
+// gatherStatsForClientIDLocked gathers stats assuming ws.mutex is already held.
+func (ws *ReactWebServer) gatherStatsForClientIDLocked(clientID string) map[string]interface{} {
 	uptime := time.Since(ws.startTime)
 	terminalSessions := 0
 	for _, clientCtx := range ws.clientContexts {
@@ -472,9 +494,6 @@ func (ws *ReactWebServer) gatherStatsForClientID(clientID string) map[string]int
 	}
 
 	clientCtx := ws.clientContexts[clientID]
-	if clientCtx == nil {
-		clientCtx = ws.clientContexts[defaultWebClientID]
-	}
 
 	var agentInst *agent.Agent
 	if clientCtx != nil {

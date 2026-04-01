@@ -52,7 +52,7 @@ interface ChatProps {
     id: string;
     toolCallId: string;
     toolName: string;
-    phase: 'spawn' | 'output' | 'complete';
+    phase: 'spawn' | 'output' | 'complete' | 'step';
     message: string;
     timestamp: Date;
     taskId?: string;
@@ -62,6 +62,7 @@ interface ChatProps {
     model?: string;
     taskCount?: number;
     failures?: number;
+    tool?: string;
   }>;
 }
 
@@ -90,7 +91,10 @@ const Chat: React.FC<ChatProps> = ({
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const inputContainerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
+  const outputLogRef = useRef<HTMLDivElement>(null);
+  const lastCompletedIdRef = useRef<string>('');
   const [inputContainerHeight, setInputContainerHeight] = useState(0);
+  const [showCompletionBadge, setShowCompletionBadge] = useState(false);
 
   const isNearBottom = useCallback((node: HTMLDivElement) => {
     const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight;
@@ -131,6 +135,27 @@ const Chat: React.FC<ChatProps> = ({
 
     node.scrollTop = node.scrollHeight;
   }, [messages, toolExecutions, queryProgress, isProcessing, subagentActivities]);
+
+  // Auto-scroll the output log when new lines arrive
+  useEffect(() => {
+    if (outputLogRef.current && shouldAutoScrollRef.current) {
+      outputLogRef.current.scrollTop = outputLogRef.current.scrollHeight;
+    }
+  }, [subagentActivities]);
+
+  // Check for newly completed subagents to show a brief completion badge
+  useEffect(() => {
+    const completedActivities = subagentActivities.filter(a => a.phase === 'complete');
+    if (completedActivities.length > 0) {
+      const latestComplete = completedActivities[completedActivities.length - 1];
+      if (latestComplete.id !== lastCompletedIdRef.current) {
+        lastCompletedIdRef.current = latestComplete.id;
+        setShowCompletionBadge(true);
+        const timer = setTimeout(() => setShowCompletionBadge(false), 3000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [subagentActivities]);
 
   const handleChatScroll = useCallback(() => {
     const node = chatContainerRef.current;
@@ -173,20 +198,30 @@ const Chat: React.FC<ChatProps> = ({
   }, [toolExecutions]);
 
   const latestSubagentActivity = useMemo(() => {
-    // Only show spawn/output phases (not 'complete' — those are terminal)
+    // Only show spawn/output/step phases (not 'complete' — those are terminal)
     const liveActivities = subagentActivities.filter(a => a.phase !== 'complete');
     return liveActivities.length > 0 ? liveActivities[liveActivities.length - 1] : null;
   }, [subagentActivities]);
 
+  // The overall most recent activity (regardless of phase) — needed for
+  // completion badge detection.
+  const latestActivity = useMemo(() => {
+    return subagentActivities.length > 0
+      ? subagentActivities[subagentActivities.length - 1]
+      : null;
+  }, [subagentActivities]);
+
   // Group recent output lines per tool call for the live feed
   const activeSubagentOutputGroups = useMemo(() => {
-    const outputActivities = subagentActivities.filter(a => a.phase === 'output' && a.message);
+    // Include 'output' and 'step' phases — step events are meaningful milestones
+    const outputActivities = subagentActivities.filter(a => (a.phase === 'output' || a.phase === 'step') && a.message);
     if (outputActivities.length === 0) return [];
 
     // Group by toolCallId, keep the most recent group(s)
-    const groups: Record<string, { toolCallId: string; persona?: string; isParallel?: boolean; lines: string[] }> = {};
+    const groups: Record<string, { toolCallId: string; persona?: string; isParallel?: boolean; lines: Array<{ text: string; isStep: boolean }> }> = {};
     for (const activity of outputActivities) {
       const key = activity.toolCallId || '_default';
+      const isStep = activity.phase === 'step';
       if (!groups[key]) {
         groups[key] = {
           toolCallId: key,
@@ -195,13 +230,13 @@ const Chat: React.FC<ChatProps> = ({
           lines: [],
         };
       }
-      groups[key].lines.push(activity.message);
+      groups[key].lines.push({ text: activity.message, isStep });
     }
 
-    // Return groups sorted by most recent activity, with at most 8 lines each
+    // Return groups sorted by most recent activity, with at most 20 lines each
     return Object.values(groups)
       .sort((a, b) => b.lines.length - a.lines.length)
-      .map(g => ({ ...g, lines: g.lines.slice(-8) }));
+      .map(g => ({ ...g, lines: g.lines.slice(-20) }));
   }, [subagentActivities]);
 
   const getToolLabel = useCallback((tool: ToolExecution) => {
@@ -214,6 +249,12 @@ const Chat: React.FC<ChatProps> = ({
     if (tool.tool === 'run_parallel_subagents') return 'Running parallel subagents…';
     return `${tool.tool.replace(/_/g, ' ')}…`;
   }, []);
+
+  const hasOutputYet = activeSubagentOutputGroups.some(g => g.lines.length > 0);
+
+  const activeOutputLineCount = useMemo(() => {
+    return activeSubagentOutputGroups.reduce((sum, g) => sum + g.lines.length, 0);
+  }, [activeSubagentOutputGroups]);
 
   return (
     <div
@@ -296,39 +337,58 @@ const Chat: React.FC<ChatProps> = ({
                 {latestActiveTool && (
                   <div className="live-activity-row">
                     <Wrench size={13} className="live-activity-icon" />
-                    <span className="live-activity-label">{latestSubagentActivity ? 'Tool' : 'Active'}</span>
+                    <span className="live-activity-label">Tool</span>
                     <span className="live-activity-text">{getToolLabel(latestActiveTool)}</span>
                   </div>
                 )}
-                {latestSubagentActivity && (
-                  <div className="live-activity-subagent-header">
-                    <Cpu size={13} className="live-activity-subagent-icon" />
-                    <span className="live-activity-subagent-label">
-                      {latestSubagentActivity.isParallel ? 'Parallel ' : ''}
-                      {latestSubagentActivity.persona || 'subagent'}
-                    </span>
-                    {latestSubagentActivity.provider && (
-                      <span className="live-activity-subagent-model">
-                        {latestSubagentActivity.provider}/{latestSubagentActivity.model}
+                {latestSubagentActivity && latestSubagentActivity.phase !== 'complete' && (
+                  <>
+                    <div className="live-activity-subagent-header">
+                      <Cpu size={13} className="live-activity-subagent-icon" />
+                      <span className="live-activity-subagent-badge">
+                        {latestSubagentActivity.isParallel ? 'Parallel ' : ''}{latestSubagentActivity.persona || 'subagent'}
                       </span>
+                      {latestSubagentActivity.provider && (
+                        <span className="live-activity-subagent-model">
+                          {latestSubagentActivity.provider}/{latestSubagentActivity.model}
+                        </span>
+                      )}
+                      <span className="live-activity-subagent-status">running</span>
+                      <span className="live-activity-subagent-spinner" />
+                    </div>
+                    {activeSubagentOutputGroups.length > 0 && (
+                      <>
+                        {activeSubagentOutputGroups.slice(0, 1).map((group) => (
+                          <div key={group.toolCallId} className="live-activity-output-log" ref={outputLogRef}>
+                            {group.lines.map((item, i) => (
+                              <div
+                                key={`${group.toolCallId}-${i}`}
+                                className={`live-activity-output-line ${item.isStep ? 'live-activity-line-step' : ''}`}
+                                title={stripAnsiCodes(item.text)}
+                              >
+                                <span className={`live-activity-line-chevron ${item.isStep ? 'live-activity-chevron-step' : ''}`}>
+                                  {item.isStep ? '◆' : '›'}
+                                </span>
+                                <span className="live-activity-line-text">{stripAnsiCodes(item.text)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ))}
+                        {activeOutputLineCount > 0 && (
+                          <div className="live-activity-line-count">
+                            {activeOutputLineCount} lines output
+                          </div>
+                        )}
+                      </>
                     )}
-                    <span className="live-activity-subagent-spinner" />
-                  </div>
-                )}
-                {activeSubagentOutputGroups.length > 0 && activeSubagentOutputGroups.slice(0, 1).map((group) => (
-                  <div key={group.toolCallId} className="live-activity-output-log">
-                    {group.lines.map((line, i) => (
-                      <div
-                        key={`${group.toolCallId}-${i}`}
-                        className="live-activity-output-line"
-                        title={stripAnsiCodes(line)}
-                      >
-                        <span className="live-activity-line-chevron">&rsaquo;</span>
-                        <span className="live-activity-line-text">{stripAnsiCodes(line)}</span>
+                    {!hasOutputYet && (
+                      <div className="live-activity-waiting">
+                        <span className="live-activity-waiting-dots" />
+                        <span>Waiting for output...</span>
                       </div>
-                    ))}
-                  </div>
-                ))}
+                    )}
+                  </>
+                )}
               </div>
             ) : (
               <div className="processing-indicator">
@@ -338,6 +398,13 @@ const Chat: React.FC<ChatProps> = ({
                 </div>
               </div>
             )
+          )}
+
+          {showCompletionBadge && latestActivity?.phase === 'complete' && (
+            <div className="live-activity-completion-badge">
+              <span className="completion-checkmark">✓</span>
+              <span className="completion-text">Subagent completed</span>
+            </div>
           )}
 
           {lastError && (

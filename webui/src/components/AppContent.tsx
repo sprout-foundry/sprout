@@ -12,6 +12,7 @@ import CommandPalette from './CommandPalette';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { ApiService, LeditInstance } from '../services/api';
 import { useGitWorkspace } from '../hooks/useGitWorkspace';
+import type { GitViewTab } from './GitSidebarPanel';
 
 const INSTANCE_PID_STORAGE_KEY = 'ledit:webui:instancePid';
 const INSTANCE_SWITCH_RESET_KEY = 'ledit:webui:instanceSwitchReset';
@@ -90,7 +91,7 @@ interface AppState {
     id: string;
     toolCallId: string;
     toolName: string;
-    phase: 'spawn' | 'output' | 'complete';
+    phase: 'spawn' | 'output' | 'complete' | 'step';
     message: string;
     timestamp: Date;
     taskId?: string;
@@ -233,6 +234,7 @@ const AppContent: React.FC<AppContentProps> = ({
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isContextPanelMobileOpen, setIsContextPanelMobileOpen] = useState(false);
   const [hotkeysConfigPath, setHotkeysConfigPath] = useState<string | null>(null);
+  const [gitViewTab, setGitViewTab] = useState<GitViewTab>('changes');
   const [instances, setInstances] = useState<LeditInstance[]>([]);
   const [selectedInstancePID, setSelectedInstancePID] = useState<number>(0);
   const [isSwitchingInstance, setIsSwitchingInstance] = useState(false);
@@ -1055,6 +1057,19 @@ const AppContent: React.FC<AppContentProps> = ({
           onSectionAction: handleSectionAction,
           onOpenFile: handleFileClick,
           workspaceRoot,
+          apiService,
+          openWorkspaceBuffer: openWorkspaceBuffer as (options: {
+            kind: 'chat' | 'diff' | 'review';
+            path: string;
+            title: string;
+            content?: string;
+            ext?: string;
+            isPinned?: boolean;
+            isClosable?: boolean;
+            metadata?: Record<string, any>;
+          }) => string,
+          activeTab: gitViewTab,
+          onTabChange: setGitViewTab,
         }}
       />
       <div className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''} ${isTerminalExpanded ? 'terminal-expanded' : ''}`}>

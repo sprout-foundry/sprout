@@ -1076,7 +1076,9 @@ func (ws *ReactWebServer) handleAPIGitDeepReviewFix(w http.ResponseWriter, r *ht
 	}
 
 	var req struct {
-		ReviewOutput string `json:"review_output"`
+		ReviewOutput  string   `json:"review_output"`
+		FixPrompt     string   `json:"fix_prompt"`
+		SelectedItems []string `json:"selected_items"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
@@ -1088,7 +1090,7 @@ func (ws *ReactWebServer) handleAPIGitDeepReviewFix(w http.ResponseWriter, r *ht
 		return
 	}
 
-	job, _, err := ws.startFixReviewJob(reviewOutput, ws.resolveClientID(r))
+	job, _, err := ws.startFixReviewJob(reviewOutput, ws.resolveClientID(r), req.FixPrompt, req.SelectedItems)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to start fix workflow: %v", err), http.StatusInternalServerError)
 		return
@@ -1121,7 +1123,9 @@ func (ws *ReactWebServer) handleAPIGitDeepReviewFixStart(w http.ResponseWriter, 
 	}
 
 	var req struct {
-		ReviewOutput string `json:"review_output"`
+		ReviewOutput  string   `json:"review_output"`
+		FixPrompt     string   `json:"fix_prompt"`
+		SelectedItems []string `json:"selected_items"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
@@ -1133,7 +1137,7 @@ func (ws *ReactWebServer) handleAPIGitDeepReviewFixStart(w http.ResponseWriter, 
 		return
 	}
 
-	job, _, err := ws.startFixReviewJob(reviewOutput, ws.resolveClientID(r))
+	job, _, err := ws.startFixReviewJob(reviewOutput, ws.resolveClientID(r), req.FixPrompt, req.SelectedItems)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to start fix workflow: %v", err), http.StatusInternalServerError)
 		return
@@ -1200,9 +1204,22 @@ func (ws *ReactWebServer) handleAPIGitDeepReviewFixStatus(w http.ResponseWriter,
 	})
 }
 
-func (ws *ReactWebServer) startFixReviewJob(reviewOutput, clientID string) (*gitFixReviewJob, string, error) {
-	fixInstructions := "First validate that all of these review items are valid issues, then use subagents to address any of the valid issues. When they are resolved, use a code review subagent to review the solution and fix any issues that come out of it and iterate through the process until the issues are resolved."
-	prompt := fmt.Sprintf("Use this deep review output as input:\n\n%s\n\n%s", reviewOutput, fixInstructions)
+func (ws *ReactWebServer) startFixReviewJob(reviewOutput, clientID, fixPrompt string, selectedItems []string) (*gitFixReviewJob, string, error) {
+	var prompt string
+	if len(selectedItems) > 0 {
+		selectedSection := strings.Join(selectedItems, "\n\n")
+		prompt = fmt.Sprintf("Use these selected review items as input:\n\n%s", selectedSection)
+		if strings.TrimSpace(fixPrompt) != "" {
+			prompt += fmt.Sprintf("\n\nAdditional instructions from the user:\n%s", fixPrompt)
+		}
+		prompt += "\n\nFirst validate that each of these selected review items is a valid issue, then use subagents to address the valid ones. When resolved, use a code review subagent to review the solution and iterate until the issues are resolved."
+	} else {
+		fixInstructions := "First validate that all of these review items are valid issues, then use subagents to address any of the valid issues. When they are resolved, use a code review subagent to review the solution and fix any issues that come out of it and iterate through the process until the issues are resolved."
+		prompt = fmt.Sprintf("Use this deep review output as input:\n\n%s\n\n%s", reviewOutput, fixInstructions)
+		if strings.TrimSpace(fixPrompt) != "" {
+			prompt += fmt.Sprintf("\n\nAdditional instructions from the user:\n%s", fixPrompt)
+		}
+	}
 
 	provider := ""
 	model := ""

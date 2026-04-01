@@ -421,7 +421,7 @@ export const useGitWorkspace = ({
     }
   }, [apiService, onViewChange, openWorkspaceBuffer]);
 
-  const handleFixFromReview = useCallback(async () => {
+  const handleFixFromReview = useCallback(async (options?: { fixPrompt?: string; selectedItems?: string[] }) => {
     if (!deepReview?.review_output) return;
     setReviewError(null);
     setReviewFixResult(null);
@@ -429,7 +429,7 @@ export const useGitWorkspace = ({
     setReviewFixSessionID(null);
     setIsReviewFixing(true);
     try {
-      const started = await apiService.startFixFromDeepReview(deepReview.review_output);
+      const started = await apiService.startFixFromDeepReview(deepReview.review_output, options);
       setReviewFixSessionID(started.session_id || null);
       fixPollIndexRef.current = 0;
       setReviewFixLogs((prev) => [...prev, `Started fix session: ${started.session_id}`]);

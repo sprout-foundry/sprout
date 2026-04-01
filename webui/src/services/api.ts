@@ -42,6 +42,7 @@ interface StatsResponse {
 
 interface QueryRequest {
   query: string;
+  chat_id?: string;
 }
 
 interface FilesResponse {
@@ -569,13 +570,15 @@ class ApiService {
     return response.json();
   }
 
-  async sendQuery(query: string): Promise<void> {
+  async sendQuery(query: string, chatId?: string): Promise<void> {
+    const reqBody: QueryRequest = { query };
+    if (chatId) reqBody.chat_id = chatId;
     const response = await clientFetch('/api/query', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ query } as QueryRequest),
+      body: JSON.stringify(reqBody),
     });
 
     if (!response.ok) {
@@ -597,13 +600,15 @@ class ApiService {
     return response.json();
   }
 
-  async steerQuery(query: string): Promise<void> {
+  async steerQuery(query: string, chatId?: string): Promise<void> {
+    const reqBody: QueryRequest = { query };
+    if (chatId) reqBody.chat_id = chatId;
     const response = await clientFetch('/api/query/steer', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ query } as QueryRequest),
+      body: JSON.stringify(reqBody),
     });
 
     if (!response.ok) {

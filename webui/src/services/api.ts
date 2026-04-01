@@ -880,6 +880,48 @@ class ApiService {
     }
   }
 
+  async getGitLog(limit: number, offset: number, opts?: { signal?: AbortSignal }): Promise<{
+    message: string;
+    commits: Array<{
+      hash: string;
+      short_hash: string;
+      author: string;
+      date: string;
+      message: string;
+      ref_names?: string;
+    }>;
+    offset: number;
+    limit: number;
+    total: number;
+  }> {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    const response = await clientFetch(`/api/git/log?${params.toString()}`, { signal: opts?.signal });
+    if (!response.ok) {
+      throw new Error(`Failed to get git log: HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
+  async getGitCommitDetail(hash: string): Promise<{
+    message: string;
+    hash: string;
+    short_hash: string;
+    author: string;
+    date: string;
+    ref_names?: string;
+    subject: string;
+    files: Array<{ path: string; status: string }>;
+    diff: string;
+    stats: string;
+  }> {
+    const params = new URLSearchParams({ hash });
+    const response = await clientFetch(`/api/git/commit/show?${params.toString()}`);
+    if (!response.ok) {
+      throw new Error(`Failed to get commit detail: HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
   async generateDeepReview(): Promise<{
     message: string;
     status: string;
@@ -928,7 +970,7 @@ class ApiService {
     }
   }
 
-  async startFixFromDeepReview(reviewOutput: string): Promise<{
+  async startFixFromDeepReview(reviewOutput: string, options?: { fixPrompt?: string; selectedItems?: string[] }): Promise<{
     message: string;
     job_id: string;
     session_id: string;

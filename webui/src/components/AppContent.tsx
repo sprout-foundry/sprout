@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react';
-import { Menu, X, Columns2, Rows2, PanelRightOpen, PanelRightClose } from 'lucide-react';
+import { Menu, X, Columns2, Rows2, PanelRightOpen, PanelRightClose, Plus } from 'lucide-react';
 import Sidebar from './Sidebar';
 import WorkspaceBar from './WorkspaceBar';
 import Terminal from './Terminal';
@@ -130,8 +130,8 @@ interface AppContentProps {
   isConnected: boolean;
   chatSessions?: ChatSession[];
   activeChatId?: string | null;
-  onSwitchChat?: (id: string) => void;
-  onCreateChat?: () => void;
+  onActiveChatChange?: (id: string) => void;
+  onCreateChat?: () => Promise<string | null>;
   onDeleteChat?: (id: string) => void;
   onRenameChat?: (id: string, name: string) => void;
 }
@@ -168,7 +168,7 @@ const AppContent: React.FC<AppContentProps> = ({
   isConnected,
   chatSessions,
   activeChatId,
-  onSwitchChat,
+  onActiveChatChange,
   onCreateChat,
   onDeleteChat,
   onRenameChat,
@@ -188,7 +188,9 @@ const AppContent: React.FC<AppContentProps> = ({
     openFile,
     openWorkspaceBuffer,
     paneSizes,
-    updatePaneSize
+    updatePaneSize,
+    updateBufferMetadata,
+    updateBufferTitle,
   } = useEditorManager();
   const apiService = ApiService.getInstance();
 
@@ -245,6 +247,58 @@ const AppContent: React.FC<AppContentProps> = ({
     if (typeof window === 'undefined') return;
     window.localStorage.setItem('ledit.contextPanel.width', String(Math.round(panelWidth)));
   }, [panelWidth]);
+
+  // Keep a stable ref to the current buffers map to avoid infinite loops in effects
+  const buffersRef = useRef(buffers);
+  useEffect(() => { buffersRef.current = buffers; }, [buffers]);
+
+  // Sync chat sessions → editor buffers: update the initial chat buffer with the active
+  // session's ID, and open additional buffers for other sessions.
+  useEffect(() => {
+    if (!chatSessions || chatSessions.length === 0) return;
+    const currentBuffers = buffersRef.current;
+    chatSessions.forEach(session => {
+      const existing = Array.from(currentBuffers.values()).find(
+        b => b.kind === 'chat' && b.metadata?.chatId === session.id
+      );
+      if (existing) {
+        // Update tab title if the session was renamed
+        if (existing.file.name !== (session.name || 'Chat')) {
+          updateBufferTitle(existing.id, session.name || 'Chat');
+        }
+        return;
+      }
+      // If this is the active session and the initial chat buffer has no chatId yet, claim it
+      const initialBuf = currentBuffers.get('buffer-chat');
+      if (session.id === activeChatId && initialBuf && !initialBuf.metadata?.chatId) {
+        updateBufferMetadata('buffer-chat', { chatId: session.id });
+        updateBufferTitle('buffer-chat', session.name || 'Chat');
+      } else {
+        openWorkspaceBuffer({
+          kind: 'chat',
+          path: `__workspace/chat/${session.id}`,
+          title: session.name || 'Chat',
+          isPinned: session.is_default ?? false,
+          isClosable: !(session.is_default ?? false),
+          metadata: { chatId: session.id },
+        });
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatSessions, activeChatId]);
+
+  // Detect when the user switches to a different chat tab and notify parent
+  useEffect(() => {
+    if (!activeBufferId) return;
+    const activeBuf = buffersRef.current.get(activeBufferId);
+    if (activeBuf?.kind === 'chat' && activeBuf.metadata?.chatId) {
+      const chatId = activeBuf.metadata.chatId as string;
+      if (chatId !== activeChatId && onActiveChatChange) {
+        onActiveChatChange(chatId);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBufferId]);
   const initialViewSyncRef = useRef(false);
 
   // Load hotkeys config path on mount
@@ -655,8 +709,34 @@ const AppContent: React.FC<AppContentProps> = ({
 
   const showResizeHandles = panes.length > 1;
 
-  const renderSplitControls = (paneId: string) => (
+  const renderSplitControls = (paneId: string) => {
+    const pane = panes.find(p => p.id === paneId);
+    const currentBuf = pane?.bufferId ? buffers.get(pane.bufferId) : null;
+    const isChat = currentBuf?.kind === 'chat';
+    return (
     <div className="split-controls split-controls-embedded">
+      {paneId === activePaneId && isChat && onCreateChat && (
+        <button
+          onClick={async () => {
+            const newId = await onCreateChat();
+            if (newId) {
+              openWorkspaceBuffer({
+                kind: 'chat',
+                path: `__workspace/chat/${newId}`,
+                title: 'New Chat',
+                isPinned: false,
+                isClosable: true,
+                metadata: { chatId: newId },
+              });
+            }
+          }}
+          className="pane-control-btn compact"
+          title="New chat"
+          aria-label="New chat"
+        >
+          <Plus size={13} />
+        </button>
+      )}
       {paneId === activePaneId && canCloseSplit && (
         <button
           onClick={handleCloseAllSplits}
@@ -688,7 +768,8 @@ const AppContent: React.FC<AppContentProps> = ({
         </button>
       )}
     </div>
-  );
+    );
+  };
 
   const renderPaneById = (paneId: string, style?: React.CSSProperties) => {
     const pane = panes.find((item) => item.id === paneId);
@@ -726,16 +807,6 @@ const AppContent: React.FC<AppContentProps> = ({
                 currentTodos,
                 onStopProcessing,
                 onToolPillClick: (toolId: string) => contextPanelRef.current?.highlightTool(toolId),
-                ...(chatSessions && chatSessions.length > 0 && activeChatId && onSwitchChat && onCreateChat && onDeleteChat && onRenameChat ? {
-                  chatTabBarProps: {
-                    sessions: chatSessions,
-                    activeChatId,
-                    onSwitch: onSwitchChat,
-                    onCreate: onCreateChat,
-                    onDelete: onDeleteChat,
-                    onRename: onRenameChat,
-                  }
-                } : {}),
               }}
               reviewProps={{
                 review: deepReview,

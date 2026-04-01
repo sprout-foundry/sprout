@@ -218,6 +218,11 @@ class WebSocketService {
     }
   }
 
+  /** Resume after tab unfreeze. Triggers immediate reconnection. */
+  resume() {
+    this.resetAndReconnect();
+  }
+
   /** Reset all reconnection state and trigger an immediate reconnect attempt.
    *  Used by visibility change and page freeze handlers to cleanly reconnect
    *  after the browser has throttled/killed WebSocket connections.

@@ -36,6 +36,15 @@ func (ws *ReactWebServer) incrementActiveQueries(clientID string) {
 	ws.mutex.Unlock()
 }
 
+func (ws *ReactWebServer) incrementActiveQueriesWithQuery(clientID, currentQuery string) {
+	ws.mutex.Lock()
+	ws.activeQueries++
+	ctx := ws.getOrCreateClientContextLocked(clientID)
+	ctx.ActiveQuery = true
+	ctx.CurrentQuery = currentQuery
+	ws.mutex.Unlock()
+}
+
 func (ws *ReactWebServer) decrementActiveQueries(clientID string) {
 	ws.mutex.Lock()
 	if ws.activeQueries > 0 {
@@ -43,6 +52,7 @@ func (ws *ReactWebServer) decrementActiveQueries(clientID string) {
 	}
 	if ctx := ws.clientContexts[clientID]; ctx != nil {
 		ctx.ActiveQuery = false
+		ctx.CurrentQuery = ""
 	}
 	ws.mutex.Unlock()
 }
@@ -110,7 +120,9 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 	ws.mutex.Unlock()
 
 	// Run the query asynchronously. The web UI consumes progress and completion via WebSocket.
-	ws.incrementActiveQueries(clientID)
+	// Store CurrentQuery atomically with ActiveQuery so that stats responses
+	// include it on reconnect without a TOCTOU window.
+	ws.incrementActiveQueriesWithQuery(clientID, query.Query)
 	go func() {
 		defer ws.decrementActiveQueries(clientID)
 		startedAt := time.Now()
@@ -260,13 +272,13 @@ func (ws *ReactWebServer) handleAPIStats(w http.ResponseWriter, r *http.Request)
 	}
 
 	clientID := ws.resolveClientID(r)
-	// Ensure the client context exists before gathering stats.
-	// Without this, a brand-new tab that sends /api/stats before any other
-	// request would hit the defaultWebClientID fallback and see another
-	// client's provider/model/session_id.
+	// Ensure the client context exists before gathering stats and build the
+	// response under the lock — getOrCreateClientContextLocked may mutate the
+	// map, and the subsequent read must observe a consistent snapshot.
+	ws.mutex.Lock()
 	ws.getOrCreateClientContextLocked(clientID)
-
 	stats := ws.gatherStatsForClientIDLocked(clientID)
+	ws.mutex.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stats)
@@ -494,6 +506,15 @@ func (ws *ReactWebServer) gatherStatsForClientIDLocked(clientID string) map[stri
 	}
 
 	clientCtx := ws.clientContexts[clientID]
+
+	// Report whether this client currently has an active query.
+	// The frontend uses this during reconnect to immediately restore (or
+	// clear) the processing indicator instead of relying on a 3-second
+	// safety timer.
+	stats["is_processing"] = clientCtx != nil && clientCtx.ActiveQuery
+	if clientCtx != nil && clientCtx.ActiveQuery && clientCtx.CurrentQuery != "" {
+		stats["current_query"] = clientCtx.CurrentQuery
+	}
 
 	var agentInst *agent.Agent
 	if clientCtx != nil {

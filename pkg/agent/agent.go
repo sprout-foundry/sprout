@@ -711,6 +711,20 @@ func (a *Agent) decorateEventPayload(data interface{}) interface{} {
 // OutputRouter returns the current output router (nil if not initialized)
 func (a *Agent) OutputRouter() *OutputRouter { return a.outputRouter }
 
+// PrintTerminalOnly writes text to the terminal without publishing to the event bus.
+// Use this for output already published via a more specific event type.
+func (a *Agent) PrintTerminalOnly(text string) {
+	if a == nil || a.outputRouter == nil {
+		// Fallback: just print
+		if !strings.HasSuffix(text, "\n") {
+			text += "\n"
+		}
+		fmt.Print(text)
+		return
+	}
+	a.outputRouter.RouteTerminalOnly(text)
+}
+
 // GetSecurityApprovalMgr returns the security approval manager
 func (a *Agent) GetSecurityApprovalMgr() *SecurityApprovalManager {
 	return a.securityApprovalMgr

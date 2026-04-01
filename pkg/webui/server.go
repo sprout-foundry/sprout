@@ -198,6 +198,8 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/git/branch/create", ws.handleAPIGitCreateBranch)
 	mux.HandleFunc("/api/git/pull", ws.handleAPIGitPull)
 	mux.HandleFunc("/api/git/push", ws.handleAPIGitPush)
+	mux.HandleFunc("/api/git/log", ws.handleAPIGitLog)
+	mux.HandleFunc("/api/git/commit/show", ws.handleAPIGitCommitShow)
 	mux.HandleFunc("/api/instances", ws.handleAPIInstances)
 	mux.HandleFunc("/api/instances/select", ws.handleAPIInstanceSelect)
 	mux.HandleFunc("/api/instances/ssh-hosts", ws.handleAPISSHHosts)
@@ -277,6 +279,9 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	}()
 
 	go ws.startClientContextCleanupWorker(ctx, clientContextCleanupInterval, clientContextMaxIdle)
+
+	// Start terminal session cleanup worker (every 5 minutes, timeout 30 minutes)
+	ws.terminalManager.StartCleanupWorker(ctx, 5*time.Minute, 30*time.Minute)
 
 	// Wait for context cancellation
 	go func() {

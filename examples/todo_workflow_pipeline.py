@@ -16,14 +16,12 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import io
 import json
 import pathlib
 import re
 import subprocess
 import sys
 import tempfile
-import threading
 import time
 from dataclasses import dataclass
 
@@ -149,48 +147,20 @@ def build_templated_workflow(
 # ---------------------------------------------------------------------------
 
 
-def _truncate_lines(text: str, tail: int) -> str:
-    lines = text.strip().splitlines()
-    if len(lines) <= tail:
-        return text.strip()
-    return "... (" + str(len(lines)) + " lines total)\n" + "\n".join(lines[-tail:])
-
-
-def _stream_process(
+def _run_process(
     cmd: list[str],
     cwd: pathlib.Path | str,
     timeout: int | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    """Run a command and stream stdout/stderr to the console in real time."""
-    stdout_lines: list[str] = []
-    stderr_lines: list[str] = []
-
+    """Run a command with stdout/stderr flowing directly to the console."""
     proc = subprocess.Popen(
         cmd,
         cwd=str(cwd),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stdin=subprocess.DEVNULL,
+        stdout=None,
+        stderr=None,
         text=True,
-        bufsize=1,  # line-buffered
     )
-
-    def _drain(stream: io.TextIOWrapper, buf: list[str]) -> None:
-        assert stream is not None
-        for line in stream:
-            buf.append(line.rstrip("\n\r"))
-            print(line, end="", flush=True)
-
-    stdout_stream = proc.stdout
-    stderr_stream = proc.stderr
-    if stdout_stream is None:
-        stdout_stream = io.StringIO()
-    if stderr_stream is None:
-        stderr_stream = io.StringIO()
-
-    t_out = threading.Thread(target=_drain, args=(stdout_stream, stdout_lines), daemon=True)
-    t_err = threading.Thread(target=_drain, args=(stderr_stream, stderr_lines), daemon=True)
-    t_out.start()
-    t_err.start()
 
     try:
         proc.wait(timeout=timeout)
@@ -199,16 +169,11 @@ def _stream_process(
         proc.wait()
         raise
 
-    t_out.join(timeout=10)
-    t_err.join(timeout=10)
-
-    stdout_text = "\n".join(stdout_lines)
-    stderr_text = "\n".join(stderr_lines)
     return subprocess.CompletedProcess(
         cmd,
         returncode=proc.returncode,
-        stdout=stdout_text,
-        stderr=stderr_text,
+        stdout="",
+        stderr="",
     )
 
 
@@ -224,13 +189,14 @@ def run_ledit_agent(
         str(workflow_config_path),
         "--skip-prompt",
         "--no-web-ui",
+        "--no-connection-check",
     ]
     _log(f"Running: {' '.join(cmd)}")
     if opts.dry_run:
         _log("[DRY RUN] Would run ledit agent (skipped)")
         return subprocess.CompletedProcess(cmd, returncode=0, stdout="", stderr="")
 
-    result = _stream_process(cmd, cwd=opts.repo, timeout=3600)
+    result = _run_process(cmd, cwd=opts.repo, timeout=3600)
 
     if result.returncode != 0:
         _log(f"Agent exited with code {result.returncode}")
@@ -263,7 +229,7 @@ def run_ledit_commit(opts: Opts) -> subprocess.CompletedProcess[str]:
         _log("[DRY RUN] Would run ledit commit (skipped)")
         return subprocess.CompletedProcess(cmd, returncode=0, stdout="", stderr="")
 
-    result = _stream_process(cmd, cwd=opts.repo, timeout=300)
+    result = _run_process(cmd, cwd=opts.repo, timeout=300)
 
     if result.returncode != 0:
         _log(f"Commit exited with code {result.returncode}")

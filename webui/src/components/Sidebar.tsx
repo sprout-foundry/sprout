@@ -752,6 +752,21 @@ const Sidebar: React.FC<SidebarProps> = ({
     );
   };
 
+  // Keyboard navigation for tab bars (arrow keys + Home/End)
+  const handleTabBarKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const tabs = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]:not([disabled])'));
+    const currentIndex = tabs.indexOf(document.activeElement as HTMLButtonElement);
+    if (currentIndex === -1) return;
+    let nextIndex = currentIndex;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') nextIndex = (currentIndex + 1) % tabs.length;
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+    else if (e.key === 'Home') nextIndex = 0;
+    else if (e.key === 'End') nextIndex = tabs.length - 1;
+    else return;
+    e.preventDefault();
+    tabs[nextIndex].focus();
+  };
+
   /** Render the content pane based on selected section */
   const renderContentPane = () => {
     switch (selectedSection) {
@@ -772,10 +787,12 @@ const Sidebar: React.FC<SidebarProps> = ({
           <>
             {/* Sub-tab bar: Changes / History */}
             {gitPanel && (
-              <div className="git-sidebar-tab-bar" role="tablist" aria-label="Git sub-sections">
+              <div className="git-sidebar-tab-bar" role="tablist" aria-label="Git sub-sections" onKeyDown={handleTabBarKeyDown}>
                 <button
                   type="button"
                   role="tab"
+                  id="git-tab-changes"
+                  aria-controls="git-panel-changes"
                   aria-selected={gitSubTab === 'changes'}
                   className={`git-sidebar-tab ${gitSubTab === 'changes' ? 'active' : ''}`}
                   onClick={() => setGitSubTab('changes')}
@@ -786,6 +803,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <button
                   type="button"
                   role="tab"
+                  id="git-tab-history"
+                  aria-controls="git-panel-history"
                   aria-selected={gitSubTab === 'history'}
                   className={`git-sidebar-tab ${gitSubTab === 'history' ? 'active' : ''}`}
                   disabled={!hasHistoryContent}
@@ -799,16 +818,20 @@ const Sidebar: React.FC<SidebarProps> = ({
 
             {/* Changes sub-tab: working tree panel */}
             {gitSubTab === 'changes' ? (
-              gitPanel ? <GitSidebarPanel {...gitPanel} /> : <div className="empty">Git unavailable</div>
+              <div id="git-panel-changes" role="tabpanel" aria-labelledby="git-tab-changes">
+                {gitPanel ? <GitSidebarPanel {...gitPanel} /> : <div className="empty">Git unavailable</div>}
+              </div>
             ) : (
               /* History sub-tab: git-log + revisions */
-              <div className="history-pane">
+              <div id="git-panel-history" role="tabpanel" aria-labelledby="git-tab-history" className="history-pane">
                 {hasHistoryContent && (
-                  <div className="git-sidebar-tab-bar git-sidebar-tab-bar-secondary" role="tablist" aria-label="History sub-sections">
+                  <div className="git-sidebar-tab-bar git-sidebar-tab-bar-secondary" role="tablist" aria-label="History sub-sections" onKeyDown={handleTabBarKeyDown}>
                     {hasGitLog && (
                       <button
                         type="button"
                         role="tab"
+                        id="history-tab-git-log"
+                        aria-controls="history-panel-git-log"
                         aria-selected={effectiveHistorySubTab === 'git-log'}
                         className={`git-sidebar-tab ${effectiveHistorySubTab === 'git-log' ? 'active' : ''}`}
                         onClick={() => setHistorySubTab('git-log')}
@@ -821,6 +844,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                       <button
                         type="button"
                         role="tab"
+                        id="history-tab-revisions"
+                        aria-controls="history-panel-revisions"
                         aria-selected={effectiveHistorySubTab === 'revisions'}
                         className={`git-sidebar-tab ${effectiveHistorySubTab === 'revisions' ? 'active' : ''}`}
                         onClick={() => setHistorySubTab('revisions')}
@@ -831,17 +856,21 @@ const Sidebar: React.FC<SidebarProps> = ({
                     )}
                   </div>
                 )}
-                {effectiveHistorySubTab === 'git-log' ? (
-                  <GitHistoryPanel
-                    apiService={gitPanel!.apiService!}
-                    isActing={false}
-                    onRefresh={gitPanel!.onRefresh}
-                    openWorkspaceBuffer={gitPanel!.openWorkspaceBuffer!}
-                  />
+                {effectiveHistorySubTab === 'git-log' && hasGitLog ? (
+                  <div id="history-panel-git-log" role="tabpanel" aria-labelledby="history-tab-git-log">
+                    <GitHistoryPanel
+                      apiService={gitPanel!.apiService!}
+                      isActing={gitPanel!.isActing}
+                      onRefresh={gitPanel!.onRefresh}
+                      openWorkspaceBuffer={gitPanel!.openWorkspaceBuffer!}
+                    />
+                  </div>
+                ) : effectiveHistorySubTab === 'revisions' && hasRevisions ? (
+                  <div id="history-panel-revisions" role="tabpanel" aria-labelledby="history-tab-revisions">
+                    <RevisionListPanel mode="global" allowRollback={true} onOpenDiff={onOpenRevisionDiff} />
+                  </div>
                 ) : (
-                  hasRevisions
-                    ? <RevisionListPanel mode="global" allowRollback={true} onOpenDiff={onOpenRevisionDiff} />
-                    : <div className="empty">Git log unavailable</div>
+                  <div className="empty">No history available</div>
                 )}
               </div>
             )}

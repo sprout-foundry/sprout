@@ -1,9 +1,10 @@
-import React, { useRef, useEffect, useCallback, useState, useLayoutEffect } from 'react';
-import { Zap, Bot, AlertTriangle, BrainCircuit } from 'lucide-react';
+import React, { useRef, useEffect, useCallback, useState, useLayoutEffect, useMemo } from 'react';
+import { Zap, Bot, AlertTriangle, BrainCircuit, Wrench } from 'lucide-react';
 import CommandInput from './CommandInput';
 import MessageSegments from './MessageSegments';
 import MessageContent from './MessageContent';
 import MessageBubble from './MessageBubble';
+import { stripAnsiCodes } from '../utils/ansi';
 import './Chat.css';
 
 interface Message {
@@ -47,6 +48,21 @@ interface ChatProps {
   currentTodos?: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }>;
   onToolPillClick?: (toolId: string) => void;
   onStopProcessing?: () => void;
+  subagentActivities?: Array<{
+    id: string;
+    toolCallId: string;
+    toolName: string;
+    phase: 'spawn' | 'output' | 'complete';
+    message: string;
+    timestamp: Date;
+    taskId?: string;
+    persona?: string;
+    isParallel?: boolean;
+    provider?: string;
+    model?: string;
+    taskCount?: number;
+    failures?: number;
+  }>;
 }
 
 const Chat: React.FC<ChatProps> = ({
@@ -67,6 +83,7 @@ const Chat: React.FC<ChatProps> = ({
   currentTodos = [],
   onToolPillClick,
   onStopProcessing,
+  subagentActivities = [],
 }) => {
   const AUTO_SCROLL_THRESHOLD_PX = 96;
   const chatShellRef = useRef<HTMLDivElement>(null);
@@ -113,7 +130,7 @@ const Chat: React.FC<ChatProps> = ({
     }
 
     node.scrollTop = node.scrollHeight;
-  }, [messages, toolExecutions, queryProgress, isProcessing]);
+  }, [messages, toolExecutions, queryProgress, isProcessing, subagentActivities]);
 
   const handleChatScroll = useCallback(() => {
     const node = chatContainerRef.current;
@@ -148,6 +165,29 @@ const Chat: React.FC<ChatProps> = ({
 
   const showExpiredSessionRecovery =
     !!lastError && lastError.toLowerCase().includes('ssh session not found or expired');
+
+  // Live activity feed data – memoized to avoid unnecessary re-renders
+  const latestActiveTool = useMemo(() => {
+    const active = toolExecutions.filter(t => t.status === 'started' || t.status === 'running');
+    return active.length > 0 ? active[active.length - 1] : null;
+  }, [toolExecutions]);
+
+  const latestSubagentActivity = useMemo(() => {
+    // Only show spawn/output phases (not 'complete' — those are terminal)
+    const liveActivities = subagentActivities.filter(a => a.phase !== 'complete');
+    return liveActivities.length > 0 ? liveActivities[liveActivities.length - 1] : null;
+  }, [subagentActivities]);
+
+  const getToolLabel = useCallback((tool: ToolExecution) => {
+    if (tool.tool === 'run_subagent') {
+      try {
+        const args = tool.arguments ? JSON.parse(tool.arguments) : {};
+        return args.persona ? `Running ${args.persona} subagent…` : 'Running subagent…';
+      } catch { return 'Running subagent…'; }
+    }
+    if (tool.tool === 'run_parallel_subagents') return 'Running parallel subagents…';
+    return `${tool.tool.replace(/_/g, ' ')}…`;
+  }, []);
 
   return (
     <div
@@ -224,13 +264,33 @@ const Chat: React.FC<ChatProps> = ({
             </div>
           )}
 
-          {isProcessing && toolExecutions.length === 0 && !queryProgress && (
-            <div className="processing-indicator">
-              <div className="processing-content">
-                <div className="processing-spinner"><Zap size={14} /></div>
-                <div className="processing-text">Processing your request...</div>
+          {isProcessing && !queryProgress && (
+            (latestActiveTool || latestSubagentActivity) ? (
+              <div className="live-activity-feed">
+                {latestActiveTool && (
+                  <div className="live-activity-row">
+                    <Wrench size={13} className="live-activity-icon" />
+                    <span className="live-activity-label">{latestSubagentActivity ? 'Tool' : 'Active'}</span>
+                    <span className="live-activity-text">{getToolLabel(latestActiveTool)}</span>
+                  </div>
+                )}
+                {latestSubagentActivity && latestSubagentActivity.message && (
+                  <div
+                    className="live-activity-subagent-msg"
+                    title={stripAnsiCodes(latestSubagentActivity.message)}
+                  >
+                    {stripAnsiCodes(latestSubagentActivity.message)}
+                  </div>
+                )}
               </div>
-            </div>
+            ) : (
+              <div className="processing-indicator">
+                <div className="processing-content">
+                  <div className="processing-spinner"><Zap size={14} /></div>
+                  <div className="processing-text">Processing your request...</div>
+                </div>
+              </div>
+            )
           )}
 
           {lastError && (

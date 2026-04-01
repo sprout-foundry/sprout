@@ -1240,7 +1240,7 @@ function App() {
         if (!wsService.isConnected() || hiddenDuration > 30000) {
           debugLog('[visibility] Tab visible again, reconnecting WebSocket',
             hiddenDuration > 30000 ? `(hidden for ${Math.round(hiddenDuration / 1000)}s, forcing reconnect)` : '');
-          wsService.resetAndReconnect();
+          wsService.resume();
         }
       }
     };
@@ -1263,7 +1263,7 @@ function App() {
     // that state and trigger a fresh connection attempt.
     const handleResume = () => {
       debugLog('[lifecycle] Page resumed from freeze, reconnecting WebSocket');
-      wsService.resetAndReconnect();
+      wsService.resume();
     };
     document.addEventListener('resume', handleResume);
 
@@ -1274,30 +1274,104 @@ function App() {
     const handlePageShow = (event: PageTransitionEvent) => {
       if (event.persisted) {
         debugLog('[lifecycle] Page restored from bfcache, reconnecting WebSocket');
-        wsService.resetAndReconnect();
+        wsService.resume();
       }
     };
     window.addEventListener('pageshow', handlePageShow);
 
+    // Helper: attempt to recover missed messages from the backend after a
+    // reconnect.  Fetches the current session_id from stats, calls the
+    // restore-session endpoint, and appends any new user/assistant messages
+    // to the local state.
+    const recoverMissedMessages = async () => {
+      try {
+        const stats: any = await apiService.getStats();
+        const sessionId = stats?.session_id;
+        if (!sessionId) {
+          debugLog('[lifecycle] No session_id in stats after reconnect – cannot sync messages');
+          return;
+        }
+        const result: any = await apiService.restoreSession(sessionId);
+        if (!result?.messages || !Array.isArray(result.messages)) return;
+        setState(prev => {
+          const backendMsgs = result.messages.filter(
+            (m: any) => m.role === 'user' || m.role === 'assistant'
+          );
+          if (backendMsgs.length <= prev.messages.length) return prev;
+          const newMsgs = backendMsgs.slice(prev.messages.length).map((msg: any, idx: number) => ({
+            id: `sync-${prev.messages.length + idx}-${Date.now()}`,
+            type: msg.role === 'user' ? 'user' : 'assistant',
+            content: msg.content || '',
+            timestamp: new Date(),
+            ...(msg.reasoning_content ? { reasoning: msg.reasoning_content } : {}),
+          }));
+          if (newMsgs.length === 0) return prev;
+          debugLog('[lifecycle] Recovered', newMsgs.length, 'messages after reconnect');
+          return { ...prev, messages: [...prev.messages, ...newMsgs] };
+        });
+      } catch (err) {
+        debugLog('[lifecycle] Failed to sync messages after reconnect:', err);
+      }
+    };
+
     // Register a reconnect callback so that after the WebSocket successfully
     // reconnects we can request fresh state from the backend and check for a
     // stuck processing indicator.
-    wsService.onReconnect(() => {
+    wsService.onReconnect(async () => {
       debugLog('[lifecycle] WebSocket reconnected after disconnect, requesting fresh stats');
       wsService.sendEvent({ type: 'request_stats' });
 
-      // Safety timer: if no query_started or query_completed event arrives
-      // within 3 seconds of reconnecting, the backend likely finished the
-      // query while we were disconnected. Clear the stuck processing state
-      // and sync chat messages to recover any streamed output missed during
-      // the disconnect period.
+      // Immediately fetch stats via HTTP to determine if a query is active.
+      // The stats response includes is_processing so we can restore the
+      // correct processing state without waiting for the 3-second safety timer.
+      let backendIsProcessing = false;
+      try {
+        const stats: any = await apiService.getStats();
+        backendIsProcessing = !!stats.is_processing;
+
+        // Sync provider/model from backend state
+        if (stats.provider) {
+          setState(prev => ({
+            ...prev,
+            provider: stats.provider || prev.provider,
+            model: stats.model || prev.model,
+            stats: JSON.stringify(prev.stats) === JSON.stringify(stats) ? prev.stats : stats,
+          }));
+        }
+
+        // If backend says not processing but frontend thinks it is, clear immediately
+        if (!backendIsProcessing) {
+          const wasStuck = await new Promise<boolean>(resolve => {
+            setState(prev => {
+              if (prev.isProcessing) {
+                debugLog('[lifecycle] Backend reports no active query — clearing processing state');
+                resolve(true);
+                return { ...prev, isProcessing: false };
+              }
+              resolve(false);
+              return prev;
+            });
+          });
+
+          // If processing was stuck, try to recover missed messages
+          if (wasStuck) {
+            await recoverMissedMessages();
+          }
+          // Backend not processing — no need for the safety timer
+          return;
+        }
+      } catch (err) {
+        debugLog('[lifecycle] Failed to fetch stats after reconnect:', err);
+      }
+
+      // Backend is processing (or we couldn't determine) — keep the safety timer
+      // as a fallback. A real query_started event should arrive and cancel it.
       if (reconnectSafetyTimerRef.current) {
         clearTimeout(reconnectSafetyTimerRef.current);
       }
       reconnectSafetyTimerRef.current = setTimeout(async () => {
         reconnectSafetyTimerRef.current = null;
 
-        // Check if processing was stuck and clear it
         const wasStuck = await new Promise<boolean>(resolve => {
           setState(prev => {
             if (prev.isProcessing) {
@@ -1310,44 +1384,8 @@ function App() {
           });
         });
 
-        // If processing was stuck, messages may have been streamed while
-        // disconnected. Fetch the full session from the backend to recover.
         if (wasStuck) {
-          try {
-            const stats: any = await apiService.getStats();
-            const sessionId = stats?.session_id;
-            // session_id should always be present when a query was active
-            // (the agent is initialized before any query starts). If it's
-            // missing, the agent context may have been garbage-collected.
-            if (!sessionId) {
-              debugLog('[lifecycle] No session_id in stats after reconnect – cannot sync messages');
-              return;
-            }
-
-            const result: any = await apiService.restoreSession(sessionId);
-            if (!result?.messages || !Array.isArray(result.messages)) return;
-
-            setState(prev => {
-              // Only sync user and assistant messages — backend state includes
-              // system prompts and tool responses that should not appear in chat.
-              const backendMsgs = result.messages.filter(
-                (m: any) => m.role === 'user' || m.role === 'assistant'
-              );
-              if (backendMsgs.length <= prev.messages.length) return prev;
-              const newMsgs = backendMsgs.slice(prev.messages.length).map((msg: any, idx: number) => ({
-                id: `sync-${prev.messages.length + idx}-${Date.now()}`,
-                type: msg.role === 'user' ? 'user' : 'assistant',
-                content: msg.content || '',
-                timestamp: new Date(),
-                ...(msg.reasoning_content ? { reasoning: msg.reasoning_content } : {}),
-              }));
-              if (newMsgs.length === 0) return prev;
-              debugLog('[lifecycle] Recovered', newMsgs.length, 'messages after reconnect');
-              return { ...prev, messages: [...prev.messages, ...newMsgs] };
-            });
-          } catch (err) {
-            debugLog('[lifecycle] Failed to sync messages after reconnect:', err);
-          }
+          await recoverMissedMessages();
         }
       }, 3000);
     });

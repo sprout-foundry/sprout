@@ -41,6 +41,8 @@ interface EditorManagerContextValue {
   updateBufferContent: (bufferId: string, content: string) => void;
   updateBufferCursor: (bufferId: string, position: { line: number; column: number }) => void;
   updateBufferScroll: (bufferId: string, position: { top: number; left: number }) => void;
+  updateBufferMetadata: (bufferId: string, updates: Record<string, any>) => void;
+  updateBufferTitle: (bufferId: string, title: string) => void;
   saveBuffer: (bufferId: string) => Promise<void>;
   setBufferModified: (bufferId: string, isModified: boolean) => void;
   saveAllBuffers: () => Promise<void>;
@@ -83,7 +85,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
       paneId: 'pane-1',
       isPinned: true,
       isClosable: false,
-      metadata: {}
+      metadata: { chatId: null as string | null }
     };
 
     return new Map([[chatBuffer.id, chatBuffer]]);
@@ -356,6 +358,26 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   }, [activePaneId, activateBuffer, getRightmostPane, panes]);
 
   // Update buffer content
+  const updateBufferMetadata = useCallback((bufferId: string, updates: Record<string, any>) => {
+    setBuffers(prev => {
+      const buf = prev.get(bufferId);
+      if (!buf) return prev;
+      const next = new Map(prev);
+      next.set(bufferId, { ...buf, metadata: { ...buf.metadata, ...updates } });
+      return next;
+    });
+  }, []);
+
+  const updateBufferTitle = useCallback((bufferId: string, title: string) => {
+    setBuffers(prev => {
+      const buf = prev.get(bufferId);
+      if (!buf) return prev;
+      const next = new Map(prev);
+      next.set(bufferId, { ...buf, file: { ...buf.file, name: title } });
+      return next;
+    });
+  }, []);
+
   const updateBufferContent = useCallback((bufferId: string, content: string) => {
     setBuffers(prev => {
       const newBuffers = new Map(prev);
@@ -779,6 +801,8 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     updateBufferContent,
     updateBufferCursor,
     updateBufferScroll,
+    updateBufferMetadata,
+    updateBufferTitle,
     saveBuffer,
     setBufferModified,
     saveAllBuffers,

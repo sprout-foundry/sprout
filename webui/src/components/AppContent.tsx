@@ -29,8 +29,11 @@ const toPaneFlex = (weight: number): React.CSSProperties => ({
 /** Expand a leading `$HOME` or `${HOME}` token in a workspace path using the remote home directory. */
 function expandHomeInPath(path: string, homePath: string | null): string {
   if (!homePath) return path;
+  // eslint-disable-next-line no-template-curly-in-string
   if (path === '$HOME' || path === '${HOME}') return homePath;
+  // eslint-disable-next-line no-template-curly-in-string
   if (path.startsWith('$HOME/')) return homePath + path.slice(5);
+  // eslint-disable-next-line no-template-curly-in-string
   if (path.startsWith('${HOME}/')) return homePath + path.slice(7);
   return path;
 }

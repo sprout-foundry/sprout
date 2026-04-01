@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import { ShieldCheck, Loader2, Wrench } from 'lucide-react';
 import MessageSegments from './MessageSegments';
 import MessageBubble from './MessageBubble';
@@ -27,7 +27,7 @@ interface ReviewWorkspaceTabProps {
   reviewFixSessionID: string | null;
   isReviewLoading: boolean;
   isReviewFixing: boolean;
-  onFixFromReview: () => void;
+  onFixFromReview: (options?: { fixPrompt?: string; selectedItems?: string[] }) => void;
 }
 
 const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
@@ -40,6 +40,9 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
   isReviewFixing,
   onFixFromReview,
 }) => {
+  const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
+  const [fixPrompt, setFixPrompt] = useState('');
+
   const parsedDetailedGuidance = useMemo(
     () => parseReviewGuidance(review?.detailed_guidance || ''),
     [review?.detailed_guidance]
@@ -71,6 +74,70 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
     return compactReviewFixLogs(reviewFixLogs).slice(-8);
   }, [reviewFixLogs]);
   const formattedFixLogs = useMemo(() => compactReviewFixLogs(reviewFixLogs), [reviewFixLogs]);
+
+  // Reset selection state when a new review is generated so stale
+  // checkboxes from a previous review don't carry over.
+  useEffect(() => {
+    setCheckedItems(new Set());
+    setFixPrompt('');
+  }, [review]);
+
+  const handleToggleItem = useCallback((key: string) => {
+    setCheckedItems((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    const allKeys: string[] = [];
+    parsedDetailedGuidance.sections.forEach((section) => {
+      section.entries.forEach((_, index) => {
+        allKeys.push(`${section.id}:${index}`);
+      });
+    });
+    if (allKeys.length === 0) return;
+    const allChecked = allKeys.every((key) => checkedItems.has(key));
+    if (allChecked) {
+      setCheckedItems(new Set());
+    } else {
+      setCheckedItems(new Set(allKeys));
+    }
+  }, [parsedDetailedGuidance.sections, checkedItems]);
+
+  const totalItems = useMemo(
+    () => parsedDetailedGuidance.sections.reduce((acc, s) => acc + s.entries.length, 0),
+    [parsedDetailedGuidance.sections]
+  );
+  const selectedCount = checkedItems.size;
+
+  const collectSelectedItems = useCallback((): string[] => {
+    const items: string[] = [];
+    parsedDetailedGuidance.sections.forEach((section) => {
+      section.entries.forEach((entry, index) => {
+        const key = `${section.id}:${index}`;
+        if (checkedItems.has(key)) {
+          const parts = [`**[${section.title}]** ${entry.issue}`];
+          if (entry.file) parts.push(`  File: ${entry.file}`);
+          if (entry.evidence) parts.push(`  Evidence: ${entry.evidence}`);
+          if (entry.suggestion) parts.push(`  Next step: ${entry.suggestion}`);
+          items.push(parts.join('\n'));
+        }
+      });
+    });
+    return items;
+  }, [parsedDetailedGuidance.sections, checkedItems]);
+
+  const handleFixClick = useCallback(() => {
+    const opts: { fixPrompt?: string; selectedItems?: string[] } = {};
+    const trimmedPrompt = fixPrompt.trim();
+    if (trimmedPrompt) opts.fixPrompt = trimmedPrompt;
+    const items = collectSelectedItems();
+    if (items.length > 0) opts.selectedItems = items;
+    onFixFromReview(opts);
+  }, [fixPrompt, collectSelectedItems, onFixFromReview]);
 
   return (
     <div className="chat-shell review-workspace-shell">
@@ -144,41 +211,53 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
                           <div className="review-guidance-list">
                             {section.entries.map((entry, index) => (
                               <article key={`${section.id}-${index}`} className="review-guidance-card">
-                                <h5>{entry.issue}</h5>
-                                {entry.file ? (
-                                  <div className="review-guidance-row">
-                                    <span className="review-guidance-label">File</span>
-                                    <code>{entry.file}</code>
-                                  </div>
-                                ) : null}
-                                {entry.evidence ? (
-                                  <div className="review-guidance-row">
-                                    <span className="review-guidance-label">Evidence</span>
-                                    <div className="review-guidance-copy">
-                                      <MessageContent content={entry.evidence} />
-                                    </div>
-                                  </div>
-                                ) : null}
-                                {entry.suggestion ? (
-                                  <div className="review-guidance-row">
-                                    <span className="review-guidance-label">Next Step</span>
-                                    <div className="review-guidance-copy">
-                                      <MessageContent content={entry.suggestion} />
-                                    </div>
-                                  </div>
-                                ) : null}
-                                {Object.entries(entry)
-                                  .filter(([key, value]) => !['issue', 'file', 'evidence', 'suggestion'].includes(key) && typeof value === 'string' && value.trim())
-                                  .map(([key, value]) => (
-                                    <div key={key} className="review-guidance-row">
-                                      <span className="review-guidance-label">
-                                        {key.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())}
-                                      </span>
-                                      <div className="review-guidance-copy">
-                                        <MessageContent content={String(value)} />
+                                <div className="review-guidance-card-top">
+                                  <label className="review-guidance-checkbox-label">
+                                    <input
+                                      type="checkbox"
+                                      checked={checkedItems.has(`${section.id}:${index}`)}
+                                      onChange={() => handleToggleItem(`${section.id}:${index}`)}
+                                      disabled={isReviewFixing}
+                                    />
+                                  </label>
+                                  <div className="review-guidance-card-body">
+                                    <h5>{entry.issue}</h5>
+                                    {entry.file ? (
+                                      <div className="review-guidance-row">
+                                        <span className="review-guidance-label">File</span>
+                                        <code>{entry.file}</code>
                                       </div>
-                                    </div>
-                                  ))}
+                                    ) : null}
+                                    {entry.evidence ? (
+                                      <div className="review-guidance-row">
+                                        <span className="review-guidance-label">Evidence</span>
+                                        <div className="review-guidance-copy">
+                                          <MessageContent content={entry.evidence} />
+                                        </div>
+                                      </div>
+                                    ) : null}
+                                    {entry.suggestion ? (
+                                      <div className="review-guidance-row">
+                                        <span className="review-guidance-label">Next Step</span>
+                                        <div className="review-guidance-copy">
+                                          <MessageContent content={entry.suggestion} />
+                                        </div>
+                                      </div>
+                                    ) : null}
+                                    {Object.entries(entry)
+                                      .filter(([key, value]) => !['issue', 'file', 'evidence', 'suggestion'].includes(key) && typeof value === 'string' && value.trim())
+                                      .map(([key, value]) => (
+                                        <div key={key} className="review-guidance-row">
+                                          <span className="review-guidance-label">
+                                            {key.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())}
+                                          </span>
+                                          <div className="review-guidance-copy">
+                                            <MessageContent content={String(value)} />
+                                          </div>
+                                        </div>
+                                      ))}
+                                  </div>
+                                </div>
                               </article>
                             ))}
                           </div>
@@ -263,14 +342,46 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
         </div>
       </div>
 
+      {review && (
+        <div className="review-fix-prompt-section">
+          <details className="review-fix-prompt-details">
+            <summary className="review-fix-prompt-summary">
+              <span>Add fix instructions (optional)</span>
+            </summary>
+            <textarea
+              className="review-fix-prompt-textarea"
+              placeholder="E.g. Focus only on the error handling issues, skip the naming suggestions..."
+              value={fixPrompt}
+              onChange={(e) => setFixPrompt(e.target.value)}
+              disabled={isReviewFixing}
+              rows={3}
+            />
+          </details>
+        </div>
+      )}
       <div className="input-container review-actions-bar">
+        {totalItems > 0 && (
+          <button
+            className="review-fix-btn review-fix-select-all-btn"
+            onClick={handleSelectAll}
+            disabled={isReviewFixing || isReviewLoading}
+            title={selectedCount === totalItems ? 'Deselect all items' : 'Select all items'}
+          >
+            {selectedCount === totalItems ? 'Deselect All' : 'Select All'}
+          </button>
+        )}
+        {selectedCount > 0 && (
+          <span className="review-fix-selection-count">
+            {selectedCount} of {totalItems} selected
+          </span>
+        )}
         <button
           className="review-fix-btn"
-          onClick={onFixFromReview}
+          onClick={handleFixClick}
           disabled={!review?.review_output || isReviewFixing || isReviewLoading}
         >
           <Wrench size={14} />
-          {isReviewFixing ? 'Applying fixes…' : 'Fix From Review'}
+          {isReviewFixing ? 'Applying fixes…' : (selectedCount > 0 ? `Fix ${selectedCount} Item${selectedCount > 1 ? 's' : ''}` : 'Fix From Review')}
         </button>
       </div>
     </div>

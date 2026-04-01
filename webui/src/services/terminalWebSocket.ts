@@ -1,5 +1,5 @@
 import { debugLog } from '../utils/log';
-import { appendClientIdToUrl } from './clientSession';
+import { appendClientIdToUrl, getWebUIClientId } from './clientSession';
 
 type TerminalEventCallback = (event: any) => void;
 
@@ -8,7 +8,7 @@ class TerminalWebSocketService {
   private ws: WebSocket | null = null;
   private callbacks: TerminalEventCallback[] = [];
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 20;
+  private maxReconnectAttempts = 30;
   private reconnectDelay = 1000;
   private sessionId: string | null = null;
   private isConnected = false;
@@ -81,8 +81,10 @@ class TerminalWebSocketService {
       return `${protocol}//${window.location.host}${proxyBase}/terminal`;
     })();
 
-    // On reconnect, pass preserved sessionId so server can reattach
-    if (this.sessionId && this.reconnectAttempts > 0) {
+    // On reconnect with a sessionId, pass it so server can reattach to the
+    // existing tmux session (preserving history). This also covers the case
+    // where the sessionId was restored from localStorage after a tab discard.
+    if (this.sessionId) {
       const separator = wsUrl.includes('?') ? '&' : '?';
       wsUrl = `${wsUrl}${separator}reattach=${encodeURIComponent(this.sessionId)}`;
     }
@@ -120,7 +122,6 @@ class TerminalWebSocketService {
           this.connect();
         }, this.reconnectDelay * this.reconnectAttempts);
       }
-      this.intentionalClose = false;
     };
 
     this.ws.onerror = (error) => {
@@ -151,6 +152,7 @@ class TerminalWebSocketService {
         if (data.type === 'session_created') {
           this.sessionId = data.data.session_id;
           debugLog('Terminal session created:', this.sessionId);
+          this.persistSessionId();
           // Notify that we're now ready to send commands
           this.notifyCallbacks({ type: 'session_ready', data: { session_id: this.sessionId } });
         }
@@ -170,11 +172,14 @@ class TerminalWebSocketService {
     }
     this.stopPingInterval();
     if (this.ws) {
+      this.ws.onclose = null;
+      this.ws.onerror = null;
       this.reconnectAttempts = this.maxReconnectAttempts; // Prevent auto-reconnect
       this.ws.close();
       this.ws = null;
     }
     this.isConnected = false;
+    this.clearPersistedSessionId();
     this.sessionId = null;
   }
 
@@ -292,6 +297,105 @@ class TerminalWebSocketService {
   /** Clear persisted session after a successful reattach. */
   clearPersistedSession() {
     this.sessionId = null;
+  }
+
+  private getPersistedSessionKey(): string {
+    return `ledit.webui.terminalSession.${getWebUIClientId()}`;
+  }
+
+  /** Persist the current sessionId to localStorage so it survives tab discard. */
+  persistSessionId() {
+    if (this.sessionId) {
+      try {
+        window.localStorage.setItem(this.getPersistedSessionKey(), this.sessionId);
+        debugLog('Terminal session ID persisted:', this.sessionId);
+      } catch {
+        // localStorage may be unavailable
+      }
+    }
+  }
+
+  /** Restore a Previously persisted sessionId from localStorage (for reattach after tab discard). */
+  restorePersistedSessionId(): string | null {
+    try {
+      const saved = window.localStorage.getItem(this.getPersistedSessionKey());
+      if (saved) {
+        this.sessionId = saved;
+        debugLog('Terminal session ID restored from persistence:', saved);
+        return saved;
+      }
+    } catch {
+      // localStorage may be unavailable
+    }
+    return null;
+  }
+
+  /** Remove the persisted sessionId from localStorage. */
+  clearPersistedSessionId() {
+    try {
+      window.localStorage.removeItem(this.getPersistedSessionKey());
+    } catch {
+      // localStorage may be unavailable
+    }
+  }
+
+  /** Set sessionId externally before connecting (for restore from localStorage persistence). */
+  restoreSessionId(id: string) {
+    this.sessionId = id;
+    this.persistSessionId();
+  }
+
+  /** Proactively disconnect before tab freeze. Sends a clean close frame to
+   *  the server so it can properly detach from the backend session (tmux).
+   *  Unlike disconnect(), this does NOT clear the persisted sessionId --
+   *  resume() will restore it for reattachment. */
+  freeze() {
+    this.intentionalClose = true;
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+    this.stopPingInterval();
+    if (this.ws) {
+      // Neutralize handlers so the async onclose (from ws.close()) doesn't
+      // fire and null the sessionId that we need to preserve for resume().
+      this.ws.onclose = null;
+      this.ws.onerror = null;
+      this.reconnectAttempts = this.maxReconnectAttempts; // Prevent auto-reconnect
+      this.ws.close();
+      this.ws = null;
+    }
+    this.isConnected = false;
+    // NOTE: Do NOT clear persisted sessionId or null the sessionId itself so
+    // that resume() → resetAndReconnect() can reattach to the tmux session.
+  }
+
+  /** Resume after tab unfreeze. Triggers immediate reconnection with session restore. */
+  resume() {
+    this.resetAndReconnect();
+  }
+
+  /** Reset all reconnection state and trigger an immediate reconnect attempt.
+   *  Unlike disconnect() + connect(), this does NOT mark the close as
+   *  intentional, so auto-reconnect continues to work if the first attempt fails.
+   *  Also restores any previously persisted sessionId for reattachment. */
+  resetAndReconnect() {
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+    this.stopPingInterval();
+    if (this.ws) {
+      this.ws.onclose = null;  // Neutralize old handler to prevent double-connect
+      this.ws.onerror = null;
+      this.ws.close();
+      this.ws = null;
+    }
+    this.reconnectAttempts = 0;
+    this.intentionalClose = false;
+    // Restore persisted sessionId for reattach after tab discard
+    this.restorePersistedSessionId();
+    this.connect();
   }
 }
 

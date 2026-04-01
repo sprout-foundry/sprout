@@ -748,7 +748,10 @@ func (tm *TerminalManager) monitorSession(session *TerminalSession) {
 	case <-readDone:
 		// Read goroutine finished
 	case <-session.monitorDone:
-		// Monitor was asked to stop (detach/reattach/close)
+		// Monitor was asked to stop (detach/reattach/close).
+		// Wait for the reader goroutine to fully stop before we close OutputCh,
+		// otherwise it may panic with "send on closed channel".
+		<-readDone
 		return
 	}
 

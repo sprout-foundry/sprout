@@ -8,12 +8,14 @@ class WebSocketService {
   private ws: WebSocket | null = null;
   private callbacks: EventCallback[] = [];
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
+  private maxReconnectAttempts = 30;
   private reconnectDelay = 2000;
   private pingInterval: NodeJS.Timeout | null = null;
   private lastPongTime = Date.now();
   private intentionalClose = false;
   private reconnectTimeout: NodeJS.Timeout | null = null;
+  private wasConnectedBefore = false;
+  private onReconnectCallback: (() => void) | null = null;
 
   private constructor() {}
 
@@ -46,6 +48,15 @@ class WebSocketService {
   }
 
   connect() {
+    // Reset reconnect attempts to allow fresh reconnection cycle.
+    // This ensures that calling connect() after a prior disconnect()
+    // (which sets reconnectAttempts to maxReconnectAttempts to prevent
+    // auto-reconnect) will allow auto-reconnect to work again.
+    this.reconnectAttempts = 0;
+    // Explicitly reset intentional close flag when the application
+    // requests a new connection, so auto-reconnect works after connect().
+    this.intentionalClose = false;
+
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
       return;
     }
@@ -69,11 +80,19 @@ class WebSocketService {
     this.ws = new WebSocket(appendClientIdToUrl(wsUrl));
 
     this.ws.onopen = () => {
-      debugLog('WebSocket connected');
+      const isReconnect = this.wasConnectedBefore;
+      this.wasConnectedBefore = true;
+      debugLog('WebSocket connected', isReconnect ? '(reconnect)' : '(initial)');
       this.reconnectAttempts = 0;
       this.lastPongTime = Date.now();
       this.startPingInterval();
       this.notifyCallbacks({ type: 'connection_status', data: { connected: true } });
+
+      // Fire the reconnect callback so the application can sync state
+      // (e.g., request fresh stats, check for stuck processing state).
+      if (isReconnect && this.onReconnectCallback) {
+        this.onReconnectCallback();
+      }
     };
 
     this.ws.onclose = (event) => {
@@ -90,8 +109,6 @@ class WebSocketService {
           this.connect();
         }, this.reconnectDelay * this.reconnectAttempts);
       }
-      // Reset intentional close flag after handling
-      this.intentionalClose = false;
     };
 
     this.ws.onerror = (error) => {
@@ -131,16 +148,65 @@ class WebSocketService {
 
   disconnect() {
     this.intentionalClose = true;
+    this.wasConnectedBefore = false;
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
     }
     this.stopPingInterval();
     if (this.ws) {
+      this.ws.onclose = null;
+      this.ws.onerror = null;
       this.reconnectAttempts = this.maxReconnectAttempts; // Prevent auto-reconnect
       this.ws.close();
       this.ws = null;
     }
+  }
+
+  /** Proactively disconnect before tab freeze. Sends a clean close frame so the
+   *  server can properly detach from backend sessions. Unlike disconnect(), this
+   *  does NOT reset wasConnectedBefore so that resume() → resetAndReconnect()
+   *  → connect() will still recognise the next open as a reconnection and fire
+   *  the onReconnect callback (for state sync, stuck-processing guard, etc.). */
+  freeze() {
+    this.intentionalClose = true;
+    // Intentionally do NOT reset wasConnectedBefore — see comment above.
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+    this.stopPingInterval();
+    if (this.ws) {
+      this.ws.onclose = null;
+      this.ws.onerror = null;
+      this.reconnectAttempts = this.maxReconnectAttempts; // Prevent auto-reconnect
+      this.ws.close();
+      this.ws = null;
+    }
+  }
+
+  /** Reset all reconnection state and trigger an immediate reconnect attempt.
+   *  Used by visibility change and page freeze handlers to cleanly reconnect
+   *  after the browser has throttled/killed WebSocket connections.
+   *  Unlike disconnect() + connect(), this does NOT mark the close as
+   *  intentional, so auto-reconnect continues to work if the first attempt fails. */
+  resetAndReconnect() {
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+    this.stopPingInterval();
+    if (this.ws) {
+      this.ws.onclose = null;  // Neutralize old handler to prevent double-connect
+      this.ws.onerror = null;
+      this.ws.close();
+      this.ws = null;
+    }
+    // Reset state for fresh reconnection
+    this.reconnectAttempts = 0;
+    this.intentionalClose = false;
+    // Connect immediately
+    this.connect();
   }
 
   onEvent(callback: EventCallback) {
@@ -151,6 +217,13 @@ class WebSocketService {
 
   removeEvent(callback: EventCallback) {
     this.callbacks = this.callbacks.filter(cb => cb !== callback);
+  }
+
+  /** Register a callback that fires when the connection is successfully
+   *  restored after a prior disconnect/reconnect cycle (i.e. not the very
+   *  first connection). Pass null to unregister. */
+  onReconnect(callback: (() => void) | null) {
+    this.onReconnectCallback = callback;
   }
 
   private notifyCallbacks(event: any) {

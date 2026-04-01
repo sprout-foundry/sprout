@@ -62,6 +62,21 @@ interface WorkspacePaneProps {
     currentTodos?: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }>;
     onToolPillClick?: (toolId: string) => void;
     onStopProcessing?: () => void;
+    subagentActivities?: Array<{
+      id: string;
+      toolCallId: string;
+      toolName: string;
+      phase: 'spawn' | 'output' | 'complete';
+      message: string;
+      timestamp: Date;
+      taskId?: string;
+      persona?: string;
+      isParallel?: boolean;
+      provider?: string;
+      model?: string;
+      taskCount?: number;
+      failures?: number;
+    }>;
   };
   reviewProps: {
     review: DeepReviewResult | null;

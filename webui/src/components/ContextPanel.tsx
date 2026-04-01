@@ -238,7 +238,7 @@ interface GitContextPanelProps extends ContextPanelBaseProps {
   isReviewLoading: boolean;
   isReviewFixing: boolean;
   onRunReview: () => void;
-  onFixFromReview: () => void;
+  onFixFromReview: (options?: { fixPrompt?: string; selectedItems?: string[] }) => void;
 }
 
 export type ContextPanelProps = ChatContextPanelProps | GitContextPanelProps;
@@ -1745,7 +1745,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
             </button>
             {gitProps.deepReview.review_output && (
               <button
-                onClick={gitProps.onFixFromReview}
+                onClick={() => gitProps.onFixFromReview()}
                 disabled={gitProps.isReviewFixing || gitProps.isReviewLoading}
                 className="review-action-btn review-action-primary"
               >

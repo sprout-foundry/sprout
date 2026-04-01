@@ -71,7 +71,7 @@ interface WorkspacePaneProps {
     reviewFixSessionID: string | null;
     isReviewLoading: boolean;
     isReviewFixing: boolean;
-    onFixFromReview: () => void;
+    onFixFromReview: (options?: { fixPrompt?: string; selectedItems?: string[] }) => void;
   };
   diffState: {
     activeDiffPath: string | null;

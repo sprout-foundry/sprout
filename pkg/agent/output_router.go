@@ -144,8 +144,12 @@ func (r *OutputRouter) RouteStreamChunk(chunk string, contentType string) {
 	}
 
 	// Terminal: write via streamingCallback if set (real-time character output)
-	callback, _ := r.getStreamingCallback()
+	callback, mu := r.getStreamingCallback()
 	if callback != nil {
+		if mu != nil {
+			mu.Lock()
+			defer mu.Unlock()
+		}
 		callback(chunk)
 		return
 	}
@@ -251,28 +255,11 @@ func (r *OutputRouter) RouteToolLog(action string, target string) {
 
 	var message string
 	if target != "" {
-		message = fmt.Sprintf("%s%s %s%s %s%s%s\n", darkGray, iterInfo, action, reset, slightlyLighterGray, target, reset)
+		message = fmt.Sprintf("%s%s %s%s %s%s%s", darkGray, iterInfo, action, reset, slightlyLighterGray, target, reset)
 	} else {
-		message = fmt.Sprintf("%s%s %s%s\n", darkGray, iterInfo, action, reset)
+		message = fmt.Sprintf("%s%s %s%s", darkGray, iterInfo, action, reset)
 	}
-
-	// Route terminal output
-	if agent != nil && agent.outputMutex != nil {
-		agent.outputMutex.Lock()
-		defer agent.outputMutex.Unlock()
-	}
-
-	if agent != nil && agent.streamingEnabled && agent.streamingCallback != nil {
-		agent.streamingCallback(message)
-		return
-	}
-
-	if os.Getenv("LEDIT_CI_MODE") == "1" || os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
-		fmt.Print(message)
-		return
-	}
-	fmt.Print("\r\033[K")
-	fmt.Print(message)
+	r.writeTerminalMessage(message)
 }
 
 // isEventSourced returns true if the router is in event-sourced mode

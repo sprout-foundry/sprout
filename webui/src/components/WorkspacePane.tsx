@@ -66,7 +66,7 @@ interface WorkspacePaneProps {
       id: string;
       toolCallId: string;
       toolName: string;
-      phase: 'spawn' | 'output' | 'complete';
+      phase: 'spawn' | 'output' | 'complete' | 'step';
       message: string;
       timestamp: Date;
       taskId?: string;

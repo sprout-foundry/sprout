@@ -7,6 +7,8 @@ import {
   CheckCircle2,
   CheckSquare,
   GitBranch,
+  GitCompare,
+  History as HistoryIcon,
   MinusSquare,
   RefreshCw,
   ShieldCheck,
@@ -19,6 +21,10 @@ import {
 import { showThemedPrompt } from './ThemedDialog';
 import type { GitBranchesState } from '../hooks/useGitWorkspace';
 import { copyToClipboard } from '../utils/clipboard';
+import GitHistoryPanel from './GitHistoryPanel';
+import type { ApiService } from '../services/api';
+
+export type GitViewTab = 'changes' | 'history';
 
 export interface GitFile {
   path: string;
@@ -77,6 +83,19 @@ interface GitSidebarPanelProps {
   onDiscardFile: (path: string) => void;
   onSectionAction: (section: FileSection) => void;
   onOpenFile?: (path: string) => void;
+  activeTab?: GitViewTab;
+  onTabChange?: (tab: GitViewTab) => void;
+  apiService?: ApiService;
+  openWorkspaceBuffer?: (options: {
+    kind: 'chat' | 'diff' | 'review';
+    path: string;
+    title: string;
+    content?: string;
+    ext?: string;
+    isPinned?: boolean;
+    isClosable?: boolean;
+    metadata?: Record<string, any>;
+  }) => string;
 }
 
 const selectionKey = (section: FileSection, path: string): string => `${section}:${path}`;
@@ -87,6 +106,31 @@ const FILE_SECTIONS: Array<{ id: FileSection; title: string }> = [
   { id: 'untracked', title: 'Untracked' },
   { id: 'deleted', title: 'Deleted' },
 ];
+
+/** Inline tab bar used at top of the git sidebar panel. */
+const GitTabBar: React.FC<{
+  activeTab: GitViewTab;
+  onTabChange?: (tab: GitViewTab) => void;
+}> = ({ activeTab, onTabChange }) => (
+  <div className="git-sidebar-tab-bar">
+    <button
+      type="button"
+      className={`git-sidebar-tab ${activeTab === 'changes' ? 'active' : ''}`}
+      onClick={() => activeTab !== 'changes' && onTabChange?.('changes')}
+    >
+      <GitCompare size={14} />
+      <span>Changes</span>
+    </button>
+    <button
+      type="button"
+      className={`git-sidebar-tab ${activeTab === 'history' ? 'active' : ''}`}
+      onClick={() => activeTab !== 'history' && onTabChange?.('history')}
+    >
+      <HistoryIcon size={14} />
+      <span>History</span>
+    </button>
+  </div>
+);
 
 const GitSidebarPanel: React.FC<GitSidebarPanelProps> = ({
   gitStatus,
@@ -122,6 +166,10 @@ const GitSidebarPanel: React.FC<GitSidebarPanelProps> = ({
   onDiscardFile,
   onSectionAction,
   onOpenFile,
+  activeTab = 'changes',
+  onTabChange,
+  apiService,
+  openWorkspaceBuffer,
 }) => {
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<{
@@ -158,11 +206,21 @@ const GitSidebarPanel: React.FC<GitSidebarPanelProps> = ({
   }, [contextMenu]);
 
   if (isLoading) {
-    return <div className="empty">Loading git status…</div>;
+    return (
+      <div className="git-sidebar-panel">
+        <GitTabBar activeTab={activeTab} onTabChange={onTabChange} />
+        <div className="empty">Loading git status…</div>
+      </div>
+    );
   }
 
   if (!gitStatus) {
-    return <div className="empty">No git repository found</div>;
+    return (
+      <div className="git-sidebar-panel">
+        <GitTabBar activeTab={activeTab} onTabChange={onTabChange} />
+        <div className="empty">No git repository found</div>
+      </div>
+    );
   }
 
   const hasStagedFiles = gitStatus.staged.length > 0;
@@ -205,7 +263,20 @@ const GitSidebarPanel: React.FC<GitSidebarPanelProps> = ({
 
   return (
     <div className="git-sidebar-panel">
-      <div className="git-sidebar-header">
+      <GitTabBar activeTab={activeTab} onTabChange={onTabChange} />
+
+      {activeTab === 'history' && apiService && openWorkspaceBuffer ? (
+        <GitHistoryPanel
+          apiService={apiService}
+          isActing={isActing}
+          onRefresh={onRefresh}
+          openWorkspaceBuffer={openWorkspaceBuffer}
+        />
+      ) : activeTab === 'history' ? (
+        <div className="empty">Git history unavailable</div>
+      ) : (
+        <>
+          <div className="git-sidebar-header">
         <div className="git-sidebar-toolbar-row">
           <label className="git-branch-select-wrap" htmlFor="git-branch-select">
             <span className="branch-icon"><GitBranch size={14} /></span>
@@ -529,6 +600,8 @@ const GitSidebarPanel: React.FC<GitSidebarPanelProps> = ({
             document.body
           )
         : null}
+        </>
+      )}
     </div>
   );
 };

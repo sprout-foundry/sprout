@@ -22,6 +22,7 @@ import {
 import FileTree from './FileTree';
 import SearchView from './SearchView';
 import GitSidebarPanel, { GitStatusData } from './GitSidebarPanel';
+import type { GitViewTab } from './GitSidebarPanel';
 import type { GitBranchesState } from '../hooks/useGitWorkspace';
 import RevisionListPanel from './RevisionListPanel';
 import LeditLogo from './LeditLogo';
@@ -95,6 +96,19 @@ interface SidebarProps {
     onSectionAction: (section: 'staged' | 'modified' | 'untracked' | 'deleted') => void;
     onOpenFile?: (path: string) => void;
     workspaceRoot?: string;
+    activeTab?: GitViewTab;
+    onTabChange?: (tab: GitViewTab) => void;
+    apiService?: ApiService;
+    openWorkspaceBuffer?: (options: {
+      kind: 'chat' | 'diff' | 'review';
+      path: string;
+      title: string;
+      content?: string;
+      ext?: string;
+      isPinned?: boolean;
+      isClosable?: boolean;
+      metadata?: Record<string, any>;
+    }) => string;
   };
   onOpenRevisionDiff?: (options: { path: string; diff: string; title: string }) => void;
 }

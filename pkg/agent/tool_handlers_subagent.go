@@ -9,7 +9,6 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	"time"
 
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 	"github.com/alantheprice/ledit/pkg/events"
@@ -19,8 +18,11 @@ const (
 	MAX_SUBAGENT_OUTPUT_SIZE  = 10 * 1024 * 1024 // 10MB
 	MAX_SUBAGENT_CONTEXT_SIZE = 1024 * 1024      // 1MB
 	MAX_PARALLEL_SUBAGENTS    = 5
-	BATCH_SIZE                = 5               // Number of lines to batch before publishing
-	FLUSH_INTERVAL            = 200 * time.Millisecond // Max time between batch flushes
+	// BATCH_SIZE controls how many subagent output lines are buffered before
+	// publishing a single subagent_activity event. 3 is a compromise: still
+	// real-time enough to feel responsive while cutting event count by ~67%
+	// to feel responsive while cutting event count by ~67% compared to 1.
+	BATCH_SIZE = 3
 )
 
 // MILESTONE_PHASES defines phases that trigger immediate publish without batching
@@ -33,7 +35,6 @@ type subagentBatchBuffer struct {
 	taskID     string
 	persona    string
 	isParallel bool
-	lastFlush  time.Time // Last time the buffer was flushed
 }
 
 // Global batch buffer manager
@@ -59,10 +60,9 @@ func flushSubagentBatch(buffer *subagentBatchBuffer, a *Agent, toolCallID, toolN
 
 	a.publishEvent(events.EventTypeSubagentActivity, events.SubagentActivityEvent(toolCallID, toolName, "output", batchMessage, details))
 
-	// Reset buffer and update flush timestamp
+	// Reset buffer
 	buffer.lines = buffer.lines[:0]
 	buffer.lineCount = 0
-	buffer.lastFlush = time.Now()
 }
 
 // cleanupSubagentBatch flushes any remaining buffered output for a task
@@ -154,13 +154,14 @@ func publishSubagentActivity(ctx context.Context, a *Agent, phase, message strin
 	buffer.lines = append(buffer.lines, message)
 	buffer.lineCount++
 
-	// Flush if batch is full OR if enough time has elapsed since last flush
-	shouldFlush := buffer.lineCount >= BATCH_SIZE ||
-		(!buffer.lastFlush.IsZero() && time.Since(buffer.lastFlush) >= FLUSH_INTERVAL)
+	// Flush if batch is full
+	shouldFlush := buffer.lineCount >= BATCH_SIZE
 
 	if shouldFlush {
-		bufferMu.Unlock()
+		// Flush while still holding the lock to prevent data race with concurrent goroutines
+		// (e.g., stdout/stderr in RunSubagent both call the same callback)
 		flushSubagentBatch(buffer, a, toolCallID, toolName)
+		bufferMu.Unlock()
 		return
 	}
 
@@ -666,7 +667,10 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		}
 
 		message := fmt.Sprintf("%s→ %sSubagent: %s%s\n", subagentGray, prefix, cleanLine, reset)
-		a.printLineInternal(message)
+		// Write to terminal only; output is already published via publishSubagentActivity
+		// above, so we skip the event bus to avoid sending a redundant agent_message event
+		// that the WebUI would silently discard anyway.
+		a.PrintTerminalOnly(message)
 	}
 
 	// Print the provider/model being used for this subagent
@@ -1008,7 +1012,10 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 		}
 
 		message := fmt.Sprintf("%s→ %sSubagent: %s%s\n", subagentGray, prefix, cleanLine, reset)
-		a.printLineInternal(message)
+		// Write to terminal only; output is already published via publishSubagentActivity
+		// above, so we skip the event bus to avoid sending a redundant agent_message event
+		// that the WebUI would silently discard anyway.
+		a.PrintTerminalOnly(message)
 	}
 
 	// Print the provider/model being used for these parallel subagents

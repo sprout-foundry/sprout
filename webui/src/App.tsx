@@ -168,7 +168,7 @@ interface OnboardingState {
 }
 
 const APP_STATE_STORAGE_KEY = 'ledit:webui:state:v2';
-const INSTANCE_PID_STORAGE_KEY = 'ledit:webui:instancePid';
+
 const INSTANCE_SWITCH_RESET_KEY = 'ledit:webui:instanceSwitchReset';
 const MAX_PERSISTED_LOGS = 1000;
 

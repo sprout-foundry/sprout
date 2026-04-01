@@ -25,6 +25,7 @@ const toPaneFlex = (weight: number): React.CSSProperties => ({
   minHeight: 0,
 });
 
+// eslint-disable-next-line no-template-curly-in-string
 /** Expand a leading `$HOME` or `${HOME}` token in a workspace path using the remote home directory. */
 function expandHomeInPath(path: string, homePath: string | null): string {
   if (!homePath) return path;

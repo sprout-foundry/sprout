@@ -1201,7 +1201,7 @@ func (ws *ReactWebServer) handleAPIGitDeepReviewFixStatus(w http.ResponseWriter,
 }
 
 func (ws *ReactWebServer) startFixReviewJob(reviewOutput, clientID string) (*gitFixReviewJob, string, error) {
-	fixInstructions := "First validate that all of these review items are valid issues, then use subagents to address any of the valid issues. When they are resolved, use a code review subagent to review the solution and fix any issues that come out of it of it and iterate through the process until the issues are resolved."
+	fixInstructions := "First validate that all of these review items are valid issues, then use subagents to address any of the valid issues. When they are resolved, use a code review subagent to review the solution and fix any issues that come out of it and iterate through the process until the issues are resolved."
 	prompt := fmt.Sprintf("Use this deep review output as input:\n\n%s\n\n%s", reviewOutput, fixInstructions)
 
 	provider := ""
@@ -1247,43 +1247,64 @@ func generateCryptoID(prefix string) string {
 }
 
 func (ws *ReactWebServer) runFixReviewJob(job *gitFixReviewJob, prompt, provider, model, workspaceRoot string) {
-	reviewAgent, err := agent.NewAgentWithModel("")
-	if err != nil {
-		job.setError(fmt.Sprintf("Failed to initialize isolated agent: %v", err))
-		return
-	}
-	defer reviewAgent.Shutdown()
+	// When running in daemon mode, the process CWD is the daemon's directory, not the
+	// client's workspace. Many downstream code paths (agent init, SaveState, context
+	// discovery, git operations) rely on os.Getwd(), so we must switch to the correct
+	// workspace directory before creating the agent.
+	// Use withAgentWorkspace to serialize CWD changes via workspaceExecMu, avoiding
+	// races with other goroutines that also change CWD (e.g. withAgentWorkspace calls
+	// from getClientAgent / regular chat).
+	workspaceRoot = strings.TrimSpace(workspaceRoot)
 
-	// Set the workspace root to the client's workspace, not the daemon process CWD.
-	if strings.TrimSpace(workspaceRoot) != "" {
-		reviewAgent.SetWorkspaceRoot(workspaceRoot)
-	}
-
-	reviewAgent.SetSessionID(job.SessionID)
-	if provider = strings.TrimSpace(provider); provider != "" {
-		if err := reviewAgent.SetProvider(api.ClientType(provider)); err != nil {
-			job.appendLog(fmt.Sprintf("Warning: failed to set provider %s: %v", provider, err))
+	err := ws.withAgentWorkspace(workspaceRoot, func() error {
+		if workspaceRoot != "" {
+			job.appendLog(fmt.Sprintf("Changed CWD to workspace: %s", workspaceRoot))
 		}
-	}
-	if model = strings.TrimSpace(model); model != "" {
-		if err := reviewAgent.SetModel(model); err != nil {
-			job.appendLog(fmt.Sprintf("Warning: failed to set model %s: %v", model, err))
-		}
-	}
 
-	reviewAgent.SetStreamingEnabled(true)
-	reviewAgent.SetStreamingCallback(func(text string) {
-		job.appendStreamText(text)
+		reviewAgent, agentErr := agent.NewAgentWithModel("")
+		if agentErr != nil {
+			job.setError(fmt.Sprintf("Failed to initialize isolated agent: %v", agentErr))
+			return agentErr
+		}
+		defer reviewAgent.Shutdown()
+
+		if workspaceRoot != "" {
+			reviewAgent.SetWorkspaceRoot(workspaceRoot)
+		}
+
+		reviewAgent.SetSessionID(job.SessionID)
+		if p := strings.TrimSpace(provider); p != "" {
+			if err := reviewAgent.SetProvider(api.ClientType(p)); err != nil {
+				job.appendLog(fmt.Sprintf("Warning: failed to set provider %s: %v", p, err))
+			}
+		}
+		if m := strings.TrimSpace(model); m != "" {
+			if err := reviewAgent.SetModel(m); err != nil {
+				job.appendLog(fmt.Sprintf("Warning: failed to set model %s: %v", m, err))
+			}
+		}
+
+		reviewAgent.SetStreamingEnabled(true)
+		reviewAgent.SetStreamingCallback(func(text string) {
+			job.appendStreamText(text)
+		})
+
+		job.appendLog("Running fix workflow with full agentic path...")
+		result, procErr := reviewAgent.ProcessQuery(prompt)
+		job.flushStreamBuffer()
+		if procErr != nil {
+			job.setError(procErr.Error())
+			return procErr
+		}
+		job.setCompleted(strings.TrimSpace(result))
+		return nil
 	})
 
-	job.appendLog("Running fix workflow with full agentic path...")
-	result, err := reviewAgent.ProcessQuery(prompt)
-	job.flushStreamBuffer()
-	if err != nil {
-		job.setError(err.Error())
-		return
+	// If withAgentWorkspace itself failed (e.g. CWD change error) and we haven't
+	// already recorded a more specific error via job.setError, record it now.
+	if err != nil && job.Status == "running" {
+		job.setError(fmt.Sprintf("Workspace setup failed: %v", err))
 	}
-	job.setCompleted(strings.TrimSpace(result))
 }
 
 func (j *gitFixReviewJob) appendLog(line string) {

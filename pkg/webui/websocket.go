@@ -2,7 +2,6 @@ package webui
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -446,7 +445,9 @@ func (ws *ReactWebServer) handleSecurityApprovalResponse(safeConn *SafeConn, msg
 	log.Printf("Security approval response received: request_id=%s approved=%v", requestID, approved)
 }
 
-// handleTerminalWebSocket handles terminal WebSocket connections
+// handleTerminalWebSocket handles terminal WebSocket connections.
+// Supports both creating new sessions and reattaching to existing tmux-backed sessions.
+// The client can request reattachment by passing ?reattach=<sessionID> in the URL.
 func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -464,21 +465,65 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 	safeConn := NewSafeConn(conn)
 	defer safeConn.Close()
 
-	// Generate session ID
-	sessionID := fmt.Sprintf("terminal_%d", time.Now().UnixNano())
 	terminalManager := ws.getTerminalManagerForRequest(r)
 
-	log.Printf("Terminal WebSocket connection starting: %s", sessionID)
+	// Check if client wants to reattach to an existing session
+	reattachID := strings.TrimSpace(r.URL.Query().Get("reattach"))
+	var sessionID string
+	var session *TerminalSession
 
-	// Create terminal session
-	session, err := terminalManager.CreateSession(sessionID)
-	if err != nil {
-		log.Printf("Failed to create terminal session: %v", err)
-		safeConn.WriteJSON(map[string]interface{}{
-			"type": "error",
-			"data": map[string]string{"message": "Failed to create terminal session"},
-		})
-		return
+	if reattachID != "" && terminalManager.HasSession(reattachID) {
+		// Try to reattach to the existing session
+		scrollback, err := terminalManager.ReattachSession(reattachID, 2000)
+		if err != nil {
+			log.Printf("Failed to reattach to session %s: %v, creating new session", reattachID, err)
+			// Fall through to create new session
+		} else {
+			sessionID = reattachID
+			session, _ = terminalManager.GetSession(sessionID)
+
+			// Send session_restored message with scrollback
+			if err := safeConn.WriteJSON(map[string]interface{}{
+				"type": "session_restored",
+				"data": map[string]interface{}{
+					"session_id":  sessionID,
+					"scrollback":  scrollback,
+					"tmux_backed": true,
+				},
+			}); err != nil {
+				log.Printf("Terminal %s FAILED to send session_restored: %v", sessionID, err)
+			} else {
+				log.Printf("Terminal %s reattached successfully (scrollback: %d bytes)", sessionID, len(scrollback))
+			}
+		}
+	}
+
+	// Create new session if not reattaching
+	if session == nil {
+		sessionID = fmt.Sprintf("terminal_%d", time.Now().UnixNano())
+		log.Printf("Terminal WebSocket connection starting: %s", sessionID)
+
+		var err error
+		session, err = terminalManager.CreateSession(sessionID)
+		if err != nil {
+			log.Printf("Failed to create terminal session: %v", err)
+			safeConn.WriteJSON(map[string]interface{}{
+				"type": "error",
+				"data": map[string]string{"message": "Failed to create terminal session"},
+			})
+			return
+		}
+
+		// Send session created message
+		msg := map[string]interface{}{
+			"type": "session_created",
+			"data": map[string]string{"session_id": sessionID},
+		}
+		if err := safeConn.WriteJSON(msg); err != nil {
+			log.Printf("Terminal %s FAILED to send session_created: %v", sessionID, err)
+		} else {
+			log.Printf("Terminal %s successfully sent session_created", sessionID)
+		}
 	}
 
 	// Store the underlying connection with metadata
@@ -488,21 +533,6 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 		ConnectedAt: time.Now(),
 	})
 	defer ws.connections.Delete(conn)
-
-	// Send session created message
-	log.Printf("Terminal %s about to send session_created message", sessionID)
-	msg := map[string]interface{}{
-		"type": "session_created",
-		"data": map[string]string{"session_id": sessionID},
-	}
-	msgBytes, _ := json.Marshal(msg)
-	log.Printf("Terminal %s message bytes: %s", sessionID, string(msgBytes))
-
-	if err := safeConn.WriteJSON(msg); err != nil {
-		log.Printf("Terminal %s FAILED to send session_created: %v", sessionID, err)
-	} else {
-		log.Printf("Terminal %s successfully sent session_created", sessionID)
-	}
 
 	// Use context for proper cleanup coordination
 	ctx, cancel := context.WithCancel(r.Context())
@@ -578,6 +608,10 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 				} else {
 					log.Printf("Terminal %s read error: %v", sessionID, err)
 				}
+				// On WebSocket disconnect, detach from session instead of closing it.
+				// For tmux-backed sessions, this preserves the tmux session for reattach.
+				// For raw PTY sessions, DetachFromSession will close them completely.
+				terminalManager.DetachFromSession(sessionID)
 				return
 			}
 

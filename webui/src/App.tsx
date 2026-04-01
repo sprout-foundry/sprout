@@ -395,6 +395,7 @@ function App() {
   const [chatQueryProgress, setChatQueryProgress] = useState<Record<string, any>>({});
   const [chatErrors, setChatErrors] = useState<Record<string, string | null>>({});
   const [chatFileEdits, setChatFileEdits] = useState<Record<string, AppState['fileEdits']>>({});
+  const [chatProcessing, setChatProcessing] = useState<Record<string, boolean>>({});
   const currentQueryChatIdRef = useRef<string>('default');
   const activeChatIdRef = useRef(activeChatId);
   activeChatIdRef.current = activeChatId;
@@ -595,7 +596,7 @@ function App() {
         queryProgress: chatQueryProgress[id] || null,
         lastError: chatErrors[id] ?? null,
         fileEdits: chatFileEdits[id] || [],
-        isProcessing: false,
+        isProcessing: chatProcessing[id] || false,
       }));
     } else {
       // Fetch from backend
@@ -621,7 +622,7 @@ function App() {
           queryProgress: null,
           lastError: null,
           fileEdits: [],
-          isProcessing: false,
+          isProcessing: chatProcessing[id] || false,
         }));
       } catch (error) {
         console.error('[chat-sessions] Failed to switch chat:', error);
@@ -660,6 +661,7 @@ function App() {
       setChatQueryProgress(prev => { const next = { ...prev }; delete next[id]; return next; });
       setChatErrors(prev => { const next = { ...prev }; delete next[id]; return next; });
       setChatFileEdits(prev => { const next = { ...prev }; delete next[id]; return next; });
+      setChatProcessing(prev => { const next = { ...prev }; delete next[id]; return next; });
     } catch (error) {
       console.error('[chat-sessions] Failed to delete chat:', error);
     }
@@ -825,6 +827,8 @@ function App() {
         setChatSessionsList(prev =>
           prev.map(s => ({ ...s, active_query: s.id === queryChatId ? true : s.active_query }))
         );
+        // Track per-chat processing state
+        setChatProcessing(prev => ({ ...prev, [queryChatId]: true }));
         debugLog('[>>] Query started:', startedQuery, '(chat:', queryChatId, ')');
         break;
 
@@ -968,6 +972,7 @@ function App() {
         {
           const completedChatId = currentQueryChatIdRef.current;
           setChatQueryProgress(prev => ({ ...prev, [completedChatId]: null }));
+          setChatProcessing(prev => ({ ...prev, [completedChatId]: false }));
           setChatSessionsList(prev =>
             prev.map(s => ({ ...s, active_query: s.id === completedChatId ? false : s.active_query }))
           );

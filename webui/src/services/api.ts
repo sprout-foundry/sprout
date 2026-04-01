@@ -569,8 +569,9 @@ class ApiService {
     return response.json();
   }
 
-  async sendQuery(query: string): Promise<void> {
-    const response = await clientFetch('/api/query', {
+  async sendQuery(query: string, chatId?: string): Promise<void> {
+    const url = chatId ? `/api/query?chat_id=${encodeURIComponent(chatId)}` : '/api/query';
+    const response = await clientFetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -597,8 +598,9 @@ class ApiService {
     return response.json();
   }
 
-  async steerQuery(query: string): Promise<void> {
-    const response = await clientFetch('/api/query/steer', {
+  async steerQuery(query: string, chatId?: string): Promise<void> {
+    const url = chatId ? `/api/query/steer?chat_id=${encodeURIComponent(chatId)}` : '/api/query/steer';
+    const response = await clientFetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -612,8 +614,9 @@ class ApiService {
     }
   }
 
-  async stopQuery(): Promise<void> {
-    const response = await clientFetch('/api/query/stop', {
+  async stopQuery(chatId?: string): Promise<void> {
+    const url = chatId ? `/api/query/stop?chat_id=${encodeURIComponent(chatId)}` : '/api/query/stop';
+    const response = await clientFetch(url, {
       method: 'POST',
     });
 

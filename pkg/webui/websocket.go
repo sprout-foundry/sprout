@@ -269,7 +269,16 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, msg map[str
 }
 
 func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, msg map[string]interface{}, clientID string) {
-	clientAgent, err := ws.getClientAgent(clientID)
+	// Use the active chat's agent for provider changes.
+	activeChatID := ""
+	ws.mutex.RLock()
+	var ctx *webClientContext
+	if ctx = ws.clientContexts[clientID]; ctx != nil {
+		activeChatID = ctx.getActiveChatID()
+	}
+	ws.mutex.RUnlock()
+
+	clientAgent, err := ws.getChatAgent(clientID, activeChatID)
 	if err != nil || clientAgent == nil || clientAgent.GetConfigManager() == nil {
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
@@ -306,10 +315,11 @@ func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, msg ma
 		return
 	}
 
-	if ws.hasActiveQueryForClient(clientID) {
+	// Check active query for the active chat, not the global client
+	if ctx != nil && activeChatID != "" && ctx.hasActiveQueryForChat(activeChatID) {
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
-			"data": map[string]string{"message": "Cannot change provider while this window has an active run"},
+			"data": map[string]string{"message": "Cannot change provider while this chat has an active run"},
 		})
 		return
 	}
@@ -327,7 +337,16 @@ func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, msg ma
 }
 
 func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, msg map[string]interface{}, clientID string) {
-	clientAgent, err := ws.getClientAgent(clientID)
+	// Use the active chat's agent for model changes.
+	activeChatID := ""
+	ws.mutex.RLock()
+	var ctx *webClientContext
+	if ctx = ws.clientContexts[clientID]; ctx != nil {
+		activeChatID = ctx.getActiveChatID()
+	}
+	ws.mutex.RUnlock()
+
+	clientAgent, err := ws.getChatAgent(clientID, activeChatID)
 	if err != nil || clientAgent == nil {
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
@@ -355,10 +374,11 @@ func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, msg map[s
 		return
 	}
 
-	if ws.hasActiveQueryForClient(clientID) {
+	// Check active query for the active chat, not the global client
+	if ctx != nil && activeChatID != "" && ctx.hasActiveQueryForChat(activeChatID) {
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
-			"data": map[string]string{"message": "Cannot change model while this window has an active run"},
+			"data": map[string]string{"message": "Cannot change model while this chat has an active run"},
 		})
 		return
 	}
@@ -406,7 +426,16 @@ func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, msg map[s
 // The webui sends a { "type": "security_approval_response", "data": { "request_id": "...", "approved": true/false } }
 // message when the user approves or rejects a security warning.
 func (ws *ReactWebServer) handleSecurityApprovalResponse(safeConn *SafeConn, msg map[string]interface{}, clientID string) {
-	clientAgent, err := ws.getClientAgent(clientID)
+	// Route to the currently active chat's agent, since the security dialog
+	// is always shown in the context of the active chat view.
+	activeChatID := ""
+	ws.mutex.RLock()
+	if ctx := ws.clientContexts[clientID]; ctx != nil {
+		activeChatID = ctx.getActiveChatID()
+	}
+	ws.mutex.RUnlock()
+
+	clientAgent, err := ws.getChatAgent(clientID, activeChatID)
 	if err != nil || clientAgent == nil {
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",

@@ -120,9 +120,9 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 	}
 	ws.mutex.RUnlock()
 
-	clientAgent, err := ws.getClientAgent(clientID)
+	clientAgent, err := ws.getChatAgent(clientID, chatID)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("failed to initialize client agent: %v", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("failed to initialize chat agent: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -244,9 +244,9 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 	}
 	ws.mutex.RUnlock()
 
-	clientAgent, err := ws.getClientAgent(clientID)
+	clientAgent, err := ws.getChatAgent(clientID, chatID)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to access client agent: %v", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Failed to access chat agent: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -284,9 +284,9 @@ func (ws *ReactWebServer) handleAPIQueryStop(w http.ResponseWriter, r *http.Requ
 	}
 	ws.mutex.RUnlock()
 
-	clientAgent, err := ws.getClientAgent(clientID)
+	clientAgent, err := ws.getChatAgent(clientID, chatID)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to access client agent: %v", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Failed to access chat agent: %v", err), http.StatusInternalServerError)
 		return
 	}
 

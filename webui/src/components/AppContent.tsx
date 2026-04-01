@@ -268,6 +268,55 @@ const AppContent: React.FC<AppContentProps> = ({
     }).catch(() => {});
   }, [isConnected, apiService]);
 
+  // Persist workspace path to localStorage for Chrome tab-discard recovery.
+  // Each tab persists its own workspace so that after a discard (which
+  // clears sessionStorage and forces a new client_id), the tab can restore
+  // the correct workspace via the getTabWorkspacePath mechanism.
+  useEffect(() => {
+    if (!isConnected || !workspaceRoot) return;
+    try {
+      window.localStorage.setItem('ledit.workspaceTabPath', workspaceRoot);
+    } catch {
+      // QuotaExceededError — ignore
+    }
+  }, [isConnected, workspaceRoot]);
+
+  // On first connect, check if this is a tab-discard recovery: the workspace
+  // path saved in localStorage may differ from the server's default workspace.
+  // If the saved path exists and differs, switch to it so the user gets their
+  // workspace back even though the client_id (and thus server context) is new.
+  const workspaceRestoreAppliedRef = useRef(false);
+  useEffect(() => {
+    if (workspaceRestoreAppliedRef.current || !isConnected) {
+      return;
+    }
+    workspaceRestoreAppliedRef.current = true;
+
+    const savedPath = (() => {
+      try {
+        return window.localStorage.getItem('ledit.workspaceTabPath') || '';
+      } catch {
+        return '';
+      }
+    })();
+    if (!savedPath) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const current = await apiService.getWorkspace();
+        if (cancelled) return;
+        const currentRoot = (current.workspace_root || '').replace(/\/+$/, '');
+        const targetRoot = savedPath.replace(/\/+$/, '');
+        if (currentRoot === targetRoot) return;
+        await apiService.setWorkspace(targetRoot);
+      } catch {
+        // Best-effort — if restore fails the user can switch manually
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isConnected, apiService]);
+
   // Apply LEDIT_INITIAL_WORKSPACE on first mount (injected by SSH proxy).
   // Best-effort: if the switch fails, the user can manually switch later.
   useEffect(() => {

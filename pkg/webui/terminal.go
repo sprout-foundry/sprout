@@ -163,6 +163,10 @@ func (tm *TerminalManager) createTmuxSession(sessionID string) (*TerminalSession
 	setEnvCmd := exec.Command("tmux", "set-environment", "-t", tmuxName, "LEDIT_WEB_TERMINAL", "1")
 	_ = setEnvCmd.Run() // Best effort
 
+	// Disable tmux mouse mode so xterm.js handles its own scroll and selection.
+	mouseOffCmd := exec.Command("tmux", "set-option", "-t", tmuxName, "mouse", "off")
+	_ = mouseOffCmd.Run() // Best effort
+
 	// Now attach to the tmux session to get a PTY we can read/write
 	ctx, cancel := context.WithCancel(context.Background())
 

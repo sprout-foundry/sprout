@@ -50,7 +50,7 @@ test-integration:
 	@echo "Running integration tests..."
 	python3 integration_test_runner.py
 
-# E2E Tests - Real AI models (expensive)
+# E2E Tests - Real LLM models (expensive)
 test-e2e:
 ifndef MODEL
 	@echo "Error: MODEL is required for e2e tests"

@@ -147,9 +147,13 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 						websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 						log.Printf("WebSocket %s closed: %v", sessionID, err)
 					} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-						// If no message received in 120 seconds (2 heartbeat periods), connection is dead
-						if time.Since(lastMessage) > 120*time.Second {
-							log.Printf("WebSocket %s no activity for 120s, closing", sessionID)
+						// If no message received in 180 seconds (3 minutes), connection is dead.
+						// Chrome pauses background tabs aggressively, freezing timers and
+						// throttling network. 3 minutes gives enough time for the pong
+						// watchdog on the client side to detect the issue and proactively
+						// reconnect before the server kills the connection.
+						if time.Since(lastMessage) > 180*time.Second {
+							log.Printf("WebSocket %s no activity for 180s, closing", sessionID)
 							return
 						}
 						// Heartbeat timeout, send ping
@@ -170,6 +174,12 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 				// Update last message time on successful read (includes pong responses,
 				// which reset the dead connection timer).
 				lastMessage = time.Now()
+
+				// Touch the client context so it stays alive while the WebSocket
+				// is active. Without this, a long-lived WebSocket connection in a
+				// paused Chrome tab could have its client context garbage-collected
+				// by the idle cleanup worker because no HTTP requests arrive.
+				ws.touchClientLastSeen(clientID)
 
 				// Handle incoming WebSocket messages
 				ws.handleWebSocketMessage(safeConn, msg, clientID)
@@ -594,8 +604,12 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 			return
 
 		default:
-			// Set read deadline for heartbeat
-			conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+			// Set read deadline for heartbeat.
+			// Allows 90 seconds per individual read attempt. Chrome pauses
+			// background tabs aggressively; the freeze→resume lifecycle
+			// handlers on the client side should reconnect sooner than this,
+			// but we give extra headroom to avoid premature disconnects.
+			conn.SetReadDeadline(time.Now().Add(90 * time.Second))
 
 			var msg map[string]interface{}
 			if err := conn.ReadJSON(&msg); err != nil {

@@ -1288,19 +1288,67 @@ function App() {
 
       // Safety timer: if no query_started or query_completed event arrives
       // within 3 seconds of reconnecting, the backend likely finished the
-      // query while we were disconnected. Clear the stuck processing state.
+      // query while we were disconnected. Clear the stuck processing state
+      // and sync chat messages to recover any streamed output missed during
+      // the disconnect period.
       if (reconnectSafetyTimerRef.current) {
         clearTimeout(reconnectSafetyTimerRef.current);
       }
-      reconnectSafetyTimerRef.current = setTimeout(() => {
+      reconnectSafetyTimerRef.current = setTimeout(async () => {
         reconnectSafetyTimerRef.current = null;
-        setState(prev => {
-          if (prev.isProcessing) {
-            debugLog('[lifecycle] No query events after reconnect – clearing stuck processing state');
-            return { ...prev, isProcessing: false };
-          }
-          return prev;
+
+        // Check if processing was stuck and clear it
+        const wasStuck = await new Promise<boolean>(resolve => {
+          setState(prev => {
+            if (prev.isProcessing) {
+              debugLog('[lifecycle] No query events after reconnect – clearing stuck processing state');
+              resolve(true);
+              return { ...prev, isProcessing: false };
+            }
+            resolve(false);
+            return prev;
+          });
         });
+
+        // If processing was stuck, messages may have been streamed while
+        // disconnected. Fetch the full session from the backend to recover.
+        if (wasStuck) {
+          try {
+            const stats: any = await apiService.getStats();
+            const sessionId = stats?.session_id;
+            // session_id should always be present when a query was active
+            // (the agent is initialized before any query starts). If it's
+            // missing, the agent context may have been garbage-collected.
+            if (!sessionId) {
+              debugLog('[lifecycle] No session_id in stats after reconnect – cannot sync messages');
+              return;
+            }
+
+            const result: any = await apiService.restoreSession(sessionId);
+            if (!result?.messages || !Array.isArray(result.messages)) return;
+
+            setState(prev => {
+              // Only sync user and assistant messages — backend state includes
+              // system prompts and tool responses that should not appear in chat.
+              const backendMsgs = result.messages.filter(
+                (m: any) => m.role === 'user' || m.role === 'assistant'
+              );
+              if (backendMsgs.length <= prev.messages.length) return prev;
+              const newMsgs = backendMsgs.slice(prev.messages.length).map((msg: any, idx: number) => ({
+                id: `sync-${prev.messages.length + idx}-${Date.now()}`,
+                type: msg.role === 'user' ? 'user' : 'assistant',
+                content: msg.content || '',
+                timestamp: new Date(),
+                ...(msg.reasoning_content ? { reasoning: msg.reasoning_content } : {}),
+              }));
+              if (newMsgs.length === 0) return prev;
+              debugLog('[lifecycle] Recovered', newMsgs.length, 'messages after reconnect');
+              return { ...prev, messages: [...prev.messages, ...newMsgs] };
+            });
+          } catch (err) {
+            debugLog('[lifecycle] Failed to sync messages after reconnect:', err);
+          }
+        }
       }, 3000);
     });
 

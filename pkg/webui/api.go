@@ -126,11 +126,6 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Increment query count
-	ws.mutex.Lock()
-	ws.queryCount++
-	ws.mutex.Unlock()
-
 	// Run the query asynchronously. The web UI consumes progress and completion via WebSocket.
 	// Store CurrentQuery atomically with ActiveQuery so that stats responses
 	// include it on reconnect without a TOCTOU window.
@@ -157,11 +152,13 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 
 		if registry.IsSlashCommand(query.Query) {
 			log.Printf("handleAPIQuery: executing slash command: %s", query.Query)
-			ws.publishClientEvent(clientID, events.EventTypeQueryStarted, events.QueryStartedEvent(
+			queryEventData := events.QueryStartedEvent(
 				query.Query,
 				clientAgent.GetProvider(),
 				clientAgent.GetModel(),
-			))
+			)
+			queryEventData["chat_id"] = chatID
+			ws.publishClientEvent(clientID, events.EventTypeQueryStarted, queryEventData)
 
 			clientAgent.SetWorkspaceRoot(workspaceRoot)
 			err := registry.Execute(query.Query, clientAgent)
@@ -236,10 +233,16 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 	}
 
 	clientID := ws.resolveClientID(r)
-	if !ws.hasActiveQueryForClient(clientID) {
+	chatID := ws.resolveChatID(r, clientID)
+
+	ws.mutex.RLock()
+	ctx := ws.clientContexts[clientID]
+	if ctx == nil || !ctx.hasActiveQueryForChat(chatID) {
+		ws.mutex.RUnlock()
 		http.Error(w, "No active query to steer", http.StatusConflict)
 		return
 	}
+	ws.mutex.RUnlock()
 
 	clientAgent, err := ws.getClientAgent(clientID)
 	if err != nil {
@@ -270,10 +273,16 @@ func (ws *ReactWebServer) handleAPIQueryStop(w http.ResponseWriter, r *http.Requ
 	}
 
 	clientID := ws.resolveClientID(r)
-	if !ws.hasActiveQueryForClient(clientID) {
+	chatID := ws.resolveChatID(r, clientID)
+
+	ws.mutex.RLock()
+	ctx := ws.clientContexts[clientID]
+	if ctx == nil || !ctx.hasActiveQueryForChat(chatID) {
+		ws.mutex.RUnlock()
 		http.Error(w, "No active query to stop", http.StatusConflict)
 		return
 	}
+	ws.mutex.RUnlock()
 
 	clientAgent, err := ws.getClientAgent(clientID)
 	if err != nil {
@@ -312,11 +321,13 @@ func (ws *ReactWebServer) handleAPIStats(w http.ResponseWriter, r *http.Request)
 		stats["active_chat_id"] = ctx.getActiveChatID()
 		stats["chat_session_count"] = len(ctx.ChatSessions)
 		if cs := ctx.getChatSession(chatID); cs != nil {
+			cs.mu.Lock()
 			stats["chat_id"] = chatID
 			stats["chat_is_processing"] = cs.ActiveQuery
 			if cs.ActiveQuery && cs.CurrentQuery != "" {
 				stats["chat_current_query"] = cs.CurrentQuery
 			}
+			cs.mu.Unlock()
 		}
 	}
 	ws.mutex.Unlock()

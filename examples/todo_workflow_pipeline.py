@@ -84,25 +84,40 @@ def parse_incomplete_todos(todo_path: pathlib.Path) -> list[TodoItem]:
 
 
 def mark_todo_complete(todo_path: pathlib.Path, todo_text: str) -> None:
-    """Replace the first ``[] ... <todo_text>`` line with ``[x] ...``."""
+    """Replace the first matching ``[]`` or ``[x]`` TODO line — idempotent."""
     content = todo_path.read_text(encoding="utf-8")
     lines = content.splitlines()
 
     found = False
+    already_done = False
     new_lines: list[str] = []
     for line in lines:
         if not found:
             stripped = line.strip()
-            if stripped.startswith("[]"):
-                rest = stripped[2:].lstrip()
-                if rest.startswith("-") or rest.startswith("—"):
-                    desc = rest[1:].strip()
-                    if desc == todo_text:
-                        new_line = line.replace("[]", "[x]", 1)
-                        new_lines.append(new_line)
-                        found = True
-                        continue
+            # Match both [] (still open) and [x] (agent may have already marked it)
+            for marker in ("[]", "[x]", "[X]"):
+                if stripped.startswith(marker):
+                    rest = stripped[len(marker):].lstrip()
+                    if rest.startswith("-") or rest.startswith("—"):
+                        desc = rest[1:].strip()
+                        prefix_len = min(len(desc), len(todo_text), 40)
+                        if (
+                            desc == todo_text
+                            or desc[:prefix_len] == todo_text[:prefix_len]
+                        ):
+                            if marker in ("[x]", "[X]"):
+                                already_done = True
+                            else:
+                                new_line = line.replace("[]", "[x]", 1)
+                                new_lines.append(new_line)
+                            found = True
+                            continue
+                    break
         new_lines.append(line)
+
+    if already_done:
+        _log(f"Already marked complete: {todo_text}")
+        return
 
     if not found:
         raise ValueError(f"Could not find TODO item matching: {todo_text!r}")

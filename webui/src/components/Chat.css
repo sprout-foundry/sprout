@@ -1,10 +1,3 @@
-.chat-with-tab-bar {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden;
-}
-
 .chat-shell {
   --chat-input-height: 0px;
   display: flex;

@@ -131,20 +131,37 @@ def mark_todo_complete(todo_path: pathlib.Path, todo_text: str) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _replace_in_obj(
+    obj: object,
+    placeholder: str,
+    replacement: str,
+) -> object:
+    """Recursively replace *placeholder* in all string values of a JSON-like object."""
+    if isinstance(obj, str):
+        return obj.replace(placeholder, replacement)
+    if isinstance(obj, dict):
+        return {k: _replace_in_obj(v, placeholder, replacement) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_replace_in_obj(item, placeholder, replacement) for item in obj]
+    return obj
+
+
 def build_templated_workflow(
     workflow_config_path: pathlib.Path,
     todo_text: str,
 ) -> pathlib.Path:
     """Read the workflow JSON, replace ``{TODO_TEXT}``, write a temp copy."""
     workflow = json.loads(workflow_config_path.read_text(encoding="utf-8"))
-    workflow_str = json.dumps(workflow)
+    workflow_str_before = json.dumps(workflow)
 
-    if PLACEHOLDER not in workflow_str:
+    if PLACEHOLDER not in workflow_str_before:
         raise ValueError(
             f"Workflow config does not contain {PLACEHOLDER!r} placeholder"
         )
 
-    workflow_str = workflow_str.replace(PLACEHOLDER, todo_text)
+    workflow = _replace_in_obj(workflow, PLACEHOLDER, todo_text)
+    workflow_str = json.dumps(workflow)
+
     tmp = tempfile.NamedTemporaryFile(
         mode="w",
         suffix=".json",

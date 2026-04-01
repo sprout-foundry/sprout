@@ -1212,6 +1212,13 @@ func (ws *ReactWebServer) startFixReviewJob(reviewOutput, clientID string) (*git
 		model = strings.TrimSpace(agentInst.GetModel())
 		workspaceRoot = agentInst.GetWorkspaceRoot()
 	}
+	// Fallback: if getClientAgent failed or returned empty workspace root,
+	// resolve from the client context directly.
+	if strings.TrimSpace(workspaceRoot) == "" {
+		if clientCtx := ws.getOrCreateClientContext(clientID); clientCtx != nil {
+			workspaceRoot = clientCtx.WorkspaceRoot
+		}
+	}
 
 	jobID := generateCryptoID("rfx")
 	sessionID := generateCryptoID("rfxs")
@@ -1256,10 +1263,14 @@ func (ws *ReactWebServer) runFixReviewJob(job *gitFixReviewJob, prompt, provider
 	// from getClientAgent / regular chat).
 	workspaceRoot = strings.TrimSpace(workspaceRoot)
 
+	if workspaceRoot == "" {
+		job.setError("No workspace root resolved; cannot run fix review in daemon mode. " +
+			"Ensure the browser has set a workspace before triggering fix review.")
+		return
+	}
+
 	err := ws.withAgentWorkspace(workspaceRoot, func() error {
-		if workspaceRoot != "" {
-			job.appendLog(fmt.Sprintf("Changed CWD to workspace: %s", workspaceRoot))
-		}
+		job.appendLog(fmt.Sprintf("Changed CWD to workspace: %s", workspaceRoot))
 
 		reviewAgent, agentErr := agent.NewAgentWithModel("")
 		if agentErr != nil {
@@ -1268,9 +1279,7 @@ func (ws *ReactWebServer) runFixReviewJob(job *gitFixReviewJob, prompt, provider
 		}
 		defer reviewAgent.Shutdown()
 
-		if workspaceRoot != "" {
-			reviewAgent.SetWorkspaceRoot(workspaceRoot)
-		}
+		reviewAgent.SetWorkspaceRoot(workspaceRoot)
 
 		reviewAgent.SetSessionID(job.SessionID)
 		if p := strings.TrimSpace(provider); p != "" {

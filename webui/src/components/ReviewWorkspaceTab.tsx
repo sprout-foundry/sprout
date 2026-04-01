@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useState, useEffect } from 'react';
+import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import { ShieldCheck, Loader2, Wrench } from 'lucide-react';
 import MessageSegments from './MessageSegments';
 import MessageBubble from './MessageBubble';
@@ -6,6 +6,7 @@ import MessageContent from './MessageContent';
 import InlinePillRow, { type InlinePillItem } from './InlinePillRow';
 import { parseReviewGuidance, reviewGuidanceToMarkdown } from '../utils/reviewFormatting';
 import { stripAnsiCodes } from '../utils/ansi';
+import { showThemedConfirm } from './ThemedDialog';
 
 interface DeepReviewResult {
   message: string;
@@ -30,6 +31,17 @@ interface ReviewWorkspaceTabProps {
   onFixFromReview: (options?: { fixPrompt?: string; selectedItems?: string[] }) => void;
 }
 
+/** Returns a CSS tone class based on review guidance section severity */
+const getSectionToneClass = (sectionId: string): string => {
+  switch (sectionId.toUpperCase()) {
+    case 'MUST_FIX': return 'tone-danger';
+    case 'SHOULD_FIX': return 'tone-warning';
+    case 'VERIFY': return 'tone-info';
+    case 'SUGGEST': return 'tone-neutral';
+    default: return '';
+  }
+};
+
 const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
   review,
   reviewError,
@@ -42,6 +54,10 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
 }) => {
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
   const [fixPrompt, setFixPrompt] = useState('');
+  const [fixPromptExpanded, setFixPromptExpanded] = useState(false);
+
+  // Refs for section checkboxes to set indeterminate state
+  const sectionCheckboxRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const parsedDetailedGuidance = useMemo(
     () => parseReviewGuidance(review?.detailed_guidance || ''),
@@ -80,7 +96,22 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
   useEffect(() => {
     setCheckedItems(new Set());
     setFixPrompt('');
+    setFixPromptExpanded(false);
   }, [review]);
+
+  const totalItems = useMemo(
+    () => parsedDetailedGuidance.sections.reduce((acc, s) => acc + s.entries.length, 0),
+    [parsedDetailedGuidance.sections]
+  );
+  const selectedCount = checkedItems.size;
+
+  // Auto-expand the fix prompt area when items are selected
+  useEffect(() => {
+    if (selectedCount > 0 && !fixPromptExpanded) {
+      setFixPromptExpanded(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally not including fixPromptExpanded to avoid loop
+  }, [selectedCount]);
 
   const handleToggleItem = useCallback((key: string) => {
     setCheckedItems((prev) => {
@@ -107,11 +138,66 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
     }
   }, [parsedDetailedGuidance.sections, checkedItems]);
 
-  const totalItems = useMemo(
-    () => parsedDetailedGuidance.sections.reduce((acc, s) => acc + s.entries.length, 0),
-    [parsedDetailedGuidance.sections]
-  );
-  const selectedCount = checkedItems.size;
+  const handleSectionToggle = useCallback((sectionId: string, entriesCount: number, shiftKey: boolean) => {
+    if (entriesCount === 0) return;
+    const sectionKeys: string[] = [];
+    for (let i = 0; i < entriesCount; i++) {
+      sectionKeys.push(`${sectionId}:${i}`);
+    }
+
+    // Shift+Click: select ONLY this section (deselect all others)
+    if (shiftKey) {
+      const allKeys: string[] = [];
+      parsedDetailedGuidance.sections.forEach((section) => {
+        section.entries.forEach((_, idx) => {
+          allKeys.push(`${section.id}:${idx}`);
+        });
+      });
+
+      // If all items in this section are already the only checked items, deselect everything
+      const onlyThisSectionSelected = allKeys.length === sectionKeys.length
+        ? true
+        : allKeys.every((k) => !checkedItems.has(k) || sectionKeys.includes(k));
+
+      if (onlyThisSectionSelected && sectionKeys.every((k) => checkedItems.has(k))) {
+        setCheckedItems(new Set());
+      } else {
+        // Only select items from this section
+        setCheckedItems(new Set(sectionKeys));
+      }
+      return;
+    }
+
+    // Normal click: toggle this section
+    const allSectionChecked = sectionKeys.every((key) => checkedItems.has(key));
+    if (allSectionChecked) {
+      // Deselect all in this section
+      setCheckedItems((prev) => {
+        const next = new Set(prev);
+        sectionKeys.forEach((k) => next.delete(k));
+        return next;
+      });
+    } else {
+      // Select all in this section
+      setCheckedItems((prev) => {
+        const next = new Set(prev);
+        sectionKeys.forEach((k) => next.add(k));
+        return next;
+      });
+    }
+  }, [parsedDetailedGuidance.sections, checkedItems]);
+
+  // Set indeterminate state on section checkboxes after render
+  useEffect(() => {
+    parsedDetailedGuidance.sections.forEach((section) => {
+      const el = sectionCheckboxRefs.current[section.id];
+      if (!el) return;
+      const keys: string[] = [];
+      section.entries.forEach((_, idx) => keys.push(`${section.id}:${idx}`));
+      const checked = keys.filter((k) => checkedItems.has(k)).length;
+      el.indeterminate = checked > 0 && checked < keys.length;
+    });
+  }, [checkedItems, parsedDetailedGuidance.sections]);
 
   const collectSelectedItems = useCallback((): string[] => {
     const items: string[] = [];
@@ -130,14 +216,36 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
     return items;
   }, [parsedDetailedGuidance.sections, checkedItems]);
 
-  const handleFixClick = useCallback(() => {
-    const opts: { fixPrompt?: string; selectedItems?: string[] } = {};
-    const trimmedPrompt = fixPrompt.trim();
-    if (trimmedPrompt) opts.fixPrompt = trimmedPrompt;
-    const items = collectSelectedItems();
-    if (items.length > 0) opts.selectedItems = items;
-    onFixFromReview(opts);
-  }, [fixPrompt, collectSelectedItems, onFixFromReview]);
+  const handleFixClick = useCallback(async () => {
+    try {
+      // If no items are selected, warn the user that ALL items will be fixed
+      if (selectedCount === 0 && totalItems > 0) {
+        const confirmed = await showThemedConfirm(
+          `No items are selected. This will fix ALL ${totalItems} items from the review.\n\nContinue?`,
+          { title: 'Fix All Items', type: 'warning' }
+        );
+        if (!confirmed) return;
+      }
+
+      const opts: { fixPrompt?: string; selectedItems?: string[] } = {};
+      const trimmedPrompt = fixPrompt.trim();
+      if (trimmedPrompt) opts.fixPrompt = trimmedPrompt;
+      const items = collectSelectedItems();
+      if (items.length > 0) opts.selectedItems = items;
+      onFixFromReview(opts);
+    } catch {
+      // Swallow unexpected errors from showThemedConfirm or onFixFromReview
+      // — major failures are handled internally by those functions
+    }
+  }, [fixPrompt, collectSelectedItems, onFixFromReview, selectedCount, totalItems]);
+
+  const getSectionCheckedCount = useCallback((sectionId: string, entriesCount: number): number => {
+    let count = 0;
+    for (let i = 0; i < entriesCount; i++) {
+      if (checkedItems.has(`${sectionId}:${i}`)) count++;
+    }
+    return count;
+  }, [checkedItems]);
 
   return (
     <div className="chat-shell review-workspace-shell">
@@ -202,67 +310,95 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
                 >
                   {parsedDetailedGuidance.sections.length > 0 ? (
                     <div className="review-guidance-groups">
-                      {parsedDetailedGuidance.sections.map((section) => (
-                        <section key={section.id} className="review-guidance-section">
-                          <div className="review-guidance-header">
-                            <h4>{section.title}</h4>
-                            <span>{section.entries.length} item{section.entries.length === 1 ? '' : 's'}</span>
-                          </div>
-                          <div className="review-guidance-list">
-                            {section.entries.map((entry, index) => (
-                              <article key={`${section.id}-${index}`} className="review-guidance-card">
-                                <div className="review-guidance-card-top">
-                                  <label className="review-guidance-checkbox-label">
-                                    <input
-                                      type="checkbox"
-                                      checked={checkedItems.has(`${section.id}:${index}`)}
-                                      onChange={() => handleToggleItem(`${section.id}:${index}`)}
-                                      disabled={isReviewFixing}
-                                    />
-                                  </label>
-                                  <div className="review-guidance-card-body">
-                                    <h5>{entry.issue}</h5>
-                                    {entry.file ? (
-                                      <div className="review-guidance-row">
-                                        <span className="review-guidance-label">File</span>
-                                        <code>{entry.file}</code>
-                                      </div>
-                                    ) : null}
-                                    {entry.evidence ? (
-                                      <div className="review-guidance-row">
-                                        <span className="review-guidance-label">Evidence</span>
-                                        <div className="review-guidance-copy">
-                                          <MessageContent content={entry.evidence} />
+                      {parsedDetailedGuidance.sections.map((section) => {
+                        const toneClass = getSectionToneClass(section.id);
+                        const sectionCount = getSectionCheckedCount(section.id, section.entries.length);
+                        const allChecked = section.entries.length > 0 && sectionCount === section.entries.length;
+                        const noneChecked = sectionCount === 0;
+
+                        return (
+                          <section key={section.id} className={`review-guidance-section ${toneClass}`}>
+                            <div className="review-guidance-header">
+                              <label className="review-guidance-section-checkbox-label">
+                                <input
+                                  ref={(el) => { sectionCheckboxRefs.current[section.id] = el; }}
+                                  type="checkbox"
+                                  checked={allChecked}
+                                  onChange={() => handleSectionToggle(section.id, section.entries.length, false)}
+                                  onClick={(e) => {
+                                    if (e.shiftKey) {
+                                      e.preventDefault();
+                                      handleSectionToggle(section.id, section.entries.length, true);
+                                    }
+                                  }}
+                                  disabled={isReviewFixing || section.entries.length === 0}
+                                  title={section.entries.length === 0 ? 'No items in this section' : `Select/deselect all ${section.entries.length} items in ${section.title}${allChecked ? ' (Shift+Click to select only this section)' : ''}`}
+                                />
+                              </label>
+                              <h4>{section.title}</h4>
+                              <span>
+                                {sectionCount > 0 && !noneChecked
+                                  ? `${sectionCount} of ${section.entries.length} items`
+                                  : `${section.entries.length} item${section.entries.length === 1 ? '' : 's'}`}
+                              </span>
+                            </div>
+                            <div className="review-guidance-list">
+                              {section.entries.map((entry, index) => (
+                                <article key={`${section.id}-${index}`} className={`review-guidance-card ${toneClass}`}>
+                                  <div className="review-guidance-card-top">
+                                    <label className="review-guidance-checkbox-label">
+                                      <input
+                                        type="checkbox"
+                                        checked={checkedItems.has(`${section.id}:${index}`)}
+                                        onChange={() => handleToggleItem(`${section.id}:${index}`)}
+                                        disabled={isReviewFixing}
+                                        aria-label={`Select: ${entry.issue}`}
+                                      />
+                                    </label>
+                                    <div className="review-guidance-card-body">
+                                      <h5>{entry.issue}</h5>
+                                      {entry.file ? (
+                                        <div className="review-guidance-row">
+                                          <span className="review-guidance-label">File</span>
+                                          <code>{entry.file}</code>
                                         </div>
-                                      </div>
-                                    ) : null}
-                                    {entry.suggestion ? (
-                                      <div className="review-guidance-row">
-                                        <span className="review-guidance-label">Next Step</span>
-                                        <div className="review-guidance-copy">
-                                          <MessageContent content={entry.suggestion} />
-                                        </div>
-                                      </div>
-                                    ) : null}
-                                    {Object.entries(entry)
-                                      .filter(([key, value]) => !['issue', 'file', 'evidence', 'suggestion'].includes(key) && typeof value === 'string' && value.trim())
-                                      .map(([key, value]) => (
-                                        <div key={key} className="review-guidance-row">
-                                          <span className="review-guidance-label">
-                                            {key.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())}
-                                          </span>
+                                      ) : null}
+                                      {entry.evidence ? (
+                                        <div className="review-guidance-row">
+                                          <span className="review-guidance-label">Evidence</span>
                                           <div className="review-guidance-copy">
-                                            <MessageContent content={String(value)} />
+                                            <MessageContent content={entry.evidence} />
                                           </div>
                                         </div>
-                                      ))}
+                                      ) : null}
+                                      {entry.suggestion ? (
+                                        <div className="review-guidance-row">
+                                          <span className="review-guidance-label">Next Step</span>
+                                          <div className="review-guidance-copy">
+                                            <MessageContent content={entry.suggestion} />
+                                          </div>
+                                        </div>
+                                      ) : null}
+                                      {Object.entries(entry)
+                                        .filter(([key, value]) => !['issue', 'file', 'evidence', 'suggestion'].includes(key) && typeof value === 'string' && value.trim())
+                                        .map(([key, value]) => (
+                                          <div key={key} className="review-guidance-row">
+                                            <span className="review-guidance-label">
+                                              {key.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())}
+                                            </span>
+                                            <div className="review-guidance-copy">
+                                              <MessageContent content={String(value)} />
+                                            </div>
+                                          </div>
+                                        ))}
+                                    </div>
                                   </div>
-                                </div>
-                              </article>
-                            ))}
-                          </div>
-                        </section>
-                      ))}
+                                </article>
+                              ))}
+                            </div>
+                          </section>
+                        );
+                      })}
                     </div>
                   ) : (
                     <MessageSegments content={detailedGuidanceMarkdown} />
@@ -344,19 +480,31 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
 
       {review && (
         <div className="review-fix-prompt-section">
-          <details className="review-fix-prompt-details">
-            <summary className="review-fix-prompt-summary">
-              <span>Add fix instructions (optional)</span>
-            </summary>
-            <textarea
-              className="review-fix-prompt-textarea"
-              placeholder="E.g. Focus only on the error handling issues, skip the naming suggestions..."
-              value={fixPrompt}
-              onChange={(e) => setFixPrompt(e.target.value)}
-              disabled={isReviewFixing}
-              rows={3}
-            />
-          </details>
+          <button
+            className="review-fix-prompt-toggle"
+            onClick={() => setFixPromptExpanded(!fixPromptExpanded)}
+            disabled={isReviewFixing}
+            aria-expanded={fixPromptExpanded}
+          >
+            <span>{fixPromptExpanded ? '▼' : '▶'}</span>
+            <span>Add fix instructions (optional)</span>
+            {selectedCount > 0 && <span className="review-fix-prompt-hint">{selectedCount} item{selectedCount !== 1 ? 's' : ''} selected</span>}
+          </button>
+          {fixPromptExpanded && (
+            <>
+              <div className="review-fix-prompt-hint-row">
+                <span>Instructions here will guide the fix alongside the selected review items.</span>
+              </div>
+              <textarea
+                className="review-fix-prompt-textarea"
+                placeholder="E.g. Focus only on the error handling issues, skip the naming suggestions..."
+                value={fixPrompt}
+                onChange={(e) => setFixPrompt(e.target.value)}
+                disabled={isReviewFixing}
+                rows={3}
+              />
+            </>
+          )}
         </div>
       )}
       <div className="input-container review-actions-bar">
@@ -365,7 +513,7 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
             className="review-fix-btn review-fix-select-all-btn"
             onClick={handleSelectAll}
             disabled={isReviewFixing || isReviewLoading}
-            title={selectedCount === totalItems ? 'Deselect all items' : 'Select all items'}
+            title={selectedCount === totalItems ? 'Deselect all items' : 'Select all items (Shift+Click a section to select only that section)'}
           >
             {selectedCount === totalItems ? 'Deselect All' : 'Select All'}
           </button>

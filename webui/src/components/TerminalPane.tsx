@@ -46,6 +46,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     const resizeTimerRef = useRef<number | null>(null);
     const paneConnectedRef = useRef(false);
     const onConnectionChangeRef = useRef(onConnectionChange);
+    const lastHiddenTimeRef = useRef<number>(Date.now());
 
     // Keep refs in sync so event handlers always have the current value
     useEffect(() => {
@@ -222,8 +223,21 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       // Reconnect terminal WS when tab becomes visible after being backgrounded.
       // Browsers throttle timers in background tabs, killing WebSocket connections.
       const handleTerminalVisibility = () => {
-        if (!document.hidden && isActive && !paneConnectedRef.current && terminalWSRef.current) {
-          debugLog('[terminal:visibility] Tab visible, reconnecting terminal WS');
+        if (document.hidden) {
+          lastHiddenTimeRef.current = Date.now();
+          return;
+        }
+        // Tab became visible
+        if (!isActive || !terminalWSRef.current) return;
+
+        const hiddenDuration = Date.now() - lastHiddenTimeRef.current;
+        // Reconnect if: (a) not connected at all, or (b) was hidden for more
+        // than 30s. Chrome throttles timers in background tabs, so after 30s
+        // the ping interval may have been skipped and the connection could be
+        // half-open even though readyState still says OPEN.
+        if (hiddenDuration > 30000 || !paneConnectedRef.current) {
+          debugLog('[terminal:visibility] Tab visible, reconnecting terminal WS',
+            hiddenDuration > 30000 ? `(hidden for ${Math.round(hiddenDuration / 1000)}s, forcing reconnect)` : '');
           terminalWSRef.current.resetAndReconnect();
         }
       };

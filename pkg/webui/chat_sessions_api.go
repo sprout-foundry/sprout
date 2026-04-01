@@ -344,32 +344,21 @@ func (ws *ReactWebServer) handleAPIChatSessionsSwitch(w http.ResponseWriter, r *
 		return
 	}
 
-	// Refuse to switch if the CURRENTLY ACTIVE chat has a running query.
-	// All chats share a single agent instance, so switching mid-query would
-	// corrupt agent state and cause events to be routed to the wrong chat.
-	currentActiveID := ctx.getActiveChatID()
-	if currentChat := ctx.getChatSession(currentActiveID); currentChat != nil {
-		currentChat.mu.Lock()
-		isQuerying := currentChat.ActiveQuery
-		currentChat.mu.Unlock()
-		if isQuerying && currentActiveID != chatID {
-			ws.mutex.Unlock()
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusConflict)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": "Cannot switch chat while a query is active. Wait for the query to complete.",
-				"code":  "query_in_progress",
-			})
-			return
-		}
-	}
-
-	// Update the active chat ID
+	// Update the active chat ID.
+	// No need to block on active queries — each chat has its own agent, so
+	// switching is safe at any time.
 	ctx.DefaultChatID = chatID
 
+	// Point the client-level Agent reference at the active chat's agent for
+	// backward compatibility with code paths that use getClientAgent.
+	cs.mu.Lock()
+	if cs.Agent != nil {
+		ctx.Agent = cs.Agent
+	} else {
+		ctx.Agent = nil
+	}
 	// Sync the top-level agent state to match the active chat session for
 	// backward compatibility with code that reads ctx.AgentState.
-	cs.mu.Lock()
 	snapshot := cs.AgentState
 	if len(snapshot) == 0 {
 		snapshot = emptyAgentStateSnapshot()
@@ -379,22 +368,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsSwitch(w http.ResponseWriter, r *
 
 	ctx.AgentState = append([]byte(nil), snapshot...)
 	ctx.CurrentSessionID = currentSessionID
-
-	// Also update the live agent if one exists for this client, so that
-	// subsequent queries use the switched chat's state.
-	if ctx.Agent != nil {
-		// We'll import state outside the lock to avoid holding ws.mutex while
-		// the agent does potentially slow JSON deserialization.
-		agentInst := ctx.Agent
-		snapshotCopy := append([]byte(nil), snapshot...)
-		ws.mutex.Unlock()
-
-		if err := agentInst.ImportState(snapshotCopy); err != nil {
-			log.Printf("handleAPIChatSessionsSwitch: warning: failed to import state into agent: %v", err)
-		}
-	} else {
-		ws.mutex.Unlock()
-	}
+	ws.mutex.Unlock()
 
 	log.Printf("handleAPIChatSessionsSwitch: switched to chat session %s for client %s", chatID, clientID)
 
@@ -431,29 +405,8 @@ func (ws *ReactWebServer) handleAPIChatSessionsCompact(w http.ResponseWriter, r 
 		chatID = ws.resolveChatID(r, clientID)
 	}
 
-	// Sync state for this chat session
-	// Refuse to compact a non-active chat — the agent instance holds state
-	// for the active chat only. Compacting a different chat would overwrite
-	// its state with the active chat's state.
-	ws.mutex.RLock()
-	ctx := ws.clientContexts[clientID]
-	var activeID string
-	if ctx != nil {
-		activeID = ctx.getActiveChatID()
-	}
-	ws.mutex.RUnlock()
-
-	if chatID != "" && activeID != "" && chatID != activeID {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"error": "Cannot compact a non-active chat session. Switch to that chat first.",
-			"code":  "cannot_compact_non_active",
-			"id":    chatID,
-		})
-		return
-	}
-
+	// Sync state for this chat session. Each chat has its own agent, so we
+	// can compact any chat (not just the active one).
 	if err := ws.syncAgentStateForClientWithChat(clientID, chatID); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to sync chat state: %v", err), http.StatusInternalServerError)
 		return
@@ -473,7 +426,29 @@ func (ws *ReactWebServer) syncAgentStateForClientWithChat(clientID, chatID strin
 	if clientID == "" {
 		clientID = defaultWebClientID
 	}
+	if chatID == "" {
+		chatID = defaultChatID
+	}
 
+	// Try to get the chat-specific agent first.
+	chatAgent, err := ws.getChatAgent(clientID, chatID)
+	if err == nil && chatAgent != nil {
+		snapshot, exportErr := chatAgent.ExportState()
+		if exportErr != nil {
+			return exportErr
+		}
+		ws.mutex.Lock()
+		defer ws.mutex.Unlock()
+		ctx := ws.getOrCreateClientContextLocked(clientID)
+		ctx.setChatSessionState(chatID, snapshot)
+		ctx.LastSeenAt = time.Now()
+		if clientID == defaultWebClientID {
+			ws.workspaceRoot = ctx.WorkspaceRoot
+		}
+		return nil
+	}
+
+	// Fallback to client-level agent (e.g. chat sessions not initialized).
 	agentInst, err := ws.getClientAgent(clientID)
 	if err != nil {
 		return err

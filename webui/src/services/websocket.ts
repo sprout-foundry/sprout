@@ -74,11 +74,6 @@ class WebSocketService {
   }
 
   connect() {
-    // Reset reconnect attempts to allow fresh reconnection cycle.
-    // This ensures that calling connect() after a prior disconnect()
-    // (which sets reconnectAttempts to maxReconnectAttempts to prevent
-    // auto-reconnect) will allow auto-reconnect to work again.
-    this.reconnectAttempts = 0;
     // Explicitly reset intentional close flag when the application
     // requests a new connection, so auto-reconnect works after connect().
     this.intentionalClose = false;
@@ -144,11 +139,6 @@ class WebSocketService {
 
     this.ws.onerror = (error) => {
       console.error('WebSocket error:', error);
-      // If connection fails immediately, stop trying to reconnect
-      if (this.reconnectAttempts === 0) {
-        debugLog('WebSocket failed to connect, will not retry');
-        this.reconnectAttempts = this.maxReconnectAttempts;
-      }
     };
 
     this.ws.onmessage = (event) => {

@@ -9,11 +9,9 @@ import React, {
 import { X, TriangleAlert } from 'lucide-react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import { ClipboardAddon } from '@xterm/addon-clipboard';
 import '@xterm/xterm/css/xterm.css';
 import { TerminalWebSocketService } from '../services/terminalWebSocket';
 import { useTheme } from '../contexts/ThemeContext';
-import { debugLog } from '../utils/log';
 
 export interface TerminalPaneHandle {
   clear: () => void;
@@ -45,15 +43,6 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     const terminalWSRef = useRef<TerminalWebSocketService | null>(null);
     const eventHandlerRef = useRef<((event: any) => void) | null>(null);
     const resizeTimerRef = useRef<number | null>(null);
-    const paneConnectedRef = useRef(false);
-    const onConnectionChangeRef = useRef(onConnectionChange);
-    const lastHiddenTimeRef = useRef<number>(Date.now());
-
-    // Keep refs in sync so event handlers always have the current value
-    useEffect(() => {
-      paneConnectedRef.current = paneConnected;
-      onConnectionChangeRef.current = onConnectionChange;
-    }, [paneConnected, onConnectionChange]);
 
     const getTerminalTheme = useCallback(() => {
       return {
@@ -93,11 +82,11 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     }, []);
 
     const sendResize = useCallback(() => {
-      if (!paneConnectedRef.current || !terminalWSRef.current || !xtermRef.current || !fitAddonRef.current)
+      if (!paneConnected || !terminalWSRef.current || !xtermRef.current || !fitAddonRef.current)
         return;
       fitAddonRef.current.fit();
       terminalWSRef.current.sendResize(xtermRef.current.cols, xtermRef.current.rows);
-    }, []);
+    }, [paneConnected]);
 
     // Expose clear / focus to parent via ref
     useImperativeHandle(ref, () => ({
@@ -121,27 +110,8 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         theme: getTerminalTheme(),
       });
 
-      // Safety net: prevent browser DevTools from opening on Ctrl+Shift+C /
-      // Cmd+Shift+C when the terminal has focus.  Without this the browser
-      // may process the shortcut before xterm does, opening the element
-      // inspector instead of copying.  Same treatment for Ctrl+Shift+V /
-      // Cmd+Shift+V (paste).
-      term.attachCustomKeyEventHandler((event: KeyboardEvent): boolean => {
-        if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'c') {
-          return true;
-        }
-        if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'v') {
-          return true;
-        }
-        return false;
-      });
-
       const fitAddon = new FitAddon();
       term.loadAddon(fitAddon);
-
-      const clipboardAddon = new ClipboardAddon();
-      term.loadAddon(clipboardAddon);
-
       term.open(xtermContainerRef.current);
 
       xtermRef.current = term;
@@ -177,7 +147,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
 
     // Manage WebSocket connection lifecycle
     useEffect(() => {
-      if (!isActive) {
+      if (!isActive || !isConnected) {
         if (eventHandlerRef.current && terminalWSRef.current) {
           terminalWSRef.current.removeEvent(eventHandlerRef.current);
           terminalWSRef.current.disconnect();
@@ -185,46 +155,24 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         eventHandlerRef.current = null;
         terminalWSRef.current = null;
         setPaneConnected(false);
-        onConnectionChangeRef.current?.(false);
+        onConnectionChange?.(false);
         return;
       }
 
-      // Connect regardless of main WS state - terminal has its own independent connection
+      // Each pane gets its own independent WebSocket connection / PTY session
       const service = TerminalWebSocketService.createInstance();
-      // Restore persisted terminal session ID for reattach after tab discard
-      service.restorePersistedSessionId();
       terminalWSRef.current = service;
 
       const handler = (event: any) => {
         if (event.type === 'connection_status') {
           if (!event.data.connected) {
             setPaneConnected(false);
-            onConnectionChangeRef.current?.(false);
-            if (event.data.reattach) {
-              // Will auto-reattach - show softer message
-              xtermRef.current?.writeln('\r\x1b[33m⏳ Reconnecting to terminal session...\x1b[0m');
-            } else {
-              xtermRef.current?.writeln('\r\nTerminal disconnected');
-            }
+            onConnectionChange?.(false);
+            xtermRef.current?.writeln('\r\nTerminal disconnected');
           }
         } else if (event.type === 'session_ready') {
           setPaneConnected(true);
-          onConnectionChangeRef.current?.(true);
-          requestAnimationFrame(() => {
-            sendResize();
-            xtermRef.current?.focus();
-          });
-        } else if (event.type === 'session_restored') {
-          // Reattached to existing tmux session - display scrollback
-          const scrollback = event.data.scrollback || '';
-          if (xtermRef.current) {
-            xtermRef.current.clear();
-            if (scrollback) {
-              xtermRef.current.write(scrollback);
-            }
-          }
-          setPaneConnected(true);
-          onConnectionChangeRef.current?.(true);
+          onConnectionChange?.(true);
           requestAnimationFrame(() => {
             sendResize();
             xtermRef.current?.focus();
@@ -240,74 +188,13 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       service.onEvent(handler);
       service.connect();
 
-      // Reconnect terminal WS when tab becomes visible after being backgrounded.
-      // Browsers throttle timers in background tabs, killing WebSocket connections.
-      const handleTerminalVisibility = () => {
-        if (document.hidden) {
-          lastHiddenTimeRef.current = Date.now();
-          return;
-        }
-        // Tab became visible
-        if (!isActive || !terminalWSRef.current) return;
-
-        const hiddenDuration = Date.now() - lastHiddenTimeRef.current;
-        // Reconnect if: (a) not connected at all, or (b) was hidden for more
-        // than 30s. Chrome throttles timers in background tabs, so after 30s
-        // the ping interval may have been skipped and the connection could be
-        // half-open even though readyState still says OPEN.
-        if (hiddenDuration > 30000 || !paneConnectedRef.current) {
-          debugLog('[terminal:visibility] Tab visible, reconnecting terminal WS',
-            hiddenDuration > 30000 ? `(hidden for ${Math.round(hiddenDuration / 1000)}s, forcing reconnect)` : '');
-          terminalWSRef.current.resetAndReconnect();
-        }
-      };
-      document.addEventListener('visibilitychange', handleTerminalVisibility);
-
-      // Page lifecycle: freeze/resume for terminal WebSocket.
-      // When Chrome freezes a background tab, WebSocket timers are completely
-      // suspended and the connection may die silently. Proactively closing the
-      // socket gives the server a clean close frame so it can detach from the
-      // tmux session. On resume, we reconnect and reattach using the persisted
-      // session ID (preserved by freeze()).
-      const handleTerminalFreeze = () => {
-        if (terminalWSRef.current) {
-          debugLog('[terminal:lifecycle] Page freezing, proactively disconnecting terminal WS');
-          terminalWSRef.current.freeze();
-        }
-      };
-      const handleTerminalResume = () => {
-        // terminalWSRef.current is only set while the pane is active
-        if (terminalWSRef.current) {
-          debugLog('[terminal:lifecycle] Page resumed from freeze, reconnecting terminal WS');
-          terminalWSRef.current.resume();
-        }
-      };
-      document.addEventListener('freeze', handleTerminalFreeze);
-      document.addEventListener('resume', handleTerminalResume);
-
-      // pageshow: detect bfcache restore and tab-discard recovery.
-      // Chrome can restore a frozen/discarded tab from the back-forward cache
-      // without firing visibilitychange or resume events.
-      const handleTerminalPageShow = (event: PageTransitionEvent) => {
-        if (event.persisted && terminalWSRef.current) {
-          debugLog('[terminal:lifecycle] Page restored from bfcache, reconnecting terminal WS');
-          terminalWSRef.current.resetAndReconnect();
-        }
-      };
-      window.addEventListener('pageshow', handleTerminalPageShow);
-
       return () => {
-        document.removeEventListener('visibilitychange', handleTerminalVisibility);
-        document.removeEventListener('freeze', handleTerminalFreeze);
-        document.removeEventListener('resume', handleTerminalResume);
-        window.removeEventListener('pageshow', handleTerminalPageShow);
-
         service.removeEvent(handler);
         service.disconnect();
         terminalWSRef.current = null;
         eventHandlerRef.current = null;
       };
-    }, [isActive]);
+    }, [isActive, isConnected, sendResize, onConnectionChange]);
 
     // Resize observer
     useEffect(() => {
@@ -362,7 +249,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         {!paneConnected && (
           <div className="terminal-status-inline">
             <TriangleAlert size={14} className="inline-block mr-1 align-text-bottom" />
-            Backend not connected. Start with: <code>./ledit agent</code>
+            Backend not connected. Start with: <code>./ledit agent --web-port 54421</code>
           </div>
         )}
       </div>

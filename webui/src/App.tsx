@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import ErrorBoundary from './components/ErrorBoundary';
 import AppContent from './components/AppContent';
 import UIManager from './components/UIManager';
-import SecurityApprovalDialog from './components/SecurityApprovalDialog';
 import { EditorManagerProvider } from './contexts/EditorManagerContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { HotkeyProvider } from './contexts/HotkeyContext';
@@ -12,10 +11,6 @@ import { ApiService, OnboardingEnvironment, OnboardingProviderOption } from './s
 import { clientFetch, getWebUIClientId } from './services/clientSession';
 import { ensureCompletedAssistantMessage } from './utils/chatCompletion';
 import { debugLog } from './utils/log';
-import { listChatSessions, createChatSession, deleteChatSession, renameChatSession, switchChatSession } from './services/chatSessions';
-import type { ChatSession } from './services/chatSessions';
-
-let _lastWorkspaceReloadTime = 0;
 
 // Service Worker Registration
 const registerServiceWorker = async () => {
@@ -95,14 +90,6 @@ interface AppState {
     linesDeleted?: number;
   }>;
   subagentActivities: SubagentActivity[];
-  securityApproval: {
-    requestId: string;
-    toolName: string;
-    riskLevel: string;
-    reasoning: string;
-    command?: string;
-    riskType?: string;
-  } | null;
 }
 
 interface ToolExecution {
@@ -141,7 +128,7 @@ interface SubagentActivity {
   id: string;
   toolCallId: string;
   toolName: string;
-  phase: 'spawn' | 'output' | 'complete' | 'step';
+  phase: 'spawn' | 'output' | 'complete';
   message: string;
   timestamp: Date;
   taskId?: string;
@@ -151,7 +138,6 @@ interface SubagentActivity {
   model?: string;
   taskCount?: number;
   failures?: number;
-  tool?: string;
 }
 
 interface OnboardingState {
@@ -170,7 +156,7 @@ interface OnboardingState {
 }
 
 const APP_STATE_STORAGE_KEY = 'ledit:webui:state:v2';
-
+const INSTANCE_PID_STORAGE_KEY = 'ledit:webui:instancePid';
 const INSTANCE_SWITCH_RESET_KEY = 'ledit:webui:instanceSwitchReset';
 const MAX_PERSISTED_LOGS = 1000;
 
@@ -198,12 +184,9 @@ const getAppStateStorageKey = (): string => {
   if (typeof window === 'undefined' || !window.localStorage) {
     return `${APP_STATE_STORAGE_KEY}:default:local`;
   }
-  // Use the per-tab client ID (sessionStorage) to isolate persistence across tabs.
-  // localStorage is shared across tabs of the same origin, but sessionStorage is
-  // per-tab, so including client_id ensures each tab has its own persistence key.
-  const clientId = getWebUIClientId();
+  const instancePid = window.localStorage.getItem(INSTANCE_PID_STORAGE_KEY) || 'default';
   const scope = getUIContextScope();
-  return `${APP_STATE_STORAGE_KEY}:${clientId}:${scope}`;
+  return `${APP_STATE_STORAGE_KEY}:${instancePid}:${scope}`;
 };
 
 const parseDate = (value: unknown): Date => {
@@ -313,13 +296,13 @@ const loadPersistedAppState = (): Partial<AppState> | null => {
             toolRefs: Array.isArray(message?.toolRefs) ? message.toolRefs : undefined
           }))
         : [];
-    return {
+      return {
       provider: typeof parsed.provider === 'string' ? parsed.provider : 'unknown',
       model: typeof parsed.model === 'string' ? parsed.model : 'unknown',
       sessionId: typeof parsed.sessionId === 'string' ? parsed.sessionId : null,
       queryCount: typeof parsed.queryCount === 'number' ? parsed.queryCount : 0,
       currentView: ['chat', 'editor', 'git'].includes(parsed.currentView) ? parsed.currentView : 'chat',
-      messages: parsedMessages,
+      messages: [],
       fileEdits: Array.isArray(parsed.fileEdits)
         ? parsed.fileEdits.map((edit: any) => ({
             ...edit,
@@ -355,7 +338,6 @@ function App() {
       isProcessing: false,
       lastError: null,
       queryProgress: null,
-      securityApproval: null,
     };
   });
 
@@ -365,9 +347,8 @@ function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isTerminalExpanded, setIsTerminalExpanded] = useState(false);
   const activeRequestsRef = useRef(0);
-  const reconnectSafetyTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const lastHiddenTimeRef = useRef<number>(Date.now());
-  const [queuedMessages, setQueuedMessages] = useState<string[]>([]);
+  const queuedMessagesRef = useRef<string[]>([]);
+  const [queuedMessagesCount, setQueuedMessagesCount] = useState(0);
   const [recentFiles, setRecentFiles] = useState<Array<{ path: string; modified: boolean }>>([]);
   const [gitRefreshToken, setGitRefreshToken] = useState(0);
   const [onboarding, setOnboarding] = useState<OnboardingState>({
@@ -384,22 +365,6 @@ function App() {
     platformActionMessage: null,
     error: null,
   });
-
-  // Multi-chat state
-  const [chatSessionsList, setChatSessionsList] = useState<ChatSession[]>([]);
-  const [activeChatId, setActiveChatId] = useState<string>('default');
-  const [chatMessages, setChatMessages] = useState<Record<string, Message[]>>({});
-  const [chatToolExecutions, setChatToolExecutions] = useState<Record<string, ToolExecution[]>>({});
-  const [chatSubagentActivities, setChatSubagentActivities] = useState<Record<string, SubagentActivity[]>>({});
-  const [chatCurrentTodos, setChatCurrentTodos] = useState<Record<string, AppState['currentTodos']>>({});
-  const [chatQueryProgress, setChatQueryProgress] = useState<Record<string, any>>({});
-  const [chatErrors, setChatErrors] = useState<Record<string, string | null>>({});
-  const [chatFileEdits, setChatFileEdits] = useState<Record<string, AppState['fileEdits']>>({});
-  const [chatProcessing, setChatProcessing] = useState<Record<string, boolean>>({});
-  const currentQueryChatIdRef = useRef<string>('default');
-  const activeChatIdRef = useRef(activeChatId);
-  activeChatIdRef.current = activeChatId;
-  const [chatSessionsEnabled, setChatSessionsEnabled] = useState(true);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.localStorage) {
@@ -454,9 +419,6 @@ function App() {
   const handleSidebarToggle = useCallback(() => {
     setSidebarCollapsed(prev => !prev);
   }, []);
-
-  // ── Multi-chat: derived state is computed on-demand by event handlers ──
-  // using activeChatIdRef for chat-scoped guards (see handleEvent).
 
   const wsService = WebSocketService.getInstance();
   const apiService = ApiService.getInstance();
@@ -518,167 +480,6 @@ function App() {
   // Debounce connection status updates to prevent flashing
   const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastConnectionStateRef = useRef<boolean>(false);
-
-  // ── Multi-chat management functions ──────────────────────────────
-
-  const loadChatSessions = useCallback(async () => {
-    try {
-      const resp = await listChatSessions();
-      const activeId = resp.active_chat_id || 'default';
-      setChatSessionsList(resp.chat_sessions || []);
-      setActiveChatId(activeId);
-      setChatSessionsEnabled(true);
-    } catch {
-      // Backend doesn't support chat sessions – fall back to single-chat mode.
-      debugLog('[chat-sessions] API unavailable, using single-chat mode');
-      setChatSessionsEnabled(false);
-    }
-  }, []);
-
-  const handleCreateChat = useCallback(async () => {
-    try {
-      const resp = await createChatSession();
-      const newSession = resp.chat_session;
-      if (!newSession) return;
-      setChatSessionsList(prev => [...prev, newSession]);
-      // Initialize empty state for the new chat
-      setChatMessages(prev => ({ ...prev, [newSession.id]: [] }));
-      setChatToolExecutions(prev => ({ ...prev, [newSession.id]: [] }));
-      setChatSubagentActivities(prev => ({ ...prev, [newSession.id]: [] }));
-      setChatCurrentTodos(prev => ({ ...prev, [newSession.id]: [] }));
-      setChatQueryProgress(prev => ({ ...prev, [newSession.id]: null }));
-      setChatErrors(prev => ({ ...prev, [newSession.id]: null }));
-      setChatFileEdits(prev => ({ ...prev, [newSession.id]: [] }));
-      // Switch to the new chat
-      setActiveChatId(newSession.id);
-      currentQueryChatIdRef.current = newSession.id;
-      // Tell backend to switch
-      try { await switchChatSession(newSession.id); } catch { /* non-fatal */ }
-      // Reset processing state
-      setState(prev => ({
-        ...prev,
-        isProcessing: false,
-        lastError: null,
-        toolExecutions: [],
-        subagentActivities: [],
-        currentTodos: [],
-        queryProgress: null,
-      }));
-    } catch (error) {
-      console.error('[chat-sessions] Failed to create chat:', error);
-    }
-  }, []);
-
-  const handleSwitchChat = useCallback(async (id: string) => {
-    const savedActiveId = activeChatIdRef.current;
-    if (id === savedActiveId) return;
-    // Save current chat's ephemeral state before switching
-    setChatMessages(prev => ({ ...prev, [savedActiveId]: state.messages }));
-    setChatToolExecutions(prev => ({ ...prev, [savedActiveId]: state.toolExecutions }));
-    setChatSubagentActivities(prev => ({ ...prev, [savedActiveId]: state.subagentActivities }));
-    setChatCurrentTodos(prev => ({ ...prev, [savedActiveId]: state.currentTodos }));
-    setChatQueryProgress(prev => ({ ...prev, [savedActiveId]: state.queryProgress }));
-    setChatErrors(prev => ({ ...prev, [savedActiveId]: state.lastError }));
-    setChatFileEdits(prev => ({ ...prev, [savedActiveId]: state.fileEdits }));
-
-    setActiveChatId(id);
-    currentQueryChatIdRef.current = id;
-
-    // Load the target chat's messages from local cache or fetch from backend
-    const cachedMessages = chatMessages[id];
-    if (cachedMessages) {
-      setState(prev => ({
-        ...prev,
-        messages: cachedMessages,
-        toolExecutions: chatToolExecutions[id] || [],
-        subagentActivities: chatSubagentActivities[id] || [],
-        currentTodos: chatCurrentTodos[id] || [],
-        queryProgress: chatQueryProgress[id] || null,
-        lastError: chatErrors[id] ?? null,
-        fileEdits: chatFileEdits[id] || [],
-        isProcessing: chatProcessing[id] || false,
-      }));
-    } else {
-      // Fetch from backend
-      try {
-        const resp = await switchChatSession(id);
-        const msgs = resp.chat_session?.messages || [];
-        const restoredMessages: Message[] = msgs
-          .filter((m: any) => m.role === 'user' || m.role === 'assistant')
-          .map((m: any, i: number) => ({
-            id: `switched-${i}`,
-            type: m.role as 'user' | 'assistant',
-            content: typeof m.content === 'string' ? m.content : '',
-            timestamp: new Date(),
-            ...(m.reasoning_content ? { reasoning: m.reasoning_content } : {}),
-          }));
-        setChatMessages(prev => ({ ...prev, [id]: restoredMessages }));
-        setState(prev => ({
-          ...prev,
-          messages: restoredMessages,
-          toolExecutions: [],
-          subagentActivities: [],
-          currentTodos: [],
-          queryProgress: null,
-          lastError: null,
-          fileEdits: [],
-          isProcessing: chatProcessing[id] || false,
-        }));
-      } catch (error) {
-        console.error('[chat-sessions] Failed to switch chat:', error);
-        setState(prev => ({
-          ...prev,
-          messages: [],
-          toolExecutions: [],
-          subagentActivities: [],
-          currentTodos: [],
-          queryProgress: null,
-          lastError: null,
-          fileEdits: [],
-          isProcessing: false,
-        }));
-      }
-    }
-
-    // Update session list
-    setChatSessionsList(prev =>
-      prev.map(s => ({ ...s, is_active: s.id === id }))
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- state.* values are read synchronously in click handler; activeChatIdRef provides fresh activeChatId.
-  }, [activeChatId]);
-
-  const handleDeleteChat = useCallback(async (id: string) => {
-    const session = chatSessionsList.find(s => s.id === id);
-    if (!session || session.is_default || session.is_active) return;
-    try {
-      await deleteChatSession(id);
-      // Remove from local state
-      setChatSessionsList(prev => prev.filter(s => s.id !== id));
-      setChatMessages(prev => { const next = { ...prev }; delete next[id]; return next; });
-      setChatToolExecutions(prev => { const next = { ...prev }; delete next[id]; return next; });
-      setChatSubagentActivities(prev => { const next = { ...prev }; delete next[id]; return next; });
-      setChatCurrentTodos(prev => { const next = { ...prev }; delete next[id]; return next; });
-      setChatQueryProgress(prev => { const next = { ...prev }; delete next[id]; return next; });
-      setChatErrors(prev => { const next = { ...prev }; delete next[id]; return next; });
-      setChatFileEdits(prev => { const next = { ...prev }; delete next[id]; return next; });
-      setChatProcessing(prev => { const next = { ...prev }; delete next[id]; return next; });
-    } catch (error) {
-      console.error('[chat-sessions] Failed to delete chat:', error);
-    }
-  }, [chatSessionsList]);
-
-  const handleRenameChat = useCallback(async (id: string, name: string) => {
-    try {
-      const resp = await renameChatSession(id, name);
-      if (resp.chat_session) {
-        setChatSessionsList(prev =>
-          prev.map(s => s.id === id ? { ...s, name: resp.chat_session.name } : s)
-        );
-      }
-    } catch (error) {
-      console.error('[chat-sessions] Failed to rename chat:', error);
-    }
-  }, []);
 
   const refreshOnboardingStatus = useCallback(async () => {
     setOnboarding((prev) => ({ ...prev, checking: true, error: null }));
@@ -765,13 +566,6 @@ function App() {
           // Debounce the state update
           connectionTimeoutRef.current = setTimeout(() => {
             lastConnectionStateRef.current = newConnectionState;
-            if (!newConnectionState) {
-              // On disconnect, reset processing state. Any in-flight query may have
-              // completed while we were disconnected and the query_completed event
-              // was lost. When the backend sends query_started on reconnect (if
-              // still running), isProcessing will go back to true via the WS event.
-              activeRequestsRef.current = 0;
-            }
             setState(prev => ({
               ...prev,
               // NOTE:
@@ -779,7 +573,6 @@ function App() {
               // not a chat session id. It changes on reconnect and must never clear chat state.
               sessionId: prev.sessionId || incomingSessionId,
               isConnected: newConnectionState,
-              isProcessing: newConnectionState ? prev.isProcessing : false,
               logs: [...prev.logs, logEntry]
             }));
           }, 300); // Wait 300ms to confirm the connection state is stable
@@ -790,60 +583,34 @@ function App() {
       case 'query_started':
         logEntry.category = 'query';
         logEntry.level = 'info';
-        // Cancel the reconnect safety timer – a real query_started proves the
-        // backend is (still) processing, so we should NOT clear isProcessing.
-        if (reconnectSafetyTimerRef.current) {
-          clearTimeout(reconnectSafetyTimerRef.current);
-          reconnectSafetyTimerRef.current = null;
-        }
-        // Capture the chat_id for this query so subsequent events route correctly.
-        // If the backend provides chat_id in the event, use it; otherwise use
-        // the currently active chat ID.
-        const queryChatId = event.data?.chat_id || activeChatIdRef.current || 'default';
-        currentQueryChatIdRef.current = queryChatId;
         const startedQuery = event.data?.query || '';
-        const isForActiveChat = queryChatId === activeChatIdRef.current;
-        if (isForActiveChat) {
-          setState(prev => ({
-            ...prev,
-            isProcessing: true,
-            lastError: null,
-            queryCount: prev.queryCount + 1,
-            messages: [...prev.messages, {
-              id: Date.now().toString(),
-              type: 'user',
-              content: startedQuery,
-              timestamp: new Date()
-            }],
-            toolExecutions: [], // Clear previous tool executions
-            fileEdits: [],      // Clear previous file edits for current-run status metrics
-            subagentActivities: [],
-            queryProgress: null, // Clear previous progress
-            currentTodos: [],    // Clear previous todos
-            logs: [...prev.logs, logEntry]
-          }));
-        }
-        // Update session list to mark this chat as having an active query
-        setChatSessionsList(prev =>
-          prev.map(s => ({ ...s, active_query: s.id === queryChatId ? true : s.active_query }))
-        );
-        // Track per-chat processing state
-        setChatProcessing(prev => ({ ...prev, [queryChatId]: true }));
-        debugLog('[>>] Query started:', startedQuery, '(chat:', queryChatId, ')');
+        setState(prev => ({
+          ...prev,
+          isProcessing: true,
+          lastError: null,
+          queryCount: prev.queryCount + 1,
+          messages: [...prev.messages, {
+            id: Date.now().toString(),
+            type: 'user',
+            content: startedQuery,
+            timestamp: new Date()
+          }],
+          toolExecutions: [], // Clear previous tool executions
+          fileEdits: [],      // Clear previous file edits for current-run status metrics
+          subagentActivities: [],
+          queryProgress: null, // Clear previous progress
+          currentTodos: [],    // Clear previous todos
+          logs: [...prev.logs, logEntry]
+        }));
+        debugLog('[>>] Query started:', startedQuery);
         break;
 
       case 'query_progress':
-        {
-          const progressChatId = currentQueryChatIdRef.current;
-          if (currentQueryChatIdRef.current === activeChatIdRef.current) {
-            setState(prev => ({
-              ...prev,
-              queryProgress: event.data
-            }));
-          }
-          setChatQueryProgress(prev => ({ ...prev, [progressChatId]: event.data }));
-          debugLog('[>>] Query progress:', event.data);
-        }
+        setState(prev => ({
+          ...prev,
+          queryProgress: event.data
+        }));
+        debugLog('[>>] Query progress:', event.data);
         break;
 
       case 'stream_chunk':
@@ -853,8 +620,7 @@ function App() {
         const chunkContent = event.data.chunk || '';
         const chunkType = event.data.content_type || 'assistant_text';
         
-        if (currentQueryChatIdRef.current === activeChatIdRef.current) {
-          setState(prev => {
+        setState(prev => {
           const newMessages = [...prev.messages];
           const lastMessage = newMessages[newMessages.length - 1];
           if (lastMessage && lastMessage.type === 'assistant') {
@@ -889,18 +655,11 @@ function App() {
             messages: newMessages
           };
         });
-        }
         break;
 
       case 'query_completed':
         logEntry.category = 'query';
         logEntry.level = 'success';
-        // Cancel the reconnect safety timer – query_completed arrives, so the
-        // backend is done processing and will update isProcessing itself.
-        if (reconnectSafetyTimerRef.current) {
-          clearTimeout(reconnectSafetyTimerRef.current);
-          reconnectSafetyTimerRef.current = null;
-        }
         if (activeRequestsRef.current > 0) {
           activeRequestsRef.current -= 1;
         }
@@ -908,12 +667,10 @@ function App() {
         const completedResponse = event.data?.response;
         const wasClearCommand = completedQuery === '/clear';
         if (wasClearCommand) {
-          setQueuedMessages([]);
+          queuedMessagesRef.current = [];
+          setQueuedMessagesCount(0);
         }
-        // Only mutate the active view state if this query was for the currently active chat.
-        // Per-chat cleanup (chatQueryProgress, chatSessionsList) always runs.
-        if (currentQueryChatIdRef.current === activeChatIdRef.current) {
-          setState(prev => {
+        setState(prev => {
           let nextMessages = wasClearCommand
             ? []
             : ensureCompletedAssistantMessage(prev.messages, completedResponse, (responseText) => ({
@@ -967,24 +724,13 @@ function App() {
             logs: [...prev.logs, logEntry]
           };
         });
-        }
-        // Per-chat state updates on query completion (always runs)
-        {
-          const completedChatId = currentQueryChatIdRef.current;
-          setChatQueryProgress(prev => ({ ...prev, [completedChatId]: null }));
-          setChatProcessing(prev => ({ ...prev, [completedChatId]: false }));
-          setChatSessionsList(prev =>
-            prev.map(s => ({ ...s, active_query: s.id === completedChatId ? false : s.active_query }))
-          );
-        }
         debugLog('[OK] Query completed');
         break;
 
       case 'tool_start':
         logEntry.category = 'tool';
         logEntry.level = 'info';
-        if (currentQueryChatIdRef.current === activeChatIdRef.current) {
-          setState(prev => {
+        setState(prev => {
           const toolCallID = String(event.data?.tool_call_id || '');
           const toolName = String(event.data?.tool_name || 'unknown_tool');
           const rawArgs = event.data?.arguments != null ? String(event.data.arguments) : undefined;
@@ -1070,15 +816,13 @@ function App() {
             logs: [...prev.logs, logEntry]
           };
         });
-        }
         debugLog('[tool] Tool start:', event.data?.tool_name);
         break;
 
       case 'tool_end':
         logEntry.category = 'tool';
         logEntry.level = event.data?.status === 'failed' ? 'error' : 'info';
-        if (currentQueryChatIdRef.current === activeChatIdRef.current) {
-          setState(prev => {
+        setState(prev => {
           const toolCallID = String(event.data?.tool_call_id || '');
           const status: ToolExecution['status'] = event.data?.status === 'failed' ? 'error' : 'completed';
           const result = event.data?.result != null ? String(event.data.result) : undefined;
@@ -1126,43 +870,39 @@ function App() {
 
           return { ...prev, toolExecutions: updatedExecutions, logs: [...prev.logs, logEntry] };
         });
-        }
         debugLog('[tool] Tool end:', event.data?.tool_name, event.data?.status);
         break;
 
       case 'subagent_activity':
         logEntry.category = 'tool';
         logEntry.level = 'info';
-        if (currentQueryChatIdRef.current === activeChatIdRef.current) {
-          setState(prev => {
-            const activity: SubagentActivity = {
-              id: String(event.id || `${Date.now()}-${Math.random()}`),
-              toolCallId: String(event.data?.tool_call_id || ''),
-              toolName: String(event.data?.tool_name || 'run_subagent'),
-              phase: event.data?.phase === 'spawn' || event.data?.phase === 'complete' || event.data?.phase === 'step' ? event.data.phase : 'output',
-              message: String(event.data?.message || '').trim(),
-              timestamp: new Date(),
-              taskId: typeof event.data?.task_id === 'string' ? event.data.task_id : undefined,
-              persona: typeof event.data?.persona === 'string' ? event.data.persona : undefined,
-              isParallel: event.data?.is_parallel === true,
-              provider: typeof event.data?.provider === 'string' ? event.data.provider : undefined,
-              model: typeof event.data?.model === 'string' ? event.data.model : undefined,
-              taskCount: typeof event.data?.task_count === 'number' ? event.data.task_count : undefined,
-              failures: typeof event.data?.failures === 'number' ? event.data.failures : undefined,
-              tool: typeof event.data?.tool === 'string' ? event.data.tool : undefined,
-            };
+        setState(prev => {
+          const activity: SubagentActivity = {
+            id: String(event.id || `${Date.now()}-${Math.random()}`),
+            toolCallId: String(event.data?.tool_call_id || ''),
+            toolName: String(event.data?.tool_name || 'run_subagent'),
+            phase: event.data?.phase === 'spawn' || event.data?.phase === 'complete' ? event.data.phase : 'output',
+            message: String(event.data?.message || '').trim(),
+            timestamp: new Date(),
+            taskId: typeof event.data?.task_id === 'string' ? event.data.task_id : undefined,
+            persona: typeof event.data?.persona === 'string' ? event.data.persona : undefined,
+            isParallel: event.data?.is_parallel === true,
+            provider: typeof event.data?.provider === 'string' ? event.data.provider : undefined,
+            model: typeof event.data?.model === 'string' ? event.data.model : undefined,
+            taskCount: typeof event.data?.task_count === 'number' ? event.data.task_count : undefined,
+            failures: typeof event.data?.failures === 'number' ? event.data.failures : undefined,
+          };
 
-            if (!activity.message) {
-              return { ...prev, logs: [...prev.logs, logEntry] };
-            }
+          if (!activity.message) {
+            return { ...prev, logs: [...prev.logs, logEntry] };
+          }
 
-            return {
-              ...prev,
-              subagentActivities: [...prev.subagentActivities, activity].slice(-500),
-              logs: [...prev.logs, logEntry]
-            };
-          });
-        }
+          return {
+            ...prev,
+            subagentActivities: [...prev.subagentActivities, activity].slice(-500),
+            logs: [...prev.logs, logEntry]
+          };
+        });
         break;
 
       case 'agent_message':
@@ -1197,8 +937,7 @@ function App() {
             const toolTarget = String(event.data?.target || '');
             const parsedToolName = extractToolNameFromToolLogTarget(toolTarget);
 
-            if (currentQueryChatIdRef.current === activeChatIdRef.current) {
-              setState(prev => {
+            setState(prev => {
               // Best effort: if this log says a tool is executing, mark its
               // most recent started row as running (without adding a duplicate row).
               if (/^executing tool$/i.test(toolAction) && parsedToolName) {
@@ -1220,46 +959,41 @@ function App() {
 
               return { ...prev, logs: [...prev.logs, logEntry] };
             });
-            }
           } else if ((category === 'warning' || category === 'error') && !suppressInChat) {
             // Warning/error messages are operational notices, not model reasoning.
             logEntry.category = 'system';
             logEntry.level = category === 'error' ? 'error' : 'warning';
 
-            if (currentQueryChatIdRef.current === activeChatIdRef.current) {
-              setState(prev => {
-                const newMessages = [...prev.messages];
-                const lastMessage = newMessages[newMessages.length - 1];
-                if (lastMessage && lastMessage.type === 'assistant') {
-                  const prefixedMsg = category === 'error'
-                    ? `\n\nWarning: ${cleanedMsg}`
-                    : `\n\nNote: ${cleanedMsg}`;
-                  newMessages[newMessages.length - 1] = {
-                    ...lastMessage,
-                    content: (lastMessage.content || '') + prefixedMsg
-                  };
-                }
-                return { ...prev, messages: newMessages, logs: [...prev.logs, logEntry] };
-              });
-            }
+            setState(prev => {
+              const newMessages = [...prev.messages];
+              const lastMessage = newMessages[newMessages.length - 1];
+              if (lastMessage && lastMessage.type === 'assistant') {
+                const prefixedMsg = category === 'error'
+                  ? `\n\nWarning: ${cleanedMsg}`
+                  : `\n\nNote: ${cleanedMsg}`;
+                newMessages[newMessages.length - 1] = {
+                  ...lastMessage,
+                  content: (lastMessage.content || '') + prefixedMsg
+                };
+              }
+              return { ...prev, messages: newMessages, logs: [...prev.logs, logEntry] };
+            });
           } else if (category === 'info_rendered' && cleanedMsg && !suppressInChat) {
             // Meaningful info messages should render in chat, but not inside reasoning.
             logEntry.category = 'system';
             logEntry.level = 'info';
 
-            if (currentQueryChatIdRef.current === activeChatIdRef.current) {
-              setState(prev => {
-                const newMessages = [...prev.messages];
-                const lastMessage = newMessages[newMessages.length - 1];
-                if (lastMessage && lastMessage.type === 'assistant') {
-                  newMessages[newMessages.length - 1] = {
-                    ...lastMessage,
-                    content: (lastMessage.content || '') + `\n\nInfo: ${cleanedMsg}`
-                  };
-                }
-                return { ...prev, messages: newMessages, logs: [...prev.logs, logEntry] };
-              });
-            }
+            setState(prev => {
+              const newMessages = [...prev.messages];
+              const lastMessage = newMessages[newMessages.length - 1];
+              if (lastMessage && lastMessage.type === 'assistant') {
+                newMessages[newMessages.length - 1] = {
+                  ...lastMessage,
+                  content: (lastMessage.content || '') + `\n\nInfo: ${cleanedMsg}`
+                };
+              }
+              return { ...prev, messages: newMessages, logs: [...prev.logs, logEntry] };
+            });
           }
           // For plain 'info' (unclassified): silently skip rendering in WebUI.
           // These include blank lines, iteration markers, context pruning messages, etc.
@@ -1271,20 +1005,17 @@ function App() {
         logEntry.category = 'tool';
         logEntry.level = 'info';
         const normalizedTodos = normalizeTodoList(event.data?.todos);
-        if (currentQueryChatIdRef.current === activeChatIdRef.current) {
-          setState(prev => ({
-            ...prev,
-            currentTodos: normalizedTodos,
-            logs: [...prev.logs, logEntry]
-          }));
-        }
+        setState(prev => ({
+          ...prev,
+          currentTodos: normalizedTodos,
+          logs: [...prev.logs, logEntry]
+        }));
         break;
 
       case 'file_changed':
         logEntry.category = 'file';
         logEntry.level = 'info';
-        if (currentQueryChatIdRef.current === activeChatIdRef.current) {
-          setState(prev => {
+        setState(prev => {
           const newLogs = [...prev.logs, logEntry];
 
           // Track file edits
@@ -1301,7 +1032,6 @@ function App() {
 
           return { ...prev, logs: newLogs, fileEdits: updatedFileEdits };
         });
-        }
         debugLog('[edit] File changed:', event.data.path);
         break;
 
@@ -1323,21 +1053,19 @@ function App() {
           activeRequestsRef.current -= 1;
         }
         const errorMessage = event.data?.message || 'Unknown error';
-        if (currentQueryChatIdRef.current === activeChatIdRef.current) {
-          setState(prev => ({
-            ...prev,
-            isProcessing: activeRequestsRef.current > 0,
-            queryProgress: null,
-            lastError: errorMessage,
-            messages: [...prev.messages, {
-              id: Date.now().toString(),
-              type: 'assistant',
-              content: `[FAIL] Error: ${errorMessage}`,
-              timestamp: new Date()
-            }],
-            logs: [...prev.logs, logEntry]
-          }));
-        }
+        setState(prev => ({
+          ...prev,
+          isProcessing: activeRequestsRef.current > 0,
+          queryProgress: null,
+          lastError: errorMessage,
+          messages: [...prev.messages, {
+            id: Date.now().toString(),
+            type: 'assistant',
+            content: `[FAIL] Error: ${errorMessage}`,
+            timestamp: new Date()
+          }],
+          logs: [...prev.logs, logEntry]
+        }));
         console.error('[FAIL] Error event:', event.data);
         break;
 
@@ -1361,34 +1089,8 @@ function App() {
         logEntry.level = 'info';
         debugLog('[workspace] Workspace changed:', event.data);
         if (!event.data?.client_id || event.data.client_id === getWebUIClientId()) {
-          if (Date.now() - _lastWorkspaceReloadTime > 2000) {
-            _lastWorkspaceReloadTime = Date.now();
-            window.location.reload();
-          }
+          window.location.reload();
         }
-        break;
-
-      case 'security_approval_request':
-        logEntry.category = 'system';
-        logEntry.level = 'info';
-        // Only respond to requests targeting this client
-        if (event.data?.client_id && event.data.client_id !== getWebUIClientId()) {
-          debugLog('[sec] Security approval request skipped – different client:', event.data.client_id);
-          break;
-        }
-        setState(prev => ({
-          ...prev,
-          securityApproval: {
-            requestId: String(event.data?.request_id || ''),
-            toolName: String(event.data?.tool_name || 'unknown'),
-            riskLevel: String(event.data?.risk_level || 'DANGEROUS'),
-            reasoning: String(event.data?.reasoning || ''),
-            command: typeof event.data?.command === 'string' ? event.data.command : undefined,
-            riskType: typeof event.data?.risk_type === 'string' ? event.data.risk_type : undefined,
-          },
-          logs: [...prev.logs, logEntry],
-        }));
-        debugLog('[sec] Security approval request:', event.data?.tool_name, event.data?.risk_level);
         break;
 
       default:
@@ -1400,7 +1102,6 @@ function App() {
         }));
         debugLog('[?] Unknown event type:', event.type, event.data);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -1414,9 +1115,6 @@ function App() {
     // Initialize WebSocket connection
     wsService.connect();
     wsService.onEvent(handleEvent);
-
-    // Load chat sessions (multi-chat support)
-    loadChatSessions().catch(console.error);
 
     // Load initial stats
     const loadStats = () => {
@@ -1457,209 +1155,9 @@ function App() {
     const checkMobile = () => {
       setIsMobile(window.innerWidth <= 768);
     };
-
+    
     checkMobile();
     window.addEventListener('resize', checkMobile);
-
-    // Visibility change handling: reconnect WebSocket when tab becomes visible
-    // again after being backgrounded. Browsers throttle timers in background tabs,
-    // which causes WebSocket ping intervals to be skipped and the server to close
-    // the connection due to read deadline timeout.
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        // Track when the tab was hidden so we can detect long background periods
-        lastHiddenTimeRef.current = Date.now();
-      } else {
-        // Tab became visible
-        const hiddenDuration = Date.now() - lastHiddenTimeRef.current;
-        // Reconnect if: (a) not connected at all, or (b) was hidden for more
-        // than 30s. Chrome throttles timers to ~1/min in background tabs, so
-        // after 30s the ping interval may have been skipped and the connection
-        // could be half-open even though readyState still says OPEN.
-        if (!wsService.isConnected() || hiddenDuration > 30000) {
-          debugLog('[visibility] Tab visible again, reconnecting WebSocket',
-            hiddenDuration > 30000 ? `(hidden for ${Math.round(hiddenDuration / 1000)}s, forcing reconnect)` : '');
-          wsService.resume();
-        }
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    // Page Lifecycle: when Chrome freezes a background tab (before potential discard),
-    // proactively close the WebSocket so the server gets a clean close frame and can
-    // properly detach from backend sessions (tmux, query state). Without this, the
-    // TCP connection dies silently and the server only notices after a read-timeout,
-    // leaving orphan sessions.
-    const handleFreeze = () => {
-      debugLog('[lifecycle] Page freezing, proactively closing WebSocket');
-      wsService.freeze();
-    };
-    document.addEventListener('freeze', handleFreeze);
-
-    // When Chrome unfreezes a tab (resume), proactively reconnect the WebSocket.
-    // After a freeze+disconnect, reconnectAttempts is at max (from disconnect()),
-    // so auto-reconnect would never fire. We must use resetAndReconnect() to clear
-    // that state and trigger a fresh connection attempt.
-    const handleResume = () => {
-      debugLog('[lifecycle] Page resumed from freeze, reconnecting WebSocket');
-      wsService.resume();
-    };
-    document.addEventListener('resume', handleResume);
-
-    // pageshow: detect bfcache restore and tab-discard recovery.
-    // Chrome can restore a frozen/discarded tab from the back-forward cache
-    // (or re-navigate to it) without firing visibilitychange or resume.
-    // event.persisted === true means the page was restored from bfcache.
-    const handlePageShow = (event: PageTransitionEvent) => {
-      if (event.persisted) {
-        debugLog('[lifecycle] Page restored from bfcache, reconnecting WebSocket');
-        wsService.resume();
-      }
-    };
-    window.addEventListener('pageshow', handlePageShow);
-
-    // Helper: attempt to recover missed messages from the backend after a
-    // reconnect.  Fetches the current session_id from stats, calls the
-    // restore-session endpoint, and appends any new user/assistant messages
-    // to the local state.
-    const recoverMissedMessages = async () => {
-      try {
-        const stats: any = await apiService.getStats();
-        const sessionId = stats?.session_id;
-        if (!sessionId) {
-          debugLog('[lifecycle] No session_id in stats after reconnect – cannot sync messages');
-          return;
-        }
-        const result: any = await apiService.restoreSession(sessionId);
-        if (!result?.messages || !Array.isArray(result.messages)) return;
-        setState(prev => {
-          const backendMsgs = result.messages.filter(
-            (m: any) => m.role === 'user' || m.role === 'assistant'
-          );
-          if (backendMsgs.length <= prev.messages.length) return prev;
-          const newMsgs = backendMsgs.slice(prev.messages.length).map((msg: any, idx: number) => ({
-            id: `sync-${prev.messages.length + idx}-${Date.now()}`,
-            type: msg.role === 'user' ? 'user' : 'assistant',
-            content: msg.content || '',
-            timestamp: new Date(),
-            ...(msg.reasoning_content ? { reasoning: msg.reasoning_content } : {}),
-          }));
-          if (newMsgs.length === 0) return prev;
-          debugLog('[lifecycle] Recovered', newMsgs.length, 'messages after reconnect');
-          return { ...prev, messages: [...prev.messages, ...newMsgs] };
-        });
-      } catch (err) {
-        debugLog('[lifecycle] Failed to sync messages after reconnect:', err);
-      }
-    };
-
-    // Register a reconnect callback so that after the WebSocket successfully
-    // reconnects we can request fresh state from the backend and check for a
-    // stuck processing indicator.
-    wsService.onReconnect(async () => {
-      debugLog('[lifecycle] WebSocket reconnected after disconnect, requesting fresh stats');
-      wsService.sendEvent({ type: 'request_stats' });
-
-      // Immediately fetch stats via HTTP to determine if a query is active.
-      // The stats response includes is_processing so we can restore the
-      // correct processing state without waiting for the 3-second safety timer.
-      let backendIsProcessing = false;
-      try {
-        const stats: any = await apiService.getStats();
-        backendIsProcessing = !!stats.is_processing;
-
-        // Sync provider/model from backend state
-        if (stats.provider) {
-          setState(prev => ({
-            ...prev,
-            provider: stats.provider || prev.provider,
-            model: stats.model || prev.model,
-            stats: JSON.stringify(prev.stats) === JSON.stringify(stats) ? prev.stats : stats,
-          }));
-        }
-
-        // If backend says not processing but frontend thinks it is, clear immediately
-        if (!backendIsProcessing) {
-          const wasStuck = await new Promise<boolean>(resolve => {
-            setState(prev => {
-              if (prev.isProcessing) {
-                debugLog('[lifecycle] Backend reports no active query — clearing processing state');
-                resolve(true);
-                return { ...prev, isProcessing: false };
-              }
-              resolve(false);
-              return prev;
-            });
-          });
-
-          // If processing was stuck, try to recover missed messages
-          if (wasStuck) {
-            await recoverMissedMessages();
-          }
-          // Backend not processing — no need for the safety timer
-          return;
-        }
-      } catch (err) {
-        debugLog('[lifecycle] Failed to fetch stats after reconnect:', err);
-      }
-
-      // Backend is processing (or we couldn't determine) — keep the safety timer
-      // as a fallback. A real query_started event should arrive and cancel it.
-      if (reconnectSafetyTimerRef.current) {
-        clearTimeout(reconnectSafetyTimerRef.current);
-      }
-      reconnectSafetyTimerRef.current = setTimeout(async () => {
-        reconnectSafetyTimerRef.current = null;
-
-        const wasStuck = await new Promise<boolean>(resolve => {
-          setState(prev => {
-            if (prev.isProcessing) {
-              debugLog('[lifecycle] No query events after reconnect – clearing stuck processing state');
-              resolve(true);
-              return { ...prev, isProcessing: false };
-            }
-            resolve(false);
-            return prev;
-          });
-        });
-
-        if (wasStuck) {
-          await recoverMissedMessages();
-        }
-      }, 3000);
-    });
-
-    // Wake lock: request a screen wake lock when the page is visible to prevent
-    // the browser from aggressively throttling timers (which breaks WebSocket
-    // heartbeats). This is particularly important for PWA usage where users may
-    // have the app open in a separate window.
-    let wakeLock: any = null;
-    const requestWakeLock = async () => {
-      if (document.hidden) return;
-      try {
-        const nav = navigator as any;
-        if (nav.wakeLock) {
-          wakeLock = await nav.wakeLock.request('screen');
-          debugLog('[wakelock] Acquired screen wake lock');
-          wakeLock.addEventListener('release', () => {
-            debugLog('[wakelock] Screen wake lock released');
-            wakeLock = null;
-          });
-        }
-      } catch {
-        // Wake lock may fail (e.g., low battery, user preference) - that's OK
-      }
-    };
-
-    // Request wake lock on visibility restore as well (wake locks are released
-    // when the page becomes hidden)
-    const handleVisibilityWakeLock = () => {
-      if (!document.hidden) {
-        requestWakeLock();
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityWakeLock);
-    requestWakeLock();
 
     // Cleanup
     return () => {
@@ -1667,27 +1165,12 @@ function App() {
       if (connectionTimeoutRef.current) {
         clearTimeout(connectionTimeoutRef.current);
       }
-      // Clear the reconnect safety timer
-      if (reconnectSafetyTimerRef.current) {
-        clearTimeout(reconnectSafetyTimerRef.current);
-        reconnectSafetyTimerRef.current = null;
-      }
       wsService.removeEvent(handleEvent);
-      wsService.onReconnect(null); // Unregister reconnect callback
       wsService.disconnect();
       window.removeEventListener('resize', checkMobile);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      document.removeEventListener('freeze', handleFreeze);
-      document.removeEventListener('resume', handleResume);
-      window.removeEventListener('pageshow', handlePageShow);
-      document.removeEventListener('visibilitychange', handleVisibilityWakeLock);
       clearInterval(statsInterval);
-      // Release wake lock
-      if (wakeLock) {
-        wakeLock.release().catch(() => {});
-      }
     };
-  }, [handleEvent, wsService, apiService, loadChatSessions]);
+  }, [handleEvent, wsService, apiService]);
 
   // Listen for session-restored events from Chat.tsx to populate messages
   useEffect(() => {
@@ -1730,7 +1213,6 @@ function App() {
     if (!message.trim()) return;
     const trimmedMessage = message.trim();
     const allowConcurrent = options?.allowConcurrent === true;
-    const chatId = chatSessionsEnabled ? activeChatId : undefined;
     if (!allowConcurrent && activeRequestsRef.current > 0) {
       setState(prev => ({
         ...prev,
@@ -1742,7 +1224,7 @@ function App() {
           timestamp: new Date()
         }]
       }));
-      await apiService.steerQuery(trimmedMessage, chatId);
+      await apiService.steerQuery(trimmedMessage);
       setInputValue('');
       return;
     }
@@ -1756,8 +1238,8 @@ function App() {
     }));
 
     try {
-      debugLog('[>>] Sending message:', trimmedMessage, '(chat:', chatId || 'default', ')');
-      await apiService.sendQuery(trimmedMessage, chatId);
+      debugLog('[>>] Sending message:', trimmedMessage);
+      await apiService.sendQuery(trimmedMessage);
       setInputValue('');
       debugLog('[OK] Message sent successfully');
     } catch (error) {
@@ -1778,106 +1260,61 @@ function App() {
         }]
       }));
     }
-  }, [apiService, chatSessionsEnabled, activeChatId]);
+  }, [apiService]);
 
   const handleQueueMessage = useCallback((message: string) => {
     const trimmed = message.trim();
     if (!trimmed) return;
-    setQueuedMessages(prev => [...prev, trimmed]);
-  }, []);
-
-  const handleRemoveQueuedMessage = useCallback((index: number) => {
-    setQueuedMessages(prev => prev.filter((_, i) => i !== index));
-  }, []);
-
-  const handleEditQueuedMessage = useCallback((index: number, newText: string) => {
-    const trimmed = newText.trim();
-    if (!trimmed) {
-      setQueuedMessages(prev => prev.filter((_, i) => i !== index));
-      return;
-    }
-    setQueuedMessages(prev => prev.map((msg, i) => i === index ? trimmed : msg));
-  }, []);
-
-  const handleReorderQueuedMessage = useCallback((fromIndex: number, toIndex: number) => {
-    setQueuedMessages(prev => {
-      const next = [...prev];
-      const [moved] = next.splice(fromIndex, 1);
-      next.splice(toIndex, 0, moved);
-      return next;
-    });
-  }, []);
-
-  const handleClearQueuedMessages = useCallback(() => {
-    setQueuedMessages([]);
+    queuedMessagesRef.current.push(trimmed);
+    setQueuedMessagesCount(queuedMessagesRef.current.length);
   }, []);
 
   const handleStopProcessing = useCallback(async () => {
-    const chatId = chatSessionsEnabled ? currentQueryChatIdRef.current : undefined;
     try {
-      await apiService.stopQuery(chatId);
-      // Optimistically clear processing state – the backend accepted the stop.
-      // query_completed may or may not follow (query may already be finishing),
-      // so we reset here to avoid a stuck "processing" indicator.
-      if (activeRequestsRef.current > 0) {
-        activeRequestsRef.current -= 1;
-      }
+      await apiService.stopQuery();
       setState(prev => ({
         ...prev,
-        isProcessing: activeRequestsRef.current > 0,
         lastError: null,
       }));
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Failed to stop query';
-      // If the backend says "No active query to stop", it means the query has
-      // already completed on the backend side. Trust the backend and reset our
-      // local processing state to prevent a stuck indicator (stop button visible
-      // when nothing is actually running).
-      const isAlreadyDone = errorMsg.includes('No active query to stop');
       setState(prev => ({
         ...prev,
-        ...(isAlreadyDone
-          ? { isProcessing: false, lastError: null }
-          : {
-              lastError: errorMsg,
-              messages: [...prev.messages, {
-                id: Date.now().toString(),
-                type: 'assistant',
-                content: `[FAIL] Error: ${errorMsg}`,
-                timestamp: new Date()
-              }],
-            }),
+        lastError: errorMsg,
+        messages: [...prev.messages, {
+          id: Date.now().toString(),
+          type: 'assistant',
+          content: `[FAIL] Error: ${errorMsg}`,
+          timestamp: new Date()
+        }]
       }));
-      if (isAlreadyDone && activeRequestsRef.current > 0) {
-        activeRequestsRef.current -= 1;
-      }
     }
-  }, [apiService, chatSessionsEnabled]);
+  }, [apiService]);
 
   useEffect(() => {
     if (state.isProcessing || activeRequestsRef.current > 0) {
       return;
     }
-    setQueuedMessages(prev => {
-      if (prev.length === 0) return prev;
-      const [next, ...rest] = prev;
-      // Use microtask to avoid setState-during-render
-      queueMicrotask(() => {
-        handleSendMessage(next).catch((error) => {
-          const errorMsg = error instanceof Error ? error.message : 'Failed to send queued message';
-          setState(s => ({
-            ...s,
-            lastError: `Failed to send queued message: ${errorMsg}`,
-            messages: [...s.messages, {
-              id: Date.now().toString(),
-              type: 'assistant',
-              content: `[FAIL] Error: ${errorMsg}`,
-              timestamp: new Date()
-            }]
-          }));
-        });
-      });
-      return rest;
+    if (queuedMessagesRef.current.length === 0) {
+      return;
+    }
+
+    const next = queuedMessagesRef.current.shift();
+    setQueuedMessagesCount(queuedMessagesRef.current.length);
+    if (!next) return;
+
+    handleSendMessage(next).catch((error) => {
+      const errorMsg = error instanceof Error ? error.message : 'Failed to send queued message';
+      setState(prev => ({
+        ...prev,
+        lastError: `Failed to send queued message: ${errorMsg}`,
+        messages: [...prev.messages, {
+          id: Date.now().toString(),
+          type: 'assistant',
+          content: `[FAIL] Error: ${errorMsg}`,
+          timestamp: new Date()
+        }]
+      }));
     });
   }, [state.isProcessing, handleSendMessage]);
 
@@ -2122,11 +1559,7 @@ function App() {
                 onSendMessage={handleSendMessage}
                 onQueueMessage={handleQueueMessage}
                 onStopProcessing={handleStopProcessing}
-                queuedMessages={queuedMessages}
-                onRemoveQueuedMessage={handleRemoveQueuedMessage}
-                onEditQueuedMessage={handleEditQueuedMessage}
-                onReorderQueuedMessage={handleReorderQueuedMessage}
-                onClearQueuedMessages={handleClearQueuedMessages}
+                queuedMessagesCount={queuedMessagesCount}
                 onGitCommit={handleGitCommit}
                 onGitAICommit={handleGitAICommit}
                 onGitStage={handleGitStage}
@@ -2135,12 +1568,6 @@ function App() {
                 onTerminalOutput={handleTerminalOutput}
                 onTerminalExpandedChange={setIsTerminalExpanded}
                 isConnected={state.isConnected}
-                chatSessions={chatSessionsEnabled ? chatSessionsList : []}
-                activeChatId={activeChatId}
-                onSwitchChat={handleSwitchChat}
-                onCreateChat={handleCreateChat}
-                onDeleteChat={handleDeleteChat}
-                onRenameChat={handleRenameChat}
               />
               {onboarding.open && (
                 <div className="onboarding-overlay" role="dialog" aria-modal="true" aria-label="Set up ledit">
@@ -2332,23 +1759,6 @@ function App() {
                     </div>
                   </div>
                 </div>
-              )}
-              {state.securityApproval && (
-                <SecurityApprovalDialog
-                  requestId={state.securityApproval.requestId}
-                  toolName={state.securityApproval.toolName}
-                  riskLevel={state.securityApproval.riskLevel as 'SAFE' | 'CAUTION' | 'DANGEROUS'}
-                  reasoning={state.securityApproval.reasoning}
-                  command={state.securityApproval.command}
-                  riskType={state.securityApproval.riskType}
-                  onRespond={(requestId, approved) => {
-                    wsService.sendEvent({
-                      type: 'security_approval_response',
-                      data: { request_id: requestId, approved },
-                    });
-                    setState(prev => ({ ...prev, securityApproval: null }));
-                  }}
-                />
               )}
             </UIManager>
           </EditorManagerProvider>

@@ -48,11 +48,7 @@ interface WorkspacePaneProps {
     messages: Message[];
     onSendMessage: (message: string) => void;
     onQueueMessage: (message: string) => void;
-    queuedMessages: string[];
-    onRemoveQueuedMessage: (index: number) => void;
-    onEditQueuedMessage: (index: number, newText: string) => void;
-    onReorderQueuedMessage: (fromIndex: number, toIndex: number) => void;
-    onClearQueuedMessages: () => void;
+    queuedMessagesCount: number;
     inputValue: string;
     onInputChange: (value: string) => void;
     isProcessing?: boolean;
@@ -62,21 +58,6 @@ interface WorkspacePaneProps {
     currentTodos?: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }>;
     onToolPillClick?: (toolId: string) => void;
     onStopProcessing?: () => void;
-    subagentActivities?: Array<{
-      id: string;
-      toolCallId: string;
-      toolName: string;
-      phase: 'spawn' | 'output' | 'complete' | 'step';
-      message: string;
-      timestamp: Date;
-      taskId?: string;
-      persona?: string;
-      isParallel?: boolean;
-      provider?: string;
-      model?: string;
-      taskCount?: number;
-      failures?: number;
-    }>;
   };
   reviewProps: {
     review: DeepReviewResult | null;
@@ -86,7 +67,7 @@ interface WorkspacePaneProps {
     reviewFixSessionID: string | null;
     isReviewLoading: boolean;
     isReviewFixing: boolean;
-    onFixFromReview: (options?: { fixPrompt?: string; selectedItems?: string[] }) => void;
+    onFixFromReview: () => void;
   };
   diffState: {
     activeDiffPath: string | null;

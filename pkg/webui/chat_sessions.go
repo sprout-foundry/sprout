@@ -2,8 +2,12 @@
 package webui
 
 import (
+	crypto_rand "crypto/rand"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -29,7 +33,15 @@ type chatSession struct {
 }
 
 // messageCount returns the number of messages in the chat's agent state.
+// The caller must hold cs.mu or this method will acquire it.
 func (cs *chatSession) messageCount() int {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	return cs.messageCountLocked()
+}
+
+// messageCountLocked is the lock-free helper for messageCount.
+func (cs *chatSession) messageCountLocked() int {
 	if len(cs.AgentState) == 0 {
 		return 0
 	}
@@ -41,7 +53,15 @@ func (cs *chatSession) messageCount() int {
 }
 
 // agentSessionID parses the session ID from the serialized agent state.
+// The caller must hold cs.mu or this method will acquire it.
 func (cs *chatSession) agentSessionID() string {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	return cs.agentSessionIDLocked()
+}
+
+// agentSessionIDLocked is the lock-free helper for agentSessionID.
+func (cs *chatSession) agentSessionIDLocked() string {
 	if len(cs.AgentState) == 0 {
 		return ""
 	}
@@ -119,7 +139,7 @@ func (cc *webClientContext) getOrCreateChatSession(chatID string) *chatSession {
 	cc.nextChatNumber++
 	name := "Chat"
 	if cc.nextChatNumber > 1 {
-		name = name + " " + itoa(cc.nextChatNumber)
+		name = name + " " + strconv.Itoa(cc.nextChatNumber)
 	}
 	cs := newChatSession(chatID, name)
 	cc.ChatSessions[chatID] = cs
@@ -138,8 +158,10 @@ type chatSessionInfo struct {
 	MessageCount     int       `json:"message_count"`
 }
 
-// toInfo copies the public fields from cs without touching the mutex.
+// toInfo copies the public fields from cs under cs.mu.
 func (cs *chatSession) toInfo() chatSessionInfo {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
 	return chatSessionInfo{
 		ID:               cs.ID,
 		Name:             cs.Name,
@@ -148,7 +170,7 @@ func (cs *chatSession) toInfo() chatSessionInfo {
 		CurrentSessionID: cs.CurrentSessionID,
 		ActiveQuery:      cs.ActiveQuery,
 		CurrentQuery:     cs.CurrentQuery,
-		MessageCount:     cs.messageCount(),
+		MessageCount:     cs.messageCountLocked(),
 	}
 }
 
@@ -254,7 +276,9 @@ func (cc *webClientContext) getChatSessionState(chatID string) []byte {
 		chatID = cc.DefaultChatID
 	}
 	if cs, ok := cc.ChatSessions[chatID]; ok {
-		return cs.AgentState
+		cs.mu.Lock()
+		defer cs.mu.Unlock()
+		return append([]byte(nil), cs.AgentState...)
 	}
 	return cc.AgentState
 }
@@ -346,31 +370,14 @@ func generateChatID() string {
 	return "chat-" + time.Now().Format("20060102-150405") + "-" + randomSuffix(4)
 }
 
-// itoa converts an int to string without importing strconv (used only here).
-func itoa(i int) string {
-	if i == 0 {
-		return "0"
-	}
-	s := ""
-	n := i
-	for n > 0 {
-		s = string(rune('0'+n%10)) + s
-		n /= 10
-	}
-	return s
-}
-
 // randomSuffix generates a short random hex string for unique IDs.
 func randomSuffix(n int) string {
-	const hex = "0123456789abcdef"
-	// Use the agent API's random-style approach with time-based entropy.
-	// For true uniqueness this is combined with the timestamp above.
 	b := make([]byte, n)
-	now := time.Now().UnixNano()
-	for i := 0; i < n; i++ {
-		b[i] = hex[(now>>(uint(i)*4))&0xf]
+	if _, err := crypto_rand.Read(b); err != nil {
+		// Fallback to time-based suffix if crypto/rand is unavailable
+		return fmt.Sprintf("%d", time.Now().UnixNano())
 	}
-	return string(b)
+	return hex.EncodeToString(b)
 }
 
 // emptyAgentStateSnapshot is already defined in client_context.go; at
@@ -381,13 +388,15 @@ func randomSuffix(n int) string {
 
 // chatSessionSummary produces a JSON-safe map with metadata for an API response.
 func (cs *chatSession) chatSessionSummary(isDefault bool) map[string]interface{} {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
 	summary := map[string]interface{}{
 		"id":               cs.ID,
 		"name":             cs.Name,
 		"created_at":       cs.CreatedAt.UTC().Format(time.RFC3339),
 		"last_active_at":   cs.LastActiveAt.UTC().Format(time.RFC3339),
-		"message_count":    cs.messageCount(),
-		"current_session_id": cs.agentSessionID(),
+		"message_count":    cs.messageCountLocked(),
+		"current_session_id": cs.agentSessionIDLocked(),
 		"active_query":     cs.ActiveQuery,
 		"is_default":       isDefault,
 	}
@@ -400,7 +409,22 @@ func (cs *chatSession) chatSessionSummary(isDefault bool) map[string]interface{}
 // chatSessionWithMessages produces a response map including the serialized
 // agent state for a chat switch response.
 func (cs *chatSession) chatSessionWithMessages() map[string]interface{} {
-	summary := cs.chatSessionSummary(false)
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+
+	summary := map[string]interface{}{
+		"id":                 cs.ID,
+		"name":               cs.Name,
+		"created_at":         cs.CreatedAt.UTC().Format(time.RFC3339),
+		"last_active_at":     cs.LastActiveAt.UTC().Format(time.RFC3339),
+		"message_count":      cs.messageCountLocked(),
+		"current_session_id": cs.agentSessionIDLocked(),
+		"active_query":       cs.ActiveQuery,
+		"is_default":         cs.ID == defaultChatID,
+	}
+	if cs.ActiveQuery && cs.CurrentQuery != "" {
+		summary["current_query"] = cs.CurrentQuery
+	}
 
 	// Decode agent state to extract messages for the frontend
 	if len(cs.AgentState) > 0 {

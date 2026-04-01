@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
 import { EditorBuffer, EditorPane, PaneLayout } from '../types/editor';
 import { writeFileWithConsent } from '../services/fileAccess';
+import { showThemedPrompt } from '../components/ThemedDialog';
 
 interface PaneSize {
   [paneId: string]: number; // Size in pixels or percentage
@@ -407,12 +408,61 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     const buffer = buffersRef.current.get(bufferId);
     if (!buffer || buffer.kind !== 'file') return;
 
-    // Prevent saving virtual workspace buffers (untitled, previews, etc.)
+    // Handle virtual workspace buffers (untitled files created via Ctrl+N)
     if (buffer.file.path.startsWith('__workspace/')) {
-      setBufferModified(bufferId, false);
+      const filePath = await showThemedPrompt(
+        'Enter a file path for the new file:',
+        {
+          title: 'Save As',
+          defaultValue: 'untitled',
+          placeholder: 'path/to/file.ts',
+        }
+      );
+
+      if (!filePath || !filePath.trim()) {
+        return; // User cancelled
+      }
+
+      const trimmedPath = filePath.trim();
+
+      // Write the file to disk
+      try {
+        const response = await writeFileWithConsent(trimmedPath, buffer.content);
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => response.statusText);
+          throw new Error(errorText || `Failed to save file: ${response.statusText}`);
+        }
+
+        // Update the buffer path to the real file path
+        const ext = trimmedPath.includes('.') ? trimmedPath.split('.').pop() : '';
+        const name = trimmedPath.split('/').pop() || trimmedPath;
+
+        setBuffers(prev => {
+          const newBuffers = new Map(prev);
+          const buf = newBuffers.get(bufferId);
+          if (buf) {
+            newBuffers.set(bufferId, {
+              ...buf,
+              file: {
+                ...buf.file,
+                name,
+                path: trimmedPath,
+                ext: ext || undefined,
+              },
+              originalContent: buf.content,
+              isModified: false,
+            });
+          }
+          return newBuffers;
+        });
+      } catch (error) {
+        console.error('Failed to save new file:', error);
+        throw error;
+      }
       return;
     }
 
+    // Normal save for existing files
     try {
       const response = await writeFileWithConsent(buffer.file.path, buffer.content);
 
@@ -439,13 +489,13 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
       console.error('Failed to save buffer:', bufferId, error);
       throw error;
     }
-  }, [setBufferModified]);
+  }, []);
 
   // Save all modified buffers
   const saveAllBuffers = useCallback(async () => {
     const currentBuffers = buffersRef.current;
     const savePromises = Array.from(currentBuffers.entries())
-      .filter(([_, buffer]) => buffer.isModified)
+      .filter(([_, buffer]) => buffer.isModified && !buffer.file.path.startsWith('__workspace/'))
       .map(([bufferId, _]) => saveBuffer(bufferId));
 
     await Promise.all(savePromises);

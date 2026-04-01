@@ -229,7 +229,7 @@ func TestSavePastedImage(t *testing.T) {
 		0x44, 0xAE, 0x42, 0x60, 0x82, // IEND chunk
 	}
 
-	relPath, err := SavePastedImage(pngData)
+	relPath, err := SavePastedImage(pngData, "")
 	if err != nil {
 		t.Fatalf("SavePastedImage failed: %v", err)
 	}
@@ -267,7 +267,7 @@ func TestSavePastedImage_Oversized(t *testing.T) {
 	data := make([]byte, MaxPastedImageSize+1)
 	copy(data, []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A})
 
-	_, err := SavePastedImage(data)
+	_, err := SavePastedImage(data, "")
 	if err == nil {
 		t.Fatal("expected error for oversized image, got nil")
 	}
@@ -279,7 +279,7 @@ func TestSavePastedImage_Oversized(t *testing.T) {
 func TestSavePastedImage_UnknownFormat(t *testing.T) {
 	data := []byte("this is not an image at all")
 
-	_, err := SavePastedImage(data)
+	_, err := SavePastedImage(data, "")
 	if err == nil {
 		t.Fatal("expected error for unknown format, got nil")
 	}
@@ -304,7 +304,7 @@ func TestSavePastedImage_JPEG(t *testing.T) {
 	// Minimal JPEG header
 	jpegData := []byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46}
 
-	relPath, err := SavePastedImage(jpegData)
+	relPath, err := SavePastedImage(jpegData, "")
 	if err != nil {
 		t.Fatalf("SavePastedImage failed: %v", err)
 	}
@@ -318,3 +318,51 @@ func TestSavePastedImage_JPEG(t *testing.T) {
 		t.Fatalf("saved file does not exist: %v", err)
 	}
 }
+
+func TestSavePastedImage_WithBaseDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseDir := filepath.Join(tmpDir, "my workspace")
+
+	// Build a minimal PNG (header + IHDR + IEND)
+	pngData := []byte{
+		0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
+		0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, // IHDR chunk
+		0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+		0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53,
+		0xDE, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E,
+		0x44, 0xAE, 0x42, 0x60, 0x82, // IEND chunk
+	}
+
+	relPath, err := SavePastedImage(pngData, baseDir)
+	if err != nil {
+		t.Fatalf("SavePastedImage failed: %v", err)
+	}
+
+	// The returned relative path should still use the standard prefix
+	if !strings.HasPrefix(relPath, "./.ledit/pasted-images/paste_") {
+		t.Errorf("unexpected path format: %s", relPath)
+	}
+	if !strings.HasSuffix(relPath, ".png") {
+		t.Errorf("expected .png extension, got: %s", relPath)
+	}
+
+	// Verify the file was created inside baseDir (with spaces in path)
+	fullPath := filepath.Join(baseDir, PastedImageDirName, filepath.Base(relPath))
+	info, err := os.Stat(fullPath)
+	if err != nil {
+		t.Fatalf("saved file does not exist in baseDir: %v", err)
+	}
+	if info.Size() != int64(len(pngData)) {
+		t.Errorf("expected file size %d, got %d", len(pngData), info.Size())
+	}
+
+	// Verify the .ledit/pasted-images directory was created under baseDir
+	dirInfo, err := os.Stat(filepath.Join(baseDir, PastedImageDirName))
+	if err != nil {
+		t.Fatalf("image directory does not exist under baseDir: %v", err)
+	}
+	if !dirInfo.IsDir() {
+		t.Error("expected image directory to be a directory")
+	}
+}
+

@@ -609,3 +609,53 @@ func TestRouteStreamChunk_ContentTypeVariations(t *testing.T) {
 		}
 	}
 }
+
+// TestRouteTerminalOnly_DoesNotPublishEvent verifies that RouteTerminalOnly
+// writes to the terminal callback but does NOT publish to the event bus.
+func TestRouteTerminalOnly_DoesNotPublishEvent(t *testing.T) {
+	bus := events.NewEventBus()
+	ch := bus.Subscribe("test")
+	defer bus.Unsubscribe("test")
+
+	var callbackCalled bool
+	var receivedMessage string
+	var callbackMu sync.Mutex
+
+	callback := func(message string) {
+		callbackMu.Lock()
+		defer callbackMu.Unlock()
+		callbackCalled = true
+		receivedMessage = message
+	}
+
+	agent := &Agent{
+		streamingEnabled:  true,
+		streamingCallback: callback,
+		outputMutex:       &sync.Mutex{},
+	}
+	router := NewOutputRouter(agent, bus)
+
+	router.RouteTerminalOnly("hello terminal")
+
+	// Verify terminal callback was invoked
+	callbackMu.Lock()
+	assert.True(t, callbackCalled, "streamingCallback should be called for terminal output")
+	assert.Contains(t, receivedMessage, "hello terminal")
+	callbackMu.Unlock()
+
+	// Verify no event was published
+	select {
+	case event := <-ch:
+		t.Fatalf("expected no event on bus, got: %s", event.Type)
+	case <-time.After(50 * time.Millisecond):
+		// Good: no event published
+	}
+}
+
+// TestRouteTerminalOnly_NilRouter_Fallback verifies that Agent.PrintTerminalOnly
+// falls back gracefully when the output router is nil.
+func TestPrintTerminalOnly_NilRouter_Fallback(t *testing.T) {
+	a := &Agent{}
+	// Should not panic
+	a.PrintTerminalOnly("test\n")
+}

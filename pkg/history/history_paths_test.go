@@ -10,18 +10,13 @@ import (
 
 // Reset globals to defaults before any test runs (helps with parallel test safety)
 func init() {
-	changesDir = projectChangesDir
-	revisionsDir = projectRevisionsDir
+	setPathsForTesting(projectChangesDir, projectRevisionsDir)
 }
 
 func TestInitializeHistoryPaths_ProjectScope(t *testing.T) {
-	// Reset to default before test
-	originalChanges := changesDir
-	originalRevisions := revisionsDir
-	defer func() {
-		changesDir = originalChanges
-		revisionsDir = originalRevisions
-	}()
+	// Save original paths and restore after test
+	originalChanges, originalRevisions := getPathsForTesting()
+	defer setPathsForTesting(originalChanges, originalRevisions)
 
 	// Create a test config with project scope
 	config := &configuration.Config{
@@ -29,18 +24,18 @@ func TestInitializeHistoryPaths_ProjectScope(t *testing.T) {
 	}
 
 	// Set to project paths
-	changesDir = projectChangesDir
-	revisionsDir = projectRevisionsDir
+	setPathsForTesting(projectChangesDir, projectRevisionsDir)
 
 	// Initialize paths
 	InitializeHistoryPaths(config)
 
 	// Verify paths are set to project-scoped locations
-	if changesDir != projectChangesDir {
-		t.Errorf("Expected changesDir to be %s, got %s", projectChangesDir, changesDir)
+	currentChanges, currentRevisions := getPathsForTesting()
+	if currentChanges != projectChangesDir {
+		t.Errorf("Expected changesDir to be %s, got %s", projectChangesDir, currentChanges)
 	}
-	if revisionsDir != projectRevisionsDir {
-		t.Errorf("Expected revisionsDir to be %s, got %s", projectRevisionsDir, revisionsDir)
+	if currentRevisions != projectRevisionsDir {
+		t.Errorf("Expected revisionsDir to be %s, got %s", projectRevisionsDir, currentRevisions)
 	}
 
 	// Verify the getters return expected values
@@ -53,13 +48,9 @@ func TestInitializeHistoryPaths_ProjectScope(t *testing.T) {
 }
 
 func TestInitializeHistoryPaths_GlobalScope(t *testing.T) {
-	// Reset to default before test
-	originalChanges := changesDir
-	originalRevisions := revisionsDir
-	defer func() {
-		changesDir = originalChanges
-		revisionsDir = originalRevisions
-	}()
+	// Save original paths and restore after test
+	originalChanges, originalRevisions := getPathsForTesting()
+	defer setPathsForTesting(originalChanges, originalRevisions)
 
 	// Create a test config with global scope
 	config := &configuration.Config{
@@ -78,11 +69,12 @@ func TestInitializeHistoryPaths_GlobalScope(t *testing.T) {
 	InitializeHistoryPaths(config)
 
 	// Verify paths are set to global-scoped locations
-	if changesDir != expectedChanges {
-		t.Errorf("Expected changesDir to be %s, got %s", expectedChanges, changesDir)
+	currentChanges, currentRevisions := getPathsForTesting()
+	if currentChanges != expectedChanges {
+		t.Errorf("Expected changesDir to be %s, got %s", expectedChanges, currentChanges)
 	}
-	if revisionsDir != expectedRevisions {
-		t.Errorf("Expected revisionsDir to be %s, got %s", expectedRevisions, revisionsDir)
+	if currentRevisions != expectedRevisions {
+		t.Errorf("Expected revisionsDir to be %s, got %s", expectedRevisions, currentRevisions)
 	}
 
 	// Verify the getters return expected values
@@ -95,13 +87,9 @@ func TestInitializeHistoryPaths_GlobalScope(t *testing.T) {
 }
 
 func TestInitializeHistoryPaths_NilConfig(t *testing.T) {
-	// Reset to default before test
-	originalChanges := changesDir
-	originalRevisions := revisionsDir
-	defer func() {
-		changesDir = originalChanges
-		revisionsDir = originalRevisions
-	}()
+	// Save original paths and restore after test
+	originalChanges, originalRevisions := getPathsForTesting()
+	defer setPathsForTesting(originalChanges, originalRevisions)
 
 	// Store current directory
 	oldDir, _ := os.Getwd()
@@ -114,26 +102,25 @@ func TestInitializeHistoryPaths_NilConfig(t *testing.T) {
 	os.Chdir(t.TempDir())
 
 	// Reset to project paths
-	changesDir = projectChangesDir
-	revisionsDir = projectRevisionsDir
+	setPathsForTesting(projectChangesDir, projectRevisionsDir)
 
 	// Initialize with nil config (should load from file or use default)
 	InitializeHistoryPaths(nil)
 
 	// Initialize should succeed without error - just check it didn't crash
 	// The paths should be set to something (either project or global based on what config returns)
-	if changesDir == "" {
+	currentChanges, currentRevisions := getPathsForTesting()
+	if currentChanges == "" {
 		t.Error("changesDir should not be empty")
 	}
-	if revisionsDir == "" {
+	if currentRevisions == "" {
 		t.Error("revisionsDir should not be empty")
 	}
 }
 
 func TestGetChangesDir_GetRevisionsDir(t *testing.T) {
 	// Test the getter functions directly
-	changesDir = ".test/changes"
-	revisionsDir = ".test/revisions"
+	setPathsForTesting(".test/changes", ".test/revisions")
 
 	if got := GetChangesDir(); got != ".test/changes" {
 		t.Errorf("GetChangesDir() = %s, want .test/changes", got)

@@ -145,13 +145,19 @@ func (tm *TerminalManager) createTmuxSession(sessionID string) (*TerminalSession
 	if strings.TrimSpace(tm.workspaceRoot) != "" {
 		createCmd.Dir = tm.workspaceRoot
 	}
-	// Inherit useful env vars for the shell inside tmux
+	// Inherit useful env vars for the shell inside tmux.
+	// COLUMNS and LINES are critical: many Node.js packages (e.g. regex,
+	// webpack) read process.stdout.columns or $COLUMNS to determine
+	// terminal width.  When running inside a PTY-backed web terminal the
+	// process may not report a valid TTY width, causing NaN errors.
 	createCmd.Env = append(os.Environ(),
 		"TERM=xterm-256color",
 		"COLORTERM=truecolor",
 		"FORCE_COLOR=1",
 		"SHELL="+shell,
 		"LEDIT_WEB_TERMINAL=1",
+		"COLUMNS=80",
+		"LINES=24",
 	)
 
 	if output, err := createCmd.CombinedOutput(); err != nil {
@@ -226,13 +232,19 @@ func (tm *TerminalManager) createUnixSession(sessionID string) (*TerminalSession
 		cmd.Dir = tm.workspaceRoot
 	}
 
-	// Set environment variables for better terminal experience
+	// Set environment variables for better terminal experience.
+	// COLUMNS and LINES are critical: many Node.js packages (e.g. regex,
+	// webpack) read process.stdout.columns or $COLUMNS to determine
+	// terminal width.  When running inside a PTY-backed web terminal the
+	// process may not report a valid TTY width, causing NaN errors.
 	cmd.Env = append(os.Environ(),
 		"TERM=xterm-256color",
 		"COLORTERM=truecolor",
 		"FORCE_COLOR=1",
 		"SHELL="+shell,
 		"LEDIT_WEB_TERMINAL=1",
+		"COLUMNS=80",
+		"LINES=24",
 	)
 
 	// Set default terminal size
@@ -677,24 +689,30 @@ func (tm *TerminalManager) CloseAllSessions() error {
 
 // monitorSession monitors a terminal session and handles output
 func (tm *TerminalManager) monitorSession(session *TerminalSession) {
+	// Capture channel references at function entry so this goroutine
+	// always closes the channels it was started with — even if ReattachSession
+	// replaces them with new ones while we are still running.
+	outputCh := session.OutputCh
+	doneCh := session.monitorDone
+
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Printf("Terminal session %s monitor panic: %v\n", session.ID, r)
 		}
-		// Close output channel when done
-		if session.OutputCh != nil {
-			close(session.OutputCh)
+		// Close the output channel this goroutine was started with.
+		if outputCh != nil {
+			close(outputCh)
 		}
 	}()
 
 	// Signal that this goroutine has stopped.
 	defer func() {
-		if session.monitorDone != nil {
+		if doneCh != nil {
 			select {
-			case <-session.monitorDone:
+			case <-doneCh:
 				// Already closed (by Detach/Close/Reattach)
 			default:
-				close(session.monitorDone)
+				close(doneCh)
 			}
 		}
 	}()
@@ -734,9 +752,9 @@ func (tm *TerminalManager) monitorSession(session *TerminalSession) {
 
 				// Send to output channel (non-blocking)
 				select {
-				case session.OutputCh <- output:
+				case outputCh <- output:
 					// Output sent successfully
-				case <-session.monitorDone:
+				case <-doneCh:
 					// Monitor was asked to stop
 					return
 				default:
@@ -751,7 +769,7 @@ func (tm *TerminalManager) monitorSession(session *TerminalSession) {
 	select {
 	case <-readDone:
 		// Read goroutine finished
-	case <-session.monitorDone:
+	case <-doneCh:
 		// Monitor was asked to stop (detach/reattach/close).
 		// Wait for the reader goroutine to fully stop before we close OutputCh,
 		// otherwise it may panic with "send on closed channel".
@@ -966,7 +984,9 @@ func (tm *TerminalManager) ResizeTerminal(sessionID string, rows, cols uint16) e
 		return fmt.Errorf("failed to resize PTY: %w", err)
 	}
 
-	// For tmux-backed sessions, also resize the tmux pane
+	// For tmux-backed sessions, also resize the tmux pane and update
+	// COLUMNS/LINES environment variables so that child processes (e.g.
+	// Node.js reading process.env.COLUMNS) pick up the new dimensions.
 	if session.TmuxBacked {
 		tmuxName := tm.TmuxSessionName(sessionID)
 		// Note: we release the lock on session before calling tmux,
@@ -981,6 +1001,18 @@ func (tm *TerminalManager) ResizeTerminal(sessionID string, rows, cols uint16) e
 				// Non-fatal: the PTY resize already happened, tmux adjust may
 				// not be critical in all cases
 				fmt.Printf("TerminalManager: failed to resize tmux pane %s: %v\n", tmuxName, err)
+			}
+
+			// Propagate updated dimensions into the tmux session environment
+			// so that new child processes inherit the correct COLUMNS/LINES.
+			for _, pair := range []struct{ k, v string }{
+				{"COLUMNS", fmt.Sprintf("%d", cols)},
+				{"LINES", fmt.Sprintf("%d", rows)},
+			} {
+				cmd := exec.Command("tmux", "set-environment", "-t", tmuxName, pair.k, pair.v)
+				if err := cmd.Run(); err != nil {
+					fmt.Printf("TerminalManager: failed to set %s in tmux session %s: %v\n", pair.k, tmuxName, err)
+				}
 			}
 		}()
 	}

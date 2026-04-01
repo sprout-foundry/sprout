@@ -430,3 +430,102 @@ func TestDetachFromTmuxSession_NoPanic(t *testing.T) {
 	}
 	t.Logf("all %d tmux detach iterations completed without panic", iterations)
 }
+
+// --------------------------------------------------------------------------
+// Test 6: ReattachSession replaces OutputCh while old monitor is still running
+// --------------------------------------------------------------------------
+
+func TestReattachOutputChannel_NoDoubleClose(t *testing.T) {
+	// This test reproduces the "close of closed channel" panic that
+	// occurs when ReattachSession replaces session.OutputCh while the
+	// old monitorSession goroutine is still running. Without the fix,
+	// both the old and new monitor defers try to close the same channel.
+	t.Setenv("TERM", "xterm-256color")
+
+	ptyFile, ptyDone, ptyCancel := startNoisyPTY(t)
+	defer ptyCancel()
+
+	_ = ptyDone
+	tm := NewTerminalManager(os.TempDir())
+	id := uniqueSessionID("reattach-race")
+
+	sess := rawSessionFromPTY(ptyFile, id)
+
+	// Start the "old" monitor goroutine (M1).
+	var m1Exited atomic.Bool
+	go func() {
+		tm.monitorSession(sess)
+		m1Exited.Store(true)
+	}()
+
+	// Let M1 read some data, and receive one message to establish
+	// happens-before between M1's initial field captures (including
+	// session.OutputCh and session.monitorDone) and our subsequent
+	// field replacement below.
+	time.Sleep(10 * time.Millisecond)
+	select {
+	case <-sess.OutputCh:
+	default:
+	}
+
+	// Simulate what ReattachSession does:
+	// 1. Signal M1 to stop by closing monitorDone.
+	select {
+	case <-sess.monitorDone:
+	default:
+		close(sess.monitorDone)
+	}
+
+	// 2. Replace channels with new ones (this is what ReattachSession does
+	//    after stopping the old monitor, but the old monitor may not have
+	//    fully exited yet).
+	//    Save old channel before replacing (read before write — same goroutine,
+	//    no race).
+	oldOutputCh := sess.OutputCh
+	sess.OutputCh = make(chan []byte, 10000)
+	sess.monitorDone = make(chan struct{})
+
+	// 3. Start the "new" monitor goroutine (M2) immediately.
+	var m2Exited atomic.Bool
+	go func() {
+		tm.monitorSession(sess)
+		m2Exited.Store(true)
+	}()
+
+	// Drain both output channels so both monitors can fully exit.
+	// The old channel (oldOutputCh) will be closed by M1's defer.
+	// The new channel (sess.OutputCh) will be closed by M2's defer.
+	reclaimOutputCh := func(ch chan []byte, timeout time.Duration) {
+		done := make(chan struct{})
+		go func() {
+			for range ch {
+				// drain
+			}
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-time.After(timeout):
+			t.Log("timed out draining channel")
+		}
+	}
+
+	reclaimOutputCh(oldOutputCh, 3*time.Second)
+
+	// Signal M2 to stop and drain its output channel.
+	select {
+	case <-sess.monitorDone:
+	default:
+		close(sess.monitorDone)
+	}
+	reclaimOutputCh(sess.OutputCh, 3*time.Second)
+
+	if !m1Exited.Load() {
+		t.Fatal("M1 (old monitor) did not exit within the timeout")
+	}
+	if !m2Exited.Load() {
+		t.Fatal("M2 (new monitor) did not exit within the timeout")
+	}
+
+	t.Log("both monitors exited cleanly — no double-close panic")
+}

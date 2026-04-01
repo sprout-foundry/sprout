@@ -2,6 +2,7 @@ import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react'
 import { Menu, X, Columns2, Rows2, PanelRightOpen, PanelRightClose } from 'lucide-react';
 import Sidebar from './Sidebar';
 import WorkspaceBar from './WorkspaceBar';
+import ChatTabBar from './ChatTabBar';
 import Terminal from './Terminal';
 import EditorTabs from './EditorTabs';
 import WorkspacePane from './WorkspacePane';
@@ -11,6 +12,7 @@ import Status from './Status';
 import CommandPalette from './CommandPalette';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { ApiService, LeditInstance } from '../services/api';
+import type { ChatSession } from '../services/chatSessions';
 import { useGitWorkspace } from '../hooks/useGitWorkspace';
 
 const INSTANCE_PID_STORAGE_KEY = 'ledit:webui:instancePid';
@@ -144,6 +146,12 @@ interface AppContentProps {
   onTerminalOutput: (output: string) => void;
   onTerminalExpandedChange: (expanded: boolean) => void;
   isConnected: boolean;
+  chatSessions: ChatSession[];
+  activeChatId: string;
+  onSwitchChat: (id: string) => void;
+  onCreateChat: () => void;
+  onDeleteChat: (id: string) => void;
+  onRenameChat: (id: string, name: string) => void;
 }
 
 const AppContent: React.FC<AppContentProps> = ({
@@ -179,7 +187,13 @@ const AppContent: React.FC<AppContentProps> = ({
   onGitDiscard,
   onTerminalOutput,
   onTerminalExpandedChange,
-  isConnected
+  isConnected,
+  chatSessions,
+  activeChatId,
+  onSwitchChat,
+  onCreateChat,
+  onDeleteChat,
+  onRenameChat,
 }) => {
   const {
     panes,
@@ -1127,6 +1141,16 @@ const AppContent: React.FC<AppContentProps> = ({
           isMobile={isMobile}
           isMobileMenuOpen={isSidebarOpen}
         />
+        {chatSessions.length > 0 && (
+          <ChatTabBar
+            sessions={chatSessions}
+            activeChatId={activeChatId}
+            onSwitch={onSwitchChat}
+            onCreate={onCreateChat}
+            onDelete={onDeleteChat}
+            onRename={onRenameChat}
+          />
+        )}
         <div className="main-view-content">
           <div className="editor-view">
             {isMobile && (

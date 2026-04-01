@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"sort"
 	"strconv"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/agent"
+	"github.com/alantheprice/ledit/pkg/events"
 )
 
 const (
@@ -29,6 +31,7 @@ type chatSession struct {
 	CurrentSessionID string    `json:"current_session_id"`
 	ActiveQuery      bool      `json:"active_query"`
 	CurrentQuery     string    `json:"current_query"`
+	Agent            *agent.Agent `json:"-"`
 	mu               sync.Mutex
 }
 
@@ -90,6 +93,58 @@ func (cs *chatSession) setQueryActive(active bool, query string) {
 		cs.CurrentQuery = ""
 	}
 	cs.LastActiveAt = time.Now()
+}
+
+// getOrCreateAgent returns the agent for this chat session, creating one
+// lazily if needed. The agent is created outside the chatSession mutex to
+// avoid holding it during potentially slow I/O (JSON deserialization, state
+// import). If two goroutines race to create the agent, only one wins and the
+// other's agent becomes unreferenced.
+func (cs *chatSession) getOrCreateAgent(workspaceRoot string, eventBus *events.EventBus, clientID string) (*agent.Agent, error) {
+	cs.mu.Lock()
+	if cs.Agent != nil {
+		agentInst := cs.Agent
+		agentInst.SetWorkspaceRoot(workspaceRoot)
+		agentInst.SetEventMetadata(map[string]interface{}{"client_id": clientID, "chat_id": cs.ID})
+		agentInst.EnableStreaming(func(string) {})
+		cs.mu.Unlock()
+		return agentInst, nil
+	}
+	cs.mu.Unlock()
+
+	// Create agent outside the lock.
+	snapshot := append([]byte(nil), cs.AgentState...)
+	created, err := agent.NewAgentWithModel("")
+	if err != nil {
+		return nil, err
+	}
+
+	if eventBus != nil {
+		created.SetEventBus(eventBus)
+	}
+	created.SetWorkspaceRoot(workspaceRoot)
+	created.SetEventMetadata(map[string]interface{}{"client_id": clientID, "chat_id": cs.ID})
+	created.EnableStreaming(func(string) {})
+	if len(snapshot) > 0 {
+		if err := created.ImportState(snapshot); err != nil {
+			log.Printf("chatSession.getOrCreateAgent: warning: failed to import state: %v", err)
+		}
+	}
+
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	if cs.Agent == nil {
+		// We won the race — store our agent.
+		cs.Agent = created
+		cs.CurrentSessionID = strings.TrimSpace(created.GetSessionID())
+	} else {
+		// Another goroutine beat us — discard ours and return theirs.
+		created = cs.Agent
+		created.SetWorkspaceRoot(workspaceRoot)
+		created.SetEventMetadata(map[string]interface{}{"client_id": clientID, "chat_id": cs.ID})
+		created.EnableStreaming(func(string) {})
+	}
+	return created, nil
 }
 
 // newChatSession creates a new chat session with a unique ID and name.

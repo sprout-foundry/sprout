@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import './LocationSwitcher.css';
 import { FolderOpen, Monitor, RefreshCw, Loader2, Server } from 'lucide-react';
-import { showThemedConfirm } from './ThemedDialog';
 import {
   ApiService,
   SSHBrowseEntry,
@@ -794,9 +793,8 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
       try {
         const sessionCount = await apiService.current.getTerminalSessionCount();
         if (sessionCount > 0) {
-          const confirmed = await showThemedConfirm(
-            `${sessionCount} terminal session${sessionCount === 1 ? ' is' : 's are'} active. Switching workspace will close ${sessionCount === 1 ? 'it' : 'them'}. Continue?`,
-            { title: 'Active Terminal Sessions', type: 'warning' }
+          const confirmed = window.confirm(
+            `${sessionCount} terminal session${sessionCount === 1 ? ' is' : 's are'} active. Switching workspace will close ${sessionCount === 1 ? 'it' : 'them'}. Continue?`
           );
           if (!confirmed) {
             setSwitchingState({ isSwitching: false, error: null, status: null });
@@ -828,6 +826,10 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
       } else {
         addRecentWorkspace(nextWorkspaceRoot);
       }
+
+      window.setTimeout(() => {
+        window.location.reload();
+      }, 300);
     } catch (error) {
       const errorMessage =
         error instanceof Error
@@ -1822,17 +1824,8 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
                         className={`location-switcher-item ${
                           instance.pid === selectedInstancePID ? 'active' : ''
                         }`}
-                        onClick={async () => {
-                          if (!onInstanceChange || !instance.pid) return;
-                          const confirmed = await showThemedConfirm(
-                            `Switch to instance ${instance.pid}?\n\n` +
-                            `Workspace: ${instance.working_dir}\n` +
-                            `Port: ${instance.port}\n\n` +
-                            `This will navigate this tab to a different ledit instance. ` +
-                            `Chat history and open files will not transfer.`,
-                            { title: 'Switch Instance', type: 'info' }
-                          );
-                          if (confirmed) {
+                        onClick={() => {
+                          if (onInstanceChange && instance.pid) {
                             onInstanceChange(instance.pid);
                           }
                         }}
@@ -1842,7 +1835,8 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
                         disabled={
                           switchingState.isSwitching ||
                           isSwitchingInstance ||
-                          !onInstanceChange
+                          !onInstanceChange ||
+                          instance.is_host
                         }
                       >
                         <span className="location-switcher-item-text">{label}</span>

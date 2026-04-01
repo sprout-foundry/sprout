@@ -806,6 +806,9 @@ func (ws *ReactWebServer) handleAPICreateFile(w http.ResponseWriter, r *http.Req
 		file.Close()
 	}
 
+	// Publish file change event so the git view auto-updates
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent(canonicalPath, "created", ""))
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"message": "success",
@@ -882,6 +885,9 @@ func (ws *ReactWebServer) handleAPIDeleteItem(w http.ResponseWriter, r *http.Req
 		})
 		return
 	}
+
+	// Publish file change event so the git view auto-updates
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent(canonicalPath, "deleted", ""))
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -999,6 +1005,10 @@ func (ws *ReactWebServer) handleAPIRenameItem(w http.ResponseWriter, r *http.Req
 		})
 		return
 	}
+
+	// Publish file change events so the git view auto-updates
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent(oldCanonicalPath, "deleted", ""))
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent(newCanonicalPath, "created", ""))
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1531,8 +1541,9 @@ func (ws *ReactWebServer) handleUploadImage(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Save the image
-	relativePath, err := console.SavePastedImage(data)
+	// Save the image to the workspace root, not the daemon's CWD
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	relativePath, err := console.SavePastedImage(data, workspaceRoot)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to save image: %v", err), http.StatusInternalServerError)
 		return

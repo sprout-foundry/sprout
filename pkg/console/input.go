@@ -1020,7 +1020,7 @@ func (ir *InputReader) finalizePaste() bool {
 	if len(rawBytes) > 4 && len(rawBytes) <= MaxPastedImageSize {
 		if ext, mimeType := DetectImageMagic(rawBytes); ext != "" {
 			fmt.Fprintf(os.Stderr, "\n[img] Image paste detected (%s, %d bytes)\n", mimeType, len(rawBytes))
-			savedPath, err := SavePastedImage(rawBytes)
+			savedPath, err := SavePastedImage(rawBytes, "")
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "[FAIL] Failed to save pasted image: %v\n", err)
 			} else {

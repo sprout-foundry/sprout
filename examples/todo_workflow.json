@@ -4,7 +4,8 @@
     "max_iterations": 300,
     "persona": "orchestrator",
     "prompt": "Look through the list of todos in TODO.md and pick this one to address: '{TODO_TEXT}'. Build, test then review the solution. If issues come back in the review, continue the build -> test -> review process until it is ready for release. Once it is ready, stage only the files you created or modified as part of this task using `git add <file1> <file2> ...`. Do NOT use `git add -A` or `git add .` — only stage your own changes.",
-    "skip_prompt": true
+    "skip_prompt": true,
+    "unsafe": true
   },
   "no_web_ui": true,
   "persist_runtime_overrides": false,
@@ -15,6 +16,7 @@
       "prompt": "Perform a deep evidence-based code review of all staged changes. Read the staged diff using `git diff --cached`, then read each changed file for full context. Analyze for correctness, edge cases, error handling, security, and code quality. Report any issues found with file paths, line numbers, severity, and a clear description. If the code looks good with no issues, say REVIEW_STATUS: APPROVED. Do NOT make any code changes or stage anything. Do NOT commit.",
       "reasoning_effort": "high",
       "skip_prompt": true,
+      "unsafe": true,
       "when": "on_success"
     },
     {
@@ -23,6 +25,7 @@
       "prompt": "Review the deep review findings from the previous step. If the review result was APPROVED with no issues, do nothing further — you are done. Otherwise, validate each issue and fix the valid ones using subagents. After fixing, re-review the solution using the same deep review approach (read the changed files, check for correctness, edge cases, error handling). Continue iterating until all valid issues are resolved. When done, stage only the files you created or modified during this fix using `git add <file1> <file2> ...`. Do NOT use `git add -A` or `git add .` — only stage your own changes. Do NOT commit — that will be handled separately.",
       "reasoning_effort": "high",
       "skip_prompt": true,
+      "unsafe": true,
       "when": "on_success"
     }
   ]

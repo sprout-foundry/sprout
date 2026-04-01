@@ -22,9 +22,9 @@ import {
 import FileTree from './FileTree';
 import SearchView from './SearchView';
 import GitSidebarPanel, { GitStatusData } from './GitSidebarPanel';
-import type { GitViewTab } from './GitSidebarPanel';
 import type { GitBranchesState } from '../hooks/useGitWorkspace';
 import RevisionListPanel from './RevisionListPanel';
+import GitHistoryPanel from './GitHistoryPanel';
 import LeditLogo from './LeditLogo';
 import LocationSwitcher from './LocationSwitcher';
 
@@ -96,8 +96,6 @@ interface SidebarProps {
     onSectionAction: (section: 'staged' | 'modified' | 'untracked' | 'deleted') => void;
     onOpenFile?: (path: string) => void;
     workspaceRoot?: string;
-    activeTab?: GitViewTab;
-    onTabChange?: (tab: GitViewTab) => void;
     apiService?: ApiService;
     openWorkspaceBuffer?: (options: {
       kind: 'chat' | 'diff' | 'review';
@@ -175,6 +173,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [isLoadingProviders, setIsLoadingProviders] = useState(false);
   const hasHydratedProviderStateRef = useRef(false);
   const [selectedSection, setSelectedSection] = useState<SectionTab>('git');
+  const [historySubTab, setHistorySubTab] = useState<'git-log' | 'revisions'>('git-log');
   const [settings, setSettings] = useState<LeditSettings | null>(null);
   const apiService = ApiService.getInstance();
   const effectiveSidebarCollapsed = !isMobile && !!sidebarCollapsed;
@@ -757,10 +756,52 @@ const Sidebar: React.FC<SidebarProps> = ({
     switch (selectedSection) {
       case 'git':
         return gitPanel ? <GitSidebarPanel {...gitPanel} /> : <div className="empty">Git unavailable</div>;
-      case 'history':
-        return onOpenRevisionDiff ? (
-          <RevisionListPanel mode="global" allowRollback={true} onOpenDiff={onOpenRevisionDiff} />
-        ) : <div className="empty">History unavailable</div>;
+      case 'history': {
+        const hasGitLog = !!gitPanel?.apiService && !!gitPanel?.openWorkspaceBuffer;
+        const hasRevisions = !!onOpenRevisionDiff;
+        return (
+          <div className="history-pane">
+            {(hasGitLog || hasRevisions) && (
+              <div className="git-sidebar-tab-bar">
+                {hasGitLog && (
+                  <button
+                    type="button"
+                    className={`git-sidebar-tab ${historySubTab === 'git-log' ? 'active' : ''}`}
+                    onClick={() => setHistorySubTab('git-log')}
+                  >
+                    <GitBranch size={14} />
+                    <span>Git Log</span>
+                  </button>
+                )}
+                {hasRevisions && (
+                  <button
+                    type="button"
+                    className={`git-sidebar-tab ${historySubTab === 'revisions' ? 'active' : ''}`}
+                    onClick={() => setHistorySubTab('revisions')}
+                  >
+                    <History size={14} />
+                    <span>Revisions</span>
+                  </button>
+                )}
+              </div>
+            )}
+            {historySubTab === 'git-log' ? (
+              hasGitLog
+                ? <GitHistoryPanel
+                    apiService={gitPanel!.apiService!}
+                    isActing={false}
+                    onRefresh={gitPanel!.onRefresh}
+                    openWorkspaceBuffer={gitPanel!.openWorkspaceBuffer!}
+                  />
+                : <div className="empty">Git log unavailable</div>
+            ) : (
+              hasRevisions
+                ? <RevisionListPanel mode="global" allowRollback={true} onOpenDiff={onOpenRevisionDiff} />
+                : <div className="empty">Revisions unavailable</div>
+            )}
+          </div>
+        );
+      }
       case 'logs':
         return renderLogsSection();
       case 'files':

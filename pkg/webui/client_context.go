@@ -30,6 +30,7 @@ type webClientContext struct {
 	Agent            *agent.Agent
 	AgentState       []byte
 	CurrentSessionID string
+	CurrentQuery    string
 	ActiveQuery      bool
 	LastSeenAt       time.Time
 }
@@ -239,6 +240,7 @@ func (ws *ReactWebServer) setClientWorkspaceRoot(clientID, path string) (string,
 	ctx.AgentState = emptyAgentStateSnapshot()
 	ctx.CurrentSessionID = ""
 	ctx.ActiveQuery = false
+	ctx.CurrentQuery = ""
 	if ctx.FileConsents == nil {
 		ctx.FileConsents = newFileConsentManager()
 	}

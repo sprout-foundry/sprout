@@ -68,10 +68,11 @@ func DetectImageMagic(data []byte) (ext string, mimeType string) {
 	return "", ""
 }
 
-// SavePastedImage saves raw image data to .ledit/pasted-images/ in the current
-// working directory. It returns a relative path like
-// "./.ledit/pasted-images/paste_20260320_145959_abc123.png".
-func SavePastedImage(data []byte) (string, error) {
+// SavePastedImage saves raw image data to .ledit/pasted-images/ under the
+// provided base directory (typically the workspace root). It returns a
+// relative path like "./.ledit/pasted-images/paste_20260320_145959_abc123.png".
+// If baseDir is empty, it falls back to os.Getwd().
+func SavePastedImage(data []byte, baseDir string) (string, error) {
 	if len(data) > MaxPastedImageSize {
 		return "", fmt.Errorf("pasted image exceeds maximum size of %d bytes", MaxPastedImageSize)
 	}
@@ -81,9 +82,13 @@ func SavePastedImage(data []byte) (string, error) {
 		return "", fmt.Errorf("cannot determine image format for saved file")
 	}
 
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", fmt.Errorf("failed to get working directory: %w", err)
+	cwd := baseDir
+	if cwd == "" {
+		var err error
+		cwd, err = os.Getwd()
+		if err != nil {
+			return "", fmt.Errorf("failed to get working directory: %w", err)
+		}
 	}
 
 	dir := filepath.Join(cwd, PastedImageDirName)

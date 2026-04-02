@@ -63,14 +63,32 @@ function deleteCurrentLine(view: EditorView): boolean {
   return true;
 }
 
+/** Extract leading whitespace (indentation) from a line of text. */
+export function getLineIndent(text: string): string {
+  const match = text.match(/^(\s*)/);
+  return match ? match[1] : '';
+}
+
+// NOTE: Cursor placement is intentionally at column 0 of the new line
+// (before the indentation). This matches CodeMirror's built-in
+// `insertBlankLine` behavior for "below" and keeps the implementation
+// simple. VS Code also places the cursor at the indentation level for
+// "insert below" but at `Math.min(indent.length, cursorColumn)` for
+// "insert above." We use the simpler column-0 approach for both, which
+// is consistent with CodeMirror's built-in editor behavior.
+
 function insertLineBelow(view: EditorView): boolean {
   if (!hasSingleSelection(view)) return false;
 
   const line = view.state.doc.lineAt(view.state.selection.main.head);
-  // Insert a newline at end of the current line and move cursor there
+  const indent = getLineIndent(line.text);
+  // Insert \n + indentation at end of the current line, then place the
+  // cursor at the start of the new line (before the indentation —
+  // VS Code places cursor at column 0 of the new indented line).
   const endOfLine = line.to;
+  const insertText = '\n' + indent;
   view.dispatch({
-    changes: { from: endOfLine, insert: '\n' },
+    changes: { from: endOfLine, insert: insertText },
     selection: { anchor: endOfLine + 1 },
     scrollIntoView: true,
   });
@@ -81,9 +99,12 @@ function insertLineAbove(view: EditorView): boolean {
   if (!hasSingleSelection(view)) return false;
 
   const line = view.state.doc.lineAt(view.state.selection.main.head);
-  // Insert a newline before the current line and position cursor there
+  const indent = getLineIndent(line.text);
+  // Insert indentation + \n before the current line's start, then place
+  // the cursor at the start of the new line (before the indentation).
+  const insertText = indent + '\n';
   view.dispatch({
-    changes: { from: line.from, insert: '\n' },
+    changes: { from: line.from, insert: insertText },
     selection: { anchor: line.from },
     scrollIntoView: true,
   });
@@ -271,8 +292,22 @@ export function getEditorKeymap(
   // maps a key to this command (e.g. Ctrl+Shift+K in VS Code preset).
   bindings.push(...bindingsFor('editor_delete_line', (v) => deleteCurrentLine(v)));
 
-  bindings.push(...bindingsFor('editor_insert_line_below', (v) => insertLineBelow(v)));
-  bindings.push(...bindingsFor('editor_insert_line_above', (v) => insertLineAbove(v)));
+  // Insert line below — fallback to Mod-Enter (same as CodeMirror's
+  // built-in insertBlankLine binding we're overriding).
+  const insertBelowBindings = bindingsFor('editor_insert_line_below', (v) => insertLineBelow(v));
+  if (insertBelowBindings.length === 0) {
+    bindings.push({ key: 'Mod-Enter', preventDefault: true, run: (v) => insertLineBelow(v) });
+  } else {
+    bindings.push(...insertBelowBindings);
+  }
+
+  // Insert line above — fallback to Mod-Shift-Enter (VS Code default).
+  const insertAboveBindings = bindingsFor('editor_insert_line_above', (v) => insertLineAbove(v));
+  if (insertAboveBindings.length === 0) {
+    bindings.push({ key: 'Mod-Shift-Enter', preventDefault: true, run: (v) => insertLineAbove(v) });
+  } else {
+    bindings.push(...insertAboveBindings);
+  }
 
   return bindings;
 }

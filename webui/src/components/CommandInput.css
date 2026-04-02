@@ -246,6 +246,48 @@
   font-weight: 700;
 }
 
+.queue-button-wrapper {
+  position: relative;
+}
+
+.queue-badge-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 12px;
+  border: none;
+  background: var(--accent-primary, #6366f1);
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  line-height: 1;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+}
+
+.queue-badge-button:hover {
+  background: var(--accent-primary-hover, #4f46e5);
+  transform: scale(1.1);
+}
+
+.queue-popover-overlay {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  z-index: 10000;
+  min-width: min(360px, calc(100vw - 32px));
+  max-width: min(420px, calc(100vw - 32px));
+  max-height: 400px;
+}
+
+.queue-popover-overlay .queue-panel {
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
 .new-session-button {
   background: transparent;
   color: var(--text-secondary);

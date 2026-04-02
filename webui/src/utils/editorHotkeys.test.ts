@@ -1,7 +1,12 @@
 // @ts-nocheck
 
+// Mock @codemirror/search to avoid ESM-only transitive dependencies
+// (@marijn/find-cluster-break) that Jest/CRA cannot transform.
+jest.mock('@codemirror/search', () => ({
+  selectSelectionMatches: jest.fn(() => true),
+}));
+
 import { getEditorKeymap, getLineIndent } from './editorHotkeys';
-import type { HotkeyEntry } from '../services/api';
 
 describe('getLineIndent', () => {
   it('returns empty string for empty input', () => {
@@ -40,7 +45,7 @@ describe('getEditorKeymap', () => {
       const keymap = getEditorKeymap(entries, emptyActions);
       const below = keymap.find((b) => b.key === 'Mod-Enter');
       expect(below).toBeDefined();
-      expect(below.preventDefault).toBe(true);
+      expect(below!.preventDefault).toBe(true);
     });
 
     it('translates Ctrl+Shift+Enter → Mod-Shift-Enter for editor_insert_line_above', () => {
@@ -50,7 +55,7 @@ describe('getEditorKeymap', () => {
       const keymap = getEditorKeymap(entries, emptyActions);
       const above = keymap.find((b) => b.key === 'Mod-Shift-Enter');
       expect(above).toBeDefined();
-      expect(above.preventDefault).toBe(true);
+      expect(above!.preventDefault).toBe(true);
     });
 
     it('translates Cmd+Enter → Mod-Enter (Mac-style)', () => {
@@ -70,6 +75,25 @@ describe('getEditorKeymap', () => {
       const above = keymap.find((b) => b.key === 'Mod-Shift-Enter');
       expect(above).toBeDefined();
     });
+
+    it('translates Ctrl+Shift+L → Mod-Shift-l for editor_select_all_occurrences', () => {
+      const entries: HotkeyEntry[] = [
+        { key: 'Ctrl+Shift+L', command_id: 'editor_select_all_occurrences' },
+      ];
+      const keymap = getEditorKeymap(entries, emptyActions);
+      const selAll = keymap.find((b) => b.key === 'Mod-Shift-l');
+      expect(selAll).toBeDefined();
+      expect(selAll!.preventDefault).toBe(true);
+    });
+
+    it('translates Cmd+Shift+L → Mod-Shift-l (Mac-style)', () => {
+      const entries: HotkeyEntry[] = [
+        { key: 'Cmd+Shift+L', command_id: 'editor_select_all_occurrences' },
+      ];
+      const keymap = getEditorKeymap(entries, emptyActions);
+      const selAll = keymap.find((b) => b.key === 'Mod-Shift-l');
+      expect(selAll).toBeDefined();
+    });
   });
 
   describe('editor_insert_line_below bindings', () => {
@@ -80,7 +104,7 @@ describe('getEditorKeymap', () => {
       const keymap = getEditorKeymap(entries, emptyActions);
       const below = keymap.find((b) => b.key === 'Mod-Enter');
       expect(below).toBeDefined();
-      expect(typeof below.run).toBe('function');
+      expect(typeof below!.run).toBe('function');
     });
   });
 
@@ -92,7 +116,19 @@ describe('getEditorKeymap', () => {
       const keymap = getEditorKeymap(entries, emptyActions);
       const above = keymap.find((b) => b.key === 'Mod-Shift-Enter');
       expect(above).toBeDefined();
-      expect(typeof above.run).toBe('function');
+      expect(typeof above!.run).toBe('function');
+    });
+  });
+
+  describe('editor_select_all_occurrences bindings', () => {
+    it('produces bindings when configured', () => {
+      const entries: HotkeyEntry[] = [
+        { key: 'Ctrl+Shift+L', command_id: 'editor_select_all_occurrences' },
+      ];
+      const keymap = getEditorKeymap(entries, emptyActions);
+      const selAll = keymap.find((b) => b.key === 'Mod-Shift-l');
+      expect(selAll).toBeDefined();
+      expect(typeof selAll!.run).toBe('function');
     });
   });
 
@@ -101,8 +137,8 @@ describe('getEditorKeymap', () => {
       const keymap = getEditorKeymap(null, emptyActions);
       const below = keymap.find((b) => b.key === 'Mod-Enter');
       expect(below).toBeDefined();
-      expect(below.preventDefault).toBe(true);
-      expect(typeof below.run).toBe('function');
+      expect(below!.preventDefault).toBe(true);
+      expect(typeof below!.run).toBe('function');
     });
 
     it('includes Mod-Enter fallback when entries array is empty', () => {
@@ -115,14 +151,28 @@ describe('getEditorKeymap', () => {
       const keymap = getEditorKeymap(null, emptyActions);
       const above = keymap.find((b) => b.key === 'Mod-Shift-Enter');
       expect(above).toBeDefined();
-      expect(above.preventDefault).toBe(true);
-      expect(typeof above.run).toBe('function');
+      expect(above!.preventDefault).toBe(true);
+      expect(typeof above!.run).toBe('function');
     });
 
     it('includes Mod-Shift-Enter fallback when entries array is empty', () => {
       const keymap = getEditorKeymap([], emptyActions);
       const above = keymap.find((b) => b.key === 'Mod-Shift-Enter');
       expect(above).toBeDefined();
+    });
+
+    it('includes Mod-Shift-l fallback for editor_select_all_occurrences when no entries provided', () => {
+      const keymap = getEditorKeymap(null, emptyActions);
+      const selAll = keymap.find((b) => b.key === 'Mod-Shift-l');
+      expect(selAll).toBeDefined();
+      expect(selAll!.preventDefault).toBe(true);
+      expect(typeof selAll!.run).toBe('function');
+    });
+
+    it('includes Mod-Shift-l fallback when entries array is empty', () => {
+      const keymap = getEditorKeymap([], emptyActions);
+      const selAll = keymap.find((b) => b.key === 'Mod-Shift-l');
+      expect(selAll).toBeDefined();
     });
   });
 
@@ -147,6 +197,16 @@ describe('getEditorKeymap', () => {
       expect(keymap.some((b) => b.key === 'Mod-Shift-Enter')).toBe(true);
     });
 
+    it('includes editor_select_all_occurrences as a handled command_id', () => {
+      const entries: HotkeyEntry[] = [
+        { key: 'Ctrl+Shift+L', command_id: 'editor_select_all_occurrences' },
+      ];
+      const keymap = getEditorKeymap(entries, emptyActions);
+      // If the command_id were not in EDITOR_COMMAND_IDS, it would be
+      // silently skipped and no Mod-Shift-l binding would exist.
+      expect(keymap.some((b) => b.key === 'Mod-Shift-l')).toBe(true);
+    });
+
     it('ignores entries with unknown command_ids', () => {
       const entries: HotkeyEntry[] = [
         { key: 'Ctrl+Enter', command_id: 'unknown_command' },
@@ -156,8 +216,8 @@ describe('getEditorKeymap', () => {
       // fallback for insert_line_below should still be present.
       expect(keymap.some((b) => b.key === 'Mod-Enter')).toBe(true);
       // Only fallbacks + save + goto — no binding from the unknown entry.
-      const knownKeys = ['Mod-s', 'Mod-g', 'Mod-Enter', 'Mod-Shift-Enter'];
-      expect(keymap.every((b) => knownKeys.includes(b.key))).toBe(true);
+      const knownKeys = ['Mod-s', 'Mod-g', 'Mod-Enter', 'Mod-Shift-Enter', 'Mod-Shift-l'];
+      expect(keymap.every((b) => b.key != null && knownKeys.includes(b.key))).toBe(true);
     });
   });
 

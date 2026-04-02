@@ -11,6 +11,7 @@ For each incomplete TODO item this script:
 Usage:
     python3 examples/todo_workflow_pipeline.py --repo /path/to/repo
     python3 examples/todo_workflow_pipeline.py --repo . --single --dry-run
+    python3 examples/todo_workflow_pipeline.py --repo . --timeout 10800
 """
 
 from __future__ import annotations
@@ -49,6 +50,7 @@ class Opts:
     max_todos: int
     single: bool
     dry_run: bool
+    timeout: int
 
 
 # ---------------------------------------------------------------------------
@@ -228,7 +230,7 @@ def run_ledit_agent(
         _log("[DRY RUN] Would run ledit agent (skipped)")
         return subprocess.CompletedProcess(cmd, returncode=0, stdout="", stderr="")
 
-    result = _run_process(cmd, cwd=opts.repo, timeout=3600)
+    result = _run_process(cmd, cwd=opts.repo, timeout=opts.timeout)
 
     if result.returncode != 0:
         _log(f"Agent exited with code {result.returncode}")
@@ -261,7 +263,7 @@ def run_ledit_commit(opts: Opts) -> subprocess.CompletedProcess[str]:
         _log("[DRY RUN] Would run ledit commit (skipped)")
         return subprocess.CompletedProcess(cmd, returncode=0, stdout="", stderr="")
 
-    result = _run_process(cmd, cwd=opts.repo, timeout=300)
+    result = _run_process(cmd, cwd=opts.repo, timeout=min(opts.timeout, 300))
 
     if result.returncode != 0:
         _log(f"Commit exited with code {result.returncode}")
@@ -322,6 +324,7 @@ class TodoPipeline:
         _log(f"  Max todos:       {self.opts.max_todos or 'unlimited'}")
         _log(f"  Single mode:     {self.opts.single}")
         _log(f"  Dry run:         {self.opts.dry_run}")
+        _log(f"  Timeout:         {self.opts.timeout}s")
 
         try:
             while True:
@@ -401,6 +404,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print what would happen without executing",
     )
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=7200,
+        help="Timeout in seconds for ledit agent subprocess (default: 7200)",
+    )
     return parser
 
 
@@ -420,6 +429,7 @@ def main() -> None:
         max_todos=args.max_todos,
         single=args.single,
         dry_run=args.dry_run,
+        timeout=args.timeout,
     )
 
     pipeline = TodoPipeline(opts)

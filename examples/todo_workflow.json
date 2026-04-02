@@ -7,8 +7,8 @@
     "skip_prompt": true,
     "subagent_overrides": {
       "coder": {
-        "provider": "deepinfra",
-        "model": "zai-org/GLM-4.7-Flash"
+        "model": "zai-org/GLM-4.7-Flash",
+        "provider": "deepinfra"
       }
     },
     "unsafe": true
@@ -26,6 +26,7 @@
       "when": "on_success"
     },
     {
+      "max_iterations": 100,
       "name": "fix_review_issues",
       "persona": "orchestrator",
       "prompt": "Review the deep review findings from the previous step. If the review result was APPROVED with no issues, do nothing further — you are done. Otherwise, validate each issue and fix the valid ones using subagents. After fixing, re-review the solution using the same deep review approach (read the changed files, check for correctness, edge cases, error handling). Continue iterating until all valid issues are resolved. When done, stage only the files you created or modified during this fix using `git add <file1> <file2> ...`. Do NOT use `git add -A` or `git add .` — only stage your own changes. Do NOT commit — that will be handled separately.",

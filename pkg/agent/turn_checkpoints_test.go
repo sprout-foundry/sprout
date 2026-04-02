@@ -15,7 +15,7 @@ func TestPrepareMessagesKeepsFullHistoryWhenContextHasHeadroom(t *testing.T) {
 
 	oldTurnContent := strings.Repeat("old detailed result ", 120)
 	agent := &Agent{
-		client:          newStubClient("openrouter", "openai/gpt-4o-mini"),
+		client:          NewScriptedClient(),
 		systemPrompt:    "system",
 		messages: []api.Message{
 			{Role: "user", Content: "First request"},
@@ -62,7 +62,7 @@ func TestPrepareMessagesUsesTurnCheckpointsWhenContextIsTight(t *testing.T) {
 	oldTurnContent := strings.Repeat("old detailed result ", 250)
 	checkpointSummary := "Compacted earlier conversation state:\n- Latest compacted user request: First request\n- Status at compaction time: work was still in progress; newer messages continue from this task."
 	agent := &Agent{
-		client:          newStubClient("openrouter", "openai/gpt-4o-mini"),
+		client:          NewScriptedClient(),
 		systemPrompt:    "system",
 		messages: []api.Message{
 			{Role: "user", Content: "First request"},

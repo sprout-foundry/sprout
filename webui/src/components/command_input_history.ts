@@ -1,7 +1,7 @@
 import { ApiService } from '../services/api';
-import { TerminalWebSocketService } from '../services/terminalWebSocket';
 
 const MAX_COMMAND_HISTORY = 100;
+const STORAGE_KEY = 'ledit:chat-history';
 
 export interface CommandHistoryState {
   commands: string[];
@@ -9,36 +9,39 @@ export interface CommandHistoryState {
   tempInput: string;
 }
 
-export async function loadCommandHistory(apiService: ApiService): Promise<string[]> {
+export async function loadCommandHistory(_apiService: ApiService): Promise<string[]> {
   try {
-    const terminalService = TerminalWebSocketService.getInstance();
-    const response = await apiService.getTerminalHistory(terminalService.getSessionId() || undefined);
-    if (response && Array.isArray(response.history)) {
-      return dedupeCommands(response.history);
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return dedupeCommands(parsed);
+      }
     }
   } catch {
-    // Terminal history sync is best-effort; command input can still function without persisted history.
+    // localStorage unavailable or corrupted — start with empty history
   }
-
   return [];
 }
 
-export async function saveCommandHistory(apiService: ApiService, commands: string[], command: string): Promise<CommandHistoryState> {
+export function persistCommandHistory(commands: string[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(commands));
+  } catch {
+    // Storage quota exceeded or unavailable — ignore, in-memory history still works
+  }
+}
+
+// Kept for compatibility but no longer used for the primary save path
+export async function saveCommandHistory(_apiService: ApiService, commands: string[], command: string): Promise<CommandHistoryState> {
   const trimmedCommand = command.trim();
   const nextCommands = dedupeCommands([...commands, trimmedCommand]);
-  const nextHistory: CommandHistoryState = {
+  persistCommandHistory(nextCommands);
+  return {
     commands: nextCommands,
     index: -1,
     tempInput: ''
   };
-
-  try {
-    await apiService.addTerminalHistory(trimmedCommand);
-  } catch {
-    // History sync failures should not block sending commands.
-  }
-
-  return nextHistory;
 }
 
 export function dedupeCommands(commands: string[]): string[] {

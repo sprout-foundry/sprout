@@ -802,6 +802,7 @@ const AppContent: React.FC<AppContentProps> = ({
                 toolExecutions: state.toolExecutions,
                 queryProgress: state.queryProgress,
                 currentTodos,
+                subagentActivities: state.subagentActivities,
                 onStopProcessing,
                 onToolPillClick: (toolId: string) => contextPanelRef.current?.highlightTool(toolId),
               }}

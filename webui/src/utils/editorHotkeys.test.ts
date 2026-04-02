@@ -94,6 +94,25 @@ describe('getEditorKeymap', () => {
       const selAll = keymap.find((b) => b.key === 'Mod-Shift-l');
       expect(selAll).toBeDefined();
     });
+
+    it('translates Ctrl+Shift+O → Mod-Shift-o for editor_goto_symbol', () => {
+      const entries: HotkeyEntry[] = [
+        { key: 'Ctrl+Shift+O', command_id: 'editor_goto_symbol' },
+      ];
+      const keymap = getEditorKeymap(entries, emptyActions);
+      const gotoSym = keymap.find((b) => b.key === 'Mod-Shift-o');
+      expect(gotoSym).toBeDefined();
+      expect(gotoSym!.preventDefault).toBe(true);
+    });
+
+    it('translates Cmd+Shift+O → Mod-Shift-o (Mac-style)', () => {
+      const entries: HotkeyEntry[] = [
+        { key: 'Cmd+Shift+O', command_id: 'editor_goto_symbol' },
+      ];
+      const keymap = getEditorKeymap(entries, emptyActions);
+      const gotoSym = keymap.find((b) => b.key === 'Mod-Shift-o');
+      expect(gotoSym).toBeDefined();
+    });
   });
 
   describe('editor_insert_line_below bindings', () => {
@@ -129,6 +148,18 @@ describe('getEditorKeymap', () => {
       const selAll = keymap.find((b) => b.key === 'Mod-Shift-l');
       expect(selAll).toBeDefined();
       expect(typeof selAll!.run).toBe('function');
+    });
+  });
+
+  describe('editor_goto_symbol bindings', () => {
+    it('produces bindings when configured', () => {
+      const entries: HotkeyEntry[] = [
+        { key: 'Ctrl+Shift+O', command_id: 'editor_goto_symbol' },
+      ];
+      const keymap = getEditorKeymap(entries, emptyActions);
+      const gotoSym = keymap.find((b) => b.key === 'Mod-Shift-o');
+      expect(gotoSym).toBeDefined();
+      expect(typeof gotoSym!.run).toBe('function');
     });
   });
 
@@ -174,6 +205,20 @@ describe('getEditorKeymap', () => {
       const selAll = keymap.find((b) => b.key === 'Mod-Shift-l');
       expect(selAll).toBeDefined();
     });
+
+    it('includes Mod-Shift-o fallback for editor_goto_symbol when no entries provided', () => {
+      const keymap = getEditorKeymap(null, emptyActions);
+      const gotoSym = keymap.find((b) => b.key === 'Mod-Shift-o');
+      expect(gotoSym).toBeDefined();
+      expect(gotoSym!.preventDefault).toBe(true);
+      expect(typeof gotoSym!.run).toBe('function');
+    });
+
+    it('includes Mod-Shift-o fallback for editor_goto_symbol when entries array is empty', () => {
+      const keymap = getEditorKeymap([], emptyActions);
+      const gotoSym = keymap.find((b) => b.key === 'Mod-Shift-o');
+      expect(gotoSym).toBeDefined();
+    });
   });
 
   describe('EDITOR_COMMAND_IDS coverage', () => {
@@ -207,6 +252,16 @@ describe('getEditorKeymap', () => {
       expect(keymap.some((b) => b.key === 'Mod-Shift-l')).toBe(true);
     });
 
+    it('includes editor_goto_symbol as a handled command_id', () => {
+      const entries: HotkeyEntry[] = [
+        { key: 'Ctrl+Shift+O', command_id: 'editor_goto_symbol' },
+      ];
+      const keymap = getEditorKeymap(entries, emptyActions);
+      // If the command_id were not in EDITOR_COMMAND_IDS, it would be
+      // silently skipped and no Mod-Shift-o binding would exist.
+      expect(keymap.some((b) => b.key === 'Mod-Shift-o')).toBe(true);
+    });
+
     it('ignores entries with unknown command_ids', () => {
       const entries: HotkeyEntry[] = [
         { key: 'Ctrl+Enter', command_id: 'unknown_command' },
@@ -216,7 +271,7 @@ describe('getEditorKeymap', () => {
       // fallback for insert_line_below should still be present.
       expect(keymap.some((b) => b.key === 'Mod-Enter')).toBe(true);
       // Only fallbacks + save + goto — no binding from the unknown entry.
-      const knownKeys = ['Mod-s', 'Mod-g', 'Mod-Enter', 'Mod-Shift-Enter', 'Mod-Shift-l'];
+      const knownKeys = ['Mod-s', 'Mod-g', 'Mod-Enter', 'Mod-Shift-Enter', 'Mod-Shift-l', 'Mod-Shift-o'];
       expect(keymap.every((b) => b.key != null && knownKeys.includes(b.key))).toBe(true);
     });
   });

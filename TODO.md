@@ -70,7 +70,7 @@
 [x] - HOTKEYS: Add missing toggle line comment (`Ctrl+/`) and toggle block comment (`Ctrl+Shift+/`) keybindings.
 [x] - HOTKEYS: Add insert line below (`Ctrl+Enter`) and insert line above (`Ctrl+Shift+Enter`) keybindings.
 [x] - HOTKEYS: Add select all occurrences of find match (`Ctrl+Shift+L`) keybinding.
-[] - HOTKEYS: Add go to symbol in file (`Ctrl+Shift+O`) keybinding.
+[x] - HOTKEYS: Add go to symbol in file (`Ctrl+Shift+O`) keybinding.
 [] - HOTKEYS: Add add selection to next find match (`Ctrl+D` — correct VS Code behavior) keybinding.
 [] - HOTKEYS: Add toggle word wrap (`Alt+Z`) keybinding.
 [] - HOTKEYS: Add navigate back (`Alt+Left`) and navigate forward (`Alt+Right`) keybindings.

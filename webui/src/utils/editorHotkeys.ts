@@ -5,6 +5,7 @@ import type { HotkeyEntry } from '../services/api';
 interface EditorHotkeyActions {
   onSave?: () => void;
   onGoToLine?: () => void;
+  onGoToSymbol?: () => void;
 }
 
 // ── Editor line-manipulation helpers ────────────────────────────────
@@ -203,6 +204,7 @@ function hotkeyToCodeMirror(key: string): string | null {
 const EDITOR_COMMAND_IDS = new Set([
   'save_file',
   'editor_goto_line',
+  'editor_goto_symbol',
   'editor_move_line_up',
   'editor_move_line_down',
   'editor_duplicate_line_up',
@@ -280,6 +282,18 @@ export function getEditorKeymap(
     bindings.push({ key: 'Mod-g', preventDefault: true, run: () => { actions.onGoToLine?.(); return true; } });
   } else {
     bindings.push(...gotoBindings);
+  }
+
+  // Go to symbol
+  const gotoSymbolBindings = bindingsFor('editor_goto_symbol', () => {
+    actions.onGoToSymbol?.();
+    return true;
+  });
+  if (gotoSymbolBindings.length === 0) {
+    // Fallback: Mod-Shift-o (Ctrl+Shift+O / Cmd+Shift+O)
+    bindings.push({ key: 'Mod-Shift-o', preventDefault: true, run: () => { actions.onGoToSymbol?.(); return true; } });
+  } else {
+    bindings.push(...gotoSymbolBindings);
   }
 
   // Line move / dup / delete — only add bindings if user configured them

@@ -3,6 +3,7 @@ import { ScrollText, X, Send, SquarePen, ListPlus, Plus, Square } from 'lucide-r
 import './CommandInput.css';
 import { ApiService } from '../services/api';
 import { CommandHistoryState, dedupeCommands, loadCommandHistory, persistCommandHistory } from './command_input_history';
+import QueuedMessagesPanel from './QueuedMessagesPanel';
 
 interface CommandInputProps {
   value?: string;
@@ -17,6 +18,11 @@ interface CommandInputProps {
   isProcessing?: boolean;
   queuedCount?: number;
   onStop?: () => void;
+  queuedMessages?: string[];
+  onQueueMessageRemove?: (index: number) => void;
+  onQueueMessageEdit?: (index: number, newText: string) => void;
+  onQueueReorder?: (fromIndex: number, toIndex: number) => void;
+  onClearQueuedMessages?: () => void;
 }
 
 const CommandInput: React.FC<CommandInputProps> = ({
@@ -32,6 +38,11 @@ const CommandInput: React.FC<CommandInputProps> = ({
   isProcessing = false,
   queuedCount = 0,
   onStop,
+  queuedMessages = [],
+  onQueueMessageRemove,
+  onQueueMessageEdit,
+  onQueueReorder,
+  onClearQueuedMessages,
 }) => {
   const [draftValue, setDraftValue] = useState(value);
   const [history, setHistory] = useState<CommandHistoryState>({
@@ -49,6 +60,8 @@ const CommandInput: React.FC<CommandInputProps> = ({
     error?: string;
   }>>([]);
   const [previewImageId, setPreviewImageId] = useState<string | null>(null);
+  const [showQueuePanel, setShowQueuePanel] = useState(false);
+  const queuePanelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const apiService = useRef(ApiService.getInstance());
@@ -102,6 +115,18 @@ const CommandInput: React.FC<CommandInputProps> = ({
       inputRef.current.focus();
     }
   }, [autoFocus]);
+
+  // Click-outside handler for the queue panel popover
+  useEffect(() => {
+    if (!showQueuePanel) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (queuePanelRef.current && !queuePanelRef.current.contains(e.target as Node)) {
+        setShowQueuePanel(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showQueuePanel]);
 
   useEffect(() => {
     if (!previewImageId) {
@@ -757,17 +782,45 @@ const CommandInput: React.FC<CommandInputProps> = ({
             <Square size={15} />
           </button>
         )}
+        {(queuedCount > 0 || showQueuePanel) && (
+          <div className="queue-button-wrapper" ref={queuePanelRef}>
+            {queuedCount > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowQueuePanel(prev => !prev);
+                }}
+                className="queue-badge-button"
+                data-tooltip={`${queuedCount} queued message${queuedCount !== 1 ? 's' : ''} — click to manage`}
+                aria-label="View queued messages"
+              >
+                {queuedCount}
+              </button>
+            )}
+            {showQueuePanel && (
+              <div className="queue-popover-overlay">
+                <QueuedMessagesPanel
+                  messages={queuedMessages}
+                  onRemove={onQueueMessageRemove || (() => {})}
+                  onEdit={onQueueMessageEdit || (() => {})}
+                  onReorder={onQueueReorder || (() => {})}
+                  onClear={onClearQueuedMessages || (() => {})}
+                  onClose={() => setShowQueuePanel(false)}
+                />
+              </div>
+            )}
+          </div>
+        )}
         {isProcessing && (
           <button
             type="button"
             onClick={handleQueue}
             disabled={disabled || !canSend}
             className="queue-button"
-            data-tooltip={`Queue for after current run${queuedCount > 0 ? ` (${queuedCount} queued)` : ''}`}
+            data-tooltip="Queue for after current run"
             aria-label="Queue message"
           >
             <ListPlus size={16} />
-            {queuedCount > 0 && <span className="queue-count">{queuedCount}</span>}
           </button>
         )}
       </div>

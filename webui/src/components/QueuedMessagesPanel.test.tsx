@@ -346,6 +346,8 @@ describe('QueuedMessagesPanel – close button', () => {
 // ===========================================================================
 
 describe('QueuedMessagesPanel – editing', () => {
+  afterEach(() => jest.useRealTimers());
+
   it('enters edit mode when the edit button is clicked', async () => {
     await renderPanel({ messages: ['Hello world'] });
 
@@ -433,7 +435,7 @@ describe('QueuedMessagesPanel – editing', () => {
     expect(displayText?.textContent).toBe('Original text');
   });
 
-  it('saves edit via the save button (pencil icon)', async () => {
+  it('saves edit via the save button (checkmark icon)', async () => {
     const { onEdit } = await renderPanel({ messages: ['Original text'] });
 
     clickButton('button[title="Edit"]');
@@ -466,7 +468,10 @@ describe('QueuedMessagesPanel – editing', () => {
     expect(container.querySelector('.queue-panel-edit-textarea')).toBeNull();
   });
 
-      it('cancels edit when saving empty text instead of removing message', async () => {const { onEdit } = await renderPanel({ messages: ['Will be emptied'] });
+  it('cancels edit when saving empty text instead of removing message', async () => {
+    jest.useFakeTimers();
+
+    const { onEdit } = await renderPanel({ messages: ['Will be emptied'] });
 
     clickButton('button[title="Edit"]');
 
@@ -481,6 +486,14 @@ describe('QueuedMessagesPanel – editing', () => {
 
     fireKeyDown('.queue-panel-edit-textarea', 'Enter');
 
+    // The item should show the shake class while animating
+    expect(container.querySelector('.queue-panel-item')?.classList.contains('shake')).toBe(true);
+
+    // Advance past the 400ms shake delay
+    act(() => {
+      jest.advanceTimersByTime(400);
+    });
+
     // Editing to empty text cancels the edit (preserves original message) rather than calling onEdit
     expect(onEdit).not.toHaveBeenCalled();
     // Edit mode should be exited (no textarea visible)
@@ -490,6 +503,8 @@ describe('QueuedMessagesPanel – editing', () => {
   });
 
   it('cancels edit when saving whitespace-only text', async () => {
+    jest.useFakeTimers();
+
     const { onEdit } = await renderPanel({ messages: ['Keep me'] });
 
     clickButton('button[title="Edit"]');
@@ -504,6 +519,14 @@ describe('QueuedMessagesPanel – editing', () => {
     });
 
     fireKeyDown('.queue-panel-edit-textarea', 'Enter');
+
+    // The item should show the shake class while animating
+    expect(container.querySelector('.queue-panel-item')?.classList.contains('shake')).toBe(true);
+
+    // Advance past the 400ms shake delay
+    act(() => {
+      jest.advanceTimersByTime(400);
+    });
 
     // Whitespace-only text should cancel the edit, not call onEdit
     expect(onEdit).not.toHaveBeenCalled();
@@ -562,5 +585,71 @@ describe('QueuedMessagesPanel – single item editing', () => {
     expect(items[0].querySelector('.queue-panel-edit-textarea')).toBeNull();
     expect(items[0].querySelector('.queue-panel-item-text')).not.toBeNull();
     expect(items[2].querySelector('.queue-panel-edit-textarea')).not.toBeNull();
+  });
+});
+
+// ===========================================================================
+// 9. Editing UX – visual feedback
+// ===========================================================================
+
+describe('QueuedMessagesPanel – editing UX polish', () => {
+  it('adds the "editing" CSS class to the item being edited', async () => {
+    await renderPanel({ messages: ['First', 'Second', 'Third'] });
+
+    const items = container.querySelectorAll('.queue-panel-item');
+
+    // Initially, no item should have the editing class
+    expect(items[0].classList.contains('editing')).toBe(false);
+    expect(items[1].classList.contains('editing')).toBe(false);
+
+    // Start editing the second item
+    act(() => {
+      (items[1].querySelector('button[title="Edit"]') as HTMLButtonElement).click();
+    });
+
+    // Only the second item should have the editing class
+    expect(items[0].classList.contains('editing')).toBe(false);
+    expect(items[1].classList.contains('editing')).toBe(true);
+    expect(items[2].classList.contains('editing')).toBe(false);
+
+    // Cancel edit
+    clickButton('.queue-panel-action.cancel');
+
+    // No item should have editing class after cancelling
+    const updatedItems = container.querySelectorAll('.queue-panel-item');
+    expect(updatedItems[0].classList.contains('editing')).toBe(false);
+    expect(updatedItems[1].classList.contains('editing')).toBe(false);
+  });
+
+  it('renders a Check icon in the save button when editing', async () => {
+    await renderPanel({ messages: ['Editable'] });
+
+    // Before editing, no save button
+    expect(container.querySelector('.queue-panel-action.save')).toBeNull();
+
+    // Enter edit mode
+    clickButton('button[title="Edit"]');
+
+    // Save button should exist with Check icon (lucide Check SVG)
+    const saveBtn = container.querySelector('.queue-panel-action.save');
+    expect(saveBtn).not.toBeNull();
+
+    // The save button should contain an SVG (lucide icon)
+    const svg = saveBtn?.querySelector('svg');
+    expect(svg).not.toBeNull();
+
+    // Check icon's path data is "M20 6 9 17l-5-5"
+    // Verify the save button has the Check icon path
+    const paths = svg?.querySelectorAll('path');
+    const checkPath = Array.from(paths!).find(
+      p => p.getAttribute('d') === 'M20 6 9 17l-5-5'
+    );
+    expect(checkPath).not.toBeNull();
+
+    // Verify it's NOT the Pencil icon (which has "M21.174 6.812a1 1 0" path)
+    const pencilPath = Array.from(paths!).find(
+      p => p.getAttribute('d')?.includes('M21.174 6.812a1 1 0')
+    );
+    expect(pencilPath).toBeUndefined();
   });
 });

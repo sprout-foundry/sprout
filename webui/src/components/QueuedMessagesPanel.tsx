@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Pencil, Trash2, X, ChevronUp, ChevronDown } from 'lucide-react';
+import { Pencil, Trash2, X, ChevronUp, ChevronDown, Check } from 'lucide-react';
 import './QueuedMessagesPanel.css';
 
 interface QueuedMessagesPanelProps {
@@ -21,7 +21,17 @@ const QueuedMessagesPanel: React.FC<QueuedMessagesPanelProps> = ({
 }) => {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [shakeIndex, setShakeIndex] = useState<number | null>(null);
   const editRef = useRef<HTMLTextAreaElement>(null);
+  const shakeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Auto-resize textarea to fit content
+  useEffect(() => {
+    if (editingIndex !== null && editRef.current) {
+      editRef.current.style.height = 'auto';
+      editRef.current.style.height = `${Math.min(editRef.current.scrollHeight, 200)}px`;
+    }
+  }, [editValue, editingIndex]);
 
   useEffect(() => {
     if (editingIndex !== null && editRef.current) {
@@ -29,6 +39,15 @@ const QueuedMessagesPanel: React.FC<QueuedMessagesPanelProps> = ({
       editRef.current.setSelectionRange(editRef.current.value.length, editRef.current.value.length);
     }
   }, [editingIndex]);
+
+  // Clean up shake timeout on unmount to prevent state updates after unmount
+  useEffect(() => {
+    return () => {
+      if (shakeTimeoutRef.current) {
+        clearTimeout(shakeTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleStartEdit = (index: number) => {
     setEditingIndex(index);
@@ -39,11 +58,19 @@ const QueuedMessagesPanel: React.FC<QueuedMessagesPanelProps> = ({
     if (editingIndex !== null) {
       const trimmed = editValue.trim();
       if (!trimmed) {
-        // Cancel edit if text is empty rather than silently removing
-        handleCancelEdit();
+        // Shake the item briefly to indicate save was rejected, then cancel
+        setShakeIndex(editingIndex);
+        if (shakeTimeoutRef.current) {
+          clearTimeout(shakeTimeoutRef.current);
+        }
+        shakeTimeoutRef.current = setTimeout(() => {
+          shakeTimeoutRef.current = null;
+          setShakeIndex(null);
+          handleCancelEdit();
+        }, 400);
         return;
       }
-      onEdit(editingIndex, editValue);
+      onEdit(editingIndex, trimmed);
       setEditingIndex(null);
       setEditValue('');
     }
@@ -106,7 +133,7 @@ const QueuedMessagesPanel: React.FC<QueuedMessagesPanelProps> = ({
       </div>
       <div className="queue-panel-list">
         {messages.map((msg, index) => (
-          <div key={index} className="queue-panel-item">
+          <div key={index} className={`queue-panel-item ${editingIndex === index ? 'editing' : ''} ${shakeIndex === index ? 'shake' : ''}`}>
             <span className="queue-panel-item-index">{index + 1}</span>
             <div className="queue-panel-item-content">
               {editingIndex === index ? (
@@ -128,7 +155,7 @@ const QueuedMessagesPanel: React.FC<QueuedMessagesPanelProps> = ({
               {editingIndex === index ? (
                 <>
                   <button type="button" className="queue-panel-action save" onClick={handleSaveEdit} title="Save (Enter)">
-                    <Pencil size={12} />
+                    <Check size={12} />
                   </button>
                   <button type="button" className="queue-panel-action cancel" onClick={handleCancelEdit} title="Cancel (Esc)">
                     <X size={12} />

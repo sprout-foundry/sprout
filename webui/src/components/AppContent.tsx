@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react';
-import { Menu, X, Columns2, Rows2, PanelRightOpen, PanelRightClose, Plus } from 'lucide-react';
+import { Menu, X, Columns2, Rows2, PanelRightOpen, PanelRightClose, MessageSquarePlus } from 'lucide-react';
 import Sidebar from './Sidebar';
 import WorkspaceBar from './WorkspaceBar';
 import Terminal from './Terminal';
@@ -710,12 +710,9 @@ const AppContent: React.FC<AppContentProps> = ({
   const showResizeHandles = panes.length > 1;
 
   const renderSplitControls = (paneId: string) => {
-    const pane = panes.find(p => p.id === paneId);
-    const currentBuf = pane?.bufferId ? buffers.get(pane.bufferId) : null;
-    const isChat = currentBuf?.kind === 'chat';
     return (
     <div className="split-controls split-controls-embedded">
-      {paneId === activePaneId && isChat && onCreateChat && (
+      {paneId === activePaneId && onCreateChat && (
         <button
           onClick={async () => {
             const newId = await onCreateChat();
@@ -734,7 +731,7 @@ const AppContent: React.FC<AppContentProps> = ({
           title="New chat"
           aria-label="New chat"
         >
-          <Plus size={13} />
+          <MessageSquarePlus size={13} />
         </button>
       )}
       {paneId === activePaneId && canCloseSplit && (

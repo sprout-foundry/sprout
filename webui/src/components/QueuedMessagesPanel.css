@@ -109,6 +109,30 @@
   background: rgba(255, 255, 255, 0.03);
 }
 
+.queue-panel-item.editing {
+  background: rgba(108, 99, 255, 0.06);
+  border-bottom-color: var(--border-default, #2a2a3e);
+}
+
+.queue-panel-item.editing .queue-panel-item-actions {
+  opacity: 1;
+}
+
+@keyframes queue-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+
+.queue-panel-item.shake {
+  animation: queue-shake 0.4s ease-in-out; /* Flash the textarea border red during shake */
+}
+.queue-panel-item.shake .queue-panel-edit-textarea {
+  border-color: var(--accent-error, #ff5555);
+}
+
 .queue-panel-item-index {
   color: var(--text-secondary, #666);
   font-size: 11px;
@@ -172,6 +196,11 @@
   }
 
   .queue-panel-item-actions:active {
+    opacity: 1;
+  }
+
+  /* Keep editing actions fully visible on touch */
+  .queue-panel-item.editing .queue-panel-item-actions {
     opacity: 1;
   }
 }

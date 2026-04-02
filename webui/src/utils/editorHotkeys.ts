@@ -1,4 +1,5 @@
 import { EditorView, KeyBinding } from '@codemirror/view';
+import { selectSelectionMatches } from '@codemirror/search';
 import type { HotkeyEntry } from '../services/api';
 
 interface EditorHotkeyActions {
@@ -209,6 +210,7 @@ const EDITOR_COMMAND_IDS = new Set([
   'editor_delete_line',
   'editor_insert_line_below',
   'editor_insert_line_above',
+  'editor_select_all_occurrences',
 ]);
 
 // ── Public API ──────────────────────────────────────────────────────
@@ -307,6 +309,20 @@ export function getEditorKeymap(
     bindings.push({ key: 'Mod-Shift-Enter', preventDefault: true, run: (v) => insertLineAbove(v) });
   } else {
     bindings.push(...insertAboveBindings);
+  }
+
+  // Select all occurrences — fallback to Mod-Shift-l (Ctrl+Shift+L).
+  // NOTE: CodeMirror's searchKeymap also binds Mod-Shift-l → selectAllOccurrences.
+  // This custom keymap MUST be registered after searchKeymap in the extension
+  // array (see EditorPane.tsx) so our binding takes priority and remains
+  // consistent with the user-configurable hotkey system.
+  const selectAllOccBindings = bindingsFor('editor_select_all_occurrences', (v) => {
+    return selectSelectionMatches(v);
+  });
+  if (selectAllOccBindings.length === 0) {
+    bindings.push({ key: 'Mod-Shift-l', preventDefault: true, run: (v) => selectSelectionMatches(v) });
+  } else {
+    bindings.push(...selectAllOccBindings);
   }
 
   return bindings;

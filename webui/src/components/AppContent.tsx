@@ -120,6 +120,11 @@ interface AppContentProps {
   onQueueMessage: (message: string) => void;
   onStopProcessing: () => void;
   queuedMessagesCount: number;
+  queuedMessages: string[];
+  onQueueMessageRemove: (index: number) => void;
+  onQueueMessageEdit: (index: number, newText: string) => void;
+  onQueueReorder: (fromIndex: number, toIndex: number) => void;
+  onClearQueuedMessages: () => void;
   onGitCommit: (message: string, files: string[]) => Promise<unknown>;
   onGitAICommit: () => Promise<{ commitMessage: string; warnings?: string[] }>;
   onGitStage: (files: string[]) => Promise<void>;
@@ -134,6 +139,16 @@ interface AppContentProps {
   onCreateChat?: () => Promise<string | null>;
   onDeleteChat?: (id: string) => void;
   onRenameChat?: (id: string, name: string) => void;
+  perChatCache?: Record<string, {
+    messages: Message[];
+    toolExecutions: ToolExecution[];
+    fileEdits: Array<{ path: string; action: string; timestamp: Date; linesAdded?: number; linesDeleted?: number }>;
+    subagentActivities: AppState['subagentActivities'];
+    currentTodos: AppState['currentTodos'];
+    queryProgress: any;
+    lastError: string | null;
+    isProcessing: boolean;
+  }>;
 }
 
 const AppContent: React.FC<AppContentProps> = ({
@@ -158,6 +173,11 @@ const AppContent: React.FC<AppContentProps> = ({
   onQueueMessage,
   onStopProcessing,
   queuedMessagesCount,
+  queuedMessages,
+  onQueueMessageRemove,
+  onQueueMessageEdit,
+  onQueueReorder,
+  onClearQueuedMessages,
   onGitCommit,
   onGitAICommit,
   onGitStage,
@@ -172,6 +192,7 @@ const AppContent: React.FC<AppContentProps> = ({
   onCreateChat,
   onDeleteChat,
   onRenameChat,
+  perChatCache,
 }) => {
   const {
     panes,
@@ -191,6 +212,7 @@ const AppContent: React.FC<AppContentProps> = ({
     updatePaneSize,
     updateBufferMetadata,
     updateBufferTitle,
+    saveAllBuffers,
   } = useEditorManager();
   const apiService = ApiService.getInstance();
 
@@ -459,6 +481,28 @@ const AppContent: React.FC<AppContentProps> = ({
     }
   }, [activePaneId, buffers, switchPane, switchToBuffer]);
 
+  const handleSplitRequest = useCallback((direction: 'vertical' | 'horizontal') => {
+    if (!activePaneId) {
+      return;
+    }
+
+    const previousPaneCount = panes.length;
+    const newPaneId = splitPane(activePaneId, direction);
+    if (!newPaneId) {
+      return;
+    }
+
+    if (previousPaneCount === 2) {
+      setNestedSplit({
+        hostPaneId: activePaneId,
+        nestedPaneId: newPaneId,
+        direction,
+      });
+      updatePaneSize(`group:${activePaneId}`, 50);
+      updatePaneSize(`nested:${activePaneId}`, 50);
+    }
+  }, [activePaneId, panes.length, splitPane, updatePaneSize]);
+
   // Listen for hotkey custom events
   useEffect(() => {
     const handleHotkey = (e: Event) => {
@@ -521,17 +565,66 @@ const AppContent: React.FC<AppContentProps> = ({
         case 'focus_tab_3':
           focusTabIndex(2);
           break;
+        case 'focus_tab_4':
+          focusTabIndex(3);
+          break;
+        case 'focus_tab_5':
+          focusTabIndex(4);
+          break;
+        case 'focus_tab_6':
+          focusTabIndex(5);
+          break;
+        case 'focus_tab_7':
+          focusTabIndex(6);
+          break;
+        case 'focus_tab_8':
+          focusTabIndex(7);
+          break;
+        case 'focus_tab_9':
+          focusTabIndex(8);
+          break;
+        case 'focus_next_tab': {
+          const paneBuffers = Array.from(buffers.values()).filter((buffer) => buffer.paneId === activePaneId);
+          if (paneBuffers.length <= 1) break;
+          const currentIdx = activeBufferId ? paneBuffers.findIndex(b => b.id === activeBufferId) : -1;
+          const nextIdx = currentIdx + 1 < paneBuffers.length ? currentIdx + 1 : 0;
+          if (paneBuffers[nextIdx]) {
+            switchPane(activePaneId!);
+            switchToBuffer(paneBuffers[nextIdx].id);
+          }
+          break;
+        }
+        case 'focus_prev_tab': {
+          const paneBuffersPrev = Array.from(buffers.values()).filter((buffer) => buffer.paneId === activePaneId);
+          if (paneBuffersPrev.length <= 1) break;
+          const currentIdx = activeBufferId ? paneBuffersPrev.findIndex(b => b.id === activeBufferId) : -1;
+          const prevIdx = currentIdx - 1 >= 0 ? currentIdx - 1 : paneBuffersPrev.length - 1;
+          if (paneBuffersPrev[prevIdx]) {
+            switchPane(activePaneId!);
+            switchToBuffer(paneBuffersPrev[prevIdx].id);
+          }
+          break;
+        }
         case 'close_editor':
           if (activeBufferId) {
             closeBuffer(activeBufferId);
           }
+          break;
+        case 'save_all_files':
+          void saveAllBuffers();
+          break;
+        case 'split_editor_vertical':
+          handleSplitRequest('vertical');
+          break;
+        case 'split_editor_horizontal':
+          handleSplitRequest('horizontal');
           break;
       }
     };
     
     window.addEventListener('ledit:hotkey', handleHotkey);
     return () => window.removeEventListener('ledit:hotkey', handleHotkey);
-  }, [activeBufferId, buffers, closeBuffer, focusTabIndex, handlePrimaryViewChange, onSidebarToggle, onTerminalExpandedChange, isTerminalExpanded, openWorkspaceBuffer, onViewChange]);
+  }, [activeBufferId, activePaneId, buffers, closeBuffer, focusTabIndex, handlePrimaryViewChange, handleSplitRequest, onSidebarToggle, onTerminalExpandedChange, isTerminalExpanded, openWorkspaceBuffer, onViewChange, saveAllBuffers, switchPane, switchToBuffer]);
 
   // Handler to open hotkeys config in editor
   const handleOpenHotkeysConfig = useCallback(() => {
@@ -644,28 +737,6 @@ const AppContent: React.FC<AppContentProps> = ({
       }
     });
   }, [onViewChange, openWorkspaceBuffer]);
-
-  const handleSplitRequest = useCallback((direction: 'vertical' | 'horizontal') => {
-    if (!activePaneId) {
-      return;
-    }
-
-    const previousPaneCount = panes.length;
-    const newPaneId = splitPane(activePaneId, direction);
-    if (!newPaneId) {
-      return;
-    }
-
-    if (previousPaneCount === 2) {
-      setNestedSplit({
-        hostPaneId: activePaneId,
-        nestedPaneId: newPaneId,
-        direction,
-      });
-      updatePaneSize(`group:${activePaneId}`, 50);
-      updatePaneSize(`nested:${activePaneId}`, 50);
-    }
-  }, [activePaneId, panes.length, splitPane, updatePaneSize]);
 
   const handleCloseAllSplits = useCallback(() => {
     if (nestedSplit) {
@@ -790,11 +861,18 @@ const AppContent: React.FC<AppContentProps> = ({
               paneId={pane.id}
               isActive={pane.id === activePaneId}
               onClick={() => switchPane(pane.id)}
+              perChatCache={perChatCache}
+              activeChatId={activeChatId}
               chatProps={{
                 messages: state.messages,
                 onSendMessage,
                 onQueueMessage,
                 queuedMessagesCount,
+                queuedMessages,
+                onQueueMessageRemove,
+                onQueueMessageEdit,
+                onQueueReorder,
+                onClearQueuedMessages,
                 inputValue,
                 onInputChange,
                 isProcessing: state.isProcessing,
@@ -962,7 +1040,6 @@ const AppContent: React.FC<AppContentProps> = ({
         sidebarCollapsed={sidebarCollapsed}
         onSidebarToggle={onSidebarToggle}
         onProviderChange={onProviderChange}
-        onOpenRevisionDiff={handleOpenRevisionDiff}
         gitPanel={{
           gitStatus,
           gitBranches,
@@ -995,6 +1072,8 @@ const AppContent: React.FC<AppContentProps> = ({
           onUnstageFile: handleUnstageFile,
           onDiscardFile: handleDiscardFile,
           onSectionAction: handleSectionAction,
+          apiService: apiService,
+          openWorkspaceBuffer: openWorkspaceBuffer,
         }}
       />
       <div className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''} ${isTerminalExpanded ? 'terminal-expanded' : ''}`}>
@@ -1119,14 +1198,18 @@ const EditorPaneComponent: React.FC<{
   paneId: string;
   isActive?: boolean;
   onClick?: () => void;
+  perChatCache?: Record<string, any>;
+  activeChatId?: string | null;
   chatProps: React.ComponentProps<typeof WorkspacePane>['chatProps'];
   reviewProps: React.ComponentProps<typeof WorkspacePane>['reviewProps'];
   diffState: React.ComponentProps<typeof WorkspacePane>['diffState'];
-}> = ({ paneId, onClick, chatProps, reviewProps, diffState }) => {
+}> = ({ paneId, onClick, perChatCache, activeChatId, chatProps, reviewProps, diffState }) => {
   return (
     <div className="editor-pane-host" onClick={onClick}>
       <WorkspacePane
         paneId={paneId}
+        perChatCache={perChatCache}
+        activeChatId={activeChatId}
         chatProps={chatProps}
         reviewProps={reviewProps}
         diffState={diffState}

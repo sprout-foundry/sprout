@@ -1,4 +1,5 @@
 import { clientFetch } from './clientSession';
+import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
 
 interface StatsResponse {
   // Basic info
@@ -882,14 +883,7 @@ class ApiService {
 
   async getGitLog(limit: number, offset: number, opts?: { signal?: AbortSignal }): Promise<{
     message: string;
-    commits: Array<{
-      hash: string;
-      short_hash: string;
-      author: string;
-      date: string;
-      message: string;
-      ref_names?: string;
-    }>;
+    commits: GitCommitSummary[];
     offset: number;
     limit: number;
     total: number;
@@ -902,22 +896,25 @@ class ApiService {
     return response.json();
   }
 
-  async getGitCommitDetail(hash: string): Promise<{
-    message: string;
-    hash: string;
-    short_hash: string;
-    author: string;
-    date: string;
-    ref_names?: string;
-    subject: string;
-    files: Array<{ path: string; status: string }>;
-    diff: string;
-    stats: string;
-  }> {
+  async getGitCommitDetail(hash: string): Promise<GitCommitDetail> {
     const params = new URLSearchParams({ hash });
     const response = await clientFetch(`/api/git/commit/show?${params.toString()}`);
     if (!response.ok) {
       throw new Error(`Failed to get commit detail: HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
+  async getGitCommitFileDiff(hash: string, path: string): Promise<{
+    message: string;
+    hash: string;
+    path: string;
+    diff: string;
+  }> {
+    const params = new URLSearchParams({ hash, path });
+    const response = await clientFetch(`/api/git/commit/show/file?${params.toString()}`);
+    if (!response.ok) {
+      throw new Error(`Failed to get commit file diff: HTTP ${response.status}`);
     }
     return response.json();
   }
@@ -1590,6 +1587,7 @@ export interface LeditSettings {
   system_prompt_text: string;
   skip_prompt: boolean;
   enable_pre_write_validation: boolean;
+  allow_orchestrator_git_write: boolean;
   enable_zsh_command_detection: boolean;
   auto_execute_detected_commands: boolean;
   history_scope: string;

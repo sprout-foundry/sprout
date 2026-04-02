@@ -1,0 +1,78 @@
+/* ── DiffSurface — self-contained diff display component ── */
+/* Requires: classifyDiffLine from utils/format for line classification */
+
+.commit-detail-diff-surface {
+  flex: 1;
+  width: 100%;
+  overflow: auto;
+  padding: 4px 0;
+  font-family: var(--font-mono, 'SFMono-Regular', Consolas, monospace);
+  font-size: 11px;
+  line-height: 1.5;
+  max-height: calc(100vh - 300px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-primary);
+}
+
+.commit-detail-diff-surface::-webkit-scrollbar {
+  width: 5px;
+}
+
+.commit-detail-diff-surface::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.commit-detail-diff-surface::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.commit-detail-diff-line {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: stretch;
+  width: 100%;
+}
+
+.commit-detail-diff-line-number {
+  color: var(--text-tertiary);
+  padding: 0 8px 0 10px;
+  text-align: right;
+  user-select: none;
+  border-right: 1px solid var(--border-subtle);
+  font-size: 10px;
+  line-height: 1.5;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.commit-detail-diff-line-text {
+  display: block;
+  width: 100%;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 0 10px;
+}
+
+.commit-detail-diff-line.file .commit-detail-diff-line-text {
+  color: var(--accent-primary);
+  background: rgba(97, 175, 239, 0.08);
+  font-weight: 600;
+}
+
+.commit-detail-diff-line.hunk .commit-detail-diff-line-text {
+  color: var(--accent-warning);
+  background: rgba(229, 192, 123, 0.1);
+}
+
+.commit-detail-diff-line.add .commit-detail-diff-line-text {
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.14);
+}
+
+.commit-detail-diff-line.del .commit-detail-diff-line-text {
+  color: #fda4af;
+  background: rgba(244, 63, 94, 0.14);
+}

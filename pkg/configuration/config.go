@@ -46,6 +46,13 @@ type Config struct {
 	// Pre-write Validation Configuration
 	EnablePreWriteValidation bool `json:"enable_pre_write_validation,omitempty"`
 
+	// AllowOrchestratorGitWrite controls whether the orchestrator persona is allowed to execute
+	// writable git operations (commit, push, add, etc.) via shell_command.
+	// When true (default), the orchestrator can use git write commands through shell_command
+	// as an alternative to the dedicated git tool. Other personas are never allowed.
+	// When false, ALL personas must use the git tool for write operations.
+	AllowOrchestratorGitWrite bool `json:"allow_orchestrator_git_write,omitempty"`
+
 	// ResourceDirectory stores captured web/vision resources relative to the current working directory.
 	// This can be overridden at runtime with --resource-directory.
 	ResourceDirectory string `json:"resource_directory,omitempty"`

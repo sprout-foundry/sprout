@@ -3,18 +3,13 @@ package agent
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/events"
-	"github.com/alantheprice/ledit/pkg/spec"
 	"github.com/alantheprice/ledit/pkg/trace"
-	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 // ConversationHandler manages the high-level conversation flow
@@ -466,6 +461,10 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		ch.agent.messages = append(ch.agent.messages, toolResults...)
 		ch.agent.debugLog("[ok] Added %d tool results to conversation\n", len(toolResults))
 
+		// The model made concrete progress by executing tools, so reset
+		// the tentative rejection counter — prior rejections are now stale.
+		ch.tentativeRejectionCount = 0
+
 		// Additional debugging for DeepSeek tool call format
 		if strings.EqualFold(ch.agent.GetProvider(), "deepseek") {
 			ch.agent.debugLog("[search] DeepSeek conversation flow check:\n")
@@ -604,7 +603,6 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	} else {
 		// Reset blank iteration counter on any non-blank response
 		ch.consecutiveBlankIterations = 0
-		ch.tentativeRejectionCount = 0
 	}
 
 	// Final check for incomplete responses (only reached if not stopped and not blank/repetitive)
@@ -740,286 +738,4 @@ func (ch *ConversationHandler) maybeCheckpointCompletedTurn() {
 	}
 
 	ch.agent.RecordTurnCheckpointAsync(ch.queryStartIndex, endIndex)
-}
-
-func (ch *ConversationHandler) runSelfReviewGate() error {
-	if os.Getenv("LEDIT_SKIP_SELF_REVIEW_GATE") == "1" {
-		ch.agent.PrintLineAsync("[WARN] Self-review gate skipped (LEDIT_SKIP_SELF_REVIEW_GATE=1)")
-		return nil
-	}
-	activePersona := ch.agent.GetActivePersona()
-	if !isSelfReviewGatePersonaEnabled(activePersona) {
-		if strings.TrimSpace(activePersona) == "" {
-			ch.agent.PrintLineAsync("[info] Self-review gate skipped (persona=<none>)")
-		} else {
-			ch.agent.PrintLineAsync(fmt.Sprintf("[info] Self-review gate skipped (persona=%s)", activePersona))
-		}
-		return nil
-	}
-
-	revisionID := strings.TrimSpace(ch.agent.GetRevisionID())
-	if revisionID == "" {
-		return fmt.Errorf("self-review gate blocked completion: no revision ID available for changed task")
-	}
-
-	var cfgErr error
-	cfg := ch.agent.GetConfigManager().GetConfig()
-	if cfg == nil {
-		cfg, cfgErr = configuration.Load()
-		if cfgErr != nil {
-			return fmt.Errorf("self-review gate blocked completion: failed to load config: %w", cfgErr)
-		}
-	}
-	mode := cfg.GetSelfReviewGateMode()
-	if mode == configuration.SelfReviewGateModeOff {
-		ch.agent.PrintLineAsync("[info] Self-review gate skipped (mode=off)")
-		return nil
-	}
-	if mode == configuration.SelfReviewGateModeCode && !hasCodeLikeTrackedFiles(ch.agent.GetTrackedFiles()) {
-		ch.agent.PrintLineAsync("[info] Self-review gate skipped (mode=code, no code files changed)")
-		return nil
-	}
-
-	logger := utils.GetLogger(true)
-	result, err := spec.ReviewTrackedChanges(revisionID, cfg, logger)
-	if err != nil {
-		return fmt.Errorf("self-review gate blocked completion: %w", err)
-	}
-	if result.ScopeResult != nil && !result.ScopeResult.InScope {
-		summary := strings.TrimSpace(result.ScopeResult.Summary)
-		if summary == "" {
-			summary = "scope violations detected"
-		}
-		return fmt.Errorf("self-review gate blocked completion: %s", summary)
-	}
-
-	ch.agent.PrintLineAsync(fmt.Sprintf("[OK] Self-review gate passed: revision %s is within scope", revisionID))
-	return nil
-}
-
-func hasCodeLikeTrackedFiles(files []string) bool {
-	if len(files) == 0 {
-		return false
-	}
-
-	codeExtensions := map[string]struct{}{
-		".go": {}, ".py": {}, ".js": {}, ".ts": {}, ".tsx": {}, ".jsx": {}, ".java": {},
-		".rs": {}, ".c": {}, ".cc": {}, ".cpp": {}, ".h": {}, ".hh": {}, ".hpp": {}, ".cs": {},
-		".rb": {}, ".php": {}, ".swift": {}, ".kt": {}, ".kts": {}, ".scala": {}, ".sh": {},
-		".bash": {}, ".zsh": {}, ".fish": {}, ".sql": {}, ".html": {}, ".css": {}, ".scss": {},
-		".vue": {}, ".svelte": {}, ".yaml": {}, ".yml": {}, ".toml": {}, ".ini": {}, ".json": {},
-		".xml": {}, ".proto": {}, ".tf": {},
-	}
-	codeBasenames := map[string]struct{}{
-		"dockerfile":       {},
-		"makefile":         {},
-		"justfile":         {},
-		"cmakelists.txt":   {},
-		"build.gradle":     {},
-		"build.gradle.kts": {},
-	}
-
-	for _, f := range files {
-		path := strings.TrimSpace(f)
-		if path == "" {
-			continue
-		}
-		ext := strings.ToLower(filepath.Ext(path))
-		if _, ok := codeExtensions[ext]; ok {
-			return true
-		}
-		base := strings.ToLower(filepath.Base(path))
-		if _, ok := codeBasenames[base]; ok {
-			return true
-		}
-	}
-
-	return false
-}
-
-func isSelfReviewGatePersonaEnabled(persona string) bool {
-	switch strings.ToLower(strings.TrimSpace(persona)) {
-	case "orchestrator", "coder":
-		return true
-	default:
-		return false
-	}
-}
-
-// handleFinishReason processes the model's finish reason and returns whether to stop
-func (ch *ConversationHandler) handleFinishReason(finishReason, content string) (bool, string) {
-	if finishReason == "" {
-		return false, ""
-	}
-
-	ch.agent.debugLog("[GO] Model finish reason: %s\n", finishReason)
-
-	switch finishReason {
-	case "tool_calls":
-		return false, "model tool_calls finish"
-	case "stop":
-		if strings.TrimSpace(content) == "" {
-			ch.agent.debugLog("[WARN] WARNING: Model returned finish_reason='stop' with empty content\n")
-			ch.agent.debugLog("[WARN] Treating as incomplete and asking model to continue\n")
-			ch.handleIncompleteResponse()
-			return false, "empty stop response"
-		}
-		if ch.responseValidator != nil && ch.responseValidator.IsIncomplete(content) {
-			ch.agent.debugLog("[WARN] Model returned finish_reason='stop' with incomplete content\n")
-			ch.enqueueTransientMessage(api.Message{
-				Role: "user",
-				Content: "You indicated completion, but your answer appears incomplete. " +
-					"Provide a concise final answer to the original user request now.",
-			})
-			return false, "incomplete stop response"
-		}
-		if ch.responseValidator != nil && ch.followsRecentToolResults() &&
-			ch.responseValidator.LooksLikeTentativePostToolResponse(content) {
-			ch.tentativeRejectionCount++
-			if ch.tentativeRejectionCount >= 2 {
-				// Accept the response after 2 rejections to avoid loops
-				ch.tentativeRejectionCount = 0
-				ch.agent.debugLog("[WARN] Tentative post-tool rejection limit reached, accepting response\n")
-				ch.displayFinalResponse(content)
-				return true, "completion"
-			}
-			ch.agent.debugLog("[WARN] Model returned finish_reason='stop' immediately after tool results with tentative content (rejection %d/2)\n", ch.tentativeRejectionCount)
-			ch.enqueueTransientMessage(api.Message{
-				Role: "user",
-				Content: "You just received tool results. Do not stop with a planning note. " +
-					"Either take the next concrete action or provide the actual final answer now.",
-			})
-			return false, "tentative post-tool stop response"
-		}
-		// Model explicitly signaled it's done with non-empty content - accept completion.
-		ch.agent.debugLog("[GO] Model signaled 'stop' - accepting response as complete\n")
-		ch.displayFinalResponse(content)
-		return true, "completion"
-	case "length":
-		ch.agent.debugLog("[WARN] Model hit length limit, asking to continue\n")
-		ch.handleIncompleteResponse()
-		return false, "model length limit"
-	case "content_filter":
-		ch.agent.debugLog("[NO] Model response was filtered\n")
-		return false, "content filtered"
-	default:
-		ch.agent.debugLog("[?] Unknown finish reason: %s\n", finishReason)
-		return false, "unknown finish reason: " + finishReason
-	}
-}
-
-func (ch *ConversationHandler) followsRecentToolResults() bool {
-	if ch == nil || ch.agent == nil || len(ch.agent.messages) == 0 {
-		return false
-	}
-
-	i := len(ch.agent.messages) - 1
-	if ch.agent.messages[i].Role == "assistant" {
-		i--
-	}
-	if i < 0 {
-		return false
-	}
-
-	foundTool := false
-	for ; i >= 0 && ch.agent.messages[i].Role == "tool"; i-- {
-		foundTool = true
-	}
-	return foundTool
-}
-
-// handleMalformedToolCalls attempts to parse and execute tool calls from malformed content
-func (ch *ConversationHandler) handleMalformedToolCalls(content string, turn TurnEvaluation, parserErrors []string) bool {
-	ch.agent.debugLog("[tool] Attempting to parse malformed tool calls from content\n")
-
-	// Defensive nil check for fallbackParser
-	if ch.fallbackParser == nil {
-		ch.agent.debugLog("[WARN] Fallback parser is nil, cannot parse malformed tool calls\n")
-		turn.GuardrailTrigger = "fallback parser unavailable"
-
-		// Update turn record without fallback usage
-		ch.updateTurnRecord(content, nil, append(parserErrors, "fallback parser unavailable"), false, "")
-		return false // Continue conversation to allow model to issue proper tool_calls
-	}
-
-	fallbackResult := ch.fallbackParser.Parse(content)
-	if fallbackResult == nil || len(fallbackResult.ToolCalls) == 0 {
-		ch.agent.debugLog("[WARN] Fallback parser could not extract valid tool calls\n")
-		turn.GuardrailTrigger = "fallback parser failed"
-
-		// Update turn record without fallback success
-		ch.updateTurnRecord(content, nil, append(parserErrors, "fallback parser failed"), false, "")
-		return false // Continue conversation to allow model to issue proper tool_calls
-	}
-
-	ch.agent.debugLog("[tool] Successfully parsed %d tool calls from malformed content\n", len(fallbackResult.ToolCalls))
-
-	// Generate IDs for parsed tool calls
-	for i := range fallbackResult.ToolCalls {
-		if fallbackResult.ToolCalls[i].ID == "" {
-			fallbackResult.ToolCalls[i].ID = ch.toolExecutor.GenerateToolCallID(fallbackResult.ToolCalls[i].Function.Name)
-		}
-	}
-
-	// Update the assistant message with cleaned content and parsed tool calls
-	if len(ch.agent.messages) > 0 {
-		ch.agent.messages[len(ch.agent.messages)-1].Content = fallbackResult.CleanedContent
-		ch.agent.messages[len(ch.agent.messages)-1].ToolCalls = fallbackResult.ToolCalls
-	}
-
-	// Execute the parsed tool calls
-	toolResults := ch.toolExecutor.ExecuteTools(fallbackResult.ToolCalls)
-	ch.agent.messages = append(ch.agent.messages, toolResults...)
-	ch.agent.debugLog("[ok] Executed %d fallback-parsed tool calls\n", len(toolResults))
-
-	turn.ToolCalls = append(turn.ToolCalls, fallbackResult.ToolCalls...)
-	turn.ToolResults = append(turn.ToolResults, toolResults...)
-	turn.GuardrailTrigger = "fallback parser success"
-
-	// Update turn record with fallback parser usage
-	fallbackOutputStr := ""
-	if fallbackResult.CleanedContent != "" {
-		fallbackOutputStr = fallbackResult.CleanedContent
-	}
-	ch.updateTurnRecord(content, fallbackResult.ToolCalls, parserErrors, true, fallbackOutputStr)
-
-	return false // Continue conversation
-}
-
-// updateTurnRecord updates the current turn record with response data and persists it
-func (ch *ConversationHandler) updateTurnRecord(rawResponse string, parsedToolCalls []api.ToolCall, parserErrors []string, fallbackUsed bool, fallbackOutput string) {
-	// Only proceed if tracing is enabled and we have a current turn record
-	if ch.traceSession == nil || ch.currentTurnRecord == nil {
-		return
-	}
-
-	// Type assert to trace session with RecordTurn method
-	type traceSessionInterface interface {
-		RecordTurn(record trace.TurnRecord) error
-	}
-
-	traceSession, ok := ch.traceSession.(traceSessionInterface)
-	if !ok {
-		// Not a valid trace session, skip recording
-		ch.agent.debugLog("DEBUG: traceSession is not a valid trace session, skipping turn update\n")
-		return
-	}
-
-	// Update the turn record with response data
-	ch.currentTurnRecord.RawResponse = rawResponse
-	if parsedToolCalls != nil {
-		ch.currentTurnRecord.ParsedToolCalls = parsedToolCalls
-	}
-	if len(parserErrors) > 0 {
-		ch.currentTurnRecord.ParserErrors = parserErrors
-	}
-	ch.currentTurnRecord.FallbackUsed = fallbackUsed
-	if fallbackOutput != "" {
-		ch.currentTurnRecord.FallbackOutput = fallbackOutput
-	}
-
-	// Record the updated turn
-	if err := traceSession.RecordTurn(*ch.currentTurnRecord); err != nil {
-		ch.agent.debugLog("DEBUG: Failed to update turn record: %v\n", err)
-	}
 }

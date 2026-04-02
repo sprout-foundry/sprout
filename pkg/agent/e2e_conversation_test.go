@@ -2,6 +2,8 @@ package agent
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -17,83 +19,111 @@ import (
 
 // buildE2EAgent creates a minimal Agent + ConversationHandler wired to the
 // given scripted client for full ProcessQuery or processResponse tests.
-func buildE2EAgent(t *testing.T, maxIter int, responses ...*api.ChatResponse) (*Agent, *ConversationHandler) {
+func buildE2EAgent(t *testing.T, maxIter int, responses ...*ScriptedResponse) (*Agent, *ConversationHandler) {
 	t.Helper()
-	client := newScriptedClient(responses...)
+	client := NewScriptedClient(responses...)
 	agent := makeAgentWithScriptedClient(maxIter, client)
 	ch := NewConversationHandler(agent)
 	return agent, ch
 }
 
-// tokenUsageResponse returns a ChatResponse with explicit usage metrics.
-func tokenUsageResponse(content, finishReason string, prompt, completion, total int) *api.ChatResponse {
-	resp := &api.ChatResponse{
-		Choices: []api.Choice{{
-			FinishReason: finishReason,
-		}},
-	}
-	resp.Choices[0].Message.Role = "assistant"
-	resp.Choices[0].Message.Content = content
-	resp.Usage.PromptTokens = prompt
-	resp.Usage.CompletionTokens = completion
-	resp.Usage.TotalTokens = total
-	resp.Usage.EstimatedCost = float64(total) * 0.00001
-	return resp
+// tokenUsageResponse returns a ScriptedResponse with explicit usage metrics.
+func tokenUsageResponse(content, finishReason string, prompt, completion, total int) *ScriptedResponse {
+	return NewScriptedResponseBuilder().
+		Content(content).
+		FinishReason(finishReason).
+		Usage(prompt, completion, total, 0.0).
+		Build()
 }
 
-// blankResponse returns a ChatResponse whose content is whitespace and whose
+// blankResponse returns a ScriptedResponse whose content is whitespace and whose
 // finish_reason is empty — a blank iteration.
-func blankResponse() *api.ChatResponse {
-	return &api.ChatResponse{
-		Choices: []api.Choice{{
-			FinishReason: "",
-		}},
-	}
+func blankResponse() *ScriptedResponse {
+	return blankResponseWithContent("   \n\t  ")
 }
 
 // blankResponseWithContent returns a blank response with the whitespace content set.
-func blankResponseWithContent(content string) *api.ChatResponse {
-	resp := blankResponse()
-	resp.Choices[0].Message.Role = "assistant"
-	resp.Choices[0].Message.Content = content
-	return resp
+func blankResponseWithContent(content string) *ScriptedResponse {
+	return NewScriptedResponseBuilder().
+		Content(content).
+		Build()
 }
 
-// lengthResponse returns a ChatResponse with finish_reason "length" signaling
+// lengthResponse returns a ScriptedResponse with finish_reason "length" signaling
 // the model hit its output limit.
-func lengthResponse(content string) *api.ChatResponse {
-	resp := &api.ChatResponse{
-		Choices: []api.Choice{{
-			FinishReason: "length",
-		}},
-	}
-	resp.Choices[0].Message.Role = "assistant"
-	resp.Choices[0].Message.Content = content
-	return resp
+func lengthResponse(content string) *ScriptedResponse {
+	return NewScriptedResponseBuilder().
+		Content(content).
+		FinishReason("length").
+		Build()
 }
 
-// emptyStopResponse returns a ChatResponse with finish_reason "stop" but empty content.
-func emptyStopResponse() *api.ChatResponse {
-	resp := &api.ChatResponse{
-		Choices: []api.Choice{{
-			FinishReason: "stop",
-		}},
-	}
-	resp.Choices[0].Message.Role = "assistant"
-	resp.Choices[0].Message.Content = ""
-	return resp
+// emptyStopResponse returns a ScriptedResponse with finish_reason "stop" but empty content.
+func emptyStopResponse() *ScriptedResponse {
+	return NewScriptedResponseBuilder().
+		Content("").
+		FinishReason("stop").
+		Build()
 }
 
-// contentResponse returns a ChatResponse with the given content and no finish_reason.
-func contentResponse(content string) *api.ChatResponse {
-	resp := &api.ChatResponse{
-		Choices: []api.Choice{{
-			FinishReason: "",
-		}},
+// contentResponse returns a ScriptedResponse with the given content and no finish_reason.
+func contentResponse(content string) *ScriptedResponse {
+	return NewScriptedResponseBuilder().
+		Content(content).
+		Build()
+}
+
+// scriptedResponseToChatResponse converts a ScriptedResponse to an api.ChatResponse
+// for testing processResponse directly.
+func scriptedResponseToChatResponse(resp *ScriptedResponse) *api.ChatResponse {
+	if resp == nil {
+		return nil
 	}
-	resp.Choices[0].Message.Role = "assistant"
-	resp.Choices[0].Message.Content = content
-	return resp
+
+	// Use response usage if provided, otherwise use defaults
+	usage := resp.Usage
+	if usage.PromptTokens == 0 && usage.CompletionTokens == 0 && usage.TotalTokens == 0 {
+		usage = ScriptedTokenUsage{
+			PromptTokens:     10,
+			CompletionTokens: 5,
+			TotalTokens:      15,
+			EstimatedCost:    0.0,
+		}
+	}
+
+	return &api.ChatResponse{
+		Choices: []api.Choice{{
+			FinishReason: resp.FinishReason,
+			Message: struct {
+				Role             string          `json:"role"`
+				Content          string          `json:"content"`
+				ReasoningContent string          `json:"reasoning_content,omitempty"`
+				Images           []api.ImageData `json:"images,omitempty"`
+				ToolCalls        []api.ToolCall  `json:"tool_calls,omitempty"`
+			}{
+				Role:             "assistant",
+				Content:          resp.Content,
+				ReasoningContent: resp.ReasoningContent,
+				Images:           resp.Images,
+				ToolCalls:        resp.ToolCalls,
+			},
+		}},
+		Usage: struct {
+			PromptTokens        int     `json:"prompt_tokens"`
+			CompletionTokens    int     `json:"completion_tokens"`
+			TotalTokens         int     `json:"total_tokens"`
+			EstimatedCost       float64 `json:"estimated_cost"`
+			PromptTokensDetails struct {
+				CachedTokens     int  `json:"cached_tokens"`
+				CacheWriteTokens *int `json:"cache_write_tokens"`
+			} `json:"prompt_tokens_details,omitempty"`
+		}{
+			PromptTokens:     usage.PromptTokens,
+			CompletionTokens: usage.CompletionTokens,
+			TotalTokens:      usage.TotalTokens,
+			EstimatedCost:    usage.EstimatedCost,
+		},
+	}
 }
 
 // waitForCheckpoints polls agent.HasTurnCheckpoints() with exponential backoff.
@@ -145,7 +175,7 @@ func TestE2E_SingleTurnComplete(t *testing.T) {
 func TestE2E_MultiTurnContinuation(t *testing.T) {
 	t.Parallel()
 
-	responses := []*api.ChatResponse{
+	responses := []*ScriptedResponse{
 		keepGoingResponse(),
 		keepGoingResponse(),
 		keepGoingResponse(),
@@ -169,7 +199,7 @@ func TestE2E_MultiTurnContinuation(t *testing.T) {
 func TestE2E_MaxIterationsCap(t *testing.T) {
 	t.Parallel()
 
-	responses := make([]*api.ChatResponse, 20)
+	responses := make([]*ScriptedResponse, 20)
 	for i := range responses {
 		responses[i] = keepGoingResponse()
 	}
@@ -192,7 +222,7 @@ func TestE2E_UnlimitedIterations(t *testing.T) {
 	t.Parallel()
 
 	totalKeepGoing := 15
-	responses := make([]*api.ChatResponse, 0, totalKeepGoing+1)
+	responses := make([]*ScriptedResponse, 0, totalKeepGoing+1)
 	for i := 0; i < totalKeepGoing; i++ {
 		responses = append(responses, keepGoingResponse())
 	}
@@ -229,7 +259,7 @@ func TestE2E_BlankIterationRecovery(t *testing.T) {
 	ch.pendingUserMessage = "test query"
 
 	// First call: blank response → should NOT stop, should enqueue reminder
-	stopped := ch.processResponse(blankResp)
+	stopped := ch.processResponse(scriptedResponseToChatResponse(blankResp))
 	assert.False(t, stopped, "blank response should not stop the conversation")
 	assert.Equal(t, 0, ch.agent.currentIteration)
 
@@ -251,7 +281,7 @@ func TestE2E_BlankIterationRecovery(t *testing.T) {
 		Role:    "assistant",
 		Content: "   \n\t  ",
 	})
-	stopped = ch.processResponse(stopResp)
+	stopped = ch.processResponse(scriptedResponseToChatResponse(stopResp))
 	assert.True(t, stopped, "proper stop response should complete the conversation")
 }
 
@@ -273,7 +303,7 @@ func TestE2E_DoubleBlankErrorStop(t *testing.T) {
 	ch.pendingUserMessage = "test"
 
 	// First blank → continue with reminder
-	stopped := ch.processResponse(blankResp1)
+	stopped := ch.processResponse(scriptedResponseToChatResponse(blankResp1))
 	assert.False(t, stopped, "first blank should not stop")
 
 	// Append the blank assistant message so the next processResponse sees it in history
@@ -283,7 +313,7 @@ func TestE2E_DoubleBlankErrorStop(t *testing.T) {
 	})
 
 	// Second blank → should stop (error out)
-	stopped = ch.processResponse(blankResp2)
+	stopped = ch.processResponse(scriptedResponseToChatResponse(blankResp2))
 	assert.True(t, stopped, "second consecutive blank should stop the conversation")
 }
 
@@ -306,7 +336,7 @@ func TestE2E_RepetitiveContentRecovery(t *testing.T) {
 	dupContent := "Let me check the files and then update the configuration."
 
 	firstResp := lengthResponse(dupContent)
-	stopped := ch.processResponse(firstResp)
+	stopped := ch.processResponse(scriptedResponseToChatResponse(firstResp))
 	// finish_reason="length" → handleFinishReason returns false → falls through.
 	// Not blank, not repetitive (first time), not incomplete (complete sentence).
 	// Falls through final check — not incomplete → continues.
@@ -314,7 +344,7 @@ func TestE2E_RepetitiveContentRecovery(t *testing.T) {
 
 	// Now send the exact duplicate with finish_reason="length"
 	duplicateResp := lengthResponse(dupContent)
-	stopped = ch.processResponse(duplicateResp)
+	stopped = ch.processResponse(scriptedResponseToChatResponse(duplicateResp))
 	assert.False(t, stopped, "repetitive length response should trigger reminder and continue")
 
 	// Verify transient reminder was enqueued
@@ -330,7 +360,7 @@ func TestE2E_RepetitiveContentRecovery(t *testing.T) {
 
 	// Now a proper stop response should complete
 	stopResp := stopResponse()
-	stopped = ch.processResponse(stopResp)
+	stopped = ch.processResponse(scriptedResponseToChatResponse(stopResp))
 	assert.True(t, stopped, "stop response after repetitive recovery should complete")
 }
 
@@ -394,7 +424,7 @@ func TestE2E_CheckpointCompactionOnPrepareMessages(t *testing.T) {
 	t.Parallel()
 
 	// Build an agent with ConversationOptimizer for checkpoint summary generation.
-	client := newScriptedClient(stopResponse())
+	client := NewScriptedClient(stopResponse())
 	agent := makeAgentWithScriptedClient(10, client)
 	agent.optimizer = NewConversationOptimizer(true, false)
 
@@ -596,7 +626,7 @@ func TestE2E_TransientMessagesConsumedOnce(t *testing.T) {
 	t.Parallel()
 
 	// Set up agent and handler
-	client := newScriptedClient(stopResponse())
+	client := NewScriptedClient(stopResponse())
 	agent := makeAgentWithScriptedClient(10, client)
 	agent.optimizer = NewConversationOptimizer(false, false) // Disable optimization for simplicity
 	ch := NewConversationHandler(agent)
@@ -785,7 +815,7 @@ func TestE2E_BuildCheckpointCompactedMessages(t *testing.T) {
 	}
 
 	// Create an agent
-	client := newScriptedClient(stopResponse())
+	client := NewScriptedClient(stopResponse())
 	agent := makeAgentWithScriptedClient(10, client)
 	agent.optimizer = NewConversationOptimizer(true, false)
 	agent.messages = messages
@@ -833,7 +863,7 @@ func TestE2E_KeepGoingThenBlankThenStop(t *testing.T) {
 	t.Parallel()
 
 	// 2 keepGoing, 1 blank (recovery), 1 stop
-	responses := []*api.ChatResponse{
+	responses := []*ScriptedResponse{
 		keepGoingResponse(),
 		keepGoingResponse(),
 		blankResponseWithContent("   "),
@@ -870,7 +900,7 @@ func TestE2E_MultipleCheckpointsCompaction(t *testing.T) {
 		{Role: "assistant", Content: "Reviewed all changes and they look good"},
 	}
 
-	client := newScriptedClient(stopResponse())
+	client := NewScriptedClient(stopResponse())
 	agent := makeAgentWithScriptedClient(10, client)
 	agent.optimizer = NewConversationOptimizer(true, false)
 	agent.messages = messages
@@ -908,7 +938,7 @@ func TestE2E_MultipleCheckpointsCompaction(t *testing.T) {
 func TestE2E_PrepareMessagesTokenEstimation(t *testing.T) {
 	t.Parallel()
 
-	client := newScriptedClient(stopResponse())
+	client := NewScriptedClient(stopResponse())
 	agent := makeAgentWithScriptedClient(10, client)
 	agent.maxContextTokens = 100000 // Large enough to not trigger compaction
 
@@ -933,4 +963,177 @@ func TestE2E_PrepareMessagesTokenEstimation(t *testing.T) {
 	tokensWithTools := ch.apiClient.estimateRequestTokens(prepared, tools)
 	assert.Greater(t, tokensWithTools, tokens,
 		"expected tools to increase token estimate: with tools=%d, without=%d", tokensWithTools, tokens)
+}
+
+// ---------------------------------------------------------------------------
+// Test 16 – Tool call execution flow
+// ---------------------------------------------------------------------------
+
+// TestE2E_ToolCallExecutionFlow verifies the complete tool call execution flow:
+// 1. Model returns a tool call (e.g., read_file)
+// 2. Tool executes and result is appended to conversation
+// 3. Model sees the tool result and continues
+// 4. Model returns a stop response
+// The test verifies the conversation completes with RunTerminationCompleted
+// and exactly 2 iterations (one for tool call, one for stop).
+func TestE2E_ToolCallExecutionFlow(t *testing.T) {
+	t.Parallel()
+
+	// Create a temporary file so the read_file tool succeeds
+	tempDir := t.TempDir()
+	tempFile := filepath.Join(tempDir, "test_file.txt")
+	testContent := "This is test content for the e2e tool call test.\nLine 2 of the file."
+	if err := os.WriteFile(tempFile, []byte(testContent), 0o644); err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+
+	// Build a tool call for read_file
+	toolCall := api.ToolCall{
+		ID:   "call_read_file_001",
+		Type: "function",
+		Function: struct {
+			Name      string `json:"name"`
+			Arguments string `json:"arguments"`
+		}{
+			Name: "read_file",
+			Arguments: fmt.Sprintf(`{"file_path": "%s", "start_line": 1, "end_line": 2}`, tempFile),
+		},
+	}
+
+	// First response: model returns a tool call (finish_reason empty = continue)
+	firstResp := NewScriptedResponseBuilder().
+		Content("Let me read the file to get the information.").
+		ToolCall(toolCall).
+		Build()
+
+	// Second response: model sees tool result and returns stop
+	// Using stopResponse() to match the pattern used in other e2e tests
+	secondResp := stopResponse()
+
+	// Build responses array: tool call response first, then stop response
+	responses := []*ScriptedResponse{firstResp, secondResp}
+
+	// Build the E2E agent with the scripted client
+	agent, _ := buildE2EAgent(t, 10, responses...)
+
+	// Execute ProcessQuery
+	result, err := agent.ProcessQuery("What is in the test file?")
+	require.NoError(t, err, "ProcessQuery should succeed")
+
+	// Verify the result
+	assert.Equal(t, "Done.", result, "ProcessQuery should return Done.")
+
+	// Verify termination reason is completed
+	assert.Equal(t, RunTerminationCompleted, agent.GetLastRunTerminationReason(),
+		"expected termination reason RunTerminationCompleted")
+
+	// Verify iteration count is exactly 2
+	// Iteration 1: model returns tool call
+	// Iteration 2: model sees tool result and stops
+	assert.Equal(t, 2, agent.GetCurrentIteration()+1,
+		"expected exactly 2 iterations (1 tool call + 1 stop), got %d",
+		agent.GetCurrentIteration()+1)
+
+	// Verify conversation history has the expected structure
+	// Should have: user message, assistant (tool call), tool result, assistant (stop)
+	assert.GreaterOrEqual(t, len(agent.messages), 4,
+		"expected at least 4 messages (user, assistant with tool call, tool result, assistant stop)")
+
+	// Verify the tool call was recorded
+	var foundToolCall bool
+	var foundToolResult bool
+	for _, msg := range agent.messages {
+		if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
+			foundToolCall = true
+			assert.Equal(t, "read_file", msg.ToolCalls[0].Function.Name,
+				"expected tool call name to be read_file")
+		}
+		if msg.Role == "tool" {
+			foundToolResult = true
+			assert.Contains(t, msg.Content, "test content",
+				"expected tool result to contain the file content")
+		}
+	}
+	assert.True(t, foundToolCall, "expected to find assistant message with tool call")
+	assert.True(t, foundToolResult, "expected to find tool result message")
+}
+
+// ---------------------------------------------------------------------------
+// Test 17 – Fallback parser extracts tool from unstructured content
+// ---------------------------------------------------------------------------
+
+// TestE2E_FallbackParser extracts tool calls from unstructured content when
+// the model returns tool calls in the content field instead of structured
+// tool_calls. The fallback parser should extract the tool, execute it, and
+// the conversation should continue normally.
+func TestE2E_FallbackParser(t *testing.T) {
+	t.Parallel()
+
+	// Create a temporary file to ensure the tool succeeds (like TestE2E_ToolCallExecutionFlow)
+	tempFile := filepath.Join(t.TempDir(), "test_readme.md")
+	testContent := "This is a test README file for the fallback parser e2e test.\nProject: ledit"
+	if err := os.WriteFile(tempFile, []byte(testContent), 0o644); err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+
+	// First response: model returns tool call in content (unstructured)
+	// This simulates a model that doesn't use the structured tool_calls API
+	// but instead embeds the tool call in natural text
+	// Use a format that matches the fallback parser's named tool block pattern:
+	// tool_name { "arg": "value" }
+	firstResp := NewScriptedResponseBuilder().
+		Content(fmt.Sprintf(`Let me use the read_file tool to check the README.
+
+read_file {
+"file_path": "%s"
+}`, tempFile)).
+		Build()
+
+	// Second response: model sees tool result and completes
+	secondResp := stopResponse()
+
+	agent, _ := buildE2EAgent(t, 10, firstResp, secondResp)
+	result, err := agent.ProcessQuery("What is in the README?")
+
+	require.NoError(t, err, "ProcessQuery should succeed with fallback parser")
+	assert.Equal(t, "Done.", result, "ProcessQuery should return Done after fallback parser extracts and executes tool")
+	assert.Equal(t, RunTerminationCompleted, agent.GetLastRunTerminationReason(), "Should complete successfully")
+	// Expected 2 iterations: fallback parser extracts tool → tool executes → stop response
+	assert.Equal(t, 2, agent.GetCurrentIteration()+1, "expected 2 iterations (fallback tool + stop)")
+
+	// Verify the fallback parser was used by checking the conversation history
+	// Should have: user message, assistant (unstructured content), tool result, assistant (stop)
+	assert.GreaterOrEqual(t, len(agent.messages), 4,
+		"expected at least 4 messages (user, assistant with unstructured tool, tool result, assistant stop)")
+
+	// Verify the tool call was extracted and executed, and the assistant message was cleaned
+	var foundToolCall bool
+	var foundToolResult bool
+	var cleanedContentVerified bool
+	for _, msg := range agent.messages {
+		if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
+			foundToolCall = true
+			assert.Equal(t, "read_file", msg.ToolCalls[0].Function.Name,
+				"expected extracted tool call name to be read_file")
+			// Verify the fallback parser cleaned the content by stripping the raw tool block
+			assert.NotContains(t, msg.Content, "read_file {",
+				"expected cleaned content to strip the raw tool block")
+			assert.NotContains(t, msg.Content, `"file_path"`,
+				"expected cleaned content to strip the raw tool block JSON")
+			assert.Contains(t, msg.Content, "Let me use the",
+				"expected cleaned content to preserve the natural text preamble")
+			cleanedContentVerified = true
+		}
+		if msg.Role == "tool" {
+			foundToolResult = true
+			// Tool result should contain actual file content, not an error
+			assert.Contains(t, msg.Content, "test README file",
+				"expected tool result to contain the file content")
+			assert.NotContains(t, msg.Content, "Error reading file",
+				"expected tool to succeed, got error")
+		}
+	}
+	assert.True(t, foundToolCall, "expected to find assistant message with extracted tool call")
+	assert.True(t, cleanedContentVerified, "expected to verify cleaned content assertions")
+	assert.True(t, foundToolResult, "expected to find tool result message")
 }

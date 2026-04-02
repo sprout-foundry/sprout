@@ -60,6 +60,17 @@ interface SubagentActivity {
 
 interface WorkspacePaneProps {
   paneId: string;
+  perChatCache?: Record<string, {
+    messages: Message[];
+    toolExecutions?: ToolExecution[];
+    fileEdits?: Array<{ path: string; action: string; timestamp: Date; linesAdded?: number; linesDeleted?: number }>;
+    subagentActivities?: SubagentActivity[];
+    currentTodos?: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }>;
+    queryProgress?: any;
+    lastError?: string | null;
+    isProcessing?: boolean;
+  }>;
+  activeChatId?: string | null;
   chatProps: {
     messages: Message[];
     onSendMessage: (message: string) => void;
@@ -96,7 +107,7 @@ interface WorkspacePaneProps {
   };
 }
 
-const WorkspacePane: React.FC<WorkspacePaneProps> = ({ paneId, chatProps, reviewProps, diffState }) => {
+const WorkspacePane: React.FC<WorkspacePaneProps> = ({ paneId, perChatCache, activeChatId, chatProps, reviewProps, diffState }) => {
   const { panes, buffers } = useEditorManager();
   const pane = panes.find((item) => item.id === paneId);
   const buffer = pane?.bufferId ? buffers.get(pane.bufferId) : null;
@@ -114,7 +125,52 @@ const WorkspacePane: React.FC<WorkspacePaneProps> = ({ paneId, chatProps, review
 
   switch (buffer.kind) {
     case 'chat': {
-      return <Chat {...chatProps} />;
+      const bufferChatId = buffer.metadata?.chatId as string | undefined;
+
+      // If this buffer's chat is the active chat, use the live chatProps
+      if (bufferChatId === activeChatId || !bufferChatId) {
+        return <Chat {...chatProps} />;
+      }
+
+      // Otherwise, look up the cached messages for this specific chat
+      const cached = perChatCache?.[bufferChatId];
+      if (cached) {
+        return (
+          <Chat
+            {...chatProps}
+            messages={cached.messages ?? []}
+            toolExecutions={cached.toolExecutions ?? []}
+            isProcessing={cached.isProcessing ?? false}
+            subagentActivities={cached.subagentActivities ?? []}
+            currentTodos={cached.currentTodos ?? []}
+            lastError={cached.lastError ?? null}
+            queryProgress={cached.queryProgress ?? null}
+            // Disable input for inactive chat tabs since the backend is focused on active chat
+            inputValue=""
+            onSendMessage={() => {}}
+            onQueueMessage={() => {}}
+            onStopProcessing={() => {}}
+          />
+        );
+      }
+
+      // No cache available — show empty state
+      return (
+        <Chat
+          {...chatProps}
+          messages={[]}
+          toolExecutions={[]}
+          isProcessing={false}
+          subagentActivities={[]}
+          currentTodos={[]}
+          lastError={null}
+          queryProgress={null}
+          inputValue=""
+          onSendMessage={() => {}}
+          onQueueMessage={() => {}}
+          onStopProcessing={() => {}}
+        />
+      );
     }
     case 'diff': {
       const diffPath = buffer.metadata?.sourcePath;

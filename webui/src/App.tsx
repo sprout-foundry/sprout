@@ -1786,6 +1786,7 @@ function App() {
                 onCreateChat={handleCreateChat}
                 onDeleteChat={handleDeleteChat}
                 onRenameChat={handleRenameChat}
+                perChatCache={state.perChatCache}
               />
               {onboarding.open && (
                 <div className="onboarding-overlay" role="dialog" aria-modal="true" aria-label="Set up ledit">

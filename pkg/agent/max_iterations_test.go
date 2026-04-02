@@ -16,45 +16,37 @@ import (
 
 // makeAgentWithScriptedClient creates a minimal Agent wired to the given
 // scripted client.  This mirrors the setup in termination_reason_test.go.
-func makeAgentWithScriptedClient(maxIter int, client *scriptedClient) *Agent {
+func makeAgentWithScriptedClient(maxIter int, client *ScriptedClient) *Agent {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Agent{
-		client:             client,
-		systemPrompt:       "system",
-		maxIterations:      maxIter,
-		inputInjectionChan: make(chan string, inputInjectionBufferSize),
-		interruptCtx:       ctx,
-		interruptCancel:    cancel,
-		outputMutex:        &sync.Mutex{},
+		client:                    client,
+		systemPrompt:              "system",
+		maxIterations:             maxIter,
+		inputInjectionChan:        make(chan string, inputInjectionBufferSize),
+		interruptCtx:              ctx,
+		interruptCancel:           cancel,
+		outputMutex:               &sync.Mutex{},
+		shellCommandHistory:       make(map[string]*ShellCommandResult),
 	}
 }
 
-// keepGoingResponse returns a ChatResponse whose finish_reason is empty,
+// keepGoingResponse returns a ScriptedResponse whose finish_reason is empty,
 // signalling to the conversation handler that the model wants to continue.
-func keepGoingResponse() *api.ChatResponse {
-	resp := &api.ChatResponse{
-		Choices: []api.Choice{{
-			FinishReason: "",
-		}},
-	}
-	resp.Choices[0].Message.Role = "assistant"
-	resp.Choices[0].Message.Content = "Still working..."
-	return resp
+func keepGoingResponse() *ScriptedResponse {
+	return NewScriptedResponseBuilder().
+		Content("Still working...").
+		FinishReason("").
+		Build()
 }
 
-// stopResponse returns a ChatResponse with finish_reason "stop".
-func stopResponse() *api.ChatResponse {
-	resp := &api.ChatResponse{
-		Choices: []api.Choice{{
-			FinishReason: "stop",
-		}},
-	}
-	resp.Choices[0].Message.Role = "assistant"
-	resp.Choices[0].Message.Content = "Done."
-	return resp
+// stopResponse returns a ScriptedResponse with finish_reason "stop".
+func stopResponse() *ScriptedResponse {
+	return NewScriptedResponseBuilder().
+		Content("Done.").
+		FinishReason("stop").
+		Build()
 }
 
-// ---------------------------------------------------------------------------
 // Test 1 – maxIterations = 0 means unlimited
 // ---------------------------------------------------------------------------
 
@@ -63,13 +55,13 @@ func TestMaxIterationsZeroMeansUnlimited(t *testing.T) {
 	// With maxIterations=0 the loop should *never* set termination reason to
 	// RunTerminationMaxIterations — only the explicit stop should end it.
 	totalKeepGoing := 10
-	responses := make([]*api.ChatResponse, 0, totalKeepGoing+1)
+	responses := make([]*ScriptedResponse, 0, totalKeepGoing+1)
 	for i := 0; i < totalKeepGoing; i++ {
 		responses = append(responses, keepGoingResponse())
 	}
 	responses = append(responses, stopResponse())
 
-	agent := makeAgentWithScriptedClient(0, newScriptedClient(responses...))
+	agent := makeAgentWithScriptedClient(0, NewScriptedClient(responses...))
 	_, err := agent.ProcessQuery("Keep going until done")
 	if err != nil {
 		t.Fatalf("ProcessQuery returned error: %v", err)
@@ -95,12 +87,12 @@ func TestMaxIterationsZeroMeansUnlimited(t *testing.T) {
 
 func TestMaxIterationsPositiveStillCaps(t *testing.T) {
 	// Every response says "keep going" (empty finish_reason).
-	responses := make([]*api.ChatResponse, 100)
+	responses := make([]*ScriptedResponse, 100)
 	for i := range responses {
 		responses[i] = keepGoingResponse()
 	}
 
-	agent := makeAgentWithScriptedClient(3, newScriptedClient(responses...))
+	agent := makeAgentWithScriptedClient(3, NewScriptedClient(responses...))
 	_, err := agent.ProcessQuery("Should cap at 3")
 	if err != nil {
 		t.Fatalf("ProcessQuery returned error: %v", err)
@@ -120,7 +112,7 @@ func TestMaxIterationsPositiveStillCaps(t *testing.T) {
 
 func TestSetMaxIterationsZeroIsUnlimited(t *testing.T) {
 	t.Run("zero means unlimited", func(t *testing.T) {
-		a := makeAgentWithScriptedClient(99, newScriptedClient())
+		a := makeAgentWithScriptedClient(99, NewScriptedClient())
 		a.SetMaxIterations(0)
 		if got := a.GetMaxIterations(); got != 0 {
 			t.Fatalf("GetMaxIterations() = %d, want 0 (unlimited)", got)
@@ -128,7 +120,7 @@ func TestSetMaxIterationsZeroIsUnlimited(t *testing.T) {
 	})
 
 	t.Run("positive value is preserved", func(t *testing.T) {
-		a := makeAgentWithScriptedClient(0, newScriptedClient())
+		a := makeAgentWithScriptedClient(0, NewScriptedClient())
 		a.SetMaxIterations(50)
 		if got := a.GetMaxIterations(); got != 50 {
 			t.Fatalf("GetMaxIterations() = %d, want 50", got)
@@ -136,7 +128,7 @@ func TestSetMaxIterationsZeroIsUnlimited(t *testing.T) {
 	})
 
 	t.Run("negative value is clamped to unlimited", func(t *testing.T) {
-		a := makeAgentWithScriptedClient(99, newScriptedClient())
+		a := makeAgentWithScriptedClient(99, NewScriptedClient())
 		a.SetMaxIterations(-5)
 		if got := a.GetMaxIterations(); got != 0 {
 			t.Fatalf("GetMaxIterations() = %d, want 0 (clamped from negative)", got)
@@ -151,7 +143,7 @@ func TestSetMaxIterationsZeroIsUnlimited(t *testing.T) {
 func TestDefaultMaxIterationsIsZero(t *testing.T) {
 	// Construct a minimal agent the way tests do; maxIterations should default
 	// to the zero-value of int, which is 0 (unlimited).
-	agent := makeAgentWithScriptedClient(0, newScriptedClient())
+	agent := makeAgentWithScriptedClient(0, NewScriptedClient())
 
 	if got := agent.GetMaxIterations(); got != 0 {
 		t.Fatalf("default GetMaxIterations() = %d, want 0 (unlimited)", got)
@@ -169,7 +161,7 @@ func TestDefaultMaxIterationsIsZero(t *testing.T) {
 
 func TestErrorHandlerUnlimitedDisplay(t *testing.T) {
 	t.Run("max zero shows unlimited", func(t *testing.T) {
-		a := makeAgentWithScriptedClient(0, newScriptedClient())
+		a := makeAgentWithScriptedClient(0, NewScriptedClient())
 		eh := NewErrorHandler(a)
 		result, err := eh.HandleAPIFailure(fmt.Errorf("something went wrong"), []api.Message{})
 		if err != nil {
@@ -181,7 +173,7 @@ func TestErrorHandlerUnlimitedDisplay(t *testing.T) {
 	})
 
 	t.Run("max positive shows fraction", func(t *testing.T) {
-		a := makeAgentWithScriptedClient(50, newScriptedClient())
+		a := makeAgentWithScriptedClient(50, NewScriptedClient())
 		a.currentIteration = 7
 		eh := NewErrorHandler(a)
 		result, err := eh.HandleAPIFailure(fmt.Errorf("something went wrong"), []api.Message{})

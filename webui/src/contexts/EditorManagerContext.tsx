@@ -45,6 +45,7 @@ interface EditorManagerContextValue {
   updateBufferTitle: (bufferId: string, title: string) => void;
   saveBuffer: (bufferId: string) => Promise<void>;
   setBufferModified: (bufferId: string, isModified: boolean) => void;
+  setBufferOriginalContent: (bufferId: string, originalContent: string) => void;
   saveAllBuffers: () => Promise<void>;
   updatePaneSize: (paneId: string, size: number) => void; // Update pane size
 }
@@ -425,6 +426,23 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     });
   }, []);
 
+  // Set the original content baseline for a buffer (e.g., after loading from disk).
+  // This also resets isModified to false if the current content matches the new baseline.
+  const setBufferOriginalContent = useCallback((bufferId: string, originalContent: string) => {
+    setBuffers(prev => {
+      const newBuffers = new Map(prev);
+      const buffer = newBuffers.get(bufferId);
+      if (buffer) {
+        newBuffers.set(bufferId, {
+          ...buffer,
+          originalContent,
+          isModified: buffer.content !== originalContent ? buffer.isModified : false,
+        });
+      }
+      return newBuffers;
+    });
+  }, []);
+
   // Save a buffer to the server
   const saveBuffer = useCallback(async (bufferId: string) => {
     const buffer = buffersRef.current.get(bufferId);
@@ -506,6 +524,12 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
             return newBuffers;
           });
         }
+      } else {
+        // Server returned a non-2xx status (e.g., 400 validation error).
+        // Log the error so it's visible during debugging.
+        const errorBody = await response.text().catch(() => 'Unknown error');
+        console.error(`Save failed (${response.status}) for ${buffer.file.path}: ${errorBody}`);
+        throw new Error(`Save failed (${response.status}): ${errorBody}`);
       }
     } catch (error) {
       console.error('Failed to save buffer:', bufferId, error);
@@ -518,7 +542,11 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     const currentBuffers = buffersRef.current;
     const savePromises = Array.from(currentBuffers.entries())
       .filter(([_, buffer]) => buffer.isModified && !buffer.file.path.startsWith('__workspace/'))
-      .map(([bufferId, _]) => saveBuffer(bufferId));
+      .map(([bufferId, _]) =>
+        saveBuffer(bufferId).catch(err => {
+          console.error('Save failed for buffer:', bufferId, err);
+        })
+      );
 
     await Promise.all(savePromises);
   }, [saveBuffer]);
@@ -805,6 +833,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     updateBufferTitle,
     saveBuffer,
     setBufferModified,
+    setBufferOriginalContent,
     saveAllBuffers,
     updatePaneSize
   };

@@ -584,23 +584,25 @@ const AppContent: React.FC<AppContentProps> = ({
           focusTabIndex(8);
           break;
         case 'focus_next_tab': {
+          if (!activePaneId) break;
           const paneBuffers = Array.from(buffers.values()).filter((buffer) => buffer.paneId === activePaneId);
           if (paneBuffers.length <= 1) break;
           const currentIdx = activeBufferId ? paneBuffers.findIndex(b => b.id === activeBufferId) : -1;
           const nextIdx = currentIdx + 1 < paneBuffers.length ? currentIdx + 1 : 0;
           if (paneBuffers[nextIdx]) {
-            switchPane(activePaneId!);
+            switchPane(activePaneId);
             switchToBuffer(paneBuffers[nextIdx].id);
           }
           break;
         }
         case 'focus_prev_tab': {
+          if (!activePaneId) break;
           const paneBuffersPrev = Array.from(buffers.values()).filter((buffer) => buffer.paneId === activePaneId);
           if (paneBuffersPrev.length <= 1) break;
           const currentIdx = activeBufferId ? paneBuffersPrev.findIndex(b => b.id === activeBufferId) : -1;
           const prevIdx = currentIdx - 1 >= 0 ? currentIdx - 1 : paneBuffersPrev.length - 1;
           if (paneBuffersPrev[prevIdx]) {
-            switchPane(activePaneId!);
+            switchPane(activePaneId);
             switchToBuffer(paneBuffersPrev[prevIdx].id);
           }
           break;

@@ -231,6 +231,18 @@ func TestHotkeyPresetConfigs(t *testing.T) {
 					t.Errorf("Preset %q missing editor command_id %q", preset, cmd)
 				}
 			}
+
+			// Regression guard: Ctrl+D/Cmd+D must NOT be bound to
+			// editor_delete_line in vscode or ledit presets.  CodeMirror's
+			// searchKeymap already provides Mod-d → selectNextOccurrence and
+			// the override would break multi-cursor find-match selection.
+			if preset != "webstorm" {
+				for _, h := range config.Hotkeys {
+					if h.CommandID == "editor_delete_line" && (h.Key == "Ctrl+D" || h.Key == "Cmd+D") {
+						t.Errorf("Preset %q: editor_delete_line must not use Ctrl+D/Cmd+D (use Ctrl+Shift+K)", preset)
+					}
+				}
+			}
 		})
 	}
 }

@@ -31,10 +31,12 @@ var sshProxyUpgrader = websocket.Upgrader{
 
 // resolveInitialWorkspace expands shell-like home references in a workspace path
 // so the frontend receives a concrete path it can pass to the backend API.
-//   "$HOME"   → "$HOME"   (kept as-is; parsed by BROWSER=none frontend context)
-//   "${HOME}"  → "${HOME}"  (kept as-is)
-//   "~/..."   → "$HOME/..."
-//   everything else → original
+//
+//	"$HOME"   → "$HOME"   (kept as-is; parsed by BROWSER=none frontend context)
+//	"${HOME}"  → "${HOME}"  (kept as-is)
+//	"~/..."   → "$HOME/..."
+//	everything else → original
+//
 // The actual expansion of $HOME happens on the remote ledit daemon side;
 // this function only handles ~/ shortcuts that the frontend needs to resolve
 // to send a valid absolute path to the setWorkspace API.
@@ -76,6 +78,10 @@ func (srv *ReactWebServer) handleSSHProxy(w http.ResponseWriter, r *http.Request
 
 	srv.sshSessionsMu.Lock()
 	session := srv.sshSessions[sessionKey]
+	var tunnelPort int
+	if session != nil {
+		tunnelPort = session.LocalPort
+	}
 	srv.sshSessionsMu.Unlock()
 
 	if session == nil {
@@ -83,7 +89,6 @@ func (srv *ReactWebServer) handleSSHProxy(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	tunnelPort := session.LocalPort
 	// Re-encode the session key so LEDIT_PROXY_BASE is consistently
 	// percent-encoded, matching what launchSSHWorkspace returns as ProxyBase.
 	proxyBase := "/ssh/" + url.PathEscape(sessionKey)

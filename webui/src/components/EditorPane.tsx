@@ -23,6 +23,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import EditorToolbar from './EditorToolbar';
 import ImageViewer from './ImageViewer';
 import SvgPreview from './SvgPreview';
+import GoToSymbolOverlay from './GoToSymbolOverlay';
 import { readFileWithConsent } from '../services/fileAccess';
 import { getEditorKeymap } from '../utils/editorHotkeys';
 import { diffGutter, updateDiffGutter, clearDiffGutter } from '../extensions/diffGutter';
@@ -47,6 +48,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   const [saving, setSaving] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [localContent, setLocalContent] = useState<string>('');
+  const [showGoToSymbol, setShowGoToSymbol] = useState<boolean>(false);
 
   const {
     panes,
@@ -354,6 +356,9 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         const event = new CustomEvent('editor-goto-line');
         document.dispatchEvent(event);
       },
+      onGoToSymbol: () => {
+        setShowGoToSymbol(true);
+      },
     });
 
     const extensions = [
@@ -564,26 +569,42 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
 
   return (
     <div className="editor-pane">
-      <EditorToolbar
-        paneId={paneId}
-        onGoToLine={handleGoToLine}
-        onSave={handleSave}
-        saving={saving}
-        actions={isSvgFile ? [
-          {
-            id: 'svg-preview',
-            title: 'Open SVG preview',
-            icon: <Eye size={16} />,
-            onClick: openSvgPreview,
-          },
-          {
-            id: 'svg-preview-split',
-            title: 'Open SVG preview in split',
-            icon: <Columns2 size={16} />,
-            onClick: openSvgPreviewInSplit,
-          }
-        ] : []}
-      />
+      <div style={{ position: 'relative' }}>
+        <EditorToolbar
+          paneId={paneId}
+          onGoToLine={handleGoToLine}
+          onSave={handleSave}
+          saving={saving}
+          actions={isSvgFile ? [
+            {
+              id: 'svg-preview',
+              title: 'Open SVG preview',
+              icon: <Eye size={16} />,
+              onClick: openSvgPreview,
+            },
+            {
+              id: 'svg-preview-split',
+              title: 'Open SVG preview in split',
+              icon: <Columns2 size={16} />,
+              onClick: openSvgPreviewInSplit,
+            }
+          ] : []}
+        />
+        <GoToSymbolOverlay
+          visible={showGoToSymbol}
+          content={localContent}
+          fileExtension={buffer?.file?.ext}
+          onSelectSymbol={(line) => {
+            handleGoToLine(line);
+            setShowGoToSymbol(false);
+            viewRef.current?.focus();
+          }}
+          onClose={() => {
+            setShowGoToSymbol(false);
+            viewRef.current?.focus();
+          }}
+        />
+      </div>
 
       {loading && (
         <div className="loading-indicator">

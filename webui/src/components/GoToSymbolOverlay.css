@@ -1,0 +1,221 @@
+/* ── Go to Symbol in File Overlay ───────────────────────────────────────── */
+
+.goto-symbol-overlay {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  min-width: 320px;
+  max-width: min(600px, 90vw);
+  max-height: 300px;
+  background: var(--input-bg, #252525);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Input area ─────────────────────────────────────────────────────────── */
+
+.goto-symbol-input-wrapper {
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border-color, #444);
+  background: var(--input-bg, #1e1e1e);
+  flex-shrink: 0;
+}
+
+.goto-symbol-prefix {
+  color: var(--toolbar-fg, #ccc);
+  font-size: 14px;
+  font-weight: bold;
+  margin-right: 6px;
+  user-select: none;
+  min-width: 10px;
+}
+
+.goto-symbol-input {
+  flex: 1;
+  padding: 8px 4px;
+  border: none;
+  background: transparent;
+  color: var(--input-fg, #fff);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.goto-symbol-input::placeholder {
+  color: var(--toolbar-fg, #888);
+}
+
+/* ── Scrollable symbol list ─────────────────────────────────────────────── */
+
+.goto-symbol-list {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* ── Symbol count / empty states ────────────────────────────────────────── */
+
+.goto-symbol-count {
+  padding: 4px 12px;
+  font-size: 11px;
+  color: var(--toolbar-fg, #888);
+  user-select: none;
+  border-bottom: 1px solid var(--border-color, #333);
+}
+
+.goto-symbol-empty {
+  padding: 16px 12px;
+  color: var(--toolbar-fg, #888);
+  font-style: italic;
+  text-align: center;
+  font-size: 13px;
+}
+
+/* ── Individual symbol row ──────────────────────────────────────────────── */
+
+.goto-symbol-item {
+  display: flex;
+  align-items: center;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--input-fg, #ddd);
+  transition: background-color 0.1s ease;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.goto-symbol-item:last-child {
+  border-bottom: none;
+}
+
+.goto-symbol-item:hover {
+  background: var(--toolbar-hover-bg, #333);
+}
+
+.goto-symbol-item.goto-symbol-item-active {
+  background: var(--accent-bg, #0e7490);
+  color: var(--accent-fg, #fff);
+}
+
+/* ── Kind icon badge ────────────────────────────────────────────────────── */
+
+.goto-symbol-kind {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  margin-right: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-mono, 'Monaco', 'Menlo', 'Fira Code', monospace);
+  border-radius: 3px;
+  user-select: none;
+  line-height: 1;
+}
+
+/* Kind-specific colors */
+.goto-symbol-kind-function,
+.goto-symbol-kind-method {
+  background: rgba(250, 204, 21, 0.18);
+  color: #facc15;
+}
+
+.goto-symbol-kind-class {
+  background: rgba(168, 85, 247, 0.18);
+  color: #a855f7;
+}
+
+.goto-symbol-kind-interface {
+  background: rgba(34, 197, 94, 0.18);
+  color: #22c55e;
+}
+
+.goto-symbol-kind-type {
+  background: rgba(56, 189, 248, 0.18);
+  color: #38bdf8;
+}
+
+.goto-symbol-kind-variable {
+  background: rgba(156, 163, 175, 0.18);
+  color: #9ca3af;
+}
+
+.goto-symbol-kind-constant {
+  background: rgba(251, 146, 60, 0.18);
+  color: #fb923c;
+}
+
+/* Recolour badges inside the active (selected) row so they remain visible
+   on the accent background. */
+.goto-symbol-item-active .goto-symbol-kind {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+/* ── Symbol name ────────────────────────────────────────────────────────── */
+
+.goto-symbol-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.goto-symbol-name mark {
+  color: inherit;
+  font-weight: 600;
+  background: none;
+  text-decoration: underline;
+  text-decoration-color: var(--accent-bg, #0e7490);
+  text-underline-offset: 2px;
+}
+
+.goto-symbol-item-active .goto-symbol-name mark {
+  text-decoration-color: rgba(255, 255, 255, 0.5);
+}
+
+/* ── Line number suffix ─────────────────────────────────────────────────── */
+
+.goto-symbol-line {
+  flex-shrink: 0;
+  margin-left: 12px;
+  font-size: 11px;
+  color: var(--toolbar-fg, #888);
+  font-family: var(--font-mono, 'Monaco', 'Menlo', 'Fira Code', monospace);
+}
+
+.goto-symbol-item-active .goto-symbol-line {
+  color: var(--accent-fg, rgba(255, 255, 255, 0.7));
+}
+
+/* ── Scrollbar ──────────────────────────────────────────────────────────── */
+
+.goto-symbol-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.goto-symbol-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.goto-symbol-list::-webkit-scrollbar-thumb {
+  background: var(--border-color, #444);
+  border-radius: 3px;
+}
+
+.goto-symbol-list::-webkit-scrollbar-thumb:hover {
+  background: var(--toolbar-hover-bg, #555);
+}

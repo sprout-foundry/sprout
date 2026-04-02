@@ -92,6 +92,8 @@ func VsCodeHotkeyConfig() *HotkeyConfig {
 		{Key: "Cmd+Shift+Enter", CommandID: "editor_insert_line_above", Description: "Insert line above (Mac)"},
 		{Key: "Ctrl+Shift+L", CommandID: "editor_select_all_occurrences", Description: "Select all occurrences of find match"},
 		{Key: "Cmd+Shift+L", CommandID: "editor_select_all_occurrences", Description: "Select all occurrences of find match (Mac)"},
+		{Key: "Ctrl+Shift+O", CommandID: "editor_goto_symbol", Description: "Go to symbol in file"},
+		{Key: "Cmd+Shift+O", CommandID: "editor_goto_symbol", Description: "Go to symbol in file (Mac)"},
 	}
 	all := append(sharedUniversalHotkeys(), editor...)
 	return &HotkeyConfig{Version: "1.0", Hotkeys: all}
@@ -116,6 +118,8 @@ func WebStormHotkeyConfig() *HotkeyConfig {
 		{Key: "Cmd+Shift+Enter", CommandID: "editor_insert_line_above", Description: "Insert line above (Mac)"},
 		{Key: "Ctrl+Shift+L", CommandID: "editor_select_all_occurrences", Description: "Select all occurrences of find match"},
 		{Key: "Cmd+Shift+L", CommandID: "editor_select_all_occurrences", Description: "Select all occurrences of find match (Mac)"},
+		{Key: "Ctrl+Shift+O", CommandID: "editor_goto_symbol", Description: "Go to symbol in file"},
+		{Key: "Cmd+Shift+O", CommandID: "editor_goto_symbol", Description: "Go to symbol in file (Mac)"},
 	}
 	all := append(sharedUniversalHotkeys(), editor...)
 	return &HotkeyConfig{Version: "1.0", Hotkeys: all}
@@ -154,6 +158,8 @@ func DefaultHotkeyConfig() *HotkeyConfig {
 		{Key: "Cmd+Shift+Enter", CommandID: "editor_insert_line_above", Description: "Insert line above (Mac)"},
 		{Key: "Ctrl+Shift+L", CommandID: "editor_select_all_occurrences", Description: "Select all occurrences of find match"},
 		{Key: "Cmd+Shift+L", CommandID: "editor_select_all_occurrences", Description: "Select all occurrences of find match (Mac)"},
+		{Key: "Ctrl+Shift+O", CommandID: "editor_goto_symbol", Description: "Go to symbol in file"},
+		{Key: "Cmd+Shift+O", CommandID: "editor_goto_symbol", Description: "Go to symbol in file (Mac)"},
 	}
 	all := append(sharedUniversalHotkeys(), editor...)
 	return &HotkeyConfig{Version: "1.0", Hotkeys: all}

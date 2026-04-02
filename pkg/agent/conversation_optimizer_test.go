@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"errors"
 	"testing"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
@@ -277,6 +278,209 @@ func TestCreateFileReadSummary(t *testing.T) {
 
 	if !containsString(summary, "Go file") {
 		t.Errorf("Expected summary to identify Go file type, got: %s", summary)
+	}
+}
+
+func TestCompactConversationWithLLMSummary(t *testing.T) {
+	optimizer := NewConversationOptimizer(true, false)
+
+	llmSummary := "The user asked to refactor auth module. Files auth.go and middleware.go were read and updated. Tests passed after the changes."
+	scriptedClient := NewScriptedClient(
+		NewScriptedResponseBuilder().Content(llmSummary).FinishReason("stop").Build(),
+	)
+	optimizer.SetLLMClient(scriptedClient, "test-provider", nil)
+
+	// Build a conversation large enough to trigger compaction.
+	// Requirements: ≥18 total messages, anchorEnd=3 (system + user + assistant),
+	// recentStart at index len-12, and middle segment ≥6 messages.
+	messages := []api.Message{
+		{Role: "system", Content: "System prompt"},                        // 0 - anchor start
+		{Role: "user", Content: "Refactor the auth module"},               // 1 - anchor user
+		{Role: "assistant", Content: "I'll start by reviewing the code."}, // 2 - anchor assistant (no tool calls)
+	}
+
+	// Middle messages (indices 3 through 12 = 10 messages, well above MinMiddleMessages=6)
+	for i := 0; i < 5; i++ {
+		messages = append(messages, api.Message{
+			Role:    "assistant",
+			Content: "Reviewed part of the auth implementation.",
+		})
+		messages = append(messages, api.Message{
+			Role:    "user",
+			Content: "Continue with the next part.",
+		})
+	}
+
+	// Recent messages: 12 messages (indices 13-24). Total = 25 messages.
+	// recentStart = 25 - 12 = 13 > anchorEnd(3), middle = 10 ≥ 6 → compaction triggers.
+	messages = append(messages,
+		api.Message{Role: "user", Content: "Check the remaining issues"},
+		api.Message{Role: "assistant", Content: "Looking at the remaining issues now."},
+		api.Message{Role: "assistant", Content: "", ToolCalls: []api.ToolCall{{ID: "recent-call-1"}}},
+		api.Message{Role: "tool", ToolCallId: "recent-call-1", Content: "Tool call result for read_file: auth/token.go\npackage auth\n\nfunc Token() {}"},
+		api.Message{Role: "assistant", Content: "Found the issue in token handling."},
+		api.Message{Role: "user", Content: "Fix it please"},
+		api.Message{Role: "assistant", Content: "Applying the fix now."},
+		api.Message{Role: "assistant", Content: "", ToolCalls: []api.ToolCall{{ID: "recent-call-2"}}},
+		api.Message{Role: "tool", ToolCallId: "recent-call-2", Content: "Tool call result for edit_file: auth/token.go\nok"},
+		api.Message{Role: "assistant", Content: "Fix applied successfully."},
+		api.Message{Role: "user", Content: "Run the tests"},
+		api.Message{Role: "assistant", Content: "Running the test suite now."},
+	)
+
+	if len(messages) < 18 {
+		t.Fatalf("test setup error: expected ≥18 messages, got %d", len(messages))
+	}
+
+	compacted := optimizer.CompactConversation(messages)
+
+	// Compacted should be shorter than original (middle replaced by one summary message)
+	if len(compacted) >= len(messages) {
+		t.Fatalf("expected compacted history to shrink message count, got %d -> %d", len(messages), len(compacted))
+	}
+
+	// Verify the LLM was called exactly once
+	sentRequests := scriptedClient.GetSentRequests()
+	if len(sentRequests) != 1 {
+		t.Fatalf("expected exactly 1 LLM call, got %d", len(sentRequests))
+	}
+
+	// The sent request should contain a system message with the summarizer prompt
+	if len(sentRequests[0]) < 2 {
+		t.Fatalf("expected at least 2 messages in the LLM request (system + user), got %d", len(sentRequests[0]))
+	}
+	if sentRequests[0][0].Role != "system" {
+		t.Errorf("expected first message in LLM request to be system, got %s", sentRequests[0][0].Role)
+	}
+
+	// Find the summary message in compacted output
+	var summaryMsg *api.Message
+	for i := range compacted {
+		if compacted[i].Role == "assistant" && containsString(compacted[i].Content, "Compacted earlier conversation state:") {
+			summaryMsg = &compacted[i]
+			break
+		}
+	}
+	if summaryMsg == nil {
+		t.Fatalf("expected compacted conversation to contain a summary message starting with 'Compacted earlier conversation state:'")
+	}
+
+	// The summary should contain the LLM-generated text
+	if !containsString(summaryMsg.Content, llmSummary) {
+		t.Errorf("expected summary to contain LLM-generated text, got: %s", summaryMsg.Content)
+	}
+
+	// First message should be the system message (anchor preserved)
+	if compacted[0].Role != "system" {
+		t.Errorf("expected first message to be system, got %s", compacted[0].Role)
+	}
+
+	// Second message should still be the user anchor
+	if compacted[1].Role != "user" {
+		t.Errorf("expected second message to be user anchor, got %s", compacted[1].Role)
+	}
+
+	// The recent tool chain should remain intact
+	foundRecentTool := false
+	for _, msg := range compacted {
+		if msg.Role == "tool" && msg.ToolCallId == "recent-call-2" {
+			foundRecentTool = true
+			break
+		}
+	}
+	if !foundRecentTool {
+		t.Fatal("expected recent tool result (recent-call-2) to remain intact")
+	}
+}
+
+func TestCompactConversationLLMErrorFallsBackToGoSummary(t *testing.T) {
+	optimizer := NewConversationOptimizer(true, false)
+
+	// Script the LLM to return an error, forcing fallback to Go-based summary
+	scriptedClient := NewScriptedClient(
+		NewErrorResponse(errors.New("LLM unavailable")),
+	)
+	optimizer.SetLLMClient(scriptedClient, "test-provider", nil)
+
+	messages := []api.Message{
+		{Role: "system", Content: "System prompt"},
+		{Role: "user", Content: "Refactor the auth module"},
+		{Role: "assistant", Content: "I'll start by reviewing the code."},
+	}
+
+	// sufficiently large middle segment
+	for i := 0; i < 5; i++ {
+		messages = append(messages, api.Message{
+			Role:    "assistant",
+			Content: "Reviewed implementation details for the auth flow.",
+		})
+		messages = append(messages, api.Message{
+			Role:    "user",
+			Content: "Continue with the next part.",
+		})
+	}
+
+	// 12 recent messages
+	messages = append(messages,
+		api.Message{Role: "user", Content: "Check the remaining issues"},
+		api.Message{Role: "assistant", Content: "Looking at the remaining issues now."},
+		api.Message{Role: "assistant", Content: "", ToolCalls: []api.ToolCall{{ID: "recent-call-fb"}}},
+		api.Message{Role: "tool", ToolCallId: "recent-call-fb", Content: "Tool call result for shell_command: go test ./...\nok"},
+		api.Message{Role: "assistant", Content: "Tests are passing."},
+		api.Message{Role: "user", Content: "Great, wrap up."},
+		api.Message{Role: "assistant", Content: "Wrapping up the session."},
+		api.Message{Role: "assistant", Content: "", ToolCalls: []api.ToolCall{{ID: "recent-call-fb2"}}},
+		api.Message{Role: "tool", ToolCallId: "recent-call-fb2", Content: "Tool call result for shell_command: go build ./...\nok"},
+		api.Message{Role: "assistant", Content: "Build succeeded."},
+		api.Message{Role: "user", Content: "Done"},
+		api.Message{Role: "assistant", Content: "All done."},
+	)
+
+	if len(messages) < 18 {
+		t.Fatalf("test setup error: expected ≥18 messages, got %d", len(messages))
+	}
+
+	compacted := optimizer.CompactConversation(messages)
+
+	if len(compacted) >= len(messages) {
+		t.Fatalf("expected compacted history to shrink message count, got %d -> %d", len(messages), len(compacted))
+	}
+
+	// Verify the LLM was called (and failed)
+	sentRequests := scriptedClient.GetSentRequests()
+	if len(sentRequests) != 1 {
+		t.Fatalf("expected exactly 1 LLM call attempt, got %d", len(sentRequests))
+	}
+
+	// The Go fallback should still produce a wrapped summary with the standard header
+	foundSummary := false
+	for _, msg := range compacted {
+		if msg.Role == "assistant" && containsString(msg.Content, "Compacted earlier conversation state:") {
+			foundSummary = true
+			break
+		}
+	}
+	if !foundSummary {
+		t.Fatal("expected fallback Go summary to contain 'Compacted earlier conversation state:' header")
+	}
+
+	// Anchor and recent messages should be preserved
+	if compacted[0].Role != "system" {
+		t.Errorf("expected first message to be system, got %s", compacted[0].Role)
+	}
+	if compacted[1].Role != "user" {
+		t.Errorf("expected second message to be user anchor, got %s", compacted[1].Role)
+	}
+
+	foundRecentTool := false
+	for _, msg := range compacted {
+		if msg.Role == "tool" && msg.ToolCallId == "recent-call-fb2" {
+			foundRecentTool = true
+			break
+		}
+	}
+	if !foundRecentTool {
+		t.Fatal("expected recent tool result to remain intact in fallback path")
 	}
 }
 

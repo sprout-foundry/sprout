@@ -42,6 +42,22 @@ interface DeepReviewResult {
   warnings?: string[];
 }
 
+interface SubagentActivity {
+  id: string;
+  toolCallId: string;
+  toolName: string;
+  phase: 'spawn' | 'output' | 'complete' | 'step';
+  message: string;
+  timestamp: Date;
+  taskId?: string;
+  persona?: string;
+  isParallel?: boolean;
+  provider?: string;
+  model?: string;
+  taskCount?: number;
+  failures?: number;
+}
+
 interface WorkspacePaneProps {
   paneId: string;
   chatProps: {
@@ -56,6 +72,7 @@ interface WorkspacePaneProps {
     toolExecutions?: ToolExecution[];
     queryProgress?: any;
     currentTodos?: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }>;
+    subagentActivities?: SubagentActivity[];
     onToolPillClick?: (toolId: string) => void;
     onStopProcessing?: () => void;
   };

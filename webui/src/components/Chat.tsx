@@ -1,5 +1,5 @@
-import React, { useRef, useEffect, useCallback, useState, useLayoutEffect } from 'react';
-import { Zap, Bot, AlertTriangle, BrainCircuit } from 'lucide-react';
+import React, { useRef, useEffect, useCallback, useState, useMemo, useLayoutEffect } from 'react';
+import { Zap, Bot, AlertTriangle, BrainCircuit, CheckCircle2, XCircle, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import CommandInput from './CommandInput';
 import MessageSegments from './MessageSegments';
 import MessageContent from './MessageContent';
@@ -29,6 +29,22 @@ interface ToolExecution {
   subagentType?: 'single' | 'parallel';
 }
 
+interface SubagentActivity {
+  id: string;
+  toolCallId: string;
+  toolName: string;
+  phase: 'spawn' | 'output' | 'complete' | 'step';
+  message: string;
+  timestamp: Date;
+  taskId?: string;
+  persona?: string;
+  isParallel?: boolean;
+  provider?: string;
+  model?: string;
+  taskCount?: number;
+  failures?: number;
+}
+
 interface ChatProps {
   messages: Message[];
   onSendMessage: (message: string) => void;
@@ -41,9 +57,295 @@ interface ChatProps {
   toolExecutions?: ToolExecution[];
   queryProgress?: any;
   currentTodos?: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }>;
+  subagentActivities?: SubagentActivity[];
   onToolPillClick?: (toolId: string) => void;
   onStopProcessing?: () => void;
 }
+
+// ── Subagent Activity Feed ─────────────────────────────────────────
+
+const MAX_ACTIVE_LINES = 50;
+const MAX_COMPLETED_SUMMARIES = 3;
+
+interface SubagentRun {
+  toolCallId: string;
+  persona: string;
+  isParallel: boolean;
+  isComplete: boolean;
+  completionMessage: string;
+  completionTimestamp: Date | null;
+  activities: SubagentActivity[];
+  spawnActivity: SubagentActivity | null;
+  completeActivity: SubagentActivity | null;
+  outputLines: Array<{ id: string; text: string; timestamp: Date; taskId?: string }>;
+}
+
+const groupSubagentRuns = (activities: SubagentActivity[]): SubagentRun[] => {
+  const runMap = new Map<string, SubagentRun>();
+
+  for (const activity of activities) {
+    const key = activity.toolCallId || activity.id;
+    let run = runMap.get(key);
+    if (!run) {
+      run = {
+        toolCallId: activity.toolCallId,
+        persona: activity.persona || 'subagent',
+        isParallel: activity.isParallel || false,
+        isComplete: false,
+        completionMessage: '',
+        completionTimestamp: null,
+        activities: [],
+        spawnActivity: null,
+        completeActivity: null,
+        outputLines: [],
+      };
+      runMap.set(key, run);
+    }
+
+    run.activities.push(activity);
+    if (activity.persona && (!run.spawnActivity || activity.phase === 'spawn')) {
+      run.persona = activity.persona;
+    }
+    if (activity.isParallel) {
+      run.isParallel = true;
+    }
+    if (activity.phase === 'spawn') {
+      run.spawnActivity = activity;
+    }
+    if (activity.phase === 'complete') {
+      run.isComplete = true;
+      run.completeActivity = activity;
+      run.completionMessage = activity.message;
+      run.completionTimestamp = activity.timestamp;
+    }
+    if (activity.phase === 'output' || activity.phase === 'step') {
+      // Split multi-line batched messages into individual lines
+      const lines = activity.message.split('\n').filter((l) => l.trim());
+      for (const line of lines) {
+        run.outputLines.push({
+          id: `${activity.id}-${run.outputLines.length}`,
+          text: line.trim(),
+          timestamp: activity.timestamp,
+          taskId: activity.taskId,
+        });
+      }
+    }
+  }
+
+  return Array.from(runMap.values());
+};
+
+const PERSONA_COLORS: Record<string, string> = {
+  coder: '#58a6ff',
+  reviewer: '#d2a8ff',
+  code_reviewer: '#d2a8ff',
+  tester: '#7ee787',
+  debugger: '#f0883e',
+  refactor: '#79c0ff',
+  researcher: '#ff7b72',
+  general: '#8b949e',
+};
+
+const getPersonaColor = (persona?: string): string => {
+  return PERSONA_COLORS[persona || ''] || '#8b949e';
+};
+
+const formatDuration = (start: Date, end?: Date): string => {
+  const ms = (end || new Date()).getTime() - start.getTime();
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+  return `${(ms / 60000).toFixed(1)}m`;
+};
+
+// ── Live Log Scroller Component ────────────────────────────────────
+
+const LiveLog: React.FC<{
+  lines: Array<{ id: string; text: string; timestamp: Date; taskId?: string }>;
+  maxLines: number;
+}> = ({ lines, maxLines }) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const userScrolledRef = useRef(false);
+
+  // Combined auto-scroll and user-scroll-reset effect
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    // Reset lock if near bottom, otherwise keep user lock
+    if (distanceFromBottom <= 48) {
+      userScrolledRef.current = false;
+    }
+    // Auto-scroll only if not user-locked
+    if (!userScrolledRef.current) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [lines.length]);
+
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    userScrolledRef.current = distanceFromBottom > 48;
+  }, []);
+
+  const visibleLines = lines.slice(-maxLines);
+
+  if (visibleLines.length === 0) return null;
+
+  return (
+    <div className="subagent-feed-log" ref={scrollRef} onScroll={handleScroll}>
+      {visibleLines.map((line) => (
+        <div key={line.id} className="subagent-feed-log-line">
+          {line.taskId && (
+            <span className="subagent-feed-log-task">{line.taskId}</span>
+          )}
+          <span className="subagent-feed-log-text">{line.text}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ── Active Subagent Card ───────────────────────────────────────────
+
+const ActiveSubagentCard: React.FC<{ run: SubagentRun }> = ({ run }) => {
+  const [expanded, setExpanded] = useState(true);
+  const color = getPersonaColor(run.persona);
+  const startTime = run.spawnActivity?.timestamp || run.activities[0]?.timestamp;
+  const hasOutput = run.outputLines.length > 0;
+
+  return (
+    <div className="subagent-feed-card subagent-feed-card--active" style={{ '--feed-persona-color': color } as React.CSSProperties}>
+      <button
+        className="subagent-feed-card-header"
+        onClick={() => hasOutput && setExpanded((prev) => !prev)}
+        type="button"
+        aria-expanded={expanded}
+      >
+        <span className="subagent-feed-card-left">
+          <span className="subagent-feed-status-dot subagent-feed-status-dot--active">
+            <Loader2 size={8} />
+          </span>
+          <Bot size={13} className="subagent-feed-card-icon" />
+          <span className="subagent-feed-persona">{run.persona}</span>
+          {run.isParallel && <span className="subagent-feed-badge">parallel</span>}
+        </span>
+        <span className="subagent-feed-card-right">
+          {run.outputLines.length > 0 && (
+            <span className="subagent-feed-line-count">{run.outputLines.length} lines</span>
+          )}
+          {startTime && (
+            <span className="subagent-feed-duration">{formatDuration(startTime)}</span>
+          )}
+          {hasOutput && (
+            <span className="subagent-feed-toggle">
+              {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+            </span>
+          )}
+        </span>
+      </button>
+
+      {expanded && hasOutput && (
+        <LiveLog lines={run.outputLines} maxLines={MAX_ACTIVE_LINES} />
+      )}
+    </div>
+  );
+};
+
+// ── Completed Subagent Card ────────────────────────────────────────
+
+const CompletedSubagentCard: React.FC<{ run: SubagentRun }> = ({ run }) => {
+  const hasFailures = run.completionMessage?.toLowerCase().includes('fail') || run.completionMessage?.toLowerCase().includes('error');
+
+  return (
+    <div className="subagent-feed-card subagent-feed-card--completed">
+      <span className="subagent-feed-status-dot subagent-feed-status-dot--completed">
+        {hasFailures
+          ? <XCircle size={9} />
+          : <CheckCircle2 size={9} />
+        }
+      </span>
+      <Bot size={13} className="subagent-feed-card-icon" style={{ color: getPersonaColor(run.persona) }} />
+      <span className="subagent-feed-persona">{run.persona}</span>
+      {run.isParallel && <span className="subagent-feed-badge">parallel</span>}
+      <span className="subagent-feed-sep">·</span>
+      <span className={`subagent-feed-result ${hasFailures ? 'subagent-feed-result--fail' : ''}`}>
+        {run.completionMessage || 'Completed'}
+      </span>
+      {run.spawnActivity?.timestamp && (
+        <>
+          <span className="subagent-feed-sep">·</span>
+          <span className="subagent-feed-duration">
+            {formatDuration(run.spawnActivity.timestamp, run.completionTimestamp || undefined)}
+          </span>
+        </>
+      )}
+    </div>
+  );
+};
+
+// ── Subagent Activity Feed ─────────────────────────────────────────
+
+const SubagentActivityFeed: React.FC<{
+  activities: SubagentActivity[];
+}> = ({ activities }) => {
+  const [visible, setVisible] = useState(true);
+
+  const runs = useMemo(() => groupSubagentRuns(activities), [activities]);
+
+  // Separate active and completed runs. Only show the most recent completed runs.
+  const activeRuns = useMemo(
+    () => runs.filter((r) => !r.isComplete),
+    [runs],
+  );
+  const completedRuns = useMemo(
+    () => runs
+      .filter((r) => r.isComplete)
+      .slice(-MAX_COMPLETED_SUMMARIES),
+    [runs],
+  );
+
+  // Show feed only when there are any runs to display
+  const hasContent = activeRuns.length > 0 || completedRuns.length > 0;
+  if (!hasContent) return null;
+
+  return (
+    <div className={`subagent-feed ${visible ? '' : 'subagent-feed--collapsed'}`}>
+      <button
+        className="subagent-feed-toggle-bar"
+        onClick={() => setVisible((prev) => !prev)}
+        type="button"
+        aria-expanded={visible}
+      >
+        <span className="subagent-feed-toggle-left">
+          <Bot size={14} />
+          <span className="subagent-feed-toggle-label">Subagent Activity</span>
+          {activeRuns.length > 0 && (
+            <span className="subagent-feed-active-badge">
+              {activeRuns.length === 1 ? '1 active' : `${activeRuns.length} active`}
+            </span>
+          )}
+        </span>
+        <span className="subagent-feed-toggle-right">
+          {visible ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </span>
+      </button>
+
+      {visible && (
+        <div className="subagent-feed-body">
+          {activeRuns.map((run) => (
+            <ActiveSubagentCard key={run.toolCallId} run={run} />
+          ))}
+          {completedRuns.map((run) => (
+            <CompletedSubagentCard key={run.toolCallId} run={run} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Main Chat Component ───────────────────────────────────────────
 
 const Chat: React.FC<ChatProps> = ({
   messages,
@@ -57,6 +359,7 @@ const Chat: React.FC<ChatProps> = ({
   toolExecutions = [],
   queryProgress = null,
   currentTodos = [],
+  subagentActivities = [],
   onToolPillClick,
   onStopProcessing,
 }) => {
@@ -66,6 +369,8 @@ const Chat: React.FC<ChatProps> = ({
   const inputContainerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
   const [inputContainerHeight, setInputContainerHeight] = useState(0);
+
+  const hasSubagentActivity = subagentActivities.length > 0;
 
   const isNearBottom = useCallback((node: HTMLDivElement) => {
     const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight;
@@ -98,6 +403,7 @@ const Chat: React.FC<ChatProps> = ({
     };
   }, []);
 
+
   useEffect(() => {
     const node = chatContainerRef.current;
     if (!node || !shouldAutoScrollRef.current) {
@@ -105,7 +411,7 @@ const Chat: React.FC<ChatProps> = ({
     }
 
     node.scrollTop = node.scrollHeight;
-  }, [messages, toolExecutions, queryProgress, isProcessing]);
+  }, [messages, toolExecutions, queryProgress, isProcessing, subagentActivities.length]);
 
   const handleChatScroll = useCallback(() => {
     const node = chatContainerRef.current;
@@ -202,6 +508,11 @@ const Chat: React.FC<ChatProps> = ({
             ))
           )}
 
+          {/* Inline subagent activity feed – shows between messages and processing indicators */}
+          {hasSubagentActivity && (
+            <SubagentActivityFeed activities={subagentActivities} />
+          )}
+
           {queryProgress && (
             <div className="query-progress">
               <div className="progress-header">
@@ -216,7 +527,7 @@ const Chat: React.FC<ChatProps> = ({
             </div>
           )}
 
-          {isProcessing && toolExecutions.length === 0 && !queryProgress && (
+          {isProcessing && toolExecutions.length === 0 && !queryProgress && !hasSubagentActivity && (
             <div className="processing-indicator">
               <div className="processing-content">
                 <div className="processing-spinner"><Zap size={14} /></div>

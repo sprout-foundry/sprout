@@ -65,6 +65,8 @@ type ReactWebServer struct {
 	fixReviewMu                     sync.RWMutex
 	sshSessions                     map[string]*sshWorkspaceSession
 	sshSessionsMu                   sync.Mutex
+	sshInFlight                     map[string]chan struct{}
+	sshInFlightMu                   sync.Mutex
 	sshLaunchStatuses               map[string]*sshLaunchStatus
 	sshLaunchStatusMu               sync.RWMutex
 	workspaceExecMu                 sync.Mutex
@@ -135,6 +137,7 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int) 
 		startTime:         time.Now(),
 		fixReviewJobs:     make(map[string]*gitFixReviewJob),
 		sshSessions:       make(map[string]*sshWorkspaceSession),
+		sshInFlight:       make(map[string]chan struct{}),
 		sshLaunchStatuses: make(map[string]*sshLaunchStatus),
 	}
 }

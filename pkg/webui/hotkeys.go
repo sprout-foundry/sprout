@@ -86,6 +86,10 @@ func VsCodeHotkeyConfig() *HotkeyConfig {
 		{Key: "Shift+Alt+ArrowUp", CommandID: "editor_duplicate_line_up", Description: "Duplicate line up"},
 		{Key: "Ctrl+Shift+K", CommandID: "editor_delete_line", Description: "Delete current line"},
 		{Key: "Cmd+Shift+K", CommandID: "editor_delete_line", Description: "Delete current line (Mac)"},
+		{Key: "Ctrl+Enter", CommandID: "editor_insert_line_below", Description: "Insert line below"},
+		{Key: "Cmd+Enter", CommandID: "editor_insert_line_below", Description: "Insert line below (Mac)"},
+		{Key: "Ctrl+Shift+Enter", CommandID: "editor_insert_line_above", Description: "Insert line above"},
+		{Key: "Cmd+Shift+Enter", CommandID: "editor_insert_line_above", Description: "Insert line above (Mac)"},
 	}
 	all := append(sharedUniversalHotkeys(), editor...)
 	return &HotkeyConfig{Version: "1.0", Hotkeys: all}
@@ -104,6 +108,10 @@ func WebStormHotkeyConfig() *HotkeyConfig {
 		{Key: "Cmd+Shift+Alt+ArrowUp", CommandID: "editor_duplicate_line_up", Description: "Duplicate line up (Mac)"},
 		{Key: "Ctrl+Shift+D", CommandID: "editor_delete_line", Description: "Delete current line"},
 		{Key: "Cmd+Shift+D", CommandID: "editor_delete_line", Description: "Delete current line (Mac)"},
+		{Key: "Ctrl+Enter", CommandID: "editor_insert_line_below", Description: "Insert line below"},
+		{Key: "Cmd+Enter", CommandID: "editor_insert_line_below", Description: "Insert line below (Mac)"},
+		{Key: "Ctrl+Shift+Enter", CommandID: "editor_insert_line_above", Description: "Insert line above"},
+		{Key: "Cmd+Shift+Enter", CommandID: "editor_insert_line_above", Description: "Insert line above (Mac)"},
 	}
 	all := append(sharedUniversalHotkeys(), editor...)
 	return &HotkeyConfig{Version: "1.0", Hotkeys: all}
@@ -136,6 +144,10 @@ func DefaultHotkeyConfig() *HotkeyConfig {
 		{Key: "Shift+Alt+ArrowUp", CommandID: "editor_duplicate_line_up", Description: "Duplicate line up"},
 		{Key: "Ctrl+Shift+K", CommandID: "editor_delete_line", Description: "Delete current line"},
 		{Key: "Cmd+Shift+K", CommandID: "editor_delete_line", Description: "Delete current line (Mac)"},
+		{Key: "Ctrl+Enter", CommandID: "editor_insert_line_below", Description: "Insert line below"},
+		{Key: "Cmd+Enter", CommandID: "editor_insert_line_below", Description: "Insert line below (Mac)"},
+		{Key: "Ctrl+Shift+Enter", CommandID: "editor_insert_line_above", Description: "Insert line above"},
+		{Key: "Cmd+Shift+Enter", CommandID: "editor_insert_line_above", Description: "Insert line above (Mac)"},
 	}
 	all := append(sharedUniversalHotkeys(), editor...)
 	return &HotkeyConfig{Version: "1.0", Hotkeys: all}

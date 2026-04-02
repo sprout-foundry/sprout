@@ -63,6 +63,33 @@ function deleteCurrentLine(view: EditorView): boolean {
   return true;
 }
 
+function insertLineBelow(view: EditorView): boolean {
+  if (!hasSingleSelection(view)) return false;
+
+  const line = view.state.doc.lineAt(view.state.selection.main.head);
+  // Insert a newline at end of the current line and move cursor there
+  const endOfLine = line.to;
+  view.dispatch({
+    changes: { from: endOfLine, insert: '\n' },
+    selection: { anchor: endOfLine + 1 },
+    scrollIntoView: true,
+  });
+  return true;
+}
+
+function insertLineAbove(view: EditorView): boolean {
+  if (!hasSingleSelection(view)) return false;
+
+  const line = view.state.doc.lineAt(view.state.selection.main.head);
+  // Insert a newline before the current line and position cursor there
+  view.dispatch({
+    changes: { from: line.from, insert: '\n' },
+    selection: { anchor: line.from },
+    scrollIntoView: true,
+  });
+  return true;
+}
+
 function moveCurrentLine(view: EditorView, direction: 'up' | 'down'): boolean {
   if (!hasSingleSelection(view)) return false;
 
@@ -159,6 +186,8 @@ const EDITOR_COMMAND_IDS = new Set([
   'editor_duplicate_line_up',
   'editor_duplicate_line_down',
   'editor_delete_line',
+  'editor_insert_line_below',
+  'editor_insert_line_above',
 ]);
 
 // ── Public API ──────────────────────────────────────────────────────
@@ -241,6 +270,9 @@ export function getEditorKeymap(
   // next find match). Only bind it if the user's hotkey config explicitly
   // maps a key to this command (e.g. Ctrl+Shift+K in VS Code preset).
   bindings.push(...bindingsFor('editor_delete_line', (v) => deleteCurrentLine(v)));
+
+  bindings.push(...bindingsFor('editor_insert_line_below', (v) => insertLineBelow(v)));
+  bindings.push(...bindingsFor('editor_insert_line_above', (v) => insertLineAbove(v)));
 
   return bindings;
 }

@@ -235,6 +235,11 @@ export function getEditorKeymap(
   bindings.push(...bindingsFor('editor_move_line_down', (v) => moveCurrentLine(v, 'down')));
   bindings.push(...bindingsFor('editor_duplicate_line_up', (v) => duplicateCurrentLine(v, 'up')));
   bindings.push(...bindingsFor('editor_duplicate_line_down', (v) => duplicateCurrentLine(v, 'down')));
+
+  // Intentionally no fallback for editor_delete_line — let CodeMirror's
+  // searchKeymap handle Mod-d → selectNextOccurrence (add selection to
+  // next find match). Only bind it if the user's hotkey config explicitly
+  // maps a key to this command (e.g. Ctrl+Shift+K in VS Code preset).
   bindings.push(...bindingsFor('editor_delete_line', (v) => deleteCurrentLine(v)));
 
   return bindings;

@@ -2,6 +2,32 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.14.6] - 2026-04-02
+
+- Updates 22 files - Updates git history panel with commit detail and file diff views (d998eff)
+- Updates 4 files - Updates chat with inline subagent activity feed (0e2e899)
+- Updates 2 files - Updates persisted messages loading in app state (9431599)
+- Updates 11 files - Updates webui chat creation and dialog positioning (6c4c1d1)
+- Updates 4 files - Updates agent workflow to support subagent overrides (fffc48e)
+- Updates 10 files - Updates web UI static assets (60c3f4f)
+- Updates 7 files - Updates SSH workspace picker and in-flight tracking (1f986dc)
+- Updates 3 files - Updates command history persistence to use localStorage synchronously (91e70b6)
+- Updates 17 files - Updates chat session switching with state caching and buffer sync (16cf255)
+- Updates 11 files - Updates web UI with multi-chat sessions and improved port strategy (8267d82)
+- Updates 32 files - Updates webui port strategy and removes multi-chat session support (d656a26)
+- Updates 10 files - Updates to enable per-chat agents for concurrent query support (00aeb85)
+- Updates 2 files - Updates terminal env vars and fixes channel close race (b20f4f3)
+- Updates 7 files - Updates web UI with multi-chat tab bar support (0188bdb)
+- Updates 27 files - Updates multi-chat sessions and browser tab isolation (541f0d5)
+- Updates 5 files - Updates reconnection handling with processing state in stats (92418c0)
+- Updates 11 files - Updates WebSocket resilience for frozen Chrome tabs (76b1657)
+- Updates 15 files - Updates WebSocket reliability with pong watchdog (a5ae574)
+- Updates 7 files - Updates WebSocket handling for tab lifecycle events (718304a)
+- Updates 4 files - Updates system prompt, fixes tool schema, improves accessibility (5770baa)
+- Updates 2 files - Updates sidebar to nest history under git tab (67f72fa)
+- Updates 3 files - Updates history section with sub-tabs for git log and revisions (a00bf3b)
+- Updates webui/src/components/AppContent.tsx - Updates eslint disable comments for template string checks (516a87b)
+
 ## [v0.14.4] - 2026-03-31
 
 - Updates 6 files - Updates editor buffer switching function order (37e7170)

@@ -17,7 +17,7 @@ func TestProcessResponsePreservesToolOutputForLLM(t *testing.T) {
 	defer cancel()
 
 	agent := &Agent{
-		client:          newStubClient("openrouter", "openai/gpt-4o-mini"),
+		client:          NewScriptedClient(),
 		systemPrompt:    "system",
 		messages:        []api.Message{{Role: "user", Content: "Show the first line of README.md"}},
 		interruptCtx:    ctx,
@@ -117,7 +117,7 @@ func TestProcessResponseDeduplicatesDuplicateToolCalls(t *testing.T) {
 	defer cancel()
 
 	agent := &Agent{
-		client:          newStubClient("openrouter", "openai/gpt-4o-mini"),
+		client:          NewScriptedClient(),
 		systemPrompt:    "system",
 		messages:        []api.Message{{Role: "user", Content: "Read a sample file"}},
 		interruptCtx:    ctx,
@@ -197,7 +197,7 @@ func TestProcessResponseDoesNotExecuteIrreparableStructuredToolCall(t *testing.T
 	defer cancel()
 
 	agent := &Agent{
-		client:          newStubClient("openrouter", "openai/gpt-4o-mini"),
+		client:          NewScriptedClient(),
 		systemPrompt:    "system",
 		messages:        []api.Message{{Role: "user", Content: "Delegate this to a subagent"}},
 		interruptCtx:    ctx,

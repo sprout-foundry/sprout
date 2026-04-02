@@ -371,10 +371,10 @@ function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isTerminalExpanded, setIsTerminalExpanded] = useState(false);
   const activeRequestsRef = useRef(0);
+  const [queuedMessages, setQueuedMessages] = useState<string[]>([]);
   const queuedMessagesRef = useRef<string[]>([]);
   const activeChatIdRef = useRef<string | null>(null);
   activeChatIdRef.current = state.activeChatId;
-  const [queuedMessagesCount, setQueuedMessagesCount] = useState(0);
   const [recentFiles, setRecentFiles] = useState<Array<{ path: string; modified: boolean }>>([]);
   const [gitRefreshToken, setGitRefreshToken] = useState(0);
   const [onboarding, setOnboarding] = useState<OnboardingState>({
@@ -877,7 +877,7 @@ function App() {
         const wasClearCommand = completedQuery === '/clear';
         if (wasClearCommand) {
           queuedMessagesRef.current = [];
-          setQueuedMessagesCount(0);
+          setQueuedMessages([]);
         }
         setState(prev => {
           let nextMessages = wasClearCommand
@@ -1478,7 +1478,40 @@ function App() {
     const trimmed = message.trim();
     if (!trimmed) return;
     queuedMessagesRef.current.push(trimmed);
-    setQueuedMessagesCount(queuedMessagesRef.current.length);
+    setQueuedMessages([...queuedMessagesRef.current]);
+  }, []);
+
+  const handleRemoveQueuedMessage = useCallback((index: number) => {
+    setQueuedMessages(prev => {
+      const next = [...prev];
+      next.splice(index, 1);
+      queuedMessagesRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const handleEditQueuedMessage = useCallback((index: number, newText: string) => {
+    setQueuedMessages(prev => {
+      const next = [...prev];
+      next[index] = newText;
+      queuedMessagesRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const handleReorderQueuedMessages = useCallback((fromIndex: number, toIndex: number) => {
+    setQueuedMessages(prev => {
+      const next = [...prev];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      queuedMessagesRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const handleClearQueuedMessages = useCallback(() => {
+    setQueuedMessages([]);
+    queuedMessagesRef.current = [];
   }, []);
 
   const handleStopProcessing = useCallback(async () => {
@@ -1512,7 +1545,7 @@ function App() {
     }
 
     const next = queuedMessagesRef.current.shift();
-    setQueuedMessagesCount(queuedMessagesRef.current.length);
+    setQueuedMessages([...queuedMessagesRef.current]);
     if (!next) return;
 
     handleSendMessage(next).catch((error) => {
@@ -1771,7 +1804,12 @@ function App() {
                 onSendMessage={handleSendMessage}
                 onQueueMessage={handleQueueMessage}
                 onStopProcessing={handleStopProcessing}
-                queuedMessagesCount={queuedMessagesCount}
+                queuedMessagesCount={queuedMessages.length}
+                queuedMessages={queuedMessages}
+                onQueueMessageRemove={handleRemoveQueuedMessage}
+                onQueueMessageEdit={handleEditQueuedMessage}
+                onQueueReorder={handleReorderQueuedMessages}
+                onClearQueuedMessages={handleClearQueuedMessages}
                 onGitCommit={handleGitCommit}
                 onGitAICommit={handleGitAICommit}
                 onGitStage={handleGitStage}
@@ -1786,6 +1824,7 @@ function App() {
                 onCreateChat={handleCreateChat}
                 onDeleteChat={handleDeleteChat}
                 onRenameChat={handleRenameChat}
+                perChatCache={state.perChatCache}
               />
               {onboarding.open && (
                 <div className="onboarding-overlay" role="dialog" aria-modal="true" aria-label="Set up ledit">

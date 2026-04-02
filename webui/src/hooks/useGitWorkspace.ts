@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiService } from '../services/api';
 import { WebSocketService } from '../services/websocket';
-import { GitStatusData } from '../components/GitSidebarPanel';
+import type { GitStatusData } from '../types/git-types';
+import type { FileSection } from '../types/git-types';
+import { selectionKey, parseSelectionKey } from '../types/git-types';
 
 export interface GitDiffResponse {
   message: string;
@@ -29,25 +31,6 @@ export interface GitBranchesState {
   current: string;
   branches: string[];
 }
-
-export type FileSection = 'staged' | 'modified' | 'untracked' | 'deleted';
-
-const selectionKey = (section: FileSection, path: string): string => `${section}:${path}`;
-
-const parseSelectionKey = (key: string): { section: FileSection; path: string } | null => {
-  const separatorIndex = key.indexOf(':');
-  if (separatorIndex <= 0) {
-    return null;
-  }
-
-  const section = key.slice(0, separatorIndex) as FileSection;
-  const path = key.slice(separatorIndex + 1);
-  if (!path || !['staged', 'modified', 'untracked', 'deleted'].includes(section)) {
-    return null;
-  }
-
-  return { section, path };
-};
 
 interface UseGitWorkspaceOptions {
   apiService: ApiService;

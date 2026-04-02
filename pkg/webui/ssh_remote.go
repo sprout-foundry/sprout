@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -144,6 +145,20 @@ func newSSHCommand(hostAlias, script string, extraArgs ...string) *exec.Cmd {
 	return exec.Command("ssh", baseArgs...)
 }
 
+func newSSHCommandContext(ctx context.Context, hostAlias, script string, extraArgs ...string) *exec.Cmd {
+	baseArgs := []string{
+		"-o", "BatchMode=yes",
+		"-o", "StrictHostKeyChecking=accept-new",
+		"-o", "ConnectTimeout=10",
+		"-o", "ConnectionAttempts=1",
+		"-o", "ServerAliveInterval=10",
+		"-o", "ServerAliveCountMax=2",
+	}
+	baseArgs = append(baseArgs, extraArgs...)
+	baseArgs = append(baseArgs, hostAlias, fmt.Sprintf("sh -lc %s", shellEscapeSSH(script)))
+	return exec.CommandContext(ctx, "ssh", baseArgs...)
+}
+
 func localSSHCacheRoot() string {
 	if tempBase := strings.TrimSpace(os.TempDir()); tempBase != "" {
 		candidate := filepath.Join(tempBase, "ledit-ssh-cache")
@@ -265,6 +280,38 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (result *s
 		ws.setSSHLaunchStatus(sessionKey, "ready", fmt.Sprintf("SSH workspace ready: %s", hostAlias), false, "")
 	}()
 
+	// Deduplicate: if a launch for this key is already in progress, wait for it.
+	ws.sshInFlightMu.Lock()
+	if waitCh, exists := ws.sshInFlight[sessionKey]; exists {
+		ws.sshInFlightMu.Unlock()
+		<-waitCh
+		ws.sshSessionsMu.Lock()
+		existing := ws.sshSessions[sessionKey]
+		ws.sshSessionsMu.Unlock()
+		if existing != nil {
+			return &sshLaunchResult{
+				URL:       existing.URL,
+				LocalPort: existing.LocalPort,
+				ProxyBase: "/ssh/" + url.PathEscape(sessionKey),
+			}, nil
+		}
+		return nil, fmt.Errorf("concurrent SSH launch for %s did not succeed", sessionKey)
+	}
+	doneCh := make(chan struct{})
+	ws.sshInFlight[sessionKey] = doneCh
+	ws.sshInFlightMu.Unlock()
+	defer func() {
+		ws.sshInFlightMu.Lock()
+		delete(ws.sshInFlight, sessionKey)
+		ws.sshInFlightMu.Unlock()
+		close(doneCh)
+	}()
+
+	// Bound the entire launch sequence so a stalled SSH connection or slow
+	// profile script on the remote host cannot block indefinitely.
+	launchCtx, launchCancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer launchCancel()
+
 	ws.sshSessionsMu.Lock()
 	if existing := ws.sshSessions[sessionKey]; existing != nil {
 		ws.setSSHLaunchStatus(sessionKey, "reusing-session", fmt.Sprintf("Reusing existing session for %s...", hostAlias), true, "")
@@ -296,7 +343,7 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (result *s
 	logger.Logf("ssh and scp detected locally")
 
 	ws.setSSHLaunchStatus(sessionKey, "inspecting-remote", fmt.Sprintf("Inspecting remote host %s...", hostAlias), true, "")
-	remoteInfo, err := inspectRemoteSSHHost(hostAlias, logger)
+	remoteInfo, err := inspectRemoteSSHHost(launchCtx, hostAlias, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -310,7 +357,7 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (result *s
 	logger.Logf("local SSH backend binary ready: %s", localBinary)
 
 	ws.setSSHLaunchStatus(sessionKey, "installing-remote-backend", fmt.Sprintf("Installing backend on %s...", hostAlias), true, "")
-	remoteBinary, err := ensureRemoteSSHBinary(hostAlias, localBinary, remoteInfo, logger)
+	remoteBinary, err := ensureRemoteSSHBinary(launchCtx, hostAlias, localBinary, remoteInfo, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -326,7 +373,7 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (result *s
 
 	launcherURL := fmt.Sprintf("http://127.0.0.1:%d", ws.port)
 	ws.setSSHLaunchStatus(sessionKey, "starting-remote-backend", fmt.Sprintf("Starting remote backend on %s...", hostAlias), true, "")
-	remotePort, remotePID, reusedDaemon, err := startRemoteSSHBackend(hostAlias, sessionKey, launcherURL, remoteWorkspacePath, remoteBinary, logger)
+	remotePort, remotePID, reusedDaemon, err := startRemoteSSHBackend(launchCtx, hostAlias, sessionKey, launcherURL, remoteWorkspacePath, remoteBinary, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -635,8 +682,8 @@ func browseSSHDirectory(hostAlias, requestedPath string) ([]sshRemoteEntry, stri
 	return payload.Files, strings.TrimSpace(payload.Path), strings.TrimSpace(payload.HomePath), nil
 }
 
-func inspectRemoteSSHHost(hostAlias string, logger *sshLaunchLogger) (*remoteSSHInfo, error) {
-	cmd := newSSHCommand(hostAlias, "uname -s; uname -m")
+func inspectRemoteSSHHost(ctx context.Context, hostAlias string, logger *sshLaunchLogger) (*remoteSSHInfo, error) {
+	cmd := newSSHCommandContext(ctx, hostAlias, "uname -s; uname -m")
 	out, err := runSSHLoggedCommand(logger, "inspect-remote", fmt.Sprintf("ssh %s uname -s; uname -m", hostAlias), cmd)
 	if err != nil {
 		return nil, err
@@ -873,7 +920,8 @@ func resolveGitHubReleaseAssetURL(tag, assetName string, logger *sshLaunchLogger
 
 func downloadFile(url, destPath string, logger *sshLaunchLogger) error {
 	logger.Logf("downloading artifact %s to %s", url, destPath)
-	resp, err := http.Get(url)
+	client := &http.Client{Timeout: 5 * time.Minute}
+	resp, err := client.Get(url)
 	if err != nil {
 		return fmt.Errorf("failed to download SSH artifact: %w", err)
 	}
@@ -942,13 +990,13 @@ func extractTarGzSingleFile(archivePath, destPath string) error {
 	return fmt.Errorf("artifact archive %s did not contain a binary", archivePath)
 }
 
-func ensureRemoteSSHBinary(hostAlias, localBinary string, remoteInfo *remoteSSHInfo, logger *sshLaunchLogger) (string, error) {
+func ensureRemoteSSHBinary(ctx context.Context, hostAlias, localBinary string, remoteInfo *remoteSSHInfo, logger *sshLaunchLogger) (string, error) {
 	localFingerprint, err := fingerprintFile(localBinary)
 	if err != nil {
 		return "", fmt.Errorf("failed to fingerprint local executable: %w", err)
 	}
 
-	homeCmd := newSSHCommand(hostAlias, `printf "%s" "$HOME"`)
+	homeCmd := newSSHCommandContext(ctx, hostAlias, `printf "%s" "$HOME"`)
 	homeOut, err := runSSHLoggedCommand(logger, "resolve-remote-home", fmt.Sprintf("ssh %s print $HOME", hostAlias), homeCmd)
 	if err != nil {
 		return "", err
@@ -964,7 +1012,7 @@ func ensureRemoteSSHBinary(hostAlias, localBinary string, remoteInfo *remoteSSHI
 
 	// Fast path: if the fingerprinted backend already exists and executes,
 	// skip upload/install and reuse it directly.
-	checkExisting := newSSHCommand(hostAlias, fmt.Sprintf("[ -x %s ] && %s version", shellEscapeSSH(remoteBinarySSH), shellEscapeSSH(remoteBinarySSH)))
+	checkExisting := newSSHCommandContext(ctx, hostAlias, fmt.Sprintf("[ -x %s ] && %s version", shellEscapeSSH(remoteBinarySSH), shellEscapeSSH(remoteBinarySSH)))
 	if out, err := checkExisting.CombinedOutput(); err == nil {
 		if output := trimSSHOutput(out); output != "" {
 			logger.Logf("reuse-backend output:\n%s", output)
@@ -978,12 +1026,12 @@ func ensureRemoteSSHBinary(hostAlias, localBinary string, remoteInfo *remoteSSHI
 		logger.Logf("reuse-backend check failed, proceeding with install")
 	}
 
-	mkdir := newSSHCommand(hostAlias, fmt.Sprintf("mkdir -p %s", shellEscapeSSH(remoteDirSSH)))
+	mkdir := newSSHCommandContext(ctx, hostAlias, fmt.Sprintf("mkdir -p %s", shellEscapeSSH(remoteDirSSH)))
 	if _, err := runSSHLoggedCommand(logger, "prepare-remote-dir", fmt.Sprintf("ssh %s mkdir -p %s", hostAlias, remoteDirSSH), mkdir); err != nil {
 		return "", err
 	}
 
-	copyCmd := exec.Command("scp",
+	copyCmd := exec.CommandContext(ctx, "scp",
 		"-o", "BatchMode=yes",
 		"-o", "StrictHostKeyChecking=accept-new",
 		"-o", "ConnectTimeout=10",
@@ -996,7 +1044,7 @@ func ensureRemoteSSHBinary(hostAlias, localBinary string, remoteInfo *remoteSSHI
 		return "", err
 	}
 
-	install := newSSHCommand(hostAlias, fmt.Sprintf(
+	install := newSSHCommandContext(ctx, hostAlias, fmt.Sprintf(
 		"mv %s %s && chmod +x %s",
 		`"$HOME/`+remoteUploadSCP+`"`,
 		shellEscapeSSH(remoteBinarySSH),
@@ -1007,7 +1055,7 @@ func ensureRemoteSSHBinary(hostAlias, localBinary string, remoteInfo *remoteSSHI
 	}
 
 	// Verify the uploaded backend can execute on the remote host.
-	verify := newSSHCommand(hostAlias, fmt.Sprintf("%s version", shellEscapeSSH(remoteBinarySSH)))
+	verify := newSSHCommandContext(ctx, hostAlias, fmt.Sprintf("%s version", shellEscapeSSH(remoteBinarySSH)))
 	if _, err := runSSHLoggedCommand(logger, "verify-backend", fmt.Sprintf("ssh %s verify backend executable %s", hostAlias, remoteBinarySSH), verify); err != nil {
 		return "", newSSHLaunchFailure(
 			"verify-backend",
@@ -1120,7 +1168,7 @@ func removePersistedSSHSession(sessionKey string) error {
 	return writePersistedSSHSessionRegistry(registry)
 }
 
-func startRemoteSSHBackend(hostAlias, sessionKey, launcherURL, remoteWorkspacePath, remoteBinary string, logger *sshLaunchLogger) (remotePort int, remotePID int, reused bool, err error) {
+func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherURL, remoteWorkspacePath, remoteBinary string, logger *sshLaunchLogger) (remotePort int, remotePID int, reused bool, err error) {
 	workspaceRaw := strings.TrimSpace(remoteWorkspacePath)
 	if workspaceRaw == "" {
 		workspaceRaw = "$HOME"
@@ -1147,7 +1195,7 @@ func startRemoteSSHBackend(hostAlias, sessionKey, launcherURL, remoteWorkspacePa
 		`  fi`,
 		`  # Look for a JSON response with a "port" field to confirm ledit.`,
 		`  case "$resp" in`,
-		`    *'"port":'*"status":"ok"*) ;;`,
+		`    *'"status":"ok"'*) ;;`,
 		`    *) return 1 ;;`,
 		`  esac`,
 		`  # Find the PID listening on the daemon port.`,
@@ -1155,9 +1203,9 @@ func startRemoteSSHBackend(hostAlias, sessionKey, launcherURL, remoteWorkspacePa
 		`  if command -v lsof >/dev/null 2>&1; then`,
 		`    pid=$(lsof -ti tcp:$DAEMON_PORT -sTCP:LISTEN 2>/dev/null | head -1)`,
 		`  elif command -v ss >/dev/null 2>&1; then`,
-		`    pid=$(ss -tlnpH "sport = :$DAEMON_PORT" 2>/dev/null | grep -oP 'pid=\K[0-9]+' | head -1)`,
+		`    pid=$(ss -tlnpH "sport = :$DAEMON_PORT" 2>/dev/null | sed -n 's/.*pid=\([0-9]*\).*/\1/p' | head -1)`,
 		`  elif command -v netstat >/dev/null 2>&1; then`,
-		`    pid=$(netstat -tlnp 2>/dev/null | grep ":$DAEMON_PORT " | grep -oP ' LISTEN[^ ]* \\d+/[^ ]*' | grep -oP '\\d+' | head -1)`,
+		`    pid=$(netstat -tlnp 2>/dev/null | grep ":$DAEMON_PORT " | sed -n 's/.*LISTEN[[:space:]]*\([0-9]*\)\/.*/\1/p' | head -1)`,
 		`  elif command -v fuser >/dev/null 2>&1; then`,
 		`    pid=$(fuser "$DAEMON_PORT/tcp" 2>/dev/null | head -1)`,
 		`  fi`,
@@ -1201,16 +1249,38 @@ func startRemoteSSHBackend(hostAlias, sessionKey, launcherURL, remoteWorkspacePa
 			shellEscapeSSH(remoteBinary),
 		),
 		"REMOTE_PID=$!",
-		`# Verify the daemon started successfully.`,
-		`sleep 1`,
-		`if ! kill -0 "$REMOTE_PID" 2>/dev/null; then`,
-		`  echo "ERROR: ledit daemon failed to start on port $DAEMON_PORT — another daemon may already be running on this host" >&2`,
-		`  exit 1`,
+		`# Poll the daemon's health endpoint until it responds or the process dies.`,
+		`if command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1; then`,
+		`  START_WAIT=0`,
+		`  MAX_WAIT=15`,
+		`  while [ $START_WAIT -lt $MAX_WAIT ]; do`,
+		`    if ! kill -0 "$REMOTE_PID" 2>/dev/null; then`,
+		`      echo "ERROR: ledit daemon exited prematurely on port $DAEMON_PORT" >&2`,
+		`      exit 1`,
+		`    fi`,
+		`    HEALTH=""`,
+		`    if command -v curl >/dev/null 2>&1; then`,
+		`      HEALTH=$(curl -sf -m 1 "http://127.0.0.1:$DAEMON_PORT/health" 2>/dev/null) || true`,
+		`    else`,
+		`      HEALTH=$(wget -qO- -T 1 "http://127.0.0.1:$DAEMON_PORT/health" 2>/dev/null) || true`,
+		`    fi`,
+		`    case "$HEALTH" in`,
+		`      *'"status":"ok"'*) break ;;`,
+		`    esac`,
+		`    sleep 1`,
+		`    START_WAIT=$((START_WAIT + 1))`,
+		`  done`,
+		`else`,
+		`  sleep 1`,
+		`  if ! kill -0 "$REMOTE_PID" 2>/dev/null; then`,
+		`    echo "ERROR: ledit daemon failed to start on port $DAEMON_PORT — another daemon may already be running on this host" >&2`,
+		`    exit 1`,
+		`  fi`,
 		`fi`,
 		`printf "%s\n%s\nnew\n" "$DAEMON_PORT" "$REMOTE_PID"`,
 	}, "\n")
 
-	cmd := newSSHCommand(hostAlias, script)
+	cmd := newSSHCommandContext(ctx, hostAlias, script)
 	out, err := runSSHLoggedCommand(logger, "start-remote-backend", fmt.Sprintf("ssh %s start remote backend", hostAlias), cmd)
 	if err != nil {
 		return 0, 0, false, err
@@ -1358,10 +1428,6 @@ func waitForWebHealth(port int, timeout time.Duration) error {
 	var lastErr error
 	const pollInterval = 250 * time.Millisecond
 
-	// Give the remote daemon and SSH tunnel a brief warm-up window to avoid
-	// failing on initial connection-reset bursts while the backend binds.
-	time.Sleep(300 * time.Millisecond)
-
 	for time.Now().Before(deadline) {
 		resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/health", port))
 		if err == nil {
@@ -1443,6 +1509,58 @@ func (ws *ReactWebServer) watchSSHSession(key string, session *sshWorkspaceSessi
 		return
 	}
 	_ = cmd.Wait()
+
+	// Attempt to reconnect the tunnel before giving up.
+	const maxRetries = 3
+	backoff := 2 * time.Second
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		// Check whether the session has been replaced or explicitly closed.
+		ws.sshSessionsMu.Lock()
+		current := ws.sshSessions[key]
+		ws.sshSessionsMu.Unlock()
+		if current == nil || current != session {
+			return
+		}
+
+		time.Sleep(backoff)
+		backoff *= 2
+		if backoff > 30*time.Second {
+			backoff = 30 * time.Second
+		}
+
+		newLocalPort, portErr := findFreeLocalPort()
+		if portErr != nil {
+			continue
+		}
+		newTunnel, tunnelErr := startSSHTunnel(session.HostAlias, newLocalPort, session.RemotePort, nil)
+		if tunnelErr != nil {
+			continue
+		}
+		if healthErr := waitForWebHealth(newLocalPort, sshRestoreHealthTimeout); healthErr != nil {
+			_ = killProcess(newTunnel)
+			continue
+		}
+
+		// Reconnect succeeded — swap in the new tunnel under the lock so the
+		// proxy always reads a consistent LocalPort value.
+		ws.sshSessionsMu.Lock()
+		current = ws.sshSessions[key]
+		if current != nil && current == session {
+			oldTunnel := session.TunnelCmd
+			session.LocalPort = newLocalPort
+			session.TunnelCmd = newTunnel
+			session.URL = fmt.Sprintf("http://127.0.0.1:%d", newLocalPort)
+			ws.sshSessionsMu.Unlock()
+			_ = killProcess(oldTunnel)
+			go ws.watchSSHSession(key, session, newTunnel)
+			return
+		}
+		ws.sshSessionsMu.Unlock()
+		_ = killProcess(newTunnel)
+		return
+	}
+
+	// All reconnection attempts failed; clean up.
 	ws.sshSessionsMu.Lock()
 	defer ws.sshSessionsMu.Unlock()
 	current := ws.sshSessions[key]

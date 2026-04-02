@@ -123,7 +123,7 @@ const ChatTabBar: React.FC<ChatTabBarProps> = ({
       x: e.clientX,
       y: e.clientY,
       sessionId: session.id,
-      canDelete: !session.is_default && !session.is_active,
+      canDelete: !session.is_default,
     });
   }, []);
 
@@ -192,9 +192,7 @@ const ChatTabBar: React.FC<ChatTabBarProps> = ({
                   aria-label={`Close ${session.name}`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (!session.is_active) {
-                      onDelete(session.id);
-                    }
+                    onDelete(session.id);
                   }}
                 >
                   <X size={12} />

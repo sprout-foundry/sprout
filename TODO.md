@@ -8,14 +8,13 @@
 [x] - WEBUI: The fix review items process after a review needs to accept a prompt to steer the agent toward fixing the items the should be fixed, or instead have the user select a check by each item they want fixed, then have the fix process run to fix them. That will help the user steer away from "fixing" changes that were intentional, but may have been flagged in the review.
 [x] - WEBUI: We need more real-time output from the subagents in the UI so that it is clear that something is happening. We can start with just piping in the log messages that would be printing out in the terminal, but ideally it would something a bit cleaner and clearer.
 [x] - WEBUI: The command palette could be improved by as soon as a user starts typing is starts fuzzy finding to commands first, then filenames etc and keeps filtering as typing happens.
-[x] - WEBUI: Update the git viewer to have 2 different sections. 1 for the current commit flow, and a second for viewing past
+[] - WEBUI: Update the git viewer to have 2 different sections. 1 for the current commit flow, and a second for viewing past commits and viewing individual file diffs or a full listview of all the file diffs for that commit. 
 [x] - The maximum iterations of 1000 appears to be a hard stop, but should reset after every entered prompt. Maybe the right move is to just remove it entirely unless a user passes in a specific max iterations value
 [x] - WEBUI: When a website, or a pwd gets "paused" by chrome, it changes state in ways that we are not handling correctly in the WEBUI. We need to make sure that it still works when it gets restored and that we don't lose the terminal session that was attached, or the chat session.
 [x] - WEBUI: We need to add support for multiple independent chats that can be managed and concurrently run.
 [x] - WEBUI: Missing costs and token counting in the status tab of the webui chat.
 [x] - WEBUI: In the status tab of the webui chat, the duration is not accurate. It appears to anchor to the first time the tab is opened and never progresses
 [X] - WEBUI: Selecting subagents providers and models doesn't work in the ui.
-[x] - WEBUI: If there are multiple tabs open, the chat should always live in the furthest to the right to better map with opening the right sidebar.
 [X] - Provider and model selection should be scoped to the session so if it changes it doesn't affect all agents and just sets the last used provider / model in the config if possible, but fail cleanly if it can't update the config.
 [x] - WEBUI: the git view is not auto-updating as expected when files are edited, deleted, or renamed.
 [x] - WEBUI: Queued prompts need to be able to be modified.

@@ -922,6 +922,20 @@ class ApiService {
     return response.json();
   }
 
+  async getGitCommitFileDiff(hash: string, path: string): Promise<{
+    message: string;
+    hash: string;
+    path: string;
+    diff: string;
+  }> {
+    const params = new URLSearchParams({ hash, path });
+    const response = await clientFetch(`/api/git/commit/show/file?${params.toString()}`);
+    if (!response.ok) {
+      throw new Error(`Failed to get commit file diff: HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
   async generateDeepReview(): Promise<{
     message: string;
     status: string;

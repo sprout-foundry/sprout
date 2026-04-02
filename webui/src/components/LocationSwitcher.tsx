@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import './LocationSwitcher.css';
 import { FolderOpen, Monitor, RefreshCw, Loader2, Server } from 'lucide-react';
 import {
@@ -1732,8 +1733,9 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
           </div>
         </div>
       ) : null}
-      {/* Post-SSH-connect workspace picker dialog */}
-      {showSSHWorkspacePicker ? (
+      {/* Post-SSH-connect workspace picker dialog — rendered via portal so it
+          escapes any parent overflow/transform that would confine fixed positioning. */}
+      {showSSHWorkspacePicker ? createPortal(
         <div className="ssh-workspace-picker-overlay" role="dialog" aria-modal="true" aria-label="Select SSH workspace">
           <div className="ssh-workspace-picker-dialog">
             <div className="ssh-workspace-picker-header">
@@ -1831,7 +1833,8 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       ) : null}
     </div>
   );

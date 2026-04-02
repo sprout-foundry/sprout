@@ -203,6 +203,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/git/push", ws.handleAPIGitPush)
 	mux.HandleFunc("/api/git/log", ws.handleAPIGitLog)
 	mux.HandleFunc("/api/git/commit/show", ws.handleAPIGitCommitShow)
+	mux.HandleFunc("/api/git/commit/show/file", ws.handleAPIGitCommitFileDiff)
 	mux.HandleFunc("/api/instances", ws.handleAPIInstances)
 	mux.HandleFunc("/api/instances/select", ws.handleAPIInstanceSelect)
 	mux.HandleFunc("/api/instances/ssh-hosts", ws.handleAPISSHHosts)

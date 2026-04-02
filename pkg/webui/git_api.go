@@ -1807,6 +1807,61 @@ func (ws *ReactWebServer) handleAPIGitCommitShow(w http.ResponseWriter, r *http.
 	})
 }
 
+// handleAPIGitCommitFileDiff returns the diff for a single file within a specific commit.
+func (ws *ReactWebServer) handleAPIGitCommitFileDiff(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+
+	hash := strings.TrimSpace(r.URL.Query().Get("hash"))
+	if hash == "" {
+		http.Error(w, "hash is required", http.StatusBadRequest)
+		return
+	}
+
+	reqPath := strings.TrimSpace(r.URL.Query().Get("path"))
+	if reqPath == "" {
+		http.Error(w, "path is required", http.StatusBadRequest)
+		return
+	}
+
+	// Path traversal protection.
+	if strings.Contains(reqPath, "..") {
+		http.Error(w, "path must not contain '..'", http.StatusBadRequest)
+		return
+	}
+
+	// Validate that the hash refers to an actual commit.
+	validateCmd := ws.gitCommandForWorkspace(workspaceRoot, "cat-file", "-t", hash)
+	if output, err := validateCmd.CombinedOutput(); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid commit hash: %s", strings.TrimSpace(string(output))), http.StatusBadRequest)
+		return
+	} else if strings.TrimSpace(string(output)) != "commit" {
+		http.Error(w, "hash does not refer to a commit", http.StatusBadRequest)
+		return
+	}
+
+	// Get the diff for just the requested file within this commit.
+	showCmd := ws.gitCommandForWorkspace(workspaceRoot, "show", "--format=", "--patch", hash, "--", reqPath)
+	showOutput, err := showCmd.CombinedOutput()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to get commit diff: %v", err), http.StatusInternalServerError)
+		return
+	}
+	diff := truncateDiffOutput(string(showOutput), 500000)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "success",
+		"hash":    hash,
+		"path":    reqPath,
+		"diff":    diff,
+	})
+}
+
 func gitReviewShouldSkipFileForContext(filePath string) bool {
 	if utils.ClassifyReviewFile(filePath).SkipForReview {
 		return true

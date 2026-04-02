@@ -22,14 +22,11 @@
 [x] - WEBUI: prompt history is not preserved past a refresh of the browser (pressing up arrow to scroll through history). It should be using the same history mechanism as the terminal cli so not sure why the behavior is different
 [x] - WEBUI: When we exectute: ctrl+n, it creates a new tab with an empty file, but it shows: Failed to load file: Bad Request and there is no way to save the new file.
 
-[] - Before Refactoring, we need more robust testing of the full solution to catch regressions as refactoring is executed.
-[] - The codebase needs a lot of refactoring to follow SRP and to reduce file size to something more manageable.
-[] - WEBUI: Add support for worktrees for runnning secondary chats for scoped feature work.
-[] - WEBUI: terminal randomly resetting.
 
 ### E2E Conversation Test Coverage
 
-~Was originally marked complete as "full end to end conversation mock" but 19 existing tests only cover basic-loop and unit-level compaction. 12 of 22 conversational patterns and 8 of 20 compaction paths remain untested at the e2e level. The first item (scriptedClient expansion) is a prerequisite for most others.~
+~Was originally marked complete as "full end to end conversation mock" but 19 existing tests only cover basic-loop and unit-level compaction. 12 of 22 conversational patterns and 8 of 20 compaction paths remain untested at the e2e level. The first item (scriptedClient expansion) is a prerequisite for most others.~ Before any major refactoring, we need more robust testing of the full solution to catch regressions as refactoring is executed.
+
 
 [] - E2E-TESTING: [FOUNDATION] Expand `scriptedClient` (from `termination_reason_test.go`) or replace `stub_client.go` to support: sequential scripted responses with tool calls, streaming simulation, error injection, vision support, and rate limit simulation. Delete the dead `stub_client.go` wrapper if replaced.
 [] - E2E-TESTING: Add e2e test for tool call execution through `ProcessQuery`: model returns `tool_call` → tool executes → result appended → model sees result and continues → stops.
@@ -50,6 +47,9 @@
 [] - E2E-TESTING: Add e2e test for orphaned tool result removal after compaction: checkpoint compaction runs → verify orphaned tool results from compacted ranges are removed.
 [] - E2E-TESTING: Add e2e test for file invalidation after edits: read file → optimizer caches → edit file → `InvalidateFile` called → old read not treated as redundant with new content.
 [] - E2E-TESTING: Add e2e test for checkpoint compaction actionable summary round-trip: `ProcessQuery` completes → async checkpoint records → next `ProcessQuery` triggers compaction → actionable summary injected → model sees useful context.
+
+
+[] - The codebase needs a lot of refactoring to follow SRP and to reduce file size to something more manageable.
 
 ---
 
@@ -144,3 +144,8 @@
 [] - UX: Add the ability to pin tabs to prevent accidental closure (type partially supported in `EditorBuffer` but no UI toggle for it).
 [] - UX: Add a status bar at the bottom showing current branch, file type, encoding, line endings, indentation settings — currently cursor position is in the editor footer but there is no global status bar.
 [] - UX: Add "zoom into/zoom out of terminal" controls or a font size setting for the integrated terminal.
+
+### General
+
+[] - WEBUI: Add support for leveraging worktrees for runnning secondary chats for scoped feature work.
+[] - WEBUI: terminal randomly resetting.

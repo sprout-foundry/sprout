@@ -38,7 +38,6 @@
       ],
       "allowed_tools": [
         "shell_command",
-        "git",
         "read_file",
         "write_file",
         "edit_file",
@@ -63,7 +62,6 @@
     {
       "allowed_tools": [
         "shell_command",
-        "git",
         "read_file",
         "write_file",
         "edit_file",
@@ -90,7 +88,6 @@
     {
       "allowed_tools": [
         "shell_command",
-        "git",
         "read_file",
         "write_file",
         "edit_file",
@@ -113,7 +110,6 @@
     {
       "allowed_tools": [
         "shell_command",
-        "git",
         "read_file",
         "write_file",
         "edit_file",
@@ -140,7 +136,6 @@
     {
       "allowed_tools": [
         "shell_command",
-        "git",
         "read_file",
         "write_file",
         "edit_file",
@@ -167,7 +162,6 @@
         "reviewer"
       ],
       "allowed_tools": [
-        "git",
         "read_file",
         "search_files",
         "analyze_ui_screenshot",
@@ -186,7 +180,6 @@
     {
       "allowed_tools": [
         "shell_command",
-        "git",
         "web_search",
         "fetch_url",
         "read_file",
@@ -209,7 +202,6 @@
       ],
       "allowed_tools": [
         "shell_command",
-        "git",
         "web_search",
         "fetch_url",
         "browse_url",
@@ -237,7 +229,6 @@
       ],
       "allowed_tools": [
         "shell_command",
-        "git",
         "read_file",
         "write_file",
         "edit_file",

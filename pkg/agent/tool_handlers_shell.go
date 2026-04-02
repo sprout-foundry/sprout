@@ -14,10 +14,15 @@ import (
 func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	command := args["command"].(string)
 
-	// Block git write operations - these must use the git tool for approval
-	// Read-only operations (status, log, diff, etc.) are allowed through shell_command
+	// Block git write operations unless the orchestrator persona has permission
+	// Read-only operations (status, log, diff, etc.) are always allowed through shell_command
 	if isGitWriteCommand(command) {
-		return "", fmt.Errorf("git write operations require the git tool for approval. Please use the git tool instead (operation: '%s')", command)
+		if !a.isOrchestratorGitWriteAllowed() {
+			if a.GetActivePersona() == "orchestrator" {
+				return "", fmt.Errorf("git write operations are disabled for the orchestrator. Enable 'Allow orchestrator git write' in settings, or use the git tool instead (operation: '%s')", command)
+			}
+			return "", fmt.Errorf("git write operations require the git tool for approval. Please use the git tool instead (operation: '%s')", command)
+		}
 	}
 
 	return a.executeShellCommandWithTruncation(ctx, command)

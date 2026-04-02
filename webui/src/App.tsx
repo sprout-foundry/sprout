@@ -692,6 +692,8 @@ function App() {
       return newId;
     } catch (error) {
       debugLog('[chat] Failed to create chat session:', error);
+      const message = error instanceof Error ? error.message : 'Failed to create new chat';
+      setState(prev => ({ ...prev, lastError: message }));
       return null;
     }
   }, []);

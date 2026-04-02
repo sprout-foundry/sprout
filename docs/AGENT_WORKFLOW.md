@@ -128,7 +128,8 @@ Validation rule: workflow must include at least one `steps` item, or an `initial
 - `prompt` or `prompt_file` (exactly one required per step).
 - Runtime overrides (same fields as `initial` runtime block):
   - `skip_prompt`, `provider`, `model`, `persona`, `dry_run`, `max_iterations`, `no_stream`,
-    `system_prompt`, `system_prompt_file`, `unsafe`, `no_subagents`, `resource_directory`, `reasoning_effort`.
+    `system_prompt`, `system_prompt_file`, `unsafe`, `no_subagents`, `resource_directory`, `reasoning_effort`,
+    `subagent_overrides`.
 
 ## Prompt and System Prompt Files
 
@@ -154,6 +155,43 @@ Runtime overrides are applied in this order for each initial/step block:
 10. `system_prompt` / `system_prompt_file`
 11. `persona`
 12. `reasoning_effort`
+13. `subagent_overrides`
+
+## Subagent Overrides
+
+`subagent_overrides` allows per-step control over which provider/model subagents use for each persona. This is the primary mechanism for cost control within a workflow run.
+
+The field is a map of persona IDs to provider/model overrides, available on both `initial` and each `step`:
+
+```json
+{
+  "initial": {
+    "provider": "anthropic",
+    "model": "claude-sonnet-4",
+    "subagent_overrides": {
+      "tester": { "provider": "anthropic", "model": "claude-haiku-4-20250514" },
+      "code_reviewer": { "provider": "openrouter", "model": "google/gemini-2.5-pro" }
+    },
+    "prompt": "Implement feature X"
+  }
+}
+```
+
+- Persona IDs are normalized (lowercase, hyphens → underscores). Aliases are matched.
+- Unknown or disabled personas are silently skipped.
+- Each entry requires at least one of `provider` or `model`.
+- Overrides patch the per-persona `SubagentTypes` entries in config. They do not affect the global `subagent_provider`/`subagent_model` defaults.
+- When `persist_runtime_overrides` is `false`, original persona provider/model values are restored after the workflow completes.
+- Later steps can override earlier steps — each step's overrides are applied sequentially.
+
+### Resolution order for subagent provider/model
+
+When a subagent is spawned during a workflow step:
+
+1. **Workflow `subagent_overrides`** for the matching persona (highest priority, per-step)
+2. **Persona config** `SubagentTypes[persona].Provider/Model` from persisted config
+3. **Global subagent config** `subagent_provider`/`subagent_model`
+4. **Parent agent** provider/model inheritance
 
 ## Triggering Semantics
 
@@ -231,6 +269,40 @@ Note: hard termination (for example `SIGKILL`) can prevent restoration.
       "when": "on_error",
       "reasoning_effort": "high",
       "prompt": "Diagnose failure and propose a repair plan."
+    }
+  ]
+}
+```
+
+### 4. Cost-controlled subagent routing
+
+```json
+{
+  "persist_runtime_overrides": false,
+  "initial": {
+    "prompt": "Implement the feature",
+    "provider": "anthropic",
+    "model": "claude-sonnet-4",
+    "subagent_overrides": {
+      "tester": { "provider": "deepinfra", "model": "deepseek-v3" }
+    }
+  },
+  "steps": [
+    {
+      "name": "tests",
+      "when": "on_success",
+      "subagent_overrides": {
+        "tester": { "provider": "deepinfra", "model": "deepseek-v3" }
+      },
+      "prompt": "Write comprehensive tests."
+    },
+    {
+      "name": "review",
+      "when": "on_success",
+      "subagent_overrides": {
+        "code_reviewer": { "provider": "openrouter", "model": "google/gemini-2.5-pro" }
+      },
+      "prompt": "Review all changes."
     }
   ]
 }

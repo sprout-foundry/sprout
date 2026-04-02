@@ -48,6 +48,17 @@ type AgentWorkflowOrchestrationConfig struct {
 	ConversationSessionID  string `json:"conversation_session_id,omitempty"`
 }
 
+// workflowSubagentOverride defines per-persona subagent provider/model overrides.
+type workflowSubagentOverride struct {
+	Provider string `json:"provider,omitempty"`
+	Model    string `json:"model,omitempty"`
+}
+
+// WorkflowSubagentOverrides maps persona IDs to their subagent routing overrides.
+// Keys are normalized persona IDs (lowercase, hyphens→underscores).
+// Values override provider/model for subagents with that persona.
+type WorkflowSubagentOverrides map[string]workflowSubagentOverride
+
 type workflowExecutionState struct {
 	Version          int    `json:"version"`
 	InitialCompleted bool   `json:"initial_completed"`
@@ -72,8 +83,9 @@ type AgentWorkflowRuntime struct {
 	SystemPromptFile  string `json:"system_prompt_file,omitempty"`
 	Unsafe            *bool  `json:"unsafe,omitempty"`
 	NoSubagents       *bool  `json:"no_subagents,omitempty"`
-	ResourceDirectory string `json:"resource_directory,omitempty"`
-	ReasoningEffort   string `json:"reasoning_effort,omitempty"`
+	ResourceDirectory string                    `json:"resource_directory,omitempty"`
+	ReasoningEffort   string                    `json:"reasoning_effort,omitempty"`
+	SubagentOverrides WorkflowSubagentOverrides `json:"subagent_overrides,omitempty"`
 }
 
 // AgentWorkflowInitial is the first run definition (can replace CLI prompt).
@@ -231,6 +243,15 @@ func (r *AgentWorkflowRuntime) validate(prefix string) error {
 	if r.MaxIterations != nil && *r.MaxIterations < 0 {
 		return fmt.Errorf("%s.max_iterations must be >= 0", prefix)
 	}
+	for personaID, override := range r.SubagentOverrides {
+		normalized := normalizeWorkflowPersonaID(personaID)
+		if normalized == "" {
+			return fmt.Errorf("%s.subagent_overrides has an empty persona key", prefix)
+		}
+		if override.Provider == "" && override.Model == "" {
+			return fmt.Errorf("%s.subagent_overrides[%q] must have at least one of provider or model", prefix, normalized)
+		}
+	}
 
 	return nil
 }
@@ -296,6 +317,58 @@ func normalizeWorkflowPaths(paths []string) []string {
 		normalized = append(normalized, trimmed)
 	}
 	return normalized
+}
+
+// normalizeWorkflowPersonaID normalizes a persona ID the same way config.go does.
+func normalizeWorkflowPersonaID(raw string) string {
+	normalized := strings.TrimSpace(strings.ToLower(raw))
+	normalized = strings.ReplaceAll(normalized, "-", "_")
+	return normalized
+}
+
+// findSubagentTypeMapKey finds the original map key in SubagentTypes matching the
+// given normalized persona ID. It mirrors the lookup logic in config.go GetSubagentType.
+func findSubagentTypeMapKey(subagentTypes map[string]configuration.SubagentType, normalizedID string) (string, bool) {
+	for key, st := range subagentTypes {
+		if normalizeWorkflowPersonaID(key) == normalizedID {
+			return key, true
+		}
+		for _, alias := range st.Aliases {
+			if normalizeWorkflowPersonaID(alias) == normalizedID {
+				return key, true
+			}
+		}
+	}
+	return "", false
+}
+
+// applyWorkflowSubagentOverrides patches the SubagentTypes map entries matching
+// the given overrides. No error is returned for unknown personas — they are skipped.
+func applyWorkflowSubagentOverrides(subagentTypes map[string]configuration.SubagentType, overrides WorkflowSubagentOverrides) {
+	for personaID, override := range overrides {
+		if override.Provider == "" && override.Model == "" {
+			continue
+		}
+		normalizedID := normalizeWorkflowPersonaID(personaID)
+		if normalizedID == "" {
+			continue
+		}
+		mapKey, found := findSubagentTypeMapKey(subagentTypes, normalizedID)
+		if !found {
+			continue
+		}
+		st := subagentTypes[mapKey]
+		if !st.Enabled {
+			continue
+		}
+		if override.Provider != "" {
+			st.Provider = override.Provider
+		}
+		if override.Model != "" {
+			st.Model = override.Model
+		}
+		subagentTypes[mapKey] = st
+	}
 }
 
 func isValidWorkflowWhen(v string) bool {
@@ -452,6 +525,18 @@ func applyWorkflowRuntimeOverrides(chatAgent *agent.Agent, runtime AgentWorkflow
 		}
 	}
 
+	if len(runtime.SubagentOverrides) > 0 {
+		if err := chatAgent.GetConfigManager().UpdateConfigNoSave(func(cfg *configuration.Config) error {
+			if cfg.SubagentTypes == nil {
+				return nil
+			}
+			applyWorkflowSubagentOverrides(cfg.SubagentTypes, runtime.SubagentOverrides)
+			return nil
+		}); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -476,6 +561,11 @@ type workflowRuntimeSnapshot struct {
 	ResourceDirectoryEnv   string
 	SystemPrompt           string
 	CustomReasoningEfforts map[string]string
+	SubagentOverridesBackup map[string]struct {
+		OriginalProvider string
+		OriginalModel    string
+		OriginalKey      string
+	}
 }
 
 func prepareWorkflowRuntimeRestorer(chatAgent *agent.Agent, cfg *AgentWorkflowConfig) (func() error, error) {
@@ -508,6 +598,46 @@ func prepareWorkflowRuntimeRestorer(chatAgent *agent.Agent, cfg *AgentWorkflowCo
 	}
 	for providerName, providerCfg := range agentCfg.CustomProviders {
 		snapshot.CustomReasoningEfforts[providerName] = providerCfg.ReasoningEffort
+	}
+
+	// Snapshot SubagentTypes entries that will be overwritten by any step's subagent_overrides.
+	snapshot.SubagentOverridesBackup = map[string]struct {
+		OriginalProvider string
+		OriginalModel    string
+		OriginalKey      string
+	}{}
+	var allOverrides WorkflowSubagentOverrides
+	if cfg.Initial != nil {
+		for k, v := range cfg.Initial.SubagentOverrides {
+			allOverrides[k] = v
+		}
+	}
+	for _, step := range cfg.Steps {
+		for k, v := range step.SubagentOverrides {
+			allOverrides[k] = v
+		}
+	}
+	if agentCfg.SubagentTypes != nil {
+		for personaID := range allOverrides {
+			normalizedID := normalizeWorkflowPersonaID(personaID)
+			if normalizedID == "" {
+				continue
+			}
+			mapKey, found := findSubagentTypeMapKey(agentCfg.SubagentTypes, normalizedID)
+			if !found {
+				continue
+			}
+			st := agentCfg.SubagentTypes[mapKey]
+			snapshot.SubagentOverridesBackup[normalizedID] = struct {
+				OriginalProvider string
+				OriginalModel    string
+				OriginalKey      string
+			}{
+				OriginalProvider: st.Provider,
+				OriginalModel:    st.Model,
+				OriginalKey:      mapKey,
+			}
+		}
 	}
 
 	restore := func() error {
@@ -543,6 +673,18 @@ func prepareWorkflowRuntimeRestorer(chatAgent *agent.Agent, cfg *AgentWorkflowCo
 				}
 				providerCfg.ReasoningEffort = originalReasoning
 				currentCfg.CustomProviders[providerName] = providerCfg
+			}
+			// Restore subagent persona overrides to their original values.
+			if currentCfg.SubagentTypes != nil {
+				for _, backup := range snapshot.SubagentOverridesBackup {
+					if _, exists := currentCfg.SubagentTypes[backup.OriginalKey]; !exists {
+						continue
+					}
+					st := currentCfg.SubagentTypes[backup.OriginalKey]
+					st.Provider = backup.OriginalProvider
+					st.Model = backup.OriginalModel
+					currentCfg.SubagentTypes[backup.OriginalKey] = st
+				}
 			}
 		}
 

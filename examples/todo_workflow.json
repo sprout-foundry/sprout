@@ -5,6 +5,12 @@
     "persona": "orchestrator",
     "prompt": "Look through the list of todos in TODO.md and pick this one to address: '{TODO_TEXT}'. Build, test then review the solution. If issues come back in the review, continue the build -> test -> review process until it is ready for release. Once it is ready, stage only the files you created or modified as part of this task using `git add <file1> <file2> ...`. Do NOT use `git add -A` or `git add .` — only stage your own changes.",
     "skip_prompt": true,
+    "subagent_overrides": {
+      "coder": {
+        "provider": "deepinfra",
+        "model": "zai-org/GLM-4.7-Flash"
+      }
+    },
     "unsafe": true
   },
   "no_web_ui": true,

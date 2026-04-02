@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/alantheprice/ledit/pkg/configuration"
 )
 
 func TestLoadAgentWorkflowConfig(t *testing.T) {
@@ -397,5 +399,380 @@ func TestShouldRestoreWorkflowConversationState(t *testing.T) {
 				t.Fatalf("shouldRestoreWorkflowConversationState()=%t want=%t", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestSubagentOverridesValidation(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empty persona key errors", func(t *testing.T) {
+		runtime := AgentWorkflowRuntime{
+			SubagentOverrides: WorkflowSubagentOverrides{
+				"": {Provider: "deepinfra"},
+			},
+		}
+		if err := runtime.validate("test"); err == nil {
+			t.Fatalf("expected validation error for empty persona key")
+		}
+	})
+
+	t.Run("whitespace-only persona key errors", func(t *testing.T) {
+		runtime := AgentWorkflowRuntime{
+			SubagentOverrides: WorkflowSubagentOverrides{
+				"   ": {Provider: "deepinfra"},
+			},
+		}
+		if err := runtime.validate("test"); err == nil {
+			t.Fatalf("expected validation error for whitespace-only persona key")
+		}
+	})
+
+	t.Run("missing both provider and model errors", func(t *testing.T) {
+		runtime := AgentWorkflowRuntime{
+			SubagentOverrides: WorkflowSubagentOverrides{
+				"tester": {},
+			},
+		}
+		if err := runtime.validate("test"); err == nil {
+			t.Fatalf("expected validation error when both provider and model are empty")
+		}
+	})
+
+	t.Run("provider only is valid", func(t *testing.T) {
+		runtime := AgentWorkflowRuntime{
+			SubagentOverrides: WorkflowSubagentOverrides{
+				"tester": {Provider: "deepinfra"},
+			},
+		}
+		if err := runtime.validate("test"); err != nil {
+			t.Fatalf("unexpected validation error: %v", err)
+		}
+	})
+
+	t.Run("model only is valid", func(t *testing.T) {
+		runtime := AgentWorkflowRuntime{
+			SubagentOverrides: WorkflowSubagentOverrides{
+				"coder": {Model: "claude-haiku"},
+			},
+		}
+		if err := runtime.validate("test"); err != nil {
+			t.Fatalf("unexpected validation error: %v", err)
+		}
+	})
+
+	t.Run("both provider and model is valid", func(t *testing.T) {
+		runtime := AgentWorkflowRuntime{
+			SubagentOverrides: WorkflowSubagentOverrides{
+				"tester": {Provider: "anthropic", Model: "claude-4-haiku"},
+			},
+		}
+		if err := runtime.validate("test"); err != nil {
+			t.Fatalf("unexpected validation error: %v", err)
+		}
+	})
+
+	t.Run("normalizes persona keys", func(t *testing.T) {
+		runtime := AgentWorkflowRuntime{
+			SubagentOverrides: WorkflowSubagentOverrides{
+				"Code-Reviewer": {Provider: "openrouter"},
+			},
+		}
+		if err := runtime.validate("test"); err != nil {
+			t.Fatalf("unexpected validation error: %v", err)
+		}
+	})
+}
+
+func TestSubagentOverridesApplyAndRestore(t *testing.T) {
+	t.Parallel()
+
+	t.Run("apply patches subagent types", func(t *testing.T) {
+		subagentTypes := map[string]configuration.SubagentType{
+			"tester": {
+				ID:       "tester",
+				Name:     "Tester",
+				Provider: "anthropic",
+				Model:    "claude-sonnet-4",
+				Enabled:  true,
+			},
+			"coder": {
+				ID:       "coder",
+				Name:     "Coder",
+				Provider: "openai",
+				Model:    "gpt-5",
+				Enabled:  true,
+			},
+		}
+
+		overrides := WorkflowSubagentOverrides{
+			"tester": {Provider: "deepinfra", Model: "deepseek-v3"},
+		}
+
+		applyWorkflowSubagentOverrides(subagentTypes, overrides)
+
+		if subagentTypes["tester"].Provider != "deepinfra" {
+			t.Fatalf("expected tester provider deepinfra, got %q", subagentTypes["tester"].Provider)
+		}
+		if subagentTypes["tester"].Model != "deepseek-v3" {
+			t.Fatalf("expected tester model deepseek-v3, got %q", subagentTypes["tester"].Model)
+		}
+		// coder should be untouched
+		if subagentTypes["coder"].Provider != "openai" {
+			t.Fatalf("expected coder provider to remain openai, got %q", subagentTypes["coder"].Provider)
+		}
+	})
+
+	t.Run("apply skips unknown persona", func(t *testing.T) {
+		subagentTypes := map[string]configuration.SubagentType{
+			"tester": {
+				ID:       "tester",
+				Name:     "Tester",
+				Provider: "anthropic",
+				Model:    "claude-sonnet-4",
+				Enabled:  true,
+			},
+		}
+
+		overrides := WorkflowSubagentOverrides{
+			"nonexistent": {Provider: "deepinfra", Model: "deepseek-v3"},
+		}
+
+		applyWorkflowSubagentOverrides(subagentTypes, overrides)
+
+		if subagentTypes["tester"].Provider != "anthropic" {
+			t.Fatalf("expected tester provider to remain unchanged, got %q", subagentTypes["tester"].Provider)
+		}
+	})
+
+	t.Run("apply skips disabled persona", func(t *testing.T) {
+		subagentTypes := map[string]configuration.SubagentType{
+			"tester": {
+				ID:       "tester",
+				Name:     "Tester",
+				Provider: "anthropic",
+				Model:    "claude-sonnet-4",
+				Enabled:  false,
+			},
+		}
+
+		overrides := WorkflowSubagentOverrides{
+			"tester": {Provider: "deepinfra", Model: "deepseek-v3"},
+		}
+
+		applyWorkflowSubagentOverrides(subagentTypes, overrides)
+
+		if subagentTypes["tester"].Provider != "anthropic" {
+			t.Fatalf("expected disabled tester provider to remain unchanged, got %q", subagentTypes["tester"].Provider)
+		}
+	})
+
+	t.Run("apply normalizes persona keys", func(t *testing.T) {
+		subagentTypes := map[string]configuration.SubagentType{
+			"code_reviewer": {
+				ID:       "code_reviewer",
+				Name:     "Code Reviewer",
+				Provider: "anthropic",
+				Model:    "claude-sonnet-4",
+				Enabled:  true,
+			},
+		}
+
+		overrides := WorkflowSubagentOverrides{
+			"Code-Reviewer": {Provider: "openrouter", Model: "gemini-2.5-pro"},
+		}
+
+		applyWorkflowSubagentOverrides(subagentTypes, overrides)
+
+		if subagentTypes["code_reviewer"].Provider != "openrouter" {
+			t.Fatalf("expected code_reviewer provider openrouter, got %q", subagentTypes["code_reviewer"].Provider)
+		}
+		if subagentTypes["code_reviewer"].Model != "gemini-2.5-pro" {
+			t.Fatalf("expected code_reviewer model gemini-2.5-pro, got %q", subagentTypes["code_reviewer"].Model)
+		}
+	})
+
+	t.Run("apply with aliases matches correct entry", func(t *testing.T) {
+		subagentTypes := map[string]configuration.SubagentType{
+			"tester": {
+				ID:       "tester",
+				Name:     "Tester",
+				Provider: "anthropic",
+				Model:    "claude-sonnet-4",
+				Enabled:  true,
+				Aliases:  []string{"qa-checker", "test-writer"},
+			},
+		}
+
+		overrides := WorkflowSubagentOverrides{
+			"qa-checker": {Provider: "deepinfra"},
+		}
+
+		applyWorkflowSubagentOverrides(subagentTypes, overrides)
+
+		if subagentTypes["tester"].Provider != "deepinfra" {
+			t.Fatalf("expected tester provider deepinfra (matched via alias), got %q", subagentTypes["tester"].Provider)
+		}
+	})
+
+	t.Run("restore returns original values via backup map", func(t *testing.T) {
+		subagentTypes := map[string]configuration.SubagentType{
+			"tester": {
+				ID:       "tester",
+				Name:     "Tester",
+				Provider: "anthropic",
+				Model:    "claude-sonnet-4",
+				Enabled:  true,
+			},
+			"coder": {
+				ID:       "coder",
+				Name:     "Coder",
+				Provider: "openai",
+				Model:    "gpt-5",
+				Enabled:  true,
+			},
+		}
+
+		// Create a backup as prepareWorkflowRuntimeRestorer would
+		backup := map[string]struct {
+			OriginalProvider string
+			OriginalModel    string
+			OriginalKey      string
+		}{
+			"tester": {
+				OriginalProvider: subagentTypes["tester"].Provider,
+				OriginalModel:    subagentTypes["tester"].Model,
+				OriginalKey:      "tester",
+			},
+		}
+
+		// Apply overrides (变形)
+		overrides := WorkflowSubagentOverrides{
+			"tester": {Provider: "deepinfra", Model: "deepseek-v3"},
+		}
+		applyWorkflowSubagentOverrides(subagentTypes, overrides)
+
+		// Verify mutation happened
+		if subagentTypes["tester"].Provider != "deepinfra" {
+			t.Fatalf("expected tester provider deepinfra after apply, got %q", subagentTypes["tester"].Provider)
+		}
+
+		// Restore (same logic as restore function)
+		for _, b := range backup {
+			st := subagentTypes[b.OriginalKey]
+			st.Provider = b.OriginalProvider
+			st.Model = b.OriginalModel
+			subagentTypes[b.OriginalKey] = st
+		}
+
+		// Verify restoration
+		if subagentTypes["tester"].Provider != "anthropic" {
+			t.Fatalf("expected tester provider restored to anthropic, got %q", subagentTypes["tester"].Provider)
+		}
+		if subagentTypes["tester"].Model != "claude-sonnet-4" {
+			t.Fatalf("expected tester model restored to claude-sonnet-4, got %q", subagentTypes["tester"].Model)
+		}
+		// coder should be unchanged throughout
+		if subagentTypes["coder"].Provider != "openai" {
+			t.Fatalf("expected coder provider to remain openai, got %q", subagentTypes["coder"].Provider)
+		}
+	})
+}
+
+func TestFindSubagentTypeMapKey(t *testing.T) {
+	t.Parallel()
+
+	subagentTypes := map[string]configuration.SubagentType{
+		"tester": {
+			ID:      "tester",
+			Enabled: true,
+			Aliases: []string{"qa-checker"},
+		},
+		"code_reviewer": {
+			ID:      "code_reviewer",
+			Enabled: true,
+		},
+	}
+
+	key, found := findSubagentTypeMapKey(subagentTypes, "tester")
+	if !found || key != "tester" {
+		t.Fatalf("expected to find tester, got key=%q found=%t", key, found)
+	}
+
+	key, found = findSubagentTypeMapKey(subagentTypes, "tester")
+	if !found || key != "tester" {
+		t.Fatalf("expected to find tester by normalized key, got key=%q found=%t", key, found)
+	}
+
+	key, found = findSubagentTypeMapKey(subagentTypes, "code_reviewer")
+	if !found || key != "code_reviewer" {
+		t.Fatalf("expected to find code_reviewer by normalized key, got key=%q found=%t", key, found)
+	}
+
+	key, found = findSubagentTypeMapKey(subagentTypes, "qa_checker")
+	if !found || key != "tester" {
+		t.Fatalf("expected to find tester via normalized alias, got key=%q found=%t", key, found)
+	}
+
+	key, found = findSubagentTypeMapKey(subagentTypes, "nonexistent")
+	if found {
+		t.Fatalf("expected not to find nonexistent, got key=%q", key)
+	}
+}
+
+func TestSubagentOverridesWorkflowConfigParsing(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "subagent-workflow.json")
+	content := `{
+		"initial": {
+			"prompt": "Implement feature X",
+			"subagent_overrides": {
+				"tester": {"provider": "anthropic", "model": "claude-haiku-4"},
+				"code-reviewer": {"provider": "openrouter", "model": "google/gemini-2.5-pro"}
+			}
+		},
+		"steps": [
+			{
+				"name": "cheap_tests",
+				"subagent_overrides": {
+					"tester": {"provider": "deepinfra", "model": "deepseek-v3"}
+				},
+				"prompt": "Write all tests"
+			}
+		]
+	}`
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := loadAgentWorkflowConfig(path)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if cfg == nil {
+		t.Fatalf("expected non-nil config")
+	}
+
+	// Verify initial subagent overrides
+	if len(cfg.Initial.SubagentOverrides) != 2 {
+		t.Fatalf("expected 2 initial subagent overrides, got %d", len(cfg.Initial.SubagentOverrides))
+	}
+	if cfg.Initial.SubagentOverrides["tester"].Provider != "anthropic" {
+		t.Fatalf("expected initial tester provider anthropic, got %q", cfg.Initial.SubagentOverrides["tester"].Provider)
+	}
+	if cfg.Initial.SubagentOverrides["code-reviewer"].Model != "google/gemini-2.5-pro" {
+		t.Fatalf("expected initial code-reviewer model google/gemini-2.5-pro, got %q", cfg.Initial.SubagentOverrides["code-reviewer"].Model)
+	}
+
+	// Verify step subagent overrides
+	if len(cfg.Steps) != 1 {
+		t.Fatalf("expected 1 step, got %d", len(cfg.Steps))
+	}
+	if len(cfg.Steps[0].SubagentOverrides) != 1 {
+		t.Fatalf("expected 1 step subagent override, got %d", len(cfg.Steps[0].SubagentOverrides))
+	}
+	if cfg.Steps[0].SubagentOverrides["tester"].Provider != "deepinfra" {
+		t.Fatalf("expected step tester provider deepinfra, got %q", cfg.Steps[0].SubagentOverrides["tester"].Provider)
 	}
 }

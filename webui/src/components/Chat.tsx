@@ -50,6 +50,11 @@ interface ChatProps {
   onSendMessage: (message: string) => void;
   onQueueMessage: (message: string) => void;
   queuedMessagesCount: number;
+  queuedMessages?: string[];
+  onQueueMessageRemove?: (index: number) => void;
+  onQueueMessageEdit?: (index: number, newText: string) => void;
+  onQueueReorder?: (fromIndex: number, toIndex: number) => void;
+  onClearQueuedMessages?: () => void;
   inputValue: string;
   onInputChange: (value: string) => void;
   isProcessing?: boolean;
@@ -352,6 +357,11 @@ const Chat: React.FC<ChatProps> = ({
   onSendMessage,
   onQueueMessage,
   queuedMessagesCount,
+  queuedMessages = [],
+  onQueueMessageRemove,
+  onQueueMessageEdit,
+  onQueueReorder,
+  onClearQueuedMessages,
   inputValue,
   onInputChange,
   isProcessing = false,
@@ -570,6 +580,11 @@ const Chat: React.FC<ChatProps> = ({
           autoFocus={true}
           isProcessing={isProcessing}
           queuedCount={queuedMessagesCount}
+          queuedMessages={queuedMessages}
+          onQueueMessageRemove={onQueueMessageRemove}
+          onQueueMessageEdit={onQueueMessageEdit}
+          onQueueReorder={onQueueReorder}
+          onClearQueuedMessages={onClearQueuedMessages}
         />
       </div>
     </div>

@@ -622,6 +622,10 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
             <h4>Security</h4>
             {renderNumberInput('security_validation.threshold', 'Validation threshold (0-2)', 0, 2)}
             {renderSelect('self_review_gate_mode', 'Self-review gate', ['off', 'code', 'always'])}
+            <div style={{ marginTop: 'var(--space-5)' }}>
+              <h4>Git Permissions</h4>
+              {renderToggle('allow_orchestrator_git_write', 'Allow orchestrator git write')}
+            </div>
           </div>
         );
 

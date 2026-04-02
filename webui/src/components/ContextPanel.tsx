@@ -29,12 +29,7 @@ import {
   ChevronDown,
   ChevronRight,
   FileCode,
-  AlertTriangle,
-  ShieldCheck,
   FileEdit,
-  File,
-  Check,
-  Loader2,
 } from 'lucide-react';
 import './ContextPanel.css';
 import { showThemedConfirm } from './ThemedDialog';
@@ -43,10 +38,6 @@ import { ApiService } from '../services/api';
 import { stripAnsiCodes } from '../utils/ansi';
 import { getSubagentResultPreview, formatToolDetail } from '../utils/resultSummary';
 import RevisionListPanel from './RevisionListPanel';
-
-// ── Types ──────────────────────────────────────────────────────────
-
-type FileSection = 'staged' | 'modified' | 'untracked' | 'deleted';
 
 interface ToolExecution {
   id: string;
@@ -116,28 +107,6 @@ interface SessionEntry {
   last_updated: string;
   message_count: number;
   total_tokens: number;
-}
-
-interface GitDiffResponse {
-  message: string;
-  path: string;
-  has_staged: boolean;
-  has_unstaged: boolean;
-  staged_diff: string;
-  unstaged_diff: string;
-  diff: string;
-}
-
-interface DeepReviewResult {
-  message: string;
-  status: string;
-  feedback: string;
-  detailed_guidance?: string;
-  suggested_new_prompt?: string;
-  review_output: string;
-  provider?: string;
-  model?: string;
-  warnings?: string[];
 }
 
 interface StatusMetrics {
@@ -211,38 +180,7 @@ interface ChatContextPanelProps extends ContextPanelBaseProps {
   onOpenRevisionDiff?: (options: { path: string; diff: string; title: string }) => void;
 }
 
-// Git-context specific props
-interface GitContextPanelProps extends ContextPanelBaseProps {
-  context: 'git';
-  stagedFiles: Array<{ path: string; status?: string; changes?: { additions: number; deletions: number } }>;
-  modifiedFiles: Array<{ path: string; status?: string; changes?: { additions: number; deletions: number } }>;
-  untrackedFiles: Array<{ path: string; status?: string; changes?: { additions: number; deletions: number } }>;
-  deletedFiles: Array<{ path: string; status?: string; changes?: { additions: number; deletions: number } }>;
-  selectedFiles: Set<string>;
-  onFileSelect: (section: FileSection, path: string) => void;
-  onPreviewFile: (section: FileSection, path: string) => void;
-  activeDiffSelectionKey: string | null;
-  activeDiffPath: string | null;
-  activeDiff: GitDiffResponse | null;
-  diffMode: 'combined' | 'staged' | 'unstaged';
-  onDiffModeChange: (mode: 'combined' | 'staged' | 'unstaged') => void;
-  isDiffLoading: boolean;
-  diffError: string | null;
-  onStage: (files: string[]) => void;
-  onUnstage?: (files: string[]) => void;
-  onDiscard: (files: string[]) => void;
-  deepReview: DeepReviewResult | null;
-  reviewError: string | null;
-  reviewFixResult: string | null;
-  reviewFixLogs: string[];
-  reviewFixSessionID: string | null;
-  isReviewLoading: boolean;
-  isReviewFixing: boolean;
-  onRunReview: () => void;
-  onFixFromReview: (options?: { fixPrompt?: string; selectedItems?: string[] }) => void;
-}
-
-export type ContextPanelProps = ChatContextPanelProps | GitContextPanelProps;
+export type ContextPanelProps = ChatContextPanelProps;
 
 // ── Public API via ref ─────────────────────────────────────────────
 
@@ -316,9 +254,6 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   const [sessionRestoreError, setSessionRestoreError] = useState<string | null>(null);
   const [sessionsCount, setSessionsCount] = useState(0);
 
-  // ── Git-specific state ───────────────────────────────────────────
-  const [gitTab, setGitTab] = useState<'files' | 'diff' | 'review'>('files');
-
   // ── API service ──────────────────────────────────────────────────
   const apiService = ApiService.getInstance();
 
@@ -373,8 +308,6 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
         if (tab === 'sessions' && sessionsCount === 0) {
           loadSessions();
         }
-      } else if (context === 'git' && ['files', 'diff', 'review'].includes(tab)) {
-        setGitTab(tab as any);
       }
     },
     highlightTool: (toolId: string) => {
@@ -404,10 +337,8 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       setPanelCollapsed(true);
     }
     if (storedTab) {
-      if (context === 'chat' && ['subagents', 'tools', 'changes', 'tasks', 'status', 'sessions'].includes(storedTab)) {
+      if (['subagents', 'tools', 'changes', 'tasks', 'status', 'sessions'].includes(storedTab)) {
         setChatTab(storedTab as any);
-      } else if (context === 'git' && ['files', 'diff', 'review'].includes(storedTab)) {
-        setGitTab(storedTab as any);
       }
     }
   }, [context]);
@@ -427,9 +358,8 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   // Persist active tab
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const tab = context === 'chat' ? chatTab : gitTab;
-    window.localStorage.setItem(`${PANEL_TAB_KEY}.${context}`, tab);
-  }, [context, chatTab, gitTab]);
+    window.localStorage.setItem(`${PANEL_TAB_KEY}.${context}`, chatTab);
+  }, [context, chatTab]);
 
   // ── Clear highlight after 3 seconds ──────────────────────────────
   useEffect(() => {
@@ -783,34 +713,9 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     return `$${cost.toFixed(4)}`;
   };
 
-  // ── Diff renderer ────────────────────────────────────────────────
-
-  const renderGitDiffContent = (diff: string) => {
-    const lines = stripAnsiCodes(diff).split('\n');
-    return (
-      <div className="context-panel-diff-view" role="region" aria-label="Git diff view">
-        {lines.map((line, index) => {
-          let lineClass = 'context-diff';
-          if (line.startsWith('diff --git') || line.startsWith('index ') || line.startsWith('old mode') || line.startsWith('new mode'))
-            lineClass = 'context-diff context-diff-file';
-          else if (line.startsWith('@@')) lineClass = 'context-diff context-diff-hunk';
-          else if (line.startsWith('+') && !line.startsWith('+++')) lineClass = 'context-diff context-diff-add';
-          else if (line.startsWith('-') && !line.startsWith('---')) lineClass = 'context-diff context-diff-del';
-          else if (line.startsWith('+++') || line.startsWith('---')) lineClass = 'context-diff context-diff-header';
-          return (
-            <div key={`git-diff-${index}`} className={lineClass}>
-              {line || ' '}
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
-
   // ── Chat computed values ─────────────────────────────────────────
 
   const chatProps = context === 'chat' ? props as ChatContextPanelProps : null;
-  const gitProps = context === 'git' ? props as GitContextPanelProps : null;
   const toolExecutions = useMemo(() => chatProps?.toolExecutions ?? [], [chatProps]);
   const currentTodos = chatProps?.currentTodos ?? [];
   const chatMessages = useMemo(() => chatProps?.messages ?? [], [chatProps]);
@@ -983,49 +888,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     { id: 'status', label: 'Status', icon: <Activity size={14} />, count: `${statusMetrics.totalMsgs} msgs` },
   ];
 
-  const gitPanelTabs: Array<{ id: 'files' | 'diff' | 'review'; label: string; icon: ReactNode; count: string }> = useMemo(() => {
-    if (!gitProps) return [];
-    const totalFiles = gitProps.stagedFiles.length + gitProps.modifiedFiles.length + gitProps.untrackedFiles.length + gitProps.deletedFiles.length;
-    return [
-      { id: 'files', label: 'Files', icon: <FileCode size={14} />, count: `${totalFiles} files` },
-      { id: 'diff', label: 'Diff', icon: <FileText size={14} />, count: gitProps.activeDiffPath || 'No selection' },
-      { id: 'review', label: 'Review', icon: <ShieldCheck size={14} />, count: gitProps.deepReview ? gitProps.deepReview.status : 'No review' },
-    ];
-  }, [gitProps]);
-
-  const activeTab = context === 'chat' ? (chatPanelTabs.find(t => t.id === chatTab) || chatPanelTabs[0]) : (gitPanelTabs.find(t => t.id === gitTab) || gitPanelTabs[0]);
-
-  // ── Git helpers ──────────────────────────────────────────────────
-
-  const getGitSectionFiles = (section: FileSection) => {
-    if (context !== 'git') return [];
-    const gitProps = props as GitContextPanelProps;
-    switch (section) {
-      case 'staged': return gitProps.stagedFiles;
-      case 'modified': return gitProps.modifiedFiles;
-      case 'untracked': return gitProps.untrackedFiles;
-      case 'deleted': return gitProps.deletedFiles;
-    }
-  };
-
-  const getGitSectionCount = (section: FileSection) => {
-    return getGitSectionFiles(section).length;
-  };
-
-  const handleGitSelectAll = (section: FileSection) => {
-    if (context !== 'git') return;
-    const gitProps = props as GitContextPanelProps;
-    const files = getGitSectionFiles(section);
-    const newSelected = new Set(gitProps.selectedFiles);
-    files.forEach(f => newSelected.add(`${section}:${f.path}`));
-    // We cannot directly set selectedFiles since it's a prop
-    // Instead, call onFileSelect for each
-    files.forEach(f => {
-      if (!gitProps.selectedFiles.has(`${section}:${f.path}`)) {
-        gitProps.onFileSelect(section, f.path);
-      }
-    });
-  };
+  const activeTab = chatPanelTabs.find(t => t.id === chatTab) || chatPanelTabs[0];
 
   // ── Render: Tools Tab (Chat) ─────────────────────────────────────
 
@@ -1525,308 +1388,35 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     </div>
   );
 
-  // ── Render: Files Tab (Git) ──────────────────────────────────────
-
-  const renderGitFilesTab = () => {
-    if (context !== 'git') return null;
-    const gitProps = props as GitContextPanelProps;
-    const sections: Array<{ section: FileSection; title: string; cssClass: string }> = [
-      { section: 'staged', title: 'Staged', cssClass: 'staged' },
-      { section: 'modified', title: 'Modified', cssClass: 'modified' },
-      { section: 'untracked', title: 'Untracked', cssClass: 'untracked' },
-      { section: 'deleted', title: 'Deleted', cssClass: 'deleted' },
-    ];
-
-    const allEmpty = sections.every(s => getGitSectionCount(s.section) === 0);
-
-    if (allEmpty) {
-      return (
-        <div className="no-changes">
-          <span className="no-changes-icon"><FileCode size={32} /></span>
-          <p>No changes detected</p>
-        </div>
-      );
-    }
-
-    return (
-      <div className="context-panel-file-list">
-        {sections.map(({ section, title, cssClass }) => {
-          const files = getGitSectionFiles(section);
-          if (files.length === 0) return null;
-
-          return (
-            <div key={section} className={`file-section ${cssClass}`}>
-              <div className="file-section-header">
-                <h3>{title}</h3>
-                <button
-                  className="section-select-btn"
-                  onClick={() => handleGitSelectAll(section)}
-                >
-                  <Check size={12} />
-                  <span className="section-select-count">{files.length}</span>
-                </button>
-              </div>
-              <div className="file-list">
-                {files.map((file) => {
-                  const key = `${section}:${file.path}`;
-                  const isSelected = gitProps.selectedFiles.has(key);
-                  const isActiveDiff = gitProps.activeDiffSelectionKey === key;
-
-                  return (
-                    <div
-                      key={key}
-                      className={`file-item ${isSelected ? 'selected' : ''} ${isActiveDiff ? 'active-diff' : ''}`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => gitProps.onFileSelect(section, file.path)}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                      <span className="file-icon"><File size={14} /></span>
-                      <span className="file-path">{file.path}</span>
-                      {file.changes && (
-                        <span className="file-changes">
-                          {file.changes.additions > 0 && <span className="additions">+{file.changes.additions}</span>}
-                          {file.changes.deletions > 0 && <span className="deletions">-{file.changes.deletions}</span>}
-                        </span>
-                      )}
-                      <button
-                        className="file-diff-btn"
-                        onClick={() => gitProps.onPreviewFile(section, file.path)}
-                        title="View diff"
-                      >
-                        <FileText size={14} />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
-
-  // ── Render: Diff Tab (Git) ───────────────────────────────────────
-
-  const renderGitDiffTab = () => {
-    if (context !== 'git') return null;
-    const gitProps = props as GitContextPanelProps;
-
-    if (!gitProps.activeDiffPath) {
-      return (
-        <div className="no-changes">
-          <span className="no-changes-icon"><FileText size={32} /></span>
-          <p>Select a file to view its diff</p>
-        </div>
-      );
-    }
-
-    const diffContent = (() => {
-      if (gitProps.isDiffLoading) return null;
-      if (gitProps.diffError) return null;
-      if (!gitProps.activeDiff) return null;
-
-      switch (gitProps.diffMode) {
-        case 'staged': return gitProps.activeDiff.staged_diff || '(no staged changes)';
-        case 'unstaged': return gitProps.activeDiff.unstaged_diff || '(no unstaged changes)';
-        default: return gitProps.activeDiff.diff || '(no diff)';
-      }
-    })();
-
-    return (
-      <div className="context-panel-diff-container">
-        <div className="context-panel-diff-header">
-          <h3>{gitProps.activeDiffPath}</h3>
-        </div>
-        <div className="context-panel-diff-mode-tabs">
-          {(['combined', 'staged', 'unstaged'] as const).map((mode) => (
-            <button
-              key={mode}
-              className={`context-panel-diff-mode-tab ${gitProps.diffMode === mode ? 'active' : ''}`}
-              onClick={() => gitProps.onDiffModeChange(mode)}
-            >
-              {mode}
-            </button>
-          ))}
-        </div>
-        <div className="context-panel-diff-content">
-          {gitProps.isDiffLoading && (
-            <div className="context-panel-diff-loading">
-              <Loader2 size={16} className="context-panel-spinner" /> Loading diff…
-            </div>
-          )}
-          {gitProps.diffError && (
-            <div className="context-panel-diff-error">{gitProps.diffError}</div>
-          )}
-          {!gitProps.isDiffLoading && !gitProps.diffError && diffContent && (
-            renderGitDiffContent(diffContent)
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  // ── Render: Review Tab (Git) ─────────────────────────────────────
-
-  const renderGitReviewTab = () => {
-    if (context !== 'git') return null;
-    const gitProps = props as GitContextPanelProps;
-
-    if (!gitProps.deepReview && !gitProps.isReviewLoading && !gitProps.reviewError) {
-      return (
-        <div className="no-changes">
-          <span className="no-changes-icon"><ShieldCheck size={32} /></span>
-          <p>No review generated yet</p>
-          <p style={{ fontSize: '12px', opacity: 0.7 }}>Click "Review" in the git actions bar to generate an AI code review</p>
-        </div>
-      );
-    }
-
-    return (
-      <div className="context-panel-review">
-        <div className="review-meta">
-          {gitProps.deepReview?.status && (
-            <span className={`review-status status-${gitProps.deepReview.status}`}>
-              {gitProps.deepReview.status}
-            </span>
-          )}
-          {gitProps.deepReview?.model && (
-            <span className="review-model">{gitProps.deepReview.model}</span>
-          )}
-        </div>
-
-        <div className="review-scroll-area">
-          {gitProps.isReviewLoading ? (
-            <div className="review-loading">
-              <Loader2 size={24} className="context-panel-spinner" />
-              <p>Running deep review…</p>
-            </div>
-          ) : gitProps.reviewError ? (
-            <div className="review-error">
-              <AlertTriangle size={16} />
-              <p>{gitProps.reviewError}</p>
-            </div>
-          ) : gitProps.deepReview ? (
-            <>
-              {gitProps.deepReview.feedback && (
-                <div className="review-section">
-                  <h4>Feedback</h4>
-                  <pre>{gitProps.deepReview.feedback}</pre>
-                </div>
-              )}
-              {gitProps.deepReview.warnings && gitProps.deepReview.warnings.length > 0 && (
-                <div className="review-section review-section-warning">
-                  <h4>Warnings</h4>
-                  <div className="review-warning-list">
-                    {gitProps.deepReview.warnings.map((warning, index) => (
-                      <div key={`${warning}-${index}`} className="review-warning-entry">
-                        <AlertTriangle size={14} />
-                        <span>{warning}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {gitProps.deepReview.detailed_guidance && (
-                <div className="review-section">
-                  <h4>Detailed Guidance</h4>
-                  <pre>{gitProps.deepReview.detailed_guidance}</pre>
-                </div>
-              )}
-              {gitProps.reviewFixLogs.length > 0 && (
-                <div className="review-section">
-                  <h4>Fix Progress</h4>
-                  <div className="review-fix-logs">
-                    {gitProps.reviewFixLogs.map((log, i) => (
-                      <div key={i} className="review-fix-log-entry">{log}</div>
-                    ))}
-                    {gitProps.isReviewFixing && (
-                      <div className="review-fix-log-entry review-fix-active">
-                        <Loader2 size={12} className="context-panel-spinner" /> Working…
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-              {gitProps.reviewFixResult && (
-                <div className="review-section">
-                  <h4>Fix Result</h4>
-                  <pre>{gitProps.reviewFixResult}</pre>
-                </div>
-              )}
-            </>
-          ) : null}
-        </div>
-
-        {gitProps.deepReview && !gitProps.isReviewLoading && (
-          <div className="review-footer">
-            <button
-              onClick={gitProps.onRunReview}
-              disabled={gitProps.isReviewLoading || gitProps.isReviewFixing}
-              className="review-action-btn"
-            >
-              <RotateCcw size={14} /> Re-run Review
-            </button>
-            {gitProps.deepReview.review_output && (
-              <button
-                onClick={() => gitProps.onFixFromReview()}
-                disabled={gitProps.isReviewFixing || gitProps.isReviewLoading}
-                className="review-action-btn review-action-primary"
-              >
-                {gitProps.isReviewFixing ? 'Fixing…' : 'Apply Fixes'}
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  };
-
   // ── Main Render ──────────────────────────────────────────────────
 
   const isMobileLayout = props.isMobileLayout ?? false;
 
-  const tabs = context === 'chat' ? chatPanelTabs : gitPanelTabs;
-  const activeTabId = context === 'chat' ? chatTab : gitTab;
+  const tabs = chatPanelTabs;
+  const activeTabId = chatTab;
 
   const handleTabClick = (tabId: string) => {
     setPanelCollapsed(false);
-    if (context === 'chat') {
-      const id = tabId as 'subagents' | 'tools' | 'changes' | 'tasks' | 'status' | 'sessions';
-      setChatTab(id);
-      if (id === 'changes' && revisions.length === 0) loadRevisionHistory();
-      if (id === 'sessions' && sessionsCount === 0) loadSessions();
-    } else {
-      setGitTab(tabId as 'files' | 'diff' | 'review');
-    }
+    const id = tabId as 'subagents' | 'tools' | 'changes' | 'tasks' | 'status' | 'sessions';
+    setChatTab(id);
+    if (id === 'changes' && revisions.length === 0) loadRevisionHistory();
+    if (id === 'sessions' && sessionsCount === 0) loadSessions();
   };
 
   const renderTabContent = () => {
-    if (context === 'chat') {
-      switch (chatTab) {
-        case 'subagents': return renderSubagentsTab();
-        case 'tools': return renderToolsTab();
-        case 'changes': return (
-          <RevisionListPanel
-            mode="session"
-            onOpenDiff={(props as ChatContextPanelProps).onOpenRevisionDiff || (() => {})}
-          />
-        );
-        case 'tasks': return <div className="side-panel-tasks"><TodoPanel todos={currentTodos || []} isLoading={isProcessing && currentTodos.length === 0} /></div>;
-        case 'sessions': return renderSessionsTab();
-        case 'status': return renderStatusTab();
-        default: return renderSubagentsTab();
-      }
-    } else {
-      switch (gitTab) {
-        case 'files': return renderGitFilesTab();
-        case 'diff': return renderGitDiffTab();
-        case 'review': return renderGitReviewTab();
-        default: return renderGitFilesTab();
-      }
+    switch (chatTab) {
+      case 'subagents': return renderSubagentsTab();
+      case 'tools': return renderToolsTab();
+      case 'changes': return (
+        <RevisionListPanel
+          mode="session"
+          onOpenDiff={(props as ChatContextPanelProps).onOpenRevisionDiff || (() => {})}
+        />
+      );
+      case 'tasks': return <div className="side-panel-tasks"><TodoPanel todos={currentTodos || []} isLoading={isProcessing && currentTodos.length === 0} /></div>;
+      case 'sessions': return renderSessionsTab();
+      case 'status': return renderStatusTab();
+      default: return renderSubagentsTab();
     }
   };
 

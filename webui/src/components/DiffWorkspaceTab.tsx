@@ -1,5 +1,6 @@
 import React from 'react';
 import { GitCompareArrows } from 'lucide-react';
+import DiffSurface from './DiffSurface';
 
 interface GitDiffResponse {
   message: string;
@@ -54,7 +55,6 @@ const DiffWorkspaceTab: React.FC<DiffWorkspaceTabProps> = ({
   });
 
   const diffText = getDiffText(diff, diffMode);
-  const diffLines = diffText.split('\n');
 
   return (
     <div className="workspace-tab workspace-diff-tab">
@@ -88,24 +88,10 @@ const DiffWorkspaceTab: React.FC<DiffWorkspaceTabProps> = ({
           <GitCompareArrows size={28} />
           <p>{error}</p>
         </div>
+      ) : diffText ? (
+        <DiffSurface diffText={diffText} />
       ) : (
-        <div className="workspace-diff-surface">
-          {diffText ? diffLines.map((line, index) => {
-            const lineClass =
-              line.startsWith('+++') || line.startsWith('---') ? 'file' :
-              line.startsWith('@@') ? 'hunk' :
-              line.startsWith('+') ? 'add' :
-              line.startsWith('-') ? 'del' :
-              'context';
-
-            return (
-              <div key={`${index}-${line}`} className={`workspace-diff-line ${lineClass}`}>
-                <span className="workspace-diff-line-number">{index + 1}</span>
-                <span className="workspace-diff-line-text">{line || ' '}</span>
-              </div>
-            );
-          }) : <div className="workspace-tab-empty"><p>(no diff available)</p></div>}
-        </div>
+        <div className="workspace-tab-empty"><p>(no diff available)</p></div>
       )}
     </div>
   );

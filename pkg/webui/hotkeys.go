@@ -90,6 +90,8 @@ func VsCodeHotkeyConfig() *HotkeyConfig {
 		{Key: "Cmd+Enter", CommandID: "editor_insert_line_below", Description: "Insert line below (Mac)"},
 		{Key: "Ctrl+Shift+Enter", CommandID: "editor_insert_line_above", Description: "Insert line above"},
 		{Key: "Cmd+Shift+Enter", CommandID: "editor_insert_line_above", Description: "Insert line above (Mac)"},
+		{Key: "Ctrl+Shift+L", CommandID: "editor_select_all_occurrences", Description: "Select all occurrences of find match"},
+		{Key: "Cmd+Shift+L", CommandID: "editor_select_all_occurrences", Description: "Select all occurrences of find match (Mac)"},
 	}
 	all := append(sharedUniversalHotkeys(), editor...)
 	return &HotkeyConfig{Version: "1.0", Hotkeys: all}
@@ -112,6 +114,8 @@ func WebStormHotkeyConfig() *HotkeyConfig {
 		{Key: "Cmd+Enter", CommandID: "editor_insert_line_below", Description: "Insert line below (Mac)"},
 		{Key: "Ctrl+Shift+Enter", CommandID: "editor_insert_line_above", Description: "Insert line above"},
 		{Key: "Cmd+Shift+Enter", CommandID: "editor_insert_line_above", Description: "Insert line above (Mac)"},
+		{Key: "Ctrl+Shift+L", CommandID: "editor_select_all_occurrences", Description: "Select all occurrences of find match"},
+		{Key: "Cmd+Shift+L", CommandID: "editor_select_all_occurrences", Description: "Select all occurrences of find match (Mac)"},
 	}
 	all := append(sharedUniversalHotkeys(), editor...)
 	return &HotkeyConfig{Version: "1.0", Hotkeys: all}
@@ -148,6 +152,8 @@ func DefaultHotkeyConfig() *HotkeyConfig {
 		{Key: "Cmd+Enter", CommandID: "editor_insert_line_below", Description: "Insert line below (Mac)"},
 		{Key: "Ctrl+Shift+Enter", CommandID: "editor_insert_line_above", Description: "Insert line above"},
 		{Key: "Cmd+Shift+Enter", CommandID: "editor_insert_line_above", Description: "Insert line above (Mac)"},
+		{Key: "Ctrl+Shift+L", CommandID: "editor_select_all_occurrences", Description: "Select all occurrences of find match"},
+		{Key: "Cmd+Shift+L", CommandID: "editor_select_all_occurrences", Description: "Select all occurrences of find match (Mac)"},
 	}
 	all := append(sharedUniversalHotkeys(), editor...)
 	return &HotkeyConfig{Version: "1.0", Hotkeys: all}

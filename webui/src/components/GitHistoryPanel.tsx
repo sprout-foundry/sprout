@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2, ChevronRight, Clock, GitCommitHorizontal } from 'lucide-react';
 import type { ApiService } from '../services/api';
+import CommitDetailPanel from './CommitDetailPanel';
 
 interface GitCommitEntry {
   hash: string;
@@ -74,8 +75,8 @@ const GitHistoryPanel: React.FC<GitHistoryPanelProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [commitBeingOpened, setCommitBeingOpened] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
+  const [selectedCommit, setSelectedCommit] = useState<GitCommitEntry | null>(null);
   const loadMoreAbortRef = useRef<AbortController | null>(null);
 
   const fetchCommits = useCallback(async (offset: number, append: boolean, signal?: AbortSignal) => {
@@ -132,29 +133,10 @@ const GitHistoryPanel: React.FC<GitHistoryPanelProps> = ({
     fetchCommits(commits.length, true, controller.signal);
   }, [fetchCommits, commits.length]);
 
-  const handleCommitClick = useCallback(async (commit: GitCommitEntry) => {
-    if (isActing || commitBeingOpened) return;
-    setCommitBeingOpened(commit.hash);
-    try {
-      const detail = await apiService.getGitCommitDetail(commit.hash);
-
-      openWorkspaceBuffer({
-        kind: 'diff',
-        path: `__workspace/commit/${commit.short_hash}`,
-        title: `${commit.short_hash}: ${firstLine(detail.subject || commit.message)}`,
-        ext: '.diff',
-        metadata: {
-          commitDetail: detail,
-          sourcePath: `commit:${commit.hash}`,
-        },
-      });
-    } catch (err) {
-      console.error('Failed to load commit detail:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load commit details');
-    } finally {
-      setCommitBeingOpened(null);
-    }
-  }, [apiService, isActing, commitBeingOpened, openWorkspaceBuffer]);
+  const handleCommitClick = useCallback((commit: GitCommitEntry) => {
+    if (isActing) return;
+    setSelectedCommit(commit);
+  }, [isActing]);
 
   if (isLoading && commits.length === 0) {
     return (
@@ -196,6 +178,20 @@ const GitHistoryPanel: React.FC<GitHistoryPanelProps> = ({
     );
   }
 
+  // If a commit is selected, show the detail panel
+  if (selectedCommit) {
+    return (
+      <div className="git-history-panel">
+        <CommitDetailPanel
+          apiService={apiService}
+          commit={selectedCommit}
+          onBack={() => setSelectedCommit(null)}
+          openWorkspaceBuffer={openWorkspaceBuffer}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="git-history-panel">
       {error && commits.length > 0 && (
@@ -204,28 +200,22 @@ const GitHistoryPanel: React.FC<GitHistoryPanelProps> = ({
         </div>
       )}
       <div className="git-history-commit-list">
-        {commits.map((commit) => {
-          const isCurrent = commitBeingOpened === commit.hash;
-          return (
+        {commits.map((commit) => (
             <button
               key={commit.hash}
               type="button"
               className="git-history-commit-row"
               onClick={() => handleCommitClick(commit)}
-              disabled={isActing || isCurrent}
+              disabled={isActing}
               title={commit.message}
             >
               <div className="git-history-commit-top">
                 <span className="git-history-commit-hash">{commit.short_hash}</span>
                 <span className="git-history-commit-author">{commit.author}</span>
-                {isCurrent ? (
-                  <Loader2 size={12} className="git-history-commit-date" />
-                ) : (
-                  <span className="git-history-commit-date">
-                    <Clock size={11} />
-                    {formatRelativeDate(commit.date)}
-                  </span>
-                )}
+                <span className="git-history-commit-date">
+                  <Clock size={11} />
+                  {formatRelativeDate(commit.date)}
+                </span>
               </div>
               <div className="git-history-commit-message">
                 {firstLine(commit.message)}
@@ -236,8 +226,7 @@ const GitHistoryPanel: React.FC<GitHistoryPanelProps> = ({
                 </div>
               )}
             </button>
-          );
-        })}
+        ))}
       </div>
       {hasMore && (
         <button

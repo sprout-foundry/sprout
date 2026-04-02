@@ -134,6 +134,16 @@ interface AppContentProps {
   onCreateChat?: () => Promise<string | null>;
   onDeleteChat?: (id: string) => void;
   onRenameChat?: (id: string, name: string) => void;
+  perChatCache?: Record<string, {
+    messages: Message[];
+    toolExecutions: ToolExecution[];
+    fileEdits: Array<{ path: string; action: string; timestamp: Date; linesAdded?: number; linesDeleted?: number }>;
+    subagentActivities: AppState['subagentActivities'];
+    currentTodos: AppState['currentTodos'];
+    queryProgress: any;
+    lastError: string | null;
+    isProcessing: boolean;
+  }>;
 }
 
 const AppContent: React.FC<AppContentProps> = ({
@@ -172,6 +182,7 @@ const AppContent: React.FC<AppContentProps> = ({
   onCreateChat,
   onDeleteChat,
   onRenameChat,
+  perChatCache,
 }) => {
   const {
     panes,
@@ -790,6 +801,8 @@ const AppContent: React.FC<AppContentProps> = ({
               paneId={pane.id}
               isActive={pane.id === activePaneId}
               onClick={() => switchPane(pane.id)}
+              perChatCache={perChatCache}
+              activeChatId={activeChatId}
               chatProps={{
                 messages: state.messages,
                 onSendMessage,
@@ -1119,14 +1132,18 @@ const EditorPaneComponent: React.FC<{
   paneId: string;
   isActive?: boolean;
   onClick?: () => void;
+  perChatCache?: Record<string, any>;
+  activeChatId?: string | null;
   chatProps: React.ComponentProps<typeof WorkspacePane>['chatProps'];
   reviewProps: React.ComponentProps<typeof WorkspacePane>['reviewProps'];
   diffState: React.ComponentProps<typeof WorkspacePane>['diffState'];
-}> = ({ paneId, onClick, chatProps, reviewProps, diffState }) => {
+}> = ({ paneId, onClick, perChatCache, activeChatId, chatProps, reviewProps, diffState }) => {
   return (
     <div className="editor-pane-host" onClick={onClick}>
       <WorkspacePane
         paneId={paneId}
+        perChatCache={perChatCache}
+        activeChatId={activeChatId}
         chatProps={chatProps}
         reviewProps={reviewProps}
         diffState={diffState}

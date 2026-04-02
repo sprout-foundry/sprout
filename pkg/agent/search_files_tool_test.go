@@ -36,7 +36,7 @@ func TestSearchFiles_SubstringCaseInsensitive(t *testing.T) {
 
 	reg := GetToolRegistry()
 	ctx := context.Background()
-	agent := &Agent{client: newStubClient("openrouter", "anthropic/claude-3")}
+	agent := &Agent{client: NewScriptedClient()}
 	_, out, err := reg.ExecuteTool(ctx, "search_files", args, agent)
 	if err != nil {
 		t.Fatalf("search_files returned error: %v", err)
@@ -64,7 +64,7 @@ func TestSearchFiles_RegexCaseSensitive(t *testing.T) {
 	}
 	reg := GetToolRegistry()
 	ctx := context.Background()
-	agent := &Agent{client: newStubClient("openrouter", "anthropic/claude-3")}
+	agent := &Agent{client: NewScriptedClient()}
 	_, out, err := reg.ExecuteTool(ctx, "search_files", args, agent)
 	if err != nil {
 		t.Fatalf("search_files error: %v", err)
@@ -90,7 +90,7 @@ func TestSearchFiles_GlobFilterAndMaxResults(t *testing.T) {
 	}
 	reg := GetToolRegistry()
 	ctx := context.Background()
-	agent := &Agent{client: newStubClient("openrouter", "anthropic/claude-3")}
+	agent := &Agent{client: NewScriptedClient()}
 	_, out, err := reg.ExecuteTool(ctx, "search_files", args, agent)
 	if err != nil {
 		t.Fatalf("search_files error: %v", err)
@@ -111,7 +111,7 @@ func TestSearchFiles_ExcludeDotLedit(t *testing.T) {
 	}
 	reg := GetToolRegistry()
 	ctx := context.Background()
-	agent := &Agent{client: newStubClient("openrouter", "anthropic/claude-3")}
+	agent := &Agent{client: NewScriptedClient()}
 	_, out, err := reg.ExecuteTool(ctx, "search_files", args, agent)
 	if err != nil {
 		t.Fatalf("search_files error: %v", err)
@@ -132,7 +132,7 @@ func TestSearchFiles_DefaultMaxResultsAndLineTruncation(t *testing.T) {
 
 	reg := GetToolRegistry()
 	ctx := context.Background()
-	agent := &Agent{client: newStubClient("openrouter", "anthropic/claude-3")}
+	agent := &Agent{client: NewScriptedClient()}
 	// Use a max_bytes limit that allows ~40 results to test max_results=50
 	// Each result is ~80 chars, 40 results = 3200 bytes. 50 = 4000 bytes.
 	_, out, err := reg.ExecuteTool(ctx, "search_files", map[string]interface{}{
@@ -158,7 +158,7 @@ func TestSearchFiles_MaxBytesLimit(t *testing.T) {
 
 	reg := GetToolRegistry()
 	ctx := context.Background()
-	agent := &Agent{client: newStubClient("openrouter", "anthropic/claude-3")}
+	agent := &Agent{client: NewScriptedClient()}
 	_, out, err := reg.ExecuteTool(ctx, "search_files", map[string]interface{}{
 		"pattern":   "needle",
 		"directory": root,

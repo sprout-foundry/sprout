@@ -408,10 +408,10 @@ function App() {
       queryCount: state.queryCount,
       currentView: state.currentView,
       messages: state.messages.slice(-messageCount),
-      fileEdits: state.fileEdits.slice(-50),
+      fileEdits: state.fileEdits.slice(-20),
     });
     try {
-      window.localStorage.setItem(storageKey, persistPayload(100));
+      window.localStorage.setItem(storageKey, persistPayload(20));
     } catch {
       // QuotaExceededError: retry with fewer messages, then give up gracefully.
       try {

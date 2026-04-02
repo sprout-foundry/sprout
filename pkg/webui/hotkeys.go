@@ -41,10 +41,10 @@ func sharedUniversalHotkeys() []HotkeyEntry {
 		{Key: "Cmd+`", CommandID: "toggle_terminal", Description: "Toggle terminal (Mac)"},
 		{Key: "Ctrl+W", CommandID: "close_editor", Description: "Close editor tab"},
 		{Key: "Cmd+W", CommandID: "close_editor", Description: "Close editor tab (Mac)"},
-		{Key: "Ctrl+S", CommandID: "save_file", Description: "Save file"},
-		{Key: "Cmd+S", CommandID: "save_file", Description: "Save file (Mac)"},
-		{Key: "Ctrl+Shift+S", CommandID: "save_all_files", Description: "Save all files"},
-		{Key: "Cmd+Shift+S", CommandID: "save_all_files", Description: "Save all files (Mac)"},
+		{Key: "Ctrl+S", CommandID: "save_file", Description: "Save file", Global: true},
+		{Key: "Cmd+S", CommandID: "save_file", Description: "Save file (Mac)", Global: true},
+		{Key: "Ctrl+Shift+S", CommandID: "save_all_files", Description: "Save all files", Global: true},
+		{Key: "Cmd+Shift+S", CommandID: "save_all_files", Description: "Save all files (Mac)", Global: true},
 		{Key: "Ctrl+N", CommandID: "new_file", Description: "New file"},
 		{Key: "Cmd+N", CommandID: "new_file", Description: "New file (Mac)"},
 		{Key: "Ctrl+\\", CommandID: "split_editor_vertical", Description: "Split editor vertical"},
@@ -54,6 +54,22 @@ func sharedUniversalHotkeys() []HotkeyEntry {
 		{Key: "Cmd+2", CommandID: "focus_tab_2", Description: "Focus second tab in active split (Mac)"},
 		{Key: "Ctrl+3", CommandID: "focus_tab_3", Description: "Focus third tab in active split"},
 		{Key: "Cmd+3", CommandID: "focus_tab_3", Description: "Focus third tab in active split (Mac)"},
+		{Key: "Ctrl+4", CommandID: "focus_tab_4", Description: "Focus fourth tab in active split"},
+		{Key: "Cmd+4", CommandID: "focus_tab_4", Description: "Focus fourth tab in active split (Mac)"},
+		{Key: "Ctrl+5", CommandID: "focus_tab_5", Description: "Focus fifth tab in active split"},
+		{Key: "Cmd+5", CommandID: "focus_tab_5", Description: "Focus fifth tab in active split (Mac)"},
+		{Key: "Ctrl+6", CommandID: "focus_tab_6", Description: "Focus sixth tab in active split"},
+		{Key: "Cmd+6", CommandID: "focus_tab_6", Description: "Focus sixth tab in active split (Mac)"},
+		{Key: "Ctrl+7", CommandID: "focus_tab_7", Description: "Focus seventh tab in active split"},
+		{Key: "Cmd+7", CommandID: "focus_tab_7", Description: "Focus seventh tab in active split (Mac)"},
+		{Key: "Ctrl+8", CommandID: "focus_tab_8", Description: "Focus eighth tab in active split"},
+		{Key: "Cmd+8", CommandID: "focus_tab_8", Description: "Focus eighth tab in active split (Mac)"},
+		{Key: "Ctrl+9", CommandID: "focus_tab_9", Description: "Focus ninth tab in active split"},
+		{Key: "Cmd+9", CommandID: "focus_tab_9", Description: "Focus ninth tab in active split (Mac)"},
+		{Key: "Ctrl+Tab", CommandID: "focus_next_tab", Description: "Focus next tab"},
+		{Key: "Ctrl+Shift+Tab", CommandID: "focus_prev_tab", Description: "Focus previous tab"},
+		// Note: No Cmd+Tab / Cmd+Shift+Tab variants — these are intercepted by macOS
+		// for native app switching and cannot be overridden in a browser.
 		{Key: "Ctrl+Shift+F", CommandID: "open_search", Description: "Open search", Global: true},
 		{Key: "Cmd+Shift+F", CommandID: "open_search", Description: "Open search (Mac)", Global: true},
 	}
@@ -68,8 +84,8 @@ func VsCodeHotkeyConfig() *HotkeyConfig {
 		{Key: "Alt+ArrowDown", CommandID: "editor_move_line_down", Description: "Move line down"},
 		{Key: "Shift+Alt+ArrowDown", CommandID: "editor_duplicate_line_down", Description: "Duplicate line down"},
 		{Key: "Shift+Alt+ArrowUp", CommandID: "editor_duplicate_line_up", Description: "Duplicate line up"},
-		{Key: "Ctrl+D", CommandID: "editor_delete_line", Description: "Delete current line"},
-		{Key: "Cmd+D", CommandID: "editor_delete_line", Description: "Delete current line (Mac)"},
+		{Key: "Ctrl+Shift+K", CommandID: "editor_delete_line", Description: "Delete current line"},
+		{Key: "Cmd+Shift+K", CommandID: "editor_delete_line", Description: "Delete current line (Mac)"},
 	}
 	all := append(sharedUniversalHotkeys(), editor...)
 	return &HotkeyConfig{Version: "1.0", Hotkeys: all}
@@ -111,188 +127,18 @@ func HotkeyPresetConfig(preset string) *HotkeyConfig {
 
 // DefaultHotkeyConfig returns the default hotkey configuration
 func DefaultHotkeyConfig() *HotkeyConfig {
-	return &HotkeyConfig{
-		Version: "1.0",
-		Hotkeys: []HotkeyEntry{
-			{
-				Key:         "Ctrl+Shift+P",
-				CommandID:   "command_palette",
-				Description: "Toggle command palette",
-			},
-			{
-				Key:         "Cmd+Shift+P",
-				CommandID:   "command_palette",
-				Description: "Toggle command palette (Mac)",
-			},
-			{
-			 Key:         "Ctrl+P",
-				CommandID:   "quick_open",
-				Description: "Quick open file",
-			},
-			{
-				Key:         "Cmd+P",
-				CommandID:   "quick_open",
-				Description: "Quick open file (Mac)",
-			},
-			{
-				Key:         "Ctrl+Shift+E",
-				CommandID:   "toggle_explorer",
-				Description: "Toggle file explorer",
-			},
-			{
-				Key:         "Cmd+Shift+E",
-				CommandID:   "toggle_explorer",
-				Description: "Toggle file explorer (Mac)",
-			},
-			{
-				Key:         "Ctrl+B",
-				CommandID:   "toggle_sidebar",
-				Description: "Toggle sidebar",
-			},
-			{
-				Key:         "Cmd+B",
-				CommandID:   "toggle_sidebar",
-				Description: "Toggle sidebar (Mac)",
-			},
-			{
-				Key:         "Ctrl+`",
-				CommandID:   "toggle_terminal",
-				Description: "Toggle terminal",
-			},
-			{
-				Key:         "Cmd+`",
-				CommandID:   "toggle_terminal",
-				Description: "Toggle terminal (Mac)",
-			},
-			{
-				Key:         "Ctrl+W",
-				CommandID:   "close_editor",
-				Description: "Close editor tab",
-			},
-			{
-				Key:         "Cmd+W",
-				CommandID:   "close_editor",
-				Description: "Close editor tab (Mac)",
-			},
-			{
-				Key:         "Ctrl+S",
-				CommandID:   "save_file",
-				Description: "Save file",
-			},
-			{
-				Key:         "Cmd+S",
-				CommandID:   "save_file",
-				Description: "Save file (Mac)",
-			},
-			{
-				Key:         "Ctrl+Shift+S",
-				CommandID:   "save_all_files",
-				Description: "Save all files",
-			},
-			{
-				Key:         "Cmd+Shift+S",
-				CommandID:   "save_all_files",
-				Description: "Save all files (Mac)",
-			},
-			{
-				Key:         "Ctrl+N",
-				CommandID:   "new_file",
-				Description: "New file",
-			},
-			{
-				Key:         "Cmd+N",
-				CommandID:   "new_file",
-				Description: "New file (Mac)",
-			},
-			{
-				Key:         "Ctrl+\\",
-				CommandID:   "split_editor_vertical",
-				Description: "Split editor vertical",
-			},
-			{
-				Key:         "Ctrl+1",
-				CommandID:   "focus_tab_1",
-				Description: "Focus first tab in active split",
-			},
-			{
-				Key:         "Cmd+1",
-				CommandID:   "focus_tab_1",
-				Description: "Focus first tab in active split (Mac)",
-			},
-			{
-				Key:         "Ctrl+2",
-				CommandID:   "focus_tab_2",
-				Description: "Focus second tab in active split",
-			},
-			{
-				Key:         "Cmd+2",
-				CommandID:   "focus_tab_2",
-				Description: "Focus second tab in active split (Mac)",
-			},
-			{
-				Key:         "Ctrl+3",
-				CommandID:   "focus_tab_3",
-				Description: "Focus third tab in active split",
-			},
-			{
-				Key:         "Cmd+3",
-				CommandID:   "focus_tab_3",
-				Description: "Focus third tab in active split (Mac)",
-			},
-			{
-				Key:         "Ctrl+Shift+F",
-				CommandID:   "open_search",
-				Description: "Open search",
-				Global:      true,
-			},
-			{
-				Key:         "Cmd+Shift+F",
-				CommandID:   "open_search",
-				Description: "Open search (Mac)",
-				Global:      true,
-			},
-			{
-				Key:         "Ctrl+G",
-				CommandID:   "editor_goto_line",
-				Description: "Go to line",
-			},
-			{
-				Key:         "Cmd+G",
-				CommandID:   "editor_goto_line",
-				Description: "Go to line (Mac)",
-			},
-			{
-				Key:         "Alt+ArrowUp",
-				CommandID:   "editor_move_line_up",
-				Description: "Move line up",
-			},
-			{
-				Key:         "Alt+ArrowDown",
-				CommandID:   "editor_move_line_down",
-				Description: "Move line down",
-			},
-			{
-				Key:         "Shift+Alt+ArrowDown",
-				CommandID:   "editor_duplicate_line_down",
-				Description: "Duplicate line down",
-			},
-			{
-				Key:         "Shift+Alt+ArrowUp",
-				CommandID:   "editor_duplicate_line_up",
-				Description: "Duplicate line up",
-			},
-			{
-				Key:         "Ctrl+D",
-				CommandID:   "editor_delete_line",
-				Description: "Delete current line",
-			},
-			{
-				Key:         "Cmd+D",
-				CommandID:   "editor_delete_line",
-				Description: "Delete current line (Mac)",
-			},
-		},
+	editor := []HotkeyEntry{
+		{Key: "Ctrl+G", CommandID: "editor_goto_line", Description: "Go to line"},
+		{Key: "Cmd+G", CommandID: "editor_goto_line", Description: "Go to line (Mac)"},
+		{Key: "Alt+ArrowUp", CommandID: "editor_move_line_up", Description: "Move line up"},
+		{Key: "Alt+ArrowDown", CommandID: "editor_move_line_down", Description: "Move line down"},
+		{Key: "Shift+Alt+ArrowDown", CommandID: "editor_duplicate_line_down", Description: "Duplicate line down"},
+		{Key: "Shift+Alt+ArrowUp", CommandID: "editor_duplicate_line_up", Description: "Duplicate line up"},
+		{Key: "Ctrl+Shift+K", CommandID: "editor_delete_line", Description: "Delete current line"},
+		{Key: "Cmd+Shift+K", CommandID: "editor_delete_line", Description: "Delete current line (Mac)"},
 	}
+	all := append(sharedUniversalHotkeys(), editor...)
+	return &HotkeyConfig{Version: "1.0", Hotkeys: all}
 }
 
 // GetHotkeysPath returns the path to the hotkeys configuration file

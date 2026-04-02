@@ -55,6 +55,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     updateBufferCursor,
     saveBuffer,
     setBufferModified,
+    setBufferOriginalContent,
     splitPane,
     openWorkspaceBuffer,
   } = useEditorManager();
@@ -131,10 +132,12 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
 
       setLocalContent(content);
 
-      // Update buffer in context to keep it in sync with editor
+      // Update buffer in context to keep it in sync with editor.
+      // Set originalContent so the buffer is NOT marked as modified just
+      // because it was loaded from disk (the content matches what's on disk).
       if (buffer) {
         updateBufferContent(buffer.id, content);
-        setBufferModified(buffer.id, content !== buffer.originalContent);
+        setBufferOriginalContent(buffer.id, content);
       }
 
       // Update editor if it exists
@@ -170,7 +173,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       isExternalUpdateRef.current = false;
       setLoading(false);
     }
-  }, [apiService, buffer, updateBufferContent, setBufferModified]);
+  }, [apiService, buffer, updateBufferContent, setBufferOriginalContent]);
 
   // Keep ref in sync
   loadFileRef.current = loadFile;

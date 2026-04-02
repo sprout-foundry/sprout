@@ -1,20 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2, ChevronRight, Clock, GitCommitHorizontal } from 'lucide-react';
 import type { ApiService } from '../services/api';
-
-interface GitCommitEntry {
-  hash: string;
-  short_hash: string;
-  author: string;
-  date: string;
-  message: string;
-  ref_names?: string;
-}
+import { formatRelativeDate, firstLine } from '../utils/format';
+import type { GitCommitSummary } from '../types/git-types';
+import CommitDetailPanel from './CommitDetailPanel';
+import './GitHistoryPanel.css';
 
 interface GitHistoryPanelProps {
   apiService: ApiService;
   isActing: boolean;
-  onRefresh?: () => void;
   openWorkspaceBuffer: (options: {
     kind: 'chat' | 'diff' | 'review';
     path: string;
@@ -23,59 +17,23 @@ interface GitHistoryPanelProps {
     ext?: string;
     isPinned?: boolean;
     isClosable?: boolean;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
   }) => string;
-}
-
-/** Simple relative date formatter (e.g. "3 days ago", "2 hours ago") */
-function formatRelativeDate(dateStr: string): string {
-  try {
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) {
-      return dateStr;
-    }
-    const now = Date.now();
-    const diffMs = now - date.getTime();
-    const diffSec = Math.floor(diffMs / 1000);
-    const diffMin = Math.floor(diffSec / 60);
-    const diffHours = Math.floor(diffMin / 60);
-    const diffDays = Math.floor(diffHours / 24);
-    const diffWeeks = Math.floor(diffDays / 7);
-    const diffMonths = Math.floor(diffDays / 30);
-    const diffYears = Math.floor(diffDays / 365);
-
-    if (diffSec < 60) return 'just now';
-    if (diffMin < 60) return `${diffMin}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    if (diffWeeks < 5) return `${diffWeeks}w ago`;
-    if (diffMonths < 12) return `${diffMonths}mo ago`;
-    return `${diffYears}y ago`;
-  } catch {
-    return dateStr;
-  }
-}
-
-/** Extract the first line of a commit message (subject line). */
-function firstLine(message: string): string {
-  const idx = message.indexOf('\n');
-  return idx >= 0 ? message.slice(0, idx) : message;
 }
 
 const PAGE_SIZE = 30;
 
-const GitHistoryPanel: React.FC<GitHistoryPanelProps> = ({
+const GitHistoryPanel = ({
   apiService,
   isActing,
-  onRefresh,
   openWorkspaceBuffer,
-}) => {
-  const [commits, setCommits] = useState<GitCommitEntry[]>([]);
+}: GitHistoryPanelProps): JSX.Element => {
+  const [commits, setCommits] = useState<GitCommitSummary[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [commitBeingOpened, setCommitBeingOpened] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
+  const [selectedCommit, setSelectedCommit] = useState<GitCommitSummary | null>(null);
   const loadMoreAbortRef = useRef<AbortController | null>(null);
 
   const fetchCommits = useCallback(async (offset: number, append: boolean, signal?: AbortSignal) => {
@@ -109,14 +67,14 @@ const GitHistoryPanel: React.FC<GitHistoryPanelProps> = ({
     }
   }, [apiService]);
 
-  // Fetch initial commits on mount and when refresh changes
+  // Fetch initial commits on mount; re-fetch when refresh is signaled
   useEffect(() => {
     const controller = new AbortController();
     setCommits([]);
     setHasMore(false);
     fetchCommits(0, false, controller.signal);
     return () => controller.abort();
-  }, [fetchCommits, onRefresh]);
+  }, [fetchCommits]);
 
   // Abort any in-flight "load more" fetch on unmount
   useEffect(() => {
@@ -132,29 +90,10 @@ const GitHistoryPanel: React.FC<GitHistoryPanelProps> = ({
     fetchCommits(commits.length, true, controller.signal);
   }, [fetchCommits, commits.length]);
 
-  const handleCommitClick = useCallback(async (commit: GitCommitEntry) => {
-    if (isActing || commitBeingOpened) return;
-    setCommitBeingOpened(commit.hash);
-    try {
-      const detail = await apiService.getGitCommitDetail(commit.hash);
-
-      openWorkspaceBuffer({
-        kind: 'diff',
-        path: `__workspace/commit/${commit.short_hash}`,
-        title: `${commit.short_hash}: ${firstLine(detail.subject || commit.message)}`,
-        ext: '.diff',
-        metadata: {
-          commitDetail: detail,
-          sourcePath: `commit:${commit.hash}`,
-        },
-      });
-    } catch (err) {
-      console.error('Failed to load commit detail:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load commit details');
-    } finally {
-      setCommitBeingOpened(null);
-    }
-  }, [apiService, isActing, commitBeingOpened, openWorkspaceBuffer]);
+  const handleCommitClick = useCallback((commit: GitCommitSummary) => {
+    if (isActing) return;
+    setSelectedCommit(commit);
+  }, [isActing]);
 
   if (isLoading && commits.length === 0) {
     return (
@@ -196,6 +135,20 @@ const GitHistoryPanel: React.FC<GitHistoryPanelProps> = ({
     );
   }
 
+  // If a commit is selected, show the detail panel
+  if (selectedCommit) {
+    return (
+      <div className="git-history-panel">
+        <CommitDetailPanel
+          apiService={apiService}
+          commit={selectedCommit}
+          onBack={() => setSelectedCommit(null)}
+          openWorkspaceBuffer={openWorkspaceBuffer}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="git-history-panel">
       {error && commits.length > 0 && (
@@ -203,29 +156,23 @@ const GitHistoryPanel: React.FC<GitHistoryPanelProps> = ({
           <span>{error}</span>
         </div>
       )}
-      <div className="git-history-commit-list">
-        {commits.map((commit) => {
-          const isCurrent = commitBeingOpened === commit.hash;
-          return (
+      <div className="git-history-commit-list thin-scrollbar">
+        {commits.map((commit) => (
             <button
               key={commit.hash}
               type="button"
               className="git-history-commit-row"
               onClick={() => handleCommitClick(commit)}
-              disabled={isActing || isCurrent}
+              disabled={isActing}
               title={commit.message}
             >
               <div className="git-history-commit-top">
                 <span className="git-history-commit-hash">{commit.short_hash}</span>
                 <span className="git-history-commit-author">{commit.author}</span>
-                {isCurrent ? (
-                  <Loader2 size={12} className="git-history-commit-date" />
-                ) : (
-                  <span className="git-history-commit-date">
-                    <Clock size={11} />
-                    {formatRelativeDate(commit.date)}
-                  </span>
-                )}
+                <span className="git-history-commit-date">
+                  <Clock size={11} />
+                  {formatRelativeDate(commit.date)}
+                </span>
               </div>
               <div className="git-history-commit-message">
                 {firstLine(commit.message)}
@@ -236,8 +183,7 @@ const GitHistoryPanel: React.FC<GitHistoryPanelProps> = ({
                 </div>
               )}
             </button>
-          );
-        })}
+        ))}
       </div>
       {hasMore && (
         <button

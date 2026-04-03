@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { showThemedConfirm } from './ThemedDialog';
 import ContextMenu from './ContextMenu';
 import {
@@ -20,6 +20,7 @@ import {
   Zap,
   AlertTriangle,
   ImageIcon,
+  Search,
   FilePlus,
   FolderPlus,
   X,
@@ -29,6 +30,7 @@ import './FileTree.css';
 import { ApiService } from '../services/api';
 import { clientFetch } from '../services/clientSession';
 import { copyToClipboard } from '../utils/clipboard';
+import { fuzzyScore, highlightMatches } from '../utils/fuzzyMatch';
 
 interface FileInfo {
   name: string;
@@ -104,6 +106,8 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
   const inputRef = useRef<HTMLInputElement>(null);
   const fileListRef = useRef<HTMLDivElement>(null);
   const [internalSelectedFile, setInternalSelectedFile] = useState<string | null>(null);
+  const [filterQuery, setFilterQuery] = useState('');
+  const [isFilterFocused, setIsFilterFocused] = useState(false);
 
   const findFileByPath = useCallback((fileList: FileInfo[], targetPath: string): FileInfo | null => {
     for (const file of fileList) {
@@ -421,13 +425,93 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
     }, 100);
   }, [getAncestors, rootPath, expandedDirs, findFileByPath, fetchFiles, updateFileChildren]);
 
+  // ── Filter / fuzzy search ────────────────────────────────────────────
+
+  const isFiltering = filterQuery.trim().length > 0;
+
+  // Flatten tree into all items for filtering
+  const flatFiles = useMemo(() => {
+    const result: FileInfo[] = [];
+    const flatten = (items: FileInfo[]) => {
+      for (const item of items) {
+        result.push(item);
+        if (item.children) flatten(item.children);
+      }
+    };
+    flatten(files);
+    return result;
+  }, [files]);
+
+  // Compute filter matches: path -> { score, matches }
+  const filterMatches = useMemo(() => {
+    if (!filterQuery.trim()) return new Map<string, { score: number; matches: Array<[number, number]> }>();
+
+    const matches = new Map<string, { score: number; matches: Array<[number, number]> }>();
+
+    for (const file of flatFiles) {
+      const { score, matches: m } = fuzzyScore(filterQuery, file.path);
+      if (score >= 0) {
+        matches.set(file.path, { score, matches: m });
+      }
+    }
+
+    return matches;
+  }, [filterQuery, flatFiles]);
+
+  // Build filtered tree: keep dirs that transitively contain matching files.
+  // Returns an empty array when nothing matches (the caller decides whether
+  // to show the unfiltered tree or the "no results" message).
+  const filteredFiles = useMemo(() => {
+    if (filterMatches.size === 0) return [];
+
+    // Set of all paths that either match or are ancestors of matching files
+    const visiblePaths = new Set<string>();
+
+    filterMatches.forEach((_match, path) => {
+      visiblePaths.add(path);
+      // Add all ancestor directories
+      const segments = path.split('/');
+      for (let i = 1; i < segments.length; i++) {
+        const ancestor = segments.slice(0, i).join('/');
+        visiblePaths.add(ancestor);
+      }
+    });
+
+    // Filter tree recursively
+    const filterTree = (items: FileInfo[]): FileInfo[] => {
+      return items
+        .filter(item => visiblePaths.has(item.path))
+        .map(item => {
+          if (item.isDir && item.children) {
+            const filteredChildren = filterTree(item.children);
+            return { ...item, children: filteredChildren.length > 0 ? filteredChildren : undefined };
+          }
+          return item;
+        });
+    };
+
+    return filterTree(files);
+  }, [filterMatches, files]);
+
+  const treeData = isFiltering ? filteredFiles : files;
+
+  const handleFilterKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') {
+      setFilterQuery('');
+      e.currentTarget.blur();
+    }
+  }, []);
+
   const handleClick = useCallback(async (file: FileInfo) => {
-    if (file.isDir) {
+    if (file.isDir && !isFiltering) {
       await toggleDir(file.path);
       return;
     }
-    onFileSelect(file);
-  }, [onFileSelect, toggleDir]);
+    // During filtering, clicking a directory does nothing visible
+    if (!file.isDir) {
+      onFileSelect(file);
+    }
+  }, [isFiltering, onFileSelect, toggleDir]);
 
   const getFileIcon = (file: FileInfo): React.ReactNode => {
     if (file.isDir) {
@@ -521,10 +605,23 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
 
   const renderFileTree = (fileList: FileInfo[], depth = 0): JSX.Element[] => (
     fileList.map((file) => {
-      const isExpanded = expandedDirs.has(file.path);
+      const isExpanded = isFiltering ? true : expandedDirs.has(file.path);
       const isSelected = (internalSelectedFile ?? selectedFile) === file.path;
       const hasChildren = file.isDir && Array.isArray(file.children) && file.children.length > 0;
       const isRenaming = draft?.mode === 'rename' && draft.targetPath === file.path;
+      const matchInfo = isFiltering ? filterMatches.get(file.path) : undefined;
+
+      // Compute name-level matches from path-level matches for highlighting
+      const nameMatches = matchInfo
+        ? (() => {
+            const nameStart = file.path.lastIndexOf('/') + 1;
+            const ranges = matchInfo.matches
+              .filter(([s, e]) => s >= nameStart || e > nameStart)
+              .map(([s, e]) => [Math.max(0, s - nameStart), Math.max(0, e - nameStart)] as [number, number])
+              .filter(([s, e]) => s < e);
+            return ranges.length > 0 ? ranges : undefined;
+          })()
+        : undefined;
 
       return (
         <React.Fragment key={file.path}>
@@ -595,6 +692,8 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
                   </button>
                 </div>
               </div>
+            ) : nameMatches ? (
+              <span className="file-tree-name" dangerouslySetInnerHTML={{ __html: highlightMatches(file.name, nameMatches) }} />
             ) : (
               <span className="file-tree-name">{file.name}</span>
             )}
@@ -619,6 +718,31 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
       <div className="file-tree-header">
         <div className="header-left">
           <span className="header-title">Files</span>
+          <div className={`file-tree-filter-wrapper ${isFilterFocused || isFiltering ? 'focused' : ''}`}>
+            <Search size={13} className="file-tree-filter-icon" />
+            <input
+              type="text"
+              role="searchbox"
+              className="file-tree-filter-input"
+              placeholder="Filter files..."
+              value={filterQuery}
+              onChange={(e) => setFilterQuery(e.target.value)}
+              onFocus={() => setIsFilterFocused(true)}
+              onBlur={() => setIsFilterFocused(false)}
+              onKeyDown={handleFilterKeyDown}
+              aria-label="Filter files"
+            />
+            {isFiltering && (
+              <button
+                className="file-tree-filter-clear"
+                onClick={() => setFilterQuery('')}
+                aria-label="Clear filter"
+                type="button"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
         </div>
         <div className="header-actions">
           <button
@@ -676,7 +800,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
         </div>
       ) : null}
 
-      <div className="file-list" ref={fileListRef}
+      <div className="file-list" ref={fileListRef} role="tree" aria-label="File tree"
         onContextMenu={(event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -685,11 +809,16 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
         }}
       >
         {renderDraftRow(rootPath, 0)}
-        {renderFileTree(files)}
-        {files.length === 0 && !loading && !error ? (
+        {renderFileTree(treeData)}
+        {treeData.length === 0 && !loading && !error && !isFiltering ? (
           <div className="empty-directory">
             <span className="empty-icon"><FolderOpen size={16} /></span>
             <span className="empty-text">Empty directory</span>
+          </div>
+        ) : null}
+        {isFiltering && filteredFiles.length === 0 && !loading && !error ? (
+          <div className="file-tree-no-results">
+            <span>No files matching &quot;{filterQuery}&quot;</span>
           </div>
         ) : null}
       </div>

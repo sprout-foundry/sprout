@@ -489,6 +489,87 @@
   100% { background-color: transparent; }
 }
 
+/* File tree filter input */
+.file-tree .file-tree-filter-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  transition: all 0.15s var(--ease-out);
+  max-width: 200px;
+}
+
+.file-tree .file-tree-filter-wrapper.focused {
+  border-color: var(--accent-primary);
+  background: var(--bg-elevated);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
+
+.file-tree .file-tree-filter-icon {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+.file-tree .file-tree-filter-wrapper.focused .file-tree-filter-icon {
+  color: var(--accent-primary);
+}
+
+.file-tree .file-tree-filter-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  padding: 1px 0;
+  min-width: 0;
+}
+
+.file-tree .file-tree-filter-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.file-tree .file-tree-filter-clear {
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 2px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  transition: color 0.1s;
+}
+
+.file-tree .file-tree-filter-clear:hover {
+  color: var(--text-primary);
+  background: var(--bg-surface);
+}
+
+.file-tree .file-tree-no-results {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6) var(--space-5);
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+/* Highlight matched text in filter */
+.file-tree .file-tree-name mark {
+  background: rgba(99, 102, 241, 0.3);
+  color: var(--text-primary);
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
 @media (max-width: 768px) {
   .file-tree .file-tree-header {
     padding: var(--space-2) var(--space-3);
@@ -505,5 +586,9 @@
 
   .file-tree .file-tree-name {
     font-size: 11px;
+  }
+
+  .file-tree .file-tree-filter-wrapper {
+    max-width: 140px;
   }
 }

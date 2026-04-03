@@ -3,6 +3,7 @@
 import React from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { act } from 'react';
+import { Simulate } from 'react-dom/test-utils';
 import FileTree from './FileTree';
 import { ApiService } from '../services/api';
 
@@ -438,5 +439,182 @@ describe('FileTree background context menu', () => {
     expect(texts).not.toContain('New Folder');
     expect(texts).toContain('Rename');
     expect(texts).toContain('Delete');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// File tree filter tests
+// ---------------------------------------------------------------------------
+
+describe('FileTree filter', () => {
+  /**
+   * Helper: type a query into the filter input and wait for re-render.
+   * Throws if the filter input cannot be found.
+   */
+  async function typeFilter(query: string) {
+    const filterInput = container.querySelector('.file-tree-filter-input');
+    if (!filterInput) throw new Error('Filter input not found');
+    await act(async () => {
+      // React's Simulate properly triggers the synthetic onChange handler
+      // for controlled inputs, unlike native DOM dispatch.
+      Simulate.change(filterInput, { target: { value: query } });
+    });
+    await flushPromises();
+  }
+
+  /**
+   * Helper: return the set of file names currently visible in the tree.
+   */
+  function getVisibleFileNames(): string[] {
+    const items = document.querySelectorAll('.file-tree-item .file-tree-name');
+    return Array.from(items).map((el) => el.textContent ?? '');
+  }
+
+  /**
+   * Helper: click the filter clear (X) button.
+   */
+  async function clickClearFilter() {
+    const clearBtn = container.querySelector('.file-tree-filter-clear');
+    if (!clearBtn) throw new Error('Clear button not found');
+    await act(async () => {
+      clearBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushPromises();
+  }
+
+  it('renders the filter input in the header', async () => {
+    await renderTree();
+
+    const filterInput = container.querySelector('.file-tree-filter-input');
+    expect(filterInput).not.toBeNull();
+    expect((filterInput as HTMLInputElement).placeholder).toBe('Filter files...');
+  });
+
+  it('filters files by name, hiding non-matching items', async () => {
+    await renderTree();
+
+    // Verify all root items are present before filtering
+    const before = getVisibleFileNames();
+    expect(before).toContain('src');
+    expect(before).toContain('main.go');
+    expect(before).toContain('README.md');
+
+    await typeFilter('main');
+
+    // After filtering for "main", only main.go should be visible at root level
+    const after = getVisibleFileNames();
+    expect(after).toContain('main.go');
+    expect(after).not.toContain('README.md');
+    // "src" directory does not fuzzy-match "main" so it should be hidden
+    expect(after).not.toContain('src');
+  });
+
+  it('shows matching files inside directories when query matches path segments', async () => {
+    await renderTree();
+
+    // First expand the src directory so its children are loaded into state.
+    const srcItem = document.querySelector('.file-tree-item.directory');
+    if (srcItem) {
+      await act(async () => {
+        srcItem.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      await flushPromises();
+    }
+
+    await typeFilter('app');
+
+    // "app.tsx" is at path "src/app.tsx", so typing "app" should match it.
+    // The "src" directory should still appear as an ancestor container.
+    const after = getVisibleFileNames();
+    expect(after).toContain('src');
+    expect(after).toContain('app.tsx');
+  });
+
+  it('shows no results message when nothing matches', async () => {
+    await renderTree();
+
+    await typeFilter('zzzzz');
+
+    const noResults = container.querySelector('.file-tree-no-results');
+    expect(noResults).not.toBeNull();
+    expect(noResults!.textContent).toContain('No files matching');
+  });
+
+  it('clearing the filter restores all files', async () => {
+    await renderTree();
+
+    // Filter to only show main.go
+    await typeFilter('main');
+    let names = getVisibleFileNames();
+    expect(names).not.toContain('README.md');
+
+    // Clear the filter via the X button
+    await clickClearFilter();
+
+    // All original items should be visible again
+    names = getVisibleFileNames();
+    expect(names).toContain('src');
+    expect(names).toContain('main.go');
+    expect(names).toContain('README.md');
+  });
+
+  it('Escape key clears the filter', async () => {
+    await renderTree();
+
+    await typeFilter('main');
+    let names = getVisibleFileNames();
+    expect(names).not.toContain('README.md');
+
+    // Press Escape on the filter input
+    const filterInput = container.querySelector('.file-tree-filter-input');
+    if (!filterInput) throw new Error('Filter input not found');
+    await act(async () => {
+      Simulate.keyDown(filterInput, { key: 'Escape' });
+    });
+    await flushPromises();
+
+    // All files should be visible again and the input should be empty
+    names = getVisibleFileNames();
+    expect(names).toContain('src');
+    expect(names).toContain('main.go');
+    expect(names).toContain('README.md');
+    expect((filterInput as HTMLInputElement).value).toBe('');
+  });
+
+  it('auto-expands directories when filtering', async () => {
+    await renderTree();
+
+    // First, expand the src directory so its children get loaded into state.
+    const srcItem = document.querySelector('.file-tree-item.directory');
+    if (srcItem) {
+      await act(async () => {
+        srcItem.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      await flushPromises();
+    }
+
+    // Now collapse the src directory back.
+    if (srcItem) {
+      await act(async () => {
+        srcItem.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      await flushPromises();
+    }
+
+    // Verify the src directory is collapsed — no children wrapper visible.
+    const childrenBefore = document.querySelector('.file-tree-children');
+    expect(childrenBefore).toBeNull();
+
+    // Type a query that matches something inside the src/ directory.
+    // "app" matches "src/app.tsx".
+    await typeFilter('app');
+
+    // The src directory should now be auto-expanded — its children should be visible.
+    const childrenAfter = document.querySelector('.file-tree-children');
+    expect(childrenAfter).not.toBeNull();
+
+    // Verify app.tsx is visible inside the tree
+    const names = getVisibleFileNames();
+    expect(names).toContain('app.tsx');
   });
 });

@@ -36,8 +36,10 @@ const EditorTabs: React.FC<EditorTabsProps> = ({ paneId, actions, compact = fals
   const [showConfirm, setShowConfirm] = useState<{ bufferId: string; fileName: string } | null>(null);
   const [draggingBufferId, setDraggingBufferId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; bufferId: string } | null>(null);
+  const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number } | null>(null);
   const tabRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
+  const emptyAreaMenuRef = useRef<HTMLDivElement | null>(null);
   const batchCloseTargetsRef = useRef<string[]>([]);
 
   const paneOrder = useMemo(() => {
@@ -65,35 +67,45 @@ const EditorTabs: React.FC<EditorTabsProps> = ({ paneId, actions, compact = fals
   }, [activeBufferId]);
 
   useEffect(() => {
-    if (!contextMenu) {
+    if (!contextMenu && !emptyAreaContextMenu) {
       return;
     }
 
     const handlePointerDown = (event: MouseEvent) => {
       const target = event.target as Node | null;
-      if (target && contextMenuRef.current?.contains(target)) {
+      if (
+        target && (
+          contextMenuRef.current?.contains(target) ||
+          emptyAreaMenuRef.current?.contains(target)
+        )
+      ) {
         return;
       }
       setContextMenu(null);
+      setEmptyAreaContextMenu(null);
     };
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setContextMenu(null);
+        setEmptyAreaContextMenu(null);
       }
     };
 
     window.addEventListener('mousedown', handlePointerDown);
     window.addEventListener('contextmenu', handlePointerDown);
     window.addEventListener('keydown', handleEscape);
-    window.addEventListener('blur', () => setContextMenu(null), { once: true });
+    window.addEventListener('blur', () => {
+      setContextMenu(null);
+      setEmptyAreaContextMenu(null);
+    }, { once: true });
 
     return () => {
       window.removeEventListener('mousedown', handlePointerDown);
       window.removeEventListener('contextmenu', handlePointerDown);
       window.removeEventListener('keydown', handleEscape);
     };
-  }, [contextMenu]);
+  }, [contextMenu, emptyAreaContextMenu]);
 
   const handleTabClick = (buffer: EditorBuffer) => {
     if (buffer.id !== activeBufferId) {
@@ -123,11 +135,21 @@ const EditorTabs: React.FC<EditorTabsProps> = ({ paneId, actions, compact = fals
   const handleTabContextMenu = (e: React.MouseEvent, buffer: EditorBuffer) => {
     e.preventDefault();
     e.stopPropagation();
+    setEmptyAreaContextMenu(null);
     setContextMenu({
       x: e.clientX,
       y: e.clientY,
       bufferId: buffer.id,
     });
+  };
+
+  const handleTabsContainerContextMenu = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('.tab')) {
+      return;
+    }
+    e.preventDefault();
+    setContextMenu(null);
+    setEmptyAreaContextMenu({ x: e.clientX, y: e.clientY });
   };
 
   const handleDragStart = (e: React.DragEvent, bufferId: string) => {
@@ -208,6 +230,7 @@ const EditorTabs: React.FC<EditorTabsProps> = ({ paneId, actions, compact = fals
     <div className={`editor-tabs ${compact ? 'compact' : ''}`}>
       <div
         className="tabs-container"
+        onContextMenu={handleTabsContainerContextMenu}
         onDragOver={(e) => {
           e.preventDefault();
           e.dataTransfer.dropEffect = 'move';
@@ -387,6 +410,32 @@ const EditorTabs: React.FC<EditorTabsProps> = ({ paneId, actions, compact = fals
                   <span>Close</span>
                 </button>
               ) : null}
+            </div>,
+            document.body
+          )
+        : null}
+      {emptyAreaContextMenu && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              ref={emptyAreaMenuRef}
+              className="tab-context-menu"
+              style={{ left: `${emptyAreaContextMenu.x}px`, top: `${emptyAreaContextMenu.y}px` }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button
+                className="tab-context-item"
+                onClick={() => {
+                  setEmptyAreaContextMenu(null);
+                  if (paneId) {
+                    closeRelatedBuffers((buffer) => buffer.paneId === paneId);
+                  } else {
+                    closeRelatedBuffers(() => true);
+                  }
+                }}
+              >
+                <X size={14} />
+                <span>Close All Tabs</span>
+              </button>
             </div>,
             document.body
           )

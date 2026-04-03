@@ -80,6 +80,33 @@ interface ContextMenuState {
   file: FileInfo;
 }
 
+/** Registers global listeners to dismiss a context menu on outside mousedown or Escape. */
+function useMenuDismissal(
+  menuRef: React.RefObject<HTMLDivElement | null>,
+  closeRef: React.MutableRefObject<() => void>,
+  isOpen: boolean,
+): void {
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (target && menuRef.current?.contains(target)) return;
+      closeRef.current();
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeRef.current();
+    };
+
+    window.addEventListener('mousedown', handlePointerDown);
+    window.addEventListener('keydown', handleEscape);
+    return () => {
+      window.removeEventListener('mousedown', handlePointerDown);
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, [isOpen, menuRef, closeRef]);
+}
+
 const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
   onFileSelect,
   selectedFile,
@@ -99,9 +126,11 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
   const [draftValue, setDraftValue] = useState('');
   const [draftError, setDraftError] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [bgContextMenu, setBgContextMenu] = useState<{ x: number; y: number } | null>(null);
   const filesRef = useRef<FileInfo[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
+  const bgContextMenuRef = useRef<HTMLDivElement>(null);
   const fileListRef = useRef<HTMLDivElement>(null);
   const [internalSelectedFile, setInternalSelectedFile] = useState<string | null>(null);
 
@@ -224,34 +253,16 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
     return () => window.clearTimeout(timer);
   }, [draft]);
 
-  useEffect(() => {
-    if (!contextMenu) {
-      return;
-    }
+  // Shared helper: dismiss a context menu on outside click or Escape
+  const closeItemMenuRef = useRef(() => setContextMenu(null));
+  const closeBgMenuRef = useRef(() => setBgContextMenu(null));
 
-    const handlePointerDown = (event: MouseEvent) => {
-      const target = event.target as Node | null;
-      if (target && contextMenuRef.current?.contains(target)) {
-        return;
-      }
-      setContextMenu(null);
-    };
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setContextMenu(null);
-      }
-    };
-
-    window.addEventListener('mousedown', handlePointerDown);
-    window.addEventListener('keydown', handleEscape);
-    return () => {
-      window.removeEventListener('mousedown', handlePointerDown);
-      window.removeEventListener('keydown', handleEscape);
-    };
-  }, [contextMenu]);
+  useMenuDismissal(contextMenuRef, closeItemMenuRef, contextMenu !== null);
+  useMenuDismissal(bgContextMenuRef, closeBgMenuRef, bgContextMenu !== null);
 
   const startDraft = useCallback((nextDraft: DraftState, initialValue = '') => {
     setContextMenu(null);
+    setBgContextMenu(null);
     setDraft(nextDraft);
     setDraftValue(initialValue);
     setDraftError(null);
@@ -560,6 +571,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
             onContextMenu={(event) => {
               event.preventDefault();
               event.stopPropagation();
+              setBgContextMenu(null);
               setContextMenu({
                 x: event.clientX,
                 y: event.clientY,
@@ -698,7 +710,14 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
         </div>
       ) : null}
 
-      <div className="file-list" ref={fileListRef}>
+      <div className="file-list" ref={fileListRef}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setContextMenu(null);
+          setBgContextMenu({ x: event.clientX, y: event.clientY });
+        }}
+      >
         {renderDraftRow(rootPath, 0)}
         {renderFileTree(files)}
         {files.length === 0 && !loading && !error ? (
@@ -736,6 +755,21 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
                 </>
               )}
               <button className="file-tree-context-item danger" onClick={() => { setContextMenu(null); handleDeleteTreeItem(contextMenu.file); }}>Delete</button>
+            </div>,
+            document.body
+          )
+        : null}
+
+      {bgContextMenu && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              ref={bgContextMenuRef}
+              className="file-tree-context-menu"
+              style={{ left: `${bgContextMenu.x}px`, top: `${bgContextMenu.y}px` }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button className="file-tree-context-item" onClick={() => { setBgContextMenu(null); handleCreateItem('file'); }}>New File</button>
+              <button className="file-tree-context-item" onClick={() => { setBgContextMenu(null); handleCreateItem('folder'); }}>New Folder</button>
             </div>,
             document.body
           )

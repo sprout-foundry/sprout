@@ -47,6 +47,11 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     const [paneConnected, setPaneConnected] = useState(false);
     const [contextMenu, setContextMenu] = useState<TerminalContextMenuState | null>(null);
 
+    // Stabilize callback props in refs so the WebSocket lifecycle effect doesn't
+    // tear down / reconnect when a parent passes an inline callback.
+    const onConnectionChangeRef = useRef(onConnectionChange);
+    onConnectionChangeRef.current = onConnectionChange;
+
     const paneWrapperRef = useRef<HTMLDivElement>(null);
     const xtermContainerRef = useRef<HTMLDivElement>(null);
     const xtermRef = useRef<XTerm | null>(null);
@@ -254,7 +259,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         eventHandlerRef.current = null;
         terminalWSRef.current = null;
         setPaneConnected(false);
-        onConnectionChange?.(false);
+        onConnectionChangeRef.current?.(false);
         return;
       }
 
@@ -266,12 +271,12 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         if (event.type === 'connection_status') {
           if (!event.data.connected) {
             setPaneConnected(false);
-            onConnectionChange?.(false);
+            onConnectionChangeRef.current?.(false);
             xtermRef.current?.writeln('\r\nTerminal disconnected');
           }
         } else if (event.type === 'session_ready') {
           setPaneConnected(true);
-          onConnectionChange?.(true);
+          onConnectionChangeRef.current?.(true);
           requestAnimationFrame(() => {
             sendResize();
             xtermRef.current?.focus();
@@ -289,11 +294,14 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
 
       return () => {
         service.removeEvent(handler);
+        if (typeof service.closeSession === 'function') {
+          service.closeSession();
+        }
         service.disconnect();
         terminalWSRef.current = null;
         eventHandlerRef.current = null;
       };
-    }, [isActive, isConnected, sendResize, onConnectionChange]);
+    }, [isActive, isConnected, sendResize]);
 
     // Resize observer
     useEffect(() => {

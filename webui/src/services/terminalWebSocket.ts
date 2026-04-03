@@ -22,6 +22,7 @@ class TerminalWebSocketService {
   private maxPongAge = 60000;
   private intentionalClose = false;
   private reconnectTimeout: NodeJS.Timeout | null = null;
+  private preferredShell: string | null = null;
 
   private constructor() {}
 
@@ -139,12 +140,22 @@ class TerminalWebSocketService {
       return `${protocol}//${window.location.host}${proxyBase}/terminal`;
     })();
 
+    // Build query parameters for the WebSocket URL.
     // On reconnect with a sessionId, pass it so server can reattach to the
     // existing tmux session (preserving history). This also covers the case
     // where the sessionId was restored from localStorage after a tab discard.
+    // A preferredShell can be set before the first connect to select a specific shell.
+    const params = new URLSearchParams();
     if (this.sessionId) {
+      params.set('reattach', this.sessionId);
+    }
+    if (this.preferredShell) {
+      params.set('shell', this.preferredShell);
+    }
+    const paramStr = params.toString();
+    if (paramStr) {
       const separator = wsUrl.includes('?') ? '&' : '?';
-      wsUrl = `${wsUrl}${separator}reattach=${encodeURIComponent(this.sessionId)}`;
+      wsUrl = `${wsUrl}${separator}${paramStr}`;
     }
 
     debugLog('Connecting to Terminal WebSocket:', wsUrl);
@@ -347,6 +358,13 @@ class TerminalWebSocketService {
 
   isReady(): boolean {
     return this.isConnected && this.sessionId !== null;
+  }
+
+  /** Set the preferred shell name (e.g. "bash", "zsh", "fish") to use for the
+   *  next connect() call. Must be called before connect(). On reconnect (reattach)
+   *  the shell parameter is ignored by the server since the PTY already exists. */
+  setPreferredShell(shell: string | null): void {
+    this.preferredShell = shell;
   }
 
   getSessionId(): string | null {

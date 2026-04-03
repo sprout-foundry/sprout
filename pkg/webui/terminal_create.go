@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -15,13 +16,20 @@ import (
 // CreateSession creates a new terminal session with PTY support.
 // When tmux is available on Unix, the session is backed by a tmux server
 // so it can survive WebSocket disconnections and be reattached.
-func (tm *TerminalManager) CreateSession(sessionID string) (*TerminalSession, error) {
+// shellOverride, if non-empty, specifies the preferred shell binary (must be in PATH).
+func (tm *TerminalManager) CreateSession(sessionID string, shellOverride ...string) (*TerminalSession, error) {
 	tm.mutex.Lock()
 	defer tm.mutex.Unlock()
 
 	// Check if session already exists
 	if _, exists := tm.sessions[sessionID]; exists {
 		return nil, fmt.Errorf("session %s already exists", sessionID)
+	}
+
+	// Resolve optional shell override from variadic arg
+	var override string
+	if len(shellOverride) > 0 {
+		override = shellOverride[0]
 	}
 
 	// Determine shell based on OS with better fallback logic
@@ -32,18 +40,22 @@ func (tm *TerminalManager) CreateSession(sessionID string) (*TerminalSession, er
 	default:
 		// Unix-like systems - try tmux first, then raw PTY
 		if tm.tmuxAvailable {
-			return tm.createTmuxSession(sessionID)
+			return tm.createTmuxSession(sessionID, override)
 		}
-		return tm.createUnixSession(sessionID)
+		return tm.createUnixSession(sessionID, override)
 	}
 }
 
 // createTmuxSession creates a tmux-backed terminal session for persistence.
-func (tm *TerminalManager) createTmuxSession(sessionID string) (*TerminalSession, error) {
+func (tm *TerminalManager) createTmuxSession(sessionID string, shellOverride ...string) (*TerminalSession, error) {
 	tmuxName := tm.TmuxSessionName(sessionID)
 
 	// Determine the shell to use
-	shell, shellArgs, err := tm.resolveShell()
+	var override string
+	if len(shellOverride) > 0 {
+		override = shellOverride[0]
+	}
+	shell, shellArgs, err := tm.resolveShell(override)
 	if err != nil {
 		return nil, err
 	}
@@ -140,8 +152,12 @@ func (tm *TerminalManager) createTmuxSession(sessionID string) (*TerminalSession
 }
 
 // createUnixSession creates a raw PTY terminal session (fallback when tmux is unavailable).
-func (tm *TerminalManager) createUnixSession(sessionID string) (*TerminalSession, error) {
-	shell, shellArgs, err := tm.resolveShell()
+func (tm *TerminalManager) createUnixSession(sessionID string, shellOverride ...string) (*TerminalSession, error) {
+	var override string
+	if len(shellOverride) > 0 {
+		override = shellOverride[0]
+	}
+	shell, shellArgs, err := tm.resolveShell(override)
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +223,16 @@ func (tm *TerminalManager) createUnixSession(sessionID string) (*TerminalSession
 }
 
 // resolveShell determines which shell to use on Unix systems.
-func (tm *TerminalManager) resolveShell() (shell string, shellArgs []string, err error) {
+// shellOverride, if non-empty, is used directly (after verifying it exists).
+func (tm *TerminalManager) resolveShell(shellOverride string) (shell string, shellArgs []string, err error) {
+	override := strings.TrimSpace(shellOverride)
+	if override != "" {
+		if !shellExists(override) {
+			return "", nil, fmt.Errorf("requested shell %q not found in PATH", override)
+		}
+		return override, resolveShellArgs(override), nil
+	}
+
 	userShell := os.Getenv("SHELL")
 	switch {
 	case userShell != "":
@@ -220,6 +245,19 @@ func (tm *TerminalManager) resolveShell() (shell string, shellArgs []string, err
 		return "sh", []string{"-l"}, nil
 	default:
 		return "", nil, fmt.Errorf("no suitable shell found")
+	}
+}
+
+// resolveShellArgs returns suitable login args for a given shell name.
+func resolveShellArgs(shell string) []string {
+	base := filepath.Base(shell)
+	switch base {
+	case "fish":
+		return nil // fish doesn't use --login
+	case "sh", "dash", "ash", "ksh", "csh", "tcsh":
+		return []string{"-l"}
+	default:
+		return []string{"--login"}
 	}
 }
 

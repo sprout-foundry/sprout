@@ -318,7 +318,11 @@ const Terminal: React.FC<TerminalProps> = ({
         document.body.style.cursor = '';
         // Persist the final height
         setTerminalHeight(prev => {
-          localStorage.setItem(TERMINAL_HEIGHT_STORAGE_KEY, String(Math.round(prev)));
+          try {
+            localStorage.setItem(TERMINAL_HEIGHT_STORAGE_KEY, String(Math.round(prev)));
+          } catch {
+            // Storage write failed (quota, security policy, etc.) — non-critical
+          }
           return prev;
         });
       };

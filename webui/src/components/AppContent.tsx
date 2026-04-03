@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react';
-import { Menu, X, Columns2, Rows2, PanelRightOpen, PanelRightClose, MessageSquarePlus } from 'lucide-react';
+import { Menu, X, Columns2, Rows2, LayoutGrid, PanelRightOpen, PanelRightClose, MessageSquarePlus } from 'lucide-react';
 import Sidebar from './Sidebar';
 import WorkspaceBar from './WorkspaceBar';
 import Terminal from './Terminal';
@@ -203,6 +203,7 @@ const AppContent: React.FC<AppContentProps> = ({
     switchPane,
     switchToBuffer,
     splitPane,
+    splitIntoGrid,
     closeSplit,
     closePane,
     closeBuffer,
@@ -483,7 +484,31 @@ const AppContent: React.FC<AppContentProps> = ({
     }
   }, [activePaneId, buffers, switchPane, switchToBuffer]);
 
-  const handleSplitRequest = useCallback((direction: 'vertical' | 'horizontal') => {
+  const handleSplitRequest = useCallback((direction: 'vertical' | 'horizontal' | 'grid') => {
+    if (direction === 'grid') {
+      // If already in grid layout, close it back to single
+      if (paneLayout === 'split-grid' && panes.length === 4) {
+        // Keep primary pane, preserve its buffer
+        const primaryPane = panes.find(p => p.position === 'primary') || panes[0];
+        if (primaryPane) {
+          const bufId = primaryPane.bufferId;
+          closeSplit();
+          if (bufId) {
+            switchToBuffer(bufId);
+          }
+        }
+        return;
+      }
+      // Otherwise, save primary buffer ID and create grid directly
+      const primaryPane = panes.find(p => p.position === 'primary') || panes[0];
+      const bufId = primaryPane?.bufferId;
+      splitIntoGrid();
+      if (bufId) {
+        switchToBuffer(bufId);
+      }
+      return;
+    }
+
     if (!activePaneId) {
       return;
     }
@@ -503,7 +528,7 @@ const AppContent: React.FC<AppContentProps> = ({
       updatePaneSize(`group:${activePaneId}`, 50);
       updatePaneSize(`nested:${activePaneId}`, 50);
     }
-  }, [activePaneId, panes.length, splitPane, updatePaneSize]);
+  }, [activePaneId, panes, paneLayout, splitPane, splitIntoGrid, closeSplit, updatePaneSize, switchToBuffer]);
 
   // Listen for hotkey custom events
   useEffect(() => {
@@ -631,6 +656,9 @@ const AppContent: React.FC<AppContentProps> = ({
         case 'split_editor_horizontal':
           handleSplitRequest('horizontal');
           break;
+        case 'split_editor_grid':
+          handleSplitRequest('grid');
+          break;
         case 'editor_toggle_word_wrap':
           document.dispatchEvent(new CustomEvent('editor-toggle-word-wrap'));
           break;
@@ -681,6 +709,7 @@ const AppContent: React.FC<AppContentProps> = ({
   const contextPanelRef = useRef<ContextPanelHandle>(null);
   const showContextSidebar = currentBuffer?.kind === 'chat';
   const canSplit = panes.length < 3;
+  const canSplitGrid = paneLayout !== 'split-grid';
   const canCloseSplit = panes.length > 1;
 
   useEffect(() => {
@@ -760,6 +789,16 @@ const AppContent: React.FC<AppContentProps> = ({
   }, [onViewChange, openWorkspaceBuffer]);
 
   const handleCloseAllSplits = useCallback(() => {
+    if (paneLayout === 'split-grid' && panes.length === 4) {
+      // Grid mode: close all splits back to single pane
+      const primaryPane = panes.find(p => p.position === 'primary') || panes[0];
+      const bufId = primaryPane?.bufferId;
+      closeSplit();
+      if (bufId) {
+        switchToBuffer(bufId);
+      }
+      return;
+    }
     if (nestedSplit) {
       // When a nested split is active, close just the nested pane (3 → 2 panes)
       closePane(nestedSplit.nestedPaneId);
@@ -768,7 +807,7 @@ const AppContent: React.FC<AppContentProps> = ({
       // No nested split — close all splits (2 → 1 pane)
       closeSplit();
     }
-  }, [closeSplit, closePane, nestedSplit]);
+  }, [closeSplit, closePane, nestedSplit, paneLayout, panes, switchToBuffer]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const dragStartSizeRef = useRef<Map<string, number>>(new Map());
@@ -856,6 +895,16 @@ const AppContent: React.FC<AppContentProps> = ({
           <Rows2 size={14} />
         </button>
       )}
+      {paneId === activePaneId && canSplitGrid && (
+        <button
+          onClick={() => handleSplitRequest('grid')}
+          className="pane-control-btn compact"
+          title="Split into 2×2 grid"
+          aria-label="Split into 2×2 grid"
+        >
+          <LayoutGrid size={14} />
+        </button>
+      )}
     </div>
     );
   };
@@ -933,6 +982,52 @@ const AppContent: React.FC<AppContentProps> = ({
   const renderPaneLayout = () => {
     if (panes.length === 0) {
       return null;
+    }
+
+    // ── 2×2 Grid layout ─────────────────────────────────────────
+    if (paneLayout === 'split-grid' && panes.length === 4) {
+      const colSplit = Math.max(10, Math.min(90, paneSizes['grid:col'] ?? 50));
+      const rowSplit = Math.max(10, Math.min(90, paneSizes['grid:row'] ?? 50));
+
+      // Order panes by position: primary=0, secondary=1, tertiary=2, quaternary=3
+      const positionOrder: Record<string, number> = { 'primary': 0, 'secondary': 1, 'tertiary': 2, 'quaternary': 3 };
+      const sortedPanes = [...panes].sort((a, b) => (positionOrder[a.position ?? ''] ?? 99) - (positionOrder[b.position ?? ''] ?? 99));
+      const [topLeft, topRight, bottomLeft, bottomRight] = sortedPanes;
+
+      return (
+        <div className="grid-pane-layout" style={{
+          display: 'grid',
+          gridTemplateColumns: `${colSplit}% ${100 - colSplit}%`,
+          gridTemplateRows: `${rowSplit}% ${100 - rowSplit}%`,
+          flex: 1,
+          minWidth: 0,
+          minHeight: 0,
+          position: 'relative',
+        }}>
+          {/* Top row */}
+          {renderPaneById(topLeft.id)}
+          {topRight && renderPaneById(topRight.id)}
+          {/* Bottom row */}
+          {bottomLeft && renderPaneById(bottomLeft.id)}
+          {bottomRight && renderPaneById(bottomRight.id)}
+
+          {/* Center cross resize handles */}
+          <ResizeHandle
+            direction="horizontal"
+            className="grid-resize-handle-col"
+            position="absolute"
+            onResize={handlePaneResize('grid:col', 'horizontal')}
+            onResizeEnd={handlePaneResizeEnd('grid:col')}
+          />
+          <ResizeHandle
+            direction="vertical"
+            className="grid-resize-handle-row"
+            position="absolute"
+            onResize={handlePaneResize('grid:row', 'vertical')}
+            onResizeEnd={handlePaneResizeEnd('grid:row')}
+          />
+        </div>
+      );
     }
 
     if (panes.length < 3 || !nestedSplit) {

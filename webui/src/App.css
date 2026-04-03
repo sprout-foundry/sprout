@@ -648,15 +648,44 @@ html, body, #root {
 
 .panes-container.layout-split-grid {
   display: flex;
+  /* Grid layout is handled by the inner .grid-pane-layout div */
 }
 
 .panes-container.layout-split-grid .pane-wrapper {
   flex: 1;
   min-width: 200px;
+  min-height: 100px;
 }
 
 .panes-container.layout-split-grid .pane-wrapper:not(:first-child) {
   border-left: 1px solid var(--border-subtle);
+}
+
+/* ── 2×2 Grid pane layout ────────────────────────────────────── */
+.grid-pane-layout {
+  position: relative;
+  overflow: hidden;
+}
+
+/* Resize handles within the grid — override the inline position: relative */
+.grid-pane-layout .grid-resize-handle-col {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20 !important;
+  margin: 0;
+}
+
+.grid-pane-layout .grid-resize-handle-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 20 !important;
+  margin: 0;
 }
 
 .pane-wrapper {

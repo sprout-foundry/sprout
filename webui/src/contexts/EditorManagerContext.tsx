@@ -15,6 +15,7 @@ interface EditorManagerContextValue {
   activeBufferId: string | null;
   isAutoSaveEnabled: boolean;
   autoSaveInterval: number; // milliseconds
+  isLinkedScrollEnabled: boolean; // Whether linked scrolling is active for split panes (fix: was consumed by EditorPane but missing from context)
   paneSizes: PaneSize; // Track pane sizes for resizable split panes
 
   // Actions
@@ -38,6 +39,7 @@ interface EditorManagerContextValue {
   switchPane: (paneId: string) => void;
   switchToBuffer: (bufferId: string) => void;
   splitPane: (paneId: string, direction: 'vertical' | 'horizontal') => string | null;
+  splitIntoGrid: () => string[]; // Returns array of all pane IDs
   closeSplit: () => void;
   setPaneLayout: (layout: PaneLayout) => void;
   updateBufferContent: (bufferId: string, content: string) => void;
@@ -52,6 +54,7 @@ interface EditorManagerContextValue {
   saveAllBuffers: () => Promise<void>;
   updatePaneSize: (paneId: string, size: number) => void; // Update pane size
   setBufferLanguageOverride: (bufferId: string, languageId: string | null) => void;
+  toggleLinkedScroll: () => void; // Toggle linked scrolling for split panes (fix: was consumed by EditorPane but missing from context)
 }
 
 const EditorManagerContext = createContext<EditorManagerContextValue | null>(null);
@@ -103,6 +106,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   const [activeBufferId, setActiveBufferId] = useState<string | null>('buffer-chat');
   const [isAutoSaveEnabled] = useState(true);
   const [autoSaveInterval] = useState(30000); // 30 seconds
+  const [isLinkedScrollEnabled, setIsLinkedScrollEnabled] = useState(false); // fix: consumed by EditorPane but was missing from context
   const [paneSizes, setPaneSizes] = useState<PaneSize>({ 'pane-1': 100 }); // Initial sizes in percentage
 
   // Keep a ref to the latest buffers Map so async closures don't read stale data
@@ -828,7 +832,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   // Split a pane
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const splitPane = useCallback((paneId: string, direction: 'vertical' | 'horizontal') => {
-    if (panes.length >= 3) return null; // Max 3 panes
+    if (panes.length >= 4) return null; // Max 4 panes
 
     const newPaneId = `pane-${Date.now()}`;
 
@@ -838,7 +842,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
         id: newPaneId,
         bufferId: null,
         isActive: false,
-        position: panes.length === 1 ? 'secondary' : 'tertiary'
+        position: panes.length === 1 ? 'secondary' : panes.length === 2 ? 'tertiary' : 'quaternary'
       }
     ];
 
@@ -864,6 +868,58 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     // Activate new pane
     setActivePaneId(newPaneId);
     return newPaneId;
+  }, [panes]);
+
+  // Split into a 2x2 grid (4 panes)
+  const splitIntoGrid = useCallback(() => {
+    const primaryPane = panes.find(p => p.position === 'primary') || panes[0];
+    if (!primaryPane) return panes.map(p => p.id);
+
+    // Detach buffers from panes that will be replaced (non-primary).
+    // This prevents orphaned buffers that still reference dead pane IDs.
+    const primaryPaneId = primaryPane.id;
+    const displacedPaneIds = new Set(
+      panes.filter(p => p.id !== primaryPaneId).map(p => p.id)
+    );
+    if (displacedPaneIds.size > 0) {
+      setBuffers(prev => {
+        const next = new Map(prev);
+        let changed = false;
+        next.forEach((buf, id) => {
+          if (buf.paneId && displacedPaneIds.has(buf.paneId)) {
+            next.set(id, { ...buf, paneId: undefined, isActive: false });
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
+    }
+
+    const now = Date.now();
+    const newPaneIds = [
+      `pane-${now}-1`, // top-right
+      `pane-${now}-2`, // bottom-left
+      `pane-${now}-3`, // bottom-right
+    ];
+
+    const newPanes: EditorPane[] = [
+      { ...primaryPane, position: 'primary' },
+      { id: newPaneIds[0], bufferId: null, isActive: false, position: 'secondary' },
+      { id: newPaneIds[1], bufferId: null, isActive: false, position: 'tertiary' },
+      { id: newPaneIds[2], bufferId: null, isActive: false, position: 'quaternary' },
+    ];
+
+    setPanes(newPanes);
+    setPaneLayoutState('split-grid');
+    setActivePaneId(primaryPane.id);
+
+    // Initialize grid pane sizes: 50/50 for both row and column splits
+    setPaneSizes({
+      'grid:col': 50,
+      'grid:row': 50,
+    });
+
+    return [primaryPane.id, ...newPaneIds];
   }, [panes]);
 
   // Close split (reset to single pane)
@@ -927,6 +983,11 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     }));
   }, []);
 
+  // Toggle linked scrolling for split panes showing the same file
+  const toggleLinkedScroll = useCallback(() => {
+    setIsLinkedScrollEnabled(prev => !prev);
+  }, []);
+
   const value: EditorManagerContextValue = {
     buffers,
     panes,
@@ -935,6 +996,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     activeBufferId,
     isAutoSaveEnabled,
     autoSaveInterval,
+    isLinkedScrollEnabled,
     paneSizes,
     openFile,
     openWorkspaceBuffer,
@@ -947,6 +1009,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     switchPane,
     switchToBuffer,
     splitPane,
+    splitIntoGrid,
     closeSplit,
     setPaneLayout,
     updateBufferContent,
@@ -961,6 +1024,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     saveAllBuffers,
     updatePaneSize,
     setBufferLanguageOverride,
+    toggleLinkedScroll,
   };
 
   return (

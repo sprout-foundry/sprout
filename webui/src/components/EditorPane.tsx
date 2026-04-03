@@ -11,10 +11,11 @@ import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { useTheme } from '../contexts/ThemeContext';
 import EditorToolbar from './EditorToolbar';
-import EditorBreadcrumb from './EditorBreadcrumb';
+import EditorBreadcrumb, { type BreadcrumbSymbol } from './EditorBreadcrumb';
 import ImageViewer from './ImageViewer';
 import SvgPreview from './SvgPreview';
 import GoToSymbolOverlay from './GoToSymbolOverlay';
+import { getEnclosingSymbols } from './GoToSymbolOverlay';
 import LanguageSwitcher from './LanguageSwitcher';
 import { readFileWithConsent } from '../services/fileAccess';
 import { getEditorKeymap } from '../utils/editorHotkeys';
@@ -370,6 +371,21 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     if (!editorRef.current) return;
 
     const updateListener = EditorView.updateListener.of((update) => {
+      // Update cursor position on ANY selection change (cursor moves, clicks, typing)
+      if (buffer && update.selectionSet) {
+        try {
+          const selection = update.state.selection.main;
+          if (selection) {
+            const line = update.state.doc.lineAt(selection.head).number;
+            const column = selection.head - update.state.doc.line(selection.head).from;
+            updateBufferCursor(buffer.id, { line, column });
+          }
+        } catch {
+          // Ignore position errors during large content changes
+          console.debug('Cursor position update skipped');
+        }
+      }
+
       if (update.docChanged && !isExternalUpdateRef.current) {
         const newContent = update.state.doc.toString();
         // Only update localContent if this is a user edit (content differs from localContent)
@@ -380,19 +396,6 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         if (buffer) {
           updateBufferContent(buffer.id, newContent);
           setBufferModified(buffer.id, newContent !== buffer.originalContent);
-        }
-
-        // Update cursor position - wrap in try-catch to handle invalid positions during content loads
-        try {
-          const selection = update.state.selection.main;
-          if (selection && buffer) {
-            const line = update.state.doc.lineAt(selection.head).number;
-            const column = selection.head - update.state.doc.line(selection.head).from;
-            updateBufferCursor(buffer.id, { line, column });
-          }
-        } catch (e) {
-          // Ignore position errors during large content changes
-          console.debug('Cursor position update skipped during content change');
         }
 
         // Debounced: fetch diagnostics for the edited content
@@ -677,6 +680,32 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     setBufferLanguageOverride(buffer.id, languageId);
   }, [buffer?.id, setBufferLanguageOverride]);
 
+  // Compute enclosing symbols for breadcrumb display (before early returns).
+  // buffer.cursorPosition.line is 0-based; getEnclosingSymbols expects 1-based.
+  // Debounced to avoid running extractSymbols on every cursor move.
+  const enclosingSymbolsRef = useRef<BreadcrumbSymbol[]>([]);
+  const [enclosingSymbols, setEnclosingSymbols] = useState<BreadcrumbSymbol[]>([]);
+
+  useEffect(() => {
+    if (!localContent || !buffer?.file?.ext) {
+      enclosingSymbolsRef.current = [];
+      setEnclosingSymbols([]);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      const result = getEnclosingSymbols(
+        localContent,
+        buffer.file.ext,
+        buffer.cursorPosition.line + 1,
+      ) as BreadcrumbSymbol[];
+      enclosingSymbolsRef.current = result;
+      setEnclosingSymbols(result);
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [localContent, buffer?.file?.ext, buffer?.cursorPosition.line]);
+
 
   if (!buffer || !buffer.file || buffer.file.isDir) {
     return (
@@ -829,6 +858,10 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
           window.dispatchEvent(new CustomEvent('ledit:reveal-in-explorer', {
             detail: { path }
           }));
+        }}
+        symbols={enclosingSymbols}
+        onNavigateToSymbol={(line) => {
+          handleGoToLine(line);
         }}
       />
 

@@ -50,7 +50,11 @@ jest.mock('../utils/clipboard', () => ({
 jest.mock('./EditorToolbar', () => () => <div data-testid="editor-toolbar" />);
 jest.mock('./ImageViewer', () => () => <div data-testid="image-viewer" />);
 jest.mock('./SvgPreview', () => () => <div data-testid="svg-preview" />);
-jest.mock('./GoToSymbolOverlay', () => () => null);
+jest.mock('./GoToSymbolOverlay', () => {
+  const MockComponent = () => null;
+  MockComponent.getEnclosingSymbols = () => [];
+  return MockComponent;
+});
 jest.mock('./LanguageSwitcher', () => {
   return function MockLanguageSwitcher(props: any) {
     return (

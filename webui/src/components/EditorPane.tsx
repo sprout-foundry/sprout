@@ -16,6 +16,7 @@ import { html } from '@codemirror/lang-html';
 import { css } from '@codemirror/lang-css';
 import { markdown } from '@codemirror/lang-markdown';
 import { php } from '@codemirror/lang-php';
+import { wast } from '@codemirror/lang-wast';
 
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
@@ -132,6 +133,9 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         return [markdown()];
       case '.php':
         return [php()];
+      case '.wat':
+      case '.wast':
+        return [wast()];
       default:
         return [];
     }

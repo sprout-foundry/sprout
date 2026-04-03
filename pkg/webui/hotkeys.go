@@ -78,6 +78,10 @@ func sharedUniversalHotkeys() []HotkeyEntry {
 		// for native app switching and cannot be overridden in a browser.
 		{Key: "Ctrl+Shift+F", CommandID: "open_search", Description: "Open search", Global: true},
 		{Key: "Cmd+Shift+F", CommandID: "open_search", Description: "Open search (Mac)", Global: true},
+		// Panel switching
+		{Key: "Alt+1", CommandID: "switch_to_editor", Description: "Switch to editor panel"},
+		{Key: "Alt+2", CommandID: "switch_to_chat", Description: "Switch to chat panel"},
+		{Key: "Alt+3", CommandID: "switch_to_git", Description: "Switch to git panel"},
 	}
 }
 

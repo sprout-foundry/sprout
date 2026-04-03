@@ -7,6 +7,7 @@ interface ResizeHandleProps {
   onResizeEnd?: () => void;             // Called when drag ends
   onDoubleClick?: () => void;           // Called when handle is double-clicked
   className?: string;
+  position?: 'relative' | 'absolute';   // CSS position of the handle (default: 'relative')
 }
 
 /**
@@ -20,7 +21,8 @@ const ResizeHandle: React.FC<ResizeHandleProps> = ({
   onResize,
   onResizeEnd,
   onDoubleClick,
-  className = ''
+  className = '',
+  position = 'relative'
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const isDraggingRef = useRef(false);
@@ -104,7 +106,7 @@ const ResizeHandle: React.FC<ResizeHandleProps> = ({
       onDoubleClick={onDoubleClick}
       style={{
         cursor: direction === 'horizontal' ? 'col-resize' : 'row-resize',
-        position: 'relative',
+        position,
         zIndex: isDragging ? 100 : 1
       }}
     >

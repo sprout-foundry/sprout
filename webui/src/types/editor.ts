@@ -36,7 +36,7 @@ export interface EditorPane {
   id: string;
   bufferId: string | null; // null = empty pane
   isActive: boolean;
-  position?: 'primary' | 'secondary' | 'tertiary';
+  position?: 'primary' | 'secondary' | 'tertiary' | 'quaternary';
   dimensions?: {
     width: number | string;
     height: number | string;

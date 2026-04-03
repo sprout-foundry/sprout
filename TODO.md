@@ -83,7 +83,7 @@
 [x] - CONTEXT MENU: Add context menu to **SearchView** results — should support "Copy match text", "Open in editor at match line", "Copy file path", and "Exclude file/folder from search".
 [x] - CONTEXT MENU: Add context menu to **EditorPane** (CodeMirror area) — at minimum: "Reveal in File Explorer", "Copy relative path", "Copy absolute path". Later: "Go to Definition", "Rename Symbol", "Find All References" when LSP is available.
 [x] - CONTEXT MENU: Add context menu to **Terminal** — should support "Copy" (selection), "Paste", "Clear Terminal", "Select All", "Copy Link" (for terminal URLs).
-[] - CONTEXT MENU: Add context menu to **Chat messages** — should support "Copy message", "Copy code block" (right-clicking code sections), "Insert at cursor" (re-inject message into input).
+[x] - CONTEXT MENU: Add context menu to **Chat messages** — should support "Copy message", "Copy code block" (right-clicking code sections), "Insert at cursor" (re-inject message into input).
 [] - CONTEXT MENU: Add context menu to **GitHistoryPanel** — should support "Copy commit SHA", "Copy commit message", "Checkout this commit", "Revert commit".
 [] - CONTEXT MENU: Add context menu to **FileTree empty/background area** — right-clicking blank space should offer "New File" and "New Folder" at the workspace root.
 [] - CONTEXT MENU: Add context menu to **EditorTabs empty bar area** — right-clicking the empty tab strip should offer "Close All Tabs".

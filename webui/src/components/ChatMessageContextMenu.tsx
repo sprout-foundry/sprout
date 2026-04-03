@@ -42,12 +42,12 @@ const ChatMessageContextMenu: React.FC<ChatMessageContextMenuProps> = ({
     codeBlockText: null,
   });
 
-  const [copiedLabel, setCopiedLabel] = useState<string | null>(null);
+  const [copiedAction, setCopiedAction] = useState<'message' | 'code' | null>(null);
 
-  const showCopied = useCallback((label: string) => {
-    setCopiedLabel(label);
-    timersRef.current.push(window.setTimeout(() => setCopiedLabel(null), 1200));
-  }, [clearTimers]);
+  const showCopied = useCallback((action: 'message' | 'code') => {
+    setCopiedAction(action);
+    timersRef.current.push(window.setTimeout(() => setCopiedAction(null), 1200));
+  }, []);
 
   // ── Close helpers ─────────────────────────────────────────
 
@@ -159,6 +159,11 @@ const ChatMessageContextMenu: React.FC<ChatMessageContextMenuProps> = ({
   useLayoutEffect(() => {
     if (!menu.visible || !menuRef.current) return;
     const el = menuRef.current;
+
+    // Reset any inline styles from a previous open before computing fresh position
+    el.style.left = '';
+    el.style.top = '';
+
     const rect = el.getBoundingClientRect();
     const vw = window.innerWidth;
     const vh = window.innerHeight;
@@ -177,14 +182,14 @@ const ChatMessageContextMenu: React.FC<ChatMessageContextMenuProps> = ({
   const handleCopyMessage = useCallback(async () => {
     if (!menu.messageContent) return;
     await copyToClipboard(menu.messageContent);
-    showCopied('Copied!');
+    showCopied('message');
     timersRef.current.push(window.setTimeout(() => close(), 800));
   }, [menu.messageContent, close, showCopied]);
 
   const handleCopyCodeBlock = useCallback(async () => {
     if (!menu.codeBlockText) return;
     await copyToClipboard(menu.codeBlockText);
-    showCopied('Copied!');
+    showCopied('code');
     timersRef.current.push(window.setTimeout(() => close(), 800));
   }, [menu.codeBlockText, close, showCopied]);
 
@@ -206,10 +211,10 @@ const ChatMessageContextMenu: React.FC<ChatMessageContextMenuProps> = ({
         className="chat-msg-context-menu-item"
         onClick={handleCopyMessage}
         type="button"
-        disabled={!!copiedLabel}
+        disabled={copiedAction === 'message'}
       >
         <Copy size={13} />
-        <span className="menu-item-label">{copiedLabel || 'Copy message'}</span>
+        <span className="menu-item-label">{copiedAction === 'message' ? 'Copied!' : 'Copy message'}</span>
       </button>
 
       {menu.codeBlockText && (
@@ -217,10 +222,10 @@ const ChatMessageContextMenu: React.FC<ChatMessageContextMenuProps> = ({
           className="chat-msg-context-menu-item"
           onClick={handleCopyCodeBlock}
           type="button"
-          disabled={!!copiedLabel}
+          disabled={copiedAction === 'code'}
         >
           <Copy size={13} />
-          <span className="menu-item-label">{copiedLabel || 'Copy code block'}</span>
+          <span className="menu-item-label">{copiedAction === 'code' ? 'Copied!' : 'Copy code block'}</span>
         </button>
       )}
 

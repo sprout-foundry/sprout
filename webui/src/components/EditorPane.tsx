@@ -27,7 +27,7 @@ import GoToSymbolOverlay from './GoToSymbolOverlay';
 import { readFileWithConsent } from '../services/fileAccess';
 import { getEditorKeymap } from '../utils/editorHotkeys';
 import { diffGutter, updateDiffGutter, clearDiffGutter } from '../extensions/diffGutter';
-import { lintDiagnostics, clearDiagnostics } from '../extensions/lintDiagnostics';
+import { lintDiagnostics, clearDiagnostics, createDebouncedDiagnosticsUpdater } from '../extensions/lintDiagnostics';
 import { cursorHistoryPlugin } from '../extensions/cursorHistory';
 import { ApiService } from '../services/api';
 import {
@@ -91,6 +91,9 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   // API service instance (singleton)
   const apiService = useRef(ApiService.getInstance()).current;
 
+  // Debounced diagnostics updater — coalesces rapid diagnostic pushes
+  const debouncedDiag = useRef(createDebouncedDiagnosticsUpdater(500));
+
   // Fetch workspace root on mount (for absolute path copy)
   useEffect(() => {
     apiService.getWorkspace().then(ws => {
@@ -135,6 +138,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   }, []);
 
   const loadFileRef = useRef<((filePath: string) => Promise<void>) | null>(null);
+  const fetchDiagnosticsRef = useRef<(filePath: string, content: string) => void>(() => {});
 
   // Load file content - updates buffer in context to keep it in sync with editor
   const loadFile = useCallback(async (filePath: string) => {
@@ -187,6 +191,11 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
           clearDiffGutter(viewRef.current);
         }
       }
+
+      // Fetch diagnostics for the loaded file
+      if (viewRef.current) {
+        fetchDiagnosticsRef.current(filePath, content);
+      }
     } catch (err) {
       console.error('[EditorPane loadFile] Error:', err);
       setError(err instanceof Error ? err.message : 'Unknown error');
@@ -194,7 +203,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       isExternalUpdateRef.current = false;
       setLoading(false);
     }
-  }, [apiService, buffer, updateBufferContent, setBufferOriginalContent]);
+  }, [apiService, buffer, updateBufferContent, setBufferOriginalContent]); // eslint-disable-line react-hooks/exhaustive-deps -- fetchDiagnostics is accessed via ref to avoid forward-reference issue
 
   // Keep ref in sync
   loadFileRef.current = loadFile;
@@ -287,6 +296,25 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       setSaving(false);
     }
   }, [buffer, saveBuffer, apiService]); // eslint-disable-line react-hooks/exhaustive-deps -- updateDiffGutter/clearDiffGutter are module-level functions
+
+  // Fetch diagnostics for the current file and push them into the editor
+  const fetchDiagnostics = useCallback(async (filePath: string, content: string) => {
+    if (!viewRef.current) return;
+    try {
+      const result = await apiService.getDiagnostics(filePath, content);
+      if (result.diagnostics && result.diagnostics.length > 0) {
+        debouncedDiag.current.update(viewRef.current, result.diagnostics);
+      } else {
+        clearDiagnostics(viewRef.current);
+      }
+    } catch {
+      // Diagnostics are best-effort — don't show errors for diagnostic failures
+      clearDiagnostics(viewRef.current);
+    }
+  }, [apiService]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keep ref in sync so loadFile can call fetchDiagnostics without a forward reference
+  fetchDiagnosticsRef.current = fetchDiagnostics;
 
   const isExternalUpdateRef = useRef<boolean>(false);
   const lastLoadedRef = useRef<{bufferId: string, filePath: string} | null>(null);
@@ -401,6 +429,11 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         } catch (e) {
           // Ignore position errors during large content changes
           console.debug('Cursor position update skipped during content change');
+        }
+
+        // Debounced: fetch diagnostics for the edited content
+        if (buffer && buffer.kind === 'file' && buffer.file && !buffer.file.path.startsWith('__workspace/')) {
+          fetchDiagnostics(buffer.file.path, newContent);
         }
       }
     });
@@ -570,6 +603,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     viewRef.current = view;
 
     return () => {
+      debouncedDiag.current.cancel();
       view.destroy();
       viewRef.current = null;
     };

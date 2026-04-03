@@ -28,6 +28,7 @@ import {
   AlertTriangle,
   Eye,
   Columns2,
+  WrapText,
 } from 'lucide-react';
 import { copyToClipboard } from '../utils/clipboard';
 import './EditorPane.css';
@@ -43,7 +44,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   const lineWrappingCompartment = useRef(new Compartment());
   const languageCompartment = useRef(new Compartment());
   const lastInitLanguageKey = useRef<string | null>(null);
-  const wordWrapEnabled = useRef(true);
+  const [wordWrapEnabled, setWordWrapEnabled] = useState(true);
   const [loading, setLoading] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -411,12 +412,10 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         setShowGoToSymbol(true);
       },
       onToggleWordWrap: () => {
-        wordWrapEnabled.current = !wordWrapEnabled.current;
-        viewRef.current?.dispatch({
-          effects: lineWrappingCompartment.current.reconfigure(
-            wordWrapEnabled.current ? EditorView.lineWrapping : []
-          ),
-        });
+        // NOTE: onToggleWordWrap MUST remain stable (empty useCallback deps).
+        // It accesses state only via refs to avoid stale closures in this
+        // keymap, which is captured once during editor init.
+        onToggleWordWrap();
       },
     });
 
@@ -546,7 +545,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         }
       }),
       lineWrappingCompartment.current.of(
-        wordWrapEnabled.current ? EditorView.lineWrapping : []
+        wordWrapEnabled ? EditorView.lineWrapping : []
       ),
       languageCompartment.current.of(
         getLanguageExtensions(
@@ -607,6 +606,28 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   }, [buffer?.id, buffer?.languageOverride, buffer?.file?.ext, buffer?.file?.name]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
+  // Toggle word wrap: updates React state (for toolbar button) and
+  // dispatches a CodeMirror compartment reconfigure to apply/remove
+  // EditorView.lineWrapping.  Uses a ref mirror to avoid stale closures
+  // inside the CodeMirror keymap and event-listener callbacks.
+  const wordWrapRef = useRef(wordWrapEnabled);
+  const onToggleWordWrap = useCallback(() => {
+    const next = !wordWrapRef.current;
+    wordWrapRef.current = next;
+    setWordWrapEnabled(next);
+    viewRef.current?.dispatch({
+      effects: lineWrappingCompartment.current.reconfigure(
+        next ? EditorView.lineWrapping : []
+      ),
+    });
+  }, []);
+
+  // Keep the ref mirror in sync whenever the state value changes from
+  // an external source (e.g. the global event listener).
+  useEffect(() => {
+    wordWrapRef.current = wordWrapEnabled;
+  }, [wordWrapEnabled]);
+
   // Listen for go to line event from toolbar and global word-wrap toggle
   // A small dedup guard prevents double-toggle if the same keyboard event is
   // handled by both the CodeMirror keymap AND the global HotkeyProvider (e.g.
@@ -623,14 +644,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         const now = Date.now();
         if (now - lastWrapToggleRef.current < 100) return; // dedup: skip if toggled within last 100ms
         lastWrapToggleRef.current = now;
-        if (viewRef.current) {
-          wordWrapEnabled.current = !wordWrapEnabled.current;
-          viewRef.current.dispatch({
-            effects: lineWrappingCompartment.current.reconfigure(
-              wordWrapEnabled.current ? EditorView.lineWrapping : []
-            ),
-          });
-        }
+        onToggleWordWrap();
       }
     };
 
@@ -640,7 +654,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       document.removeEventListener('editor-goto-line', handler);
       document.removeEventListener('editor-toggle-word-wrap', handler);
     };
-  }, [handleGoToLine]);
+  }, [handleGoToLine, onToggleWordWrap]);
 
   // Compute effective language info for the LanguageSwitcher
   // (Must be declared before early returns to satisfy React hooks rules)
@@ -657,6 +671,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     if (!buffer) return;
     setBufferLanguageOverride(buffer.id, languageId);
   }, [buffer?.id, setBufferLanguageOverride]);
+
 
   if (!buffer || !buffer.file || buffer.file.isDir) {
     return (
@@ -762,20 +777,29 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
           onGoToLine={handleGoToLine}
           onSave={handleSave}
           saving={saving}
-          actions={isSvgFile ? [
+          actions={[
             {
-              id: 'svg-preview',
-              title: 'Open SVG preview',
-              icon: <Eye size={16} />,
-              onClick: openSvgPreview,
+              id: 'word-wrap-toggle',
+              title: 'Toggle word wrap (Alt+Z)',
+              icon: <WrapText size={16} />,
+              active: wordWrapEnabled,
+              onClick: onToggleWordWrap,
             },
-            {
-              id: 'svg-preview-split',
-              title: 'Open SVG preview in split',
-              icon: <Columns2 size={16} />,
-              onClick: openSvgPreviewInSplit,
-            }
-          ] : []}
+            ...(isSvgFile ? [
+              {
+                id: 'svg-preview',
+                title: 'Open SVG preview',
+                icon: <Eye size={16} />,
+                onClick: openSvgPreview,
+              },
+              {
+                id: 'svg-preview-split',
+                title: 'Open SVG preview in split',
+                icon: <Columns2 size={16} />,
+                onClick: openSvgPreviewInSplit,
+              }
+            ] : []),
+          ]}
         />
         <GoToSymbolOverlay
           visible={showGoToSymbol}

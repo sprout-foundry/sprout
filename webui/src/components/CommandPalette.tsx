@@ -45,6 +45,8 @@ const COMMAND_DEFINITIONS: CommandDef[] = [
   { id: 'split_editor_vertical', label: 'Split Editor Vertical', category: 'View' },
   { id: 'split_editor_horizontal', label: 'Split Editor Horizontal', category: 'View' },
   { id: 'split_editor_grid', label: 'Split Editor Grid', category: 'View' },
+  { id: 'split_terminal_vertical', label: 'Split Terminal Vertical', category: 'View' },
+  { id: 'split_terminal_horizontal', label: 'Split Terminal Horizontal', category: 'View' },
   { id: 'editor_toggle_word_wrap', label: 'Toggle Word Wrap', category: 'View' },
   { id: 'toggle_minimap', label: 'Toggle Minimap', category: 'View' },
   { id: 'toggle_linked_scroll', label: 'Toggle Linked Scrolling', category: 'View' },
@@ -331,6 +333,12 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
         break;
       case 'split_editor_grid':
         window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'split_editor_grid' } }));
+        break;
+      case 'split_terminal_vertical':
+        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'split_terminal_vertical' } }));
+        break;
+      case 'split_terminal_horizontal':
+        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'split_terminal_horizontal' } }));
         break;
       case 'editor_toggle_word_wrap':
         window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'editor_toggle_word_wrap' } }));

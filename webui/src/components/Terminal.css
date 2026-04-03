@@ -29,6 +29,8 @@
 
 .terminal-container.expanded {
   z-index: 1000;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Resize handle — appears at the top of the expanded terminal */
@@ -63,14 +65,21 @@
 
 .terminal-header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  height: 42px;
+  flex-direction: column;
+  align-items: stretch;
   background: rgba(15, 23, 42, 0.76);
   border-bottom: 1px solid rgba(148, 163, 184, 0.16);
   padding: 0 12px;
-  cursor: pointer;
+  flex-shrink: 0;
   user-select: none;
+}
+
+.terminal-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 42px;
+  cursor: pointer;
 }
 
 .terminal-title {
@@ -119,11 +128,6 @@
   color: #f8fafc;
 }
 
-.split-btn:hover {
-  border-color: rgba(34, 211, 238, 0.4);
-  background: rgba(8, 51, 68, 0.5);
-}
-
 .clear-btn:hover {
   border-color: rgba(248, 113, 113, 0.4);
   background: rgba(127, 29, 29, 0.5);
@@ -132,7 +136,8 @@
 .terminal-body {
   display: flex;
   flex-direction: column;
-  height: calc(100% - 42px);
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -156,25 +161,6 @@
   flex: 1;
   min-width: 0;
   overflow: hidden;
-}
-
-.terminal-panes-container.split .terminal-pane-wrapper {
-  flex: none;
-}
-
-/* Draggable vertical divider between split panes */
-.terminal-split-divider {
-  width: 5px;
-  flex-shrink: 0;
-  background: rgba(148, 163, 184, 0.16);
-  cursor: col-resize;
-  position: relative;
-  transition: background 0.15s;
-}
-
-.terminal-split-divider:hover,
-.terminal-split-divider:active {
-  background: rgba(34, 211, 238, 0.45);
 }
 
 /* ── Individual pane ─────────────────────────────────────── */
@@ -265,13 +251,13 @@
     height: 34px;
   }
 
-  .terminal-header {
+  .terminal-title-row {
     height: 34px;
-    padding: 0 8px;
   }
 
   .terminal-body {
-    height: calc(100% - 34px);
+    flex: 1;
+    min-height: 0;
   }
 
   .terminal-title {
@@ -326,6 +312,7 @@
   }
 
   .terminal-header,
+  .terminal-title-row,
   .terminal-output {
     padding-left: 8px;
     padding-right: 8px;
@@ -354,6 +341,62 @@
 .terminal-xterm .xterm-rows,
 .terminal-xterm .xterm-rows span {
   letter-spacing: normal !important;
+}
+
+/* ── Terminal Split Layout ──────────────────────────────── */
+
+.terminal-panes-container.terminal-split-vertical {
+  flex-direction: row;
+}
+
+.terminal-panes-container.terminal-split-horizontal {
+  flex-direction: column;
+}
+
+.terminal-split-divider {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(148, 163, 184, 0.16);
+  transition: background 0.15s ease;
+  z-index: 5;
+}
+
+.terminal-split-divider:hover,
+.terminal-split-divider:active {
+  background: rgba(34, 211, 238, 0.35);
+}
+
+.terminal-split-divider-vertical {
+  width: 4px;
+  cursor: col-resize;
+}
+
+.terminal-split-divider-horizontal {
+  height: 4px;
+  cursor: row-resize;
+}
+
+/* Split container overrides — override default flex: 1 with explicit sizes */
+.terminal-panes-container.terminal-split-vertical .terminal-pane-wrapper,
+.terminal-panes-container.terminal-split-horizontal .terminal-pane-wrapper {
+  flex: none;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Split button states */
+.split-btn:hover {
+  border-color: rgba(34, 211, 238, 0.35);
+  background: rgba(8, 51, 68, 0.5);
+}
+
+.split-btn-active {
+  background: rgba(34, 211, 238, 0.18) !important;
+  border-color: rgba(34, 211, 238, 0.45) !important;
+  color: #22d3ee !important;
 }
 
 /* ── Terminal Context Menu is handled by shared ContextMenu.css ── */

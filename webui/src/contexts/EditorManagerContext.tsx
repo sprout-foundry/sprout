@@ -48,8 +48,10 @@ interface EditorManagerContextValue {
   saveBuffer: (bufferId: string) => Promise<void>;
   setBufferModified: (bufferId: string, isModified: boolean) => void;
   setBufferOriginalContent: (bufferId: string, originalContent: string) => void;
+  revertBufferToOriginal: (bufferId: string) => void;
   saveAllBuffers: () => Promise<void>;
   updatePaneSize: (paneId: string, size: number) => void; // Update pane size
+  setBufferLanguageOverride: (bufferId: string, languageId: string | null) => void;
 }
 
 const EditorManagerContext = createContext<EditorManagerContextValue | null>(null);
@@ -441,6 +443,36 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
           isModified: buffer.content !== originalContent ? buffer.isModified : false,
         });
       }
+      return newBuffers;
+    });
+  }, []);
+
+  // Set or clear the language override for a buffer.
+  // Pass null to revert to auto-detection by file extension.
+  const setBufferLanguageOverride = useCallback((bufferId: string, languageId: string | null) => {
+    setBuffers(prev => {
+      const newBuffers = new Map(prev);
+      const buffer = newBuffers.get(bufferId);
+      if (buffer) {
+        newBuffers.set(bufferId, { ...buffer, languageOverride: languageId });
+      }
+      return newBuffers;
+    });
+  }, []);
+
+  // Revert a buffer's content back to the last-saved state.
+  // After calling this, the EditorPane is responsible for syncing
+  // the CodeMirror editor view so the visual content matches.
+  const revertBufferToOriginal = useCallback((bufferId: string) => {
+    setBuffers(prev => {
+      const newBuffers = new Map(prev);
+      const buf = newBuffers.get(bufferId);
+      if (!buf || buf.kind !== 'file') return prev;
+      newBuffers.set(bufferId, {
+        ...buf,
+        content: buf.originalContent,
+        isModified: false,
+      });
       return newBuffers;
     });
   }, []);
@@ -925,8 +957,10 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     saveBuffer,
     setBufferModified,
     setBufferOriginalContent,
+    revertBufferToOriginal,
     saveAllBuffers,
-    updatePaneSize
+    updatePaneSize,
+    setBufferLanguageOverride,
   };
 
   return (

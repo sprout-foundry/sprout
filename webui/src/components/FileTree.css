@@ -261,6 +261,7 @@
   cursor: pointer;
   transition: background-color 0.1s var(--ease-out), border-color 0.1s var(--ease-out);
   user-select: none;
+  position: relative;
 }
 
 .file-tree .file-tree-item:hover {
@@ -572,6 +573,27 @@
   color: var(--text-primary);
   border-radius: 2px;
   padding: 0 1px;
+}
+
+/* Drag-and-drop styles */
+.file-tree .file-tree-item.dragging {
+  opacity: 0.5;
+}
+
+.file-tree .file-tree-item.drop-target {
+  background: rgba(14, 165, 233, 0.12);
+  border-left-color: var(--accent-primary);
+  outline: 1px dashed var(--accent-primary);
+  outline-offset: -1px;
+}
+
+.file-tree .file-tree-item.drop-target::after {
+  content: '';
+  position: absolute;
+  inset: 2px 0;
+  border: 1px solid rgba(14, 165, 233, 0.4);
+  border-radius: var(--radius-sm);
+  pointer-events: none;
 }
 
 @media (max-width: 768px) {

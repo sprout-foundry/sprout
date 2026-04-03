@@ -149,7 +149,7 @@ class TerminalWebSocketService {
     if (this.sessionId) {
       params.set('reattach', this.sessionId);
     }
-    if (this.preferredShell) {
+    if (this.preferredShell && !this.sessionId) {
       params.set('shell', this.preferredShell);
     }
     const paramStr = params.toString();

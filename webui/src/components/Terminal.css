@@ -429,6 +429,8 @@
   top: calc(100% + 4px);
   right: 0;
   min-width: 160px;
+  max-height: 300px;
+  overflow-y: auto;
   background: rgba(15, 23, 42, 0.98);
   border: 1px solid rgba(148, 163, 184, 0.24);
   border-radius: 8px;

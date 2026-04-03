@@ -547,6 +547,23 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 		if len(shellOverride) > 64 {
 			shellOverride = shellOverride[:64]
 		}
+		// Cross-check the override against the known available shells so
+		// that only actual shells (not arbitrary PATH binaries) can be
+		// started as PTY sessions.
+		if shellOverride != "" {
+			allowed := terminalManager.AvailableShells()
+			valid := false
+			for _, s := range allowed {
+				if s.Name == shellOverride || s.Path == shellOverride {
+					valid = true
+					break
+				}
+			}
+			if !valid {
+				log.Printf("Terminal %s: shell override %q not in available shells list, ignoring", sessionID, shellOverride)
+				shellOverride = ""
+			}
+		}
 		session, err = terminalManager.CreateSession(sessionID, shellOverride)
 		if err != nil {
 			log.Printf("Failed to create terminal session: %v", err)

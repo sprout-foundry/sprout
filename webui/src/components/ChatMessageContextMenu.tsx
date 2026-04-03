@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback, useRef, useLayoutEffect, type RefObject } from 'react';
+import React, { useState, useEffect, useCallback, useRef, type RefObject } from 'react';
 import { Copy, ArrowDownToLine } from 'lucide-react';
 import { copyToClipboard } from '../utils/clipboard';
+import ContextMenu from './ContextMenu';
 
 interface ChatMessageMenuState {
   visible: boolean;
@@ -24,8 +25,6 @@ const ChatMessageContextMenu: React.FC<ChatMessageContextMenuProps> = ({
   containerRef,
   onInsertAtCursor,
 }) => {
-  const menuRef = useRef<HTMLDivElement>(null);
-  const attachedRef = useRef(false);
   const timersRef = useRef<number[]>([]);
 
   // Clean up all pending timers
@@ -52,8 +51,9 @@ const ChatMessageContextMenu: React.FC<ChatMessageContextMenuProps> = ({
   // ── Close helpers ─────────────────────────────────────────
 
   const close = useCallback(() => {
+    clearTimers();
     setMenu((prev) => ({ ...prev, visible: false }));
-  }, []);
+  }, [clearTimers]);
 
   // ── Find message-bubble ancestor and code block ───────────
 
@@ -109,74 +109,6 @@ const ChatMessageContextMenu: React.FC<ChatMessageContextMenuProps> = ({
     return () => { clearTimers(); };
   }, [clearTimers]);
 
-  // ── Global close listeners (with rAF race-condition guard) ─
-
-  useEffect(() => {
-    if (!menu.visible) {
-      attachedRef.current = false;
-      return;
-    }
-
-    const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        close();
-      }
-    };
-
-    const handleScroll = () => {
-      close();
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        close();
-      }
-    };
-
-    const timer = requestAnimationFrame(() => {
-      if (attachedRef.current) return;
-      attachedRef.current = true;
-      document.addEventListener('mousedown', handleClickOutside);
-      window.addEventListener('scroll', handleScroll, true);
-      document.addEventListener('keydown', handleKeyDown);
-      window.addEventListener('blur', close);
-    });
-
-    return () => {
-      cancelAnimationFrame(timer);
-      if (attachedRef.current) {
-        attachedRef.current = false;
-        document.removeEventListener('mousedown', handleClickOutside);
-        window.removeEventListener('scroll', handleScroll, true);
-        document.removeEventListener('keydown', handleKeyDown);
-        window.removeEventListener('blur', close);
-      }
-    };
-  }, [menu.visible, close]);
-
-  // ── Viewport boundary clamping ────────────────────────────
-
-  useLayoutEffect(() => {
-    if (!menu.visible || !menuRef.current) return;
-    const el = menuRef.current;
-
-    // Reset any inline styles from a previous open before computing fresh position
-    el.style.left = '';
-    el.style.top = '';
-
-    const rect = el.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const pad = 8;
-
-    if (rect.right > vw) {
-      el.style.left = `${Math.max(pad, vw - rect.width - pad)}px`;
-    }
-    if (rect.bottom > vh) {
-      el.style.top = `${Math.max(pad, vh - rect.height - pad)}px`;
-    }
-  }, [menu.visible, menu.x, menu.y]);
-
   // ── Action handlers ───────────────────────────────────────
 
   const handleCopyMessage = useCallback(async () => {
@@ -199,16 +131,10 @@ const ChatMessageContextMenu: React.FC<ChatMessageContextMenuProps> = ({
     close();
   }, [menu.messageContent, onInsertAtCursor, close]);
 
-  if (!menu.visible) return null;
-
   return (
-    <div
-      ref={menuRef}
-      className="chat-msg-context-menu"
-      style={{ left: menu.x, top: menu.y }}
-    >
+    <ContextMenu isOpen={menu.visible} x={menu.x} y={menu.y} onClose={close}>
       <button
-        className="chat-msg-context-menu-item"
+        className="context-menu-item"
         onClick={handleCopyMessage}
         type="button"
         disabled={copiedAction === 'message'}
@@ -219,7 +145,7 @@ const ChatMessageContextMenu: React.FC<ChatMessageContextMenuProps> = ({
 
       {menu.codeBlockText && (
         <button
-          className="chat-msg-context-menu-item"
+          className="context-menu-item"
           onClick={handleCopyCodeBlock}
           type="button"
           disabled={copiedAction === 'code'}
@@ -229,17 +155,17 @@ const ChatMessageContextMenu: React.FC<ChatMessageContextMenuProps> = ({
         </button>
       )}
 
-      <div className="chat-msg-context-menu-divider" />
+      <div className="context-menu-divider" />
 
       <button
-        className="chat-msg-context-menu-item"
+        className="context-menu-item"
         onClick={handleInsertAtCursor}
         type="button"
       >
         <ArrowDownToLine size={13} />
         <span className="menu-item-label">Insert at cursor</span>
       </button>
-    </div>
+    </ContextMenu>
   );
 };
 

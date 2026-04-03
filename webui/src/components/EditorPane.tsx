@@ -302,7 +302,10 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       case '.cmake':
         return [StreamLanguage.define(cmake)];
       case '.conf':
-        return [StreamLanguage.define(nginx)];
+        if (/nginx/i.test(fileName || '')) {
+          return [StreamLanguage.define(nginx)];
+        }
+        return [];
       case '.ps1':
       case '.psm1':
       case '.psd1':
@@ -354,6 +357,11 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       case '.txt':
         return [];
       default:
+        // Handle Dockerfile variants (Dockerfile.dev, Dockerfile.prod, etc.)
+        // These have non-standard extensions like .dev, .prod but should get Dockerfile highlighting
+        if (ext && /^dockerfile$/i.test((fileName || '').replace(/\.[^.]+$/, ''))) {
+          return [StreamLanguage.define(dockerFile)];
+        }
         return [];
     }
   }, []);

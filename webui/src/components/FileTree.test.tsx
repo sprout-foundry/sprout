@@ -160,6 +160,22 @@ function getContextMenuTexts(): string[] {
   return getContextButtons().map((btn) => btn.textContent?.trim() ?? '');
 }
 
+/**
+ * Right-click the background area of the file list (empty space).
+ */
+function fireContextMenuOnBackground(): void {
+  const fileList = document.querySelector('.file-list');
+  if (!fileList) throw new Error('Could not find .file-list element');
+  fileList.dispatchEvent(
+    new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 300,
+      clientY: 400,
+    })
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -303,5 +319,106 @@ describe('FileTree context menu – clipboard & editor actions', () => {
 
     // Menu should be removed
     expect(document.querySelector('.file-tree-context-menu')).toBeNull();
+  });
+});
+
+describe('FileTree background context menu', () => {
+  it('background context menu appears when right-clicking empty space', async () => {
+    await renderTree();
+
+    expect(document.querySelector('.file-tree-context-menu')).toBeNull();
+
+    fireContextMenuOnBackground();
+    await flushPromises();
+
+    expect(document.querySelector('.file-tree-context-menu')).not.toBeNull();
+  });
+
+  it('shows only "New File" and "New Folder"', async () => {
+    await renderTree();
+
+    fireContextMenuOnBackground();
+    await flushPromises();
+
+    const texts = getContextMenuTexts();
+    expect(texts).toEqual(['New File', 'New Folder']);
+    expect(texts).not.toContain('Rename');
+    expect(texts).not.toContain('Delete');
+    expect(texts).not.toContain('Copy relative path');
+    expect(texts).not.toContain('Open in editor');
+  });
+
+  it('"New File" triggers draft mode at root', async () => {
+    await renderTree();
+
+    fireContextMenuOnBackground();
+    await flushPromises();
+
+    const newFileBtn = getContextButtons().find(
+      (btn) => btn.textContent?.trim() === 'New File'
+    );
+    expect(newFileBtn).toBeDefined();
+
+    await act(async () => {
+      newFileBtn!.click();
+    });
+    await flushPromises();
+
+    // A draft row for creating a file should appear at root level
+    expect(document.querySelector('.file-tree-draft-row')).not.toBeNull();
+  });
+
+  it('"New Folder" triggers draft mode at root', async () => {
+    await renderTree();
+
+    fireContextMenuOnBackground();
+    await flushPromises();
+
+    const newFolderBtn = getContextButtons().find(
+      (btn) => btn.textContent?.trim() === 'New Folder'
+    );
+    expect(newFolderBtn).toBeDefined();
+
+    await act(async () => {
+      newFolderBtn!.click();
+    });
+    await flushPromises();
+
+    // A draft row for creating a folder should appear at root level
+    expect(document.querySelector('.file-tree-draft-row')).not.toBeNull();
+  });
+
+  it('background context menu is dismissed on Escape', async () => {
+    await renderTree();
+
+    fireContextMenuOnBackground();
+    await flushPromises();
+
+    expect(document.querySelector('.file-tree-context-menu')).not.toBeNull();
+
+    await act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+    await flushPromises();
+
+    expect(document.querySelector('.file-tree-context-menu')).toBeNull();
+  });
+
+  it('clicking a file item context menu does not show background menu', async () => {
+    await renderTree();
+
+    // Right-click directly on a file item (which calls stopPropagation)
+    fireContextMenuOnFile('main.go');
+    await flushPromises();
+
+    // The file item context menu should be showing
+    expect(document.querySelector('.file-tree-context-menu')).not.toBeNull();
+
+    // It should show file-specific items, NOT the background menu items
+    const texts = getContextMenuTexts();
+    expect(texts).not.toContain('New File');
+    expect(texts).not.toContain('New Folder');
+    expect(texts).toContain('Rename');
+    expect(texts).toContain('Delete');
   });
 });

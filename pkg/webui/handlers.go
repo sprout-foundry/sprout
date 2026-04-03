@@ -21,7 +21,7 @@ func (ws *ReactWebServer) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := staticFiles.ReadFile("static/index.html")
+	data, err := readStaticFile("index.html")
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -40,12 +40,12 @@ func (ws *ReactWebServer) handleStaticFiles(w http.ResponseWriter, r *http.Reque
 	}
 
 	filePath := strings.TrimPrefix(r.URL.Path, "/static/")
-	if filePath == "" || strings.Contains(filePath, "..") || strings.HasPrefix(filePath, "/") {
+	if filePath == "" || strings.Contains(filePath, "..") || strings.HasPrefix(filePath, "/") || strings.HasPrefix(filePath, "\\") {
 		http.NotFound(w, r)
 		return
 	}
 
-	data, err := staticFiles.ReadFile("static/" + filePath)
+	data, err := readStaticFile(filePath)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -60,7 +60,7 @@ func (ws *ReactWebServer) handleStaticFiles(w http.ResponseWriter, r *http.Reque
 
 // handleServiceWorker serves the Service Worker with proper MIME type
 func (ws *ReactWebServer) handleServiceWorker(w http.ResponseWriter, r *http.Request) {
-	data, err := staticFiles.ReadFile("static/sw.js")
+	data, err := readStaticFile("sw.js")
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -112,10 +112,6 @@ func (ws *ReactWebServer) serveRootAsset(w http.ResponseWriter, r *http.Request,
 func (ws *ReactWebServer) serveRootAssetOptional(w http.ResponseWriter, r *http.Request, name string, contentType string) {
 	data, err := ws.readRootAsset(name)
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			http.NotFound(w, r)
-			return
-		}
 		http.NotFound(w, r)
 		return
 	}
@@ -123,7 +119,7 @@ func (ws *ReactWebServer) serveRootAssetOptional(w http.ResponseWriter, r *http.
 }
 
 func (ws *ReactWebServer) serveEmbeddedFile(w http.ResponseWriter, r *http.Request, embeddedPath string, contentType string, optional bool, cacheable bool) {
-	data, err := staticFiles.ReadFile(embeddedPath)
+	data, err := readStaticFile(strings.TrimPrefix(embeddedPath, "static/"))
 	if err != nil {
 		if optional && errors.Is(err, fs.ErrNotExist) {
 			http.NotFound(w, r)
@@ -137,7 +133,7 @@ func (ws *ReactWebServer) serveEmbeddedFile(w http.ResponseWriter, r *http.Reque
 }
 
 func (ws *ReactWebServer) readRootAsset(name string) ([]byte, error) {
-	data, err := staticFiles.ReadFile("static/" + name)
+	data, err := readStaticFile(name)
 	if err != nil {
 		return nil, fmt.Errorf("read root asset %q: %w", name, err)
 	}

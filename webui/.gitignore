@@ -3,24 +3,6 @@ node_modules/
 
 # Build outputs
 build/
-dist/
-
-# Generated files in pkg/webui/static - ignore build artifacts but track source assets
-pkg/webui/static/*.js
-pkg/webui/static/*.css
-pkg/webui/static/*.map
-pkg/webui/static/*.html
-pkg/webui/static/*.json
-pkg/webui/static/*.xml
-pkg/webui/static/sw.js
-pkg/webui/static/asset-manifest.json
-pkg/webui/static/manifest.json
-pkg/webui/static/browserconfig.xml
-pkg/webui/static/*.LICENSE.txt
-
-# Track source assets in pkg/webui/static (these are not generated)
-pkg/webui/static/icon-192.png
-pkg/webui/static/icon-512.png
 
 # TypeScript build info
 *.tsbuildinfo

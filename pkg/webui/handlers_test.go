@@ -88,7 +88,7 @@ func TestStaticFilesServesHashedMainBundle(t *testing.T) {
 		Files map[string]string `json:"files"`
 	}
 
-	rawManifest, err := staticFiles.ReadFile("static/asset-manifest.json")
+	rawManifest, err := readStaticFile("asset-manifest.json")
 	if err != nil {
 		t.Fatalf("failed to read embedded asset-manifest.json: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestStaticFilesServesHashedMainBundle(t *testing.T) {
 }
 
 func TestEmbeddedIndexReferencesAvailableRootAssets(t *testing.T) {
-	indexHTML, err := staticFiles.ReadFile("static/index.html")
+	indexHTML, err := readStaticFile("index.html")
 	if err != nil {
 		t.Fatalf("failed to read embedded index.html: %v", err)
 	}

@@ -121,48 +121,96 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
 
     return new Map([[chatBuffer.id, chatBuffer]]);
   });
-  const [panes, setPanes] = useState<EditorPane[]>([
-    { id: 'pane-1', bufferId: 'buffer-chat', isActive: true, position: 'primary' }
-  ]);
-  // paneLayout is always initialized to 'single' because split layouts
-  // require multiple panes that are not recreated on reload. The persisted
-  // value is kept for future session-restore support. The layout updates
-  // correctly when the user performs a split or creates a grid.
-  const [paneLayout, setPaneLayoutState] = useState<PaneLayout>('single');
+
+  // Read the persisted layout once and share it across all three initializers
+  // to avoid redundant localStorage reads.
+  const initialLayout: PaneLayout = (() => {
+    const stored = readStorageItem(PANE_LAYOUT_STORAGE_KEY);
+    if (stored === 'split-vertical' || stored === 'split-horizontal' || stored === 'split-grid') {
+      return stored;
+    }
+    return 'single';
+  })();
+
+  const [paneLayout, setPaneLayoutState] = useState<PaneLayout>(initialLayout);
+
+  // Initialize panes to match the restored layout. Stable IDs (pane-1 through
+  // pane-4) mean pane sizes keyed by these IDs are meaningful across reloads.
+  const [panes, setPanes] = useState<EditorPane[]>(() => {
+    const primary: EditorPane = { id: 'pane-1', bufferId: 'buffer-chat', isActive: true, position: 'primary' };
+    if (initialLayout === 'split-vertical' || initialLayout === 'split-horizontal') {
+      return [
+        primary,
+        { id: 'pane-2', bufferId: null, isActive: false, position: 'secondary' as const },
+      ];
+    }
+    if (initialLayout === 'split-grid') {
+      return [
+        primary,
+        { id: 'pane-2', bufferId: null, isActive: false, position: 'secondary' as const },
+        { id: 'pane-3', bufferId: null, isActive: false, position: 'tertiary' as const },
+        { id: 'pane-4', bufferId: null, isActive: false, position: 'quaternary' as const },
+      ];
+    }
+    return [primary];
+  });
   const [activePaneId, setActivePaneId] = useState<string | null>('pane-1');
   const [activeBufferId, setActiveBufferId] = useState<string | null>('buffer-chat');
   const [isAutoSaveEnabled] = useState(true);
   const [autoSaveInterval] = useState(30000); // 30 seconds
   const [isLinkedScrollEnabled, setIsLinkedScrollEnabled] = useState(false); // fix: consumed by EditorPane but was missing from context
   const [paneSizes, setPaneSizes] = useState<PaneSize>(() => {
+    // Stable pane IDs are meaningful across page reloads, so we accept them
+    // (along with layout-wide keys like grid:col) when restoring from storage.
+    const STABLE_PANE_IDS = ['pane-1', 'pane-2', 'pane-3', 'pane-4'];
+
+    const isSplit = initialLayout === 'split-vertical' || initialLayout === 'split-horizontal';
+    const isGrid = initialLayout === 'split-grid';
+    const defaultSizes: PaneSize = isGrid
+      ? { 'grid:col': 50, 'grid:row': 50 }
+      : isSplit
+        ? { 'pane-1': 50, 'pane-2': 50 }
+        : { 'pane-1': 100 };
+
     const stored = readStorageItem(PANE_SIZES_STORAGE_KEY);
     if (stored) {
       try {
         const parsed = JSON.parse(stored) as PaneSize;
-        // Only keep layout-agnostic keys (grid splits).
-        // Pane-ID-specific sizes are meaningless across page reloads
-        // because new panes get fresh IDs. Nested split keys
-        // ("group:<paneId>", "nested:<paneId>") are caught by the
-        // generic fallback below since they don't start with "pane-".
-        const safeKeys = ['grid:col', 'grid:row'];
         const filtered: PaneSize = {};
-        for (const key of safeKeys) {
-          if (typeof parsed[key] === 'number' && isFinite(parsed[key])) {
-            filtered[key] = parsed[key];
-          }
-        }
-        // Include any other non-pane-ID keys that might exist
         for (const key of Object.keys(parsed)) {
-          if (!key.startsWith('pane-') && typeof parsed[key] === 'number' && isFinite(parsed[key])) {
+          if ((STABLE_PANE_IDS.includes(key) || !key.startsWith('pane-'))
+            && typeof parsed[key] === 'number'
+            && isFinite(parsed[key])) {
             filtered[key] = parsed[key];
           }
         }
-        return Object.keys(filtered).length > 0 ? filtered : { 'pane-1': 100 };
+
+        // Fill in any missing required keys so the sizes map is always
+        // structurally complete for the restored layout.
+        if (isGrid) {
+          if (filtered['grid:col'] == null) filtered['grid:col'] = 50;
+          if (filtered['grid:row'] == null) filtered['grid:row'] = 50;
+          delete filtered['pane-1'];
+          delete filtered['pane-2'];
+          delete filtered['pane-3'];
+          delete filtered['pane-4'];
+        } else if (isSplit) {
+          if (filtered['pane-1'] == null) filtered['pane-1'] = 50;
+          if (filtered['pane-2'] == null) filtered['pane-2'] = 50;
+          delete filtered['grid:col'];
+          delete filtered['grid:row'];
+        } else {
+          filtered['pane-1'] = 100;
+          delete filtered['grid:col'];
+          delete filtered['grid:row'];
+        }
+
+        return filtered;
       } catch {
         // JSON parse error — use default
       }
     }
-    return { 'pane-1': 100 };
+    return defaultSizes;
   });
 
   // Keep a ref to the latest buffers Map so async closures don't read stale data
@@ -176,6 +224,15 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   useEffect(() => {
     activePaneIdRef.current = activePaneId;
   }, [activePaneId]);
+
+  // Auto-sync layout to 'single' when panes are reduced to 1. This guards
+  // against stale-closure bugs where closePane reads the old `panes.length`
+  // and skips the layout reset.
+  useEffect(() => {
+    if (panes.length === 1 && paneLayout !== 'single') {
+      setPaneLayoutState('single');
+    }
+  }, [panes.length, paneLayout]);
 
   // Persist pane layout type to localStorage
   useEffect(() => {
@@ -892,10 +949,9 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
       setActivePaneId(remainingPanes[0]?.id || null);
     }
 
-    // (Going from 2 → 1, not 3 → 2 — a 2-pane split is still valid)
-    if (panes.length === 2) {
-      setPaneLayoutState('single');
-    }
+    // The useEffect on panes.length auto-syncs layout to 'single' when
+    // panes are reduced to 1, so we no longer need an explicit layout reset
+    // here (which previously read from a stale `panes` closure).
   }, [panes, activePaneId, closeBuffer]);
 
   // Switch to a different pane
@@ -912,7 +968,10 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   const splitPane = useCallback((paneId: string, direction: 'vertical' | 'horizontal') => {
     if (panes.length >= 4) return null; // Max 4 panes
 
-    const newPaneId = `pane-${Date.now()}`;
+    // Use the next available stable pane ID
+    const usedIds = new Set(panes.map(p => p.id));
+    const stableIds = ['pane-2', 'pane-3', 'pane-4'];
+    const newPaneId = stableIds.find(id => !usedIds.has(id)) || `pane-${Date.now()}`;
 
     const newPanes: EditorPane[] = [
       ...panes,
@@ -973,12 +1032,9 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
       });
     }
 
-    const now = Date.now();
-    const newPaneIds = [
-      `pane-${now}-1`, // top-right
-      `pane-${now}-2`, // bottom-left
-      `pane-${now}-3`, // bottom-right
-    ];
+    // Use stable pane IDs for the grid panes
+    const usedIds = new Set(panes.map(p => p.id));
+    const newPaneIds = ['pane-2', 'pane-3', 'pane-4'].filter(id => !usedIds.has(id));
 
     const newPanes: EditorPane[] = [
       { ...primaryPane, position: 'primary' },

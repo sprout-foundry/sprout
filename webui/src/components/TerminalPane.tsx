@@ -6,7 +6,7 @@ import React, {
   useImperativeHandle,
   forwardRef,
 } from 'react';
-import { createPortal } from 'react-dom';
+import ContextMenu from './ContextMenu';
 import { X, TriangleAlert, Copy, ClipboardPaste, Trash2, TextSelect, Link2 } from 'lucide-react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
@@ -34,7 +34,6 @@ interface TerminalPaneProps {
 }
 
 interface TerminalContextMenuState {
-  visible: boolean;
   x: number;
   y: number;
   hasSelection: boolean;
@@ -46,14 +45,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
   ({ isActive, isConnected = true, showCloseButton, onClose, onConnectionChange }, ref) => {
     const { themePack } = useTheme();
     const [paneConnected, setPaneConnected] = useState(false);
-    const [contextMenu, setContextMenu] = useState<TerminalContextMenuState>({
-      visible: false,
-      x: 0,
-      y: 0,
-      hasSelection: false,
-      hasLink: false,
-      linkUrl: '',
-    });
+    const [contextMenu, setContextMenu] = useState<TerminalContextMenuState | null>(null);
 
     const paneWrapperRef = useRef<HTMLDivElement>(null);
     const xtermContainerRef = useRef<HTMLDivElement>(null);
@@ -62,7 +54,6 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     const terminalWSRef = useRef<TerminalWebSocketService | null>(null);
     const eventHandlerRef = useRef<((event: any) => void) | null>(null);
     const resizeTimerRef = useRef<number | null>(null);
-    const contextMenuRef = useRef<HTMLDivElement>(null);
 
     const getTerminalTheme = useCallback(() => {
       return {
@@ -108,45 +99,9 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       terminalWSRef.current.sendResize(xtermRef.current.cols, xtermRef.current.rows);
     }, [paneConnected]);
 
-    // ── Context menu: close on outside click, scroll, Escape, or another contextmenu ──
-    useEffect(() => {
-      if (!contextMenu.visible) return;
-      const handleClickOutside = (e: MouseEvent) => {
-        if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
-          setContextMenu((prev) => ({ ...prev, visible: false }));
-        }
-      };
-      const handleScroll = () => {
-        setContextMenu((prev) => ({ ...prev, visible: false }));
-      };
-      const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
-          setContextMenu((prev) => ({ ...prev, visible: false }));
-        }
-      };
-      const handleContextMenuOutside = () => {
-        setContextMenu((prev) => ({ ...prev, visible: false }));
-      };
-      const handleResize = () => {
-        setContextMenu((prev) => ({ ...prev, visible: false }));
-      };
-      document.addEventListener('mousedown', handleClickOutside);
-      window.addEventListener('scroll', handleScroll, true);
-      document.addEventListener('keydown', handleKeyDown);
-      window.addEventListener('contextmenu', handleContextMenuOutside);
-      window.addEventListener('resize', handleResize);
-      return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
-        window.removeEventListener('scroll', handleScroll, true);
-        document.removeEventListener('keydown', handleKeyDown);
-        window.removeEventListener('contextmenu', handleContextMenuOutside);
-        window.removeEventListener('resize', handleResize);
-      };
-    }, [contextMenu.visible]);
-
     // ── Context menu handlers ──
     const closeContextMenu = useCallback(() => {
-      setContextMenu((prev) => ({ ...prev, visible: false }));
+      setContextMenu(null);
     }, []);
 
     const handleCopy = useCallback(() => {
@@ -178,11 +133,11 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     }, [closeContextMenu]);
 
     const handleCopyLink = useCallback(() => {
-      if (contextMenu.linkUrl) {
+      if (contextMenu?.linkUrl) {
         copyToClipboard(contextMenu.linkUrl);
       }
       closeContextMenu();
-    }, [contextMenu.linkUrl, closeContextMenu]);
+    }, [contextMenu?.linkUrl, closeContextMenu]);
 
     const handleContextMenu = useCallback((e: React.MouseEvent) => {
       e.preventDefault();
@@ -223,14 +178,9 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         }
       }
 
-      // Clamp position so menu stays within viewport
-      const x = Math.max(0, Math.min(e.clientX, window.innerWidth - 240));
-      const y = Math.max(0, Math.min(e.clientY, window.innerHeight - 250));
-
       setContextMenu({
-        visible: true,
-        x,
-        y,
+        x: e.clientX,
+        y: e.clientY,
         hasSelection,
         hasLink,
         linkUrl,
@@ -376,14 +326,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     // Reset context menu when pane becomes inactive or unmounts
     useEffect(() => {
       if (!isActive) {
-        setContextMenu({
-          visible: false,
-          x: 0,
-          y: 0,
-          hasSelection: false,
-          hasLink: false,
-          linkUrl: '',
-        });
+        setContextMenu(null);
       }
     }, [isActive]);
 
@@ -416,65 +359,60 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
             Backend not connected. Start with: <code>./ledit agent --web-port 54421</code>
           </div>
         )}
-        {/* Terminal context menu */}
-        {contextMenu.visible &&
-          createPortal(
-            <div
-              ref={contextMenuRef}
-              className="terminal-context-menu"
-              style={{ left: contextMenu.x, top: contextMenu.y }}
-              onClick={(e) => e.stopPropagation()}
-            >
+        <ContextMenu
+          isOpen={contextMenu !== null}
+          x={contextMenu?.x ?? 0}
+          y={contextMenu?.y ?? 0}
+          onClose={closeContextMenu}
+        >
+          <button
+            className={`context-menu-item ${!contextMenu?.hasSelection ? 'disabled' : ''}`}
+            onClick={handleCopy}
+            disabled={!contextMenu?.hasSelection}
+            type="button"
+          >
+            <Copy size={13} />
+            <span className="menu-item-label">Copy</span>
+          </button>
+          <button
+            className="context-menu-item"
+            onClick={handlePaste}
+            type="button"
+          >
+            <ClipboardPaste size={13} />
+            <span className="menu-item-label">Paste</span>
+          </button>
+          <div className="context-menu-divider" />
+          <button
+            className="context-menu-item"
+            onClick={handleClear}
+            type="button"
+          >
+            <Trash2 size={13} />
+            <span className="menu-item-label">Clear Terminal</span>
+          </button>
+          <button
+            className="context-menu-item"
+            onClick={handleSelectAll}
+            type="button"
+          >
+            <TextSelect size={13} />
+            <span className="menu-item-label">Select All</span>
+          </button>
+          {contextMenu?.hasLink && (
+            <>
+              <div className="context-menu-divider" />
               <button
-                className={`terminal-context-item ${!contextMenu.hasSelection ? 'disabled' : ''}`}
-                onClick={handleCopy}
-                disabled={!contextMenu.hasSelection}
+                className="context-menu-item"
+                onClick={handleCopyLink}
                 type="button"
               >
-                <Copy size={13} />
-                <span className="terminal-context-item-label">Copy</span>
+                <Link2 size={13} />
+                <span className="menu-item-label">Copy Link</span>
               </button>
-              <button
-                className="terminal-context-item"
-                onClick={handlePaste}
-                type="button"
-              >
-                <ClipboardPaste size={13} />
-                <span className="terminal-context-item-label">Paste</span>
-              </button>
-              <div className="terminal-context-separator" />
-              <button
-                className="terminal-context-item"
-                onClick={handleClear}
-                type="button"
-              >
-                <Trash2 size={13} />
-                <span className="terminal-context-item-label">Clear Terminal</span>
-              </button>
-              <button
-                className="terminal-context-item"
-                onClick={handleSelectAll}
-                type="button"
-              >
-                <TextSelect size={13} />
-                <span className="terminal-context-item-label">Select All</span>
-              </button>
-              {contextMenu.hasLink && (
-                <>
-                  <div className="terminal-context-separator" />
-                  <button
-                    className="terminal-context-item"
-                    onClick={handleCopyLink}
-                    type="button"
-                  >
-                    <Link2 size={13} />
-                    <span className="terminal-context-item-label">Copy Link</span>
-                  </button>
-                </>
-              )}
-            </div>,
-            document.body
+            </>
           )}
+        </ContextMenu>
       </div>
     );
   }

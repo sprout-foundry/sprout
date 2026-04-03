@@ -96,6 +96,9 @@ afterEach(() => {
   document.querySelectorAll('.tab-context-menu').forEach((el) => {
     if (el.parentNode) el.parentNode.removeChild(el);
   });
+  document.querySelectorAll('.context-menu').forEach((el) => {
+    if (el.parentNode) el.parentNode.removeChild(el);
+  });
   document.querySelectorAll('.close-confirm-overlay').forEach((el) => {
     if (el.parentNode) el.parentNode.removeChild(el);
   });
@@ -121,7 +124,7 @@ function getContextMenuElements(): Element[] {
 /** Returns menu items (`.tab-context-item`) from the first visible empty area menu. */
 function getMenuItems(menu?: Element): Element[] {
   const m = menu || getContextMenuElements()[0];
-  return m ? Array.from(m.querySelectorAll('.tab-context-item')) : [];
+  return m ? Array.from(m.querySelectorAll('.context-menu-item')) : [];
 }
 
 /** Get text content of each menu item. */

@@ -101,17 +101,23 @@ function fireContextMenu(element: Element, x = 100, y = 100) {
 }
 
 function getMenu() {
-  return document.body.querySelector('.terminal-context-menu');
+  return document.body.querySelector('.context-menu');
 }
 
 function getMenuItems() {
   const menu = getMenu();
-  return menu ? Array.from(menu.querySelectorAll('.terminal-context-item')) : [];
+  return menu ? Array.from(menu.querySelectorAll('.context-menu-item')) : [];
 }
 
 function getMenuTexts() {
   return getMenuItems().map((el) => el.textContent?.trim() || '');
 }
+
+const flushRAF = () =>
+  act(async () => {
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    await Promise.resolve();
+  });
 
 const flushPromises = async () => {
   await act(async () => {
@@ -207,7 +213,7 @@ describe('TerminalPane context menu', () => {
     });
     container.remove();
     // Clean up any leftover portal elements
-    document.querySelectorAll('.terminal-context-menu').forEach((el) => el.remove());
+    document.querySelectorAll('.context-menu').forEach((el) => el.remove());
     jest.clearAllMocks();
   });
 
@@ -439,6 +445,7 @@ describe('TerminalPane context menu', () => {
     const paneContent = container.querySelector('.terminal-pane-content');
     fireContextMenu(paneContent);
     await flushPromises();
+    await flushRAF();
 
     expect(getMenu()).toBeTruthy();
 
@@ -463,6 +470,7 @@ describe('TerminalPane context menu', () => {
     const paneContent = container.querySelector('.terminal-pane-content');
     fireContextMenu(paneContent);
     await flushPromises();
+    await flushRAF();
 
     expect(getMenu()).toBeTruthy();
 
@@ -515,6 +523,7 @@ describe('TerminalPane context menu', () => {
     const paneContent = container.querySelector('.terminal-pane-content');
     fireContextMenu(paneContent);
     await flushPromises();
+    await flushRAF();
 
     expect(getMenu()).toBeTruthy();
 

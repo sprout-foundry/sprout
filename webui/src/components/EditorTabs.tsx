@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
 import {
   X,
   AlertTriangle,
@@ -23,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { EditorBuffer } from '../types/editor';
+import ContextMenu from './ContextMenu';
 import './EditorTabs.css';
 
 interface EditorTabsProps {
@@ -38,8 +38,6 @@ const EditorTabs: React.FC<EditorTabsProps> = ({ paneId, actions, compact = fals
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; bufferId: string } | null>(null);
   const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number } | null>(null);
   const tabRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const contextMenuRef = useRef<HTMLDivElement | null>(null);
-  const emptyAreaMenuRef = useRef<HTMLDivElement | null>(null);
   const batchCloseTargetsRef = useRef<string[]>([]);
 
   const paneOrder = useMemo(() => {
@@ -65,47 +63,6 @@ const EditorTabs: React.FC<EditorTabsProps> = ({ paneId, actions, compact = fals
       activeTab.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
     }
   }, [activeBufferId]);
-
-  useEffect(() => {
-    if (!contextMenu && !emptyAreaContextMenu) {
-      return;
-    }
-
-    const handlePointerDown = (event: MouseEvent) => {
-      const target = event.target as Node | null;
-      if (
-        target && (
-          contextMenuRef.current?.contains(target) ||
-          emptyAreaMenuRef.current?.contains(target)
-        )
-      ) {
-        return;
-      }
-      setContextMenu(null);
-      setEmptyAreaContextMenu(null);
-    };
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setContextMenu(null);
-        setEmptyAreaContextMenu(null);
-      }
-    };
-
-    window.addEventListener('mousedown', handlePointerDown);
-    window.addEventListener('contextmenu', handlePointerDown);
-    window.addEventListener('keydown', handleEscape);
-    window.addEventListener('blur', () => {
-      setContextMenu(null);
-      setEmptyAreaContextMenu(null);
-    }, { once: true });
-
-    return () => {
-      window.removeEventListener('mousedown', handlePointerDown);
-      window.removeEventListener('contextmenu', handlePointerDown);
-      window.removeEventListener('keydown', handleEscape);
-    };
-  }, [contextMenu, emptyAreaContextMenu]);
 
   const handleTabClick = (buffer: EditorBuffer) => {
     if (buffer.id !== activeBufferId) {
@@ -346,100 +303,100 @@ const EditorTabs: React.FC<EditorTabsProps> = ({ paneId, actions, compact = fals
         </div>
       )}
 
-      {contextMenu && activeContextBuffer && typeof document !== 'undefined'
-        ? createPortal(
-            <div
-              ref={contextMenuRef}
-              className="tab-context-menu"
-              style={{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }}
-              onClick={(event) => event.stopPropagation()}
+      <ContextMenu
+        isOpen={contextMenu !== null}
+        x={contextMenu?.x ?? 0}
+        y={contextMenu?.y ?? 0}
+        onClose={() => setContextMenu(null)}
+        className="tab-context-menu"
+        zIndex={1500}
+      >
+        {contextMenu && activeContextBuffer && (
+          <>
+            <button
+              className="context-menu-item"
+              onClick={() => handleContextAction(() => {
+                if (activeContextBuffer.paneId) {
+                  switchPane(activeContextBuffer.paneId);
+                }
+                switchToBuffer(activeContextBuffer.id);
+              })}
             >
+              <Eye size={14} />
+              <span>Reveal tab</span>
+            </button>
+            {availablePaneTargets.map((pane, index) => (
               <button
-                className="tab-context-item"
+                key={pane.id}
+                className="context-menu-item"
                 onClick={() => handleContextAction(() => {
-                  if (activeContextBuffer.paneId) {
-                    switchPane(activeContextBuffer.paneId);
-                  }
-                  switchToBuffer(activeContextBuffer.id);
+                  moveBufferToPane(activeContextBuffer.id, pane.id);
+                  window.setTimeout(() => {
+                    switchPane(pane.id);
+                    switchToBuffer(activeContextBuffer.id);
+                  }, 0);
                 })}
               >
-                <Eye size={14} />
-                <span>Reveal tab</span>
+                <ArrowRightLeft size={14} />
+                <span>Move to split {paneOrder.get(pane.id) ?? index + 1}</span>
               </button>
-              {availablePaneTargets.map((pane, index) => (
-                <button
-                  key={pane.id}
-                  className="tab-context-item"
-                  onClick={() => handleContextAction(() => {
-                    moveBufferToPane(activeContextBuffer.id, pane.id);
-                    window.setTimeout(() => {
-                      switchPane(pane.id);
-                      switchToBuffer(activeContextBuffer.id);
-                    }, 0);
-                  })}
-                >
-                  <ArrowRightLeft size={14} />
-                  <span>Move to split {paneOrder.get(pane.id) ?? index + 1}</span>
-                </button>
-              ))}
-              <div className="tab-context-divider" />
-              <button
-                className="tab-context-item"
-                onClick={() => handleContextAction(() => {
-                  closeRelatedBuffers((buffer) => buffer.id !== activeContextBuffer.id);
-                })}
-              >
-                <PanelRightOpen size={14} />
-                <span>Close other tabs</span>
-              </button>
-              <button
-                className="tab-context-item"
-                onClick={() => handleContextAction(() => {
-                  closeRelatedBuffers((buffer) => buffer.paneId === contextPaneId && buffer.id !== activeContextBuffer.id);
-                })}
-              >
-                <PanelRightOpen size={14} />
-                <span>Close other tabs in split</span>
-              </button>
-              {activeContextBuffer.isClosable !== false ? (
-                <button
-                  className="tab-context-item danger"
-                  onClick={() => handleContextAction(() => closeBuffer(activeContextBuffer.id))}
-                >
-                  <X size={14} />
-                  <span>Close</span>
-                </button>
-              ) : null}
-            </div>,
-            document.body
-          )
-        : null}
-      {emptyAreaContextMenu && typeof document !== 'undefined'
-        ? createPortal(
-            <div
-              ref={emptyAreaMenuRef}
-              className="tab-context-menu"
-              style={{ left: `${emptyAreaContextMenu.x}px`, top: `${emptyAreaContextMenu.y}px` }}
-              onClick={(event) => event.stopPropagation()}
+            ))}
+            <div className="context-menu-divider" />
+            <button
+              className="context-menu-item"
+              onClick={() => handleContextAction(() => {
+                closeRelatedBuffers((buffer) => buffer.id !== activeContextBuffer.id);
+              })}
             >
+              <PanelRightOpen size={14} />
+              <span>Close other tabs</span>
+            </button>
+            <button
+              className="context-menu-item"
+              onClick={() => handleContextAction(() => {
+                closeRelatedBuffers((buffer) => buffer.paneId === contextPaneId && buffer.id !== activeContextBuffer.id);
+              })}
+            >
+              <PanelRightOpen size={14} />
+              <span>Close other tabs in split</span>
+            </button>
+            {activeContextBuffer.isClosable !== false ? (
               <button
-                className="tab-context-item danger"
-                onClick={() => {
-                  setEmptyAreaContextMenu(null);
-                  if (paneId) {
-                    closeRelatedBuffers((buffer) => buffer.paneId === paneId);
-                  } else {
-                    closeRelatedBuffers(() => true);
-                  }
-                }}
+                className="context-menu-item danger"
+                onClick={() => handleContextAction(() => closeBuffer(activeContextBuffer.id))}
               >
                 <X size={14} />
-                <span>Close All Tabs</span>
+                <span>Close</span>
               </button>
-            </div>,
-            document.body
-          )
-        : null}
+            ) : null}
+          </>
+        )}
+      </ContextMenu>
+      <ContextMenu
+        isOpen={emptyAreaContextMenu !== null}
+        x={emptyAreaContextMenu?.x ?? 0}
+        y={emptyAreaContextMenu?.y ?? 0}
+        onClose={() => setEmptyAreaContextMenu(null)}
+        className="tab-context-menu"
+        zIndex={1500}
+      >
+        {emptyAreaContextMenu && (
+          <button
+            className="context-menu-item danger"
+            onClick={() => {
+              setEmptyAreaContextMenu(null);
+              if (paneId) {
+                closeRelatedBuffers((buffer) => buffer.paneId === paneId);
+              } else {
+                closeRelatedBuffers(() => true);
+              }
+            }}
+          >
+            <X size={14} />
+            <span>Close All Tabs</span>
+          </button>
+        )}
+      </ContextMenu>
     </div>
   );
 };

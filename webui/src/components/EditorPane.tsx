@@ -649,7 +649,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     } else {
       setSnippetLanguage(view, null);
     }
-  }, [buffer?.id, buffer?.languageOverride, buffer?.file?.ext]);
+  }, [buffer?.id, buffer?.languageOverride, buffer?.file?.ext, buffer?.file?.name]);
 
   // Toggle word wrap: updates React state (for toolbar button) and
   // dispatches a CodeMirror compartment reconfigure to apply/remove

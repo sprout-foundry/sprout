@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Copy, GitBranch, RotateCcw } from 'lucide-react';
 import type { ApiService } from '../services/api';
 import { copyToClipboard } from '../utils/clipboard';
+import ContextMenu from './ContextMenu';
 import './GitHistoryPanel.css';
 
 interface GitHistoryMenuState {
@@ -27,8 +28,6 @@ const GitHistoryContextMenu: React.FC<GitHistoryContextMenuProps> = ({
   apiService,
   isActing = false,
 }) => {
-  const menuRef = useRef<HTMLDivElement>(null);
-  const attachedRef = useRef(false);
   const timersRef = useRef<number[]>([]);
 
   const clearTimers = useCallback(() => {
@@ -54,7 +53,7 @@ const GitHistoryContextMenu: React.FC<GitHistoryContextMenuProps> = ({
     timersRef.current.push(window.setTimeout(() => setCopiedAction(null), 1200));
   }, []);
 
-  // ── Close helpers ─────────────────────────────────────────
+  // ── Close helper ──────────────────────────────────────────
 
   const close = useCallback(() => {
     clearTimers();
@@ -102,73 +101,6 @@ const GitHistoryContextMenu: React.FC<GitHistoryContextMenuProps> = ({
   useEffect(() => {
     return () => { clearTimers(); };
   }, [clearTimers]);
-
-  // ── Global close listeners (with rAF race-condition guard) ─
-
-  useEffect(() => {
-    if (!menu.visible) {
-      attachedRef.current = false;
-      return;
-    }
-
-    const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        close();
-      }
-    };
-
-    const handleScroll = () => {
-      close();
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        close();
-      }
-    };
-
-    const timer = requestAnimationFrame(() => {
-      if (attachedRef.current) return;
-      attachedRef.current = true;
-      document.addEventListener('mousedown', handleClickOutside);
-      window.addEventListener('scroll', handleScroll, true);
-      document.addEventListener('keydown', handleKeyDown);
-      window.addEventListener('blur', close);
-    });
-
-    return () => {
-      cancelAnimationFrame(timer);
-      if (attachedRef.current) {
-        attachedRef.current = false;
-        document.removeEventListener('mousedown', handleClickOutside);
-        window.removeEventListener('scroll', handleScroll, true);
-        document.removeEventListener('keydown', handleKeyDown);
-        window.removeEventListener('blur', close);
-      }
-    };
-  }, [menu.visible, close]);
-
-  // ── Viewport boundary clamping ────────────────────────────
-
-  useLayoutEffect(() => {
-    if (!menu.visible || !menuRef.current) return;
-    const el = menuRef.current;
-
-    el.style.left = '';
-    el.style.top = '';
-
-    const rect = el.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const pad = 8;
-
-    if (rect.right > vw) {
-      el.style.left = `${Math.max(pad, vw - rect.width - pad)}px`;
-    }
-    if (rect.bottom > vh) {
-      el.style.top = `${Math.max(pad, vh - rect.height - pad)}px`;
-    }
-  }, [menu.visible, menu.x, menu.y]);
 
   // ── Action handlers ───────────────────────────────────────
 
@@ -240,22 +172,22 @@ const GitHistoryContextMenu: React.FC<GitHistoryContextMenuProps> = ({
     }
   }, [menu.commitHash, menu.commitShortHash, apiService, close, isLoading, isActing]);
 
-  if (!menu.visible) return null;
-
   const short = menu.commitShortHash || menu.commitHash.slice(0, 7);
 
   return (
-    <div
-      ref={menuRef}
+    <ContextMenu
+      isOpen={menu.visible}
+      x={menu.x}
+      y={menu.y}
+      onClose={close}
       className="git-history-context-menu"
-      style={{ left: menu.x, top: menu.y }}
     >
       {actionStatus && (
         <div className="git-history-context-menu-status">{actionStatus}</div>
       )}
 
       <button
-        className="git-history-context-menu-item"
+        className="context-menu-item"
         onClick={handleCopySha}
         type="button"
         disabled={copiedAction === 'sha'}
@@ -267,7 +199,7 @@ const GitHistoryContextMenu: React.FC<GitHistoryContextMenuProps> = ({
       </button>
 
       <button
-        className="git-history-context-menu-item"
+        className="context-menu-item"
         onClick={handleCopyMessage}
         type="button"
         disabled={copiedAction === 'message'}
@@ -278,10 +210,10 @@ const GitHistoryContextMenu: React.FC<GitHistoryContextMenuProps> = ({
         </span>
       </button>
 
-      <div className="git-history-context-menu-divider" />
+      <div className="context-menu-divider" />
 
       <button
-        className="git-history-context-menu-item"
+        className="context-menu-item"
         onClick={handleCheckout}
         type="button"
         disabled={isLoading || (actionStatus !== null && actionStatus !== 'Checked out!')}
@@ -297,7 +229,7 @@ const GitHistoryContextMenu: React.FC<GitHistoryContextMenuProps> = ({
       </button>
 
       <button
-        className="git-history-context-menu-item danger"
+        className="context-menu-item danger"
         onClick={handleRevert}
         type="button"
         disabled={isLoading || (actionStatus !== null && actionStatus !== 'Reverted!')}
@@ -311,7 +243,7 @@ const GitHistoryContextMenu: React.FC<GitHistoryContextMenuProps> = ({
               : `Revert commit (${short})`}
         </span>
       </button>
-    </div>
+    </ContextMenu>
   );
 };
 

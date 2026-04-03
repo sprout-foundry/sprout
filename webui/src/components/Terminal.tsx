@@ -1,18 +1,16 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Trash2, SplitSquareHorizontal } from 'lucide-react';
+import { Trash2, Columns2, Rows2 } from 'lucide-react';
 import './Terminal.css';
 import TerminalPane, { TerminalPaneHandle } from './TerminalPane';
+import TerminalTabBar, { TerminalSession } from './TerminalTabBar';
+
+type SplitDirection = 'none' | 'horizontal' | 'vertical';
 
 interface TerminalProps {
-  onCommand?: (command: string) => void;
-  onOutput?: (output: string) => void;
   isConnected?: boolean;
   isExpanded?: boolean;
   onToggleExpand?: (expanded: boolean) => void;
 }
-
-let paneCounter = 0;
-const newPaneId = () => `pane-${++paneCounter}`;
 
 const Terminal: React.FC<TerminalProps> = ({
   isConnected = true,
@@ -31,24 +29,40 @@ const Terminal: React.FC<TerminalProps> = ({
   const [isResizingVertical, setIsResizingVertical] = useState(false);
   const [collapsedHeight, setCollapsedHeight] = useState(getCollapsedHeight);
 
-  // Split pane state
-  const [panes, setPanes] = useState<{ id: string }[]>(() => [{ id: newPaneId() }]);
-  const [splitPosition, setSplitPosition] = useState(50); // left pane width %
-  const [isResizingSplit, setIsResizingSplit] = useState(false);
+  // ── Split state ──────────────────────────────────────────────────────────
+  const [splitDirection, setSplitDirection] = useState<SplitDirection>('none');
+  const splitDirectionRef = useRef<SplitDirection>('none');
+  const [splitSizes, setSplitSizes] = useState<[number, number]>([50, 50]);
+  const [secondarySessionId, setSecondarySessionId] = useState<string | null>(null);
+  const secondarySessionIdRef = useRef<string | null>(null);
+
+  // Tabbed session state — derive initial IDs together
+  const paneIdCounter = useRef(0);
+  const [sessionState] = useState(() => {
+    paneIdCounter.current += 1;
+    const id = `pane-${paneIdCounter.current}`;
+    return { initialId: id, initialSessions: [{ id, name: 'Session 1' }] };
+  });
+  const [sessions, setSessions] = useState<TerminalSession[]>(sessionState.initialSessions);
+  const [activeSessionId, setActiveSessionId] = useState(sessionState.initialId);
+  const sessionCounterRef = useRef(1);
+  const sessionsRef = useRef(sessions);
+  sessionsRef.current = sessions;
 
   const hasMountedRef = useRef(false);
   const isDraggingVertical = useRef(false);
-  const isDraggingSplit = useRef(false);
   const dragStartY = useRef(0);
   const dragStartHeight = useRef(0);
-  const dragStartX = useRef(0);
-  const dragStartSplit = useRef(50);
-  const splitContainerRef = useRef<HTMLDivElement>(null);
+
+  // Split divider drag refs
+  const isDraggingSplit = useRef(false);
+  const splitDragStartPos = useRef(0);
+  const splitDragStartSizes = useRef<[number, number]>([50, 50]);
 
   // Keyed refs to each pane's imperative handle
   const paneHandles = useRef<Map<string, TerminalPaneHandle | null>>(new Map());
-
-  const isSplit = panes.length > 1;
+  const activeSessionIdRef = useRef(activeSessionId);
+  activeSessionIdRef.current = activeSessionId;
 
   useEffect(() => {
     setIsExpanded(externalIsExpanded);
@@ -90,22 +104,167 @@ const Terminal: React.FC<TerminalProps> = ({
     });
   }, [onToggleExpand]);
 
-  const clearAllPanes = useCallback(() => {
-    paneHandles.current.forEach(handle => handle?.clear());
+  const clearActivePane = useCallback(() => {
+    const handle = paneHandles.current.get(activeSessionIdRef.current);
+    handle?.clear();
   }, []);
 
-  const addSplitPane = useCallback(() => {
-    setPanes(prev => (prev.length >= 2 ? prev : [...prev, { id: newPaneId() }]));
+  // ── Session management ────────────────────────────────────────────────────
+
+  const newPaneId = useCallback(() => {
+    paneIdCounter.current += 1;
+    return `pane-${paneIdCounter.current}`;
   }, []);
 
-  const removePane = useCallback((id: string) => {
-    setPanes(prev => {
+  const addSession = useCallback(() => {
+    sessionCounterRef.current += 1;
+    const newSession: TerminalSession = {
+      id: newPaneId(),
+      name: `Session ${sessionCounterRef.current}`,
+    };
+    setSessions(prev => [...prev, newSession]);
+    setActiveSessionId(newSession.id);
+  }, [newPaneId]);
+
+  // Close secondary pane (called directly or when secondary session is closed)
+  const closeSecondaryPane = useCallback(() => {
+    secondarySessionIdRef.current = null;
+    setSecondarySessionId(null);
+    splitDirectionRef.current = 'none';
+    setSplitDirection('none');
+  }, []);
+
+  const closeSession = useCallback((id: string) => {
+    // If closing the secondary session's tab, unsplit as well
+    if (secondarySessionIdRef.current === id) {
+      secondarySessionIdRef.current = null;
+      setSecondarySessionId(null);
+      splitDirectionRef.current = 'none';
+      setSplitDirection('none');
+    }
+    setSessions(prev => {
       if (prev.length <= 1) return prev;
       paneHandles.current.delete(id);
-      return prev.filter(p => p.id !== id);
+      return prev.filter(s => s.id !== id);
     });
-    setSplitPosition(50);
+    setActiveSessionId(current => {
+      if (current !== id) return current;
+      const remaining = sessionsRef.current.filter(s => s.id !== id);
+      return remaining.length > 0 ? remaining[0].id : current;
+    });
   }, []);
+
+  const renameSession = useCallback((id: string, name: string) => {
+    setSessions(prev => prev.map(s => s.id === id ? { ...s, name } : s));
+  }, []);
+
+  const switchSession = useCallback((id: string) => {
+    setActiveSessionId(id);
+  }, []);
+
+  // ── Split management ──────────────────────────────────────────────────────
+
+  const toggleSplit = useCallback((direction: 'horizontal' | 'vertical') => {
+    const currentDir = splitDirectionRef.current;
+
+    if (currentDir === direction) {
+      // Unsplit: clear secondary session reference
+      secondarySessionIdRef.current = null;
+      setSecondarySessionId(null);
+      splitDirectionRef.current = 'none';
+      setSplitDirection('none');
+    } else {
+      // Entering or switching split mode — create a secondary session if needed
+      if (!secondarySessionIdRef.current) {
+        paneIdCounter.current += 1;
+        const newId = `pane-${paneIdCounter.current}`;
+        sessionCounterRef.current += 1;
+        const newSession: TerminalSession = {
+          id: newId,
+          name: `Session ${sessionCounterRef.current}`,
+        };
+        setSessions(s => [...s, newSession]);
+        secondarySessionIdRef.current = newId;
+        setSecondarySessionId(newId);
+      }
+      setSplitSizes([50, 50]);
+      splitDirectionRef.current = direction;
+      setSplitDirection(direction);
+    }
+  }, []);
+
+  // Listen for external terminal action events (from command palette / hotkeys)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ action: string }>).detail;
+      if (!detail?.action) return;
+      if (detail.action === 'split_horizontal') {
+        toggleSplit('horizontal');
+      } else if (detail.action === 'split_vertical') {
+        toggleSplit('vertical');
+      }
+    };
+    window.addEventListener('ledit:terminal-action', handler as EventListener);
+    return () => window.removeEventListener('ledit:terminal-action', handler as EventListener);
+  }, [toggleSplit]);
+
+  // ── Split divider drag ────────────────────────────────────────────────────
+
+  const handleSplitDividerDragStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      isDraggingSplit.current = true;
+      setIsResizingVertical(true); // disable transitions
+      splitDragStartPos.current = splitDirection === 'vertical' ? e.clientX : e.clientY;
+      splitDragStartSizes.current = [...splitSizes];
+
+      // Measure the panes container for accurate percentage calculation
+      const bodyEl = document.querySelector('.terminal-panes-container');
+      const bodyRect = bodyEl?.getBoundingClientRect();
+      const containerWidth = bodyRect?.width ?? window.innerWidth;
+      const containerHeight = bodyRect?.height ?? terminalHeight;
+
+      const onMove = (ev: MouseEvent) => {
+        if (!isDraggingSplit.current) return;
+        const currentPos = splitDirection === 'vertical' ? ev.clientX : ev.clientY;
+        const containerSize = splitDirection === 'vertical' ? containerWidth : containerHeight;
+        if (containerSize <= 0) return;
+
+        const deltaPx = currentPos - splitDragStartPos.current;
+        const startSizes = splitDragStartSizes.current;
+        // Convert pixel delta to relative change
+        const newFirst = startSizes[0] + (deltaPx / containerSize) * 100;
+        const clamped = Math.max(20, Math.min(80, newFirst));
+        setSplitSizes([clamped, 100 - clamped]);
+      };
+
+      const onUp = () => {
+        isDraggingSplit.current = false;
+        setIsResizingVertical(false);
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+      };
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = splitDirection === 'vertical' ? 'col-resize' : 'row-resize';
+    },
+    [splitDirection, splitSizes, terminalHeight],
+  );
+
+  // Compute inline style for a given pane index (0 = primary, 1 = secondary)
+  const splitStyleForPane = useCallback(
+    (paneIndex: number): React.CSSProperties => {
+      if (splitDirection === 'none') return {};
+      const property = splitDirection === 'vertical' ? 'width' : 'height';
+      const value = paneIndex === 0 ? `${splitSizes[0]}%` : `${splitSizes[1]}%`;
+      return { [property]: value, minWidth: 0, minHeight: 0 };
+    },
+    [splitDirection, splitSizes],
+  );
 
   // ── Vertical resize (terminal height) ──────────────────────────────────────
 
@@ -141,42 +300,6 @@ const Terminal: React.FC<TerminalProps> = ({
     [terminalHeight]
   );
 
-  // ── Horizontal split resize ─────────────────────────────────────────────────
-
-  const handleSplitResizeStart = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      isDraggingSplit.current = true;
-      setIsResizingSplit(true);
-      dragStartX.current = e.clientX;
-      dragStartSplit.current = splitPosition;
-      const containerWidth = splitContainerRef.current?.offsetWidth ?? window.innerWidth;
-
-      const onMove = (ev: MouseEvent) => {
-        if (!isDraggingSplit.current) return;
-        const delta = ev.clientX - dragStartX.current;
-        const deltaPercent = (delta / containerWidth) * 100;
-        const next = Math.max(20, Math.min(80, dragStartSplit.current + deltaPercent));
-        setSplitPosition(next);
-      };
-
-      const onUp = () => {
-        isDraggingSplit.current = false;
-        setIsResizingSplit(false);
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-        document.body.style.userSelect = '';
-        document.body.style.cursor = '';
-      };
-
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-      document.body.style.userSelect = 'none';
-      document.body.style.cursor = 'col-resize';
-    },
-    [splitPosition]
-  );
-
   useEffect(() => {
     if (!hasMountedRef.current) {
       hasMountedRef.current = true;
@@ -187,13 +310,15 @@ const Terminal: React.FC<TerminalProps> = ({
     }
   }, []);
 
+  const isSplitActive = splitDirection !== 'none';
+
   return (
     <div
       className={[
         'terminal-container',
         isExpanded ? 'expanded' : 'collapsed',
         hasMountedRef.current ? 'initial-mount' : '',
-        isResizingVertical || isResizingSplit ? 'resizing' : '',
+        isResizingVertical ? 'resizing' : '',
       ]
         .filter(Boolean)
         .join(' ')}
@@ -208,79 +333,109 @@ const Terminal: React.FC<TerminalProps> = ({
       )}
 
       {/* ── Header ── */}
-      <div className="terminal-header" onClick={toggleExpanded}>
-        <div className="terminal-title">
-          <span className="terminal-icon">$</span>
-          <span>Terminal</span>
-        </div>
-        <div className="terminal-controls" onClick={e => e.stopPropagation()}>
-          {isExpanded && !isSplit && (
+      <div className="terminal-header">
+        <div className="terminal-title-row" onClick={toggleExpanded}>
+          <div className="terminal-title">
+            <span className="terminal-icon">$</span>
+            <span>Terminal</span>
+          </div>
+          <div className="terminal-controls" onClick={e => e.stopPropagation()}>
             <button
-              className="terminal-btn split-btn"
-              onClick={addSplitPane}
-              title="Split terminal"
+              className="terminal-btn clear-btn"
+              onClick={clearActivePane}
+              title="Clear terminal"
             >
-              <SplitSquareHorizontal size={15} />
+              <Trash2 size={16} />
             </button>
-          )}
-          <button
-            className="terminal-btn clear-btn"
-            onClick={clearAllPanes}
-            title="Clear terminal"
-          >
-            <Trash2 size={16} />
-          </button>
-          <button
-            className="terminal-btn toggle-btn"
-            onClick={toggleExpanded}
-            title={isExpanded ? 'Collapse terminal' : 'Expand terminal'}
-          >
-            {isExpanded ? '▼' : '▲'}
-          </button>
+            <button
+              className={`terminal-btn split-btn ${splitDirection === 'vertical' ? 'split-btn-active' : ''}`}
+              onClick={() => toggleSplit('vertical')}
+              title={splitDirection === 'vertical' ? 'Unsplit terminal' : 'Split terminal vertically'}
+              aria-label={splitDirection === 'vertical' ? 'Unsplit terminal' : 'Split terminal vertically'}
+              aria-pressed={splitDirection === 'vertical'}
+            >
+              <Columns2 size={16} />
+            </button>
+            <button
+              className={`terminal-btn split-btn ${splitDirection === 'horizontal' ? 'split-btn-active' : ''}`}
+              onClick={() => toggleSplit('horizontal')}
+              title={splitDirection === 'horizontal' ? 'Unsplit terminal' : 'Split terminal horizontally'}
+              aria-label={splitDirection === 'horizontal' ? 'Unsplit terminal' : 'Split terminal horizontally'}
+              aria-pressed={splitDirection === 'horizontal'}
+            >
+              <Rows2 size={16} />
+            </button>
+            <button
+              className="terminal-btn toggle-btn"
+              onClick={toggleExpanded}
+              title={isExpanded ? 'Collapse terminal' : 'Expand terminal'}
+            >
+              {isExpanded ? '▼' : '▲'}
+            </button>
+          </div>
         </div>
+        {isExpanded && sessions.length > 0 && (
+          <TerminalTabBar
+            sessions={sessions}
+            activeSessionId={activeSessionId}
+            onSwitch={switchSession}
+            onCreate={addSession}
+            onClose={closeSession}
+            onRename={renameSession}
+          />
+        )}
       </div>
 
       {/* ── Body ── */}
       <div className="terminal-body">
-        <div
-          className={`terminal-panes-container${isSplit ? ' split' : ''}`}
-          ref={splitContainerRef}
-        >
-          {panes.map((pane, index) => (
-            <React.Fragment key={pane.id}>
-              <div
-                className="terminal-pane-wrapper"
-                style={
-                  isSplit
-                    ? { width: index === 0 ? `${splitPosition}%` : `${100 - splitPosition}%` }
-                    : undefined
-                }
-              >
-                <TerminalPane
-                  ref={handle => {
-                    if (handle) {
-                      paneHandles.current.set(pane.id, handle);
-                    } else {
-                      paneHandles.current.delete(pane.id);
-                    }
-                  }}
-                  isActive={hasActivated || isExpanded}
-                  isConnected={isConnected}
-                  showCloseButton={isSplit}
-                  onClose={() => removePane(pane.id)}
-                />
-              </div>
+        <div className={`terminal-panes-container ${isSplitActive ? `terminal-split-${splitDirection}` : ''}`}>
+          {/* Primary pane */}
+          {activeSessionId && (
+            <div className="terminal-pane-wrapper" style={splitStyleForPane(0)}>
+              <TerminalPane
+                key={activeSessionId}
+                ref={handle => {
+                  const id = activeSessionIdRef.current;
+                  if (handle) {
+                    paneHandles.current.set(id, handle);
+                  } else {
+                    paneHandles.current.delete(id);
+                  }
+                }}
+                isActive={hasActivated || isExpanded}
+                isConnected={isConnected}
+                showCloseButton={false}
+              />
+            </div>
+          )}
 
-              {/* Draggable divider between panes */}
-              {isSplit && index === 0 && (
-                <div
-                  className="terminal-split-divider"
-                  onMouseDown={handleSplitResizeStart}
-                  title="Drag to resize panes"
-                />
-              )}
-            </React.Fragment>
-          ))}
+          {/* Split divider */}
+          {isSplitActive && (
+            <div
+              className={`terminal-split-divider terminal-split-divider-${splitDirection}`}
+              onMouseDown={handleSplitDividerDragStart}
+            />
+          )}
+
+          {/* Secondary pane */}
+          {isSplitActive && secondarySessionId && (
+            <div className="terminal-pane-wrapper" style={splitStyleForPane(1)}>
+              <TerminalPane
+                key={secondarySessionId}
+                ref={handle => {
+                  if (handle) {
+                    paneHandles.current.set(secondarySessionId, handle);
+                  } else {
+                    paneHandles.current.delete(secondarySessionId);
+                  }
+                }}
+                isActive={hasActivated || isExpanded}
+                isConnected={isConnected}
+                showCloseButton={true}
+                onClose={closeSecondaryPane}
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -1765,11 +1765,6 @@ function App() {
     }
   }, []);
 
-  const handleTerminalOutput = useCallback((output: string) => {
-    // You could handle terminal output here if needed
-    debugLog('[term] Terminal output:', output);
-  }, []);
-
   const toggleSidebar = useCallback(() => {
     setIsSidebarOpen(prev => !prev);
   }, []);
@@ -1821,7 +1816,6 @@ function App() {
                 onGitStage={handleGitStage}
                 onGitUnstage={handleGitUnstage}
                 onGitDiscard={handleGitDiscard}
-                onTerminalOutput={handleTerminalOutput}
                 onTerminalExpandedChange={setIsTerminalExpanded}
                 isConnected={state.isConnected}
                 chatSessions={state.chatSessions}

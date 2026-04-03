@@ -2,29 +2,19 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { EditorBuffer, EditorPane, PaneLayout } from '../types/editor';
 import { writeFileWithConsent } from '../services/fileAccess';
 import { showThemedPrompt } from '../components/ThemedDialog';
+import {
+  saveLayoutSnapshot,
+  loadLayoutSnapshot,
+  initBeforeUnloadFlush,
+  dispose as disposeLayoutPersistence,
+  readStorageItem,
+  writeStorageItem,
+  type BufferLayoutEntry,
+  type LayoutSnapshot,
+} from '../services/layoutPersistence';
 
 const PANE_LAYOUT_STORAGE_KEY = 'ledit.editor.paneLayout';
 const PANE_SIZES_STORAGE_KEY = 'ledit.editor.paneSizes';
-
-/** Safely read a localStorage key, returning null on failure. */
-function readStorageItem(key: string): string | null {
-  try {
-    if (typeof window === 'undefined' || !window.localStorage) return null;
-    return window.localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-/** Safely write a localStorage key. */
-function writeStorageItem(key: string, value: string): void {
-  try {
-    if (typeof window === 'undefined' || !window.localStorage) return;
-    window.localStorage.setItem(key, value);
-  } catch {
-    // Ignore storage errors (private browsing, quota exceeded, etc.)
-  }
-}
 
 interface PaneSize {
   [paneId: string]: number; // Size in pixels or percentage
@@ -78,6 +68,7 @@ interface EditorManagerContextValue {
   updatePaneSize: (paneId: string, size: number) => void; // Update pane size
   setBufferLanguageOverride: (bufferId: string, languageId: string | null) => void;
   toggleLinkedScroll: () => void; // Toggle linked scrolling for split panes (fix: was consumed by EditorPane but missing from context)
+  restoreLayout: () => void; // Re-open file tabs from the persisted layout snapshot
 }
 
 const EditorManagerContext = createContext<EditorManagerContextValue | null>(null);
@@ -224,6 +215,13 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   useEffect(() => {
     activePaneIdRef.current = activePaneId;
   }, [activePaneId]);
+
+  // Keep a ref to the latest panes list for use in callbacks that don't
+  // directly depend on the panes state (e.g. restoreLayout).
+  const panesRef = useRef(panes);
+  useEffect(() => {
+    panesRef.current = panes;
+  }, [panes]);
 
   // Auto-sync layout to 'single' when panes are reduced to 1. This guards
   // against stale-closure bugs where closePane reads the old `panes.length`
@@ -1128,6 +1126,224 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     setIsLinkedScrollEnabled(prev => !prev);
   }, []);
 
+  // ---------------------------------------------------------------------------
+  // Layout persistence — restore
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Restore open-file tabs from the persisted layout snapshot.
+   *
+   * Reads the snapshot saved by `saveLayoutSnapshot`, builds new (empty)
+   * EditorBuffer objects for each recorded file path, and merges them into
+   * the existing buffers Map so the default chat buffer is preserved.
+   *
+   * Buffer content is intentionally NOT restored here; `EditorPane` takes care
+   * of fetching file content on mount and applying the saved cursor/scroll
+   * positions once loading completes.
+   */
+  const restoreLayout = useCallback(() => {
+    const snapshot = loadLayoutSnapshot();
+    if (!snapshot || snapshot.buffers.length === 0) return;
+
+    const currentPanes = panesRef.current;
+    const validPaneIds = new Set(currentPanes.map(p => p.id));
+
+    // Start from the existing buffers (always includes the chat buffer)
+    const existingBuffers = buffersRef.current;
+    const newBuffers = new Map(existingBuffers);
+
+    // Maps persisted file paths to their newly created buffer IDs.
+    const pathToBufferId = new Map<string, string>();
+
+    // Helper: create a file buffer from a persisted entry.
+    const createBuffer = (entry: BufferLayoutEntry, index: number): EditorBuffer | null => {
+      const filePath = entry.filePath;
+
+      // Skip virtual workspace buffers — the chat buffer is always created
+      // by the default initialiser above.
+      if (filePath.startsWith('__workspace/')) return null;
+
+      // Parse file metadata from the path
+      const name = filePath.split('/').pop() || filePath;
+      const dotIndex = name.lastIndexOf('.');
+      const ext = dotIndex > 0 ? name.substring(dotIndex + 1) : undefined;
+
+      // Only assign to panes that actually exist; fallback to 'pane-1'.
+      const paneId = validPaneIds.has(entry.paneId) ? entry.paneId : 'pane-1';
+
+      const bufferId = `buffer-file-${Date.now()}-${index}`;
+
+      pathToBufferId.set(filePath, bufferId);
+
+      return {
+        id: bufferId,
+        kind: 'file' as const,
+        file: {
+          name,
+          path: filePath,
+          isDir: false,
+          size: 0,
+          modified: 0,
+          ext,
+        },
+        content: '',
+        originalContent: '',
+        cursorPosition: entry.cursorPosition,
+        scrollPosition: entry.scrollPosition,
+        isModified: false,
+        isActive: entry.isActive,
+        paneId,
+      };
+    };
+
+    // Deduplicate entries by filePath.  The snapshot service already does this
+    // but we guard against future changes or hand-edited localStorage.
+    // Also skip files already present in existingBuffers (prevents duplicates
+    // on React StrictMode double-mount and when files are already open).
+    const seen = new Set<string>();
+    const existingPaths = new Set(
+      Array.from(newBuffers.values()).map(b => b.file.path),
+    );
+
+    // Process entries in bufferOrder so the Map insertion order reflects the
+    // original tab sequence (used by UI components that iterate the Map).
+    for (let orderIdx = 0; orderIdx < snapshot.bufferOrder.length; orderIdx++) {
+      const filePath = snapshot.bufferOrder[orderIdx];
+      if (seen.has(filePath)) continue;
+      if (existingPaths.has(filePath)) continue;
+      seen.add(filePath);
+
+      const entry = snapshot.buffers.find(b => b.filePath === filePath);
+      if (!entry) continue;
+
+      const buf = createBuffer(entry, orderIdx);
+      if (buf) newBuffers.set(buf.id, buf);
+    }
+
+    // Add any buffers present in `snapshot.buffers` but missing from
+    // `bufferOrder` (edge case from future extensions).
+    let fallbackIdx = snapshot.bufferOrder.length;
+    for (const entry of snapshot.buffers) {
+      if (seen.has(entry.filePath)) continue;
+      if (existingPaths.has(entry.filePath)) continue;
+      seen.add(entry.filePath);
+
+      const buf = createBuffer(entry, fallbackIdx++);
+      if (buf) newBuffers.set(buf.id, buf);
+    }
+
+    // Apply the new buffer map.
+    setBuffers(newBuffers);
+
+    // Update each pane's bufferId pointer to the active buffer for that pane.
+    // Without this, WorkspacePane/EditorPane resolve their buffer via
+    // pane.bufferId → buffers.get() and would still point at the initial
+    // chat buffer or null, ignoring the restored file buffers.
+    setPanes(prev => prev.map(pane => {
+      const activeBufForPane = Array.from(newBuffers.values())
+        .find(b => b.paneId === pane.id && b.isActive);
+      return {
+        ...pane,
+        bufferId: activeBufForPane?.id ?? pane.bufferId,
+      };
+    }));
+
+    // Restore the active pane if it still exists.
+    if (snapshot.activePaneId && validPaneIds.has(snapshot.activePaneId)) {
+      setActivePaneId(snapshot.activePaneId);
+    }
+
+    // Resolve and set the active buffer.
+    if (snapshot.activeBufferFilePath && pathToBufferId.has(snapshot.activeBufferFilePath)) {
+      setActiveBufferId(pathToBufferId.get(snapshot.activeBufferFilePath)!);
+    }
+  }, []);
+
+  // Auto-restore layout on first mount (after panes have been initialised from
+  // persisted layout data).
+  useEffect(() => {
+    restoreLayout();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // Layout persistence — save
+  // ---------------------------------------------------------------------------
+
+  // Register the beforeunload listener once so the debounced layout snapshot
+  // is synchronously flushed when the user closes or reloads the page.
+  useEffect(() => {
+    initBeforeUnloadFlush();
+  }, []);
+
+  // Ref that tracks whether the very first render cycle has completed so the
+  // save effect can skip the initial state (which would overwrite the snapshot
+  // with a bare chat buffer before restoreLayout has a chance to run).
+  const hasFirstRenderCompletedRef = useRef(false);
+
+  useEffect(() => {
+    // Skip the initial render — let restoreLayout populate buffers first.
+    if (!hasFirstRenderCompletedRef.current) {
+      hasFirstRenderCompletedRef.current = true;
+      return;
+    }
+
+    const currentPanes = panesRef.current;
+    const validPaneIds = new Set(currentPanes.map(p => p.id));
+
+    // Collect file-kind buffers only (chat/diff/review are ephemeral).
+    const fileBuffers = Array.from(buffers.entries())
+      .filter(([, b]) => b.kind === 'file' && !b.file.path.startsWith('__workspace/'));
+
+    if (fileBuffers.length === 0) {
+      saveLayoutSnapshot({
+        version: 1,
+        activePaneId,
+        activeBufferFilePath: null,
+        buffers: [],
+        bufferOrder: [],
+      });
+      return;
+    }
+
+    const activeBuffer = activeBufferId
+      ? buffers.get(activeBufferId)
+      : null;
+
+    const activeBufferFilePath =
+      (activeBuffer?.kind === 'file' && activeBuffer.file.path && !activeBuffer.file.path.startsWith('__workspace/'))
+        ? activeBuffer.file.path
+        : null;
+
+    const snapshotBuffers: BufferLayoutEntry[] = fileBuffers.map(([, b]) => ({
+      filePath: b.file.path,
+      paneId: (b.paneId && validPaneIds.has(b.paneId)) ? b.paneId : 'pane-1',
+      isActive: b.isActive,
+      cursorPosition: b.cursorPosition,
+      scrollPosition: b.scrollPosition,
+    }));
+
+    const snapshot: LayoutSnapshot = {
+      version: 1,
+      activePaneId,
+      activeBufferFilePath,
+      buffers: snapshotBuffers,
+      bufferOrder: snapshotBuffers.map(b => b.filePath),
+    };
+
+    saveLayoutSnapshot(snapshot);
+  }, [buffers, activePaneId, activeBufferId]);
+
+  // ---------------------------------------------------------------------------
+  // Layout persistence — cleanup
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    return () => {
+      disposeLayoutPersistence();
+    };
+  }, []);
+
   const value: EditorManagerContextValue = {
     buffers,
     panes,
@@ -1165,6 +1381,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     updatePaneSize,
     setBufferLanguageOverride,
     toggleLinkedScroll,
+    restoreLayout,
   };
 
   return (

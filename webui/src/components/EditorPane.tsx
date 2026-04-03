@@ -78,6 +78,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     buffers,
     updateBufferContent,
     updateBufferCursor,
+    updateBufferScroll,
     saveBuffer,
     setBufferModified,
     setBufferOriginalContent,
@@ -154,6 +155,33 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
             from: 0,
             to: viewRef.current.state.doc.length,
             insert: content
+          }
+        });
+      }
+
+      // Restore cursor position from buffer state (layout persistence).
+      // Line numbers are 1-based (matching CodeMirror's doc.line().number).
+      // Only restore if non-zero to avoid jarring jumps for files without
+      // saved positions.
+      if (buffer && viewRef.current && (buffer.cursorPosition.line > 0 || buffer.cursorPosition.column > 0)) {
+        const { line, column } = buffer.cursorPosition;
+        const doc = viewRef.current.state.doc;
+        const targetLine = Math.max(0, Math.min(line, doc.lines - 1));
+        const lineInfo = doc.line(targetLine + 1);
+        const pos = lineInfo.from + Math.min(column, lineInfo.length);
+        viewRef.current.dispatch({
+          selection: { anchor: pos },
+        });
+      }
+
+      // Restore scroll position from buffer state (layout persistence).
+      // Uses rAF so the DOM has rendered the new content before scrolling.
+      if (buffer && viewRef.current && (buffer.scrollPosition.top > 0 || buffer.scrollPosition.left > 0)) {
+        const { top, left } = buffer.scrollPosition;
+        requestAnimationFrame(() => {
+          if (viewRef.current) {
+            viewRef.current.scrollDOM.scrollTop = top;
+            viewRef.current.scrollDOM.scrollLeft = left;
           }
         });
       }
@@ -420,6 +448,14 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
           fetchDiagnostics(buffer.file.path, newContent);
         }
       }
+
+      // Track scroll position changes for layout persistence
+      if (buffer && update.viewportChanged) {
+        const scrollInfo = update.view.scrollDOM;
+        if (scrollInfo) {
+          updateBufferScroll(buffer.id, { top: scrollInfo.scrollTop, left: scrollInfo.scrollLeft });
+        }
+      }
     });
 
     const customKeymap = getEditorKeymap(hotkeys, {
@@ -608,7 +644,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       view.destroy();
       viewRef.current = null;
     };
-  }, [paneId, buffer?.id, buffer?.file?.ext, theme, themePack.id, hotkeys, customHighlightStyle, updateBufferContent, setBufferModified, updateBufferCursor]); // eslint-disable-line react-hooks/exhaustive-deps -- handleSave intentionally excluded to prevent infinite re-init loop when buffer changes
+  }, [paneId, buffer?.id, buffer?.file?.ext, theme, themePack.id, hotkeys, customHighlightStyle, updateBufferContent, setBufferModified, updateBufferCursor, updateBufferScroll]); // eslint-disable-line react-hooks/exhaustive-deps -- handleSave intentionally excluded to prevent infinite re-init loop when buffer changes
 
   // Reconfigure the language compartment when the language override changes,
   // without requiring a full editor re-initialization.

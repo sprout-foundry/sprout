@@ -118,6 +118,10 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
     }
   });
 
+  // ── Drag-and-drop state ────────────────────────────────────────────
+  const [draggedPath, setDraggedPath] = useState<string | null>(null);
+  const [dropTargetPath, setDropTargetPath] = useState<string | null>(null);
+
   const findFileByPath = useCallback((fileList: FileInfo[], targetPath: string): FileInfo | null => {
     for (const file of fileList) {
       if (file.path === targetPath) {
@@ -615,6 +619,138 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
     }
   };
 
+  // ── Drag-and-drop handlers ───────────────────────────────────────
+  const isDescendant = useCallback((filePath: string, dirPath: string): boolean => {
+    if (filePath === dirPath) return true; // self check
+    const filePathPrefix = filePath + '/';
+    return dirPath.startsWith(filePathPrefix);
+  }, []);
+
+  const getParentPath = useCallback((filePath: string): string => {
+    const segments = filePath.split('/').filter(Boolean);
+    segments.pop();
+    return segments.length > 0 ? segments.join('/') : rootPath;
+  }, [rootPath]);
+
+  const handleDragStart = useCallback((e: React.DragEvent, filePath: string) => {
+    // Don't allow drag while in draft mode (creating/renaming)
+    if (draft) return;
+    setDraggedPath(filePath);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('application/x-ledit-filepath', filePath);
+    // Set a minimal drag image for better UX
+    if (e.currentTarget instanceof HTMLElement) {
+      e.dataTransfer.setDragImage(e.currentTarget, 0, 0);
+    }
+  }, [draft]);
+
+  const handleDragEnd = useCallback(() => {
+    setDraggedPath(null);
+    setDropTargetPath(null);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent, filePath: string, file: FileInfo) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!draggedPath) return;
+
+    // Only directories are valid drop targets
+    if (!file.isDir) return;
+
+    // Can't drop onto self or descendants
+    if (isDescendant(draggedPath, filePath)) {
+      setDropTargetPath(null);
+      e.dataTransfer.dropEffect = 'none';
+      return;
+    }
+
+    // Can't drop into same parent (no-op)
+    const currentParent = getParentPath(draggedPath);
+    if (currentParent === filePath) {
+      setDropTargetPath(null);
+      e.dataTransfer.dropEffect = 'none';
+      return;
+    }
+
+    setDropTargetPath(filePath);
+    e.dataTransfer.dropEffect = 'move';
+  }, [draggedPath, isDescendant, getParentPath]);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    // Only clear if we're truly leaving this element (not entering a child)
+    const relatedTarget = e.relatedTarget as Node | null;
+    if (relatedTarget && e.currentTarget.contains(relatedTarget)) {
+      return;
+    }
+    setDropTargetPath(null);
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent, targetDirPath: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDropTargetPath(null);
+
+    const sourcePath = draggedPath || e.dataTransfer.getData('application/x-ledit-filepath');
+    if (!sourcePath) return;
+    if (sourcePath === targetDirPath) return;
+    setDraggedPath(null);
+
+    // Validate: target must be a directory
+    const targetDir = findFileByPath(filesRef.current, targetDirPath);
+    if (!targetDir?.isDir) return;
+
+    // Validate: not dropping onto self or descendant
+    if (isDescendant(sourcePath, targetDirPath)) return;
+
+    // Validate: not same parent (no-op)
+    const currentParent = getParentPath(sourcePath);
+    if (currentParent === targetDirPath) return;
+
+    // Check for name conflict in target directory
+    const sourceName = sourcePath.split('/').pop() || '';
+    const existingChild = targetDir.children?.find(
+      (child) => child.name === sourceName && child.path !== sourcePath
+    );
+
+    if (existingChild) {
+      const confirmed = await showThemedConfirm(
+        `"${sourceName}" already exists in "${targetDir.name}".\n\nReplace it? This cannot be undone.`,
+        { title: 'Confirm Replace', type: 'danger' }
+      );
+      if (!confirmed) return;
+    }
+
+    // Build new path
+    const targetPrefix = targetDirPath === rootPath ? '' : `${targetDirPath}/`;
+    const newPath = `${targetPrefix}${sourceName}`;
+
+    // Execute the move (rename)
+    try {
+      setLoading(true);
+      await apiService.renameItem(sourcePath, newPath);
+
+      // Expand target directory
+      setExpandedDirs((prev) => {
+        const next = new Set(prev);
+        if (targetDirPath !== rootPath) {
+          next.add(targetDirPath);
+        }
+        return next;
+      });
+
+      await refreshTree();
+
+      // Select the moved item at its new location
+      setInternalSelectedFile(newPath);
+      onItemCreated?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to move item');
+    } finally {
+      setLoading(false);
+    }
+  }, [draggedPath, findFileByPath, isDescendant, getParentPath, apiService, rootPath, refreshTree, onItemCreated]);
+
   const renderDraftRow = (parentPath: string, depth: number): JSX.Element | null => {
     if (!draft || draft.mode === 'rename' || draft.parentPath !== parentPath) {
       return null;
@@ -679,11 +815,17 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
       return (
         <React.Fragment key={file.path}>
           <div
-            className={`file-tree-item ${file.isDir ? 'directory' : 'file'} ${isSelected ? 'selected' : ''}${file.gitStatus ? ` git-${file.gitStatus}` : ''}`}
+            className={`file-tree-item ${file.isDir ? 'directory' : 'file'} ${isSelected ? 'selected' : ''}${file.gitStatus ? ` git-${file.gitStatus}` : ''}${dropTargetPath === file.path ? ' drop-target' : ''}${draggedPath === file.path ? ' dragging' : ''}`}
             style={{ paddingLeft: `${depth * 16 + 8}px` }}
             data-ext={file.ext || ''}
             data-git-status={file.gitStatus || ''}
+            draggable={!draft}
             onClick={() => handleClick(file)}
+            onDragStart={(event) => handleDragStart(event, file.path)}
+            onDragEnd={handleDragEnd}
+            onDragOver={(event) => handleDragOver(event, file.path, file)}
+            onDragLeave={handleDragLeave}
+            onDrop={(event) => handleDrop(event, file.path)}
             onContextMenu={(event) => {
               event.preventDefault();
               event.stopPropagation();

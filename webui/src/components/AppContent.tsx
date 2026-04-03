@@ -621,6 +621,9 @@ const AppContent: React.FC<AppContentProps> = ({
         case 'split_editor_horizontal':
           handleSplitRequest('horizontal');
           break;
+        case 'editor_toggle_word_wrap':
+          document.dispatchEvent(new CustomEvent('editor-toggle-word-wrap'));
+          break;
       }
     };
     

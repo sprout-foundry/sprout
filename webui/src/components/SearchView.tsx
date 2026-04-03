@@ -1,5 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { ApiService } from '../services/api';
+import { copyToClipboard } from '../utils/clipboard';
 import {
   Search,
   Replace,
@@ -9,6 +11,10 @@ import {
   AlertCircle,
   Loader2,
   ChevronRight,
+  Copy,
+  FileText,
+  FolderOpen,
+  Ban,
 } from 'lucide-react';
 import './SearchView.css';
 
@@ -31,6 +37,16 @@ interface SearchViewProps {
   onFileClick?: (filePath: string, lineNumber?: number) => void;
 }
 
+interface SearchContextMenuState {
+  visible: boolean;
+  x: number;
+  y: number;
+  filePath: string;
+  lineNumber?: number;
+  matchText?: string;
+  isFileHeader: boolean;
+}
+
 const DEBOUNCE_DELAY = 300;
 
 const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
@@ -48,15 +64,61 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
   const [showReplace, setShowReplace] = useState(false);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const [replaceStatus, setReplaceStatus] = useState<string | null>(null);
+  const [excludePatterns, setExcludePatterns] = useState('');
+
+  const [contextMenu, setContextMenu] = useState<SearchContextMenuState>({
+    visible: false,
+    x: 0,
+    y: 0,
+    filePath: '',
+    isFileHeader: false,
+  });
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
   const apiService = ApiService.getInstance();
 
   // Focus search input on mount
   useEffect(() => {
     searchInputRef.current?.focus();
   }, []);
+
+  // Close context menu on click outside, scroll, or Escape
+  useEffect(() => {
+    if (!contextMenu.visible) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+        setContextMenu((prev) => ({ ...prev, visible: false }));
+      }
+    };
+
+    const handleScroll = () => {
+      setContextMenu((prev) => ({ ...prev, visible: false }));
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setContextMenu((prev) => ({ ...prev, visible: false }));
+      }
+    };
+
+    const handleContextMenuOutside = () => {
+      setContextMenu((prev) => ({ ...prev, visible: false }));
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('scroll', handleScroll, true);
+    document.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('contextmenu', handleContextMenuOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', handleScroll, true);
+      document.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('contextmenu', handleContextMenuOutside);
+    };
+  }, [contextMenu.visible]);
 
   // Debounced search function
   const performSearch = useCallback(async (query: string) => {
@@ -78,6 +140,7 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
         case_sensitive: caseSensitive,
         whole_word: wholeWord,
         regex: useRegex,
+        exclude: excludePatterns || undefined,
       });
 
       setResults(response.results || []);
@@ -96,7 +159,7 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
     } finally {
       setIsSearching(false);
     }
-  }, [caseSensitive, wholeWord, useRegex, apiService]);
+  }, [caseSensitive, wholeWord, useRegex, excludePatterns, apiService]);
 
   // Debounced search trigger
   useEffect(() => {
@@ -157,7 +220,7 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
       return;
     }
 
-    if (!results || results.length === 0) {
+    if (!filteredResults || filteredResults.length === 0) {
       return;
     }
 
@@ -166,7 +229,7 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
     setError(null);
 
     try {
-      const allFilePaths = results.map(r => r.file);
+      const allFilePaths = filteredResults.map(r => r.file);
 
       const response = await apiService.searchReplace({
         search: searchQuery,
@@ -211,6 +274,7 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
   // Clear search
   const handleClear = useCallback(() => {
     setSearchQuery('');
+    setExcludePatterns('');
     setResults(null);
     setTotalMatches(0);
     setTotalFiles(0);
@@ -258,6 +322,142 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
   const getRelativePath = (path: string): string => {
     return path.startsWith('./') ? path.slice(2) : path;
   };
+
+  // Get parent directory path for excluding
+  const getParentDirectory = (filePath: string): string => {
+    const relative = getRelativePath(filePath);
+    const lastSlash = relative.lastIndexOf('/');
+    if (lastSlash === -1) {
+      // File is at root, exclude it directly
+      return relative;
+    }
+    return relative.substring(0, lastSlash + 1);
+  };
+
+  // ── Context menu handlers ──────────────────────────────────
+
+  const handleRowContextMenu = useCallback((e: React.MouseEvent, filePath: string, lineNumber: number, lineText: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({
+      visible: true,
+      x: e.clientX,
+      y: e.clientY,
+      filePath,
+      lineNumber,
+      matchText: lineText,
+      isFileHeader: false,
+    });
+  }, []);
+
+  const handleFileHeaderContextMenu = useCallback((e: React.MouseEvent, filePath: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({
+      visible: true,
+      x: e.clientX,
+      y: e.clientY,
+      filePath,
+      isFileHeader: true,
+    });
+  }, []);
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(prev => ({ ...prev, visible: false }));
+  }, []);
+
+  // Context menu action handlers
+  const handleCopyMatchText = useCallback(() => {
+    if (contextMenu.matchText !== undefined) {
+      copyToClipboard(contextMenu.matchText);
+    }
+    closeContextMenu();
+  }, [contextMenu.matchText, closeContextMenu]);
+
+  const handleOpenInEditor = useCallback(() => {
+    handleFileClick(contextMenu.filePath, contextMenu.lineNumber);
+    closeContextMenu();
+  }, [contextMenu.filePath, contextMenu.lineNumber, handleFileClick, closeContextMenu]);
+
+  const handleCopyFilePath = useCallback(() => {
+    copyToClipboard(getRelativePath(contextMenu.filePath));
+    closeContextMenu();
+  }, [contextMenu.filePath, closeContextMenu]);
+
+  const handleExcludeFromSearch = useCallback(() => {
+    let patternToExclude: string;
+    if (contextMenu.isFileHeader) {
+      // Exclude the file itself
+      patternToExclude = getRelativePath(contextMenu.filePath);
+    } else {
+      // Exclude the parent directory
+      patternToExclude = getParentDirectory(contextMenu.filePath);
+    }
+
+    // Check if pattern already exists in the exclude list
+    const existingPatterns = excludePatterns
+      .split(',')
+      .map(p => p.trim())
+      .filter(p => p.length > 0);
+
+    if (!existingPatterns.includes(patternToExclude)) {
+      const newExclude = existingPatterns.length > 0
+        ? `${excludePatterns},${patternToExclude}`
+        : patternToExclude;
+      setExcludePatterns(newExclude);
+    }
+
+    closeContextMenu();
+  }, [contextMenu, excludePatterns, closeContextMenu]);
+
+  // Determine the label for the exclude action
+  const getExcludeLabel = (): string => {
+    if (contextMenu.isFileHeader) {
+      return getRelativePath(contextMenu.filePath);
+    }
+    return getParentDirectory(contextMenu.filePath);
+  };
+
+  const isAlreadyExcluded = (): boolean => {
+    const pattern = contextMenu.isFileHeader
+      ? getRelativePath(contextMenu.filePath)
+      : getParentDirectory(contextMenu.filePath);
+    const existing = excludePatterns
+      .split(',')
+      .map(p => p.trim())
+      .filter(p => p.length > 0);
+    return existing.includes(pattern);
+  };
+
+  // Filter results based on exclude patterns
+  const filteredResults = React.useMemo(() => {
+    if (!results || !excludePatterns.trim()) return results;
+
+    const patterns = excludePatterns
+      .split(',')
+      .map(p => p.trim())
+      .filter(p => p.length > 0);
+
+    if (patterns.length === 0) return results;
+
+    return results.filter(result => {
+      const relativePath = getRelativePath(result.file);
+      return !patterns.some(pattern => {
+        // Check if the file path starts with the exclude pattern
+        if (pattern.endsWith('/')) {
+          return relativePath.startsWith(pattern) || relativePath.startsWith('./' + pattern);
+        }
+        return relativePath === pattern || relativePath === './' + pattern;
+      });
+    });
+  }, [results, excludePatterns]);
+
+  // Compute displayed counts from filtered results (accurate even when client-side filtering is active)
+  const displayMatches = React.useMemo(() =>
+    filteredResults?.reduce((sum, r) => sum + r.match_count, 0) ?? 0,
+    [filteredResults]
+  );
+  const displayFiles = filteredResults?.length ?? 0;
 
   return (
     <div className="search-view">
@@ -315,6 +515,22 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
         </button>
       </div>
 
+      {/* Exclude patterns indicator */}
+      {excludePatterns && (
+        <div className="search-exclude-indicator">
+          <span className="search-exclude-label">Excluding:</span>
+          <span className="search-exclude-patterns">{excludePatterns}</span>
+          <button
+            className="search-exclude-clear"
+            onClick={() => setExcludePatterns('')}
+            title="Clear excludes"
+            aria-label="Clear excludes"
+          >
+            <X size={12} />
+          </button>
+        </div>
+      )}
+
       {/* Replace row */}
       {showReplace && (
         <div className="search-replace-row">
@@ -331,7 +547,7 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
           <button
             className="search-replace-btn"
             onClick={handleReplace}
-            disabled={isSearching || !searchQuery.trim() || !replaceQuery.trim() || !results || results.length === 0}
+            disabled={isSearching || !searchQuery.trim() || !replaceQuery.trim() || !filteredResults || filteredResults.length === 0}
             title="Replace all in matched files"
           >
             {isSearching ? <Loader2 size={16} className="spinning" /> : <Replace size={16} />}
@@ -354,10 +570,10 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
       </button>
 
       {/* Search stats */}
-      {results && (
+      {filteredResults && (
         <div className="search-stats">
-          {totalMatches} {totalMatches === 1 ? 'match' : 'matches'} in{' '}
-          {totalFiles} {totalFiles === 1 ? 'file' : 'files'}
+          {displayMatches} {displayMatches === 1 ? 'match' : 'matches'} in{' '}
+          {displayFiles} {displayFiles === 1 ? 'file' : 'files'}
           {truncated && ' (truncated)'}
         </div>
       )}
@@ -378,14 +594,14 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
           </div>
         )}
 
-        {results && results.length === 0 && !isSearching && !error && (
+        {filteredResults && filteredResults.length === 0 && !isSearching && !error && (
           <div className="search-no-results">
             <Search size={24} />
             <span>No results found</span>
           </div>
         )}
 
-        {results && results.map((result) => {
+        {filteredResults && filteredResults.map((result) => {
           const isExpanded = expandedFiles.has(result.file);
           const relativePath = getRelativePath(result.file);
 
@@ -394,6 +610,7 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
               <div
                 className="search-file-header"
                 onClick={() => toggleFile(result.file)}
+                onContextMenu={(e) => handleFileHeaderContextMenu(e, result.file)}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
@@ -416,31 +633,36 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
                 <div className="search-file-matches">
                   {result.matches.map((match, idx) => (
                     <div key={idx} className="search-match">
-                      {match.context_before.map((ctx, i) => (
-                        <div
-                          key={`before-${i}`}
-                          className="search-match-row search-match-row--context search-match-row--clickable"
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => handleFileClick(result.file, match.line_number - (match.context_before.length - i))}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              handleFileClick(result.file, match.line_number - (match.context_before.length - i));
-                            }
-                          }}
-                        >
-                          <span className="search-match-line-number">
-                            {match.line_number - (match.context_before.length - i)}
-                          </span>
-                          <div className="search-match-line">{ctx}</div>
-                        </div>
-                      ))}
+                      {match.context_before.map((ctx, i) => {
+                        const contextLineNumber = match.line_number - (match.context_before.length - i);
+                        return (
+                          <div
+                            key={`before-${i}`}
+                            className="search-match-row search-match-row--context search-match-row--clickable"
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => handleFileClick(result.file, contextLineNumber)}
+                            onContextMenu={(e) => handleRowContextMenu(e, result.file, contextLineNumber, ctx)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                handleFileClick(result.file, contextLineNumber);
+                              }
+                            }}
+                          >
+                            <span className="search-match-line-number">
+                              {contextLineNumber}
+                            </span>
+                            <div className="search-match-line">{ctx}</div>
+                          </div>
+                        );
+                      })}
                       <div
                         className="search-match-row search-match-row--hit search-match-row--clickable"
                         role="button"
                         tabIndex={0}
                         onClick={() => handleFileClick(result.file, match.line_number)}
+                        onContextMenu={(e) => handleRowContextMenu(e, result.file, match.line_number, match.line)}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault();
@@ -455,26 +677,30 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
                           {highlightMatch(match.line, match.column_start, match.column_end)}
                         </div>
                       </div>
-                      {match.context_after.map((ctx, i) => (
-                        <div
-                          key={`after-${i}`}
-                          className="search-match-row search-match-row--context search-match-row--clickable"
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => handleFileClick(result.file, match.line_number + i + 1)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              handleFileClick(result.file, match.line_number + i + 1);
-                            }
-                          }}
-                        >
-                          <span className="search-match-line-number">
-                            {match.line_number + i + 1}
-                          </span>
-                          <div className="search-match-line">{ctx}</div>
-                        </div>
-                      ))}
+                      {match.context_after.map((ctx, i) => {
+                        const afterLineNumber = match.line_number + i + 1;
+                        return (
+                          <div
+                            key={`after-${i}`}
+                            className="search-match-row search-match-row--context search-match-row--clickable"
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => handleFileClick(result.file, afterLineNumber)}
+                            onContextMenu={(e) => handleRowContextMenu(e, result.file, afterLineNumber, ctx)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                handleFileClick(result.file, afterLineNumber);
+                              }
+                            }}
+                          >
+                            <span className="search-match-line-number">
+                              {afterLineNumber}
+                            </span>
+                            <div className="search-match-line">{ctx}</div>
+                          </div>
+                        );
+                      })}
                     </div>
                   ))}
                 </div>
@@ -483,6 +709,65 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
           );
         })}
       </div>
+
+      {/* Context menu portal */}
+      {contextMenu.visible &&
+        createPortal(
+          <div
+            ref={contextMenuRef}
+            className="search-context-menu"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {!contextMenu.isFileHeader && (
+              <>
+                <button
+                  className="search-context-item"
+                  onClick={handleCopyMatchText}
+                  type="button"
+                >
+                  <Copy size={13} />
+                  <span className="search-context-item-label">Copy line text</span>
+                </button>
+                <button
+                  className="search-context-item"
+                  onClick={handleOpenInEditor}
+                  type="button"
+                >
+                  <FileText size={13} />
+                  <span className="search-context-item-label">Open in editor</span>
+                </button>
+                <div className="search-context-separator" />
+              </>
+            )}
+            <button
+              className="search-context-item"
+              onClick={handleCopyFilePath}
+              type="button"
+            >
+              <FileText size={13} />
+              <span className="search-context-item-label">Copy file path</span>
+            </button>
+            <div className="search-context-separator" />
+            <button
+              className={`search-context-item ${isAlreadyExcluded() ? 'disabled' : ''}`}
+              onClick={handleExcludeFromSearch}
+              type="button"
+              disabled={isAlreadyExcluded()}
+            >
+              {contextMenu.isFileHeader ? <Ban size={13} /> : <FolderOpen size={13} />}
+              <div className="search-context-item-content">
+                <span className="search-context-item-label">
+                  {contextMenu.isFileHeader ? 'Exclude file from search' : 'Exclude folder from search'}
+                </span>
+                <span className="search-context-item-sub">
+                  {getExcludeLabel()}
+                </span>
+              </div>
+            </button>
+          </div>,
+          document.body
+        )}
     </div>
   );
 };

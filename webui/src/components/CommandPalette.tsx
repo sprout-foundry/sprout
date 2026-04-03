@@ -9,7 +9,6 @@ interface CommandPaletteProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenFile: (filePath: string) => void;
-  onViewChange: (view: 'chat' | 'editor' | 'git') => void;
   onToggleSidebar: () => void;
   onToggleTerminal: () => void;
   onOpenHotkeysConfig: () => void;
@@ -91,7 +90,6 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
   isOpen,
   onClose,
   onOpenFile,
-  onViewChange,
   onToggleSidebar,
   onToggleTerminal,
   onOpenHotkeysConfig,
@@ -315,13 +313,9 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
         window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'new_file' } }));
         break;
       case 'switch_to_chat':
-        onViewChange('chat');
-        break;
       case 'switch_to_editor':
-        onViewChange('editor');
-        break;
       case 'switch_to_git':
-        onViewChange('git');
+        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: commandId } }));
         break;
       case 'open_hotkeys_config':
         onOpenHotkeysConfig();
@@ -360,7 +354,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
         break;
     }
     onClose();
-  }, [onClose, onViewChange, onToggleSidebar, onToggleTerminal, onOpenHotkeysConfig]);
+  }, [onClose, onToggleSidebar, onToggleTerminal, onOpenHotkeysConfig]);
 
   // ── Select & execute the currently selected item ──────────────────────
 

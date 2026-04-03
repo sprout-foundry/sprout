@@ -104,7 +104,8 @@
 [x] - EDITOR: Add breadcrumb navigation bar — no breadcrumb row showing file path or symbol context above the editor. (duplicate — resolved)
 [x] - EDITOR: Add linked scrolling for split panes — when the same file is open in multiple panes, there is no option to sync scroll positions.
 [x] - EDITOR: Add linked scrolling for split panes — when the same file is open in multiple panes, there is no option to sync scroll positions.
-[] - EDITOR: Add minimap — no minimap extension. Requires `@codemirror/minimap` or a custom implementation.
+[x] - EDITOR: Add minimap — no minimap extension. Requires `@codemirror/minimap` or a custom implementation.
+[x] - EDITOR: Add minimap — no minimap extension. Requires `@codemirror/minimap` or a custom implementation.
 [] - EDITOR: Add snippet support (expand `for`, `ifn`, etc. with tab-stop navigation through placeholders).
 [] - EDITOR: Add bracket colorization — no distinct colors for nested bracket pairs (only matching-bracket highlight exists).
 [] - EDITOR: Implement `'split-grid'` layout type — defined in `PaneLayout` type but not rendered in the layout logic in AppContent.

@@ -637,6 +637,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   // inside the CodeMirror keymap and event-listener callbacks.
   const wordWrapRef = useRef(wordWrapEnabled);
   const lastWrapToggleRef = useRef(0);
+  const minimapEnabledRef = useRef(minimapEnabled);
   const onToggleWordWrap = useCallback(() => {
     const now = Date.now();
     if (now - lastWrapToggleRef.current < 100) return; // dedup: prevent double-toggle from global handler
@@ -654,8 +655,13 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   // Toggle minimap: updates React state (for toolbar button) and
   // dispatches a CodeMirror compartment reconfigure to enable/disable
   // the minimap gutter extension.
+  const lastMinimapToggleRef = useRef(0);
   const onToggleMinimap = useCallback(() => {
-    const next = !minimapEnabled;
+    const now = Date.now();
+    if (now - lastMinimapToggleRef.current < 100) return; // dedup
+    lastMinimapToggleRef.current = now;
+    const next = !minimapEnabledRef.current;
+    minimapEnabledRef.current = next;
     setMinimapEnabled(next);
     try {
       localStorage.setItem('editor:minimap-enabled', String(next));
@@ -667,13 +673,17 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         next ? minimapExtension() : []
       ),
     });
-  }, [minimapEnabled]);
+  }, []);
 
   // Keep the ref mirror in sync whenever the state value changes from
   // an external source (e.g. the global event listener).
   useEffect(() => {
     wordWrapRef.current = wordWrapEnabled;
   }, [wordWrapEnabled]);
+
+  useEffect(() => {
+    minimapEnabledRef.current = minimapEnabled;
+  }, [minimapEnabled]);
 
   // Keep module-level linked scroll state in sync with context.
   useEffect(() => {
@@ -695,18 +705,22 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         onToggleWordWrap();
       } else if (e.type === 'editor-toggle-linked-scroll') {
         toggleLinkedScroll();
+      } else if (e.type === 'editor-toggle-minimap') {
+        onToggleMinimap();
       }
     };
 
     document.addEventListener('editor-goto-line', handler);
     document.addEventListener('editor-toggle-word-wrap', handler);
     document.addEventListener('editor-toggle-linked-scroll', handler);
+    document.addEventListener('editor-toggle-minimap', handler);
     return () => {
       document.removeEventListener('editor-goto-line', handler);
       document.removeEventListener('editor-toggle-word-wrap', handler);
       document.removeEventListener('editor-toggle-linked-scroll', handler);
+      document.removeEventListener('editor-toggle-minimap', handler);
     };
-  }, [handleGoToLine, onToggleWordWrap, toggleLinkedScroll]);
+  }, [handleGoToLine, onToggleMinimap, onToggleWordWrap, toggleLinkedScroll]);
 
   // Listen for scroll sync events from other panes (linked scrolling).
   useEffect(() => {
@@ -904,7 +918,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
               title: minimapEnabled ? 'Hide minimap' : 'Show minimap',
               icon: <PanelRightClose size={16} />,
               active: minimapEnabled,
-              onClick: onToggleMinimap,
+              onClick: () => document.dispatchEvent(new CustomEvent('editor-toggle-minimap')),
             },
             ...(isSvgFile ? [
               {

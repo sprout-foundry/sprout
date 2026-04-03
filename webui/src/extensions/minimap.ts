@@ -29,6 +29,18 @@ const minimapBaseTheme = EditorView.baseTheme({
   },
 });
 
+// ── Stable config (hoisted to avoid re-creation on every doc change) ──
+
+const minimapConfig = {
+  create: (view: EditorView) => {
+    const dom = document.createElement('div');
+    dom.className = 'cm-minimap-container';
+    return { dom };
+  },
+  displayText: 'blocks' as const,
+  showOverlay: 'always' as const,
+};
+
 // ── Public API ──────────────────────────────────────────────────────
 
 /**
@@ -45,14 +57,6 @@ const minimapBaseTheme = EditorView.baseTheme({
 export function minimapExtension() {
   return [
     minimapBaseTheme,
-    showMinimap.compute(['doc'], (_state) => ({
-      create: (view: EditorView) => {
-        const dom = document.createElement('div');
-        dom.className = 'cm-minimap-container';
-        return { dom };
-      },
-      displayText: 'blocks',
-      showOverlay: 'always',
-    })),
+    showMinimap.compute(['doc'], () => minimapConfig),
   ];
 }

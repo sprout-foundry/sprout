@@ -263,6 +263,8 @@ const EDITOR_COMMAND_IDS = new Set([
   'split_editor_horizontal',
   'editor_insert_cursor_above',
   'editor_insert_cursor_below',
+  'toggle_linked_scroll',
+  'toggle_minimap',
 ]);
 
 // ── Public API ──────────────────────────────────────────────────────
@@ -473,6 +475,24 @@ export function getEditorKeymap(
   // No fallback: only bound when explicitly configured to avoid
   // conflicts with Alt+ArrowDown (move line down).
   bindings.push(...bindingsFor('editor_insert_cursor_below', (v) => insertCursorBelow(v)));
+
+  // Toggle linked scrolling for split panes showing the same file.
+  // No default key binding — users must explicitly configure one.
+  bindings.push(...bindingsFor('toggle_linked_scroll', () => {
+    window.dispatchEvent(new CustomEvent('ledit:hotkey', {
+      detail: { commandId: 'toggle_linked_scroll' },
+    }));
+    return true;
+  }));
+
+  // Toggle minimap visibility in the editor gutter.
+  // No default key binding — users must explicitly configure one.
+  bindings.push(...bindingsFor('toggle_minimap', () => {
+    window.dispatchEvent(new CustomEvent('ledit:hotkey', {
+      detail: { commandId: 'toggle_minimap' },
+    }));
+    return true;
+  }));
 
   return bindings;
 }

@@ -114,7 +114,7 @@
 
 [x] - TERMINAL: Add terminal tabs to support 3+ terminal sessions — currently the model is binary (0 or 2 side-by-side panes). Need a tab bar with named sessions and add/remove cycle.
 [x] - TERMINAL: Add vertical terminal split option — implemented with Columns2/Rows2 buttons, hotkeys (Ctrl+Shift+5 / Ctrl+Alt+5), command palette entries, and full CSS layout support.
-[] - TERMINAL: Persist terminal height to `localStorage` — always resets to 400px on mount. Sidebar and context panel widths are already persisted; terminal height should be too.
+[x] - TERMINAL: Persist terminal height to `localStorage` — always resets to 400px on mount. Sidebar and context panel widths are already persisted; terminal height should be too.
 [] - TERMINAL: Allow user to choose shell profile for new terminal instances (e.g., bash, zsh, fish).
 [] - FILE TREE: Add search/filter input to the file tree — currently there is no way to filter or fuzzy-find within the file tree (the command palette does project-wide file search, but not the tree itself).
 [] - FILE TREE: Add `.gitignore`-aware toggle — currently ignored files are sorted to the bottom but always visible. Add a toggle to hide them.

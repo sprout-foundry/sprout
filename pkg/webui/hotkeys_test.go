@@ -234,6 +234,26 @@ func TestHotkeyPresetConfigs(t *testing.T) {
 				}
 			}
 
+			// VS Code / Ledit presets also include Ctrl+D for next-match
+			// selection (WebStorm uses Ctrl+D for duplicate-line-down instead).
+			if preset != "webstorm" {
+				vscodeEditorCmds := []string{
+					"editor_add_selection_to_next_match",
+				}
+				for _, cmd := range vscodeEditorCmds {
+					found := false
+					for _, h := range config.Hotkeys {
+						if h.CommandID == cmd {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Errorf("Preset %q missing editor command_id %q", preset, cmd)
+					}
+				}
+			}
+
 			// Regression guard: Ctrl+D/Cmd+D must NOT be bound to
 			// editor_delete_line in vscode or ledit presets.  CodeMirror's
 			// searchKeymap already provides Mod-d → selectNextOccurrence and

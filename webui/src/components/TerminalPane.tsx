@@ -6,12 +6,14 @@ import React, {
   useImperativeHandle,
   forwardRef,
 } from 'react';
-import { X, TriangleAlert } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { X, TriangleAlert, Copy, ClipboardPaste, Trash2, TextSelect, Link2 } from 'lucide-react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { TerminalWebSocketService } from '../services/terminalWebSocket';
 import { useTheme } from '../contexts/ThemeContext';
+import { copyToClipboard } from '../utils/clipboard';
 
 export interface TerminalPaneHandle {
   clear: () => void;
@@ -31,10 +33,27 @@ interface TerminalPaneProps {
   onConnectionChange?: (connected: boolean) => void;
 }
 
+interface TerminalContextMenuState {
+  visible: boolean;
+  x: number;
+  y: number;
+  hasSelection: boolean;
+  hasLink: boolean;
+  linkUrl: string;
+}
+
 const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
   ({ isActive, isConnected = true, showCloseButton, onClose, onConnectionChange }, ref) => {
     const { themePack } = useTheme();
     const [paneConnected, setPaneConnected] = useState(false);
+    const [contextMenu, setContextMenu] = useState<TerminalContextMenuState>({
+      visible: false,
+      x: 0,
+      y: 0,
+      hasSelection: false,
+      hasLink: false,
+      linkUrl: '',
+    });
 
     const paneWrapperRef = useRef<HTMLDivElement>(null);
     const xtermContainerRef = useRef<HTMLDivElement>(null);
@@ -43,6 +62,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     const terminalWSRef = useRef<TerminalWebSocketService | null>(null);
     const eventHandlerRef = useRef<((event: any) => void) | null>(null);
     const resizeTimerRef = useRef<number | null>(null);
+    const contextMenuRef = useRef<HTMLDivElement>(null);
 
     const getTerminalTheme = useCallback(() => {
       return {
@@ -87,6 +107,130 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       fitAddonRef.current.fit();
       terminalWSRef.current.sendResize(xtermRef.current.cols, xtermRef.current.rows);
     }, [paneConnected]);
+
+    // ── Context menu: close on outside click, scroll, Escape, or another contextmenu ──
+    useEffect(() => {
+      if (!contextMenu.visible) return;
+      const handleClickOutside = (e: MouseEvent) => {
+        if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+          setContextMenu((prev) => ({ ...prev, visible: false }));
+        }
+      };
+      const handleScroll = () => {
+        setContextMenu((prev) => ({ ...prev, visible: false }));
+      };
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          setContextMenu((prev) => ({ ...prev, visible: false }));
+        }
+      };
+      const handleContextMenuOutside = () => {
+        setContextMenu((prev) => ({ ...prev, visible: false }));
+      };
+      document.addEventListener('mousedown', handleClickOutside);
+      window.addEventListener('scroll', handleScroll, true);
+      document.addEventListener('keydown', handleKeyDown);
+      window.addEventListener('contextmenu', handleContextMenuOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+        window.removeEventListener('scroll', handleScroll, true);
+        document.removeEventListener('keydown', handleKeyDown);
+        window.removeEventListener('contextmenu', handleContextMenuOutside);
+      };
+    }, [contextMenu.visible]);
+
+    // ── Context menu handlers ──
+    const closeContextMenu = useCallback(() => {
+      setContextMenu((prev) => ({ ...prev, visible: false }));
+    }, []);
+
+    const handleCopy = useCallback(() => {
+      const term = xtermRef.current;
+      if (term?.hasSelection()) {
+        copyToClipboard(term.getSelection());
+      }
+      closeContextMenu();
+    }, [closeContextMenu]);
+
+    const handlePaste = useCallback(async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        terminalWSRef.current?.sendRawInput(text);
+      } catch {
+        // Clipboard access denied
+      }
+      closeContextMenu();
+    }, [closeContextMenu]);
+
+    const handleClear = useCallback(() => {
+      xtermRef.current?.clear();
+      closeContextMenu();
+    }, [closeContextMenu]);
+
+    const handleSelectAll = useCallback(() => {
+      xtermRef.current?.selectAll();
+      closeContextMenu();
+    }, [closeContextMenu]);
+
+    const handleCopyLink = useCallback(() => {
+      if (contextMenu.linkUrl) {
+        copyToClipboard(contextMenu.linkUrl);
+      }
+      closeContextMenu();
+    }, [contextMenu.linkUrl, closeContextMenu]);
+
+    const handleContextMenu = useCallback((e: React.MouseEvent) => {
+      e.preventDefault();
+      const term = xtermRef.current;
+      const hasSelection = term?.hasSelection() ?? false;
+
+      // Detect link under cursor
+      let hasLink = false;
+      let linkUrl = '';
+      const el = xtermContainerRef.current;
+      if (term && el) {
+        const rect = el.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          const cellWidth = rect.width / term.cols;
+          const cellHeight = rect.height / term.rows;
+          const cellX = Math.floor((e.clientX - rect.left) / cellWidth);
+          const cellY = Math.floor((e.clientY - rect.top) / cellHeight);
+          const buf = term.buffer.active;
+          const lineIdx = buf.baseY + cellY;
+          const line = buf.getLine(lineIdx);
+          if (line) {
+            let text = '';
+            for (let i = 0; i < line.length; i++) {
+              text += line.getCell(i)?.getChars() || '';
+            }
+            const urlRegex = /https?:\/\/[\w\-._~:/?#\[\]@!$&'()*+,;=%]+/g;
+            let match;
+            while ((match = urlRegex.exec(text)) !== null) {
+              const start = match.index;
+              const end = start + match[0].length;
+              if (cellX >= start && cellX <= end) {
+                hasLink = true;
+                linkUrl = match[0];
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      // Clamp position so menu stays within viewport
+      const x = Math.max(0, Math.min(e.clientX, window.innerWidth - 240));
+      const y = Math.max(0, Math.min(e.clientY, window.innerHeight - 250));
+
+      setContextMenu({
+        visible: true,
+        x,
+        y,
+        hasSelection,
+        hasLink,
+        linkUrl,
+      });
+    }, []);
 
     // Expose clear / focus to parent via ref
     useImperativeHandle(ref, () => ({
@@ -224,6 +368,20 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       };
     }, [isActive, paneConnected, sendResize]);
 
+    // Reset context menu when pane becomes inactive or unmounts
+    useEffect(() => {
+      if (!isActive) {
+        setContextMenu({
+          visible: false,
+          x: 0,
+          y: 0,
+          hasSelection: false,
+          hasLink: false,
+          linkUrl: '',
+        });
+      }
+    }, [isActive]);
+
     return (
       <div className="terminal-pane" ref={paneWrapperRef}>
         {showCloseButton && (
@@ -243,6 +401,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         <div
           className="terminal-pane-content"
           onClick={() => xtermRef.current?.focus()}
+          onContextMenu={handleContextMenu}
         >
           <div ref={xtermContainerRef} className="terminal-xterm" />
         </div>
@@ -252,6 +411,65 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
             Backend not connected. Start with: <code>./ledit agent --web-port 54421</code>
           </div>
         )}
+        {/* Terminal context menu */}
+        {contextMenu.visible &&
+          createPortal(
+            <div
+              ref={contextMenuRef}
+              className="terminal-context-menu"
+              style={{ left: contextMenu.x, top: contextMenu.y }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                className={`terminal-context-item ${!contextMenu.hasSelection ? 'disabled' : ''}`}
+                onClick={handleCopy}
+                disabled={!contextMenu.hasSelection}
+                type="button"
+              >
+                <Copy size={13} />
+                <span className="terminal-context-item-label">Copy</span>
+              </button>
+              <button
+                className="terminal-context-item"
+                onClick={handlePaste}
+                type="button"
+              >
+                <ClipboardPaste size={13} />
+                <span className="terminal-context-item-label">Paste</span>
+              </button>
+              <div className="terminal-context-separator" />
+              <button
+                className="terminal-context-item"
+                onClick={handleClear}
+                type="button"
+              >
+                <Trash2 size={13} />
+                <span className="terminal-context-item-label">Clear Terminal</span>
+              </button>
+              <button
+                className="terminal-context-item"
+                onClick={handleSelectAll}
+                type="button"
+              >
+                <TextSelect size={13} />
+                <span className="terminal-context-item-label">Select All</span>
+              </button>
+              {contextMenu.hasLink && (
+                <>
+                  <div className="terminal-context-separator" />
+                  <button
+                    className="terminal-context-item"
+                    onClick={handleCopyLink}
+                    type="button"
+                  >
+                    <Link2 size={13} />
+                    <span className="terminal-context-item-label">Copy Link</span>
+                  </button>
+                </>
+              )}
+            </div>,
+            document.body
+          )}
       </div>
     );
   }

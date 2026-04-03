@@ -355,3 +355,61 @@
 .terminal-xterm .xterm-rows span {
   letter-spacing: normal !important;
 }
+
+/* ── Terminal Context Menu ──────────────────────────────────── */
+
+.terminal-context-menu {
+  position: fixed;
+  z-index: 1400;
+  min-width: 220px;
+  padding: 6px;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--border-default, rgba(148, 163, 184, 0.24));
+  background: var(--bg-secondary, rgba(15, 23, 42, 0.95));
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  animation: terminal-menu-in 0.1s ease;
+}
+
+@keyframes terminal-menu-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.terminal-context-item {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-primary, #e2e8f0);
+  font-size: 12px;
+  text-align: left;
+  border-radius: var(--radius-sm, 4px);
+  padding: 8px 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.08s ease;
+}
+
+.terminal-context-item:hover {
+  background: rgba(148, 163, 184, 0.1);
+}
+
+.terminal-context-item.disabled {
+  color: var(--text-tertiary, #64748b);
+  cursor: default;
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.terminal-context-item-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.terminal-context-separator {
+  height: 1px;
+  margin: 4px 8px;
+  background: var(--border-default, rgba(148, 163, 184, 0.24));
+}

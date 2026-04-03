@@ -621,6 +621,54 @@ describe('FileTree filter', () => {
     const names = getVisibleFileNames();
     expect(names).toContain('app.tsx');
   });
+
+  it('does not show ignored files in filter results when toggle is off', async () => {
+    await renderTree();
+
+    // Hide ignored files
+    const toggleBtn = container.querySelector('.toggle-ignored-btn');
+    if (!toggleBtn) throw new Error('Toggle ignored button not found');
+    await act(async () => {
+      toggleBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushPromises();
+
+    // Filter for an ignored file name
+    const filterInput = container.querySelector('.file-tree-filter-input');
+    if (!filterInput) throw new Error('Filter input not found');
+    await act(async () => {
+      Simulate.change(filterInput, { target: { value: '.env' } });
+    });
+    await flushPromises();
+
+    // The ignored file should not appear in results
+    const items = document.querySelectorAll('.file-tree-item .file-tree-name');
+    const names = Array.from(items).map((el) => el.textContent ?? '');
+    expect(names).not.toContain('.env');
+  });
+
+  it('highlights matching text in file names with &lt;mark&gt; tags', async () => {
+    await renderTree();
+
+    await typeFilter('main');
+
+    // Find the .file-tree-item.file elements (non-directories)
+    const fileItems = document.querySelectorAll('.file-tree-item.file .file-tree-name');
+    const nameElements = Array.from(fileItems);
+    const mainGo = nameElements.find(el => el.textContent === 'main.go');
+    expect(mainGo).toBeDefined();
+    expect(mainGo!.innerHTML).toContain('<mark>');
+    expect(mainGo!.innerHTML).toContain('main');
+  });
+
+  it('does not highlight when no filter is active', async () => {
+    await renderTree();
+
+    const fileItems = document.querySelectorAll('.file-tree-item .file-tree-name');
+    for (const item of Array.from(fileItems)) {
+      expect(item.innerHTML).not.toContain('<mark>');
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -726,5 +774,44 @@ describe('FileTree ignored files toggle', () => {
 
     await clickToggleIgnoredBtn();
     expect(btn!.classList.contains('active')).toBe(false);
+  });
+
+  it('keeps a non-ignored directory visible when it contains only ignored children', async () => {
+    // Override clientFetch to return a directory with only ignored children
+    (clientFetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('path=.')) return Promise.resolve(mockFetchResponse([
+        { name: 'output', path: 'output', is_dir: true, size: 0, mod_time: 0 },
+        { name: 'main.go', path: 'main.go', is_dir: false, size: 100, mod_time: 1000 },
+      ]));
+      if (url.includes('path=output')) return Promise.resolve(mockFetchResponse([
+        { name: 'build.log', path: 'output/build.log', is_dir: false, size: 50, mod_time: 500, git_status: 'ignored' },
+      ]));
+      return Promise.resolve(mockFetchResponse([]));
+    });
+
+    await renderTree();
+
+    // Expand the output directory
+    const outputItem = document.querySelector('.file-tree-item.directory');
+    if (outputItem) {
+      await act(async () => {
+        outputItem.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      await flushPromises();
+    }
+
+    // Verify both items visible before toggle
+    let names = getVisibleFileNames();
+    expect(names).toContain('output');
+    expect(names).toContain('main.go');
+
+    // Hide ignored files
+    await clickToggleIgnoredBtn();
+
+    // The 'output' directory should still be visible even though all its children are ignored
+    names = getVisibleFileNames();
+    expect(names).toContain('output');
+    expect(names).toContain('main.go');
+    expect(names).not.toContain('build.log');
   });
 });

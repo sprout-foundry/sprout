@@ -1,66 +1,11 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { EditorView, keymap, KeyBinding, lineNumbers, highlightSpecialChars, highlightActiveLine, rectangularSelection, crosshairCursor } from '@codemirror/view';
 import { EditorState, Compartment } from '@codemirror/state';
 import { defaultKeymap, indentWithTab, history } from '@codemirror/commands';
 import { search, searchKeymap, openSearchPanel, replaceAll } from '@codemirror/search';
 import { autocompletion, closeBrackets } from '@codemirror/autocomplete';
-import { syntaxHighlighting, defaultHighlightStyle, codeFolding, foldGutter, indentOnInput, bracketMatching, StreamLanguage } from '@codemirror/language';
+import { syntaxHighlighting, defaultHighlightStyle, codeFolding, foldGutter, indentOnInput, bracketMatching } from '@codemirror/language';
 import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark';
-
-// Language support
-import { javascript } from '@codemirror/lang-javascript';
-import { python } from '@codemirror/lang-python';
-import { go } from '@codemirror/lang-go';
-import { json } from '@codemirror/lang-json';
-import { html } from '@codemirror/lang-html';
-import { css } from '@codemirror/lang-css';
-import { markdown } from '@codemirror/lang-markdown';
-import { php } from '@codemirror/lang-php';
-import { wast } from '@codemirror/lang-wast';
-
-// Additional language support — official @codemirror/lang-* packages
-import { rust } from '@codemirror/lang-rust';
-import { cpp } from '@codemirror/lang-cpp';
-import { java } from '@codemirror/lang-java';
-import { yaml } from '@codemirror/lang-yaml';
-import { xml } from '@codemirror/lang-xml';
-import { sql } from '@codemirror/lang-sql';
-import { shell } from '@codemirror/legacy-modes/mode/shell';
-import { toml } from '@codemirror/legacy-modes/mode/toml';
-import { dockerFile } from '@codemirror/legacy-modes/mode/dockerfile';
-import { ruby } from 'codemirror-lang-ruby';
-
-// Additional language support — legacy-modes (StreamLanguage)
-import { clike } from '@codemirror/legacy-modes/mode/clike';
-import { clojure } from '@codemirror/legacy-modes/mode/clojure';
-import { coffeeScript } from '@codemirror/legacy-modes/mode/coffeescript';
-import { diff } from '@codemirror/legacy-modes/mode/diff';
-import { elm } from '@codemirror/legacy-modes/mode/elm';
-import { erlang } from '@codemirror/legacy-modes/mode/erlang';
-import { fortran } from '@codemirror/legacy-modes/mode/fortran';
-import { groovy } from '@codemirror/legacy-modes/mode/groovy';
-import { haskell } from '@codemirror/legacy-modes/mode/haskell';
-import { julia } from '@codemirror/legacy-modes/mode/julia';
-import { lua } from '@codemirror/legacy-modes/mode/lua';
-import { oCaml, fSharp } from '@codemirror/legacy-modes/mode/mllike';
-import { nginx } from '@codemirror/legacy-modes/mode/nginx';
-import { perl } from '@codemirror/legacy-modes/mode/perl';
-import { powerShell } from '@codemirror/legacy-modes/mode/powershell';
-import { properties } from '@codemirror/legacy-modes/mode/properties';
-import { protobuf } from '@codemirror/legacy-modes/mode/protobuf';
-import { r } from '@codemirror/legacy-modes/mode/r';
-import { sass } from '@codemirror/legacy-modes/mode/sass';
-import { scheme } from '@codemirror/legacy-modes/mode/scheme';
-import { swift } from '@codemirror/legacy-modes/mode/swift';
-import { tcl } from '@codemirror/legacy-modes/mode/tcl';
-import { vb } from '@codemirror/legacy-modes/mode/vb';
-import { verilog } from '@codemirror/legacy-modes/mode/verilog';
-import { vhdl } from '@codemirror/legacy-modes/mode/vhdl';
-import { cmake } from '@codemirror/legacy-modes/mode/cmake';
-import { crystal } from '@codemirror/legacy-modes/mode/crystal';
-import { d } from '@codemirror/legacy-modes/mode/d';
-import { gas } from '@codemirror/legacy-modes/mode/gas';
-import { textile } from '@codemirror/legacy-modes/mode/textile';
 
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
@@ -69,11 +14,13 @@ import EditorToolbar from './EditorToolbar';
 import ImageViewer from './ImageViewer';
 import SvgPreview from './SvgPreview';
 import GoToSymbolOverlay from './GoToSymbolOverlay';
+import LanguageSwitcher from './LanguageSwitcher';
 import { readFileWithConsent } from '../services/fileAccess';
 import { getEditorKeymap } from '../utils/editorHotkeys';
 import { diffGutter, updateDiffGutter, clearDiffGutter } from '../extensions/diffGutter';
 import { lintDiagnostics, clearDiagnostics, createDebouncedDiagnosticsUpdater } from '../extensions/lintDiagnostics';
 import { cursorHistoryPlugin } from '../extensions/cursorHistory';
+import { getLanguageExtensions, resolveLanguageId } from '../extensions/languageRegistry';
 import { ApiService } from '../services/api';
 import {
   File,
@@ -94,6 +41,8 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const lineWrappingCompartment = useRef(new Compartment());
+  const languageCompartment = useRef(new Compartment());
+  const lastInitLanguageKey = useRef<string | null>(null);
   const wordWrapEnabled = useRef(true);
   const [loading, setLoading] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
@@ -115,6 +64,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     setBufferOriginalContent,
     splitPane,
     openWorkspaceBuffer,
+    setBufferLanguageOverride,
   } = useEditorManager();
 
   const { theme, themePack, customHighlightStyle } = useTheme();
@@ -147,224 +97,6 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       // Graceful degradation - absolute path option just won't appear
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Get language support based on file extension
-  const getLanguageSupport = useCallback((ext?: string, fileName?: string) => {
-    if (!ext && fileName) {
-      // Filename-based detection for extensionless files
-      const lower = fileName.toLowerCase();
-      if (lower === 'dockerfile' || lower.startsWith('dockerfile.')) {
-        return [StreamLanguage.define(dockerFile)];
-      }
-      // Ruby files without extension
-      const rubyFiles = ['gemfile', 'rakefile', '.pryrc', '.irbrc', 'guardfile', 'capfile', 'berksfile', 'thorfile', 'vagrantfile', 'config.ru'];
-      if (rubyFiles.includes(lower)) {
-        return [ruby()];
-      }
-      if (lower === 'makefile' || lower === 'gnumakefile') {
-        // No suitable legacy-mode for Makefile; plain text highlighting
-        return [];
-      }
-      return [];
-    }
-    if (!ext) return [];
-
-    switch (ext.toLowerCase()) {
-      // JavaScript / TypeScript
-      case '.js':
-        return [javascript()];
-      case '.jsx':
-        return [javascript({ jsx: true })];
-      case '.mjs':
-      case '.cjs':
-        return [javascript()];
-      case '.ts':
-        return [javascript({ typescript: true })];
-      case '.tsx':
-        return [javascript({ typescript: true, jsx: true })];
-      // Web
-      case '.html':
-      case '.htm':
-      case '.svg':
-        return [html()];
-      case '.css':
-        return [css()];
-      case '.json':
-        return [json()];
-      // Markdown
-      case '.md':
-      case '.markdown':
-        return [markdown()];
-      // Systems languages
-      case '.rs':
-        return [rust()];
-      case '.c':
-      case '.h':
-        return [cpp()];
-      case '.cpp':
-      case '.cc':
-      case '.cxx':
-      case '.hpp':
-      case '.hxx':
-      case '.hh':
-        return [cpp()];
-      case '.java':
-        return [java()];
-      // Scripting languages
-      case '.py':
-        return [python()];
-      case '.rb':
-        return [ruby()];
-      case '.erb':
-        // Note: .erb gets Ruby highlighting only (no HTML template support)
-        return [ruby()];
-      case '.php':
-        return [php()];
-      case '.go':
-        return [go()];
-      // Shell / DevOps
-      case '.sh':
-      case '.bash':
-      case '.zsh':
-      case '.fish':
-        return [StreamLanguage.define(shell)];
-      case '.dockerfile':
-        return [StreamLanguage.define(dockerFile)];
-      // Data formats
-      case '.yaml':
-      case '.yml':
-        return [yaml()];
-      case '.toml':
-        return [StreamLanguage.define(toml)];
-      case '.xml':
-      case '.xsl':
-      case '.xslt':
-      case '.xsd':
-        // .svg is handled above by the HTML extension (SVG is valid HTML5)
-        return [xml()];
-      // Database
-      case '.sql':
-        return [sql()];
-      // WebAssembly
-      case '.wat':
-      case '.wast':
-        return [wast()];
-      // C-family / .NET
-      case '.cs':
-        return [StreamLanguage.define(clike({ name: 'csharp' }))];
-      case '.scala':
-        return [StreamLanguage.define(clike({ name: 'scala' }))];
-      case '.kt':
-      case '.kts':
-        return [StreamLanguage.define(clike({ name: 'kotlin' }))];
-      case '.dart':
-        return [StreamLanguage.define(clike({ name: 'dart' }))];
-      // Functional languages
-      case '.clj':
-      case '.cljs':
-      case '.cljc':
-      case '.edn':
-        return [StreamLanguage.define(clojure)];
-      case '.hs':
-        return [StreamLanguage.define(haskell)];
-      case '.elm':
-        return [StreamLanguage.define(elm)];
-      case '.erl':
-      case '.hrl':
-        return [StreamLanguage.define(erlang)];
-      // Note: .ex/.exs (Elixir) intentionally omitted — no suitable CodeMirror mode
-      // exists in @codemirror/legacy-modes; clike has no 'elixir' preset.
-      case '.ml':
-      case '.mli':
-        return [StreamLanguage.define(oCaml)];
-      case '.fs':
-      case '.fsi':
-      case '.fsx':
-        return [StreamLanguage.define(fSharp)];
-      case '.scm':
-      case '.rkt':
-        return [StreamLanguage.define(scheme)];
-      case '.lua':
-        return [StreamLanguage.define(lua)];
-      case '.swift':
-        return [StreamLanguage.define(swift)];
-      // Web / Styling
-      case '.coffee':
-        return [StreamLanguage.define(coffeeScript)];
-      case '.cr':
-        return [StreamLanguage.define(crystal)];
-      case '.sass':
-      case '.scss':
-        return [StreamLanguage.define(sass)];
-      case '.textile':
-        return [StreamLanguage.define(textile)];
-      // Systems / DevOps
-      case '.cmake':
-        return [StreamLanguage.define(cmake)];
-      case '.conf':
-        if (/nginx/i.test(fileName || '')) {
-          return [StreamLanguage.define(nginx)];
-        }
-        return [];
-      case '.ps1':
-      case '.psm1':
-      case '.psd1':
-        return [StreamLanguage.define(powerShell)];
-      case '.proto':
-        return [StreamLanguage.define(protobuf)];
-      // Scientific / Math / Hardware
-      case '.r':
-        return [StreamLanguage.define(r)];
-      case '.jl':
-        return [StreamLanguage.define(julia)];
-      case '.f':
-      case '.f90':
-      case '.f95':
-      case '.f03':
-      case '.f08':
-      case '.for':
-        return [StreamLanguage.define(fortran)];
-      case '.d':
-        return [StreamLanguage.define(d)];
-      case '.v':
-        return [StreamLanguage.define(verilog)];
-      case '.vh':
-      case '.vhd':
-        return [StreamLanguage.define(vhdl)];
-      // Other languages
-      case '.groovy':
-      case '.gradle':
-        return [StreamLanguage.define(groovy)];
-      case '.pl':
-      case '.pm':
-        return [StreamLanguage.define(perl)];
-      case '.tcl':
-        return [StreamLanguage.define(tcl)];
-      case '.vb':
-      case '.vbs':
-        return [StreamLanguage.define(vb)];
-      case '.properties':
-        return [StreamLanguage.define(properties)];
-      case '.s':
-      case '.asm':
-        return [StreamLanguage.define(gas)];
-      // Diff
-      case '.diff':
-      case '.patch':
-        return [StreamLanguage.define(diff)];
-      // Plain text (no highlighting)
-      case '.log':
-      case '.txt':
-        return [];
-      default:
-        // Handle Dockerfile variants (Dockerfile.dev, Dockerfile.prod, etc.)
-        // These have non-standard extensions like .dev, .prod but should get Dockerfile highlighting
-        if (ext && /^dockerfile$/i.test((fileName || '').replace(/\.[^.]+$/, ''))) {
-          return [StreamLanguage.define(dockerFile)];
-        }
-        return [];
-    }
-  }, []);
 
   const loadFileRef = useRef<((filePath: string) => Promise<void>) | null>(null);
   const fetchDiagnosticsRef = useRef<(filePath: string, content: string) => void>(() => {});
@@ -816,7 +548,15 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       lineWrappingCompartment.current.of(
         wordWrapEnabled.current ? EditorView.lineWrapping : []
       ),
-      ...getLanguageSupport(buffer?.file.ext, buffer?.file.name)
+      languageCompartment.current.of(
+        getLanguageExtensions(
+          resolveLanguageId(
+            buffer?.languageOverride,
+            buffer?.file?.ext?.replace(/^\./, ''),
+            buffer?.file?.name,
+          ).languageId,
+        )
+      ),
     ];
 
     const state = EditorState.create({
@@ -831,12 +571,40 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
 
     viewRef.current = view;
 
+    // Track which language was set during init so the reconfiguration effect
+    // can skip a redundant reconfigure on the same buffer/language combo.
+    lastInitLanguageKey.current = `${buffer?.id}:${buffer?.languageOverride ?? ''}:${buffer?.file?.ext ?? ''}:${buffer?.file?.name ?? ''}`;
+
     return () => {
       debouncedDiag.current.cancel();
       view.destroy();
       viewRef.current = null;
     };
-  }, [paneId, buffer?.id, buffer?.file?.ext, theme, themePack.id, hotkeys, customHighlightStyle, updateBufferContent, setBufferModified, updateBufferCursor, getLanguageSupport]); // eslint-disable-line react-hooks/exhaustive-deps -- handleSave intentionally excluded to prevent infinite re-init loop when buffer changes
+  }, [paneId, buffer?.id, buffer?.file?.ext, theme, themePack.id, hotkeys, customHighlightStyle, updateBufferContent, setBufferModified, updateBufferCursor]); // eslint-disable-line react-hooks/exhaustive-deps -- handleSave intentionally excluded to prevent infinite re-init loop when buffer changes
+
+  // Reconfigure the language compartment when the language override changes,
+  // without requiring a full editor re-initialization.
+  // A guard key prevents a redundant reconfigure on the same render cycle
+  // where the init effect already set the correct language.
+  useEffect(() => {
+    if (!viewRef.current || !buffer) return;
+
+    const key = `${buffer.id}:${buffer.languageOverride ?? ''}:${buffer.file?.ext ?? ''}:${buffer.file?.name ?? ''}`;
+    if (key === lastInitLanguageKey.current) return; // init already applied this language
+    lastInitLanguageKey.current = key;
+
+    const { languageId } = resolveLanguageId(
+      buffer.languageOverride,
+      buffer.file?.ext?.replace(/^\./, ''),
+      buffer.file?.name,
+    );
+
+    viewRef.current.dispatch({
+      effects: languageCompartment.current.reconfigure(
+        getLanguageExtensions(languageId),
+      ),
+    });
+  }, [buffer?.id, buffer?.languageOverride, buffer?.file?.ext, buffer?.file?.name]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
   // Listen for go to line event from toolbar and global word-wrap toggle
@@ -873,6 +641,22 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       document.removeEventListener('editor-toggle-word-wrap', handler);
     };
   }, [handleGoToLine]);
+
+  // Compute effective language info for the LanguageSwitcher
+  // (Must be declared before early returns to satisfy React hooks rules)
+  const languageInfo = useMemo(() => {
+    if (!buffer || !buffer.file) return { languageId: null as string | null, isAutoDetected: false };
+    return resolveLanguageId(
+      buffer.languageOverride ?? null,
+      buffer.file?.ext?.replace(/^\./, ''),
+      buffer.file?.name,
+    );
+  }, [buffer?.languageOverride, buffer?.file?.ext, buffer?.file?.name]);
+
+  const handleLanguageChange = useCallback((languageId: string | null) => {
+    if (!buffer) return;
+    setBufferLanguageOverride(buffer.id, languageId);
+  }, [buffer?.id, setBufferLanguageOverride]);
 
   if (!buffer || !buffer.file || buffer.file.isDir) {
     return (
@@ -965,6 +749,14 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   return (
     <div className="editor-pane">
       <div style={{ position: 'relative' }}>
+        {/* Language switcher floats over the toolbar's left area */}
+        <div className="editor-language-switcher-zone">
+          <LanguageSwitcher
+            currentLanguageId={languageInfo.languageId}
+            isAutoDetected={languageInfo.isAutoDetected}
+            onLanguageChange={handleLanguageChange}
+          />
+        </div>
         <EditorToolbar
           paneId={paneId}
           onGoToLine={handleGoToLine}

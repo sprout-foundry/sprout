@@ -27,6 +27,7 @@ import GoToSymbolOverlay from './GoToSymbolOverlay';
 import { readFileWithConsent } from '../services/fileAccess';
 import { getEditorKeymap } from '../utils/editorHotkeys';
 import { diffGutter, updateDiffGutter, clearDiffGutter } from '../extensions/diffGutter';
+import { lintDiagnostics, clearDiagnostics } from '../extensions/lintDiagnostics';
 import { cursorHistoryPlugin } from '../extensions/cursorHistory';
 import { ApiService } from '../services/api';
 import {
@@ -310,6 +311,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       currentBufferIdRef.current = null;
       if (viewRef.current) {
         clearDiffGutter(viewRef.current);
+        clearDiagnostics(viewRef.current);
       }
       return;
     }
@@ -328,6 +330,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
           }
         });
         clearDiffGutter(viewRef.current);
+        clearDiagnostics(viewRef.current);
       }
       return;
     }
@@ -341,6 +344,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       currentBufferIdRef.current = buffer.id;
       if (viewRef.current) {
         clearDiffGutter(viewRef.current);
+        clearDiagnostics(viewRef.current);
       }
       return;
     }
@@ -482,6 +486,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       bracketMatching(),
       syntaxHighlighting(customHighlightStyle || (themePack.editorSyntaxStyle === 'one-dark' ? oneDarkHighlightStyle : defaultHighlightStyle)),
       diffGutter(),
+      lintDiagnostics(),
       lineNumbers(),
       foldGutter({
         openText: '▼',

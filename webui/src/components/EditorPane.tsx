@@ -27,6 +27,7 @@ import GoToSymbolOverlay from './GoToSymbolOverlay';
 import { readFileWithConsent } from '../services/fileAccess';
 import { getEditorKeymap } from '../utils/editorHotkeys';
 import { diffGutter, updateDiffGutter, clearDiffGutter } from '../extensions/diffGutter';
+import { cursorHistoryPlugin } from '../extensions/cursorHistory';
 import { ApiService } from '../services/api';
 import {
   File,
@@ -381,6 +382,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       autocompletion(),
       closeBrackets(),
       history(),
+      cursorHistoryPlugin,
       indentOnInput(),
       highlightSpecialChars(),
       highlightActiveLine(),

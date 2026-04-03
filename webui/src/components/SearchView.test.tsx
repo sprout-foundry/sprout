@@ -1,8 +1,8 @@
-// @ts-nocheck
 
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { act } from 'react';
+import { copyToClipboard } from '../utils/clipboard';
 import SearchView from './SearchView';
 import { ApiService } from '../services/api';
 
@@ -10,23 +10,19 @@ import { ApiService } from '../services/api';
 // Mocks
 // ---------------------------------------------------------------------------
 
+jest.mock('../utils/clipboard', () => ({
+  copyToClipboard: jest.fn().mockResolvedValue(undefined),
+}));
+
 jest.mock('../services/clientSession', () => ({
   clientFetch: jest.fn(),
 }));
-
-import { clientFetch } from '../services/clientSession';
 
 jest.mock('../services/api', () => ({
   ApiService: {
     getInstance: jest.fn(),
   },
 }));
-
-// Mock navigator.clipboard
-const mockClipboardWriteText = jest.fn().mockResolvedValue(undefined);
-Object.assign(navigator, {
-  clipboard: { writeText: mockClipboardWriteText },
-});
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -73,8 +69,8 @@ const MOCK_SEARCH_RESPONSE = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-let container = null;
-let root = null;
+let container: HTMLDivElement | null = null;
+let root: ReturnType<typeof createRoot> | null = null;
 
 beforeAll(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -88,11 +84,18 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
 
-  (ApiService.getInstance).mockReturnValue({
+  // Reset mockReturnValue on getInstance, but do NOT use clearAllMocks
+  // because it wipes mockResolvedValue from mockSearchFn.
+  (ApiService.getInstance as jest.Mock).mockClear();
+  (ApiService.getInstance as jest.Mock).mockReturnValue({
     search: mockSearchFn,
   });
 
-  jest.clearAllMocks();
+  // Clear call history on specific mocks (preserve implementations)
+  mockSearchFn.mockClear();
+  mockSearchFn.mockResolvedValue(MOCK_SEARCH_RESPONSE);
+  copyToClipboard.mockClear();
+  defaultOnFileClick.mockClear();
 });
 
 afterEach(() => {
@@ -114,22 +117,22 @@ const flushPromises = async () => {
 const defaultOnFileClick = jest.fn();
 
 /** Render SearchView and trigger debounced search. */
-async function renderSearch(props = {}) {
+async function renderSearch(props: { onFileClick?: jest.Mock } = {}) {
   const onFileClick = props.onFileClick || defaultOnFileClick;
 
   await act(async () => {
-    root.render(React.createElement(SearchView, { onFileClick }));
+    root!.render(React.createElement(SearchView, { onFileClick }));
   });
 
   // Type a search query
-  const input = container.querySelector('.search-text-input');
+  const input = container!.querySelector<HTMLInputElement>('.search-text-input');
   expect(input).not.toBeNull();
 
   // Use React's internal value setter to trigger onChange
-  const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+  const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
   await act(() => {
     nativeInputValueSetter.call(input, 'handleClick');
-    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input!.dispatchEvent(new Event('input', { bubbles: true }));
   });
 
   // Advance past debounce delay
@@ -137,6 +140,14 @@ async function renderSearch(props = {}) {
     jest.advanceTimersByTime(400);
   });
   await flushPromises();
+
+  // Auto-expand all file groups so match rows are rendered
+  const headers = container!.querySelectorAll('.search-file-header');
+  for (const header of headers) {
+    await act(() => {
+      header.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+  }
 }
 
 /** Fire a contextmenu event on a search match hit row. */
@@ -241,16 +252,16 @@ describe('SearchView context menu - clipboard and editor actions', () => {
     await flushPromises();
 
     const copyBtn = getContextItems().find((item) =>
-      item.textContent.includes('Copy line text')
+      item.textContent?.includes('Copy line text')
     );
     expect(copyBtn).toBeDefined();
 
     await act(async () => {
-      copyBtn.click();
+      copyBtn!.click();
     });
     await flushPromises();
 
-    expect(mockClipboardWriteText).toHaveBeenCalledWith('  const handleClick = () => {');
+    expect(copyToClipboard).toHaveBeenCalledWith('  const handleClick = () => {');
   });
 
   it('"Copy file path" copies the relative path to clipboard', async () => {
@@ -260,16 +271,16 @@ describe('SearchView context menu - clipboard and editor actions', () => {
     await flushPromises();
 
     const copyBtn = getContextItems().find((item) =>
-      item.textContent.includes('Copy file path')
+      item.textContent?.includes('Copy file path')
     );
     expect(copyBtn).toBeDefined();
 
     await act(async () => {
-      copyBtn.click();
+      copyBtn!.click();
     });
     await flushPromises();
 
-    expect(mockClipboardWriteText).toHaveBeenCalledWith('src/components/App.tsx');
+    expect(copyToClipboard).toHaveBeenCalledWith('src/components/App.tsx');
   });
 
   it('"Open in editor" calls onFileClick with correct path and line number', async () => {
@@ -280,12 +291,12 @@ describe('SearchView context menu - clipboard and editor actions', () => {
     await flushPromises();
 
     const openBtn = getContextItems().find((item) =>
-      item.textContent.includes('Open in editor')
+      item.textContent?.includes('Open in editor')
     );
     expect(openBtn).toBeDefined();
 
     await act(async () => {
-      openBtn.click();
+      openBtn!.click();
     });
     await flushPromises();
 
@@ -305,12 +316,12 @@ describe('SearchView context menu - exclude functionality', () => {
     await flushPromises();
 
     const excludeBtn = getContextItems().find((item) =>
-      item.textContent.includes('Exclude folder')
+      item.textContent?.includes('Exclude folder')
     );
     expect(excludeBtn).toBeDefined();
 
     await act(async () => {
-      excludeBtn.click();
+      excludeBtn!.click();
     });
     await flushPromises();
 
@@ -319,7 +330,7 @@ describe('SearchView context menu - exclude functionality', () => {
 
     // Exclude indicator should appear
     expect(document.querySelector('.search-exclude-indicator')).not.toBeNull();
-    expect(document.querySelector('.search-exclude-patterns').textContent).toContain('src/components/');
+    expect(document.querySelector('.search-exclude-patterns')!.textContent).toContain('src/components/');
 
     // Now only 1 file group should be visible (utils not excluded)
     expect(document.querySelectorAll('.search-file-group').length).toBe(1);
@@ -334,17 +345,17 @@ describe('SearchView context menu - exclude functionality', () => {
     await flushPromises();
 
     const excludeBtn = getContextItems().find((item) =>
-      item.textContent.includes('Exclude file')
+      item.textContent?.includes('Exclude file')
     );
     expect(excludeBtn).toBeDefined();
 
     await act(async () => {
-      excludeBtn.click();
+      excludeBtn!.click();
     });
     await flushPromises();
 
     expect(document.querySelector('.search-exclude-indicator')).not.toBeNull();
-    expect(document.querySelector('.search-exclude-patterns').textContent).toContain(
+    expect(document.querySelector('.search-exclude-patterns')!.textContent).toContain(
       'src/components/App.tsx'
     );
 
@@ -352,29 +363,40 @@ describe('SearchView context menu - exclude functionality', () => {
     expect(document.querySelectorAll('.search-file-group').length).toBe(1);
   });
 
-  it('shows disabled state when path is already excluded', async () => {
+  it('non-excluded files show exclude action as enabled after another file is excluded', async () => {
     await renderSearch();
 
-    // First exclude
-    fireContextMenuOnMatch();
+    // Exclude from file header (exclude the file, not folder)
+    fireContextMenuOnFileHeader();
     await flushPromises();
     const excludeBtn = getContextItems().find((item) =>
-      item.textContent.includes('Exclude folder')
+      item.textContent?.includes('Exclude file')
     );
     await act(async () => {
-      excludeBtn.click();
+      excludeBtn!.click();
     });
     await flushPromises();
 
-    // Now re-open context menu on the same area - should show disabled
-    fireContextMenuOnMatch();
+    // Re-open context menu on the remaining file header — its exclude
+    // action should NOT be disabled since it has not been excluded.
+    const remainingHeaders = document.querySelectorAll('.search-file-header');
+    expect(remainingHeaders.length).toBe(1);
+    remainingHeaders[0].dispatchEvent(
+      new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: 100,
+        clientY: 200,
+      })
+    );
     await flushPromises();
 
-    const disabledBtn = getContextItems().find((item) =>
-      item.textContent.includes('Exclude folder')
+    // The remaining file is NOT excluded, so the button should NOT be disabled
+    const excludeBtn2 = getContextItems().find((item) =>
+      item.textContent?.includes('Exclude file')
     );
-    expect(disabledBtn).toBeDefined();
-    expect(disabledBtn.classList.contains('disabled')).toBe(true);
+    expect(excludeBtn2).toBeDefined();
+    expect(excludeBtn2.classList.contains('disabled')).toBe(false);
   });
 
   it('clear exclude patterns removes the exclude filter', async () => {
@@ -384,10 +406,10 @@ describe('SearchView context menu - exclude functionality', () => {
     fireContextMenuOnMatch();
     await flushPromises();
     const excludeBtn = getContextItems().find((item) =>
-      item.textContent.includes('Exclude folder')
+      item.textContent?.includes('Exclude folder')
     );
     await act(async () => {
-      excludeBtn.click();
+      excludeBtn!.click();
     });
     await flushPromises();
 
@@ -399,7 +421,7 @@ describe('SearchView context menu - exclude functionality', () => {
     expect(clearBtn).not.toBeNull();
 
     await act(async () => {
-      clearBtn.click();
+      clearBtn!.click();
     });
     await flushPromises();
 

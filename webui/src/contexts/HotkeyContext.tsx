@@ -193,6 +193,39 @@ export const HotkeyProvider: React.FC<HotkeyProviderProps> = ({ children }) => {
 
   useEffect(() => { loadHotkeys(); }, [loadHotkeys]);
 
+  // Listen for Electron desktop hotkey events that bypass Chromium's
+  // keyboard shortcut interception (e.g. Ctrl+Shift+W would otherwise
+  // close the window before JS sees it).
+  // Respects the global flag: non-global commands are suppressed when
+  // an input field or contentEditable element has focus.
+  useEffect(() => {
+    const desktop = (window as any).leditDesktop;
+    if (typeof desktop?.onDesktopHotkey !== 'function') return;
+
+    const cleanup = desktop.onDesktopHotkey((commandId: string) => {
+      // Look up the hotkey to check its global flag.
+      const entry = fallbackHotkeys.find(h => h.command_id === commandId)
+        || (hotkeys ?? []).find(h => h.command_id === commandId);
+
+      if (entry && !entry.global) {
+        const activeEl = document.activeElement as HTMLElement | null;
+        if (activeEl?.tagName === 'INPUT' ||
+            activeEl?.tagName === 'TEXTAREA' ||
+            activeEl?.isContentEditable) {
+          return;
+        }
+      }
+
+      window.dispatchEvent(new CustomEvent('ledit:hotkey', {
+        detail: { commandId, key: '(desktop)' },
+        bubbles: true,
+        cancelable: true,
+      }));
+    });
+
+    return cleanup;
+  }, [hotkeys]);
+
   const hotkeyForCommand = useCallback((commandId: string): string | null => {
     if (!hotkeys) return null;
     const entry = hotkeys.find(h => h.command_id === commandId);

@@ -1044,6 +1044,26 @@ function buildMenu() {
             dialog.showErrorBox('Failed to Open Folder', String(error?.message || error));
           }),
         },
+        {
+          label: 'Close All Editors',
+          accelerator: 'CmdOrCtrl+Shift+W',
+          click: () => {
+            const win = BrowserWindow.getFocusedWindow();
+            if (win && !win.isDestroyed()) {
+              win.webContents.send('desktop:hotkey', 'close_all_editors');
+            }
+          },
+        },
+        {
+          label: 'Close Other Editors',
+          accelerator: 'CmdOrCtrl+Alt+W',
+          click: () => {
+            const win = BrowserWindow.getFocusedWindow();
+            if (win && !win.isDestroyed()) {
+              win.webContents.send('desktop:hotkey', 'close_other_editors');
+            }
+          },
+        },
         ...(recentItems.length > 0 ? [{ type: 'separator' }, ...recentItems] : []),
         { type: 'separator' },
         { role: 'close' },
@@ -1056,6 +1076,17 @@ function buildMenu() {
         { role: 'reload' },
         { role: 'forceReload' },
         { role: 'toggleDevTools' },
+        { type: 'separator' },
+        {
+          label: 'Split Editor Horizontal',
+          accelerator: 'CmdOrCtrl+K',
+          click: () => {
+            const win = BrowserWindow.getFocusedWindow();
+            if (win && !win.isDestroyed()) {
+              win.webContents.send('desktop:hotkey', 'split_editor_horizontal');
+            }
+          },
+        },
         { type: 'separator' },
         { role: 'resetZoom' },
         { role: 'zoomIn' },

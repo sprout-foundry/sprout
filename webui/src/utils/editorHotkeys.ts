@@ -219,6 +219,7 @@ const EDITOR_COMMAND_IDS = new Set([
   'editor_toggle_word_wrap',
   'editor_navigate_back',
   'editor_navigate_forward',
+  'split_editor_horizontal',
 ]);
 
 // ── Public API ──────────────────────────────────────────────────────
@@ -389,6 +390,35 @@ export function getEditorKeymap(
     bindings.push({ key: 'Alt-ArrowRight', preventDefault: true, run: (v) => navigateCursorForward(v) });
   } else {
     bindings.push(...navForwardBindings);
+  }
+
+  // Split editor horizontal — fallback to Mod-k (Ctrl+K / Cmd+K).
+  // NOTE: CodeMirror's defaultKeymap (emacsStyleKeymap) binds Mod-k →
+  // deleteToLineEnd. This custom binding is registered AFTER defaultKeymap
+  // in EditorPane.tsx, so it takes priority and replaces the Emacs-style
+  // delete-to-end-of-line behavior when the hotkey is configured.
+  // We dispatch a global ledit:hotkey event so AppContent handles the
+  // actual split, and return true to prevent CodeMirror's deleteToLineEnd
+  // from also firing.
+  const splitHorizBindings = bindingsFor('split_editor_horizontal', () => {
+    window.dispatchEvent(new CustomEvent('ledit:hotkey', {
+      detail: { commandId: 'split_editor_horizontal' },
+    }));
+    return true;
+  });
+  if (splitHorizBindings.length === 0) {
+    bindings.push({
+      key: 'Mod-k',
+      preventDefault: true,
+      run: () => {
+        window.dispatchEvent(new CustomEvent('ledit:hotkey', {
+          detail: { commandId: 'split_editor_horizontal' },
+        }));
+        return true;
+      },
+    });
+  } else {
+    bindings.push(...splitHorizBindings);
   }
 
   return bindings;

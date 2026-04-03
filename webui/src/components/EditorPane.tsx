@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { EditorView, keymap, lineNumbers, highlightSpecialChars, highlightActiveLine } from '@codemirror/view';
-import { EditorState } from '@codemirror/state';
+import { EditorState, Compartment } from '@codemirror/state';
 import { defaultKeymap, indentWithTab, history } from '@codemirror/commands';
 import { search, searchKeymap } from '@codemirror/search';
 import { autocompletion, closeBrackets } from '@codemirror/autocomplete';
@@ -44,6 +44,8 @@ interface EditorPaneProps {
 const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const lineWrappingCompartment = useRef(new Compartment());
+  const wordWrapEnabled = useRef(true);
   const [loading, setLoading] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -359,6 +361,14 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       onGoToSymbol: () => {
         setShowGoToSymbol(true);
       },
+      onToggleWordWrap: () => {
+        wordWrapEnabled.current = !wordWrapEnabled.current;
+        viewRef.current?.dispatch({
+          effects: lineWrappingCompartment.current.reconfigure(
+            wordWrapEnabled.current ? [EditorView.lineWrapping] : []
+          ),
+        });
+      },
     });
 
     const extensions = [
@@ -441,7 +451,9 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
           color: 'var(--accent-primary, #6366f1)'
         }
       }),
-      EditorView.lineWrapping,
+      lineWrappingCompartment.current.of(
+        wordWrapEnabled.current ? EditorView.lineWrapping : []
+      ),
       ...getLanguageSupport(buffer?.file.ext)
     ];
 

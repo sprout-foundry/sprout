@@ -57,6 +57,9 @@ const MATCHING_CLOSE: ReadonlyMap<string, string> = new Map([
 
 export const MAX_DEPTH = 6;
 
+/** Matches any of the six bracket characters our colorizer cares about. */
+const BRACKET_PATTERN = /[\[()\]{}]/;
+
 // ── Pure helpers (exported for testing) ────────────────────────────
 
 /**
@@ -103,38 +106,12 @@ export function computeBracketDecorations(text: string): BracketDecoration[] {
 }
 
 /**
- * Same as `computeBracketDecorations` but works directly on a CodeMirror
- * `Text` object, avoiding a full-document `toString()` allocation.
+ * Same as `computeBracketDecorations` but accepts a CodeMirror `Text`
+ * object.  Delegates to the string-based implementation to avoid
+ * maintaining a parallel, untested code path.
  */
 export function computeBracketDecorationsFromDoc(doc: Text): BracketDecoration[] {
-  const result: BracketDecoration[] = [];
-  const stack: { pos: number; depth: number; bracket: string }[] = [];
-  let pos = 0;
-
-  // Use Text.iter() instead of for-of to avoid --downlevelIteration issues.
-  const iter = doc.iter();
-  while (!iter.done) {
-    const chunk = iter.value;
-    for (let i = 0; i < chunk.length; i++) {
-      const ch = chunk[i];
-
-      if (OPEN_BRACKETS.has(ch)) {
-        const depth = stack.length % MAX_DEPTH;
-        stack.push({ pos, depth, bracket: ch });
-        result.push({ from: pos, to: pos + 1, depth });
-      } else if (MATCHING_CLOSE.has(ch)) {
-        const expected = MATCHING_CLOSE.get(ch)!;
-        if (stack.length > 0 && stack[stack.length - 1].bracket === expected) {
-          const match = stack.pop()!;
-          result.push({ from: pos, to: pos + 1, depth: match.depth });
-        }
-      }
-      pos++;
-    }
-    iter.next();
-  }
-
-  return result;
+  return computeBracketDecorations(doc.toString());
 }
 
 // ── Decoration factories ───────────────────────────────────────────
@@ -157,12 +134,22 @@ const bracketPlugin = ViewPlugin.fromClass(
     }
 
     update(update: ViewUpdate): void {
-      if (
-        update.docChanged ||
-        update.viewportChanged ||
-        update.transactions.some((t) => t.reconfigured)
-      ) {
+      if (update.viewportChanged || update.transactions.some((t) => t.reconfigured)) {
         this.decorations = this.buildDecorations(update.view);
+      } else if (update.docChanged) {
+        // Only rescan if the changed regions contain any bracket characters.
+        // Typing non-bracket text should not trigger a full-document rescan.
+        let bracketsChanged = false;
+        update.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
+          if (bracketsChanged) return; // short-circuit once found
+          const deleted = update.startState.doc.sliceString(fromA, toA);
+          if (BRACKET_PATTERN.test(deleted) || BRACKET_PATTERN.test(inserted.toString())) {
+            bracketsChanged = true;
+          }
+        });
+        if (bracketsChanged) {
+          this.decorations = this.buildDecorations(update.view);
+        }
       }
     }
 

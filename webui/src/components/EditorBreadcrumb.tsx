@@ -1,15 +1,14 @@
 import React, { useMemo, useCallback } from 'react';
 import { ChevronRight } from 'lucide-react';
-import { type SymbolKind, KIND_ICONS } from './GoToSymbolOverlay';
+import { type SymbolInfo as BreadcrumbSymbol, type SymbolKind, KIND_ICONS } from './GoToSymbolOverlay';
 import './EditorBreadcrumb.css';
 
 // ── Types ────────────────────────────────────────────────────────────────
 
-export interface BreadcrumbSymbol {
-  name: string;
-  line: number; // 1-based line number
-  kind: SymbolKind;
-}
+// BreadcrumbSymbol is re-exported as an alias for SymbolInfo (from
+// GoToSymbolOverlay) so that existing consumers that import
+// `BreadcrumbSymbol` from this module continue to compile without changes.
+export type { BreadcrumbSymbol };
 
 interface EditorBreadcrumbProps {
   filePath: string;

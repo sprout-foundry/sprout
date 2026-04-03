@@ -1,45 +1,58 @@
 // @ts-nocheck
 
-import { loadCommandHistory, saveCommandHistory } from './command_input_history';
+import { loadCommandHistory, saveCommandHistory, dedupeCommands, persistCommandHistory } from './command_input_history';
 
 describe('command_input_history', () => {
-  afterEach(() => {
+  const origGetItem = Object.getOwnPropertyDescriptor(Storage.prototype, 'getItem');
+  const origSetItem = Object.getOwnPropertyDescriptor(Storage.prototype, 'setItem');
+
+  beforeEach(() => {
     jest.restoreAllMocks();
     jest.clearAllMocks();
+    localStorage.clear();
   });
 
-  it('loads history from the api service', async () => {
-    const apiService = {
-      getTerminalHistory: jest.fn().mockResolvedValue({
-        history: [' first ', '', 'second', 'first', 'third '],
-        count: 5,
-      }),
-    } as any;
-
-    await expect(loadCommandHistory(apiService)).resolves.toEqual(['second', 'first', 'third']);
-    expect(apiService.getTerminalHistory).toHaveBeenCalled();
+  afterAll(() => {
+    if (origGetItem) Object.defineProperty(Storage.prototype, 'getItem', origGetItem);
+    if (origSetItem) Object.defineProperty(Storage.prototype, 'setItem', origSetItem);
   });
 
-  it('returns empty history when api call fails', async () => {
-    const apiService = {
-      getTerminalHistory: jest.fn().mockRejectedValue(new Error('API unavailable')),
-    } as any;
+  it('loads history from localStorage', async () => {
+    localStorage.setItem('ledit:chat-history', JSON.stringify(['cmd1', 'cmd2', 'cmd1', 'cmd3']));
 
-    await expect(loadCommandHistory(apiService)).resolves.toEqual([]);
-    expect(apiService.getTerminalHistory).toHaveBeenCalled();
+    const result = await loadCommandHistory({} as any);
+    expect(result).toEqual(['cmd2', 'cmd1', 'cmd3']);
   });
 
-  it('keeps command sending independent from terminal history persistence', async () => {
-    const apiService = {
-      addTerminalHistory: jest.fn().mockRejectedValue(new Error('history unavailable')),
-    } as any;
+  it('returns empty history when localStorage is empty', async () => {
+    const result = await loadCommandHistory({} as any);
+    expect(result).toEqual([]);
+  });
 
-    await expect(saveCommandHistory(apiService, ['older'], 'new command')).resolves.toEqual({
-      commands: ['older', 'new command'],
+  it('returns empty history when localStorage is corrupted', async () => {
+    localStorage.setItem('ledit:chat-history', 'not-json');
+
+    const result = await loadCommandHistory({} as any);
+    expect(result).toEqual([]);
+  });
+
+  it('trims and deduplicates commands', () => {
+    const result = dedupeCommands([' first ', '', 'second', 'first', 'third ']);
+    expect(result).toEqual(['second', 'first', 'third']);
+  });
+
+  it('deduplicates but preserves last occurrence', () => {
+    const result = dedupeCommands(['alpha', 'beta', 'alpha']);
+    expect(result).toEqual(['beta', 'alpha']);
+  });
+
+  it('saveCommandHistory persists deduplicated commands to localStorage', async () => {
+    const result = await saveCommandHistory({} as any, ['old'], 'new');
+    expect(result).toEqual({
+      commands: ['old', 'new'],
       index: -1,
       tempInput: '',
     });
-
-    expect(apiService.addTerminalHistory).toHaveBeenCalledWith('new command');
+    expect(JSON.parse(localStorage.getItem('ledit:chat-history'))).toEqual(['old', 'new']);
   });
 });

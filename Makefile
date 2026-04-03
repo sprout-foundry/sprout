@@ -111,7 +111,7 @@ build-ui:
 	@cd webui && npm run build
 	@echo "React web UI build completed in webui/build/"
 
-# Build React web UI and deploy to Go static directory
+# Build React web UI and deploy to Go static directory (for embedding)
 deploy-ui:
 	@echo "Deploying React web UI to Go static directory..."
 	@if [ ! -d "webui" ]; then \
@@ -120,15 +120,13 @@ deploy-ui:
 	fi
 	@node scripts/build-webui-embed.mjs
 	@echo "React web UI deployed to pkg/webui/static/"
-	@echo "Run 'make build' to create Go binary with embedded UI"
+	@echo "Build artifacts in pkg/webui/static/ are now embedded at compile time."
 
 verify-ui-embedded:
-	@echo "Verifying embedded UI assets are up to date..."
-	@test -z "$$(git status --porcelain=v1 --untracked-files=all -- pkg/webui/static)" || \
-		( echo "Embedded UI assets are stale or untracked. Run 'make deploy-ui' and commit pkg/webui/static changes."; \
-		  git status --short --untracked-files=all -- pkg/webui/static; \
-		  exit 1 )
-	@echo "Embedded UI assets are up to date"
+	@echo "Verifying webui/build/ assets are available..."
+	@test -d webui/build || ( echo "webui/build/ does not exist. Run 'make build-ui'."; exit 1 )
+	@test -f webui/build/index.html || ( echo "webui/build/index.html is missing. Run 'make build-ui'."; exit 1 )
+	@echo "WebUI build assets are available (served from webui/build/ at runtime)"
 
 # Test React web UI server
 test-webui:

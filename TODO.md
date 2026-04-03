@@ -72,6 +72,7 @@
 [x] - HOTKEYS: Add select all occurrences of find match (`Ctrl+Shift+L`) keybinding.
 [x] - HOTKEYS: Add go to symbol in file (`Ctrl+Shift+O`) keybinding.
 [x] - HOTKEYS: Add add selection to next find match (`Ctrl+D` — correct VS Code behavior) keybinding.
+[x] - HOTKEYS: Add toggle word wrap (`Alt+Z`) keybinding.
 [] - HOTKEYS: Add toggle word wrap (`Alt+Z`) keybinding.
 [] - HOTKEYS: Add navigate back (`Alt+Left`) and navigate forward (`Alt+Right`) keybindings.
 [] - HOTKEYS: Add keybindings for `split_editor_horizontal`, `close_all_editors`, `close_other_editors` — currently command-palette-only with no keyboard shortcuts.

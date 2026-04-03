@@ -77,6 +77,8 @@ const atomOneDark: ThemePack = {
     '--cm-selection': 'rgba(62, 68, 81, 0.95)',
     '--cm-active-line': 'rgba(44, 49, 60, 0.8)',
     '--cm-active-line-gutter': 'rgba(44, 49, 60, 0.8)',
+    '--cm-indent-guide': 'rgba(128, 128, 128, 0.15)',
+    '--cm-indent-guide-active': 'rgba(160, 160, 160, 0.35)',
     '--editor-pane-inactive-overlay': 'rgba(0, 0, 0, 0.28)',
     '--editor-pane-inactive-overlay-hover': 'rgba(0, 0, 0, 0.18)',
 
@@ -160,6 +162,8 @@ const atomOneLight: ThemePack = {
     '--cm-selection': 'rgba(196, 211, 255, 0.75)',
     '--cm-active-line': 'rgba(0, 0, 0, 0.035)',
     '--cm-active-line-gutter': 'rgba(0, 0, 0, 0.035)',
+    '--cm-indent-guide': 'rgba(0, 0, 0, 0.08)',
+    '--cm-indent-guide-active': 'rgba(0, 0, 0, 0.20)',
     '--editor-pane-inactive-overlay': 'rgba(56, 58, 66, 0.1)',
     '--editor-pane-inactive-overlay-hover': 'rgba(56, 58, 66, 0.06)',
 
@@ -248,6 +252,8 @@ const dracula: ThemePack = {
     '--cm-selection': 'rgba(68, 71, 90, 0.95)',
     '--cm-active-line': 'rgba(42, 45, 58, 0.8)',
     '--cm-active-line-gutter': 'rgba(42, 45, 58, 0.8)',
+    '--cm-indent-guide': 'rgba(128, 128, 128, 0.15)',
+    '--cm-indent-guide-active': 'rgba(180, 180, 180, 0.35)',
     '--editor-pane-inactive-overlay': 'rgba(0, 0, 0, 0.28)',
     '--editor-pane-inactive-overlay-hover': 'rgba(0, 0, 0, 0.18)',
 

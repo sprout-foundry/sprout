@@ -95,7 +95,7 @@
 [x] - EDITOR: Enable the in-file find & replace panel from `@codemirror/search` — only `search()` is loaded, not `replace`/`replaceKeymap`. The global `SearchView` replace exists but the standard `Ctrl+H` in-editor replace panel is not functional.
 [x] - EDITOR: Use `@codemirror/lint` (installed but zero imports) — the package is available at v6.9.2 but never used. Should be wired up to enable diagnostics/error squiggles from linters or the LSP.
 [x] - EDITOR: Use `@codemirror/lint` (installed but zero imports) — the package is available at v6.9.2 but never used. Should be wired up to enable diagnostics/error squiggles from linters or the LSP. (duplicate — see line above)
-[] - EDITOR: Wire `@codemirror/lang-wast` (installed but unused) into the `getLanguageSupport()` extension-to-language switch.
+[x] - EDITOR: Wire `@codemirror/lang-wast` (installed but unused) into the `getLanguageSupport()` extension-to-language switch.
 [] - EDITOR: Add missing language support extensions — no syntax highlighting for Rust, C/C++, Java, Ruby, Shell/Bash, YAML, TOML, XML, SQL, Dockerfile, and many other common file types. Need to add corresponding `@codemirror/lang-*` packages and switch-case entries.
 [] - EDITOR: Add language mode switcher UI — currently language is detected by file extension only; there is no way for the user to manually override the language mode.
 [] - EDITOR: Make word wrap toggleable — currently `EditorView.lineWrapping` is hardcoded on. Add an `Alt+Z` toggle and a toolbar/menu option.

@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { EditorView, keymap, lineNumbers, highlightSpecialChars, highlightActiveLine, rectangularSelection, crosshairCursor } from '@codemirror/view';
+import { EditorView, keymap, KeyBinding, lineNumbers, highlightSpecialChars, highlightActiveLine, rectangularSelection, crosshairCursor } from '@codemirror/view';
 import { EditorState, Compartment } from '@codemirror/state';
 import { defaultKeymap, indentWithTab, history } from '@codemirror/commands';
-import { search, searchKeymap } from '@codemirror/search';
+import { search, searchKeymap, openSearchPanel } from '@codemirror/search';
 import { autocompletion, closeBrackets } from '@codemirror/autocomplete';
 import { syntaxHighlighting, defaultHighlightStyle, codeFolding, foldGutter, indentOnInput, bracketMatching } from '@codemirror/language';
 import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark';
@@ -422,6 +422,36 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       },
     });
 
+    // Ctrl+H / Cmd+H: open search panel and focus the replace input field.
+    // The standard searchKeymap only binds Mod-f (find). This extra binding
+    // provides VS Code-style Ctrl+H to jump straight into replace mode.
+    //
+    // NOTE: In read-only mode, the replace fields are not rendered by the
+    // search extension (@codemirror/search SearchPanel constructor), so
+    // the focus-shift to the replace input silently no-ops. Ctrl+H falls
+    // back to opening the find panel — identical to Ctrl+F behavior.
+    const replacePanelKeymap: KeyBinding[] = [
+      {
+        key: 'Mod-h',
+        preventDefault: true,
+        run: (view: EditorView) => {
+          openSearchPanel(view);
+          // After opening the panel, focus the replace input field.
+          // The panel is rendered asynchronously, so we use requestAnimationFrame.
+          requestAnimationFrame(() => {
+            const replaceInput = view.dom.querySelector<HTMLInputElement>(
+              '.cm-search input[name="replace"]'
+            );
+            if (replaceInput) {
+              replaceInput.focus();
+              replaceInput.select();
+            }
+          });
+          return true;
+        },
+      },
+    ];
+
     const extensions = [
       updateListener,
       EditorState.allowMultipleSelections.of(true),
@@ -431,6 +461,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       keymap.of([indentWithTab]),
       keymap.of(searchKeymap),
       keymap.of(customKeymap),
+      keymap.of(replacePanelKeymap),
       search(),
       autocompletion(),
       closeBrackets(),

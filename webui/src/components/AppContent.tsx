@@ -1016,6 +1016,7 @@ const AppContent: React.FC<AppContentProps> = ({
             direction="horizontal"
             className="grid-resize-handle-col"
             position="absolute"
+            style={{ left: `${colSplit}%` }}
             onResize={handlePaneResize('grid:col', 'horizontal')}
             onResizeEnd={handlePaneResizeEnd('grid:col')}
           />
@@ -1023,6 +1024,7 @@ const AppContent: React.FC<AppContentProps> = ({
             direction="vertical"
             className="grid-resize-handle-row"
             position="absolute"
+            style={{ top: `${rowSplit}%` }}
             onResize={handlePaneResize('grid:row', 'vertical')}
             onResizeEnd={handlePaneResizeEnd('grid:row')}
           />

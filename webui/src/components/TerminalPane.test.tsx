@@ -476,4 +476,78 @@ describe('TerminalPane context menu', () => {
 
     expect(getMenu()).toBeFalsy();
   });
+
+  it('Copy Link does NOT appear when no URL is under cursor', async () => {
+    // Ensure no URL mock is set — getLine returns null by default
+    mockTerm.buffer.active.getLine.mockReturnValue(null);
+
+    await act(async () => {
+      root.render(
+        <TerminalPane isActive={true} isConnected={false} showCloseButton={false} />
+      );
+    });
+    await flushPromises();
+
+    const xtermContainer = container.querySelector('.terminal-xterm');
+    const rect = {
+      left: 0, top: 0, width: 800, height: 480,
+      right: 800, bottom: 480, x: 0, y: 0,
+      toJSON: () => ({}),
+    } as DOMRect;
+    jest.spyOn(xtermContainer as HTMLElement, 'getBoundingClientRect').mockReturnValue(rect);
+
+    const paneContent = container.querySelector('.terminal-pane-content');
+    fireContextMenu(paneContent, 155, 10);
+    await flushPromises();
+
+    const texts = getMenuTexts();
+    expect(texts).not.toContain('Copy Link');
+  });
+
+  it('context menu closes on scroll', async () => {
+    await act(async () => {
+      root.render(
+        <TerminalPane isActive={true} isConnected={false} showCloseButton={false} />
+      );
+    });
+    await flushPromises();
+
+    const paneContent = container.querySelector('.terminal-pane-content');
+    fireContextMenu(paneContent);
+    await flushPromises();
+
+    expect(getMenu()).toBeTruthy();
+
+    await act(async () => {
+      window.dispatchEvent(new Event('scroll', { bubbles: true }));
+    });
+    await flushPromises();
+
+    expect(getMenu()).toBeFalsy();
+  });
+
+  it('context menu closes when pane deactivates', async () => {
+    await act(async () => {
+      root.render(
+        <TerminalPane isActive={true} isConnected={false} showCloseButton={false} />
+      );
+    });
+    await flushPromises();
+
+    const paneContent = container.querySelector('.terminal-pane-content');
+    fireContextMenu(paneContent);
+    await flushPromises();
+
+    expect(getMenu()).toBeTruthy();
+
+    // Deactivate the pane
+    await act(async () => {
+      root.render(
+        <TerminalPane isActive={false} isConnected={false} showCloseButton={false} />
+      );
+    });
+    await flushPromises();
+
+    expect(getMenu()).toBeFalsy();
+  });
 });

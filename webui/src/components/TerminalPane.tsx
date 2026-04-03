@@ -127,15 +127,20 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       const handleContextMenuOutside = () => {
         setContextMenu((prev) => ({ ...prev, visible: false }));
       };
+      const handleResize = () => {
+        setContextMenu((prev) => ({ ...prev, visible: false }));
+      };
       document.addEventListener('mousedown', handleClickOutside);
       window.addEventListener('scroll', handleScroll, true);
       document.addEventListener('keydown', handleKeyDown);
       window.addEventListener('contextmenu', handleContextMenuOutside);
+      window.addEventListener('resize', handleResize);
       return () => {
         document.removeEventListener('mousedown', handleClickOutside);
         window.removeEventListener('scroll', handleScroll, true);
         document.removeEventListener('keydown', handleKeyDown);
         window.removeEventListener('contextmenu', handleContextMenuOutside);
+        window.removeEventListener('resize', handleResize);
       };
     }, [contextMenu.visible]);
 
@@ -147,7 +152,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     const handleCopy = useCallback(() => {
       const term = xtermRef.current;
       if (term?.hasSelection()) {
-        copyToClipboard(term.getSelection());
+        copyToClipboard(term.getSelection()).catch(() => { /* clipboard denied */ });
       }
       closeContextMenu();
     }, [closeContextMenu]);
@@ -208,7 +213,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
             while ((match = urlRegex.exec(text)) !== null) {
               const start = match.index;
               const end = start + match[0].length;
-              if (cellX >= start && cellX <= end) {
+              if (cellX >= start && cellX < end) {
                 hasLink = true;
                 linkUrl = match[0];
                 break;

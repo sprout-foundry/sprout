@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
-import { createPortal } from 'react-dom';
 import { showThemedConfirm } from './ThemedDialog';
+import ContextMenu from './ContextMenu';
 import {
   FolderOpen,
   Folder,
@@ -80,33 +80,6 @@ interface ContextMenuState {
   file: FileInfo;
 }
 
-/** Registers global listeners to dismiss a context menu on outside mousedown or Escape. */
-function useMenuDismissal(
-  menuRef: React.RefObject<HTMLDivElement | null>,
-  closeRef: React.MutableRefObject<() => void>,
-  isOpen: boolean,
-): void {
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handlePointerDown = (event: MouseEvent) => {
-      const target = event.target as Node | null;
-      if (target && menuRef.current?.contains(target)) return;
-      closeRef.current();
-    };
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') closeRef.current();
-    };
-
-    window.addEventListener('mousedown', handlePointerDown);
-    window.addEventListener('keydown', handleEscape);
-    return () => {
-      window.removeEventListener('mousedown', handlePointerDown);
-      window.removeEventListener('keydown', handleEscape);
-    };
-  }, [isOpen, menuRef, closeRef]);
-}
-
 const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
   onFileSelect,
   selectedFile,
@@ -129,8 +102,6 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
   const [bgContextMenu, setBgContextMenu] = useState<{ x: number; y: number } | null>(null);
   const filesRef = useRef<FileInfo[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
-  const contextMenuRef = useRef<HTMLDivElement>(null);
-  const bgContextMenuRef = useRef<HTMLDivElement>(null);
   const fileListRef = useRef<HTMLDivElement>(null);
   const [internalSelectedFile, setInternalSelectedFile] = useState<string | null>(null);
 
@@ -253,12 +224,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
     return () => window.clearTimeout(timer);
   }, [draft]);
 
-  // Shared helper: dismiss a context menu on outside click or Escape
-  const closeItemMenuRef = useRef(() => setContextMenu(null));
-  const closeBgMenuRef = useRef(() => setBgContextMenu(null));
-
-  useMenuDismissal(contextMenuRef, closeItemMenuRef, contextMenu !== null);
-  useMenuDismissal(bgContextMenuRef, closeBgMenuRef, bgContextMenu !== null);
+  // ContextMenu handles its own dismissal
 
   const startDraft = useCallback((nextDraft: DraftState, initialValue = '') => {
     setContextMenu(null);
@@ -728,52 +694,42 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
         ) : null}
       </div>
 
-      {contextMenu && typeof document !== 'undefined'
-        ? createPortal(
-            <div
-              ref={contextMenuRef}
-              className="file-tree-context-menu"
-              style={{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }}
-              onClick={(event) => event.stopPropagation()}
-            >
-              {contextMenu.file.isDir ? (
-                <>
-                  <button className="file-tree-context-item" onClick={() => { setContextMenu(null); handleCreateItem('file', contextMenu.file.path); }}>Add file</button>
-                  <button className="file-tree-context-item" onClick={() => { setContextMenu(null); handleCreateItem('folder', contextMenu.file.path); }}>Add folder</button>
-                </>
-              ) : null}
-              <button className="file-tree-context-item" onClick={() => { setContextMenu(null); handleStartRename(contextMenu.file); }}>Rename</button>
-              {!contextMenu.file.isDir && (
-                <>
-                  <div className="file-tree-context-separator" />
-                  <button className="file-tree-context-item" onClick={() => { copyToClipboard(contextMenu.file.path); setContextMenu(null); }}>Copy relative path</button>
-                  {workspaceRoot && (
-                    <button className="file-tree-context-item" onClick={() => { copyToClipboard(`${workspaceRoot.replace(/\/+$/, '')}/${contextMenu.file.path}`); setContextMenu(null); }}>Copy absolute path</button>
-                  )}
-                  <button className="file-tree-context-item" onClick={() => { setContextMenu(null); onFileSelect(contextMenu.file); }}>Open in editor</button>
-                  <div className="file-tree-context-separator" />
-                </>
-              )}
-              <button className="file-tree-context-item danger" onClick={() => { setContextMenu(null); handleDeleteTreeItem(contextMenu.file); }}>Delete</button>
-            </div>,
-            document.body
-          )
-        : null}
+      <ContextMenu
+        isOpen={contextMenu !== null}
+        x={contextMenu?.x ?? 0}
+        y={contextMenu?.y ?? 0}
+        onClose={() => setContextMenu(null)}
+      >
+        {contextMenu?.file.isDir ? (
+          <>
+            <button className="context-menu-item" onClick={() => { if (!contextMenu) return; setContextMenu(null); handleCreateItem('file', contextMenu.file.path); }}>Add file</button>
+            <button className="context-menu-item" onClick={() => { if (!contextMenu) return; setContextMenu(null); handleCreateItem('folder', contextMenu.file.path); }}>Add folder</button>
+          </>
+        ) : null}
+        {contextMenu && <button className="context-menu-item" onClick={() => { setContextMenu(null); handleStartRename(contextMenu.file); }}>Rename</button>}
+        {contextMenu && !contextMenu.file.isDir && (
+          <>
+            <div className="context-menu-divider" />
+            <button className="context-menu-item" onClick={() => { copyToClipboard(contextMenu.file.path); setContextMenu(null); }}>Copy relative path</button>
+            {workspaceRoot && (
+              <button className="context-menu-item" onClick={() => { copyToClipboard(`${workspaceRoot.replace(/\/+$/, '')}/${contextMenu.file.path}`); setContextMenu(null); }}>Copy absolute path</button>
+            )}
+            <button className="context-menu-item" onClick={() => { setContextMenu(null); onFileSelect(contextMenu.file); }}>Open in editor</button>
+            <div className="context-menu-divider" />
+          </>
+        )}
+        {contextMenu && <button className="context-menu-item danger" onClick={() => { setContextMenu(null); handleDeleteTreeItem(contextMenu.file); }}>Delete</button>}
+      </ContextMenu>
 
-      {bgContextMenu && typeof document !== 'undefined'
-        ? createPortal(
-            <div
-              ref={bgContextMenuRef}
-              className="file-tree-context-menu"
-              style={{ left: `${bgContextMenu.x}px`, top: `${bgContextMenu.y}px` }}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <button className="file-tree-context-item" onClick={() => { setBgContextMenu(null); handleCreateItem('file'); }}>New File</button>
-              <button className="file-tree-context-item" onClick={() => { setBgContextMenu(null); handleCreateItem('folder'); }}>New Folder</button>
-            </div>,
-            document.body
-          )
-        : null}
+      <ContextMenu
+        isOpen={bgContextMenu !== null}
+        x={bgContextMenu?.x ?? 0}
+        y={bgContextMenu?.y ?? 0}
+        onClose={() => setBgContextMenu(null)}
+      >
+        <button className="context-menu-item" onClick={() => { setBgContextMenu(null); handleCreateItem('file'); }}>New File</button>
+        <button className="context-menu-item" onClick={() => { setBgContextMenu(null); handleCreateItem('folder'); }}>New Folder</button>
+      </ContextMenu>
     </div>
   );
 });

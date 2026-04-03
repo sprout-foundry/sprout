@@ -36,6 +36,8 @@ import {
   Eye,
   Columns2,
 } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { copyToClipboard } from '../utils/clipboard';
 import './EditorPane.css';
 
 interface EditorPaneProps {
@@ -52,6 +54,11 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   const [error, setError] = useState<string | null>(null);
   const [localContent, setLocalContent] = useState<string>('');
   const [showGoToSymbol, setShowGoToSymbol] = useState<boolean>(false);
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0 });
+  const contextMenuRef = useRef<HTMLDivElement>(null);
+  const [workspaceRoot, setWorkspaceRoot] = useState<string>('');
 
   const {
     panes,
@@ -83,6 +90,38 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
 
   // API service instance (singleton)
   const apiService = useRef(ApiService.getInstance()).current;
+
+  // Fetch workspace root on mount (for absolute path copy)
+  useEffect(() => {
+    apiService.getWorkspace().then(ws => {
+      setWorkspaceRoot(ws.workspace_root || '');
+    }).catch(() => {
+      // Graceful degradation - absolute path option just won't appear
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Close context menu on click outside or scroll
+  useEffect(() => {
+    const handleMouseDown = (e: MouseEvent) => {
+      if (!contextMenu.visible) return;
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+        setContextMenu({ visible: false, x: 0, y: 0 });
+      }
+    };
+
+    const handleScroll = () => {
+      if (contextMenu.visible) {
+        setContextMenu({ visible: false, x: 0, y: 0 });
+      }
+    };
+
+    document.addEventListener('mousedown', handleMouseDown);
+    document.addEventListener('scroll', handleScroll, true); // capture phase for scrolling inside any element
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown);
+      document.removeEventListener('scroll', handleScroll, true);
+    };
+  }, [contextMenu.visible]);
 
   // Get language support based on file extension
   const getLanguageSupport = useCallback((ext?: string) => {
@@ -204,6 +243,41 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     // Focus the editor after navigation
     dispatch.focus();
   }, []);
+
+  // ── Context menu handlers ─────────────────────────────────────
+  const hideContextMenu = useCallback(() => {
+    setContextMenu({ visible: false, x: 0, y: 0 });
+  }, []);
+
+  const handleEditorContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!buffer || !buffer.file || buffer.file.isDir) return;
+    if (buffer.kind !== 'file') return;
+    setContextMenu({ visible: true, x: e.clientX, y: e.clientY });
+  }, [buffer]);
+
+  const handleRevealInExplorer = useCallback(() => {
+    if (!buffer || !buffer.file) return;
+    window.dispatchEvent(new CustomEvent('ledit:reveal-in-explorer', {
+      detail: { path: buffer.file.path }
+    }));
+    hideContextMenu();
+  }, [buffer, hideContextMenu]);
+
+  const handleCopyRelativePath = useCallback(() => {
+    if (!buffer || !buffer.file) return;
+    copyToClipboard(buffer.file.path);
+    hideContextMenu();
+  }, [buffer, hideContextMenu]);
+
+  const handleCopyAbsolutePath = useCallback(() => {
+    if (!buffer || !buffer.file) return;
+    const root = workspaceRoot.replace(/\/+$/, '');
+    copyToClipboard(root + '/' + buffer.file.path);
+    hideContextMenu();
+  }, [buffer, hideContextMenu, workspaceRoot]);
+  // ──────────────────────────────────────────────────────────────
 
   // Save buffer
   const handleSave = useCallback(async () => {
@@ -654,7 +728,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         </div>
       )}
 
-      <div className="pane-content">
+      <div className="pane-content" onContextMenu={handleEditorContextMenu}>
         <div ref={editorRef} className="editor" />
       </div>
 
@@ -667,6 +741,37 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
           </span>
         </div>
       </div>
+
+      {contextMenu.visible && createPortal(
+        <div
+          ref={contextMenuRef}
+          className="file-tree-context-menu"
+          style={{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className="file-tree-context-item"
+            onClick={(e) => { e.stopPropagation(); handleRevealInExplorer(); }}
+          >
+            Reveal in File Explorer
+          </button>
+          <button
+            className="file-tree-context-item"
+            onClick={(e) => { e.stopPropagation(); handleCopyRelativePath(); }}
+          >
+            Copy relative path
+          </button>
+          {workspaceRoot && (
+            <button
+              className="file-tree-context-item"
+              onClick={(e) => { e.stopPropagation(); handleCopyAbsolutePath(); }}
+            >
+              Copy absolute path
+            </button>
+          )}
+        </div>,
+        document.body
+      )}
     </div>
   );
 };

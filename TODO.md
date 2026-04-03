@@ -117,8 +117,8 @@
 [x] - TERMINAL: Persist terminal height to `localStorage` — always resets to 400px on mount. Sidebar and context panel widths are already persisted; terminal height should be too.
 [x] - TERMINAL: Allow user to choose shell profile for new terminal instances (e.g., bash, zsh, fish).
 [x] - TERMINAL: Allow user to choose shell profile for new terminal instances (e.g., bash, zsh, fish).
-[] - FILE TREE: Add search/filter input to the file tree — currently there is no way to filter or fuzzy-find within the file tree (the command palette does project-wide file search, but not the tree itself).
-[] - FILE TREE: Add `.gitignore`-aware toggle — currently ignored files are sorted to the bottom but always visible. Add a toggle to hide them.
+[x] - FILE TREE: Add search/filter input to the file tree — currently there is no way to filter or fuzzy-find within the file tree (the command palette does project-wide file search, but not the tree itself).
+[x] - FILE TREE: Add `.gitignore`-aware toggle — currently ignored files are sorted to the bottom but always visible. Add a toggle to hide them.
 [] - FILE TREE: Add drag-and-drop support — no ability to move files between folders via drag-and-drop. Currently files can only be moved via the rename operation.
 
 ### Layout & Persistence Gaps

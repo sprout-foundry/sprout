@@ -236,7 +236,7 @@ func (tm *TerminalManager) resolveShell(shellOverride string) (shell string, she
 	userShell := os.Getenv("SHELL")
 	switch {
 	case userShell != "":
-		return userShell, []string{"--login"}, nil
+		return userShell, resolveShellArgs(userShell), nil
 	case shellExists("bash"):
 		return "bash", []string{"--login"}, nil
 	case shellExists("zsh"):

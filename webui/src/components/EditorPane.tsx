@@ -476,7 +476,11 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   }, [paneId, buffer?.id, buffer?.file?.ext, theme, themePack.id, hotkeys, customHighlightStyle, updateBufferContent, setBufferModified, updateBufferCursor, getLanguageSupport]); // eslint-disable-line react-hooks/exhaustive-deps -- handleSave intentionally excluded to prevent infinite re-init loop when buffer changes
 
 
-  // Listen for go to line event from toolbar
+  // Listen for go to line event from toolbar and global word-wrap toggle
+  // A small dedup guard prevents double-toggle if the same keyboard event is
+  // handled by both the CodeMirror keymap AND the global HotkeyProvider (e.g.
+  // if a user manually sets global:true on editor_toggle_word_wrap).
+  const lastWrapToggleRef = useRef(0);
   useEffect(() => {
     const handler = (e: Event) => {
       if (e.type === 'editor-goto-line') {
@@ -485,6 +489,9 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
           handleGoToLine(customEvent.detail.line);
         }
       } else if (e.type === 'editor-toggle-word-wrap') {
+        const now = Date.now();
+        if (now - lastWrapToggleRef.current < 100) return; // dedup: skip if toggled within last 100ms
+        lastWrapToggleRef.current = now;
         if (viewRef.current) {
           wordWrapEnabled.current = !wordWrapEnabled.current;
           viewRef.current.dispatch({

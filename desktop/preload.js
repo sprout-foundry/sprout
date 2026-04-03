@@ -16,4 +16,9 @@ contextBridge.exposeInMainWorld('leditDesktop', {
   installWsl: () => ipcRenderer.invoke('desktop:installWsl'),
   installGitForWindows: () => ipcRenderer.invoke('desktop:installGitForWindows'),
   appVersion: () => ipcRenderer.invoke('desktop:appVersion'),
+  onDesktopHotkey: (callback) => {
+    const handler = (_event, commandId) => callback(commandId);
+    ipcRenderer.on('desktop:hotkey', handler);
+    return () => ipcRenderer.removeListener('desktop:hotkey', handler);
+  },
 });

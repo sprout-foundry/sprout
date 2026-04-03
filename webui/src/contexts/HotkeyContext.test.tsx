@@ -350,3 +350,181 @@ describe('fallback hotkeys are wired to hotkey commands', () => {
     window.removeEventListener('ledit:hotkey', handler);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Tests: Desktop hotkey bridge (Electron IPC)
+// ---------------------------------------------------------------------------
+
+describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
+  let registeredCallback: ((commandId: string) => void) | null;
+  let cleanupFn: (() => void) | undefined;
+
+  beforeEach(() => {
+    registeredCallback = null;
+    cleanupFn = undefined;
+    // Install a mock leditDesktop API on the window.
+    (window as any).leditDesktop = {
+      platform: 'linux',
+      onDesktopHotkey: (callback: (commandId: string) => void) => {
+        registeredCallback = callback;
+        const handler = () => { registeredCallback = null; };
+        cleanupFn = handler;
+        return handler;
+      },
+      appVersion: () => Promise.resolve('0.0.0-test'),
+    };
+  });
+
+  afterEach(() => {
+    delete (window as any).leditDesktop;
+    registeredCallback = null;
+    cleanupFn = undefined;
+  });
+
+  it('dispatches ledit:hotkey when onDesktopHotkey fires a global command', async () => {
+    act(() => {
+      root.render(
+        React.createElement(HotkeyProvider, null, React.createElement('div')),
+      );
+    });
+
+    await flushPromises();
+
+    // Simulate the environment where the listener registered successfully.
+    expect(registeredCallback).not.toBeNull();
+
+    const handler = jest.fn();
+    window.addEventListener('ledit:hotkey', handler);
+
+    // Simulate Electron sending a desktop hotkey for a global command
+    registeredCallback!('close_all_editors');
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler.mock.calls[0][0].detail.commandId).toBe('close_all_editors');
+    expect(handler.mock.calls[0][0].detail.key).toBe('(desktop)');
+
+    window.removeEventListener('ledit:hotkey', handler);
+  });
+
+  it('does NOT dispatch when input is focused and command is not global', async () => {
+    act(() => {
+      root.render(
+        React.createElement(HotkeyProvider, null, React.createElement('div')),
+      );
+    });
+
+    await flushPromises();
+
+    // Create and focus an input element
+    const input = document.createElement('input');
+    container.appendChild(input);
+    input.focus();
+
+    const handler = jest.fn();
+    window.addEventListener('ledit:hotkey', handler);
+
+    // split_editor_horizontal has global: false in the fallback hotkeys.
+    // When an input is focused, the desktop bridge should suppress it.
+    registeredCallback!('split_editor_horizontal');
+
+    expect(handler).not.toHaveBeenCalled();
+
+    input.remove();
+    window.removeEventListener('ledit:hotkey', handler);
+  });
+
+  it('dispatches non-global command when no input is focused', async () => {
+    act(() => {
+      root.render(
+        React.createElement(HotkeyProvider, null, React.createElement('div')),
+      );
+    });
+
+    await flushPromises();
+
+    // Ensure no input is focused (document.body is focused)
+    document.body.focus();
+
+    const handler = jest.fn();
+    window.addEventListener('ledit:hotkey', handler);
+
+    registeredCallback!('split_editor_horizontal');
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler.mock.calls[0][0].detail.commandId).toBe('split_editor_horizontal');
+
+    window.removeEventListener('ledit:hotkey', handler);
+  });
+
+  it('dispatches global command even when contentEditable is focused', async () => {
+    act(() => {
+      root.render(
+        React.createElement(HotkeyProvider, null, React.createElement('div')),
+      );
+    });
+
+    await flushPromises();
+
+    // Simulate a contentEditable element (like CodeMirror's editor)
+    const editable = document.createElement('div');
+    editable.contentEditable = 'true';
+    container.appendChild(editable);
+    editable.focus();
+
+    const handler = jest.fn();
+    window.addEventListener('ledit:hotkey', handler);
+
+    // close_all_editors has global: true, should fire even with contentEditable focused
+    registeredCallback!('close_all_editors');
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler.mock.calls[0][0].detail.commandId).toBe('close_all_editors');
+
+    editable.remove();
+    window.removeEventListener('ledit:hotkey', handler);
+  });
+
+  it('does not leak IPC listeners on unmount', async () => {
+    act(() => {
+      root.render(
+        React.createElement(HotkeyProvider, null, React.createElement('div')),
+      );
+    });
+
+    await flushPromises();
+    expect(registeredCallback).not.toBeNull();
+
+    // Unmount — the cleanup function should be called
+    act(() => {
+      root?.unmount();
+    });
+
+    // After unmount, the callback should have been cleaned up
+    expect(registeredCallback).toBeNull();
+  });
+
+  it('gracefully handles missing leditDesktop API (non-Electron browsers)', async () => {
+    delete (window as any).leditDesktop;
+
+    act(() => {
+      root.render(
+        React.createElement(HotkeyProvider, null, React.createElement('div')),
+      );
+    });
+
+    await flushPromises();
+
+    // No crash — the provider should work fine without the desktop API
+    const handler = jest.fn();
+    window.addEventListener('ledit:hotkey', handler);
+
+    // Web hot keys should still work
+    const ev = new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true });
+    window.dispatchEvent(ev);
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler.mock.calls[0][0].detail.commandId).toBe('save_file');
+
+    window.removeEventListener('ledit:hotkey', handler);
+  });
+});

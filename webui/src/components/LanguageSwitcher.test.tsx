@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { act } from 'react';
@@ -9,7 +8,7 @@ import LanguageSwitcher from './LanguageSwitcher';
 // ---------------------------------------------------------------------------
 
 jest.mock('../extensions/languageRegistry', () => {
-  const mockEntries = [
+  const mockEntries: Array<{ id: string; name: string; extensions: string[] }> = [
     { id: 'javascript', name: 'JavaScript', extensions: ['js', 'mjs', 'cjs'] },
     { id: 'typescript', name: 'TypeScript', extensions: ['ts'] },
     { id: 'python', name: 'Python', extensions: ['py'] },
@@ -21,7 +20,7 @@ jest.mock('../extensions/languageRegistry', () => {
   ];
   return {
     allLanguageEntries: mockEntries,
-    getLanguageExtensions: (_args?: any) => [],
+    getLanguageExtensions: () => [],
     resolveLanguageId: jest.fn(),
     detectLanguage: jest.fn(),
   };
@@ -37,14 +36,14 @@ jest.mock('lucide-react', () => ({
 let rafId = 0;
 beforeAll(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-  global.requestAnimationFrame = ((cb) => {
+  global.requestAnimationFrame = ((cb: FrameRequestCallback) => {
     rafId += 1;
     cb(Date.now());
     return rafId;
   }) as typeof requestAnimationFrame;
-  global.cancelAnimationFrame = jest.fn();
+  global.cancelAnimationFrame = jest.fn() as jest.Mock;
   // jsdom does not implement scrollIntoView
-  Element.prototype.scrollIntoView = jest.fn();
+  Element.prototype.scrollIntoView = jest.fn() as jest.Mock;
 });
 
 // ---------------------------------------------------------------------------
@@ -117,7 +116,7 @@ function typeInSearch(text: string) {
       'value',
     );
     expect(desc?.set).toBeDefined();
-    desc!.set!.call(input, text);
+    (desc as PropertyDescriptor).set!.call(input, text);
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
 }
@@ -391,5 +390,41 @@ describe('LanguageSwitcher', () => {
     expect(footer!.textContent).toContain('Navigate');
     expect(footer!.textContent).toContain('Select');
     expect(footer!.textContent).toContain('Close');
+  });
+
+  // ---- 16. Closes popup when button is clicked again ----
+  test('closes popup when button is clicked again', () => {
+    renderSwitcher();
+    const btn = document.querySelector('[data-testid="language-switcher-button"]') as HTMLElement;
+
+    // Open
+    act(() => { btn.click(); });
+    expect(document.querySelector('[data-testid="language-switcher-popup"]')).not.toBeNull();
+
+    // Close by clicking the same button again
+    act(() => { btn.click(); });
+    expect(document.querySelector('[data-testid="language-switcher-popup"]')).toBeNull();
+  });
+
+  // ---- 17. ArrowUp at index 0 stays at 0 ----
+  test('keyboard navigation: ArrowUp at index 0 stays at 0', () => {
+    renderSwitcher({ currentLanguageId: null, isAutoDetected: false });
+    openPopup();
+
+    // selectedIndex starts at 0 (Auto-detect)
+    fireSearchKeyDown('ArrowUp');
+
+    const items = document.querySelectorAll('.language-switcher-item');
+    expect(items[0]!.classList.contains('selected')).toBe(true);
+    // Nothing else should be selected
+    expect(items[1]!.classList.contains('selected')).toBe(false);
+  });
+
+  // ---- 18. Unknown language ID renders "Auto" ----
+  test('renders "Auto" when currentLanguageId is an unknown value', () => {
+    renderSwitcher({ currentLanguageId: 'nonexistent-lang', isAutoDetected: false });
+    const btn = document.querySelector('[data-testid="language-switcher-button"]')!;
+    const label = btn.querySelector('.language-switcher-label')!;
+    expect(label.textContent).toBe('Auto');
   });
 });

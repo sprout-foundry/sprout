@@ -56,6 +56,64 @@ export function measureIndent(text: string, tabSize: number): number {
   return col;
 }
 
+/**
+ * Compute the text-offset positions where indent-guide widgets should be
+ * placed for a single line's leading whitespace.
+ *
+ * For each indent-unit boundary reached during the whitespace scan the
+ * character index immediately *after* the boundary is recorded.  Spaces
+ * contribute one column each; tabs advance to the next tab-stop.
+ *
+ * @returns Array of 0-based character offsets into `lineText` (i.e.
+ *          "after this char, insert the widget").
+ */
+export function computeGuidePositions(
+  lineText: string,
+  tabSize: number,
+): number[] {
+  if (tabSize <= 0) return [];
+
+  const indentCol = measureIndent(lineText, tabSize);
+  const numGuides = Math.floor(indentCol / tabSize);
+  if (numGuides === 0) return [];
+
+  let col = 0;
+  let emitted = 0;
+  const positions: number[] = [];
+
+  for (let i = 0; i < lineText.length && emitted < numGuides; i++) {
+    const ch = lineText[i];
+
+    if (ch === ' ') {
+      col++;
+      if (col % tabSize === 0) {
+        positions.push(i + 1);
+        emitted++;
+      }
+    } else if (ch === '\t') {
+      const tabEnd = col + (tabSize - (col % tabSize));
+      const firstBoundary = Math.ceil((col + 1) / tabSize) * tabSize;
+
+      for (
+        let g = firstBoundary;
+        g <= tabEnd && emitted < numGuides;
+        g += tabSize
+      ) {
+        // Dedup: multiple boundaries in a single tab map to the same offset.
+        if (positions.length === 0 || positions[positions.length - 1] !== i + 1) {
+          positions.push(i + 1);
+          emitted++;
+        }
+      }
+      col = tabEnd;
+    } else {
+      break; // reached non-whitespace
+    }
+  }
+
+  return positions;
+}
+
 // ── Widget type ─────────────────────────────────────────────────────
 
 /**
@@ -101,19 +159,44 @@ function indentGuideDeco(active: boolean): Decoration {
 const guidePlugin = ViewPlugin.fromClass(
   class IndentGuidePlugin {
     decorations: DecorationSet;
+    private lastCursorLine = -1;
 
     constructor(view: EditorView) {
       this.decorations = this.buildDecorations(view);
+      // Initialise cursor-line cache so the first selection-only update
+      // can short-circuit when the head hasn't moved lines.
+      const sel = view.state.selection.main;
+      this.lastCursorLine = view.state.doc.length > 0
+        ? view.state.doc.lineAt(sel.head).number
+        : -1;
     }
 
     update(update: ViewUpdate): void {
+      // Structural changes always require a full rebuild.
       if (
         update.viewportChanged ||
         update.docChanged ||
-        update.selectionSet ||
         update.transactions.some((t) => t.reconfigured)
       ) {
         this.decorations = this.buildDecorations(update.view);
+        const sel = update.state.selection.main;
+        this.lastCursorLine = update.state.doc.length > 0
+          ? update.state.doc.lineAt(sel.head).number
+          : -1;
+        return;
+      }
+
+      // Selection-only change: only rebuild if the cursor moved to a
+      // different line (active-guide highlighting changes).
+      if (update.selectionSet) {
+        const sel = update.state.selection.main;
+        const newLine = update.state.doc.length > 0
+          ? update.state.doc.lineAt(sel.head).number
+          : -1;
+        if (newLine !== this.lastCursorLine) {
+          this.lastCursorLine = newLine;
+          this.decorations = this.buildDecorations(update.view);
+        }
       }
     }
 
@@ -159,73 +242,22 @@ const guidePlugin = ViewPlugin.fromClass(
           continue;
         }
 
-        const indentCol = measureIndent(lineText, tabSize);
-        const numGuides = Math.floor(indentCol / tabSize);
-
-        if (numGuides === 0) {
-          pos = line.to + 1;
-          continue;
-        }
-
         const isActive = line.number === cursorLine;
         const lineFrom = line.from;
 
-        // Walk leading whitespace, tracking visual columns.
-        let col = 0;
-        let emitted = 0;
-
-        for (
-          let i = 0;
-          i < lineText.length && emitted < numGuides;
-          i++
-        ) {
-          const ch = lineText[i];
-
-          if (ch === ' ') {
-            col++;
-            if (col % tabSize === 0 && col > 0) {
-              pieces.push({
-                from: lineFrom + i + 1,
-                deco: indentGuideDeco(isActive),
-              });
-              emitted++;
-            }
-          } else if (ch === '\t') {
-            // A tab may span multiple guide boundaries.
-            const tabEnd = col + (tabSize - (col % tabSize));
-            const firstBoundary =
-              Math.ceil((col + 1) / tabSize) * tabSize;
-
-            for (
-              let g = firstBoundary;
-              g <= tabEnd && emitted < numGuides;
-              g += tabSize
-            ) {
-              // Emit only one decoration per position. Multiple boundaries in a
-              // single tab all map to the same text offset (after the tab char).
-              if (
-                pieces.length === 0 ||
-                pieces[pieces.length - 1].from !== lineFrom + i + 1
-              ) {
-                pieces.push({
-                  from: lineFrom + i + 1,
-                  deco: indentGuideDeco(isActive),
-                });
-                emitted++;
-              }
-            }
-            col = tabEnd;
-          } else {
-            break; // reached non-whitespace
-          }
+        const positions = computeGuidePositions(lineText, tabSize);
+        for (const offset of positions) {
+          pieces.push({
+            from: lineFrom + offset,
+            deco: indentGuideDeco(isActive),
+          });
         }
 
         pos = line.to + 1;
       }
 
-      // Decoration.set requires ranges in ascending order.
-      pieces.sort((a, b) => a.from - b.from);
-
+      // Ranges are already in ascending document order because lines are
+      // walked top-down and positions within each line are monotonic.
       return Decoration.set(
         pieces.map(({ from, deco }) => deco.range(from)),
         true, // already sorted
@@ -250,6 +282,11 @@ const guidePlugin = ViewPlugin.fromClass(
  * fallback colours when `--cm-indent-guide` is not defined.
  */
 const indentGuideBaseTheme = EditorView.baseTheme({
+  // NOTE: The indent-guide rendering technique requires `.cm-line` to have
+  // `position: relative`.  If another extension ever overrides this, the
+  // absolutely-positioned guide spans will float up to the nearest
+  // positioned ancestor and span the entire editor height instead of one
+  // line.  This is the first thing to check if guides render incorrectly.
   '.cm-line': {
     position: 'relative',
   },

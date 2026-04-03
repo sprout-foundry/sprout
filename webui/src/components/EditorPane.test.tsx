@@ -164,6 +164,12 @@ jest.mock('@codemirror/view', () => ({
   highlightActiveLine: () => [],
   rectangularSelection: () => [],
   crosshairCursor: () => [],
+  Decoration: {
+    mark: jest.fn(() => ({ range: jest.fn() })),
+    set: jest.fn(),
+    none: [],
+    widget: jest.fn(),
+  },
 }));
 
 jest.mock('@codemirror/state', () => {

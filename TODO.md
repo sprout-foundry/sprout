@@ -112,7 +112,7 @@
 
 ### Terminal & File Pane Gaps
 
-[] - TERMINAL: Add terminal tabs to support 3+ terminal sessions — currently the model is binary (0 or 2 side-by-side panes). Need a tab bar with named sessions and add/remove cycle.
+[x] - TERMINAL: Add terminal tabs to support 3+ terminal sessions — currently the model is binary (0 or 2 side-by-side panes). Need a tab bar with named sessions and add/remove cycle.
 [] - TERMINAL: Add vertical terminal split option — currently only horizontal split is supported.
 [] - TERMINAL: Persist terminal height to `localStorage` — always resets to 400px on mount. Sidebar and context panel widths are already persisted; terminal height should be too.
 [] - TERMINAL: Allow user to choose shell profile for new terminal instances (e.g., bash, zsh, fish).

@@ -205,6 +205,21 @@ describe('getEditorKeymap', () => {
       expect(toggleWrap).toBeDefined();
       expect(typeof toggleWrap!.run).toBe('function');
     });
+
+    it('invokes onToggleWordWrap and returns true when run is called', () => {
+      const onToggleWordWrap = jest.fn();
+      const actions = { onSave: jest.fn(), onGoToLine: jest.fn(), onToggleWordWrap };
+      const entries: HotkeyEntry[] = [
+        { key: 'Alt+Z', command_id: 'editor_toggle_word_wrap' },
+      ];
+      const keymap = getEditorKeymap(entries, actions);
+      const toggleWrap = keymap.find((b) => b.key === 'Alt-z');
+      expect(toggleWrap).toBeDefined();
+
+      const result = toggleWrap!.run(null as any);
+      expect(result).toBe(true);
+      expect(onToggleWordWrap).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('fallback defaults (no hotkey entries)', () => {

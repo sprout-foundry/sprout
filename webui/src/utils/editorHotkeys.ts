@@ -6,6 +6,7 @@ interface EditorHotkeyActions {
   onSave?: () => void;
   onGoToLine?: () => void;
   onGoToSymbol?: () => void;
+  onToggleWordWrap?: () => void;
 }
 
 // ── Editor line-manipulation helpers ────────────────────────────────
@@ -214,6 +215,7 @@ const EDITOR_COMMAND_IDS = new Set([
   'editor_insert_line_above',
   'editor_select_all_occurrences',
   'editor_add_selection_to_next_match',
+  'editor_toggle_word_wrap',
 ]);
 
 // ── Public API ──────────────────────────────────────────────────────
@@ -350,6 +352,17 @@ export function getEditorKeymap(
     bindings.push({ key: 'Mod-d', preventDefault: true, run: (v) => selectNextOccurrence(v) });
   } else {
     bindings.push(...addNextMatchBindings);
+  }
+
+  // Toggle word wrap — fallback to Alt-z (VS Code default).
+  const toggleWordWrapBindings = bindingsFor('editor_toggle_word_wrap', () => {
+    actions.onToggleWordWrap?.();
+    return true;
+  });
+  if (toggleWordWrapBindings.length === 0) {
+    bindings.push({ key: 'Alt-z', preventDefault: true, run: () => { actions.onToggleWordWrap?.(); return true; } });
+  } else {
+    bindings.push(...toggleWordWrapBindings);
   }
 
   return bindings;

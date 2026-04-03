@@ -195,6 +195,18 @@ describe('getEditorKeymap', () => {
     });
   });
 
+  describe('editor_toggle_word_wrap bindings', () => {
+    it('produces bindings when configured', () => {
+      const entries: HotkeyEntry[] = [
+        { key: 'Alt+Z', command_id: 'editor_toggle_word_wrap' },
+      ];
+      const keymap = getEditorKeymap(entries, emptyActions);
+      const toggleWrap = keymap.find((b) => b.key === 'Alt-z');
+      expect(toggleWrap).toBeDefined();
+      expect(typeof toggleWrap!.run).toBe('function');
+    });
+  });
+
   describe('fallback defaults (no hotkey entries)', () => {
     it('includes Mod-Enter fallback for editor_insert_line_below when no entries provided', () => {
       const keymap = getEditorKeymap(null, emptyActions);
@@ -259,6 +271,14 @@ describe('getEditorKeymap', () => {
       expect(addNext!.preventDefault).toBe(true);
       expect(typeof addNext!.run).toBe('function');
     });
+
+    it('includes Alt-z fallback for editor_toggle_word_wrap when no entries provided', () => {
+      const keymap = getEditorKeymap(null, emptyActions);
+      const toggleWrap = keymap.find((b) => b.key === 'Alt-z');
+      expect(toggleWrap).toBeDefined();
+      expect(toggleWrap!.preventDefault).toBe(true);
+      expect(typeof toggleWrap!.run).toBe('function');
+    });
   });
 
   describe('EDITOR_COMMAND_IDS coverage', () => {
@@ -310,6 +330,14 @@ describe('getEditorKeymap', () => {
       expect(keymap.some((b) => b.key === 'Mod-d')).toBe(true);
     });
 
+    it('includes editor_toggle_word_wrap as a handled command_id', () => {
+      const entries: HotkeyEntry[] = [
+        { key: 'Alt+Z', command_id: 'editor_toggle_word_wrap' },
+      ];
+      const keymap = getEditorKeymap(entries, emptyActions);
+      expect(keymap.some((b) => b.key === 'Alt-z')).toBe(true);
+    });
+
     it('ignores entries with unknown command_ids', () => {
       const entries: HotkeyEntry[] = [
         { key: 'Ctrl+Enter', command_id: 'unknown_command' },
@@ -319,7 +347,7 @@ describe('getEditorKeymap', () => {
       // fallback for insert_line_below should still be present.
       expect(keymap.some((b) => b.key === 'Mod-Enter')).toBe(true);
       // Only fallbacks + save + goto — no binding from the unknown entry.
-      const knownKeys = ['Mod-s', 'Mod-g', 'Mod-Enter', 'Mod-Shift-Enter', 'Mod-Shift-l', 'Mod-Shift-o', 'Mod-d'];
+      const knownKeys = ['Mod-s', 'Mod-g', 'Mod-Enter', 'Mod-Shift-Enter', 'Mod-Shift-l', 'Mod-Shift-o', 'Mod-d', 'Alt-z'];
       expect(keymap.every((b) => b.key != null && knownKeys.includes(b.key))).toBe(true);
     });
   });

@@ -20,6 +20,7 @@ import { getEditorKeymap } from '../utils/editorHotkeys';
 import { diffGutter, updateDiffGutter, clearDiffGutter } from '../extensions/diffGutter';
 import { lintDiagnostics, clearDiagnostics, createDebouncedDiagnosticsUpdater } from '../extensions/lintDiagnostics';
 import { cursorHistoryPlugin } from '../extensions/cursorHistory';
+import { indentGuidesPlugin } from '../extensions/indentGuides';
 import { getLanguageExtensions, resolveLanguageId } from '../extensions/languageRegistry';
 import { ApiService } from '../services/api';
 import {
@@ -475,6 +476,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       closeBrackets(),
       history(),
       cursorHistoryPlugin,
+      indentGuidesPlugin(),
       indentOnInput(),
       highlightSpecialChars(),
       highlightActiveLine(),

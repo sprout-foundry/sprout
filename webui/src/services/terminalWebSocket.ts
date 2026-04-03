@@ -5,6 +5,9 @@ type TerminalEventCallback = (event: any) => void;
 
 class TerminalWebSocketService {
   private static instance: TerminalWebSocketService;
+  /** Registry of all live instances (including the singleton). Used by the
+   *  visibility change handler to freeze/resume all terminal connections. */
+  private static readonly instances = new Set<TerminalWebSocketService>();
   private ws: WebSocket | null = null;
   private callbacks: TerminalEventCallback[] = [];
   private reconnectAttempts = 0;
@@ -22,9 +25,33 @@ class TerminalWebSocketService {
 
   private constructor() {}
 
+  // ── Static instance registry ──────────────────────────────────────────
+
+  /** Register an instance so it is included in freezeAll / resumeAll calls. */
+  static registerInstance(inst: TerminalWebSocketService): void {
+    TerminalWebSocketService.instances.add(inst);
+  }
+
+  /** Remove an instance from the registry. Called on permanent teardown (disconnect). */
+  static unregisterInstance(inst: TerminalWebSocketService): void {
+    TerminalWebSocketService.instances.delete(inst);
+  }
+
+  /** Call freeze() on every registered instance. Used by the visibility handler. */
+  static freezeAll(): void {
+    TerminalWebSocketService.instances.forEach((inst) => inst.freeze());
+  }
+
+  /** Call resume() on every registered instance. Used by the visibility handler. */
+  static resumeAll(): void {
+    TerminalWebSocketService.instances.forEach((inst) => inst.resume());
+  }
+
   /** Creates a fresh independent instance (not the singleton). Use for split panes. */
   static createInstance(): TerminalWebSocketService {
-    return new TerminalWebSocketService();
+    const inst = new TerminalWebSocketService();
+    TerminalWebSocketService.registerInstance(inst);
+    return inst;
   }
 
   private startPingInterval() {
@@ -74,6 +101,7 @@ class TerminalWebSocketService {
   static getInstance(): TerminalWebSocketService {
     if (!TerminalWebSocketService.instance) {
       TerminalWebSocketService.instance = new TerminalWebSocketService();
+      TerminalWebSocketService.registerInstance(TerminalWebSocketService.instance);
     }
     return TerminalWebSocketService.instance;
   }
@@ -215,6 +243,8 @@ class TerminalWebSocketService {
     this.isConnected = false;
     this.clearPersistedSessionId();
     this.sessionId = null;
+    // Permanent teardown — remove from the freeze/resume registry.
+    TerminalWebSocketService.unregisterInstance(this);
   }
 
   onEvent(callback: TerminalEventCallback) {

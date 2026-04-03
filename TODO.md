@@ -10,7 +10,7 @@
 [x] - WEBUI: The command palette could be improved by as soon as a user starts typing is starts fuzzy finding to commands first, then filenames etc and keeps filtering as typing happens.
 [x] - WEBUI: Update the git viewer to have 2 different sections. 1 for the current commit flow, and a second for viewing past commits and viewing individual file diffs or a full listview of all the file diffs for that commit. Currently there is some duplication here. Clean it up.
 [x] - The maximum iterations of 1000 appears to be a hard stop, but should reset after every entered prompt. Maybe the right move is to just remove it entirely unless a user passes in a specific max iterations value
-[x] - WEBUI: When a website, or a pwd gets "paused" by chrome, it changes state in ways that we are not handling correctly in the WEBUI. We need to make sure that it still works when it gets restored and that we don't lose the terminal session that was attached, or the chat session.
+[x] - WEBUI: When a website, or a pwd gets "paused" by chrome, it changes state in ways that we are not handling correctly in the WEBUI. We need to make sure that it still works when it gets restored and that we don't lose the terminal session that was attached, or the chat session. (backend has extended timeouts; frontend has freeze()/resume() methods and visibilitychange listener wired up)
 [x] - WEBUI: We need to add support for multiple independent chats that can be managed and concurrently run.
 [x] - WEBUI: Missing costs and token counting in the status tab of the webui chat.
 [x] - WEBUI: In the status tab of the webui chat, the duration is not accurate. It appears to anchor to the first time the tab is opened and never progresses

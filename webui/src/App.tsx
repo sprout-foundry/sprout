@@ -19,6 +19,7 @@ import {
   switchChatSession,
 } from './services/chatSessions';
 import { debugLog } from './utils/log';
+import { usePageVisibility } from './hooks/usePageVisibility';
 
 // Service Worker Registration
 const registerServiceWorker = async () => {
@@ -391,6 +392,11 @@ function App() {
     platformActionMessage: null,
     error: null,
   });
+
+  // Wire up browser tab freeze/resume for WebSocket connections.
+  // When Chrome throttles a background tab, WebSocket connections become stale.
+  // This hook calls freeze()/resume() on all WS services when visibility changes.
+  usePageVisibility();
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.localStorage) {

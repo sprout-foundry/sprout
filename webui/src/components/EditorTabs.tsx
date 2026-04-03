@@ -423,7 +423,7 @@ const EditorTabs: React.FC<EditorTabsProps> = ({ paneId, actions, compact = fals
               onClick={(event) => event.stopPropagation()}
             >
               <button
-                className="tab-context-item"
+                className="tab-context-item danger"
                 onClick={() => {
                   setEmptyAreaContextMenu(null);
                   if (paneId) {

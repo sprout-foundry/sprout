@@ -53,6 +53,8 @@ const fallbackHotkeys: HotkeyEntry[] = [
   { key: 'Ctrl+Tab', command_id: 'focus_next_tab', global: false },
   { key: 'Ctrl+Shift+Tab', command_id: 'focus_prev_tab', global: false },
   { key: 'Alt+Z', command_id: 'editor_toggle_word_wrap', global: false },
+  { key: 'Ctrl+K', command_id: 'split_editor_horizontal', global: false },
+  { key: 'Cmd+K', command_id: 'split_editor_horizontal', global: false },
 ];
 
 // Key mapping for special keys

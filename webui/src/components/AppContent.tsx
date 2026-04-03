@@ -206,6 +206,8 @@ const AppContent: React.FC<AppContentProps> = ({
     closeSplit,
     closePane,
     closeBuffer,
+    closeAllBuffers,
+    closeOtherBuffers,
     openFile,
     openWorkspaceBuffer,
     paneSizes,
@@ -612,6 +614,14 @@ const AppContent: React.FC<AppContentProps> = ({
             closeBuffer(activeBufferId);
           }
           break;
+        case 'close_all_editors':
+          closeAllBuffers();
+          break;
+        case 'close_other_editors':
+          if (activeBufferId) {
+            closeOtherBuffers(activeBufferId);
+          }
+          break;
         case 'save_all_files':
           void saveAllBuffers();
           break;
@@ -629,7 +639,7 @@ const AppContent: React.FC<AppContentProps> = ({
     
     window.addEventListener('ledit:hotkey', handleHotkey);
     return () => window.removeEventListener('ledit:hotkey', handleHotkey);
-  }, [activeBufferId, activePaneId, buffers, closeBuffer, focusTabIndex, handlePrimaryViewChange, handleSplitRequest, onSidebarToggle, onTerminalExpandedChange, isTerminalExpanded, openWorkspaceBuffer, onViewChange, saveAllBuffers, switchPane, switchToBuffer]);
+  }, [activeBufferId, activePaneId, buffers, closeAllBuffers, closeBuffer, closeOtherBuffers, focusTabIndex, handlePrimaryViewChange, handleSplitRequest, onSidebarToggle, onTerminalExpandedChange, isTerminalExpanded, openWorkspaceBuffer, onViewChange, saveAllBuffers, switchPane, switchToBuffer]);
 
   // Handler to open hotkeys config in editor
   const handleOpenHotkeysConfig = useCallback(() => {

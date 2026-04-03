@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, FileCode } from 'lucide-react';
 import { allLanguageEntries } from '../extensions/languageRegistry';
@@ -9,6 +9,9 @@ interface LanguageSwitcherProps {
   isAutoDetected: boolean;
   onLanguageChange: (languageId: string | null) => void;
 }
+
+/** Estimated total popup height (max-height list + search + footer + borders). */
+const ESTIMATED_POPUP_HEIGHT = 350;
 
 /**
  * A compact language mode switcher for the editor toolbar.
@@ -51,12 +54,23 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
     setSelectedIndex(prev => Math.min(prev, items.length));
   }, [items.length]);
 
+  // Reset selected index when popup reopens
+  useEffect(() => {
+    if (isOpen) setSelectedIndex(0);
+  }, [isOpen]);
+
   // Focus search when opened
   useEffect(() => {
     if (isOpen && searchRef.current) {
       searchRef.current.focus();
     }
   }, [isOpen]);
+
+  // Close popup and return focus to the trigger button
+  const closePopup = useCallback(() => {
+    setIsOpen(false);
+    buttonRef.current?.focus();
+  }, []);
 
   // Close on outside clicks
   useEffect(() => {
@@ -67,7 +81,7 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
         popupRef.current && !popupRef.current.contains(e.target as Node) &&
         buttonRef.current && !buttonRef.current.contains(e.target as Node)
       ) {
-        setIsOpen(false);
+        closePopup();
       }
     };
 
@@ -78,15 +92,15 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
       cancelAnimationFrame(timer);
       document.removeEventListener('mousedown', handler);
     };
-  }, [isOpen]);
+  }, [isOpen, closePopup]);
 
   // Close on scroll
   useEffect(() => {
     if (!isOpen) return;
-    const handler = () => setIsOpen(false);
+    const handler = () => closePopup();
     window.addEventListener('scroll', handler, true);
     return () => window.removeEventListener('scroll', handler, true);
-  }, [isOpen]);
+  }, [isOpen, closePopup]);
 
   // Close on Escape
   useEffect(() => {
@@ -94,19 +108,19 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        setIsOpen(false);
+        closePopup();
       }
     };
     document.addEventListener('keydown', handler, true);
     return () => document.removeEventListener('keydown', handler, true);
-  }, [isOpen]);
+  }, [isOpen, closePopup]);
 
   // Determine the index of "Auto-detect" in the filtered list (always 0 conceptually)
   const autoDetectIndex = 0;
 
   const handleSelect = (languageId: string | null) => {
     onLanguageChange(languageId);
-    setIsOpen(false);
+    closePopup();
     setQuery('');
   };
 
@@ -155,16 +169,36 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
   const [popupStyle, setPopupStyle] = useState<React.CSSProperties>({});
   useEffect(() => {
     if (!isOpen || !buttonRef.current) return;
-    const rect = buttonRef.current.getBoundingClientRect();
-    const viewportWidth = window.innerWidth;
-    const preferredWidth = 240;
-    const leftPos = Math.max(8, Math.min(rect.left, viewportWidth - preferredWidth - 8));
-    setPopupStyle({
-      position: 'fixed',
-      top: rect.bottom + 4,
-      left: leftPos,
-      width: preferredWidth,
-    });
+
+    const positionPopup = () => {
+      const rect = buttonRef.current!.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const preferredWidth = 240;
+      const leftPos = Math.max(8, Math.min(rect.left, viewportWidth - preferredWidth - 8));
+
+      const wouldOverflowBelow = rect.bottom + ESTIMATED_POPUP_HEIGHT + 4 > viewportHeight;
+
+      if (wouldOverflowBelow) {
+        setPopupStyle({
+          position: 'fixed',
+          bottom: viewportHeight - rect.top + 4,
+          left: leftPos,
+          width: preferredWidth,
+        });
+      } else {
+        setPopupStyle({
+          position: 'fixed',
+          top: rect.bottom + 4,
+          left: leftPos,
+          width: preferredWidth,
+        });
+      }
+    };
+
+    positionPopup();
+    window.addEventListener('resize', positionPopup);
+    return () => window.removeEventListener('resize', positionPopup);
   }, [isOpen]);
 
   return (
@@ -174,6 +208,9 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
         className="language-switcher-button"
         onClick={() => setIsOpen(prev => !prev)}
         title={`Language: ${displayName} — click to change`}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        aria-label={`Language: ${displayName} — click to change`}
         data-testid="language-switcher-button"
         data-language-id={currentLanguageId ?? 'auto'}
         data-auto-detected={String(isAutoDetected)}
@@ -183,7 +220,14 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
       </button>
 
       {isOpen && createPortal(
-        <div className="language-switcher-popup" style={popupStyle} ref={popupRef} data-testid="language-switcher-popup">
+        <div
+          className="language-switcher-popup"
+          style={popupStyle}
+          ref={popupRef}
+          role="listbox"
+          aria-label="Select language mode"
+          data-testid="language-switcher-popup"
+        >
           <div className="language-switcher-search">
             <input
               ref={searchRef}
@@ -202,6 +246,8 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
               className={`language-switcher-item ${selectedIndex === autoDetectIndex ? 'selected' : ''} ${currentLanguageId == null || isAutoDetected ? 'active' : ''}`}
               onMouseEnter={() => setSelectedIndex(autoDetectIndex)}
               onClick={() => handleSelect(null)}
+              role="option"
+              aria-selected={selectedIndex === autoDetectIndex}
             >
               <span className="language-switcher-item-name">Auto-detect</span>
               {(currentLanguageId == null || isAutoDetected) && (
@@ -218,6 +264,8 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
                   className={`language-switcher-item ${selectedIndex === listIndex ? 'selected' : ''} ${isActive ? 'active' : ''}`}
                   onMouseEnter={() => setSelectedIndex(listIndex)}
                   onClick={() => handleSelect(entry.id)}
+                  role="option"
+                  aria-selected={selectedIndex === listIndex}
                 >
                   <span className="language-switcher-item-name">{entry.name}</span>
                   {isActive && (

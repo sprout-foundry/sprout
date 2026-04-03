@@ -52,6 +52,7 @@ const fallbackHotkeys: HotkeyEntry[] = [
   { key: 'Cmd+W', command_id: 'close_editor', global: false },
   { key: 'Ctrl+Tab', command_id: 'focus_next_tab', global: false },
   { key: 'Ctrl+Shift+Tab', command_id: 'focus_prev_tab', global: false },
+  { key: 'Alt+Z', command_id: 'editor_toggle_word_wrap', global: false },
 ];
 
 // Key mapping for special keys

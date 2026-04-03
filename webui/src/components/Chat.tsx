@@ -4,6 +4,7 @@ import CommandInput from './CommandInput';
 import MessageSegments from './MessageSegments';
 import MessageContent from './MessageContent';
 import MessageBubble from './MessageBubble';
+import ChatMessageContextMenu from './ChatMessageContextMenu';
 import './Chat.css';
 
 interface Message {
@@ -380,6 +381,9 @@ const Chat: React.FC<ChatProps> = ({
   const shouldAutoScrollRef = useRef(true);
   const [inputContainerHeight, setInputContainerHeight] = useState(0);
 
+  const inputValueRef = useRef(inputValue);
+  inputValueRef.current = inputValue;
+
   const hasSubagentActivity = subagentActivities.length > 0;
 
   const isNearBottom = useCallback((node: HTMLDivElement) => {
@@ -456,6 +460,11 @@ const Chat: React.FC<ChatProps> = ({
 
   const showExpiredSessionRecovery =
     !!lastError && lastError.toLowerCase().includes('ssh session not found or expired');
+
+  const handleInsertAtCursor = useCallback((text: string) => {
+    const separator = inputValueRef.current ? '\n' : '';
+    onInputChange(inputValueRef.current + separator + text);
+  }, [onInputChange]);
 
   return (
     <div
@@ -587,6 +596,11 @@ const Chat: React.FC<ChatProps> = ({
           onClearQueuedMessages={onClearQueuedMessages}
         />
       </div>
+
+      <ChatMessageContextMenu
+        containerRef={chatContainerRef}
+        onInsertAtCursor={handleInsertAtCursor}
+      />
     </div>
   );
 };

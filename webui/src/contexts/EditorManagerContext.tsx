@@ -30,6 +30,8 @@ interface EditorManagerContextValue {
     metadata?: Record<string, any>;
   }) => string;
   closeBuffer: (bufferId: string) => void;
+  closeAllBuffers: () => void;
+  closeOtherBuffers: (bufferId: string) => void;
   reorderBuffers: (sourceBufferId: string, targetBufferId: string) => void;
   moveBufferToPane: (bufferId: string, paneId: string) => void;
   closePane: (paneId: string) => void;
@@ -607,6 +609,93 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     }
   }, [activeBufferId, isAutoSaveEnabled, saveBuffer]);
 
+  // Close all closable buffers, keeping only pinned/non-closable ones
+  const closeAllBuffers = useCallback(() => {
+    const currentBuffers = buffersRef.current;
+    const closableIds = Array.from(currentBuffers.entries())
+      .filter(([_, buffer]) => buffer.isClosable !== false)
+      .map(([id]) => id);
+
+    for (const bufferId of closableIds) {
+      const buffer = currentBuffers.get(bufferId);
+      if (!buffer) continue;
+
+      // Save before closing if modified and auto-save is enabled (fire-and-forget)
+      if (buffer.isModified && isAutoSaveEnabled) {
+        saveBuffer(bufferId).catch(err => {
+          console.error('Failed to save buffer before closing:', bufferId, err);
+        });
+      }
+
+      setBuffers(prev => {
+        const newBuffers = new Map(prev);
+        newBuffers.delete(bufferId);
+        return newBuffers;
+      });
+    }
+
+    // Find a remaining buffer to activate (pinned ones).
+    // Use the snapshot captured at the top (currentBuffers), not
+    // buffersRef.current, because setBuffers updates are asynchronous
+    // and the ref won't reflect deletions until the next render.
+    const remaining = Array.from(currentBuffers.values())
+      .filter(b => !closableIds.includes(b.id));
+
+    const nextBuffer = remaining[0] || null;
+    setActiveBufferId(nextBuffer?.id || null);
+
+    // Update panes — point each pane at a remaining buffer or null
+    setPanes(prev => prev.map(pane => {
+      const paneBuffer = closableIds.includes(pane.bufferId || '')
+        ? (nextBuffer?.id || null)
+        : pane.bufferId;
+      return { ...pane, bufferId: paneBuffer };
+    }));
+  }, [isAutoSaveEnabled, saveBuffer]);
+
+  // Close all buffers except the specified one (and pinned/non-closable ones)
+  const closeOtherBuffers = useCallback((keepBufferId: string) => {
+    const currentBuffers = buffersRef.current;
+    const closableOtherIds = Array.from(currentBuffers.entries())
+      .filter(([id, buffer]) => id !== keepBufferId && buffer.isClosable !== false)
+      .map(([id]) => id);
+
+    for (const bufferId of closableOtherIds) {
+      const buffer = currentBuffers.get(bufferId);
+      if (!buffer) continue;
+
+      // Save before closing if modified and auto-save is enabled (fire-and-forget)
+      if (buffer.isModified && isAutoSaveEnabled) {
+        saveBuffer(bufferId).catch(err => {
+          console.error('Failed to save buffer before closing:', bufferId, err);
+        });
+      }
+
+      setBuffers(prev => {
+        const newBuffers = new Map(prev);
+        newBuffers.delete(bufferId);
+        return newBuffers;
+      });
+    }
+
+    // Activate the kept buffer
+    const keptBuffer = currentBuffers.get(keepBufferId);
+    const currentPaneId = keptBuffer?.paneId || activePaneIdRef.current;
+
+    setActiveBufferId(keepBufferId);
+    setBuffers(prev => {
+      const next = new Map(prev);
+      const buf = next.get(keepBufferId);
+      if (buf) {
+        next.set(keepBufferId, { ...buf, isActive: true, paneId: currentPaneId });
+      }
+      return next;
+    });
+    setPanes(prev => prev.map(pane =>
+      pane.id === currentPaneId ? { ...pane, bufferId: keepBufferId } : pane
+    ));
+  }, [activeBufferId, isAutoSaveEnabled, saveBuffer]);
+
   const reorderBuffers = useCallback((sourceBufferId: string, targetBufferId: string) => {
     if (!sourceBufferId || !targetBufferId || sourceBufferId === targetBufferId) {
       return;
@@ -818,6 +907,8 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     openFile,
     openWorkspaceBuffer,
     closeBuffer,
+    closeAllBuffers,
+    closeOtherBuffers,
     reorderBuffers,
     moveBufferToPane,
     closePane,

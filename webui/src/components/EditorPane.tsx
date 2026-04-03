@@ -30,6 +30,38 @@ import { toml } from '@codemirror/legacy-modes/mode/toml';
 import { dockerFile } from '@codemirror/legacy-modes/mode/dockerfile';
 import { ruby } from 'codemirror-lang-ruby';
 
+// Additional language support — legacy-modes (StreamLanguage)
+import { clike } from '@codemirror/legacy-modes/mode/clike';
+import { clojure } from '@codemirror/legacy-modes/mode/clojure';
+import { coffeeScript } from '@codemirror/legacy-modes/mode/coffeescript';
+import { diff } from '@codemirror/legacy-modes/mode/diff';
+import { elm } from '@codemirror/legacy-modes/mode/elm';
+import { erlang } from '@codemirror/legacy-modes/mode/erlang';
+import { fortran } from '@codemirror/legacy-modes/mode/fortran';
+import { groovy } from '@codemirror/legacy-modes/mode/groovy';
+import { haskell } from '@codemirror/legacy-modes/mode/haskell';
+import { julia } from '@codemirror/legacy-modes/mode/julia';
+import { lua } from '@codemirror/legacy-modes/mode/lua';
+import { oCaml, fSharp } from '@codemirror/legacy-modes/mode/mllike';
+import { nginx } from '@codemirror/legacy-modes/mode/nginx';
+import { perl } from '@codemirror/legacy-modes/mode/perl';
+import { powerShell } from '@codemirror/legacy-modes/mode/powershell';
+import { properties } from '@codemirror/legacy-modes/mode/properties';
+import { protobuf } from '@codemirror/legacy-modes/mode/protobuf';
+import { r } from '@codemirror/legacy-modes/mode/r';
+import { sass } from '@codemirror/legacy-modes/mode/sass';
+import { scheme } from '@codemirror/legacy-modes/mode/scheme';
+import { swift } from '@codemirror/legacy-modes/mode/swift';
+import { tcl } from '@codemirror/legacy-modes/mode/tcl';
+import { vb } from '@codemirror/legacy-modes/mode/vb';
+import { verilog } from '@codemirror/legacy-modes/mode/verilog';
+import { vhdl } from '@codemirror/legacy-modes/mode/vhdl';
+import { cmake } from '@codemirror/legacy-modes/mode/cmake';
+import { crystal } from '@codemirror/legacy-modes/mode/crystal';
+import { d } from '@codemirror/legacy-modes/mode/d';
+import { gas } from '@codemirror/legacy-modes/mode/gas';
+import { textile } from '@codemirror/legacy-modes/mode/textile';
+
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -124,8 +156,14 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       if (lower === 'dockerfile' || lower.startsWith('dockerfile.')) {
         return [StreamLanguage.define(dockerFile)];
       }
+      // Ruby files without extension
+      const rubyFiles = ['gemfile', 'rakefile', '.pryrc', '.irbrc', 'guardfile', 'capfile', 'berksfile', 'thorfile', 'vagrantfile', 'config.ru'];
+      if (rubyFiles.includes(lower)) {
+        return [ruby()];
+      }
       if (lower === 'makefile' || lower === 'gnumakefile') {
-        // Future: add Makefile highlighting when a suitable mode is available
+        // No suitable legacy-mode for Makefile; plain text highlighting
+        return [];
       }
       return [];
     }
@@ -211,6 +249,110 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       case '.wat':
       case '.wast':
         return [wast()];
+      // C-family / .NET
+      case '.cs':
+        return [StreamLanguage.define(clike({ name: 'csharp' }))];
+      case '.scala':
+        return [StreamLanguage.define(clike({ name: 'scala' }))];
+      case '.kt':
+      case '.kts':
+        return [StreamLanguage.define(clike({ name: 'kotlin' }))];
+      case '.dart':
+        return [StreamLanguage.define(clike({ name: 'dart' }))];
+      // Functional languages
+      case '.clj':
+      case '.cljs':
+      case '.cljc':
+      case '.edn':
+        return [StreamLanguage.define(clojure)];
+      case '.hs':
+        return [StreamLanguage.define(haskell)];
+      case '.elm':
+        return [StreamLanguage.define(elm)];
+      case '.erl':
+      case '.hrl':
+        return [StreamLanguage.define(erlang)];
+      // Note: .ex/.exs (Elixir) intentionally omitted — no suitable CodeMirror mode
+      // exists in @codemirror/legacy-modes; clike has no 'elixir' preset.
+      case '.ml':
+      case '.mli':
+        return [StreamLanguage.define(oCaml)];
+      case '.fs':
+      case '.fsi':
+      case '.fsx':
+        return [StreamLanguage.define(fSharp)];
+      case '.scm':
+      case '.rkt':
+        return [StreamLanguage.define(scheme)];
+      case '.lua':
+        return [StreamLanguage.define(lua)];
+      case '.swift':
+        return [StreamLanguage.define(swift)];
+      // Web / Styling
+      case '.coffee':
+        return [StreamLanguage.define(coffeeScript)];
+      case '.cr':
+        return [StreamLanguage.define(crystal)];
+      case '.sass':
+      case '.scss':
+        return [StreamLanguage.define(sass)];
+      case '.textile':
+        return [StreamLanguage.define(textile)];
+      // Systems / DevOps
+      case '.cmake':
+        return [StreamLanguage.define(cmake)];
+      case '.conf':
+        return [StreamLanguage.define(nginx)];
+      case '.ps1':
+      case '.psm1':
+      case '.psd1':
+        return [StreamLanguage.define(powerShell)];
+      case '.proto':
+        return [StreamLanguage.define(protobuf)];
+      // Scientific / Math / Hardware
+      case '.r':
+        return [StreamLanguage.define(r)];
+      case '.jl':
+        return [StreamLanguage.define(julia)];
+      case '.f':
+      case '.f90':
+      case '.f95':
+      case '.f03':
+      case '.f08':
+      case '.for':
+        return [StreamLanguage.define(fortran)];
+      case '.d':
+        return [StreamLanguage.define(d)];
+      case '.v':
+        return [StreamLanguage.define(verilog)];
+      case '.vh':
+      case '.vhd':
+        return [StreamLanguage.define(vhdl)];
+      // Other languages
+      case '.groovy':
+      case '.gradle':
+        return [StreamLanguage.define(groovy)];
+      case '.pl':
+      case '.pm':
+        return [StreamLanguage.define(perl)];
+      case '.tcl':
+        return [StreamLanguage.define(tcl)];
+      case '.vb':
+      case '.vbs':
+        return [StreamLanguage.define(vb)];
+      case '.properties':
+        return [StreamLanguage.define(properties)];
+      case '.s':
+      case '.asm':
+        return [StreamLanguage.define(gas)];
+      // Diff
+      case '.diff':
+      case '.patch':
+        return [StreamLanguage.define(diff)];
+      // Plain text (no highlighting)
+      case '.log':
+      case '.txt':
+        return [];
       default:
         return [];
     }

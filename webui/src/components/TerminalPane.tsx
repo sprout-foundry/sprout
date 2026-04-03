@@ -31,6 +31,8 @@ interface TerminalPaneProps {
   onClose?: () => void;
   /** Notifies the parent of connection state changes. */
   onConnectionChange?: (connected: boolean) => void;
+  /** Preferred shell name (e.g. "bash", "zsh", "fish") for the initial PTY session. */
+  preferredShell?: string | null;
 }
 
 interface TerminalContextMenuState {
@@ -42,7 +44,7 @@ interface TerminalContextMenuState {
 }
 
 const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
-  ({ isActive, isConnected = true, showCloseButton, onClose, onConnectionChange }, ref) => {
+  ({ isActive, isConnected = true, showCloseButton, onClose, onConnectionChange, preferredShell }, ref) => {
     const { themePack } = useTheme();
     const [paneConnected, setPaneConnected] = useState(false);
     const [contextMenu, setContextMenu] = useState<TerminalContextMenuState | null>(null);
@@ -51,6 +53,11 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     // tear down / reconnect when a parent passes an inline callback.
     const onConnectionChangeRef = useRef(onConnectionChange);
     onConnectionChangeRef.current = onConnectionChange;
+
+    // Stabilize preferredShell so the WebSocket lifecycle effect doesn't
+    // tear down / reconnect when a parent changes the value.
+    const preferredShellRef = useRef(preferredShell);
+    preferredShellRef.current = preferredShell;
 
     const paneWrapperRef = useRef<HTMLDivElement>(null);
     const xtermContainerRef = useRef<HTMLDivElement>(null);
@@ -290,6 +297,13 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
 
       eventHandlerRef.current = handler;
       service.onEvent(handler);
+
+      // Set the preferred shell before the initial connection so the backend
+      // creates a PTY with the requested shell.
+      if (preferredShellRef.current) {
+        service.setPreferredShell(preferredShellRef.current);
+      }
+
       service.connect();
 
       return () => {

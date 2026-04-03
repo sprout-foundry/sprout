@@ -124,6 +124,10 @@ jest.mock('../extensions/cursorHistory', () => ({
   navigateCursorForward: () => false,
 }));
 
+jest.mock('../extensions/indentGuides', () => ({
+  indentGuidesPlugin: () => [],
+}));
+
 // Mock CodeMirror packages — their ESM internals break Jest 27.
 // Factories create stub jest.fn()s; the actual implementations are
 // configured in beforeEach (after resetMocks runs).

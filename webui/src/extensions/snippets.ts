@@ -106,8 +106,8 @@ const JAVASCRIPT_SNIPPETS: [string, string][] = [
 const PYTHON_SNIPPETS: [string, string][] = [
   ['fn',    'def ${1:function_name}(${2:params}):\n\t${0}'],
   ['if',    'if ${1:condition}:\n\t${0}'],
-  ['ifn',   'if ${1:condition}:\n\t${2}\nelse:\n\t${3}'],
-  ['ife',   'if ${1:condition}:\n\t${2}\nelif ${3:condition}:\n\t${4}'],
+  ['ifn',   'if ${1:condition}:\n\t${2}\nelse:\n\t${0}'],
+  ['ife',   'if ${1:condition}:\n\t${2}\nelif ${3:condition}:\n\t${0}'],
   ['for',   'for ${1:item} in ${2:iterable}:\n\t${0}'],
   ['wh',    'while ${1:condition}:\n\t${0}'],
   ['class', 'class ${1:ClassName}:\n\t${0}'],
@@ -212,6 +212,195 @@ const RUBY_SNIPPETS: [string, string][] = [
   ['req',  "require '${0}'"],
 ];
 
+/**
+ * Shell/Bash snippets (language ID: 'shell').
+ */
+const SHELL_SNIPPETS: [string, string][] = [
+  ['if',      'if [[ ${1:condition} ]]; then\n\t${0}\nfi'],
+  ['ifn',     'if [[ ${1:condition} ]]; then\n\t${2}\nelse\n\t${3}\nfi'],
+  ['ife',     'if [[ ${1:condition} ]]; then\n\t${2}\nelif [[ ${3:condition} ]]; then\n\t${4}\nelse\n\t${5}\nfi'],
+  ['for',     'for ${1:var} in ${2:list}; do\n\t${0}\ndone'],
+  ['wh',      'while [[ ${1:condition} ]]; do\n\t${0}\ndone'],
+  ['case',    'case ${1:value} in\n\t${2:pattern})\n\t\t${0}\n\t\t;;\nesac'],
+  ['func',    '${1:name}() {\n\t${0}\n}'],
+  ['shebang', '#!/bin/bash\n\n${0}'],
+  ['echo',    'echo "${0}"'],
+];
+
+/**
+ * HTML snippets (language ID: 'html').
+ */
+const HTML_SNIPPETS: [string, string][] = [
+  ['div',    '<div>\n\t${0}\n</div>'],
+  ['span',   '<span>${0}</span>'],
+  ['p',      '<p>\n\t${0}\n</p>'],
+  ['a',      '<a href="${1:#}">${0}</a>'],
+  ['img',    '<img src="${1}" alt="${0}" />'],
+  ['ul',     '<ul>\n\t<li>${0}</li>\n</ul>'],
+  ['ol',     '<ol>\n\t<li>${0}</li>\n</ol>'],
+  ['li',     '<li>${0}</li>'],
+  ['h1',     '<h1>${0}</h1>'],
+  ['h2',     '<h2>${0}</h2>'],
+  ['h3',     '<h3>${0}</h3>'],
+  ['h4',     '<h4>${0}</h4>'],
+  ['input',  '<input type="${1:text}" id="${2}" name="${0}" />'],
+  ['btn',    '<button type="button"${1}>${0}</button>'],
+  ['form',   '<form action="${1}" method="${2:post}">\n\t${0}\n</form>'],
+  ['meta',   '<meta charset="${0}" />'],
+  ['link',   '<link rel="${1:stylesheet}" href="${0}" />'],
+  ['script', '<script>\n\t${0}\n</script>'],
+  ['style',  '<style>\n\t${0}\n</style>'],
+  ['html',   '<!DOCTYPE html>\n<html lang="${1:en}">\n<head>\n\t<meta charset="UTF-8" />\n\t<meta name="viewport" content="width=device-width, initial-scale=1.0" />\n\t<title>${2}</title>\n</head>\n<body>\n\t${0}\n</body>\n</html>'],
+];
+
+/**
+ * SQL snippets (language ID: 'sql').
+ */
+const SQL_SNIPPETS: [string, string][] = [
+  ['sel',   'SELECT ${1:*} FROM ${0}'],
+  ['selw',  'SELECT ${1:*} FROM ${2:table} WHERE ${0}'],
+  ['ins',   'INSERT INTO ${1:table} (${2:columns}) VALUES (${0});'],
+  ['upd',   'UPDATE ${1:table} SET ${2:column} = ${3:value} WHERE ${0};'],
+  ['del',   'DELETE FROM ${1:table} WHERE ${0};'],
+  ['ct',    'CREATE TABLE ${1:table_name} (\n\t${0}\n);'],
+  ['join',  'INNER JOIN ${1:table} ON ${0}'],
+  ['lj',    'LEFT JOIN ${1:table} ON ${0}'],
+];
+
+/**
+ * YAML snippets (language ID: 'yaml').
+ */
+const YAML_SNIPPETS: [string, string][] = [
+  ['key',  '${1:key}: ${0}'],
+  ['list', '${1}:\n\t- ${0}'],
+];
+
+/**
+ * Markdown snippets (language ID: 'markdown').
+ */
+const MARKDOWN_SNIPPETS: [string, string][] = [
+  ['code',   '```\n${0}\n```'],
+  ['link',   '[${1:text}](${2:url})${0}'],
+  ['img',    '![${1:alt}](${2:url})${0}'],
+  ['bold',   '**${0}**'],
+  ['italic', '*${0}*'],
+  ['h1',     '# ${0}'],
+  ['h2',     '## ${0}'],
+  ['h3',     '### ${0}'],
+  ['h4',     '#### ${0}'],
+  ['ul',     '- ${0}'],
+  ['ol',     '1. ${0}'],
+  ['task',   '- [ ] ${0}'],
+  ['tbl',    '| ${1:Header 1} | ${2:Header 2} | ${3:Header 3} |\n| --- | --- | --- |\n| ${4} | ${5} | ${6} |${0}'],
+  ['quote',  '> ${0}'],
+  ['hr',     '---${0}'],
+];
+
+/**
+ * Swift snippets (language ID: 'swift').
+ */
+const SWIFT_SNIPPETS: [string, string][] = [
+  ['if',     'if ${1:condition} {\n\t${0}\n}'],
+  ['ifn',    'if ${1:condition} {\n\t${2}\n} else {\n\t${3}\n}'],
+  ['ife',    'if ${1:condition} {\n\t${2}\n} else if ${3:condition} {\n\t${4}\n} else {\n\t${5}\n}'],
+  ['for',    'for ${1:item} in ${2:collection} {\n\t${0}\n}'],
+  ['wh',     'while ${1:condition} {\n\t${0}\n}'],
+  ['fn',     'func ${1:name}(${2:params}) {\n\t${0}\n}'],
+  ['guard',  'guard ${1:condition} else {\n\t${0}\n\treturn\n}'],
+  ['cls',    'class ${1:ClassName} {\n\t${0}\n}'],
+  ['st',     'struct ${1:StructName} {\n\t${0}\n}'],
+  ['prt',    'print(${0})'],
+  ['sw',     'switch ${1:value} {\ncase ${2:pattern}:\n\t${0}\ndefault:\n\tbreak\n}'],
+  ['do',     'do {\n\ttry ${0}\n} catch {\n\tprint(error)\n}'],
+];
+
+/**
+ * Kotlin snippets (language ID: 'kotlin').
+ */
+const KOTLIN_SNIPPETS: [string, string][] = [
+  ['if',       'if (${1:condition}) {\n\t${0}\n}'],
+  ['ifn',      'if (${1:condition}) {\n\t${2}\n} else {\n\t${3}\n}'],
+  ['for',      'for (${1:item} in ${2:collection}) {\n\t${0}\n}'],
+  ['wh',       'while (${1:condition}) {\n\t${0}\n}'],
+  ['fn',       'fun ${1:name}(${2:params}): ${3:ReturnType} {\n\t${0}\n}'],
+  ['cls',      'class ${1:ClassName} {\n\t${0}\n}'],
+  ['obj',      'object ${1:ObjectName} {\n\t${0}\n}'],
+  ['when',     'when (${1:value}) {\n\t${2:pattern} -> ${0}\n\telse -> {}\n}'],
+  ['println',  'println(${0})'],
+  ['val',      'val ${1:name} = ${0}'],
+  ['var',      'var ${1:name} = ${0}'],
+];
+
+/**
+ * Dart snippets (language ID: 'dart').
+ */
+const DART_SNIPPETS: [string, string][] = [
+  ['fn',     '${1:ReturnType} ${2:name}(${3:params}) {\n\t${0}\n}'],
+  ['cls',    'class ${1:ClassName} {\n\t${0}\n}'],
+  ['if',     'if (${1:condition}) {\n\t${0}\n}'],
+  ['ifn',    'if (${1:condition}) {\n\t${2}\n} else {\n\t${3}\n}'],
+  ['for',    'for (var ${1:item} in ${2:collection}) {\n\t${0}\n}'],
+  ['wh',     'while (${1:condition}) {\n\t${0}\n}'],
+  ['main',   'void main() {\n\t${0}\n}'],
+];
+
+/**
+ * Scala snippets (language ID: 'scala').
+ */
+const SCALA_SNIPPETS: [string, string][] = [
+  ['fn',      'def ${1:name}(${2:params}): ${3:ReturnType} = {\n\t${0}\n}'],
+  ['cls',     'class ${1:ClassName} {\n\t${0}\n}'],
+  ['obj',     'object ${1:ObjectName} {\n\t${0}\n}'],
+  ['trt',     'trait ${1:TraitName} {\n\t${0}\n}'],
+  ['if',      'if (${1:condition}) {\n\t${0}\n}'],
+  ['ifn',     'if (${1:condition}) {\n\t${2}\n} else {\n\t${3}\n}'],
+  ['for',     'for (${1:item} <- ${2:collection}) {\n\t${0}\n}'],
+  ['match',   '${1:value} match {\n\tcase ${2:pattern} => ${0}\n\tcase _ =>\n}'],
+  ['println', 'println(${0})'],
+];
+
+/**
+ * C# snippets (language ID: 'csharp').
+ */
+const CSHARP_SNIPPETS: [string, string][] = [
+  ['if',    'if (${1:condition}) {\n\t${0}\n}'],
+  ['ifn',   'if (${1:condition}) {\n\t${2}\n} else {\n\t${3}\n}'],
+  ['for',   'for (int ${1:i} = 0; ${1:i} < ${2:n}; ${1:i}++) {\n\t${0}\n}'],
+  ['fore',  'foreach (var ${1:item} in ${2:collection}) {\n\t${0}\n}'],
+  ['wh',    'while (${1:condition}) {\n\t${0}\n}'],
+  ['cw',    'Console.WriteLine(${0});'],
+  ['cls',   'public class ${1:ClassName} {\n\t${0}\n}'],
+  ['meth',  'public ${1:void} ${2:MethodName}(${3:params}) {\n\t${0}\n}'],
+  ['prop',  'public ${1:type} ${2:Name} { get; set; }${0}'],
+  ['try',   'try {\n\t${1}\n} catch (${2:Exception} ${3:e}) {\n\t${4}\n} finally {\n\t${5}\n}'],
+];
+
+/**
+ * Lua snippets (language ID: 'lua').
+ */
+const LUA_SNIPPETS: [string, string][] = [
+  ['fn',     'local function ${1:name}(${2:params})\n\t${0}\nend'],
+  ['if',     'if ${1:condition} then\n\t${0}\nend'],
+  ['ifn',    'if ${1:condition} then\n\t${2}\nelse\n\t${3}\nend'],
+  ['for',    'for ${1:i} = ${2:1}, ${3:n} do\n\t${0}\nend'],
+  ['wh',     'while ${1:condition} do\n\t${0}\nend'],
+  ['pr',     'print(${0})'],
+];
+
+/**
+ * Groovy snippets (language ID: 'groovy').
+ */
+const GROOVY_SNIPPETS: [string, string][] = [
+  ['cls',     'class ${1:ClassName} {\n\t${0}\n}'],
+  ['fn',      'def ${1:name}(${2:params}) {\n\t${0}\n}'],
+  ['if',      'if (${1:condition}) {\n\t${0}\n}'],
+  ['ifn',     'if (${1:condition}) {\n\t${2}\n} else {\n\t${3}\n}'],
+  ['for',     'for (${1:item} in ${2:collection}) {\n\t${0}\n}'],
+  ['wh',      'while (${1:condition}) {\n\t${0}\n}'],
+  ['println', 'println ${0}'],
+  ['each',    '${1:collection}.each { ${0} ->\n\t\n}'],
+];
+
 // ── Language → snippet mapping ──────────────────────────────────────
 
 /**
@@ -231,6 +420,18 @@ const LANGUAGE_SNIPPETS = new Map<string, [string, string][]>([
   ['cpp',              CPP_SNIPPETS],
   ['php',              PHP_SNIPPETS],
   ['ruby',             RUBY_SNIPPETS],
+  ['shell',            SHELL_SNIPPETS],
+  ['html',             HTML_SNIPPETS],
+  ['sql',              SQL_SNIPPETS],
+  ['yaml',             YAML_SNIPPETS],
+  ['markdown',         MARKDOWN_SNIPPETS],
+  ['swift',            SWIFT_SNIPPETS],
+  ['kotlin',           KOTLIN_SNIPPETS],
+  ['dart',             DART_SNIPPETS],
+  ['scala',            SCALA_SNIPPETS],
+  ['csharp',           CSHARP_SNIPPETS],
+  ['lua',              LUA_SNIPPETS],
+  ['groovy',           GROOVY_SNIPPETS],
 ]);
 
 // Pre-built Maps for each language (computed once, reused).

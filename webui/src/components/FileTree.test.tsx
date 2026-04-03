@@ -65,6 +65,10 @@ let root: Root;
 
 beforeAll(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  // Mock requestAnimationFrame so ContextMenu's close-listener effect fires synchronously.
+  let rafId = 0;
+  global.requestAnimationFrame = ((cb) => { rafId += 1; cb(Date.now()); return rafId; }) as typeof requestAnimationFrame;
+  global.cancelAnimationFrame = jest.fn();
 });
 
 beforeEach(() => {
@@ -134,14 +138,16 @@ function fireContextMenuOnFile(fileName: string): void {
   for (const item of Array.from(allItems)) {
     const nameEl = item.querySelector('.file-tree-name');
     if (nameEl && nameEl.textContent === fileName) {
-      item.dispatchEvent(
-        new MouseEvent('contextmenu', {
-          bubbles: true,
-          cancelable: true,
-          clientX: 100,
-          clientY: 200,
-        })
-      );
+      act(() => {
+        item.dispatchEvent(
+          new MouseEvent('contextmenu', {
+            bubbles: true,
+            cancelable: true,
+            clientX: 100,
+            clientY: 200,
+          })
+        );
+      });
       return;
     }
   }
@@ -151,7 +157,7 @@ function fireContextMenuOnFile(fileName: string): void {
 /** Return all context menu buttons currently rendered in the portal. */
 function getContextButtons(): HTMLButtonElement[] {
   return Array.from(
-    document.querySelectorAll('.file-tree-context-menu .file-tree-context-item')
+    document.querySelectorAll('.context-menu .context-menu-item')
   );
 }
 
@@ -166,14 +172,16 @@ function getContextMenuTexts(): string[] {
 function fireContextMenuOnBackground(): void {
   const fileList = document.querySelector('.file-list');
   if (!fileList) throw new Error('Could not find .file-list element');
-  fileList.dispatchEvent(
-    new MouseEvent('contextmenu', {
-      bubbles: true,
-      cancelable: true,
-      clientX: 300,
-      clientY: 400,
-    })
-  );
+  act(() => {
+    fileList.dispatchEvent(
+      new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: 300,
+        clientY: 400,
+      })
+    );
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -306,7 +314,7 @@ describe('FileTree context menu – clipboard & editor actions', () => {
     await flushPromises();
 
     // Menu should be in the DOM now
-    expect(document.querySelector('.file-tree-context-menu')).not.toBeNull();
+    expect(document.querySelector('.context-menu')).not.toBeNull();
 
     const copyRelBtn = getContextButtons().find(
       (btn) => btn.textContent?.trim() === 'Copy relative path'
@@ -318,7 +326,7 @@ describe('FileTree context menu – clipboard & editor actions', () => {
     await flushPromises();
 
     // Menu should be removed
-    expect(document.querySelector('.file-tree-context-menu')).toBeNull();
+    expect(document.querySelector('.context-menu')).toBeNull();
   });
 });
 
@@ -326,12 +334,12 @@ describe('FileTree background context menu', () => {
   it('background context menu appears when right-clicking empty space', async () => {
     await renderTree();
 
-    expect(document.querySelector('.file-tree-context-menu')).toBeNull();
+    expect(document.querySelector('.context-menu')).toBeNull();
 
     fireContextMenuOnBackground();
     await flushPromises();
 
-    expect(document.querySelector('.file-tree-context-menu')).not.toBeNull();
+    expect(document.querySelector('.context-menu')).not.toBeNull();
   });
 
   it('shows only "New File" and "New Folder"', async () => {
@@ -394,14 +402,24 @@ describe('FileTree background context menu', () => {
     fireContextMenuOnBackground();
     await flushPromises();
 
-    expect(document.querySelector('.file-tree-context-menu')).not.toBeNull();
+    expect(document.querySelector('.context-menu')).not.toBeNull();
 
-    await act(() => {
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    // ContextMenu attaches Escape listener on document via a deferred
+    // requestAnimationFrame. The RAF mock fires synchronously inside act(),
+    // but only after the effect runs. We need an extra act() to flush
+    // the pending effect (which schedules the RAF inside the next act).
+    await act(async () => {
+      // no-op tick — lets React flush the useLayoutEffect + useEffect chain
+      await Promise.resolve();
+    });
+
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     });
     await flushPromises();
+    await flushPromises();
 
-    expect(document.querySelector('.file-tree-context-menu')).toBeNull();
+    expect(document.querySelector('.context-menu')).toBeNull();
   });
 
   it('clicking a file item context menu does not show background menu', async () => {
@@ -412,7 +430,7 @@ describe('FileTree background context menu', () => {
     await flushPromises();
 
     // The file item context menu should be showing
-    expect(document.querySelector('.file-tree-context-menu')).not.toBeNull();
+    expect(document.querySelector('.context-menu')).not.toBeNull();
 
     // It should show file-specific items, NOT the background menu items
     const texts = getContextMenuTexts();

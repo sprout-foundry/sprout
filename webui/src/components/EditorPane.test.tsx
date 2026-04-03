@@ -91,6 +91,18 @@ const flushPromises = async () => {
   });
 };
 
+/**
+ * Flush any pending requestAnimationFrame callbacks.
+ * The shared ContextMenu component registers its close listeners (mousedown,
+ * keydown, scroll, blur) inside a requestAnimationFrame callback, so after
+ * opening the menu we must flush the RAF before those listeners are active.
+ */
+const flushRAF = () =>
+  act(async () => {
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    await Promise.resolve();
+  });
+
 function fireContextMenu(element: Element, x = 100, y = 100) {
   const event = new MouseEvent('contextmenu', {
     bubbles: true,
@@ -103,16 +115,16 @@ function fireContextMenu(element: Element, x = 100, y = 100) {
 }
 
 /**
- * Helper to find the context menu. Since it's rendered via createPortal to
+ * Helper to find the context menu. Since it's rendered via a portal to
  * document.body, we must query the body (not the container).
  */
 function getMenu() {
-  return document.body.querySelector('.file-tree-context-menu');
+  return document.body.querySelector('.context-menu');
 }
 
 function getMenuItems() {
   const menu = getMenu();
-  return menu ? Array.from(menu.querySelectorAll('.file-tree-context-item')) : [];
+  return menu ? Array.from(menu.querySelectorAll('.context-menu-item')) : [];
 }
 
 // ---------------------------------------------------------------------------
@@ -339,6 +351,9 @@ describe('EditorPane context menu', () => {
     fireContextMenu(paneContent);
     await act(async () => { await Promise.resolve(); });
 
+    // Flush RAF so the menu registers its mousedown listener
+    await flushRAF();
+
     expect(getMenu()).toBeTruthy();
 
     // Click outside the menu (on the body, not the menu itself)
@@ -359,6 +374,9 @@ describe('EditorPane context menu', () => {
     const paneContent = container.querySelector('.pane-content');
     fireContextMenu(paneContent);
     await act(async () => { await Promise.resolve(); });
+
+    // Flush RAF so the menu registers its keydown listener
+    await flushRAF();
 
     expect(getMenu()).toBeTruthy();
 

@@ -390,37 +390,6 @@
   font-size: 12px;
 }
 
-.file-tree-context-menu {
-  position: fixed;
-  z-index: 1400;
-  min-width: 160px;
-  padding: 6px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-default);
-  background: var(--bg-secondary);
-  box-shadow: var(--shadow-elevated);
-}
-
-.file-tree-context-item {
-  width: 100%;
-  border: none;
-  background: transparent;
-  color: var(--text-primary);
-  font-size: 12px;
-  text-align: left;
-  border-radius: var(--radius-sm);
-  padding: 8px 10px;
-  cursor: pointer;
-}
-
-.file-tree-context-item:hover {
-  background: rgba(148, 163, 184, 0.1);
-}
-
-.file-tree-context-item.danger {
-  color: var(--accent-error);
-}
-
 .file-tree .file-tree-count {
   color: var(--text-tertiary);
   font-size: 10px;

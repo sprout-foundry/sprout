@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { EditorView, keymap, lineNumbers, highlightSpecialChars, highlightActiveLine } from '@codemirror/view';
+import { EditorView, keymap, lineNumbers, highlightSpecialChars, highlightActiveLine, rectangularSelection, crosshairCursor } from '@codemirror/view';
 import { EditorState, Compartment } from '@codemirror/state';
 import { defaultKeymap, indentWithTab, history } from '@codemirror/commands';
 import { search, searchKeymap } from '@codemirror/search';
@@ -36,9 +36,9 @@ import {
   Eye,
   Columns2,
 } from 'lucide-react';
-import { createPortal } from 'react-dom';
 import { copyToClipboard } from '../utils/clipboard';
 import './EditorPane.css';
+import ContextMenu from './ContextMenu';
 
 interface EditorPaneProps {
   paneId: string;
@@ -56,8 +56,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   const [showGoToSymbol, setShowGoToSymbol] = useState<boolean>(false);
 
   // Context menu state
-  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0 });
-  const contextMenuRef = useRef<HTMLDivElement>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [workspaceRoot, setWorkspaceRoot] = useState<string>('');
 
   const {
@@ -99,37 +98,6 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       // Graceful degradation - absolute path option just won't appear
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Close context menu on click outside or scroll
-  useEffect(() => {
-    const handleMouseDown = (e: MouseEvent) => {
-      if (!contextMenu.visible) return;
-      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
-        setContextMenu({ visible: false, x: 0, y: 0 });
-      }
-    };
-
-    const handleScroll = () => {
-      if (contextMenu.visible) {
-        setContextMenu({ visible: false, x: 0, y: 0 });
-      }
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && contextMenu.visible) {
-        setContextMenu({ visible: false, x: 0, y: 0 });
-      }
-    };
-
-    document.addEventListener('mousedown', handleMouseDown);
-    document.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('scroll', handleScroll, true); // capture phase for scrolling inside any element
-    return () => {
-      document.removeEventListener('mousedown', handleMouseDown);
-      document.removeEventListener('keydown', handleKeyDown);
-      document.removeEventListener('scroll', handleScroll, true);
-    };
-  }, [contextMenu.visible]);
 
   // Get language support based on file extension
   const getLanguageSupport = useCallback((ext?: string) => {
@@ -254,7 +222,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
 
   // ── Context menu handlers ─────────────────────────────────────
   const hideContextMenu = useCallback(() => {
-    setContextMenu({ visible: false, x: 0, y: 0 });
+    setContextMenu(null);
   }, []);
 
   const handleEditorContextMenu = useCallback((e: React.MouseEvent) => {
@@ -262,7 +230,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     e.stopPropagation();
     if (!buffer || !buffer.file || buffer.file.isDir) return;
     if (buffer.kind !== 'file') return;
-    setContextMenu({ visible: true, x: e.clientX, y: e.clientY });
+    setContextMenu({ x: e.clientX, y: e.clientY });
   }, [buffer]);
 
   const handleRevealInExplorer = useCallback(() => {
@@ -456,6 +424,9 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
 
     const extensions = [
       updateListener,
+      EditorState.allowMultipleSelections.of(true),
+      rectangularSelection(),
+      crosshairCursor(),
       keymap.of(defaultKeymap),
       keymap.of([indentWithTab]),
       keymap.of(searchKeymap),
@@ -750,39 +721,24 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         </div>
       </div>
 
-      {contextMenu.visible && createPortal(
-        <div
-          ref={contextMenuRef}
-          className="file-tree-context-menu"
-          style={{
-            left: `${Math.max(0, Math.min(contextMenu.x, window.innerWidth - 220))}px`,
-            top: `${Math.max(0, Math.min(contextMenu.y, window.innerHeight - 120))}px`,
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            className="file-tree-context-item"
-            onClick={(e) => { e.stopPropagation(); handleRevealInExplorer(); }}
-          >
-            Reveal in File Explorer
+      <ContextMenu
+        isOpen={contextMenu !== null}
+        x={contextMenu?.x ?? 0}
+        y={contextMenu?.y ?? 0}
+        onClose={hideContextMenu}
+      >
+        <button className="context-menu-item" onClick={handleRevealInExplorer}>
+          Reveal in File Explorer
+        </button>
+        <button className="context-menu-item" onClick={handleCopyRelativePath}>
+          Copy relative path
+        </button>
+        {workspaceRoot && (
+          <button className="context-menu-item" onClick={handleCopyAbsolutePath}>
+            Copy absolute path
           </button>
-          <button
-            className="file-tree-context-item"
-            onClick={(e) => { e.stopPropagation(); handleCopyRelativePath(); }}
-          >
-            Copy relative path
-          </button>
-          {workspaceRoot && (
-            <button
-              className="file-tree-context-item"
-              onClick={(e) => { e.stopPropagation(); handleCopyAbsolutePath(); }}
-            >
-              Copy absolute path
-            </button>
-          )}
-        </div>,
-        document.body
-      )}
+        )}
+      </ContextMenu>
     </div>
   );
 };

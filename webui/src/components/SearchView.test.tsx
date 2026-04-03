@@ -72,6 +72,15 @@ const MOCK_SEARCH_RESPONSE = {
 let container: HTMLDivElement | null = null;
 let root: ReturnType<typeof createRoot> | null = null;
 
+// Mock requestAnimationFrame so close-listener effect fires synchronously.
+// jest does not auto-flush rAF; without this, close listeners never attach.
+let rafId = 0;
+const syncRAF = ((cb: FrameRequestCallback) => {
+  rafId += 1;
+  cb(Date.now());
+  return rafId;
+}) as typeof requestAnimationFrame;
+
 beforeAll(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 });
@@ -80,6 +89,9 @@ const mockSearchFn = jest.fn().mockResolvedValue(MOCK_SEARCH_RESPONSE);
 
 beforeEach(() => {
   jest.useFakeTimers();
+  // Re-mock rAF afterjest.useFakeTimers overrides it
+  global.requestAnimationFrame = syncRAF;
+  global.cancelAnimationFrame = jest.fn();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -94,7 +106,7 @@ beforeEach(() => {
   // Clear call history on specific mocks (preserve implementations)
   mockSearchFn.mockClear();
   mockSearchFn.mockResolvedValue(MOCK_SEARCH_RESPONSE);
-  copyToClipboard.mockClear();
+  (copyToClipboard as jest.Mock).mockClear();
   defaultOnFileClick.mockClear();
 });
 
@@ -104,7 +116,7 @@ afterEach(() => {
   });
   if (container) container.remove();
   // Clean up any portal containers leftover
-  document.querySelectorAll('.search-context-menu').forEach((el) => el.remove());
+  document.querySelectorAll('.context-menu').forEach((el) => el.remove());
   jest.useRealTimers();
 });
 
@@ -143,7 +155,7 @@ async function renderSearch(props: { onFileClick?: jest.Mock } = {}) {
 
   // Auto-expand all file groups so match rows are rendered
   const headers = container!.querySelectorAll('.search-file-header');
-  for (const header of headers) {
+  for (const header of Array.from(headers)) {
     await act(() => {
       header.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
@@ -180,7 +192,7 @@ function fireContextMenuOnFileHeader() {
 
 /** Get all context menu item elements. */
 function getContextItems() {
-  return Array.from(document.querySelectorAll('.search-context-item'));
+  return Array.from(document.querySelectorAll('.context-menu-item'));
 }
 
 /** Get the text content of all context menu items (trimmed). */
@@ -196,12 +208,12 @@ describe('SearchView context menu - match row', () => {
   it('appears on right-click of a match row', async () => {
     await renderSearch();
 
-    expect(document.querySelector('.search-context-menu')).toBeNull();
+    expect(document.querySelector('.context-menu')).toBeNull();
 
     fireContextMenuOnMatch();
     await flushPromises();
 
-    expect(document.querySelector('.search-context-menu')).not.toBeNull();
+    expect(document.querySelector('.context-menu')).not.toBeNull();
   });
 
   it('shows Copy line text, Open in editor, Copy file path, Exclude folder for match rows', async () => {
@@ -222,12 +234,12 @@ describe('SearchView context menu - file header', () => {
   it('appears on right-click of a file header', async () => {
     await renderSearch();
 
-    expect(document.querySelector('.search-context-menu')).toBeNull();
+    expect(document.querySelector('.context-menu')).toBeNull();
 
     fireContextMenuOnFileHeader();
     await flushPromises();
 
-    expect(document.querySelector('.search-context-menu')).not.toBeNull();
+    expect(document.querySelector('.context-menu')).not.toBeNull();
   });
 
   it('does NOT show Copy line text or Open in editor on file header', async () => {
@@ -257,7 +269,7 @@ describe('SearchView context menu - clipboard and editor actions', () => {
     expect(copyBtn).toBeDefined();
 
     await act(async () => {
-      copyBtn!.click();
+      (copyBtn as HTMLElement).click();
     });
     await flushPromises();
 
@@ -276,7 +288,7 @@ describe('SearchView context menu - clipboard and editor actions', () => {
     expect(copyBtn).toBeDefined();
 
     await act(async () => {
-      copyBtn!.click();
+      (copyBtn as HTMLElement).click();
     });
     await flushPromises();
 
@@ -296,7 +308,7 @@ describe('SearchView context menu - clipboard and editor actions', () => {
     expect(openBtn).toBeDefined();
 
     await act(async () => {
-      openBtn!.click();
+      (openBtn as HTMLElement).click();
     });
     await flushPromises();
 
@@ -321,12 +333,12 @@ describe('SearchView context menu - exclude functionality', () => {
     expect(excludeBtn).toBeDefined();
 
     await act(async () => {
-      excludeBtn!.click();
+      (excludeBtn as HTMLElement).click();
     });
     await flushPromises();
 
     // Menu should close
-    expect(document.querySelector('.search-context-menu')).toBeNull();
+    expect(document.querySelector('.context-menu')).toBeNull();
 
     // Exclude indicator should appear
     expect(document.querySelector('.search-exclude-indicator')).not.toBeNull();
@@ -350,7 +362,7 @@ describe('SearchView context menu - exclude functionality', () => {
     expect(excludeBtn).toBeDefined();
 
     await act(async () => {
-      excludeBtn!.click();
+      (excludeBtn as HTMLElement).click();
     });
     await flushPromises();
 
@@ -373,7 +385,7 @@ describe('SearchView context menu - exclude functionality', () => {
       item.textContent?.includes('Exclude file')
     );
     await act(async () => {
-      excludeBtn!.click();
+      (excludeBtn as HTMLElement).click();
     });
     await flushPromises();
 
@@ -396,7 +408,7 @@ describe('SearchView context menu - exclude functionality', () => {
       item.textContent?.includes('Exclude file')
     );
     expect(excludeBtn2).toBeDefined();
-    expect(excludeBtn2.classList.contains('disabled')).toBe(false);
+    expect((excludeBtn2 as HTMLElement).classList.contains('disabled')).toBe(false);
   });
 
   it('clear exclude patterns removes the exclude filter', async () => {
@@ -409,7 +421,7 @@ describe('SearchView context menu - exclude functionality', () => {
       item.textContent?.includes('Exclude folder')
     );
     await act(async () => {
-      excludeBtn!.click();
+      (excludeBtn as HTMLElement).click();
     });
     await flushPromises();
 
@@ -421,7 +433,7 @@ describe('SearchView context menu - exclude functionality', () => {
     expect(clearBtn).not.toBeNull();
 
     await act(async () => {
-      clearBtn!.click();
+      (clearBtn as HTMLElement).click();
     });
     await flushPromises();
 
@@ -440,7 +452,7 @@ describe('SearchView context menu - dismissal', () => {
     fireContextMenuOnMatch();
     await flushPromises();
 
-    expect(document.querySelector('.search-context-menu')).not.toBeNull();
+    expect(document.querySelector('.context-menu')).not.toBeNull();
 
     // Simulate mousedown on body (outside the menu)
     await act(async () => {
@@ -450,7 +462,7 @@ describe('SearchView context menu - dismissal', () => {
     });
     await flushPromises();
 
-    expect(document.querySelector('.search-context-menu')).toBeNull();
+    expect(document.querySelector('.context-menu')).toBeNull();
   });
 
   it('closes on Escape key', async () => {
@@ -459,13 +471,13 @@ describe('SearchView context menu - dismissal', () => {
     fireContextMenuOnMatch();
     await flushPromises();
 
-    expect(document.querySelector('.search-context-menu')).not.toBeNull();
+    expect(document.querySelector('.context-menu')).not.toBeNull();
 
     await act(async () => {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     });
     await flushPromises();
 
-    expect(document.querySelector('.search-context-menu')).toBeNull();
+    expect(document.querySelector('.context-menu')).toBeNull();
   });
 });

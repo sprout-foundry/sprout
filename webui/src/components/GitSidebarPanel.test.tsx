@@ -3,8 +3,7 @@
 import React from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { act } from 'react';
-import GitSidebarPanel from './GitSidebarPanel';
-import type { GitStatusData } from './GitSidebarPanel';
+import GitSidebarPanel, { GitStatusData } from './GitSidebarPanel';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -79,6 +78,11 @@ let root: Root;
 
 beforeAll(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  // Mock requestAnimationFrame so ContextMenu close-listener effect fires synchronously
+  let rafId = 0;
+  // @ts-ignore
+  global.requestAnimationFrame = (cb) => { rafId += 1; cb(Date.now()); return rafId; };
+  global.cancelAnimationFrame = jest.fn();
 });
 
 beforeEach(() => {
@@ -93,6 +97,7 @@ afterEach(() => {
     root?.unmount();
   });
   container?.remove();
+  document.querySelectorAll('.context-menu').forEach((el) => el.remove());
 });
 
 const flushPromises = async () => {
@@ -134,7 +139,7 @@ function fireContextMenuOnGitFile(filePath: string): void {
 /** Return all context menu buttons. */
 function getContextButtons(): HTMLButtonElement[] {
   return Array.from(
-    document.querySelectorAll('.file-tree-context-menu .file-tree-context-item')
+    document.querySelectorAll('.context-menu .context-menu-item')
   );
 }
 
@@ -269,7 +274,7 @@ describe('GitSidebarPanel context menu – clipboard & editor actions', () => {
     fireContextMenuOnGitFile('src/utils.ts');
     await flushPromises();
 
-    expect(document.querySelector('.file-tree-context-menu')).not.toBeNull();
+    expect(document.querySelector('.context-menu')).not.toBeNull();
 
     const copyRelBtn = getContextButtons().find(
       (btn) => btn.textContent?.trim() === 'Copy relative path'
@@ -280,7 +285,7 @@ describe('GitSidebarPanel context menu – clipboard & editor actions', () => {
     });
     await flushPromises();
 
-    expect(document.querySelector('.file-tree-context-menu')).toBeNull();
+    expect(document.querySelector('.context-menu')).toBeNull();
   });
 
   it('"Open in editor" appears when onOpenFile is provided', async () => {

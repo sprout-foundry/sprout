@@ -100,7 +100,7 @@ function renderWithBubble(
   (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = chatContainer;
 
   act(() => {
-    root = createRoot(mountPoint);
+    root = createRoot(mountPoint!);
     root.render(
       <ChatMessageContextMenu
         containerRef={containerRef}
@@ -122,7 +122,7 @@ function getMenuItems(): Element[] {
 }
 
 function getMenuTexts(): string[] {
-  return getMenuItems().map((el) => el.textContent?.trim());
+  return getMenuItems().map((el) => el.textContent?.trim() ?? '');
 }
 
 /** Dispatch a contextmenu MouseEvent on `target` inside act(). */
@@ -188,7 +188,7 @@ describe('ChatMessageContextMenu', () => {
     expect(copyBtn).toBeDefined();
 
     await act(async () => {
-      copyBtn!.click();
+      (copyBtn as HTMLElement)!.click();
       await flushPromises();
     });
 
@@ -216,7 +216,7 @@ describe('ChatMessageContextMenu', () => {
     expect(copyCodeBtn).toBeDefined();
 
     await act(async () => {
-      copyCodeBtn!.click();
+      (copyCodeBtn as HTMLElement)!.click();
       await flushPromises();
     });
 
@@ -250,7 +250,7 @@ describe('ChatMessageContextMenu', () => {
     expect(insertBtn).toBeDefined();
 
     act(() => {
-      insertBtn!.click();
+      (insertBtn as HTMLElement)!.click();
     });
 
     expect(onInsertAtCursor).toHaveBeenCalledWith(msg);
@@ -354,7 +354,7 @@ describe('ChatMessageContextMenu', () => {
 
     // Click copy — schedules a "Copied!" label timer (1200ms) and a close timer (800ms)
     await act(async () => {
-      copyBtn.click();
+      (copyBtn as HTMLElement).click();
       await flushPromises();
     });
 

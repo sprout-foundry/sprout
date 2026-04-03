@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Plus, X, Pencil, Trash2 } from 'lucide-react';
 import type { ChatSession } from '../services/chatSessions';
+import ContextMenu from './ContextMenu';
 import './ChatTabBar.css';
 
 interface ChatTabBarProps {
@@ -39,29 +40,6 @@ const ChatTabBar: React.FC<ChatTabBarProps> = ({
   });
   const renameInputRef = useRef<HTMLInputElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
-  const contextMenuRef = useRef<HTMLDivElement>(null);
-
-  // Close context menu on click outside or scroll
-  useEffect(() => {
-    if (!contextMenu.visible) return;
-
-    const handleClickOutside = (e: MouseEvent) => {
-      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
-        setContextMenu((prev) => ({ ...prev, visible: false }));
-      }
-    };
-
-    const handleScroll = () => {
-      setContextMenu((prev) => ({ ...prev, visible: false }));
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    window.addEventListener('scroll', handleScroll, true);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      window.removeEventListener('scroll', handleScroll, true);
-    };
-  }, [contextMenu.visible]);
 
   // Focus rename input when it appears
   useEffect(() => {
@@ -115,6 +93,10 @@ const ChatTabBar: React.FC<ChatTabBarProps> = ({
     e.stopPropagation();
   }, [commitRename, cancelRename]);
 
+  const closeContextMenu = useCallback(() => {
+    setContextMenu((prev) => ({ ...prev, visible: false }));
+  }, []);
+
   const handleContextMenu = useCallback((e: React.MouseEvent, session: ChatSession) => {
     e.preventDefault();
     e.stopPropagation();
@@ -127,6 +109,9 @@ const ChatTabBar: React.FC<ChatTabBarProps> = ({
     });
   }, []);
 
+  const contextSessionId = contextMenu.sessionId;
+  const isDefaultSession = contextSessionId != null && sessions.find((s) => s.id === contextSessionId)?.is_default;
+
   const handleMenuRename = useCallback(() => {
     const id = contextMenu.sessionId;
     if (!id) return;
@@ -134,15 +119,15 @@ const ChatTabBar: React.FC<ChatTabBarProps> = ({
     if (!session || session.is_default) return;
     setRenamingId(id);
     setRenameValue(session.name);
-    setContextMenu((prev) => ({ ...prev, visible: false }));
-  }, [contextMenu.sessionId, sessions]);
+    closeContextMenu();
+  }, [contextMenu.sessionId, sessions, closeContextMenu]);
 
   const handleMenuDelete = useCallback(() => {
     const id = contextMenu.sessionId;
     if (!id || !contextMenu.canDelete) return;
     onDelete(id);
-    setContextMenu((prev) => ({ ...prev, visible: false }));
-  }, [contextMenu.sessionId, contextMenu.canDelete, onDelete]);
+    closeContextMenu();
+  }, [contextMenu.sessionId, contextMenu.canDelete, onDelete, closeContextMenu]);
 
   if (sessions.length === 0) {
     return null;
@@ -212,35 +197,32 @@ const ChatTabBar: React.FC<ChatTabBarProps> = ({
         </button>
       </div>
 
-      {contextMenu.visible && (
-        <div
-          ref={contextMenuRef}
-          className="chat-tab-context-menu"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
+      <ContextMenu
+        isOpen={contextMenu.visible}
+        x={contextMenu.x}
+        y={contextMenu.y}
+        onClose={closeContextMenu}
+      >
+        <button
+          className={`context-menu-item ${isDefaultSession ? 'disabled' : ''}`}
+          onClick={handleMenuRename}
+          type="button"
+          disabled={!!isDefaultSession}
         >
-          <button
-            className={`chat-tab-context-menu-item ${contextMenu.sessionId === sessions.find((s) => s.is_default)?.id ? 'disabled' : ''}`}
-            onClick={handleMenuRename}
-            type="button"
-            disabled={contextMenu.sessionId === sessions.find((s) => s.is_default)?.id}
-            aria-disabled={contextMenu.sessionId === sessions.find((s) => s.is_default)?.id}
-          >
-            <Pencil size={13} />
-            <span className="menu-item-label">Rename</span>
-          </button>
-          <div className="chat-tab-context-menu-divider" />
-          <button
-            className={`chat-tab-context-menu-item ${contextMenu.canDelete ? '' : 'disabled'}`}
-            onClick={handleMenuDelete}
-            type="button"
-            disabled={!contextMenu.canDelete}
-            aria-disabled={!contextMenu.canDelete}
-          >
-            <Trash2 size={13} />
-            <span className="menu-item-label">Delete</span>
-          </button>
-        </div>
-      )}
+          <Pencil size={13} />
+          <span className="menu-item-label">Rename</span>
+        </button>
+        <div className="context-menu-divider" />
+        <button
+          className={`context-menu-item ${contextMenu.canDelete ? '' : 'disabled'}`}
+          onClick={handleMenuDelete}
+          type="button"
+          disabled={!contextMenu.canDelete}
+        >
+          <Trash2 size={13} />
+          <span className="menu-item-label">Delete</span>
+        </button>
+      </ContextMenu>
     </>
   );
 };

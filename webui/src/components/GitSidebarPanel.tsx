@@ -1,5 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useState } from 'react';
 import {
   AlertTriangle,
   ArrowDown,
@@ -17,6 +16,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { showThemedPrompt } from './ThemedDialog';
+import ContextMenu from './ContextMenu';
 import type { GitBranchesState } from '../hooks/useGitWorkspace';
 import { copyToClipboard } from '../utils/clipboard';
 import type { FileSection } from '../types/git-types';
@@ -97,39 +97,12 @@ function GitSidebarPanel({
   onSectionAction,
   onOpenFile,
 }: GitSidebarPanelProps): JSX.Element {
-  const contextMenuRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
     section: FileSection;
     file: GitFile;
   } | null>(null);
-
-  useEffect(() => {
-    if (!contextMenu) {
-      return;
-    }
-
-    const handlePointerDown = (event: MouseEvent) => {
-      const target = event.target as Node | null;
-      if (target && contextMenuRef.current?.contains(target)) {
-        return;
-      }
-      setContextMenu(null);
-    };
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setContextMenu(null);
-      }
-    };
-
-    window.addEventListener('mousedown', handlePointerDown);
-    window.addEventListener('keydown', handleEscape);
-    return () => {
-      window.removeEventListener('mousedown', handlePointerDown);
-      window.removeEventListener('keydown', handleEscape);
-    };
-  }, [contextMenu]);
 
   if (isLoading) {
     return (
@@ -469,46 +442,43 @@ function GitSidebarPanel({
             })}
           </div>
 
-      {contextMenu && typeof document !== 'undefined'
-        ? createPortal(
-            <div
-              ref={contextMenuRef}
-              className="file-tree-context-menu git-context-menu"
-              style={{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <button className="file-tree-context-item" onClick={() => { setContextMenu(null); onPreviewFile(contextMenu.section, contextMenu.file.path); }}>
-                Preview diff
-              </button>
-              {onOpenFile && contextMenu.section !== 'deleted' && (
-                <button className="file-tree-context-item" onClick={() => { setContextMenu(null); onOpenFile(contextMenu.file.path); }}>Open in editor</button>
+      {contextMenu && (
+        <ContextMenu
+          isOpen
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+        >
+          <button className="context-menu-item" onClick={() => { setContextMenu(null); onPreviewFile(contextMenu.section, contextMenu.file.path); }}>
+            Preview diff
+          </button>
+          {onOpenFile && contextMenu.section !== 'deleted' && (
+            <button className="context-menu-item" onClick={() => { setContextMenu(null); onOpenFile(contextMenu.file.path); }}>Open in editor</button>
+          )}
+          {contextMenu.section !== 'deleted' && (
+            <>
+              <div className="context-menu-divider" />
+              <button className="context-menu-item" onClick={() => { copyToClipboard(contextMenu.file.path); setContextMenu(null); }}>Copy relative path</button>
+              {workspaceRoot && (
+                <button className="context-menu-item" onClick={() => { copyToClipboard(`${workspaceRoot.replace(/\/+$/, '')}/${contextMenu.file.path}`); setContextMenu(null); }}>Copy absolute path</button>
               )}
-              {contextMenu.section !== 'deleted' && (
-                <>
-                  <div className="file-tree-context-separator" />
-                  <button className="file-tree-context-item" onClick={() => { copyToClipboard(contextMenu.file.path); setContextMenu(null); }}>Copy relative path</button>
-                  {workspaceRoot && (
-                    <button className="file-tree-context-item" onClick={() => { copyToClipboard(`${workspaceRoot.replace(/\/+$/, '')}/${contextMenu.file.path}`); setContextMenu(null); }}>Copy absolute path</button>
-                  )}
-                </>
-              )}
-              <div className="file-tree-context-separator" />
-              {contextMenu.section === 'staged' ? (
-                <button className="file-tree-context-item" onClick={() => { setContextMenu(null); onUnstageFile(contextMenu.file.path); }}>
-                  Unstage
-                </button>
-              ) : (
-                <button className="file-tree-context-item" onClick={() => { setContextMenu(null); onStageFile(contextMenu.file.path); }}>
-                  Stage
-                </button>
-              )}
-              <button className="file-tree-context-item danger" onClick={() => { setContextMenu(null); onDiscardFile(contextMenu.file.path); }}>
-                {contextMenu.section === 'deleted' ? 'Restore' : 'Delete'}
-              </button>
-            </div>,
-            document.body
-          )
-        : null}
+            </>
+          )}
+          <div className="context-menu-divider" />
+          {contextMenu.section === 'staged' ? (
+            <button className="context-menu-item" onClick={() => { setContextMenu(null); onUnstageFile(contextMenu.file.path); }}>
+              Unstage
+            </button>
+          ) : (
+            <button className="context-menu-item" onClick={() => { setContextMenu(null); onStageFile(contextMenu.file.path); }}>
+              Stage
+            </button>
+          )}
+          <button className="context-menu-item danger" onClick={() => { setContextMenu(null); onDiscardFile(contextMenu.file.path); }}>
+            {contextMenu.section === 'deleted' ? 'Restore' : 'Delete'}
+          </button>
+        </ContextMenu>
+      )}
     </div>
   );
 }

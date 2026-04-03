@@ -195,6 +195,58 @@ describe('getEditorKeymap', () => {
     });
   });
 
+  describe('editor_insert_cursor_above bindings', () => {
+    it('produces bindings when configured', () => {
+      const entries: HotkeyEntry[] = [
+        { key: 'Ctrl+Alt+ArrowUp', command_id: 'editor_insert_cursor_above' },
+      ];
+      const keymap = getEditorKeymap(entries, emptyActions);
+      const cursorAbove = keymap.find((b) => b.key === 'Mod-Alt-ArrowUp');
+      expect(cursorAbove).toBeDefined();
+      expect(typeof cursorAbove!.run).toBe('function');
+    });
+
+    it('translates Cmd+Alt+ArrowUp → Mod-Alt-ArrowUp (Mac-style)', () => {
+      const entries: HotkeyEntry[] = [
+        { key: 'Cmd+Alt+ArrowUp', command_id: 'editor_insert_cursor_above' },
+      ];
+      const keymap = getEditorKeymap(entries, emptyActions);
+      const cursorAbove = keymap.find((b) => b.key === 'Mod-Alt-ArrowUp');
+      expect(cursorAbove).toBeDefined();
+    });
+
+    it('has no fallback binding when not configured', () => {
+      const keymap = getEditorKeymap(null, emptyActions);
+      expect(keymap.some((b) => b.key === 'Mod-Alt-ArrowUp')).toBe(false);
+    });
+  });
+
+  describe('editor_insert_cursor_below bindings', () => {
+    it('produces bindings when configured', () => {
+      const entries: HotkeyEntry[] = [
+        { key: 'Ctrl+Alt+ArrowDown', command_id: 'editor_insert_cursor_below' },
+      ];
+      const keymap = getEditorKeymap(entries, emptyActions);
+      const cursorBelow = keymap.find((b) => b.key === 'Mod-Alt-ArrowDown');
+      expect(cursorBelow).toBeDefined();
+      expect(typeof cursorBelow!.run).toBe('function');
+    });
+
+    it('translates Cmd+Alt+ArrowDown → Mod-Alt-ArrowDown (Mac-style)', () => {
+      const entries: HotkeyEntry[] = [
+        { key: 'Cmd+Alt+ArrowDown', command_id: 'editor_insert_cursor_below' },
+      ];
+      const keymap = getEditorKeymap(entries, emptyActions);
+      const cursorBelow = keymap.find((b) => b.key === 'Mod-Alt-ArrowDown');
+      expect(cursorBelow).toBeDefined();
+    });
+
+    it('has no fallback binding when not configured', () => {
+      const keymap = getEditorKeymap(null, emptyActions);
+      expect(keymap.some((b) => b.key === 'Mod-Alt-ArrowDown')).toBe(false);
+    });
+  });
+
   describe('editor_toggle_word_wrap bindings', () => {
     it('produces bindings when configured', () => {
       const entries: HotkeyEntry[] = [
@@ -351,6 +403,22 @@ describe('getEditorKeymap', () => {
       ];
       const keymap = getEditorKeymap(entries, emptyActions);
       expect(keymap.some((b) => b.key === 'Alt-z')).toBe(true);
+    });
+
+    it('includes editor_insert_cursor_above as a handled command_id', () => {
+      const entries: HotkeyEntry[] = [
+        { key: 'Ctrl+Alt+ArrowUp', command_id: 'editor_insert_cursor_above' },
+      ];
+      const keymap = getEditorKeymap(entries, emptyActions);
+      expect(keymap.some((b) => b.key === 'Mod-Alt-ArrowUp')).toBe(true);
+    });
+
+    it('includes editor_insert_cursor_below as a handled command_id', () => {
+      const entries: HotkeyEntry[] = [
+        { key: 'Ctrl+Alt+ArrowDown', command_id: 'editor_insert_cursor_below' },
+      ];
+      const keymap = getEditorKeymap(entries, emptyActions);
+      expect(keymap.some((b) => b.key === 'Mod-Alt-ArrowDown')).toBe(true);
     });
 
     it('ignores entries with unknown command_ids', () => {

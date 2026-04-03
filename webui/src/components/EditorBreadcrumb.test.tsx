@@ -1,9 +1,7 @@
-// @ts-nocheck
-
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { act } from 'react';
-import EditorBreadcrumb, { BreadcrumbSymbol } from './EditorBreadcrumb';
+import EditorBreadcrumb, { type BreadcrumbSymbol } from './EditorBreadcrumb';
 import { getEnclosingSymbols } from './GoToSymbolOverlay';
 
 // ---------------------------------------------------------------------------

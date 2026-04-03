@@ -683,24 +683,22 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   // Compute enclosing symbols for breadcrumb display (before early returns).
   // buffer.cursorPosition.line is 0-based; getEnclosingSymbols expects 1-based.
   // Debounced to avoid running extractSymbols on every cursor move.
-  const enclosingSymbolsRef = useRef<BreadcrumbSymbol[]>([]);
   const [enclosingSymbols, setEnclosingSymbols] = useState<BreadcrumbSymbol[]>([]);
 
   useEffect(() => {
     if (!localContent || !buffer?.file?.ext) {
-      enclosingSymbolsRef.current = [];
       setEnclosingSymbols([]);
       return;
     }
 
     const timer = setTimeout(() => {
-      const result = getEnclosingSymbols(
-        localContent,
-        buffer.file.ext,
-        buffer.cursorPosition.line + 1,
-      ) as BreadcrumbSymbol[];
-      enclosingSymbolsRef.current = result;
-      setEnclosingSymbols(result);
+      setEnclosingSymbols(
+        getEnclosingSymbols(
+          localContent,
+          buffer.file.ext,
+          buffer.cursorPosition.line + 1,
+        ),
+      );
     }, 100);
 
     return () => clearTimeout(timer);

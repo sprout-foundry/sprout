@@ -3,6 +3,29 @@ import { EditorBuffer, EditorPane, PaneLayout } from '../types/editor';
 import { writeFileWithConsent } from '../services/fileAccess';
 import { showThemedPrompt } from '../components/ThemedDialog';
 
+const PANE_LAYOUT_STORAGE_KEY = 'ledit.editor.paneLayout';
+const PANE_SIZES_STORAGE_KEY = 'ledit.editor.paneSizes';
+
+/** Safely read a localStorage key, returning null on failure. */
+function readStorageItem(key: string): string | null {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return null;
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+/** Safely write a localStorage key. */
+function writeStorageItem(key: string, value: string): void {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Ignore storage errors (private browsing, quota exceeded, etc.)
+  }
+}
+
 interface PaneSize {
   [paneId: string]: number; // Size in pixels or percentage
 }
@@ -101,13 +124,46 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   const [panes, setPanes] = useState<EditorPane[]>([
     { id: 'pane-1', bufferId: 'buffer-chat', isActive: true, position: 'primary' }
   ]);
+  // paneLayout is always initialized to 'single' because split layouts
+  // require multiple panes that are not recreated on reload. The persisted
+  // value is kept for future session-restore support. The layout updates
+  // correctly when the user performs a split or creates a grid.
   const [paneLayout, setPaneLayoutState] = useState<PaneLayout>('single');
   const [activePaneId, setActivePaneId] = useState<string | null>('pane-1');
   const [activeBufferId, setActiveBufferId] = useState<string | null>('buffer-chat');
   const [isAutoSaveEnabled] = useState(true);
   const [autoSaveInterval] = useState(30000); // 30 seconds
   const [isLinkedScrollEnabled, setIsLinkedScrollEnabled] = useState(false); // fix: consumed by EditorPane but was missing from context
-  const [paneSizes, setPaneSizes] = useState<PaneSize>({ 'pane-1': 100 }); // Initial sizes in percentage
+  const [paneSizes, setPaneSizes] = useState<PaneSize>(() => {
+    const stored = readStorageItem(PANE_SIZES_STORAGE_KEY);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored) as PaneSize;
+        // Only keep layout-agnostic keys (grid splits).
+        // Pane-ID-specific sizes are meaningless across page reloads
+        // because new panes get fresh IDs. Nested split keys
+        // ("group:<paneId>", "nested:<paneId>") are caught by the
+        // generic fallback below since they don't start with "pane-".
+        const safeKeys = ['grid:col', 'grid:row'];
+        const filtered: PaneSize = {};
+        for (const key of safeKeys) {
+          if (typeof parsed[key] === 'number' && isFinite(parsed[key])) {
+            filtered[key] = parsed[key];
+          }
+        }
+        // Include any other non-pane-ID keys that might exist
+        for (const key of Object.keys(parsed)) {
+          if (!key.startsWith('pane-') && typeof parsed[key] === 'number' && isFinite(parsed[key])) {
+            filtered[key] = parsed[key];
+          }
+        }
+        return Object.keys(filtered).length > 0 ? filtered : { 'pane-1': 100 };
+      } catch {
+        // JSON parse error — use default
+      }
+    }
+    return { 'pane-1': 100 };
+  });
 
   // Keep a ref to the latest buffers Map so async closures don't read stale data
   const buffersRef = useRef(buffers);
@@ -120,6 +176,28 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   useEffect(() => {
     activePaneIdRef.current = activePaneId;
   }, [activePaneId]);
+
+  // Persist pane layout type to localStorage
+  useEffect(() => {
+    writeStorageItem(PANE_LAYOUT_STORAGE_KEY, paneLayout);
+  }, [paneLayout]);
+
+  // Persist pane sizes to localStorage (debounced — resize drags fire frequently)
+  const paneSizesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (paneSizesTimeoutRef.current) {
+      clearTimeout(paneSizesTimeoutRef.current);
+    }
+    paneSizesTimeoutRef.current = setTimeout(() => {
+      writeStorageItem(PANE_SIZES_STORAGE_KEY, JSON.stringify(paneSizes));
+    }, 300);
+
+    return () => {
+      if (paneSizesTimeoutRef.current) {
+        clearTimeout(paneSizesTimeoutRef.current);
+      }
+    };
+  }, [paneSizes]);
 
   // Activate a buffer (display in active pane)
   const activateBuffer = useCallback((bufferId: string) => {
@@ -913,11 +991,11 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     setPaneLayoutState('split-grid');
     setActivePaneId(primaryPane.id);
 
-    // Initialize grid pane sizes: 50/50 for both row and column splits
-    setPaneSizes({
-      'grid:col': 50,
-      'grid:row': 50,
-    });
+    // Initialize grid pane sizes using restored values (if available) or 50/50
+    setPaneSizes((prev) => ({
+      'grid:col': (typeof prev['grid:col'] === 'number' && isFinite(prev['grid:col'])) ? prev['grid:col'] : 50,
+      'grid:row': (typeof prev['grid:row'] === 'number' && isFinite(prev['grid:row'])) ? prev['grid:row'] : 50,
+    }));
 
     return [primaryPane.id, ...newPaneIds];
   }, [panes]);

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import ContextMenu from './ContextMenu';
 import { ApiService } from '../services/api';
 import { copyToClipboard } from '../utils/clipboard';
 import {
@@ -38,7 +38,6 @@ interface SearchViewProps {
 }
 
 interface SearchContextMenuState {
-  visible: boolean;
   x: number;
   y: number;
   filePath: string;
@@ -66,59 +65,16 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
   const [replaceStatus, setReplaceStatus] = useState<string | null>(null);
   const [excludePatterns, setExcludePatterns] = useState('');
 
-  const [contextMenu, setContextMenu] = useState<SearchContextMenuState>({
-    visible: false,
-    x: 0,
-    y: 0,
-    filePath: '',
-    isFileHeader: false,
-  });
+  const [contextMenu, setContextMenu] = useState<SearchContextMenuState | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const contextMenuRef = useRef<HTMLDivElement>(null);
   const apiService = ApiService.getInstance();
 
   // Focus search input on mount
   useEffect(() => {
     searchInputRef.current?.focus();
   }, []);
-
-  // Close context menu on click outside, scroll, or Escape
-  useEffect(() => {
-    if (!contextMenu.visible) return;
-
-    const handleClickOutside = (e: MouseEvent) => {
-      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
-        setContextMenu((prev) => ({ ...prev, visible: false }));
-      }
-    };
-
-    const handleScroll = () => {
-      setContextMenu((prev) => ({ ...prev, visible: false }));
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setContextMenu((prev) => ({ ...prev, visible: false }));
-      }
-    };
-
-    const handleContextMenuOutside = () => {
-      setContextMenu((prev) => ({ ...prev, visible: false }));
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    window.addEventListener('scroll', handleScroll, true);
-    document.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('contextmenu', handleContextMenuOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      window.removeEventListener('scroll', handleScroll, true);
-      document.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('contextmenu', handleContextMenuOutside);
-    };
-  }, [contextMenu.visible]);
 
   // Debounced search function
   const performSearch = useCallback(async (query: string) => {
@@ -340,7 +296,6 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
     e.preventDefault();
     e.stopPropagation();
     setContextMenu({
-      visible: true,
       x: e.clientX,
       y: e.clientY,
       filePath,
@@ -354,7 +309,6 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
     e.preventDefault();
     e.stopPropagation();
     setContextMenu({
-      visible: true,
       x: e.clientX,
       y: e.clientY,
       filePath,
@@ -363,28 +317,34 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
   }, []);
 
   const closeContextMenu = useCallback(() => {
-    setContextMenu(prev => ({ ...prev, visible: false }));
+    setContextMenu(null);
   }, []);
 
   // Context menu action handlers
   const handleCopyMatchText = useCallback(() => {
-    if (contextMenu.matchText !== undefined) {
+    if (contextMenu?.matchText !== undefined) {
       copyToClipboard(contextMenu.matchText);
     }
     closeContextMenu();
-  }, [contextMenu.matchText, closeContextMenu]);
+  }, [contextMenu?.matchText, closeContextMenu]);
 
   const handleOpenInEditor = useCallback(() => {
-    handleFileClick(contextMenu.filePath, contextMenu.lineNumber);
+    if (contextMenu) {
+      handleFileClick(contextMenu.filePath, contextMenu.lineNumber);
+    }
     closeContextMenu();
-  }, [contextMenu.filePath, contextMenu.lineNumber, handleFileClick, closeContextMenu]);
+  }, [contextMenu, handleFileClick, closeContextMenu]);
 
   const handleCopyFilePath = useCallback(() => {
-    copyToClipboard(getRelativePath(contextMenu.filePath));
+    if (contextMenu) {
+      copyToClipboard(getRelativePath(contextMenu.filePath));
+    }
     closeContextMenu();
-  }, [contextMenu.filePath, closeContextMenu]);
+  }, [contextMenu, closeContextMenu]);
 
   const handleExcludeFromSearch = useCallback(() => {
+    if (!contextMenu) return;
+
     let patternToExclude: string;
     if (contextMenu.isFileHeader) {
       // Exclude the file itself
@@ -412,6 +372,7 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
 
   // Determine the label for the exclude action
   const getExcludeLabel = (): string => {
+    if (!contextMenu) return '';
     if (contextMenu.isFileHeader) {
       return getRelativePath(contextMenu.filePath);
     }
@@ -419,6 +380,7 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
   };
 
   const isAlreadyExcluded = (): boolean => {
+    if (!contextMenu) return false;
     const pattern = contextMenu.isFileHeader
       ? getRelativePath(contextMenu.filePath)
       : getParentDirectory(contextMenu.filePath);
@@ -710,64 +672,46 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
         })}
       </div>
 
-      {/* Context menu portal */}
-      {contextMenu.visible &&
-        createPortal(
-          <div
-            ref={contextMenuRef}
-            className="search-context-menu"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {!contextMenu.isFileHeader && (
-              <>
-                <button
-                  className="search-context-item"
-                  onClick={handleCopyMatchText}
-                  type="button"
-                >
-                  <Copy size={13} />
-                  <span className="search-context-item-label">Copy line text</span>
-                </button>
-                <button
-                  className="search-context-item"
-                  onClick={handleOpenInEditor}
-                  type="button"
-                >
-                  <FileText size={13} />
-                  <span className="search-context-item-label">Open in editor</span>
-                </button>
-                <div className="search-context-separator" />
-              </>
-            )}
-            <button
-              className="search-context-item"
-              onClick={handleCopyFilePath}
-              type="button"
-            >
+      {/* Context menu */}
+      <ContextMenu
+        isOpen={contextMenu !== null}
+        x={contextMenu?.x ?? 0}
+        y={contextMenu?.y ?? 0}
+        onClose={closeContextMenu}
+      >
+        {!contextMenu?.isFileHeader && (
+          <>
+            <button className="context-menu-item" onClick={handleCopyMatchText} type="button">
+              <Copy size={13} />
+              <span className="menu-item-label">Copy line text</span>
+            </button>
+            <button className="context-menu-item" onClick={handleOpenInEditor} type="button">
               <FileText size={13} />
-              <span className="search-context-item-label">Copy file path</span>
+              <span className="menu-item-label">Open in editor</span>
             </button>
-            <div className="search-context-separator" />
-            <button
-              className={`search-context-item ${isAlreadyExcluded() ? 'disabled' : ''}`}
-              onClick={handleExcludeFromSearch}
-              type="button"
-              disabled={isAlreadyExcluded()}
-            >
-              {contextMenu.isFileHeader ? <Ban size={13} /> : <FolderOpen size={13} />}
-              <div className="search-context-item-content">
-                <span className="search-context-item-label">
-                  {contextMenu.isFileHeader ? 'Exclude file from search' : 'Exclude folder from search'}
-                </span>
-                <span className="search-context-item-sub">
-                  {getExcludeLabel()}
-                </span>
-              </div>
-            </button>
-          </div>,
-          document.body
+            <div className="context-menu-divider" />
+          </>
         )}
+        <button className="context-menu-item" onClick={handleCopyFilePath} type="button">
+          <FileText size={13} />
+          <span className="menu-item-label">Copy file path</span>
+        </button>
+        <div className="context-menu-divider" />
+        <button
+          className={`context-menu-item ${isAlreadyExcluded() ? 'disabled' : ''}`}
+          onClick={handleExcludeFromSearch}
+          type="button"
+          disabled={isAlreadyExcluded()}
+        >
+          {contextMenu?.isFileHeader ? <Ban size={13} /> : <FolderOpen size={13} />}
+          <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
+            <span className="menu-item-label">
+              {contextMenu?.isFileHeader ? 'Exclude file from search' : 'Exclude folder from search'}
+            </span>
+            <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{getExcludeLabel()}</span>
+          </div>
+        </button>
+      </ContextMenu>
     </div>
   );
 };

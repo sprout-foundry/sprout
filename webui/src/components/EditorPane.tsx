@@ -4,7 +4,7 @@ import { EditorState, Compartment } from '@codemirror/state';
 import { defaultKeymap, indentWithTab, history } from '@codemirror/commands';
 import { search, searchKeymap, openSearchPanel, replaceAll } from '@codemirror/search';
 import { autocompletion, closeBrackets } from '@codemirror/autocomplete';
-import { syntaxHighlighting, defaultHighlightStyle, codeFolding, foldGutter, indentOnInput, bracketMatching } from '@codemirror/language';
+import { syntaxHighlighting, defaultHighlightStyle, codeFolding, foldGutter, indentOnInput, bracketMatching, StreamLanguage } from '@codemirror/language';
 import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark';
 
 // Language support
@@ -17,6 +17,18 @@ import { css } from '@codemirror/lang-css';
 import { markdown } from '@codemirror/lang-markdown';
 import { php } from '@codemirror/lang-php';
 import { wast } from '@codemirror/lang-wast';
+
+// Additional language support — official @codemirror/lang-* packages
+import { rust } from '@codemirror/lang-rust';
+import { cpp } from '@codemirror/lang-cpp';
+import { java } from '@codemirror/lang-java';
+import { yaml } from '@codemirror/lang-yaml';
+import { xml } from '@codemirror/lang-xml';
+import { sql } from '@codemirror/lang-sql';
+import { shell } from '@codemirror/legacy-modes/mode/shell';
+import { toml } from '@codemirror/legacy-modes/mode/toml';
+import { dockerFile } from '@codemirror/legacy-modes/mode/dockerfile';
+import { ruby } from 'codemirror-lang-ruby';
 
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
@@ -105,34 +117,97 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Get language support based on file extension
-  const getLanguageSupport = useCallback((ext?: string) => {
+  const getLanguageSupport = useCallback((ext?: string, fileName?: string) => {
+    if (!ext && fileName) {
+      // Filename-based detection for extensionless files
+      const lower = fileName.toLowerCase();
+      if (lower === 'dockerfile' || lower.startsWith('dockerfile.')) {
+        return [StreamLanguage.define(dockerFile)];
+      }
+      if (lower === 'makefile' || lower === 'gnumakefile') {
+        // Future: add Makefile highlighting when a suitable mode is available
+      }
+      return [];
+    }
     if (!ext) return [];
 
     switch (ext.toLowerCase()) {
+      // JavaScript / TypeScript
       case '.js':
+        return [javascript()];
       case '.jsx':
+        return [javascript({ jsx: true })];
       case '.mjs':
-        return [javascript({ typescript: false }), javascript()];
+      case '.cjs':
+        return [javascript()];
       case '.ts':
+        return [javascript({ typescript: true })];
       case '.tsx':
-        return [javascript({ typescript: true }), javascript()];
-      case '.py':
-        return [python()];
-      case '.go':
-        return [go()];
-      case '.json':
-        return [json()];
+        return [javascript({ typescript: true, jsx: true })];
+      // Web
       case '.html':
       case '.htm':
       case '.svg':
         return [html()];
       case '.css':
         return [css()];
+      case '.json':
+        return [json()];
+      // Markdown
       case '.md':
       case '.markdown':
         return [markdown()];
+      // Systems languages
+      case '.rs':
+        return [rust()];
+      case '.c':
+      case '.h':
+        return [cpp()];
+      case '.cpp':
+      case '.cc':
+      case '.cxx':
+      case '.hpp':
+      case '.hxx':
+      case '.hh':
+        return [cpp()];
+      case '.java':
+        return [java()];
+      // Scripting languages
+      case '.py':
+        return [python()];
+      case '.rb':
+        return [ruby()];
+      case '.erb':
+        // Note: .erb gets Ruby highlighting only (no HTML template support)
+        return [ruby()];
       case '.php':
         return [php()];
+      case '.go':
+        return [go()];
+      // Shell / DevOps
+      case '.sh':
+      case '.bash':
+      case '.zsh':
+      case '.fish':
+        return [StreamLanguage.define(shell)];
+      case '.dockerfile':
+        return [StreamLanguage.define(dockerFile)];
+      // Data formats
+      case '.yaml':
+      case '.yml':
+        return [yaml()];
+      case '.toml':
+        return [StreamLanguage.define(toml)];
+      case '.xml':
+      case '.xsl':
+      case '.xslt':
+      case '.xsd':
+        // .svg is handled above by the HTML extension (SVG is valid HTML5)
+        return [xml()];
+      // Database
+      case '.sql':
+        return [sql()];
+      // WebAssembly
       case '.wat':
       case '.wast':
         return [wast()];
@@ -591,7 +666,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       lineWrappingCompartment.current.of(
         wordWrapEnabled.current ? EditorView.lineWrapping : []
       ),
-      ...getLanguageSupport(buffer?.file.ext)
+      ...getLanguageSupport(buffer?.file.ext, buffer?.file.name)
     ];
 
     const state = EditorState.create({

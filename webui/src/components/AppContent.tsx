@@ -130,7 +130,6 @@ interface AppContentProps {
   onGitStage: (files: string[]) => Promise<void>;
   onGitUnstage: (files: string[]) => Promise<void>;
   onGitDiscard: (files: string[]) => Promise<void>;
-  onTerminalOutput: (output: string) => void;
   onTerminalExpandedChange: (expanded: boolean) => void;
   isConnected: boolean;
   chatSessions?: ChatSession[];
@@ -183,7 +182,6 @@ const AppContent: React.FC<AppContentProps> = ({
   onGitStage,
   onGitUnstage,
   onGitDiscard,
-  onTerminalOutput,
   onTerminalExpandedChange,
   isConnected,
   chatSessions,
@@ -658,6 +656,12 @@ const AppContent: React.FC<AppContentProps> = ({
           break;
         case 'split_editor_grid':
           handleSplitRequest('grid');
+          break;
+        case 'split_terminal_vertical':
+          window.dispatchEvent(new CustomEvent('ledit:terminal-action', { detail: { action: 'split_vertical' } }));
+          break;
+        case 'split_terminal_horizontal':
+          window.dispatchEvent(new CustomEvent('ledit:terminal-action', { detail: { action: 'split_horizontal' } }));
           break;
         case 'editor_toggle_word_wrap':
           document.dispatchEvent(new CustomEvent('editor-toggle-word-wrap'));
@@ -1265,7 +1269,6 @@ const AppContent: React.FC<AppContentProps> = ({
       </div>
 
       <Terminal
-        onOutput={onTerminalOutput}
         isExpanded={isTerminalExpanded}
         onToggleExpand={onTerminalExpandedChange}
       />

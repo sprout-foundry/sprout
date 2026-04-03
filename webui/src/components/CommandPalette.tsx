@@ -45,6 +45,7 @@ const COMMAND_DEFINITIONS: CommandDef[] = [
   { id: 'toggle_terminal', label: 'Toggle Terminal', category: 'View' },
   { id: 'split_editor_vertical', label: 'Split Editor Vertical', category: 'View' },
   { id: 'split_editor_horizontal', label: 'Split Editor Horizontal', category: 'View' },
+  { id: 'editor_toggle_word_wrap', label: 'Toggle Word Wrap', category: 'View' },
   // Navigation
   { id: 'focus_next_tab', label: 'Focus Next Tab', category: 'Navigation' },
   { id: 'focus_prev_tab', label: 'Focus Previous Tab', category: 'Navigation' },
@@ -330,6 +331,9 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
         break;
       case 'split_editor_horizontal':
         window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'split_editor_horizontal' } }));
+        break;
+      case 'editor_toggle_word_wrap':
+        document.dispatchEvent(new CustomEvent('editor-toggle-word-wrap'));
         break;
       case 'close_editor':
         window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'close_editor' } }));

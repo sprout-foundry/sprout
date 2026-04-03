@@ -365,7 +365,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         wordWrapEnabled.current = !wordWrapEnabled.current;
         viewRef.current?.dispatch({
           effects: lineWrappingCompartment.current.reconfigure(
-            wordWrapEnabled.current ? [EditorView.lineWrapping] : []
+            wordWrapEnabled.current ? EditorView.lineWrapping : []
           ),
         });
       },
@@ -484,11 +484,24 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         if (customEvent.detail?.line) {
           handleGoToLine(customEvent.detail.line);
         }
+      } else if (e.type === 'editor-toggle-word-wrap') {
+        if (viewRef.current) {
+          wordWrapEnabled.current = !wordWrapEnabled.current;
+          viewRef.current.dispatch({
+            effects: lineWrappingCompartment.current.reconfigure(
+              wordWrapEnabled.current ? EditorView.lineWrapping : []
+            ),
+          });
+        }
       }
     };
 
     document.addEventListener('editor-goto-line', handler);
-    return () => document.removeEventListener('editor-goto-line', handler);
+    document.addEventListener('editor-toggle-word-wrap', handler);
+    return () => {
+      document.removeEventListener('editor-goto-line', handler);
+      document.removeEventListener('editor-toggle-word-wrap', handler);
+    };
   }, [handleGoToLine]);
 
   if (!buffer || !buffer.file || buffer.file.isDir) {

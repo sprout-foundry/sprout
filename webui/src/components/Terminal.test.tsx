@@ -1211,3 +1211,148 @@ describe('Terminal split lifecycle and edge cases', () => {
     expect(document.body.style.userSelect).toBe('');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Tests: terminal height persistence to localStorage
+// ---------------------------------------------------------------------------
+
+describe('Terminal height persistence', () => {
+  let container: HTMLDivElement;
+  let root: any;
+
+  const STORAGE_KEY = 'ledit-terminal-height';
+
+  beforeAll(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
+  beforeEach(() => {
+    localStorage.removeItem(STORAGE_KEY);
+    document.documentElement.style.removeProperty('--ledit-terminal-reserved-height');
+  });
+
+  afterEach(() => {
+    if (root) {
+      act(() => {
+        root.unmount();
+      });
+    }
+    if (container) {
+      container.remove();
+    }
+    localStorage.removeItem(STORAGE_KEY);
+    document.documentElement.style.removeProperty('--ledit-terminal-reserved-height');
+  });
+
+  it('initializes with default height (400px) when localStorage is empty', () => {
+    const result = renderTerminal({ isExpanded: true });
+    container = result.container;
+    root = result.root;
+
+    const terminalEl = container.querySelector('.terminal-container') as HTMLElement;
+    expect(terminalEl.style.height).toBe('400px');
+
+    // localStorage should NOT have been written just from mounting
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+
+  it('reads persisted height from localStorage on mount', () => {
+    localStorage.setItem(STORAGE_KEY, '250');
+
+    const result = renderTerminal({ isExpanded: true });
+    container = result.container;
+    root = result.root;
+
+    const terminalEl = container.querySelector('.terminal-container') as HTMLElement;
+    expect(terminalEl.style.height).toBe('250px');
+  });
+
+  it('clamps persisted value below minimum to minimum (120px)', () => {
+    localStorage.setItem(STORAGE_KEY, '50');
+
+    const result = renderTerminal({ isExpanded: true });
+    container = result.container;
+    root = result.root;
+
+    const terminalEl = container.querySelector('.terminal-container') as HTMLElement;
+    expect(terminalEl.style.height).toBe('120px');
+  });
+
+  it('clamps persisted invalid value to default (400px)', () => {
+    localStorage.setItem(STORAGE_KEY, 'not-a-number');
+
+    const result = renderTerminal({ isExpanded: true });
+    container = result.container;
+    root = result.root;
+
+    const terminalEl = container.querySelector('.terminal-container') as HTMLElement;
+    expect(terminalEl.style.height).toBe('400px');
+  });
+
+  it('persists height to localStorage after resize drag completes', () => {
+    const result = renderTerminal({ isExpanded: true });
+    container = result.container;
+    root = result.root;
+
+    // Simulate a resize drag via the resize handle
+    const resizeHandle = container.querySelector('.terminal-resize-handle') as HTMLElement;
+    expect(resizeHandle).toBeTruthy();
+
+    // We can't easily simulate full drag in jsdom withoutMouseMove on document,
+    // but we can verify the component renders at the initial height and the
+    // localStorage key does not exist until a drag completes.
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+
+    // Verify initial height
+    const terminalEl = container.querySelector('.terminal-container') as HTMLElement;
+    expect(terminalEl.style.height).toBe('400px');
+
+    // Simulate mousedown on resize handle and immediately mouseup
+    // This simulates a "resize" that doesn't move, so height stays at 400
+    act(() => {
+      resizeHandle.dispatchEvent(
+        new MouseEvent('mousedown', {
+          bubbles: true,
+          clientX: 0,
+          clientY: 600,
+        })
+      );
+    });
+
+    // The resize sets isResizingVertical, now trigger mouseup
+    act(() => {
+      document.dispatchEvent(
+        new MouseEvent('mouseup', {
+          clientX: 0,
+          clientY: 600,
+        })
+      );
+    });
+
+    // After drag completes, height should be persisted
+    expect(localStorage.getItem(STORAGE_KEY)).toBe('400');
+  });
+
+  it('sets correct CSS variable when expanded with persisted height', () => {
+    localStorage.setItem(STORAGE_KEY, '300');
+
+    const result = renderTerminal({ isExpanded: true });
+    container = result.container;
+    root = result.root;
+
+    const reservedHeight = document.documentElement.style.getPropertyValue('--ledit-terminal-reserved-height');
+    expect(reservedHeight).toBe('300px');
+  });
+
+  it('falls back to collapsed height CSS variable when not expanded', () => {
+    localStorage.setItem(STORAGE_KEY, '500');
+
+    const result = renderTerminal({ isExpanded: false });
+    container = result.container;
+    root = result.root;
+
+    const reservedHeight = document.documentElement.style.getPropertyValue('--ledit-terminal-reserved-height');
+    // When collapsed, should use collapsedHeight (42px on non-mobile), not the persisted height
+    expect(reservedHeight).toBe('42px');
+  });
+});

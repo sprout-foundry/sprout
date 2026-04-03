@@ -6,6 +6,16 @@ import TerminalTabBar, { TerminalSession } from './TerminalTabBar';
 
 type SplitDirection = 'none' | 'horizontal' | 'vertical';
 
+const TERMINAL_HEIGHT_MIN = 120;
+const TERMINAL_HEIGHT_DEFAULT = 400;
+const TERMINAL_HEIGHT_MAX_FACTOR = 100; // max = innerHeight - this
+const TERMINAL_HEIGHT_STORAGE_KEY = 'ledit-terminal-height';
+
+const clampTerminalHeight = (value: number): number => {
+  if (!Number.isFinite(value)) return TERMINAL_HEIGHT_DEFAULT;
+  return Math.max(TERMINAL_HEIGHT_MIN, Math.min(window.innerHeight - TERMINAL_HEIGHT_MAX_FACTOR, value));
+};
+
 interface TerminalProps {
   isConnected?: boolean;
   isExpanded?: boolean;
@@ -25,7 +35,15 @@ const Terminal: React.FC<TerminalProps> = ({
   }, []);
   const [isExpanded, setIsExpanded] = useState(externalIsExpanded);
   const [hasActivated, setHasActivated] = useState(externalIsExpanded);
-  const [terminalHeight, setTerminalHeight] = useState(400);
+  const [terminalHeight, setTerminalHeight] = useState<number>(() => {
+    if (typeof window === 'undefined') return TERMINAL_HEIGHT_DEFAULT;
+    try {
+      const stored = localStorage.getItem(TERMINAL_HEIGHT_STORAGE_KEY);
+      return stored ? clampTerminalHeight(Number(stored)) : TERMINAL_HEIGHT_DEFAULT;
+    } catch {
+      return TERMINAL_HEIGHT_DEFAULT;
+    }
+  });
   const [isResizingVertical, setIsResizingVertical] = useState(false);
   const [collapsedHeight, setCollapsedHeight] = useState(getCollapsedHeight);
 
@@ -287,7 +305,7 @@ const Terminal: React.FC<TerminalProps> = ({
       const onMove = (ev: MouseEvent) => {
         if (!isDraggingVertical.current) return;
         const delta = dragStartY.current - ev.clientY;
-        const next = Math.max(120, Math.min(window.innerHeight - 100, dragStartHeight.current + delta));
+        const next = clampTerminalHeight(dragStartHeight.current + delta);
         setTerminalHeight(next);
       };
 
@@ -298,6 +316,11 @@ const Terminal: React.FC<TerminalProps> = ({
         document.removeEventListener('mouseup', onUp);
         document.body.style.userSelect = '';
         document.body.style.cursor = '';
+        // Persist the final height
+        setTerminalHeight(prev => {
+          localStorage.setItem(TERMINAL_HEIGHT_STORAGE_KEY, String(Math.round(prev)));
+          return prev;
+        });
       };
 
       document.addEventListener('mousemove', onMove);

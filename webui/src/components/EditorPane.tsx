@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { EditorView, keymap, KeyBinding, lineNumbers, highlightSpecialChars, highlightActiveLine, rectangularSelection, crosshairCursor } from '@codemirror/view';
 import { EditorState, Compartment } from '@codemirror/state';
 import { defaultKeymap, indentWithTab, history } from '@codemirror/commands';
-import { search, searchKeymap, openSearchPanel } from '@codemirror/search';
+import { search, searchKeymap, openSearchPanel, replaceAll } from '@codemirror/search';
 import { autocompletion, closeBrackets } from '@codemirror/autocomplete';
 import { syntaxHighlighting, defaultHighlightStyle, codeFolding, foldGutter, indentOnInput, bracketMatching } from '@codemirror/language';
 import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark';
@@ -449,6 +449,14 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
           });
           return true;
         },
+      },
+      // replaceNext is NOT bound here — the built-in SearchPanel's keydown
+      // handler already maps Enter (in the replace input) → replaceNext.
+      // Replace All bound to Ctrl+Alt+Enter within the search panel scope.
+      {
+        key: 'Mod-Alt-Enter',
+        run: replaceAll,
+        scope: 'search-panel',
       },
     ];
 

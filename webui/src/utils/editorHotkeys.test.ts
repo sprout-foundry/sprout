@@ -362,7 +362,7 @@ describe('getEditorKeymap', () => {
       // fallback for insert_line_below should still be present.
       expect(keymap.some((b) => b.key === 'Mod-Enter')).toBe(true);
       // Only fallbacks + save + goto — no binding from the unknown entry.
-      const knownKeys = ['Mod-s', 'Mod-g', 'Mod-Enter', 'Mod-Shift-Enter', 'Mod-Shift-l', 'Mod-Shift-o', 'Mod-d', 'Alt-z'];
+      const knownKeys = ['Mod-s', 'Mod-g', 'Mod-Enter', 'Mod-Shift-Enter', 'Mod-Shift-l', 'Mod-Shift-o', 'Mod-d', 'Alt-z', 'Alt-ArrowLeft', 'Alt-ArrowRight'];
       expect(keymap.every((b) => b.key != null && knownKeys.includes(b.key))).toBe(true);
     });
   });

@@ -412,10 +412,12 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         setShowGoToSymbol(true);
       },
       onToggleWordWrap: () => {
+        // Dispatch globally so all editor panes toggle together
+        // (consistent with the toolbar button and command palette paths).
         // NOTE: onToggleWordWrap MUST remain stable (empty useCallback deps).
         // It accesses state only via refs to avoid stale closures in this
         // keymap, which is captured once during editor init.
-        onToggleWordWrap();
+        document.dispatchEvent(new CustomEvent('editor-toggle-word-wrap'));
       },
     });
 
@@ -611,7 +613,11 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   // EditorView.lineWrapping.  Uses a ref mirror to avoid stale closures
   // inside the CodeMirror keymap and event-listener callbacks.
   const wordWrapRef = useRef(wordWrapEnabled);
+  const lastWrapToggleRef = useRef(0);
   const onToggleWordWrap = useCallback(() => {
+    const now = Date.now();
+    if (now - lastWrapToggleRef.current < 100) return; // dedup: prevent double-toggle from global handler
+    lastWrapToggleRef.current = now;
     const next = !wordWrapRef.current;
     wordWrapRef.current = next;
     setWordWrapEnabled(next);
@@ -628,11 +634,10 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     wordWrapRef.current = wordWrapEnabled;
   }, [wordWrapEnabled]);
 
-  // Listen for go to line event from toolbar and global word-wrap toggle
+  // Listen for go to line event from toolbar and global word-wrap toggle.
   // A small dedup guard prevents double-toggle if the same keyboard event is
   // handled by both the CodeMirror keymap AND the global HotkeyProvider (e.g.
   // if a user manually sets global:true on editor_toggle_word_wrap).
-  const lastWrapToggleRef = useRef(0);
   useEffect(() => {
     const handler = (e: Event) => {
       if (e.type === 'editor-goto-line') {
@@ -641,9 +646,6 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
           handleGoToLine(customEvent.detail.line);
         }
       } else if (e.type === 'editor-toggle-word-wrap') {
-        const now = Date.now();
-        if (now - lastWrapToggleRef.current < 100) return; // dedup: skip if toggled within last 100ms
-        lastWrapToggleRef.current = now;
         onToggleWordWrap();
       }
     };
@@ -783,7 +785,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
               title: 'Toggle word wrap (Alt+Z)',
               icon: <WrapText size={16} />,
               active: wordWrapEnabled,
-              onClick: onToggleWordWrap,
+              onClick: () => document.dispatchEvent(new CustomEvent('editor-toggle-word-wrap')),
             },
             ...(isSvgFile ? [
               {

@@ -1183,7 +1183,6 @@ const AppContent: React.FC<AppContentProps> = ({
             ext: fileExt,
           });
         }}
-        onViewChange={onViewChange}
         onToggleSidebar={onSidebarToggle}
         onToggleTerminal={() => onTerminalExpandedChange(!isTerminalExpanded)}
         onOpenHotkeysConfig={handleOpenHotkeysConfig}

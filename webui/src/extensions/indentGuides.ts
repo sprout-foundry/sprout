@@ -37,8 +37,11 @@ import { type Extension } from '@codemirror/state';
 /**
  * Measure the visual-column indent of `text`, expanding tabs to `tabSize`
  * columns with proper tab-stop alignment.
+ *
+ * Returns `0` when `tabSize` is zero or negative.
  */
-function measureIndent(text: string, tabSize: number): number {
+export function measureIndent(text: string, tabSize: number): number {
+  if (tabSize <= 0) return 0;
   let col = 0;
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
@@ -198,9 +201,8 @@ const guidePlugin = ViewPlugin.fromClass(
               g <= tabEnd && emitted < numGuides;
               g += tabSize
             ) {
-              // Multiple boundaries in one tab all map to the same DOM
-              // position (after the tab).  Emit only the first to avoid
-              // duplicate decorations at the same text position.
+              // Emit only one decoration per position. Multiple boundaries in a
+              // single tab all map to the same text offset (after the tab char).
               if (
                 pieces.length === 0 ||
                 pieces[pieces.length - 1].from !== lineFrom + i + 1

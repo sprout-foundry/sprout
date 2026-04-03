@@ -350,6 +350,26 @@ describe('EditorPane context menu', () => {
     expect(getMenu()).toBeFalsy();
   });
 
+  it('context menu closes when pressing Escape', async () => {
+    await act(async () => {
+      root.render(<EditorPane paneId="pane-1" />);
+    });
+    await flushPromises();
+
+    const paneContent = container.querySelector('.pane-content');
+    fireContextMenu(paneContent);
+    await act(async () => { await Promise.resolve(); });
+
+    expect(getMenu()).toBeTruthy();
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    await flushPromises();
+
+    expect(getMenu()).toBeFalsy();
+  });
+
   it('context menu does NOT appear when there is no buffer (empty state)', async () => {
     mockUseEditorManager.mockReturnValue({
       ...defaultMockEditorManager,

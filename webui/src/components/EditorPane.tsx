@@ -115,10 +115,18 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       }
     };
 
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && contextMenu.visible) {
+        setContextMenu({ visible: false, x: 0, y: 0 });
+      }
+    };
+
     document.addEventListener('mousedown', handleMouseDown);
+    document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('scroll', handleScroll, true); // capture phase for scrolling inside any element
     return () => {
       document.removeEventListener('mousedown', handleMouseDown);
+      document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('scroll', handleScroll, true);
     };
   }, [contextMenu.visible]);
@@ -746,7 +754,10 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         <div
           ref={contextMenuRef}
           className="file-tree-context-menu"
-          style={{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }}
+          style={{
+            left: `${Math.max(0, Math.min(contextMenu.x, window.innerWidth - 220))}px`,
+            top: `${Math.max(0, Math.min(contextMenu.y, window.innerHeight - 120))}px`,
+          }}
           onClick={(e) => e.stopPropagation()}
         >
           <button

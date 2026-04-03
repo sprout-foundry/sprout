@@ -37,6 +37,9 @@ const MOCK_FILES = [
   { name: 'src', path: 'src', is_dir: true, size: 0, mod_time: 0 },
   { name: 'main.go', path: 'main.go', is_dir: false, size: 100, mod_time: 1000 },
   { name: 'README.md', path: 'README.md', is_dir: false, size: 200, mod_time: 2000 },
+  { name: 'node_modules', path: 'node_modules', is_dir: true, size: 0, mod_time: 0, git_status: 'ignored' },
+  { name: 'dist', path: 'dist', is_dir: true, size: 0, mod_time: 0, git_status: 'ignored' },
+  { name: '.env', path: '.env', is_dir: false, size: 50, mod_time: 500, git_status: 'ignored' },
 ];
 
 const MOCK_DIR_CHILDREN = [
@@ -102,6 +105,7 @@ afterEach(() => {
     root?.unmount();
   });
   container?.remove();
+  localStorage.removeItem('filetree-show-ignored');
 });
 
 const flushPromises = async () => {
@@ -616,5 +620,111 @@ describe('FileTree filter', () => {
     // Verify app.tsx is visible inside the tree
     const names = getVisibleFileNames();
     expect(names).toContain('app.tsx');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Ignored files toggle tests
+// ---------------------------------------------------------------------------
+
+describe('FileTree ignored files toggle', () => {
+  /**
+   * Helper: return the set of file names currently visible in the tree.
+   */
+  function getVisibleFileNames(): string[] {
+    const items = document.querySelectorAll('.file-tree-item .file-tree-name');
+    return Array.from(items).map((el) => el.textContent ?? '');
+  }
+
+  /**
+   * Helper: click the toggle-ignored button.
+   */
+  async function clickToggleIgnoredBtn() {
+    const btn = container.querySelector('.toggle-ignored-btn');
+    if (!btn) throw new Error('Toggle ignored button not found');
+    await act(async () => {
+      btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushPromises();
+  }
+
+  it('renders ignored files by default', async () => {
+    await renderTree();
+
+    const names = getVisibleFileNames();
+    expect(names).toContain('node_modules');
+    expect(names).toContain('dist');
+    expect(names).toContain('.env');
+  });
+
+  it('hides ignored files when toggle is clicked', async () => {
+    await renderTree();
+
+    await clickToggleIgnoredBtn();
+
+    const names = getVisibleFileNames();
+    expect(names).not.toContain('node_modules');
+    expect(names).not.toContain('dist');
+    expect(names).not.toContain('.env');
+
+    // Non-ignored files should still be visible
+    expect(names).toContain('src');
+    expect(names).toContain('main.go');
+    expect(names).toContain('README.md');
+  });
+
+  it('shows ignored files again when toggled back on', async () => {
+    await renderTree();
+
+    // Hide ignored files
+    await clickToggleIgnoredBtn();
+    let names = getVisibleFileNames();
+    expect(names).not.toContain('node_modules');
+
+    // Show them again
+    await clickToggleIgnoredBtn();
+    names = getVisibleFileNames();
+    expect(names).toContain('node_modules');
+    expect(names).toContain('dist');
+    expect(names).toContain('.env');
+  });
+
+  it('persists preference to localStorage', async () => {
+    await renderTree();
+
+    const storageSpy = jest.spyOn(Storage.prototype, 'setItem');
+
+    // Toggle to hide ignored files
+    await clickToggleIgnoredBtn();
+
+    expect(storageSpy).toHaveBeenCalledWith('filetree-show-ignored', 'false');
+
+    storageSpy.mockRestore();
+  });
+
+  it('respects localStorage value on mount', async () => {
+    // Set localStorage to hide ignored files before rendering
+    localStorage.setItem('filetree-show-ignored', 'false');
+
+    await renderTree();
+
+    const names = getVisibleFileNames();
+    expect(names).not.toContain('node_modules');
+    expect(names).not.toContain('dist');
+    expect(names).not.toContain('.env');
+
+    // Clean up
+    localStorage.removeItem('filetree-show-ignored');
+  });
+
+  it('toggle button has active class when ignored files are shown', async () => {
+    await renderTree();
+
+    const btn = container.querySelector('.toggle-ignored-btn');
+    expect(btn).not.toBeNull();
+    expect(btn!.classList.contains('active')).toBe(true);
+
+    await clickToggleIgnoredBtn();
+    expect(btn!.classList.contains('active')).toBe(false);
   });
 });

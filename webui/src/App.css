@@ -41,6 +41,9 @@
   --font-sans: 'Sora', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Consolas', monospace;
 
+  --editor-pane-inactive-overlay: rgba(0, 0, 0, 0.15);
+  --editor-pane-inactive-overlay-hover: rgba(0, 0, 0, 0.06);
+
   --text-xs: 12px;
   --text-sm: 13px;
   --text-base: 14px;
@@ -667,7 +670,11 @@ html, body, #root {
   overflow: hidden;
 }
 
-/* Resize handles within the grid — override the inline position: relative */
+/* Resize handles within the grid — position them over the grid cells.
+ * z-index uses !important because ResizeHandle applies zIndex via inline
+ * style (isDragging ? 100 : 1); without !important the inline value would
+ * win and the handle would sink behind the inactive pane overlay (z-index 10).
+ */
 .grid-pane-layout .grid-resize-handle-col {
   position: absolute;
   top: 0;
@@ -678,6 +685,10 @@ html, body, #root {
   margin: 0;
 }
 
+.grid-pane-layout .grid-resize-handle-col.resizing {
+  z-index: 100 !important;
+}
+
 .grid-pane-layout .grid-resize-handle-row {
   position: absolute;
   left: 0;
@@ -686,6 +697,10 @@ html, body, #root {
   transform: translateY(-50%);
   z-index: 20 !important;
   margin: 0;
+}
+
+.grid-pane-layout .grid-resize-handle-row.resizing {
+  z-index: 100 !important;
 }
 
 .pane-wrapper {

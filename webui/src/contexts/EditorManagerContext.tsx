@@ -926,27 +926,32 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   const closeSplit = useCallback(() => {
     const activePane = panes.find(p => p.id === activePaneId);
 
-    // Close all panes except the primary one
+    // Close all non-primary panes (including the active one if it's non-primary).
+    // Previously we skipped `pane.id !== activePaneId` which orphaned the active
+    // non-primary pane's buffer when `setPanes` later removed it without closing.
     panes.forEach(pane => {
-      if (pane.position !== 'primary' && pane.id !== activePaneId) {
+      if (pane.position !== 'primary') {
         closePane(pane.id);
       }
     });
 
+    const primaryPane = panes.find(p => p.position === 'primary');
     setPanes(prev => {
-      const primaryPane = prev.find(p => p.position === 'primary');
-      return primaryPane ? [primaryPane] : prev;
+      const primary = prev.find(p => p.position === 'primary');
+      return primary ? [primary] : prev;
     });
 
     setPaneLayoutState('single');
-    setActivePaneId(panes[0]?.id || null);
+    setActivePaneId(primaryPane?.id || null);
 
     // Reset pane sizes
-    setPaneSizes({ [panes[0]?.id || 'pane-1']: 100 });
+    setPaneSizes({ [primaryPane?.id || 'pane-1']: 100 });
 
-    const remainingBuffer = activePane?.bufferId;
-    if (remainingBuffer) {
-      setActiveBufferId(remainingBuffer);
+    // Preserve the buffer that was active (even if its pane is now gone),
+    // falling back to the primary pane's buffer.
+    const activeBufferToRestore = activePane?.bufferId || primaryPane?.bufferId;
+    if (activeBufferToRestore) {
+      setActiveBufferId(activeBufferToRestore);
     }
   }, [panes, activePaneId, closePane]);
 

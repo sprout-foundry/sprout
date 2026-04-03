@@ -1,5 +1,6 @@
 import React from 'react';
 import { Copy } from 'lucide-react';
+import { copyToClipboard } from '../utils/clipboard';
 
 interface MessageBubbleProps {
   type?: 'user' | 'assistant';
@@ -16,9 +17,9 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   timestamp,
   children,
 }) => {
-  const handleCopy = () => {
+  const handleCopy = async () => {
     if (copyText) {
-      navigator.clipboard.writeText(copyText);
+      await copyToClipboard(copyText);
     }
   };
 
@@ -28,7 +29,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
       role={type === 'user' ? 'user-message' : 'assistant-message'}
       aria-label={ariaLabel}
     >
-      <div className="message-bubble">
+      <div className="message-bubble" data-message-content={copyText || ''}>
         {copyText ? (
           <button
             className="copy-button"

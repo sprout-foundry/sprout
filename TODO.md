@@ -74,7 +74,7 @@
 [x] - HOTKEYS: Add add selection to next find match (`Ctrl+D` — correct VS Code behavior) keybinding.
 [x] - HOTKEYS: Add toggle word wrap (`Alt+Z`) keybinding.
 [x] - HOTKEYS: Add navigate back (`Alt+Left`) and navigate forward (`Alt+Right`) keybindings.
-[] - HOTKEYS: Add keybindings for `split_editor_horizontal`, `close_all_editors`, `close_other_editors` — currently command-palette-only with no keyboard shortcuts.
+[x] - HOTKEYS: Add keybindings for `split_editor_horizontal`, `close_all_editors`, `close_other_editors` — currently command-palette-only with no keyboard shortcuts.
 [] - HOTKEYS: Add keybindings for panel switching (`switch_to_chat`, `switch_to_editor`, `switch_to_git`) — currently command-palette-only.
 [] - HOTKEYS: Add insert cursor above (`Ctrl+Alt+Up`) and insert cursor below (`Ctrl+Alt+Down`) for multi-cursor editing.
 

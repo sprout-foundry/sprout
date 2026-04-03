@@ -69,10 +69,5 @@
     "start": "react-scripts start",
     "test": "react-scripts test"
   },
-  "version": "1.0.0",
-  "jest": {
-    "transformIgnorePatterns": [
-      "node_modules/(?!(?:@codemirror|@marijn|@lezer|crelt|style-mod|w3c-keyname)/)"
-    ]
-  }
+  "version": "1.0.0"
 }

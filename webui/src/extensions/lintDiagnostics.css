@@ -1,0 +1,158 @@
+/**
+ * Lint diagnostics theming for @codemirror/lint decorations.
+ *
+ * Styles lint tooltip items, the lint panel, and hover tooltips to match
+ * the existing theme system via CSS custom properties. Works in both
+ * dark and light modes.
+ *
+ * Gutter markers (.cm-lint-marker-*) use CodeMirror's built-in SVG markers
+ * and are intentionally not overridden here. Inline squiggle decorations
+ * (.cm-lintRange-*) are JS-injected via @codemirror/theme and cannot be
+ * overridden with CSS.
+ */
+
+/* ── Diagnostic tooltip items ──────────────────────────────────── */
+
+.cm-diagnostic {
+  text-decoration: underline wavy var(--text-tertiary, #7f8794);
+  text-decoration-skip-ink: none;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1.5px;
+}
+
+.cm-diagnostic-error {
+  text-decoration-color: var(--accent-error, #e06c75);
+}
+
+.cm-diagnostic-warning {
+  text-decoration-color: var(--accent-warning, #e5c07b);
+}
+
+.cm-diagnostic-info {
+  text-decoration-color: var(--accent-primary, #61afef);
+}
+
+.cm-diagnostic-hint {
+  text-decoration-color: var(--accent-success, #98c379);
+}
+
+/* ── Diagnostic hover tooltip ──────────────────────────────────── */
+
+.cm-diagnosticText {
+  background-color: var(--bg-elevated, #303742);
+  color: var(--text-primary, #abb2bf);
+  border: 1px solid var(--border-default, rgba(171, 178, 191, 0.22));
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  max-width: 360px;
+  word-wrap: break-word;
+  z-index: 100;
+}
+
+.cm-diagnosticText.cm-diagnosticText-error {
+  border-left: 3px solid var(--accent-error, #e06c75);
+}
+
+.cm-diagnosticText.cm-diagnosticText-warning {
+  border-left: 3px solid var(--accent-warning, #e5c07b);
+}
+
+.cm-diagnosticText.cm-diagnosticText-info {
+  border-left: 3px solid var(--accent-primary, #61afef);
+}
+
+.cm-diagnosticText.cm-diagnosticText-hint {
+  border-left: 3px solid var(--accent-success, #98c379);
+}
+
+/* ── Action buttons inside tooltip ─────────────────────────────── */
+
+.cm-diagnosticAction-subtle {
+  color: var(--accent-primary, #61afef);
+  background: transparent;
+  border: none;
+  padding: 2px 6px;
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.cm-diagnosticAction-subtle:hover {
+  background-color: var(--accent-primary-alpha, rgba(97, 175, 239, 0.2));
+  color: var(--accent-primary, #61afef);
+}
+
+/* ── Lint panel ────────────────────────────────────────────────── */
+
+.cm-panels {
+  background-color: var(--bg-secondary, #21252b);
+  border-top: 1px solid var(--border-subtle, rgba(171, 178, 191, 0.14));
+  color: var(--text-primary, #abb2bf);
+}
+
+.cm-panels input,
+.cm-panels button {
+  background: var(--bg-tertiary, #2c313a);
+  color: var(--text-primary, #abb2bf);
+  border: 1px solid var(--border-subtle, rgba(171, 178, 191, 0.14));
+}
+
+.cm-panels button:hover {
+  background: var(--bg-elevated, #303742);
+  border-color: var(--border-default, rgba(171, 178, 191, 0.22));
+}
+
+.cm-panels.cm-panels-top {
+  border-top: 1px solid var(--border-subtle, rgba(171, 178, 191, 0.14));
+  border-bottom: 1px solid var(--border-subtle, rgba(171, 178, 191, 0.14));
+}
+
+/* The lint diagnostic list inside the panel */
+.cm-lint {
+  background-color: var(--bg-secondary, #21252b);
+  color: var(--text-primary, #abb2bf);
+}
+
+.cm-lint-lint-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cm-lint-lint-item {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-subtle, rgba(171, 178, 191, 0.14));
+  font-size: 13px;
+  line-height: 1.5;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.cm-lint-lint-item:hover {
+  background-color: var(--bg-tertiary, #2c313a);
+}
+
+.cm-lint-lint-item.cm-lint-lint-item-error {
+  border-left: 3px solid var(--accent-error, #e06c75);
+}
+
+.cm-lint-lint-item.cm-lint-lint-item-warning {
+  border-left: 3px solid var(--accent-warning, #e5c07b);
+}
+
+.cm-lint-lint-item.cm-lint-lint-item-info {
+  border-left: 3px solid var(--accent-primary, #61afef);
+}
+
+.cm-lint-lint-item.cm-lint-lint-item-hint {
+  border-left: 3px solid var(--accent-success, #98c379);
+}
+
+.cm-lint-lint-item .cm-lint-lint-source {
+  color: var(--text-secondary, #9aa3b2);
+  font-size: 11px;
+}

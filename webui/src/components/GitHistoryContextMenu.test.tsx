@@ -93,16 +93,16 @@ afterEach(() => {
     document.body.removeChild(commitRow);
     commitRow = null;
   }
-  document.querySelectorAll('.git-history-context-menu').forEach((el) => el.remove());
+  document.querySelectorAll('.context-menu').forEach((el) => el.remove());
 });
 
 function getMenu(): Element | null {
-  return document.querySelector('.git-history-context-menu');
+  return document.querySelector('.context-menu');
 }
 
 function getMenuItems(): Element[] {
   const menu = getMenu();
-  return menu ? Array.from(menu.querySelectorAll('.git-history-context-menu-item')) : [];
+  return menu ? Array.from(menu.querySelectorAll('.context-menu-item')) : [];
 }
 
 function getMenuTexts(): string[] {

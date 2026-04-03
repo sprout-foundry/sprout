@@ -219,7 +219,7 @@ func TestHotkeyPresetConfigs(t *testing.T) {
 				"editor_goto_line", "editor_move_line_up", "editor_move_line_down",
 				"editor_duplicate_line_up", "editor_duplicate_line_down", "editor_delete_line",
 				"editor_insert_line_below", "editor_insert_line_above", "editor_select_all_occurrences",
-				"editor_goto_symbol",
+				"editor_goto_symbol", "editor_toggle_word_wrap",
 			}
 			for _, cmd := range editorCmds {
 				found := false

@@ -543,7 +543,11 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 		sessionID = fmt.Sprintf("terminal_%d", time.Now().UnixNano())
 		log.Printf("Terminal WebSocket connection starting: %s", sessionID)
 
-		session, err = terminalManager.CreateSession(sessionID)
+		shellOverride := strings.TrimSpace(r.URL.Query().Get("shell"))
+		if len(shellOverride) > 64 {
+			shellOverride = shellOverride[:64]
+		}
+		session, err = terminalManager.CreateSession(sessionID, shellOverride)
 		if err != nil {
 			log.Printf("Failed to create terminal session: %v", err)
 			safeConn.WriteJSON(map[string]interface{}{

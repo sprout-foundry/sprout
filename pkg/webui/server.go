@@ -212,6 +212,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/history/rollback", ws.handleAPIHistoryRollback)
 	mux.HandleFunc("/api/history/changes", ws.handleAPIHistoryChanges)
 	mux.HandleFunc("/api/terminal/sessions", ws.handleAPITerminalSessions)
+	mux.HandleFunc("/api/terminal/shells", ws.handleAPITerminalShells)
 	// Session API
 	mux.HandleFunc("/api/sessions", ws.handleAPISessions)
 	mux.HandleFunc("/api/sessions/restore", ws.handleAPIRestoreSession)

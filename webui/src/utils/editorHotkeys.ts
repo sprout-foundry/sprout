@@ -1,4 +1,5 @@
 import { EditorView, KeyBinding } from '@codemirror/view';
+import { EditorSelection } from '@codemirror/state';
 import { selectNextOccurrence, selectSelectionMatches } from '@codemirror/search';
 import { navigateCursorBack, navigateCursorForward } from '../extensions/cursorHistory';
 import type { HotkeyEntry } from '../services/api';
@@ -150,6 +151,46 @@ function moveCurrentLine(view: EditorView, direction: 'up' | 'down'): boolean {
   return true;
 }
 
+function insertCursorAbove(view: EditorView): boolean {
+  const state = view.state;
+  const originalRanges = state.selection.ranges;
+  const addedRanges = originalRanges.flatMap(r => {
+    const line = state.doc.lineAt(r.head);
+    if (line.number <= 1) return [];
+    const prevLine = state.doc.line(line.number - 1);
+    const col = Math.min(r.head - line.from, prevLine.length);
+    return [EditorSelection.range(prevLine.from + col, prevLine.from + col)];
+  });
+  if (addedRanges.length === 0) return true;
+  const tr = state.update({
+    selection: EditorSelection.create([...originalRanges, ...addedRanges], state.selection.mainIndex),
+  });
+  if (tr.selection) {
+    view.dispatch(tr);
+  }
+  return true;
+}
+
+function insertCursorBelow(view: EditorView): boolean {
+  const state = view.state;
+  const originalRanges = state.selection.ranges;
+  const addedRanges = originalRanges.flatMap(r => {
+    const line = state.doc.lineAt(r.head);
+    if (line.number >= state.doc.lines) return [];
+    const nextLine = state.doc.line(line.number + 1);
+    const col = Math.min(r.head - line.from, nextLine.length);
+    return [EditorSelection.range(nextLine.from + col, nextLine.from + col)];
+  });
+  if (addedRanges.length === 0) return true;
+  const tr = state.update({
+    selection: EditorSelection.create([...originalRanges, ...addedRanges], state.selection.mainIndex),
+  });
+  if (tr.selection) {
+    view.dispatch(tr);
+  }
+  return true;
+}
+
 // ── Hotkey entry → CodeMirror key notation translator ──────────────
 
 // Convert "Ctrl+G" → "Mod-g", "Alt+ArrowUp" → "Alt-ArrowUp"
@@ -220,6 +261,8 @@ const EDITOR_COMMAND_IDS = new Set([
   'editor_navigate_back',
   'editor_navigate_forward',
   'split_editor_horizontal',
+  'editor_insert_cursor_above',
+  'editor_insert_cursor_below',
 ]);
 
 // ── Public API ──────────────────────────────────────────────────────
@@ -420,6 +463,16 @@ export function getEditorKeymap(
   } else {
     bindings.push(...splitHorizBindings);
   }
+
+  // Insert cursor above (Ctrl+Alt+ArrowUp) — multi-cursor editing.
+  // No fallback: only bound when explicitly configured to avoid
+  // conflicts with Alt+ArrowUp (move line up).
+  bindings.push(...bindingsFor('editor_insert_cursor_above', (v) => insertCursorAbove(v)));
+
+  // Insert cursor below (Ctrl+Alt+ArrowDown) — multi-cursor editing.
+  // No fallback: only bound when explicitly configured to avoid
+  // conflicts with Alt+ArrowDown (move line down).
+  bindings.push(...bindingsFor('editor_insert_cursor_below', (v) => insertCursorBelow(v)));
 
   return bindings;
 }

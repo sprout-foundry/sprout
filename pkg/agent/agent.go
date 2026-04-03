@@ -636,6 +636,11 @@ func (a *Agent) GetSystemPrompt() string {
 	return a.systemPrompt
 }
 
+// GetValidator returns the syntax validator (nil until SetEventBus is called).
+func (a *Agent) GetValidator() *validation.Validator {
+	return a.validator
+}
+
 // SetTraceSessionsets the trace session for dataset collection
 func (a *Agent) SetTraceSession(traceSession interface{}) {
 	a.traceSession = traceSession

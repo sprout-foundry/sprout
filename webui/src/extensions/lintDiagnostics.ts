@@ -20,6 +20,8 @@
 import { setDiagnostics, lintGutter, linter, lintKeymap, diagnosticCount as cmDiagnosticCount, openLintPanel, nextDiagnostic, previousDiagnostic, forceLinting, type Diagnostic } from '@codemirror/lint';
 import { EditorView, keymap } from '@codemirror/view';
 
+import './lintDiagnostics.css';
+
 /** Re-export the Diagnostic type so consumers don't need to import from @codemirror/lint directly. */
 export type { Diagnostic };
 
@@ -74,4 +76,39 @@ export function clearDiagnostics(view: EditorView): void {
  */
 export function diagnosticCount(view: EditorView): number {
   return cmDiagnosticCount(view.state);
+}
+
+/**
+ * Creates a debounced version of `updateDiagnostics` that coalesces rapid
+ * calls within the given delay window. Only the most recent set of diagnostics
+ * is applied once the timer fires.
+ *
+ * Useful for diagnostics arriving from WebSocket streams or debounce-able
+ * backend requests where you want to avoid excessive re-renders.
+ *
+ * Returns an object with `update` (the debounced updater) and `cancel`
+ * (to clear any pending timer, e.g. on editor destruction).
+ */
+export interface DebouncedDiagnosticsUpdater {
+  update: (view: EditorView, diagnostics: Diagnostic[]) => void;
+  cancel: () => void;
+}
+
+export function createDebouncedDiagnosticsUpdater(delayMs = 500): DebouncedDiagnosticsUpdater {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  return {
+    update(view: EditorView, diagnostics: Diagnostic[]) {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        updateDiagnostics(view, diagnostics);
+        timer = null;
+      }, delayMs);
+    },
+    cancel() {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    },
+  };
 }

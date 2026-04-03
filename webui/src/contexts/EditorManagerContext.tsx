@@ -181,7 +181,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
           if ((STABLE_PANE_IDS.includes(key) || !key.startsWith('pane-'))
             && typeof parsed[key] === 'number'
             && isFinite(parsed[key])) {
-            filtered[key] = parsed[key];
+            filtered[key] = Math.max(10, Math.min(90, parsed[key]));
           }
         }
 
@@ -252,6 +252,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     return () => {
       if (paneSizesTimeoutRef.current) {
         clearTimeout(paneSizesTimeoutRef.current);
+        writeStorageItem(PANE_SIZES_STORAGE_KEY, JSON.stringify(paneSizes));
       }
     };
   }, [paneSizes]);

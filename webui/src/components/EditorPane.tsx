@@ -26,6 +26,7 @@ import { indentGuidesPlugin } from '../extensions/indentGuides';
 import { linkedScrollExtension, setLinkedScrollEnabled, suppressScrollSync } from '../extensions/linkedScroll';
 import { getLanguageExtensions, resolveLanguageId } from '../extensions/languageRegistry';
 import { minimapExtension } from '../extensions/minimap';
+import { tabExpandSnippets, setSnippetLanguage } from '../extensions/snippets';
 import { ApiService } from '../services/api';
 import {
   File,
@@ -486,6 +487,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       rectangularSelection(),
       crosshairCursor(),
       keymap.of(defaultKeymap),
+      tabExpandSnippets(),
       keymap.of([indentWithTab]),
       keymap.of(searchKeymap),
       keymap.of(customKeymap),
@@ -630,6 +632,24 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     });
   }, [buffer?.id, buffer?.languageOverride, buffer?.file?.ext, buffer?.file?.name]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Keep the snippet expansion language in sync with the current buffer.
+  // Reconfigures a per-view compartment so two panes showing files in
+  // different languages don't interfere with each other.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+
+    if (buffer?.file) {
+      const { languageId } = resolveLanguageId(
+        buffer.languageOverride,
+        buffer.file.ext?.replace(/^\./, ''),
+        buffer.file.name,
+      );
+      setSnippetLanguage(view, languageId);
+    } else {
+      setSnippetLanguage(view, null);
+    }
+  }, [buffer?.id, buffer?.languageOverride, buffer?.file?.ext]);
 
   // Toggle word wrap: updates React state (for toolbar button) and
   // dispatches a CodeMirror compartment reconfigure to apply/remove

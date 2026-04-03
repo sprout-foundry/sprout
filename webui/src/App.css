@@ -672,7 +672,7 @@ html, body, #root {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 50%;
+  left: 50%; /* overridden by inline style via paneSizes['grid:col'] */
   transform: translateX(-50%);
   z-index: 20 !important;
   margin: 0;
@@ -682,7 +682,7 @@ html, body, #root {
   position: absolute;
   left: 0;
   right: 0;
-  top: 50%;
+  top: 50%; /* overridden by inline style via paneSizes['grid:row'] */
   transform: translateY(-50%);
   z-index: 20 !important;
   margin: 0;

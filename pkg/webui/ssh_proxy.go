@@ -167,7 +167,7 @@ func (srv *ReactWebServer) handleSSHProxy(w http.ResponseWriter, r *http.Request
 // inline script that sets window.LEDIT_PROXY_BASE and window.LEDIT_INITIAL_WORKSPACE
 // before the </head> tag.
 func sshServeIndexWithBase(w http.ResponseWriter, proxyBase, initialWorkspace string) {
-	data, err := staticFiles.ReadFile("static/index.html")
+	data, err := readStaticFile("index.html")
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return

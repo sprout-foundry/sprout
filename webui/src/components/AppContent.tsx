@@ -634,6 +634,12 @@ const AppContent: React.FC<AppContentProps> = ({
         case 'editor_toggle_word_wrap':
           document.dispatchEvent(new CustomEvent('editor-toggle-word-wrap'));
           break;
+        case 'toggle_linked_scroll':
+          document.dispatchEvent(new CustomEvent('editor-toggle-linked-scroll'));
+          break;
+        case 'toggle_minimap':
+          document.dispatchEvent(new CustomEvent('editor-toggle-minimap'));
+          break;
       }
     };
     

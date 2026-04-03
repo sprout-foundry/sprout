@@ -4,6 +4,7 @@
 // (@marijn/find-cluster-break) that Jest/CRA cannot transform.
 jest.mock('@codemirror/search', () => ({
   selectSelectionMatches: jest.fn(() => true),
+  selectNextOccurrence: jest.fn(() => true),
 }));
 
 import { getEditorKeymap, getLineIndent } from './editorHotkeys';
@@ -113,6 +114,25 @@ describe('getEditorKeymap', () => {
       const gotoSym = keymap.find((b) => b.key === 'Mod-Shift-o');
       expect(gotoSym).toBeDefined();
     });
+
+    it('translates Ctrl+D → Mod-d for editor_add_selection_to_next_match', () => {
+      const entries: HotkeyEntry[] = [
+        { key: 'Ctrl+D', command_id: 'editor_add_selection_to_next_match' },
+      ];
+      const keymap = getEditorKeymap(entries, emptyActions);
+      const addNext = keymap.find((b) => b.key === 'Mod-d');
+      expect(addNext).toBeDefined();
+      expect(addNext!.preventDefault).toBe(true);
+    });
+
+    it('translates Cmd+D → Mod-d for editor_add_selection_to_next_match', () => {
+      const entries: HotkeyEntry[] = [
+        { key: 'Cmd+D', command_id: 'editor_add_selection_to_next_match' },
+      ];
+      const keymap = getEditorKeymap(entries, emptyActions);
+      const addNext = keymap.find((b) => b.key === 'Mod-d');
+      expect(addNext).toBeDefined();
+    });
   });
 
   describe('editor_insert_line_below bindings', () => {
@@ -160,6 +180,18 @@ describe('getEditorKeymap', () => {
       const gotoSym = keymap.find((b) => b.key === 'Mod-Shift-o');
       expect(gotoSym).toBeDefined();
       expect(typeof gotoSym!.run).toBe('function');
+    });
+  });
+
+  describe('editor_add_selection_to_next_match bindings', () => {
+    it('produces bindings when configured', () => {
+      const entries: HotkeyEntry[] = [
+        { key: 'Ctrl+D', command_id: 'editor_add_selection_to_next_match' },
+      ];
+      const keymap = getEditorKeymap(entries, emptyActions);
+      const addNext = keymap.find((b) => b.key === 'Mod-d');
+      expect(addNext).toBeDefined();
+      expect(typeof addNext!.run).toBe('function');
     });
   });
 
@@ -219,6 +251,14 @@ describe('getEditorKeymap', () => {
       const gotoSym = keymap.find((b) => b.key === 'Mod-Shift-o');
       expect(gotoSym).toBeDefined();
     });
+
+    it('includes Mod-d fallback for editor_add_selection_to_next_match when no entries provided', () => {
+      const keymap = getEditorKeymap(null, emptyActions);
+      const addNext = keymap.find((b) => b.key === 'Mod-d');
+      expect(addNext).toBeDefined();
+      expect(addNext!.preventDefault).toBe(true);
+      expect(typeof addNext!.run).toBe('function');
+    });
   });
 
   describe('EDITOR_COMMAND_IDS coverage', () => {
@@ -262,6 +302,14 @@ describe('getEditorKeymap', () => {
       expect(keymap.some((b) => b.key === 'Mod-Shift-o')).toBe(true);
     });
 
+    it('includes editor_add_selection_to_next_match as a handled command_id', () => {
+      const entries: HotkeyEntry[] = [
+        { key: 'Ctrl+D', command_id: 'editor_add_selection_to_next_match' },
+      ];
+      const keymap = getEditorKeymap(entries, emptyActions);
+      expect(keymap.some((b) => b.key === 'Mod-d')).toBe(true);
+    });
+
     it('ignores entries with unknown command_ids', () => {
       const entries: HotkeyEntry[] = [
         { key: 'Ctrl+Enter', command_id: 'unknown_command' },
@@ -271,7 +319,7 @@ describe('getEditorKeymap', () => {
       // fallback for insert_line_below should still be present.
       expect(keymap.some((b) => b.key === 'Mod-Enter')).toBe(true);
       // Only fallbacks + save + goto — no binding from the unknown entry.
-      const knownKeys = ['Mod-s', 'Mod-g', 'Mod-Enter', 'Mod-Shift-Enter', 'Mod-Shift-l', 'Mod-Shift-o'];
+      const knownKeys = ['Mod-s', 'Mod-g', 'Mod-Enter', 'Mod-Shift-Enter', 'Mod-Shift-l', 'Mod-Shift-o', 'Mod-d'];
       expect(keymap.every((b) => b.key != null && knownKeys.includes(b.key))).toBe(true);
     });
   });

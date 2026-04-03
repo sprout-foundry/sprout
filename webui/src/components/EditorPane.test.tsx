@@ -154,6 +154,7 @@ jest.mock('@codemirror/view', () => ({
     static lineWrapping: any = [];
     static theme = (spec: any) => spec;
     static updateListener: { of: (fn: any) => any } = { of: (fn: any) => fn };
+    static baseTheme = (spec: any) => spec;
   },
   ViewPlugin: { fromClass: (cls: any) => cls },
   keymap: { of: (bindings: any[]) => bindings },
@@ -165,17 +166,28 @@ jest.mock('@codemirror/view', () => ({
   crosshairCursor: () => [],
 }));
 
-jest.mock('@codemirror/state', () => ({
-  EditorState: {
-    create: jest.fn(),
-    allowMultipleSelections: { of: (v: any) => v },
-  },
-  Compartment: jest.fn(),
-  EditorSelection: {
-    create: jest.fn(),
-    range: jest.fn(),
-  },
-}));
+jest.mock('@codemirror/state', () => {
+  const mockCompartment = {
+    of: jest.fn((ext: any) => ext),
+    reconfigure: jest.fn((ext: any) => ({ reconfigure: ext })),
+  };
+  return {
+    EditorState: {
+      create: jest.fn(),
+      allowMultipleSelections: { of: (v: any) => v },
+    },
+    Compartment: jest.fn(() => mockCompartment),
+    Facet: {
+      define: jest.fn(() => ({
+        of: jest.fn((v: any) => ({ facetOf: v })),
+      })),
+    },
+    EditorSelection: {
+      create: jest.fn(),
+      range: jest.fn(),
+    },
+  };
+});
 
 jest.mock('@codemirror/commands', () => ({
   defaultKeymap: [],
@@ -195,6 +207,9 @@ jest.mock('@codemirror/search', () => ({
 jest.mock('@codemirror/autocomplete', () => ({
   autocompletion: () => [],
   closeBrackets: () => [],
+  snippet: (template: string) => () => template,
+  hasNextSnippetField: () => false,
+  hasPrevSnippetField: () => false,
 }));
 
 jest.mock('@codemirror/language', () => ({

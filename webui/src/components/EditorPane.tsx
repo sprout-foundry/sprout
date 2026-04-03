@@ -23,6 +23,7 @@ import { diffGutter, updateDiffGutter, clearDiffGutter } from '../extensions/dif
 import { lintDiagnostics, clearDiagnostics, createDebouncedDiagnosticsUpdater } from '../extensions/lintDiagnostics';
 import { cursorHistoryPlugin } from '../extensions/cursorHistory';
 import { indentGuidesPlugin } from '../extensions/indentGuides';
+import { bracketColorizationPlugin } from '../extensions/bracketColorization';
 import { linkedScrollExtension, setLinkedScrollEnabled, suppressScrollSync } from '../extensions/linkedScroll';
 import { getLanguageExtensions, resolveLanguageId } from '../extensions/languageRegistry';
 import { minimapExtension } from '../extensions/minimap';
@@ -503,6 +504,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       highlightSpecialChars(),
       highlightActiveLine(),
       bracketMatching(),
+      bracketColorizationPlugin(),
       syntaxHighlighting(customHighlightStyle || (themePack.editorSyntaxStyle === 'one-dark' ? oneDarkHighlightStyle : defaultHighlightStyle)),
       diffGutter(),
       lintDiagnostics(),

@@ -11,6 +11,12 @@ import { ApiService } from '../services/api';
 import { readFileWithConsent } from '../services/fileAccess';
 import { copyToClipboard } from '../utils/clipboard';
 
+// Import CodeMirror modules (resolved via mocks defined below).
+// We need references to configure them in beforeEach because react-scripts
+// sets resetMocks:true, which clears factory-configured implementations.
+import { EditorState, Compartment } from '@codemirror/state';
+import { EditorView } from '@codemirror/view';
+
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
@@ -38,7 +44,7 @@ jest.mock('../services/fileAccess', () => ({
 }));
 
 jest.mock('../utils/clipboard', () => ({
-  copyToClipboard: jest.fn().mockResolvedValue(undefined),
+  copyToClipboard: jest.fn(),
 }));
 
 jest.mock('./EditorToolbar', () => () => <div data-testid="editor-toolbar" />);
@@ -59,6 +65,179 @@ jest.mock('./LanguageSwitcher', () => {
     );
   };
 });
+
+// Must mock languageRegistry before EditorPane imports it — it pulls in
+// heavy ESM @codemirror/lang-* and @codemirror/legacy-modes packages that
+// Jest (27.x) cannot handle.
+// NOTE: react-scripts sets resetMocks:true globally, which clears
+// jest.fn() implementations before each test.  Use plain arrow functions
+// for module-level mocks so they survive the reset.
+jest.mock('../extensions/languageRegistry', () => {
+  const entries = [
+    { id: 'typescript', name: 'TypeScript', extensions: ['ts', 'tsx'] },
+    { id: 'javascript', name: 'JavaScript', extensions: ['js', 'jsx'] },
+    { id: 'python', name: 'Python', extensions: ['py'] },
+    { id: 'css', name: 'CSS', extensions: ['css'] },
+    { id: 'json', name: 'JSON', extensions: ['json'] },
+  ];
+  return {
+    allLanguageEntries: entries,
+    getLanguageExtensions: () => [],
+    resolveLanguageId: (override, ext, name) => {
+      if (override) return { languageId: override, isAutoDetected: false };
+      // Mimic real behaviour: return languageId + sub-variant for known extensions
+      const extensionMap: Record<string, string> = {
+        ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
+        py: 'python', css: 'css', json: 'json',
+      };
+      const base = extensionMap[ext];
+      if (!base) return { languageId: null, isAutoDetected: false };
+      // .tsx → typescript-jsx, .jsx → javascript-jsx
+      const sub = ext === 'tsx' ? '-jsx' : ext === 'jsx' ? '-jsx' : '';
+      return { languageId: base + sub, isAutoDetected: true };
+    },
+    detectLanguage: (ext) => {
+      const map: Record<string, string> = {
+        ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
+        py: 'python', css: 'css', json: 'json',
+      };
+      return map[ext] ?? null;
+    },
+  };
+});
+
+jest.mock('../extensions/diffGutter', () => ({
+  diffGutter: () => [],
+  updateDiffGutter: () => {},
+  clearDiffGutter: () => {},
+}));
+
+jest.mock('../extensions/lintDiagnostics', () => ({
+  lintDiagnostics: () => [],
+  clearDiagnostics: () => {},
+  createDebouncedDiagnosticsUpdater: () => ({ update: () => {}, cancel: () => {} }),
+}));
+
+jest.mock('../extensions/cursorHistory', () => ({
+  cursorHistoryPlugin: () => [],
+  navigateCursorBack: () => false,
+  navigateCursorForward: () => false,
+}));
+
+// Mock CodeMirror packages — their ESM internals break Jest 27.
+// Factories create stub jest.fn()s; the actual implementations are
+// configured in beforeEach (after resetMocks runs).
+jest.mock('@codemirror/view', () => ({
+  EditorView: class MockEditorView {
+    state: any;
+    dom: any;
+    constructor({ state, parent }: any) {
+      this.state = state;
+      this.dom = { querySelector: () => null, classList: { add: () => {} } };
+    }
+    dispatch() {}
+    focus() {}
+    destroy() {}
+    static lineWrapping: any = [];
+    static theme = (spec: any) => spec;
+    static updateListener: { of: (fn: any) => any } = { of: (fn: any) => fn };
+  },
+  keymap: { of: (bindings: any[]) => bindings },
+  KeyBinding: {} as any,
+  lineNumbers: () => [],
+  highlightSpecialChars: () => [],
+  highlightActiveLine: () => [],
+  rectangularSelection: () => [],
+  crosshairCursor: () => [],
+}));
+
+jest.mock('@codemirror/state', () => ({
+  EditorState: {
+    create: jest.fn(),
+    allowMultipleSelections: { of: (v: any) => v },
+  },
+  Compartment: jest.fn(),
+  EditorSelection: {
+    create: jest.fn(),
+    range: jest.fn(),
+  },
+}));
+
+jest.mock('@codemirror/commands', () => ({
+  defaultKeymap: [],
+  indentWithTab: {},
+  history: () => [],
+}));
+
+jest.mock('@codemirror/search', () => ({
+  search: () => [],
+  searchKeymap: [],
+  openSearchPanel: jest.fn(),
+  replaceAll: jest.fn(),
+  selectNextOccurrence: jest.fn(),
+  selectSelectionMatches: jest.fn(),
+}));
+
+jest.mock('@codemirror/autocomplete', () => ({
+  autocompletion: () => [],
+  closeBrackets: () => [],
+}));
+
+jest.mock('@codemirror/language', () => ({
+  syntaxHighlighting: (s: any) => s,
+  defaultHighlightStyle: [],
+  codeFolding: () => [],
+  foldGutter: (opts: any) => [],
+  indentOnInput: () => [],
+  bracketMatching: () => [],
+  highlightSpecialChars: () => [],
+  highlightActiveLine: () => [],
+}));
+
+jest.mock('@codemirror/theme-one-dark', () => ({
+  oneDarkHighlightStyle: [],
+}));
+
+// ---------------------------------------------------------------------------
+// Mock helpers for CodeMirror internals
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a lightweight mock for a CodeMirror Text-like doc object.
+ * Not a jest.mock — just a plain helper so resetMocks won't touch it.
+ */
+function createMockDoc(text = '') {
+  const lines = text.split('\n');
+  const lineData = lines.map((l, i) => {
+    return { number: i + 1, text: l, from: 0, to: 0, length: l.length };
+  });
+  let pos = 0;
+  for (const ld of lineData) {
+    ld.from = pos;
+    ld.to = pos + ld.length;
+    pos = ld.to + 1;
+  }
+  return {
+    toString: () => text,
+    length: text.length,
+    lines: lines.length,
+    lineAt: (p) => {
+      for (let i = lineData.length - 1; i >= 0; i--) {
+        if (p >= lineData[i].from) return lineData[i];
+      }
+      return lineData[0];
+    },
+    line: (n) => lineData[n - 1] || lineData[lineData.length - 1],
+  };
+}
+
+/** Create a mock state object as EditorState.create would. */
+function createMockState(text = '') {
+  return {
+    doc: createMockDoc(text),
+    selection: { main: { head: 0 }, ranges: [{ from: 0, to: 0 }], mainIndex: 0 },
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Constants & Helpers
@@ -143,10 +322,12 @@ function getMenuItems() {
 }
 
 // ---------------------------------------------------------------------------
-// Test Suite
+// Shared test parent — provides beforeAll/beforeEach/afterEach for all
+// EditorPane describe blocks.  Variables are scoped to this shared describe
+// so nested describe blocks can reference them without re-declaration.
 // ---------------------------------------------------------------------------
 
-describe('EditorPane context menu', () => {
+describe('EditorPane', () => {
   let container: HTMLDivElement;
   let root: any;
   let apiServiceMock: any;
@@ -160,6 +341,19 @@ describe('EditorPane context menu', () => {
     document.body.appendChild(container);
     root = createRoot(container);
 
+    // ── CodeMirror mock setup (resetMocks clears before each test) ──
+    EditorState.create.mockImplementation(({ doc }) =>
+      createMockState(typeof doc === 'string' ? doc : ''),
+    );
+    (Compartment as jest.Mock).mockImplementation(() => ({
+      of: jest.fn().mockReturnValue([]),
+      reconfigure: jest.fn().mockReturnValue({}),
+    }));
+
+    // ── copyToClipboard — tests assert on .toHaveBeenCalledWith ──
+    (copyToClipboard as jest.Mock).mockResolvedValue(undefined);
+
+    // ── Context & service mocks ──
     apiServiceMock = {
       getWorkspace: jest.fn().mockResolvedValue({
         workspace_root: '/home/user/project',
@@ -194,6 +388,9 @@ describe('EditorPane context menu', () => {
     jest.clearAllMocks();
   });
 
+  // ── Context menu tests ──
+
+  describe('context menu', () => {
   it('renders without crashing', async () => {
     await act(async () => {
       root.render(<EditorPane paneId="pane-1" />);
@@ -449,59 +646,12 @@ describe('EditorPane context menu', () => {
     const paneContent = container.querySelector('.pane-content');
     expect(paneContent).toBeFalsy();
   });
-});
 
-// ---------------------------------------------------------------------------
-// Language Override Tests
-// ---------------------------------------------------------------------------
+  }); // context menu
 
-describe('EditorPane language override', () => {
-  let container: HTMLDivElement;
-  let root: any;
-  let apiServiceMock: any;
+  // ── Language override tests ──
 
-  beforeAll(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-  });
-
-  beforeEach(() => {
-    container = document.createElement('div');
-    document.body.appendChild(container);
-    root = createRoot(container);
-
-    apiServiceMock = {
-      getWorkspace: jest.fn().mockResolvedValue({
-        workspace_root: '/home/user/project',
-        daemon_root: '/home/user/project/.ledit',
-      }),
-      getGitDiff: jest.fn().mockResolvedValue({ diff: '' }),
-    };
-    (ApiService.getInstance as jest.Mock).mockReturnValue(apiServiceMock);
-
-    mockUseEditorManager.mockReturnValue({ ...defaultMockEditorManager });
-
-    (useHotkeys as jest.MockedFunction<typeof useHotkeys>).mockReturnValue({ hotkeys: [] });
-
-    (useTheme as jest.MockedFunction<typeof useTheme>).mockReturnValue({
-      theme: 'dark',
-      themePack: { id: 'dark', mode: 'dark', editorSyntaxStyle: 'one-dark' },
-      customHighlightStyle: undefined,
-    });
-
-    (readFileWithConsent as jest.Mock).mockResolvedValue({
-      ok: true,
-      statusText: 'OK',
-      text: () => Promise.resolve('line1\nline2\nline3'),
-    });
-  });
-
-  afterEach(() => {
-    act(() => {
-      root.unmount();
-    });
-    container.remove();
-    jest.clearAllMocks();
-  });
+  describe('language override', () => {
 
   it('renders the LanguageSwitcher in the toolbar zone', async () => {
     await act(async () => {
@@ -600,4 +750,6 @@ describe('EditorPane language override', () => {
     const languageSwitcher = container.querySelector('[data-testid="language-switcher"]');
     expect(languageSwitcher).toBeFalsy();
   });
-});
+  }); // language override
+
+}); // EditorPane

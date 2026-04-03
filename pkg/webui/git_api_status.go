@@ -509,6 +509,10 @@ func (ws *ReactWebServer) handleAPIGitCheckout(w http.ResponseWriter, r *http.Re
 		http.Error(w, "Branch is required", http.StatusBadRequest)
 		return
 	}
+	if strings.HasPrefix(req.Branch, "-") {
+		http.Error(w, "Invalid branch name", http.StatusBadRequest)
+		return
+	}
 
 	if _, err := gitOutputStringForWorkspace(ws, ws.getWorkspaceRootForRequest(r), "checkout", req.Branch); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to checkout branch: %v", err), http.StatusInternalServerError)
@@ -791,6 +795,10 @@ func (ws *ReactWebServer) handleAPIGitRevert(w http.ResponseWriter, r *http.Requ
 	req.Commit = strings.TrimSpace(req.Commit)
 	if req.Commit == "" {
 		http.Error(w, "Commit is required", http.StatusBadRequest)
+		return
+	}
+	if strings.HasPrefix(req.Commit, "-") {
+		http.Error(w, "Invalid commit hash", http.StatusBadRequest)
 		return
 	}
 	if _, err := gitOutputStringForWorkspace(ws, ws.getWorkspaceRootForRequest(r), "revert", "--no-edit", req.Commit); err != nil {

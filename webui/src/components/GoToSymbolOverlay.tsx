@@ -25,7 +25,7 @@ interface GoToSymbolOverlayProps {
 
 const MAX_SYMBOLS = 500;
 
-const KIND_ICONS: Record<SymbolKind, string> = {
+export const KIND_ICONS: Record<SymbolKind, string> = {
   function: 'ƒ',
   method: 'ƒ',
   class: 'C',
@@ -91,6 +91,121 @@ export function extractSymbols(content: string, languageId?: string): SymbolInfo
   }
 
   return symbols;
+}
+
+// ── Enclosing-symbol detection ───────────────────────────────────────────
+
+/** Kinds that can act as scope containers for the breadcrumb. */
+const CONTAINER_KINDS: ReadonlySet<SymbolKind> = new Set<SymbolKind>([
+  'function', 'method', 'class', 'interface',
+]);
+
+/**
+ * Find the 1-based end line (inclusive) of a symbol's scope by counting
+ * balanced braces from the symbol's definition line onward.
+ *
+ * Handles:
+ *  - Single-quoted, double-quoted, and backtick strings (skips braces inside).
+ *  - `//` line comments (skips the rest of the line).
+ *  - Handles escape sequences inside strings (e.g. `\"`, `\'`, `\\`).
+ *
+ * If no matching close brace is found, returns `lines.length` (end of file).
+ */
+function findSymbolScopeEnd(lines: string[], startLineIndex: number): number {
+  let braceCount = 0;
+  let foundFirstBrace = false;
+  let inBlockComment = false;
+
+  for (let i = startLineIndex; i < lines.length; i++) {
+    const line = lines[i];
+    for (let j = 0; j < line.length; j++) {
+      const ch = line[j];
+
+      // Inside a block comment — look for */
+      if (inBlockComment) {
+        if (ch === '*' && j + 1 < line.length && line[j + 1] === '/') {
+          inBlockComment = false;
+          j++; // skip the /
+        }
+        continue;
+      }
+
+      // Start of block comment
+      if (ch === '/' && j + 1 < line.length && line[j + 1] === '*') {
+        inBlockComment = true;
+        j++; // skip the *
+        continue;
+      }
+
+      // Line comment — skip rest of line
+      if (ch === '/' && j + 1 < line.length && line[j + 1] === '/') {
+        break; // skip to end of line
+      }
+
+      // String handling
+      if (ch === "'" || ch === '"' || ch === '`') {
+        const quote = ch;
+        j++; // advance past opening quote
+        while (j < line.length) {
+          if (line[j] === '\\' && j + 1 < line.length) {
+            j += 2; // skip escaped character
+            continue;
+          }
+          if (line[j] === quote) break; // closing quote
+          j++;
+        }
+        continue; // continue outer loop (j will be incremented by for-loop)
+      }
+
+      if (ch === '{') {
+        braceCount++;
+        foundFirstBrace = true;
+      } else if (ch === '}') {
+        braceCount--;
+        if (foundFirstBrace && braceCount === 0) {
+          return i + 1; // 1-based inclusive end line
+        }
+      }
+    }
+  }
+
+  // No matching close brace — scope extends to end of file
+  return lines.length;
+}
+
+/**
+ * Return the symbols (up to 3) that enclose `cursorLine` (1-based).
+ *
+ * Only container kinds are considered (function, method, class, interface).
+ * Symbols are returned sorted by line ascending (outermost → innermost).
+ */
+export function getEnclosingSymbols(
+  content: string,
+  languageId: string | undefined,
+  cursorLine: number, // 1-based
+): SymbolInfo[] {
+  if (!content || cursorLine < 1) return [];
+
+  const allSymbols = extractSymbols(content, languageId);
+  const lines = content.split('\n');
+  const result: SymbolInfo[] = [];
+
+  // Filter to container kinds only and process in line order
+  const containers = allSymbols
+    .filter((s) => CONTAINER_KINDS.has(s.kind))
+    .sort((a, b) => a.line - b.line);
+
+  for (const sym of containers) {
+    if (sym.line > cursorLine) continue; // symbol starts after cursor
+
+    const endLine = findSymbolScopeEnd(lines, sym.line - 1);
+    if (cursorLine <= endLine) {
+      result.push(sym);
+      if (result.length >= 3) break; // cap at 3 levels deep
+    }
+  }
+
+  return result;
 }
 
 // ── Language-specific patterns ───────────────────────────────────────────

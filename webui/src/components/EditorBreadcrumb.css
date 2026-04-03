@@ -1,0 +1,81 @@
+.editor-breadcrumb {
+  display: flex;
+  align-items: center;
+  height: 22px;
+  min-height: 22px;
+  padding: 0 12px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 12px;
+  color: var(--text-tertiary);
+  overflow: hidden;
+}
+
+.breadcrumb-list {
+  display: flex;
+  align-items: center;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.breadcrumb-item {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.breadcrumb-segment {
+  cursor: pointer;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+  min-width: 0;
+  border-radius: 3px;
+  padding: 1px 4px;
+  transition: background-color 0.1s, color 0.1s;
+
+  /* Reset button styles */
+  background: none;
+  border: none;
+  font-size: inherit;
+  font-family: inherit;
+  line-height: inherit;
+}
+
+.breadcrumb-segment:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary, rgba(255, 255, 255, 0.06));
+}
+
+.breadcrumb-segment:focus-visible {
+  outline: 1px solid var(--accent-primary, #6366f1);
+  outline-offset: -1px;
+  border-radius: 3px;
+}
+
+.breadcrumb-segment-current {
+  cursor: default;
+  color: var(--text-primary);
+  font-weight: 500;
+  max-width: 200px;
+  flex-shrink: 0.5;
+}
+
+.breadcrumb-segment-current:hover {
+  background: transparent;
+}
+
+.breadcrumb-separator {
+  color: var(--text-tertiary);
+  margin: 0 2px;
+  flex-shrink: 0;
+  opacity: 0.5;
+  display: flex;
+  align-items: center;
+}

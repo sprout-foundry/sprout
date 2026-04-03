@@ -815,3 +815,379 @@ describe('FileTree ignored files toggle', () => {
     expect(names).not.toContain('build.log');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Drag-and-drop tests
+// ---------------------------------------------------------------------------
+
+describe('FileTree drag-and-drop', () => {
+  /**
+   * Helper: get a file tree item DOM element by name.
+   */
+  function getFileItem(fileName: string): HTMLElement | null {
+    const allItems = document.querySelectorAll('.file-tree-item');
+    for (const item of Array.from(allItems)) {
+      const nameEl = item.querySelector('.file-tree-name');
+      if (nameEl && nameEl.textContent === fileName) return item as HTMLElement;
+    }
+    return null;
+  }
+
+  /**
+   * Helper: simulate drag start on a file tree item.
+   * Returns a mock DataTransfer with the file path data set.
+   */
+  function fireDragStart(fileName: string): DataTransfer | null {
+    const item = getFileItem(fileName);
+    if (!item) return null;
+    const dataStore: Record<string, string> = {};
+    const dataTransfer = {
+      dropEffect: 'none',
+      effectAllowed: 'none',
+      data: dataStore,
+      setData(type: string, value: string) { this.data[type] = value; },
+      getData(type: string) { return this.data[type] || ''; },
+      clearData() { Object.keys(this.data).forEach(k => delete this.data[k]); },
+      setDragImage() {},
+      items: [],
+      types: [] as string[],
+    } as unknown as DataTransfer;
+    const event = new Event('dragstart', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'dataTransfer', { value: dataTransfer });
+    Object.defineProperty(event, 'currentTarget', { value: item });
+    act(() => { item.dispatchEvent(event); });
+    return dataTransfer;
+  }
+
+  /**
+   * Helper: simulate dragover on a file tree item.
+   * Uses relatedTarget: null so handleDragLeave doesn't skip clearing.
+   */
+  function fireDragOverOnItem(fileName: string, dataTransfer: DataTransfer): void {
+    const item = getFileItem(fileName);
+    if (!item) return;
+    const event = new Event('dragover', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'dataTransfer', { value: dataTransfer });
+    Object.defineProperty(event, 'relatedTarget', { value: null });
+    Object.defineProperty(event, 'preventDefault', { value: jest.fn() });
+    Object.defineProperty(event, 'stopPropagation', { value: jest.fn() });
+    act(() => { item.dispatchEvent(event); });
+  }
+
+  /**
+   * Helper: simulate drop on a file tree item.
+   */
+  async function fireDropOnItem(fileName: string, dataTransfer: DataTransfer): Promise<void> {
+    const item = getFileItem(fileName);
+    if (!item) return;
+    const event = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'dataTransfer', { value: dataTransfer });
+    Object.defineProperty(event, 'preventDefault', { value: jest.fn() });
+    Object.defineProperty(event, 'stopPropagation', { value: jest.fn() });
+    act(() => { item.dispatchEvent(event); });
+    await flushPromises();
+    // Extra tick for async renameItem
+    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    await flushPromises();
+    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    await flushPromises();
+  }
+
+  /**
+   * Helper: simulate dragover on file-list background.
+   */
+  function fireDragOverOnBackground(dataTransfer: DataTransfer): void {
+    const fileList = document.querySelector('.file-list');
+    if (!fileList) return;
+    const event = new Event('dragover', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'dataTransfer', { value: dataTransfer });
+    Object.defineProperty(event, 'relatedTarget', { value: null });
+    Object.defineProperty(event, 'preventDefault', { value: jest.fn() });
+    Object.defineProperty(event, 'stopPropagation', { value: jest.fn() });
+    act(() => { fileList.dispatchEvent(event); });
+  }
+
+  /**
+   * Helper: simulate drop on file-list background.
+   */
+  async function fireDropOnBackground(dataTransfer: DataTransfer): Promise<void> {
+    const fileList = document.querySelector('.file-list');
+    if (!fileList) return;
+    const event = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'dataTransfer', { value: dataTransfer });
+    Object.defineProperty(event, 'preventDefault', { value: jest.fn() });
+    Object.defineProperty(event, 'stopPropagation', { value: jest.fn() });
+    act(() => { fileList.dispatchEvent(event); });
+    await flushPromises();
+    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    await flushPromises();
+    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    await flushPromises();
+  }
+
+  it('sets draggable attribute on file tree items', async () => {
+    await renderTree();
+    const item = getFileItem('main.go');
+    expect(item?.getAttribute('draggable')).toBe('true');
+  });
+
+  it('stores file path in dataTransfer on drag start', async () => {
+    await renderTree();
+    const dt = fireDragStart('main.go');
+    expect(dt?.getData('application/x-ledit-filepath')).toBe('main.go');
+  });
+
+  it('applies "dragging" class to the dragged item', async () => {
+    await renderTree();
+    fireDragStart('main.go');
+    await flushPromises();
+    const item = getFileItem('main.go');
+    expect(item?.classList.contains('dragging')).toBe(true);
+  });
+
+  it('clears drag state on drag end', async () => {
+    await renderTree();
+    fireDragStart('main.go');
+    await flushPromises();
+
+    const item = getFileItem('main.go');
+    if (item) {
+      act(() => {
+        item.dispatchEvent(new Event('dragend', { bubbles: true }));
+      });
+    }
+    await flushPromises();
+
+    expect(item?.classList.contains('dragging')).toBe(false);
+  });
+
+  it('shows drop-target class when dragging over a directory', async () => {
+    await renderTree();
+    const dt = fireDragStart('main.go')!;
+    await flushPromises();
+
+    fireDragOverOnItem('src', dt);
+    await flushPromises();
+
+    const srcItem = getFileItem('src');
+    expect(srcItem?.classList.contains('drop-target')).toBe(true);
+  });
+
+  it('does NOT show drop-target class when dragging over a file', async () => {
+    await renderTree();
+    const dt = fireDragStart('README.md')!;
+    await flushPromises();
+
+    fireDragOverOnItem('main.go', dt);
+    await flushPromises();
+
+    const mainGoItem = getFileItem('main.go');
+    expect(mainGoItem?.classList.contains('drop-target')).toBe(false);
+  });
+
+  it('calls renameItem when dropping a file onto a directory', async () => {
+    const apiMock = ApiService.getInstance();
+    await renderTree();
+
+    const dt = fireDragStart('main.go')!;
+    await flushPromises();
+
+    fireDragOverOnItem('src', dt);
+    await flushPromises();
+
+    await fireDropOnItem('src', dt);
+
+    expect(apiMock.renameItem).toHaveBeenCalledWith('main.go', 'src/main.go');
+  });
+
+  it('does NOT call renameItem when dropping onto self', async () => {
+    const apiMock = ApiService.getInstance();
+    await renderTree();
+
+    // Try to drop src onto itself
+    const dt = fireDragStart('src')!;
+    await flushPromises();
+
+    // handleDragOver should refuse — setDropTargetPath(null)
+    fireDragOverOnItem('src', dt);
+    await flushPromises();
+
+    const srcItem = getFileItem('src');
+    expect(srcItem?.classList.contains('drop-target')).toBe(false);
+
+    await fireDropOnItem('src', dt);
+    expect(apiMock.renameItem).not.toHaveBeenCalled();
+  });
+
+  it('shows drop-on-root class when dragging over file-list background with a nested file', async () => {
+    // Mock files with a nested item so we can drag it to root
+    (clientFetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('path=.')) return Promise.resolve(mockFetchResponse([
+        { name: 'src', path: 'src', is_dir: true, size: 0, mod_time: 0 },
+      ]));
+      if (url.includes('path=src')) return Promise.resolve(mockFetchResponse([
+        { name: 'utils.go', path: 'src/utils.go', is_dir: false, size: 50, mod_time: 500 },
+      ]));
+      return Promise.resolve(mockFetchResponse([]));
+    });
+
+    await renderTree();
+
+    // Expand src to see its children
+    const srcItem = getFileItem('src');
+    if (srcItem) {
+      await act(async () => {
+        srcItem.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      await flushPromises();
+    }
+
+    // Start dragging the nested file
+    const dt = fireDragStart('utils.go')!;
+    await flushPromises();
+
+    // Drag over the file-list background
+    fireDragOverOnBackground(dt);
+    await flushPromises();
+
+    const fileList = document.querySelector('.file-list');
+    expect(fileList?.classList.contains('drop-on-root')).toBe(true);
+  });
+
+  it('does NOT show drop-on-root when dragging an already-root file over background', async () => {
+    await renderTree();
+
+    const dt = fireDragStart('main.go')!;
+    await flushPromises();
+
+    fireDragOverOnBackground(dt);
+    await flushPromises();
+
+    const fileList = document.querySelector('.file-list');
+    // main.go's parent is already rootPath ('.'), so drop-on-root should NOT show
+    expect(fileList?.classList.contains('drop-on-root')).toBe(false);
+  });
+
+  it('calls renameItem when dropping a nested file on the background (root)', async () => {
+    const apiMock = ApiService.getInstance();
+
+    // Mock nested structure
+    (clientFetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('path=.')) return Promise.resolve(mockFetchResponse([
+        { name: 'src', path: 'src', is_dir: true, size: 0, mod_time: 0 },
+      ]));
+      if (url.includes('path=src')) return Promise.resolve(mockFetchResponse([
+        { name: 'helper.go', path: 'src/helper.go', is_dir: false, size: 50, mod_time: 500 },
+      ]));
+      return Promise.resolve(mockFetchResponse([]));
+    });
+
+    await renderTree();
+
+    // Expand src to see children
+    const srcItem = getFileItem('src');
+    if (srcItem) {
+      await act(async () => {
+        srcItem.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      await flushPromises();
+    }
+
+    const dt = fireDragStart('helper.go')!;
+    await flushPromises();
+
+    fireDragOverOnBackground(dt);
+    await flushPromises();
+
+    await fireDropOnBackground(dt);
+
+    expect(apiMock.renameItem).toHaveBeenCalledWith('src/helper.go', 'helper.go');
+  });
+
+  it('clears drop-on-root class when hovering over a specific directory', async () => {
+    // Mock nested structure
+    (clientFetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('path=.')) return Promise.resolve(mockFetchResponse([
+        { name: 'src', path: 'src', is_dir: true, size: 0, mod_time: 0 },
+        { name: 'lib', path: 'lib', is_dir: true, size: 0, mod_time: 0 },
+      ]));
+      if (url.includes('path=src')) return Promise.resolve(mockFetchResponse([
+        { name: 'app.tsx', path: 'src/app.tsx', is_dir: false, size: 50, mod_time: 500 },
+      ]));
+      return Promise.resolve(mockFetchResponse([]));
+    });
+
+    await renderTree();
+
+    // Expand src
+    const srcItem = getFileItem('src');
+    if (srcItem) {
+      await act(async () => {
+        srcItem.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      await flushPromises();
+    }
+
+    const dt = fireDragStart('app.tsx')!;
+    await flushPromises();
+
+    // Hover background first — should show drop-on-root
+    fireDragOverOnBackground(dt);
+    await flushPromises();
+    let fileList = document.querySelector('.file-list');
+    expect(fileList?.classList.contains('drop-on-root')).toBe(true);
+
+    // Now hover over a specific directory — should clear drop-on-root
+    fireDragOverOnItem('lib', dt);
+    await flushPromises();
+    fileList = document.querySelector('.file-list');
+    expect(fileList?.classList.contains('drop-on-root')).toBe(false);
+    // And show drop-target on the directory
+    expect(getFileItem('lib')?.classList.contains('drop-target')).toBe(true);
+  });
+
+  it('clears drop-on-root on drag end', async () => {
+    // Mock nested structure
+    (clientFetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('path=.')) return Promise.resolve(mockFetchResponse([
+        { name: 'src', path: 'src', is_dir: true, size: 0, mod_time: 0 },
+      ]));
+      if (url.includes('path=src')) return Promise.resolve(mockFetchResponse([
+        { name: 'nested.go', path: 'src/nested.go', is_dir: false, size: 50, mod_time: 500 },
+      ]));
+      return Promise.resolve(mockFetchResponse([]));
+    });
+
+    await renderTree();
+
+    // Expand src
+    const srcItem = getFileItem('src');
+    if (srcItem) {
+      await act(async () => {
+        srcItem.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      await flushPromises();
+    }
+
+    fireDragStart('nested.go');
+    await flushPromises();
+
+    fireDragOverOnBackground({ dropEffect: 'move', getData: () => 'src/nested.go', setData: () => {}, types: [] as string[], items: [], clearData: () => {}, setDragImage: () => {} } as unknown as DataTransfer);
+    await flushPromises();
+
+    let fileList = document.querySelector('.file-list');
+    expect(fileList?.classList.contains('drop-on-root')).toBe(true);
+
+    // Fire dragend
+    const nestedItem = getFileItem('nested.go');
+    if (nestedItem) {
+      act(() => {
+        nestedItem.dispatchEvent(new Event('dragend', { bubbles: true }));
+      });
+    }
+    await flushPromises();
+
+    fileList = document.querySelector('.file-list');
+    expect(fileList?.classList.contains('drop-on-root')).toBe(false);
+  });
+});

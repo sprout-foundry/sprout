@@ -121,6 +121,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
   // ── Drag-and-drop state ────────────────────────────────────────────
   const [draggedPath, setDraggedPath] = useState<string | null>(null);
   const [dropTargetPath, setDropTargetPath] = useState<string | null>(null);
+  const [isDropOnRoot, setIsDropOnRoot] = useState(false);
 
   const findFileByPath = useCallback((fileList: FileInfo[], targetPath: string): FileInfo | null => {
     for (const file of fileList) {
@@ -620,10 +621,10 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
   };
 
   // ── Drag-and-drop handlers ───────────────────────────────────────
-  const isDescendant = useCallback((filePath: string, dirPath: string): boolean => {
-    if (filePath === dirPath) return true; // self check
-    const filePathPrefix = filePath + '/';
-    return dirPath.startsWith(filePathPrefix);
+  // Returns true if candidatePath is the same as, or is a descendant of, ancestorPath
+  const isAncestorOrSelf = useCallback((ancestorPath: string, candidatePath: string): boolean => {
+    if (ancestorPath === candidatePath) return true;
+    return candidatePath.startsWith(ancestorPath + '/');
   }, []);
 
   const getParentPath = useCallback((filePath: string): string => {
@@ -647,19 +648,25 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
   const handleDragEnd = useCallback(() => {
     setDraggedPath(null);
     setDropTargetPath(null);
+    setIsDropOnRoot(false);
   }, []);
 
   const handleDragOver = useCallback((e: React.DragEvent, filePath: string, file: FileInfo) => {
+    if (!draggedPath) return;
+
+    // Non-directory items: don't handle — let the event bubble to .file-list
+    // so the background root drop zone can activate.
+    if (!file.isDir) return;
+
+    // This item will handle the drag — stop it from reaching the background
     e.preventDefault();
     e.stopPropagation();
 
-    if (!draggedPath) return;
-
-    // Only directories are valid drop targets
-    if (!file.isDir) return;
+    // Clear root drop zone when hovering a specific valid directory target
+    setIsDropOnRoot(false);
 
     // Can't drop onto self or descendants
-    if (isDescendant(draggedPath, filePath)) {
+    if (isAncestorOrSelf(draggedPath, filePath)) {
       setDropTargetPath(null);
       e.dataTransfer.dropEffect = 'none';
       return;
@@ -675,7 +682,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
 
     setDropTargetPath(filePath);
     e.dataTransfer.dropEffect = 'move';
-  }, [draggedPath, isDescendant, getParentPath]);
+  }, [draggedPath, isAncestorOrSelf, getParentPath]);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     // Only clear if we're truly leaving this element (not entering a child)
@@ -686,51 +693,27 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
     setDropTargetPath(null);
   }, []);
 
-  const handleDrop = useCallback(async (e: React.DragEvent, targetDirPath: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDropTargetPath(null);
-
-    const sourcePath = draggedPath || e.dataTransfer.getData('application/x-ledit-filepath');
-    if (!sourcePath) return;
-    if (sourcePath === targetDirPath) return;
-    setDraggedPath(null);
-
-    // Validate: target must be a directory
-    const targetDir = findFileByPath(filesRef.current, targetDirPath);
-    if (!targetDir?.isDir) return;
-
-    // Validate: not dropping onto self or descendant
-    if (isDescendant(sourcePath, targetDirPath)) return;
-
-    // Validate: not same parent (no-op)
-    const currentParent = getParentPath(sourcePath);
-    if (currentParent === targetDirPath) return;
-
-    // Check for name conflict in target directory
+  const executeMove = useCallback(async (sourcePath: string, targetDirPath: string, targetDirName: string, existingChildren?: FileInfo[]) => {
     const sourceName = sourcePath.split('/').pop() || '';
-    const existingChild = targetDir.children?.find(
+    const existingChild = existingChildren?.find(
       (child) => child.name === sourceName && child.path !== sourcePath
     );
 
     if (existingChild) {
       const confirmed = await showThemedConfirm(
-        `"${sourceName}" already exists in "${targetDir.name}".\n\nReplace it? This cannot be undone.`,
+        `"${sourceName}" already exists in "${targetDirName}".\n\nReplace it? This cannot be undone.`,
         { title: 'Confirm Replace', type: 'danger' }
       );
       if (!confirmed) return;
     }
 
-    // Build new path
     const targetPrefix = targetDirPath === rootPath ? '' : `${targetDirPath}/`;
     const newPath = `${targetPrefix}${sourceName}`;
 
-    // Execute the move (rename)
     try {
       setLoading(true);
       await apiService.renameItem(sourcePath, newPath);
 
-      // Expand target directory
       setExpandedDirs((prev) => {
         const next = new Set(prev);
         if (targetDirPath !== rootPath) {
@@ -740,8 +723,6 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
       });
 
       await refreshTree();
-
-      // Select the moved item at its new location
       setInternalSelectedFile(newPath);
       onItemCreated?.();
     } catch (err) {
@@ -749,7 +730,32 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
     } finally {
       setLoading(false);
     }
-  }, [draggedPath, findFileByPath, isDescendant, getParentPath, apiService, rootPath, refreshTree, onItemCreated]);
+  }, [apiService, refreshTree, onItemCreated, rootPath]);
+
+  const handleDrop = useCallback(async (e: React.DragEvent, targetDirPath: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDropTargetPath(null);
+    setIsDropOnRoot(false);
+
+    const sourcePath = draggedPath || e.dataTransfer.getData('application/x-ledit-filepath');
+    if (!sourcePath) { setDraggedPath(null); return; }
+    if (sourcePath === targetDirPath) { setDraggedPath(null); return; }
+    setDraggedPath(null);
+
+    // Validate: target must be a directory
+    const targetDir = findFileByPath(filesRef.current, targetDirPath);
+    if (!targetDir?.isDir) return;
+
+    // Validate: not dropping onto self or descendant
+    if (isAncestorOrSelf(sourcePath, targetDirPath)) return;
+
+    // Validate: not same parent (no-op)
+    const currentParent = getParentPath(sourcePath);
+    if (currentParent === targetDirPath) return;
+
+    await executeMove(sourcePath, targetDirPath, targetDir.name, targetDir.children);
+  }, [draggedPath, findFileByPath, isAncestorOrSelf, getParentPath, executeMove]);
 
   const renderDraftRow = (parentPath: string, depth: number): JSX.Element | null => {
     if (!draft || draft.mode === 'rename' || draft.parentPath !== parentPath) {
@@ -1003,12 +1009,42 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
         </div>
       ) : null}
 
-      <div className="file-list" ref={fileListRef} role="tree" aria-label="File tree"
+      <div className={`file-list ${isDropOnRoot ? 'drop-on-root' : ''}`} ref={fileListRef} role="tree" aria-label="File tree"
         onContextMenu={(event) => {
           event.preventDefault();
           event.stopPropagation();
           setContextMenu(null);
           setBgContextMenu({ x: event.clientX, y: event.clientY });
+        }}
+        onDragOver={(e) => {
+          if (!draggedPath) return;
+          const currentParent = getParentPath(draggedPath);
+          if (currentParent === rootPath) return;
+          e.preventDefault();
+          e.stopPropagation();
+          e.dataTransfer.dropEffect = 'move';
+          setIsDropOnRoot(true);
+          setDropTargetPath(null);
+        }}
+        onDragLeave={(e) => {
+          const relatedTarget = e.relatedTarget as Node | null;
+          if (relatedTarget && fileListRef.current?.contains(relatedTarget)) return;
+          setIsDropOnRoot(false);
+        }}
+        onDrop={async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsDropOnRoot(false);
+          setDropTargetPath(null);
+
+          const sourcePath = draggedPath || e.dataTransfer.getData('application/x-ledit-filepath');
+          if (!sourcePath) return;
+          setDraggedPath(null);
+
+          const currentParent = getParentPath(sourcePath);
+          if (currentParent === rootPath) return;
+
+          await executeMove(sourcePath, rootPath, 'root directory', filesRef.current);
         }}
       >
         {renderDraftRow(rootPath, 0)}

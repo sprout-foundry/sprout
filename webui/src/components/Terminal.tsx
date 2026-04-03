@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Trash2, Columns2, Rows2 } from 'lucide-react';
+import { Trash2, Columns2, Rows2, Plus, Check } from 'lucide-react';
 import './Terminal.css';
 import TerminalPane, { TerminalPaneHandle } from './TerminalPane';
 import TerminalTabBar, { TerminalSession } from './TerminalTabBar';
+import { ApiService, ShellInfo } from '../services/api';
 
 type SplitDirection = 'none' | 'horizontal' | 'vertical';
 
@@ -46,6 +47,15 @@ const Terminal: React.FC<TerminalProps> = ({
   });
   const [isResizingVertical, setIsResizingVertical] = useState(false);
   const [collapsedHeight, setCollapsedHeight] = useState(getCollapsedHeight);
+
+  // ── Shell selection state ─────────────────────────────────────────────────
+  const [availableShells, setAvailableShells] = useState<ShellInfo[]>([]);
+  const [shellsLoaded, setShellsLoaded] = useState(false);
+  const [selectedShell, setSelectedShell] = useState<string | null>(null);
+  const [showShellMenu, setShowShellMenu] = useState(false);
+  const shellPickerRef = useRef<HTMLDivElement>(null);
+  // Track which shell each session should use (map: sessionId → shell name | null)
+  const sessionShellsRef = useRef<Map<string, string | null>>(new Map());
 
   // ── Split state ──────────────────────────────────────────────────────────
   const [splitDirection, setSplitDirection] = useState<SplitDirection>('none');
@@ -111,6 +121,49 @@ const Terminal: React.FC<TerminalProps> = ({
     return () => window.removeEventListener('resize', updateCollapsedHeight);
   }, [getCollapsedHeight]);
 
+  // ── Fetch available shells on mount ────────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    ApiService.getInstance()
+      .getAvailableShells()
+      .then(res => {
+        if (cancelled) return;
+        setAvailableShells(res.shells || []);
+        // Default to the server-specified default shell
+        const defaultShell = res.shells.find(s => s.default) || res.shells[0];
+        if (defaultShell) {
+          setSelectedShell(defaultShell.name);
+        }
+        setShellsLoaded(true);
+      })
+      .catch(err => {
+        console.warn('Failed to load available shells:', err);
+        setShellsLoaded(true);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Close shell picker when clicking outside or pressing Escape
+  useEffect(() => {
+    if (!showShellMenu) return;
+    const handleClick = (e: MouseEvent) => {
+      if (shellPickerRef.current && !shellPickerRef.current.contains(e.target as Node)) {
+        setShowShellMenu(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowShellMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showShellMenu]);
+
   const toggleExpanded = useCallback(() => {
     setIsExpanded(prev => {
       const next = !prev;
@@ -134,15 +187,24 @@ const Terminal: React.FC<TerminalProps> = ({
     return `pane-${paneIdCounter.current}`;
   }, []);
 
-  const addSession = useCallback(() => {
+  const addSession = useCallback((shell?: string | null) => {
     sessionCounterRef.current += 1;
+    const id = newPaneId();
     const newSession: TerminalSession = {
-      id: newPaneId(),
+      id,
       name: `Session ${sessionCounterRef.current}`,
     };
+    // Track which shell this session should use
+    sessionShellsRef.current.set(id, shell ?? selectedShell ?? null);
     setSessions(prev => [...prev, newSession]);
-    setActiveSessionId(newSession.id);
-  }, [newPaneId]);
+    setActiveSessionId(id);
+  }, [newPaneId, selectedShell]);
+
+  const handleShellPickerSelect = useCallback((shellName: string) => {
+    setSelectedShell(shellName);
+    setShowShellMenu(false);
+    addSession(shellName);
+  }, [addSession]);
 
   // Clear all split state (used by closeSecondaryPane and closeSession)
   const clearSplitState = useCallback(() => {
@@ -169,6 +231,7 @@ const Terminal: React.FC<TerminalProps> = ({
 
     // Clean up imperative handle (SIDE EFFECT outside updater)
     paneHandles.current.delete(id);
+    sessionShellsRef.current.delete(id);
 
     // Batch state updates
     setSessions(remaining);
@@ -209,6 +272,8 @@ const Terminal: React.FC<TerminalProps> = ({
           id: newId,
           name: `Session ${sessionCounterRef.current}`,
         };
+        // Track the shell for the new split pane session
+        sessionShellsRef.current.set(newId, selectedShell ?? null);
         setSessions(s => [...s, newSession]);
         secondarySessionIdRef.current = newId;
         setSecondarySessionId(newId);
@@ -217,7 +282,7 @@ const Terminal: React.FC<TerminalProps> = ({
       splitDirectionRef.current = direction;
       setSplitDirection(direction);
     }
-  }, [clearSplitState]);
+  }, [clearSplitState, selectedShell]);
 
   // Listen for external terminal action events (from command palette / hotkeys)
   useEffect(() => {
@@ -420,14 +485,61 @@ const Terminal: React.FC<TerminalProps> = ({
           </div>
         </div>
         {isExpanded && sessions.length > 0 && (
-          <TerminalTabBar
-            sessions={sessions}
-            activeSessionId={activeSessionId}
-            onSwitch={switchSession}
-            onCreate={addSession}
-            onClose={closeSession}
-            onRename={renameSession}
-          />
+          <div className="terminal-tab-bar-row" style={{ display: 'flex', alignItems: 'stretch', position: 'relative' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <TerminalTabBar
+                sessions={sessions}
+                activeSessionId={activeSessionId}
+                onSwitch={switchSession}
+                onClose={closeSession}
+                onRename={renameSession}
+              />
+            </div>
+            <div className="shell-picker-dropdown" ref={shellPickerRef}>
+              <button
+                className="terminal-tab-new shell-picker-btn"
+                onClick={() => {
+                  if (availableShells.length <= 1) {
+                    addSession(selectedShell);
+                  } else {
+                    setShowShellMenu(prev => !prev);
+                  }
+                }}
+                title="New terminal session"
+                type="button"
+                aria-label="New terminal session"
+                aria-haspopup={availableShells.length > 1}
+                aria-expanded={showShellMenu}
+              >
+                <Plus size={14} />
+                {shellsLoaded && selectedShell && (
+                  <span style={{ fontSize: 10, marginLeft: 3, opacity: 0.7 }}>{selectedShell}</span>
+                )}
+              </button>
+              {showShellMenu && shellsLoaded && availableShells.length > 1 && (
+                <div className="shell-picker-menu" role="menu">
+                  <div className="shell-picker-header">New Terminal</div>
+                  {availableShells.map(shell => (
+                    <button
+                      key={shell.name}
+                      className="shell-picker-item"
+                      onClick={() => handleShellPickerSelect(shell.name)}
+                      type="button"
+                      role="menuitem"
+                      title={shell.path}
+                    >
+                      {shell.default && (
+                        <Check size={12} className="shell-default-indicator" />
+                      )}
+                      {!shell.default && <span style={{ width: 12, flexShrink: 0 }} />}
+                      <span className="shell-name">{shell.name}</span>
+                      <span className="shell-path">{shell.path}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </div>
 
@@ -450,6 +562,7 @@ const Terminal: React.FC<TerminalProps> = ({
                 isActive={hasActivated || isExpanded}
                 isConnected={isConnected}
                 showCloseButton={false}
+                preferredShell={sessionShellsRef.current.get(activeSessionId) ?? null}
               />
             </div>
           )}
@@ -478,6 +591,7 @@ const Terminal: React.FC<TerminalProps> = ({
                 isConnected={isConnected}
                 showCloseButton={true}
                 onClose={closeSecondaryPane}
+                preferredShell={sessionShellsRef.current.get(secondarySessionId) ?? null}
               />
             </div>
           )}

@@ -1,0 +1,169 @@
+/* ── Terminal Tab Bar ──────────────────────────────────── */
+
+.terminal-tab-bar {
+  display: flex;
+  align-items: stretch;
+  height: 28px;
+  min-height: 28px;
+  background: transparent;
+  border-top: 1px solid rgba(148, 163, 184, 0.1);
+  padding: 0 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.2) transparent;
+  gap: 2px;
+  -webkit-app-region: drag;
+}
+
+.terminal-tab-bar::-webkit-scrollbar {
+  height: 3px;
+}
+
+.terminal-tab-bar::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 3px;
+}
+
+.terminal-tab-bar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ── Individual Tab ───────────────────────────────────── */
+
+.terminal-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  min-width: 0;
+  max-width: 180px;
+  padding: 0 10px;
+  margin: 1px 0;
+  border-radius: 4px 4px 0 0;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  -webkit-app-region: no-drag;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  user-select: none;
+  position: relative;
+}
+
+.terminal-tab:hover {
+  background: rgba(30, 41, 59, 0.72);
+  color: #cbd5e1;
+}
+
+.terminal-tab.active {
+  background: rgba(30, 41, 59, 0.72);
+  border-bottom-color: #22d3ee;
+  color: #e2e8f0;
+}
+
+.terminal-tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+  pointer-events: none;
+}
+
+/* ── Tab Close Button ─────────────────────────────────── */
+
+.terminal-tab-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  border-radius: 3px;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
+}
+
+.terminal-tab:hover .terminal-tab-close,
+.terminal-tab.active .terminal-tab-close {
+  opacity: 0.7;
+}
+
+.terminal-tab-close:hover {
+  opacity: 1 !important;
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+}
+
+/* ── New Session Button ───────────────────────────────── */
+
+.terminal-tab-new {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 26px;
+  min-width: 28px;
+  margin: 1px 0;
+  border-radius: 4px 4px 0 0;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.terminal-tab-new:hover {
+  background: rgba(30, 41, 59, 0.72);
+  color: #cbd5e1;
+}
+
+/* ── Inline Rename Input ──────────────────────────────── */
+
+.terminal-tab-rename-input {
+  flex: 1;
+  min-width: 0;
+  height: 18px;
+  border: 1px solid #22d3ee;
+  border-radius: 2px;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  padding: 0 4px;
+  outline: none;
+  -webkit-app-region: no-drag;
+}
+
+.terminal-tab-rename-input::selection {
+  background: rgba(34, 211, 238, 0.38);
+  color: #f8fafc;
+}
+
+/* ── Focus Visible ───────────────────────────────────── */
+
+.terminal-tab:focus-visible {
+  outline: 2px solid #22d3ee;
+  outline-offset: -2px;
+}
+
+.terminal-tab-new:focus-visible,
+.terminal-tab-close:focus-visible {
+  outline: 2px solid #22d3ee;
+  outline-offset: -2px;
+}

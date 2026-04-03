@@ -400,3 +400,104 @@
 }
 
 /* ── Terminal Context Menu is handled by shared ContextMenu.css ── */
+
+/* ── Shell Picker Dropdown ── */
+.shell-picker-dropdown {
+  position: relative;
+  display: inline-flex;
+}
+
+.shell-picker-btn {
+  background: rgba(30, 41, 59, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  color: #cbd5e1;
+  cursor: pointer;
+  padding: 3px 8px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+}
+
+.shell-picker-btn:hover {
+  color: #f8fafc;
+  border-color: rgba(34, 211, 238, 0.35);
+  background: rgba(8, 51, 68, 0.5);
+}
+
+.shell-picker-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 160px;
+  background: rgba(15, 23, 42, 0.98);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 8px;
+  padding: 4px;
+  z-index: 200;
+  box-shadow: 0 8px 24px rgba(2, 6, 23, 0.5);
+  animation: shellPickerFadeIn 0.1s ease-out;
+}
+
+@keyframes shellPickerFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.shell-picker-header {
+  padding: 6px 8px 4px;
+  font-size: 11px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  user-select: none;
+  font-weight: 600;
+}
+
+.shell-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #cbd5e1;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+}
+
+.shell-picker-item:hover {
+  background: rgba(30, 41, 59, 0.72);
+  color: #f8fafc;
+}
+
+.shell-picker-item .shell-default-indicator {
+  color: #22d3ee;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.shell-picker-item .shell-name {
+  flex: 1;
+}
+
+.shell-picker-item .shell-path {
+  font-size: 10px;
+  color: #64748b;
+  margin-left: auto;
+  opacity: 0.7;
+}
+
+.shell-picker-item .shell-path:hover {
+  color: #94a3b8;
+}
+
+.shell-picker-separator {
+  height: 1px;
+  background: rgba(148, 163, 184, 0.16);
+  margin: 4px 8px;
+}

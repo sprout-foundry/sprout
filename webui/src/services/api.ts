@@ -174,6 +174,12 @@ export interface SSHLaunchStatus {
   updated_at: string;
 }
 
+export interface ShellInfo {
+  name: string;
+  path: string;
+  default: boolean;
+}
+
 export class SSHWorkspaceOpenError extends Error {
   step?: string;
   details?: string;
@@ -304,6 +310,12 @@ class ApiService {
     if (!response.ok) throw new Error('Failed to fetch terminal sessions');
     const data = await response.json();
     return data.active_count ?? data.count ?? 0;
+  }
+
+  async getAvailableShells(): Promise<{ shells: ShellInfo[] }> {
+    const response = await clientFetch('/api/terminal/shells');
+    if (!response.ok) throw new Error('Failed to fetch available shells');
+    return response.json();
   }
 
   async getProviders(): Promise<{

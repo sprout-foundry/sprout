@@ -2021,3 +2021,58 @@
     max-height: 160px;
   }
 }
+
+/* ── Chat Message Context Menu ──────────────────────────────────── */
+.chat-msg-context-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 140px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  padding: 4px 0;
+  animation: chat-msg-menu-in 0.1s ease;
+}
+
+@keyframes chat-msg-menu-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.chat-msg-context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.08s ease;
+}
+
+.chat-msg-context-menu-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.chat-msg-context-menu-item:disabled,
+.chat-msg-context-menu-item.disabled {
+  color: var(--text-tertiary);
+  cursor: default;
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.chat-msg-context-menu-item .menu-item-label {
+  flex: 1;
+}
+
+.chat-msg-context-menu-divider {
+  height: 1px;
+  margin: 4px 8px;
+  background: var(--border-default);
+}

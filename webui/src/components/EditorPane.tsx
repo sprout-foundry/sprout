@@ -455,6 +455,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       // Replace All bound to Ctrl+Alt+Enter within the search panel scope.
       {
         key: 'Mod-Alt-Enter',
+        preventDefault: true,
         run: replaceAll,
         scope: 'search-panel',
       },

@@ -198,6 +198,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/git/diff", ws.handleAPIGitDiff)
 	mux.HandleFunc("/api/git/branches", ws.handleAPIGitBranches)
 	mux.HandleFunc("/api/git/checkout", ws.handleAPIGitCheckout)
+	mux.HandleFunc("/api/git/revert", ws.handleAPIGitRevert)
 	mux.HandleFunc("/api/git/branch/create", ws.handleAPIGitCreateBranch)
 	mux.HandleFunc("/api/git/pull", ws.handleAPIGitPull)
 	mux.HandleFunc("/api/git/push", ws.handleAPIGitPush)

@@ -4,6 +4,7 @@ import type { ApiService } from '../services/api';
 import { formatRelativeDate, firstLine } from '../utils/format';
 import type { GitCommitSummary } from '../types/git-types';
 import CommitDetailPanel from './CommitDetailPanel';
+import GitHistoryContextMenu from './GitHistoryContextMenu';
 import './GitHistoryPanel.css';
 
 interface GitHistoryPanelProps {
@@ -151,6 +152,7 @@ const GitHistoryPanel = ({
 
   return (
     <div className="git-history-panel">
+      <GitHistoryContextMenu apiService={apiService} isActing={isActing} />
       {error && commits.length > 0 && (
         <div className="git-history-error">
           <span>{error}</span>
@@ -165,6 +167,9 @@ const GitHistoryPanel = ({
               onClick={() => handleCommitClick(commit)}
               disabled={isActing}
               title={commit.message}
+              data-commit-hash={commit.hash}
+              data-commit-short-hash={commit.short_hash}
+              data-commit-message={commit.message}
             >
               <div className="git-history-commit-top">
                 <span className="git-history-commit-hash">{commit.short_hash}</span>

@@ -174,13 +174,16 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
         className="language-switcher-button"
         onClick={() => setIsOpen(prev => !prev)}
         title={`Language: ${displayName} — click to change`}
+        data-testid="language-switcher-button"
+        data-language-id={currentLanguageId ?? 'auto'}
+        data-auto-detected={String(isAutoDetected)}
       >
         <FileCode size={14} />
         <span className="language-switcher-label">{displayName}</span>
       </button>
 
       {isOpen && createPortal(
-        <div className="language-switcher-popup" style={popupStyle} ref={popupRef}>
+        <div className="language-switcher-popup" style={popupStyle} ref={popupRef} data-testid="language-switcher-popup">
           <div className="language-switcher-search">
             <input
               ref={searchRef}

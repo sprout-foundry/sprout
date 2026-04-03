@@ -11,6 +11,7 @@ import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { useTheme } from '../contexts/ThemeContext';
 import EditorToolbar from './EditorToolbar';
+import EditorBreadcrumb from './EditorBreadcrumb';
 import ImageViewer from './ImageViewer';
 import SvgPreview from './SvgPreview';
 import GoToSymbolOverlay from './GoToSymbolOverlay';
@@ -820,6 +821,16 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
           }}
         />
       </div>
+
+      <EditorBreadcrumb
+        filePath={buffer.file.path}
+        onNavigate={(path) => {
+          // Reveal the clicked path segment in the file explorer sidebar
+          window.dispatchEvent(new CustomEvent('ledit:reveal-in-explorer', {
+            detail: { path }
+          }));
+        }}
+      />
 
       {loading && (
         <div className="loading-indicator">

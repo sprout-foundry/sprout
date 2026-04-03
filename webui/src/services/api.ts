@@ -1594,6 +1594,34 @@ class ApiService {
       throw error;
     }
   }
+
+  async getDiagnostics(path: string, content: string): Promise<{
+    message: string;
+    path: string;
+    diagnostics: Array<{
+      from: number;
+      to: number;
+      severity: 'error' | 'warning' | 'info' | 'hint';
+      message: string;
+      source: string;
+    }>;
+    version: string;
+  }> {
+    try {
+      const response = await clientFetch('/api/diagnostics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path, content }),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to get diagnostics:', error);
+      throw error;
+    }
+  }
 }
 
 export { ApiService };

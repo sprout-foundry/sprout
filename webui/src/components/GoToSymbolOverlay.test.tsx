@@ -319,12 +319,13 @@ describe('extractSymbols', () => {
       expect(symbols).toHaveLength(0);
     });
 
-    it('deduplicates symbols (same name returned once)', () => {
+    it('deduplicates symbols (same name+line returned once, different lines kept)', () => {
       const content = 'func Foo() {}\nfunc Foo() {}\n';
       const symbols = extractSymbols(content, '.go');
-      // Both lines match but Foo should only appear once
+      // Both lines define Foo — they are at different lines, so both are kept.
+      // Dedup only prevents multiple patterns from matching the same line.
       const fooSymbols = symbols.filter((s) => s.name === 'Foo');
-      expect(fooSymbols).toHaveLength(1);
+      expect(fooSymbols).toHaveLength(2);
     });
 
     it('respects MAX_SYMBOLS limit (500)', () => {

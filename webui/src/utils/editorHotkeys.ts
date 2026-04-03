@@ -1,5 +1,5 @@
 import { EditorView, KeyBinding } from '@codemirror/view';
-import { selectSelectionMatches } from '@codemirror/search';
+import { selectNextOccurrence, selectSelectionMatches } from '@codemirror/search';
 import type { HotkeyEntry } from '../services/api';
 
 interface EditorHotkeyActions {
@@ -213,6 +213,7 @@ const EDITOR_COMMAND_IDS = new Set([
   'editor_insert_line_below',
   'editor_insert_line_above',
   'editor_select_all_occurrences',
+  'editor_add_selection_to_next_match',
 ]);
 
 // ── Public API ──────────────────────────────────────────────────────
@@ -302,10 +303,9 @@ export function getEditorKeymap(
   bindings.push(...bindingsFor('editor_duplicate_line_up', (v) => duplicateCurrentLine(v, 'up')));
   bindings.push(...bindingsFor('editor_duplicate_line_down', (v) => duplicateCurrentLine(v, 'down')));
 
-  // Intentionally no fallback for editor_delete_line — let CodeMirror's
-  // searchKeymap handle Mod-d → selectNextOccurrence (add selection to
-  // next find match). Only bind it if the user's hotkey config explicitly
-  // maps a key to this command (e.g. Ctrl+Shift+K in VS Code preset).
+  // Intentionally no fallback for editor_delete_line — we do not want
+  // to auto-bind any key to line deletion. Users must explicitly map a
+  // key (e.g. Ctrl+Shift+K in VS Code preset) to enable this command.
   bindings.push(...bindingsFor('editor_delete_line', (v) => deleteCurrentLine(v)));
 
   // Insert line below — fallback to Mod-Enter (same as CodeMirror's
@@ -337,6 +337,19 @@ export function getEditorKeymap(
     bindings.push({ key: 'Mod-Shift-l', preventDefault: true, run: (v) => selectSelectionMatches(v) });
   } else {
     bindings.push(...selectAllOccBindings);
+  }
+
+  // Add selection to next find match — fallback to Mod-d (Ctrl+D / Cmd+D).
+  // CodeMirror's searchKeymap also binds Mod-d → selectNextOccurrence, but
+  // this explicit entry makes the binding visible in the configurable hotkey
+  // system so users can discover and remap it in settings.
+  const addNextMatchBindings = bindingsFor('editor_add_selection_to_next_match', (v) => {
+    return selectNextOccurrence(v);
+  });
+  if (addNextMatchBindings.length === 0) {
+    bindings.push({ key: 'Mod-d', preventDefault: true, run: (v) => selectNextOccurrence(v) });
+  } else {
+    bindings.push(...addNextMatchBindings);
   }
 
   return bindings;

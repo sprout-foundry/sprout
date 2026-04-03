@@ -166,3 +166,11 @@
   background-color: var(--diff-mod-bg) !important;
 }
 
+/* ── Minimap Styles ──────────────────────────────────────────── */
+
+/* Width is set dynamically by @replit/codemirror-minimap based on
+   editor width. This class is kept as a styling hook for overrides. */
+.cm-minimap-container {
+  height: 100%;
+}
+

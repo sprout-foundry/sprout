@@ -123,7 +123,7 @@
 
 ### Layout & Persistence Gaps
 
-[] - LAYOUT: Persist editor split pane sizes and layout type to `localStorage` — sidebar and context panel widths are persisted, but editor `paneSizes` and `PaneLayout` are ephemeral React state that resets on page reload.
+[x] - LAYOUT: Persist editor split pane sizes and layout type to `localStorage` — sidebar and context panel widths are persisted, but editor `paneSizes` and `PaneLayout` are ephemeral React state that resets on page reload.
 [] - LAYOUT: Implement layout save/restore — all layout state (pane arrangement, sizes, open files/tabs with their positions, cursor/scroll positions, terminal height) is ephemeral and lost on reload. This is the single biggest UX gap for returning users.
 [] - LAYOUT: Optionally restore the set of open files and their tab/pane arrangement on page load.
 

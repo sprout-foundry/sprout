@@ -109,6 +109,10 @@ func VsCodeHotkeyConfig() *HotkeyConfig {
 		{Key: "Alt+Z", CommandID: "editor_toggle_word_wrap", Description: "Toggle word wrap"},
 		{Key: "Alt+ArrowLeft", CommandID: "editor_navigate_back", Description: "Navigate back"},
 		{Key: "Alt+ArrowRight", CommandID: "editor_navigate_forward", Description: "Navigate forward"},
+		{Key: "Ctrl+Alt+ArrowUp", CommandID: "editor_insert_cursor_above", Description: "Insert cursor above"},
+		{Key: "Cmd+Alt+ArrowUp", CommandID: "editor_insert_cursor_above", Description: "Insert cursor above (Mac)"},
+		{Key: "Ctrl+Alt+ArrowDown", CommandID: "editor_insert_cursor_below", Description: "Insert cursor below"},
+		{Key: "Cmd+Alt+ArrowDown", CommandID: "editor_insert_cursor_below", Description: "Insert cursor below (Mac)"},
 	}
 	all := append(sharedUniversalHotkeys(), editor...)
 	return &HotkeyConfig{Version: "1.0", Hotkeys: all}
@@ -138,6 +142,10 @@ func WebStormHotkeyConfig() *HotkeyConfig {
 		{Key: "Alt+Z", CommandID: "editor_toggle_word_wrap", Description: "Toggle word wrap"},
 		{Key: "Alt+ArrowLeft", CommandID: "editor_navigate_back", Description: "Navigate back"},
 		{Key: "Alt+ArrowRight", CommandID: "editor_navigate_forward", Description: "Navigate forward"},
+		{Key: "Ctrl+Alt+ArrowUp", CommandID: "editor_insert_cursor_above", Description: "Insert cursor above"},
+		{Key: "Cmd+Alt+ArrowUp", CommandID: "editor_insert_cursor_above", Description: "Insert cursor above (Mac)"},
+		{Key: "Ctrl+Alt+ArrowDown", CommandID: "editor_insert_cursor_below", Description: "Insert cursor below"},
+		{Key: "Cmd+Alt+ArrowDown", CommandID: "editor_insert_cursor_below", Description: "Insert cursor below (Mac)"},
 	}
 	all := append(sharedUniversalHotkeys(), editor...)
 	return &HotkeyConfig{Version: "1.0", Hotkeys: all}
@@ -183,6 +191,10 @@ func DefaultHotkeyConfig() *HotkeyConfig {
 		{Key: "Alt+Z", CommandID: "editor_toggle_word_wrap", Description: "Toggle word wrap"},
 		{Key: "Alt+ArrowLeft", CommandID: "editor_navigate_back", Description: "Navigate back"},
 		{Key: "Alt+ArrowRight", CommandID: "editor_navigate_forward", Description: "Navigate forward"},
+		{Key: "Ctrl+Alt+ArrowUp", CommandID: "editor_insert_cursor_above", Description: "Insert cursor above"},
+		{Key: "Cmd+Alt+ArrowUp", CommandID: "editor_insert_cursor_above", Description: "Insert cursor above (Mac)"},
+		{Key: "Ctrl+Alt+ArrowDown", CommandID: "editor_insert_cursor_below", Description: "Insert cursor below"},
+		{Key: "Cmd+Alt+ArrowDown", CommandID: "editor_insert_cursor_below", Description: "Insert cursor below (Mac)"},
 	}
 	all := append(sharedUniversalHotkeys(), editor...)
 	return &HotkeyConfig{Version: "1.0", Hotkeys: all}

@@ -392,6 +392,15 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
       return;
     }
 
+    // If the target file is ignored and we're hiding ignored files,
+    // temporarily show them so the reveal can work.
+    if (!showIgnoredFiles) {
+      const target = findFileByPath(filesRef.current, filePath);
+      if (target?.gitStatus === 'ignored') {
+        setShowIgnoredFiles(true);
+      }
+    }
+
     // Compute all ancestor directories
     const ancestors = getAncestors(filePath, rootPath);
     const newAncestors = ancestors.filter(a => !expandedDirs.has(a));
@@ -441,13 +450,13 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
         }, 1500);
       }
     }, 100);
-  }, [getAncestors, rootPath, expandedDirs, findFileByPath, fetchFiles, updateFileChildren]);
+  }, [getAncestors, rootPath, expandedDirs, findFileByPath, fetchFiles, updateFileChildren, showIgnoredFiles]);
 
   // ── Filter / fuzzy search ────────────────────────────────────────────
 
   const isFiltering = filterQuery.trim().length > 0;
 
-  // Recursively remove ignored files (and empty parent directories of only ignored files)
+  // Recursively remove ignored files but keep directories visible (even when empty)
   const filterIgnoredFiles = useCallback((items: FileInfo[]): FileInfo[] => {
     return items.reduce<FileInfo[]>((acc, item) => {
       if (item.gitStatus === 'ignored') {
@@ -455,10 +464,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
       }
       if (item.isDir && item.children) {
         const filteredChildren = filterIgnoredFiles(item.children);
-        if (filteredChildren.length === 0) {
-          return acc; // directory contains only ignored files – hide it entirely
-        }
-        acc.push({ ...item, children: filteredChildren });
+        acc.push({ ...item, children: filteredChildren.length > 0 ? filteredChildren : undefined });
         return acc;
       }
       acc.push(item);
@@ -466,9 +472,14 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
     }, []);
   }, []);
 
+  // Shared pre-filtered source: remove ignored files when toggle is off
+  const visibleFiles = useMemo(
+    () => showIgnoredFiles ? files : filterIgnoredFiles(files),
+    [files, filterIgnoredFiles, showIgnoredFiles]
+  );
+
   // Flatten tree into all items for filtering
   const flatFiles = useMemo(() => {
-    const source = showIgnoredFiles ? files : filterIgnoredFiles(files);
     const result: FileInfo[] = [];
     const flatten = (items: FileInfo[]) => {
       for (const item of items) {
@@ -476,9 +487,9 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
         if (item.children) flatten(item.children);
       }
     };
-    flatten(source);
+    flatten(visibleFiles);
     return result;
-  }, [files, filterIgnoredFiles, showIgnoredFiles]);
+  }, [visibleFiles]);
 
   // Compute filter matches: path -> { score, matches }
   const filterMatches = useMemo(() => {
@@ -528,17 +539,14 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
         });
     };
 
-    return filterTree(files);
-  }, [filterMatches, files]);
+    return filterTree(visibleFiles);
+  }, [filterMatches, visibleFiles]);
 
-  const source = isFiltering ? filteredFiles : files;
-  const treeData = useMemo(
-    () => showIgnoredFiles ? source : filterIgnoredFiles(source),
-    [source, filterIgnoredFiles, showIgnoredFiles]
-  );
+  const treeData = isFiltering ? filteredFiles : visibleFiles;
 
   const handleFilterKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Escape') {
+      e.preventDefault();
       setFilterQuery('');
       e.currentTarget.blur();
     }
@@ -658,8 +666,11 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
         ? (() => {
             const nameStart = file.path.lastIndexOf('/') + 1;
             const ranges = matchInfo.matches
-              .filter(([s, e]) => s >= nameStart || e > nameStart)
-              .map(([s, e]) => [Math.max(0, s - nameStart), Math.max(0, e - nameStart)] as [number, number])
+              .filter(([s, e]) => e > nameStart)                    // match must touch the name
+              .map(([s, e]) => {
+                const clampedStart = Math.max(s, nameStart);
+                return [clampedStart - nameStart, e - nameStart] as [number, number];
+              })
               .filter(([s, e]) => s < e);
             return ranges.length > 0 ? ranges : undefined;
           })()
@@ -867,7 +878,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
           </div>
         ) : null}
         {isFiltering && treeData.length === 0 && !loading && !error ? (
-          <div className="file-tree-no-results">
+          <div className="file-tree-no-results" role="status">
             <span>No files matching &quot;{filterQuery}&quot;</span>
           </div>
         ) : null}

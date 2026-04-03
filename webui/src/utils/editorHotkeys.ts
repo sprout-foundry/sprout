@@ -1,5 +1,6 @@
 import { EditorView, KeyBinding } from '@codemirror/view';
 import { selectNextOccurrence, selectSelectionMatches } from '@codemirror/search';
+import { navigateCursorBack, navigateCursorForward } from '../extensions/cursorHistory';
 import type { HotkeyEntry } from '../services/api';
 
 interface EditorHotkeyActions {
@@ -216,6 +217,8 @@ const EDITOR_COMMAND_IDS = new Set([
   'editor_select_all_occurrences',
   'editor_add_selection_to_next_match',
   'editor_toggle_word_wrap',
+  'editor_navigate_back',
+  'editor_navigate_forward',
 ]);
 
 // ── Public API ──────────────────────────────────────────────────────
@@ -363,6 +366,29 @@ export function getEditorKeymap(
     bindings.push({ key: 'Alt-z', preventDefault: true, run: () => { actions.onToggleWordWrap?.(); return true; } });
   } else {
     bindings.push(...toggleWordWrapBindings);
+  }
+
+  // Navigate back — fallback to Alt-ArrowLeft (VS Code default).
+  // NOTE: CodeMirror's defaultKeymap binds Alt-ArrowLeft to cursorSyntaxLeft.
+  // This custom keymap is registered AFTER defaultKeymap in EditorPane.tsx,
+  // so our binding takes priority.
+  const navBackBindings = bindingsFor('editor_navigate_back', (v) => {
+    return navigateCursorBack(v);
+  });
+  if (navBackBindings.length === 0) {
+    bindings.push({ key: 'Alt-ArrowLeft', preventDefault: true, run: (v) => navigateCursorBack(v) });
+  } else {
+    bindings.push(...navBackBindings);
+  }
+
+  // Navigate forward — fallback to Alt-ArrowRight (VS Code default).
+  const navForwardBindings = bindingsFor('editor_navigate_forward', (v) => {
+    return navigateCursorForward(v);
+  });
+  if (navForwardBindings.length === 0) {
+    bindings.push({ key: 'Alt-ArrowRight', preventDefault: true, run: (v) => navigateCursorForward(v) });
+  } else {
+    bindings.push(...navForwardBindings);
   }
 
   return bindings;

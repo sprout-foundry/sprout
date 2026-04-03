@@ -132,6 +132,11 @@ jest.mock('../extensions/indentGuides', () => ({
   indentGuidesPlugin: () => [],
 }));
 
+jest.mock('../extensions/minimap', () => ({
+  minimapExtension: () => [],
+  showMinimap: { compute: () => null },
+}));
+
 // Mock CodeMirror packages — their ESM internals break Jest 27.
 // Factories create stub jest.fn()s; the actual implementations are
 // configured in beforeEach (after resetMocks runs).
@@ -150,6 +155,7 @@ jest.mock('@codemirror/view', () => ({
     static theme = (spec: any) => spec;
     static updateListener: { of: (fn: any) => any } = { of: (fn: any) => fn };
   },
+  ViewPlugin: { fromClass: (cls: any) => cls },
   keymap: { of: (bindings: any[]) => bindings },
   KeyBinding: {} as any,
   lineNumbers: () => [],

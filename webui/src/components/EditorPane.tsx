@@ -23,7 +23,9 @@ import { diffGutter, updateDiffGutter, clearDiffGutter } from '../extensions/dif
 import { lintDiagnostics, clearDiagnostics, createDebouncedDiagnosticsUpdater } from '../extensions/lintDiagnostics';
 import { cursorHistoryPlugin } from '../extensions/cursorHistory';
 import { indentGuidesPlugin } from '../extensions/indentGuides';
+import { linkedScrollExtension, setLinkedScrollEnabled, suppressScrollSync } from '../extensions/linkedScroll';
 import { getLanguageExtensions, resolveLanguageId } from '../extensions/languageRegistry';
+import { minimapExtension } from '../extensions/minimap';
 import { ApiService } from '../services/api';
 import {
   File,
@@ -32,6 +34,8 @@ import {
   Eye,
   Columns2,
   WrapText,
+  Link2,
+  PanelRightClose,
 } from 'lucide-react';
 import { copyToClipboard } from '../utils/clipboard';
 import './EditorPane.css';
@@ -46,6 +50,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   const viewRef = useRef<EditorView | null>(null);
   const lineWrappingCompartment = useRef(new Compartment());
   const languageCompartment = useRef(new Compartment());
+  const minimapCompartment = useRef(new Compartment());
   const lastInitLanguageKey = useRef<string | null>(null);
   const [wordWrapEnabled, setWordWrapEnabled] = useState(true);
   const [loading, setLoading] = useState<boolean>(false);
@@ -53,6 +58,14 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   const [error, setError] = useState<string | null>(null);
   const [localContent, setLocalContent] = useState<string>('');
   const [showGoToSymbol, setShowGoToSymbol] = useState<boolean>(false);
+  const [minimapEnabled, setMinimapEnabled] = useState(() => {
+    try {
+      const stored = localStorage.getItem('editor:minimap-enabled');
+      return stored !== null ? stored === 'true' : true; // default on
+    } catch {
+      return true; // default on if localStorage unavailable
+    }
+  });
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
@@ -69,6 +82,8 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     splitPane,
     openWorkspaceBuffer,
     setBufferLanguageOverride,
+    isLinkedScrollEnabled,
+    toggleLinkedScroll,
   } = useEditorManager();
 
   const { theme, themePack, customHighlightStyle } = useTheme();
@@ -481,6 +496,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       history(),
       cursorHistoryPlugin,
       indentGuidesPlugin(),
+      linkedScrollExtension(paneId, () => buffer?.file?.path ?? null),
       indentOnInput(),
       highlightSpecialChars(),
       highlightActiveLine(),
@@ -494,6 +510,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         closedText: '▶',
       }),
       codeFolding(),
+      minimapCompartment.current.of(minimapEnabled ? minimapExtension() : []),
       EditorView.theme({
         '&': {
           height: '100%',
@@ -634,13 +651,36 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     });
   }, []);
 
+  // Toggle minimap: updates React state (for toolbar button) and
+  // dispatches a CodeMirror compartment reconfigure to enable/disable
+  // the minimap gutter extension.
+  const onToggleMinimap = useCallback(() => {
+    const next = !minimapEnabled;
+    setMinimapEnabled(next);
+    try {
+      localStorage.setItem('editor:minimap-enabled', String(next));
+    } catch {
+      // Graceful degradation — preference won't persist
+    }
+    viewRef.current?.dispatch({
+      effects: minimapCompartment.current.reconfigure(
+        next ? minimapExtension() : []
+      ),
+    });
+  }, [minimapEnabled]);
+
   // Keep the ref mirror in sync whenever the state value changes from
   // an external source (e.g. the global event listener).
   useEffect(() => {
     wordWrapRef.current = wordWrapEnabled;
   }, [wordWrapEnabled]);
 
-  // Listen for go to line event from toolbar and global word-wrap toggle.
+  // Keep module-level linked scroll state in sync with context.
+  useEffect(() => {
+    setLinkedScrollEnabled(isLinkedScrollEnabled);
+  }, [isLinkedScrollEnabled]);
+
+  // Listen for go to line event, global word-wrap toggle, and linked scroll toggle.
   // A small dedup guard prevents double-toggle if the same keyboard event is
   // handled by both the CodeMirror keymap AND the global HotkeyProvider (e.g.
   // if a user manually sets global:true on editor_toggle_word_wrap).
@@ -653,16 +693,51 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         }
       } else if (e.type === 'editor-toggle-word-wrap') {
         onToggleWordWrap();
+      } else if (e.type === 'editor-toggle-linked-scroll') {
+        toggleLinkedScroll();
       }
     };
 
     document.addEventListener('editor-goto-line', handler);
     document.addEventListener('editor-toggle-word-wrap', handler);
+    document.addEventListener('editor-toggle-linked-scroll', handler);
     return () => {
       document.removeEventListener('editor-goto-line', handler);
       document.removeEventListener('editor-toggle-word-wrap', handler);
+      document.removeEventListener('editor-toggle-linked-scroll', handler);
     };
-  }, [handleGoToLine, onToggleWordWrap]);
+  }, [handleGoToLine, onToggleWordWrap, toggleLinkedScroll]);
+
+  // Listen for scroll sync events from other panes (linked scrolling).
+  useEffect(() => {
+    const handleLinkedScroll = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const { sourcePaneId, filePath, topLine } = customEvent.detail;
+
+      // Skip if same pane or different file
+      if (sourcePaneId === paneId) return;
+      const currentPath = buffer?.file?.path;
+      if (!currentPath || currentPath !== filePath) return;
+      if (!viewRef.current) return;
+
+      const view = viewRef.current;
+
+      // topLine is 1-based; validate bounds.
+      if (topLine < 1 || topLine > view.state.doc.lines) return;
+
+      // Suppress this pane's next viewportChanged dispatch so the
+      // programmatic scroll doesn't cause an echo loop (A → B → A → …).
+      suppressScrollSync(paneId);
+
+      // Get the layout block for the target line and scroll it to the top.
+      const targetPos = view.state.doc.line(topLine).from;
+      const block = view.lineBlockAt(targetPos);
+      view.scrollDOM.scrollTo(0, block.top);
+    };
+
+    document.addEventListener('editor:linked-scroll', handleLinkedScroll);
+    return () => document.removeEventListener('editor:linked-scroll', handleLinkedScroll);
+  }, [paneId, buffer?.file?.path]);
 
   // Compute effective language info for the LanguageSwitcher
   // (Must be declared before early returns to satisfy React hooks rules)
@@ -816,6 +891,20 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
               icon: <WrapText size={16} />,
               active: wordWrapEnabled,
               onClick: () => document.dispatchEvent(new CustomEvent('editor-toggle-word-wrap')),
+            },
+            {
+              id: 'linked-scroll-toggle',
+              title: isLinkedScrollEnabled ? 'Disable linked scrolling' : 'Enable linked scrolling',
+              icon: <Link2 size={16} />,
+              active: isLinkedScrollEnabled,
+              onClick: () => toggleLinkedScroll(),
+            },
+            {
+              id: 'minimap-toggle',
+              title: minimapEnabled ? 'Hide minimap' : 'Show minimap',
+              icon: <PanelRightClose size={16} />,
+              active: minimapEnabled,
+              onClick: onToggleMinimap,
             },
             ...(isSvgFile ? [
               {

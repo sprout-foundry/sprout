@@ -80,7 +80,7 @@
 
 ### Context Menu Gaps
 
-[] - CONTEXT MENU: Add context menu to **SearchView** results — should support "Copy match text", "Open in editor at match line", "Copy file path", and "Exclude file/folder from search".
+[x] - CONTEXT MENU: Add context menu to **SearchView** results — should support "Copy match text", "Open in editor at match line", "Copy file path", and "Exclude file/folder from search".
 [x] - CONTEXT MENU: Add context menu to **EditorPane** (CodeMirror area) — at minimum: "Reveal in File Explorer", "Copy relative path", "Copy absolute path". Later: "Go to Definition", "Rename Symbol", "Find All References" when LSP is available.
 [] - CONTEXT MENU: Add context menu to **Terminal** — should support "Copy" (selection), "Paste", "Clear Terminal", "Select All", "Copy Link" (for terminal URLs).
 [] - CONTEXT MENU: Add context menu to **Chat messages** — should support "Copy message", "Copy code block" (right-clicking code sections), "Insert at cursor" (re-inject message into input).

@@ -126,33 +126,44 @@ const Terminal: React.FC<TerminalProps> = ({
     setActiveSessionId(newSession.id);
   }, [newPaneId]);
 
-  // Close secondary pane (called directly or when secondary session is closed)
-  const closeSecondaryPane = useCallback(() => {
+  // Clear all split state (used by closeSecondaryPane and closeSession)
+  const clearSplitState = useCallback(() => {
     secondarySessionIdRef.current = null;
     setSecondarySessionId(null);
     splitDirectionRef.current = 'none';
     setSplitDirection('none');
   }, []);
 
+  // Close secondary pane (called directly or when secondary session is closed)
+  const closeSecondaryPane = useCallback(() => {
+    clearSplitState();
+  }, [clearSplitState]);
+
   const closeSession = useCallback((id: string) => {
-    // If closing the secondary session's tab, unsplit as well
+    // Synchronously compute what remains using the ref (always up-to-date)
+    const remaining = sessionsRef.current.filter(s => s.id !== id);
+    if (remaining.length === 0) return; // guard: never remove the last session
+
+    // If closing the session that's in the secondary pane, unsplit
     if (secondarySessionIdRef.current === id) {
-      secondarySessionIdRef.current = null;
-      setSecondarySessionId(null);
-      splitDirectionRef.current = 'none';
-      setSplitDirection('none');
+      clearSplitState();
     }
-    setSessions(prev => {
-      if (prev.length <= 1) return prev;
-      paneHandles.current.delete(id);
-      return prev.filter(s => s.id !== id);
-    });
-    setActiveSessionId(current => {
-      if (current !== id) return current;
-      const remaining = sessionsRef.current.filter(s => s.id !== id);
-      return remaining.length > 0 ? remaining[0].id : current;
-    });
-  }, []);
+
+    // Clean up imperative handle (SIDE EFFECT outside updater)
+    paneHandles.current.delete(id);
+
+    // Batch state updates
+    setSessions(remaining);
+    setActiveSessionId(current =>
+      current !== id ? current : remaining[0].id
+    );
+
+    // Auto-unsplit if only one session would remain and split is still active
+    // (could happen if the closed session was NOT the secondary one but was one of >2)
+    if (remaining.length === 1 && splitDirectionRef.current !== 'none') {
+      clearSplitState();
+    }
+  }, [clearSplitState]);
 
   const renameSession = useCallback((id: string, name: string) => {
     setSessions(prev => prev.map(s => s.id === id ? { ...s, name } : s));
@@ -169,10 +180,7 @@ const Terminal: React.FC<TerminalProps> = ({
 
     if (currentDir === direction) {
       // Unsplit: clear secondary session reference
-      secondarySessionIdRef.current = null;
-      setSecondarySessionId(null);
-      splitDirectionRef.current = 'none';
-      setSplitDirection('none');
+      clearSplitState();
     } else {
       // Entering or switching split mode — create a secondary session if needed
       if (!secondarySessionIdRef.current) {
@@ -191,7 +199,7 @@ const Terminal: React.FC<TerminalProps> = ({
       splitDirectionRef.current = direction;
       setSplitDirection(direction);
     }
-  }, []);
+  }, [clearSplitState]);
 
   // Listen for external terminal action events (from command palette / hotkeys)
   useEffect(() => {
@@ -308,6 +316,16 @@ const Terminal: React.FC<TerminalProps> = ({
       }, 300);
       return () => clearTimeout(timer);
     }
+  }, []);
+
+  // Clean up body styles and flags if component unmounts mid-drag
+  useEffect(() => {
+    return () => {
+      if (isDraggingSplit.current || isDraggingVertical.current) {
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+      }
+    };
   }, []);
 
   const isSplitActive = splitDirection !== 'none';

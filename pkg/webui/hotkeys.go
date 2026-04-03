@@ -97,6 +97,8 @@ func VsCodeHotkeyConfig() *HotkeyConfig {
 		{Key: "Ctrl+D", CommandID: "editor_add_selection_to_next_match", Description: "Add selection to next find match"},
 		{Key: "Cmd+D", CommandID: "editor_add_selection_to_next_match", Description: "Add selection to next find match (Mac)"},
 		{Key: "Alt+Z", CommandID: "editor_toggle_word_wrap", Description: "Toggle word wrap"},
+		{Key: "Alt+ArrowLeft", CommandID: "editor_navigate_back", Description: "Navigate back"},
+		{Key: "Alt+ArrowRight", CommandID: "editor_navigate_forward", Description: "Navigate forward"},
 	}
 	all := append(sharedUniversalHotkeys(), editor...)
 	return &HotkeyConfig{Version: "1.0", Hotkeys: all}
@@ -124,6 +126,8 @@ func WebStormHotkeyConfig() *HotkeyConfig {
 		{Key: "Ctrl+Shift+O", CommandID: "editor_goto_symbol", Description: "Go to symbol in file"},
 		{Key: "Cmd+Shift+O", CommandID: "editor_goto_symbol", Description: "Go to symbol in file (Mac)"},
 		{Key: "Alt+Z", CommandID: "editor_toggle_word_wrap", Description: "Toggle word wrap"},
+		{Key: "Alt+ArrowLeft", CommandID: "editor_navigate_back", Description: "Navigate back"},
+		{Key: "Alt+ArrowRight", CommandID: "editor_navigate_forward", Description: "Navigate forward"},
 	}
 	all := append(sharedUniversalHotkeys(), editor...)
 	return &HotkeyConfig{Version: "1.0", Hotkeys: all}
@@ -167,6 +171,8 @@ func DefaultHotkeyConfig() *HotkeyConfig {
 		{Key: "Ctrl+D", CommandID: "editor_add_selection_to_next_match", Description: "Add selection to next find match"},
 		{Key: "Cmd+D", CommandID: "editor_add_selection_to_next_match", Description: "Add selection to next find match (Mac)"},
 		{Key: "Alt+Z", CommandID: "editor_toggle_word_wrap", Description: "Toggle word wrap"},
+		{Key: "Alt+ArrowLeft", CommandID: "editor_navigate_back", Description: "Navigate back"},
+		{Key: "Alt+ArrowRight", CommandID: "editor_navigate_forward", Description: "Navigate forward"},
 	}
 	all := append(sharedUniversalHotkeys(), editor...)
 	return &HotkeyConfig{Version: "1.0", Hotkeys: all}

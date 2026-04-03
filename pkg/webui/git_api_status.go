@@ -775,3 +775,31 @@ func (ws *ReactWebServer) handleAPIGitCommitMessage(w http.ResponseWriter, r *ht
 		"warnings":       result.Warnings,
 	})
 }
+
+func (ws *ReactWebServer) handleAPIGitRevert(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Commit string `json:"commit"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	req.Commit = strings.TrimSpace(req.Commit)
+	if req.Commit == "" {
+		http.Error(w, "Commit is required", http.StatusBadRequest)
+		return
+	}
+	if _, err := gitOutputStringForWorkspace(ws, ws.getWorkspaceRootForRequest(r), "revert", "--no-edit", req.Commit); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to revert commit: %v", err), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "Commit reverted successfully",
+		"commit":  req.Commit,
+	})
+}

@@ -721,6 +721,32 @@ class ApiService {
     return data;
   }
 
+  async checkoutGitCommit(commitHash: string): Promise<{ message: string; commit: string }> {
+    const response = await clientFetch('/api/git/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ branch: commitHash }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || data.message || `HTTP error! status: ${response.status}`);
+    }
+    return data;
+  }
+
+  async revertGitCommit(commitHash: string): Promise<{ message: string; commit: string }> {
+    const response = await clientFetch('/api/git/revert', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ commit: commitHash }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || data.message || `HTTP error! status: ${response.status}`);
+    }
+    return data;
+  }
+
   async createGitBranch(name: string): Promise<{ message: string; branch: string }> {
     const response = await clientFetch('/api/git/branch/create', {
       method: 'POST',

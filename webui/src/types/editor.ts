@@ -27,6 +27,7 @@ export interface EditorBuffer {
   isPinned?: boolean;
   isClosable?: boolean;
   metadata?: Record<string, any>;
+  languageOverride?: string | null; // Language mode override (null = auto-detect by extension)
 }
 
 export type PaneLayout = 'single' | 'split-vertical' | 'split-horizontal' | 'split-grid';

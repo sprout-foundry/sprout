@@ -45,6 +45,20 @@ jest.mock('./EditorToolbar', () => () => <div data-testid="editor-toolbar" />);
 jest.mock('./ImageViewer', () => () => <div data-testid="image-viewer" />);
 jest.mock('./SvgPreview', () => () => <div data-testid="svg-preview" />);
 jest.mock('./GoToSymbolOverlay', () => () => null);
+jest.mock('./LanguageSwitcher', () => {
+  return function MockLanguageSwitcher(props: any) {
+    return (
+      <button
+        data-testid="language-switcher"
+        data-language-id={props.currentLanguageId ?? ''}
+        data-auto-detected={props.isAutoDetected ? 'true' : 'false'}
+        onClick={() => props.onLanguageChange('python')}
+      >
+        MockLanguageSwitcher
+      </button>
+    );
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Constants & Helpers
@@ -83,6 +97,7 @@ const defaultMockEditorManager = {
   setBufferOriginalContent: jest.fn(),
   splitPane: jest.fn(),
   openWorkspaceBuffer: jest.fn(),
+  setBufferLanguageOverride: jest.fn(),
 };
 
 const flushPromises = async () => {
@@ -433,5 +448,156 @@ describe('EditorPane context menu', () => {
     // No pane-content div for images
     const paneContent = container.querySelector('.pane-content');
     expect(paneContent).toBeFalsy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Language Override Tests
+// ---------------------------------------------------------------------------
+
+describe('EditorPane language override', () => {
+  let container: HTMLDivElement;
+  let root: any;
+  let apiServiceMock: any;
+
+  beforeAll(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    apiServiceMock = {
+      getWorkspace: jest.fn().mockResolvedValue({
+        workspace_root: '/home/user/project',
+        daemon_root: '/home/user/project/.ledit',
+      }),
+      getGitDiff: jest.fn().mockResolvedValue({ diff: '' }),
+    };
+    (ApiService.getInstance as jest.Mock).mockReturnValue(apiServiceMock);
+
+    mockUseEditorManager.mockReturnValue({ ...defaultMockEditorManager });
+
+    (useHotkeys as jest.MockedFunction<typeof useHotkeys>).mockReturnValue({ hotkeys: [] });
+
+    (useTheme as jest.MockedFunction<typeof useTheme>).mockReturnValue({
+      theme: 'dark',
+      themePack: { id: 'dark', mode: 'dark', editorSyntaxStyle: 'one-dark' },
+      customHighlightStyle: undefined,
+    });
+
+    (readFileWithConsent as jest.Mock).mockResolvedValue({
+      ok: true,
+      statusText: 'OK',
+      text: () => Promise.resolve('line1\nline2\nline3'),
+    });
+  });
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+    jest.clearAllMocks();
+  });
+
+  it('renders the LanguageSwitcher in the toolbar zone', async () => {
+    await act(async () => {
+      root.render(<EditorPane paneId="pane-1" />);
+    });
+    await flushPromises();
+
+    const languageSwitcher = container.querySelector('[data-testid="language-switcher"]');
+    expect(languageSwitcher).toBeTruthy();
+  });
+
+  it('passes auto-detected language info when no override is set', async () => {
+    await act(async () => {
+      root.render(<EditorPane paneId="pane-1" />);
+    });
+    await flushPromises();
+
+    const languageSwitcher = container.querySelector('[data-testid="language-switcher"]');
+    expect(languageSwitcher?.getAttribute('data-language-id')).toBe('typescript-jsx');
+    expect(languageSwitcher?.getAttribute('data-auto-detected')).toBe('true');
+  });
+
+  it('passes the language override when set', async () => {
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([
+        ['buffer-1', { ...mockBuffer, languageOverride: 'python' }],
+      ]),
+    });
+
+    await act(async () => {
+      root.render(<EditorPane paneId="pane-1" />);
+    });
+    await flushPromises();
+
+    const languageSwitcher = container.querySelector('[data-testid="language-switcher"]');
+    expect(languageSwitcher?.getAttribute('data-language-id')).toBe('python');
+    expect(languageSwitcher?.getAttribute('data-auto-detected')).toBe('false');
+  });
+
+  it('calls setBufferLanguageOverride when language is changed from the switcher', async () => {
+    await act(async () => {
+      root.render(<EditorPane paneId="pane-1" />);
+    });
+    await flushPromises();
+
+    const languageSwitcher = container.querySelector('[data-testid="language-switcher"]');
+
+    await act(async () => {
+      (languageSwitcher as HTMLElement).click();
+    });
+    await flushPromises();
+
+    expect(defaultMockEditorManager.setBufferLanguageOverride).toHaveBeenCalledWith(
+      'buffer-1',
+      'python', // The mock calls onLanguageChange('python') on click
+    );
+  });
+
+  it('shows "Auto" when no language is detected for unknown extension', async () => {
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([
+        [
+          'buffer-1',
+          {
+            ...mockBuffer,
+            file: { ...mockBuffer.file, ext: '.xyz', name: 'file.xyz' },
+          },
+        ],
+      ]),
+    });
+
+    await act(async () => {
+      root.render(<EditorPane paneId="pane-1" />);
+    });
+    await flushPromises();
+
+    const languageSwitcher = container.querySelector('[data-testid="language-switcher"]');
+    expect(languageSwitcher?.getAttribute('data-language-id')).toBe('');
+    expect(languageSwitcher?.getAttribute('data-auto-detected')).toBe('false');
+  });
+
+  it('does not render LanguageSwitcher in empty pane state', async () => {
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      panes: [{ id: 'pane-1', bufferId: null, isActive: true }],
+      buffers: new Map(),
+    });
+
+    await act(async () => {
+      root.render(<EditorPane paneId="pane-1" />);
+    });
+    await flushPromises();
+
+    const languageSwitcher = container.querySelector('[data-testid="language-switcher"]');
+    expect(languageSwitcher).toBeFalsy();
   });
 });

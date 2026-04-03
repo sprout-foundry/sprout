@@ -25,6 +25,8 @@ import {
   FolderPlus,
   X,
   Check,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import './FileTree.css';
 import { ApiService } from '../services/api';
@@ -108,6 +110,13 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
   const [internalSelectedFile, setInternalSelectedFile] = useState<string | null>(null);
   const [filterQuery, setFilterQuery] = useState('');
   const [isFilterFocused, setIsFilterFocused] = useState(false);
+  const [showIgnoredFiles, setShowIgnoredFiles] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('filetree-show-ignored') !== 'false';
+    } catch {
+      return true;
+    }
+  });
 
   const findFileByPath = useCallback((fileList: FileInfo[], targetPath: string): FileInfo | null => {
     for (const file of fileList) {
@@ -227,6 +236,15 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
     const timer = window.setTimeout(() => inputRef.current?.focus(), 0);
     return () => window.clearTimeout(timer);
   }, [draft]);
+
+  // Persist showIgnoredFiles preference to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('filetree-show-ignored', String(showIgnoredFiles));
+    } catch {
+      // Ignore storage errors (e.g. quota exceeded, private browsing)
+    }
+  }, [showIgnoredFiles]);
 
   // ContextMenu handles its own dismissal
 
@@ -429,8 +447,28 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
 
   const isFiltering = filterQuery.trim().length > 0;
 
+  // Recursively remove ignored files (and empty parent directories of only ignored files)
+  const filterIgnoredFiles = useCallback((items: FileInfo[]): FileInfo[] => {
+    return items.reduce<FileInfo[]>((acc, item) => {
+      if (item.gitStatus === 'ignored') {
+        return acc;
+      }
+      if (item.isDir && item.children) {
+        const filteredChildren = filterIgnoredFiles(item.children);
+        if (filteredChildren.length === 0) {
+          return acc; // directory contains only ignored files – hide it entirely
+        }
+        acc.push({ ...item, children: filteredChildren });
+        return acc;
+      }
+      acc.push(item);
+      return acc;
+    }, []);
+  }, []);
+
   // Flatten tree into all items for filtering
   const flatFiles = useMemo(() => {
+    const source = showIgnoredFiles ? files : filterIgnoredFiles(files);
     const result: FileInfo[] = [];
     const flatten = (items: FileInfo[]) => {
       for (const item of items) {
@@ -438,9 +476,9 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
         if (item.children) flatten(item.children);
       }
     };
-    flatten(files);
+    flatten(source);
     return result;
-  }, [files]);
+  }, [files, filterIgnoredFiles, showIgnoredFiles]);
 
   // Compute filter matches: path -> { score, matches }
   const filterMatches = useMemo(() => {
@@ -493,7 +531,11 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
     return filterTree(files);
   }, [filterMatches, files]);
 
-  const treeData = isFiltering ? filteredFiles : files;
+  const source = isFiltering ? filteredFiles : files;
+  const treeData = useMemo(
+    () => showIgnoredFiles ? source : filterIgnoredFiles(source),
+    [source, filterIgnoredFiles, showIgnoredFiles]
+  );
 
   const handleFilterKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Escape') {
@@ -746,6 +788,14 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
         </div>
         <div className="header-actions">
           <button
+            className={`action-button toggle-ignored-btn ${showIgnoredFiles ? 'active' : ''}`}
+            onClick={() => setShowIgnoredFiles((prev) => !prev)}
+            aria-label={showIgnoredFiles ? 'Hide ignored files' : 'Show ignored files'}
+            title={showIgnoredFiles ? 'Hide ignored files' : 'Show ignored files'}
+          >
+            {showIgnoredFiles ? <EyeOff size={14} /> : <Eye size={14} />}
+          </button>
+          <button
             className="action-button create-file-btn"
             onClick={() => handleCreateItem('file')}
             disabled={loading}
@@ -816,7 +866,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(({
             <span className="empty-text">Empty directory</span>
           </div>
         ) : null}
-        {isFiltering && filteredFiles.length === 0 && !loading && !error ? (
+        {isFiltering && treeData.length === 0 && !loading && !error ? (
           <div className="file-tree-no-results">
             <span>No files matching &quot;{filterQuery}&quot;</span>
           </div>

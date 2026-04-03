@@ -162,6 +162,23 @@
   cursor: not-allowed;
 }
 
+.file-tree .file-tree-header .toggle-ignored-btn.active {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.file-tree .file-tree-header .toggle-ignored-btn:hover {
+  background: var(--bg-surface);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.file-tree .file-tree-header .toggle-ignored-btn.active:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  background: rgba(99, 102, 241, 0.08);
+}
+
 .file-tree .current-path {
   padding: var(--space-2) var(--space-4);
   background: var(--bg-secondary);

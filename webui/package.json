@@ -61,6 +61,11 @@
       "react-app/jest"
     ]
   },
+  "jest": {
+    "moduleNameMapper": {
+      "^@marijn/find-cluster-break$": "<rootDir>/node_modules/@marijn/find-cluster-break/dist/index.cjs"
+    }
+  },
   "name": "ledit-webui",
   "overrides": {
     "@tootallnate/once": "^3.0.1",

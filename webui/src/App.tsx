@@ -369,8 +369,32 @@ function App() {
   const [inputValue, setInputValue] = useState('');
   const [isMobile, setIsMobile] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [isTerminalExpanded, setIsTerminalExpanded] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return window.localStorage.getItem('ledit-sidebar-collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const setSidebarCollapsedPersisted = useCallback((collapsed: boolean) => {
+    try {
+      window.localStorage.setItem('ledit-sidebar-collapsed', String(collapsed));
+    } catch { /* ignore */ }
+    setSidebarCollapsed(collapsed);
+  }, []);
+  const [isTerminalExpanded, setIsTerminalExpanded] = useState(() => {
+    try {
+      return window.localStorage.getItem('ledit-terminal-expanded') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const setIsTerminalExpandedPersisted = useCallback((expanded: boolean) => {
+    try {
+      window.localStorage.setItem('ledit-terminal-expanded', String(expanded));
+    } catch { /* ignore */ }
+    setIsTerminalExpanded(expanded);
+  }, []);
   const activeRequestsRef = useRef(0);
   const [queuedMessages, setQueuedMessages] = useState<string[]>([]);
   const queuedMessagesRef = useRef<string[]>([]);
@@ -421,7 +445,7 @@ function App() {
     } catch {
       // QuotaExceededError: retry with fewer messages, then give up gracefully.
       try {
-        window.localStorage.setItem(storageKey, persistPayload(20));
+        window.localStorage.setItem(storageKey, persistPayload(5));
       } catch {
         try {
           window.localStorage.removeItem(storageKey);
@@ -449,8 +473,9 @@ function App() {
 
   // Memoize sidebar toggle handler
   const handleSidebarToggle = useCallback(() => {
-    setSidebarCollapsed(prev => !prev);
-  }, []);
+    const next = !sidebarCollapsed;
+    setSidebarCollapsedPersisted(next);
+  }, [sidebarCollapsed]);
 
   const wsService = WebSocketService.getInstance();
   const apiService = ApiService.getInstance();
@@ -1816,7 +1841,7 @@ function App() {
                 onGitStage={handleGitStage}
                 onGitUnstage={handleGitUnstage}
                 onGitDiscard={handleGitDiscard}
-                onTerminalExpandedChange={setIsTerminalExpanded}
+                onTerminalExpandedChange={setIsTerminalExpandedPersisted}
                 isConnected={state.isConnected}
                 chatSessions={state.chatSessions}
                 activeChatId={state.activeChatId}

@@ -802,6 +802,34 @@ func World() {
     expect(result).toHaveLength(1);
   });
 
+  test('does not count braces inside multi-line template literals', () => {
+    const content = `function hello() {
+  const s = \`
+    {
+      key: \${value}
+    }
+  \`;
+  return s;
+}`;
+    const result = getEnclosingSymbols(content, '.ts', 2);
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('hello');
+  });
+
+  test('handles escaped quotes in single-quoted strings without corrupting scope', () => {
+    const content = `function foo() {
+  const x = '\\'';
+  return x;
+}
+function bar() {
+  return 42;
+}`;
+    // Cursor inside foo — scope should end at foo's closing brace (line 4), not extend into bar
+    const result = getEnclosingSymbols(content, '.ts', 2);
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('foo');
+  });
+
   test('does not count braces inside line comments', () => {
     const content = `function hello() {
   // this is a {comment}

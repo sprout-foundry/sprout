@@ -59,7 +59,7 @@ export function extractSymbols(content: string, languageId?: string): SymbolInfo
   }
 
   const lines = content.split('\n');
-  const seen = new Map<string, number>(); // name → first line (dedup)
+  const seen = new Map<string, number>(); // `${name}:${line}` → first line (dedup)
   const symbols: SymbolInfo[] = [];
 
   for (let i = 0; i < lines.length && symbols.length < MAX_SYMBOLS; i++) {
@@ -81,9 +81,13 @@ export function extractSymbols(content: string, languageId?: string): SymbolInfo
       if (m) {
         const name = m[1];
         if (!name) continue;
-        // Dedup: keep first occurrence only
-        if (seen.has(name)) continue;
-        seen.set(name, i + 1);
+        // Dedup: keep only one symbol per (name, line) pair.
+        // Using name:line as key allows same-named symbols in different
+        // classes (different lines) while still preventing duplicate
+        // extractions from multiple patterns matching on the same line.
+        const key = `${name}:${i + 1}`;
+        if (seen.has(key)) continue;
+        seen.set(key, i + 1);
         symbols.push({ name, line: i + 1, kind });
         break; // only one symbol per line
       }
@@ -106,7 +110,9 @@ const CONTAINER_KINDS: ReadonlySet<SymbolKind> = new Set<SymbolKind>([
  *
  * Handles:
  *  - Single-quoted, double-quoted, and backtick strings (skips braces inside).
+ *  - Multi-line strings (the `inString` state persists across line boundaries).
  *  - `//` line comments (skips the rest of the line).
+ *  - Block comments (skips the rest of the line inside a block comment).
  *  - Handles escape sequences inside strings (e.g. `\"`, `\'`, `\\`).
  *
  * If no matching close brace is found, returns `lines.length` (end of file).
@@ -115,13 +121,35 @@ function findSymbolScopeEnd(lines: string[], startLineIndex: number): number {
   let braceCount = 0;
   let foundFirstBrace = false;
   let inBlockComment = false;
+  // Tracks whether we are inside a string that spans across lines.
+  // null  = not inside a string
+  // "'" / '"' / '`' = the quote character that opened the string
+  let inString: string | null = null;
 
   for (let i = startLineIndex; i < lines.length; i++) {
     const line = lines[i];
     for (let j = 0; j < line.length; j++) {
       const ch = line[j];
 
-      // Inside a block comment — look for */
+      // ── Inside a string (possibly multi-line) ────────────────────────
+      if (inString) {
+        // Escape sequence — skip the next character.
+        // Note: j += 1 (not 2) because the for-loop's j++ increment
+        // advances j by one more, effectively skipping exactly 2 chars
+        // (the backslash and the escaped character).
+        if (ch === '\\' && j + 1 < line.length) {
+          j += 1; // skip backslash; loop j++ skips escaped char
+          continue;
+        }
+        // Closing quote matching the one that opened the string
+        if (ch === inString) {
+          inString = null;
+        }
+        // Everything else inside the string is ignored (no brace counting)
+        continue;
+      }
+
+      // ── Inside a block comment — look for */ ────────────────────────
       if (inBlockComment) {
         if (ch === '*' && j + 1 < line.length && line[j + 1] === '/') {
           inBlockComment = false;
@@ -142,19 +170,10 @@ function findSymbolScopeEnd(lines: string[], startLineIndex: number): number {
         break; // skip to end of line
       }
 
-      // String handling
+      // String start — enter string state (may be multi-line for backticks)
       if (ch === "'" || ch === '"' || ch === '`') {
-        const quote = ch;
-        j++; // advance past opening quote
-        while (j < line.length) {
-          if (line[j] === '\\' && j + 1 < line.length) {
-            j += 2; // skip escaped character
-            continue;
-          }
-          if (line[j] === quote) break; // closing quote
-          j++;
-        }
-        continue; // continue outer loop (j will be incremented by for-loop)
+        inString = ch;
+        continue;
       }
 
       if (ch === '{') {
@@ -167,6 +186,7 @@ function findSymbolScopeEnd(lines: string[], startLineIndex: number): number {
         }
       }
     }
+    // Note: inString persists to the next line iteration for multi-line strings
   }
 
   // No matching close brace — scope extends to end of file

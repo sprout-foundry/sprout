@@ -16,7 +16,7 @@ jest.mock('@codemirror/view', () => ({
 jest.mock('@codemirror/state', () => ({}));
 
 // Module under test — now safe to import because CM deps are mocked.
-import { computeBracketDecorations } from './bracketColorization';
+import { computeBracketDecorations, MAX_DEPTH } from './bracketColorization';
 
 // ── computeBracketDecorations tests ─────────────────────────────────
 
@@ -316,5 +316,13 @@ describe('computeBracketDecorations', () => {
     expect(result).toHaveLength(2);
     expect(result[0]).toEqual({ from: 0, to: 1, depth: 0 });
     expect(result[1]).toEqual({ from: 1, to: 2, depth: 0 });
+  });
+});
+
+// ── Constants ──────────────────────────────────────────────────────────
+
+describe('exported constants', () => {
+  it('exports MAX_DEPTH as 6', () => {
+    expect(MAX_DEPTH).toBe(6);
   });
 });

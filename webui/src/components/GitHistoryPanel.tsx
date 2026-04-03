@@ -140,6 +140,7 @@ const GitHistoryPanel = ({
   if (selectedCommit) {
     return (
       <div className="git-history-panel">
+        <GitHistoryContextMenu apiService={apiService} isActing={isActing} />
         <CommitDetailPanel
           apiService={apiService}
           commit={selectedCommit}

@@ -12,7 +12,7 @@ import { copyToClipboard } from '../utils/clipboard';
 // jest does not auto-flush rAF; without this, close listeners never attach.
 let rafId = 0;
 beforeAll(() => {
-  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   global.requestAnimationFrame = ((cb: FrameRequestCallback) => {
     rafId += 1;
     cb(Date.now());
@@ -48,7 +48,7 @@ let commitRow: HTMLButtonElement | null = null;
 let root: ReturnType<typeof createRoot> | null = null;
 
 beforeAll(() => {
-  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 });
 
 beforeEach(() => {
@@ -71,7 +71,7 @@ beforeEach(() => {
   document.body.appendChild(mountPoint);
 
   act(() => {
-    root = createRoot(mountPoint);
+    root = createRoot(mountPoint!);
     root.render(
       <GitHistoryContextMenu apiService={mockApiService as any} />,
     );
@@ -106,7 +106,7 @@ function getMenuItems(): Element[] {
 }
 
 function getMenuTexts(): string[] {
-  return getMenuItems().map((el) => el.textContent?.trim());
+  return getMenuItems().map((el) => el.textContent?.trim()).filter((t): t is string => Boolean(t));
 }
 
 /** Dispatch a contextmenu MouseEvent on `target` inside act(). */
@@ -171,7 +171,7 @@ describe('GitHistoryContextMenu', () => {
     expect(copyShaBtn).toBeDefined();
 
     await act(async () => {
-      copyShaBtn!.click();
+      (copyShaBtn as HTMLElement).click();
       await flushPromises();
     });
 
@@ -194,7 +194,7 @@ describe('GitHistoryContextMenu', () => {
     expect(copyMsgBtn).toBeDefined();
 
     await act(async () => {
-      copyMsgBtn!.click();
+      (copyMsgBtn as HTMLElement).click();
       await flushPromises();
     });
 
@@ -299,7 +299,7 @@ describe('GitHistoryContextMenu', () => {
 
     // Click copy — schedules a "Copied!" label timer (1200ms) and a close timer (800ms)
     await act(async () => {
-      copyShaBtn.click();
+      (copyShaBtn as HTMLElement).click();
       await flushPromises();
     });
 
@@ -348,7 +348,7 @@ describe('GitHistoryContextMenu', () => {
     expect(checkoutBtn).toBeDefined();
 
     await act(async () => {
-      checkoutBtn!.click();
+      (checkoutBtn as HTMLElement).click();
       await flushPromises();
     });
 
@@ -374,7 +374,7 @@ describe('GitHistoryContextMenu', () => {
     expect(revertBtn).toBeDefined();
 
     await act(async () => {
-      revertBtn!.click();
+      (revertBtn as HTMLElement).click();
       await flushPromises();
     });
 
@@ -400,7 +400,7 @@ describe('GitHistoryContextMenu', () => {
     expect(checkoutBtn).toBeDefined();
 
     act(() => {
-      checkoutBtn!.click();
+      (checkoutBtn as HTMLElement).click();
     });
 
     expect(mockApiService.checkoutGitCommit).not.toHaveBeenCalled();
@@ -420,10 +420,58 @@ describe('GitHistoryContextMenu', () => {
     expect(revertBtn).toBeDefined();
 
     act(() => {
-      revertBtn!.click();
+      (revertBtn as HTMLElement).click();
     });
 
     expect(mockApiService.revertGitCommit).not.toHaveBeenCalled();
+
+    (window.confirm as jest.Mock).mockRestore();
+  });
+
+  // 17. Checkout error shows error message in actionStatus
+  test('checkout error shows error message in actionStatus', async () => {
+    jest.spyOn(window, 'confirm').mockReturnValue(true);
+    mockApiService.checkoutGitCommit.mockRejectedValueOnce(new Error('merge conflict'));
+
+    fireContextMenu(commitRow!);
+
+    const checkoutBtn = getMenuItems().find(
+      (el) => el.textContent?.trim().includes('Checkout'),
+    );
+    expect(checkoutBtn).toBeDefined();
+
+    await act(async () => {
+      (checkoutBtn as HTMLElement).click();
+      await flushPromises();
+    });
+
+    const statusEl = document.querySelector('.git-history-context-menu-status');
+    expect(statusEl).not.toBeNull();
+    expect(statusEl!.textContent).toContain('merge conflict');
+
+    (window.confirm as jest.Mock).mockRestore();
+  });
+
+  // 18. Revert error shows error message in actionStatus
+  test('revert error shows error message in actionStatus', async () => {
+    jest.spyOn(window, 'confirm').mockReturnValue(true);
+    mockApiService.revertGitCommit.mockRejectedValueOnce(new Error('merge conflict'));
+
+    fireContextMenu(commitRow!);
+
+    const revertBtn = getMenuItems().find(
+      (el) => el.textContent?.trim().includes('Revert'),
+    );
+    expect(revertBtn).toBeDefined();
+
+    await act(async () => {
+      (revertBtn as HTMLElement).click();
+      await flushPromises();
+    });
+
+    const statusEl = document.querySelector('.git-history-context-menu-status');
+    expect(statusEl).not.toBeNull();
+    expect(statusEl!.textContent).toContain('merge conflict');
 
     (window.confirm as jest.Mock).mockRestore();
   });

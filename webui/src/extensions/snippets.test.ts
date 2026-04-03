@@ -630,6 +630,19 @@ describe('getSnippetsForLanguage', () => {
       const template = snippets.get('ifn')!;
       expect(template).toContain('else');
     });
+
+    it('does NOT contain a "do" trigger (not standalone in Ruby)', () => {
+      expect(snippets.has('do')).toBe(false);
+    });
+
+    it('"ifn" template uses unique placeholder numbers (no duplicate ${0})', () => {
+      const template = snippets.get('ifn')!;
+      expect(template).toContain('${2}');
+      expect(template).toContain('${3}');
+      // Should not have two ${0} placeholders
+      const zeroCount = (template.match(/\$\{0\}/g) || []).length;
+      expect(zeroCount).toBeLessThanOrEqual(1);
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -713,6 +726,18 @@ describe('getSnippetsForLanguage', () => {
       // Template literals with \n and \t become actual newline/tab characters
       expect(template).toContain('\n');
       expect(template).toContain('\t');
+    });
+
+    it('no template has duplicate ${0} placeholders (exit point must be unique)', () => {
+      const languagesWithSnippets = ['go', 'typescript', 'javascript', 'python', 'rust', 'java', 'c', 'cpp', 'php', 'ruby'];
+      for (const lang of languagesWithSnippets) {
+        const snippets = getSnippetsForLanguage(lang);
+        for (const [trigger, template] of snippets) {
+          const zeroCount = (template.match(/\$\{0\}/g) || []).length;
+          expect(zeroCount).toBeLessThanOrEqual(1);
+          // ${lang}: "${trigger}" has ${zeroCount} ${0} placeholders
+        }
+      }
     });
   });
 });

@@ -333,7 +333,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
         window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'split_editor_horizontal' } }));
         break;
       case 'editor_toggle_word_wrap':
-        document.dispatchEvent(new CustomEvent('editor-toggle-word-wrap'));
+        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'editor_toggle_word_wrap' } }));
         break;
       case 'close_editor':
         window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'close_editor' } }));

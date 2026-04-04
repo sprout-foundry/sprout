@@ -1826,7 +1826,7 @@ class ApiService {
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
-    return await response.json();
+    return response.json();
   }
 }
 export { ApiService };

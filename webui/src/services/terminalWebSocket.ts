@@ -405,7 +405,8 @@ class TerminalWebSocketService {
       try {
         window.localStorage.setItem(this.getPersistedSessionKey(), this.sessionId);
         debugLog('Terminal session ID persisted:', this.sessionId);
-      } catch {
+      } catch (err) {
+        debugLog('[persistSessionId] failed to persist session ID:', err);
         // localStorage may be unavailable
       }
     }
@@ -420,7 +421,8 @@ class TerminalWebSocketService {
         debugLog('Terminal session ID restored from persistence:', saved);
         return saved;
       }
-    } catch {
+    } catch (err) {
+      debugLog('[restorePersistedSessionId] failed to restore session ID:', err);
       // localStorage may be unavailable
     }
     return null;
@@ -430,7 +432,8 @@ class TerminalWebSocketService {
   clearPersistedSessionId() {
     try {
       window.localStorage.removeItem(this.getPersistedSessionKey());
-    } catch {
+    } catch (err) {
+      debugLog('[clearPersistedSessionId] failed to clear session ID:', err);
       // localStorage may be unavailable
     }
   }

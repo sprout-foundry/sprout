@@ -6,6 +6,7 @@ import TerminalPane, { type TerminalPaneHandle } from './TerminalPane';
 import TerminalTabBar, { type TerminalSession } from './TerminalTabBar';
 import { ApiService, type ShellInfo } from '../services/api';
 import { notificationBus } from '../services/notificationBus';
+import { debugLog } from '../utils/log';
 
 type SplitDirection = 'none' | 'horizontal' | 'vertical';
 
@@ -43,7 +44,8 @@ const Terminal: FC<TerminalProps> = ({
     try {
       const stored = localStorage.getItem(TERMINAL_HEIGHT_STORAGE_KEY);
       return stored ? clampTerminalHeight(Number(stored)) : TERMINAL_HEIGHT_DEFAULT;
-    } catch {
+    } catch (err) {
+      debugLog('[Terminal] failed to read terminal height from localStorage:', err);
       return TERMINAL_HEIGHT_DEFAULT;
     }
   });
@@ -399,7 +401,8 @@ const Terminal: FC<TerminalProps> = ({
         setTerminalHeight((prev) => {
           try {
             localStorage.setItem(TERMINAL_HEIGHT_STORAGE_KEY, String(Math.round(prev)));
-          } catch {
+          } catch (err) {
+            debugLog('[Terminal] failed to persist terminal height:', err);
             // Storage write failed (quota, security policy, etc.) — non-critical
           }
           return prev;

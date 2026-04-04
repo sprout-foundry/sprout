@@ -1,3 +1,5 @@
+import { debugLog } from './log';
+
 export interface ReviewGuidanceEntry {
   issue: string;
   evidence?: string;
@@ -45,7 +47,8 @@ const parseJsonLike = (value: string): unknown | null => {
       return parseJsonLike(parsed) ?? parsed;
     }
     return parsed;
-  } catch {
+  } catch (err) {
+    debugLog('[reviewFormatting] parseJsonLike JSON parse failed:', err);
     return null;
   }
 };

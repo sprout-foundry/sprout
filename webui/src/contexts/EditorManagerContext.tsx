@@ -8,6 +8,7 @@ import { useTabManagement } from '../hooks/useTabManagement';
 import { useTabOpen } from '../hooks/useTabOpen';
 import { usePaneManagement } from '../hooks/usePaneManagement';
 import { useLayoutPersistence } from '../hooks/useLayoutPersistence';
+import { debugLog } from '../utils/log';
 import { useExternalFileWatcher } from '../hooks/useExternalFileWatcher';
 import { useAutoReloadCleanBuffers } from '../hooks/useAutoReloadCleanBuffers';
 
@@ -191,7 +192,8 @@ export const EditorManagerProvider: FC<EditorManagerProviderProps> = ({ children
         delete filtered['grid:row'];
       }
       return filtered;
-    } catch {
+    } catch (err) {
+      debugLog('[EditorManagerContext] failed to parse stored pane layout:', err);
       /* JSON parse error */
     }
     return defaults;

@@ -9,6 +9,8 @@
  * Writes are debounced (1 s) to avoid excessive I/O during rapid tab switching.
  */
 
+import { debugLog } from '../utils/log';
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -68,7 +70,8 @@ export function readStorageItem(key: string): string | null {
   try {
     if (typeof window === 'undefined' || !window.localStorage) return null;
     return window.localStorage.getItem(key);
-  } catch {
+  } catch (err) {
+    debugLog('[readStorageItem] failed to read localStorage key:', err);
     return null;
   }
 }
@@ -78,8 +81,9 @@ export function writeStorageItem(key: string, value: string): void {
   try {
     if (typeof window === 'undefined' || !window.localStorage) return;
     window.localStorage.setItem(key, value);
-  } catch {
-    // Ignore storage errors (private browsing, quota exceeded, etc.)
+  } catch (err) {
+    debugLog('[writeStorageItem] failed to write localStorage key:', err);
+    // Non-critical: private browsing, quota exceeded, etc.
   }
 }
 
@@ -235,8 +239,8 @@ function flushSnapshot(state: LayoutSnapshot): void {
     };
 
     writeStorageItem(STORAGE_KEY, JSON.stringify(snapshot));
-  } catch {
-    // Silently ignore serialization errors
+  } catch (err) {
+    debugLog('[flushSnapshot] failed to serialize/write layout:', err);
   }
 }
 
@@ -258,7 +262,8 @@ export function loadLayoutSnapshot(): LayoutSnapshot | null {
     if (parsed.version !== 1) return null;
 
     return parsed;
-  } catch {
+  } catch (err) {
+    debugLog('[loadLayoutSnapshot] failed to load/parse layout:', err);
     return null;
   }
 }
@@ -270,8 +275,8 @@ export function clearLayoutSnapshot(): void {
   try {
     if (typeof window === 'undefined' || !window.localStorage) return;
     window.localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    // Ignore
+  } catch (err) {
+    debugLog('[clearLayoutSnapshot] failed to clear layout storage:', err);
   }
 }
 

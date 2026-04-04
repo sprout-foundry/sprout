@@ -698,7 +698,7 @@ const SettingsPanel: FC<SettingsPanelProps> = ({ settings, onSettingsChanged }) 
                 value={currentSubModel}
                 onChange={(e) => updateSetting('subagent_model', e.target.value)}
               >
-                <option value="">Default (use provider's default model)</option>
+                <option value="">Default (use provider&apos;s default model)</option>
                 {availableModels.map((m) => (
                   <option key={m} value={m}>
                     {m}

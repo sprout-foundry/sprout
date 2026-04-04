@@ -184,6 +184,7 @@ class WebSocketService {
 
         this.notifyCallbacks(data);
       } catch (error) {
+        debugLog('[WebSocket] Failed to parse message:', error);
         notificationBus.notify('error', 'WebSocket Error', 'Failed to parse message: ' + String(error));
       }
     };

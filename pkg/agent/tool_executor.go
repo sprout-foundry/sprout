@@ -1,8 +1,15 @@
 // Tool executor: core struct, constructor, and orchestration entry point.
 //
-// Parallel execution: tool_executor_parallel.go
-// Sequential execution: tool_executor_sequential.go
-// Configuration: tool_executor_config.go
+// Companions (all in this package):
+//   Execution:    tool_executor_sequential.go, tool_executor_parallel.go
+//   Config:       tool_executor_config.go
+//   Context:      tool_execution_context.go, tool_executor_helpers.go
+//   Safety:       tool_executor_circuit_breaker.go
+//   Observability: tool_executor_trace.go
+//   Formatting:   tool_call_format.go
+//   Constraint:   tool_result_constraint.go
+//   Todo events:  tool_executor_todo_events.go
+//   JSON repair:  tool_json_repair.go
 package agent
 
 import (

@@ -155,8 +155,9 @@ function App() {
   // ── 15. Render ────────────────────────────────────────────────────
   return (
     <ErrorBoundary
-      onError={(error, errorInfo) => {
-        console.error('Application error:', error, errorInfo);
+      onError={(_error, _errorInfo) => {
+        // Logging is handled by ErrorBoundary.componentDidCatch via logError().
+        // Only send the user-facing notification here to avoid duplicate console output.
         notificationBus.notify(
           'error',
           'Application Error',

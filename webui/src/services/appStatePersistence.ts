@@ -8,6 +8,7 @@
 import type { AppState, Message } from '../types/app';
 import { APP_STATE_STORAGE_KEY, INSTANCE_PID_STORAGE_KEY, INSTANCE_SWITCH_RESET_KEY } from '../constants/app';
 import { parseDate } from '../utils/dateUtils';
+import { debugLog } from '../utils/log';
 import { notificationBus } from './notificationBus';
 
 export const getUIContextScope = (): string => {
@@ -81,6 +82,7 @@ export const loadPersistedAppState = (): Partial<AppState> | null => {
       subagentActivities: [],
     };
   } catch (error) {
+    debugLog('[appStatePersistence] Failed to load saved application state:', error);
     notificationBus.notify('warning', 'Settings', 'Failed to load saved application state');
     return null;
   }

@@ -141,6 +141,7 @@ const Terminal: FC<TerminalProps> = ({
         setShellsLoaded(true);
       })
       .catch((err) => {
+        debugLog('[Terminal] Failed to load available shells:', err);
         notificationBus.notify('warning', 'Terminal', 'Failed to load available shells: ' + String(err));
         setShellsLoaded(true);
       });

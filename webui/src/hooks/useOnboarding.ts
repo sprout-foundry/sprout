@@ -108,6 +108,7 @@ function useOnboarding(): UseOnboardingReturn {
   // Refresh onboarding status on mount
   useEffect(() => {
     refreshStatus().catch((err) => {
+      debugLog('[useOnboarding] Failed to refresh setup status:', err);
       notificationBus.notify('warning', 'Onboarding', 'Failed to refresh setup status: ' + String(err));
     });
   }, [refreshStatus]);

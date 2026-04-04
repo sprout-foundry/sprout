@@ -673,6 +673,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to get terminal history:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -697,6 +698,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to add terminal history:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -728,6 +730,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to get git status:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -833,6 +836,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to stage file:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -854,6 +858,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to unstage file:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -875,6 +880,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to discard changes:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -895,6 +901,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to stage all:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -915,6 +922,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to unstage all:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -936,6 +944,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to create commit:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -963,6 +972,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to generate commit message:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1041,6 +1051,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to generate deep review:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1066,6 +1077,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to run deep review fix:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1095,6 +1107,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to start deep review fix:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1127,6 +1140,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to fetch deep review fix status:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1152,6 +1166,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to get git diff:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1186,6 +1201,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to get changelog:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1219,6 +1235,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to get changes:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1257,6 +1274,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to get revision details:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1278,6 +1296,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to rollback:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1309,6 +1328,7 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to get sessions:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1336,6 +1356,7 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to restore session:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1353,6 +1374,7 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to get settings:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1372,6 +1394,7 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to update settings:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1387,6 +1410,7 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to get MCP settings:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1406,6 +1430,7 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to update MCP settings:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1425,6 +1450,7 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to add MCP server:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1444,6 +1470,7 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to update MCP server:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1461,6 +1488,7 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to delete MCP server:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1476,6 +1504,7 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to get custom providers:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1495,6 +1524,7 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to add custom provider:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1514,6 +1544,7 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to update custom provider:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1531,6 +1562,7 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to delete custom provider:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1546,6 +1578,7 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to get skills:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1565,6 +1598,7 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to update skills:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1601,6 +1635,7 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to get subagent types:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1626,6 +1661,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to update subagent type:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1643,6 +1679,7 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to get hotkeys:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1662,6 +1699,7 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to update hotkeys:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1681,6 +1719,7 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to validate hotkeys:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1703,6 +1742,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to apply hotkey preset:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1759,6 +1799,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to search:', error);
       notificationBus.notify(
         'error',
         'API Error',
@@ -1802,6 +1843,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
+      debugLog('[api] Failed to replace:', error);
       notificationBus.notify(
         'error',
         'API Error',

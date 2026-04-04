@@ -6,7 +6,7 @@ import type { WsEvent } from '../services/websocket';
 import type { GitStatusData } from '../types/git-types';
 import type { FileSection } from '../types/git-types';
 import { selectionKey, parseSelectionKey } from '../types/git-types';
-import { useLog, debugLog } from '../utils/log';
+import { useLog, debugLog, warn } from '../utils/log';
 
 export interface GitDiffResponse {
   message: string;
@@ -286,7 +286,7 @@ export const useGitWorkspace = ({
         await loadGitStatus();
         setSelectedFiles(new Set());
       } catch (error) {
-        debugLog('[runGitAction] failed:', error);
+        warn(`[runGitAction] failed: ${error instanceof Error ? error.message : String(error)}`);
         setGitActionError(error instanceof Error ? error.message : fallbackMessage);
       } finally {
         setIsGitActing(false);
@@ -425,6 +425,7 @@ export const useGitWorkspace = ({
         }
       })
       .catch((error) => {
+        debugLog('[useGitWorkspace] Failed to generate commit message:', error);
         const msg = error instanceof Error ? error.message : 'Failed to generate commit message';
         setGitActionError(msg);
         notificationBus.notify('warning', 'AI Commit', msg, 5000);
@@ -451,7 +452,7 @@ export const useGitWorkspace = ({
       });
       onViewChange('editor');
     } catch (error) {
-      debugLog('[handleRunReview] failed:', error);
+      warn(`[handleRunReview] failed: ${error instanceof Error ? error.message : String(error)}`);
       setReviewError(error instanceof Error ? error.message : 'Failed to generate deep review');
       setDeepReview(null);
     } finally {
@@ -494,7 +495,7 @@ export const useGitWorkspace = ({
 
             fixPollTimeoutRef.current = window.setTimeout(poll, 1000);
           } catch (error) {
-            debugLog('[handleFixFromReview] poll error:', error);
+            warn(`[handleFixFromReview] poll error: ${error instanceof Error ? error.message : String(error)}`);
             setReviewError(error instanceof Error ? error.message : 'Failed to fetch fix progress');
             setIsReviewFixing(false);
           }
@@ -502,7 +503,7 @@ export const useGitWorkspace = ({
 
         await poll();
       } catch (error) {
-        debugLog('[handleFixFromReview] outer error:', error);
+        warn(`[handleFixFromReview] outer error: ${error instanceof Error ? error.message : String(error)}`);
         setReviewError(error instanceof Error ? error.message : 'Failed to apply fixes from deep review');
         setIsReviewFixing(false);
       }

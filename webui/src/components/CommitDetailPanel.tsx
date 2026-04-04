@@ -5,6 +5,7 @@ import type { ApiService } from '../services/api';
 import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
 import { formatRelativeDate, firstLine } from '../utils/format';
 import { getStatusInfo } from '../utils/git';
+import { useLog } from '../utils/log';
 import './CommitDetailPanel.css';
 
 interface CommitDetailPanelProps {
@@ -24,6 +25,7 @@ interface CommitDetailPanelProps {
 }
 
 const CommitDetailPanel: FC<CommitDetailPanelProps> = ({ apiService, commit, onBack, openWorkspaceBuffer }) => {
+  const log = useLog();
   const [detail, setDetail] = useState<GitCommitDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -84,10 +86,10 @@ const CommitDetailPanel: FC<CommitDetailPanelProps> = ({ apiService, commit, onB
           },
         });
       } catch (err) {
-        console.error('Failed to load file diff:', err);
+        log.error('Failed to load file diff', { title: 'Git Error' });
       }
     },
-    [apiService, commit.hash, commit.short_hash, openWorkspaceBuffer],
+    [apiService, commit.hash, commit.short_hash, openWorkspaceBuffer, log],
   );
 
   const handleViewAllDiffs = useCallback(() => {

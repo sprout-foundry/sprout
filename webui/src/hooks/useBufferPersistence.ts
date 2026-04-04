@@ -4,6 +4,7 @@ import type { EditorBuffer } from '../types/editor';
 import type { Dispatch, SetStateAction } from 'react';
 import { writeFileWithConsent } from '../services/fileAccess';
 import { showThemedPrompt } from '../components/ThemedDialog';
+import { useLog } from '../utils/log';
 
 interface UseBufferPersistenceParams {
   buffersRef: MutableRefObject<Map<string, EditorBuffer>>;
@@ -15,6 +16,8 @@ interface UseBufferPersistenceParams {
  * Provides `saveBuffer` and `saveAllBuffers`.
  */
 export function useBufferPersistence({ buffersRef, setBuffers }: UseBufferPersistenceParams) {
+  const log = useLog();
+
   // Save a buffer to the server
   const saveBuffer = useCallback(
     async (bufferId: string) => {
@@ -66,7 +69,6 @@ export function useBufferPersistence({ buffersRef, setBuffers }: UseBufferPersis
             return next;
           });
         } catch (error) {
-          console.error('Failed to save new file:', error);
           throw error;
         }
         return;
@@ -80,7 +82,6 @@ export function useBufferPersistence({ buffersRef, setBuffers }: UseBufferPersis
           const data = await response.json();
           // Check for validation errors (hotkeys config)
           if (data.success === false) {
-            console.error('Save validation failed:', data);
             throw new Error(data.error || 'Save validation failed');
           }
           // Check for success message
@@ -97,15 +98,15 @@ export function useBufferPersistence({ buffersRef, setBuffers }: UseBufferPersis
         } else {
           // Server returned a non-2xx status (e.g., 400 validation error).
           const errorBody = await response.text().catch(() => 'Unknown error');
-          console.error(`Save failed (${response.status}) for ${buffer.file.path}: ${errorBody}`);
           throw new Error(`Save failed (${response.status}): ${errorBody}`);
         }
       } catch (error) {
-        console.error('Failed to save buffer:', bufferId, error);
+        const msg = error instanceof Error ? error.message : 'Failed to save buffer';
+        log.error(msg, { title: 'Save Error' });
         throw error;
       }
     },
-    [buffersRef, setBuffers],
+    [buffersRef, setBuffers, log],
   );
 
   // Save all modified buffers
@@ -114,9 +115,7 @@ export function useBufferPersistence({ buffersRef, setBuffers }: UseBufferPersis
     const savePromises = Array.from(currentBuffers.entries())
       .filter(([_, buffer]) => buffer.isModified && !buffer.file.path.startsWith('__workspace/'))
       .map(([bufferId, _]) =>
-        saveBuffer(bufferId).catch((err) => {
-          console.error('Save failed for buffer:', bufferId, err);
-        }),
+        saveBuffer(bufferId).catch(() => undefined),
       );
 
     await Promise.all(savePromises);

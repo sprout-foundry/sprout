@@ -483,9 +483,9 @@ const Sidebar: FC<SidebarProps> = ({
 
   /** Logs section: full event/log stream */
   // Terminal-style log formatting helper
-  const formatLogLine = (log: ProviderLogEntry): string => {
-    const d = log.data as Record<string, unknown> | null | undefined;
-    switch (log.type) {
+  const formatLogLine = (logEntry: ProviderLogEntry): string => {
+    const d = logEntry.data as Record<string, unknown> | null | undefined;
+    switch (logEntry.type) {
       case 'query_started':
         return `Query: ${String(d?.query ?? '').substring(0, 80) || 'No query'}`;
       case 'tool_start':
@@ -529,7 +529,7 @@ const Sidebar: FC<SidebarProps> = ({
       case 'metrics_update':
         return `Model: ${String(d?.model || '?')} | Provider: ${String(d?.provider || '?')}`;
       default:
-        return `${log.type}: ${JSON.stringify(d || {}).substring(0, 80)}`;
+        return `${logEntry.type}: ${JSON.stringify(d || {}).substring(0, 80)}`;
     }
   };
 
@@ -550,13 +550,13 @@ const Sidebar: FC<SidebarProps> = ({
   const getRenderedLogLines = useCallback(
     (entries: typeof normalizedRecentLogs) => {
       return entries
-        .map((log) => {
-          const message = formatLogLine(log);
+        .map((logEntry) => {
+          const message = formatLogLine(logEntry);
           if (!message) {
             return null;
           }
 
-          return `${buildLogTimestamp(log.timestamp)} [${log.type}] ${message}`;
+          return `${buildLogTimestamp(logEntry.timestamp)} [${logEntry.type}] ${message}`;
         })
         .filter((line): line is string => Boolean(line));
     },
@@ -632,17 +632,17 @@ const Sidebar: FC<SidebarProps> = ({
           </div>
         </div>
         <div className="terminal-logs" ref={logsContainerRef} onScroll={handleLogsScroll}>
-          {displayLogs.map((log) => {
-            const message = formatLogLine(log);
+          {displayLogs.map((logEntry) => {
+            const message = formatLogLine(logEntry);
             // Skip empty log lines
             if (!message) return null;
 
-            const timestamp = buildLogTimestamp(log.timestamp);
+            const timestamp = buildLogTimestamp(logEntry.timestamp);
 
             return (
-              <div key={log.id} className={`term-log-line term-log-${log.level}`}>
+              <div key={logEntry.id} className={`term-log-line term-log-${logEntry.level}`}>
                 <span className="term-log-time">{timestamp}</span>
-                <span className="term-log-type">[{log.type}]</span>
+                <span className="term-log-type">[{logEntry.type}]</span>
                 <span className="term-log-msg">{message}</span>
               </div>
             );
@@ -657,7 +657,7 @@ const Sidebar: FC<SidebarProps> = ({
   const renderFilesSection = () => {
     return (
       <FileTree
-        ref={fileTreeRef as any}
+        ref={fileTreeRef as React.RefObject<{ refresh: () => void; revealFile: (filePath: string) => void }>}
         rootPath="."
         workspaceRoot={gitPanel?.workspaceRoot}
         onFileSelect={(file) => onFileClick?.(file.path)}
@@ -869,6 +869,11 @@ const Sidebar: FC<SidebarProps> = ({
   };
 
   /** Render the content pane based on selected section */
+  /** Search section: find and replace panel */
+  const renderSearchSection = () => {
+    return <SearchView onFileClick={onFileClick} />;
+  };
+
   const renderContentPane = () => {
     switch (selectedSection) {
       case 'git': {
@@ -924,9 +929,9 @@ const Sidebar: FC<SidebarProps> = ({
               >
                 {gitPanel ? (
                   <GitHistoryPanel
-                    apiService={gitPanel.apiService!}
+                    apiService={gitPanel.apiService ?? ApiService.getInstance()}
                     isActing={gitPanel.isActing}
-                    openWorkspaceBuffer={gitPanel.openWorkspaceBuffer!}
+                    openWorkspaceBuffer={gitPanel.openWorkspaceBuffer ?? ((_options) => '')}
                   />
                 ) : (
                   <div className="empty">Git unavailable</div>
@@ -947,11 +952,6 @@ const Sidebar: FC<SidebarProps> = ({
       default:
         return null;
     }
-  };
-
-  /** Search section: find and replace panel */
-  const renderSearchSection = () => {
-    return <SearchView onFileClick={onFileClick} />;
   };
 
   return (

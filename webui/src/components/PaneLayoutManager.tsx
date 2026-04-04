@@ -101,6 +101,51 @@ export interface PaneLayoutManagerProps {
   containerRef: RefObject<HTMLDivElement | null>;
 }
 
+// ── Sub-components used by PaneLayoutManager ──────────────────────
+
+export const PaneWrapper: FC<{ children: ReactNode; style?: CSSProperties }> = ({ children, style }) => (
+  <div className="pane-wrapper" style={style}>
+    {children}
+  </div>
+);
+
+export const EditorPaneWrapper: FC<{
+  children: ReactNode;
+  isActive?: boolean;
+  onClick?: () => void;
+}> = ({ children, isActive, onClick }) => (
+  <div
+    className={`editor-pane-wrapper ${isActive ? 'active' : ''}`}
+    onClick={onClick}
+    tabIndex={isActive ? -1 : 0}
+    onFocus={() => isActive && onClick?.()}
+  >
+    {children}
+  </div>
+);
+
+export const EditorPaneComponent: FC<{
+  paneId: string;
+  isActive?: boolean;
+  onClick?: () => void;
+  perChatCache?: Record<string, PerChatState>;
+  activeChatId?: string | null;
+  chatProps: ComponentProps<typeof WorkspacePane>['chatProps'];
+  reviewProps: ComponentProps<typeof WorkspacePane>['reviewProps'];
+  diffState: ComponentProps<typeof WorkspacePane>['diffState'];
+}> = ({ paneId, onClick, perChatCache, activeChatId, chatProps, reviewProps, diffState }) => (
+  <div className="editor-pane-host" onClick={onClick}>
+    <WorkspacePane
+      paneId={paneId}
+      perChatCache={perChatCache}
+      activeChatId={activeChatId}
+      chatProps={chatProps}
+      reviewProps={reviewProps}
+      diffState={diffState}
+    />
+  </div>
+);
+
 /**
  * PaneLayoutManager — owns the nested-split state, pane rendering, resize
  * handles, and the split control buttons for each pane tab bar.
@@ -178,7 +223,7 @@ const PaneLayoutManager: FC<PaneLayoutManagerProps> = ({
           isPaneDraggingRef.current.add(sizeKey);
           dragStartSizeRef.current.set(sizeKey, paneSizes[sizeKey] || 50);
         }
-        const sizeAtDragStart = dragStartSizeRef.current.get(sizeKey)!;
+        const sizeAtDragStart = dragStartSizeRef.current.get(sizeKey) ?? 50;
         const newSize = Math.max(10, Math.min(90, sizeAtDragStart + deltaPercent));
         updatePaneSize(sizeKey, newSize);
       },
@@ -484,50 +529,5 @@ const PaneLayoutManager: FC<PaneLayoutManagerProps> = ({
     </div>
   );
 };
-
-// ── Sub-components used by PaneLayoutManager ──────────────────────
-
-export const PaneWrapper: FC<{ children: ReactNode; style?: CSSProperties }> = ({ children, style }) => (
-  <div className="pane-wrapper" style={style}>
-    {children}
-  </div>
-);
-
-export const EditorPaneWrapper: FC<{
-  children: ReactNode;
-  isActive?: boolean;
-  onClick?: () => void;
-}> = ({ children, isActive, onClick }) => (
-  <div
-    className={`editor-pane-wrapper ${isActive ? 'active' : ''}`}
-    onClick={onClick}
-    tabIndex={isActive ? -1 : 0}
-    onFocus={() => isActive && onClick?.()}
-  >
-    {children}
-  </div>
-);
-
-export const EditorPaneComponent: FC<{
-  paneId: string;
-  isActive?: boolean;
-  onClick?: () => void;
-  perChatCache?: Record<string, PerChatState>;
-  activeChatId?: string | null;
-  chatProps: ComponentProps<typeof WorkspacePane>['chatProps'];
-  reviewProps: ComponentProps<typeof WorkspacePane>['reviewProps'];
-  diffState: ComponentProps<typeof WorkspacePane>['diffState'];
-}> = ({ paneId, onClick, perChatCache, activeChatId, chatProps, reviewProps, diffState }) => (
-  <div className="editor-pane-host" onClick={onClick}>
-    <WorkspacePane
-      paneId={paneId}
-      perChatCache={perChatCache}
-      activeChatId={activeChatId}
-      chatProps={chatProps}
-      reviewProps={reviewProps}
-      diffState={diffState}
-    />
-  </div>
-);
 
 export default PaneLayoutManager;

@@ -217,6 +217,83 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
       }
     }, [expandedDirs, fetchFiles, findFileByPath, onRefresh, rootPath, updateFileChildren]);
 
+    const getAncestors = useCallback((filePath: string, _dirRoot: string): string[] => {
+      const segments = filePath.split('/').filter(Boolean);
+      const ancestors: string[] = [];
+      for (let i = 0; i < segments.length - 1; i++) {
+        const ancestorPath = segments.slice(0, i + 1).join('/');
+        ancestors.push(ancestorPath);
+      }
+      return ancestors;
+    }, []);
+
+    const revealFile = useCallback(
+      async (filePath: string) => {
+        // Skip empty paths
+        if (!filePath) {
+          return;
+        }
+
+        // If the target file is ignored and we're hiding ignored files,
+        // temporarily show them so the reveal can work.
+        if (!showIgnoredFiles) {
+          const target = findFileByPath(filesRef.current, filePath);
+          if (target?.gitStatus === 'ignored') {
+            setShowIgnoredFiles(true);
+          }
+        }
+
+        // Compute all ancestor directories
+        const ancestors = getAncestors(filePath, rootPath);
+        const newAncestors = ancestors.filter((a) => !expandedDirs.has(a));
+
+        // Add new ancestors to expandedDirs
+        if (newAncestors.length > 0) {
+          setExpandedDirs((prev) => {
+            const next = new Set(prev);
+            newAncestors.forEach((a) => next.add(a));
+            return next;
+          });
+        }
+
+        // Fetch children for newly expanded directories that don't have children loaded
+        // Fetch from deepest to shallowest so parent structures are in place
+        if (newAncestors.length > 0) {
+          // Sort by depth (deepest first)
+          const sortedAncestors = [...newAncestors].sort((a, b) => b.split('/').length - a.split('/').length);
+
+          for (const dirPath of sortedAncestors) {
+            const dir = findFileByPath(filesRef.current, dirPath);
+            if (!dir || dir.isDir) {
+              const children = await fetchFiles(dirPath);
+              setFiles((prev) => updateFileChildren(prev, dirPath, children));
+            }
+          }
+        }
+
+        // Set the selected file
+        setInternalSelectedFile(filePath);
+
+        // Scroll the selected element into view after state updates
+        setTimeout(() => {
+          const selectedElement = fileListRef.current?.querySelector('.file-tree-item.selected');
+          if (selectedElement) {
+            // Add flash animation class
+            selectedElement.classList.add('revealed');
+
+            // Scroll into view
+            selectedElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+            // Remove flash animation class after animation
+            setTimeout(() => {
+              selectedElement.classList.remove('revealed');
+            }, 1500);
+          }
+        }, 100);
+      },
+      [getAncestors, rootPath, expandedDirs, findFileByPath, fetchFiles, updateFileChildren, showIgnoredFiles],
+    );
+
     useImperativeHandle(ref, () => ({
       refresh: refreshTree,
       revealFile,
@@ -401,84 +478,6 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
         setFiles((prev) => updateFileChildren(prev, dirPath, children));
       },
       [expandedDirs, fetchFiles, findFileByPath, updateFileChildren],
-    );
-
-    const getAncestors = useCallback((filePath: string, _dirRoot: string): string[] => {
-      const segments = filePath.split('/').filter(Boolean);
-      const ancestors: string[] = [];
-      // Build ancestor paths: e.g. "pkg/webui/server.go" -> ["pkg", "pkg/webui"]
-      for (let i = 0; i < segments.length - 1; i++) {
-        const ancestorPath = segments.slice(0, i + 1).join('/');
-        ancestors.push(ancestorPath);
-      }
-      return ancestors;
-    }, []);
-
-    const revealFile = useCallback(
-      async (filePath: string) => {
-        // Skip empty paths
-        if (!filePath) {
-          return;
-        }
-
-        // If the target file is ignored and we're hiding ignored files,
-        // temporarily show them so the reveal can work.
-        if (!showIgnoredFiles) {
-          const target = findFileByPath(filesRef.current, filePath);
-          if (target?.gitStatus === 'ignored') {
-            setShowIgnoredFiles(true);
-          }
-        }
-
-        // Compute all ancestor directories
-        const ancestors = getAncestors(filePath, rootPath);
-        const newAncestors = ancestors.filter((a) => !expandedDirs.has(a));
-
-        // Add new ancestors to expandedDirs
-        if (newAncestors.length > 0) {
-          setExpandedDirs((prev) => {
-            const next = new Set(prev);
-            newAncestors.forEach((a) => next.add(a));
-            return next;
-          });
-        }
-
-        // Fetch children for newly expanded directories that don't have children loaded
-        // Fetch from deepest to shallowest so parent structures are in place
-        if (newAncestors.length > 0) {
-          // Sort by depth (deepest first)
-          const sortedAncestors = [...newAncestors].sort((a, b) => b.split('/').length - a.split('/').length);
-
-          for (const dirPath of sortedAncestors) {
-            const dir = findFileByPath(filesRef.current, dirPath);
-            if (!dir || dir.isDir) {
-              const children = await fetchFiles(dirPath);
-              setFiles((prev) => updateFileChildren(prev, dirPath, children));
-            }
-          }
-        }
-
-        // Set the selected file
-        setInternalSelectedFile(filePath);
-
-        // Scroll the selected element into view after state updates
-        setTimeout(() => {
-          const selectedElement = fileListRef.current?.querySelector('.file-tree-item.selected');
-          if (selectedElement) {
-            // Add flash animation class
-            selectedElement.classList.add('revealed');
-
-            // Scroll into view
-            selectedElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
-            // Remove flash animation class after animation
-            setTimeout(() => {
-              selectedElement.classList.remove('revealed');
-            }, 1500);
-          }
-        }, 100);
-      },
-      [getAncestors, rootPath, expandedDirs, findFileByPath, fetchFiles, updateFileChildren, showIgnoredFiles],
     );
 
     // ── Filter / fuzzy search ────────────────────────────────────────────

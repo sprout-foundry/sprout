@@ -34,6 +34,23 @@ const diffState = StateField.define<DecorationSet>({
   },
 });
 
+// Gutter marker class for diff indicators
+class DiffMarker extends GutterMarker {
+  constructor(private type: 'added' | 'removed' | 'modified') {
+    super();
+  }
+
+  toDOM() {
+    const el = document.createElement('div');
+    el.className = `cm-diff-marker cm-diff-marker-${this.type}`;
+    return el;
+  }
+
+  eq(other: GutterMarker) {
+    return other instanceof DiffMarker && other.type === this.type;
+  }
+}
+
 // Gutter extension that uses the diff state
 const diffGutterExtension = gutter({
   class: 'cm-diffGutter',
@@ -63,23 +80,6 @@ const diffGutterExtension = gutter({
     return builder.finish();
   },
 });
-
-// Gutter marker class for diff indicators
-class DiffMarker extends GutterMarker {
-  constructor(private type: 'added' | 'removed' | 'modified') {
-    super();
-  }
-
-  toDOM() {
-    const el = document.createElement('div');
-    el.className = `cm-diff-marker cm-diff-marker-${this.type}`;
-    return el;
-  }
-
-  eq(other: GutterMarker) {
-    return other instanceof DiffMarker && other.type === this.type;
-  }
-}
 
 // View plugin to handle diff updates
 const diffUpdatePlugin = ViewPlugin.fromClass(

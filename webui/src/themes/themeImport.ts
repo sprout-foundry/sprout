@@ -243,7 +243,7 @@
  */
 
 import { HighlightStyle } from '@codemirror/language';
-import { tags } from '@lezer/highlight';
+import { tags, type Tag } from '@lezer/highlight';
 import type { ThemePack, ThemeMode } from './themePacks';
 
 // ============================================================================
@@ -411,7 +411,7 @@ export class ThemeImporter {
    * Scopes are matched by longest suffix (most specific match wins).
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private scopeToTag: Map<string, any> = new Map();
+  private scopeToTag: Map<string, readonly Tag[]> = new Map();
 
   constructor() {
     this.scopeToTag = new Map(SCOPE_TO_TAG_ENTRIES);
@@ -478,7 +478,7 @@ export class ThemeImporter {
    * Parses a TextMate/VSCode scope selector to a CodeMirror tag array.
    * Handles comma-separated scopes and suffix matching.
    */
-  private resolveScope(scope: string): readonly any[] | null {
+  private resolveScope(scope: string): readonly Tag[] | null {
     // Handle comma-separated scopes (take first match)
     const parts = scope.split(',').map((s) => s.trim());
     for (const part of parts) {
@@ -491,7 +491,7 @@ export class ThemeImporter {
   /**
    * Matches a single scope string to a CodeMirror tag by longest suffix.
    */
-  private matchScope(scope: string): readonly any[] | null {
+  private matchScope(scope: string): readonly Tag[] | null {
     // Try exact match
     const exact = this.scopeToTag.get(scope);
     if (exact) return exact;
@@ -574,7 +574,7 @@ export class ThemeImporter {
    */
   buildHighlightStyle(tokenRules: VSCodeTokenColor[]): HighlightStyle {
     const specs: Array<{
-      tag: readonly any[];
+      tag: readonly Tag[];
       color?: string;
       fontStyle?: string;
       fontWeight?: string;

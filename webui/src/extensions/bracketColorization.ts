@@ -85,12 +85,14 @@ export function computeBracketDecorations(text: string): BracketDecoration[] {
       stack.push({ pos: i, depth, bracket: ch });
       result.push({ from: i, to: i + 1, depth });
     } else if (MATCHING_CLOSE.has(ch)) {
-      const expected = MATCHING_CLOSE.get(ch)!;
+      const expected = MATCHING_CLOSE.get(ch);
+      if (!expected) break;
       // Only pop when the top of the stack matches.  Stray or mismatched
       // closing brackets are ignored to keep the depth tracking simple
       // and well-defined.
       if (stack.length > 0 && stack[stack.length - 1].bracket === expected) {
-        const match = stack.pop()!;
+        const match = stack.pop();
+        if (!match) break;
         result.push({ from: i, to: i + 1, depth: match.depth });
       }
     }

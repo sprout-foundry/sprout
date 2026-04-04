@@ -48,6 +48,41 @@ const getSectionToneClass = (sectionId: string): string => {
   }
 };
 
+const HTMLISH_LINE_PATTERN =
+  /^(<!DOCTYPE|<\/?(html|head|body|div|span|title|meta|link|script|header|section|p|ul|li)\b|<!--|\*\/|\/\*|<\w+)/i;
+
+const compactReviewFixLogs = (logs: string[]): string[] => {
+  const compacted: string[] = [];
+  let pendingHtmlCount = 0;
+
+  const flushHtml = () => {
+    if (pendingHtmlCount > 0) {
+      compacted.push(`HTML error payload suppressed (${pendingHtmlCount} lines)`);
+      pendingHtmlCount = 0;
+    }
+  };
+
+  logs.forEach((raw) => {
+    const cleaned = stripAnsiCodes(String(raw || ''))
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!cleaned) {
+      return;
+    }
+
+    if (HTMLISH_LINE_PATTERN.test(cleaned)) {
+      pendingHtmlCount += 1;
+      return;
+    }
+
+    flushHtml();
+    compacted.push(cleaned);
+  });
+
+  flushHtml();
+  return compacted;
+};
+
 const ReviewWorkspaceTab: FC<ReviewWorkspaceTabProps> = ({
   review,
   reviewError,
@@ -556,41 +591,6 @@ const ReviewWorkspaceTab: FC<ReviewWorkspaceTabProps> = ({
       </div>
     </div>
   );
-};
-
-const HTMLISH_LINE_PATTERN =
-  /^(<!DOCTYPE|<\/?(html|head|body|div|span|title|meta|link|script|header|section|p|ul|li)\b|<!--|\*\/|\/\*|<\w+)/i;
-
-const compactReviewFixLogs = (logs: string[]): string[] => {
-  const compacted: string[] = [];
-  let pendingHtmlCount = 0;
-
-  const flushHtml = () => {
-    if (pendingHtmlCount > 0) {
-      compacted.push(`HTML error payload suppressed (${pendingHtmlCount} lines)`);
-      pendingHtmlCount = 0;
-    }
-  };
-
-  logs.forEach((raw) => {
-    const cleaned = stripAnsiCodes(String(raw || ''))
-      .replace(/\s+/g, ' ')
-      .trim();
-    if (!cleaned) {
-      return;
-    }
-
-    if (HTMLISH_LINE_PATTERN.test(cleaned)) {
-      pendingHtmlCount += 1;
-      return;
-    }
-
-    flushHtml();
-    compacted.push(cleaned);
-  });
-
-  flushHtml();
-  return compacted;
 };
 
 export default ReviewWorkspaceTab;

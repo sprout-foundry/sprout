@@ -177,6 +177,45 @@ const SearchView: FC<SearchViewProps> = ({ onFileClick }) => {
     }
   };
 
+  // Get relative path (strip leading ./)
+  const getRelativePath = (path: string): string => {
+    return path.startsWith('./') ? path.slice(2) : path;
+  };
+
+  // Get parent directory path for excluding
+  const getParentDirectory = (filePath: string): string => {
+    const relative = getRelativePath(filePath);
+    const lastSlash = relative.lastIndexOf('/');
+    if (lastSlash === -1) {
+      // File is at root, exclude it directly
+      return relative;
+    }
+    return relative.substring(0, lastSlash + 1);
+  };
+
+  // Filter results based on exclude patterns
+  const filteredResults = useMemo(() => {
+    if (!results || !excludePatterns.trim()) return results;
+
+    const patterns = excludePatterns
+      .split(',')
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0);
+
+    if (patterns.length === 0) return results;
+
+    return results.filter((result) => {
+      const relativePath = getRelativePath(result.file);
+      return !patterns.some((pattern) => {
+        // Check if the file path starts with the exclude pattern
+        if (pattern.endsWith('/')) {
+          return relativePath.startsWith(pattern) || relativePath.startsWith(`./${pattern}`);
+        }
+        return relativePath === pattern || relativePath === `./${pattern}`;
+      });
+    });
+  }, [results, excludePatterns]);
+
   // Handle replace
   const handleReplace = async () => {
     if (!searchQuery.trim() || !replaceQuery.trim()) {
@@ -285,22 +324,6 @@ const SearchView: FC<SearchViewProps> = ({ onFileClick }) => {
     );
   };
 
-  // Get relative path (strip leading ./)
-  const getRelativePath = (path: string): string => {
-    return path.startsWith('./') ? path.slice(2) : path;
-  };
-
-  // Get parent directory path for excluding
-  const getParentDirectory = (filePath: string): string => {
-    const relative = getRelativePath(filePath);
-    const lastSlash = relative.lastIndexOf('/');
-    if (lastSlash === -1) {
-      // File is at root, exclude it directly
-      return relative;
-    }
-    return relative.substring(0, lastSlash + 1);
-  };
-
   // ── Context menu handlers ──────────────────────────────────
 
   const handleRowContextMenu = useCallback((e: MouseEvent, filePath: string, lineNumber: number, lineText: string) => {
@@ -403,29 +426,6 @@ const SearchView: FC<SearchViewProps> = ({ onFileClick }) => {
       .filter((p) => p.length > 0);
     return existing.includes(pattern);
   };
-
-  // Filter results based on exclude patterns
-  const filteredResults = useMemo(() => {
-    if (!results || !excludePatterns.trim()) return results;
-
-    const patterns = excludePatterns
-      .split(',')
-      .map((p) => p.trim())
-      .filter((p) => p.length > 0);
-
-    if (patterns.length === 0) return results;
-
-    return results.filter((result) => {
-      const relativePath = getRelativePath(result.file);
-      return !patterns.some((pattern) => {
-        // Check if the file path starts with the exclude pattern
-        if (pattern.endsWith('/')) {
-          return relativePath.startsWith(pattern) || relativePath.startsWith(`./${pattern}`);
-        }
-        return relativePath === pattern || relativePath === `./${pattern}`;
-      });
-    });
-  }, [results, excludePatterns]);
 
   // Compute displayed counts from filtered results (accurate even when client-side filtering is active)
   const displayMatches = useMemo(

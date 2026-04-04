@@ -32,6 +32,92 @@ interface EditorTabsProps {
   compact?: boolean;
 }
 
+// ── File icon helpers (defined before component to avoid use-before-define) ──
+
+const FILE_ICON_SIZE = 16;
+
+const getFileIconComponent = (ext?: string): LucideIcon => {
+  if (!ext) return File;
+
+  switch (ext.toLowerCase()) {
+    case '.js':
+    case '.jsx':
+      return FileCode;
+    case '.ts':
+    case '.tsx':
+      return Braces;
+    case '.go':
+      return Code2;
+    case '.py':
+      return FileCode;
+    case '.json':
+      return Braces;
+    case '.html':
+      return Globe;
+    case '.css':
+      return Palette;
+    case '.md':
+      return FileText;
+    case '.txt':
+      return FileText;
+    case '.yml':
+    case '.yaml':
+      return Settings;
+    case '.sh':
+      return Terminal;
+    default:
+      return File;
+  }
+};
+
+const getFileIcon = (ext?: string): ReactNode => {
+  const Icon = getFileIconComponent(ext);
+  return <Icon size={FILE_ICON_SIZE} />;
+};
+
+const getFileIconColor = (ext?: string): string => {
+  if (ext === '.chat') return 'var(--accent-primary)';
+  if (ext === '.diff') return '#22c55e';
+  if (ext === '.review') return '#f59e0b';
+  if (!ext) return '#9ca3af';
+
+  switch (ext.toLowerCase()) {
+    case '.js':
+    case '.jsx':
+      return '#f7df1e';
+    case '.ts':
+    case '.tsx':
+      return '#3178c6';
+    case '.go':
+      return '#00add8';
+    case '.py':
+      return '#3776ab';
+    case '.json':
+      return '#cbcb41';
+    case '.html':
+      return '#e34c26';
+    case '.css':
+      return '#264de4';
+    case '.md':
+      return '#083fa1';
+    default:
+      return '#9ca3af';
+  }
+};
+
+const getBufferIcon = (buffer: EditorBuffer): ReactNode => {
+  switch (buffer.kind) {
+    case 'chat':
+      return <MessageSquareText size={FILE_ICON_SIZE} />;
+    case 'diff':
+      return <GitCompareArrows size={FILE_ICON_SIZE} />;
+    case 'review':
+      return <ShieldCheck size={FILE_ICON_SIZE} />;
+    default:
+      return getFileIcon(buffer.file.ext);
+  }
+};
+
 const EditorTabs: FC<EditorTabsProps> = ({ paneId, actions, compact = false }) => {
   const {
     buffers,
@@ -439,90 +525,6 @@ const EditorTabs: FC<EditorTabsProps> = ({ paneId, actions, compact = false }) =
       </ContextMenu>
     </div>
   );
-};
-
-const FILE_ICON_SIZE = 16;
-
-const getBufferIcon = (buffer: EditorBuffer): ReactNode => {
-  switch (buffer.kind) {
-    case 'chat':
-      return <MessageSquareText size={FILE_ICON_SIZE} />;
-    case 'diff':
-      return <GitCompareArrows size={FILE_ICON_SIZE} />;
-    case 'review':
-      return <ShieldCheck size={FILE_ICON_SIZE} />;
-    default:
-      return getFileIcon(buffer.file.ext);
-  }
-};
-
-const getFileIcon = (ext?: string): ReactNode => {
-  const Icon = getFileIconComponent(ext);
-  return <Icon size={FILE_ICON_SIZE} />;
-};
-
-const getFileIconComponent = (ext?: string): LucideIcon => {
-  if (!ext) return File;
-
-  switch (ext.toLowerCase()) {
-    case '.js':
-    case '.jsx':
-      return FileCode;
-    case '.ts':
-    case '.tsx':
-      return Braces;
-    case '.go':
-      return Code2;
-    case '.py':
-      return FileCode;
-    case '.json':
-      return Braces;
-    case '.html':
-      return Globe;
-    case '.css':
-      return Palette;
-    case '.md':
-      return FileText;
-    case '.txt':
-      return FileText;
-    case '.yml':
-    case '.yaml':
-      return Settings;
-    case '.sh':
-      return Terminal;
-    default:
-      return File;
-  }
-};
-
-const getFileIconColor = (ext?: string): string => {
-  if (ext === '.chat') return 'var(--accent-primary)';
-  if (ext === '.diff') return '#22c55e';
-  if (ext === '.review') return '#f59e0b';
-  if (!ext) return '#9ca3af';
-
-  switch (ext.toLowerCase()) {
-    case '.js':
-    case '.jsx':
-      return '#f7df1e';
-    case '.ts':
-    case '.tsx':
-      return '#3178c6';
-    case '.go':
-      return '#00add8';
-    case '.py':
-      return '#3776ab';
-    case '.json':
-      return '#cbcb41';
-    case '.html':
-      return '#e34c26';
-    case '.css':
-      return '#264de4';
-    case '.md':
-      return '#083fa1';
-    default:
-      return '#9ca3af';
-  }
 };
 
 export default EditorTabs;

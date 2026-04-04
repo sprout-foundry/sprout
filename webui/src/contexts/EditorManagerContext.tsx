@@ -54,14 +54,14 @@ interface EditorManagerContextValue {
   updateBufferScroll: (bufferId: string, position: { top: number; left: number }) => void;
   updateBufferMetadata: (bufferId: string, updates: Record<string, any>) => void;
   updateBufferTitle: (bufferId: string, title: string) => void;
-  saveBuffer: (bufferId: string) => Promise<void>;
+  saveBuffer: (bufferId: string, options?: { silent?: boolean }) => Promise<void>;
   setBufferModified: (bufferId: string, isModified: boolean) => void;
   setBufferOriginalContent: (bufferId: string, originalContent: string) => void;
   revertBufferToOriginal: (bufferId: string) => void;
   setBufferExternallyModified: (bufferId: string, diskContent: string, mtime?: number) => void;
   clearBufferExternallyModified: (bufferId: string) => void;
   reloadBufferFromDisk: (bufferId: string, diskContent: string, mtime?: number) => void;
-  saveAllBuffers: () => Promise<void>;
+  saveAllBuffers: (options?: { silent?: boolean }) => Promise<void>;
   updatePaneSize: (paneId: string, size: number) => void;
   setBufferLanguageOverride: (bufferId: string, languageId: string | null) => void;
   toggleLinkedScroll: () => void;
@@ -302,7 +302,7 @@ export const EditorManagerProvider: FC<EditorManagerProviderProps> = ({ children
   useEffect(() => {
     if (!isAutoSaveEnabled) return;
     const id = setInterval(() => {
-      saveAllBuffers();
+      saveAllBuffers({ silent: true });
     }, autoSaveInterval);
     return () => clearInterval(id);
   }, [isAutoSaveEnabled, autoSaveInterval, saveAllBuffers]);

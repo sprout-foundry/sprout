@@ -20,9 +20,11 @@ export function useBufferPersistence({ buffersRef, setBuffers }: UseBufferPersis
 
   // Save a buffer to the server
   const saveBuffer = useCallback(
-    async (bufferId: string) => {
+    async (bufferId: string, options?: { silent?: boolean }) => {
       const buffer = buffersRef.current.get(bufferId);
       if (!buffer || buffer.kind !== 'file') return;
+
+      const silent = options?.silent ?? false;
 
       // Handle virtual workspace buffers (untitled files created via Ctrl+N)
       if (buffer.file.path.startsWith('__workspace/')) {
@@ -68,6 +70,9 @@ export function useBufferPersistence({ buffersRef, setBuffers }: UseBufferPersis
             }
             return next;
           });
+          if (!silent) {
+            log.success(`${trimmedPath} saved successfully`, { title: 'File Saved', duration: 3000 });
+          }
         } catch (error) {
           throw error;
         }
@@ -94,6 +99,9 @@ export function useBufferPersistence({ buffersRef, setBuffers }: UseBufferPersis
               }
               return next;
             });
+            if (!silent) {
+              log.success(`${buffer.file.path} saved successfully`, { title: 'File Saved', duration: 3000 });
+            }
           }
         } else {
           // Server returned a non-2xx status (e.g., 400 validation error).
@@ -110,12 +118,12 @@ export function useBufferPersistence({ buffersRef, setBuffers }: UseBufferPersis
   );
 
   // Save all modified buffers
-  const saveAllBuffers = useCallback(async () => {
+  const saveAllBuffers = useCallback(async (options?: { silent?: boolean }) => {
     const currentBuffers = buffersRef.current;
     const savePromises = Array.from(currentBuffers.entries())
       .filter(([_, buffer]) => buffer.isModified && !buffer.file.path.startsWith('__workspace/'))
       .map(([bufferId, _]) =>
-        saveBuffer(bufferId).catch(() => undefined),
+        saveBuffer(bufferId, options).catch(() => undefined),
       );
 
     await Promise.all(savePromises);

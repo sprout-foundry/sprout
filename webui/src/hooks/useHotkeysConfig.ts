@@ -32,7 +32,9 @@ export function useHotkeysConfig({
       .then((config) => {
         if (config.path) setHotkeysConfigPath(config.path);
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.error('Failed to load hotkeys config path:', err);
+      });
   }, [isConnected, apiService]);
 
   const handleOpenHotkeysConfig = useCallback(() => {

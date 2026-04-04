@@ -6,7 +6,7 @@
  * helpers for auto-detection and CodeMirror extension creation.
  */
 
-import { Extension } from '@codemirror/state';
+import { type Extension } from '@codemirror/state';
 
 // Language support — official @codemirror/lang-* packages
 import { javascript } from '@codemirror/lang-javascript';
@@ -67,8 +67,8 @@ import { textile } from '@codemirror/legacy-modes/mode/textile';
 // ---------------------------------------------------------------------------
 
 export interface LanguageEntry {
-  id: string;           // Unique identifier (e.g. 'javascript')
-  name: string;         // Display name (e.g. 'JavaScript')
+  id: string; // Unique identifier (e.g. 'javascript')
+  name: string; // Display name (e.g. 'JavaScript')
   extensions: string[]; // File extensions this language handles (without leading dot)
   filenames?: string[]; // Special filenames (lowercase, e.g. ['dockerfile', 'gemfile'])
 }
@@ -78,8 +78,16 @@ export interface LanguageEntry {
 // ---------------------------------------------------------------------------
 
 const RUBY_FILENAMES = [
-  'gemfile', 'rakefile', '.pryrc', '.irbrc', 'guardfile',
-  'capfile', 'berksfile', 'thorfile', 'vagrantfile', 'config.ru',
+  'gemfile',
+  'rakefile',
+  '.pryrc',
+  '.irbrc',
+  'guardfile',
+  'capfile',
+  'berksfile',
+  'thorfile',
+  'vagrantfile',
+  'config.ru',
 ];
 
 export const allLanguageEntries: LanguageEntry[] = [
@@ -150,64 +158,64 @@ export const allLanguageEntries: LanguageEntry[] = [
 // ---------------------------------------------------------------------------
 
 const extensionMap = new Map<string, () => Extension[]>([
-  ['javascript',       () => [javascript()]],
-  ['javascript-jsx',   () => [javascript({ jsx: true })]],
-  ['typescript',       () => [javascript({ typescript: true })]],
-  ['typescript-jsx',   () => [javascript({ typescript: true, jsx: true })]],
-  ['python',           () => [python()]],
-  ['go',               () => [go()]],
-  ['html',             () => [html()]],
-  ['css',              () => [css()]],
-  ['json',             () => [json()]],
-  ['markdown',         () => [markdown()]],
-  ['php',              () => [php()]],
-  ['rust',             () => [rust()]],
-  ['c',                () => [cpp()]],
-  ['cpp',              () => [cpp()]],
-  ['java',             () => [java()]],
-  ['ruby',             () => [ruby()]],
-  ['shell',            () => [StreamLanguage.define(shell)]],
-  ['dockerfile',       () => [StreamLanguage.define(dockerFile)]],
-  ['yaml',             () => [yaml()]],
-  ['toml',             () => [StreamLanguage.define(toml)]],
-  ['xml',              () => [xml()]],
-  ['sql',              () => [sql()]],
-  ['wast',             () => [wast()]],
-  ['csharp',           () => [StreamLanguage.define(clike({ name: 'csharp' } as any))]],
-  ['scala',            () => [StreamLanguage.define(clike({ name: 'scala' } as any))]],
-  ['kotlin',           () => [StreamLanguage.define(clike({ name: 'kotlin' } as any))]],
-  ['dart',             () => [StreamLanguage.define(clike({ name: 'dart' } as any))]],
-  ['clojure',          () => [StreamLanguage.define(clojure)]],
-  ['haskell',          () => [StreamLanguage.define(haskell)]],
-  ['elm',              () => [StreamLanguage.define(elm)]],
-  ['erlang',           () => [StreamLanguage.define(erlang)]],
-  ['ocaml',            () => [StreamLanguage.define(oCaml)]],
-  ['fsharp',           () => [StreamLanguage.define(fSharp)]],
-  ['scheme',           () => [StreamLanguage.define(scheme)]],
-  ['lua',              () => [StreamLanguage.define(lua)]],
-  ['swift',            () => [StreamLanguage.define(swift)]],
-  ['coffeescript',     () => [StreamLanguage.define(coffeeScript)]],
-  ['crystal',          () => [StreamLanguage.define(crystal)]],
-  ['sass',             () => [StreamLanguage.define(sass)]],
-  ['textile',          () => [StreamLanguage.define(textile)]],
-  ['cmake',            () => [StreamLanguage.define(cmake)]],
-  ['nginx',            () => [StreamLanguage.define(nginx)]],
-  ['powershell',       () => [StreamLanguage.define(powerShell)]],
-  ['protobuf',         () => [StreamLanguage.define(protobuf)]],
-  ['r',                () => [StreamLanguage.define(r)]],
-  ['julia',            () => [StreamLanguage.define(julia)]],
-  ['fortran',          () => [StreamLanguage.define(fortran)]],
-  ['d',                () => [StreamLanguage.define(d)]],
-  ['verilog',          () => [StreamLanguage.define(verilog)]],
-  ['vhdl',             () => [StreamLanguage.define(vhdl)]],
-  ['groovy',           () => [StreamLanguage.define(groovy)]],
-  ['perl',             () => [StreamLanguage.define(perl)]],
-  ['tcl',              () => [StreamLanguage.define(tcl)]],
-  ['vb',               () => [StreamLanguage.define(vb)]],
-  ['properties',       () => [StreamLanguage.define(properties)]],
-  ['gas',              () => [StreamLanguage.define(gas)]],
-  ['diff',             () => [StreamLanguage.define(diff)]],
-  ['plaintext',        () => []],
+  ['javascript', () => [javascript()]],
+  ['javascript-jsx', () => [javascript({ jsx: true })]],
+  ['typescript', () => [javascript({ typescript: true })]],
+  ['typescript-jsx', () => [javascript({ typescript: true, jsx: true })]],
+  ['python', () => [python()]],
+  ['go', () => [go()]],
+  ['html', () => [html()]],
+  ['css', () => [css()]],
+  ['json', () => [json()]],
+  ['markdown', () => [markdown()]],
+  ['php', () => [php()]],
+  ['rust', () => [rust()]],
+  ['c', () => [cpp()]],
+  ['cpp', () => [cpp()]],
+  ['java', () => [java()]],
+  ['ruby', () => [ruby()]],
+  ['shell', () => [StreamLanguage.define(shell)]],
+  ['dockerfile', () => [StreamLanguage.define(dockerFile)]],
+  ['yaml', () => [yaml()]],
+  ['toml', () => [StreamLanguage.define(toml)]],
+  ['xml', () => [xml()]],
+  ['sql', () => [sql()]],
+  ['wast', () => [wast()]],
+  ['csharp', () => [StreamLanguage.define(clike({ name: 'csharp' } as any))]],
+  ['scala', () => [StreamLanguage.define(clike({ name: 'scala' } as any))]],
+  ['kotlin', () => [StreamLanguage.define(clike({ name: 'kotlin' } as any))]],
+  ['dart', () => [StreamLanguage.define(clike({ name: 'dart' } as any))]],
+  ['clojure', () => [StreamLanguage.define(clojure)]],
+  ['haskell', () => [StreamLanguage.define(haskell)]],
+  ['elm', () => [StreamLanguage.define(elm)]],
+  ['erlang', () => [StreamLanguage.define(erlang)]],
+  ['ocaml', () => [StreamLanguage.define(oCaml)]],
+  ['fsharp', () => [StreamLanguage.define(fSharp)]],
+  ['scheme', () => [StreamLanguage.define(scheme)]],
+  ['lua', () => [StreamLanguage.define(lua)]],
+  ['swift', () => [StreamLanguage.define(swift)]],
+  ['coffeescript', () => [StreamLanguage.define(coffeeScript)]],
+  ['crystal', () => [StreamLanguage.define(crystal)]],
+  ['sass', () => [StreamLanguage.define(sass)]],
+  ['textile', () => [StreamLanguage.define(textile)]],
+  ['cmake', () => [StreamLanguage.define(cmake)]],
+  ['nginx', () => [StreamLanguage.define(nginx)]],
+  ['powershell', () => [StreamLanguage.define(powerShell)]],
+  ['protobuf', () => [StreamLanguage.define(protobuf)]],
+  ['r', () => [StreamLanguage.define(r)]],
+  ['julia', () => [StreamLanguage.define(julia)]],
+  ['fortran', () => [StreamLanguage.define(fortran)]],
+  ['d', () => [StreamLanguage.define(d)]],
+  ['verilog', () => [StreamLanguage.define(verilog)]],
+  ['vhdl', () => [StreamLanguage.define(vhdl)]],
+  ['groovy', () => [StreamLanguage.define(groovy)]],
+  ['perl', () => [StreamLanguage.define(perl)]],
+  ['tcl', () => [StreamLanguage.define(tcl)]],
+  ['vb', () => [StreamLanguage.define(vb)]],
+  ['properties', () => [StreamLanguage.define(properties)]],
+  ['gas', () => [StreamLanguage.define(gas)]],
+  ['diff', () => [StreamLanguage.define(diff)]],
+  ['plaintext', () => []],
 ]);
 
 // ---------------------------------------------------------------------------
@@ -299,7 +307,7 @@ export function detectLanguage(ext: string | undefined, fileName?: string): stri
   }
 
   // Dockerfile variants that have non-standard extensions like .dev, .prod
-  if (fileName && /^dockerfile$/i.test((fileName).replace(/\.[^.]+$/, ''))) {
+  if (fileName && /^dockerfile$/i.test(fileName.replace(/\.[^.]+$/, ''))) {
     return 'dockerfile';
   }
 

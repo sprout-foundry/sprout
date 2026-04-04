@@ -39,10 +39,7 @@ function makeSnapshot(overrides: Partial<LayoutSnapshot> = {}): LayoutSnapshot {
   };
 }
 
-function makeEntry(
-  filePath: string,
-  overrides: Partial<BufferLayoutEntry> = {},
-): BufferLayoutEntry {
+function makeEntry(filePath: string, overrides: Partial<BufferLayoutEntry> = {}): BufferLayoutEntry {
   return {
     filePath,
     paneId: 'pane-1',
@@ -95,24 +92,24 @@ beforeEach(() => {
   // Track beforeunload listeners via spy
   beforeUnloadHandlers.length = 0;
 
-  jest.spyOn(window, 'addEventListener').mockImplementation(
-    (type: string, handler: EventListenerOrEventListenerObject, ...rest) => {
+  jest
+    .spyOn(window, 'addEventListener')
+    .mockImplementation((type: string, handler: EventListenerOrEventListenerObject, ...rest) => {
       if (type === 'beforeunload' && typeof handler === 'function') {
         beforeUnloadHandlers.push(handler as () => void);
       }
       realAddEventListener.call(window, type, handler, ...rest);
-    },
-  );
+    });
 
-  jest.spyOn(window, 'removeEventListener').mockImplementation(
-    (type: string, handler: EventListenerOrEventListenerObject, ...rest) => {
+  jest
+    .spyOn(window, 'removeEventListener')
+    .mockImplementation((type: string, handler: EventListenerOrEventListenerObject, ...rest) => {
       if (type === 'beforeunload' && typeof handler === 'function') {
         const idx = beforeUnloadHandlers.indexOf(handler as () => void);
         if (idx >= 0) beforeUnloadHandlers.splice(idx, 1);
       }
       realRemoveEventListener.call(window, type, handler, ...rest);
-    },
-  );
+    });
 });
 
 afterEach(() => {
@@ -344,11 +341,7 @@ describe('clearLayoutSnapshot', () => {
 describe('virtual buffer filtering', () => {
   it('filters out buffers whose filePath starts with __workspace/', () => {
     const snapshot = makeSnapshot({
-      buffers: [
-        makeEntry('/real/file.ts'),
-        makeEntry('__workspace/virtual.buf'),
-        makeEntry('/another/real.go'),
-      ],
+      buffers: [makeEntry('/real/file.ts'), makeEntry('__workspace/virtual.buf'), makeEntry('/another/real.go')],
       bufferOrder: ['/real/file.ts', '__workspace/virtual.buf', '/another/real.go'],
     });
     saveLayoutSnapshot(snapshot);
@@ -362,10 +355,7 @@ describe('virtual buffer filtering', () => {
 
   it('filters out buffers with empty filePath', () => {
     const snapshot = makeSnapshot({
-      buffers: [
-        makeEntry('/real.ts'),
-        makeEntry(''),
-      ],
+      buffers: [makeEntry('/real.ts'), makeEntry('')],
       bufferOrder: ['/real.ts', ''],
     });
     saveLayoutSnapshot(snapshot);
@@ -429,10 +419,7 @@ describe('buffer deduplication', () => {
 describe('bufferOrder deduplication', () => {
   it('removes duplicate paths from bufferOrder while preserving order', () => {
     const snapshot = makeSnapshot({
-      buffers: [
-        makeEntry('/a.ts'),
-        makeEntry('/b.ts'),
-      ],
+      buffers: [makeEntry('/a.ts'), makeEntry('/b.ts')],
       bufferOrder: ['/a.ts', '/b.ts', '/a.ts', '/c.ts', '/b.ts'],
     });
     saveLayoutSnapshot(snapshot);
@@ -489,11 +476,13 @@ describe('MAX_BUFFERS truncation', () => {
       );
       bufferOrder.push(path);
     }
-    saveLayoutSnapshot(makeSnapshot({
-      activeBufferFilePath: '/file-055.ts',
-      buffers,
-      bufferOrder,
-    }));
+    saveLayoutSnapshot(
+      makeSnapshot({
+        activeBufferFilePath: '/file-055.ts',
+        buffers,
+        bufferOrder,
+      }),
+    );
     flush();
 
     const loaded = loadLayoutSnapshot();

@@ -5,6 +5,9 @@
  * all CM imports are mocked.
  */
 
+import { minimapExtension, showMinimap } from './minimap';
+import { showMinimap as showMinimapOriginal } from '@replit/codemirror-minimap';
+
 jest.mock('@codemirror/view', () => ({
   EditorView: { baseTheme: jest.fn(() => []) },
 }));
@@ -17,9 +20,6 @@ jest.mock('@replit/codemirror-minimap', () => ({
     compute: jest.fn(() => mockComputeResult),
   },
 }));
-
-import { minimapExtension, showMinimap } from './minimap';
-import { showMinimap as showMinimapOriginal } from '@replit/codemirror-minimap';
 
 describe('minimap', () => {
   it('returns an array with 2 elements', () => {

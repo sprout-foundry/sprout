@@ -54,7 +54,9 @@
   height: 3px;
   border-radius: 3px;
   background: rgba(148, 163, 184, 0.35);
-  transition: background 0.15s, width 0.15s;
+  transition:
+    background 0.15s,
+    width 0.15s;
 }
 
 .terminal-resize-handle:hover::after,
@@ -284,8 +286,12 @@
 }
 
 @keyframes slideUp {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
 }
 
 .terminal-status-inline {
@@ -441,8 +447,14 @@
 }
 
 @keyframes shellPickerFadeIn {
-  from { opacity: 0; transform: translateY(-4px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .shell-picker-header {

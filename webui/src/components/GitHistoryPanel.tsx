@@ -24,11 +24,7 @@ interface GitHistoryPanelProps {
 
 const PAGE_SIZE = 30;
 
-const GitHistoryPanel = ({
-  apiService,
-  isActing,
-  openWorkspaceBuffer,
-}: GitHistoryPanelProps): JSX.Element => {
+const GitHistoryPanel = ({ apiService, isActing, openWorkspaceBuffer }: GitHistoryPanelProps): JSX.Element => {
   const [commits, setCommits] = useState<GitCommitSummary[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -37,36 +33,39 @@ const GitHistoryPanel = ({
   const [selectedCommit, setSelectedCommit] = useState<GitCommitSummary | null>(null);
   const loadMoreAbortRef = useRef<AbortController | null>(null);
 
-  const fetchCommits = useCallback(async (offset: number, append: boolean, signal?: AbortSignal) => {
-    if (append) {
-      setIsLoadingMore(true);
-    } else {
-      setIsLoading(true);
-    }
-    setError(null);
-
-    try {
-      const response = await apiService.getGitLog(PAGE_SIZE, offset, { signal });
-      if (signal?.aborted) return;
-      const newCommits = response.commits || [];
-      const total = response.total || 0;
-
+  const fetchCommits = useCallback(
+    async (offset: number, append: boolean, signal?: AbortSignal) => {
       if (append) {
-        setCommits((prev) => [...prev, ...newCommits]);
+        setIsLoadingMore(true);
       } else {
-        setCommits(newCommits);
+        setIsLoading(true);
       }
-      setHasMore(offset + newCommits.length < total);
-    } catch (err) {
-      if (signal?.aborted) return;
-      setError(err instanceof Error ? err.message : 'Failed to load commit history');
-    } finally {
-      if (!signal?.aborted) {
-        setIsLoading(false);
-        setIsLoadingMore(false);
+      setError(null);
+
+      try {
+        const response = await apiService.getGitLog(PAGE_SIZE, offset, { signal });
+        if (signal?.aborted) return;
+        const newCommits = response.commits || [];
+        const total = response.total || 0;
+
+        if (append) {
+          setCommits((prev) => [...prev, ...newCommits]);
+        } else {
+          setCommits(newCommits);
+        }
+        setHasMore(offset + newCommits.length < total);
+      } catch (err) {
+        if (signal?.aborted) return;
+        setError(err instanceof Error ? err.message : 'Failed to load commit history');
+      } finally {
+        if (!signal?.aborted) {
+          setIsLoading(false);
+          setIsLoadingMore(false);
+        }
       }
-    }
-  }, [apiService]);
+    },
+    [apiService],
+  );
 
   // Fetch initial commits on mount; re-fetch when refresh is signaled
   useEffect(() => {
@@ -91,10 +90,13 @@ const GitHistoryPanel = ({
     fetchCommits(commits.length, true, controller.signal);
   }, [fetchCommits, commits.length]);
 
-  const handleCommitClick = useCallback((commit: GitCommitSummary) => {
-    if (isActing) return;
-    setSelectedCommit(commit);
-  }, [isActing]);
+  const handleCommitClick = useCallback(
+    (commit: GitCommitSummary) => {
+      if (isActing) return;
+      setSelectedCommit(commit);
+    },
+    [isActing],
+  );
 
   if (isLoading && commits.length === 0) {
     return (
@@ -161,34 +163,28 @@ const GitHistoryPanel = ({
       )}
       <div className="git-history-commit-list thin-scrollbar">
         {commits.map((commit) => (
-            <button
-              key={commit.hash}
-              type="button"
-              className="git-history-commit-row"
-              onClick={() => handleCommitClick(commit)}
-              disabled={isActing}
-              title={commit.message}
-              data-commit-hash={commit.hash}
-              data-commit-short-hash={commit.short_hash}
-              data-commit-message={commit.message}
-            >
-              <div className="git-history-commit-top">
-                <span className="git-history-commit-hash">{commit.short_hash}</span>
-                <span className="git-history-commit-author">{commit.author}</span>
-                <span className="git-history-commit-date">
-                  <Clock size={11} />
-                  {formatRelativeDate(commit.date)}
-                </span>
-              </div>
-              <div className="git-history-commit-message">
-                {firstLine(commit.message)}
-              </div>
-              {commit.ref_names && (
-                <div className="git-history-commit-refs">
-                  {commit.ref_names}
-                </div>
-              )}
-            </button>
+          <button
+            key={commit.hash}
+            type="button"
+            className="git-history-commit-row"
+            onClick={() => handleCommitClick(commit)}
+            disabled={isActing}
+            title={commit.message}
+            data-commit-hash={commit.hash}
+            data-commit-short-hash={commit.short_hash}
+            data-commit-message={commit.message}
+          >
+            <div className="git-history-commit-top">
+              <span className="git-history-commit-hash">{commit.short_hash}</span>
+              <span className="git-history-commit-author">{commit.author}</span>
+              <span className="git-history-commit-date">
+                <Clock size={11} />
+                {formatRelativeDate(commit.date)}
+              </span>
+            </div>
+            <div className="git-history-commit-message">{firstLine(commit.message)}</div>
+            {commit.ref_names && <div className="git-history-commit-refs">{commit.ref_names}</div>}
+          </button>
         ))}
       </div>
       {hasMore && (

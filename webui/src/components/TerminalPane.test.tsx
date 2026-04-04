@@ -219,9 +219,7 @@ describe('TerminalPane context menu', () => {
 
   it('context menu appears on right-click in the terminal pane content', async () => {
     await act(async () => {
-      root.render(
-        <TerminalPane isActive={true} isConnected={false} showCloseButton={false} />
-      );
+      root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
     });
     await flushPromises();
 
@@ -238,9 +236,7 @@ describe('TerminalPane context menu', () => {
     mockTerm.hasSelection.mockReturnValue(true);
 
     await act(async () => {
-      root.render(
-        <TerminalPane isActive={true} isConnected={false} showCloseButton={false} />
-      );
+      root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
     });
     await flushPromises();
 
@@ -255,9 +251,7 @@ describe('TerminalPane context menu', () => {
     expect(texts).toContain('Select All');
 
     // Copy should NOT be disabled
-    const copyBtn = getMenuItems().find((item) =>
-      item.textContent?.includes('Copy')
-    );
+    const copyBtn = getMenuItems().find((item) => item.textContent?.includes('Copy'));
     expect(copyBtn?.classList.contains('disabled')).toBe(false);
     expect((copyBtn as HTMLButtonElement)?.disabled).toBe(false);
   });
@@ -266,9 +260,7 @@ describe('TerminalPane context menu', () => {
     mockTerm.hasSelection.mockReturnValue(false);
 
     await act(async () => {
-      root.render(
-        <TerminalPane isActive={true} isConnected={false} showCloseButton={false} />
-      );
+      root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
     });
     await flushPromises();
 
@@ -276,9 +268,7 @@ describe('TerminalPane context menu', () => {
     fireContextMenu(paneContent);
     await flushPromises();
 
-    const copyBtn = getMenuItems().find((item) =>
-      item.textContent?.includes('Copy')
-    );
+    const copyBtn = getMenuItems().find((item) => item.textContent?.includes('Copy'));
     expect(copyBtn).toBeTruthy();
     expect(copyBtn?.classList.contains('disabled')).toBe(true);
     expect((copyBtn as HTMLButtonElement)?.disabled).toBe(true);
@@ -291,9 +281,7 @@ describe('TerminalPane context menu', () => {
     setupMockLineWithUrl(url, urlStartCol, 50);
 
     await act(async () => {
-      root.render(
-        <TerminalPane isActive={true} isConnected={false} showCloseButton={false} />
-      );
+      root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
     });
     await flushPromises();
 
@@ -304,8 +292,14 @@ describe('TerminalPane context menu', () => {
 
     // Spy getBoundingClientRect since jsdom returns all zeros for layout
     const rect = {
-      left: 0, top: 0, width: 800, height: 480,
-      right: 800, bottom: 480, x: 0, y: 0,
+      left: 0,
+      top: 0,
+      width: 800,
+      height: 480,
+      right: 800,
+      bottom: 480,
+      x: 0,
+      y: 0,
       toJSON: () => ({}),
     } as DOMRect;
     jest.spyOn(xtermContainer as HTMLElement, 'getBoundingClientRect').mockReturnValue(rect);
@@ -327,9 +321,7 @@ describe('TerminalPane context menu', () => {
     mockTerm.getSelection.mockReturnValue('selected text');
 
     await act(async () => {
-      root.render(
-        <TerminalPane isActive={true} isConnected={false} showCloseButton={false} />
-      );
+      root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
     });
     await flushPromises();
 
@@ -337,9 +329,7 @@ describe('TerminalPane context menu', () => {
     fireContextMenu(paneContent);
     await flushPromises();
 
-    const copyBtn = getMenuItems().find((item) =>
-      item.textContent?.includes('Copy')
-    );
+    const copyBtn = getMenuItems().find((item) => item.textContent?.includes('Copy'));
     expect(copyBtn).toBeTruthy();
 
     await act(async () => {
@@ -356,9 +346,7 @@ describe('TerminalPane context menu', () => {
     navigator.clipboard.readText.mockResolvedValue('pasted text');
 
     await act(async () => {
-      root.render(
-        <TerminalPane isActive={true} isConnected={true} showCloseButton={false} />
-      );
+      root.render(<TerminalPane isActive={true} isConnected={true} showCloseButton={false} />);
     });
     await flushPromises();
 
@@ -366,9 +354,7 @@ describe('TerminalPane context menu', () => {
     fireContextMenu(paneContent);
     await flushPromises();
 
-    const pasteBtn = getMenuItems().find((item) =>
-      item.textContent?.includes('Paste')
-    );
+    const pasteBtn = getMenuItems().find((item) => item.textContent?.includes('Paste'));
     expect(pasteBtn).toBeTruthy();
 
     // handlePaste is async — it awaits navigator.clipboard.readText()
@@ -386,9 +372,7 @@ describe('TerminalPane context menu', () => {
 
   it('Select All action calls term.selectAll()', async () => {
     await act(async () => {
-      root.render(
-        <TerminalPane isActive={true} isConnected={false} showCloseButton={false} />
-      );
+      root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
     });
     await flushPromises();
 
@@ -396,9 +380,7 @@ describe('TerminalPane context menu', () => {
     fireContextMenu(paneContent);
     await flushPromises();
 
-    const selectAllBtn = getMenuItems().find((item) =>
-      item.textContent?.includes('Select All')
-    );
+    const selectAllBtn = getMenuItems().find((item) => item.textContent?.includes('Select All'));
     expect(selectAllBtn).toBeTruthy();
 
     await act(async () => {
@@ -411,9 +393,7 @@ describe('TerminalPane context menu', () => {
 
   it('Clear Terminal action calls term.clear()', async () => {
     await act(async () => {
-      root.render(
-        <TerminalPane isActive={true} isConnected={false} showCloseButton={false} />
-      );
+      root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
     });
     await flushPromises();
 
@@ -421,9 +401,7 @@ describe('TerminalPane context menu', () => {
     fireContextMenu(paneContent);
     await flushPromises();
 
-    const clearBtn = getMenuItems().find((item) =>
-      item.textContent?.includes('Clear Terminal')
-    );
+    const clearBtn = getMenuItems().find((item) => item.textContent?.includes('Clear Terminal'));
     expect(clearBtn).toBeTruthy();
 
     await act(async () => {
@@ -436,9 +414,7 @@ describe('TerminalPane context menu', () => {
 
   it('context menu closes on Escape key', async () => {
     await act(async () => {
-      root.render(
-        <TerminalPane isActive={true} isConnected={false} showCloseButton={false} />
-      );
+      root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
     });
     await flushPromises();
 
@@ -450,9 +426,7 @@ describe('TerminalPane context menu', () => {
     expect(getMenu()).toBeTruthy();
 
     await act(async () => {
-      document.dispatchEvent(
-        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
-      );
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     });
     await flushPromises();
 
@@ -461,9 +435,7 @@ describe('TerminalPane context menu', () => {
 
   it('context menu closes on click outside', async () => {
     await act(async () => {
-      root.render(
-        <TerminalPane isActive={true} isConnected={false} showCloseButton={false} />
-      );
+      root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
     });
     await flushPromises();
 
@@ -476,9 +448,7 @@ describe('TerminalPane context menu', () => {
 
     // Click outside the menu (on the body, not the menu itself)
     await act(async () => {
-      document.body.dispatchEvent(
-        new MouseEvent('mousedown', { bubbles: true })
-      );
+      document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
     });
     await flushPromises();
 
@@ -490,16 +460,20 @@ describe('TerminalPane context menu', () => {
     mockTerm.buffer.active.getLine.mockReturnValue(null);
 
     await act(async () => {
-      root.render(
-        <TerminalPane isActive={true} isConnected={false} showCloseButton={false} />
-      );
+      root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
     });
     await flushPromises();
 
     const xtermContainer = container.querySelector('.terminal-xterm');
     const rect = {
-      left: 0, top: 0, width: 800, height: 480,
-      right: 800, bottom: 480, x: 0, y: 0,
+      left: 0,
+      top: 0,
+      width: 800,
+      height: 480,
+      right: 800,
+      bottom: 480,
+      x: 0,
+      y: 0,
       toJSON: () => ({}),
     } as DOMRect;
     jest.spyOn(xtermContainer as HTMLElement, 'getBoundingClientRect').mockReturnValue(rect);
@@ -514,9 +488,7 @@ describe('TerminalPane context menu', () => {
 
   it('context menu closes on scroll', async () => {
     await act(async () => {
-      root.render(
-        <TerminalPane isActive={true} isConnected={false} showCloseButton={false} />
-      );
+      root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
     });
     await flushPromises();
 
@@ -537,9 +509,7 @@ describe('TerminalPane context menu', () => {
 
   it('context menu closes when pane deactivates', async () => {
     await act(async () => {
-      root.render(
-        <TerminalPane isActive={true} isConnected={false} showCloseButton={false} />
-      );
+      root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
     });
     await flushPromises();
 
@@ -551,9 +521,7 @@ describe('TerminalPane context menu', () => {
 
     // Deactivate the pane
     await act(async () => {
-      root.render(
-        <TerminalPane isActive={false} isConnected={false} showCloseButton={false} />
-      );
+      root.render(<TerminalPane isActive={false} isConnected={false} showCloseButton={false} />);
     });
     await flushPromises();
 

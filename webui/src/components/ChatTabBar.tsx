@@ -21,14 +21,7 @@ interface ContextMenuState {
   canDelete: boolean;
 }
 
-const ChatTabBar: React.FC<ChatTabBarProps> = ({
-  sessions,
-  activeChatId,
-  onSwitch,
-  onCreate,
-  onDelete,
-  onRename,
-}) => {
+const ChatTabBar: React.FC<ChatTabBarProps> = ({ sessions, activeChatId, onSwitch, onCreate, onDelete, onRename }) => {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({
@@ -83,15 +76,18 @@ const ChatTabBar: React.FC<ChatTabBarProps> = ({
     setRenameValue('');
   }, []);
 
-  const handleRenameKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      commitRename();
-    } else if (e.key === 'Escape') {
-      cancelRename();
-    }
-    // Don't let the event propagate to the global Ctrl+T handler
-    e.stopPropagation();
-  }, [commitRename, cancelRename]);
+  const handleRenameKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        commitRename();
+      } else if (e.key === 'Escape') {
+        cancelRename();
+      }
+      // Don't let the event propagate to the global Ctrl+T handler
+      e.stopPropagation();
+    },
+    [commitRename, cancelRename],
+  );
 
   const closeContextMenu = useCallback(() => {
     setContextMenu((prev) => ({ ...prev, visible: false }));
@@ -153,9 +149,7 @@ const ChatTabBar: React.FC<ChatTabBarProps> = ({
               title={session.name}
               type="button"
             >
-              {session.active_query && !isActive && (
-                <span className="chat-tab-activity-dot" />
-              )}
+              {session.active_query && !isActive && <span className="chat-tab-activity-dot" />}
               {isRenaming ? (
                 <input
                   ref={renameInputRef}
@@ -197,12 +191,7 @@ const ChatTabBar: React.FC<ChatTabBarProps> = ({
         </button>
       </div>
 
-      <ContextMenu
-        isOpen={contextMenu.visible}
-        x={contextMenu.x}
-        y={contextMenu.y}
-        onClose={closeContextMenu}
-      >
+      <ContextMenu isOpen={contextMenu.visible} x={contextMenu.x} y={contextMenu.y} onClose={closeContextMenu}>
         <button
           className={`context-menu-item ${isDefaultSession ? 'disabled' : ''}`}
           onClick={handleMenuRename}

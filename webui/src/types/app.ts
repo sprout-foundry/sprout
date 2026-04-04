@@ -27,7 +27,7 @@ export interface Message {
   type: 'user' | 'assistant';
   content: string;
   timestamp: Date;
-  reasoning?: string;  // Chain-of-thought content from content_type: "reasoning"
+  reasoning?: string; // Chain-of-thought content from content_type: "reasoning"
   toolRefs?: Array<{ toolId: string; toolName: string; label: string; parallel?: boolean }>;
 }
 
@@ -64,13 +64,13 @@ export interface TodoItem {
   status: TodoStatus;
 }
 
-export type FileEdit = {
+export interface FileEdit {
   path: string;
   action: string;
   timestamp: Date;
   linesAdded?: number;
   linesDeleted?: number;
-};
+}
 
 export interface PerChatState {
   messages: Message[];

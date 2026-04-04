@@ -1,4 +1,4 @@
-import React, { createContext, ReactNode, useContext, useMemo, useState, useEffect, useCallback } from 'react';
+import React, { createContext, type ReactNode, useContext, useMemo, useState, useEffect, useCallback } from 'react';
 import { ApiService, type HotkeyEntry } from '../services/api';
 
 interface HotkeyContextValue {
@@ -66,30 +66,30 @@ const fallbackHotkeys: HotkeyEntry[] = [
 
 // Key mapping for special keys
 const keyMap: Record<string, string> = {
-  'Backquote': '`',
-  'Backslash': '\\',
-  'BracketLeft': '[',
-  'BracketRight': ']',
-  'Comma': ',',
-  'Period': '.',
-  'Plus': '+',
-  'Quote': "'",
-  'Semicolon': ';',
-  'Slash': '/',
-  'Space': ' ',
-  'Tab': 'Tab',
-  'Enter': 'Enter',
-  'Escape': 'Escape',
-  'ArrowUp': 'Up',
-  'ArrowDown': 'Down',
-  'ArrowLeft': 'Left',
-  'ArrowRight': 'Right',
-  'Delete': 'Delete',
-  'Backspace': 'Backspace',
-  'Home': 'Home',
-  'End': 'End',
-  'PageUp': 'PageUp',
-  'PageDown': 'PageDown',
+  Backquote: '`',
+  Backslash: '\\',
+  BracketLeft: '[',
+  BracketRight: ']',
+  Comma: ',',
+  Period: '.',
+  Plus: '+',
+  Quote: "'",
+  Semicolon: ';',
+  Slash: '/',
+  Space: ' ',
+  Tab: 'Tab',
+  Enter: 'Enter',
+  Escape: 'Escape',
+  ArrowUp: 'Up',
+  ArrowDown: 'Down',
+  ArrowLeft: 'Left',
+  ArrowRight: 'Right',
+  Delete: 'Delete',
+  Backspace: 'Backspace',
+  Home: 'Home',
+  End: 'End',
+  PageUp: 'PageUp',
+  PageDown: 'PageDown',
 };
 
 // Build normalized key string from KeyboardEvent
@@ -111,16 +111,53 @@ export function buildKeyString(event: KeyboardEvent): string {
     key = event.code;
     // Map event.code values to human-readable key names
     const codeToKey: Record<string, string> = {
-      'Digit0': '0', 'Digit1': '1', 'Digit2': '2', 'Digit3': '3', 'Digit4': '4',
-      'Digit5': '5', 'Digit6': '6', 'Digit7': '7', 'Digit8': '8', 'Digit9': '9',
-      'KeyA': 'A', 'KeyB': 'B', 'KeyC': 'C', 'KeyD': 'D', 'KeyE': 'E', 'KeyF': 'F',
-      'KeyG': 'G', 'KeyH': 'H', 'KeyI': 'I', 'KeyJ': 'J', 'KeyK': 'K', 'KeyL': 'L',
-      'KeyM': 'M', 'KeyN': 'N', 'KeyO': 'O', 'KeyP': 'P', 'KeyQ': 'Q', 'KeyR': 'R',
-      'KeyS': 'S', 'KeyT': 'T', 'KeyU': 'U', 'KeyV': 'V', 'KeyW': 'W', 'KeyX': 'X',
-      'KeyY': 'Y', 'KeyZ': 'Z',
-      'BracketLeft': '[', 'BracketRight': ']', 'Backquote': '`', 'Backslash': '\\',
-      'Semicolon': ';', 'Quote': "'", 'Comma': ',', 'Period': '.', 'Slash': '/',
-      'Minus': '-', 'Equal': '=',
+      Digit0: '0',
+      Digit1: '1',
+      Digit2: '2',
+      Digit3: '3',
+      Digit4: '4',
+      Digit5: '5',
+      Digit6: '6',
+      Digit7: '7',
+      Digit8: '8',
+      Digit9: '9',
+      KeyA: 'A',
+      KeyB: 'B',
+      KeyC: 'C',
+      KeyD: 'D',
+      KeyE: 'E',
+      KeyF: 'F',
+      KeyG: 'G',
+      KeyH: 'H',
+      KeyI: 'I',
+      KeyJ: 'J',
+      KeyK: 'K',
+      KeyL: 'L',
+      KeyM: 'M',
+      KeyN: 'N',
+      KeyO: 'O',
+      KeyP: 'P',
+      KeyQ: 'Q',
+      KeyR: 'R',
+      KeyS: 'S',
+      KeyT: 'T',
+      KeyU: 'U',
+      KeyV: 'V',
+      KeyW: 'W',
+      KeyX: 'X',
+      KeyY: 'Y',
+      KeyZ: 'Z',
+      BracketLeft: '[',
+      BracketRight: ']',
+      Backquote: '`',
+      Backslash: '\\',
+      Semicolon: ';',
+      Quote: "'",
+      Comma: ',',
+      Period: '.',
+      Slash: '/',
+      Minus: '-',
+      Equal: '=',
     };
     key = codeToKey[key] || key;
   } else {
@@ -154,10 +191,13 @@ export const HotkeyProvider: React.FC<HotkeyProviderProps> = ({ children }) => {
 
   // Apply a named preset (e.g. "vscode", "webstorm", "ledit") by saving it
   // server-side, then reloading.
-  const applyPreset = useCallback(async (preset: string) => {
-    await apiService.applyHotkeyPreset(preset);
-    await loadHotkeys();
-  }, [loadHotkeys]);
+  const applyPreset = useCallback(
+    async (preset: string) => {
+      await apiService.applyHotkeyPreset(preset);
+      await loadHotkeys();
+    },
+    [loadHotkeys],
+  );
 
   // Global keydown handler
   useEffect(() => {
@@ -169,7 +209,7 @@ export const HotkeyProvider: React.FC<HotkeyProviderProps> = ({ children }) => {
 
       let matchingHotkey: HotkeyEntry | undefined;
       if (hotkeys) {
-        matchingHotkey = hotkeys.find(entry => {
+        matchingHotkey = hotkeys.find((entry) => {
           let storedKey = entry.key;
           if (mac) {
             storedKey = storedKey.replace(/\bCtrl\b/g, 'Cmd');
@@ -194,23 +234,23 @@ export const HotkeyProvider: React.FC<HotkeyProviderProps> = ({ children }) => {
 
       if (matchingHotkey) {
         const target = event.target as HTMLElement;
-        const isInputFocused = target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.isContentEditable;
+        const isInputFocused = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
 
         if (isInputFocused && !matchingHotkey.global) return;
 
         event.preventDefault();
         event.stopPropagation();
 
-        window.dispatchEvent(new CustomEvent('ledit:hotkey', {
-          detail: {
-            commandId: matchingHotkey.command_id,
-            key: matchingHotkey.key,
-          },
-          bubbles: true,
-          cancelable: true,
-        }));
+        window.dispatchEvent(
+          new CustomEvent('ledit:hotkey', {
+            detail: {
+              commandId: matchingHotkey.command_id,
+              key: matchingHotkey.key,
+            },
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
       }
     };
 
@@ -218,7 +258,9 @@ export const HotkeyProvider: React.FC<HotkeyProviderProps> = ({ children }) => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [hotkeys, isLoaded]);
 
-  useEffect(() => { loadHotkeys(); }, [loadHotkeys]);
+  useEffect(() => {
+    loadHotkeys();
+  }, [loadHotkeys]);
 
   // Listen for Electron desktop hotkey events that bypass Chromium's
   // keyboard shortcut interception (e.g. Ctrl+Shift+W would otherwise
@@ -231,54 +273,57 @@ export const HotkeyProvider: React.FC<HotkeyProviderProps> = ({ children }) => {
 
     const cleanup = desktop.onDesktopHotkey((commandId: string) => {
       // Look up the hotkey to check its global flag.
-      const entry = fallbackHotkeys.find(h => h.command_id === commandId)
-        || (hotkeys ?? []).find(h => h.command_id === commandId);
+      const entry =
+        fallbackHotkeys.find((h) => h.command_id === commandId) ||
+        (hotkeys ?? []).find((h) => h.command_id === commandId);
 
       if (entry && !entry.global) {
         const activeEl = document.activeElement as HTMLElement | null;
-        if (activeEl?.tagName === 'INPUT' ||
-            activeEl?.tagName === 'TEXTAREA' ||
-            activeEl?.isContentEditable) {
+        if (activeEl?.tagName === 'INPUT' || activeEl?.tagName === 'TEXTAREA' || activeEl?.isContentEditable) {
           return;
         }
       }
 
-      window.dispatchEvent(new CustomEvent('ledit:hotkey', {
-        detail: { commandId, key: '(desktop)' },
-        bubbles: true,
-        cancelable: true,
-      }));
+      window.dispatchEvent(
+        new CustomEvent('ledit:hotkey', {
+          detail: { commandId, key: '(desktop)' },
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
     });
 
     return cleanup;
   }, [hotkeys]);
 
-  const hotkeyForCommand = useCallback((commandId: string): string | null => {
-    if (!hotkeys) return null;
-    const entry = hotkeys.find(h => h.command_id === commandId);
-    if (!entry) return null;
-    let displayKey = entry.key;
-    if (isMac()) {
-      displayKey = displayKey.replace(/\bCtrl\b/g, 'Cmd');
-    } else {
-      displayKey = displayKey.replace(/\bCmd\b/g, 'Ctrl');
-    }
-    return displayKey;
-  }, [hotkeys]);
-
-  const value = useMemo(() => ({
-    hotkeys,
-    loadHotkeys,
-    applyPreset,
-    hotkeyForCommand,
-    isLoaded,
-  }), [hotkeys, loadHotkeys, applyPreset, hotkeyForCommand, isLoaded]);
-
-  return (
-    <HotkeyContext.Provider value={value}>
-      {children}
-    </HotkeyContext.Provider>
+  const hotkeyForCommand = useCallback(
+    (commandId: string): string | null => {
+      if (!hotkeys) return null;
+      const entry = hotkeys.find((h) => h.command_id === commandId);
+      if (!entry) return null;
+      let displayKey = entry.key;
+      if (isMac()) {
+        displayKey = displayKey.replace(/\bCtrl\b/g, 'Cmd');
+      } else {
+        displayKey = displayKey.replace(/\bCmd\b/g, 'Ctrl');
+      }
+      return displayKey;
+    },
+    [hotkeys],
   );
+
+  const value = useMemo(
+    () => ({
+      hotkeys,
+      loadHotkeys,
+      applyPreset,
+      hotkeyForCommand,
+      isLoaded,
+    }),
+    [hotkeys, loadHotkeys, applyPreset, hotkeyForCommand, isLoaded],
+  );
+
+  return <HotkeyContext.Provider value={value}>{children}</HotkeyContext.Provider>;
 };
 
 export default HotkeyContext;

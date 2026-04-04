@@ -38,34 +38,40 @@ export function useModelProviderHandlers({
     providerRef.current = state.provider;
   }, [state.provider]);
 
-  const handleModelChange = useCallback((model: string) => {
-    debugLog('Model changed to:', model);
-    const provider = pendingProviderRef.current || providerRef.current;
-    setState(prev => ({
-      ...prev,
-      model,
-    }));
-    wsService.sendEvent({
-      type: 'model_change',
-      data: { provider, model },
-    });
-  }, [wsService]);
+  const handleModelChange = useCallback(
+    (model: string) => {
+      debugLog('Model changed to:', model);
+      const provider = pendingProviderRef.current || providerRef.current;
+      setState((prev) => ({
+        ...prev,
+        model,
+      }));
+      wsService.sendEvent({
+        type: 'model_change',
+        data: { provider, model },
+      });
+    },
+    [wsService],
+  );
 
-  const handleProviderChange = useCallback((provider: string) => {
-    debugLog('Provider changed to:', provider);
-    pendingProviderRef.current = provider;
-    setState(prev => ({
-      ...prev,
-      provider,
-    }));
-    wsService.sendEvent({
-      type: 'provider_change',
-      data: { provider },
-    });
-  }, [wsService]);
+  const handleProviderChange = useCallback(
+    (provider: string) => {
+      debugLog('Provider changed to:', provider);
+      pendingProviderRef.current = provider;
+      setState((prev) => ({
+        ...prev,
+        provider,
+      }));
+      wsService.sendEvent({
+        type: 'provider_change',
+        data: { provider },
+      });
+    },
+    [wsService],
+  );
 
   const handleViewChange = useCallback((view: 'chat' | 'editor' | 'git') => {
-    setState(prev => ({
+    setState((prev) => ({
       ...prev,
       currentView: view,
     }));

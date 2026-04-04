@@ -15,8 +15,8 @@ interface TodoPanelProps {
 
 const TodoPanel: React.FC<TodoPanelProps> = ({ todos, isLoading = false }) => {
   const total = todos.length;
-  const completed = todos.filter(t => t.status === 'completed').length;
-  const active = todos.filter(t => t.status === 'pending' || t.status === 'in_progress').length;
+  const completed = todos.filter((t) => t.status === 'completed').length;
+  const active = todos.filter((t) => t.status === 'pending' || t.status === 'in_progress').length;
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
   const showLoadingState = isLoading && total === 0;
 
@@ -84,20 +84,12 @@ const TodoPanel: React.FC<TodoPanelProps> = ({ todos, isLoading = false }) => {
         </span>
       </div>
       <div className="todo-progress-bar">
-        <div 
-          className="todo-progress-fill" 
-          style={{ width: `${pct}%` }} 
-        />
+        <div className="todo-progress-fill" style={{ width: `${pct}%` }} />
       </div>
       <div className="todo-list">
         {todos.map((todo) => (
-          <div 
-            key={todo.id} 
-            className={`todo-item todo-${todo.status}`}
-          >
-            <span className="todo-status-icon">
-              {getStatusIcon(todo.status)}
-            </span>
+          <div key={todo.id} className={`todo-item todo-${todo.status}`}>
+            <span className="todo-status-icon">{getStatusIcon(todo.status)}</span>
             <span className="todo-content">{todo.content}</span>
           </div>
         ))}

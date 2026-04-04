@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { act } from 'react';
@@ -172,7 +171,7 @@ function fireContextMenuOnMatch() {
       cancelable: true,
       clientX: 100,
       clientY: 200,
-    })
+    }),
   );
 }
 
@@ -186,7 +185,7 @@ function fireContextMenuOnFileHeader() {
       cancelable: true,
       clientX: 100,
       clientY: 200,
-    })
+    }),
   );
 }
 
@@ -263,9 +262,7 @@ describe('SearchView context menu - clipboard and editor actions', () => {
     fireContextMenuOnMatch();
     await flushPromises();
 
-    const copyBtn = getContextItems().find((item) =>
-      item.textContent?.includes('Copy line text')
-    );
+    const copyBtn = getContextItems().find((item) => item.textContent?.includes('Copy line text'));
     expect(copyBtn).toBeDefined();
 
     await act(async () => {
@@ -282,9 +279,7 @@ describe('SearchView context menu - clipboard and editor actions', () => {
     fireContextMenuOnMatch();
     await flushPromises();
 
-    const copyBtn = getContextItems().find((item) =>
-      item.textContent?.includes('Copy file path')
-    );
+    const copyBtn = getContextItems().find((item) => item.textContent?.includes('Copy file path'));
     expect(copyBtn).toBeDefined();
 
     await act(async () => {
@@ -302,9 +297,7 @@ describe('SearchView context menu - clipboard and editor actions', () => {
     fireContextMenuOnMatch();
     await flushPromises();
 
-    const openBtn = getContextItems().find((item) =>
-      item.textContent?.includes('Open in editor')
-    );
+    const openBtn = getContextItems().find((item) => item.textContent?.includes('Open in editor'));
     expect(openBtn).toBeDefined();
 
     await act(async () => {
@@ -327,9 +320,7 @@ describe('SearchView context menu - exclude functionality', () => {
     fireContextMenuOnMatch();
     await flushPromises();
 
-    const excludeBtn = getContextItems().find((item) =>
-      item.textContent?.includes('Exclude folder')
-    );
+    const excludeBtn = getContextItems().find((item) => item.textContent?.includes('Exclude folder'));
     expect(excludeBtn).toBeDefined();
 
     await act(async () => {
@@ -356,9 +347,7 @@ describe('SearchView context menu - exclude functionality', () => {
     fireContextMenuOnFileHeader();
     await flushPromises();
 
-    const excludeBtn = getContextItems().find((item) =>
-      item.textContent?.includes('Exclude file')
-    );
+    const excludeBtn = getContextItems().find((item) => item.textContent?.includes('Exclude file'));
     expect(excludeBtn).toBeDefined();
 
     await act(async () => {
@@ -367,9 +356,7 @@ describe('SearchView context menu - exclude functionality', () => {
     await flushPromises();
 
     expect(document.querySelector('.search-exclude-indicator')).not.toBeNull();
-    expect(document.querySelector('.search-exclude-patterns')!.textContent).toContain(
-      'src/components/App.tsx'
-    );
+    expect(document.querySelector('.search-exclude-patterns')!.textContent).toContain('src/components/App.tsx');
 
     // Only 1 file group should remain
     expect(document.querySelectorAll('.search-file-group').length).toBe(1);
@@ -381,9 +368,7 @@ describe('SearchView context menu - exclude functionality', () => {
     // Exclude from file header (exclude the file, not folder)
     fireContextMenuOnFileHeader();
     await flushPromises();
-    const excludeBtn = getContextItems().find((item) =>
-      item.textContent?.includes('Exclude file')
-    );
+    const excludeBtn = getContextItems().find((item) => item.textContent?.includes('Exclude file'));
     await act(async () => {
       (excludeBtn as HTMLElement).click();
     });
@@ -399,14 +384,12 @@ describe('SearchView context menu - exclude functionality', () => {
         cancelable: true,
         clientX: 100,
         clientY: 200,
-      })
+      }),
     );
     await flushPromises();
 
     // The remaining file is NOT excluded, so the button should NOT be disabled
-    const excludeBtn2 = getContextItems().find((item) =>
-      item.textContent?.includes('Exclude file')
-    );
+    const excludeBtn2 = getContextItems().find((item) => item.textContent?.includes('Exclude file'));
     expect(excludeBtn2).toBeDefined();
     expect((excludeBtn2 as HTMLElement).classList.contains('disabled')).toBe(false);
   });
@@ -417,9 +400,7 @@ describe('SearchView context menu - exclude functionality', () => {
     // Exclude first
     fireContextMenuOnMatch();
     await flushPromises();
-    const excludeBtn = getContextItems().find((item) =>
-      item.textContent?.includes('Exclude folder')
-    );
+    const excludeBtn = getContextItems().find((item) => item.textContent?.includes('Exclude folder'));
     await act(async () => {
       (excludeBtn as HTMLElement).click();
     });
@@ -456,9 +437,7 @@ describe('SearchView context menu - dismissal', () => {
 
     // Simulate mousedown on body (outside the menu)
     await act(async () => {
-      document.body.dispatchEvent(
-        new MouseEvent('mousedown', { bubbles: true, clientX: 0, clientY: 0 })
-      );
+      document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: 0, clientY: 0 }));
     });
     await flushPromises();
 

@@ -33,7 +33,7 @@ export function getWebUIClientId(): string {
     return 'default';
   }
 
-  let existing = window.sessionStorage.getItem(WEBUI_CLIENT_ID_STORAGE_KEY);
+  const existing = window.sessionStorage.getItem(WEBUI_CLIENT_ID_STORAGE_KEY);
   if (existing) {
     return existing;
   }
@@ -128,4 +128,3 @@ export async function clientFetch(input: RequestInfo | URL, init?: RequestInit):
   }
   return fetch(url, { ...init, headers });
 }
-

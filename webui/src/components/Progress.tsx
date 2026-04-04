@@ -22,7 +22,7 @@ const Progress: React.FC<ProgressProps> = ({ items }) => {
       const now = Date.now();
       const newElapsed: { [key: string]: number } = {};
 
-      items.forEach(item => {
+      items.forEach((item) => {
         if (!item.done) {
           newElapsed[item.id] = Math.floor((now - item.startTime) / 1000);
         }
@@ -63,7 +63,7 @@ const Progress: React.FC<ProgressProps> = ({ items }) => {
 
   return (
     <div className="progress-container">
-      {items.map(item => (
+      {items.map((item) => (
         <div key={item.id} className={`progress-item ${item.done ? 'done' : 'active'}`}>
           <div className="progress-header">
             <div className="progress-message">{item.message}</div>
@@ -78,7 +78,7 @@ const Progress: React.FC<ProgressProps> = ({ items }) => {
               className="progress-bar"
               style={{
                 width: `${getPercentage(item)}%`,
-                backgroundColor: getProgressBarColor(item)
+                backgroundColor: getProgressBarColor(item),
               }}
             />
           </div>
@@ -87,9 +87,7 @@ const Progress: React.FC<ProgressProps> = ({ items }) => {
             <span className="progress-count">
               {item.total > 0 ? `${item.current}/${item.total}` : `${item.current} items`}
             </span>
-            <span className="progress-percentage">
-              {getPercentage(item)}%
-            </span>
+            <span className="progress-percentage">{getPercentage(item)}%</span>
           </div>
         </div>
       ))}

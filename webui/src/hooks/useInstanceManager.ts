@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ApiService, LeditInstance } from '../services/api';
+import { type ApiService, type LeditInstance } from '../services/api';
 import { INSTANCE_PID_STORAGE_KEY, INSTANCE_SWITCH_RESET_KEY } from '../constants/app';
 
 export interface UseInstanceManagerOptions {
@@ -14,10 +14,7 @@ export interface UseInstanceManagerReturn {
   handleInstanceChange: (pid: number) => Promise<void>;
 }
 
-export function useInstanceManager({
-  isConnected,
-  apiService,
-}: UseInstanceManagerOptions): UseInstanceManagerReturn {
+export function useInstanceManager({ isConnected, apiService }: UseInstanceManagerOptions): UseInstanceManagerReturn {
   const [instances, setInstances] = useState<LeditInstance[]>([]);
   const [selectedInstancePID, setSelectedInstancePID] = useState<number>(0);
   const [isSwitchingInstance, setIsSwitchingInstance] = useState(false);
@@ -67,28 +64,31 @@ export function useInstanceManager({
     };
   }, [apiService, isConnected]);
 
-  const handleInstanceChange = useCallback(async (pid: number) => {
-    if (!Number.isFinite(pid) || pid <= 0 || pid === selectedInstancePID) {
-      return;
-    }
-
-    setIsSwitchingInstance(true);
-    try {
-      const targetInstance = instances.find((instance) => instance.pid === pid);
-      if (!targetInstance || !targetInstance.port) {
-        throw new Error('Selected instance is unavailable');
+  const handleInstanceChange = useCallback(
+    async (pid: number) => {
+      if (!Number.isFinite(pid) || pid <= 0 || pid === selectedInstancePID) {
+        return;
       }
 
-      window.localStorage.setItem(INSTANCE_PID_STORAGE_KEY, String(pid));
-      window.sessionStorage.setItem(INSTANCE_SWITCH_RESET_KEY, '1');
-      const nextURL = new URL(window.location.href);
-      nextURL.port = String(targetInstance.port);
-      window.location.assign(nextURL.toString());
-    } catch (error) {
-      console.error('Failed to switch instance:', error);
-      setIsSwitchingInstance(false);
-    }
-  }, [instances, selectedInstancePID]);
+      setIsSwitchingInstance(true);
+      try {
+        const targetInstance = instances.find((instance) => instance.pid === pid);
+        if (!targetInstance || !targetInstance.port) {
+          throw new Error('Selected instance is unavailable');
+        }
+
+        window.localStorage.setItem(INSTANCE_PID_STORAGE_KEY, String(pid));
+        window.sessionStorage.setItem(INSTANCE_SWITCH_RESET_KEY, '1');
+        const nextURL = new URL(window.location.href);
+        nextURL.port = String(targetInstance.port);
+        window.location.assign(nextURL.toString());
+      } catch (error) {
+        console.error('Failed to switch instance:', error);
+        setIsSwitchingInstance(false);
+      }
+    },
+    [instances, selectedInstancePID],
+  );
 
   return {
     instances,

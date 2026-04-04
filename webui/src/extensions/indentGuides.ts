@@ -21,14 +21,7 @@
  * - Cursor-line guides use `--cm-indent-guide-active` for a brighter look.
  */
 
-import {
-  Decoration,
-  DecorationSet,
-  EditorView,
-  ViewPlugin,
-  ViewUpdate,
-  WidgetType,
-} from '@codemirror/view';
+import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate, WidgetType } from '@codemirror/view';
 import { getIndentUnit } from '@codemirror/language';
 import { type Extension } from '@codemirror/state';
 
@@ -67,10 +60,7 @@ export function measureIndent(text: string, tabSize: number): number {
  * @returns Array of 0-based character offsets into `lineText` (i.e.
  *          "after this char, insert the widget").
  */
-export function computeGuidePositions(
-  lineText: string,
-  tabSize: number,
-): number[] {
+export function computeGuidePositions(lineText: string, tabSize: number): number[] {
   if (tabSize <= 0) return [];
 
   const indentCol = measureIndent(lineText, tabSize);
@@ -94,11 +84,7 @@ export function computeGuidePositions(
       const tabEnd = col + (tabSize - (col % tabSize));
       const firstBoundary = Math.ceil((col + 1) / tabSize) * tabSize;
 
-      for (
-        let g = firstBoundary;
-        g <= tabEnd && emitted < numGuides;
-        g += tabSize
-      ) {
+      for (let g = firstBoundary; g <= tabEnd && emitted < numGuides; g += tabSize) {
         // Dedup: multiple boundaries in a single tab map to the same offset.
         if (positions.length === 0 || positions[positions.length - 1] !== i + 1) {
           positions.push(i + 1);
@@ -127,9 +113,7 @@ class IndentGuideWidget extends WidgetType {
 
   toDOM(): HTMLElement {
     const span = document.createElement('span');
-    span.className = this.active
-      ? 'cm-indent-guide cm-indent-guide-active'
-      : 'cm-indent-guide';
+    span.className = this.active ? 'cm-indent-guide cm-indent-guide-active' : 'cm-indent-guide';
     span.setAttribute('aria-hidden', 'true');
     return span;
   }
@@ -166,23 +150,15 @@ const guidePlugin = ViewPlugin.fromClass(
       // Initialise cursor-line cache so the first selection-only update
       // can short-circuit when the head hasn't moved lines.
       const sel = view.state.selection.main;
-      this.lastCursorLine = view.state.doc.length > 0
-        ? view.state.doc.lineAt(sel.head).number
-        : -1;
+      this.lastCursorLine = view.state.doc.length > 0 ? view.state.doc.lineAt(sel.head).number : -1;
     }
 
     update(update: ViewUpdate): void {
       // Structural changes always require a full rebuild.
-      if (
-        update.viewportChanged ||
-        update.docChanged ||
-        update.transactions.some((t) => t.reconfigured)
-      ) {
+      if (update.viewportChanged || update.docChanged || update.transactions.some((t) => t.reconfigured)) {
         this.decorations = this.buildDecorations(update.view);
         const sel = update.state.selection.main;
-        this.lastCursorLine = update.state.doc.length > 0
-          ? update.state.doc.lineAt(sel.head).number
-          : -1;
+        this.lastCursorLine = update.state.doc.length > 0 ? update.state.doc.lineAt(sel.head).number : -1;
         return;
       }
 
@@ -190,9 +166,7 @@ const guidePlugin = ViewPlugin.fromClass(
       // different line (active-guide highlighting changes).
       if (update.selectionSet) {
         const sel = update.state.selection.main;
-        const newLine = update.state.doc.length > 0
-          ? update.state.doc.lineAt(sel.head).number
-          : -1;
+        const newLine = update.state.doc.length > 0 ? update.state.doc.lineAt(sel.head).number : -1;
         if (newLine !== this.lastCursorLine) {
           this.lastCursorLine = newLine;
           this.decorations = this.buildDecorations(update.view);
@@ -220,17 +194,10 @@ const guidePlugin = ViewPlugin.fromClass(
 
       // Cursor line for active-guide highlighting.
       const sel = view.state.selection.main;
-      const cursorLine = view.state.doc.length > 0
-        ? view.state.doc.lineAt(sel.head).number
-        : -1;
+      const cursorLine = view.state.doc.length > 0 ? view.state.doc.lineAt(sel.head).number : -1;
 
       // Walk visible lines.
-      let pos =
-        viewFrom > 0
-          ? view.state.doc.lineAt(viewFrom).from
-          : view.state.doc.length > 0
-            ? 0
-            : viewTo;
+      let pos = viewFrom > 0 ? view.state.doc.lineAt(viewFrom).from : view.state.doc.length > 0 ? 0 : viewTo;
 
       while (pos < viewTo && pos < view.state.doc.length) {
         const line = view.state.doc.lineAt(pos);
@@ -309,22 +276,19 @@ const indentGuideBaseTheme = EditorView.baseTheme({
     background: 'var(--cm-indent-guide, rgba(128, 128, 128, 0.2))',
   },
   '.cm-indent-guide-active::after': {
-    background:
-      'var(--cm-indent-guide-active, rgba(128, 128, 128, 0.38))',
+    background: 'var(--cm-indent-guide-active, rgba(128, 128, 128, 0.38))',
   },
   '&dark .cm-indent-guide::after': {
     background: 'var(--cm-indent-guide, rgba(128, 128, 128, 0.15))',
   },
   '&dark .cm-indent-guide-active::after': {
-    background:
-      'var(--cm-indent-guide-active, rgba(180, 180, 180, 0.35))',
+    background: 'var(--cm-indent-guide-active, rgba(180, 180, 180, 0.35))',
   },
   '&light .cm-indent-guide::after': {
     background: 'var(--cm-indent-guide, rgba(0, 0, 0, 0.1))',
   },
   '&light .cm-indent-guide-active::after': {
-    background:
-      'var(--cm-indent-guide-active, rgba(0, 0, 0, 0.22))',
+    background: 'var(--cm-indent-guide-active, rgba(0, 0, 0, 0.22))',
   },
 });
 

@@ -45,7 +45,7 @@ export function useGitActions(): UseGitActionsReturn {
 
       const data = await response.json();
       debugLog('Commit successful:', data);
-      setGitRefreshToken(k => k + 1);
+      setGitRefreshToken((k) => k + 1);
       return data;
     } catch (err) {
       console.error('Failed to commit:', err);
@@ -74,7 +74,7 @@ export function useGitActions(): UseGitActionsReturn {
           throw new Error(`Failed to stage ${file}`);
         }
       }
-      setGitRefreshToken(k => k + 1);
+      setGitRefreshToken((k) => k + 1);
     } catch (err) {
       console.error('Failed to stage files:', err);
       throw err;
@@ -94,7 +94,7 @@ export function useGitActions(): UseGitActionsReturn {
           throw new Error(`Failed to unstage ${file}`);
         }
       }
-      setGitRefreshToken(k => k + 1);
+      setGitRefreshToken((k) => k + 1);
     } catch (err) {
       console.error('Failed to unstage files:', err);
       throw err;
@@ -114,7 +114,7 @@ export function useGitActions(): UseGitActionsReturn {
           throw new Error(`Failed to discard ${file}`);
         }
       }
-      setGitRefreshToken(k => k + 1);
+      setGitRefreshToken((k) => k + 1);
     } catch (err) {
       console.error('Failed to discard files:', err);
       throw err;

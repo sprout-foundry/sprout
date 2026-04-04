@@ -7,11 +7,7 @@ interface LeditLogoProps {
   className?: string;
 }
 
-const LeditLogo: React.FC<LeditLogoProps> = ({
-  showWordmark = true,
-  compact = false,
-  className = '',
-}) => {
+const LeditLogo: React.FC<LeditLogoProps> = ({ showWordmark = true, compact = false, className = '' }) => {
   const logoTitleId = React.useId();
 
   return (

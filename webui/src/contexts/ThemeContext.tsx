@@ -1,12 +1,12 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, ReactNode } from 'react';
-import { HighlightStyle } from '@codemirror/language';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react';
+import { type HighlightStyle } from '@codemirror/language';
 import {
   DEFAULT_THEME_PACK_ID,
   getThemePackForMode,
   THEME_PACKS,
   THEME_VARIABLE_KEYS,
-  ThemeMode,
-  ThemePack
+  type ThemeMode,
+  type ThemePack,
 } from '../themes/themePacks';
 import { ThemeImporter, type VSCodeTheme, type ImportResult } from '../themes/themeImport';
 
@@ -78,11 +78,16 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   // Merge built-in + imported themes
   const allPacks = useMemo(() => [...THEME_PACKS, ...importedThemes], [importedThemes]);
 
-  const getValidPack = useCallback((id: string): ThemePack => {
-    return allPacks.find((pack) => pack.id === id) ||
-      allPacks.find((pack) => pack.id === DEFAULT_THEME_PACK_ID) ||
-      allPacks[0];
-  }, [allPacks]);
+  const getValidPack = useCallback(
+    (id: string): ThemePack => {
+      return (
+        allPacks.find((pack) => pack.id === id) ||
+        allPacks.find((pack) => pack.id === DEFAULT_THEME_PACK_ID) ||
+        allPacks[0]
+      );
+    },
+    [allPacks],
+  );
 
   const themePack = getValidPack(themePackID);
   const theme = themePack.mode;
@@ -115,12 +120,15 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     localStorage.setItem(THEME_PACK_STORAGE_KEY, nextPack.id);
   }, []);
 
-  const setThemePack = useCallback((nextThemePackID: string) => {
-    const nextPack = getValidPack(nextThemePackID);
-    setThemePackID(nextPack.id);
-    localStorage.setItem(THEME_PACK_STORAGE_KEY, nextPack.id);
-    localStorage.setItem(THEME_STORAGE_KEY, nextPack.mode);
-  }, [getValidPack]);
+  const setThemePack = useCallback(
+    (nextThemePackID: string) => {
+      const nextPack = getValidPack(nextThemePackID);
+      setThemePackID(nextPack.id);
+      localStorage.setItem(THEME_PACK_STORAGE_KEY, nextPack.id);
+      localStorage.setItem(THEME_STORAGE_KEY, nextPack.mode);
+    },
+    [getValidPack],
+  );
 
   const importTheme = useCallback((jsonString: string): ImportResult => {
     let parsed: VSCodeTheme;
@@ -161,20 +169,23 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     return result;
   }, []);
 
-  const removeTheme = useCallback((id: string) => {
-    setImportedThemes((prev) => {
-      const updated = prev.filter((t) => t.id !== id);
-      saveImportedThemes(updated);
-      return updated;
-    });
+  const removeTheme = useCallback(
+    (id: string) => {
+      setImportedThemes((prev) => {
+        const updated = prev.filter((t) => t.id !== id);
+        saveImportedThemes(updated);
+        return updated;
+      });
 
-    // If we removed the active theme, fall back to built-in
-    if (themePackID === id) {
-      const fallback = getThemePackForMode(theme);
-      setThemePackID(fallback.id);
-      localStorage.setItem(THEME_PACK_STORAGE_KEY, fallback.id);
-    }
-  }, [themePackID, theme]);
+      // If we removed the active theme, fall back to built-in
+      if (themePackID === id) {
+        const fallback = getThemePackForMode(theme);
+        setThemePackID(fallback.id);
+        localStorage.setItem(THEME_PACK_STORAGE_KEY, fallback.id);
+      }
+    },
+    [themePackID, theme],
+  );
 
   // Update CSS variable tokens and document attributes for global theming
   useEffect(() => {
@@ -201,9 +212,5 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     removeTheme,
   };
 
-  return (
-    <ThemeContext.Provider value={value}>
-      {children}
-    </ThemeContext.Provider>
-  );
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 };

@@ -25,7 +25,10 @@ export interface FuzzyResult<T> {
  *
  * Returns `{ score, matches }` where `score < 0` means no match.
  */
-export function fuzzyScore(query: string, label: string): {
+export function fuzzyScore(
+  query: string,
+  label: string,
+): {
   score: number;
   matches: Array<[number, number]>;
 } {
@@ -93,12 +96,7 @@ export function fuzzyScore(query: string, label: string): {
  * @param getLabel - Extract the searchable string from an item.
  * @param limit - Max results to return.
  */
-export function fuzzyFilter<T>(
-  query: string,
-  items: T[],
-  getLabel: (item: T) => string,
-  limit = 50,
-): FuzzyResult<T>[] {
+export function fuzzyFilter<T>(query: string, items: T[], getLabel: (item: T) => string, limit = 50): FuzzyResult<T>[] {
   if (!query) return [];
 
   const results: FuzzyResult<T>[] = [];

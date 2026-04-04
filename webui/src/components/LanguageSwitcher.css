@@ -13,7 +13,9 @@
   color: var(--toolbar-fg, #ccc);
   font-size: 11px;
   white-space: nowrap;
-  transition: background-color 0.15s, color 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
 }
 
 .language-switcher-button:hover {
@@ -48,8 +50,14 @@
 }
 
 @keyframes lang-switcher-in {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ── Search ── */

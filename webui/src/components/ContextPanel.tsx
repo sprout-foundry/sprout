@@ -1,4 +1,13 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo, type ReactNode, useImperativeHandle, forwardRef } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+  type ReactNode,
+  useImperativeHandle,
+  forwardRef,
+} from 'react';
 import {
   Wrench,
   History,
@@ -234,7 +243,9 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   const panelContainerRef = useRef<HTMLDivElement>(null);
 
   // ── Chat-specific state ──────────────────────────────────────────
-  const [chatTab, setChatTab] = useState<'subagents' | 'tools' | 'changes' | 'tasks' | 'status' | 'sessions'>('subagents');
+  const [chatTab, setChatTab] = useState<'subagents' | 'tools' | 'changes' | 'tasks' | 'status' | 'sessions'>(
+    'subagents',
+  );
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
   const [expandedSubagents, setExpandedSubagents] = useState<Set<string>>(new Set());
   const [activeToolId, setActiveToolId] = useState<string | null>(null);
@@ -297,35 +308,39 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   }, [apiService]);
 
   // ── Public API via ref ───────────────────────────────────────────
-  useImperativeHandle(ref, () => ({
-    openTab: (tab: string) => {
-      setPanelCollapsed(false);
-      if (context === 'chat' && ['subagents', 'tools', 'changes', 'tasks', 'status', 'sessions'].includes(tab)) {
-        setChatTab(tab as any);
-        if (tab === 'changes' && revisions.length === 0) {
-          loadRevisionHistory();
+  useImperativeHandle(
+    ref,
+    () => ({
+      openTab: (tab: string) => {
+        setPanelCollapsed(false);
+        if (context === 'chat' && ['subagents', 'tools', 'changes', 'tasks', 'status', 'sessions'].includes(tab)) {
+          setChatTab(tab as any);
+          if (tab === 'changes' && revisions.length === 0) {
+            loadRevisionHistory();
+          }
+          if (tab === 'sessions' && sessionsCount === 0) {
+            loadSessions();
+          }
         }
-        if (tab === 'sessions' && sessionsCount === 0) {
-          loadSessions();
-        }
-      }
-    },
-    highlightTool: (toolId: string) => {
-      if (context !== 'chat') return;
-      setPanelCollapsed(false);
-      setChatTab('tools');
-      setActiveToolId(toolId);
-      setTimeout(() => {
-        const el = toolRefs.current[toolId];
-        if (el != null) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
-      }, 100);
-    },
-    closePanel: () => {
-      setPanelCollapsed(true);
-    },
-  }), [context, revisions.length, sessionsCount, loadRevisionHistory, loadSessions]);
+      },
+      highlightTool: (toolId: string) => {
+        if (context !== 'chat') return;
+        setPanelCollapsed(false);
+        setChatTab('tools');
+        setActiveToolId(toolId);
+        setTimeout(() => {
+          const el = toolRefs.current[toolId];
+          if (el != null) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
+        }, 100);
+      },
+      closePanel: () => {
+        setPanelCollapsed(true);
+      },
+    }),
+    [context, revisions.length, sessionsCount, loadRevisionHistory, loadSessions],
+  );
 
   // ── Persistence ──────────────────────────────────────────────────
   useEffect(() => {
@@ -370,33 +385,36 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   }, [activeToolId]);
 
   // ── Resize handler ───────────────────────────────────────────────
-  const startResize = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setPanelCollapsed(false);
-    const startX = e.clientX;
-    const startWidth = panelWidth;
+  const startResize = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      setPanelCollapsed(false);
+      const startX = e.clientX;
+      const startWidth = panelWidth;
 
-    const onMouseMove = (moveEvent: MouseEvent) => {
-      const parentEl = panelContainerRef.current?.parentElement;
-      const parentWidth = parentEl ? parentEl.getBoundingClientRect().width : window.innerWidth;
-      const rawWidth = startWidth + (startX - moveEvent.clientX);
-      const maxByLayout = parentWidth - 260;
-      const clamped = Math.max(PANEL_MIN, Math.min(Math.min(PANEL_MAX, maxByLayout), rawWidth));
-      onPanelWidthChange?.(clamped);
-    };
+      const onMouseMove = (moveEvent: MouseEvent) => {
+        const parentEl = panelContainerRef.current?.parentElement;
+        const parentWidth = parentEl ? parentEl.getBoundingClientRect().width : window.innerWidth;
+        const rawWidth = startWidth + (startX - moveEvent.clientX);
+        const maxByLayout = parentWidth - 260;
+        const clamped = Math.max(PANEL_MIN, Math.min(Math.min(PANEL_MAX, maxByLayout), rawWidth));
+        onPanelWidthChange?.(clamped);
+      };
 
-    const onMouseUp = () => {
-      document.body.style.userSelect = '';
-      document.body.style.cursor = '';
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-    };
+      const onMouseUp = () => {
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+      };
 
-    document.body.style.userSelect = 'none';
-    document.body.style.cursor = 'col-resize';
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-  }, [onPanelWidthChange, panelWidth]);
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'col-resize';
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    },
+    [onPanelWidthChange, panelWidth],
+  );
 
   const isProcessing = context === 'chat' ? props.isProcessing : false;
 
@@ -406,11 +424,14 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
   // Stable primitives for the effect dependency array (avoids interval teardown on every render).
   // We only care about whether there's at least one message and its timestamp.
-  const msgArr: Array<{ timestamp: Date }> = ('messages' in props) ? (props as any).messages : [];
+  const msgArr: Array<{ timestamp: Date }> = 'messages' in props ? (props as any).messages : [];
   const messageCount = msgArr.length;
-  const firstMessageTs = messageCount > 0
-    ? (msgArr[0].timestamp instanceof Date ? msgArr[0].timestamp.getTime() : new Date(msgArr[0].timestamp).getTime())
-    : 0;
+  const firstMessageTs =
+    messageCount > 0
+      ? msgArr[0].timestamp instanceof Date
+        ? msgArr[0].timestamp.getTime()
+        : new Date(msgArr[0].timestamp).getTime()
+      : 0;
 
   useEffect(() => {
     if (!isProcessing || messageCount === 0) {
@@ -420,62 +441,78 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     const tick = () => setLiveDurationMs(Date.now() - firstMessageTs);
     tick();
     const id = setInterval(tick, 1000);
-    return () => { clearInterval(id); setLiveDurationMs(null); };
+    return () => {
+      clearInterval(id);
+      setLiveDurationMs(null);
+    };
   }, [isProcessing, messageCount, firstMessageTs]);
 
-  const handleRestoreSession = useCallback(async (sessionId: string) => {
-    if (isProcessing) {
-      setSessionRestoreError('Wait for current request to finish.');
-      return;
-    }
-    if (sessionId === currentSessionId) {
-      setSessionRestoreError('This is the current session.');
-      return;
-    }
-    if (!(await showThemedConfirm(`Restore session ${sessionId}?\n\nThis will replace the current conversation.`, { title: 'Restore Session', type: 'warning' }))) {
-      return;
-    }
-    setIsLoadingSessions(true);
-    setSessionRestoreError(null);
-    try {
-      const response = await apiService.restoreSession(sessionId);
-      if (response.messages?.length) {
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('ledit:session-restored', {
-            detail: { messages: response.messages }
-          }));
-        }, 400);
+  const handleRestoreSession = useCallback(
+    async (sessionId: string) => {
+      if (isProcessing) {
+        setSessionRestoreError('Wait for current request to finish.');
+        return;
       }
-      await loadSessions();
-    } catch (error) {
-      setSessionRestoreError(error instanceof Error ? error.message : 'Failed to restore session');
-    } finally {
-      setIsLoadingSessions(false);
-    }
-  }, [apiService, currentSessionId, isProcessing, loadSessions]);
+      if (sessionId === currentSessionId) {
+        setSessionRestoreError('This is the current session.');
+        return;
+      }
+      if (
+        !(await showThemedConfirm(`Restore session ${sessionId}?\n\nThis will replace the current conversation.`, {
+          title: 'Restore Session',
+          type: 'warning',
+        }))
+      ) {
+        return;
+      }
+      setIsLoadingSessions(true);
+      setSessionRestoreError(null);
+      try {
+        const response = await apiService.restoreSession(sessionId);
+        if (response.messages?.length) {
+          setTimeout(() => {
+            window.dispatchEvent(
+              new CustomEvent('ledit:session-restored', {
+                detail: { messages: response.messages },
+              }),
+            );
+          }, 400);
+        }
+        await loadSessions();
+      } catch (error) {
+        setSessionRestoreError(error instanceof Error ? error.message : 'Failed to restore session');
+      } finally {
+        setIsLoadingSessions(false);
+      }
+    },
+    [apiService, currentSessionId, isProcessing, loadSessions],
+  );
 
   const buildRevisionFileKey = useCallback((file: RevisionFile | RevisionDetailFile, index: number) => {
     return `${file.file_revision_hash || file.path}::${index}`;
   }, []);
 
-  const loadRevisionDetails = useCallback(async (revisionId: string) => {
-    if (!revisionId || revisionDetailsById[revisionId] || revisionDetailsLoading[revisionId]) return;
+  const loadRevisionDetails = useCallback(
+    async (revisionId: string) => {
+      if (!revisionId || revisionDetailsById[revisionId] || revisionDetailsLoading[revisionId]) return;
 
-    setRevisionDetailsLoading((prev) => ({ ...prev, [revisionId]: true }));
+      setRevisionDetailsLoading((prev) => ({ ...prev, [revisionId]: true }));
 
-    try {
-      const response = await apiService.getRevisionDetails(revisionId);
-      const detailsMap: Record<string, string> = {};
-      (response.revision?.files || []).forEach((file: RevisionDetailFile, index: number) => {
-        detailsMap[buildRevisionFileKey(file, index)] = file.diff || '';
-      });
-      setRevisionDetailsById((prev) => ({ ...prev, [revisionId]: detailsMap }));
-    } catch (error) {
-      console.error('Failed to load revision details:', error);
-    } finally {
-      setRevisionDetailsLoading((prev) => ({ ...prev, [revisionId]: false }));
-    }
-  }, [apiService, buildRevisionFileKey, revisionDetailsById, revisionDetailsLoading]);
+      try {
+        const response = await apiService.getRevisionDetails(revisionId);
+        const detailsMap: Record<string, string> = {};
+        (response.revision?.files || []).forEach((file: RevisionDetailFile, index: number) => {
+          detailsMap[buildRevisionFileKey(file, index)] = file.diff || '';
+        });
+        setRevisionDetailsById((prev) => ({ ...prev, [revisionId]: detailsMap }));
+      } catch (error) {
+        console.error('Failed to load revision details:', error);
+      } finally {
+        setRevisionDetailsLoading((prev) => ({ ...prev, [revisionId]: false }));
+      }
+    },
+    [apiService, buildRevisionFileKey, revisionDetailsById, revisionDetailsLoading],
+  );
 
   // ── Data loading triggers ────────────────────────────────────────
 
@@ -518,7 +555,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   // ── Toggle handlers ──────────────────────────────────────────────
 
   const toggleToolExpansion = (toolId: string) => {
-    setExpandedTools(prev => {
+    setExpandedTools((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(toolId)) newSet.delete(toolId);
       else newSet.add(toolId);
@@ -538,7 +575,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     });
   };
 
-// ── Chat helpers ─────────────────────────────────────────────────
+  // ── Chat helpers ─────────────────────────────────────────────────
 
   const isSubagentTool = (tool: ToolExecution) =>
     tool.tool === 'run_subagent' || tool.tool === 'run_parallel_subagents';
@@ -580,67 +617,70 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     return message.replace(/executing tool \[[^\]]+\]/i, `Running ${toolName}${suffix}`);
   }, []);
 
-  const normalizeSubagentActivity = useCallback((rawMessage: string) => {
-    const cleaned = stripAnsiCodes(rawMessage).trim();
-    const taskMatch = cleaned.match(/^→\s+\[([^\]]+)\]\s+Subagent:\s+(.*)$/);
-    if (taskMatch) {
-      const body = summarizeExecutionTarget(taskMatch[2].trim())
-        .replace(/^\[\d+\s*-\s*\d+%\]\s*/i, '')
-        .trim();
-      return {
-        taskId: taskMatch[1],
-        label: body,
-        isSpawn: false,
-      };
-    }
+  const normalizeSubagentActivity = useCallback(
+    (rawMessage: string) => {
+      const cleaned = stripAnsiCodes(rawMessage).trim();
+      const taskMatch = cleaned.match(/^→\s+\[([^\]]+)\]\s+Subagent:\s+(.*)$/);
+      if (taskMatch) {
+        const body = summarizeExecutionTarget(taskMatch[2].trim())
+          .replace(/^\[\d+\s*-\s*\d+%\]\s*/i, '')
+          .trim();
+        return {
+          taskId: taskMatch[1],
+          label: body,
+          isSpawn: false,
+        };
+      }
 
-    const spawnMatch = cleaned.match(/Spawning subagent \[([^\]]+)\]:\s*(.*)$/i);
-    if (spawnMatch) {
-      const spawnDetails = spawnMatch[2].trim();
+      const spawnMatch = cleaned.match(/Spawning subagent \[([^\]]+)\]:\s*(.*)$/i);
+      if (spawnMatch) {
+        const spawnDetails = spawnMatch[2].trim();
+        return {
+          taskId: undefined,
+          label: spawnDetails ? `Starting ${spawnMatch[1]} (${spawnDetails})` : `Starting ${spawnMatch[1]}`,
+          isSpawn: true,
+        };
+      }
+
+      const inlineMatch = cleaned.match(/^→\s+Subagent:\s+(.*)$/);
+      if (inlineMatch) {
+        const body = summarizeExecutionTarget(inlineMatch[1].trim())
+          .replace(/^\[\d+\s*-\s*\d+%\]\s*/i, '')
+          .trim();
+        return {
+          taskId: undefined,
+          label: body,
+          isSpawn: false,
+        };
+      }
+
       return {
         taskId: undefined,
-        label: spawnDetails ? `Starting ${spawnMatch[1]} (${spawnDetails})` : `Starting ${spawnMatch[1]}`,
-        isSpawn: true,
-      };
-    }
-
-    const inlineMatch = cleaned.match(/^→\s+Subagent:\s+(.*)$/);
-    if (inlineMatch) {
-      const body = summarizeExecutionTarget(inlineMatch[1].trim())
-        .replace(/^\[\d+\s*-\s*\d+%\]\s*/i, '')
-        .trim();
-      return {
-        taskId: undefined,
-        label: body,
+        label: summarizeExecutionTarget(cleaned),
         isSpawn: false,
       };
-    }
-
-    return {
-      taskId: undefined,
-      label: summarizeExecutionTarget(cleaned),
-      isSpawn: false,
-    };
-  }, [summarizeExecutionTarget]);
+    },
+    [summarizeExecutionTarget],
+  );
 
   const getToolIcon = (toolName: string): ReactNode => {
     const iconMap: { [key: string]: ReactNode } = {
-      'shell_command': <Terminal size={14} />,
-      'read_file': <BookOpen size={14} />,
-      'write_file': <Pencil size={14} />,
-      'edit_file': <FileEdit size={14} />,
-      'search_files': <Search size={14} />,
-      'analyze_ui_screenshot': <Eye size={14} />,
-      'analyze_image_content': <FlaskConical size={14} />,
-      'web_search': <Globe size={14} />,
-      'fetch_url': <ArrowDown size={14} />,
-      'TodoWrite': <ClipboardList size={14} />,
-      'TodoRead': <ClipboardList size={14} />,
-      'view_history': <ScrollText size={14} />,
-      'rollback_changes': <RotateCcw size={14} />,
-      'mcp_tools': <Wrench size={14} />,
-      'run_subagent': <Bot size={14} />,
-      'run_parallel_subagents': <Bot size={14} />,
+      shell_command: <Terminal size={14} />,
+      read_file: <BookOpen size={14} />,
+      write_file: <Pencil size={14} />,
+      edit_file: <FileEdit size={14} />,
+      search_files: <Search size={14} />,
+      analyze_ui_screenshot: <Eye size={14} />,
+      analyze_image_content: <FlaskConical size={14} />,
+      web_search: <Globe size={14} />,
+      fetch_url: <ArrowDown size={14} />,
+      TodoWrite: <ClipboardList size={14} />,
+      TodoRead: <ClipboardList size={14} />,
+      view_history: <ScrollText size={14} />,
+      rollback_changes: <RotateCcw size={14} />,
+      mcp_tools: <Wrench size={14} />,
+      run_subagent: <Bot size={14} />,
+      run_parallel_subagents: <Bot size={14} />,
     };
     return iconMap[toolName] || <Wrench size={14} />;
   };
@@ -661,11 +701,16 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
   const getStatusIcon = (status: string): ReactNode => {
     switch (status) {
-      case 'started': return <Rocket size={14} />;
-      case 'running': return <Zap size={14} />;
-      case 'completed': return <CheckCircle2 size={14} />;
-      case 'error': return <XCircle size={14} />;
-      default: return <Hourglass size={14} />;
+      case 'started':
+        return <Rocket size={14} />;
+      case 'running':
+        return <Zap size={14} />;
+      case 'completed':
+        return <CheckCircle2 size={14} />;
+      case 'error':
+        return <XCircle size={14} />;
+      default:
+        return <Hourglass size={14} />;
     }
   };
 
@@ -715,7 +760,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
   // ── Chat computed values ─────────────────────────────────────────
 
-  const chatProps = context === 'chat' ? props as ChatContextPanelProps : null;
+  const chatProps = context === 'chat' ? (props as ChatContextPanelProps) : null;
   const toolExecutions = useMemo(() => chatProps?.toolExecutions ?? [], [chatProps]);
   const currentTodos = chatProps?.currentTodos ?? [];
   const chatMessages = useMemo(() => chatProps?.messages ?? [], [chatProps]);
@@ -744,115 +789,130 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   const chatStats = chatProps?.stats ?? null;
 
   const subagentRuns = useMemo(() => {
-    return subagentToolExecutions
-      .filter(isSubagentTool)
-      .map((tool) => {
-        const structuredActivities = subagentActivities
-          .filter((activity) => {
-            if (activity.toolCallId) {
-              return activity.toolCallId === tool.id;
-            }
-            const ts = activity.timestamp instanceof Date ? activity.timestamp.getTime() : new Date(activity.timestamp).getTime();
-            const startMs = tool.startTime.getTime() - 500;
-            const endMs = (tool.endTime || new Date()).getTime() + 500;
-            return ts >= startMs && ts <= endMs;
-          })
-          .map((activity) => ({
-            id: activity.id,
-            timestamp: activity.timestamp,
-            taskId: activity.taskId,
-            label: activity.message,
-            isSpawn: activity.phase === 'spawn',
-          }));
-
-        const startMs = tool.startTime.getTime() - 500;
-        const endMs = (tool.endTime || new Date()).getTime() + 500;
-        const fallbackActivities = subagentLogs
-          .filter((log) => {
-            const message = getSubagentLogMessage(log);
-            if (!message) {
-              return false;
-            }
-            const ts = log.timestamp instanceof Date ? log.timestamp.getTime() : new Date(log.timestamp).getTime();
-            return ts >= startMs && ts <= endMs;
-          })
-          .map((log) => {
-            const message = getSubagentLogMessage(log) || '';
-            const normalized = normalizeSubagentActivity(message);
-            return {
-              id: log.id,
-              timestamp: log.timestamp,
-              taskId: normalized.taskId,
-              label: normalized.label,
-              isSpawn: normalized.isSpawn,
-            };
-          })
-          .filter((item, index, items) => {
-            if (!item.label) {
-              return false;
-            }
-            const previous = items[index - 1];
-            return !previous || previous.label !== item.label;
-          });
-        const activities = structuredActivities.length > 0 ? structuredActivities : fallbackActivities;
-
-        const taskGroups = activities.reduce<Record<string, typeof activities>>((acc, item) => {
-          const key = item.taskId || '__main__';
-          if (!acc[key]) {
-            acc[key] = [];
+    return subagentToolExecutions.filter(isSubagentTool).map((tool) => {
+      const structuredActivities = subagentActivities
+        .filter((activity) => {
+          if (activity.toolCallId) {
+            return activity.toolCallId === tool.id;
           }
-          acc[key].push(item);
-          return acc;
-        }, {});
-
-        const orderedTaskGroups = Object.entries(taskGroups).map(([taskId, items]) => ({
-          taskId: taskId === '__main__' ? null : taskId,
-          items,
-          latest: items[items.length - 1],
+          const ts =
+            activity.timestamp instanceof Date ? activity.timestamp.getTime() : new Date(activity.timestamp).getTime();
+          const startMs = tool.startTime.getTime() - 500;
+          const endMs = (tool.endTime || new Date()).getTime() + 500;
+          return ts >= startMs && ts <= endMs;
+        })
+        .map((activity) => ({
+          id: activity.id,
+          timestamp: activity.timestamp,
+          taskId: activity.taskId,
+          label: activity.message,
+          isSpawn: activity.phase === 'spawn',
         }));
 
-        return {
-          tool,
-          prompt: getSubagentPrompt(tool),
-          latestActivity: activities[activities.length - 1],
-          activities,
-          orderedTaskGroups,
-        };
-      });
+      const startMs = tool.startTime.getTime() - 500;
+      const endMs = (tool.endTime || new Date()).getTime() + 500;
+      const fallbackActivities = subagentLogs
+        .filter((log) => {
+          const message = getSubagentLogMessage(log);
+          if (!message) {
+            return false;
+          }
+          const ts = log.timestamp instanceof Date ? log.timestamp.getTime() : new Date(log.timestamp).getTime();
+          return ts >= startMs && ts <= endMs;
+        })
+        .map((log) => {
+          const message = getSubagentLogMessage(log) || '';
+          const normalized = normalizeSubagentActivity(message);
+          return {
+            id: log.id,
+            timestamp: log.timestamp,
+            taskId: normalized.taskId,
+            label: normalized.label,
+            isSpawn: normalized.isSpawn,
+          };
+        })
+        .filter((item, index, items) => {
+          if (!item.label) {
+            return false;
+          }
+          const previous = items[index - 1];
+          return !previous || previous.label !== item.label;
+        });
+      const activities = structuredActivities.length > 0 ? structuredActivities : fallbackActivities;
+
+      const taskGroups = activities.reduce<Record<string, typeof activities>>((acc, item) => {
+        const key = item.taskId || '__main__';
+        if (!acc[key]) {
+          acc[key] = [];
+        }
+        acc[key].push(item);
+        return acc;
+      }, {});
+
+      const orderedTaskGroups = Object.entries(taskGroups).map(([taskId, items]) => ({
+        taskId: taskId === '__main__' ? null : taskId,
+        items,
+        latest: items[items.length - 1],
+      }));
+
+      return {
+        tool,
+        prompt: getSubagentPrompt(tool),
+        latestActivity: activities[activities.length - 1],
+        activities,
+        orderedTaskGroups,
+      };
+    });
   }, [getSubagentLogMessage, normalizeSubagentActivity, subagentActivities, subagentLogs, subagentToolExecutions]);
 
   const activeToolCount = toolExecutions.filter(
-    (tool) => tool.status === 'started' || tool.status === 'running'
+    (tool) => tool.status === 'started' || tool.status === 'running',
   ).length;
 
   const activeSubagentCount = subagentRuns.filter(
-    ({ tool }) => tool.status === 'started' || tool.status === 'running'
+    ({ tool }) => tool.status === 'started' || tool.status === 'running',
   ).length;
 
   const historyCounts = revisions.length;
 
   const statusMetrics: StatusMetrics = useMemo(() => {
     if (context !== 'chat') {
-      return { userMsgs: 0, assistantMsgs: 0, totalMsgs: 0, completedTools: 0, failedTools: 0, activeTools: 0, totalTools: 0, totalAdditions: 0, totalDeletions: 0, filesTouched: 0, topTools: [], maxToolCount: 1, duration: 0 };
+      return {
+        userMsgs: 0,
+        assistantMsgs: 0,
+        totalMsgs: 0,
+        completedTools: 0,
+        failedTools: 0,
+        activeTools: 0,
+        totalTools: 0,
+        totalAdditions: 0,
+        totalDeletions: 0,
+        filesTouched: 0,
+        topTools: [],
+        maxToolCount: 1,
+        duration: 0,
+      };
     }
 
     const msgs = chatMessages;
-    const userMsgs = msgs.filter(m => m.type === 'user').length;
-    const assistantMsgs = msgs.filter(m => m.type === 'assistant').length;
-    const completedTools = toolExecutions.filter(t => t.status === 'completed').length;
-    const failedTools = toolExecutions.filter(t => t.status === 'error').length;
-    const activeTools = toolExecutions.filter(t => t.status === 'running' || t.status === 'started').length;
+    const userMsgs = msgs.filter((m) => m.type === 'user').length;
+    const assistantMsgs = msgs.filter((m) => m.type === 'assistant').length;
+    const completedTools = toolExecutions.filter((t) => t.status === 'completed').length;
+    const failedTools = toolExecutions.filter((t) => t.status === 'error').length;
+    const activeTools = toolExecutions.filter((t) => t.status === 'running' || t.status === 'started').length;
 
     const totalAdditions = chatFileEdits.reduce((sum, edit) => sum + (edit.linesAdded || 0), 0);
     const totalDeletions = chatFileEdits.reduce((sum, edit) => sum + (edit.linesDeleted || 0), 0);
 
     const touchedFiles = new Set<string>();
-    toolExecutions.forEach(t => {
+    toolExecutions.forEach((t) => {
       if (t.tool === 'write_file' || t.tool === 'edit_file') {
         try {
           const args = t.arguments ? JSON.parse(t.arguments) : {};
           if (args.path) touchedFiles.add(args.path);
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
     });
     chatFileEdits.forEach((edit) => {
@@ -862,11 +922,13 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     });
 
     const toolCounts: Record<string, number> = {};
-    toolExecutions.forEach(t => {
+    toolExecutions.forEach((t) => {
       const name = isSubagentTool(t) ? 'subagent' : t.tool;
       toolCounts[name] = (toolCounts[name] || 0) + 1;
     });
-    const sortedTools = Object.entries(toolCounts).sort((a, b) => b[1] - a[1]).slice(0, 6);
+    const sortedTools = Object.entries(toolCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6);
     const maxToolCount = sortedTools.length > 0 ? sortedTools[0][1] : 1;
 
     let duration = 0;
@@ -874,21 +936,55 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       duration = msgs[msgs.length - 1].timestamp.getTime() - msgs[0].timestamp.getTime();
     }
 
-    return { userMsgs, assistantMsgs, totalMsgs: userMsgs + assistantMsgs, completedTools, failedTools, activeTools, totalTools: toolExecutions.length, totalAdditions, totalDeletions, filesTouched: touchedFiles.size, topTools: sortedTools, maxToolCount, duration };
+    return {
+      userMsgs,
+      assistantMsgs,
+      totalMsgs: userMsgs + assistantMsgs,
+      completedTools,
+      failedTools,
+      activeTools,
+      totalTools: toolExecutions.length,
+      totalAdditions,
+      totalDeletions,
+      filesTouched: touchedFiles.size,
+      topTools: sortedTools,
+      maxToolCount,
+      duration,
+    };
   }, [chatFileEdits, chatMessages, context, toolExecutions]);
 
   // ── Tab definitions ──────────────────────────────────────────────
 
-  const chatPanelTabs: Array<{ id: 'subagents' | 'tools' | 'changes' | 'tasks' | 'status' | 'sessions'; label: string; icon: ReactNode; count: string }> = [
-    { id: 'subagents', label: 'Subagents', icon: <Bot size={14} />, count: activeSubagentCount > 0 ? `${activeSubagentCount} active` : `${subagentRuns.length} total` },
-    { id: 'tools', label: 'Tool Executions', icon: <Wrench size={14} />, count: activeToolCount > 0 ? `${activeToolCount} active` : `${toolExecutions.length} total` },
+  const chatPanelTabs: Array<{
+    id: 'subagents' | 'tools' | 'changes' | 'tasks' | 'status' | 'sessions';
+    label: string;
+    icon: ReactNode;
+    count: string;
+  }> = [
+    {
+      id: 'subagents',
+      label: 'Subagents',
+      icon: <Bot size={14} />,
+      count: activeSubagentCount > 0 ? `${activeSubagentCount} active` : `${subagentRuns.length} total`,
+    },
+    {
+      id: 'tools',
+      label: 'Tool Executions',
+      icon: <Wrench size={14} />,
+      count: activeToolCount > 0 ? `${activeToolCount} active` : `${toolExecutions.length} total`,
+    },
     { id: 'changes', label: 'Session Changes', icon: <History size={14} />, count: `${historyCounts} revisions` },
-    { id: 'tasks', label: 'Tasks', icon: <ListTodo size={14} />, count: `${currentTodos.filter(t => t.status === 'in_progress').length || 0} active` },
+    {
+      id: 'tasks',
+      label: 'Tasks',
+      icon: <ListTodo size={14} />,
+      count: `${currentTodos.filter((t) => t.status === 'in_progress').length || 0} active`,
+    },
     { id: 'sessions', label: 'Sessions', icon: <Clock size={14} />, count: `${sessionsCount}` },
     { id: 'status', label: 'Status', icon: <Activity size={14} />, count: `${statusMetrics.totalMsgs} msgs` },
   ];
 
-  const activeTab = chatPanelTabs.find(t => t.id === chatTab) || chatPanelTabs[0];
+  const activeTab = chatPanelTabs.find((t) => t.id === chatTab) || chatPanelTabs[0];
 
   // ── Render: Tools Tab (Chat) ─────────────────────────────────────
 
@@ -904,7 +1000,9 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
           return (
             <div
               key={tool.id}
-              ref={(el) => { toolRefs.current[tool.id] = el; }}
+              ref={(el) => {
+                toolRefs.current[tool.id] = el;
+              }}
               className={`tool-execution tool-${tool.status} ${isSub ? 'tool-subagent' : ''} ${activeToolId === tool.id ? 'tool-highlighted' : ''}`}
               onClick={() => toggleToolExpansion(tool.id)}
             >
@@ -920,7 +1018,11 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
                 </span>
                 <span className={`tool-name ${isSub ? 'tool-name-subagent' : ''}`}>
                   {isSub
-                    ? (tool.persona ? `${tool.persona}` : (tool.subagentType === 'parallel' ? 'parallel subagents' : 'subagent'))
+                    ? tool.persona
+                      ? `${tool.persona}`
+                      : tool.subagentType === 'parallel'
+                        ? 'parallel subagents'
+                        : 'subagent'
                     : tool.tool}
                   {isSub && tool.subagentType === 'parallel' && ' (parallel)'}
                 </span>
@@ -943,19 +1045,33 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
                 <div className="tool-details">
                   {isSub && subagentPrompt && (
                     <div className="tool-detail-section">
-                      <div className="tool-detail-label"><FileEdit size={12} className="inline-icon" /> Task</div>
+                      <div className="tool-detail-label">
+                        <FileEdit size={12} className="inline-icon" /> Task
+                      </div>
                       <pre className="subagent-prompt-detail">{stripAnsiCodes(subagentPrompt)}</pre>
                     </div>
                   )}
                   {tool.arguments && !isSub && (
                     <div className="tool-detail-section">
-                      <div className="tool-detail-label"><ClipboardList size={12} className="inline-icon" /> Call</div>
+                      <div className="tool-detail-label">
+                        <ClipboardList size={12} className="inline-icon" /> Call
+                      </div>
                       <pre>{formatToolDetail(tool.arguments)}</pre>
                     </div>
                   )}
                   {tool.result && (
                     <div className="tool-detail-section">
-                      <div className="tool-detail-label">{isSub ? <><BarChart3 size={12} className="inline-icon" /> Summary</> : <><FileText size={12} className="inline-icon" /> Response</>}</div>
+                      <div className="tool-detail-label">
+                        {isSub ? (
+                          <>
+                            <BarChart3 size={12} className="inline-icon" /> Summary
+                          </>
+                        ) : (
+                          <>
+                            <FileText size={12} className="inline-icon" /> Response
+                          </>
+                        )}
+                      </div>
                       <pre>{formatToolDetail(tool.result)}</pre>
                     </div>
                   )}
@@ -989,10 +1105,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
           const lastUpdatedAt = latestActivity?.timestamp || tool.endTime || tool.startTime;
 
           return (
-            <section
-              key={tool.id}
-              className={`subagent-card tool-${tool.status}`}
-            >
+            <section key={tool.id} className={`subagent-card tool-${tool.status}`}>
               <button
                 className="subagent-card-header"
                 onClick={() => toggleSubagentExpansion(tool.id)}
@@ -1016,16 +1129,16 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
                 </span>
               </button>
 
-              {prompt && (
-                <div className="subagent-prompt-preview">
-                  {stripAnsiCodes(prompt)}
-                </div>
-              )}
+              {prompt && <div className="subagent-prompt-preview">{stripAnsiCodes(prompt)}</div>}
 
               <div className="subagent-card-stats">
-                <span className="subagent-stat-chip">{activities.length} {activities.length === 1 ? 'update' : 'updates'}</span>
+                <span className="subagent-stat-chip">
+                  {activities.length} {activities.length === 1 ? 'update' : 'updates'}
+                </span>
                 {isParallel && taskCount > 0 && (
-                  <span className="subagent-stat-chip">{taskCount} {taskCount === 1 ? 'task' : 'tasks'}</span>
+                  <span className="subagent-stat-chip">
+                    {taskCount} {taskCount === 1 ? 'task' : 'tasks'}
+                  </span>
                 )}
                 <span className="subagent-stat-chip">Updated {formatTime(lastUpdatedAt)}</span>
               </div>
@@ -1063,9 +1176,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
                           {activity.taskId && <span className="subagent-task-pill">{activity.taskId}</span>}
                           <span>{activity.label}</span>
                         </div>
-                        <div className="subagent-activity-time">
-                          {formatTime(activity.timestamp)}
-                        </div>
+                        <div className="subagent-activity-time">{formatTime(activity.timestamp)}</div>
                       </div>
                     </div>
                   ))}
@@ -1098,10 +1209,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
               <div className="subagent-card-actions">
                 {activities.length > 3 && (
-                  <button
-                    className="subagent-link-btn"
-                    onClick={() => toggleSubagentExpansion(tool.id)}
-                  >
+                  <button className="subagent-link-btn" onClick={() => toggleSubagentExpansion(tool.id)}>
                     {expanded ? 'Show fewer updates' : 'Show all updates'}
                   </button>
                 )}
@@ -1164,7 +1272,9 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
                 </span>
               </div>
               <div className="session-meta">
-                <span className="session-dir" title={session.working_directory}>{dirName}</span>
+                <span className="session-dir" title={session.working_directory}>
+                  {dirName}
+                </span>
                 {isCurrent ? (
                   <span className="session-current-badge">Current</span>
                 ) : (
@@ -1236,15 +1346,15 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
             <span className="status-metric-label">Assistant</span>
           </div>
           {(() => {
-                const displayMs = liveDurationMs ?? statusMetrics.duration;
-                if (!displayMs || isNaN(displayMs) || displayMs <= 0) return null;
-                return (
-                  <div className="status-metric status-metric-wide">
-                    <span className="status-metric-value">{formatDurationMs(displayMs)}</span>
-                    <span className="status-metric-label">Duration</span>
-                  </div>
-                );
-              })()}
+            const displayMs = liveDurationMs ?? statusMetrics.duration;
+            if (!displayMs || isNaN(displayMs) || displayMs <= 0) return null;
+            return (
+              <div className="status-metric status-metric-wide">
+                <span className="status-metric-value">{formatDurationMs(displayMs)}</span>
+                <span className="status-metric-label">Duration</span>
+              </div>
+            );
+          })()}
         </div>
       </div>
 
@@ -1326,7 +1436,9 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
             <span className="status-metric-label">Prompt</span>
           </div>
           <div className="status-metric">
-            <span className="status-metric-value">{chatStats ? formatTokens(chatStats.completion_tokens || 0) : '—'}</span>
+            <span className="status-metric-value">
+              {chatStats ? formatTokens(chatStats.completion_tokens || 0) : '—'}
+            </span>
             <span className="status-metric-label">Completion</span>
           </div>
           {(chatStats?.cached_tokens || 0) > 0 && (
@@ -1350,11 +1462,15 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
             <span className="status-metric-label">Used</span>
           </div>
           <div className="status-metric">
-            <span className="status-metric-value">{chatStats ? formatTokens(chatStats.current_context_tokens || 0) : '—'}</span>
+            <span className="status-metric-value">
+              {chatStats ? formatTokens(chatStats.current_context_tokens || 0) : '—'}
+            </span>
             <span className="status-metric-label">Current</span>
           </div>
           <div className="status-metric">
-            <span className="status-metric-value">{chatStats ? formatTokens(chatStats.max_context_tokens || 0) : '—'}</span>
+            <span className="status-metric-value">
+              {chatStats ? formatTokens(chatStats.max_context_tokens || 0) : '—'}
+            </span>
             <span className="status-metric-label">Max</span>
           </div>
         </div>
@@ -1405,18 +1521,29 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
   const renderTabContent = () => {
     switch (chatTab) {
-      case 'subagents': return renderSubagentsTab();
-      case 'tools': return renderToolsTab();
-      case 'changes': return (
-        <RevisionListPanel
-          mode="session"
-          onOpenDiff={(props as ChatContextPanelProps).onOpenRevisionDiff || (() => {})}
-        />
-      );
-      case 'tasks': return <div className="side-panel-tasks"><TodoPanel todos={currentTodos || []} isLoading={isProcessing && currentTodos.length === 0} /></div>;
-      case 'sessions': return renderSessionsTab();
-      case 'status': return renderStatusTab();
-      default: return renderSubagentsTab();
+      case 'subagents':
+        return renderSubagentsTab();
+      case 'tools':
+        return renderToolsTab();
+      case 'changes':
+        return (
+          <RevisionListPanel
+            mode="session"
+            onOpenDiff={(props as ChatContextPanelProps).onOpenRevisionDiff || (() => {})}
+          />
+        );
+      case 'tasks':
+        return (
+          <div className="side-panel-tasks">
+            <TodoPanel todos={currentTodos || []} isLoading={isProcessing && currentTodos.length === 0} />
+          </div>
+        );
+      case 'sessions':
+        return renderSessionsTab();
+      case 'status':
+        return renderStatusTab();
+      default:
+        return renderSubagentsTab();
     }
   };
 
@@ -1471,9 +1598,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
                   <span className="tool-count">{activeTab.count}</span>
                 </div>
               </div>
-              <div className="side-panel-body">
-                {renderTabContent()}
-              </div>
+              <div className="side-panel-body">{renderTabContent()}</div>
             </div>
           )}
         </aside>

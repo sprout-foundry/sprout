@@ -27,17 +27,13 @@ const InlinePillRow: React.FC<InlinePillRowProps> = ({ items, ariaLabel, classNa
           'message-tool-link',
           item.tone ? `message-tool-link-${item.tone}` : '',
           item.mono ? 'message-tool-link-mono' : '',
-        ].filter(Boolean).join(' ');
+        ]
+          .filter(Boolean)
+          .join(' ');
 
         if (item.onClick) {
           return (
-            <button
-              key={item.id}
-              className={classes}
-              type="button"
-              onClick={item.onClick}
-              title={item.title}
-            >
+            <button key={item.id} className={classes} type="button" onClick={item.onClick} title={item.title}>
               {item.label}
             </button>
           );

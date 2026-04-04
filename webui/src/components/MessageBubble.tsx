@@ -31,23 +31,12 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     >
       <div className="message-bubble" data-message-content={copyText || ''}>
         {copyText ? (
-          <button
-            className="copy-button"
-            onClick={handleCopy}
-            title="Copy message"
-            aria-label="Copy message"
-          >
+          <button className="copy-button" onClick={handleCopy} title="Copy message" aria-label="Copy message">
             <Copy size={14} />
           </button>
         ) : null}
-        <div className="message-content">
-          {children}
-        </div>
-        {timestamp ? (
-          <div className="message-timestamp">
-            {timestamp}
-          </div>
-        ) : null}
+        <div className="message-content">{children}</div>
+        {timestamp ? <div className="message-timestamp">{timestamp}</div> : null}
       </div>
     </div>
   );

@@ -61,13 +61,14 @@ const normalizeEntry = (entry: unknown): ReviewGuidanceEntry | null => {
   }
 
   const record = entry as Record<string, unknown>;
-  const issueCandidate = typeof record.issue === 'string'
-    ? record.issue
-    : typeof record.title === 'string'
-      ? record.title
-      : typeof record.summary === 'string'
-        ? record.summary
-        : '';
+  const issueCandidate =
+    typeof record.issue === 'string'
+      ? record.issue
+      : typeof record.title === 'string'
+        ? record.title
+        : typeof record.summary === 'string'
+          ? record.summary
+          : '';
   const issue = issueCandidate.trim();
   if (!issue) {
     return null;
@@ -116,9 +117,7 @@ export const parseReviewGuidance = (rawValue?: string | null): ParsedReviewGuida
     if (!Array.isArray(value)) {
       return;
     }
-    const entries = value
-      .map(normalizeEntry)
-      .filter((entry): entry is ReviewGuidanceEntry => entry !== null);
+    const entries = value.map(normalizeEntry).filter((entry): entry is ReviewGuidanceEntry => entry !== null);
     if (entries.length === 0) {
       return;
     }
@@ -134,9 +133,7 @@ export const parseReviewGuidance = (rawValue?: string | null): ParsedReviewGuida
     if (seenKeys.has(key) || !Array.isArray(value)) {
       return;
     }
-    const entries = value
-      .map(normalizeEntry)
-      .filter((entry): entry is ReviewGuidanceEntry => entry !== null);
+    const entries = value.map(normalizeEntry).filter((entry): entry is ReviewGuidanceEntry => entry !== null);
     if (entries.length === 0) {
       return;
     }
@@ -174,11 +171,12 @@ export const reviewGuidanceToMarkdown = (guidance: ParsedReviewGuidance): string
             lines.push(`  - Next step: ${entry.suggestion}`);
           }
           Object.entries(entry)
-            .filter(([key, value]) => !['issue', 'file', 'evidence', 'suggestion'].includes(key) && typeof value === 'string' && value.trim())
+            .filter(
+              ([key, value]) =>
+                !['issue', 'file', 'evidence', 'suggestion'].includes(key) && typeof value === 'string' && value.trim(),
+            )
             .forEach(([key, value]) => {
-              const label = key
-                .replace(/_/g, ' ')
-                .replace(/\b\w/g, (char) => char.toUpperCase());
+              const label = key.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
               lines.push(`  - ${label}: ${String(value)}`);
             });
           return lines.join('\n');

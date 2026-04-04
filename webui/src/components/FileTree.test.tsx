@@ -1,11 +1,13 @@
 // @ts-nocheck
 
 import React from 'react';
-import { createRoot, Root } from 'react-dom/client';
+import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
 import { Simulate } from 'react-dom/test-utils';
 import FileTree from './FileTree';
 import { ApiService } from '../services/api';
+
+import { clientFetch } from '../services/clientSession';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -14,8 +16,6 @@ import { ApiService } from '../services/api';
 jest.mock('../services/clientSession', () => ({
   clientFetch: jest.fn(),
 }));
-
-import { clientFetch } from '../services/clientSession';
 
 jest.mock('../services/api', () => ({
   ApiService: {
@@ -71,7 +71,11 @@ beforeAll(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   // Mock requestAnimationFrame so ContextMenu's close-listener effect fires synchronously.
   let rafId = 0;
-  global.requestAnimationFrame = ((cb) => { rafId += 1; cb(Date.now()); return rafId; }) as typeof requestAnimationFrame;
+  global.requestAnimationFrame = ((cb) => {
+    rafId += 1;
+    cb(Date.now());
+    return rafId;
+  }) as typeof requestAnimationFrame;
   global.cancelAnimationFrame = jest.fn();
 });
 
@@ -128,7 +132,7 @@ async function renderTree(props: Partial<React.ComponentProps<typeof FileTree>> 
         onRefresh={props.onRefresh}
         onItemCreated={props.onItemCreated}
         onDeleteItem={props.onDeleteItem}
-      />
+      />,
     );
   });
   // Wait for clientFetch to resolve + state updates
@@ -150,7 +154,7 @@ function fireContextMenuOnFile(fileName: string): void {
             cancelable: true,
             clientX: 100,
             clientY: 200,
-          })
+          }),
         );
       });
       return;
@@ -161,9 +165,7 @@ function fireContextMenuOnFile(fileName: string): void {
 
 /** Return all context menu buttons currently rendered in the portal. */
 function getContextButtons(): HTMLButtonElement[] {
-  return Array.from(
-    document.querySelectorAll('.context-menu .context-menu-item')
-  );
+  return Array.from(document.querySelectorAll('.context-menu .context-menu-item'));
 }
 
 /** Get the text content of all context menu buttons (trimmed). */
@@ -184,7 +186,7 @@ function fireContextMenuOnBackground(): void {
         cancelable: true,
         clientX: 300,
         clientY: 400,
-      })
+      }),
     );
   });
 }
@@ -258,9 +260,7 @@ describe('FileTree context menu – clipboard & editor actions', () => {
     fireContextMenuOnFile('main.go');
     await flushPromises();
 
-    const copyRelBtn = getContextButtons().find(
-      (btn) => btn.textContent?.trim() === 'Copy relative path'
-    );
+    const copyRelBtn = getContextButtons().find((btn) => btn.textContent?.trim() === 'Copy relative path');
     expect(copyRelBtn).toBeDefined();
 
     await act(async () => {
@@ -277,9 +277,7 @@ describe('FileTree context menu – clipboard & editor actions', () => {
     fireContextMenuOnFile('main.go');
     await flushPromises();
 
-    const copyAbsBtn = getContextButtons().find(
-      (btn) => btn.textContent?.trim() === 'Copy absolute path'
-    );
+    const copyAbsBtn = getContextButtons().find((btn) => btn.textContent?.trim() === 'Copy absolute path');
     expect(copyAbsBtn).toBeDefined();
 
     await act(async () => {
@@ -296,9 +294,7 @@ describe('FileTree context menu – clipboard & editor actions', () => {
     fireContextMenuOnFile('README.md');
     await flushPromises();
 
-    const openBtn = getContextButtons().find(
-      (btn) => btn.textContent?.trim() === 'Open in editor'
-    );
+    const openBtn = getContextButtons().find((btn) => btn.textContent?.trim() === 'Open in editor');
     expect(openBtn).toBeDefined();
 
     await act(async () => {
@@ -321,9 +317,7 @@ describe('FileTree context menu – clipboard & editor actions', () => {
     // Menu should be in the DOM now
     expect(document.querySelector('.context-menu')).not.toBeNull();
 
-    const copyRelBtn = getContextButtons().find(
-      (btn) => btn.textContent?.trim() === 'Copy relative path'
-    );
+    const copyRelBtn = getContextButtons().find((btn) => btn.textContent?.trim() === 'Copy relative path');
 
     await act(async () => {
       copyRelBtn!.click();
@@ -367,9 +361,7 @@ describe('FileTree background context menu', () => {
     fireContextMenuOnBackground();
     await flushPromises();
 
-    const newFileBtn = getContextButtons().find(
-      (btn) => btn.textContent?.trim() === 'New File'
-    );
+    const newFileBtn = getContextButtons().find((btn) => btn.textContent?.trim() === 'New File');
     expect(newFileBtn).toBeDefined();
 
     await act(async () => {
@@ -387,9 +379,7 @@ describe('FileTree background context menu', () => {
     fireContextMenuOnBackground();
     await flushPromises();
 
-    const newFolderBtn = getContextButtons().find(
-      (btn) => btn.textContent?.trim() === 'New Folder'
-    );
+    const newFolderBtn = getContextButtons().find((btn) => btn.textContent?.trim() === 'New Folder');
     expect(newFolderBtn).toBeDefined();
 
     await act(async () => {
@@ -655,7 +645,7 @@ describe('FileTree filter', () => {
     // Find the .file-tree-item.file elements (non-directories)
     const fileItems = document.querySelectorAll('.file-tree-item.file .file-tree-name');
     const nameElements = Array.from(fileItems);
-    const mainGo = nameElements.find(el => el.textContent === 'main.go');
+    const mainGo = nameElements.find((el) => el.textContent === 'main.go');
     expect(mainGo).toBeDefined();
     expect(mainGo!.innerHTML).toContain('<mark>');
     expect(mainGo!.innerHTML).toContain('main');
@@ -779,13 +769,28 @@ describe('FileTree ignored files toggle', () => {
   it('keeps a non-ignored directory visible when it contains only ignored children', async () => {
     // Override clientFetch to return a directory with only ignored children
     (clientFetch as jest.Mock).mockImplementation((url: string) => {
-      if (url.includes('path=.')) return Promise.resolve(mockFetchResponse([
-        { name: 'output', path: 'output', is_dir: true, size: 0, mod_time: 0 },
-        { name: 'main.go', path: 'main.go', is_dir: false, size: 100, mod_time: 1000 },
-      ]));
-      if (url.includes('path=output')) return Promise.resolve(mockFetchResponse([
-        { name: 'build.log', path: 'output/build.log', is_dir: false, size: 50, mod_time: 500, git_status: 'ignored' },
-      ]));
+      if (url.includes('path=.')) {
+        return Promise.resolve(
+          mockFetchResponse([
+            { name: 'output', path: 'output', is_dir: true, size: 0, mod_time: 0 },
+            { name: 'main.go', path: 'main.go', is_dir: false, size: 100, mod_time: 1000 },
+          ]),
+        );
+      }
+      if (url.includes('path=output')) {
+        return Promise.resolve(
+          mockFetchResponse([
+            {
+              name: 'build.log',
+              path: 'output/build.log',
+              is_dir: false,
+              size: 50,
+              mod_time: 500,
+              git_status: 'ignored',
+            },
+          ]),
+        );
+      }
       return Promise.resolve(mockFetchResponse([]));
     });
 
@@ -845,9 +850,15 @@ describe('FileTree drag-and-drop', () => {
       dropEffect: 'none',
       effectAllowed: 'none',
       data: dataStore,
-      setData(type: string, value: string) { this.data[type] = value; },
-      getData(type: string) { return this.data[type] || ''; },
-      clearData() { Object.keys(this.data).forEach(k => delete this.data[k]); },
+      setData(type: string, value: string) {
+        this.data[type] = value;
+      },
+      getData(type: string) {
+        return this.data[type] || '';
+      },
+      clearData() {
+        Object.keys(this.data).forEach((k) => delete this.data[k]);
+      },
       setDragImage() {},
       items: [],
       types: [] as string[],
@@ -855,7 +866,9 @@ describe('FileTree drag-and-drop', () => {
     const event = new Event('dragstart', { bubbles: true, cancelable: true });
     Object.defineProperty(event, 'dataTransfer', { value: dataTransfer });
     Object.defineProperty(event, 'currentTarget', { value: item });
-    act(() => { item.dispatchEvent(event); });
+    act(() => {
+      item.dispatchEvent(event);
+    });
     return dataTransfer;
   }
 
@@ -871,7 +884,9 @@ describe('FileTree drag-and-drop', () => {
     Object.defineProperty(event, 'relatedTarget', { value: null });
     Object.defineProperty(event, 'preventDefault', { value: jest.fn() });
     Object.defineProperty(event, 'stopPropagation', { value: jest.fn() });
-    act(() => { item.dispatchEvent(event); });
+    act(() => {
+      item.dispatchEvent(event);
+    });
   }
 
   /**
@@ -884,12 +899,18 @@ describe('FileTree drag-and-drop', () => {
     Object.defineProperty(event, 'dataTransfer', { value: dataTransfer });
     Object.defineProperty(event, 'preventDefault', { value: jest.fn() });
     Object.defineProperty(event, 'stopPropagation', { value: jest.fn() });
-    act(() => { item.dispatchEvent(event); });
+    act(() => {
+      item.dispatchEvent(event);
+    });
     await flushPromises();
     // Extra tick for async renameItem
-    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
     await flushPromises();
-    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
     await flushPromises();
   }
 
@@ -904,7 +925,9 @@ describe('FileTree drag-and-drop', () => {
     Object.defineProperty(event, 'relatedTarget', { value: null });
     Object.defineProperty(event, 'preventDefault', { value: jest.fn() });
     Object.defineProperty(event, 'stopPropagation', { value: jest.fn() });
-    act(() => { fileList.dispatchEvent(event); });
+    act(() => {
+      fileList.dispatchEvent(event);
+    });
   }
 
   /**
@@ -917,11 +940,17 @@ describe('FileTree drag-and-drop', () => {
     Object.defineProperty(event, 'dataTransfer', { value: dataTransfer });
     Object.defineProperty(event, 'preventDefault', { value: jest.fn() });
     Object.defineProperty(event, 'stopPropagation', { value: jest.fn() });
-    act(() => { fileList.dispatchEvent(event); });
+    act(() => {
+      fileList.dispatchEvent(event);
+    });
     await flushPromises();
-    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
     await flushPromises();
-    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
     await flushPromises();
   }
 
@@ -1022,12 +1051,14 @@ describe('FileTree drag-and-drop', () => {
   it('shows drop-on-root class when dragging over file-list background with a nested file', async () => {
     // Mock files with a nested item so we can drag it to root
     (clientFetch as jest.Mock).mockImplementation((url: string) => {
-      if (url.includes('path=.')) return Promise.resolve(mockFetchResponse([
-        { name: 'src', path: 'src', is_dir: true, size: 0, mod_time: 0 },
-      ]));
-      if (url.includes('path=src')) return Promise.resolve(mockFetchResponse([
-        { name: 'utils.go', path: 'src/utils.go', is_dir: false, size: 50, mod_time: 500 },
-      ]));
+      if (url.includes('path=.')) {
+        return Promise.resolve(mockFetchResponse([{ name: 'src', path: 'src', is_dir: true, size: 0, mod_time: 0 }]));
+      }
+      if (url.includes('path=src')) {
+        return Promise.resolve(
+          mockFetchResponse([{ name: 'utils.go', path: 'src/utils.go', is_dir: false, size: 50, mod_time: 500 }]),
+        );
+      }
       return Promise.resolve(mockFetchResponse([]));
     });
 
@@ -1073,12 +1104,14 @@ describe('FileTree drag-and-drop', () => {
 
     // Mock nested structure
     (clientFetch as jest.Mock).mockImplementation((url: string) => {
-      if (url.includes('path=.')) return Promise.resolve(mockFetchResponse([
-        { name: 'src', path: 'src', is_dir: true, size: 0, mod_time: 0 },
-      ]));
-      if (url.includes('path=src')) return Promise.resolve(mockFetchResponse([
-        { name: 'helper.go', path: 'src/helper.go', is_dir: false, size: 50, mod_time: 500 },
-      ]));
+      if (url.includes('path=.')) {
+        return Promise.resolve(mockFetchResponse([{ name: 'src', path: 'src', is_dir: true, size: 0, mod_time: 0 }]));
+      }
+      if (url.includes('path=src')) {
+        return Promise.resolve(
+          mockFetchResponse([{ name: 'helper.go', path: 'src/helper.go', is_dir: false, size: 50, mod_time: 500 }]),
+        );
+      }
       return Promise.resolve(mockFetchResponse([]));
     });
 
@@ -1107,13 +1140,19 @@ describe('FileTree drag-and-drop', () => {
   it('clears drop-on-root class when hovering over a specific directory', async () => {
     // Mock nested structure
     (clientFetch as jest.Mock).mockImplementation((url: string) => {
-      if (url.includes('path=.')) return Promise.resolve(mockFetchResponse([
-        { name: 'src', path: 'src', is_dir: true, size: 0, mod_time: 0 },
-        { name: 'lib', path: 'lib', is_dir: true, size: 0, mod_time: 0 },
-      ]));
-      if (url.includes('path=src')) return Promise.resolve(mockFetchResponse([
-        { name: 'app.tsx', path: 'src/app.tsx', is_dir: false, size: 50, mod_time: 500 },
-      ]));
+      if (url.includes('path=.')) {
+        return Promise.resolve(
+          mockFetchResponse([
+            { name: 'src', path: 'src', is_dir: true, size: 0, mod_time: 0 },
+            { name: 'lib', path: 'lib', is_dir: true, size: 0, mod_time: 0 },
+          ]),
+        );
+      }
+      if (url.includes('path=src')) {
+        return Promise.resolve(
+          mockFetchResponse([{ name: 'app.tsx', path: 'src/app.tsx', is_dir: false, size: 50, mod_time: 500 }]),
+        );
+      }
       return Promise.resolve(mockFetchResponse([]));
     });
 
@@ -1149,12 +1188,14 @@ describe('FileTree drag-and-drop', () => {
   it('clears drop-on-root on drag end', async () => {
     // Mock nested structure
     (clientFetch as jest.Mock).mockImplementation((url: string) => {
-      if (url.includes('path=.')) return Promise.resolve(mockFetchResponse([
-        { name: 'src', path: 'src', is_dir: true, size: 0, mod_time: 0 },
-      ]));
-      if (url.includes('path=src')) return Promise.resolve(mockFetchResponse([
-        { name: 'nested.go', path: 'src/nested.go', is_dir: false, size: 50, mod_time: 500 },
-      ]));
+      if (url.includes('path=.')) {
+        return Promise.resolve(mockFetchResponse([{ name: 'src', path: 'src', is_dir: true, size: 0, mod_time: 0 }]));
+      }
+      if (url.includes('path=src')) {
+        return Promise.resolve(
+          mockFetchResponse([{ name: 'nested.go', path: 'src/nested.go', is_dir: false, size: 50, mod_time: 500 }]),
+        );
+      }
       return Promise.resolve(mockFetchResponse([]));
     });
 
@@ -1172,7 +1213,15 @@ describe('FileTree drag-and-drop', () => {
     fireDragStart('nested.go');
     await flushPromises();
 
-    fireDragOverOnBackground({ dropEffect: 'move', getData: () => 'src/nested.go', setData: () => {}, types: [] as string[], items: [], clearData: () => {}, setDragImage: () => {} } as unknown as DataTransfer);
+    fireDragOverOnBackground({
+      dropEffect: 'move',
+      getData: () => 'src/nested.go',
+      setData: () => {},
+      types: [] as string[],
+      items: [],
+      clearData: () => {},
+      setDragImage: () => {},
+    } as unknown as DataTransfer);
     await flushPromises();
 
     let fileList = document.querySelector('.file-list');

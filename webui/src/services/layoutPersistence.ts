@@ -165,8 +165,7 @@ export function saveLayoutSnapshot(state: LayoutSnapshot): void {
 function flushSnapshot(state: LayoutSnapshot): void {
   try {
     // Filter to real file buffers only
-    const filteredBuffers = state.buffers
-      .filter((b) => isRealFilePath(b.filePath));
+    const filteredBuffers = state.buffers.filter((b) => isRealFilePath(b.filePath));
 
     // Deduplicate by filePath, keeping the entry that is active (or the last seen)
     const bufferByPath = new Map<string, BufferLayoutEntry>();

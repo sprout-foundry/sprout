@@ -43,19 +43,23 @@ export function useSidebarState(): UseSidebarStateReturn {
   const setSidebarCollapsed = useCallback((collapsed: boolean) => {
     try {
       window.localStorage.setItem('ledit-sidebar-collapsed', String(collapsed));
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     setSidebarCollapsedRaw(collapsed);
   }, []);
 
   const setIsTerminalExpanded = useCallback((expanded: boolean) => {
     try {
       window.localStorage.setItem('ledit-terminal-expanded', String(expanded));
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     setIsTerminalExpandedRaw(expanded);
   }, []);
 
   const toggleSidebar = useCallback(() => {
-    setIsSidebarOpen(prev => !prev);
+    setIsSidebarOpen((prev) => !prev);
   }, []);
 
   const closeSidebar = useCallback(() => {

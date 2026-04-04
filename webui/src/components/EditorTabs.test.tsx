@@ -35,8 +35,14 @@ const makeMockBuffer = (id: string, paneId: string, overrides: Partial<any> = {}
   id,
   kind: 'file',
   file: { path: `src/${id}.tsx`, name: `${id}.tsx`, ext: '.tsx', isDir: false, size: 123, modified: 0 },
-  content: 'line1', originalContent: 'line1', cursorPosition: { line: 0, column: 0 },
-  scrollPosition: { top: 0, left: 0 }, isModified: false, isActive: true, isClosable: true, metadata: {},
+  content: 'line1',
+  originalContent: 'line1',
+  cursorPosition: { line: 0, column: 0 },
+  scrollPosition: { top: 0, left: 0 },
+  isModified: false,
+  isActive: true,
+  isClosable: true,
+  metadata: {},
   paneId,
   ...overrides,
 });
@@ -106,13 +112,7 @@ afterEach(() => {
 
 function renderEditorTabs(props: { paneId?: string; actions?: React.ReactNode; compact?: boolean } = {}) {
   act(() => {
-    root!.render(
-      <EditorTabs
-        paneId={props.paneId}
-        actions={props.actions}
-        compact={props.compact}
-      />,
-    );
+    root!.render(<EditorTabs paneId={props.paneId} actions={props.actions} compact={props.compact} />);
   });
 }
 
@@ -129,7 +129,9 @@ function getMenuItems(menu?: Element): Element[] {
 
 /** Get text content of each menu item. */
 function getMenuTexts(menu?: Element): string[] {
-  return getMenuItems(menu).map((el) => el.textContent?.trim() ?? '').filter(Boolean);
+  return getMenuItems(menu)
+    .map((el) => el.textContent?.trim() ?? '')
+    .filter(Boolean);
 }
 
 /** Dispatch a contextmenu MouseEvent on `target` inside act(). */
@@ -182,7 +184,10 @@ describe('EditorTabs empty area context menu', () => {
       const buf2 = makeMockBuffer('buf-2', 'pane-1');
       mockUseEditorManager.mockReturnValue({
         ...defaultMockEditorManager,
-        buffers: new Map([['buf-1', buf1], ['buf-2', buf2]]),
+        buffers: new Map([
+          ['buf-1', buf1],
+          ['buf-2', buf2],
+        ]),
         activeBufferId: 'buf-1',
       });
       renderEditorTabs({ paneId: 'pane-1' });
@@ -194,9 +199,7 @@ describe('EditorTabs empty area context menu', () => {
 
       const menus = getContextMenuElements();
       // At least one menu should appear. The empty area menu is the one with "Close All Tabs"
-      const hasCloseAll = menus.some((m) =>
-        getMenuTexts(m).some((t) => t.includes('Close All Tabs')),
-      );
+      const hasCloseAll = menus.some((m) => getMenuTexts(m).some((t) => t.includes('Close All Tabs')));
       expect(hasCloseAll).toBe(true);
     });
 
@@ -214,9 +217,7 @@ describe('EditorTabs empty area context menu', () => {
 
       // The per-tab context menu should appear, but it should NOT have "Close All Tabs"
       const menus = getContextMenuElements();
-      const hasCloseAll = menus.some((m) =>
-        getMenuTexts(m).some((t) => t.includes('Close All Tabs')),
-      );
+      const hasCloseAll = menus.some((m) => getMenuTexts(m).some((t) => t.includes('Close All Tabs')));
       expect(hasCloseAll).toBe(false);
     });
   });
@@ -227,7 +228,10 @@ describe('EditorTabs empty area context menu', () => {
       const buf2 = makeMockBuffer('buf-2', 'pane-1');
       mockUseEditorManager.mockReturnValue({
         ...defaultMockEditorManager,
-        buffers: new Map([['buf-1', buf1], ['buf-2', buf2]]),
+        buffers: new Map([
+          ['buf-1', buf1],
+          ['buf-2', buf2],
+        ]),
       });
       renderEditorTabs(/* no paneId */);
 
@@ -236,14 +240,10 @@ describe('EditorTabs empty area context menu', () => {
 
       // Find the menu with "Close All Tabs"
       const menus = getContextMenuElements();
-      const rightMenu = menus.find((m) =>
-        getMenuTexts(m).some((t) => t.includes('Close All Tabs')),
-      );
+      const rightMenu = menus.find((m) => getMenuTexts(m).some((t) => t.includes('Close All Tabs')));
       expect(rightMenu).toBeDefined();
 
-      const closeAllBtn = getMenuItems(rightMenu).find(
-        (el) => el.textContent?.trim().includes('Close All Tabs'),
-      );
+      const closeAllBtn = getMenuItems(rightMenu).find((el) => el.textContent?.trim().includes('Close All Tabs'));
       expect(closeAllBtn).toBeDefined();
 
       act(() => {
@@ -262,7 +262,11 @@ describe('EditorTabs empty area context menu', () => {
       const buf3 = makeMockBuffer('buf-3', 'pane-2');
       mockUseEditorManager.mockReturnValue({
         ...defaultMockEditorManager,
-        buffers: new Map([['buf-1', buf1], ['buf-2', buf2], ['buf-3', buf3]]),
+        buffers: new Map([
+          ['buf-1', buf1],
+          ['buf-2', buf2],
+          ['buf-3', buf3],
+        ]),
         panes: [
           { id: 'pane-1', bufferId: null, isActive: true },
           { id: 'pane-2', bufferId: null, isActive: false },
@@ -274,14 +278,10 @@ describe('EditorTabs empty area context menu', () => {
       fireContextMenu(tabsContainer);
 
       const menus = getContextMenuElements();
-      const rightMenu = menus.find((m) =>
-        getMenuTexts(m).some((t) => t.includes('Close All Tabs')),
-      );
+      const rightMenu = menus.find((m) => getMenuTexts(m).some((t) => t.includes('Close All Tabs')));
       expect(rightMenu).toBeDefined();
 
-      const closeAllBtn = getMenuItems(rightMenu).find(
-        (el) => el.textContent?.trim().includes('Close All Tabs'),
-      );
+      const closeAllBtn = getMenuItems(rightMenu).find((el) => el.textContent?.trim().includes('Close All Tabs'));
 
       act(() => {
         (closeAllBtn as HTMLElement).click();
@@ -305,12 +305,8 @@ describe('EditorTabs empty area context menu', () => {
       fireContextMenu(tabsContainer);
 
       const menus = getContextMenuElements();
-      const rightMenu = menus.find((m) =>
-        getMenuTexts(m).some((t) => t.includes('Close All Tabs')),
-      );
-      const closeAllBtn = getMenuItems(rightMenu).find(
-        (el) => el.textContent?.trim().includes('Close All Tabs'),
-      );
+      const rightMenu = menus.find((m) => getMenuTexts(m).some((t) => t.includes('Close All Tabs')));
+      const closeAllBtn = getMenuItems(rightMenu).find((el) => el.textContent?.trim().includes('Close All Tabs'));
 
       act(() => {
         (closeAllBtn as HTMLElement).click();
@@ -324,7 +320,10 @@ describe('EditorTabs empty area context menu', () => {
       const buf2 = makeMockBuffer('buf-2', 'pane-1', { isClosable: false });
       mockUseEditorManager.mockReturnValue({
         ...defaultMockEditorManager,
-        buffers: new Map([['buf-1', buf1], ['buf-2', buf2]]),
+        buffers: new Map([
+          ['buf-1', buf1],
+          ['buf-2', buf2],
+        ]),
       });
       renderEditorTabs();
 
@@ -332,12 +331,8 @@ describe('EditorTabs empty area context menu', () => {
       fireContextMenu(tabsContainer);
 
       const menus = getContextMenuElements();
-      const rightMenu = menus.find((m) =>
-        getMenuTexts(m).some((t) => t.includes('Close All Tabs')),
-      );
-      const closeAllBtn = getMenuItems(rightMenu).find(
-        (el) => el.textContent?.trim().includes('Close All Tabs'),
-      );
+      const rightMenu = menus.find((m) => getMenuTexts(m).some((t) => t.includes('Close All Tabs')));
+      const closeAllBtn = getMenuItems(rightMenu).find((el) => el.textContent?.trim().includes('Close All Tabs'));
 
       act(() => {
         (closeAllBtn as HTMLElement).click();
@@ -355,7 +350,10 @@ describe('EditorTabs empty area context menu', () => {
       const buf2 = makeMockBuffer('buf-2', 'pane-1');
       mockUseEditorManager.mockReturnValue({
         ...defaultMockEditorManager,
-        buffers: new Map([['buf-1', buf1], ['buf-2', buf2]]),
+        buffers: new Map([
+          ['buf-1', buf1],
+          ['buf-2', buf2],
+        ]),
       });
       renderEditorTabs();
 
@@ -363,12 +361,8 @@ describe('EditorTabs empty area context menu', () => {
       fireContextMenu(tabsContainer);
 
       const menus = getContextMenuElements();
-      const rightMenu = menus.find((m) =>
-        getMenuTexts(m).some((t) => t.includes('Close All Tabs')),
-      );
-      const closeAllBtn = getMenuItems(rightMenu).find(
-        (el) => el.textContent?.trim().includes('Close All Tabs'),
-      );
+      const rightMenu = menus.find((m) => getMenuTexts(m).some((t) => t.includes('Close All Tabs')));
+      const closeAllBtn = getMenuItems(rightMenu).find((el) => el.textContent?.trim().includes('Close All Tabs'));
 
       act(() => {
         (closeAllBtn as HTMLElement).click();
@@ -385,7 +379,10 @@ describe('EditorTabs empty area context menu', () => {
       const buf2 = makeMockBuffer('buf-2', 'pane-1');
       mockUseEditorManager.mockReturnValue({
         ...defaultMockEditorManager,
-        buffers: new Map([['buf-1', buf1], ['buf-2', buf2]]),
+        buffers: new Map([
+          ['buf-1', buf1],
+          ['buf-2', buf2],
+        ]),
       });
       renderEditorTabs();
 
@@ -393,12 +390,8 @@ describe('EditorTabs empty area context menu', () => {
       fireContextMenu(tabsContainer);
 
       const menus = getContextMenuElements();
-      const rightMenu = menus.find((m) =>
-        getMenuTexts(m).some((t) => t.includes('Close All Tabs')),
-      );
-      const closeAllBtn = getMenuItems(rightMenu).find(
-        (el) => el.textContent?.trim().includes('Close All Tabs'),
-      );
+      const rightMenu = menus.find((m) => getMenuTexts(m).some((t) => t.includes('Close All Tabs')));
+      const closeAllBtn = getMenuItems(rightMenu).find((el) => el.textContent?.trim().includes('Close All Tabs'));
 
       // First click opens the confirm dialog
       act(() => {
@@ -424,7 +417,10 @@ describe('EditorTabs empty area context menu', () => {
       const buf2 = makeMockBuffer('buf-2', 'pane-1');
       mockUseEditorManager.mockReturnValue({
         ...defaultMockEditorManager,
-        buffers: new Map([['buf-1', buf1], ['buf-2', buf2]]),
+        buffers: new Map([
+          ['buf-1', buf1],
+          ['buf-2', buf2],
+        ]),
       });
       renderEditorTabs();
 
@@ -432,12 +428,8 @@ describe('EditorTabs empty area context menu', () => {
       fireContextMenu(tabsContainer);
 
       const menus = getContextMenuElements();
-      const rightMenu = menus.find((m) =>
-        getMenuTexts(m).some((t) => t.includes('Close All Tabs')),
-      );
-      const closeAllBtn = getMenuItems(rightMenu).find(
-        (el) => el.textContent?.trim().includes('Close All Tabs'),
-      );
+      const rightMenu = menus.find((m) => getMenuTexts(m).some((t) => t.includes('Close All Tabs')));
+      const closeAllBtn = getMenuItems(rightMenu).find((el) => el.textContent?.trim().includes('Close All Tabs'));
 
       // First click opens the confirm dialog
       act(() => {

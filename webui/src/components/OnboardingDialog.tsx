@@ -78,8 +78,12 @@ function OnboardingDialog({
               )}
             </div>
             <div className="onboarding-provider-links onboarding-platform-links">
-              <a href="https://learn.microsoft.com/windows/wsl/install" target="_blank" rel="noreferrer">Install WSL</a>
-              <a href="https://gitforwindows.org/" target="_blank" rel="noreferrer">Install Git Bash</a>
+              <a href="https://learn.microsoft.com/windows/wsl/install" target="_blank" rel="noreferrer">
+                Install WSL
+              </a>
+              <a href="https://gitforwindows.org/" target="_blank" rel="noreferrer">
+                Install Git Bash
+              </a>
             </div>
           </div>
         )}
@@ -134,13 +138,19 @@ function OnboardingDialog({
         {selectedProvider && (
           <div className="onboarding-provider-summary">
             <div className="onboarding-provider-summary-title">{selectedProvider.name}</div>
-            <div className="onboarding-provider-summary-body">{selectedProvider.setup_hint || selectedProvider.description}</div>
+            <div className="onboarding-provider-summary-body">
+              {selectedProvider.setup_hint || selectedProvider.description}
+            </div>
             <div className="onboarding-provider-links">
               {selectedProvider.docs_url && (
-                <a href={selectedProvider.docs_url} target="_blank" rel="noreferrer">Docs</a>
+                <a href={selectedProvider.docs_url} target="_blank" rel="noreferrer">
+                  Docs
+                </a>
               )}
               {selectedProvider.signup_url && (
-                <a href={selectedProvider.signup_url} target="_blank" rel="noreferrer">Get API access</a>
+                <a href={selectedProvider.signup_url} target="_blank" rel="noreferrer">
+                  Get API access
+                </a>
               )}
             </div>
           </div>
@@ -172,7 +182,9 @@ function OnboardingDialog({
                 <button
                   type="button"
                   className="onboarding-inline-action"
-                  onClick={() => updateOnboarding((prev) => ({ ...prev, model: selectedProvider.recommended_model, error: null }))}
+                  onClick={() =>
+                    updateOnboarding((prev) => ({ ...prev, model: selectedProvider.recommended_model, error: null }))
+                  }
                   disabled={onboarding.submitting || onboarding.checking}
                 >
                   Use recommended model
@@ -194,9 +206,7 @@ function OnboardingDialog({
               placeholder="Paste API key"
               disabled={onboarding.submitting || onboarding.checking}
             />
-            {selectedProvider.api_key_help && (
-              <div className="onboarding-help">{selectedProvider.api_key_help}</div>
-            )}
+            {selectedProvider.api_key_help && <div className="onboarding-help">{selectedProvider.api_key_help}</div>}
           </>
         )}
 
@@ -208,11 +218,7 @@ function OnboardingDialog({
         {onboarding.platformActionMessage && <div className="onboarding-help">{onboarding.platformActionMessage}</div>}
 
         <div className="onboarding-actions">
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={onboarding.submitting}
-          >
+          <button type="button" onClick={onRefresh} disabled={onboarding.submitting}>
             Refresh
           </button>
           <button

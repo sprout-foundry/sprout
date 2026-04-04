@@ -62,14 +62,12 @@ export function useChatSessions({
           debugLog('[chat] Failed to load initial messages:', e);
         }
       }
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
         chatSessions: response.chat_sessions,
         activeChatId: prev.activeChatId || activeChatId,
         // Only set initial messages if we have none yet (don't clobber live messages)
-        messages: prev.messages.length === 0 && initialMessages.length > 0
-          ? initialMessages
-          : prev.messages,
+        messages: prev.messages.length === 0 && initialMessages.length > 0 ? initialMessages : prev.messages,
       }));
     } catch (error) {
       debugLog('[chat] Failed to load chat sessions:', error);
@@ -87,21 +85,23 @@ export function useChatSessions({
     // Phase 1: instant UI update from cache — no blank flash while API loads.
     // Saves the outgoing chat's full state (including messages) and restores
     // the incoming chat's previously-cached state atomically.
-    setState(prev => {
+    setState((prev) => {
       const cached = prev.perChatCache[id];
-      const newCache = currentId ? {
-        ...prev.perChatCache,
-        [currentId]: {
-          messages: prev.messages,
-          toolExecutions: prev.toolExecutions,
-          fileEdits: prev.fileEdits,
-          subagentActivities: prev.subagentActivities,
-          currentTodos: prev.currentTodos,
-          queryProgress: prev.queryProgress,
-          lastError: prev.lastError,
-          isProcessing: prev.isProcessing,
-        },
-      } : prev.perChatCache;
+      const newCache = currentId
+        ? {
+            ...prev.perChatCache,
+            [currentId]: {
+              messages: prev.messages,
+              toolExecutions: prev.toolExecutions,
+              fileEdits: prev.fileEdits,
+              subagentActivities: prev.subagentActivities,
+              currentTodos: prev.currentTodos,
+              queryProgress: prev.queryProgress,
+              lastError: prev.lastError,
+              isProcessing: prev.isProcessing,
+            },
+          }
+        : prev.perChatCache;
       const restoredIsProcessing = cached?.isProcessing ?? false;
       // Sync the requests counter with cached processing state so the Chat
       // input/stop-button reflects the correct state without waiting for the
@@ -140,7 +140,7 @@ export function useChatSessions({
       // if we missed the query_completed WebSocket event while on another chat.
       const backendIsActive = !!(response.chat_session as any).active_query;
 
-      setState(prev => {
+      setState((prev) => {
         // Only update messages if backend has equal or more messages than what's
         // already shown from cache. If backend has fewer (query still in flight
         // so AgentState not yet synced), keep the cache messages which include
@@ -158,7 +158,7 @@ export function useChatSessions({
 
       // Refresh session list to reflect updated active state
       const sessionsResp = await listChatSessions();
-      setState(prev => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
+      setState((prev) => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
     } catch (error) {
       // Rollback the eagerly-updated ref so subsequent switches aren't confused
       activeChatIdRef.current = currentId;
@@ -171,42 +171,45 @@ export function useChatSessions({
       const response = await createChatSession();
       const newId = response.chat_session.id;
       const sessionsResp = await listChatSessions();
-      setState(prev => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
+      setState((prev) => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
       return newId;
     } catch (error) {
       debugLog('[chat] Failed to create chat session:', error);
       const message = error instanceof Error ? error.message : 'Failed to create new chat';
-      setState(prev => ({ ...prev, lastError: message }));
+      setState((prev) => ({ ...prev, lastError: message }));
       return null;
     }
   }, []);
 
-  const handleDeleteChat = useCallback(async (id: string) => {
-    try {
-      await deleteChatSession(id);
-      if (id === activeChatIdRef.current) {
-        const sessionsResp = await listChatSessions();
-        if (sessionsResp.chat_sessions.length > 0) {
-          // Switch to the active session (deprecated alias kept for useChatSessions internal use).
-          // We reference handleActiveChatChange through a local alias to avoid circular deps.
-          await handleActiveChatChange(sessionsResp.active_chat_id);
+  const handleDeleteChat = useCallback(
+    async (id: string) => {
+      try {
+        await deleteChatSession(id);
+        if (id === activeChatIdRef.current) {
+          const sessionsResp = await listChatSessions();
+          if (sessionsResp.chat_sessions.length > 0) {
+            // Switch to the active session (deprecated alias kept for useChatSessions internal use).
+            // We reference handleActiveChatChange through a local alias to avoid circular deps.
+            await handleActiveChatChange(sessionsResp.active_chat_id);
+          } else {
+            setState((prev) => ({ ...prev, chatSessions: [], activeChatId: null, messages: [] }));
+          }
         } else {
-          setState(prev => ({ ...prev, chatSessions: [], activeChatId: null, messages: [] }));
+          const sessionsResp = await listChatSessions();
+          setState((prev) => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
         }
-      } else {
-        const sessionsResp = await listChatSessions();
-        setState(prev => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
+      } catch (error) {
+        debugLog('[chat] Failed to delete chat session:', error);
       }
-    } catch (error) {
-      debugLog('[chat] Failed to delete chat session:', error);
-    }
-  }, [handleActiveChatChange]);
+    },
+    [handleActiveChatChange],
+  );
 
   const handleRenameChat = useCallback(async (id: string, name: string) => {
     try {
       await renameChatSession(id, name);
       const sessionsResp = await listChatSessions();
-      setState(prev => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
+      setState((prev) => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
     } catch (error) {
       debugLog('[chat] Failed to rename chat session:', error);
     }

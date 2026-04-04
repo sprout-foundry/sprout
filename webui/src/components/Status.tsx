@@ -54,7 +54,9 @@ const Status: React.FC<StatusProps> = ({ isConnected, position = 'top', stats })
   const contextStatus = getContextStatus();
 
   return (
-    <div className={`status-bar ${position === 'bottom' ? 'status-bar-bottom' : 'status-bar-top'} ${isConnected ? 'connected' : 'disconnected'}`}>
+    <div
+      className={`status-bar ${position === 'bottom' ? 'status-bar-bottom' : 'status-bar-top'} ${isConnected ? 'connected' : 'disconnected'}`}
+    >
       <div className="status-indicator">
         <span className={`indicator ${isConnected ? 'on' : 'off'}`}></span>
         <span className="status-text">
@@ -82,13 +84,22 @@ const Status: React.FC<StatusProps> = ({ isConnected, position = 'top', stats })
             </span>
 
             {/* Token Usage */}
-            <span className="status-item status-item-priority" title={`Prompt: ${formatTokens(stats.prompt_tokens || 0)} | Completion: ${formatTokens(stats.completion_tokens || 0)} | Cached: ${formatTokens(stats.cached_tokens || 0)}`}>
+            <span
+              className="status-item status-item-priority"
+              title={`Prompt: ${formatTokens(stats.prompt_tokens || 0)} | Completion: ${formatTokens(stats.completion_tokens || 0)} | Cached: ${formatTokens(stats.cached_tokens || 0)}`}
+            >
               Tokens: {formatTokens(stats.total_tokens || 0)}
             </span>
 
             {/* Context Usage */}
-            <span className={`status-item status-item-priority context-${contextStatus}`} title={`Current: ${formatTokens(stats.current_context_tokens || 0)} / Max: ${formatTokens(stats.max_context_tokens || 0)}`}>
-              Context: {stats.context_usage_percent !== undefined && stats.context_usage_percent !== null ? `${stats.context_usage_percent.toFixed(1)}%` : 'N/A'}
+            <span
+              className={`status-item status-item-priority context-${contextStatus}`}
+              title={`Current: ${formatTokens(stats.current_context_tokens || 0)} / Max: ${formatTokens(stats.max_context_tokens || 0)}`}
+            >
+              Context:{' '}
+              {stats.context_usage_percent !== undefined && stats.context_usage_percent !== null
+                ? `${stats.context_usage_percent.toFixed(1)}%`
+                : 'N/A'}
             </span>
 
             {/* Cache Efficiency */}
@@ -99,7 +110,10 @@ const Status: React.FC<StatusProps> = ({ isConnected, position = 'top', stats })
             )}
 
             {/* Cost */}
-            <span className="status-item status-item-secondary" title={`Total: ${formatCost(stats.total_cost || 0)} | Saved: ${formatCost(stats.cached_cost_savings || 0)}`}>
+            <span
+              className="status-item status-item-secondary"
+              title={`Total: ${formatCost(stats.total_cost || 0)} | Saved: ${formatCost(stats.cached_cost_savings || 0)}`}
+            >
               Cost: {formatCost(stats.total_cost || 0)}
             </span>
 
@@ -111,20 +125,29 @@ const Status: React.FC<StatusProps> = ({ isConnected, position = 'top', stats })
             )}
 
             {/* Iterations */}
-            <span className="status-item status-item-priority" title={`Current: ${stats.current_iteration || 0} / Max: ${stats.max_iterations || 0}`}>
+            <span
+              className="status-item status-item-priority"
+              title={`Current: ${stats.current_iteration || 0} / Max: ${stats.max_iterations || 0}`}
+            >
               Iter: {stats.current_iteration || 0}/{stats.max_iterations || 0}
             </span>
 
             {/* Status Indicators */}
             <span className="status-item status-item-secondary">
               {stats.streaming_enabled && (
-                <span className="status-badge streaming" title="Streaming enabled">S</span>
+                <span className="status-badge streaming" title="Streaming enabled">
+                  S
+                </span>
               )}
               {stats.debug_mode && (
-                <span className="status-badge debug" title="Debug mode">D</span>
+                <span className="status-badge debug" title="Debug mode">
+                  D
+                </span>
               )}
               {stats.context_warning_issued && (
-                <span className="status-badge warning" title="Context limit warning">!</span>
+                <span className="status-badge warning" title="Context limit warning">
+                  !
+                </span>
               )}
             </span>
           </>

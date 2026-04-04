@@ -259,7 +259,9 @@
   padding: 0 var(--space-3);
   border-left: 2px solid transparent;
   cursor: pointer;
-  transition: background-color 0.1s var(--ease-out), border-color 0.1s var(--ease-out);
+  transition:
+    background-color 0.1s var(--ease-out),
+    border-color 0.1s var(--ease-out);
   user-select: none;
   position: relative;
 }
@@ -474,15 +476,31 @@
 
 /* File-type accents */
 .file-tree .file-tree-item[data-ext='.js'] .file-tree-icon,
-.file-tree .file-tree-item[data-ext='.jsx'] .file-tree-icon { color: #f7df1e; }
+.file-tree .file-tree-item[data-ext='.jsx'] .file-tree-icon {
+  color: #f7df1e;
+}
 .file-tree .file-tree-item[data-ext='.ts'] .file-tree-icon,
-.file-tree .file-tree-item[data-ext='.tsx'] .file-tree-icon { color: #3178c6; }
-.file-tree .file-tree-item[data-ext='.go'] .file-tree-icon { color: #00add8; }
-.file-tree .file-tree-item[data-ext='.py'] .file-tree-icon { color: #3776ab; }
-.file-tree .file-tree-item[data-ext='.json'] .file-tree-icon { color: #94a3b8; }
-.file-tree .file-tree-item[data-ext='.html'] .file-tree-icon { color: #e34c26; }
-.file-tree .file-tree-item[data-ext='.css'] .file-tree-icon { color: #1572b6; }
-.file-tree .file-tree-item[data-ext='.md'] .file-tree-icon { color: #38bdf8; }
+.file-tree .file-tree-item[data-ext='.tsx'] .file-tree-icon {
+  color: #3178c6;
+}
+.file-tree .file-tree-item[data-ext='.go'] .file-tree-icon {
+  color: #00add8;
+}
+.file-tree .file-tree-item[data-ext='.py'] .file-tree-icon {
+  color: #3776ab;
+}
+.file-tree .file-tree-item[data-ext='.json'] .file-tree-icon {
+  color: #94a3b8;
+}
+.file-tree .file-tree-item[data-ext='.html'] .file-tree-icon {
+  color: #e34c26;
+}
+.file-tree .file-tree-item[data-ext='.css'] .file-tree-icon {
+  color: #1572b6;
+}
+.file-tree .file-tree-item[data-ext='.md'] .file-tree-icon {
+  color: #38bdf8;
+}
 
 /* File reveal animation */
 .file-tree .file-tree-item.revealed {
@@ -490,8 +508,12 @@
 }
 
 @keyframes file-reveal-flash {
-  0% { background-color: rgba(99, 102, 241, 0.3); }
-  100% { background-color: transparent; }
+  0% {
+    background-color: rgba(99, 102, 241, 0.3);
+  }
+  100% {
+    background-color: transparent;
+  }
 }
 
 /* File tree filter input */

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ApiService } from '../services/api';
+import { type ApiService } from '../services/api';
 import { WebSocketService } from '../services/websocket';
 import type { GitStatusData } from '../types/git-types';
 import type { FileSection } from '../types/git-types';
@@ -118,7 +118,7 @@ export const useGitWorkspace = ({
         modified: [],
         untracked: [],
         deleted: [],
-        renamed: []
+        renamed: [],
       };
 
       setGitStatus({
@@ -130,7 +130,13 @@ export const useGitWorkspace = ({
         untracked: status.untracked || [],
         deleted: status.deleted || [],
         renamed: status.renamed || [],
-        clean: !(status.staged?.length || status.modified?.length || status.untracked?.length || status.deleted?.length || status.renamed?.length)
+        clean: !(
+          status.staged?.length ||
+          status.modified?.length ||
+          status.untracked?.length ||
+          status.deleted?.length ||
+          status.renamed?.length
+        ),
       });
       setGitBranches({
         current: branchData.current || status.branch || '',
@@ -186,35 +192,41 @@ export const useGitWorkspace = ({
     };
   }, [loadGitStatus]);
 
-  const loadDiff = useCallback(async (filePath: string) => {
-    setIsDiffLoading(true);
-    setDiffError(null);
-    try {
-      const response = await apiService.getGitDiff(filePath);
-      setActiveDiff(response);
-      const nextMode = response.has_staged && !response.has_unstaged
-        ? 'staged'
-        : (!response.has_staged && response.has_unstaged ? 'unstaged' : 'combined');
-      setDiffMode(nextMode);
-      openWorkspaceBuffer({
-        kind: 'diff',
-        path: `__workspace/diff/${filePath}`,
-        title: `Diff: ${filePath.split('/').pop() || filePath}`,
-        ext: '.diff',
-        metadata: {
-          sourcePath: filePath,
-          diff: response,
-          diffMode: nextMode,
-        }
-      });
-    } catch (error) {
-      console.error('Failed to load diff:', error);
-      setDiffError(error instanceof Error ? error.message : 'Failed to load diff');
-      setActiveDiff(null);
-    } finally {
-      setIsDiffLoading(false);
-    }
-  }, [apiService, openWorkspaceBuffer]);
+  const loadDiff = useCallback(
+    async (filePath: string) => {
+      setIsDiffLoading(true);
+      setDiffError(null);
+      try {
+        const response = await apiService.getGitDiff(filePath);
+        setActiveDiff(response);
+        const nextMode =
+          response.has_staged && !response.has_unstaged
+            ? 'staged'
+            : !response.has_staged && response.has_unstaged
+              ? 'unstaged'
+              : 'combined';
+        setDiffMode(nextMode);
+        openWorkspaceBuffer({
+          kind: 'diff',
+          path: `__workspace/diff/${filePath}`,
+          title: `Diff: ${filePath.split('/').pop() || filePath}`,
+          ext: '.diff',
+          metadata: {
+            sourcePath: filePath,
+            diff: response,
+            diffMode: nextMode,
+          },
+        });
+      } catch (error) {
+        console.error('Failed to load diff:', error);
+        setDiffError(error instanceof Error ? error.message : 'Failed to load diff');
+        setActiveDiff(null);
+      } finally {
+        setIsDiffLoading(false);
+      }
+    },
+    [apiService, openWorkspaceBuffer],
+  );
 
   useEffect(() => {
     if (!selectedGitFilePath) {
@@ -225,44 +237,53 @@ export const useGitWorkspace = ({
     loadDiff(selectedGitFilePath);
   }, [loadDiff, selectedGitFilePath]);
 
-  const selectedEntries = useMemo(() => (
-    Array.from(selectedFiles)
-      .map(parseSelectionKey)
-      .filter((entry): entry is { section: FileSection; path: string } => entry !== null)
-  ), [selectedFiles]);
+  const selectedEntries = useMemo(
+    () =>
+      Array.from(selectedFiles)
+        .map(parseSelectionKey)
+        .filter((entry): entry is { section: FileSection; path: string } => entry !== null),
+    [selectedFiles],
+  );
 
-  const stageablePaths = useMemo(() => Array.from(new Set(
-    selectedEntries
-      .filter((entry) => entry.section !== 'staged')
-      .map((entry) => entry.path)
-  )), [selectedEntries]);
+  const stageablePaths = useMemo(
+    () => Array.from(new Set(selectedEntries.filter((entry) => entry.section !== 'staged').map((entry) => entry.path))),
+    [selectedEntries],
+  );
 
-  const unstageablePaths = useMemo(() => Array.from(new Set(
-    selectedEntries
-      .filter((entry) => entry.section === 'staged')
-      .map((entry) => entry.path)
-  )), [selectedEntries]);
+  const unstageablePaths = useMemo(
+    () => Array.from(new Set(selectedEntries.filter((entry) => entry.section === 'staged').map((entry) => entry.path))),
+    [selectedEntries],
+  );
 
-  const discardablePaths = useMemo(() => Array.from(new Set(
-    selectedEntries
-      .filter((entry) => entry.section === 'modified' || entry.section === 'deleted')
-      .map((entry) => entry.path)
-  )), [selectedEntries]);
+  const discardablePaths = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          selectedEntries
+            .filter((entry) => entry.section === 'modified' || entry.section === 'deleted')
+            .map((entry) => entry.path),
+        ),
+      ),
+    [selectedEntries],
+  );
 
-  const runGitAction = useCallback(async (action: () => Promise<unknown>, fallbackMessage: string) => {
-    setGitActionError(null);
-    setGitActionWarning(null);
-    setIsGitActing(true);
-    try {
-      await action();
-      await loadGitStatus();
-      setSelectedFiles(new Set());
-    } catch (error) {
-      setGitActionError(error instanceof Error ? error.message : fallbackMessage);
-    } finally {
-      setIsGitActing(false);
-    }
-  }, [loadGitStatus]);
+  const runGitAction = useCallback(
+    async (action: () => Promise<unknown>, fallbackMessage: string) => {
+      setGitActionError(null);
+      setGitActionWarning(null);
+      setIsGitActing(true);
+      try {
+        await action();
+        await loadGitStatus();
+        setSelectedFiles(new Set());
+      } catch (error) {
+        setGitActionError(error instanceof Error ? error.message : fallbackMessage);
+      } finally {
+        setIsGitActing(false);
+      }
+    },
+    [loadGitStatus],
+  );
 
   const handleToggleFileSelection = useCallback((section: FileSection, filePath: string) => {
     const key = selectionKey(section, filePath);
@@ -277,35 +298,41 @@ export const useGitWorkspace = ({
     });
   }, []);
 
-  const handleToggleSectionSelection = useCallback((section: FileSection) => {
-    const files = gitStatus?.[section] || [];
-    if (files.length === 0) return;
+  const handleToggleSectionSelection = useCallback(
+    (section: FileSection) => {
+      const files = gitStatus?.[section] || [];
+      if (files.length === 0) return;
 
-    setSelectedFiles((prev) => {
-      const next = new Set(prev);
-      const keys = files.map((file) => selectionKey(section, file.path));
-      const allSelected = keys.every((key) => next.has(key));
-      keys.forEach((key) => {
-        if (allSelected) {
-          next.delete(key);
-        } else {
-          next.add(key);
-        }
+      setSelectedFiles((prev) => {
+        const next = new Set(prev);
+        const keys = files.map((file) => selectionKey(section, file.path));
+        const allSelected = keys.every((key) => next.has(key));
+        keys.forEach((key) => {
+          if (allSelected) {
+            next.delete(key);
+          } else {
+            next.add(key);
+          }
+        });
+        return next;
       });
-      return next;
-    });
-  }, [gitStatus]);
+    },
+    [gitStatus],
+  );
 
   const clearSelectedFiles = useCallback(() => {
     setSelectedFiles(new Set());
   }, []);
 
-  const handlePreviewGitFile = useCallback((section: FileSection, filePath: string) => {
-    setActiveDiffSelectionKey(selectionKey(section, filePath));
-    setActiveDiffPath(filePath);
-    loadDiff(filePath);
-    onViewChange('editor');
-  }, [loadDiff, onViewChange]);
+  const handlePreviewGitFile = useCallback(
+    (section: FileSection, filePath: string) => {
+      setActiveDiffSelectionKey(selectionKey(section, filePath));
+      setActiveDiffPath(filePath);
+      loadDiff(filePath);
+      onViewChange('editor');
+    },
+    [loadDiff, onViewChange],
+  );
 
   const handleStageSelected = useCallback(() => {
     if (stageablePaths.length === 0) return;
@@ -322,36 +349,51 @@ export const useGitWorkspace = ({
     runGitAction(() => onGitDiscard(discardablePaths), 'Failed to discard selected files');
   }, [discardablePaths, onGitDiscard, runGitAction]);
 
-  const handleStageFile = useCallback((filePath: string) => {
-    runGitAction(() => onGitStage([filePath]), `Failed to stage ${filePath}`);
-  }, [onGitStage, runGitAction]);
+  const handleStageFile = useCallback(
+    (filePath: string) => {
+      runGitAction(() => onGitStage([filePath]), `Failed to stage ${filePath}`);
+    },
+    [onGitStage, runGitAction],
+  );
 
-  const handleUnstageFile = useCallback((filePath: string) => {
-    runGitAction(() => onGitUnstage([filePath]), `Failed to unstage ${filePath}`);
-  }, [onGitUnstage, runGitAction]);
+  const handleUnstageFile = useCallback(
+    (filePath: string) => {
+      runGitAction(() => onGitUnstage([filePath]), `Failed to unstage ${filePath}`);
+    },
+    [onGitUnstage, runGitAction],
+  );
 
-  const handleDiscardFile = useCallback((filePath: string) => {
-    runGitAction(() => onGitDiscard([filePath]), `Failed to discard ${filePath}`);
-  }, [onGitDiscard, runGitAction]);
+  const handleDiscardFile = useCallback(
+    (filePath: string) => {
+      runGitAction(() => onGitDiscard([filePath]), `Failed to discard ${filePath}`);
+    },
+    [onGitDiscard, runGitAction],
+  );
 
-  const handleSectionAction = useCallback((section: FileSection) => {
-    const files = gitStatus?.[section] || [];
-    if (files.length === 0) return;
+  const handleSectionAction = useCallback(
+    (section: FileSection) => {
+      const files = gitStatus?.[section] || [];
+      if (files.length === 0) return;
 
-    if (section === 'staged') {
-      runGitAction(() => onGitUnstage(files.map((file) => file.path)), 'Failed to unstage section');
-      return;
-    }
+      if (section === 'staged') {
+        runGitAction(() => onGitUnstage(files.map((file) => file.path)), 'Failed to unstage section');
+        return;
+      }
 
-    if (section === 'modified' || section === 'untracked' || section === 'deleted') {
-      runGitAction(() => onGitStage(files.map((file) => file.path)), 'Failed to stage section');
-    }
-  }, [gitStatus, onGitStage, onGitUnstage, runGitAction]);
+      if (section === 'modified' || section === 'untracked' || section === 'deleted') {
+        runGitAction(() => onGitStage(files.map((file) => file.path)), 'Failed to stage section');
+      }
+    },
+    [gitStatus, onGitStage, onGitUnstage, runGitAction],
+  );
 
   const handleGitCommitClick = useCallback(() => {
     if (!commitMessage.trim() || !gitStatus?.staged.length) return;
     runGitAction(async () => {
-      await onGitCommit(commitMessage, gitStatus.staged.map((file) => file.path));
+      await onGitCommit(
+        commitMessage,
+        gitStatus.staged.map((file) => file.path),
+      );
       setCommitMessage('');
       setDeepReview(null);
     }, 'Failed to create commit');
@@ -393,7 +435,7 @@ export const useGitWorkspace = ({
         path: '__workspace/review',
         title: 'Review',
         ext: '.review',
-        metadata: { reviewGeneratedAt: Date.now() }
+        metadata: { reviewGeneratedAt: Date.now() },
       });
       onViewChange('editor');
     } catch (error) {
@@ -404,87 +446,99 @@ export const useGitWorkspace = ({
     }
   }, [apiService, onViewChange, openWorkspaceBuffer]);
 
-  const handleFixFromReview = useCallback(async (options?: { fixPrompt?: string; selectedItems?: string[] }) => {
-    if (!deepReview?.review_output) return;
-    setReviewError(null);
-    setReviewFixResult(null);
-    setReviewFixLogs([]);
-    setReviewFixSessionID(null);
-    setIsReviewFixing(true);
-    try {
-      const started = await apiService.startFixFromDeepReview(deepReview.review_output, options);
-      setReviewFixSessionID(started.session_id || null);
-      fixPollIndexRef.current = 0;
-      setReviewFixLogs((prev) => [...prev, `Started fix session: ${started.session_id}`]);
+  const handleFixFromReview = useCallback(
+    async (options?: { fixPrompt?: string; selectedItems?: string[] }) => {
+      if (!deepReview?.review_output) return;
+      setReviewError(null);
+      setReviewFixResult(null);
+      setReviewFixLogs([]);
+      setReviewFixSessionID(null);
+      setIsReviewFixing(true);
+      try {
+        const started = await apiService.startFixFromDeepReview(deepReview.review_output, options);
+        setReviewFixSessionID(started.session_id || null);
+        fixPollIndexRef.current = 0;
+        setReviewFixLogs((prev) => [...prev, `Started fix session: ${started.session_id}`]);
 
-      const poll = async () => {
-        try {
-          const status = await apiService.getFixFromDeepReviewStatus(started.job_id, fixPollIndexRef.current);
-          if (status.logs?.length) {
-            setReviewFixLogs((prev) => [...prev, ...status.logs]);
-          }
-          fixPollIndexRef.current = status.next_index || fixPollIndexRef.current;
+        const poll = async () => {
+          try {
+            const status = await apiService.getFixFromDeepReviewStatus(started.job_id, fixPollIndexRef.current);
+            if (status.logs?.length) {
+              setReviewFixLogs((prev) => [...prev, ...status.logs]);
+            }
+            fixPollIndexRef.current = status.next_index || fixPollIndexRef.current;
 
-          if (status.status === 'completed') {
-            setReviewFixResult(status.result || 'Fix workflow completed.');
+            if (status.status === 'completed') {
+              setReviewFixResult(status.result || 'Fix workflow completed.');
+              setIsReviewFixing(false);
+              await loadGitStatus();
+              return;
+            }
+
+            if (status.status === 'error') {
+              throw new Error(status.error || 'Fix workflow failed');
+            }
+
+            fixPollTimeoutRef.current = window.setTimeout(poll, 1000);
+          } catch (error) {
+            setReviewError(error instanceof Error ? error.message : 'Failed to fetch fix progress');
             setIsReviewFixing(false);
-            await loadGitStatus();
-            return;
           }
+        };
 
-          if (status.status === 'error') {
-            throw new Error(status.error || 'Fix workflow failed');
-          }
-
-          fixPollTimeoutRef.current = window.setTimeout(poll, 1000);
-        } catch (error) {
-          setReviewError(error instanceof Error ? error.message : 'Failed to fetch fix progress');
-          setIsReviewFixing(false);
-        }
-      };
-
-      await poll();
-    } catch (error) {
-      setReviewError(error instanceof Error ? error.message : 'Failed to apply fixes from deep review');
-      setIsReviewFixing(false);
-    }
-  }, [apiService, deepReview, loadGitStatus]);
-
-  const handleDiffModeChange = useCallback((mode: 'combined' | 'staged' | 'unstaged') => {
-    setDiffMode(mode);
-    if (!activeDiffPath) {
-      return;
-    }
-
-    openWorkspaceBuffer({
-      kind: 'diff',
-      path: `__workspace/diff/${activeDiffPath}`,
-      title: `Diff: ${activeDiffPath.split('/').pop() || activeDiffPath}`,
-      ext: '.diff',
-      metadata: {
-        sourcePath: activeDiffPath,
-        diff: activeDiff,
-        diffMode: mode,
+        await poll();
+      } catch (error) {
+        setReviewError(error instanceof Error ? error.message : 'Failed to apply fixes from deep review');
+        setIsReviewFixing(false);
       }
-    });
-  }, [activeDiff, activeDiffPath, openWorkspaceBuffer]);
+    },
+    [apiService, deepReview, loadGitStatus],
+  );
+
+  const handleDiffModeChange = useCallback(
+    (mode: 'combined' | 'staged' | 'unstaged') => {
+      setDiffMode(mode);
+      if (!activeDiffPath) {
+        return;
+      }
+
+      openWorkspaceBuffer({
+        kind: 'diff',
+        path: `__workspace/diff/${activeDiffPath}`,
+        title: `Diff: ${activeDiffPath.split('/').pop() || activeDiffPath}`,
+        ext: '.diff',
+        metadata: {
+          sourcePath: activeDiffPath,
+          diff: activeDiff,
+          diffMode: mode,
+        },
+      });
+    },
+    [activeDiff, activeDiffPath, openWorkspaceBuffer],
+  );
 
   const currentBranch = gitBranches.current;
 
-  const handleCheckoutBranch = useCallback((branch: string) => {
-    if (!branch.trim() || branch === currentBranch) return;
-    runGitAction(async () => {
-      await apiService.checkoutGitBranch(branch);
-    }, `Failed to checkout ${branch}`);
-  }, [apiService, currentBranch, runGitAction]);
+  const handleCheckoutBranch = useCallback(
+    (branch: string) => {
+      if (!branch.trim() || branch === currentBranch) return;
+      runGitAction(async () => {
+        await apiService.checkoutGitBranch(branch);
+      }, `Failed to checkout ${branch}`);
+    },
+    [apiService, currentBranch, runGitAction],
+  );
 
-  const handleCreateBranch = useCallback((name: string) => {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    runGitAction(async () => {
-      await apiService.createGitBranch(trimmed);
-    }, `Failed to create branch ${trimmed}`);
-  }, [apiService, runGitAction]);
+  const handleCreateBranch = useCallback(
+    (name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      runGitAction(async () => {
+        await apiService.createGitBranch(trimmed);
+      }, `Failed to create branch ${trimmed}`);
+    },
+    [apiService, runGitAction],
+  );
 
   const handlePull = useCallback(() => {
     runGitAction(async () => {

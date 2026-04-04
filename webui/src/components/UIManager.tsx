@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import Dropdown, { DropdownItem } from './Dropdown';
+import Dropdown, { type DropdownItem } from './Dropdown';
 import QuickPrompt from './QuickPrompt';
 import Progress from './Progress';
 import FileBrowser from './FileBrowser';
-import { uiService, UIDropdownItem, UIDropdownOptions, UIQuickOption } from '../services/ui';
+import { uiService, type UIDropdownItem, type UIDropdownOptions, type UIQuickOption } from '../services/ui';
 
 interface UIManagerProps {
   children: React.ReactNode;
@@ -18,7 +18,7 @@ const UIManager: React.FC<UIManagerProps> = ({ children }) => {
   }>({
     isOpen: false,
     items: [],
-    options: { prompt: '' }
+    options: { prompt: '' },
   });
 
   const [quickPromptState, setQuickPromptState] = useState<{
@@ -31,7 +31,7 @@ const UIManager: React.FC<UIManagerProps> = ({ children }) => {
     isOpen: false,
     prompt: '',
     options: [],
-    horizontal: true
+    horizontal: true,
   });
 
   const [inputPromptState, setInputPromptState] = useState<{
@@ -44,16 +44,21 @@ const UIManager: React.FC<UIManagerProps> = ({ children }) => {
     isOpen: false,
     prompt: '',
     value: '',
-    mask: false
+    mask: false,
   });
 
-  const [progressItems, setProgressItems] = useState<Map<string, {
-    message: string;
-    current: number;
-    total: number;
-    done: boolean;
-    startTime: number;
-  }>>(new Map());
+  const [progressItems, setProgressItems] = useState<
+    Map<
+      string,
+      {
+        message: string;
+        current: number;
+        total: number;
+        done: boolean;
+        startTime: number;
+      }
+    >
+  >(new Map());
 
   const [fileBrowserState, setFileBrowserState] = useState<{
     isOpen: boolean;
@@ -64,7 +69,7 @@ const UIManager: React.FC<UIManagerProps> = ({ children }) => {
   }>({
     isOpen: false,
     allowDirectories: false,
-    allowedExtensions: []
+    allowedExtensions: [],
   });
 
   useEffect(() => {
@@ -77,14 +82,14 @@ const UIManager: React.FC<UIManagerProps> = ({ children }) => {
         id: uiItem.id,
         display: uiItem.display,
         searchText: uiItem.search_text,
-        value: uiItem.value
+        value: uiItem.value,
       }));
 
       setDropdownState({
         isOpen: true,
         items: convertedItems,
         options: options || { prompt },
-        promptId: id
+        promptId: id,
       });
     };
 
@@ -96,7 +101,7 @@ const UIManager: React.FC<UIManagerProps> = ({ children }) => {
         prompt,
         options: options || [],
         horizontal: horizontal !== false,
-        promptId: id
+        promptId: id,
       });
     };
 
@@ -107,21 +112,21 @@ const UIManager: React.FC<UIManagerProps> = ({ children }) => {
         prompt,
         value: defaultValue || '',
         mask: Boolean(mask),
-        promptId: id
+        promptId: id,
       });
     };
 
     const handleProgressStart = (event: CustomEvent) => {
       const { id, message, current = 0, total = 0 } = event.detail;
 
-      setProgressItems(prev => {
+      setProgressItems((prev) => {
         const next = new Map(prev);
         next.set(id, {
           message,
           current,
           total,
           done: false,
-          startTime: Date.now()
+          startTime: Date.now(),
         });
         return next;
       });
@@ -130,7 +135,7 @@ const UIManager: React.FC<UIManagerProps> = ({ children }) => {
     const handleProgressUpdate = (event: CustomEvent) => {
       const { id, message, current, total, done } = event.detail;
 
-      setProgressItems(prev => {
+      setProgressItems((prev) => {
         const newMap = new Map(prev);
         const existing = newMap.get(id);
 
@@ -140,7 +145,7 @@ const UIManager: React.FC<UIManagerProps> = ({ children }) => {
             ...(message !== undefined && { message }),
             ...(current !== undefined && { current }),
             ...(total !== undefined && { total }),
-            ...(done !== undefined && { done })
+            ...(done !== undefined && { done }),
           });
         }
 
@@ -169,10 +174,10 @@ const UIManager: React.FC<UIManagerProps> = ({ children }) => {
         id: dropdownState.promptId,
         type: 'dropdown',
         selected: item.value,
-        cancelled: false
+        cancelled: false,
       });
     }
-    setDropdownState(prev => ({ ...prev, isOpen: false, promptId: undefined }));
+    setDropdownState((prev) => ({ ...prev, isOpen: false, promptId: undefined }));
   };
 
   const handleDropdownCancel = () => {
@@ -180,10 +185,10 @@ const UIManager: React.FC<UIManagerProps> = ({ children }) => {
       uiService.respondToPrompt({
         id: dropdownState.promptId,
         type: 'dropdown',
-        cancelled: true
+        cancelled: true,
       });
     }
-    setDropdownState(prev => ({ ...prev, isOpen: false, promptId: undefined }));
+    setDropdownState((prev) => ({ ...prev, isOpen: false, promptId: undefined }));
   };
 
   const handleQuickPromptSelect = (option: UIQuickOption) => {
@@ -192,10 +197,10 @@ const UIManager: React.FC<UIManagerProps> = ({ children }) => {
         id: quickPromptState.promptId,
         type: 'quick_prompt',
         selected: option.value,
-        cancelled: false
+        cancelled: false,
       });
     }
-    setQuickPromptState(prev => ({ ...prev, isOpen: false, promptId: undefined }));
+    setQuickPromptState((prev) => ({ ...prev, isOpen: false, promptId: undefined }));
   };
 
   const handleQuickPromptCancel = () => {
@@ -203,10 +208,10 @@ const UIManager: React.FC<UIManagerProps> = ({ children }) => {
       uiService.respondToPrompt({
         id: quickPromptState.promptId,
         type: 'quick_prompt',
-        cancelled: true
+        cancelled: true,
       });
     }
-    setQuickPromptState(prev => ({ ...prev, isOpen: false, promptId: undefined }));
+    setQuickPromptState((prev) => ({ ...prev, isOpen: false, promptId: undefined }));
   };
 
   const handleInputPromptSubmit = () => {
@@ -215,10 +220,10 @@ const UIManager: React.FC<UIManagerProps> = ({ children }) => {
         id: inputPromptState.promptId,
         type: 'input',
         value: inputPromptState.value,
-        cancelled: false
+        cancelled: false,
       });
     }
-    setInputPromptState(prev => ({ ...prev, isOpen: false, promptId: undefined }));
+    setInputPromptState((prev) => ({ ...prev, isOpen: false, promptId: undefined }));
   };
 
   const handleInputPromptCancel = () => {
@@ -226,27 +231,27 @@ const UIManager: React.FC<UIManagerProps> = ({ children }) => {
       uiService.respondToPrompt({
         id: inputPromptState.promptId,
         type: 'input',
-        cancelled: true
+        cancelled: true,
       });
     }
-    setInputPromptState(prev => ({ ...prev, isOpen: false, promptId: undefined }));
+    setInputPromptState((prev) => ({ ...prev, isOpen: false, promptId: undefined }));
   };
 
   const handleFileBrowserSelect = (file: any) => {
     if (fileBrowserState.resolve) {
       fileBrowserState.resolve(file);
     }
-    setFileBrowserState(prev => ({ ...prev, isOpen: false }));
+    setFileBrowserState((prev) => ({ ...prev, isOpen: false }));
   };
 
   const handleFileBrowserCancel = () => {
-    setFileBrowserState(prev => ({ ...prev, isOpen: false }));
+    setFileBrowserState((prev) => ({ ...prev, isOpen: false }));
   };
 
   // Clean up completed progress items after a delay
   useEffect(() => {
     const interval = setInterval(() => {
-      setProgressItems(prev => {
+      setProgressItems((prev) => {
         const newMap = new Map();
         let hasChanges = false;
 
@@ -295,7 +300,7 @@ const UIManager: React.FC<UIManagerProps> = ({ children }) => {
             <input
               type={inputPromptState.mask ? 'password' : 'text'}
               value={inputPromptState.value}
-              onChange={(e) => setInputPromptState(prev => ({ ...prev, value: e.target.value }))}
+              onChange={(e) => setInputPromptState((prev) => ({ ...prev, value: e.target.value }))}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault();
@@ -328,7 +333,7 @@ const UIManager: React.FC<UIManagerProps> = ({ children }) => {
           current: item.current,
           total: item.total,
           done: item.done,
-          startTime: item.startTime
+          startTime: item.startTime,
         }))}
       />
 

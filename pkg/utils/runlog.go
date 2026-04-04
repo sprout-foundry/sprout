@@ -3,6 +3,7 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,7 +28,9 @@ var (
 // Log file: .ledit/runlogs/run-YYYYmmdd_HHMMSS.jsonl
 func GetRunLogger() *RunLogger {
 	runOnce.Do(func() {
-		_ = os.MkdirAll(".ledit/runlogs", 0755)
+		if err := os.MkdirAll(".ledit/runlogs", 0755); err != nil {
+			log.Printf("[debug] failed to create runlogs directory: %v", err)
+		}
 		name := time.Now().Format("20060102_150405")
 		path := filepath.Join(".ledit", "runlogs", fmt.Sprintf("run-%s.jsonl", name))
 		f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)

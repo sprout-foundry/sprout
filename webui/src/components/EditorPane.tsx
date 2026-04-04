@@ -905,7 +905,9 @@ const EditorPane: FC<EditorPaneProps> = ({ paneId }) => {
               }
               // 'ignore' → dismissed without action (no indicator needed)
             })
-            .catch(() => {});
+            .catch((err) => {
+              console.error('File change dialog error:', err);
+            });
           return;
         }
 

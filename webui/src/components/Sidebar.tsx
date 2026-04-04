@@ -46,6 +46,7 @@ interface SidebarProps {
   stats?: {
     queryCount: number;
     filesModified: number;
+    persona?: string;
   };
   recentFiles?: Array<{ path: string; modified: boolean }>;
   recentLogs?:
@@ -116,6 +117,7 @@ const Sidebar: FC<SidebarProps> = ({
   onPersonaChange,
   availableModels,
   currentView,
+  stats,
   recentFiles: _recentFiles = [],
   recentLogs = [],
   isMobileMenuOpen,
@@ -148,7 +150,7 @@ const Sidebar: FC<SidebarProps> = ({
   sidebarWidthRef.current = sidebarWidth;
   const [selectedProvider, setSelectedProvider] = useState(provider || '');
   const [selectedModelState, setSelectedModelState] = useState(model || selectedModel || '');
-  const [selectedPersonaState, setSelectedPersonaState] = useState<string>(selectedPersona || 'orchestrator');
+  const [selectedPersonaState, setSelectedPersonaState] = useState<string>(selectedPersona || (stats?.persona || 'orchestrator'));
   const [personas, setPersonas] = useState<{ id: string; name: string; enabled: boolean }[]>([]);
   const [isLoadingPersonas, setIsLoadingPersonas] = useState(false);
   const [providers, setProviders] = useState<ProviderOption[]>([]);
@@ -159,6 +161,13 @@ const Sidebar: FC<SidebarProps> = ({
   const [settings, setSettings] = useState<LeditSettings | null>(null);
   const apiService = ApiService.getInstance();
   const effectiveSidebarCollapsed = !isMobile && !!sidebarCollapsed;
+
+  // Sync persona state when stats change (e.g., from another client's persona change)
+  useEffect(() => {
+    if (stats?.persona && stats.persona !== selectedPersonaState) {
+      setSelectedPersonaState(stats.persona);
+    }
+  }, [stats?.persona]);
 
   // Load settings on mount / connection
   useEffect(() => {

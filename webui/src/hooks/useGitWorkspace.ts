@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type ApiService } from '../services/api';
 import { WebSocketService } from '../services/websocket';
+import type { WsEvent } from '../services/websocket';
 import type { GitStatusData } from '../types/git-types';
 import type { FileSection } from '../types/git-types';
 import { selectionKey, parseSelectionKey } from '../types/git-types';
@@ -50,7 +51,7 @@ interface UseGitWorkspaceOptions {
     ext?: string;
     isPinned?: boolean;
     isClosable?: boolean;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
   }) => string;
 }
 
@@ -163,10 +164,11 @@ export const useGitWorkspace = ({
   useEffect(() => {
     const wsService = WebSocketService.getInstance();
 
-    const handleFileChanged = (event: any) => {
+    const handleFileChanged = (event: WsEvent) => {
       if (event?.type !== 'file_changed') return;
 
-      const action = event.data?.action || '';
+      const eventData = event.data as Record<string, unknown> | undefined;
+      const action = String(eventData?.action || '');
       // Skip git-level actions — those already trigger explicit refreshes
       // via runGitAction → loadGitStatus.
       if (action.startsWith('git_')) return;

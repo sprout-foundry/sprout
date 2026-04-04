@@ -55,7 +55,7 @@ interface ToolExecution {
   message?: string;
   startTime: Date;
   endTime?: Date;
-  details?: any;
+  details?: unknown;
   arguments?: string;
   result?: string;
   persona?: string;
@@ -66,7 +66,7 @@ interface LogEntry {
   id: string;
   type: string;
   timestamp: Date;
-  data: any;
+  data: unknown;
   level: 'info' | 'warning' | 'error' | 'success';
   category: 'query' | 'tool' | 'file' | 'system' | 'stream';
 }
@@ -162,7 +162,7 @@ interface ChatContextPanelProps extends ContextPanelBaseProps {
   messages: Array<{ type: string; timestamp: Date }>;
   isProcessing: boolean;
   lastError: string | null;
-  queryProgress: any;
+  queryProgress: unknown;
   stats?: {
     provider?: string;
     model?: string;
@@ -207,9 +207,18 @@ const PANEL_MIN = 280;
 const PANEL_MAX = 760;
 const MOBILE_LAYOUT_MAX_WIDTH = 768;
 
-const normalizeRevision = (raw: any): Revision => {
-  const files = Array.isArray(raw?.files)
-    ? raw.files.map((file: any) => ({
+const normalizeRevision = (raw: unknown): Revision => {
+  const r = raw as Record<string, unknown> | null | undefined;
+  if (!r) {
+    return {
+      revision_id: 'unknown',
+      timestamp: new Date().toISOString(),
+      files: [],
+      description: '',
+    };
+  }
+  const files = Array.isArray(r.files)
+    ? (r.files as Array<Record<string, unknown>>).map((file: Record<string, unknown>) => ({
         file_revision_hash: typeof file?.file_revision_hash === 'string' ? file.file_revision_hash : undefined,
         path: typeof file?.path === 'string' ? file.path : 'Unknown',
         operation: typeof file?.operation === 'string' ? file.operation : 'edited',
@@ -219,10 +228,10 @@ const normalizeRevision = (raw: any): Revision => {
     : [];
 
   return {
-    revision_id: typeof raw?.revision_id === 'string' ? raw.revision_id : 'unknown',
-    timestamp: typeof raw?.timestamp === 'string' ? raw.timestamp : new Date().toISOString(),
+    revision_id: typeof r?.revision_id === 'string' ? r.revision_id : 'unknown',
+    timestamp: typeof r?.timestamp === 'string' ? r.timestamp : new Date().toISOString(),
     files,
-    description: typeof raw?.description === 'string' ? raw.description : '',
+    description: typeof r?.description === 'string' ? r.description : '',
   };
 };
 
@@ -243,9 +252,8 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   const panelContainerRef = useRef<HTMLDivElement>(null);
 
   // ── Chat-specific state ──────────────────────────────────────────
-  const [chatTab, setChatTab] = useState<'subagents' | 'tools' | 'changes' | 'tasks' | 'status' | 'sessions'>(
-    'subagents',
-  );
+  type ChatTabId = 'subagents' | 'tools' | 'changes' | 'tasks' | 'status' | 'sessions';
+  const [chatTab, setChatTab] = useState<ChatTabId>('subagents');
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
   const [expandedSubagents, setExpandedSubagents] = useState<Set<string>>(new Set());
   const [activeToolId, setActiveToolId] = useState<string | null>(null);
@@ -314,7 +322,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       openTab: (tab: string) => {
         setPanelCollapsed(false);
         if (context === 'chat' && ['subagents', 'tools', 'changes', 'tasks', 'status', 'sessions'].includes(tab)) {
-          setChatTab(tab as any);
+          setChatTab(tab as ChatTabId);
           if (tab === 'changes' && revisions.length === 0) {
             loadRevisionHistory();
           }
@@ -353,7 +361,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     }
     if (storedTab) {
       if (['subagents', 'tools', 'changes', 'tasks', 'status', 'sessions'].includes(storedTab)) {
-        setChatTab(storedTab as any);
+        setChatTab(storedTab as ChatTabId);
       }
     }
   }, [context]);
@@ -424,7 +432,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
   // Stable primitives for the effect dependency array (avoids interval teardown on every render).
   // We only care about whether there's at least one message and its timestamp.
-  const msgArr: Array<{ timestamp: Date }> = 'messages' in props ? (props as any).messages : [];
+  const msgArr: Array<{ timestamp: Date }> = 'messages' in props ? props.messages : [];
   const messageCount = msgArr.length;
   const firstMessageTs =
     messageCount > 0
@@ -594,7 +602,8 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     if (log.type !== 'agent_message' || !log.data || typeof log.data !== 'object') {
       return null;
     }
-    const raw = typeof log.data.message === 'string' ? log.data.message : '';
+    const d = log.data as Record<string, unknown>;
+    const raw = typeof d.message === 'string' ? d.message : '';
     if (!raw || (!raw.includes('Subagent:') && !/Spawning subagent/i.test(raw))) {
       return null;
     }
@@ -990,97 +999,101 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
   const renderToolsTab = () => (
     <div className="context-panel-tools-list">
-      {toolExecutions.length === 0 ? (
-        <div className="context-panel-empty">Tool calls will appear here.</div>
-      ) : (
-        toolExecutions.map((tool) => {
-          const isSub = isSubagentTool(tool);
-          const subagentPrompt = isSub ? getSubagentPrompt(tool) : undefined;
+      <>
+        {toolExecutions.length === 0 ? (
+          <div className="context-panel-empty">Tool calls will appear here.</div>
+        ) : (
+          toolExecutions.map((tool) => {
+            const isSub = isSubagentTool(tool);
+            const subagentPrompt = isSub ? getSubagentPrompt(tool) : undefined;
 
-          return (
-            <div
-              key={tool.id}
-              ref={(el) => {
-                toolRefs.current[tool.id] = el;
-              }}
-              className={`tool-execution tool-${tool.status} ${isSub ? 'tool-subagent' : ''} ${activeToolId === tool.id ? 'tool-highlighted' : ''}`}
-              onClick={() => toggleToolExpansion(tool.id)}
-            >
-              <div className="tool-summary">
-                <span className="tool-icon">
-                  {isSub ? (
-                    <span className="subagent-icon" style={{ color: getPersonaColor(tool.persona) }}>
-                      <Bot size={14} />
+            return (
+              <div
+                key={tool.id}
+                ref={(el) => {
+                  toolRefs.current[tool.id] = el;
+                }}
+                className={`tool-execution tool-${tool.status} ${isSub ? 'tool-subagent' : ''} ${activeToolId === tool.id ? 'tool-highlighted' : ''}`}
+                onClick={() => toggleToolExpansion(tool.id)}
+              >
+                <>
+                  <div className="tool-summary">
+                    <span className="tool-icon">
+                      {isSub ? (
+                        <span className="subagent-icon" style={{ color: getPersonaColor(tool.persona) }}>
+                          <Bot size={14} />
+                        </span>
+                      ) : (
+                        getToolIcon(tool.tool)
+                      )}
                     </span>
-                  ) : (
-                    getToolIcon(tool.tool)
+                    <span className={`tool-name ${isSub ? 'tool-name-subagent' : ''}`}>
+                      {isSub
+                        ? tool.persona
+                          ? `${tool.persona}`
+                          : tool.subagentType === 'parallel'
+                            ? 'parallel subagents'
+                            : 'subagent'
+                        : tool.tool}
+                      {isSub && tool.subagentType === 'parallel' && ' (parallel)'}
+                    </span>
+                    <span className="tool-status">{getStatusIcon(tool.status)}</span>
+                    <span className="tool-duration">{formatDuration(tool.startTime, tool.endTime)}</span>
+                    <span className="tool-expand">
+                      {expandedTools.has(tool.id) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                    </span>
+                  </div>
+
+                  {isSub && subagentPrompt && !expandedTools.has(tool.id) && (
+                    <div className="tool-message tool-subagent-prompt">{stripAnsiCodes(subagentPrompt)}</div>
                   )}
-                </span>
-                <span className={`tool-name ${isSub ? 'tool-name-subagent' : ''}`}>
-                  {isSub
-                    ? tool.persona
-                      ? `${tool.persona}`
-                      : tool.subagentType === 'parallel'
-                        ? 'parallel subagents'
-                        : 'subagent'
-                    : tool.tool}
-                  {isSub && tool.subagentType === 'parallel' && ' (parallel)'}
-                </span>
-                <span className="tool-status">{getStatusIcon(tool.status)}</span>
-                <span className="tool-duration">{formatDuration(tool.startTime, tool.endTime)}</span>
-                <span className="tool-expand">
-                  {expandedTools.has(tool.id) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                </span>
+
+                  {tool.message && !(isSub && subagentPrompt) && (
+                    <div className="tool-message">{stripAnsiCodes(tool.message)}</div>
+                  )}
+
+                  {expandedTools.has(tool.id) && (tool.arguments || tool.result || tool.details) && (
+                    <div className="tool-details">
+                      {isSub && subagentPrompt && (
+                        <div className="tool-detail-section">
+                          <div className="tool-detail-label">
+                            <FileEdit size={12} className="inline-icon" /> Task
+                          </div>
+                          <pre className="subagent-prompt-detail">{stripAnsiCodes(subagentPrompt)}</pre>
+                        </div>
+                      )}
+                      {tool.arguments && !isSub && (
+                        <div className="tool-detail-section">
+                          <div className="tool-detail-label">
+                            <ClipboardList size={12} className="inline-icon" /> Call
+                          </div>
+                          <pre>{formatToolDetail(tool.arguments)}</pre>
+                        </div>
+                      )}
+                      {tool.result && (
+                        <div className="tool-detail-section">
+                          <div className="tool-detail-label">
+                            {isSub ? (
+                              <>
+                                <BarChart3 size={12} className="inline-icon" /> Summary
+                              </>
+                            ) : (
+                              <>
+                                <FileText size={12} className="inline-icon" /> Response
+                              </>
+                            )}
+                          </div>
+                          <pre>{formatToolDetail(tool.result)}</pre>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
               </div>
-
-              {isSub && subagentPrompt && !expandedTools.has(tool.id) && (
-                <div className="tool-message tool-subagent-prompt">{stripAnsiCodes(subagentPrompt)}</div>
-              )}
-
-              {tool.message && !(isSub && subagentPrompt) && (
-                <div className="tool-message">{stripAnsiCodes(tool.message)}</div>
-              )}
-
-              {expandedTools.has(tool.id) && (tool.arguments || tool.result || tool.details) && (
-                <div className="tool-details">
-                  {isSub && subagentPrompt && (
-                    <div className="tool-detail-section">
-                      <div className="tool-detail-label">
-                        <FileEdit size={12} className="inline-icon" /> Task
-                      </div>
-                      <pre className="subagent-prompt-detail">{stripAnsiCodes(subagentPrompt)}</pre>
-                    </div>
-                  )}
-                  {tool.arguments && !isSub && (
-                    <div className="tool-detail-section">
-                      <div className="tool-detail-label">
-                        <ClipboardList size={12} className="inline-icon" /> Call
-                      </div>
-                      <pre>{formatToolDetail(tool.arguments)}</pre>
-                    </div>
-                  )}
-                  {tool.result && (
-                    <div className="tool-detail-section">
-                      <div className="tool-detail-label">
-                        {isSub ? (
-                          <>
-                            <BarChart3 size={12} className="inline-icon" /> Summary
-                          </>
-                        ) : (
-                          <>
-                            <FileText size={12} className="inline-icon" /> Response
-                          </>
-                        )}
-                      </div>
-                      <pre>{formatToolDetail(tool.result)}</pre>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })
-      )}
+            );
+          })
+        )}
+      </>
     </div>
   );
 
@@ -1311,7 +1324,9 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
           {chatIsProcessing ? (
             <>
               <span className="status-dot-indicator active" />
-              <span className="status-label">{chatQueryProgress?.message || 'Working...'}</span>
+              <span className="status-label">
+                {chatQueryProgress ? ((chatQueryProgress as Record<string, unknown>).message as string) : 'Working...'}
+              </span>
             </>
           ) : chatLastError ? (
             <>

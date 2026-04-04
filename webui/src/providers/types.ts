@@ -19,14 +19,14 @@ export interface ProviderLogEntry {
 /** Generic action that can be performed by providers */
 export interface Action {
   type: string;
-  payload?: any;
+  payload?: unknown;
 }
 
 /** Result of handling an action */
 export interface ActionResult {
   success: boolean;
   error?: string;
-  data?: any;
+  data?: unknown;
 }
 
 /** Context provided to content providers */
@@ -53,15 +53,15 @@ export interface DataSource {
   type: 'api' | 'state' | 'websocket';
   endpoint?: string;
   eventType?: string;
-  transform?: (data: any) => any;
+  transform?: (data: unknown) => unknown;
 }
 
 /** Section definition - data-driven, not hardcoded */
 export interface SidebarSection {
   id: string;
   dataSource: DataSource;
-  renderItem: (item: any, context: ProviderContext) => ReactNode;
-  title?: (data: any) => string;
+  renderItem: (item: unknown, context: ProviderContext) => ReactNode;
+  title?: (data: unknown) => string;
   emptyMessage?: string;
   order?: number;
 }

@@ -1,7 +1,14 @@
 import { debugLog } from '../utils/log';
 import { appendClientIdToUrl } from './clientSession';
 
-type EventCallback = (event: any) => void;
+/** Shape of a WebSocket event coming from / going to the server. */
+export interface WsEvent {
+  type: string;
+  data?: unknown;
+  [key: string]: unknown;
+}
+
+type EventCallback = (event: WsEvent) => void;
 
 class WebSocketService {
   private static instance: WebSocketService;
@@ -101,7 +108,7 @@ class WebSocketService {
     const wsUrl =
       process.env.REACT_APP_WS_URL ||
       (() => {
-        const proxyBase = (window as any).LEDIT_PROXY_BASE || '';
+        const proxyBase = (window as unknown as Record<string, string>).LEDIT_PROXY_BASE || '';
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         return `${protocol}//${window.location.host}${proxyBase}/ws`;
       })();
@@ -265,11 +272,11 @@ class WebSocketService {
     this.onReconnectCallback = callback;
   }
 
-  private notifyCallbacks(event: any) {
+  private notifyCallbacks(event: WsEvent) {
     this.callbacks.forEach((callback) => callback(event));
   }
 
-  sendEvent(event: any) {
+  sendEvent(event: WsEvent) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(event));
     } else {

@@ -90,6 +90,7 @@ export function useMessageSending({
         }));
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [apiService],
   );
 
@@ -116,6 +117,7 @@ export function useMessageSending({
         ],
       }));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiService]);
 
   return { handleSendMessage, handleStopProcessing };

@@ -60,11 +60,14 @@ export interface UIProgressUpdate {
 class UIService {
   private static instance: UIService;
   private wsService: WebSocketService;
-  private pendingPrompts: Map<string, {
-    resolve: (value: any) => void;
-    reject: (error: Error) => void;
-    type: string;
-  }> = new Map();
+  private pendingPrompts: Map<
+    string,
+    {
+      resolve: (value: any) => void;
+      reject: (error: Error) => void;
+      type: string;
+    }
+  > = new Map();
 
   private constructor() {
     this.wsService = WebSocketService.getInstance();
@@ -123,10 +126,7 @@ class UIService {
     }
   }
 
-  async showDropdown(
-    items: UIDropdownItem[],
-    options: UIDropdownOptions
-  ): Promise<any> {
+  async showDropdown(items: UIDropdownItem[], options: UIDropdownOptions): Promise<any> {
     return new Promise((resolve, reject) => {
       const id = `dropdown-${Date.now()}-${Math.random()}`;
 
@@ -138,7 +138,7 @@ class UIService {
         type: 'dropdown',
         prompt: options.prompt,
         dropdown_options: options,
-        dropdown_items: items
+        dropdown_items: items,
       };
 
       // In a real implementation, this would be sent via WebSocket
@@ -147,11 +147,7 @@ class UIService {
     });
   }
 
-  async showQuickPrompt(
-    prompt: string,
-    options: UIQuickOption[],
-    horizontal: boolean = true
-  ): Promise<any> {
+  async showQuickPrompt(prompt: string, options: UIQuickOption[], horizontal: boolean = true): Promise<any> {
     return new Promise((resolve, reject) => {
       const id = `quick-${Date.now()}-${Math.random()}`;
 
@@ -162,18 +158,14 @@ class UIService {
         type: 'quick_prompt',
         prompt,
         quick_options: options,
-        horizontal
+        horizontal,
       };
 
       this.emitUIEvent('show_quick_prompt', request);
     });
   }
 
-  async showInput(
-    prompt: string,
-    defaultValue: string = '',
-    mask: boolean = false
-  ): Promise<string> {
+  async showInput(prompt: string, defaultValue: string = '', mask: boolean = false): Promise<string> {
     return new Promise((resolve, reject) => {
       const id = `input-${Date.now()}-${Math.random()}`;
 
@@ -184,7 +176,7 @@ class UIService {
         type: 'input',
         prompt,
         default_value: defaultValue,
-        mask
+        mask,
       };
 
       this.emitUIEvent('show_input', request);
@@ -196,7 +188,7 @@ class UIService {
       id,
       message,
       current,
-      total
+      total,
     };
 
     this.emitUIEvent('progress_start', progress);
@@ -207,7 +199,7 @@ class UIService {
       id,
       message,
       current,
-      total
+      total,
     };
 
     this.emitUIEvent('progress_update', progress);
@@ -216,7 +208,7 @@ class UIService {
   completeProgress(id: string) {
     const progress: UIProgressUpdate = {
       id,
-      done: true
+      done: true,
     };
 
     this.emitUIEvent('progress_update', progress);
@@ -233,7 +225,7 @@ class UIService {
     // Send response via WebSocket to backend
     this.wsService.sendEvent({
       type: 'ui_prompt_response',
-      data: response
+      data: response,
     });
   }
 }

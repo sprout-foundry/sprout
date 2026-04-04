@@ -3,14 +3,7 @@ import { parseFilePath } from '../utils/filePath';
 
 export interface UseFileHandlersOptions {
   onViewChange: (view: 'chat' | 'editor' | 'git') => void;
-  openFile: (file: {
-    path: string;
-    name: string;
-    isDir: boolean;
-    size: number;
-    modified: number;
-    ext: string;
-  }) => void;
+  openFile: (file: { path: string; name: string; isDir: boolean; size: number; modified: number; ext: string }) => void;
   openWorkspaceBuffer: (options: {
     kind: 'chat' | 'diff' | 'review' | 'file';
     path: string;
@@ -37,42 +30,48 @@ export function useFileHandlers({
   openFile,
   openWorkspaceBuffer,
 }: UseFileHandlersOptions): UseFileHandlersReturn {
-  const handleFileClick = useCallback((filePath: string, lineNumber?: number) => {
-    const { fileName, fileExt } = parseFilePath(filePath);
-    onViewChange('editor');
-    openFile({ path: filePath, name: fileName, isDir: false, size: 0, modified: 0, ext: fileExt });
-    if (typeof lineNumber === 'number') {
-      setTimeout(() => {
-        document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line: lineNumber } }));
-      }, 100);
-    }
-  }, [onViewChange, openFile]);
-
-  const handleOpenRevisionDiff = useCallback((options: { path: string; diff: string; title: string }) => {
-    const { fileName } = parseFilePath(options.path);
-    onViewChange('editor');
-    openWorkspaceBuffer({
-      kind: 'diff',
-      path: `__workspace/revision/${options.path}-${Date.now()}`,
-      title: `${options.title}: ${fileName}`,
-      ext: '.diff',
-      metadata: {
-        sourcePath: options.path,
-        diff: {
-          message: 'success',
-          path: options.path,
-          has_staged: false,
-          has_unstaged: false,
-          staged_diff: '',
-          unstaged_diff: '',
-          diff: options.diff,
-        },
-        diffMode: 'combined',
-        modeOptions: ['combined'],
-        title: options.title,
+  const handleFileClick = useCallback(
+    (filePath: string, lineNumber?: number) => {
+      const { fileName, fileExt } = parseFilePath(filePath);
+      onViewChange('editor');
+      openFile({ path: filePath, name: fileName, isDir: false, size: 0, modified: 0, ext: fileExt });
+      if (typeof lineNumber === 'number') {
+        setTimeout(() => {
+          document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line: lineNumber } }));
+        }, 100);
       }
-    });
-  }, [onViewChange, openWorkspaceBuffer]);
+    },
+    [onViewChange, openFile],
+  );
+
+  const handleOpenRevisionDiff = useCallback(
+    (options: { path: string; diff: string; title: string }) => {
+      const { fileName } = parseFilePath(options.path);
+      onViewChange('editor');
+      openWorkspaceBuffer({
+        kind: 'diff',
+        path: `__workspace/revision/${options.path}-${Date.now()}`,
+        title: `${options.title}: ${fileName}`,
+        ext: '.diff',
+        metadata: {
+          sourcePath: options.path,
+          diff: {
+            message: 'success',
+            path: options.path,
+            has_staged: false,
+            has_unstaged: false,
+            staged_diff: '',
+            unstaged_diff: '',
+            diff: options.diff,
+          },
+          diffMode: 'combined',
+          modeOptions: ['combined'],
+          title: options.title,
+        },
+      });
+    },
+    [onViewChange, openWorkspaceBuffer],
+  );
 
   return { handleFileClick, handleOpenRevisionDiff };
 }

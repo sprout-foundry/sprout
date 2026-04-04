@@ -38,7 +38,9 @@
   min-width: 0;
   border-radius: 3px;
   padding: 1px 4px;
-  transition: background-color 0.1s, color 0.1s;
+  transition:
+    background-color 0.1s,
+    color 0.1s;
 
   /* Reset button styles */
   background: none;

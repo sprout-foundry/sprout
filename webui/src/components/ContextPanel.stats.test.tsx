@@ -69,11 +69,11 @@ function makeChatProps(overrides: Record<string, unknown> = {}) {
  */
 function makeMessages(count: number, spacingMs = 60_000): Array<{ type: string; timestamp: Date }> {
   const msgs: Array<{ type: string; timestamp: Date }> = [];
-  const base = Date.now() - (count * spacingMs);
+  const base = Date.now() - count * spacingMs;
   for (let i = 0; i < count; i++) {
     msgs.push({
       type: i % 2 === 0 ? 'user' : 'assistant',
-      timestamp: new Date(base + (i * spacingMs)),
+      timestamp: new Date(base + i * spacingMs),
     });
   }
   return msgs;
@@ -178,12 +178,12 @@ function getStatusSections(): HTMLElement[] {
  */
 function getStatusSectionByTitle(title: string): HTMLElement | null {
   const sections = getStatusSections();
-  return sections.find(
-    (section) => {
+  return (
+    sections.find((section) => {
       const titleEl = section.querySelector('.status-section-title');
       return titleEl && titleEl.textContent?.includes(title);
-    }
-  ) ?? null;
+    }) ?? null
+  );
 }
 
 /**
@@ -341,56 +341,68 @@ describe('ContextPanel status tab – no stats provided', () => {
 
 describe('ContextPanel status tab – Token Usage with stats', () => {
   it('shows formatted total_tokens as "15.0K"', async () => {
-    await renderPanel(makeChatProps({
-      messages: makeMessages(2),
-      stats: makeStats({ total_tokens: 15000 }),
-    }));
+    await renderPanel(
+      makeChatProps({
+        messages: makeMessages(2),
+        stats: makeStats({ total_tokens: 15000 }),
+      }),
+    );
 
     expect(getMetricValue('Total')).toBe('15.0K');
   });
 
   it('shows formatted prompt_tokens', async () => {
-    await renderPanel(makeChatProps({
-      messages: makeMessages(2),
-      stats: makeStats({ prompt_tokens: 10000 }),
-    }));
+    await renderPanel(
+      makeChatProps({
+        messages: makeMessages(2),
+        stats: makeStats({ prompt_tokens: 10000 }),
+      }),
+    );
 
     expect(getMetricValue('Prompt')).toBe('10.0K');
   });
 
   it('shows formatted completion_tokens', async () => {
-    await renderPanel(makeChatProps({
-      messages: makeMessages(2),
-      stats: makeStats({ completion_tokens: 500 }),
-    }));
+    await renderPanel(
+      makeChatProps({
+        messages: makeMessages(2),
+        stats: makeStats({ completion_tokens: 500 }),
+      }),
+    );
 
     expect(getMetricValue('Completion')).toBe('500');
   });
 
   it('shows Cached metric when cached_tokens > 0', async () => {
-    await renderPanel(makeChatProps({
-      messages: makeMessages(2),
-      stats: makeStats({ cached_tokens: 5000 }),
-    }));
+    await renderPanel(
+      makeChatProps({
+        messages: makeMessages(2),
+        stats: makeStats({ cached_tokens: 5000 }),
+      }),
+    );
 
     expect(hasMetric('Cached')).toBe(true);
     expect(getMetricValue('Cached')).toBe('5.0K');
   });
 
   it('hides Cached metric when cached_tokens is 0', async () => {
-    await renderPanel(makeChatProps({
-      messages: makeMessages(2),
-      stats: makeStats({ cached_tokens: 0 }),
-    }));
+    await renderPanel(
+      makeChatProps({
+        messages: makeMessages(2),
+        stats: makeStats({ cached_tokens: 0 }),
+      }),
+    );
 
     expect(hasMetric('Cached')).toBe(false);
   });
 
   it('formats large token counts (millions)', async () => {
-    await renderPanel(makeChatProps({
-      messages: makeMessages(2),
-      stats: makeStats({ total_tokens: 1500000 }),
-    }));
+    await renderPanel(
+      makeChatProps({
+        messages: makeMessages(2),
+        stats: makeStats({ total_tokens: 1500000 }),
+      }),
+    );
 
     expect(getMetricValue('Total')).toBe('1.5M');
   });
@@ -402,37 +414,45 @@ describe('ContextPanel status tab – Token Usage with stats', () => {
 
 describe('ContextPanel status tab – Context Window with stats', () => {
   it('shows percentage for Used when context_usage_percent is set', async () => {
-    await renderPanel(makeChatProps({
-      messages: makeMessages(2),
-      stats: makeStats({ context_usage_percent: 50.0 }),
-    }));
+    await renderPanel(
+      makeChatProps({
+        messages: makeMessages(2),
+        stats: makeStats({ context_usage_percent: 50.0 }),
+      }),
+    );
 
     expect(getMetricValue('Used')).toBe('50.0%');
   });
 
   it('shows formatted current_context_tokens', async () => {
-    await renderPanel(makeChatProps({
-      messages: makeMessages(2),
-      stats: makeStats({ current_context_tokens: 8000 }),
-    }));
+    await renderPanel(
+      makeChatProps({
+        messages: makeMessages(2),
+        stats: makeStats({ current_context_tokens: 8000 }),
+      }),
+    );
 
     expect(getMetricValue('Current')).toBe('8.0K');
   });
 
   it('shows formatted max_context_tokens', async () => {
-    await renderPanel(makeChatProps({
-      messages: makeMessages(2),
-      stats: makeStats({ max_context_tokens: 16000 }),
-    }));
+    await renderPanel(
+      makeChatProps({
+        messages: makeMessages(2),
+        stats: makeStats({ max_context_tokens: 16000 }),
+      }),
+    );
 
     expect(getMetricValue('Max')).toBe('16.0K');
   });
 
   it('renders context bar with normal class when usage is below 75%', async () => {
-    await renderPanel(makeChatProps({
-      messages: makeMessages(2),
-      stats: makeStats({ context_usage_percent: 50.0 }),
-    }));
+    await renderPanel(
+      makeChatProps({
+        messages: makeMessages(2),
+        stats: makeStats({ context_usage_percent: 50.0 }),
+      }),
+    );
 
     const classes = getContextBarFillClasses();
     expect(classes).not.toBeNull();
@@ -444,10 +464,12 @@ describe('ContextPanel status tab – Context Window with stats', () => {
   });
 
   it('renders context bar with "high" class when usage is 75-90%', async () => {
-    await renderPanel(makeChatProps({
-      messages: makeMessages(2),
-      stats: makeStats({ context_usage_percent: 85.5 }),
-    }));
+    await renderPanel(
+      makeChatProps({
+        messages: makeMessages(2),
+        stats: makeStats({ context_usage_percent: 85.5 }),
+      }),
+    );
 
     const classes = getContextBarFillClasses();
     expect(classes).not.toBeNull();
@@ -456,10 +478,12 @@ describe('ContextPanel status tab – Context Window with stats', () => {
   });
 
   it('renders context bar with "high" class exactly at 75%', async () => {
-    await renderPanel(makeChatProps({
-      messages: makeMessages(2),
-      stats: makeStats({ context_usage_percent: 75.0 }),
-    }));
+    await renderPanel(
+      makeChatProps({
+        messages: makeMessages(2),
+        stats: makeStats({ context_usage_percent: 75.0 }),
+      }),
+    );
 
     const classes = getContextBarFillClasses();
     expect(classes).not.toBeNull();
@@ -470,10 +494,12 @@ describe('ContextPanel status tab – Context Window with stats', () => {
   });
 
   it('renders context bar with "high" class at 75.01%', async () => {
-    await renderPanel(makeChatProps({
-      messages: makeMessages(2),
-      stats: makeStats({ context_usage_percent: 75.01 }),
-    }));
+    await renderPanel(
+      makeChatProps({
+        messages: makeMessages(2),
+        stats: makeStats({ context_usage_percent: 75.01 }),
+      }),
+    );
 
     const classes = getContextBarFillClasses();
     expect(classes).not.toBeNull();
@@ -482,10 +508,12 @@ describe('ContextPanel status tab – Context Window with stats', () => {
   });
 
   it('renders context bar with "critical" class when usage is above 90%', async () => {
-    await renderPanel(makeChatProps({
-      messages: makeMessages(2),
-      stats: makeStats({ context_usage_percent: 95.0 }),
-    }));
+    await renderPanel(
+      makeChatProps({
+        messages: makeMessages(2),
+        stats: makeStats({ context_usage_percent: 95.0 }),
+      }),
+    );
 
     const classes = getContextBarFillClasses();
     expect(classes).not.toBeNull();
@@ -494,10 +522,12 @@ describe('ContextPanel status tab – Context Window with stats', () => {
   });
 
   it('renders context bar with "critical" class exactly at 90%', async () => {
-    await renderPanel(makeChatProps({
-      messages: makeMessages(2),
-      stats: makeStats({ context_usage_percent: 90.0 }),
-    }));
+    await renderPanel(
+      makeChatProps({
+        messages: makeMessages(2),
+        stats: makeStats({ context_usage_percent: 90.0 }),
+      }),
+    );
 
     const classes = getContextBarFillClasses();
     expect(classes).not.toBeNull();
@@ -507,10 +537,12 @@ describe('ContextPanel status tab – Context Window with stats', () => {
   });
 
   it('renders context bar with "critical" class at 90.01%', async () => {
-    await renderPanel(makeChatProps({
-      messages: makeMessages(2),
-      stats: makeStats({ context_usage_percent: 90.01 }),
-    }));
+    await renderPanel(
+      makeChatProps({
+        messages: makeMessages(2),
+        stats: makeStats({ context_usage_percent: 90.01 }),
+      }),
+    );
 
     const classes = getContextBarFillClasses();
     expect(classes).not.toBeNull();
@@ -519,10 +551,12 @@ describe('ContextPanel status tab – Context Window with stats', () => {
   });
 
   it('sets context bar width to match usage percent', async () => {
-    await renderPanel(makeChatProps({
-      messages: makeMessages(2),
-      stats: makeStats({ context_usage_percent: 65.0 }),
-    }));
+    await renderPanel(
+      makeChatProps({
+        messages: makeMessages(2),
+        stats: makeStats({ context_usage_percent: 65.0 }),
+      }),
+    );
 
     const fill = container.querySelector('.status-context-bar-fill');
     expect(fill).not.toBeNull();
@@ -530,10 +564,12 @@ describe('ContextPanel status tab – Context Window with stats', () => {
   });
 
   it('caps context bar width at 100%', async () => {
-    await renderPanel(makeChatProps({
-      messages: makeMessages(2),
-      stats: makeStats({ context_usage_percent: 150.0 }),
-    }));
+    await renderPanel(
+      makeChatProps({
+        messages: makeMessages(2),
+        stats: makeStats({ context_usage_percent: 150.0 }),
+      }),
+    );
 
     const fill = container.querySelector('.status-context-bar-fill');
     expect(fill).not.toBeNull();
@@ -547,53 +583,63 @@ describe('ContextPanel status tab – Context Window with stats', () => {
 
 describe('ContextPanel status tab – Costs with stats', () => {
   it('shows formatted total_cost', async () => {
-    await renderPanel(makeChatProps({
-      messages: makeMessages(2),
-      stats: makeStats({ total_cost: 0.0123 }),
-    }));
+    await renderPanel(
+      makeChatProps({
+        messages: makeMessages(2),
+        stats: makeStats({ total_cost: 0.0123 }),
+      }),
+    );
 
     expect(getMetricValue('Total Cost')).toBe('$0.0123');
   });
 
   it('shows Cache Savings when cached_cost_savings > 0', async () => {
-    await renderPanel(makeChatProps({
-      messages: makeMessages(2),
-      stats: makeStats({ cached_cost_savings: 0.0050 }),
-    }));
+    await renderPanel(
+      makeChatProps({
+        messages: makeMessages(2),
+        stats: makeStats({ cached_cost_savings: 0.005 }),
+      }),
+    );
 
     expect(hasMetric('Cache Savings')).toBe(true);
     expect(getMetricValue('Cache Savings')).toBe('$0.0050');
   });
 
   it('hides Cache Savings when cached_cost_savings is 0', async () => {
-    await renderPanel(makeChatProps({
-      messages: makeMessages(2),
-      stats: makeStats({ cached_cost_savings: 0 }),
-    }));
+    await renderPanel(
+      makeChatProps({
+        messages: makeMessages(2),
+        stats: makeStats({ cached_cost_savings: 0 }),
+      }),
+    );
 
     expect(hasMetric('Cache Savings')).toBe(false);
   });
 
   it('formats larger costs correctly', async () => {
-    await renderPanel(makeChatProps({
-      messages: makeMessages(2),
-      stats: makeStats({ total_cost: 1.5 }),
-    }));
+    await renderPanel(
+      makeChatProps({
+        messages: makeMessages(2),
+        stats: makeStats({ total_cost: 1.5 }),
+      }),
+    );
 
     expect(getMetricValue('Total Cost')).toBe('$1.5000');
   });
 
   it('shows both token and cost stats together', async () => {
-    await renderPanel(makeChatProps({
-      messages: makeMessages(2),
-      stats: makeStats({
-        total_tokens: 1500000,
-        total_cost: 0.0123,
-        cached_tokens: 5000,
-        cached_cost_savings: 0.0050,
-        context_usage_percent: 85.5,
+    await renderPanel(
+      makeChatProps({
+        messages: makeMessages(2),
+        stats: makeStats({
+          total_tokens: 1500000,
+          total_cost: 0.0123,
+          cached_tokens: 5000,
+          cached_cost_savings: 0.005,
+          context_usage_percent: 85.5,
+        }),
       }),
-    }));
+    );
 
     // Token Usage
     expect(getMetricValue('Total')).toBe('1.5M');

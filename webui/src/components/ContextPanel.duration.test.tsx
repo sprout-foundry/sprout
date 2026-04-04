@@ -65,11 +65,11 @@ function makeChatProps(overrides: Record<string, unknown> = {}) {
  */
 function makeMessages(count: number, spacingMs = 60_000): Array<{ type: string; timestamp: Date }> {
   const msgs: Array<{ type: string; timestamp: Date }> = [];
-  const base = Date.now() - (count * spacingMs);
+  const base = Date.now() - count * spacingMs;
   for (let i = 0; i < count; i++) {
     msgs.push({
       type: i % 2 === 0 ? 'user' : 'assistant',
-      timestamp: new Date(base + (i * spacingMs)),
+      timestamp: new Date(base + i * spacingMs),
     });
   }
   return msgs;
@@ -165,7 +165,7 @@ describe('formatDurationMs – unit tests (pure formatting logic)', () => {
   });
 
   it('formats seconds with "s" suffix (no decimal places)', () => {
-    expect(formatDurationMs(1500)).toBe('2s');   // 1500/1000 = 1.5 → toFixed(0) → "2"
+    expect(formatDurationMs(1500)).toBe('2s'); // 1500/1000 = 1.5 → toFixed(0) → "2"
     expect(formatDurationMs(30000)).toBe('30s');
     expect(formatDurationMs(59999)).toBe('60s');
   });

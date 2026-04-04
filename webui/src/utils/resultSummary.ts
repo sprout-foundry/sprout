@@ -98,7 +98,9 @@ export function getSubagentResultPreview(rawResult?: string): string | undefined
   try {
     const parsed = JSON.parse(cleaned);
     const summary = extractResultSummary(parsed);
-    return summary ? truncateText(summary, 220) : truncateText(formatToolDetail(cleaned).replace(/\s+/g, ' ').trim(), 220);
+    return summary
+      ? truncateText(summary, 220)
+      : truncateText(formatToolDetail(cleaned).replace(/\s+/g, ' ').trim(), 220);
   } catch {
     return truncateText(cleaned.replace(/\s+/g, ' ').trim(), 220);
   }

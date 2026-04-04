@@ -47,7 +47,8 @@ const normalizeRevision = (raw: any): Revision => {
   };
 };
 
-const buildRevisionFileKey = (file: RevisionFile, index: number): string => `${file.file_revision_hash || file.path}::${index}`;
+const buildRevisionFileKey = (file: RevisionFile, index: number): string =>
+  `${file.file_revision_hash || file.path}::${index}`;
 
 const formatRelativeTime = (timestamp: string) => {
   const delta = Date.now() - new Date(timestamp).getTime();
@@ -62,11 +63,16 @@ const formatRelativeTime = (timestamp: string) => {
 
 const getOperationText = (operation: string) => {
   switch (operation) {
-    case 'create': return 'Create';
-    case 'delete': return 'Delete';
-    case 'rename': return 'Rename';
-    case 'rollback': return 'Rollback';
-    default: return 'Edit';
+    case 'create':
+      return 'Create';
+    case 'delete':
+      return 'Delete';
+    case 'rename':
+      return 'Rename';
+    case 'rollback':
+      return 'Rollback';
+    default:
+      return 'Edit';
   }
 };
 
@@ -128,75 +134,88 @@ const RevisionListPanel: React.FC<RevisionListPanelProps> = ({ mode, onOpenDiff,
     loadRevisions();
   }, [loadRevisions]);
 
-  const loadRevisionDetails = useCallback(async (revisionId: string) => {
-    if (revisionDetailsById[revisionId] || loadingById[revisionId]) {
-      return;
-    }
-    // Cancel any pending detail load for this revision
-    detailAbortRef.current?.abort();
-    const controller = new AbortController();
-    detailAbortRef.current = controller;
-    const { signal } = controller;
-
-    setLoadingById((prev) => ({ ...prev, [revisionId]: true }));
-    try {
-      const response = await apiService.getRevisionDetails(revisionId);
-      if (signal.aborted) return;
-      const detailMap: Record<string, string> = {};
-      (response.revision?.files || []).forEach((file: RevisionDetailFile, index: number) => {
-        detailMap[buildRevisionFileKey(file, index)] = file.diff || '';
-      });
-      setRevisionDetailsById((prev) => ({ ...prev, [revisionId]: detailMap }));
-    } finally {
-      if (!signal.aborted) {
-        setLoadingById((prev) => ({ ...prev, [revisionId]: false }));
+  const loadRevisionDetails = useCallback(
+    async (revisionId: string) => {
+      if (revisionDetailsById[revisionId] || loadingById[revisionId]) {
+        return;
       }
-    }
-  }, [apiService, loadingById, revisionDetailsById]);
+      // Cancel any pending detail load for this revision
+      detailAbortRef.current?.abort();
+      const controller = new AbortController();
+      detailAbortRef.current = controller;
+      const { signal } = controller;
 
-  const toggleRevision = useCallback((revisionId: string) => {
-    setExpandedRevisionIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(revisionId)) {
-        next.delete(revisionId);
-      } else {
-        next.add(revisionId);
-        loadRevisionDetails(revisionId);
+      setLoadingById((prev) => ({ ...prev, [revisionId]: true }));
+      try {
+        const response = await apiService.getRevisionDetails(revisionId);
+        if (signal.aborted) return;
+        const detailMap: Record<string, string> = {};
+        (response.revision?.files || []).forEach((file: RevisionDetailFile, index: number) => {
+          detailMap[buildRevisionFileKey(file, index)] = file.diff || '';
+        });
+        setRevisionDetailsById((prev) => ({ ...prev, [revisionId]: detailMap }));
+      } finally {
+        if (!signal.aborted) {
+          setLoadingById((prev) => ({ ...prev, [revisionId]: false }));
+        }
       }
-      return next;
-    });
-  }, [loadRevisionDetails]);
+    },
+    [apiService, loadingById, revisionDetailsById],
+  );
 
-  const openFileDiff = useCallback(async (revisionId: string, file: RevisionFile, index: number) => {
-    let detailMap = revisionDetailsById[revisionId];
-    if (!detailMap) {
-      const response = await apiService.getRevisionDetails(revisionId);
-      detailMap = {};
-      (response.revision?.files || []).forEach((detailFile: RevisionDetailFile, detailIndex: number) => {
-        detailMap![buildRevisionFileKey(detailFile, detailIndex)] = detailFile.diff || '';
+  const toggleRevision = useCallback(
+    (revisionId: string) => {
+      setExpandedRevisionIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(revisionId)) {
+          next.delete(revisionId);
+        } else {
+          next.add(revisionId);
+          loadRevisionDetails(revisionId);
+        }
+        return next;
       });
-      setRevisionDetailsById((prev) => ({ ...prev, [revisionId]: detailMap! }));
-    }
+    },
+    [loadRevisionDetails],
+  );
 
-    const key = buildRevisionFileKey(file, index);
-    const diff = detailMap?.[key];
-    if (!diff) {
-      return;
-    }
+  const openFileDiff = useCallback(
+    async (revisionId: string, file: RevisionFile, index: number) => {
+      let detailMap = revisionDetailsById[revisionId];
+      if (!detailMap) {
+        const response = await apiService.getRevisionDetails(revisionId);
+        detailMap = {};
+        (response.revision?.files || []).forEach((detailFile: RevisionDetailFile, detailIndex: number) => {
+          detailMap![buildRevisionFileKey(detailFile, detailIndex)] = detailFile.diff || '';
+        });
+        setRevisionDetailsById((prev) => ({ ...prev, [revisionId]: detailMap! }));
+      }
 
-    onOpenDiff({
-      path: file.path,
-      diff,
-      title: `${mode === 'global' ? 'Revision Diff' : 'Session Change'}`
-    });
-  }, [apiService, mode, onOpenDiff, revisionDetailsById]);
+      const key = buildRevisionFileKey(file, index);
+      const diff = detailMap?.[key];
+      if (!diff) {
+        return;
+      }
 
-  const summaries = useMemo(() => revisions.map((revision) => ({
-    id: revision.revision_id,
-    fileCount: revision.files.length,
-    additions: revision.files.reduce((sum, file) => sum + Math.max(0, file.lines_added || 0), 0),
-    deletions: revision.files.reduce((sum, file) => sum + Math.max(0, file.lines_deleted || 0), 0),
-  })), [revisions]);
+      onOpenDiff({
+        path: file.path,
+        diff,
+        title: `${mode === 'global' ? 'Revision Diff' : 'Session Change'}`,
+      });
+    },
+    [apiService, mode, onOpenDiff, revisionDetailsById],
+  );
+
+  const summaries = useMemo(
+    () =>
+      revisions.map((revision) => ({
+        id: revision.revision_id,
+        fileCount: revision.files.length,
+        additions: revision.files.reduce((sum, file) => sum + Math.max(0, file.lines_added || 0), 0),
+        deletions: revision.files.reduce((sum, file) => sum + Math.max(0, file.lines_deleted || 0), 0),
+      })),
+    [revisions],
+  );
 
   return (
     <div className="context-panel-tools-list">
@@ -208,60 +227,72 @@ const RevisionListPanel: React.FC<RevisionListPanelProps> = ({ mode, onOpenDiff,
       {error ? <div className="history-error-inline">{error}</div> : null}
       {isLoading ? <div className="context-panel-empty">Loading…</div> : null}
       {!isLoading && revisions.length === 0 ? <div className="context-panel-empty">No changes found.</div> : null}
-      {!isLoading && revisions.map((revision, index) => {
-        const summary = summaries[index];
-        const isExpanded = expandedRevisionIds.has(revision.revision_id);
-        return (
-          <div key={revision.revision_id} className="history-item">
-            <button
-              className="history-summary"
-              onClick={() => toggleRevision(revision.revision_id)}
-              aria-expanded={isExpanded}
-            >
-              <span className="history-expand">{isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</span>
-              <span className="history-main">
-                <span className="history-id">{revision.revision_id}</span>
-                <span className="history-time">{formatRelativeTime(revision.timestamp)}</span>
-              </span>
-              <span className="history-stats">
-                <span>{summary.fileCount} files</span>
-                {summary.additions > 0 && <span className="additions">+{summary.additions}</span>}
-                {summary.deletions > 0 && <span className="deletions">-{summary.deletions}</span>}
-              </span>
-            </button>
-            {isExpanded && (
-              <div className="history-details">
-                {revision.files.map((file, fileIndex) => (
-                  <button
-                    key={`${revision.revision_id}-${file.path}-${fileIndex}`}
-                    className="history-file-row history-file-row-interactive"
-                    onClick={() => openFileDiff(revision.revision_id, file, fileIndex)}
-                  >
-                    <span className="history-file-op">{getOperationText(file.operation)}</span>
-                    <span className="history-file-path" title={file.path}>{file.path}</span>
-                    <span className="history-file-diff">
-                      {file.lines_added > 0 && <span className="additions">+{file.lines_added}</span>}
-                      {file.lines_deleted > 0 && <span className="deletions">-{file.lines_deleted}</span>}
-                    </span>
-                  </button>
-                ))}
-                {allowRollback && (
-                  <button
-                    className="history-rollback-btn"
-                    onClick={async () => {
-                      if (!(await showThemedConfirm(`Rollback to revision ${revision.revision_id}?`, { title: 'Confirm Rollback', type: 'danger' }))) return;
-                      await apiService.rollbackToRevision(revision.revision_id);
-                      await loadRevisions();
-                    }}
-                  >
-                    <RotateCcw size={12} /> Rollback to this revision
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        );
-      })}
+      {!isLoading &&
+        revisions.map((revision, index) => {
+          const summary = summaries[index];
+          const isExpanded = expandedRevisionIds.has(revision.revision_id);
+          return (
+            <div key={revision.revision_id} className="history-item">
+              <button
+                className="history-summary"
+                onClick={() => toggleRevision(revision.revision_id)}
+                aria-expanded={isExpanded}
+              >
+                <span className="history-expand">
+                  {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                </span>
+                <span className="history-main">
+                  <span className="history-id">{revision.revision_id}</span>
+                  <span className="history-time">{formatRelativeTime(revision.timestamp)}</span>
+                </span>
+                <span className="history-stats">
+                  <span>{summary.fileCount} files</span>
+                  {summary.additions > 0 && <span className="additions">+{summary.additions}</span>}
+                  {summary.deletions > 0 && <span className="deletions">-{summary.deletions}</span>}
+                </span>
+              </button>
+              {isExpanded && (
+                <div className="history-details">
+                  {revision.files.map((file, fileIndex) => (
+                    <button
+                      key={`${revision.revision_id}-${file.path}-${fileIndex}`}
+                      className="history-file-row history-file-row-interactive"
+                      onClick={() => openFileDiff(revision.revision_id, file, fileIndex)}
+                    >
+                      <span className="history-file-op">{getOperationText(file.operation)}</span>
+                      <span className="history-file-path" title={file.path}>
+                        {file.path}
+                      </span>
+                      <span className="history-file-diff">
+                        {file.lines_added > 0 && <span className="additions">+{file.lines_added}</span>}
+                        {file.lines_deleted > 0 && <span className="deletions">-{file.lines_deleted}</span>}
+                      </span>
+                    </button>
+                  ))}
+                  {allowRollback && (
+                    <button
+                      className="history-rollback-btn"
+                      onClick={async () => {
+                        if (
+                          !(await showThemedConfirm(`Rollback to revision ${revision.revision_id}?`, {
+                            title: 'Confirm Rollback',
+                            type: 'danger',
+                          }))
+                        ) {
+                          return;
+                        }
+                        await apiService.rollbackToRevision(revision.revision_id);
+                        await loadRevisions();
+                      }}
+                    >
+                      <RotateCcw size={12} /> Rollback to this revision
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
     </div>
   );
 };

@@ -1,13 +1,6 @@
 import React, { useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
-import {
-  Save,
-  X,
-  ArrowDownToLine,
-  Sun,
-  Moon,
-  Loader2,
-} from 'lucide-react';
+import { Save, X, ArrowDownToLine, Sun, Moon, Loader2 } from 'lucide-react';
 import './EditorToolbar.css';
 
 interface EditorToolbarProps {
@@ -66,17 +59,22 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
                 autoFocus
                 min="1"
               />
-              <button type="button" className="go-to-line-cancel" onClick={() => { setShowGoToLineInput(false); setLineInput(''); }}>
+              <button
+                type="button"
+                className="go-to-line-cancel"
+                onClick={() => {
+                  setShowGoToLineInput(false);
+                  setLineInput('');
+                }}
+              >
                 <X size={12} />
               </button>
             </form>
           ) : (
-            <button
-              className="toolbar-button"
-              onClick={() => setShowGoToLineInput(true)}
-              title="Go to line (Ctrl+G)"
-            >
-              <span className="toolbar-icon"><ArrowDownToLine size={16} /></span>
+            <button className="toolbar-button" onClick={() => setShowGoToLineInput(true)} title="Go to line (Ctrl+G)">
+              <span className="toolbar-icon">
+                <ArrowDownToLine size={16} />
+              </span>
             </button>
           )
         ) : null}
@@ -97,16 +95,15 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
       <div className="toolbar-group">
         {/* Save */}
         {showSave ? (
-          <button
-            className="toolbar-button"
-            onClick={onSave}
-            title="Save file (Ctrl+S)"
-            disabled={saving}
-          >
+          <button className="toolbar-button" onClick={onSave} title="Save file (Ctrl+S)" disabled={saving}>
             {saving ? (
-              <span className="toolbar-icon"><Loader2 size={16} className="spinner" /></span>
+              <span className="toolbar-icon">
+                <Loader2 size={16} className="spinner" />
+              </span>
             ) : (
-              <span className="toolbar-icon"><Save size={16} /></span>
+              <span className="toolbar-icon">
+                <Save size={16} />
+              </span>
             )}
           </button>
         ) : null}

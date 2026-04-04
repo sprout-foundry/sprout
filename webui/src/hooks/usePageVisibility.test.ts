@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { act } from 'react';
-import { createRoot, Root } from 'react-dom/client';
+import { createRoot, type Root } from 'react-dom/client';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -195,7 +195,9 @@ describe('usePageVisibility', () => {
 
     // Rapid toggle: visible → hidden → visible within 100ms
     fireVisibilityChange('hidden');
-    act(() => { jest.advanceTimersByTime(100); });
+    act(() => {
+      jest.advanceTimersByTime(100);
+    });
     fireVisibilityChange('visible');
 
     // Still in debounce window — nothing executed yet
@@ -221,7 +223,9 @@ describe('usePageVisibility', () => {
     // Hide the page
     fireVisibilityChange('hidden');
     // Wait 200ms
-    act(() => { jest.advanceTimersByTime(200); });
+    act(() => {
+      jest.advanceTimersByTime(200);
+    });
     // Show the page again
     fireVisibilityChange('visible');
 
@@ -276,11 +280,17 @@ describe('usePageVisibility', () => {
 
     // Rapid cycle: visible → hidden → visible → hidden → visible
     fireVisibilityChange('hidden');
-    act(() => { jest.advanceTimersByTime(100); });
+    act(() => {
+      jest.advanceTimersByTime(100);
+    });
     fireVisibilityChange('visible');
-    act(() => { jest.advanceTimersByTime(100); });
+    act(() => {
+      jest.advanceTimersByTime(100);
+    });
     fireVisibilityChange('hidden');
-    act(() => { jest.advanceTimersByTime(100); });
+    act(() => {
+      jest.advanceTimersByTime(100);
+    });
     fireVisibilityChange('visible');
 
     // Advance past debounce window

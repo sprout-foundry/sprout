@@ -2,6 +2,7 @@ package webui
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -166,7 +167,7 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 			if v2, ok2 := atMap["connection_timeout_sec"]; ok2 {
 				n, ok3 := asInt(v2)
 				if !ok3 {
-					return fmt.Errorf("api_timeouts.connection_timeout_sec must be a positive integer")
+					return errors.New("api_timeouts.connection_timeout_sec must be a positive integer")
 				}
 				if err := validateAPITimeout(n); err != nil {
 					return err
@@ -176,7 +177,7 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 			if v2, ok2 := atMap["first_chunk_timeout_sec"]; ok2 {
 				n, ok3 := asInt(v2)
 				if !ok3 {
-					return fmt.Errorf("api_timeouts.first_chunk_timeout_sec must be a positive integer")
+					return errors.New("api_timeouts.first_chunk_timeout_sec must be a positive integer")
 				}
 				if err := validateAPITimeout(n); err != nil {
 					return err
@@ -186,7 +187,7 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 			if v2, ok2 := atMap["chunk_timeout_sec"]; ok2 {
 				n, ok3 := asInt(v2)
 				if !ok3 {
-					return fmt.Errorf("api_timeouts.chunk_timeout_sec must be a positive integer")
+					return errors.New("api_timeouts.chunk_timeout_sec must be a positive integer")
 				}
 				if err := validateAPITimeout(n); err != nil {
 					return err
@@ -196,7 +197,7 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 			if v2, ok2 := atMap["overall_timeout_sec"]; ok2 {
 				n, ok3 := asInt(v2)
 				if !ok3 {
-					return fmt.Errorf("api_timeouts.overall_timeout_sec must be a positive integer")
+					return errors.New("api_timeouts.overall_timeout_sec must be a positive integer")
 				}
 				if err := validateAPITimeout(n); err != nil {
 					return err

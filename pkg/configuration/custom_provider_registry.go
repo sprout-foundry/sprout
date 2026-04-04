@@ -2,6 +2,7 @@ package configuration
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -323,13 +324,13 @@ func (c CustomProviderConfig) ToProviderConfig() (*providers.ProviderConfig, err
 func CanonicalizeCustomProviderName(name string) (string, error) {
 	normalized := strings.ToLower(strings.TrimSpace(name))
 	if normalized == "" {
-		return "", fmt.Errorf("provider name cannot be empty")
+		return "", errors.New("provider name cannot be empty")
 	}
 	for _, r := range normalized {
 		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
 			continue
 		}
-		return "", fmt.Errorf("provider name must contain only lowercase letters, numbers, '-' or '_'")
+		return "", errors.New("provider name must contain only lowercase letters, numbers, '-' or '_'")
 	}
 	return normalized, nil
 }
@@ -337,12 +338,12 @@ func CanonicalizeCustomProviderName(name string) (string, error) {
 func normalizeOpenAIEndpoint(raw string) (string, error) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
-		return "", fmt.Errorf("endpoint cannot be empty")
+		return "", errors.New("endpoint cannot be empty")
 	}
 
 	u, err := url.Parse(trimmed)
 	if err != nil || u.Scheme == "" || u.Host == "" {
-		return "", fmt.Errorf("endpoint must be a valid absolute URL")
+		return "", errors.New("endpoint must be a valid absolute URL")
 	}
 
 	path := strings.TrimRight(u.Path, "/")

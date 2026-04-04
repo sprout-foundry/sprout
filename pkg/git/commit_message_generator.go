@@ -2,6 +2,7 @@ package git
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -36,11 +37,11 @@ type CommitMessageResult struct {
 // title+description algorithm used by /commit.
 func GenerateCommitMessageFromStagedDiff(client api.ClientInterface, opts CommitMessageOptions) (*CommitMessageResult, error) {
 	if client == nil {
-		return nil, fmt.Errorf("client is required")
+		return nil, errors.New("client is required")
 	}
 	diffText := strings.TrimSpace(opts.Diff)
 	if diffText == "" {
-		return nil, fmt.Errorf("staged diff is empty")
+		return nil, errors.New("staged diff is empty")
 	}
 
 	primaryAction := "Updates"
@@ -175,14 +176,14 @@ Generate a Git commit message summary. The message should follow these rules:
 	case result := <-titleChan:
 		titleResp, titleErr = result.resp, result.err
 	case <-ctx.Done():
-		return nil, fmt.Errorf("LLM request timed out after 60s")
+		return nil, errors.New("LLM request timed out after 60s")
 	}
 
 	select {
 	case result := <-descChan:
 		descResp, descErr = result.resp, result.err
 	case <-ctx.Done():
-		return nil, fmt.Errorf("LLM request timed out after 60s")
+		return nil, errors.New("LLM request timed out after 60s")
 	}
 
 	if titleErr != nil {
@@ -192,10 +193,10 @@ Generate a Git commit message summary. The message should follow these rules:
 		return nil, fmt.Errorf("failed to generate commit description: %w", descErr)
 	}
 	if len(titleResp.Choices) == 0 {
-		return nil, fmt.Errorf("no response from model for commit title")
+		return nil, errors.New("no response from model for commit title")
 	}
 	if len(descResp.Choices) == 0 {
-		return nil, fmt.Errorf("no response from model for commit description")
+		return nil, errors.New("no response from model for commit description")
 	}
 
 	shortTitle := NormalizeShortTitle(titleResp.Choices[0].Message.Content)
@@ -204,7 +205,7 @@ Generate a Git commit message summary. The message should follow these rules:
 	wrappedDesc := WrapText(description, 72)
 	commitMessage := strings.TrimSpace(prefixAndActions + shortTitle + "\n\n" + wrappedDesc)
 	if commitMessage == "" {
-		return nil, fmt.Errorf("generated commit message was empty")
+		return nil, errors.New("generated commit message was empty")
 	}
 
 	approx := 0

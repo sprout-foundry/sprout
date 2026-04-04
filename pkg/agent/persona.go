@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -25,12 +26,12 @@ func (a *Agent) ClearActivePersona() {
 func (a *Agent) ApplyPersona(personaID string) error {
 	personaID = normalizeAgentPersonaID(personaID)
 	if a.configManager == nil {
-		return fmt.Errorf("configuration manager is not available")
+		return errors.New("configuration manager is not available")
 	}
 
 	config := a.configManager.GetConfig()
 	if config == nil {
-		return fmt.Errorf("configuration is not available")
+		return errors.New("configuration is not available")
 	}
 
 	persona := config.GetSubagentType(personaID)
@@ -134,11 +135,11 @@ func (a *Agent) GetAvailablePersonaIDs() []string {
 func (a *Agent) GetPersonaProviderModel(personaID string) (string, string, error) {
 	personaID = normalizeAgentPersonaID(personaID)
 	if a.configManager == nil {
-		return "", "", fmt.Errorf("configuration manager is not available")
+		return "", "", errors.New("configuration manager is not available")
 	}
 	config := a.configManager.GetConfig()
 	if config == nil {
-		return "", "", fmt.Errorf("configuration is not available")
+		return "", "", errors.New("configuration is not available")
 	}
 	persona := config.GetSubagentType(personaID)
 	if persona == nil {

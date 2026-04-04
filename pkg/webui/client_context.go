@@ -3,6 +3,7 @@ package webui
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -214,7 +215,7 @@ func (ws *ReactWebServer) setClientWorkspaceRoot(clientID, path string) (string,
 		return "", fmt.Errorf("stat workspace root: %w", err)
 	}
 	if !info.IsDir() {
-		return "", fmt.Errorf("workspace root must be a directory")
+		return "", errors.New("workspace root must be a directory")
 	}
 
 	ws.mutex.Lock()
@@ -458,7 +459,7 @@ func (ws *ReactWebServer) getChatAgent(clientID, chatID string) (*agent.Agent, e
 	ctx := ws.clientContexts[clientID]
 	if ctx == nil {
 		ws.mutex.RUnlock()
-		return nil, fmt.Errorf("client context not found")
+		return nil, errors.New("client context not found")
 	}
 	if ctx.ChatSessions == nil {
 		ws.mutex.RUnlock()

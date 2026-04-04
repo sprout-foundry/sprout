@@ -45,23 +45,23 @@ func (c *ShellCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	// Gather environmental context
 	envContext, err := c.gatherEnvironmentalContext()
 	if err != nil {
-		return fmt.Errorf("failed to gather environmental context: %v", err)
+		return fmt.Errorf("failed to gather environmental context: %w", err)
 	}
 
 	// Get a unified client wrapper using the current configuration
 	configManager, err := configuration.NewManager()
 	if err != nil {
-		return fmt.Errorf("failed to initialize configuration: %v", err)
+		return fmt.Errorf("failed to initialize configuration: %w", err)
 	}
 
 	clientType, model, err := configManager.ResolveProviderModel(c.Provider, c.Model)
 	if err != nil {
-		return fmt.Errorf("failed to resolve provider/model: %v", err)
+		return fmt.Errorf("failed to resolve provider/model: %w", err)
 	}
 
 	clientWrapper, err := factory.CreateProviderClient(clientType, model)
 	if err != nil {
-		return fmt.Errorf("failed to create client: %v", err)
+		return fmt.Errorf("failed to create client: %w", err)
 	}
 
 	// Create a comprehensive prompt with environmental context
@@ -91,7 +91,7 @@ Generate the command/script now:`, description, envContext)
 
 	response, err := clientWrapper.SendChatRequest(messages, nil, "") // nil tools = no tool usage
 	if err != nil {
-		return fmt.Errorf("failed to generate shell script: %v", err)
+		return fmt.Errorf("failed to generate shell script: %w", err)
 	}
 
 	// Clean up the result
@@ -123,7 +123,7 @@ Example format: find . -name "*.go" | wc -l`, description)},
 
 		response, err = clientWrapper.SendChatRequest(retryMessages, nil, "")
 		if err != nil {
-			return fmt.Errorf("failed to regenerate shell script: %v", err)
+			return fmt.Errorf("failed to regenerate shell script: %w", err)
 		}
 
 		if len(response.Choices) > 0 {
@@ -157,7 +157,7 @@ Example format: find . -name "*.go" | wc -l`, description)},
 	reader := bufio.NewReader(os.Stdin)
 	userResponse, err := reader.ReadString('\n')
 	if err != nil {
-		return fmt.Errorf("failed to read user response: %v", err)
+		return fmt.Errorf("failed to read user response: %w", err)
 	}
 
 	userResponse = strings.ToLower(strings.TrimSpace(userResponse))
@@ -178,21 +178,21 @@ Example format: find . -name "*.go" | wc -l`, description)},
 		// For scripts, save to temporary file and execute
 		tmpFile, err := os.CreateTemp("", "ledit-script-*.sh")
 		if err != nil {
-			return fmt.Errorf("failed to create temporary script file: %v", err)
+			return fmt.Errorf("failed to create temporary script file: %w", err)
 		}
 		defer os.Remove(tmpFile.Name())
 
 		if _, err := tmpFile.WriteString(generatedScript); err != nil {
-			return fmt.Errorf("failed to write script to temporary file: %v", err)
+			return fmt.Errorf("failed to write script to temporary file: %w", err)
 		}
 
 		if err := tmpFile.Close(); err != nil {
-			return fmt.Errorf("failed to close temporary file: %v", err)
+			return fmt.Errorf("failed to close temporary file: %w", err)
 		}
 
 		// Make script executable
 		if err := os.Chmod(tmpFile.Name(), 0755); err != nil {
-			return fmt.Errorf("failed to make script executable: %v", err)
+			return fmt.Errorf("failed to make script executable: %w", err)
 		}
 
 		// Execute the script (output streams in real-time)

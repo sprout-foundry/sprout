@@ -21,7 +21,7 @@ func normalizeNewlines(s string) string {
 func getStagedFiles() ([]string, error) {
 	out, err := exec.Command("git", "diff", "--staged", "--name-only").CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get staged files: %v", err)
+		return nil, fmt.Errorf("failed to get staged files: %w", err)
 	}
 	raw := strings.Split(strings.TrimSpace(string(out)), "\n")
 	var files []string
@@ -37,7 +37,7 @@ func getStagedFiles() ([]string, error) {
 func getPorcelainStatusLines() ([]string, error) {
 	out, err := exec.Command("git", "status", "--porcelain").CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get git status: %v", err)
+		return nil, fmt.Errorf("failed to get git status: %w", err)
 	}
 	if len(out) == 0 {
 		return nil, nil

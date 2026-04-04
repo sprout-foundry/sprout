@@ -197,7 +197,7 @@ func handleSearchFiles(ctx context.Context, a *Agent, args map[string]interface{
 	})
 
 	if walkErr != nil && walkErr != io.EOF {
-		return "", fmt.Errorf("search failed: %v", walkErr)
+		return "", fmt.Errorf("search failed: %w", walkErr)
 	}
 
 	if matched == 0 {

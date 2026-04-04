@@ -56,7 +56,7 @@ func (eh *ErrorHandler) HandleAPIFailure(apiErr error, messages []api.Message) (
 				toolsExecuted, eh.formatTokenCount(eh.agent.totalTokens))
 		}
 
-		return "", fmt.Errorf("%s", errorMsg)
+		return "", errors.New(errorMsg)
 	}
 
 	// In interactive mode, return helpful error message

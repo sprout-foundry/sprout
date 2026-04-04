@@ -67,7 +67,7 @@ Please generate only the commit message content, no additional commentary.`, str
 	fmt.Println("[bot] Generating commit message with AI...")
 	commitMessage, err := h.chatAgent.ProcessQuery(commitPrompt)
 	if err != nil {
-		return "", fmt.Errorf("failed to generate commit message: %v", err)
+		return "", fmt.Errorf("failed to generate commit message: %w", err)
 	}
 
 	return strings.TrimSpace(commitMessage), nil
@@ -120,7 +120,7 @@ func (h *CommitMessageHandler) EditCommitMessage(commitMessage string) (string, 
 	tempFile := "commit_msg_edit.txt"
 	err := os.WriteFile(tempFile, []byte(commitMessage), 0644)
 	if err != nil {
-		return "", fmt.Errorf("failed to create temporary commit message file: %v", err)
+		return "", fmt.Errorf("failed to create temporary commit message file: %w", err)
 	}
 	defer os.Remove(tempFile)
 
@@ -141,13 +141,13 @@ func (h *CommitMessageHandler) EditCommitMessage(commitMessage string) (string, 
 
 	err = cmd.Run()
 	if err != nil {
-		return "", fmt.Errorf("failed to edit commit message: %v", err)
+		return "", fmt.Errorf("failed to edit commit message: %w", err)
 	}
 
 	// Read edited message
 	editedContent, err := os.ReadFile(tempFile)
 	if err != nil {
-		return "", fmt.Errorf("failed to read edited commit message: %v", err)
+		return "", fmt.Errorf("failed to read edited commit message: %w", err)
 	}
 
 	editedMessage := strings.TrimSpace(string(editedContent))
@@ -165,7 +165,7 @@ func (h *CommitMessageHandler) CreateCommit(commitMessage string) error {
 	tempFile := "commit_msg.txt"
 	err := os.WriteFile(tempFile, []byte(commitMessage), 0644)
 	if err != nil {
-		return fmt.Errorf("failed to create temporary commit message file: %v", err)
+		return fmt.Errorf("failed to create temporary commit message file: %w", err)
 	}
 	defer os.Remove(tempFile)
 
@@ -173,7 +173,7 @@ func (h *CommitMessageHandler) CreateCommit(commitMessage string) error {
 	cmd := exec.Command("git", "commit", "-F", tempFile)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to create commit: %v", err)
+		return fmt.Errorf("failed to create commit: %w", err)
 	}
 
 	fmt.Printf("[OK] Commit created successfully!\n")

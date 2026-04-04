@@ -100,7 +100,7 @@ func (s *SubagentConfigCommand) setModel(model string, configManager *configurat
 func validateProvider(provider string, configManager *configuration.Manager) error {
 	providerType, err := configManager.MapStringToClientType(provider)
 	if err != nil {
-		return fmt.Errorf("invalid provider: %s\n\n%v", provider, err)
+		return fmt.Errorf("invalid provider: %s\n\n%w", provider, err)
 	}
 
 	available := configManager.GetAvailableProviders()

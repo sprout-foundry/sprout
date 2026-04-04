@@ -743,5 +743,92 @@ func GetToolDefinitions() []Tool {
 				},
 			},
 		},
+		{
+			Type: "function",
+			Function: struct {
+				Name        string      `json:"name"`
+				Description string      `json:"description"`
+				Parameters  interface{} `json:"parameters"`
+			}{
+				Name:        "add_memory",
+				Description: "Save a memory to persist across all future conversations. Use this to remember user preferences, learned patterns, project-specific conventions, or anything useful for future sessions. Memories are stored as markdown files in ~/.ledit/memories/ and loaded into your system prompt automatically.",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"name": map[string]interface{}{
+							"type":        "string",
+							"description": "Short descriptive name for the memory (e.g., 'git-safety', 'test-conventions')",
+						},
+						"content": map[string]interface{}{
+							"type":        "string",
+							"description": "Markdown content to store in the memory file",
+						},
+					},
+					"required":             []string{"name", "content"},
+					"additionalProperties": false,
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: struct {
+				Name        string      `json:"name"`
+				Description string      `json:"description"`
+				Parameters  interface{} `json:"parameters"`
+			}{
+				Name:        "read_memory",
+				Description: "Read a specific memory by name. Returns the full markdown content of the memory file.",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"name": map[string]interface{}{
+							"type":        "string",
+							"description": "Name of the memory to read (without .md extension, e.g., 'git-safety')",
+						},
+					},
+					"required":             []string{"name"},
+					"additionalProperties": false,
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: struct {
+				Name        string      `json:"name"`
+				Description string      `json:"description"`
+				Parameters  interface{} `json:"parameters"`
+			}{
+				Name:        "list_memories",
+				Description: "List all saved memories. Returns memory names and their first lines (titles). Memories persist across all conversations.",
+				Parameters: map[string]interface{}{
+					"type":                 "object",
+					"properties":           map[string]interface{}{},
+					"required":             []string{},
+					"additionalProperties": false,
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: struct {
+				Name        string      `json:"name"`
+				Description string      `json:"description"`
+				Parameters  interface{} `json:"parameters"`
+			}{
+				Name:        "delete_memory",
+				Description: "Delete a memory by name. Permanently removes the memory file from ~/.ledit/memories/.",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"name": map[string]interface{}{
+							"type":        "string",
+							"description": "Name of the memory to delete (e.g., 'git-safety')",
+						},
+					},
+					"required":             []string{"name"},
+					"additionalProperties": false,
+				},
+			},
+		},
 	}
 }

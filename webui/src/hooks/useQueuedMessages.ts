@@ -10,6 +10,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { AppState } from '../types/app';
 import { notificationBus } from '../services/notificationBus';
+import { debugLog } from '../utils/log';
 
 export interface UseQueuedMessagesReturn {
   queuedMessages: string[];
@@ -104,6 +105,7 @@ export function useQueuedMessagesAutoSend(
     if (!next) return;
 
     handleSendMessage(next).catch((error) => {
+      debugLog('Failed to send queued message:', error);
       const errorMsg = error instanceof Error ? error.message : 'Failed to send queued message';
       setState((prev) => ({
         ...prev,

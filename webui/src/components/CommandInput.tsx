@@ -7,7 +7,7 @@ import type {
   KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
 import { ScrollText, X, Send, SquarePen, ListPlus, Plus, Square } from 'lucide-react';
-import { useLog } from '../utils/log';
+import { useLog, debugLog } from '../utils/log';
 import './CommandInput.css';
 import { ApiService } from '../services/api';
 import {
@@ -349,6 +349,7 @@ const CommandInput: FC<CommandInputProps> = ({
         prev.map((img) => (img.id === imageId ? { ...img, uploadedPath: result.path, error: undefined } : img)),
       );
     } catch (error) {
+      debugLog('Failed to upload image:', error);
       setAttachedImages((prev) =>
         prev.map((img) =>
           img.id === imageId ? { ...img, error: error instanceof Error ? error.message : 'Upload failed' } : img,

@@ -3,6 +3,7 @@ import type { FC } from 'react';
 import { ChevronDown, ChevronRight, RotateCcw } from 'lucide-react';
 import { showThemedConfirm } from './ThemedDialog';
 import { ApiService } from '../services/api';
+import { debugLog } from '../utils/log';
 
 interface RevisionFile {
   file_revision_hash?: string;
@@ -127,6 +128,7 @@ const RevisionListPanel: FC<RevisionListPanelProps> = ({ mode, onOpenDiff, allow
       setExpandedRevisionIds(normalized.length > 0 ? new Set([normalized[0].revision_id]) : new Set());
     } catch (loadError) {
       if (signal.aborted) return;
+      debugLog('Failed to load revisions:', loadError);
       setError(loadError instanceof Error ? loadError.message : 'Failed to load revisions');
     } finally {
       if (!signal.aborted) {

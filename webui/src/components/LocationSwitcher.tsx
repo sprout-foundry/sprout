@@ -574,6 +574,7 @@ const LocationSwitcher: FC<LocationSwitcherProps> = ({
         if (cancelled) {
           return;
         }
+        debugLog('[loadSessionSuggestions] Failed to fetch remote folders:', error);
         setSshSessionSuggestions((current) => ({ ...current, [session.key]: [] }));
         setSshSessionSuggestionsError((current) => ({
           ...current,
@@ -701,6 +702,7 @@ const LocationSwitcher: FC<LocationSwitcherProps> = ({
         if (cancelled) {
           return;
         }
+        debugLog('[loadSuggestions] Failed to fetch matching folders:', error);
         setSuggestions([]);
         setSuggestionsLoading(false);
         setSuggestionsError(error instanceof Error ? error.message : 'Failed to fetch matching folders');
@@ -807,6 +809,7 @@ const LocationSwitcher: FC<LocationSwitcherProps> = ({
           window.location.reload();
         }, 300);
       } catch (error) {
+        debugLog('[setWorkspace] Failed to switch folder:', error);
         const errorMessage = error instanceof Error ? error.message : 'Failed to switch to this folder';
 
         if (errorMessage.includes('HTML response')) {
@@ -1023,6 +1026,7 @@ const LocationSwitcher: FC<LocationSwitcherProps> = ({
         status: `SSH workspace ready: ${hostAlias}`,
       });
     } catch (error) {
+      debugLog('[openSSHWorkspace] Failed to open SSH host:', error);
       const message = error instanceof Error ? error.message : 'Failed to open SSH host';
       if (error instanceof SSHWorkspaceOpenError) {
         setSshFailure({
@@ -1051,6 +1055,7 @@ const LocationSwitcher: FC<LocationSwitcherProps> = ({
       setSshSessions(await apiService.current.getSSHSessions().catch((err) => { debugLog('Failed to fetch SSH sessions after close:', err); return []; }));
       setSwitchingState({ isSwitching: false, error: null, status: 'SSH session closed' });
     } catch (error) {
+      debugLog('[closeSshSession] Failed to close SSH session:', error);
       const message = error instanceof Error ? error.message : 'Failed to close SSH session';
       setSwitchingState({ isSwitching: false, error: message, status: null });
     } finally {

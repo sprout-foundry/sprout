@@ -3,6 +3,7 @@ import type { FC } from 'react';
 import { Copy, GitBranch, RotateCcw } from 'lucide-react';
 import type { ApiService } from '../services/api';
 import { copyToClipboard } from '../utils/clipboard';
+import { debugLog } from '../utils/log';
 import ContextMenu from './ContextMenu';
 import './GitHistoryPanel.css';
 
@@ -133,6 +134,7 @@ const GitHistoryContextMenu: FC<GitHistoryContextMenuProps> = ({ apiService, isA
       setActionStatus('Checked out!');
       timersRef.current.push(window.setTimeout(() => close(), 800));
     } catch (err) {
+      debugLog('Failed to checkout commit:', err);
       const msg = err instanceof Error ? err.message : 'Checkout failed';
       setActionStatus(msg);
       timersRef.current.push(
@@ -162,6 +164,7 @@ const GitHistoryContextMenu: FC<GitHistoryContextMenuProps> = ({ apiService, isA
       setActionStatus('Reverted!');
       timersRef.current.push(window.setTimeout(() => close(), 800));
     } catch (err) {
+      debugLog('Failed to revert commit:', err);
       const msg = err instanceof Error ? err.message : 'Revert failed';
       setActionStatus(msg);
       timersRef.current.push(

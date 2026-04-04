@@ -1,6 +1,7 @@
 import { createContext, type ReactNode, useContext, useMemo, useState, useEffect, useCallback } from 'react';
 import type { FC } from 'react';
 import { ApiService, type HotkeyEntry } from '../services/api';
+import { useNotifications } from './NotificationContext';
 
 interface HotkeyContextValue {
   hotkeys: HotkeyEntry[] | null;
@@ -178,17 +179,20 @@ function isMac(): boolean {
 export const HotkeyProvider: FC<HotkeyProviderProps> = ({ children }) => {
   const [hotkeys, setHotkeys] = useState<HotkeyEntry[] | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
+  const { addNotification } = useNotifications();
 
   const loadHotkeys = useCallback(async () => {
     try {
       const config = await apiService.getHotkeys();
       setHotkeys(config.hotkeys);
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       console.error('Failed to load hotkeys:', error);
+      addNotification('error', 'Hotkey Load Error', `Failed to load hotkeys: ${errorMessage}`, 5000);
     } finally {
       setIsLoaded(true);
     }
-  }, []);
+  }, [addNotification]);
 
   // Apply a named preset (e.g. "vscode", "webstorm", "ledit") by saving it
   // server-side, then reloading.

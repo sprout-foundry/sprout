@@ -122,6 +122,7 @@ const defaultOnFileSelect = jest.fn();
 
 /** Render FileTree and wait for initial data to load. */
 async function renderTree(props: Partial<React.ComponentProps<typeof FileTree>> = {}) {
+  // eslint-disable-next-line testing-library/no-unnecessary-act
   await act(async () => {
     root.render(
       <FileTree

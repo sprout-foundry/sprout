@@ -24,7 +24,7 @@ export interface PaneLayoutManagerProps {
   activeBufferId: string | null;
   buffers: Map<string, EditorBuffer>;
   paneSizes: Record<string, number>;
-  contextPanelRef: React.RefObject<any>;
+  contextPanelRef: React.RefObject<unknown>;
   perChatCache?: Record<string, PerChatState>;
   activeChatId?: string | null;
 
@@ -44,7 +44,7 @@ export interface PaneLayoutManagerProps {
   isProcessing: boolean;
   lastError: string | null;
   toolExecutions: ToolExecution[];
-  queryProgress: any;
+  queryProgress: unknown;
   currentTodos: TodoItem[];
   subagentActivities: SubagentActivity[];
 
@@ -293,7 +293,8 @@ const PaneLayoutManager: React.FC<PaneLayoutManagerProps> = ({
                 currentTodos,
                 subagentActivities,
                 onStopProcessing,
-                onToolPillClick: (toolId: string) => contextPanelRef.current?.highlightTool(toolId),
+                onToolPillClick: (toolId: string) =>
+                  (contextPanelRef.current as { highlightTool?: (id: string) => void } | null)?.highlightTool?.(toolId),
               }}
               reviewProps={{
                 review: deepReview,

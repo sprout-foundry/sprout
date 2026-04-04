@@ -18,10 +18,10 @@ export function useCurrentTodos(currentTodos: TodoItem[] | undefined, toolExecut
       if (latest.arguments) {
         const args = JSON.parse(latest.arguments);
         if (Array.isArray(args.todos)) {
-          return args.todos.map((todo: any) => ({
-            id: todo.id || `${todo.content}-${todo.status}`,
-            content: todo.content || '',
-            status: (['pending', 'in_progress', 'completed', 'cancelled'].includes(todo.status)
+          return args.todos.map((todo: Record<string, unknown>) => ({
+            id: String(todo.id || `${todo.content}-${todo.status}`),
+            content: String(todo.content || ''),
+            status: (['pending', 'in_progress', 'completed', 'cancelled'].includes(String(todo.status))
               ? todo.status
               : 'pending') as 'pending' | 'in_progress' | 'completed' | 'cancelled',
           }));

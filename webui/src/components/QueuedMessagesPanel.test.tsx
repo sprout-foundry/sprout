@@ -44,6 +44,7 @@ async function renderPanel(props: Partial<React.ComponentProps<typeof QueuedMess
   const onClear = props.onClear ?? jest.fn();
   const onClose = props.onClose ?? jest.fn();
 
+  // eslint-disable-next-line testing-library/no-unnecessary-act
   await act(async () => {
     root.render(
       <QueuedMessagesPanel

@@ -5,6 +5,7 @@ import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { TerminalWebSocketService } from '../services/terminalWebSocket';
+import type { WsEvent } from '../services/websocket';
 import { useTheme } from '../contexts/ThemeContext';
 import { copyToClipboard } from '../utils/clipboard';
 
@@ -57,7 +58,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     const xtermRef = useRef<XTerm | null>(null);
     const fitAddonRef = useRef<FitAddon | null>(null);
     const terminalWSRef = useRef<TerminalWebSocketService | null>(null);
-    const eventHandlerRef = useRef<((event: any) => void) | null>(null);
+    const eventHandlerRef = useRef<((event: WsEvent) => void) | null>(null);
     const resizeTimerRef = useRef<number | null>(null);
 
     const getTerminalTheme = useCallback(() => {
@@ -269,9 +270,10 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       const service = TerminalWebSocketService.createInstance();
       terminalWSRef.current = service;
 
-      const handler = (event: any) => {
+      const handler = (event: WsEvent) => {
+        const data = event.data as Record<string, unknown> | undefined;
         if (event.type === 'connection_status') {
-          if (!event.data.connected) {
+          if (!data?.connected) {
             setPaneConnected(false);
             onConnectionChangeRef.current?.(false);
             xtermRef.current?.writeln('\r\nTerminal disconnected');
@@ -284,9 +286,9 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
             xtermRef.current?.focus();
           });
         } else if (event.type === 'output' || event.type === 'error_output') {
-          xtermRef.current?.write(event.data.output || '');
+          xtermRef.current?.write((data?.output as string) || '');
         } else if (event.type === 'error') {
-          xtermRef.current?.write(`\r\n${event.data.message}\r\n`);
+          xtermRef.current?.write(`\r\n${data?.message as string}\r\n`);
         }
       };
 

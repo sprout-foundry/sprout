@@ -268,7 +268,9 @@ export const HotkeyProvider: React.FC<HotkeyProviderProps> = ({ children }) => {
   // Respects the global flag: non-global commands are suppressed when
   // an input field or contentEditable element has focus.
   useEffect(() => {
-    const desktop = (window as any).leditDesktop;
+    const desktop = (
+      window as unknown as Record<string, { onDesktopHotkey?: (cb: (cmd: string) => void) => () => void } | undefined>
+    ).leditDesktop;
     if (typeof desktop?.onDesktopHotkey !== 'function') return;
 
     const cleanup = desktop.onDesktopHotkey((commandId: string) => {

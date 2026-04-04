@@ -112,6 +112,7 @@ const flushPromises = async () => {
 
 async function renderGitPanel(overrides: Partial<typeof MINIMAL_PROPS> = {}) {
   const props = { ...MINIMAL_PROPS, ...overrides };
+  // eslint-disable-next-line testing-library/no-unnecessary-act
   await act(async () => {
     root.render(<GitSidebarPanel {...(props as any)} />);
   });

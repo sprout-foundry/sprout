@@ -97,6 +97,7 @@ function renderWithBubble(innerHtml = '<div data-message-content="Hello world">H
   const containerRef = React.createRef<HTMLDivElement>();
   (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = chatContainer;
 
+  // eslint-disable-next-line testing-library/no-unnecessary-act
   act(() => {
     root = createRoot(mountPoint!);
     root.render(<ChatMessageContextMenu containerRef={containerRef} onInsertAtCursor={onInsertAtCursor} />);

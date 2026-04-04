@@ -27,6 +27,7 @@ const (
 	EventTypeSubagentActivity        = "subagent_activity"
 	EventTypeTodoUpdate              = "todo_update"
 	EventTypeFileChanged             = "file_changed"
+	EventTypeFileContentChanged      = "file_content_changed"
 	EventTypeStreamChunk             = "stream_chunk"
 	EventTypeMetricsUpdate           = "metrics_update"
 	EventTypeValidation              = "validation"
@@ -159,6 +160,16 @@ func FileChangedEvent(filePath, action string, content string) map[string]interf
 		"file_path": filePath,
 		"action":    action, // "created", "modified", "deleted"
 		"content":   content,
+	}
+}
+
+// FileContentChangedEvent creates an event indicating a file's content on disk
+// has changed while it was open in the editor
+func FileContentChangedEvent(filePath string, modTime int64, size int64) map[string]interface{} {
+	return map[string]interface{}{
+		"file_path": filePath,
+		"mod_time":  modTime,
+		"size":      size,
 	}
 }
 

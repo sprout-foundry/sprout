@@ -1232,4 +1232,6 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
   },
 );
 
+FileTree.displayName = 'FileTree';
+
 export default FileTree;

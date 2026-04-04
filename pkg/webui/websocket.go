@@ -217,7 +217,7 @@ func (ws *ReactWebServer) shouldForwardEventToConnection(event events.UIEvent, c
 
 	// Untargeted events should not leak across client windows.
 	// Only allow explicit global events without a client_id.
-	return event.Type == events.EventTypeMetricsUpdate
+	return event.Type == events.EventTypeMetricsUpdate || event.Type == events.EventTypeFileContentChanged
 }
 
 // handleWebSocketMessage processes incoming WebSocket messages

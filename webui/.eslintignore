@@ -3,3 +3,6 @@ node_modules/
 coverage/
 *.js
 !jest.config.js
+**/*.test.*
+**/*.spec.*
+**/__mocks__/**

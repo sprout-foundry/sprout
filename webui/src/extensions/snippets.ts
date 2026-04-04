@@ -21,6 +21,7 @@
 import { keymap, EditorView } from '@codemirror/view';
 import { type Extension, Facet, Compartment } from '@codemirror/state';
 import { snippet, hasNextSnippetField } from '@codemirror/autocomplete';
+import { debugLog } from '../utils/log';
 
 // ── Snippet definitions ─────────────────────────────────────────────
 
@@ -475,7 +476,8 @@ export function setSnippetLanguage(view: EditorView, langId: string | null): voi
     view.dispatch({
       effects: langCompartment.reconfigure(snippetLanguageFacet.of(langId)),
     });
-  } catch {
+  } catch (err) {
+    debugLog('[setSnippetLanguage] failed to dispatch snippet language compartment:', err);
     // Edge case: view already destroyed or compartment not attached.
     // Ignore silently — the next Tab press will see the fresh language
     // when the editor is re-initialised for a different buffer.

@@ -12,7 +12,7 @@ import {
   SSHWorkspaceOpenError,
 } from '../services/api';
 import { clientFetch, getSSHProxyContext } from '../services/clientSession';
-import { useLog } from '../utils/log';
+import { useLog, debugLog } from '../utils/log';
 
 interface LocationSwitcherProps {
   isConnected: boolean;
@@ -238,9 +238,8 @@ const writeSSHFavoriteWorkspaces = (value: Record<string, string[]>) => {
   }
   try {
     window.localStorage.setItem(SSH_FAVORITE_WORKSPACES_KEY, JSON.stringify(value));
-  } catch {
-    // QuotaExceededError: storage is full; the favorites won't persist this session
-    // but shouldn't crash the UI.
+  } catch (err) {
+    debugLog('[writeSSHFavoriteWorkspaces] localStorage write failed:', err);
   }
 };
 
@@ -772,8 +771,8 @@ const LocationSwitcher: FC<LocationSwitcherProps> = ({
               return;
             }
           }
-        } catch {
-          // Continue if session count cannot be checked.
+        } catch (err) {
+          debugLog('[setWorkspace] terminal session count check failed:', err);
         }
 
         const response = await apiService.current.setWorkspace(normalizedTarget);
@@ -967,8 +966,8 @@ const LocationSwitcher: FC<LocationSwitcherProps> = ({
         if (!statusPollCancelled && launchStatus?.status) {
           setSwitchingState((prev) => ({ ...prev, status: launchStatus.status }));
         }
-      } catch {
-        // Ignore transient status polling failures while launch is in-flight.
+      } catch (err) {
+        debugLog('[pollLaunchStatus] transient poll failed:', err);
       }
     };
     const statusPollTimer = window.setInterval(() => {
@@ -1003,8 +1002,8 @@ const LocationSwitcher: FC<LocationSwitcherProps> = ({
             if (healthResp.ok) {
               break;
             }
-          } catch {
-            // Proxy not ready yet — keep polling.
+          } catch (err) {
+            debugLog('[openSSHWorkspace] proxy health check failed:', err);
           }
           await new Promise<void>((resolve) => window.setTimeout(resolve, 400));
         }

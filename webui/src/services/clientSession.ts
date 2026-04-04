@@ -1,3 +1,5 @@
+import { debugLog } from '../utils/log';
+
 export const WEBUI_CLIENT_ID_HEADER = 'X-Ledit-Client-ID';
 export const WEBUI_CLIENT_ID_QUERY_PARAM = 'client_id';
 const WEBUI_CLIENT_ID_STORAGE_KEY = 'ledit.webuiClientId';
@@ -63,8 +65,8 @@ export function persistTabWorkspacePath(workspacePath: string): void {
   }
   try {
     window.localStorage.setItem(WEBUI_WORKSPACE_PATH_STORAGE_KEY, workspacePath);
-  } catch {
-    // QuotaExceededError — ignore silently
+  } catch (err) {
+    debugLog('[persistTabWorkspacePath] failed to persist workspace path:', err);
   }
 }
 
@@ -79,7 +81,8 @@ export function getTabWorkspacePath(): string {
   }
   try {
     return window.localStorage.getItem(WEBUI_WORKSPACE_PATH_STORAGE_KEY) || '';
-  } catch {
+  } catch (err) {
+    debugLog('[getTabWorkspacePath] failed to read workspace path:', err);
     return '';
   }
 }

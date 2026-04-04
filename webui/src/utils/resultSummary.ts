@@ -3,6 +3,7 @@
  * and formatting tool results for display
  */
 
+import { debugLog } from './log';
 import { stripAnsiCodes } from './ansi';
 
 /**
@@ -27,7 +28,8 @@ export function formatToolDetail(content: string): string {
   try {
     const parsed = JSON.parse(content);
     return JSON.stringify(parsed, null, 2);
-  } catch {
+  } catch (err) {
+    debugLog('[resultSummary] formatToolDetail JSON parse failed:', err);
     return content;
   }
 }
@@ -101,7 +103,8 @@ export function getSubagentResultPreview(rawResult?: string): string | undefined
     return summary
       ? truncateText(summary, 220)
       : truncateText(formatToolDetail(cleaned).replace(/\s+/g, ' ').trim(), 220);
-  } catch {
+  } catch (err) {
+    debugLog('[resultSummary] getSubagentResultPreview JSON parse failed:', err);
     return truncateText(cleaned.replace(/\s+/g, ' ').trim(), 220);
   }
 }

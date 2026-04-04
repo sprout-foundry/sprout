@@ -1,5 +1,5 @@
 import { useCallback, useState, useEffect } from 'react';
-import { ApiService } from '../services/api';
+import { type ApiService } from '../services/api';
 import { parseFilePath } from '../utils/filePath';
 
 interface UseHotkeysConfigOptions {
@@ -27,9 +27,12 @@ export function useHotkeysConfig({
   // Load hotkeys config path when connected
   useEffect(() => {
     if (!isConnected) return;
-    apiService.getHotkeys().then(config => {
-      if (config.path) setHotkeysConfigPath(config.path);
-    }).catch(() => {});
+    apiService
+      .getHotkeys()
+      .then((config) => {
+        if (config.path) setHotkeysConfigPath(config.path);
+      })
+      .catch(() => {});
   }, [isConnected, apiService]);
 
   const handleOpenHotkeysConfig = useCallback(() => {
@@ -42,7 +45,9 @@ export function useHotkeysConfig({
 
   // Listen for external requests to open the hotkeys config
   useEffect(() => {
-    const handler = () => { handleOpenHotkeysConfig(); };
+    const handler = () => {
+      handleOpenHotkeysConfig();
+    };
     window.addEventListener('ledit:open-hotkeys-config', handler);
     return () => window.removeEventListener('ledit:open-hotkeys-config', handler);
   }, [handleOpenHotkeysConfig]);

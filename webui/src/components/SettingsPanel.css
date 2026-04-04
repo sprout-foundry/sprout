@@ -25,8 +25,11 @@
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.12s var(--ease-out), color 0.12s var(--ease-out),
-    border-color 0.12s var(--ease-out), box-shadow 0.12s var(--ease-out);
+  transition:
+    background 0.12s var(--ease-out),
+    color 0.12s var(--ease-out),
+    border-color 0.12s var(--ease-out),
+    box-shadow 0.12s var(--ease-out);
 }
 
 .sidebar .settings-subtab:hover {
@@ -58,7 +61,7 @@
   padding: 2px 0;
 }
 
-.sidebar .styled-toggle input[type="checkbox"] {
+.sidebar .styled-toggle input[type='checkbox'] {
   position: absolute;
   opacity: 0;
   width: 0;
@@ -85,7 +88,9 @@
   background: var(--text-tertiary);
   top: 2px;
   left: 2px;
-  transition: transform 0.2s var(--ease-out), background 0.2s var(--ease-out);
+  transition:
+    transform 0.2s var(--ease-out),
+    background 0.2s var(--ease-out);
 }
 
 .sidebar .styled-toggle input:checked + .toggle-track {
@@ -114,7 +119,9 @@
   color: var(--text-primary);
   font-size: var(--text-sm);
   font-family: var(--font-sans);
-  transition: border-color 0.15s var(--ease-out), box-shadow 0.15s var(--ease-out);
+  transition:
+    border-color 0.15s var(--ease-out),
+    box-shadow 0.15s var(--ease-out);
   box-sizing: border-box;
 }
 
@@ -198,8 +205,13 @@
 }
 
 @keyframes settings-pulse {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 1; }
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 /* ── Toast notification ──────────────────────────────────────── */
@@ -213,8 +225,9 @@
   font-size: 12px;
   font-weight: 600;
   z-index: 2000;
-  animation: settings-toast-in 0.2s var(--ease-out),
-             settings-toast-out 0.2s var(--ease-out) 1.8s forwards;
+  animation:
+    settings-toast-in 0.2s var(--ease-out),
+    settings-toast-out 0.2s var(--ease-out) 1.8s forwards;
   pointer-events: none;
 }
 
@@ -229,13 +242,23 @@
 }
 
 @keyframes settings-toast-in {
-  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
-  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 }
 
 @keyframes settings-toast-out {
-  from { opacity: 1; }
-  to   { opacity: 0; }
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }
 
 /* ── CRUD list items (MCP / Custom Providers) ────────────────── */

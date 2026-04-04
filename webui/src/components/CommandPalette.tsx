@@ -67,9 +67,7 @@ const COMMAND_DEFINITIONS: CommandDef[] = [
 const MAX_FILE_RESULTS = 100;
 const MAX_INDEXED_FILES = 12000;
 const MAX_INDEXED_DIRECTORIES = 3000;
-const SKIP_DIRECTORIES = new Set([
-  '.git', 'node_modules', '.ledit', '.next', 'dist', 'build',
-]);
+const SKIP_DIRECTORIES = new Set(['.git', 'node_modules', '.ledit', '.next', 'dist', 'build']);
 
 // ── Unified result types ───────────────────────────────────────────────────
 
@@ -195,7 +193,9 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
     };
     doFetch();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [isOpen]);
 
   // ── Build unified results: commands first, then files ─────────────────
@@ -228,12 +228,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
 
     // ── Fuzzy-match commands ─────────────────────────────────────────────
     if (!prefersFilesOnly) {
-      const cmdResults: FuzzyResult<CommandDef>[] = fuzzyFilter(
-        trimmed,
-        COMMAND_DEFINITIONS,
-        (cmd) => cmd.label,
-        50,
-      );
+      const cmdResults: FuzzyResult<CommandDef>[] = fuzzyFilter(trimmed, COMMAND_DEFINITIONS, (cmd) => cmd.label, 50);
 
       if (cmdResults.length > 0) {
         items.push({ kind: 'commands-header', highlightedLabel: 'Commands', score: Infinity });
@@ -251,12 +246,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
 
     // ── Fuzzy-match files ────────────────────────────────────────────────
     if (!prefersCommandsOnly && allFiles.length > 0) {
-      const fileResults: FuzzyResult<FileResult>[] = fuzzyFilter(
-        trimmed,
-        allFiles,
-        (f) => f.path,
-        MAX_FILE_RESULTS,
-      );
+      const fileResults: FuzzyResult<FileResult>[] = fuzzyFilter(trimmed, allFiles, (f) => f.path, MAX_FILE_RESULTS);
 
       if (fileResults.length > 0) {
         items.push({ kind: 'files-header', highlightedLabel: 'Files', score: -1 });
@@ -277,10 +267,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
 
   // ── Navigable items (skip headers for arrow-key selection) ────────────
 
-  const navigableItems = useMemo(
-    () => results.filter((r) => r.kind === 'command' || r.kind === 'file'),
-    [results],
-  );
+  const navigableItems = useMemo(() => results.filter((r) => r.kind === 'command' || r.kind === 'file'), [results]);
 
   // ── Reset selected index when results or query change ─────────────────
 
@@ -301,103 +288,108 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
 
   // ── Execute a command by id ───────────────────────────────────────────
 
-  const executeCommand = useCallback((commandId: string) => {
-    switch (commandId) {
-      case 'command_palette':
-        break; // already open
-      case 'quick_open':
-        setPrefersFilesOnly(true);
-        setPrefersCommandsOnly(false);
-        return; // keep palette open and refocus
-      case 'toggle_explorer':
-      case 'toggle_sidebar':
-        onToggleSidebar();
-        break;
-      case 'toggle_terminal':
-        onToggleTerminal();
-        break;
-      case 'new_file':
-        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'new_file' } }));
-        break;
-      case 'switch_to_chat':
-      case 'switch_to_editor':
-      case 'switch_to_git':
-        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: commandId } }));
-        break;
-      case 'open_hotkeys_config':
-        onOpenHotkeysConfig();
-        break;
-      case 'split_editor_vertical':
-        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'split_editor_vertical' } }));
-        break;
-      case 'split_editor_horizontal':
-        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'split_editor_horizontal' } }));
-        break;
-      case 'split_editor_grid':
-        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'split_editor_grid' } }));
-        break;
-      case 'split_terminal_vertical':
-        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'split_terminal_vertical' } }));
-        break;
-      case 'split_terminal_horizontal':
-        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'split_terminal_horizontal' } }));
-        break;
-      case 'editor_toggle_word_wrap':
-        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'editor_toggle_word_wrap' } }));
-        break;
-      case 'toggle_linked_scroll':
-        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'toggle_linked_scroll' } }));
-        break;
-      case 'toggle_minimap':
-        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'toggle_minimap' } }));
-        break;
-      case 'close_editor':
-        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'close_editor' } }));
-        break;
-      case 'save_file':
-        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'save_file' } }));
-        break;
-      case 'save_all_files':
-        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'save_all_files' } }));
-        break;
-      case 'close_all_editors':
-        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'close_all_editors' } }));
-        break;
-      case 'close_other_editors':
-        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'close_other_editors' } }));
-        break;
-      case 'focus_next_tab':
-        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'focus_next_tab' } }));
-        break;
-      case 'focus_prev_tab':
-        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'focus_prev_tab' } }));
-        break;
-      case 'reset_saved_layout': {
-        if (!window.confirm('Reset all saved layout settings? This cannot be undone.')) break;
-        clearLayoutSnapshot();
-        const keys = [
-          'ledit.editor.paneLayout',
-          'ledit.editor.paneSizes',
-          'ledit-terminal-height',
-          'ledit-terminal-expanded',
-          'ledit-sidebar-collapsed',
-          'ledit-sidebar-width',
-          'ledit.contextPanel.width',
-          'ledit.contextPanel.collapsed',
-          'editor:minimap-enabled',
-          'filetree-show-ignored',
-        ];
-        for (const key of keys) {
-          try { window.localStorage.removeItem(key); } catch {}
+  const executeCommand = useCallback(
+    (commandId: string) => {
+      switch (commandId) {
+        case 'command_palette':
+          break; // already open
+        case 'quick_open':
+          setPrefersFilesOnly(true);
+          setPrefersCommandsOnly(false);
+          return; // keep palette open and refocus
+        case 'toggle_explorer':
+        case 'toggle_sidebar':
+          onToggleSidebar();
+          break;
+        case 'toggle_terminal':
+          onToggleTerminal();
+          break;
+        case 'new_file':
+          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'new_file' } }));
+          break;
+        case 'switch_to_chat':
+        case 'switch_to_editor':
+        case 'switch_to_git':
+          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId } }));
+          break;
+        case 'open_hotkeys_config':
+          onOpenHotkeysConfig();
+          break;
+        case 'split_editor_vertical':
+          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'split_editor_vertical' } }));
+          break;
+        case 'split_editor_horizontal':
+          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'split_editor_horizontal' } }));
+          break;
+        case 'split_editor_grid':
+          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'split_editor_grid' } }));
+          break;
+        case 'split_terminal_vertical':
+          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'split_terminal_vertical' } }));
+          break;
+        case 'split_terminal_horizontal':
+          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'split_terminal_horizontal' } }));
+          break;
+        case 'editor_toggle_word_wrap':
+          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'editor_toggle_word_wrap' } }));
+          break;
+        case 'toggle_linked_scroll':
+          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'toggle_linked_scroll' } }));
+          break;
+        case 'toggle_minimap':
+          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'toggle_minimap' } }));
+          break;
+        case 'close_editor':
+          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'close_editor' } }));
+          break;
+        case 'save_file':
+          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'save_file' } }));
+          break;
+        case 'save_all_files':
+          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'save_all_files' } }));
+          break;
+        case 'close_all_editors':
+          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'close_all_editors' } }));
+          break;
+        case 'close_other_editors':
+          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'close_other_editors' } }));
+          break;
+        case 'focus_next_tab':
+          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'focus_next_tab' } }));
+          break;
+        case 'focus_prev_tab':
+          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'focus_prev_tab' } }));
+          break;
+        case 'reset_saved_layout': {
+          if (!window.confirm('Reset all saved layout settings? This cannot be undone.')) break;
+          clearLayoutSnapshot();
+          const keys = [
+            'ledit.editor.paneLayout',
+            'ledit.editor.paneSizes',
+            'ledit-terminal-height',
+            'ledit-terminal-expanded',
+            'ledit-sidebar-collapsed',
+            'ledit-sidebar-width',
+            'ledit.contextPanel.width',
+            'ledit.contextPanel.collapsed',
+            'editor:minimap-enabled',
+            'filetree-show-ignored',
+          ];
+          for (const key of keys) {
+            try {
+              window.localStorage.removeItem(key);
+            } catch {}
+          }
+          window.location.reload();
+          return; // page is reloading — skip onClose()
         }
-        window.location.reload();
-        return; // page is reloading — skip onClose()
+        default:
+          break;
       }
-      default:
-        break;
-    }
-    onClose();
-  }, [onClose, onToggleSidebar, onToggleTerminal, onOpenHotkeysConfig]);
+      onClose();
+    },
+    [onClose, onToggleSidebar, onToggleTerminal, onOpenHotkeysConfig],
+  );
 
   // ── Select & execute the currently selected item ──────────────────────
 
@@ -437,69 +429,73 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
 
   // ── Handle keyboard navigation ────────────────────────────────────────
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    // Prevent browser defaults for Ctrl/Cmd+key
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-
-    switch (e.key) {
-      case 'Escape':
-        e.preventDefault();
-        onClose();
-        break;
-
-      case 'ArrowDown':
-        e.preventDefault();
-        setSelectedIndex((prev) =>
-          Math.min(prev + 1, Math.max(navigableItems.length - 1, 0)),
-        );
-        break;
-
-      case 'ArrowUp':
-        e.preventDefault();
-        setSelectedIndex((prev) => Math.max(prev - 1, 0));
-        break;
-
-      case 'Enter':
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      // Prevent browser defaults for Ctrl/Cmd+key
+      if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
         e.stopPropagation();
-        executeSelected();
-        break;
-
-      case 'Tab':
-        e.preventDefault();
-        if (e.shiftKey) {
-          // Shift+Tab → show only commands
-          setPrefersCommandsOnly(true);
-          setPrefersFilesOnly(false);
-        } else if (prefersFilesOnly) {
-          // Tab when in files-only → back to unified
-          setPrefersFilesOnly(false);
-        } else {
-          // Tab → show only files
-          setPrefersFilesOnly(true);
-          setPrefersCommandsOnly(false);
-        }
-        break;
-
-      case 'Backspace': {
-        if (!query && (prefersCommandsOnly || prefersFilesOnly)) {
-          e.preventDefault();
-          setPrefersCommandsOnly(false);
-          setPrefersFilesOnly(false);
-        }
-        break;
       }
-    }
-  }, [navigableItems.length, query, prefersCommandsOnly, prefersFilesOnly, executeSelected, onClose]);
+
+      switch (e.key) {
+        case 'Escape':
+          e.preventDefault();
+          onClose();
+          break;
+
+        case 'ArrowDown':
+          e.preventDefault();
+          setSelectedIndex((prev) => Math.min(prev + 1, Math.max(navigableItems.length - 1, 0)));
+          break;
+
+        case 'ArrowUp':
+          e.preventDefault();
+          setSelectedIndex((prev) => Math.max(prev - 1, 0));
+          break;
+
+        case 'Enter':
+          e.preventDefault();
+          e.stopPropagation();
+          executeSelected();
+          break;
+
+        case 'Tab':
+          e.preventDefault();
+          if (e.shiftKey) {
+            // Shift+Tab → show only commands
+            setPrefersCommandsOnly(true);
+            setPrefersFilesOnly(false);
+          } else if (prefersFilesOnly) {
+            // Tab when in files-only → back to unified
+            setPrefersFilesOnly(false);
+          } else {
+            // Tab → show only files
+            setPrefersFilesOnly(true);
+            setPrefersCommandsOnly(false);
+          }
+          break;
+
+        case 'Backspace': {
+          if (!query && (prefersCommandsOnly || prefersFilesOnly)) {
+            e.preventDefault();
+            setPrefersCommandsOnly(false);
+            setPrefersFilesOnly(false);
+          }
+          break;
+        }
+      }
+    },
+    [navigableItems.length, query, prefersCommandsOnly, prefersFilesOnly, executeSelected, onClose],
+  );
 
   // ── Handle overlay click ──────────────────────────────────────────────
 
-  const handleOverlayClick = useCallback((e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) onClose();
-  }, [onClose]);
+  const handleOverlayClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.target === e.currentTarget) onClose();
+    },
+    [onClose],
+  );
 
   // ── Map selectedIndex to flat results index (for highlighting) ───────
   const selectedFlatIndex = useMemo(() => {
@@ -522,8 +518,8 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
   const filterLabel = prefersCommandsOnly
     ? 'Commands only · Tab for files · Backspace to reset'
     : prefersFilesOnly
-    ? 'Files only · Tab or Shift+Tab to reset'
-    : '⌘+P · Tab to filter · Esc to close';
+      ? 'Files only · Tab or Shift+Tab to reset'
+      : '⌘+P · Tab to filter · Esc to close';
 
   return (
     <div className="command-palette-overlay" onClick={handleOverlayClick}>
@@ -552,7 +548,9 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
             {prefersCommandsOnly && (
               <button
                 className="filter-chip active"
-                onClick={() => { setPrefersCommandsOnly(false); }}
+                onClick={() => {
+                  setPrefersCommandsOnly(false);
+                }}
               >
                 Commands
               </button>
@@ -560,7 +558,9 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
             {prefersFilesOnly && (
               <button
                 className="filter-chip active"
-                onClick={() => { setPrefersFilesOnly(false); }}
+                onClick={() => {
+                  setPrefersFilesOnly(false);
+                }}
               >
                 Files
               </button>
@@ -579,9 +579,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
 
         {/* Results */}
         <div className="command-palette-results" ref={resultsRef}>
-          {isLoadingFiles && !hasQuery && (
-            <div className="command-palette-loading">Loading files…</div>
-          )}
+          {isLoadingFiles && !hasQuery && <div className="command-palette-loading">Loading files…</div>}
 
           {results.length === 0 && hasQuery && !isLoadingFiles && (
             <div className="command-palette-empty">No matching commands or files</div>
@@ -608,13 +606,8 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
                   onClick={() => executeCommand(item.commandId!)}
                   onMouseEnter={() => setSelectedIndex(toNavigableIndex(index))}
                 >
-                  <span
-                    className="command-palette-label"
-                    dangerouslySetInnerHTML={{ __html: item.highlightedLabel }}
-                  />
-                  {shortcut && (
-                    <span className="command-palette-shortcut">{shortcut}</span>
-                  )}
+                  <span className="command-palette-label" dangerouslySetInnerHTML={{ __html: item.highlightedLabel }} />
+                  {shortcut && <span className="command-palette-shortcut">{shortcut}</span>}
                 </div>
               );
             }
@@ -625,12 +618,13 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
                 key={`file-${item.filePath}`}
                 data-selected={isSelected}
                 className={`command-palette-item ${isSelected ? 'command-palette-selected' : ''}`}
-                onClick={() => { onOpenFile(item.filePath!); onClose(); }}
+                onClick={() => {
+                  onOpenFile(item.filePath!);
+                  onClose();
+                }}
                 onMouseEnter={() => setSelectedIndex(toNavigableIndex(index))}
               >
-                <span className="command-palette-file-icon">
-                  📄
-                </span>
+                <span className="command-palette-file-icon">📄</span>
                 <span
                   className="command-palette-file-path"
                   dangerouslySetInnerHTML={{ __html: item.highlightedLabel }}
@@ -639,11 +633,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
             );
           })}
 
-          {!hasQuery && (
-            <div className="command-palette-hint">
-              {filterLabel}
-            </div>
-          )}
+          {!hasQuery && <div className="command-palette-hint">{filterLabel}</div>}
         </div>
       </div>
     </div>

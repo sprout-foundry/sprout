@@ -32,7 +32,7 @@ export function useQueuedMessages(): UseQueuedMessagesReturn {
   }, []);
 
   const handleRemoveQueuedMessage = useCallback((index: number) => {
-    setQueuedMessages(prev => {
+    setQueuedMessages((prev) => {
       const next = [...prev];
       next.splice(index, 1);
       queuedMessagesRef.current = next;
@@ -41,7 +41,7 @@ export function useQueuedMessages(): UseQueuedMessagesReturn {
   }, []);
 
   const handleEditQueuedMessage = useCallback((index: number, newText: string) => {
-    setQueuedMessages(prev => {
+    setQueuedMessages((prev) => {
       const next = [...prev];
       next[index] = newText;
       queuedMessagesRef.current = next;
@@ -50,7 +50,7 @@ export function useQueuedMessages(): UseQueuedMessagesReturn {
   }, []);
 
   const handleReorderQueuedMessages = useCallback((fromIndex: number, toIndex: number) => {
-    setQueuedMessages(prev => {
+    setQueuedMessages((prev) => {
       const next = [...prev];
       const [moved] = next.splice(fromIndex, 1);
       next.splice(toIndex, 0, moved);
@@ -64,7 +64,16 @@ export function useQueuedMessages(): UseQueuedMessagesReturn {
     queuedMessagesRef.current = [];
   }, []);
 
-  return { queuedMessages, queuedMessagesRef, setQueuedMessages, handleQueueMessage, handleRemoveQueuedMessage, handleEditQueuedMessage, handleReorderQueuedMessages, handleClearQueuedMessages };
+  return {
+    queuedMessages,
+    queuedMessagesRef,
+    setQueuedMessages,
+    handleQueueMessage,
+    handleRemoveQueuedMessage,
+    handleEditQueuedMessage,
+    handleReorderQueuedMessages,
+    handleClearQueuedMessages,
+  };
 }
 
 /**
@@ -94,17 +103,20 @@ export function useQueuedMessagesAutoSend(
 
     handleSendMessage(next).catch((error) => {
       const errorMsg = error instanceof Error ? error.message : 'Failed to send queued message';
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
         lastError: `Failed to send queued message: ${errorMsg}`,
-        messages: [...prev.messages, {
-          id: Date.now().toString(),
-          type: 'assistant',
-          content: `[FAIL] Error: ${errorMsg}`,
-          timestamp: new Date()
-        }]
+        messages: [
+          ...prev.messages,
+          {
+            id: Date.now().toString(),
+            type: 'assistant',
+            content: `[FAIL] Error: ${errorMsg}`,
+            timestamp: new Date(),
+          },
+        ],
       }));
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- activeRequestsRef, queuedMessagesRef, setQueuedMessages, and setState are all stable refs/setters, safe to omit
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- activeRequestsRef, queuedMessagesRef, setQueuedMessages, and setState are all stable refs/setters, safe to omit
   }, [state.isProcessing, handleSendMessage]);
 }

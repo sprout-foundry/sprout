@@ -72,9 +72,7 @@ beforeEach(() => {
 
   act(() => {
     root = createRoot(mountPoint!);
-    root.render(
-      <GitHistoryContextMenu apiService={mockApiService as any} />,
-    );
+    root.render(<GitHistoryContextMenu apiService={mockApiService as any} />);
   });
 });
 
@@ -106,7 +104,9 @@ function getMenuItems(): Element[] {
 }
 
 function getMenuTexts(): string[] {
-  return getMenuItems().map((el) => el.textContent?.trim()).filter((t): t is string => Boolean(t));
+  return getMenuItems()
+    .map((el) => el.textContent?.trim())
+    .filter((t): t is string => Boolean(t));
 }
 
 /** Dispatch a contextmenu MouseEvent on `target` inside act(). */
@@ -165,9 +165,7 @@ describe('GitHistoryContextMenu', () => {
   test('"Copy commit SHA" copies full hash and shows Copied! feedback', async () => {
     fireContextMenu(commitRow!);
 
-    const copyShaBtn = getMenuItems().find(
-      (el) => el.textContent?.trim().includes('Copy commit SHA'),
-    );
+    const copyShaBtn = getMenuItems().find((el) => el.textContent?.trim().includes('Copy commit SHA'));
     expect(copyShaBtn).toBeDefined();
 
     await act(async () => {
@@ -179,18 +177,14 @@ describe('GitHistoryContextMenu', () => {
 
     // Button label should now show 'Copied!'
     const updatedTexts = getMenuTexts();
-    expect(updatedTexts).toEqual(
-      expect.arrayContaining([expect.stringContaining('Copied!')]),
-    );
+    expect(updatedTexts).toEqual(expect.arrayContaining([expect.stringContaining('Copied!')]));
   });
 
   // 5. "Copy commit message" copies full message and shows 'Copied!' feedback
   test('"Copy commit message" copies full message and shows Copied! feedback', async () => {
     fireContextMenu(commitRow!);
 
-    const copyMsgBtn = getMenuItems().find(
-      (el) => el.textContent?.trim().includes('Copy commit message'),
-    );
+    const copyMsgBtn = getMenuItems().find((el) => el.textContent?.trim().includes('Copy commit message'));
     expect(copyMsgBtn).toBeDefined();
 
     await act(async () => {
@@ -198,15 +192,11 @@ describe('GitHistoryContextMenu', () => {
       await flushPromises();
     });
 
-    expect(copyToClipboard).toHaveBeenCalledWith(
-      'Fix: resolve the issue\n\nDetailed description',
-    );
+    expect(copyToClipboard).toHaveBeenCalledWith('Fix: resolve the issue\n\nDetailed description');
 
     // Button label should now show 'Copied!'
     const updatedTexts = getMenuTexts();
-    expect(updatedTexts).toEqual(
-      expect.arrayContaining([expect.stringContaining('Copied!')]),
-    );
+    expect(updatedTexts).toEqual(expect.arrayContaining([expect.stringContaining('Copied!')]));
   });
 
   // 6. Menu closes on Escape key
@@ -227,9 +217,7 @@ describe('GitHistoryContextMenu', () => {
     expect(getMenu()).not.toBeNull();
 
     act(() => {
-      document.dispatchEvent(
-        new MouseEvent('mousedown', { bubbles: true }),
-      );
+      document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
     });
 
     expect(getMenu()).toBeNull();
@@ -283,7 +271,7 @@ describe('GitHistoryContextMenu', () => {
 
   // 11. Timer cleanup - no state updates leak after unmount
   test('timer cleanup on unmount prevents state updates', async () => {
-    let consoleErrorCalls: string[] = [];
+    const consoleErrorCalls: string[] = [];
     const origError = console.error;
     console.error = (...args: any[]) => {
       consoleErrorCalls.push(args[0]);
@@ -292,9 +280,7 @@ describe('GitHistoryContextMenu', () => {
 
     fireContextMenu(commitRow!);
 
-    const copyShaBtn = getMenuItems().find(
-      (el) => el.textContent?.trim().includes('Copy commit SHA'),
-    )!;
+    const copyShaBtn = getMenuItems().find((el) => el.textContent?.trim().includes('Copy commit SHA'))!;
     expect(copyShaBtn).toBeDefined();
 
     // Click copy — schedules a "Copied!" label timer (1200ms) and a close timer (800ms)
@@ -316,7 +302,7 @@ describe('GitHistoryContextMenu', () => {
 
     // No React warnings about updating an unmounted component
     const hasUnmountWarning = consoleErrorCalls.some(
-      (msg) => typeof msg === 'string' && msg.includes('Can\'t perform a React state update on an unmounted component'),
+      (msg) => typeof msg === 'string' && msg.includes("Can't perform a React state update on an unmounted component"),
     );
     expect(hasUnmountWarning).toBe(false);
 
@@ -342,9 +328,7 @@ describe('GitHistoryContextMenu', () => {
 
     fireContextMenu(commitRow!);
 
-    const checkoutBtn = getMenuItems().find(
-      (el) => el.textContent?.trim().includes('Checkout'),
-    );
+    const checkoutBtn = getMenuItems().find((el) => el.textContent?.trim().includes('Checkout'));
     expect(checkoutBtn).toBeDefined();
 
     await act(async () => {
@@ -355,9 +339,7 @@ describe('GitHistoryContextMenu', () => {
     expect(mockApiService.checkoutGitCommit).toHaveBeenCalledWith('abcdef1234567890');
 
     const updatedTexts = getMenuTexts();
-    expect(updatedTexts).toEqual(
-      expect.arrayContaining([expect.stringContaining('Checked out')]),
-    );
+    expect(updatedTexts).toEqual(expect.arrayContaining([expect.stringContaining('Checked out')]));
 
     (window.confirm as jest.Mock).mockRestore();
   });
@@ -368,9 +350,7 @@ describe('GitHistoryContextMenu', () => {
 
     fireContextMenu(commitRow!);
 
-    const revertBtn = getMenuItems().find(
-      (el) => el.textContent?.trim().includes('Revert'),
-    );
+    const revertBtn = getMenuItems().find((el) => el.textContent?.trim().includes('Revert'));
     expect(revertBtn).toBeDefined();
 
     await act(async () => {
@@ -381,9 +361,7 @@ describe('GitHistoryContextMenu', () => {
     expect(mockApiService.revertGitCommit).toHaveBeenCalledWith('abcdef1234567890');
 
     const updatedTexts = getMenuTexts();
-    expect(updatedTexts).toEqual(
-      expect.arrayContaining([expect.stringContaining('Reverted')]),
-    );
+    expect(updatedTexts).toEqual(expect.arrayContaining([expect.stringContaining('Reverted')]));
 
     (window.confirm as jest.Mock).mockRestore();
   });
@@ -394,9 +372,7 @@ describe('GitHistoryContextMenu', () => {
 
     fireContextMenu(commitRow!);
 
-    const checkoutBtn = getMenuItems().find(
-      (el) => el.textContent?.trim().includes('Checkout'),
-    );
+    const checkoutBtn = getMenuItems().find((el) => el.textContent?.trim().includes('Checkout'));
     expect(checkoutBtn).toBeDefined();
 
     act(() => {
@@ -414,9 +390,7 @@ describe('GitHistoryContextMenu', () => {
 
     fireContextMenu(commitRow!);
 
-    const revertBtn = getMenuItems().find(
-      (el) => el.textContent?.trim().includes('Revert'),
-    );
+    const revertBtn = getMenuItems().find((el) => el.textContent?.trim().includes('Revert'));
     expect(revertBtn).toBeDefined();
 
     act(() => {
@@ -435,9 +409,7 @@ describe('GitHistoryContextMenu', () => {
 
     fireContextMenu(commitRow!);
 
-    const checkoutBtn = getMenuItems().find(
-      (el) => el.textContent?.trim().includes('Checkout'),
-    );
+    const checkoutBtn = getMenuItems().find((el) => el.textContent?.trim().includes('Checkout'));
     expect(checkoutBtn).toBeDefined();
 
     await act(async () => {
@@ -459,9 +431,7 @@ describe('GitHistoryContextMenu', () => {
 
     fireContextMenu(commitRow!);
 
-    const revertBtn = getMenuItems().find(
-      (el) => el.textContent?.trim().includes('Revert'),
-    );
+    const revertBtn = getMenuItems().find((el) => el.textContent?.trim().includes('Revert'));
     expect(revertBtn).toBeDefined();
 
     await act(async () => {

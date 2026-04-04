@@ -70,19 +70,12 @@ const AlertDialog: React.FC<AlertDialogProps> = ({ title, message, type, onClose
       <div className="themed-dialog-card" onClick={(e) => e.stopPropagation()}>
         <div className={`themed-dialog-accent-bar themed-dialog-accent-bar--${type}`} />
         <div className="themed-dialog-header">
-          <span className={`themed-dialog-icon themed-dialog-icon--${type}`}>
-            {ICON_BY_TYPE[type]}
-          </span>
+          <span className={`themed-dialog-icon themed-dialog-icon--${type}`}>{ICON_BY_TYPE[type]}</span>
           <h2 className="themed-dialog-title">{title}</h2>
         </div>
         <div className="themed-dialog-body">{message}</div>
         <div className="themed-dialog-footer">
-          <button
-            type="button"
-            className="themed-dialog-btn themed-dialog-btn--primary"
-            onClick={onClose}
-            autoFocus
-          >
+          <button type="button" className="themed-dialog-btn themed-dialog-btn--primary" onClick={onClose} autoFocus>
             OK
           </button>
         </div>
@@ -145,37 +138,21 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       <div className="themed-dialog-card" onClick={(e) => e.stopPropagation()}>
         <div className={`themed-dialog-accent-bar themed-dialog-accent-bar--${type}`} />
         <div className="themed-dialog-header">
-          <span className={`themed-dialog-icon themed-dialog-icon--${type}`}>
-            {ICON_BY_TYPE[type]}
-          </span>
+          <span className={`themed-dialog-icon themed-dialog-icon--${type}`}>{ICON_BY_TYPE[type]}</span>
           <h2 className="themed-dialog-title">{title}</h2>
         </div>
         <div className="themed-dialog-body">{message}</div>
         <div className="themed-dialog-footer">
           {type !== 'danger' && (
-            <button
-              type="button"
-              className="themed-dialog-btn"
-              onClick={onCancel}
-            >
+            <button type="button" className="themed-dialog-btn" onClick={onCancel}>
               {cancelLabel}
             </button>
           )}
-          <button
-            type="button"
-            className={confirmBtnClass}
-            onClick={onConfirm}
-            autoFocus={type !== 'danger'}
-          >
+          <button type="button" className={confirmBtnClass} onClick={onConfirm} autoFocus={type !== 'danger'}>
             {confirmLabel}
           </button>
           {type === 'danger' && (
-            <button
-              type="button"
-              className="themed-dialog-btn"
-              onClick={onCancel}
-              autoFocus
-            >
+            <button type="button" className="themed-dialog-btn" onClick={onCancel} autoFocus>
               {cancelLabel}
             </button>
           )}
@@ -242,9 +219,7 @@ const PromptDialog: React.FC<PromptDialogProps> = ({
       <div className="themed-dialog-card" onClick={(e) => e.stopPropagation()}>
         <div className={`themed-dialog-accent-bar themed-dialog-accent-bar--${type}`} />
         <div className="themed-dialog-header">
-          <span className={`themed-dialog-icon themed-dialog-icon--${type}`}>
-            {ICON_BY_TYPE[type]}
-          </span>
+          <span className={`themed-dialog-icon themed-dialog-icon--${type}`}>{ICON_BY_TYPE[type]}</span>
           <h2 className="themed-dialog-title">{title}</h2>
         </div>
         <div className="themed-dialog-body">{message}</div>
@@ -330,9 +305,7 @@ export async function showThemedAlert(
       });
     };
 
-    cleanup = mountToBody(
-      <AlertDialog title={title} message={message} type={type} onClose={handleClose} />,
-    );
+    cleanup = mountToBody(<AlertDialog title={title} message={message} type={type} onClose={handleClose} />);
   });
 }
 

@@ -104,7 +104,8 @@ const atomOneDark: ThemePack = {
     '--sidebar-nav-btn-active-bg': 'linear-gradient(180deg, #3a404b, #343a45)',
     '--sidebar-select-bg': '#242932',
 
-    '--gradient-subtle': 'radial-gradient(1100px 420px at -5% -10%, rgba(97, 175, 239, 0.08), transparent 55%), radial-gradient(1100px 420px at 105% -10%, rgba(86, 182, 194, 0.08), transparent 58%)',
+    '--gradient-subtle':
+      'radial-gradient(1100px 420px at -5% -10%, rgba(97, 175, 239, 0.08), transparent 55%), radial-gradient(1100px 420px at 105% -10%, rgba(86, 182, 194, 0.08), transparent 58%)',
     '--gradient-elevated': 'linear-gradient(145deg, rgba(97, 175, 239, 0.16), rgba(86, 182, 194, 0.12))',
   },
 };
@@ -195,7 +196,8 @@ const atomOneLight: ThemePack = {
     '--sidebar-nav-btn-active-bg': 'linear-gradient(180deg, #4078f2, #315ec4)',
     '--sidebar-select-bg': '#ffffff',
 
-    '--gradient-subtle': 'radial-gradient(1200px 420px at -5% -10%, rgba(64, 120, 242, 0.08), transparent 55%), radial-gradient(1100px 420px at 105% -10%, rgba(1, 132, 188, 0.08), transparent 58%)',
+    '--gradient-subtle':
+      'radial-gradient(1200px 420px at -5% -10%, rgba(64, 120, 242, 0.08), transparent 55%), radial-gradient(1100px 420px at 105% -10%, rgba(1, 132, 188, 0.08), transparent 58%)',
     '--gradient-elevated': 'linear-gradient(145deg, rgba(64, 120, 242, 0.12), rgba(1, 132, 188, 0.1))',
   },
 };
@@ -291,7 +293,8 @@ const dracula: ThemePack = {
     '--sidebar-nav-btn-active-bg': 'linear-gradient(180deg, #44475a, #3d4058)',
     '--sidebar-select-bg': '#21222c',
 
-    '--gradient-subtle': 'radial-gradient(1100px 420px at -5% -10%, rgba(139, 233, 253, 0.08), transparent 55%), radial-gradient(1100px 420px at 105% -10%, rgba(255, 121, 198, 0.08), transparent 58%)',
+    '--gradient-subtle':
+      'radial-gradient(1100px 420px at -5% -10%, rgba(139, 233, 253, 0.08), transparent 55%), radial-gradient(1100px 420px at 105% -10%, rgba(255, 121, 198, 0.08), transparent 58%)',
     '--gradient-elevated': 'linear-gradient(145deg, rgba(139, 233, 253, 0.16), rgba(255, 121, 198, 0.12))',
   },
 };
@@ -300,14 +303,14 @@ export const THEME_PACKS: ThemePack[] = [atomOneDark, atomOneLight, dracula];
 
 export const DEFAULT_THEME_PACK_ID = 'atom-one-dark';
 
-export const THEME_VARIABLE_KEYS = Array.from(
-  new Set(THEME_PACKS.flatMap((pack) => Object.keys(pack.variables)))
-);
+export const THEME_VARIABLE_KEYS = Array.from(new Set(THEME_PACKS.flatMap((pack) => Object.keys(pack.variables))));
 
 export function getThemePackByID(themePackID: string): ThemePack {
-  return THEME_PACKS.find((pack) => pack.id === themePackID) ||
+  return (
+    THEME_PACKS.find((pack) => pack.id === themePackID) ||
     THEME_PACKS.find((pack) => pack.id === DEFAULT_THEME_PACK_ID) ||
-    THEME_PACKS[0];
+    THEME_PACKS[0]
+  );
 }
 
 export function getThemePackForMode(mode: ThemeMode): ThemePack {

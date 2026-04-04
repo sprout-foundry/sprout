@@ -18,7 +18,7 @@ export const parseSelectionKey = (key: string): { section: FileSection; path: st
   if (separatorIndex <= 0) return null;
   const section = key.slice(0, separatorIndex) as FileSection;
   const path = key.slice(separatorIndex + 1);
-  if (!path || !FILE_SECTIONS.some(s => s.id === section)) return null;
+  if (!path || !FILE_SECTIONS.some((s) => s.id === section)) return null;
   return { section, path };
 };
 

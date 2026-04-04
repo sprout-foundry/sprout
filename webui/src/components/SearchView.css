@@ -24,7 +24,9 @@
   border-radius: var(--radius-md);
   padding: 0 var(--space-3);
   min-height: 32px;
-  transition: border-color 0.15s var(--ease-out), box-shadow 0.15s var(--ease-out);
+  transition:
+    border-color 0.15s var(--ease-out),
+    box-shadow 0.15s var(--ease-out);
 }
 
 .search-input-wrapper:focus-within {
@@ -62,7 +64,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: color 0.15s var(--ease-out), background-color 0.15s var(--ease-out);
+  transition:
+    color 0.15s var(--ease-out),
+    background-color 0.15s var(--ease-out);
 }
 
 .search-clear-btn:hover {
@@ -168,8 +172,12 @@
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Replace status */

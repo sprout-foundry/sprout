@@ -72,30 +72,36 @@ const TerminalTabBar: React.FC<TerminalTabBarProps> = ({
     setRenameValue('');
   }, []);
 
-  const handleRenameKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      commitRename();
-    } else if (e.key === 'Escape') {
-      cancelRename();
-    }
-    e.stopPropagation();
-  }, [commitRename, cancelRename]);
+  const handleRenameKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        commitRename();
+      } else if (e.key === 'Escape') {
+        cancelRename();
+      }
+      e.stopPropagation();
+    },
+    [commitRename, cancelRename],
+  );
 
   const closeContextMenu = useCallback(() => {
     setContextMenu((prev) => ({ ...prev, visible: false }));
   }, []);
 
-  const handleContextMenu = useCallback((e: React.MouseEvent, session: TerminalSession) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setContextMenu({
-      visible: true,
-      x: e.clientX,
-      y: e.clientY,
-      sessionId: session.id,
-      canClose: sessions.length > 1,
-    });
-  }, [sessions.length]);
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent, session: TerminalSession) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setContextMenu({
+        visible: true,
+        x: e.clientX,
+        y: e.clientY,
+        sessionId: session.id,
+        canClose: sessions.length > 1,
+      });
+    },
+    [sessions.length],
+  );
 
   const handleMenuRename = useCallback(() => {
     const id = contextMenu.sessionId;
@@ -181,17 +187,8 @@ const TerminalTabBar: React.FC<TerminalTabBarProps> = ({
         )}
       </div>
 
-      <ContextMenu
-        isOpen={contextMenu.visible}
-        x={contextMenu.x}
-        y={contextMenu.y}
-        onClose={closeContextMenu}
-      >
-        <button
-          className="context-menu-item"
-          onClick={handleMenuRename}
-          type="button"
-        >
+      <ContextMenu isOpen={contextMenu.visible} x={contextMenu.x} y={contextMenu.y} onClose={closeContextMenu}>
+        <button className="context-menu-item" onClick={handleMenuRename} type="button">
           <Pencil size={13} />
           <span className="menu-item-label">Rename</span>
         </button>

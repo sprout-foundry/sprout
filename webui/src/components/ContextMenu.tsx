@@ -22,15 +22,7 @@ interface ContextMenuProps {
  * Consumers compose their own items using `.context-menu-item` (buttons)
  * and `.context-menu-divider` elements.
  */
-const ContextMenu: React.FC<ContextMenuProps> = ({
-  isOpen,
-  x,
-  y,
-  onClose,
-  children,
-  className,
-  zIndex = 1400,
-}) => {
+const ContextMenu: React.FC<ContextMenuProps> = ({ isOpen, x, y, onClose, children, className, zIndex = 1400 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
   const attachedRef = useRef(false);
 

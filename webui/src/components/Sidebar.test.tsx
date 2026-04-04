@@ -89,7 +89,7 @@ describe('Sidebar provider selection', () => {
       () =>
         new Promise((resolve) => {
           resolveProviders = resolve;
-        })
+        }),
     );
     apiServiceMock.getProviders.mockResolvedValue({
       providers: [
@@ -110,7 +110,7 @@ describe('Sidebar provider selection', () => {
           provider="openai"
           model="gpt-4o-mini"
           onProviderChange={onProviderChange}
-        />
+        />,
       );
     });
 
@@ -140,7 +140,7 @@ describe('Sidebar provider selection', () => {
           provider="openai"
           model="gpt-4o-mini"
           onProviderChange={onProviderChange}
-        />
+        />,
       );
     });
 
@@ -152,7 +152,7 @@ describe('Sidebar provider selection', () => {
           provider="openai"
           model="gpt-4o-mini"
           onProviderChange={onProviderChange}
-        />
+        />,
       );
     });
 
@@ -184,14 +184,7 @@ describe('Sidebar provider selection', () => {
     });
 
     await act(async () => {
-      root.render(
-        <Sidebar
-          isConnected={true}
-          isOpen={true}
-          provider=""
-          model=""
-        />
-      );
+      root.render(<Sidebar isConnected={true} isOpen={true} provider="" model="" />);
     });
 
     await act(async () => {

@@ -1,5 +1,5 @@
-import { useEffect, MutableRefObject } from 'react';
-import { EditorBuffer } from '../types/editor';
+import { useEffect, type MutableRefObject } from 'react';
+import { type EditorBuffer } from '../types/editor';
 import { readFileWithConsent } from '../services/fileAccess';
 
 // ---------------------------------------------------------------------------
@@ -53,14 +53,18 @@ export const useAutoReloadCleanBuffers = ({
 
         reloadBufferFromDisk(bufferId, content, detail.mtime);
 
-        document.dispatchEvent(new CustomEvent('file:editor-saved', {
-          detail: { path: detail.path, mtime: detail.mtime },
-        }));
+        document.dispatchEvent(
+          new CustomEvent('file:editor-saved', {
+            detail: { path: detail.path, mtime: detail.mtime },
+          }),
+        );
 
         // Dispatch an event so EditorPane can reload the CodeMirror view
-        document.dispatchEvent(new CustomEvent('file:auto-reloaded', {
-          detail: { bufferId, content },
-        }));
+        document.dispatchEvent(
+          new CustomEvent('file:auto-reloaded', {
+            detail: { bufferId, content },
+          }),
+        );
       } catch {
         // Silently ignore read failures
       }

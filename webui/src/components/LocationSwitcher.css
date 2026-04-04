@@ -25,7 +25,9 @@
   color: var(--text-secondary);
   cursor: pointer;
   flex-shrink: 0;
-  transition: border-color 0.15s var(--ease-out), background 0.15s var(--ease-out),
+  transition:
+    border-color 0.15s var(--ease-out),
+    background 0.15s var(--ease-out),
     color 0.15s var(--ease-out);
 }
 
@@ -63,30 +65,41 @@
   min-height: 40px;
   padding: 0 14px 0 12px;
   border-radius: 10px;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 34%, transparent), color-mix(in srgb, var(--sidebar-select-bg) 96%, transparent));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bg-surface) 34%, transparent),
+    color-mix(in srgb, var(--sidebar-select-bg) 96%, transparent)
+  );
   border: 1px solid color-mix(in srgb, var(--border-default) 88%, transparent);
   color: var(--text-primary);
   font-size: 12px;
   font-weight: 560;
   line-height: 1.1;
   cursor: pointer;
-  transition: border-color 0.15s var(--ease-out), box-shadow 0.15s var(--ease-out),
-    background 0.15s var(--ease-out), color 0.15s var(--ease-out);
+  transition:
+    border-color 0.15s var(--ease-out),
+    box-shadow 0.15s var(--ease-out),
+    background 0.15s var(--ease-out),
+    color 0.15s var(--ease-out);
   min-width: 0;
   flex-shrink: 0;
 }
 
 .location-switcher-trigger:hover:not(:disabled) {
   border-color: var(--border-strong);
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 42%, transparent), color-mix(in srgb, var(--sidebar-select-bg) 98%, transparent));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bg-surface) 42%, transparent),
+    color-mix(in srgb, var(--sidebar-select-bg) 98%, transparent)
+  );
 }
 
 .location-switcher-trigger:focus-visible {
   outline: none;
   border-color: var(--border-focus);
-  box-shadow: 0 0 0 3px var(--accent-primary-alpha), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  box-shadow:
+    0 0 0 3px var(--accent-primary-alpha),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .location-switcher-trigger:disabled {
@@ -135,11 +148,11 @@
   transition: transform 0.15s var(--ease-out);
 }
 
-.location-switcher-trigger[aria-expanded="true"] .location-switcher-trigger-chevron {
+.location-switcher-trigger[aria-expanded='true'] .location-switcher-trigger-chevron {
   transform: rotate(180deg);
 }
 
-  /* ── Popover ──────────────────────────────────────────────────── */
+/* ── Popover ──────────────────────────────────────────────────── */
 .location-switcher-popover {
   position: absolute;
   top: calc(100% + 4px);
@@ -397,7 +410,9 @@
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   outline: none;
-  transition: border-color 0.12s var(--ease-out), box-shadow 0.12s var(--ease-out);
+  transition:
+    border-color 0.12s var(--ease-out),
+    box-shadow 0.12s var(--ease-out);
 }
 
 .location-switcher-path-input::placeholder {
@@ -426,7 +441,9 @@
   border-radius: 6px;
   color: var(--text-tertiary);
   cursor: pointer;
-  transition: color 0.12s var(--ease-out), background-color 0.12s var(--ease-out);
+  transition:
+    color 0.12s var(--ease-out),
+    background-color 0.12s var(--ease-out);
   flex-shrink: 0;
 }
 
@@ -455,7 +472,9 @@
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   outline: none;
-  transition: border-color 0.12s var(--ease-out), box-shadow 0.12s var(--ease-out);
+  transition:
+    border-color 0.12s var(--ease-out),
+    box-shadow 0.12s var(--ease-out);
 }
 
 .location-switcher-ssh-input::placeholder {
@@ -640,7 +659,9 @@
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   outline: none;
-  transition: border-color 0.12s var(--ease-out), box-shadow 0.12s var(--ease-out);
+  transition:
+    border-color 0.12s var(--ease-out),
+    box-shadow 0.12s var(--ease-out);
 }
 
 .location-switcher-session-input::placeholder {
@@ -672,7 +693,10 @@
   color: var(--text-secondary);
   font-size: 11px;
   cursor: pointer;
-  transition: background-color 0.12s var(--ease-out), color 0.12s var(--ease-out), border-color 0.12s var(--ease-out);
+  transition:
+    background-color 0.12s var(--ease-out),
+    color 0.12s var(--ease-out),
+    border-color 0.12s var(--ease-out);
 }
 
 .location-switcher-session-btn:hover:not(:disabled) {
@@ -842,15 +866,21 @@
 }
 
 @keyframes ssh-picker-fade-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .ssh-workspace-picker-dialog {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: 12px;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  box-shadow:
+    0 16px 48px rgba(0, 0, 0, 0.4),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
   width: 420px;
   max-width: calc(100vw - 32px);
   max-height: calc(100vh - 80px);
@@ -861,8 +891,14 @@
 }
 
 @keyframes ssh-picker-slide-in {
-  from { transform: translateY(-8px); opacity: 0; }
-  to   { transform: translateY(0);    opacity: 1; }
+  from {
+    transform: translateY(-8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 .ssh-workspace-picker-header {

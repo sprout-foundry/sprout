@@ -101,7 +101,7 @@ const QueuedMessagesPanel: React.FC<QueuedMessagesPanelProps> = ({
   // Truncate very long messages for display
   const truncate = (msg: string, maxLen: number = 120) => {
     if (msg.length <= maxLen) return msg;
-    return msg.slice(0, maxLen) + '\u2026';
+    return `${msg.slice(0, maxLen)}\u2026`;
   };
 
   if (messages.length === 0) {
@@ -133,7 +133,10 @@ const QueuedMessagesPanel: React.FC<QueuedMessagesPanelProps> = ({
       </div>
       <div className="queue-panel-list">
         {messages.map((msg, index) => (
-          <div key={index} className={`queue-panel-item ${editingIndex === index ? 'editing' : ''} ${shakeIndex === index ? 'shake' : ''}`}>
+          <div
+            key={index}
+            className={`queue-panel-item ${editingIndex === index ? 'editing' : ''} ${shakeIndex === index ? 'shake' : ''}`}
+          >
             <span className="queue-panel-item-index">{index + 1}</span>
             <div className="queue-panel-item-content">
               {editingIndex === index ? (
@@ -141,7 +144,7 @@ const QueuedMessagesPanel: React.FC<QueuedMessagesPanelProps> = ({
                   ref={editRef}
                   className="queue-panel-edit-textarea"
                   value={editValue}
-                  onChange={e => setEditValue(e.target.value)}
+                  onChange={(e) => setEditValue(e.target.value)}
                   onKeyDown={handleKeyDown}
                   rows={3}
                 />
@@ -154,10 +157,20 @@ const QueuedMessagesPanel: React.FC<QueuedMessagesPanelProps> = ({
             <div className="queue-panel-item-actions">
               {editingIndex === index ? (
                 <>
-                  <button type="button" className="queue-panel-action save" onClick={handleSaveEdit} title="Save (Enter)">
+                  <button
+                    type="button"
+                    className="queue-panel-action save"
+                    onClick={handleSaveEdit}
+                    title="Save (Enter)"
+                  >
                     <Check size={12} />
                   </button>
-                  <button type="button" className="queue-panel-action cancel" onClick={handleCancelEdit} title="Cancel (Esc)">
+                  <button
+                    type="button"
+                    className="queue-panel-action cancel"
+                    onClick={handleCancelEdit}
+                    title="Cancel (Esc)"
+                  >
                     <X size={12} />
                   </button>
                 </>

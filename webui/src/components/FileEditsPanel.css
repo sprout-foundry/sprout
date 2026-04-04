@@ -46,7 +46,10 @@
   align-items: center;
   gap: 6px;
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .history-button:hover:not(:disabled) {
@@ -77,7 +80,9 @@
   border-radius: 8px;
   background: var(--bg-tertiary, rgba(15, 23, 42, 0.4));
   cursor: pointer;
-  transition: border-color 0.14s ease, background 0.14s ease;
+  transition:
+    border-color 0.14s ease,
+    background 0.14s ease;
 }
 
 .edit-item:hover {

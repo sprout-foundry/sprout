@@ -20,15 +20,16 @@ export function useChatPersistence(state: AppState): void {
     // Only persist what is needed to restore the chat view. Logs and
     // toolExecutions are ephemeral — they are large and re-populated by
     // the WebSocket stream, so storing them wastes quota unnecessarily.
-    const persistPayload = (messageCount: number) => JSON.stringify({
-      provider: state.provider,
-      model: state.model,
-      sessionId: state.sessionId,
-      queryCount: state.queryCount,
-      currentView: state.currentView,
-      messages: state.messages.slice(-messageCount),
-      fileEdits: state.fileEdits.slice(-20),
-    });
+    const persistPayload = (messageCount: number) =>
+      JSON.stringify({
+        provider: state.provider,
+        model: state.model,
+        sessionId: state.sessionId,
+        queryCount: state.queryCount,
+        currentView: state.currentView,
+        messages: state.messages.slice(-messageCount),
+        fileEdits: state.fileEdits.slice(-20),
+      });
     try {
       window.localStorage.setItem(storageKey, persistPayload(20));
     } catch {
@@ -38,7 +39,9 @@ export function useChatPersistence(state: AppState): void {
       } catch {
         try {
           window.localStorage.removeItem(storageKey);
-        } catch { /* nothing more we can do */ }
+        } catch {
+          /* nothing more we can do */
+        }
       }
     }
   }, [

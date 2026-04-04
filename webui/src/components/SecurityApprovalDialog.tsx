@@ -53,19 +53,16 @@ const SecurityApprovalDialog: React.FC<SecurityApprovalDialogProps> = ({
     onRespond(requestId, false);
   }, [requestId, onRespond]);
 
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        // Cannot dismiss via Escape — user MUST choose
-        e.preventDefault();
-        return;
-      }
-      if (e.key === 'Enter') {
-        e.preventDefault();
-      }
-    },
-    [],
-  );
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      // Cannot dismiss via Escape — user MUST choose
+      e.preventDefault();
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+    }
+  }, []);
 
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown);
@@ -97,9 +94,7 @@ const SecurityApprovalDialog: React.FC<SecurityApprovalDialogProps> = ({
 
         {/* Header */}
         <div className="security-approval-header">
-          <span className={`security-approval-shield security-approval-shield--${risk}`}>
-            {RISK_ICON[risk]}
-          </span>
+          <span className={`security-approval-shield security-approval-shield--${risk}`}>{RISK_ICON[risk]}</span>
           <div className="security-approval-header-row">
             <h2 className="security-approval-title">Security Approval Required</h2>
             <span className={`security-approval-risk-badge security-approval-risk-badge--${risk}`}>
@@ -117,14 +112,10 @@ const SecurityApprovalDialog: React.FC<SecurityApprovalDialogProps> = ({
           </div>
 
           {/* Reasoning */}
-          {reasoning && (
-            <div className="security-approval-reasoning">{reasoning}</div>
-          )}
+          {reasoning && <div className="security-approval-reasoning">{reasoning}</div>}
 
           {/* Risk type category */}
-          {riskType && (
-            <div className="security-approval-risk-type">{riskType}</div>
-          )}
+          {riskType && <div className="security-approval-risk-type">{riskType}</div>}
 
           {/* Command (for shell_command) */}
           {command && (

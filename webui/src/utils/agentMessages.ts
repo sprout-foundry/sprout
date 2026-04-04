@@ -35,9 +35,7 @@ export const extractToolNameFromToolLogTarget = (target: string): string | null 
   return firstToken || null;
 };
 
-export const normalizeTodoList = (
-  rawTodos: unknown
-): TodoItem[] => {
+export const normalizeTodoList = (rawTodos: unknown): TodoItem[] => {
   if (!Array.isArray(rawTodos)) {
     return [];
   }

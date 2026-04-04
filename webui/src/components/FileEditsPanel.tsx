@@ -141,7 +141,12 @@ const FileEditsPanel: React.FC<FileEditsPanelProps> = ({ edits, onFileClick }) =
   }, [openHistory]);
 
   const handleRollback = async (revisionId: string) => {
-    if (!(await showThemedConfirm(`Rollback to revision ${revisionId}?\n\nThis will undo all changes made after this revision.`, { title: 'Confirm Rollback', type: 'danger' }))) {
+    if (
+      !(await showThemedConfirm(
+        `Rollback to revision ${revisionId}?\n\nThis will undo all changes made after this revision.`,
+        { title: 'Confirm Rollback', type: 'danger' },
+      ))
+    ) {
       return;
     }
 
@@ -150,7 +155,10 @@ const FileEditsPanel: React.FC<FileEditsPanelProps> = ({ edits, onFileClick }) =
 
     try {
       await apiService.rollbackToRevision(revisionId);
-      await showThemedAlert(`Successfully rolled back to revision ${revisionId}`, { title: 'Rollback Complete', type: 'success' });
+      await showThemedAlert(`Successfully rolled back to revision ${revisionId}`, {
+        title: 'Rollback Complete',
+        type: 'success',
+      });
       setShowHistory(false);
       window.location.reload();
     } catch (error) {
@@ -175,37 +183,58 @@ const FileEditsPanel: React.FC<FileEditsPanelProps> = ({ edits, onFileClick }) =
 
   const getActionIcon = (action: string) => {
     switch (action) {
-      case 'edited': return <Pencil size={14} />;
-      case 'created': return <Plus size={14} />;
-      case 'deleted': return <Trash2 size={14} />;
-      case 'renamed': return <ArrowLeftRight size={14} />;
-      case 'git_stage': return <CircleCheck size={14} />;
-      case 'git_unstage': return <ArrowDown size={14} />;
-      case 'git_discard': return <Undo2 size={14} />;
-      default: return <File size={14} />;
+      case 'edited':
+        return <Pencil size={14} />;
+      case 'created':
+        return <Plus size={14} />;
+      case 'deleted':
+        return <Trash2 size={14} />;
+      case 'renamed':
+        return <ArrowLeftRight size={14} />;
+      case 'git_stage':
+        return <CircleCheck size={14} />;
+      case 'git_unstage':
+        return <ArrowDown size={14} />;
+      case 'git_discard':
+        return <Undo2 size={14} />;
+      default:
+        return <File size={14} />;
     }
   };
 
   const getActionText = (action: string) => {
     switch (action) {
-      case 'edited': return 'Modified';
-      case 'created': return 'Created';
-      case 'deleted': return 'Deleted';
-      case 'renamed': return 'Renamed';
-      case 'git_stage': return 'Staged';
-      case 'git_unstage': return 'Unstaged';
-      case 'git_discard': return 'Discarded';
-      default: return action;
+      case 'edited':
+        return 'Modified';
+      case 'created':
+        return 'Created';
+      case 'deleted':
+        return 'Deleted';
+      case 'renamed':
+        return 'Renamed';
+      case 'git_stage':
+        return 'Staged';
+      case 'git_unstage':
+        return 'Unstaged';
+      case 'git_discard':
+        return 'Discarded';
+      default:
+        return action;
     }
   };
 
   const getOperationText = (operation: string) => {
     switch (operation) {
-      case 'edited': return 'Modified';
-      case 'created': return 'Created';
-      case 'deleted': return 'Deleted';
-      case 'renamed': return 'Renamed';
-      default: return operation;
+      case 'edited':
+        return 'Modified';
+      case 'created':
+        return 'Created';
+      case 'deleted':
+        return 'Deleted';
+      case 'renamed':
+        return 'Renamed';
+      default:
+        return operation;
     }
   };
 
@@ -241,9 +270,7 @@ const FileEditsPanel: React.FC<FileEditsPanelProps> = ({ edits, onFileClick }) =
   }, [edits]);
 
   const sortedEdits = useMemo(() => {
-    return Array.from(latestEditsByFile.values()).sort(
-      (a, b) => b.timestamp.getTime() - a.timestamp.getTime()
-    );
+    return Array.from(latestEditsByFile.values()).sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
   }, [latestEditsByFile]);
 
   const visibleEdits = sortedEdits.slice(0, MAX_RECENT_FILE_ROWS);
@@ -267,7 +294,9 @@ const FileEditsPanel: React.FC<FileEditsPanelProps> = ({ edits, onFileClick }) =
   return (
     <div className="file-edits-panel">
       <div className="edits-header">
-        <h4><FilePen size={14} /> File Edits</h4>
+        <h4>
+          <FilePen size={14} /> File Edits
+        </h4>
         <div className="edits-header-meta">{sortedEdits.length} tracked files</div>
         <button
           onClick={openHistory}
@@ -275,14 +304,22 @@ const FileEditsPanel: React.FC<FileEditsPanelProps> = ({ edits, onFileClick }) =
           className="history-button"
           title="Open revision history"
         >
-          {isLoadingHistory ? 'Loading...' : <><RotateCcw size={14} /> Revision History</>}
+          {isLoadingHistory ? (
+            'Loading...'
+          ) : (
+            <>
+              <RotateCcw size={14} /> Revision History
+            </>
+          )}
         </button>
       </div>
 
       {sortedEdits.length === 0 ? (
         <div className="edits-list">
           <div className="edit-item muted">
-            <span className="edit-icon"><Inbox size={16} /></span>
+            <span className="edit-icon">
+              <Inbox size={16} />
+            </span>
             <span className="edit-info">
               <span className="file-name">No file edits yet</span>
               <span className="file-dir">Start editing to build a revision trail</span>
@@ -344,19 +381,19 @@ const FileEditsPanel: React.FC<FileEditsPanelProps> = ({ edits, onFileClick }) =
         <div className="history-modal-overlay" onClick={() => setShowHistory(false)}>
           <div className="history-modal" onClick={(e) => e.stopPropagation()}>
             <div className="history-modal-header">
-              <h3><RotateCcw size={16} /> Revision History</h3>
-              <button
-                className="close-button"
-                onClick={() => setShowHistory(false)}
-                title="Close"
-              >
+              <h3>
+                <RotateCcw size={16} /> Revision History
+              </h3>
+              <button className="close-button" onClick={() => setShowHistory(false)} title="Close">
                 <X size={14} />
               </button>
             </div>
 
             {rollbackError && (
               <div className="history-error">
-                <span className="error-icon"><TriangleAlert size={14} /></span>
+                <span className="error-icon">
+                  <TriangleAlert size={14} />
+                </span>
                 <span>{rollbackError}</span>
               </div>
             )}
@@ -364,7 +401,9 @@ const FileEditsPanel: React.FC<FileEditsPanelProps> = ({ edits, onFileClick }) =
             <div className="history-content">
               {revisions.length === 0 ? (
                 <div className="history-empty">
-                  <span className="empty-icon"><ScrollText size={16} /></span>
+                  <span className="empty-icon">
+                    <ScrollText size={16} />
+                  </span>
                   <p>No revision history available</p>
                   <p className="empty-hint">Make some changes to create checkpoints</p>
                 </div>
@@ -390,23 +429,30 @@ const FileEditsPanel: React.FC<FileEditsPanelProps> = ({ edits, onFileClick }) =
                           </span>
                           <span className="revision-stats">
                             <span className="stats-chip">{summary.fileCount} files</span>
-                            {summary.additions > 0 && <span className="stats-chip additions">+{summary.additions}</span>}
-                            {summary.deletions > 0 && <span className="stats-chip deletions">-{summary.deletions}</span>}
+                            {summary.additions > 0 && (
+                              <span className="stats-chip additions">+{summary.additions}</span>
+                            )}
+                            {summary.deletions > 0 && (
+                              <span className="stats-chip deletions">-{summary.deletions}</span>
+                            )}
                           </span>
                         </button>
 
                         {isExpanded && (
                           <div className="revision-details">
-                            {revision.description && (
-                              <div className="revision-description">{revision.description}</div>
-                            )}
+                            {revision.description && <div className="revision-description">{revision.description}</div>}
                             <div className="revision-file-list">
                               {revision.files.map((file, fileIndex) => (
-                                <div key={`${revision.revision_id}-${file.path}-${fileIndex}`} className="revision-file-row">
+                                <div
+                                  key={`${revision.revision_id}-${file.path}-${fileIndex}`}
+                                  className="revision-file-row"
+                                >
                                   <span className={`file-badge file-${file.operation}`}>
                                     {getOperationText(file.operation)}
                                   </span>
-                                  <span className="file-path-small" title={file.path}>{file.path}</span>
+                                  <span className="file-path-small" title={file.path}>
+                                    {file.path}
+                                  </span>
                                   <span className="file-diff-small">
                                     {file.lines_added > 0 && <span className="additions">+{file.lines_added}</span>}
                                     {file.lines_deleted > 0 && <span className="deletions">-{file.lines_deleted}</span>}

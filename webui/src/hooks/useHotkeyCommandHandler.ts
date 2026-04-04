@@ -86,9 +86,10 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
         case 'toggle_explorer': {
           // Reveal the active file's path in the file tree explorer
           const activeBuffer = activeBufferId ? buffers.get(activeBufferId) : null;
-          const filePath = activeBuffer?.file?.path && !activeBuffer.file.isDir && activeBuffer.kind === 'file'
-            ? activeBuffer.file.path
-            : null;
+          const filePath =
+            activeBuffer?.file?.path && !activeBuffer.file.isDir && activeBuffer.kind === 'file'
+              ? activeBuffer.file.path
+              : null;
 
           if (filePath) {
             window.dispatchEvent(new CustomEvent('ledit:reveal-in-explorer', { detail: { path: filePath } }));
@@ -141,7 +142,7 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
           if (!activePaneId) break;
           const paneBuffers = Array.from(buffers.values()).filter((buffer) => buffer.paneId === activePaneId);
           if (paneBuffers.length <= 1) break;
-          const currentIdx = activeBufferId ? paneBuffers.findIndex(b => b.id === activeBufferId) : -1;
+          const currentIdx = activeBufferId ? paneBuffers.findIndex((b) => b.id === activeBufferId) : -1;
           const nextIdx = currentIdx + 1 < paneBuffers.length ? currentIdx + 1 : 0;
           if (paneBuffers[nextIdx]) {
             onSwitchPane(activePaneId);
@@ -153,7 +154,7 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
           if (!activePaneId) break;
           const paneBuffersPrev = Array.from(buffers.values()).filter((buffer) => buffer.paneId === activePaneId);
           if (paneBuffersPrev.length <= 1) break;
-          const currentIdx = activeBufferId ? paneBuffersPrev.findIndex(b => b.id === activeBufferId) : -1;
+          const currentIdx = activeBufferId ? paneBuffersPrev.findIndex((b) => b.id === activeBufferId) : -1;
           const prevIdx = currentIdx - 1 >= 0 ? currentIdx - 1 : paneBuffersPrev.length - 1;
           if (paneBuffersPrev[prevIdx]) {
             onSwitchPane(activePaneId);

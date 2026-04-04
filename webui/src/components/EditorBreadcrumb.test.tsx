@@ -27,12 +27,7 @@ function renderBreadcrumb(
     onNavigateToSymbol?: (line: number) => void;
   }> = {},
 ) {
-  const {
-    filePath = 'src/components/App.tsx',
-    onNavigate,
-    symbols,
-    onNavigateToSymbol,
-  } = props;
+  const { filePath = 'src/components/App.tsx', onNavigate, symbols, onNavigateToSymbol } = props;
 
   act(() => {
     root.render(
@@ -375,9 +370,7 @@ describe('EditorBreadcrumb symbol rendering', () => {
   });
 
   test('section separator renders between path and symbols', () => {
-    const symbols: BreadcrumbSymbol[] = [
-      { name: 'myFunc', line: 5, kind: 'function' },
-    ];
+    const symbols: BreadcrumbSymbol[] = [{ name: 'myFunc', line: 5, kind: 'function' }];
 
     renderBreadcrumb({
       filePath: 'src/App.tsx',
@@ -390,9 +383,7 @@ describe('EditorBreadcrumb symbol rendering', () => {
   });
 
   test('no section separator when only symbols (no path segments)', () => {
-    const symbols: BreadcrumbSymbol[] = [
-      { name: 'myFunc', line: 5, kind: 'function' },
-    ];
+    const symbols: BreadcrumbSymbol[] = [{ name: 'myFunc', line: 5, kind: 'function' }];
 
     renderBreadcrumb({
       filePath: 'file.ts', // won't produce path segments
@@ -441,9 +432,7 @@ describe('EditorBreadcrumb symbol rendering', () => {
   });
 
   test('single symbol is rendered as current (span)', () => {
-    const symbols: BreadcrumbSymbol[] = [
-      { name: 'myFunc', line: 5, kind: 'function' },
-    ];
+    const symbols: BreadcrumbSymbol[] = [{ name: 'myFunc', line: 5, kind: 'function' }];
 
     renderBreadcrumb({
       filePath: 'src/App.tsx',
@@ -503,9 +492,7 @@ describe('EditorBreadcrumb symbol rendering', () => {
   });
 
   test('symbol title attribute includes kind, name, and line', () => {
-    const symbols: BreadcrumbSymbol[] = [
-      { name: 'myFunc', line: 42, kind: 'function' },
-    ];
+    const symbols: BreadcrumbSymbol[] = [{ name: 'myFunc', line: 42, kind: 'function' }];
 
     renderBreadcrumb({
       filePath: 'src/App.tsx',
@@ -611,9 +598,7 @@ describe('EditorBreadcrumb symbol click handling', () => {
 describe('EditorBreadcrumb path and symbol interaction', () => {
   test('last path segment becomes clickable when symbols are present', () => {
     const onNavigate = jest.fn();
-    const symbols: BreadcrumbSymbol[] = [
-      { name: 'myFunc', line: 5, kind: 'function' },
-    ];
+    const symbols: BreadcrumbSymbol[] = [{ name: 'myFunc', line: 5, kind: 'function' }];
 
     renderBreadcrumb({
       filePath: 'src/App.tsx',
@@ -629,9 +614,7 @@ describe('EditorBreadcrumb path and symbol interaction', () => {
 
   test('clicking last path segment calls onNavigate when symbols present', () => {
     const onNavigate = jest.fn();
-    const symbols: BreadcrumbSymbol[] = [
-      { name: 'myFunc', line: 5, kind: 'function' },
-    ];
+    const symbols: BreadcrumbSymbol[] = [{ name: 'myFunc', line: 5, kind: 'function' }];
 
     renderBreadcrumb({
       filePath: 'src/App.tsx',

@@ -1,12 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import {
-  ArrowLeft,
-  FileText,
-  GitCompareArrows,
-  Loader2,
-  Clock,
-  FolderOpen,
-} from 'lucide-react';
+import { ArrowLeft, FileText, GitCompareArrows, Loader2, Clock, FolderOpen } from 'lucide-react';
 import type { ApiService } from '../services/api';
 import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
 import { formatRelativeDate, firstLine } from '../utils/format';
@@ -29,37 +22,35 @@ interface CommitDetailPanelProps {
   }) => string;
 }
 
-const CommitDetailPanel: React.FC<CommitDetailPanelProps> = ({
-  apiService,
-  commit,
-  onBack,
-  openWorkspaceBuffer,
-}) => {
+const CommitDetailPanel: React.FC<CommitDetailPanelProps> = ({ apiService, commit, onBack, openWorkspaceBuffer }) => {
   const [detail, setDetail] = useState<GitCommitDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const fetchCommitDetail = useCallback((cancelledRef?: React.MutableRefObject<boolean>) => {
-    setIsLoading(true);
-    setError(null);
+  const fetchCommitDetail = useCallback(
+    (cancelledRef?: React.MutableRefObject<boolean>) => {
+      setIsLoading(true);
+      setError(null);
 
-    apiService
-      .getGitCommitDetail(commit.hash)
-      .then((data) => {
-        if (!cancelledRef?.current) {
-          setDetail(data);
-        }
-      })
-      .catch((err) => {
-        if (!cancelledRef?.current) {
-          setError(err instanceof Error ? err.message : 'Failed to load commit details');
-        }
-      })
-      .finally(() => {
-        if (!cancelledRef?.current) {
-          setIsLoading(false);
-        }
-      });
-  }, [apiService, commit.hash]);
+      apiService
+        .getGitCommitDetail(commit.hash)
+        .then((data) => {
+          if (!cancelledRef?.current) {
+            setDetail(data);
+          }
+        })
+        .catch((err) => {
+          if (!cancelledRef?.current) {
+            setError(err instanceof Error ? err.message : 'Failed to load commit details');
+          }
+        })
+        .finally(() => {
+          if (!cancelledRef?.current) {
+            setIsLoading(false);
+          }
+        });
+    },
+    [apiService, commit.hash],
+  );
 
   // Fetch commit detail on mount
   useEffect(() => {
@@ -95,7 +86,7 @@ const CommitDetailPanel: React.FC<CommitDetailPanelProps> = ({
         console.error('Failed to load file diff:', err);
       }
     },
-    [apiService, commit.hash, commit.short_hash, openWorkspaceBuffer]
+    [apiService, commit.hash, commit.short_hash, openWorkspaceBuffer],
   );
 
   const handleViewAllDiffs = useCallback(() => {
@@ -130,21 +121,13 @@ const CommitDetailPanel: React.FC<CommitDetailPanelProps> = ({
   if (error) {
     return (
       <div className="commit-detail-panel">
-        <button
-          type="button"
-          className="commit-detail-back-btn"
-          onClick={onBack}
-        >
+        <button type="button" className="commit-detail-back-btn" onClick={onBack}>
           <ArrowLeft size={14} />
           <span>Back to history</span>
         </button>
         <div className="commit-detail-empty commit-detail-error-state">
           <span>{error}</span>
-          <button
-            type="button"
-            className="sidebar-action-btn compact"
-            onClick={handleRetry}
-          >
+          <button type="button" className="sidebar-action-btn compact" onClick={handleRetry}>
             Retry
           </button>
         </div>
@@ -161,11 +144,7 @@ const CommitDetailPanel: React.FC<CommitDetailPanelProps> = ({
     <div className="commit-detail-panel">
       {/* Header */}
       <div className="commit-detail-header">
-        <button
-          type="button"
-          className="commit-detail-back-btn"
-          onClick={onBack}
-        >
+        <button type="button" className="commit-detail-back-btn" onClick={onBack}>
           <ArrowLeft size={14} />
           <span>Back to history</span>
         </button>
@@ -181,13 +160,9 @@ const CommitDetailPanel: React.FC<CommitDetailPanelProps> = ({
 
         <div className="commit-detail-subject">{firstLine(detail.subject || commit.message)}</div>
 
-        {detail.ref_names && (
-          <div className="commit-detail-refs">{detail.ref_names}</div>
-        )}
+        {detail.ref_names && <div className="commit-detail-refs">{detail.ref_names}</div>}
 
-        {detail.stats && (
-          <div className="commit-detail-stats">{detail.stats}</div>
-        )}
+        {detail.stats && <div className="commit-detail-stats">{detail.stats}</div>}
       </div>
 
       {/* Actions */}
@@ -223,11 +198,7 @@ const CommitDetailPanel: React.FC<CommitDetailPanelProps> = ({
               >
                 <FileText size={13} className="commit-detail-file-row-icon" />
                 <span className="commit-detail-file-path">{file.path}</span>
-                <span
-                  className={`commit-detail-file-status ${statusInfo.className}`}
-                >
-                  {statusInfo.label}
-                </span>
+                <span className={`commit-detail-file-status ${statusInfo.className}`}>{statusInfo.label}</span>
               </button>
             );
           })}

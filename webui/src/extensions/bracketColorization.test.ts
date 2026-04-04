@@ -7,16 +7,17 @@
  * with no CM dependencies.
  */
 
+// ── Module under test (Jest hoists mocks above imports) ─────────────
+import { computeBracketDecorations, MAX_DEPTH } from './bracketColorization';
+
 // ── Mock CodeMirror modules (ESM internals break Jest 27) ───────────
+
 jest.mock('@codemirror/view', () => ({
   Decoration: { mark: jest.fn(() => ({ range: jest.fn() })), set: jest.fn(), none: [] },
   ViewPlugin: { fromClass: jest.fn() },
   EditorView: { baseTheme: jest.fn(() => []) },
 }));
 jest.mock('@codemirror/state', () => ({}));
-
-// Module under test — now safe to import because CM deps are mocked.
-import { computeBracketDecorations, MAX_DEPTH } from './bracketColorization';
 
 // ── computeBracketDecorations tests ─────────────────────────────────
 
@@ -188,8 +189,8 @@ describe('computeBracketDecorations', () => {
     // ) — top is [, not (, so IGNORED
     // ] — top is [, match! Pop. depth 1
     expect(result).toHaveLength(3);
-    expect(result[0]).toEqual({ from: 0, to: 1, depth: 0 });  // (
-    expect(result[1]).toEqual({ from: 1, to: 2, depth: 1 });  // [
+    expect(result[0]).toEqual({ from: 0, to: 1, depth: 0 }); // (
+    expect(result[1]).toEqual({ from: 1, to: 2, depth: 1 }); // [
     // result[2] is ] which matches [ at depth 1
     expect(result[2]).toEqual({ from: 3, to: 4, depth: 1 });
   });
@@ -257,7 +258,7 @@ describe('computeBracketDecorations', () => {
     // f(0)o(1)o(2)((3)"(4)…(8),(9) (10)[(11)1(12),(13) (14)2(15)](16))(17)
     // ( at pos 3 depth 0, [ at pos 11 depth 1, ] at pos 16 depth 1, ) at pos 17 depth 0
     expect(result).toHaveLength(4);
-    expect(result[0]).toEqual({ from: 3, to: 4, depth: 0 });   // (
+    expect(result[0]).toEqual({ from: 3, to: 4, depth: 0 }); // (
     expect(result[1]).toEqual({ from: 11, to: 12, depth: 1 }); // [
     expect(result[2]).toEqual({ from: 16, to: 17, depth: 1 }); // ]
     expect(result[3]).toEqual({ from: 17, to: 18, depth: 0 }); // )
@@ -270,10 +271,10 @@ describe('computeBracketDecorations', () => {
     const result = computeBracketDecorations(text);
     // [ at 9 depth 0, ] at 10 depth 0, ( at 12 depth 0, ) at 18 depth 0
     expect(result).toHaveLength(4);
-    expect(result[0]).toEqual({ from: 9, to: 10, depth: 0 });   // [
-    expect(result[1]).toEqual({ from: 10, to: 11, depth: 0 });  // ]
-    expect(result[2]).toEqual({ from: 12, to: 13, depth: 0 });  // (
-    expect(result[3]).toEqual({ from: 18, to: 19, depth: 0 });  // )
+    expect(result[0]).toEqual({ from: 9, to: 10, depth: 0 }); // [
+    expect(result[1]).toEqual({ from: 10, to: 11, depth: 0 }); // ]
+    expect(result[2]).toEqual({ from: 12, to: 13, depth: 0 }); // (
+    expect(result[3]).toEqual({ from: 18, to: 19, depth: 0 }); // )
   });
 
   // -------------------------------------------------------------------------

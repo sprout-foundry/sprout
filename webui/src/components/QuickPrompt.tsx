@@ -22,7 +22,7 @@ const QuickPrompt: React.FC<QuickPromptProps> = ({
   horizontal = true,
   onSelect,
   onCancel,
-  isOpen
+  isOpen,
 }) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -30,45 +30,48 @@ const QuickPrompt: React.FC<QuickPromptProps> = ({
     setSelectedIndex(0);
   }, [isOpen]);
 
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (!isOpen) return;
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (!isOpen) return;
 
-    // Check hotkeys first
-    for (let i = 0; i < options.length; i++) {
-      const option = options[i];
-      if (option.hotkey && e.key.toLowerCase() === option.hotkey.toLowerCase()) {
-        e.preventDefault();
-        onSelect(option);
-        return;
+      // Check hotkeys first
+      for (let i = 0; i < options.length; i++) {
+        const option = options[i];
+        if (option.hotkey && e.key.toLowerCase() === option.hotkey.toLowerCase()) {
+          e.preventDefault();
+          onSelect(option);
+          return;
+        }
       }
-    }
 
-    // Handle navigation keys
-    switch (e.key) {
-      case 'Escape':
-        e.preventDefault();
-        onCancel();
-        break;
-      case 'Enter':
-        e.preventDefault();
-        onSelect(options[selectedIndex]);
-        break;
-      case 'ArrowLeft':
-      case 'ArrowUp':
-        e.preventDefault();
-        setSelectedIndex(prev => Math.max(0, prev - 1));
-        break;
-      case 'ArrowRight':
-      case 'ArrowDown':
-        e.preventDefault();
-        setSelectedIndex(prev => Math.min(options.length - 1, prev + 1));
-        break;
-      case 'Tab':
-        e.preventDefault();
-        setSelectedIndex(prev => (prev + 1) % options.length);
-        break;
-    }
-  }, [isOpen, options, onSelect, onCancel, selectedIndex]);
+      // Handle navigation keys
+      switch (e.key) {
+        case 'Escape':
+          e.preventDefault();
+          onCancel();
+          break;
+        case 'Enter':
+          e.preventDefault();
+          onSelect(options[selectedIndex]);
+          break;
+        case 'ArrowLeft':
+        case 'ArrowUp':
+          e.preventDefault();
+          setSelectedIndex((prev) => Math.max(0, prev - 1));
+          break;
+        case 'ArrowRight':
+        case 'ArrowDown':
+          e.preventDefault();
+          setSelectedIndex((prev) => Math.min(options.length - 1, prev + 1));
+          break;
+        case 'Tab':
+          e.preventDefault();
+          setSelectedIndex((prev) => (prev + 1) % options.length);
+          break;
+      }
+    },
+    [isOpen, options, onSelect, onCancel, selectedIndex],
+  );
 
   useEffect(() => {
     if (isOpen) {
@@ -100,17 +103,13 @@ const QuickPrompt: React.FC<QuickPromptProps> = ({
               onClick={() => handleClick(option, index)}
             >
               {option.label}
-              {option.hotkey && (
-                <span className="quickprompt-hotkey">{option.hotkey.toUpperCase()}</span>
-              )}
+              {option.hotkey && <span className="quickprompt-hotkey">{option.hotkey.toUpperCase()}</span>}
             </button>
           ))}
         </div>
         <div className="quickprompt-help">
           <span>Use arrow keys to navigate, Enter to select, Esc to cancel</span>
-          {options.some(o => o.hotkey) && (
-            <span>Or press hotkey letters</span>
-          )}
+          {options.some((o) => o.hotkey) && <span>Or press hotkey letters</span>}
         </div>
       </div>
     </div>

@@ -13,9 +13,7 @@ export interface UseSessionRestoredOptions {
   setState: React.Dispatch<React.SetStateAction<AppState>>;
 }
 
-export function useSessionRestored({
-  setState,
-}: UseSessionRestoredOptions): void {
+export function useSessionRestored({ setState }: UseSessionRestoredOptions): void {
   useEffect(() => {
     const handleSessionRestored = (event: Event) => {
       const customEvent = event as CustomEvent<{ messages: Array<{ role: string; content: string }> }>;
@@ -32,7 +30,7 @@ export function useSessionRestored({
         }));
 
       if (restoredMessages.length > 0) {
-        setState(prev => ({
+        setState((prev) => ({
           ...prev,
           messages: restoredMessages,
           toolExecutions: [],

@@ -6,14 +6,19 @@
   border-radius: 14px;
   overflow: visible;
   box-shadow: var(--shadow-subtle);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
   position: relative;
   min-height: 110px;
 }
 
 .command-input:focus-within {
   border-color: var(--border-focus);
-  box-shadow: var(--shadow-elevated), 0 0 0 1px var(--border-focus);
+  box-shadow:
+    var(--shadow-elevated),
+    0 0 0 1px var(--border-focus);
 }
 
 .input-header {
@@ -127,7 +132,9 @@
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.15s ease, transform 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
   box-shadow: var(--shadow-subtle);
   border: 1px solid var(--border-default);
   z-index: 100;
@@ -163,7 +170,11 @@
   padding: 8px;
   border-radius: 8px;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, background 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    opacity 0.2s ease,
+    background 0.2s ease;
   box-shadow: var(--shadow-subtle);
   display: flex;
   align-items: center;
@@ -189,7 +200,10 @@
   padding: 8px;
   border-radius: 8px;
   cursor: pointer;
-  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+  transition:
+    color 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -214,7 +228,10 @@
   padding: 8px;
   border-radius: 8px;
   cursor: pointer;
-  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+  transition:
+    color 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -264,7 +281,9 @@
   font-weight: 700;
   cursor: pointer;
   line-height: 1;
-  transition: background-color 0.15s ease, transform 0.1s ease;
+  transition:
+    background-color 0.15s ease,
+    transform 0.1s ease;
 }
 
 .queue-badge-button:hover {
@@ -283,7 +302,9 @@
 }
 
 .queue-popover-overlay .queue-panel {
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.25),
+    0 0 0 1px rgba(255, 255, 255, 0.06);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -295,7 +316,11 @@
   padding: 8px;
   border-radius: 8px;
   cursor: pointer;
-  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+  transition:
+    color 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease,
+    transform 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -495,7 +520,11 @@
   padding: 8px;
   border-radius: 8px;
   cursor: pointer;
-  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+  transition:
+    color 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease,
+    transform 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -532,7 +561,9 @@
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.15s ease, transform 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
   box-shadow: var(--shadow-subtle);
   border: 1px solid var(--border-default);
   z-index: 100;

@@ -20,11 +20,7 @@ const ESTIMATED_POPUP_HEIGHT = 350;
  * searchable popup listing all languages when clicked.  The popup is
  * rendered via a portal to avoid overflow clipping from parent containers.
  */
-const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
-  currentLanguageId,
-  isAutoDetected,
-  onLanguageChange,
-}) => {
+const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({ currentLanguageId, isAutoDetected, onLanguageChange }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -35,7 +31,7 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
   // Resolve display label
   const displayName = useMemo(() => {
     if (!currentLanguageId) return 'Auto';
-    const entry = allLanguageEntries.find(e => e.id === currentLanguageId);
+    const entry = allLanguageEntries.find((e) => e.id === currentLanguageId);
     if (!entry) return 'Auto';
     return isAutoDetected ? `Auto (${entry.name})` : entry.name;
   }, [currentLanguageId, isAutoDetected]);
@@ -44,14 +40,12 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
   const items = useMemo(() => {
     if (!query.trim()) return allLanguageEntries;
     const q = query.toLowerCase();
-    return allLanguageEntries.filter(
-      e => e.name.toLowerCase().includes(q) || e.id.toLowerCase().includes(q)
-    );
+    return allLanguageEntries.filter((e) => e.name.toLowerCase().includes(q) || e.id.toLowerCase().includes(q));
   }, [query]);
 
   // Keep selected index in bounds (conceptual list is [Auto-detect, ...items])
   useEffect(() => {
-    setSelectedIndex(prev => Math.min(prev, items.length));
+    setSelectedIndex((prev) => Math.min(prev, items.length));
   }, [items.length]);
 
   // Reset selected index when popup reopens
@@ -78,8 +72,10 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
 
     const handler = (e: MouseEvent) => {
       if (
-        popupRef.current && !popupRef.current.contains(e.target as Node) &&
-        buttonRef.current && !buttonRef.current.contains(e.target as Node)
+        popupRef.current &&
+        !popupRef.current.contains(e.target as Node) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(e.target as Node)
       ) {
         closePopup();
       }
@@ -128,9 +124,7 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
   useEffect(() => {
     if (!isOpen || !popupRef.current) return;
     requestAnimationFrame(() => {
-      const selected = popupRef.current?.querySelector(
-        '.language-switcher-item.selected'
-      );
+      const selected = popupRef.current?.querySelector('.language-switcher-item.selected');
       (selected as HTMLElement)?.scrollIntoView({ block: 'nearest' });
     });
   }, [selectedIndex, isOpen]);
@@ -139,11 +133,11 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        setSelectedIndex(prev => Math.min(prev + 1, items.length));
+        setSelectedIndex((prev) => Math.min(prev + 1, items.length));
         break;
       case 'ArrowUp':
         e.preventDefault();
-        setSelectedIndex(prev => Math.max(prev - 1, 0));
+        setSelectedIndex((prev) => Math.max(prev - 1, 0));
         break;
       case 'Home':
         e.preventDefault();
@@ -206,7 +200,7 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
       <button
         ref={buttonRef}
         className="language-switcher-button"
-        onClick={() => setIsOpen(prev => !prev)}
+        onClick={() => setIsOpen((prev) => !prev)}
         title={`Language: ${displayName} — click to change`}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
@@ -219,73 +213,70 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
         <span className="language-switcher-label">{displayName}</span>
       </button>
 
-      {isOpen && createPortal(
-        <div
-          className="language-switcher-popup"
-          style={popupStyle}
-          ref={popupRef}
-          role="listbox"
-          aria-label="Select language mode"
-          data-testid="language-switcher-popup"
-        >
-          <div className="language-switcher-search">
-            <input
-              ref={searchRef}
-              type="text"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Filter languages..."
-              className="language-switcher-search-input"
-            />
-          </div>
+      {isOpen &&
+        createPortal(
+          <div
+            className="language-switcher-popup"
+            style={popupStyle}
+            ref={popupRef}
+            role="listbox"
+            aria-label="Select language mode"
+            data-testid="language-switcher-popup"
+          >
+            <div className="language-switcher-search">
+              <input
+                ref={searchRef}
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Filter languages..."
+                className="language-switcher-search-input"
+              />
+            </div>
 
-          <div className="language-switcher-list">
-            {/* Auto-detect option */}
-            <div
-              className={`language-switcher-item ${selectedIndex === autoDetectIndex ? 'selected' : ''} ${currentLanguageId == null || isAutoDetected ? 'active' : ''}`}
-              onMouseEnter={() => setSelectedIndex(autoDetectIndex)}
-              onClick={() => handleSelect(null)}
-              role="option"
-              aria-selected={selectedIndex === autoDetectIndex}
-            >
-              <span className="language-switcher-item-name">Auto-detect</span>
-              {(currentLanguageId == null || isAutoDetected) && (
-                <Check size={14} className="language-switcher-check" />
+            <div className="language-switcher-list">
+              {/* Auto-detect option */}
+              <div
+                className={`language-switcher-item ${selectedIndex === autoDetectIndex ? 'selected' : ''} ${currentLanguageId == null || isAutoDetected ? 'active' : ''}`}
+                onMouseEnter={() => setSelectedIndex(autoDetectIndex)}
+                onClick={() => handleSelect(null)}
+                role="option"
+                aria-selected={selectedIndex === autoDetectIndex}
+              >
+                <span className="language-switcher-item-name">Auto-detect</span>
+                {(currentLanguageId == null || isAutoDetected) && (
+                  <Check size={14} className="language-switcher-check" />
+                )}
+              </div>
+
+              {items.map((entry, i) => {
+                const listIndex = i + 1; // +1 because auto-detect is at 0
+                const isActive = entry.id === currentLanguageId && !isAutoDetected;
+                return (
+                  <div
+                    key={entry.id}
+                    className={`language-switcher-item ${selectedIndex === listIndex ? 'selected' : ''} ${isActive ? 'active' : ''}`}
+                    onMouseEnter={() => setSelectedIndex(listIndex)}
+                    onClick={() => handleSelect(entry.id)}
+                    role="option"
+                    aria-selected={selectedIndex === listIndex}
+                  >
+                    <span className="language-switcher-item-name">{entry.name}</span>
+                    {isActive && <Check size={14} className="language-switcher-check" />}
+                  </div>
+                );
+              })}
+
+              {items.length === 0 && query.trim() && (
+                <div className="language-switcher-no-results">No matching languages</div>
               )}
             </div>
 
-            {items.map((entry, i) => {
-              const listIndex = i + 1; // +1 because auto-detect is at 0
-              const isActive = entry.id === currentLanguageId && !isAutoDetected;
-              return (
-                <div
-                  key={entry.id}
-                  className={`language-switcher-item ${selectedIndex === listIndex ? 'selected' : ''} ${isActive ? 'active' : ''}`}
-                  onMouseEnter={() => setSelectedIndex(listIndex)}
-                  onClick={() => handleSelect(entry.id)}
-                  role="option"
-                  aria-selected={selectedIndex === listIndex}
-                >
-                  <span className="language-switcher-item-name">{entry.name}</span>
-                  {isActive && (
-                    <Check size={14} className="language-switcher-check" />
-                  )}
-                </div>
-              );
-            })}
-
-            {items.length === 0 && query.trim() && (
-              <div className="language-switcher-no-results">No matching languages</div>
-            )}
-          </div>
-
-          <div className="language-switcher-footer">
-            ↑↓ Navigate · Enter Select · Esc Close
-          </div>
-        </div>,
-        document.body,
-      )}
+            <div className="language-switcher-footer">↑↓ Navigate · Enter Select · Esc Close</div>
+          </div>,
+          document.body,
+        )}
     </>
   );
 };

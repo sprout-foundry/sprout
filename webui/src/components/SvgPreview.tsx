@@ -33,12 +33,7 @@ const SvgPreview: React.FC<SvgPreviewProps> = ({ content, fileName, sourcePath }
         ) : null}
       </div>
       <div className="svg-preview-canvas">
-        <iframe
-          className="svg-preview-frame"
-          sandbox=""
-          title={`${fileName} preview`}
-          srcDoc={content}
-        />
+        <iframe className="svg-preview-frame" sandbox="" title={`${fileName} preview`} srcDoc={content} />
       </div>
     </div>
   );

@@ -13,7 +13,11 @@ import ContextMenu from './ContextMenu';
 let rafId = 0;
 beforeAll(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-  global.requestAnimationFrame = ((cb) => { rafId += 1; cb(Date.now()); return rafId; }) as typeof requestAnimationFrame;
+  global.requestAnimationFrame = ((cb) => {
+    rafId += 1;
+    cb(Date.now());
+    return rafId;
+  }) as typeof requestAnimationFrame;
   global.cancelAnimationFrame = jest.fn();
 });
 
@@ -47,14 +51,16 @@ afterEach(() => {
 /**
  * Renders a ContextMenu with the given props. Returns the onClose spy.
  */
-function renderMenu(props: {
-  isOpen?: boolean;
-  x?: number;
-  y?: number;
-  className?: string;
-  zIndex?: number;
-  children?: React.ReactNode;
-} = {}) {
+function renderMenu(
+  props: {
+    isOpen?: boolean;
+    x?: number;
+    y?: number;
+    className?: string;
+    zIndex?: number;
+    children?: React.ReactNode;
+  } = {},
+) {
   const {
     isOpen = true,
     x = 100,
@@ -68,14 +74,7 @@ function renderMenu(props: {
   act(() => {
     root = createRoot(mountPoint!);
     root.render(
-      <ContextMenu
-        isOpen={isOpen}
-        x={x}
-        y={y}
-        onClose={onClose}
-        className={className}
-        zIndex={zIndex}
-      >
+      <ContextMenu isOpen={isOpen} x={x} y={y} onClose={onClose} className={className} zIndex={zIndex}>
         {children}
       </ContextMenu>,
     );
@@ -114,12 +113,7 @@ describe('ContextMenu', () => {
     // The component is controlled: re-render with isOpen=false
     act(() => {
       root!.render(
-        <ContextMenu
-          isOpen={false}
-          x={100}
-          y={100}
-          onClose={onClose}
-        >
+        <ContextMenu isOpen={false} x={100} y={100} onClose={onClose}>
           <button className="context-menu-item">Item 1</button>
         </ContextMenu>,
       );

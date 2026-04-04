@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { act } from 'react';
-import { createRoot, Root } from 'react-dom/client';
+import { createRoot, type Root } from 'react-dom/client';
 import { EditorManagerProvider, useEditorManager } from './EditorManagerContext';
 
 // ---------------------------------------------------------------------------
@@ -58,13 +58,7 @@ function TestConsumer() {
  */
 function renderProvider() {
   act(() => {
-    root.render(
-      React.createElement(
-        EditorManagerProvider,
-        null,
-        React.createElement(TestConsumer),
-      ),
-    );
+    root.render(React.createElement(EditorManagerProvider, null, React.createElement(TestConsumer)));
   });
 }
 
@@ -106,14 +100,11 @@ const actAndUpdateWithDelay = async (fn: () => void) => {
 const ctx = () => latestContext;
 
 /** Collect buffers with a given paneId into an array. */
-const buffersInPane = (paneId: string) =>
-  Array.from(ctx().buffers.values()).filter((b) => b.paneId === paneId);
+const buffersInPane = (paneId: string) => Array.from(ctx().buffers.values()).filter((b) => b.paneId === paneId);
 
 /** Collect active (isActive === true) buffers in a given pane. */
 const activeBuffersInPane = (paneId: string) =>
-  Array.from(ctx().buffers.values()).filter(
-    (b) => b.paneId === paneId && b.isActive === true,
-  );
+  Array.from(ctx().buffers.values()).filter((b) => b.paneId === paneId && b.isActive === true);
 
 /** Helper to create a file object for openFile. */
 const makeFile = (path: string, name: string) => ({
@@ -252,9 +243,7 @@ describe('EditorManager tab pane management', () => {
     expect(buf2Id).toBe(buf1Id);
 
     // Verify only one buffer has this path
-    const matching = Array.from(ctx().buffers.values()).filter(
-      (b) => b.file.path === path,
-    );
+    const matching = Array.from(ctx().buffers.values()).filter((b) => b.file.path === path);
     expect(matching.length).toBe(1);
 
     // The buffer should be active
@@ -387,10 +376,14 @@ describe('paneId preservation fix', () => {
 
     // Open two files into the active pane
     let buf1Id: string;
-    await actAndUpdateWithDelay(() => { buf1Id = ctx().openFile(file1); });
+    await actAndUpdateWithDelay(() => {
+      buf1Id = ctx().openFile(file1);
+    });
 
     let buf2Id: string;
-    await actAndUpdateWithDelay(() => { buf2Id = ctx().openFile(file2); });
+    await actAndUpdateWithDelay(() => {
+      buf2Id = ctx().openFile(file2);
+    });
 
     // After opening both, buf2 is active; buf1 is inactive
     expect(ctx().buffers.get(buf2Id!).isActive).toBe(true);
@@ -401,7 +394,9 @@ describe('paneId preservation fix', () => {
     expect(ctx().buffers.get(buf2Id!).paneId).toBe(paneId);
 
     // Switch back to buf1 via switchToBuffer (which triggers deactivate logic)
-    await actAndUpdateWithDelay(() => { ctx().switchToBuffer(buf1Id!); });
+    await actAndUpdateWithDelay(() => {
+      ctx().switchToBuffer(buf1Id!);
+    });
 
     expect(ctx().buffers.get(buf1Id!).isActive).toBe(true);
     expect(ctx().buffers.get(buf1Id!).paneId).toBe(paneId);
@@ -411,7 +406,9 @@ describe('paneId preservation fix', () => {
     expect(ctx().buffers.get(buf2Id!).paneId).toBe(paneId);
 
     // Switch back to buf2
-    await actAndUpdateWithDelay(() => { ctx().switchToBuffer(buf2Id!); });
+    await actAndUpdateWithDelay(() => {
+      ctx().switchToBuffer(buf2Id!);
+    });
 
     expect(ctx().buffers.get(buf2Id!).isActive).toBe(true);
     expect(ctx().buffers.get(buf2Id!).paneId).toBe(paneId);
@@ -434,13 +431,19 @@ describe('paneId preservation fix', () => {
     const file3 = makeFile('/test/preserve-3.ts', 'preserve-3.ts');
 
     let buf1Id: string;
-    await actAndUpdateWithDelay(() => { buf1Id = ctx().openFile(file1); });
+    await actAndUpdateWithDelay(() => {
+      buf1Id = ctx().openFile(file1);
+    });
 
     let buf2Id: string;
-    await actAndUpdateWithDelay(() => { buf2Id = ctx().openFile(file2); });
+    await actAndUpdateWithDelay(() => {
+      buf2Id = ctx().openFile(file2);
+    });
 
     let buf3Id: string;
-    await actAndUpdateWithDelay(() => { buf3Id = ctx().openFile(file3); });
+    await actAndUpdateWithDelay(() => {
+      buf3Id = ctx().openFile(file3);
+    });
 
     // After opening buf3, all buffers should still have paneId
     expect(ctx().buffers.get(buf1Id!).paneId).toBe(paneId);
@@ -487,7 +490,9 @@ describe('paneId preservation fix', () => {
     // Now open a regular file — both chat and review should keep their paneId
     const file = makeFile('/test/workspace-file.txt', 'workspace-file.txt');
     let fileId: string;
-    await actAndUpdateWithDelay(() => { fileId = ctx().openFile(file); });
+    await actAndUpdateWithDelay(() => {
+      fileId = ctx().openFile(file);
+    });
 
     expect(ctx().buffers.get('buffer-chat').paneId).toBe(paneId);
     expect(ctx().buffers.get(reviewId!).paneId).toBe(paneId);
@@ -512,10 +517,14 @@ describe('paneId preservation fix', () => {
     const file2 = makeFile('/test/same-pane-2.ts', 'same-pane-2.ts');
 
     let buf1Id: string;
-    await actAndUpdateWithDelay(() => { buf1Id = ctx().openFile(file1); });
+    await actAndUpdateWithDelay(() => {
+      buf1Id = ctx().openFile(file1);
+    });
 
     let buf2Id: string;
-    await actAndUpdateWithDelay(() => { buf2Id = ctx().openFile(file2); });
+    await actAndUpdateWithDelay(() => {
+      buf2Id = ctx().openFile(file2);
+    });
 
     // All buffers should be in the same pane at this point
     const allBuffers = Array.from(ctx().buffers.values());
@@ -524,21 +533,27 @@ describe('paneId preservation fix', () => {
     });
 
     // Switch to chat buffer
-    await actAndUpdateWithDelay(() => { ctx().switchToBuffer('buffer-chat'); });
+    await actAndUpdateWithDelay(() => {
+      ctx().switchToBuffer('buffer-chat');
+    });
     expect(ctx().buffers.get('buffer-chat').isActive).toBe(true);
     expect(ctx().buffers.get('buffer-chat').paneId).toBe(paneId);
     expect(ctx().buffers.get(buf1Id!).paneId).toBe(paneId);
     expect(ctx().buffers.get(buf2Id!).paneId).toBe(paneId);
 
     // Switch to buf1
-    await actAndUpdateWithDelay(() => { ctx().switchToBuffer(buf1Id!); });
+    await actAndUpdateWithDelay(() => {
+      ctx().switchToBuffer(buf1Id!);
+    });
     expect(ctx().buffers.get(buf1Id!).isActive).toBe(true);
     expect(ctx().buffers.get(buf1Id!).paneId).toBe(paneId);
     expect(ctx().buffers.get('buffer-chat').paneId).toBe(paneId);
     expect(ctx().buffers.get(buf2Id!).paneId).toBe(paneId);
 
     // Switch to buf2
-    await actAndUpdateWithDelay(() => { ctx().switchToBuffer(buf2Id!); });
+    await actAndUpdateWithDelay(() => {
+      ctx().switchToBuffer(buf2Id!);
+    });
     expect(ctx().buffers.get(buf2Id!).isActive).toBe(true);
     expect(ctx().buffers.get(buf2Id!).paneId).toBe(paneId);
     expect(ctx().buffers.get(buf1Id!).paneId).toBe(paneId);
@@ -558,14 +573,22 @@ describe('paneId preservation fix', () => {
     const file3 = makeFile('/test/close-3.ts', 'close-3.ts');
 
     let buf1Id: string;
-    await actAndUpdateWithDelay(() => { buf1Id = ctx().openFile(file1); });
+    await actAndUpdateWithDelay(() => {
+      buf1Id = ctx().openFile(file1);
+    });
     let buf2Id: string;
-    await actAndUpdateWithDelay(() => { buf2Id = ctx().openFile(file2); });
+    await actAndUpdateWithDelay(() => {
+      buf2Id = ctx().openFile(file2);
+    });
     let buf3Id: string;
-    await actAndUpdateWithDelay(() => { buf3Id = ctx().openFile(file3); });
+    await actAndUpdateWithDelay(() => {
+      buf3Id = ctx().openFile(file3);
+    });
 
     // Close file2 (the middle buffer — active is buf3)
-    await actAndUpdateWithDelay(() => { ctx().closeBuffer(buf2Id!); });
+    await actAndUpdateWithDelay(() => {
+      ctx().closeBuffer(buf2Id!);
+    });
 
     // buf2 should be gone
     expect(ctx().buffers.get(buf2Id!)).toBeUndefined();
@@ -581,7 +604,9 @@ describe('paneId preservation fix', () => {
     // Now close the active buffer (buf3) — closeBuffer picks the next pane-mate
     // in Map iteration order (buffer-chat is first → becomes the new active buffer).
     // The key invariant: ALL remaining buffers keep their paneId.
-    await actAndUpdateWithDelay(() => { ctx().closeBuffer(buf3Id!); });
+    await actAndUpdateWithDelay(() => {
+      ctx().closeBuffer(buf3Id!);
+    });
 
     expect(ctx().buffers.get(buf3Id!)).toBeUndefined();
 
@@ -605,19 +630,21 @@ describe('paneId preservation fix', () => {
     const file = makeFile('/test/dup.txt', 'dup.txt');
 
     let buf1Id: string;
-    await actAndUpdateWithDelay(() => { buf1Id = ctx().openFile(file); });
+    await actAndUpdateWithDelay(() => {
+      buf1Id = ctx().openFile(file);
+    });
 
     // Open the same file path again
     let buf2Id: string;
-    await actAndUpdateWithDelay(() => { buf2Id = ctx().openFile(file); });
+    await actAndUpdateWithDelay(() => {
+      buf2Id = ctx().openFile(file);
+    });
 
     // Should return the same buffer ID (no duplicate)
     expect(buf2Id).toBe(buf1Id);
 
     // Only one buffer with this path
-    const matching = Array.from(ctx().buffers.values()).filter(
-      (b) => b.file.path === '/test/dup.txt',
-    );
+    const matching = Array.from(ctx().buffers.values()).filter((b) => b.file.path === '/test/dup.txt');
     expect(matching.length).toBe(1);
 
     // The buffer should be active
@@ -637,7 +664,9 @@ describe('paneId preservation fix', () => {
 
     // Attempt to close it — should be a no-op
     const bufferCountBefore = ctx().buffers.size;
-    await actAndUpdateWithDelay(() => { ctx().closeBuffer('buffer-chat'); });
+    await actAndUpdateWithDelay(() => {
+      ctx().closeBuffer('buffer-chat');
+    });
 
     // The chat buffer should still be in the map, unchanged
     expect(ctx().buffers.get('buffer-chat')).toBeDefined();
@@ -657,8 +686,12 @@ describe('paneId preservation fix', () => {
 
     // Open file1 in pane-1, then file2 (deactivates file1)
     let buf1Id: string;
-    await actAndUpdateWithDelay(() => { buf1Id = ctx().openFile(file1); });
-    await actAndUpdateWithDelay(() => { ctx().openFile(file2); });
+    await actAndUpdateWithDelay(() => {
+      buf1Id = ctx().openFile(file1);
+    });
+    await actAndUpdateWithDelay(() => {
+      ctx().openFile(file2);
+    });
 
     expect(ctx().buffers.get(buf1Id!).paneId).toBe(pane1Id);
     expect(ctx().buffers.get(buf1Id!).isActive).toBe(false);
@@ -671,12 +704,16 @@ describe('paneId preservation fix', () => {
     expect(ctx().activePaneId).toBe(pane2Id);
 
     const file3 = makeFile('/test/cross-pane-3.txt', 'cross-pane-3.txt');
-    await actAndUpdateWithDelay(() => { ctx().openFile(file3); });
+    await actAndUpdateWithDelay(() => {
+      ctx().openFile(file3);
+    });
 
     // Now openFile for file1 (which is in pane-1) from pane-2 context
     // This should switch to pane-1, activate file1, and set pane.bufferId
     let sameId: string;
-    await actAndUpdateWithDelay(() => { sameId = ctx().openFile(file1); });
+    await actAndUpdateWithDelay(() => {
+      sameId = ctx().openFile(file1);
+    });
 
     // Should return the same buffer id
     expect(sameId).toBe(buf1Id);
@@ -693,16 +730,12 @@ describe('paneId preservation fix', () => {
     expect(ctx().buffers.get(buf1Id!).paneId).toBe(pane1Id);
 
     // file2 (also in pane-1) should be deactivated but keep its paneId
-    const file2Buffer = Array.from(ctx().buffers.values()).find(
-      (b) => b.file.path === '/test/cross-pane-2.txt',
-    );
+    const file2Buffer = Array.from(ctx().buffers.values()).find((b) => b.file.path === '/test/cross-pane-2.txt');
     expect(file2Buffer.isActive).toBe(false);
     expect(file2Buffer.paneId).toBe(pane1Id);
 
     // --- pane-2's state should be completely unaffected by the cross-pane switch ---
-    const file3Buffer = Array.from(ctx().buffers.values()).find(
-      (b) => b.file.path === '/test/cross-pane-3.txt',
-    );
+    const file3Buffer = Array.from(ctx().buffers.values()).find((b) => b.file.path === '/test/cross-pane-3.txt');
     expect(file3Buffer).toBeDefined();
     expect(file3Buffer.isActive).toBe(true);
     expect(file3Buffer.paneId).toBe(pane2Id);

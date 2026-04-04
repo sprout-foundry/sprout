@@ -1,9 +1,9 @@
-export type ChatMessageLike = {
+export interface ChatMessageLike {
   id: string;
   type: 'user' | 'assistant';
   content: string;
   timestamp: Date;
-};
+}
 
 export const ensureCompletedAssistantMessage = <T extends ChatMessageLike>(
   messages: T[],

@@ -56,16 +56,33 @@ function App() {
     useChatSessions({ setState, activeChatIdRef, activeRequestsRef });
 
   // ── 5. Message sending (depends on WS refs) ───────────────────────
-  const { handleSendMessage, handleStopProcessing } =
-    useMessageSending({ setState, setInputValue, activeChatIdRef, activeRequestsRef });
+  const { handleSendMessage, handleStopProcessing } = useMessageSending({
+    setState,
+    setInputValue,
+    activeChatIdRef,
+    activeRequestsRef,
+  });
 
   // ── 6. Auto-send queued messages (depends on handleSendMessage) ──
-  useQueuedMessagesAutoSend(state, activeRequestsRef, queuedMessagesRef, setQueuedMessages, handleSendMessage, setState);
+  useQueuedMessagesAutoSend(
+    state,
+    activeRequestsRef,
+    queuedMessagesRef,
+    setQueuedMessages,
+    handleSendMessage,
+    setState,
+  );
 
   // ── 7. Sidebar state (independent) ────────────────────────────────
   const {
-    isMobile, isSidebarOpen, sidebarCollapsed, isTerminalExpanded,
-    setIsMobile, toggleSidebar, closeSidebar, handleSidebarToggle,
+    isMobile,
+    isSidebarOpen,
+    sidebarCollapsed,
+    isTerminalExpanded,
+    setIsMobile,
+    toggleSidebar,
+    closeSidebar,
+    handleSidebarToggle,
     setIsTerminalExpanded,
   } = useSidebarState();
 
@@ -83,10 +100,13 @@ function App() {
   const recentLogs = useMemo(() => state.logs.slice(-MAX_PERSISTED_LOGS), [state.logs]);
 
   // Memoize stats to prevent unnecessary Sidebar remounts
-  const stats = useMemo(() => ({
-    queryCount: state.queryCount,
-    filesModified: 0, // TODO: track modified files from buffers
-  }), [state.queryCount]);
+  const stats = useMemo(
+    () => ({
+      queryCount: state.queryCount,
+      filesModified: 0, // TODO: track modified files from buffers
+    }),
+    [state.queryCount],
+  );
 
   // ── 11. Onboarding ─────────────────────────────────────────────────
   const onboardingHook = useOnboarding();
@@ -94,18 +114,14 @@ function App() {
   // Adapter wrapping the hook's onComplete so that parent AppState is updated
   const onboarding = {
     ...onboardingHook,
-    onComplete: () =>
-      onboardingHook.onComplete((values) =>
-        setState((prev) => ({ ...prev, ...values })),
-      ),
+    onComplete: () => onboardingHook.onComplete((values) => setState((prev) => ({ ...prev, ...values }))),
   };
 
   // Wire up browser tab freeze/resume for WebSocket connections.
   usePageVisibility();
 
   // ── 12. Model / provider / view change handlers ───────────────────
-  const { handleModelChange, handleProviderChange, handleViewChange } =
-    useModelProviderHandlers({ state, setState });
+  const { handleModelChange, handleProviderChange, handleViewChange } = useModelProviderHandlers({ state, setState });
 
   // ── 13. Initialisation effect (WS, stats, files, mobile) ──────────
   useAppInitialization({

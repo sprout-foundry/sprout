@@ -58,13 +58,13 @@ export const loadPersistedAppState = (): Partial<AppState> | null => {
 
     const parsed = JSON.parse(raw);
     const parsedMessages: Message[] = Array.isArray(parsed.messages)
-        ? parsed.messages.map((message: any) => ({
-            ...message,
-            timestamp: parseDate(message?.timestamp),
-            toolRefs: Array.isArray(message?.toolRefs) ? message.toolRefs : undefined
-          }))
-        : [];
-      return {
+      ? parsed.messages.map((message: any) => ({
+          ...message,
+          timestamp: parseDate(message?.timestamp),
+          toolRefs: Array.isArray(message?.toolRefs) ? message.toolRefs : undefined,
+        }))
+      : [];
+    return {
       provider: typeof parsed.provider === 'string' ? parsed.provider : 'unknown',
       model: typeof parsed.model === 'string' ? parsed.model : 'unknown',
       sessionId: typeof parsed.sessionId === 'string' ? parsed.sessionId : null,
@@ -74,10 +74,10 @@ export const loadPersistedAppState = (): Partial<AppState> | null => {
       fileEdits: Array.isArray(parsed.fileEdits)
         ? parsed.fileEdits.map((edit: any) => ({
             ...edit,
-            timestamp: parseDate(edit?.timestamp)
+            timestamp: parseDate(edit?.timestamp),
           }))
         : [],
-      subagentActivities: []
+      subagentActivities: [],
     };
   } catch (error) {
     console.warn('Failed to load persisted app state:', error);

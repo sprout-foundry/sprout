@@ -242,9 +242,9 @@
  * - CodeMirror HighlightStyle: https://codemirror.net/docs/ref/#language.HighlightStyle
  */
 
-import { HighlightStyle } from "@codemirror/language";
-import { tags } from "@lezer/highlight";
-import type { ThemePack, ThemeMode } from "./themePacks";
+import { HighlightStyle } from '@codemirror/language';
+import { tags } from '@lezer/highlight';
+import type { ThemePack, ThemeMode } from './themePacks';
 
 // ============================================================================
 // Type Definitions — TextMate Theme Format (.tmTheme)
@@ -316,7 +316,7 @@ export interface VSCodeTokenColor {
  */
 export interface VSCodeTheme {
   name: string;
-  type?: "dark" | "light" | "hc" | "hcLight";
+  type?: 'dark' | 'light' | 'hc' | 'hcLight';
   tokenColors: VSCodeTokenColor[];
   colors?: Record<string, string>;
   semanticTokenColors?: Record<string, { foreground?: string; fontStyle?: string } | string>;
@@ -336,65 +336,65 @@ export interface ImportResult {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const SCOPE_TO_TAG_ENTRIES: Array<[string, any[]]> = [
   // --- Comments ---
-  ["comment", [tags.comment]],
-  ["comment.block", [tags.comment]],
-  ["comment.line", [tags.comment]],
-  ["comment.doc", [tags.docComment, tags.comment]],
+  ['comment', [tags.comment]],
+  ['comment.block', [tags.comment]],
+  ['comment.line', [tags.comment]],
+  ['comment.doc', [tags.docComment, tags.comment]],
 
   // --- Strings ---
-  ["string", [tags.string]],
-  ["string.quoted", [tags.string]],
-  ["string.quoted.double", [tags.string]],
-  ["string.quoted.single", [tags.string]],
-  ["string.template", [tags.string]],
-  ["string.regexp", [tags.regexp]],
-  ["string.escape", [tags.escape]],
+  ['string', [tags.string]],
+  ['string.quoted', [tags.string]],
+  ['string.quoted.double', [tags.string]],
+  ['string.quoted.single', [tags.string]],
+  ['string.template', [tags.string]],
+  ['string.regexp', [tags.regexp]],
+  ['string.escape', [tags.escape]],
 
   // --- Keywords ---
-  ["keyword", [tags.keyword]],
-  ["keyword.control", [tags.keyword]],
-  ["keyword.operator", [tags.operatorKeyword]],
+  ['keyword', [tags.keyword]],
+  ['keyword.control', [tags.keyword]],
+  ['keyword.operator', [tags.operatorKeyword]],
 
   // --- Types ---
-  ["storage.type", [tags.typeName]],
-  ["entity.name.type", [tags.definition(tags.className)]],
-  ["entity.name.class", [tags.definition(tags.className)]],
+  ['storage.type', [tags.typeName]],
+  ['entity.name.type', [tags.definition(tags.className)]],
+  ['entity.name.class', [tags.definition(tags.className)]],
 
   // --- Functions ---
-  ["entity.name.function", [tags.function(tags.variableName)]],
-  ["support.function", [tags.function(tags.variableName)]],
-  ["meta.function-call", [tags.function(tags.variableName)]],
+  ['entity.name.function', [tags.function(tags.variableName)]],
+  ['support.function', [tags.function(tags.variableName)]],
+  ['meta.function-call', [tags.function(tags.variableName)]],
 
   // --- Variables ---
-  ["variable", [tags.variableName]],
-  ["variable.parameter", [tags.variableName]],
+  ['variable', [tags.variableName]],
+  ['variable.parameter', [tags.variableName]],
 
   // --- Constants ---
-  ["constant.numeric", [tags.number]],
-  ["constant.language", [tags.bool]],
-  ["constant.character", [tags.string]],
+  ['constant.numeric', [tags.number]],
+  ['constant.language', [tags.bool]],
+  ['constant.character', [tags.string]],
 
   // --- Operators & punctuation ---
-  ["operator", [tags.operator]],
-  ["punctuation", [tags.punctuation]],
-  ["punctuation.terminator", [tags.punctuation]],
-  ["punctuation.separator", [tags.separator]],
+  ['operator', [tags.operator]],
+  ['punctuation', [tags.punctuation]],
+  ['punctuation.terminator', [tags.punctuation]],
+  ['punctuation.separator', [tags.separator]],
 
   // --- Properties ---
-  ["variable.other.property", [tags.propertyName]],
-  ["entity.other.attribute-name", [tags.attributeName]],
+  ['variable.other.property', [tags.propertyName]],
+  ['entity.other.attribute-name', [tags.attributeName]],
 
   // --- Markup ---
-  ["entity.name.tag", [tags.tagName]],
-  ["markup.heading", [tags.heading]],
-  ["markup.bold", [tags.strong]],
-  ["markup.italic", [tags.emphasis]],
-  ["markup.underline.link", [tags.url]],
-  ["markup.raw", [tags.processingInstruction]],
+  ['entity.name.tag', [tags.tagName]],
+  ['markup.heading', [tags.heading]],
+  ['markup.bold', [tags.strong]],
+  ['markup.italic', [tags.emphasis]],
+  ['markup.underline.link', [tags.url]],
+  ['markup.raw', [tags.processingInstruction]],
 
   // --- Special ---
-  ["invalid", [tags.invalid]],
-  ["invalid.deprecated", [tags.invalid]],
+  ['invalid', [tags.invalid]],
+  ['invalid.deprecated', [tags.invalid]],
 ];
 
 // ============================================================================
@@ -422,56 +422,56 @@ export class ThemeImporter {
    */
   private readonly vscodeColorMap: Record<string, string> = {
     // CodeMirror editor core
-    "editor.background": "--cm-bg",
-    "editor.foreground": "--cm-fg",
-    "editorLineNumber.foreground": "--cm-gutter-fg",
-    "editorLineNumber.activeForeground": "--cm-gutter-fg-active",
-    "editorCursor.foreground": "--cm-cursor",
-    "editor.selectionBackground": "--cm-selection",
-    "editor.lineHighlightBackground": "--cm-active-line",
-    "editorGutter.background": "--cm-gutter-bg",
-    "editor.lineHighlightBorder": "--cm-active-line-gutter",
-    "editorCursor.background": "--cm-cursor",
+    'editor.background': '--cm-bg',
+    'editor.foreground': '--cm-fg',
+    'editorLineNumber.foreground': '--cm-gutter-fg',
+    'editorLineNumber.activeForeground': '--cm-gutter-fg-active',
+    'editorCursor.foreground': '--cm-cursor',
+    'editor.selectionBackground': '--cm-selection',
+    'editor.lineHighlightBackground': '--cm-active-line',
+    'editorGutter.background': '--cm-gutter-bg',
+    'editor.lineHighlightBorder': '--cm-active-line-gutter',
+    'editorCursor.background': '--cm-cursor',
 
     // App chrome
-    "sideBar.background": "--sidebar-bg",
-    "sideBar.foreground": "--text-primary",
-    "sideBar.border": "--border-default",
-    "sideBarSectionHeader.background": "--sidebar-header-bg",
-    "activityBar.background": "--bg-secondary",
-    "activityBar.foreground": "--text-primary",
-    "activityBar.activeBorder": "--accent-primary",
-    "titleBar.activeBackground": "--bg-primary",
-    "statusBar.background": "--bg-secondary",
-    "statusBar.foreground": "--text-secondary",
+    'sideBar.background': '--sidebar-bg',
+    'sideBar.foreground': '--text-primary',
+    'sideBar.border': '--border-default',
+    'sideBarSectionHeader.background': '--sidebar-header-bg',
+    'activityBar.background': '--bg-secondary',
+    'activityBar.foreground': '--text-primary',
+    'activityBar.activeBorder': '--accent-primary',
+    'titleBar.activeBackground': '--bg-primary',
+    'statusBar.background': '--bg-secondary',
+    'statusBar.foreground': '--text-secondary',
 
     // Tabs / toolbar
-    "tab.activeBackground": "--toolbar-bg",
-    "tab.activeForeground": "--text-primary",
-    "tab.inactiveBackground": "--bg-secondary",
-    "tab.inactiveForeground": "--text-secondary",
-    "tab.activeBorder": "--accent-primary",
+    'tab.activeBackground': '--toolbar-bg',
+    'tab.activeForeground': '--text-primary',
+    'tab.inactiveBackground': '--bg-secondary',
+    'tab.inactiveForeground': '--text-secondary',
+    'tab.activeBorder': '--accent-primary',
 
     // Input
-    "input.background": "--input-bg",
-    "input.foreground": "--input-fg",
-    "input.border": "--border-default",
+    'input.background': '--input-bg',
+    'input.foreground': '--input-fg',
+    'input.border': '--border-default',
 
     // Focus / borders
-    "focusBorder": "--border-focus",
+    focusBorder: '--border-focus',
 
     // Lists
-    "list.hoverBackground": "--sidebar-nav-btn-hover-bg",
-    "list.activeSelectionBackground": "--sidebar-select-bg",
-    "list.focusBackground": "--sidebar-select-bg",
+    'list.hoverBackground': '--sidebar-nav-btn-hover-bg',
+    'list.activeSelectionBackground': '--sidebar-select-bg',
+    'list.focusBackground': '--sidebar-select-bg',
 
     // Editor widgets
-    "editorWidget.background": "--bg-elevated",
-    "editorWidget.border": "--border-default",
+    'editorWidget.background': '--bg-elevated',
+    'editorWidget.border': '--border-default',
 
     // Accents
-    "badge.background": "--accent-primary",
-    "badge.foreground": "--bg-primary",
+    'badge.background': '--accent-primary',
+    'badge.foreground': '--bg-primary',
   };
 
   /**
@@ -480,7 +480,7 @@ export class ThemeImporter {
    */
   private resolveScope(scope: string): readonly any[] | null {
     // Handle comma-separated scopes (take first match)
-    const parts = scope.split(",").map(s => s.trim());
+    const parts = scope.split(',').map((s) => s.trim());
     for (const part of parts) {
       const tag = this.matchScope(part);
       if (tag) return tag;
@@ -497,9 +497,9 @@ export class ThemeImporter {
     if (exact) return exact;
 
     // Try progressively shorter suffixes (e.g., "source.js string.quoted" → "string.quoted" → "string")
-    const segments = scope.split(".");
+    const segments = scope.split('.');
     for (let i = 1; i < segments.length; i++) {
-      const suffix = segments.slice(i).join(".");
+      const suffix = segments.slice(i).join('.');
       const match = this.scopeToTag.get(suffix);
       if (match) return match;
     }
@@ -511,7 +511,7 @@ export class ThemeImporter {
    * Determines if a hex color is light or dark by relative luminance.
    */
   private isLightColor(hex: string): boolean {
-    const cleaned = hex.replace("#", "");
+    const cleaned = hex.replace('#', '');
     const r = parseInt(cleaned.substring(0, 2), 16);
     const g = parseInt(cleaned.substring(2, 4), 16);
     const b = parseInt(cleaned.substring(4, 6), 16);
@@ -522,8 +522,8 @@ export class ThemeImporter {
    * Detects whether a theme is dark or light based on its background color.
    */
   private detectMode(bgColor: string | undefined): ThemeMode {
-    if (!bgColor) return "dark";
-    return this.isLightColor(bgColor) ? "light" : "dark";
+    if (!bgColor) return 'dark';
+    return this.isLightColor(bgColor) ? 'light' : 'dark';
   }
 
   /**
@@ -534,13 +534,13 @@ export class ThemeImporter {
     if (!fontStyle) return {};
     const result: Record<string, string> = {};
     const lower = fontStyle.toLowerCase();
-    if (lower.includes("italic")) result.fontStyle = "italic";
-    if (lower.includes("bold")) result.fontWeight = "bold";
-    if (lower.includes("underline")) result.textDecoration = "underline";
+    if (lower.includes('italic')) result.fontStyle = 'italic';
+    if (lower.includes('bold')) result.fontWeight = 'bold';
+    if (lower.includes('underline')) result.textDecoration = 'underline';
 
     // If both bold and italic, CodeMirror EditorView expects fontStyle: "bold italic"
     if (result.fontStyle && result.fontWeight) {
-      result.fontStyle = "bold italic";
+      result.fontStyle = 'bold italic';
       delete result.fontWeight;
     }
 
@@ -569,7 +569,13 @@ export class ThemeImporter {
    * @returns `HighlightStyle` instance ready for use as a CodeMirror extension
    */
   buildHighlightStyle(tokenRules: VSCodeTokenColor[]): HighlightStyle {
-    const specs: Array<{ tag: readonly any[]; color?: string; fontStyle?: string; fontWeight?: string; textDecoration?: string }> = [];
+    const specs: Array<{
+      tag: readonly any[];
+      color?: string;
+      fontStyle?: string;
+      fontWeight?: string;
+      textDecoration?: string;
+    }> = [];
 
     for (const rule of tokenRules) {
       if (!rule.scope || !rule.settings.foreground) continue;
@@ -599,26 +605,26 @@ export class ThemeImporter {
    */
   importVSCodeTheme(theme: VSCodeTheme): ImportResult {
     const warnings: string[] = [];
-    const id = `imported-${theme.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
-    const bgColor = theme.colors?.["editor.background"] || theme.colors?.["sideBar.background"];
+    const id = `imported-${theme.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+    const bgColor = theme.colors?.['editor.background'] || theme.colors?.['sideBar.background'];
     const mode = this.detectMode(bgColor);
 
     // Map UI colors
     const cssVars = this.mapUIColors(theme.colors || {});
 
     // Warn if critical colors are missing
-    if (!cssVars["--cm-cursor"]) {
-      warnings.push("No cursor color defined — using default");
-      cssVars["--cm-cursor"] = mode === "dark" ? "#f8f8f2" : "#526999";
+    if (!cssVars['--cm-cursor']) {
+      warnings.push('No cursor color defined — using default');
+      cssVars['--cm-cursor'] = mode === 'dark' ? '#f8f8f2' : '#526999';
     }
-    if (!cssVars["--cm-bg"]) warnings.push("No editor background defined");
+    if (!cssVars['--cm-bg']) warnings.push('No editor background defined');
 
     const themePack: ThemePack = {
       id,
       name: theme.name,
       mode,
       description: `Imported VSCode theme: ${theme.name}`,
-      editorSyntaxStyle: mode === "dark" ? "one-dark" : "default",
+      editorSyntaxStyle: mode === 'dark' ? 'one-dark' : 'default',
       variables: cssVars,
     };
 
@@ -639,14 +645,14 @@ export class ThemeImporter {
    */
   importTMTheme(theme: TMTheme): ImportResult {
     const warnings: string[] = [];
-    const id = `imported-tm-${theme.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+    const id = `imported-tm-${theme.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
 
     // Separate global settings (first entry, no `scope`) from token rules
     let globalSettings: Partial<TMThemeGlobalSettings> = {};
     const tokenRules: TMThemeToken[] = [];
 
     for (const entry of theme.settings) {
-      if ("scope" in entry && entry.scope) {
+      if ('scope' in entry && entry.scope) {
         tokenRules.push(entry as TMThemeToken);
       } else {
         globalSettings = { ...globalSettings, ...entry };
@@ -657,15 +663,15 @@ export class ThemeImporter {
 
     // Map TextMate global settings to ledit CSS vars
     const tmColorMap: Record<string, string> = {};
-    if (globalSettings.background) tmColorMap["--cm-bg"] = globalSettings.background;
-    if (globalSettings.foreground) tmColorMap["--cm-fg"] = globalSettings.foreground;
-    if (globalSettings.caret) tmColorMap["--cm-cursor"] = globalSettings.caret;
-    if (globalSettings.selection) tmColorMap["--cm-selection"] = globalSettings.selection;
-    if (globalSettings.lineHighlight) tmColorMap["--cm-active-line"] = globalSettings.lineHighlight;
+    if (globalSettings.background) tmColorMap['--cm-bg'] = globalSettings.background;
+    if (globalSettings.foreground) tmColorMap['--cm-fg'] = globalSettings.foreground;
+    if (globalSettings.caret) tmColorMap['--cm-cursor'] = globalSettings.caret;
+    if (globalSettings.selection) tmColorMap['--cm-selection'] = globalSettings.selection;
+    if (globalSettings.lineHighlight) tmColorMap['--cm-active-line'] = globalSettings.lineHighlight;
 
-    if (!tmColorMap["--cm-cursor"]) {
-      warnings.push("No caret/cursor color defined — using default");
-      tmColorMap["--cm-cursor"] = mode === "dark" ? "#f8f8f2" : "#526999";
+    if (!tmColorMap['--cm-cursor']) {
+      warnings.push('No caret/cursor color defined — using default');
+      tmColorMap['--cm-cursor'] = mode === 'dark' ? '#f8f8f2' : '#526999';
     }
 
     const themePack: ThemePack = {
@@ -673,12 +679,12 @@ export class ThemeImporter {
       name: theme.name,
       mode,
       description: `Imported TextMate theme: ${theme.name}`,
-      editorSyntaxStyle: mode === "dark" ? "one-dark" : "default",
+      editorSyntaxStyle: mode === 'dark' ? 'one-dark' : 'default',
       variables: tmColorMap,
     };
 
     // Convert TMTokenRules to VSCodeTokenColor format for buildHighlightStyle
-    const vsFormat: VSCodeTokenColor[] = tokenRules.map(t => ({
+    const vsFormat: VSCodeTokenColor[] = tokenRules.map((t) => ({
       name: t.name,
       scope: t.scope,
       settings: { foreground: t.settings.foreground, fontStyle: t.settings.fontStyle },

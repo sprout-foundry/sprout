@@ -19,17 +19,11 @@ interface EditorBreadcrumbProps {
 
 // ── Kind icon lookup (safe against unknown kinds) ────────────────────────
 
-const getKindIcon = (kind: SymbolKind): string =>
-  (KIND_ICONS as Record<string, string>)[kind] || '?';
+const getKindIcon = (kind: SymbolKind): string => (KIND_ICONS as Record<string, string>)[kind] || '?';
 
 // ── Component ────────────────────────────────────────────────────────────
 
-const EditorBreadcrumb: React.FC<EditorBreadcrumbProps> = ({
-  filePath,
-  onNavigate,
-  symbols,
-  onNavigateToSymbol,
-}) => {
+const EditorBreadcrumb: React.FC<EditorBreadcrumbProps> = ({ filePath, onNavigate, symbols, onNavigateToSymbol }) => {
   // ── File path segments ───────────────────────────────────────────────
 
   const segments = useMemo(() => {
@@ -49,37 +43,49 @@ const EditorBreadcrumb: React.FC<EditorBreadcrumbProps> = ({
 
   // ── Path click handler ───────────────────────────────────────────────
 
-  const handleClick = useCallback((index: number) => {
-    if (!segments || !onNavigate) return;
-    // The last path segment is "current" (non-clickable) only when there
-    // are no symbol breadcrumbs following it.
-    if (index === segments.length - 1 && !hasSymbols) return;
-    const path = segments.slice(0, index + 1).join('/');
-    onNavigate(path);
-  }, [segments, onNavigate, hasSymbols]);
+  const handleClick = useCallback(
+    (index: number) => {
+      if (!segments || !onNavigate) return;
+      // The last path segment is "current" (non-clickable) only when there
+      // are no symbol breadcrumbs following it.
+      if (index === segments.length - 1 && !hasSymbols) return;
+      const path = segments.slice(0, index + 1).join('/');
+      onNavigate(path);
+    },
+    [segments, onNavigate, hasSymbols],
+  );
 
   // Allow keyboard activation (Enter/Space) on breadcrumb buttons
-  const handleKeyDown = useCallback((e: React.KeyboardEvent, index: number) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      handleClick(index);
-    }
-  }, [handleClick]);
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent, index: number) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        handleClick(index);
+      }
+    },
+    [handleClick],
+  );
 
   // ── Symbol click handler ─────────────────────────────────────────────
 
-  const handleSymbolClick = useCallback((line: number) => {
-    if (onNavigateToSymbol) {
-      onNavigateToSymbol(line);
-    }
-  }, [onNavigateToSymbol]);
+  const handleSymbolClick = useCallback(
+    (line: number) => {
+      if (onNavigateToSymbol) {
+        onNavigateToSymbol(line);
+      }
+    },
+    [onNavigateToSymbol],
+  );
 
-  const handleSymbolKeyDown = useCallback((e: React.KeyboardEvent, line: number) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      handleSymbolClick(line);
-    }
-  }, [handleSymbolClick]);
+  const handleSymbolKeyDown = useCallback(
+    (e: React.KeyboardEvent, line: number) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        handleSymbolClick(line);
+      }
+    },
+    [handleSymbolClick],
+  );
 
   // ── Render guard ─────────────────────────────────────────────────────
 
@@ -90,34 +96,35 @@ const EditorBreadcrumb: React.FC<EditorBreadcrumbProps> = ({
     <nav className="editor-breadcrumb" aria-label="Breadcrumb">
       <ol className="breadcrumb-list">
         {/* ── Path segments ── */}
-        {segments && segments.map((segment, index) => {
-          const isCurrent = index === segments.length - 1;
-          const path = segments.slice(0, index + 1).join('/');
-          return (
-            <li key={`path-${index}`} className="breadcrumb-item">
-              {index > 0 && (
-                <span className="breadcrumb-separator" aria-hidden="true">
-                  <ChevronRight size={12} />
-                </span>
-              )}
-              {isCurrent && !hasSymbols ? (
-                <span className="breadcrumb-segment breadcrumb-segment-current" aria-current="page">
-                  {segment}
-                </span>
-              ) : (
-                <button
-                  className="breadcrumb-segment"
-                  onClick={() => handleClick(index)}
-                  onKeyDown={(e) => handleKeyDown(e, index)}
-                  title={path}
-                  type="button"
-                >
-                  {segment}
-                </button>
-              )}
-            </li>
-          );
-        })}
+        {segments &&
+          segments.map((segment, index) => {
+            const isCurrent = index === segments.length - 1;
+            const path = segments.slice(0, index + 1).join('/');
+            return (
+              <li key={`path-${index}`} className="breadcrumb-item">
+                {index > 0 && (
+                  <span className="breadcrumb-separator" aria-hidden="true">
+                    <ChevronRight size={12} />
+                  </span>
+                )}
+                {isCurrent && !hasSymbols ? (
+                  <span className="breadcrumb-segment breadcrumb-segment-current" aria-current="page">
+                    {segment}
+                  </span>
+                ) : (
+                  <button
+                    className="breadcrumb-segment"
+                    onClick={() => handleClick(index)}
+                    onKeyDown={(e) => handleKeyDown(e, index)}
+                    title={path}
+                    type="button"
+                  >
+                    {segment}
+                  </button>
+                )}
+              </li>
+            );
+          })}
 
         {/* ── Symbol separator (dot separator between path and symbols) ── */}
         {segments && hasSymbols && (
@@ -129,40 +136,42 @@ const EditorBreadcrumb: React.FC<EditorBreadcrumbProps> = ({
         )}
 
         {/* ── Symbol segments ── */}
-        {symbols && symbols.length > 0 && symbols.map((sym, index) => {
-          const isCurrent = index === symbols.length - 1;
-          const icon = getKindIcon(sym.kind);
-          return (
-            <li key={`sym-${sym.kind}-${sym.name}-${sym.line}`} className="breadcrumb-item">
-              {index > 0 && (
-                <span className="breadcrumb-separator" aria-hidden="true">
-                  <ChevronRight size={12} />
-                </span>
-              )}
-              {isCurrent ? (
-                <span
-                  className="breadcrumb-segment breadcrumb-symbol breadcrumb-segment-current"
-                  aria-current="page"
-                  title={`${sym.kind} ${sym.name}:${sym.line}`}
-                >
-                  <span className="breadcrumb-symbol-icon">{icon}</span>
-                  {sym.name}
-                </span>
-              ) : (
-                <button
-                  className="breadcrumb-segment breadcrumb-symbol"
-                  onClick={() => handleSymbolClick(sym.line)}
-                  onKeyDown={(e) => handleSymbolKeyDown(e, sym.line)}
-                  title={`${sym.kind} ${sym.name}:${sym.line}`}
-                  type="button"
-                >
-                  <span className="breadcrumb-symbol-icon">{icon}</span>
-                  {sym.name}
-                </button>
-              )}
-            </li>
-          );
-        })}
+        {symbols &&
+          symbols.length > 0 &&
+          symbols.map((sym, index) => {
+            const isCurrent = index === symbols.length - 1;
+            const icon = getKindIcon(sym.kind);
+            return (
+              <li key={`sym-${sym.kind}-${sym.name}-${sym.line}`} className="breadcrumb-item">
+                {index > 0 && (
+                  <span className="breadcrumb-separator" aria-hidden="true">
+                    <ChevronRight size={12} />
+                  </span>
+                )}
+                {isCurrent ? (
+                  <span
+                    className="breadcrumb-segment breadcrumb-symbol breadcrumb-segment-current"
+                    aria-current="page"
+                    title={`${sym.kind} ${sym.name}:${sym.line}`}
+                  >
+                    <span className="breadcrumb-symbol-icon">{icon}</span>
+                    {sym.name}
+                  </span>
+                ) : (
+                  <button
+                    className="breadcrumb-segment breadcrumb-symbol"
+                    onClick={() => handleSymbolClick(sym.line)}
+                    onKeyDown={(e) => handleSymbolKeyDown(e, sym.line)}
+                    title={`${sym.kind} ${sym.name}:${sym.line}`}
+                    type="button"
+                  >
+                    <span className="breadcrumb-symbol-icon">{icon}</span>
+                    {sym.name}
+                  </button>
+                )}
+              </li>
+            );
+          })}
       </ol>
     </nav>
   );

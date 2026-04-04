@@ -100,7 +100,9 @@ const PaneLayoutManager: React.FC<PaneLayoutManagerProps> = ({
   panes,
   paneLayout,
   activePaneId,
-  activeBufferId: _activeBufferId,  buffers: _buffers,  paneSizes,
+  activeBufferId: _activeBufferId,
+  buffers: _buffers,
+  paneSizes,
   contextPanelRef,
   perChatCache,
   activeChatId,
@@ -137,7 +139,8 @@ const PaneLayoutManager: React.FC<PaneLayoutManagerProps> = ({
   diffError,
   onDiffModeChange,
   switchPane,
-  switchToBuffer: _switchToBuffer,  openWorkspaceBuffer,
+  switchToBuffer: _switchToBuffer,
+  openWorkspaceBuffer,
   canSplit,
   canSplitGrid,
   canCloseSplit,
@@ -147,7 +150,8 @@ const PaneLayoutManager: React.FC<PaneLayoutManagerProps> = ({
   containerRef,
   updatePaneSize,
   nestedSplit,
-  onNestedSplitChange: _onNestedSplitChange,}) => {
+  onNestedSplitChange: _onNestedSplitChange,
+}) => {
   const dragStartSizeRef = useRef<Map<string, number>>(new Map());
   const isPaneDraggingRef = useRef<Set<string>>(new Set());
 

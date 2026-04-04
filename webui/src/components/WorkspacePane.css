@@ -70,8 +70,6 @@
   border-color: var(--accent-primary);
 }
 
-
-
 .review-workspace-shell {
   height: 100%;
 }
@@ -173,7 +171,7 @@
   flex-shrink: 0;
 }
 
-.review-guidance-checkbox-label input[type="checkbox"] {
+.review-guidance-checkbox-label input[type='checkbox'] {
   width: 16px;
   height: 16px;
   margin: 0;
@@ -328,7 +326,7 @@
   flex-shrink: 0;
 }
 
-.review-guidance-section-checkbox-label input[type="checkbox"] {
+.review-guidance-section-checkbox-label input[type='checkbox'] {
   width: 15px;
   height: 15px;
   margin: 0;
@@ -369,7 +367,9 @@
   border-radius: 12px;
   border: 1px solid var(--border-subtle);
   background: rgba(148, 163, 184, 0.06);
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
 }
 
 .review-guidance-card h5 {

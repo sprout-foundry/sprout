@@ -84,7 +84,11 @@ class TerminalWebSocketService {
     // dead connection and forces a reconnect.
     this.pongWatchdogInterval = setInterval(() => {
       if (Date.now() - this.lastPongTime > this.maxPongAge) {
-        debugLog('[terminal] Pong watchdog: no pong received in', this.maxPongAge, 'ms — connection appears dead, reconnecting');
+        debugLog(
+          '[terminal] Pong watchdog: no pong received in',
+          this.maxPongAge,
+          'ms — connection appears dead, reconnecting',
+        );
         if (!this.intentionalClose) {
           this.resetAndReconnect();
         }
@@ -134,11 +138,13 @@ class TerminalWebSocketService {
     // Use environment variable if provided, otherwise use relative URL.
     // When running via the SSH proxy the LEDIT_PROXY_BASE global is injected
     // into the page so WebSocket traffic routes through the same origin.
-    let wsUrl = process.env.REACT_APP_TERMINAL_WS_URL || (() => {
-      const proxyBase = (window as any).LEDIT_PROXY_BASE || '';
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      return `${protocol}//${window.location.host}${proxyBase}/terminal`;
-    })();
+    let wsUrl =
+      process.env.REACT_APP_TERMINAL_WS_URL ||
+      (() => {
+        const proxyBase = (window as any).LEDIT_PROXY_BASE || '';
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        return `${protocol}//${window.location.host}${proxyBase}/terminal`;
+      })();
 
     // Build query parameters for the WebSocket URL.
     // On reconnect with a sessionId, pass it so server can reattach to the
@@ -205,13 +211,13 @@ class TerminalWebSocketService {
       try {
         const data = JSON.parse(event.data);
         debugLog('Terminal WebSocket message:', data);
-        
+
         // Handle pong response
         if (data.type === 'pong') {
           this.handlePong();
           return;
         }
-        
+
         // Handle server ping
         if (data.type === 'ping') {
           if (this.ws && this.ws.readyState === WebSocket.OPEN) {
@@ -219,7 +225,7 @@ class TerminalWebSocketService {
           }
           return;
         }
-        
+
         // Handle session creation
         if (data.type === 'session_created') {
           this.sessionId = data.data.session_id;
@@ -228,7 +234,7 @@ class TerminalWebSocketService {
           // Notify that we're now ready to send commands
           this.notifyCallbacks({ type: 'session_ready', data: { session_id: this.sessionId } });
         }
-        
+
         this.notifyCallbacks(data);
       } catch (error) {
         console.error('Failed to parse Terminal WebSocket message:', error, event.data);
@@ -265,11 +271,11 @@ class TerminalWebSocketService {
   }
 
   removeEvent(callback: TerminalEventCallback) {
-    this.callbacks = this.callbacks.filter(cb => cb !== callback);
+    this.callbacks = this.callbacks.filter((cb) => cb !== callback);
   }
 
   private notifyCallbacks(event: any) {
-    this.callbacks.forEach(callback => callback(event));
+    this.callbacks.forEach((callback) => callback(event));
     if (this.eventHandler) {
       this.eventHandler(event);
     }
@@ -286,8 +292,8 @@ class TerminalWebSocketService {
         type: 'input',
         data: {
           session_id: this.sessionId,
-          input: command
-        }
+          input: command,
+        },
       };
       this.ws.send(JSON.stringify(message));
       debugLog('Sent terminal command:', command);
@@ -308,8 +314,8 @@ class TerminalWebSocketService {
         type: 'input_raw',
         data: {
           session_id: this.sessionId,
-          input
-        }
+          input,
+        },
       };
       this.ws.send(JSON.stringify(message));
       return true;
@@ -327,9 +333,9 @@ class TerminalWebSocketService {
         type: 'resize',
         data: {
           session_id: this.sessionId,
-          cols: cols,
-          rows: rows
-        }
+          cols,
+          rows,
+        },
       };
       this.ws.send(JSON.stringify(message));
       return true;
@@ -346,8 +352,8 @@ class TerminalWebSocketService {
       const message = {
         type: 'close',
         data: {
-          session_id: this.sessionId
-        }
+          session_id: this.sessionId,
+        },
       };
       this.ws.send(JSON.stringify(message));
       debugLog('Sent terminal close session');
@@ -470,7 +476,7 @@ class TerminalWebSocketService {
     this.stopPingInterval();
     this.stopPongWatchdog();
     if (this.ws) {
-      this.ws.onclose = null;  // Neutralize old handler to prevent double-connect
+      this.ws.onclose = null; // Neutralize old handler to prevent double-connect
       this.ws.onerror = null;
       this.ws.close();
       this.ws = null;

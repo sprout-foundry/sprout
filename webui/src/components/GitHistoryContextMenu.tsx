@@ -24,10 +24,7 @@ interface GitHistoryContextMenuProps {
  * Listens for `contextmenu` events on the document and shows a menu with
  * copy / checkout / revert actions when a `.git-history-commit-row` is targeted.
  */
-const GitHistoryContextMenu: React.FC<GitHistoryContextMenuProps> = ({
-  apiService,
-  isActing = false,
-}) => {
+const GitHistoryContextMenu: React.FC<GitHistoryContextMenuProps> = ({ apiService, isActing = false }) => {
   const timersRef = useRef<number[]>([]);
 
   const clearTimers = useCallback(() => {
@@ -99,7 +96,9 @@ const GitHistoryContextMenu: React.FC<GitHistoryContextMenuProps> = ({
   // ── Cleanup pending timers on unmount ─────────────────────
 
   useEffect(() => {
-    return () => { clearTimers(); };
+    return () => {
+      clearTimers();
+    };
   }, [clearTimers]);
 
   // ── Action handlers ───────────────────────────────────────
@@ -121,9 +120,7 @@ const GitHistoryContextMenu: React.FC<GitHistoryContextMenuProps> = ({
   const handleCheckout = useCallback(async () => {
     if (!menu.commitHash || isLoading || isActing) return;
     const short = menu.commitShortHash || menu.commitHash.slice(0, 7);
-    const confirmed = window.confirm(
-      `Checkout commit ${short}?\n\nThis will put you in a detached HEAD state.`,
-    );
+    const confirmed = window.confirm(`Checkout commit ${short}?\n\nThis will put you in a detached HEAD state.`);
     if (!confirmed) {
       close();
       return;
@@ -137,9 +134,11 @@ const GitHistoryContextMenu: React.FC<GitHistoryContextMenuProps> = ({
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Checkout failed';
       setActionStatus(msg);
-      timersRef.current.push(window.setTimeout(() => {
-        setActionStatus(null);
-      }, 2000));
+      timersRef.current.push(
+        window.setTimeout(() => {
+          setActionStatus(null);
+        }, 2000),
+      );
     } finally {
       setIsLoading(false);
     }
@@ -164,9 +163,11 @@ const GitHistoryContextMenu: React.FC<GitHistoryContextMenuProps> = ({
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Revert failed';
       setActionStatus(msg);
-      timersRef.current.push(window.setTimeout(() => {
-        setActionStatus(null);
-      }, 2000));
+      timersRef.current.push(
+        window.setTimeout(() => {
+          setActionStatus(null);
+        }, 2000),
+      );
     } finally {
       setIsLoading(false);
     }
@@ -175,27 +176,12 @@ const GitHistoryContextMenu: React.FC<GitHistoryContextMenuProps> = ({
   const short = menu.commitShortHash || menu.commitHash.slice(0, 7);
 
   return (
-    <ContextMenu
-      isOpen={menu.visible}
-      x={menu.x}
-      y={menu.y}
-      onClose={close}
-      className="git-history-context-menu"
-    >
-      {actionStatus && (
-        <div className="git-history-context-menu-status">{actionStatus}</div>
-      )}
+    <ContextMenu isOpen={menu.visible} x={menu.x} y={menu.y} onClose={close} className="git-history-context-menu">
+      {actionStatus && <div className="git-history-context-menu-status">{actionStatus}</div>}
 
-      <button
-        className="context-menu-item"
-        onClick={handleCopySha}
-        type="button"
-        disabled={copiedAction === 'sha'}
-      >
+      <button className="context-menu-item" onClick={handleCopySha} type="button" disabled={copiedAction === 'sha'}>
         <Copy size={13} />
-        <span className="menu-item-label">
-          {copiedAction === 'sha' ? 'Copied!' : `Copy commit SHA (${short})`}
-        </span>
+        <span className="menu-item-label">{copiedAction === 'sha' ? 'Copied!' : `Copy commit SHA (${short})`}</span>
       </button>
 
       <button
@@ -205,9 +191,7 @@ const GitHistoryContextMenu: React.FC<GitHistoryContextMenuProps> = ({
         disabled={copiedAction === 'message'}
       >
         <Copy size={13} />
-        <span className="menu-item-label">
-          {copiedAction === 'message' ? 'Copied!' : 'Copy commit message'}
-        </span>
+        <span className="menu-item-label">{copiedAction === 'message' ? 'Copied!' : 'Copy commit message'}</span>
       </button>
 
       <div className="context-menu-divider" />
@@ -236,11 +220,7 @@ const GitHistoryContextMenu: React.FC<GitHistoryContextMenuProps> = ({
       >
         <RotateCcw size={13} />
         <span className="menu-item-label">
-          {isLoading
-            ? 'Reverting…'
-            : actionStatus === 'Reverted!'
-              ? '✓ Reverted'
-              : `Revert commit (${short})`}
+          {isLoading ? 'Reverting…' : actionStatus === 'Reverted!' ? '✓ Reverted' : `Revert commit (${short})`}
         </span>
       </button>
     </ContextMenu>

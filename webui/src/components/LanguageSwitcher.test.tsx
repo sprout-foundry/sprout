@@ -81,11 +81,7 @@ interface RenderOptions {
 }
 
 function renderSwitcher(opts: RenderOptions = {}) {
-  const {
-    currentLanguageId = null,
-    isAutoDetected = true,
-    onLanguageChange = jest.fn(),
-  } = opts;
+  const { currentLanguageId = null, isAutoDetected = true, onLanguageChange = jest.fn() } = opts;
 
   act(() => {
     root = createRoot(mountPoint!);
@@ -111,10 +107,7 @@ function typeInSearch(text: string) {
     // Use native input value setter then dispatch an input event
     // so React picks it up via the onChange handler (React's onChange
     // is bound to the native 'input' event, not 'change').
-    const desc = Object.getOwnPropertyDescriptor(
-      window.HTMLInputElement.prototype,
-      'value',
-    );
+    const desc = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
     expect(desc?.set).toBeDefined();
     (desc as PropertyDescriptor).set!.call(input, text);
     input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -128,9 +121,7 @@ function fireSearchKeyDown(key: string) {
   const input = document.querySelector('.language-switcher-search-input') as HTMLElement;
   expect(input).not.toBeNull();
   act(() => {
-    input.dispatchEvent(
-      new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }),
-    );
+    input.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
   });
 }
 
@@ -234,9 +225,7 @@ describe('LanguageSwitcher', () => {
 
     // Find the "Go" item (index 4 in allLanguageEntries, rendered at list index 5 = items[4])
     const languageItems = Array.from(document.querySelectorAll('.language-switcher-item'));
-    const goItem = languageItems.find(
-      (el) => el.querySelector('.language-switcher-item-name')!.textContent === 'Go',
-    );
+    const goItem = languageItems.find((el) => el.querySelector('.language-switcher-item-name')!.textContent === 'Go');
     expect(goItem).not.toBeNull();
 
     act(() => {
@@ -277,9 +266,7 @@ describe('LanguageSwitcher', () => {
     // Should match "JavaScript" only — so 2 items: auto-detect + JavaScript
     const items = document.querySelectorAll('.language-switcher-item');
     expect(items.length).toBe(2);
-    const names = Array.from(items).map(
-      (el) => el.querySelector('.language-switcher-item-name')!.textContent,
-    );
+    const names = Array.from(items).map((el) => el.querySelector('.language-switcher-item-name')!.textContent);
     expect(names).toContain('Auto-detect');
     expect(names).toContain('JavaScript');
   });
@@ -352,9 +339,7 @@ describe('LanguageSwitcher', () => {
     expect(document.querySelector('[data-testid="language-switcher-popup"]')).not.toBeNull();
 
     act(() => {
-      document.dispatchEvent(
-        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
-      );
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     });
 
     expect(document.querySelector('[data-testid="language-switcher-popup"]')).toBeNull();
@@ -370,9 +355,7 @@ describe('LanguageSwitcher', () => {
     let items = document.querySelectorAll('.language-switcher-item');
     // There are 9 items (1 auto + 8 languages), last index = 8
     expect(items[8]!.classList.contains('selected')).toBe(true);
-    expect(
-      items[8]!.querySelector('.language-switcher-item-name')!.textContent,
-    ).toBe('Plain Text');
+    expect(items[8]!.querySelector('.language-switcher-item-name')!.textContent).toBe('Plain Text');
 
     // Press Home to go back to first item (auto-detect, index 0)
     fireSearchKeyDown('Home');
@@ -398,11 +381,15 @@ describe('LanguageSwitcher', () => {
     const btn = document.querySelector('[data-testid="language-switcher-button"]') as HTMLElement;
 
     // Open
-    act(() => { btn.click(); });
+    act(() => {
+      btn.click();
+    });
     expect(document.querySelector('[data-testid="language-switcher-popup"]')).not.toBeNull();
 
     // Close by clicking the same button again
-    act(() => { btn.click(); });
+    act(() => {
+      btn.click();
+    });
     expect(document.querySelector('[data-testid="language-switcher-popup"]')).toBeNull();
   });
 

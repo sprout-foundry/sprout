@@ -252,7 +252,7 @@ describe('resultSummary', () => {
     });
 
     it('returns truncated plain text for non-JSON input', () => {
-      const longText = 'a'.repeat(300) + ' end';
+      const longText = `${'a'.repeat(300)} end`;
       const result = getSubagentResultPreview(longText);
       expect(result).toContain('a');
       expect(result).toContain('...');

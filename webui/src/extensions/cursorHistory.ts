@@ -17,11 +17,7 @@
  *   keybinding `run` callbacks.
  */
 
-import {
-  EditorView,
-  ViewPlugin,
-  ViewUpdate,
-} from '@codemirror/view';
+import { type EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view';
 
 // ── Types ───────────────────────────────────────────────────────────
 

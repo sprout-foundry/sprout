@@ -31,77 +31,89 @@ export function useMessageSending({
 }: UseMessageSendingOptions): UseMessageSendingReturn {
   const apiService = ApiService.getInstance();
 
-  const handleSendMessage = useCallback(async (message: string, options?: { allowConcurrent?: boolean }) => {
-    if (!message.trim()) return;
-    const trimmedMessage = message.trim();
-    const allowConcurrent = options?.allowConcurrent === true;
-    if (!allowConcurrent && activeRequestsRef.current > 0) {
-      setState(prev => ({
-        ...prev,
-        lastError: null,
-        messages: [...prev.messages, {
-          id: Date.now().toString(),
-          type: 'user',
-          content: trimmedMessage,
-          timestamp: new Date()
-        }]
-      }));
-      await apiService.steerQuery(trimmedMessage, activeChatIdRef.current ?? undefined);
-      setInputValue('');
-      return;
-    }
-    activeRequestsRef.current += 1;
-
-    // Clear any previous errors and set processing state
-    setState(prev => ({
-      ...prev,
-      isProcessing: true,
-      lastError: null
-    }));
-
-    try {
-      debugLog('[>>] Sending message:', trimmedMessage);
-      await apiService.sendQuery(trimmedMessage, activeChatIdRef.current ?? undefined);
-      setInputValue('');
-      debugLog('[OK] Message sent successfully');
-    } catch (error) {
-      console.error('[FAIL] Failed to send message:', error);
-      if (activeRequestsRef.current > 0) {
-        activeRequestsRef.current -= 1;
+  const handleSendMessage = useCallback(
+    async (message: string, options?: { allowConcurrent?: boolean }) => {
+      if (!message.trim()) return;
+      const trimmedMessage = message.trim();
+      const allowConcurrent = options?.allowConcurrent === true;
+      if (!allowConcurrent && activeRequestsRef.current > 0) {
+        setState((prev) => ({
+          ...prev,
+          lastError: null,
+          messages: [
+            ...prev.messages,
+            {
+              id: Date.now().toString(),
+              type: 'user',
+              content: trimmedMessage,
+              timestamp: new Date(),
+            },
+          ],
+        }));
+        await apiService.steerQuery(trimmedMessage, activeChatIdRef.current ?? undefined);
+        setInputValue('');
+        return;
       }
-      const errorMsg = error instanceof Error ? error.message : 'Failed to send message';
-      setState(prev => ({
+      activeRequestsRef.current += 1;
+
+      // Clear any previous errors and set processing state
+      setState((prev) => ({
         ...prev,
-        isProcessing: activeRequestsRef.current > 0,
-        lastError: `Failed to send message: ${errorMsg}`,
-        messages: [...prev.messages, {
-          id: Date.now().toString(),
-          type: 'assistant',
-          content: `[FAIL] Error: ${errorMsg}`,
-          timestamp: new Date()
-        }]
+        isProcessing: true,
+        lastError: null,
       }));
-    }
-  }, [apiService]);
+
+      try {
+        debugLog('[>>] Sending message:', trimmedMessage);
+        await apiService.sendQuery(trimmedMessage, activeChatIdRef.current ?? undefined);
+        setInputValue('');
+        debugLog('[OK] Message sent successfully');
+      } catch (error) {
+        console.error('[FAIL] Failed to send message:', error);
+        if (activeRequestsRef.current > 0) {
+          activeRequestsRef.current -= 1;
+        }
+        const errorMsg = error instanceof Error ? error.message : 'Failed to send message';
+        setState((prev) => ({
+          ...prev,
+          isProcessing: activeRequestsRef.current > 0,
+          lastError: `Failed to send message: ${errorMsg}`,
+          messages: [
+            ...prev.messages,
+            {
+              id: Date.now().toString(),
+              type: 'assistant',
+              content: `[FAIL] Error: ${errorMsg}`,
+              timestamp: new Date(),
+            },
+          ],
+        }));
+      }
+    },
+    [apiService],
+  );
 
   const handleStopProcessing = useCallback(async () => {
     try {
       await apiService.stopQuery();
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
         lastError: null,
       }));
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Failed to stop query';
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
         lastError: errorMsg,
-        messages: [...prev.messages, {
-          id: Date.now().toString(),
-          type: 'assistant',
-          content: `[FAIL] Error: ${errorMsg}`,
-          timestamp: new Date()
-        }]
+        messages: [
+          ...prev.messages,
+          {
+            id: Date.now().toString(),
+            type: 'assistant',
+            content: `[FAIL] Error: ${errorMsg}`,
+            timestamp: new Date(),
+          },
+        ],
       }));
     }
   }, [apiService]);

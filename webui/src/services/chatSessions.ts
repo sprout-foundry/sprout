@@ -61,7 +61,10 @@ export async function deleteChatSession(id: string): Promise<{ message: string }
   return res.json();
 }
 
-export async function renameChatSession(id: string, name: string): Promise<{ message: string; chat_session: ChatSession }> {
+export async function renameChatSession(
+  id: string,
+  name: string,
+): Promise<{ message: string; chat_session: ChatSession }> {
   const res = await clientFetch('/api/chat-sessions/rename', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

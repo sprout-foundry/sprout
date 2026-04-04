@@ -80,10 +80,10 @@
 }
 
 /* Dark mode adjustments */
-[data-theme="dark"] .resize-handle:hover {
+[data-theme='dark'] .resize-handle:hover {
   background-color: rgba(99, 102, 241, 0.3);
 }
 
-[data-theme="dark"] .resize-handle.resizing {
+[data-theme='dark'] .resize-handle.resizing {
   background-color: rgba(99, 102, 241, 0.5);
 }

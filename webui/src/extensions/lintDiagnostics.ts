@@ -17,8 +17,19 @@
  *   clearDiagnostics(view);
  */
 
-import { setDiagnostics, lintGutter, linter, lintKeymap, diagnosticCount as cmDiagnosticCount, openLintPanel, nextDiagnostic, previousDiagnostic, forceLinting, type Diagnostic } from '@codemirror/lint';
-import { EditorView, keymap } from '@codemirror/view';
+import {
+  setDiagnostics,
+  lintGutter,
+  linter,
+  lintKeymap,
+  diagnosticCount as cmDiagnosticCount,
+  openLintPanel,
+  nextDiagnostic,
+  previousDiagnostic,
+  forceLinting,
+  type Diagnostic,
+} from '@codemirror/lint';
+import { type EditorView, keymap } from '@codemirror/view';
 
 import './lintDiagnostics.css';
 
@@ -38,11 +49,7 @@ export { openLintPanel, nextDiagnostic, previousDiagnostic, forceLinting };
  * lint panel, F8 to jump to the next diagnostic).
  */
 export function lintDiagnostics() {
-  return [
-    linter(null),
-    lintGutter(),
-    keymap.of(lintKeymap),
-  ];
+  return [linter(null), lintGutter(), keymap.of(lintKeymap)];
 }
 
 /**
@@ -56,7 +63,7 @@ export function lintDiagnostics() {
  */
 export function updateDiagnostics(view: EditorView, diagnostics: Diagnostic[]): void {
   const len = view.state.doc.length;
-  const clamped: Diagnostic[] = diagnostics.map(d => ({
+  const clamped: Diagnostic[] = diagnostics.map((d) => ({
     ...d,
     from: Math.max(0, Math.min(d.from, len)),
     to: Math.max(0, Math.min(d.to, len)),

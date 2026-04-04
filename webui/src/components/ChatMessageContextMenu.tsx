@@ -21,10 +21,7 @@ interface ChatMessageContextMenuProps {
  * Listens for `contextmenu` events on the given container ref and shows
  * a menu with Copy / Copy Code Block / Insert at Cursor actions.
  */
-const ChatMessageContextMenu: React.FC<ChatMessageContextMenuProps> = ({
-  containerRef,
-  onInsertAtCursor,
-}) => {
+const ChatMessageContextMenu: React.FC<ChatMessageContextMenuProps> = ({ containerRef, onInsertAtCursor }) => {
   const timersRef = useRef<number[]>([]);
 
   // Clean up all pending timers
@@ -78,23 +75,26 @@ const ChatMessageContextMenu: React.FC<ChatMessageContextMenuProps> = ({
 
   // ── Context menu handler ──────────────────────────────────
 
-  const handleContextMenu = useCallback((e: MouseEvent) => {
-    const container = containerRef.current;
-    if (!container || !container.contains(e.target as Node)) return;
+  const handleContextMenu = useCallback(
+    (e: MouseEvent) => {
+      const container = containerRef.current;
+      if (!container || !container.contains(e.target as Node)) return;
 
-    const data = resolveMenuData(e.target as HTMLElement);
-    if (!data) return;
+      const data = resolveMenuData(e.target as HTMLElement);
+      if (!data) return;
 
-    e.preventDefault();
+      e.preventDefault();
 
-    setMenu({
-      visible: true,
-      x: e.clientX,
-      y: e.clientY,
-      messageContent: data.messageContent,
-      codeBlockText: data.codeBlockText,
-    });
-  }, [containerRef, resolveMenuData]);
+      setMenu({
+        visible: true,
+        x: e.clientX,
+        y: e.clientY,
+        messageContent: data.messageContent,
+        codeBlockText: data.codeBlockText,
+      });
+    },
+    [containerRef, resolveMenuData],
+  );
 
   // ── Attach / detach contextmenu listener ──────────────────
 
@@ -106,7 +106,9 @@ const ChatMessageContextMenu: React.FC<ChatMessageContextMenuProps> = ({
   // ── Cleanup pending timers on unmount ─────────────────────
 
   useEffect(() => {
-    return () => { clearTimers(); };
+    return () => {
+      clearTimers();
+    };
   }, [clearTimers]);
 
   // ── Action handlers ───────────────────────────────────────
@@ -157,11 +159,7 @@ const ChatMessageContextMenu: React.FC<ChatMessageContextMenuProps> = ({
 
       <div className="context-menu-divider" />
 
-      <button
-        className="context-menu-item"
-        onClick={handleInsertAtCursor}
-        type="button"
-      >
+      <button className="context-menu-item" onClick={handleInsertAtCursor} type="button">
         <ArrowDownToLine size={13} />
         <span className="menu-item-label">Insert at cursor</span>
       </button>

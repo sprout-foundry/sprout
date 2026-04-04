@@ -15,12 +15,7 @@ interface FileChangeDialogProps {
 
 /* ── Internal dialog component ───────────────────────────────── */
 
-const FileChangeDialog: React.FC<FileChangeDialogProps> = ({
-  fileName,
-  deleted,
-  hasUnsavedChanges,
-  onResolve,
-}) => {
+const FileChangeDialog: React.FC<FileChangeDialogProps> = ({ fileName, deleted, hasUnsavedChanges, onResolve }) => {
   const handleKeyDown = React.useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -45,7 +40,37 @@ const FileChangeDialog: React.FC<FileChangeDialogProps> = ({
     };
   }, []);
 
-  // Deleted mode
+  // Deleted + unsaved changes — the user has work that could be lost.
+  if (deleted && hasUnsavedChanges) {
+    return (
+      <div className="themed-dialog-overlay" onClick={() => onResolve('keep-mine')} onKeyDown={handleKeyDown}>
+        <div className="themed-dialog-card" onClick={(e) => e.stopPropagation()}>
+          <div className="themed-dialog-accent-bar themed-dialog-accent-bar--error" />
+          <div className="themed-dialog-header">
+            <span className="themed-dialog-icon themed-dialog-icon--error">✕</span>
+            <h2 className="themed-dialog-title">File Deleted with Unsaved Changes</h2>
+          </div>
+          <div className="themed-dialog-body" style={{ whiteSpace: 'pre-line' }}>
+            {`This file has been deleted on disk and you have unsaved changes in the editor.\n\n${fileName}\n\nChoose "Keep Mine" to preserve your unsaved edits in the editor tab.\nChoose "Close" to dismiss this notice.`}
+          </div>
+          <div className="themed-dialog-footer">
+            <button type="button" className="themed-dialog-btn" onClick={() => onResolve('keep-mine')} autoFocus>
+              Keep Mine
+            </button>
+            <button
+              type="button"
+              className="themed-dialog-btn themed-dialog-btn--primary"
+              onClick={() => onResolve('ignore')}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Deleted mode (no unsaved changes)
   if (deleted) {
     return (
       <div className="themed-dialog-overlay" onClick={() => onResolve('ignore')} onKeyDown={handleKeyDown}>
@@ -55,7 +80,10 @@ const FileChangeDialog: React.FC<FileChangeDialogProps> = ({
             <span className="themed-dialog-icon themed-dialog-icon--error">✕</span>
             <h2 className="themed-dialog-title">File Deleted</h2>
           </div>
-          <div className="themed-dialog-body" style={{ whiteSpace: 'pre-line' }}>{`This file has been deleted on disk.\n\n${fileName}`}</div>
+          <div
+            className="themed-dialog-body"
+            style={{ whiteSpace: 'pre-line' }}
+          >{`This file has been deleted on disk.\n\n${fileName}`}</div>
           <div className="themed-dialog-footer">
             <button
               type="button"
@@ -85,18 +113,10 @@ const FileChangeDialog: React.FC<FileChangeDialogProps> = ({
             {`This file has been changed by another process and you have unsaved changes.\n\n${fileName}\n\nHow do you want to resolve this?`}
           </div>
           <div className="themed-dialog-footer">
-            <button
-              type="button"
-              className="themed-dialog-btn"
-              onClick={() => onResolve('keep-mine')}
-            >
+            <button type="button" className="themed-dialog-btn" onClick={() => onResolve('keep-mine')}>
               Keep Mine
             </button>
-            <button
-              type="button"
-              className="themed-dialog-btn"
-              onClick={() => onResolve('show-diff')}
-            >
+            <button type="button" className="themed-dialog-btn" onClick={() => onResolve('show-diff')}>
               Show Diff
             </button>
             <button

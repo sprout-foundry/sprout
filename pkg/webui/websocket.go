@@ -264,6 +264,9 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, msg map[str
 	case "model_change":
 		go ws.handleModelChangeMessage(safeConn, msg, clientID)
 
+	case "persona_change":
+		go ws.handlePersonaChangeMessage(safeConn, msg, clientID)
+
 	case "security_approval_response":
 		go ws.handleSecurityApprovalResponse(safeConn, msg, clientID)
 	}
@@ -412,6 +415,66 @@ func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, msg map[s
 				}
 			}
 		}
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": err.Error()},
+		})
+		return
+	}
+
+	_ = ws.syncAgentStateForClient(clientID)
+	ws.publishProviderState(clientID)
+}
+
+// handlePersonaChangeMessage handles persona change requests from the webui.
+func (ws *ReactWebServer) handlePersonaChangeMessage(safeConn *SafeConn, msg map[string]interface{}, clientID string) {
+	// Use the active chat's agent for persona changes.
+	activeChatID := ""
+	ws.mutex.RLock()
+	var ctx *webClientContext
+	if ctx = ws.clientContexts[clientID]; ctx != nil {
+		activeChatID = ctx.getActiveChatID()
+	}
+	ws.mutex.RUnlock()
+
+	clientAgent, err := ws.getChatAgent(clientID, activeChatID)
+	if err != nil || clientAgent == nil {
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": "Agent is not available"},
+		})
+		return
+	}
+
+	data, ok := msg["data"].(map[string]interface{})
+	if !ok {
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": "Invalid persona change payload"},
+		})
+		return
+	}
+
+	personaID, _ := data["persona"].(string)
+	personaID = strings.TrimSpace(personaID)
+	if personaID == "" {
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": "Persona is required"},
+		})
+		return
+	}
+
+	// Check active query for the active chat, not the global client
+	if ctx != nil && activeChatID != "" && ctx.hasActiveQueryForChat(activeChatID) {
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": "Cannot change persona while this chat has an active run"},
+		})
+		return
+	}
+
+	if err := clientAgent.ApplyPersona(personaID); err != nil {
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
 			"data": map[string]string{"message": err.Error()},

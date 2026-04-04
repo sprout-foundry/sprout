@@ -1,4 +1,4 @@
-import { debugLog } from '../utils/log';
+import { debugLog, warn } from '../utils/log';
 import { appendClientIdToUrl, getWebUIClientId } from './clientSession';
 import type { WsEvent } from './websocket';
 import { notificationBus } from './notificationBus';
@@ -245,6 +245,7 @@ class TerminalWebSocketService {
 
         this.notifyCallbacks(data);
       } catch (error) {
+        debugLog('[TerminalWebSocket] Failed to parse message:', error);
         notificationBus.notify('error', 'Terminal WebSocket Error', 'Failed to parse message: ' + String(error));
       }
     };
@@ -406,7 +407,7 @@ class TerminalWebSocketService {
         window.localStorage.setItem(this.getPersistedSessionKey(), this.sessionId);
         debugLog('Terminal session ID persisted:', this.sessionId);
       } catch (err) {
-        debugLog('[persistSessionId] failed to persist session ID:', err);
+        warn(`[persistSessionId] failed to persist session ID: ${err instanceof Error ? err.message : String(err)}`);
         // localStorage may be unavailable
       }
     }
@@ -422,7 +423,7 @@ class TerminalWebSocketService {
         return saved;
       }
     } catch (err) {
-      debugLog('[restorePersistedSessionId] failed to restore session ID:', err);
+      warn(`[restorePersistedSessionId] failed to restore session ID: ${err instanceof Error ? err.message : String(err)}`);
       // localStorage may be unavailable
     }
     return null;
@@ -433,7 +434,7 @@ class TerminalWebSocketService {
     try {
       window.localStorage.removeItem(this.getPersistedSessionKey());
     } catch (err) {
-      debugLog('[clearPersistedSessionId] failed to clear session ID:', err);
+      warn(`[clearPersistedSessionId] failed to clear session ID: ${err instanceof Error ? err.message : String(err)}`);
       // localStorage may be unavailable
     }
   }

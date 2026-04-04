@@ -104,6 +104,7 @@ export const ThemeProvider: FC<ThemeProviderProps> = ({ children }) => {
     try {
       return importer.buildHighlightStyle(themePack.tokenColors);
     } catch (err) {
+      debugLog('[ThemeContext] Failed to build custom highlight style:', err);
       notificationBus.notify('warning', 'Theme', 'Failed to build custom highlight style: ' + String(err));
       return null;
     }

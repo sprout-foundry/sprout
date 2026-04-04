@@ -3,6 +3,7 @@ package configuration
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -39,7 +40,9 @@ func loadConfigSilently() (*Config, *APIKeys, error) {
 	}
 
 	// Populate from environment variables FIRST - prioritize env vars over stored keys
-	_ = apiKeys.PopulateFromEnvironment()
+	if !apiKeys.PopulateFromEnvironment() {
+		log.Printf("[debug] no API keys found in environment variables")
+	}
 
 	// Check if we need to set a default provider
 	if config.LastUsedProvider == "" {

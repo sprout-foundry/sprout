@@ -2,6 +2,7 @@ package index
 
 import (
 	"encoding/json"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -25,7 +26,7 @@ type SymbolIndex struct {
 // BuildSymbols scans the workspace root for source files and extracts simple symbols via regex
 func BuildSymbols(root string) (*SymbolIndex, error) {
 	var files []string
-	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	if err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -38,7 +39,9 @@ func BuildSymbols(root string) (*SymbolIndex, error) {
 			files = append(files, path)
 		}
 		return nil
-	})
+	}); err != nil {
+		log.Printf("[debug] filepath.Walk failed in BuildSymbols: %v", err)
+	}
 
 	idx := &SymbolIndex{}
 	for _, f := range files {
@@ -58,11 +61,17 @@ func BuildSymbols(root string) (*SymbolIndex, error) {
 		}
 	}
 	// persist to .ledit/symbols.json
-	_ = os.MkdirAll(filepath.Join(root, ".ledit"), 0755)
+	if err := os.MkdirAll(filepath.Join(root, ".ledit"), 0755); err != nil {
+		log.Printf("[debug] failed to create .ledit directory: %v", err)
+	}
 	outPath := filepath.Join(root, ".ledit", "symbols.json")
 	if f, err := os.Create(outPath); err == nil {
-		_ = json.NewEncoder(f).Encode(idx)
-		_ = f.Close()
+		if err := json.NewEncoder(f).Encode(idx); err != nil {
+			log.Printf("[debug] failed to write symbol index: %v", err)
+		}
+		if err := f.Close(); err != nil {
+			log.Printf("[debug] failed to close symbol index file: %v", err)
+		}
 	}
 	return idx, nil
 }

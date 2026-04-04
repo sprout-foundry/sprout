@@ -3,6 +3,7 @@ package configuration
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"os"
 	"sort"
 	"strconv"
@@ -63,7 +64,9 @@ func Initialize() (*Config, *APIKeys, error) {
 	}
 
 	// Populate from environment variables FIRST - prioritize env vars over stored keys
-	_ = apiKeys.PopulateFromEnvironment()
+	if !apiKeys.PopulateFromEnvironment() {
+		log.Printf("[debug] no API keys found in environment variables")
+	}
 
 	// Check if this is first run (no provider selected)
 	isFirstRun := config.LastUsedProvider == ""

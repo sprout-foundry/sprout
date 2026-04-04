@@ -2,6 +2,7 @@ package factory
 
 import (
 	"fmt"
+	"log"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/agent_providers"
@@ -141,7 +142,9 @@ func init() {
 		// Try to load from the binary's location (for installed versions)
 		if err := globalProviderFactory.LoadConfigsFromDirectory("configs"); err != nil {
 			// As a last resort, try to load from current directory
-			_ = globalProviderFactory.LoadConfigsFromDirectory("./configs")
+			if err := globalProviderFactory.LoadConfigsFromDirectory("./configs"); err != nil {
+				log.Printf("[debug] failed to load configs from ./configs: %v", err)
+			}
 		}
 	}
 }

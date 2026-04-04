@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -75,7 +76,9 @@ func logChatResponseDetailed(resp *api.ChatResponse, provider string, streaming 
 	}
 
 	filename := fmt.Sprintf("api_response_%s.json", time.Now().Format("20060102_150405.000000000"))
-	_ = os.WriteFile(filepath.Join(dir, filename), data, 0o644)
+	if err := os.WriteFile(filepath.Join(dir, filename), data, 0o644); err != nil {
+		log.Printf("[debug] failed to write API response dump %s: %v", filename, err)
+	}
 	logging.WriteLocalCopy(filename, data)
 }
 

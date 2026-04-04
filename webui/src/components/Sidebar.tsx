@@ -152,7 +152,9 @@ const Sidebar: FC<SidebarProps> = ({
   sidebarWidthRef.current = sidebarWidth;
   const [selectedProvider, setSelectedProvider] = useState(provider || '');
   const [selectedModelState, setSelectedModelState] = useState(model || selectedModel || '');
-  const [selectedPersonaState, setSelectedPersonaState] = useState<string>(selectedPersona || (stats?.persona || 'orchestrator'));
+  const [selectedPersonaState, setSelectedPersonaState] = useState<string>(
+    selectedPersona || stats?.persona || 'orchestrator',
+  );
   const [personas, setPersonas] = useState<{ id: string; name: string; enabled: boolean }[]>([]);
   const [isLoadingPersonas, setIsLoadingPersonas] = useState(false);
   const [providers, setProviders] = useState<ProviderOption[]>([]);
@@ -236,7 +238,9 @@ const Sidebar: FC<SidebarProps> = ({
           }
         }
       } catch (error) {
-        log.error(`Failed to fetch providers: ${error instanceof Error ? error.message : String(error)}`, { title: 'Provider Load Error' });
+        log.error(`Failed to fetch providers: ${error instanceof Error ? error.message : String(error)}`, {
+          title: 'Provider Load Error',
+        });
       } finally {
         setIsLoadingProviders(false);
       }
@@ -333,7 +337,9 @@ const Sidebar: FC<SidebarProps> = ({
 
         setPersonas(allPersonas);
       } catch (error) {
-        log.error(`Failed to fetch personas: ${error instanceof Error ? error.message : String(error)}`, { title: 'Persona Load Error' });
+        log.error(`Failed to fetch personas: ${error instanceof Error ? error.message : String(error)}`, {
+          title: 'Persona Load Error',
+        });
         // Fallback to just orchestrator
         setPersonas([{ id: 'orchestrator', name: 'Orchestrator', enabled: true }]);
       } finally {
@@ -348,7 +354,9 @@ const Sidebar: FC<SidebarProps> = ({
     try {
       await applyPreset(e.target.value);
     } catch (err) {
-      log.error(`Failed to apply hotkey preset: ${err instanceof Error ? err.message : String(err)}`, { title: 'Hotkey Error' });
+      log.error(`Failed to apply hotkey preset: ${err instanceof Error ? err.message : String(err)}`, {
+        title: 'Hotkey Error',
+      });
     }
   };
 
@@ -565,7 +573,8 @@ const Sidebar: FC<SidebarProps> = ({
   /** Logs section: terminal-style log output */
   const renderLogsSection = () => {
     const displayLogs = normalizedRecentLogs.slice(-MAX_LOG_ROWS);
-    const renderedLines = getRenderedLogLines(displayLogs);
+    // eslint-disable-next-line testing-library/render-result-naming-convention
+    const formattedLines = getRenderedLogLines(displayLogs);
 
     const handleLogsScroll = () => {
       const container = logsContainerRef.current;
@@ -577,7 +586,7 @@ const Sidebar: FC<SidebarProps> = ({
     };
 
     const downloadLogs = (format: 'txt' | 'json') => {
-      const content = format === 'json' ? JSON.stringify(displayLogs, null, 2) : renderedLines.join('\n');
+      const content = format === 'json' ? JSON.stringify(displayLogs, null, 2) : formattedLines.join('\n');
       const blob = new Blob([content], {
         type: format === 'json' ? 'application/json' : 'text/plain;charset=utf-8',
       });
@@ -592,7 +601,7 @@ const Sidebar: FC<SidebarProps> = ({
       URL.revokeObjectURL(url);
     };
 
-    if (renderedLines.length === 0) {
+    if (formattedLines.length === 0) {
       return <div className="empty">No logs yet</div>;
     }
 
@@ -600,7 +609,7 @@ const Sidebar: FC<SidebarProps> = ({
       <div className="logs-pane">
         <div className="logs-toolbar">
           <div className="logs-toolbar-summary">
-            <span>{renderedLines.length} rows</span>
+            <span>{formattedLines.length} rows</span>
             <span>buffered up to {MAX_LOG_ROWS}</span>
           </div>
           <div className="logs-toolbar-actions">

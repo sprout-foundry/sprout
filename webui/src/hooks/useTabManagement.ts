@@ -120,7 +120,17 @@ export function useTabManagement({
       }
       if (bufferId === activeBufferId) setActiveBufferId(nextPaneBuffer?.id || null);
     },
-    [activeBufferId, activePaneIdRef, buffersRef, isAutoSaveEnabled, saveBuffer, setBuffers, setPanes, setActiveBufferId, log],
+    [
+      activeBufferId,
+      activePaneIdRef,
+      buffersRef,
+      isAutoSaveEnabled,
+      saveBuffer,
+      setBuffers,
+      setPanes,
+      setActiveBufferId,
+      log,
+    ],
   );
 
   const closeAllBuffers = useCallback(() => {
@@ -179,7 +189,9 @@ export function useTabManagement({
         return n;
       });
       setPanes((prev) => prev.map((p) => (p.id === pid ? { ...p, bufferId: keepBufferId } : p)));
-    }, [activePaneIdRef, buffersRef, isAutoSaveEnabled, saveBuffer, setBuffers, setPanes, setActiveBufferId, log],);
+    },
+    [activePaneIdRef, buffersRef, isAutoSaveEnabled, saveBuffer, setBuffers, setPanes, setActiveBufferId, log],
+  );
 
   const reorderBuffers = useCallback(
     (sourceBufferId: string, targetBufferId: string) => {

@@ -10,6 +10,7 @@ import {
   type ThemePack,
 } from '../themes/themePacks';
 import { ThemeImporter, type VSCodeTheme, type ImportResult } from '../themes/themeImport';
+import { notificationBus } from '../services/notificationBus';
 
 type Theme = ThemeMode;
 
@@ -101,7 +102,7 @@ export const ThemeProvider: FC<ThemeProviderProps> = ({ children }) => {
     try {
       return importer.buildHighlightStyle(themePack.tokenColors);
     } catch (err) {
-      console.error('Failed to build custom highlight style:', err);
+      notificationBus.notify('warning', 'Theme', 'Failed to build custom highlight style: ' + String(err));
       return null;
     }
   }, [themePack.tokenColors]);

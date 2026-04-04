@@ -4,7 +4,7 @@ import type { EditorBuffer } from '../types/editor';
 import type { Dispatch, SetStateAction } from 'react';
 import { writeFileWithConsent } from '../services/fileAccess';
 import { showThemedPrompt } from '../components/ThemedDialog';
-import { useLog } from '../utils/log';
+import { useLog, debugLog } from '../utils/log';
 
 interface UseBufferPersistenceParams {
   buffersRef: MutableRefObject<Map<string, EditorBuffer>>;
@@ -119,7 +119,7 @@ export function useBufferPersistence({ buffersRef, setBuffers }: UseBufferPersis
       const currentBuffers = buffersRef.current;
       const savePromises = Array.from(currentBuffers.entries())
         .filter(([_, buffer]) => buffer.isModified && !buffer.file.path.startsWith('__workspace/'))
-        .map(([bufferId, _]) => saveBuffer(bufferId, options).catch(() => undefined));
+        .map(([bufferId, _]) => saveBuffer(bufferId, options).catch((err) => { debugLog('Silently skipping failed buffer save:', err); return undefined; }));
 
       await Promise.all(savePromises);
     },

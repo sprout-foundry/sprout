@@ -6,7 +6,7 @@ import SettingsPanel from './SettingsPanel';
 import type { ProviderLogEntry } from '../providers/types';
 import { useTheme } from '../contexts/ThemeContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
-import { useLog } from '../utils/log';
+import { useLog, debugLog } from '../utils/log';
 import ResizeHandle from './ResizeHandle';
 import {
   ScrollText,
@@ -182,9 +182,7 @@ const Sidebar: FC<SidebarProps> = ({
       .then((s) => {
         if (!cancelled) setSettings(s);
       })
-      .catch(() => {
-        /* silent */
-      });
+      .catch((err) => { debugLog('Failed to load settings:', err); });
     return () => {
       cancelled = true;
     };

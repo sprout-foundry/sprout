@@ -18,6 +18,7 @@ import GoToSymbolOverlay from './GoToSymbolOverlay';
 import { getEnclosingSymbols } from './GoToSymbolOverlay';
 import LanguageSwitcher from './LanguageSwitcher';
 import { readFileWithConsent } from '../services/fileAccess';
+import { showFileChangeDialog } from './FileChangeDialog';
 import { getEditorKeymap } from '../utils/editorHotkeys';
 import { diffGutter, updateDiffGutter, clearDiffGutter } from '../extensions/diffGutter';
 import { lintDiagnostics, clearDiagnostics, createDebouncedDiagnosticsUpdater } from '../extensions/lintDiagnostics';
@@ -40,6 +41,7 @@ import {
   PanelRightClose,
 } from 'lucide-react';
 import { copyToClipboard } from '../utils/clipboard';
+import { generateUnifiedDiff } from '../utils/simpleDiff';
 import './EditorPane.css';
 import ContextMenu from './ContextMenu';
 
@@ -82,6 +84,8 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     saveBuffer,
     setBufferModified,
     setBufferOriginalContent,
+    setBufferExternallyModified,
+    clearBufferExternallyModified,
     splitPane,
     openWorkspaceBuffer,
     setBufferLanguageOverride,
@@ -284,6 +288,13 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
 
     try {
       await saveBuffer(buffer.id);
+
+      // Notify the external file watcher that this file was saved from the
+      // editor, so it updates its known mtime and doesn't re-fire a false
+      // "changed externally" notification on the next poll.
+      document.dispatchEvent(new CustomEvent('file:editor-saved', {
+        detail: { path: buffer.file.path, mtime: Math.floor(Date.now() / 1000) },
+      }));
 
       // Re-fetch diff after save
       if (buffer.file.path && viewRef.current) {
@@ -810,6 +821,110 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     document.addEventListener('editor:linked-scroll', handleLinkedScroll);
     return () => document.removeEventListener('editor:linked-scroll', handleLinkedScroll);
   }, [paneId, buffer?.file?.path]);
+
+  // Ref to always read current buffer state (avoids stale closures in event listeners)
+  const bufferRef = useRef(buffer);
+  bufferRef.current = buffer;
+
+  // Listen for external file modifications and show dialog to the user.
+  useEffect(() => {
+    if (!buffer || buffer.kind !== 'file' || buffer.file.path.startsWith('__workspace/')) return;
+
+    const filePath = buffer.file.path;
+
+    const handleExternalChange = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { path: string; mtime: number; size: number; deleted: boolean };
+      if (detail.path !== filePath) return;
+
+      // Read current buffer state via ref to avoid stale closure.
+      const currentBuffer = bufferRef.current;
+      if (!currentBuffer) return;
+
+      // Skip showing dialog if the user has unsaved changes — don't overwrite silently.
+      if (currentBuffer.isModified) {
+        // Fetch the disk content first so we can act on it regardless of user choice.
+        if (detail.deleted) return;
+
+        readFileWithConsent(filePath)
+          .then(response => {
+            if (!response.ok) return;
+            return response.text();
+          })
+          .then(async diskContent => {
+            if (diskContent === undefined) return;
+            const action = await showFileChangeDialog(currentBuffer.file.name, { deleted: false, hasUnsavedChanges: true });
+            if (action === 'reload') {
+              if (loadFileRef.current) {
+                loadFileRef.current(filePath);
+              }
+              clearBufferExternallyModified(currentBuffer.id);
+            } else if (action === 'keep-mine') {
+              setBufferExternallyModified(currentBuffer.id, diskContent);
+            } else if (action === 'show-diff') {
+              try {
+                const editorContent = bufferRef.current?.content || '';
+                const diffText = generateUnifiedDiff(editorContent, diskContent, 'Editor', 'Disk');
+                if (!diffText) return;
+
+                openWorkspaceBuffer({
+                  kind: 'diff',
+                  path: `diff:${filePath}`,
+                  title: `Diff: ${currentBuffer.file.name} (editor ↔ disk)`,
+                  content: diffText,
+                  ext: '.diff',
+                  isPinned: false,
+                  isClosable: true,
+                  metadata: { sourcePath: filePath, diffType: 'external-change' },
+                });
+
+                setBufferExternallyModified(bufferRef.current!.id, diskContent);
+              } catch (err) {
+                console.warn('[EditorPane] Failed to generate diff:', err);
+              }
+            }
+          })
+          .catch(() => {
+            // Silently ignore read failures
+          });
+        return;
+      }
+
+      // Clean (unmodified) buffers are auto-reloaded by EditorManagerContext.
+      // No dialog needed here.
+    };
+
+    document.addEventListener('file_externally_modified', handleExternalChange);
+    return () => document.removeEventListener('file_externally_modified', handleExternalChange);
+  }, [buffer, clearBufferExternallyModified, setBufferExternallyModified, openWorkspaceBuffer]); // eslint-disable-line react-hooks/exhaustive-deps -- clearBufferExternallyModified/setBufferExternallyModified are stable
+
+  // Listen for auto-reloaded events to sync the CodeMirror editor view.
+  useEffect(() => {
+    if (!buffer) return;
+
+    const handleAutoReloaded = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { bufferId: string; content: string };
+      if (detail.bufferId !== buffer.id) return;
+
+      isExternalUpdateRef.current = true;
+      try {
+        if (viewRef.current) {
+          viewRef.current.dispatch({
+            changes: {
+              from: 0,
+              to: viewRef.current.state.doc.length,
+              insert: detail.content,
+            },
+          });
+        }
+        setLocalContent(detail.content);
+      } finally {
+        isExternalUpdateRef.current = false;
+      }
+    };
+
+    document.addEventListener('file:auto-reloaded', handleAutoReloaded);
+    return () => document.removeEventListener('file:auto-reloaded', handleAutoReloaded);
+  }, [buffer]);
 
   // Compute effective language info for the LanguageSwitcher
   // (Must be declared before early returns to satisfy React hooks rules)

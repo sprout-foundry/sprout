@@ -1,6 +1,7 @@
 import { useCallback, useState, useEffect } from 'react';
 import { type ApiService } from '../services/api';
 import { parseFilePath } from '../utils/filePath';
+import { notificationBus } from '../services/notificationBus';
 
 interface UseHotkeysConfigOptions {
   isConnected: boolean;
@@ -33,7 +34,7 @@ export function useHotkeysConfig({
         if (config.path) setHotkeysConfigPath(config.path);
       })
       .catch((err) => {
-        console.error('Failed to load hotkeys config path:', err);
+        notificationBus.notify('warning', 'Hotkeys', 'Failed to load hotkeys config: ' + String(err));
       });
   }, [isConnected, apiService]);
 

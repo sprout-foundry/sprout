@@ -43,6 +43,10 @@ export interface EditorPane {
   };
 }
 
+export interface PaneSize {
+  [paneId: string]: number; // Size in percentage for pane sizing
+}
+
 export interface EditorState {
   activeBufferId: string | null;
   buffers: Map<string, EditorBuffer>;

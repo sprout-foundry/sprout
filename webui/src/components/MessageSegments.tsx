@@ -1,4 +1,5 @@
-import React, { type ReactNode } from 'react';
+import { type ReactNode } from 'react';
+import type { FC } from 'react';
 import {
   ExternalLink,
   CheckCircle,
@@ -74,7 +75,7 @@ const SHORT_TOOL_NAMES: { [key: string]: string } = {
 
 const getShortToolName = (toolName: string): string => SHORT_TOOL_NAMES[toolName] ?? toolName;
 
-const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, toolRefs = [], onToolClick, onToolRefClick }) => {
+const MessageSegments: FC<MessageSegmentsProps> = ({ content, toolRefs = [], onToolClick, onToolRefClick }) => {
   let segments: MessageSegment[];
   try {
     segments = parseMessageSegments(stripAnsiCodes(content));

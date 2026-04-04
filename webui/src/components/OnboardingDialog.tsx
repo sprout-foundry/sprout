@@ -1,4 +1,4 @@
-import React from 'react';
+import type { ReactElement } from 'react';
 import type { OnboardingState } from '../types/app';
 import type { OnboardingProviderOption } from '../services/api';
 import type { WindowsOnboardingGuidance } from '../hooks/useOnboarding';
@@ -31,7 +31,7 @@ function OnboardingDialog({
   onInstallWsl,
   onInstallGitBash,
   updateOnboarding,
-}: OnboardingDialogProps): React.ReactElement | null {
+}: OnboardingDialogProps): ReactElement | null {
   if (!onboarding.open) {
     return null;
   }
@@ -183,7 +183,11 @@ function OnboardingDialog({
                   type="button"
                   className="onboarding-inline-action"
                   onClick={() =>
-                    updateOnboarding((prev) => ({ ...prev, model: selectedProvider.recommended_model, error: null }))
+                    updateOnboarding((prev) => ({
+                      ...prev,
+                      model: selectedProvider.recommended_model,
+                      error: null,
+                    }))
                   }
                   disabled={onboarding.submitting || onboarding.checking}
                 >

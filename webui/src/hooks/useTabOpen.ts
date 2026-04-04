@@ -122,7 +122,12 @@ export function useTabOpen({
           next.set(bufferId, {
             ...buffer,
             kind: options.kind,
-            file: { ...buffer.file, name: options.title, path: options.path, ext: options.ext || buffer.file.ext },
+            file: {
+              ...buffer.file,
+              name: options.title,
+              path: options.path,
+              ext: options.ext || buffer.file.ext,
+            },
             content: options.content ?? buffer.content,
             originalContent: options.content ?? buffer.originalContent,
             isPinned: options.isPinned ?? buffer.isPinned,
@@ -144,7 +149,14 @@ export function useTabOpen({
       const newBuffer: EditorBuffer = {
         id: bufferId,
         kind: options.kind,
-        file: { name: options.title, path: options.path, isDir: false, size: 0, modified: 0, ext: options.ext },
+        file: {
+          name: options.title,
+          path: options.path,
+          isDir: false,
+          size: 0,
+          modified: 0,
+          ext: options.ext,
+        },
         content: options.content ?? '',
         originalContent: options.content ?? '',
         cursorPosition: { line: 0, column: 0 },

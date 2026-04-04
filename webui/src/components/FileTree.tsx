@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo, forwardRef, useImperativeHandle } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, forwardRef, useImperativeHandle, Fragment } from 'react';
+import type { KeyboardEvent, ReactNode, DragEvent } from 'react';
 import { showThemedConfirm } from './ThemedDialog';
 import ContextMenu from './ContextMenu';
 import {
@@ -331,7 +332,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
     }, [apiService, draft, draftValue, onItemCreated, refreshTree]);
 
     const handleDraftKeyDown = useCallback(
-      (event: React.KeyboardEvent<HTMLInputElement>) => {
+      (event: KeyboardEvent<HTMLInputElement>) => {
         if (event.key === 'Enter') {
           event.preventDefault();
           handleConfirmDraft();
@@ -492,7 +493,10 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
         }
         if (item.isDir && item.children) {
           const filteredChildren = filterIgnoredFiles(item.children);
-          acc.push({ ...item, children: filteredChildren.length > 0 ? filteredChildren : undefined });
+          acc.push({
+            ...item,
+            children: filteredChildren.length > 0 ? filteredChildren : undefined,
+          });
           return acc;
         }
         acc.push(item);
@@ -561,7 +565,10 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
           .map((item) => {
             if (item.isDir && item.children) {
               const filteredChildren = filterTree(item.children);
-              return { ...item, children: filteredChildren.length > 0 ? filteredChildren : undefined };
+              return {
+                ...item,
+                children: filteredChildren.length > 0 ? filteredChildren : undefined,
+              };
             }
             return item;
           });
@@ -572,7 +579,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
 
     const treeData = isFiltering ? filteredFiles : visibleFiles;
 
-    const handleFilterKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    const handleFilterKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
       if (e.key === 'Escape') {
         e.preventDefault();
         setFilterQuery('');
@@ -594,7 +601,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
       [isFiltering, onFileSelect, toggleDir],
     );
 
-    const getFileIcon = (file: FileInfo): React.ReactNode => {
+    const getFileIcon = (file: FileInfo): ReactNode => {
       if (file.isDir) {
         return expandedDirs.has(file.path) ? (
           <FolderOpen size={16} className="icon-folder icon-folder-open" />
@@ -665,7 +672,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
     );
 
     const handleDragStart = useCallback(
-      (e: React.DragEvent, filePath: string) => {
+      (e: DragEvent, filePath: string) => {
         // Don't allow drag while in draft mode (creating/renaming)
         if (draft) return;
         setDraggedPath(filePath);
@@ -686,7 +693,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
     }, []);
 
     const handleDragOver = useCallback(
-      (e: React.DragEvent, filePath: string, file: FileInfo) => {
+      (e: DragEvent, filePath: string, file: FileInfo) => {
         if (!draggedPath) return;
 
         // Non-directory items: don't handle — let the event bubble to .file-list
@@ -721,7 +728,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
       [draggedPath, isAncestorOrSelf, getParentPath],
     );
 
-    const handleDragLeave = useCallback((e: React.DragEvent) => {
+    const handleDragLeave = useCallback((e: DragEvent) => {
       // Only clear if we're truly leaving this element (not entering a child)
       const relatedTarget = e.relatedTarget as Node | null;
       if (relatedTarget && e.currentTarget.contains(relatedTarget)) {
@@ -771,7 +778,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
     );
 
     const handleDrop = useCallback(
-      async (e: React.DragEvent, targetDirPath: string) => {
+      async (e: DragEvent, targetDirPath: string) => {
         e.preventDefault();
         e.stopPropagation();
         setDropTargetPath(null);
@@ -862,7 +869,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
           : undefined;
 
         return (
-          <React.Fragment key={file.path}>
+          <Fragment key={file.path}>
             <div
               className={`file-tree-item ${file.isDir ? 'directory' : 'file'} ${isSelected ? 'selected' : ''}${file.gitStatus ? ` git-${file.gitStatus}` : ''}${dropTargetPath === file.path ? ' drop-target' : ''}${draggedPath === file.path ? ' dragging' : ''}`}
               style={{ paddingLeft: `${depth * 16 + 8}px` }}
@@ -949,7 +956,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
                 {Array.isArray(file.children) ? renderFileTree(file.children, depth + 1) : null}
               </div>
             )}
-          </React.Fragment>
+          </Fragment>
         );
       });
 

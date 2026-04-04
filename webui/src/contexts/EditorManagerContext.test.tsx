@@ -1,7 +1,6 @@
 // @ts-nocheck
 
-import React from 'react';
-import { act } from 'react';
+import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { EditorManagerProvider, useEditorManager } from './EditorManagerContext';
 
@@ -59,7 +58,7 @@ function TestConsumer() {
 function renderProvider() {
   // eslint-disable-next-line testing-library/no-unnecessary-act
   act(() => {
-    root.render(React.createElement(EditorManagerProvider, null, React.createElement(TestConsumer)));
+    root.render(createElement(EditorManagerProvider, null, createElement(TestConsumer)));
   });
 }
 

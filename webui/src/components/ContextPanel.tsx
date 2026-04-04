@@ -1,4 +1,4 @@
-import React, {
+import {
   useState,
   useEffect,
   useCallback,
@@ -8,6 +8,7 @@ import React, {
   useImperativeHandle,
   forwardRef,
 } from 'react';
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import {
   Wrench,
   History,
@@ -138,7 +139,7 @@ interface StatusMetrics {
 
 interface ContextPanelBaseProps {
   className?: string;
-  style?: React.CSSProperties;
+  style?: CSSProperties;
   isMobileLayout?: boolean;
   panelWidth?: number;
   onPanelWidthChange?: (width: number) => void;
@@ -158,7 +159,11 @@ interface ChatContextPanelProps extends ContextPanelBaseProps {
   }>;
   logs: LogEntry[];
   subagentActivities: SubagentActivity[];
-  currentTodos: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }>;
+  currentTodos: Array<{
+    id: string;
+    content: string;
+    status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+  }>;
   messages: Array<{ type: string; timestamp: Date }>;
   isProcessing: boolean;
   lastError: string | null;
@@ -394,7 +399,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
   // ── Resize handler ───────────────────────────────────────────────
   const startResize = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
+    (e: ReactMouseEvent<HTMLDivElement>) => {
       e.preventDefault();
       setPanelCollapsed(false);
       const startX = e.clientX;
@@ -740,7 +745,12 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     if (diffSecs < 60) return `${diffSecs}s ago`;
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
-    return date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleString([], {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   };
 
   const formatTime = (value: Date) => {
@@ -982,7 +992,12 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       icon: <Wrench size={14} />,
       count: activeToolCount > 0 ? `${activeToolCount} active` : `${toolExecutions.length} total`,
     },
-    { id: 'changes', label: 'Session Changes', icon: <History size={14} />, count: `${historyCounts} revisions` },
+    {
+      id: 'changes',
+      label: 'Session Changes',
+      icon: <History size={14} />,
+      count: `${historyCounts} revisions`,
+    },
     {
       id: 'tasks',
       label: 'Tasks',
@@ -990,7 +1005,12 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       count: `${currentTodos.filter((t) => t.status === 'in_progress').length || 0} active`,
     },
     { id: 'sessions', label: 'Sessions', icon: <Clock size={14} />, count: `${sessionsCount}` },
-    { id: 'status', label: 'Status', icon: <Activity size={14} />, count: `${statusMetrics.totalMsgs} msgs` },
+    {
+      id: 'status',
+      label: 'Status',
+      icon: <Activity size={14} />,
+      count: `${statusMetrics.totalMsgs} msgs`,
+    },
   ];
 
   const activeTab = chatPanelTabs.find((t) => t.id === chatTab) || chatPanelTabs[0];

@@ -38,7 +38,9 @@ function duplicateCurrentLine(view: EditorView, direction: 'up' | 'down' = 'down
   const prefix = line.to === view.state.doc.length ? '\n' : '';
   view.dispatch({
     changes: { from: insertPos, insert: prefix + lineText },
-    selection: { anchor: cursor + prefix.length + lineText.length + (line.to === view.state.doc.length ? 1 : 0) },
+    selection: {
+      anchor: cursor + prefix.length + lineText.length + (line.to === view.state.doc.length ? 1 : 0),
+    },
     scrollIntoView: true,
   });
   return true;
@@ -403,7 +405,11 @@ export function getEditorKeymap(hotkeyEntries: HotkeyEntry[] | null, actions: Ed
     return selectSelectionMatches(v);
   });
   if (selectAllOccBindings.length === 0) {
-    bindings.push({ key: 'Mod-Shift-l', preventDefault: true, run: (v) => selectSelectionMatches(v) });
+    bindings.push({
+      key: 'Mod-Shift-l',
+      preventDefault: true,
+      run: (v) => selectSelectionMatches(v),
+    });
   } else {
     bindings.push(...selectAllOccBindings);
   }
@@ -447,7 +453,11 @@ export function getEditorKeymap(hotkeyEntries: HotkeyEntry[] | null, actions: Ed
     return navigateCursorBack(v);
   });
   if (navBackBindings.length === 0) {
-    bindings.push({ key: 'Alt-ArrowLeft', preventDefault: true, run: (v) => navigateCursorBack(v) });
+    bindings.push({
+      key: 'Alt-ArrowLeft',
+      preventDefault: true,
+      run: (v) => navigateCursorBack(v),
+    });
   } else {
     bindings.push(...navBackBindings);
   }
@@ -457,7 +467,11 @@ export function getEditorKeymap(hotkeyEntries: HotkeyEntry[] | null, actions: Ed
     return navigateCursorForward(v);
   });
   if (navForwardBindings.length === 0) {
-    bindings.push({ key: 'Alt-ArrowRight', preventDefault: true, run: (v) => navigateCursorForward(v) });
+    bindings.push({
+      key: 'Alt-ArrowRight',
+      preventDefault: true,
+      run: (v) => navigateCursorForward(v),
+    });
   } else {
     bindings.push(...navForwardBindings);
   }

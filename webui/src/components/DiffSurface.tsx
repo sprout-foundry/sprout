@@ -1,4 +1,3 @@
-import React from 'react';
 import { classifyDiffLine } from '../utils/format';
 import './DiffSurface.css';
 

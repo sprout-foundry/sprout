@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import type { FC, ReactNode } from 'react';
 import Dropdown, { type DropdownItem } from './Dropdown';
 import QuickPrompt from './QuickPrompt';
 import Progress from './Progress';
@@ -6,10 +7,10 @@ import FileBrowser, { type FileNode } from './FileBrowser';
 import { uiService, type UIDropdownItem, type UIDropdownOptions, type UIQuickOption } from '../services/ui';
 
 interface UIManagerProps {
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
-const UIManager: React.FC<UIManagerProps> = ({ children }) => {
+const UIManager: FC<UIManagerProps> = ({ children }) => {
   const [dropdownState, setDropdownState] = useState<{
     isOpen: boolean;
     items: DropdownItem[];

@@ -1,4 +1,4 @@
-import React from 'react';
+import type { FC } from 'react';
 import { GitCompareArrows } from 'lucide-react';
 import DiffSurface from './DiffSurface';
 
@@ -35,7 +35,7 @@ const getDiffText = (diff: GitDiffResponse | null, diffMode: 'combined' | 'stage
   }
 };
 
-const DiffWorkspaceTab: React.FC<DiffWorkspaceTabProps> = ({
+const DiffWorkspaceTab: FC<DiffWorkspaceTabProps> = ({
   path,
   diff,
   diffMode,

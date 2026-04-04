@@ -1,6 +1,5 @@
-import React from 'react';
+import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
-import { act } from 'react';
 import { copyToClipboard } from '../utils/clipboard';
 import SearchView from './SearchView';
 import { ApiService } from '../services/api';
@@ -132,7 +131,7 @@ async function renderSearch(props: { onFileClick?: jest.Mock } = {}) {
   const onFileClick = props.onFileClick || defaultOnFileClick;
 
   await act(async () => {
-    root!.render(React.createElement(SearchView, { onFileClick }));
+    root!.render(createElement(SearchView, { onFileClick }));
   });
 
   // Type a search query

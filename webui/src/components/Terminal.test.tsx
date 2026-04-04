@@ -1,8 +1,7 @@
 // @ts-nocheck
 
-import React from 'react';
+import { act, forwardRef, useImperativeHandle } from 'react';
 import { createRoot } from 'react-dom/client';
-import { act } from 'react';
 import Terminal from './Terminal';
 
 // ---------------------------------------------------------------------------
@@ -10,17 +9,15 @@ import Terminal from './Terminal';
 // ---------------------------------------------------------------------------
 
 jest.mock('./TerminalPane', () => {
-  return React.forwardRef(function MockTerminalPane(
-    { isActive, isConnected, showCloseButton, onClose }: any,
-    ref: any,
-  ) {
+  const { forwardRef, useImperativeHandle } = jest.requireActual('react');
+  return forwardRef(function MockTerminalPane({ isActive, isConnected, showCloseButton, onClose }: any, ref: any) {
     // NOTE: jest.fn() inside useImperativeHandle creates fresh mock instances on
     // every re-render. This is acceptable because no test asserts on imperative
     // handle call counts — all assertions check DOM state. If future tests need
     // to verify clear()/focus() calls, the mock factory will need restructuring
     // to use stable references (e.g., storing mocks on a shared object that both
     // the factory and test scope can access).
-    React.useImperativeHandle(ref, () => ({
+    useImperativeHandle(ref, () => ({
       clear: jest.fn(),
       focus: jest.fn(),
     }));
@@ -60,6 +57,7 @@ function renderTerminal(props: Record<string, any> = {}) {
   document.body.appendChild(container);
   const root = createRoot(container);
 
+  // eslint-disable-next-line testing-library/no-unnecessary-act
   act(() => {
     root.render(<Terminal isConnected={true} isExpanded={false} {...props} />);
   });
@@ -157,9 +155,9 @@ describe('Terminal split functionality', () => {
   // ── 1. Initial state: No split active ────────────────────
 
   it('does not have split active by default (collapsed state)', () => {
-    const result = renderTerminal();
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal();
+    container = view.container;
+    root = view.root;
 
     const splitBtns = getSplitButtons(container);
     // Both buttons should exist but neither should be active
@@ -169,9 +167,9 @@ describe('Terminal split functionality', () => {
   });
 
   it('does not have split active by default (expanded state)', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     const panesContainer = getPanesContainer(container);
     expect(panesContainer).toBeTruthy();
@@ -185,9 +183,9 @@ describe('Terminal split functionality', () => {
   // ── 2. Vertical split via button click ───────────────────
 
   it('activates vertical split when vertical split button is clicked', () => {
-    const result = renderTerminal();
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal();
+    container = view.container;
+    root = view.root;
 
     // The vertical split button initially has aria-label="Split terminal vertically"
     const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]') as HTMLElement;
@@ -204,9 +202,9 @@ describe('Terminal split functionality', () => {
   });
 
   it('shows vertical split layout in panes container after vertical split', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     // Click vertical split
     const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]') as HTMLElement;
@@ -222,9 +220,9 @@ describe('Terminal split functionality', () => {
   // ── 3. Horizontal split via button click ─────────────────
 
   it('activates horizontal split when horizontal split button is clicked', () => {
-    const result = renderTerminal();
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal();
+    container = view.container;
+    root = view.root;
 
     const horizontalBtn = container.querySelector('[aria-label="Split terminal horizontally"]') as HTMLElement;
     expect(horizontalBtn).toBeTruthy();
@@ -243,9 +241,9 @@ describe('Terminal split functionality', () => {
   });
 
   it('shows horizontal split layout in panes container after horizontal split', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     const horizontalBtn = container.querySelector('[aria-label="Split terminal horizontally"]') as HTMLElement;
     act(() => {
@@ -260,9 +258,9 @@ describe('Terminal split functionality', () => {
   // ── 4. Vertical split via custom event ───────────────────
 
   it('activates vertical split via ledit:terminal-action custom event', () => {
-    const result = renderTerminal();
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal();
+    container = view.container;
+    root = view.root;
 
     act(() => {
       dispatchTerminalAction('split_vertical');
@@ -275,9 +273,9 @@ describe('Terminal split functionality', () => {
   });
 
   it('shows vertical split layout after custom event', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     act(() => {
       dispatchTerminalAction('split_vertical');
@@ -290,9 +288,9 @@ describe('Terminal split functionality', () => {
   // ── 5. Horizontal split via custom event ─────────────────
 
   it('activates horizontal split via ledit:terminal-action custom event', () => {
-    const result = renderTerminal();
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal();
+    container = view.container;
+    root = view.root;
 
     act(() => {
       dispatchTerminalAction('split_horizontal');
@@ -304,9 +302,9 @@ describe('Terminal split functionality', () => {
   });
 
   it('shows horizontal split layout after custom event', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     act(() => {
       dispatchTerminalAction('split_horizontal');
@@ -319,9 +317,9 @@ describe('Terminal split functionality', () => {
   // ── 6. Toggle off: clicking same split button deactivates ─
 
   it('deactivates vertical split when clicking the same button again', () => {
-    const result = renderTerminal();
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal();
+    container = view.container;
+    root = view.root;
 
     const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]') as HTMLElement;
 
@@ -346,9 +344,9 @@ describe('Terminal split functionality', () => {
   });
 
   it('deactivates horizontal split when clicking the same button again', () => {
-    const result = renderTerminal();
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal();
+    container = view.container;
+    root = view.root;
 
     const horizontalBtn = container.querySelector('[aria-label="Split terminal horizontally"]') as HTMLElement;
 
@@ -372,9 +370,9 @@ describe('Terminal split functionality', () => {
   });
 
   it('removes split layout when toggling off (expanded)', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     // Activate vertical split
     const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]') as HTMLElement;
@@ -396,9 +394,9 @@ describe('Terminal split functionality', () => {
   // ── 7. Switch between splits ─────────────────────────────
 
   it('switching from horizontal to vertical replaces (not stacks) the split', () => {
-    const result = renderTerminal();
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal();
+    container = view.container;
+    root = view.root;
 
     const splitBtns = getSplitButtons(container);
 
@@ -418,9 +416,9 @@ describe('Terminal split functionality', () => {
   });
 
   it('switching from vertical to horizontal replaces (not stacks) the split', () => {
-    const result = renderTerminal();
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal();
+    container = view.container;
+    root = view.root;
 
     const splitBtns = getSplitButtons(container);
 
@@ -439,9 +437,9 @@ describe('Terminal split functionality', () => {
   });
 
   it('switching split direction updates CSS classes correctly (expanded)', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     const splitBtns = getSplitButtons(container);
 
@@ -467,9 +465,9 @@ describe('Terminal split functionality', () => {
   // ── 8. Split creates secondary session ───────────────────
 
   it('vertical split creates a secondary session', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     // Before split: one pane wrapper (primary)
     const wrappersBefore = container.querySelectorAll('.terminal-pane-wrapper');
@@ -487,9 +485,9 @@ describe('Terminal split functionality', () => {
   });
 
   it('horizontal split creates a secondary session', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     const wrappersBefore = container.querySelectorAll('.terminal-pane-wrapper');
     expect(wrappersBefore.length).toBe(1);
@@ -505,9 +503,9 @@ describe('Terminal split functionality', () => {
   });
 
   it('switching split directions reuses the same secondary pane (no third pane)', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     const splitBtns = getSplitButtons(container);
 
@@ -527,9 +525,9 @@ describe('Terminal split functionality', () => {
   // ── 9. Unsplit hides secondary pane and divider ──────────
 
   it('unsplitting hides the secondary pane', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     // Activate split
     const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]') as HTMLElement;
@@ -550,9 +548,9 @@ describe('Terminal split functionality', () => {
   });
 
   it('unsplitting hides the divider', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     // Activate split
     const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]') as HTMLElement;
@@ -573,9 +571,9 @@ describe('Terminal split functionality', () => {
   // ── 10. Split CSS classes ────────────────────────────────
 
   it('vertical split adds terminal-split-vertical class to panes container', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     act(() => {
       dispatchTerminalAction('split_vertical');
@@ -586,9 +584,9 @@ describe('Terminal split functionality', () => {
   });
 
   it('horizontal split adds terminal-split-horizontal class to panes container', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     act(() => {
       dispatchTerminalAction('split_horizontal');
@@ -599,9 +597,9 @@ describe('Terminal split functionality', () => {
   });
 
   it('no split class present when split is deactivated', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     // Activate then deactivate
     act(() => {
@@ -620,9 +618,9 @@ describe('Terminal split functionality', () => {
   });
 
   it('divider has terminal-split-divider-vertical class during vertical split', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     act(() => {
       dispatchTerminalAction('split_vertical');
@@ -635,9 +633,9 @@ describe('Terminal split functionality', () => {
   });
 
   it('divider has terminal-split-divider-horizontal class during horizontal split', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     act(() => {
       dispatchTerminalAction('split_horizontal');
@@ -652,17 +650,17 @@ describe('Terminal split functionality', () => {
   // ── 11. Divider presence ─────────────────────────────────
 
   it('split divider is NOT present when no split is active', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     expect(getSplitDivider(container)).toBeNull();
   });
 
   it('split divider IS present when vertical split is active', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     act(() => {
       dispatchTerminalAction('split_vertical');
@@ -672,9 +670,9 @@ describe('Terminal split functionality', () => {
   });
 
   it('split divider IS present when horizontal split is active', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     act(() => {
       dispatchTerminalAction('split_horizontal');
@@ -686,9 +684,9 @@ describe('Terminal split functionality', () => {
   // ── 12. Secondary pane close button ──────────────────────
 
   it('secondary pane has a close button when split is active', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     act(() => {
       dispatchTerminalAction('split_vertical');
@@ -700,9 +698,9 @@ describe('Terminal split functionality', () => {
   });
 
   it('primary pane does NOT have a close button (showCloseButton is false)', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     act(() => {
       dispatchTerminalAction('split_vertical');
@@ -717,9 +715,9 @@ describe('Terminal split functionality', () => {
   // ── 13. Closing secondary pane unsplits ──────────────────
 
   it('clicking close on secondary pane removes the split', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     act(() => {
       dispatchTerminalAction('split_vertical');
@@ -741,9 +739,9 @@ describe('Terminal split functionality', () => {
   });
 
   it('closing secondary pane removes the divider', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     act(() => {
       dispatchTerminalAction('split_horizontal');
@@ -760,9 +758,9 @@ describe('Terminal split functionality', () => {
   });
 
   it('closing secondary pane removes split CSS classes', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     act(() => {
       dispatchTerminalAction('split_vertical');
@@ -781,9 +779,9 @@ describe('Terminal split functionality', () => {
   });
 
   it('closing secondary pane deactivates split button state', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     act(() => {
       dispatchTerminalAction('split_vertical');
@@ -806,9 +804,9 @@ describe('Terminal split functionality', () => {
   // ── 14. Edge cases ───────────────────────────────────────
 
   it('custom event with unknown action does not affect split state', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     act(() => {
       dispatchTerminalAction('unknown_action');
@@ -821,9 +819,9 @@ describe('Terminal split functionality', () => {
   });
 
   it('custom event without detail does not crash', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     act(() => {
       window.dispatchEvent(new CustomEvent('ledit:terminal-action'));
@@ -835,9 +833,9 @@ describe('Terminal split functionality', () => {
   });
 
   it('custom event with null detail does not crash', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     act(() => {
       window.dispatchEvent(new CustomEvent('ledit:terminal-action', { detail: null }));
@@ -848,9 +846,9 @@ describe('Terminal split functionality', () => {
   });
 
   it('split state persists after re-expanding the terminal', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     // Activate vertical split
     act(() => {
@@ -873,9 +871,9 @@ describe('Terminal split functionality', () => {
   });
 
   it('split state persists through clear button click', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     // Activate vertical split
     act(() => {
@@ -899,9 +897,9 @@ describe('Terminal split functionality', () => {
   // ── 15. Split button accessibility ───────────────────────
 
   it('split buttons have aria-pressed attribute', () => {
-    const result = renderTerminal();
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal();
+    container = view.container;
+    root = view.root;
 
     const splitBtns = getSplitButtons(container);
     expect(splitBtns.length).toBe(2);
@@ -912,9 +910,9 @@ describe('Terminal split functionality', () => {
   });
 
   it('vertical split button aria-pressed becomes true when active', () => {
-    const result = renderTerminal();
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal();
+    container = view.container;
+    root = view.root;
 
     const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]') as HTMLElement;
     act(() => {
@@ -925,9 +923,9 @@ describe('Terminal split functionality', () => {
   });
 
   it('horizontal split button aria-pressed becomes true when active', () => {
-    const result = renderTerminal();
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal();
+    container = view.container;
+    root = view.root;
 
     const horizontalBtn = container.querySelector('[aria-label="Split terminal horizontally"]') as HTMLElement;
     act(() => {
@@ -938,9 +936,9 @@ describe('Terminal split functionality', () => {
   });
 
   it('split buttons have aria-label attributes', () => {
-    const result = renderTerminal();
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal();
+    container = view.container;
+    root = view.root;
 
     const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]');
     const horizontalBtn = container.querySelector('[aria-label="Split terminal horizontally"]');
@@ -979,9 +977,9 @@ describe('Terminal split lifecycle and edge cases', () => {
   });
 
   it('can re-split after unsplitting via secondary pane close button', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]') as HTMLElement;
 
@@ -1006,9 +1004,9 @@ describe('Terminal split lifecycle and edge cases', () => {
   });
 
   it('can re-split after unsplitting via split button toggle', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]') as HTMLElement;
 
@@ -1033,9 +1031,9 @@ describe('Terminal split lifecycle and edge cases', () => {
   });
 
   it('splitting multiple times in a row does not create duplicate panes', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     const splitBtns = getSplitButtons(container);
 
@@ -1065,9 +1063,9 @@ describe('Terminal split lifecycle and edge cases', () => {
   });
 
   it('terminal remains functional (1 pane) after closing secondary pane', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     // Split vertically
     act(() => {
@@ -1105,9 +1103,9 @@ describe('Terminal split lifecycle and edge cases', () => {
   });
 
   it('no crash when splitting and unsplitting rapidly', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     const splitBtns = getSplitButtons(container);
 
@@ -1132,9 +1130,9 @@ describe('Terminal split lifecycle and edge cases', () => {
   });
 
   it('unmounting while split is active cleans up properly', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     // Activate split
     act(() => {
@@ -1186,9 +1184,9 @@ describe('Terminal height persistence', () => {
   });
 
   it('initializes with default height (400px) when localStorage is empty', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     const terminalEl = container.querySelector('.terminal-container') as HTMLElement;
     expect(terminalEl.style.height).toBe('400px');
@@ -1200,9 +1198,9 @@ describe('Terminal height persistence', () => {
   it('reads persisted height from localStorage on mount', () => {
     localStorage.setItem(STORAGE_KEY, '250');
 
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     const terminalEl = container.querySelector('.terminal-container') as HTMLElement;
     expect(terminalEl.style.height).toBe('250px');
@@ -1211,9 +1209,9 @@ describe('Terminal height persistence', () => {
   it('clamps persisted value below minimum to minimum (120px)', () => {
     localStorage.setItem(STORAGE_KEY, '50');
 
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     const terminalEl = container.querySelector('.terminal-container') as HTMLElement;
     expect(terminalEl.style.height).toBe('120px');
@@ -1222,18 +1220,18 @@ describe('Terminal height persistence', () => {
   it('clamps persisted invalid value to default (400px)', () => {
     localStorage.setItem(STORAGE_KEY, 'not-a-number');
 
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     const terminalEl = container.querySelector('.terminal-container') as HTMLElement;
     expect(terminalEl.style.height).toBe('400px');
   });
 
   it('persists height to localStorage after resize drag completes', () => {
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     // Simulate a resize drag via the resize handle
     const resizeHandle = container.querySelector('.terminal-resize-handle') as HTMLElement;
@@ -1277,9 +1275,9 @@ describe('Terminal height persistence', () => {
   it('sets correct CSS variable when expanded with persisted height', () => {
     localStorage.setItem(STORAGE_KEY, '300');
 
-    const result = renderTerminal({ isExpanded: true });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
 
     const reservedHeight = document.documentElement.style.getPropertyValue('--ledit-terminal-reserved-height');
     expect(reservedHeight).toBe('300px');
@@ -1288,9 +1286,9 @@ describe('Terminal height persistence', () => {
   it('falls back to collapsed height CSS variable when not expanded', () => {
     localStorage.setItem(STORAGE_KEY, '500');
 
-    const result = renderTerminal({ isExpanded: false });
-    container = result.container;
-    root = result.root;
+    const view = renderTerminal({ isExpanded: false });
+    container = view.container;
+    root = view.root;
 
     const reservedHeight = document.documentElement.style.getPropertyValue('--ledit-terminal-reserved-height');
     // When collapsed, should use collapsedHeight (42px on non-mobile), not the persisted height

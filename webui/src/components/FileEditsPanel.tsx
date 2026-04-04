@@ -4,7 +4,8 @@
  * Displays files edited in this session and revision checkpoints with rollback.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { FC } from 'react';
 import {
   Pencil,
   Plus,
@@ -91,7 +92,7 @@ const sortRevisionsNewestFirst = (revisions: Revision[]): Revision[] => {
   });
 };
 
-const FileEditsPanel: React.FC<FileEditsPanelProps> = ({ edits, onFileClick }) => {
+const FileEditsPanel: FC<FileEditsPanelProps> = ({ edits, onFileClick }) => {
   const [showHistory, setShowHistory] = useState(false);
   const [revisions, setRevisions] = useState<Revision[]>([]);
   const [expandedRevisionIds, setExpandedRevisionIds] = useState<Set<string>>(new Set());

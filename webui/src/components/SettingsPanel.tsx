@@ -1,4 +1,5 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import type { FC } from 'react';
 import './SettingsPanel.css';
 import { ApiService, type LeditSettings, type ProviderOption } from '../services/api';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
@@ -79,19 +80,25 @@ let toastCounter = 0;
 
 /* ─── Component ──────────────────────────────────────────────── */
 
-const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChanged }) => {
+const SettingsPanel: FC<SettingsPanelProps> = ({ settings, onSettingsChanged }) => {
   const [activeSubTab, setActiveSubTab] = useState<SettingsSubTab>('general');
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [textDrafts, setTextDrafts] = useState<Record<string, string>>({});
 
   // MCP / Provider form state
-  const [editingServer, setEditingServer] = useState<{ mode: 'add' | 'edit'; originalName?: string } | null>(null);
+  const [editingServer, setEditingServer] = useState<{
+    mode: 'add' | 'edit';
+    originalName?: string;
+  } | null>(null);
   const [serverName, setServerName] = useState('');
   const [serverCommand, setServerCommand] = useState('');
   const [serverArgs, setServerArgs] = useState('');
 
-  const [editingProvider, setEditingProvider] = useState<{ mode: 'add' | 'edit'; originalName?: string } | null>(null);
+  const [editingProvider, setEditingProvider] = useState<{
+    mode: 'add' | 'edit';
+    originalName?: string;
+  } | null>(null);
   const [providerName, setProviderName] = useState('');
   const [providerApiBase, setProviderApiBase] = useState('');
   const [providerModelName, setProviderModelName] = useState('');
@@ -536,7 +543,10 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
     };
     setSavingKey('provider-update');
     try {
-      await api.updateCustomProvider(editingProvider.originalName, { name: providerName.trim(), ...provider });
+      await api.updateCustomProvider(editingProvider.originalName, {
+        name: providerName.trim(),
+        ...provider,
+      });
       const fresh = await api.getSettings();
       onSettingsChanged(fresh);
       showToast('Provider updated', 'success');
@@ -745,7 +755,11 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
                             });
                             setSubagentTypes((prev) => ({
                               ...prev,
-                              [personaId]: { ...prev[personaId], provider: e.target.value, model: '' },
+                              [personaId]: {
+                                ...prev[personaId],
+                                provider: e.target.value,
+                                model: '',
+                              },
                             }));
                             showToast(`${persona.name}: provider updated`, 'success');
                           } catch {
@@ -1057,7 +1071,14 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
                       onChange={(e) => setProviderModelContextSizes(e.target.value)}
                       placeholder="model1:8192,model2:131072,model3:2097152"
                     />
-                    <small style={{ color: '#888', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                    <small
+                      style={{
+                        color: '#888',
+                        fontSize: '12px',
+                        marginTop: '4px',
+                        display: 'block',
+                      }}
+                    >
                       Format: model_name:context_size, separated by commas
                     </small>
                   </div>

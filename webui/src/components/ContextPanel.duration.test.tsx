@@ -1,8 +1,7 @@
 // @ts-nocheck
 
-import React from 'react';
+import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
-import { act } from 'react';
 
 // ---------------------------------------------------------------------------
 // Mock heavy child components that ContextPanel imports
@@ -124,7 +123,7 @@ async function renderPanel(props: Record<string, unknown>) {
   const ContextPanel = require('./ContextPanel').default;
   // eslint-disable-next-line testing-library/no-unnecessary-act
   await act(async () => {
-    root.render(React.createElement(ContextPanel, props));
+    root.render(createElement(ContextPanel, props));
   });
   await flushPromises();
 }
@@ -337,7 +336,7 @@ describe('ContextPanel live duration – ticking during processing', () => {
     const ContextPanel = require('./ContextPanel').default;
     // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
-      root.render(React.createElement(ContextPanel, makeChatProps({ messages, isProcessing: true })));
+      root.render(createElement(ContextPanel, makeChatProps({ messages, isProcessing: true })));
     });
     await flushPromises();
 
@@ -366,7 +365,7 @@ describe('ContextPanel live duration – ticking during processing', () => {
     const ContextPanel = require('./ContextPanel').default;
     // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
-      root.render(React.createElement(ContextPanel, makeChatProps({ messages, isProcessing: false })));
+      root.render(createElement(ContextPanel, makeChatProps({ messages, isProcessing: false })));
     });
     await flushPromises();
 

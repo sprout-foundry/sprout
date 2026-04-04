@@ -6,13 +6,14 @@
  */
 
 import { useState, useCallback } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 
 export interface UseSidebarStateReturn {
   isMobile: boolean;
   isSidebarOpen: boolean;
   sidebarCollapsed: boolean;
   isTerminalExpanded: boolean;
-  setIsMobile: React.Dispatch<React.SetStateAction<boolean>>;
+  setIsMobile: Dispatch<SetStateAction<boolean>>;
   setSidebarCollapsed: (collapsed: boolean) => void;
   toggleSidebar: () => void;
   closeSidebar: () => void;

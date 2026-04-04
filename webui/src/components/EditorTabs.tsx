@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import type { DragEvent, FC, MouseEvent } from 'react';
 import {
   X,
   AlertTriangle,
@@ -27,11 +28,11 @@ import './EditorTabs.css';
 
 interface EditorTabsProps {
   paneId?: string;
-  actions?: React.ReactNode;
+  actions?: ReactNode;
   compact?: boolean;
 }
 
-const EditorTabs: React.FC<EditorTabsProps> = ({ paneId, actions, compact = false }) => {
+const EditorTabs: FC<EditorTabsProps> = ({ paneId, actions, compact = false }) => {
   const {
     buffers,
     panes,
@@ -80,7 +81,7 @@ const EditorTabs: React.FC<EditorTabsProps> = ({ paneId, actions, compact = fals
     }
   };
 
-  const handleTabClose = (e: React.MouseEvent, buffer: EditorBuffer) => {
+  const handleTabClose = (e: MouseEvent, buffer: EditorBuffer) => {
     e.stopPropagation();
 
     if (buffer.isModified) {
@@ -91,7 +92,7 @@ const EditorTabs: React.FC<EditorTabsProps> = ({ paneId, actions, compact = fals
     closeBuffer(buffer.id);
   };
 
-  const handleTabAuxClick = (e: React.MouseEvent, buffer: EditorBuffer) => {
+  const handleTabAuxClick = (e: MouseEvent, buffer: EditorBuffer) => {
     if (e.button !== 1 || buffer.isClosable === false) {
       return;
     }
@@ -99,7 +100,7 @@ const EditorTabs: React.FC<EditorTabsProps> = ({ paneId, actions, compact = fals
     handleTabClose(e, buffer);
   };
 
-  const handleTabContextMenu = (e: React.MouseEvent, buffer: EditorBuffer) => {
+  const handleTabContextMenu = (e: MouseEvent, buffer: EditorBuffer) => {
     e.preventDefault();
     e.stopPropagation();
     setEmptyAreaContextMenu(null);
@@ -110,7 +111,7 @@ const EditorTabs: React.FC<EditorTabsProps> = ({ paneId, actions, compact = fals
     });
   };
 
-  const handleTabsContainerContextMenu = (e: React.MouseEvent) => {
+  const handleTabsContainerContextMenu = (e: MouseEvent) => {
     if ((e.target as HTMLElement).closest('.tab')) {
       return;
     }
@@ -119,7 +120,7 @@ const EditorTabs: React.FC<EditorTabsProps> = ({ paneId, actions, compact = fals
     setEmptyAreaContextMenu({ x: e.clientX, y: e.clientY });
   };
 
-  const handleDragStart = (e: React.DragEvent, bufferId: string) => {
+  const handleDragStart = (e: DragEvent, bufferId: string) => {
     setDraggingBufferId(bufferId);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', bufferId);
@@ -135,11 +136,11 @@ const EditorTabs: React.FC<EditorTabsProps> = ({ paneId, actions, compact = fals
     setDraggingBufferId(null);
   };
 
-  const resolveDraggedBufferId = (e: React.DragEvent) => {
+  const resolveDraggedBufferId = (e: DragEvent) => {
     return draggingBufferId || e.dataTransfer.getData('text/plain') || null;
   };
 
-  const handlePaneDrop = (e: React.DragEvent) => {
+  const handlePaneDrop = (e: DragEvent) => {
     e.preventDefault();
     const droppedBufferId = resolveDraggedBufferId(e);
     if (!droppedBufferId || !paneId) {

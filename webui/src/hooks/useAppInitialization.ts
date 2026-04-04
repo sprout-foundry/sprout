@@ -9,6 +9,7 @@
  */
 
 import { useEffect } from 'react';
+import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { WebSocketService } from '../services/websocket';
 import type { WsEvent } from '../services/websocket';
 import { ApiService } from '../services/api';
@@ -23,11 +24,11 @@ interface RecentFile {
 
 export interface UseAppInitializationOptions {
   handleEvent: (event: WsEvent) => void;
-  connectionTimeoutRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>;
+  connectionTimeoutRef: MutableRefObject<ReturnType<typeof setTimeout> | null>;
   loadChatSessions: () => void;
-  setRecentFiles: React.Dispatch<React.SetStateAction<RecentFile[]>>;
-  setIsMobile: React.Dispatch<React.SetStateAction<boolean>>;
-  setState: React.Dispatch<React.SetStateAction<AppState>>;
+  setRecentFiles: Dispatch<SetStateAction<RecentFile[]>>;
+  setIsMobile: Dispatch<SetStateAction<boolean>>;
+  setState: Dispatch<SetStateAction<AppState>>;
 }
 
 export function useAppInitialization({

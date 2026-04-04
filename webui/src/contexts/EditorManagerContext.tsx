@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from 'react';
+import type { FC } from 'react';
 import { type EditorBuffer, type EditorPane, type PaneLayout, type PaneSize } from '../types/editor';
 import { readStorageItem, PANE_LAYOUT_STORAGE_KEY, PANE_SIZES_STORAGE_KEY } from '../services/layoutPersistence';
 import { useBufferMutations } from '../hooks/useBufferMutations';
@@ -85,7 +86,7 @@ interface EditorManagerProviderProps {
   children: ReactNode;
 }
 
-export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ children }) => {
+export const EditorManagerProvider: FC<EditorManagerProviderProps> = ({ children }) => {
   // ---------------------------------------------------------------------------
   // Base state
   // ---------------------------------------------------------------------------
@@ -94,7 +95,14 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     const chatBuffer: EditorBuffer = {
       id: 'buffer-chat',
       kind: 'chat',
-      file: { name: 'Chat', path: '__workspace/chat', isDir: false, size: 0, modified: 0, ext: '.chat' },
+      file: {
+        name: 'Chat',
+        path: '__workspace/chat',
+        isDir: false,
+        size: 0,
+        modified: 0,
+        ext: '.chat',
+      },
       content: '',
       originalContent: '',
       cursorPosition: { line: 0, column: 0 },
@@ -118,7 +126,12 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   const [paneLayout, setPaneLayoutState] = useState<PaneLayout>(initialLayout);
 
   const [panes, setPanes] = useState<EditorPane[]>(() => {
-    const primary: EditorPane = { id: 'pane-1', bufferId: 'buffer-chat', isActive: true, position: 'primary' };
+    const primary: EditorPane = {
+      id: 'pane-1',
+      bufferId: 'buffer-chat',
+      isActive: true,
+      position: 'primary',
+    };
     if (initialLayout === 'split-vertical' || initialLayout === 'split-horizontal') {
       return [primary, { id: 'pane-2', bufferId: null, isActive: false, position: 'secondary' as const }];
     }

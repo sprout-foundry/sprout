@@ -1,6 +1,7 @@
-import React from 'react';
+import { isValidElement } from 'react';
+import type { ReactNode } from 'react';
 
-export const flattenMarkdownText = (value: React.ReactNode): string => {
+export const flattenMarkdownText = (value: ReactNode): string => {
   if (typeof value === 'string') {
     return value;
   }
@@ -13,7 +14,7 @@ export const flattenMarkdownText = (value: React.ReactNode): string => {
     return value.map(flattenMarkdownText).join('');
   }
 
-  if (React.isValidElement(value)) {
+  if (isValidElement(value)) {
     return flattenMarkdownText(value.props.children);
   }
 

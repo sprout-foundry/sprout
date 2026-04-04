@@ -1,7 +1,6 @@
 // @ts-nocheck
 
-import React from 'react';
-import { act } from 'react';
+import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
 // ---------------------------------------------------------------------------
@@ -135,7 +134,7 @@ describe('usePageVisibility', () => {
   it('does not call freeze/resume on mount with visible page', () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     act(() => {
-      root.render(React.createElement(HookRunner));
+      root.render(createElement(HookRunner));
     });
 
     expect(mockFreeze).not.toHaveBeenCalled();
@@ -147,7 +146,7 @@ describe('usePageVisibility', () => {
   it('calls freeze on WebSocketService and freezeAll on TerminalWebSocketService after page hides', () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     act(() => {
-      root.render(React.createElement(HookRunner));
+      root.render(createElement(HookRunner));
     });
 
     fireVisibilityChange('hidden');
@@ -175,7 +174,7 @@ describe('usePageVisibility', () => {
 
     // eslint-disable-next-line testing-library/no-unnecessary-act
     act(() => {
-      root.render(React.createElement(HookRunner));
+      root.render(createElement(HookRunner));
     });
 
     fireVisibilityChange('visible');
@@ -194,7 +193,7 @@ describe('usePageVisibility', () => {
   it('debounces rapid visibility toggles and only executes the most recent state', () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     act(() => {
-      root.render(React.createElement(HookRunner));
+      root.render(createElement(HookRunner));
     });
 
     // Rapid toggle: visible → hidden → visible within 100ms
@@ -222,7 +221,7 @@ describe('usePageVisibility', () => {
   it('does not execute stale freeze if page became visible during debounce', () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     act(() => {
-      root.render(React.createElement(HookRunner));
+      root.render(createElement(HookRunner));
     });
 
     // Hide the page
@@ -248,7 +247,7 @@ describe('usePageVisibility', () => {
   it('does not call anything after unmount (cleanup)', () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     act(() => {
-      root.render(React.createElement(HookRunner));
+      root.render(createElement(HookRunner));
     });
 
     fireVisibilityChange('hidden');
@@ -270,7 +269,7 @@ describe('usePageVisibility', () => {
 
     // eslint-disable-next-line testing-library/no-unnecessary-act
     act(() => {
-      root.render(React.createElement(HookRunner));
+      root.render(createElement(HookRunner));
     });
     act(() => {
       root.unmount();
@@ -283,7 +282,7 @@ describe('usePageVisibility', () => {
   it('handles multiple rapid toggle cycles and only executes final state', () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     act(() => {
-      root.render(React.createElement(HookRunner));
+      root.render(createElement(HookRunner));
     });
 
     // Rapid cycle: visible → hidden → visible → hidden → visible

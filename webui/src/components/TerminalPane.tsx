@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 'react';
+import { useState, useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 'react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import ContextMenu from './ContextMenu';
 import { X, TriangleAlert, Copy, ClipboardPaste, Trash2, TextSelect, Link2 } from 'lucide-react';
 import { Terminal as XTerm } from '@xterm/xterm';
@@ -146,7 +147,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       closeContextMenu();
     }, [contextMenu?.linkUrl, closeContextMenu]);
 
-    const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    const handleContextMenu = useCallback((e: ReactMouseEvent) => {
       e.preventDefault();
       const term = xtermRef.current;
       const hasSelection = term?.hasSelection() ?? false;

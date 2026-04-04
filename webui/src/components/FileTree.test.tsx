@@ -1,6 +1,5 @@
 // @ts-nocheck
 
-import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
 import { Simulate } from 'react-dom/test-utils';
@@ -37,7 +36,14 @@ const MOCK_FILES = [
   { name: 'src', path: 'src', is_dir: true, size: 0, mod_time: 0 },
   { name: 'main.go', path: 'main.go', is_dir: false, size: 100, mod_time: 1000 },
   { name: 'README.md', path: 'README.md', is_dir: false, size: 200, mod_time: 2000 },
-  { name: 'node_modules', path: 'node_modules', is_dir: true, size: 0, mod_time: 0, git_status: 'ignored' },
+  {
+    name: 'node_modules',
+    path: 'node_modules',
+    is_dir: true,
+    size: 0,
+    mod_time: 0,
+    git_status: 'ignored',
+  },
   { name: 'dist', path: 'dist', is_dir: true, size: 0, mod_time: 0, git_status: 'ignored' },
   { name: '.env', path: '.env', is_dir: false, size: 50, mod_time: 500, git_status: 'ignored' },
 ];

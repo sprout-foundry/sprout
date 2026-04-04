@@ -6,6 +6,7 @@
  */
 
 import { useState } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import type { AppState } from '../types/app';
 import { loadPersistedAppState } from '../services/appStatePersistence';
 
@@ -33,7 +34,7 @@ const DEFAULT_APP_STATE: AppState = {
 
 export interface UseAppStateReturn {
   state: AppState;
-  setState: React.Dispatch<React.SetStateAction<AppState>>;
+  setState: Dispatch<SetStateAction<AppState>>;
 }
 
 export function useAppState(): UseAppStateReturn {

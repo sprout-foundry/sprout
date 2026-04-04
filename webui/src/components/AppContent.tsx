@@ -1,4 +1,5 @@
-import React, { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect } from 'react';
+import type { Dispatch, FC, SetStateAction } from 'react';
 import { Menu, PanelRightOpen, PanelRightClose } from 'lucide-react';
 import Sidebar from './Sidebar';
 import WorkspaceBar from './WorkspaceBar';
@@ -24,7 +25,7 @@ import type { AppState, LogEntry, PerChatState } from '../types/app';
 interface AppContentProps {
   state: AppState;
   inputValue: string;
-  onInputChange: React.Dispatch<React.SetStateAction<string>>;
+  onInputChange: Dispatch<SetStateAction<string>>;
   isMobile: boolean;
   isSidebarOpen: boolean;
   sidebarCollapsed: boolean;
@@ -67,7 +68,7 @@ interface AppContentProps {
   perChatCache?: Record<string, PerChatState>;
 }
 
-const AppContent: React.FC<AppContentProps> = ({
+const AppContent: FC<AppContentProps> = ({
   state,
   inputValue,
   onInputChange,

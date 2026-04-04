@@ -1,6 +1,5 @@
 // @ts-nocheck
 
-import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
 import GitSidebarPanel, { type GitStatusData } from './GitSidebarPanel';

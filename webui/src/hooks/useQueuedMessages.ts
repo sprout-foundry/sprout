@@ -7,12 +7,13 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { AppState } from '../types/app';
 
 export interface UseQueuedMessagesReturn {
   queuedMessages: string[];
-  queuedMessagesRef: React.MutableRefObject<string[]>;
-  setQueuedMessages: React.Dispatch<React.SetStateAction<string[]>>;
+  queuedMessagesRef: MutableRefObject<string[]>;
+  setQueuedMessages: Dispatch<SetStateAction<string[]>>;
   handleQueueMessage: (message: string) => void;
   handleRemoveQueuedMessage: (index: number) => void;
   handleEditQueuedMessage: (index: number, newText: string) => void;
@@ -83,11 +84,11 @@ export function useQueuedMessages(): UseQueuedMessagesReturn {
  */
 export function useQueuedMessagesAutoSend(
   state: AppState,
-  activeRequestsRef: React.MutableRefObject<number>,
-  queuedMessagesRef: React.MutableRefObject<string[]>,
-  setQueuedMessages: React.Dispatch<React.SetStateAction<string[]>>,
+  activeRequestsRef: MutableRefObject<number>,
+  queuedMessagesRef: MutableRefObject<string[]>,
+  setQueuedMessages: Dispatch<SetStateAction<string[]>>,
   handleSendMessage: (message: string) => Promise<void>,
-  setState: React.Dispatch<React.SetStateAction<AppState>>,
+  setState: Dispatch<SetStateAction<AppState>>,
 ): void {
   useEffect(() => {
     if (state.isProcessing || activeRequestsRef.current > 0) {

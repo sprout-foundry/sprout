@@ -1,4 +1,5 @@
-import React from 'react';
+import { createRef } from 'react';
+import type { MutableRefObject } from 'react';
 import { createRoot } from 'react-dom/client';
 import { act } from 'react';
 import ChatMessageContextMenu from './ChatMessageContextMenu';
@@ -94,8 +95,8 @@ function renderWithBubble(innerHtml = '<div data-message-content="Hello world">H
   const bubble = bubbleWrapper.firstElementChild as HTMLElement;
   chatContainer.appendChild(bubble);
 
-  const containerRef = React.createRef<HTMLDivElement>();
-  (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = chatContainer;
+  const containerRef = createRef<HTMLDivElement>();
+  (containerRef as MutableRefObject<HTMLDivElement | null>).current = chatContainer;
 
   // eslint-disable-next-line testing-library/no-unnecessary-act
   act(() => {

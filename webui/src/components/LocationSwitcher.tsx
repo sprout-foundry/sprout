@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import type { FC } from 'react';
 import { createPortal } from 'react-dom';
 import './LocationSwitcher.css';
 import { FolderOpen, Monitor, RefreshCw, Loader2, Server } from 'lucide-react';
@@ -242,7 +243,7 @@ const writeSSHFavoriteWorkspaces = (value: Record<string, string[]>) => {
   }
 };
 
-const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
+const LocationSwitcher: FC<LocationSwitcherProps> = ({
   isConnected,
   instances = [],
   selectedInstancePID = 0,
@@ -534,7 +535,10 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
           return;
         }
         if (data.home_path) {
-          setSshHomePaths((current) => ({ ...current, [session.host_alias]: data.home_path as string }));
+          setSshHomePaths((current) => ({
+            ...current,
+            [session.host_alias]: data.home_path as string,
+          }));
         }
         const nextSuggestions = (data.files || [])
           .filter((file: SSHBrowseEntry) => file.type === 'directory')
@@ -981,7 +985,11 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
       }
       setIsOpen(false);
       setSshSessions(await apiService.current.getSSHSessions().catch(() => []));
-      setSwitchingState({ isSwitching: false, error: null, status: `SSH workspace ready: ${hostAlias}` });
+      setSwitchingState({
+        isSwitching: false,
+        error: null,
+        status: `SSH workspace ready: ${hostAlias}`,
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to open SSH host';
       if (error instanceof SSHWorkspaceOpenError) {

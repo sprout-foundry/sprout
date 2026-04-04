@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2, ChevronRight, Clock, GitCommitHorizontal } from 'lucide-react';
 import type { ApiService } from '../services/api';
 import { formatRelativeDate, firstLine } from '../utils/format';

@@ -24,7 +24,12 @@ export const useAutoReloadCleanBuffers = ({
   // Modified files are left to EditorPane's conflict dialog.
   useEffect(() => {
     const handleExternalChange = async (e: Event) => {
-      const detail = (e as CustomEvent).detail as { path: string; mtime: number; size: number; deleted: boolean };
+      const detail = (e as CustomEvent).detail as {
+        path: string;
+        mtime: number;
+        size: number;
+        deleted: boolean;
+      };
       if (!detail.path || detail.deleted) return;
 
       // Find the buffer for this file

@@ -1,4 +1,5 @@
-import React, { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
+import type { FC } from 'react';
 import './ThemedDialog.css';
 
 export interface SecurityApprovalDialogProps {
@@ -32,7 +33,7 @@ const toRiskKey = (level: string): RiskKey => {
   return 'dangerous';
 };
 
-const SecurityApprovalDialog: React.FC<SecurityApprovalDialogProps> = ({
+const SecurityApprovalDialog: FC<SecurityApprovalDialogProps> = ({
   requestId,
   toolName,
   riskLevel,

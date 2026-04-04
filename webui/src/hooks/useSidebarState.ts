@@ -7,6 +7,7 @@
 
 import { useState, useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
+import { debugLog } from '../utils/log';
 
 export interface UseSidebarStateReturn {
   isMobile: boolean;
@@ -24,7 +25,8 @@ export interface UseSidebarStateReturn {
 function loadPersistedBoolean(key: string, fallback: boolean): boolean {
   try {
     return window.localStorage.getItem(key) === 'true';
-  } catch {
+  } catch (err) {
+    debugLog('[loadPersistedBoolean] failed to read localStorage key:', key, err);
     return fallback;
   }
 }
@@ -44,8 +46,8 @@ export function useSidebarState(): UseSidebarStateReturn {
   const setSidebarCollapsed = useCallback((collapsed: boolean) => {
     try {
       window.localStorage.setItem('ledit-sidebar-collapsed', String(collapsed));
-    } catch {
-      /* ignore */
+    } catch (err) {
+      debugLog('[useSidebarState] failed to persist sidebar collapsed state:', err);
     }
     setSidebarCollapsedRaw(collapsed);
   }, []);
@@ -53,8 +55,8 @@ export function useSidebarState(): UseSidebarStateReturn {
   const setIsTerminalExpanded = useCallback((expanded: boolean) => {
     try {
       window.localStorage.setItem('ledit-terminal-expanded', String(expanded));
-    } catch {
-      /* ignore */
+    } catch (err) {
+      debugLog('[useSidebarState] failed to persist terminal expanded state:', err);
     }
     setIsTerminalExpandedRaw(expanded);
   }, []);

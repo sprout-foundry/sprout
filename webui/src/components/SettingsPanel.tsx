@@ -3,6 +3,7 @@ import type { FC } from 'react';
 import './SettingsPanel.css';
 import { ApiService, type LeditSettings, type ProviderOption } from '../services/api';
 import { useNotifications } from '../contexts/NotificationContext';
+import { debugLog } from '../utils/log';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 
 /* ─── Types ──────────────────────────────────────────────────── */
@@ -146,7 +147,8 @@ const SettingsPanel: FC<SettingsPanelProps> = ({ settings, onSettingsChanged }) 
         if (cancelled) return;
         setSubagentProviders((data.available_providers || []) as ProviderOption[]);
         setSubagentTypes((data.subagent_types || {}) as Record<string, SubagentTypeEntry>);
-      } catch {
+      } catch (err) {
+        debugLog('[SettingsPanel] failed to load subagent types:', err);
         // Silently fail — dropdowns will just be empty
       }
     })();
@@ -178,7 +180,8 @@ const SettingsPanel: FC<SettingsPanelProps> = ({ settings, onSettingsChanged }) 
         onSettingsChanged(updated);
         await api.updateSettings({ [keyOrPath]: value });
         addNotification('success', 'Settings', 'Saved', 3000);
-      } catch {
+      } catch (err) {
+        debugLog('[SettingsPanel] failed to save setting:', err);
         onSettingsChanged(prev);
         addNotification('error', 'Settings', 'Save failed', 5000);
       } finally {
@@ -373,7 +376,8 @@ const SettingsPanel: FC<SettingsPanelProps> = ({ settings, onSettingsChanged }) 
       onSettingsChanged(fresh);
       addNotification('success', 'Settings', 'Server added', 3000);
       resetServerForm();
-    } catch {
+    } catch (err) {
+      debugLog('[SettingsPanel] failed to add MCP server:', err);
       addNotification('error', 'Settings', 'Failed to add server', 5000);
     } finally {
       setSavingKey(null);
@@ -393,7 +397,8 @@ const SettingsPanel: FC<SettingsPanelProps> = ({ settings, onSettingsChanged }) 
       onSettingsChanged(fresh);
       addNotification('success', 'Settings', 'Server updated', 3000);
       resetServerForm();
-    } catch {
+    } catch (err) {
+      debugLog('[SettingsPanel] failed to update MCP server:', err);
       addNotification('error', 'Settings', 'Failed to update server', 5000);
     } finally {
       setSavingKey(null);
@@ -408,7 +413,8 @@ const SettingsPanel: FC<SettingsPanelProps> = ({ settings, onSettingsChanged }) 
       onSettingsChanged(fresh);
       addNotification('success', 'Settings', 'Server deleted', 3000);
       if (editingServer?.originalName === name) resetServerForm();
-    } catch {
+    } catch (err) {
+      debugLog('[SettingsPanel] failed to delete MCP server:', err);
       addNotification('error', 'Settings', 'Failed to delete server', 5000);
     } finally {
       setSavingKey(null);
@@ -471,7 +477,8 @@ const SettingsPanel: FC<SettingsPanelProps> = ({ settings, onSettingsChanged }) 
       onSettingsChanged(fresh);
       addNotification('success', 'Settings', 'Provider added', 3000);
       resetProviderForm();
-    } catch {
+    } catch (err) {
+      debugLog('[SettingsPanel] failed to add custom provider:', err);
       addNotification('error', 'Settings', 'Failed to add provider', 5000);
     } finally {
       setSavingKey(null);
@@ -523,7 +530,8 @@ const SettingsPanel: FC<SettingsPanelProps> = ({ settings, onSettingsChanged }) 
       onSettingsChanged(fresh);
       addNotification('success', 'Settings', 'Provider updated', 3000);
       resetProviderForm();
-    } catch {
+    } catch (err) {
+      debugLog('[SettingsPanel] failed to update custom provider:', err);
       addNotification('error', 'Settings', 'Failed to update provider', 5000);
     } finally {
       setSavingKey(null);
@@ -538,7 +546,8 @@ const SettingsPanel: FC<SettingsPanelProps> = ({ settings, onSettingsChanged }) 
       onSettingsChanged(fresh);
       addNotification('success', 'Settings', 'Provider deleted', 3000);
       if (editingProvider?.originalName === name) resetProviderForm();
-    } catch {
+    } catch (err) {
+      debugLog('[SettingsPanel] failed to delete custom provider:', err);
       addNotification('error', 'Settings', 'Failed to delete provider', 5000);
     } finally {
       setSavingKey(null);
@@ -561,7 +570,8 @@ const SettingsPanel: FC<SettingsPanelProps> = ({ settings, onSettingsChanged }) 
       await api.updateSkills(updatedSkills);
       onSettingsChanged({ ...settings, skills: updatedSkills });
       addNotification('success', 'Settings', `${skillName} ${enabled ? 'enabled' : 'disabled'}`, 3000);
-    } catch {
+    } catch (err) {
+      debugLog('[SettingsPanel] failed to update skill:', err);
       addNotification('error', 'Settings', 'Failed to update skill', 5000);
     } finally {
       setSavingKey(null);
@@ -734,7 +744,8 @@ const SettingsPanel: FC<SettingsPanelProps> = ({ settings, onSettingsChanged }) 
                               },
                             }));
                             addNotification('success', 'Settings', `${persona.name}: provider updated`, 3000);
-                          } catch {
+                          } catch (err) {
+                            debugLog('[SettingsPanel] failed to update subagent provider:', err);
                             addNotification('error', 'Settings', `Failed to update ${persona.name}`, 5000);
                           } finally {
                             setSubagentSavingPersona(null);
@@ -763,7 +774,8 @@ const SettingsPanel: FC<SettingsPanelProps> = ({ settings, onSettingsChanged }) 
                               [personaId]: { ...prev[personaId], model: e.target.value },
                             }));
                             addNotification('success', 'Settings', `${persona.name}: model updated`, 3000);
-                          } catch {
+                          } catch (err) {
+                            debugLog('[SettingsPanel] failed to update subagent model:', err);
                             addNotification('error', 'Settings', `Failed to update ${persona.name}`, 5000);
                           } finally {
                             setSubagentSavingPersona(null);

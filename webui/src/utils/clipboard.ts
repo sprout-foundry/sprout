@@ -1,9 +1,12 @@
+import { debugLog } from './log';
+
 /** Copy text to the clipboard with a fallback for non-HTTPS contexts. */
 export async function copyToClipboard(text: string): Promise<void> {
   try {
     await navigator.clipboard.writeText(text);
     return;
-  } catch {
+  } catch (err) {
+    debugLog('[clipboard] clipboard.writeText failed:', err);
     // Fallback for non-HTTPS contexts (e.g. file:// or http://localhost during development)
   }
   const textarea = document.createElement('textarea');
@@ -14,8 +17,8 @@ export async function copyToClipboard(text: string): Promise<void> {
   textarea.select();
   try {
     document.execCommand('copy');
-  } catch {
-    /* ignore */
+  } catch (err) {
+    debugLog('[clipboard] execCommand copy failed:', err);
   }
   document.body.removeChild(textarea);
 }

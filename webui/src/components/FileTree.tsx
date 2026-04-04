@@ -34,6 +34,7 @@ import { ApiService } from '../services/api';
 import { clientFetch } from '../services/clientSession';
 import { copyToClipboard } from '../utils/clipboard';
 import { fuzzyScore, highlightMatches } from '../utils/fuzzyMatch';
+import { debugLog } from '../utils/log';
 
 interface FileInfo {
   name: string;
@@ -320,8 +321,8 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
     useEffect(() => {
       try {
         localStorage.setItem('filetree-show-ignored', String(showIgnoredFiles));
-      } catch {
-        // Ignore storage errors (e.g. quota exceeded, private browsing)
+      } catch (err) {
+        debugLog('[showIgnoredFiles] localStorage persist failed:', err);
       }
     }, [showIgnoredFiles]);
 

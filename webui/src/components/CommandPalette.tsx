@@ -5,8 +5,7 @@ import { clientFetch } from '../services/clientSession';
 import { clearLayoutSnapshot } from '../services/layoutPersistence';
 import { fuzzyFilter, highlightMatches } from '../utils/fuzzyMatch';
 import type { FuzzyResult } from '../utils/fuzzyMatch';
-import { useLog } from '../utils/log';
-import './CommandPalette.css';
+import { useLog, debugLog } from '../utils/log';
 
 interface CommandPaletteProps {
   isOpen: boolean;
@@ -383,8 +382,8 @@ const CommandPalette: FC<CommandPaletteProps> = ({
           for (const key of keys) {
             try {
               window.localStorage.removeItem(key);
-            } catch {
-              // intentionally empty — localStorage may be unavailable in some contexts
+            } catch (err) {
+              debugLog('[resetPreferences] localStorage.removeItem failed:', err);
             }
           }
           window.location.reload();

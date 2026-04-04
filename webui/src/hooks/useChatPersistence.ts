@@ -9,6 +9,7 @@
 import { useEffect } from 'react';
 import type { AppState } from '../types/app';
 import { getAppStateStorageKey } from '../services/appStatePersistence';
+import { debugLog } from '../utils/log';
 
 export function useChatPersistence(state: AppState): void {
   useEffect(() => {
@@ -32,15 +33,18 @@ export function useChatPersistence(state: AppState): void {
       });
     try {
       window.localStorage.setItem(storageKey, persistPayload(20));
-    } catch {
+    } catch (err) {
       // QuotaExceededError: retry with fewer messages, then give up gracefully.
+      debugLog('[useChatPersistence] failed to persist chat state (20 messages), retrying with fewer:', err);
       try {
         window.localStorage.setItem(storageKey, persistPayload(5));
-      } catch {
+      } catch (err2) {
+        debugLog('[useChatPersistence] failed to persist chat state (5 messages), clearing storage:', err2);
         try {
           window.localStorage.removeItem(storageKey);
-        } catch {
+        } catch (err3) {
           /* nothing more we can do */
+          debugLog('[useChatPersistence] failed to remove chat state from storage:', err3);
         }
       }
     }

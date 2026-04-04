@@ -30,9 +30,18 @@ interface UseLayoutPersistenceParams {
 
 /** Layout persistence: restore open tabs on mount, save snapshot on changes, cleanup. */
 export function useLayoutPersistence({
-  buffersRef, panesRef, buffers, panes,
-  setBuffers, setPanes, activePaneId, activeBufferId,
-  setActivePaneId, setActiveBufferId, paneLayout, paneSizes,
+  buffersRef,
+  panesRef,
+  buffers,
+  panes: _panes,
+  setBuffers,
+  setPanes,
+  activePaneId,
+  activeBufferId,
+  setActivePaneId,
+  setActiveBufferId,
+  paneLayout,
+  paneSizes,
 }: UseLayoutPersistenceParams) {
   // Persist pane layout type to localStorage
   useEffect(() => {
@@ -63,7 +72,7 @@ export function useLayoutPersistence({
     if (!snapshot || snapshot.buffers.length === 0) return;
 
     const currentPanes = panesRef.current;
-    const validPaneIds = new Set(currentPanes.map(p => p.id));
+    const validPaneIds = new Set(currentPanes.map((p) => p.id));
     const existingBuffers = buffersRef.current;
     const newBuffers = new Map(existingBuffers);
     const pathToBufferId = new Map<string, string>();
@@ -78,22 +87,27 @@ export function useLayoutPersistence({
       const bufferId = `buffer-file-${Date.now()}-${index}`;
       pathToBufferId.set(filePath, bufferId);
       return {
-        id: bufferId, kind: 'file' as const,
+        id: bufferId,
+        kind: 'file' as const,
         file: { name, path: filePath, isDir: false, size: 0, modified: 0, ext },
-        content: '', originalContent: '',
-        cursorPosition: entry.cursorPosition, scrollPosition: entry.scrollPosition,
-        isModified: false, isActive: entry.isActive, paneId,
+        content: '',
+        originalContent: '',
+        cursorPosition: entry.cursorPosition,
+        scrollPosition: entry.scrollPosition,
+        isModified: false,
+        isActive: entry.isActive,
+        paneId,
       };
     };
 
     const seen = new Set<string>();
-    const existingPaths = new Set(Array.from(newBuffers.values()).map(b => b.file.path));
+    const existingPaths = new Set(Array.from(newBuffers.values()).map((b) => b.file.path));
 
     for (let idx = 0; idx < snapshot.bufferOrder.length; idx++) {
       const filePath = snapshot.bufferOrder[idx];
       if (seen.has(filePath) || existingPaths.has(filePath)) continue;
       seen.add(filePath);
-      const entry = snapshot.buffers.find(b => b.filePath === filePath);
+      const entry = snapshot.buffers.find((b) => b.filePath === filePath);
       if (!entry) continue;
       const buf = createBuffer(entry, idx);
       if (buf) newBuffers.set(buf.id, buf);
@@ -108,15 +122,17 @@ export function useLayoutPersistence({
     }
 
     setBuffers(newBuffers);
-    setPanes(prev => prev.map(pane => {
-      const activeBuf = Array.from(newBuffers.values()).find(b => b.paneId === pane.id && b.isActive);
-      return { ...pane, bufferId: activeBuf?.id ?? pane.bufferId };
-    }));
+    setPanes((prev) =>
+      prev.map((pane) => {
+        const activeBuf = Array.from(newBuffers.values()).find((b) => b.paneId === pane.id && b.isActive);
+        return { ...pane, bufferId: activeBuf?.id ?? pane.bufferId };
+      }),
+    );
 
-    if (snapshot.activePaneId && validPaneIds.has(snapshot.activePaneId))
-      setActivePaneId(snapshot.activePaneId);
-    if (snapshot.activeBufferFilePath && pathToBufferId.has(snapshot.activeBufferFilePath))
+    if (snapshot.activePaneId && validPaneIds.has(snapshot.activePaneId)) setActivePaneId(snapshot.activePaneId);
+    if (snapshot.activeBufferFilePath && pathToBufferId.has(snapshot.activeBufferFilePath)) {
       setActiveBufferId(pathToBufferId.get(snapshot.activeBufferFilePath)!);
+    }
   }, [buffersRef, panesRef, setBuffers, setPanes, setActivePaneId, setActiveBufferId]);
 
   // Auto-restore layout on first mount
@@ -126,15 +142,21 @@ export function useLayoutPersistence({
   }, []);
 
   // Register beforeunload listener
-  useEffect(() => { initBeforeUnloadFlush(); }, []);
+  useEffect(() => {
+    initBeforeUnloadFlush();
+  }, []);
 
   // Save layout snapshot on every relevant state change (skip first render)
   const hasFirstRenderCompletedRef = useRef(false);
   useEffect(() => {
-    if (!hasFirstRenderCompletedRef.current) { hasFirstRenderCompletedRef.current = true; return; }
-    const validPaneIds = new Set(panesRef.current.map(p => p.id));
-    const fileBuffers = Array.from(buffers.entries())
-      .filter(([, b]) => b.kind === 'file' && !b.file.path.startsWith('__workspace/'));
+    if (!hasFirstRenderCompletedRef.current) {
+      hasFirstRenderCompletedRef.current = true;
+      return;
+    }
+    const validPaneIds = new Set(panesRef.current.map((p) => p.id));
+    const fileBuffers = Array.from(buffers.entries()).filter(
+      ([, b]) => b.kind === 'file' && !b.file.path.startsWith('__workspace/'),
+    );
 
     if (fileBuffers.length === 0) {
       saveLayoutSnapshot({ version: 1, activePaneId, activeBufferFilePath: null, buffers: [], bufferOrder: [] });
@@ -143,25 +165,33 @@ export function useLayoutPersistence({
 
     const activeBuffer = activeBufferId ? buffers.get(activeBufferId) : null;
     const activeBufferFilePath =
-      (activeBuffer?.kind === 'file' && activeBuffer.file.path && !activeBuffer.file.path.startsWith('__workspace/'))
-        ? activeBuffer.file.path : null;
+      activeBuffer?.kind === 'file' && activeBuffer.file.path && !activeBuffer.file.path.startsWith('__workspace/')
+        ? activeBuffer.file.path
+        : null;
 
     const snapshotBuffers: BufferLayoutEntry[] = fileBuffers.map(([, b]) => ({
       filePath: b.file.path,
-      paneId: (b.paneId && validPaneIds.has(b.paneId)) ? b.paneId : 'pane-1',
-      isActive: b.isActive, cursorPosition: b.cursorPosition, scrollPosition: b.scrollPosition,
+      paneId: b.paneId && validPaneIds.has(b.paneId) ? b.paneId : 'pane-1',
+      isActive: b.isActive,
+      cursorPosition: b.cursorPosition,
+      scrollPosition: b.scrollPosition,
     }));
 
     const snapshot: LayoutSnapshot = {
-      version: 1, activePaneId, activeBufferFilePath,
-      buffers: snapshotBuffers, bufferOrder: snapshotBuffers.map(b => b.filePath),
+      version: 1,
+      activePaneId,
+      activeBufferFilePath,
+      buffers: snapshotBuffers,
+      bufferOrder: snapshotBuffers.map((b) => b.filePath),
     };
     saveLayoutSnapshot(snapshot);
   }, [buffers, activePaneId, activeBufferId, panesRef]);
 
   // Cleanup on unmount
   useEffect(() => {
-    return () => { disposeLayoutPersistence(); };
+    return () => {
+      disposeLayoutPersistence();
+    };
   }, []);
 
   return { restoreLayout };

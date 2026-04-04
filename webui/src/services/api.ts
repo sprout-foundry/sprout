@@ -512,7 +512,7 @@ class ApiService {
 
   async browseSSHDirectory(
     hostAlias: string,
-    path?: string
+    path?: string,
   ): Promise<{ path: string; home_path?: string; files: SSHBrowseEntry[] }> {
     const response = await clientFetch('/api/instances/ssh-browse', {
       method: 'POST',
@@ -653,7 +653,9 @@ class ApiService {
   // Get terminal history
   async getTerminalHistory(sessionId?: string): Promise<{ history: string[]; count: number }> {
     try {
-      const url = sessionId ? `/api/terminal/history?session_id=${encodeURIComponent(sessionId)}` : '/api/terminal/history';
+      const url = sessionId
+        ? `/api/terminal/history?session_id=${encodeURIComponent(sessionId)}`
+        : '/api/terminal/history';
       const response = await clientFetch(url);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -919,7 +921,11 @@ class ApiService {
     }
   }
 
-  async getGitLog(limit: number, offset: number, opts?: { signal?: AbortSignal }): Promise<{
+  async getGitLog(
+    limit: number,
+    offset: number,
+    opts?: { signal?: AbortSignal },
+  ): Promise<{
     message: string;
     commits: GitCommitSummary[];
     offset: number;
@@ -943,7 +949,10 @@ class ApiService {
     return response.json();
   }
 
-  async getGitCommitFileDiff(hash: string, path: string): Promise<{
+  async getGitCommitFileDiff(
+    hash: string,
+    path: string,
+  ): Promise<{
     message: string;
     hash: string;
     path: string;
@@ -1005,7 +1014,10 @@ class ApiService {
     }
   }
 
-  async startFixFromDeepReview(reviewOutput: string, options?: { fixPrompt?: string; selectedItems?: string[] }): Promise<{
+  async startFixFromDeepReview(
+    reviewOutput: string,
+    _options?: { fixPrompt?: string; selectedItems?: string[] },
+  ): Promise<{
     message: string;
     job_id: string;
     session_id: string;
@@ -1027,7 +1039,10 @@ class ApiService {
     }
   }
 
-  async getFixFromDeepReviewStatus(jobId: string, since = 0): Promise<{
+  async getFixFromDeepReviewStatus(
+    jobId: string,
+    since = 0,
+  ): Promise<{
     message: string;
     job_id: string;
     session_id: string;
@@ -1038,7 +1053,9 @@ class ApiService {
     error: string;
   }> {
     try {
-      const response = await clientFetch(`/api/git/deep-review/fix/status?job_id=${encodeURIComponent(jobId)}&since=${since}`);
+      const response = await clientFetch(
+        `/api/git/deep-review/fix/status?job_id=${encodeURIComponent(jobId)}&since=${since}`,
+      );
       if (!response.ok) {
         const text = await response.text();
         throw new Error(text || `HTTP error! status: ${response.status}`);
@@ -1198,7 +1215,7 @@ class ApiService {
     try {
       const params = new URLSearchParams();
       if (scope) params.set('scope', scope);
-      const url = `/api/sessions${params.toString() ? '?' + params.toString() : ''}`;
+      const url = `/api/sessions${params.toString() ? `?${params.toString()}` : ''}`;
       const response = await clientFetch(url);
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
@@ -1411,18 +1428,21 @@ class ApiService {
   // ── Subagent Types API ──────────────────────────────────────────
 
   async getSubagentTypes(): Promise<{
-    subagent_types: Record<string, {
-      id: string;
-      name: string;
-      description: string;
-      provider: string;
-      model: string;
-      system_prompt: string;
-      system_prompt_text?: string;
-      allowed_tools: string[];
-      aliases: string[];
-      enabled: boolean;
-    }>;
+    subagent_types: Record<
+      string,
+      {
+        id: string;
+        name: string;
+        description: string;
+        provider: string;
+        model: string;
+        system_prompt: string;
+        system_prompt_text?: string;
+        allowed_tools: string[];
+        aliases: string[];
+        enabled: boolean;
+      }
+    >;
     available_providers: Array<{ id: string; name: string; models: string[] }>;
     current_provider: string;
     current_model: string;
@@ -1521,15 +1541,18 @@ class ApiService {
 
   // ── Search API ───────────────────────────────────────────────────
 
-  async search(query: string, options?: {
-    case_sensitive?: boolean;
-    whole_word?: boolean;
-    regex?: boolean;
-    include?: string;
-    exclude?: string;
-    max_results?: number;
-    context_lines?: number;
-  }): Promise<{
+  async search(
+    query: string,
+    options?: {
+      case_sensitive?: boolean;
+      whole_word?: boolean;
+      regex?: boolean;
+      include?: string;
+      exclude?: string;
+      max_results?: number;
+      context_lines?: number;
+    },
+  ): Promise<{
     results: Array<{
       file: string;
       matches: Array<{
@@ -1607,7 +1630,10 @@ class ApiService {
     }
   }
 
-  async getDiagnostics(path: string, content: string): Promise<{
+  async getDiagnostics(
+    path: string,
+    content: string,
+  ): Promise<{
     message: string;
     path: string;
     diagnostics: Array<{
@@ -1693,5 +1719,5 @@ export interface HotkeyEntry {
 export interface HotkeyConfig {
   version: string;
   hotkeys: HotkeyEntry[];
-  path?: string;  // Filesystem path to the hotkeys config file
+  path?: string; // Filesystem path to the hotkeys config file
 }

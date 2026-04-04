@@ -55,8 +55,8 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
   const [wholeWord, setWholeWord] = useState(false);
   const [useRegex, setUseRegex] = useState(false);
   const [results, setResults] = useState<SearchResult[] | null>(null);
-  const [totalMatches, setTotalMatches] = useState(0);
-  const [totalFiles, setTotalFiles] = useState(0);
+  const [_totalMatches, setTotalMatches] = useState(0);
+  const [_totalFiles, setTotalFiles] = useState(0);
   const [truncated, setTruncated] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,45 +77,48 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
   }, []);
 
   // Debounced search function
-  const performSearch = useCallback(async (query: string) => {
-    if (!query.trim()) {
-      setResults(null);
-      setTotalMatches(0);
-      setTotalFiles(0);
-      setTruncated(false);
-      setError(null);
-      return;
-    }
-
-    setIsSearching(true);
-    setError(null);
-    setReplaceStatus(null);
-
-    try {
-      const response = await apiService.search(query, {
-        case_sensitive: caseSensitive,
-        whole_word: wholeWord,
-        regex: useRegex,
-        exclude: excludePatterns || undefined,
-      });
-
-      setResults(response.results || []);
-      setTotalMatches(response.total_matches || 0);
-      setTotalFiles(response.total_files || 0);
-      setTruncated(response.truncated || false);
-
-      // Auto-expand if only one result
-      if (response.results && response.results.length === 1) {
-        setExpandedFiles(new Set([response.results[0].file]));
+  const performSearch = useCallback(
+    async (query: string) => {
+      if (!query.trim()) {
+        setResults(null);
+        setTotalMatches(0);
+        setTotalFiles(0);
+        setTruncated(false);
+        setError(null);
+        return;
       }
-    } catch (err) {
-      console.error('Search failed:', err);
-      setError(err instanceof Error ? err.message : 'Search failed');
-      setResults(null);
-    } finally {
-      setIsSearching(false);
-    }
-  }, [caseSensitive, wholeWord, useRegex, excludePatterns, apiService]);
+
+      setIsSearching(true);
+      setError(null);
+      setReplaceStatus(null);
+
+      try {
+        const response = await apiService.search(query, {
+          case_sensitive: caseSensitive,
+          whole_word: wholeWord,
+          regex: useRegex,
+          exclude: excludePatterns || undefined,
+        });
+
+        setResults(response.results || []);
+        setTotalMatches(response.total_matches || 0);
+        setTotalFiles(response.total_files || 0);
+        setTruncated(response.truncated || false);
+
+        // Auto-expand if only one result
+        if (response.results && response.results.length === 1) {
+          setExpandedFiles(new Set([response.results[0].file]));
+        }
+      } catch (err) {
+        console.error('Search failed:', err);
+        setError(err instanceof Error ? err.message : 'Search failed');
+        setResults(null);
+      } finally {
+        setIsSearching(false);
+      }
+    },
+    [caseSensitive, wholeWord, useRegex, excludePatterns, apiService],
+  );
 
   // Debounced search trigger
   useEffect(() => {
@@ -185,7 +188,7 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
     setError(null);
 
     try {
-      const allFilePaths = filteredResults.map(r => r.file);
+      const allFilePaths = filteredResults.map((r) => r.file);
 
       const response = await apiService.searchReplace({
         search: searchQuery,
@@ -211,7 +214,7 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
 
   // Toggle file expansion
   const toggleFile = useCallback((filePath: string) => {
-    setExpandedFiles(prev => {
+    setExpandedFiles((prev) => {
       const next = new Set(prev);
       if (next.has(filePath)) {
         next.delete(filePath);
@@ -223,9 +226,12 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
   }, []);
 
   // Handle file click
-  const handleFileClick = useCallback((filePath: string, lineNumber?: number) => {
-    onFileClick?.(filePath, lineNumber);
-  }, [onFileClick]);
+  const handleFileClick = useCallback(
+    (filePath: string, lineNumber?: number) => {
+      onFileClick?.(filePath, lineNumber);
+    },
+    [onFileClick],
+  );
 
   // Clear search
   const handleClear = useCallback(() => {
@@ -242,17 +248,17 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
 
   // Toggle case sensitivity
   const toggleCaseSensitive = useCallback(() => {
-    setCaseSensitive(prev => !prev);
+    setCaseSensitive((prev) => !prev);
   }, []);
 
   // Toggle whole word
   const toggleWholeWord = useCallback(() => {
-    setWholeWord(prev => !prev);
+    setWholeWord((prev) => !prev);
   }, []);
 
   // Toggle regex
   const toggleRegex = useCallback(() => {
-    setUseRegex(prev => !prev);
+    setUseRegex((prev) => !prev);
   }, []);
 
   // Highlight match in line
@@ -292,18 +298,21 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
 
   // ── Context menu handlers ──────────────────────────────────
 
-  const handleRowContextMenu = useCallback((e: React.MouseEvent, filePath: string, lineNumber: number, lineText: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setContextMenu({
-      x: e.clientX,
-      y: e.clientY,
-      filePath,
-      lineNumber,
-      matchText: lineText,
-      isFileHeader: false,
-    });
-  }, []);
+  const handleRowContextMenu = useCallback(
+    (e: React.MouseEvent, filePath: string, lineNumber: number, lineText: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        filePath,
+        lineNumber,
+        matchText: lineText,
+        isFileHeader: false,
+      });
+    },
+    [],
+  );
 
   const handleFileHeaderContextMenu = useCallback((e: React.MouseEvent, filePath: string) => {
     e.preventDefault();
@@ -357,13 +366,11 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
     // Check if pattern already exists in the exclude list
     const existingPatterns = excludePatterns
       .split(',')
-      .map(p => p.trim())
-      .filter(p => p.length > 0);
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0);
 
     if (!existingPatterns.includes(patternToExclude)) {
-      const newExclude = existingPatterns.length > 0
-        ? `${excludePatterns},${patternToExclude}`
-        : patternToExclude;
+      const newExclude = existingPatterns.length > 0 ? `${excludePatterns},${patternToExclude}` : patternToExclude;
       setExcludePatterns(newExclude);
     }
 
@@ -386,8 +393,8 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
       : getParentDirectory(contextMenu.filePath);
     const existing = excludePatterns
       .split(',')
-      .map(p => p.trim())
-      .filter(p => p.length > 0);
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0);
     return existing.includes(pattern);
   };
 
@@ -397,27 +404,27 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
 
     const patterns = excludePatterns
       .split(',')
-      .map(p => p.trim())
-      .filter(p => p.length > 0);
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0);
 
     if (patterns.length === 0) return results;
 
-    return results.filter(result => {
+    return results.filter((result) => {
       const relativePath = getRelativePath(result.file);
-      return !patterns.some(pattern => {
+      return !patterns.some((pattern) => {
         // Check if the file path starts with the exclude pattern
         if (pattern.endsWith('/')) {
-          return relativePath.startsWith(pattern) || relativePath.startsWith('./' + pattern);
+          return relativePath.startsWith(pattern) || relativePath.startsWith(`./${pattern}`);
         }
-        return relativePath === pattern || relativePath === './' + pattern;
+        return relativePath === pattern || relativePath === `./${pattern}`;
       });
     });
   }, [results, excludePatterns]);
 
   // Compute displayed counts from filtered results (accurate even when client-side filtering is active)
-  const displayMatches = React.useMemo(() =>
-    filteredResults?.reduce((sum, r) => sum + r.match_count, 0) ?? 0,
-    [filteredResults]
+  const displayMatches = React.useMemo(
+    () => filteredResults?.reduce((sum, r) => sum + r.match_count, 0) ?? 0,
+    [filteredResults],
   );
   const displayFiles = filteredResults?.length ?? 0;
 
@@ -437,12 +444,7 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
             onKeyDown={handleSearchKeyDown}
           />
           {searchQuery && (
-            <button
-              className="search-clear-btn"
-              onClick={handleClear}
-              title="Clear search"
-              aria-label="Clear search"
-            >
+            <button className="search-clear-btn" onClick={handleClear} title="Clear search" aria-label="Clear search">
               <X size={14} />
             </button>
           )}
@@ -509,7 +511,13 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
           <button
             className="search-replace-btn"
             onClick={handleReplace}
-            disabled={isSearching || !searchQuery.trim() || !replaceQuery.trim() || !filteredResults || filteredResults.length === 0}
+            disabled={
+              isSearching ||
+              !searchQuery.trim() ||
+              !replaceQuery.trim() ||
+              !filteredResults ||
+              filteredResults.length === 0
+            }
             title="Replace all in matched files"
           >
             {isSearching ? <Loader2 size={16} className="spinning" /> : <Replace size={16} />}
@@ -518,9 +526,7 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
       )}
 
       {/* Replace status */}
-      {replaceStatus && (
-        <div className="search-replace-status">{replaceStatus}</div>
-      )}
+      {replaceStatus && <div className="search-replace-status">{replaceStatus}</div>}
 
       {/* Expand/collapse replace toggle */}
       <button
@@ -534,8 +540,8 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
       {/* Search stats */}
       {filteredResults && (
         <div className="search-stats">
-          {displayMatches} {displayMatches === 1 ? 'match' : 'matches'} in{' '}
-          {displayFiles} {displayFiles === 1 ? 'file' : 'files'}
+          {displayMatches} {displayMatches === 1 ? 'match' : 'matches'} in {displayFiles}{' '}
+          {displayFiles === 1 ? 'file' : 'files'}
           {truncated && ' (truncated)'}
         </div>
       )}
@@ -563,113 +569,106 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
           </div>
         )}
 
-        {filteredResults && filteredResults.map((result) => {
-          const isExpanded = expandedFiles.has(result.file);
-          const relativePath = getRelativePath(result.file);
+        {filteredResults &&
+          filteredResults.map((result) => {
+            const isExpanded = expandedFiles.has(result.file);
+            const relativePath = getRelativePath(result.file);
 
-          return (
-            <div key={result.file} className="search-file-group">
-              <div
-                className="search-file-header"
-                onClick={() => toggleFile(result.file)}
-                onContextMenu={(e) => handleFileHeaderContextMenu(e, result.file)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    toggleFile(result.file);
-                  }
-                }}
-              >
-                <span className="search-expand-icon">
-                  {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                </span>
-                <span className="search-file-path">
-                  {relativePath}
-                </span>
-                <span className="search-file-badge">{result.match_count}</span>
-              </div>
-
-              {isExpanded && (
-                <div className="search-file-matches">
-                  {result.matches.map((match, idx) => (
-                    <div key={idx} className="search-match">
-                      {match.context_before.map((ctx, i) => {
-                        const contextLineNumber = match.line_number - (match.context_before.length - i);
-                        return (
-                          <div
-                            key={`before-${i}`}
-                            className="search-match-row search-match-row--context search-match-row--clickable"
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => handleFileClick(result.file, contextLineNumber)}
-                            onContextMenu={(e) => handleRowContextMenu(e, result.file, contextLineNumber, ctx)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                handleFileClick(result.file, contextLineNumber);
-                              }
-                            }}
-                          >
-                            <span className="search-match-line-number">
-                              {contextLineNumber}
-                            </span>
-                            <div className="search-match-line">{ctx}</div>
-                          </div>
-                        );
-                      })}
-                      <div
-                        className="search-match-row search-match-row--hit search-match-row--clickable"
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => handleFileClick(result.file, match.line_number)}
-                        onContextMenu={(e) => handleRowContextMenu(e, result.file, match.line_number, match.line)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            handleFileClick(result.file, match.line_number);
-                          }
-                        }}
-                      >
-                        <span className="search-match-line-number">
-                          {match.line_number}
-                        </span>
-                        <div className="search-match-line">
-                          {highlightMatch(match.line, match.column_start, match.column_end)}
-                        </div>
-                      </div>
-                      {match.context_after.map((ctx, i) => {
-                        const afterLineNumber = match.line_number + i + 1;
-                        return (
-                          <div
-                            key={`after-${i}`}
-                            className="search-match-row search-match-row--context search-match-row--clickable"
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => handleFileClick(result.file, afterLineNumber)}
-                            onContextMenu={(e) => handleRowContextMenu(e, result.file, afterLineNumber, ctx)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                handleFileClick(result.file, afterLineNumber);
-                              }
-                            }}
-                          >
-                            <span className="search-match-line-number">
-                              {afterLineNumber}
-                            </span>
-                            <div className="search-match-line">{ctx}</div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ))}
+            return (
+              <div key={result.file} className="search-file-group">
+                <div
+                  className="search-file-header"
+                  onClick={() => toggleFile(result.file)}
+                  onContextMenu={(e) => handleFileHeaderContextMenu(e, result.file)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      toggleFile(result.file);
+                    }
+                  }}
+                >
+                  <span className="search-expand-icon">
+                    {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                  </span>
+                  <span className="search-file-path">{relativePath}</span>
+                  <span className="search-file-badge">{result.match_count}</span>
                 </div>
-              )}
-            </div>
-          );
-        })}
+
+                {isExpanded && (
+                  <div className="search-file-matches">
+                    {result.matches.map((match, idx) => (
+                      <div key={idx} className="search-match">
+                        {match.context_before.map((ctx, i) => {
+                          const contextLineNumber = match.line_number - (match.context_before.length - i);
+                          return (
+                            <div
+                              key={`before-${i}`}
+                              className="search-match-row search-match-row--context search-match-row--clickable"
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => handleFileClick(result.file, contextLineNumber)}
+                              onContextMenu={(e) => handleRowContextMenu(e, result.file, contextLineNumber, ctx)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  handleFileClick(result.file, contextLineNumber);
+                                }
+                              }}
+                            >
+                              <span className="search-match-line-number">{contextLineNumber}</span>
+                              <div className="search-match-line">{ctx}</div>
+                            </div>
+                          );
+                        })}
+                        <div
+                          className="search-match-row search-match-row--hit search-match-row--clickable"
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => handleFileClick(result.file, match.line_number)}
+                          onContextMenu={(e) => handleRowContextMenu(e, result.file, match.line_number, match.line)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleFileClick(result.file, match.line_number);
+                            }
+                          }}
+                        >
+                          <span className="search-match-line-number">{match.line_number}</span>
+                          <div className="search-match-line">
+                            {highlightMatch(match.line, match.column_start, match.column_end)}
+                          </div>
+                        </div>
+                        {match.context_after.map((ctx, i) => {
+                          const afterLineNumber = match.line_number + i + 1;
+                          return (
+                            <div
+                              key={`after-${i}`}
+                              className="search-match-row search-match-row--context search-match-row--clickable"
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => handleFileClick(result.file, afterLineNumber)}
+                              onContextMenu={(e) => handleRowContextMenu(e, result.file, afterLineNumber, ctx)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  handleFileClick(result.file, afterLineNumber);
+                                }
+                              }}
+                            >
+                              <span className="search-match-line-number">{afterLineNumber}</span>
+                              <div className="search-match-line">{ctx}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
       </div>
 
       {/* Context menu */}
@@ -708,7 +707,18 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
             <span className="menu-item-label">
               {contextMenu?.isFileHeader ? 'Exclude file from search' : 'Exclude folder from search'}
             </span>
-            <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{getExcludeLabel()}</span>
+            <span
+              style={{
+                fontSize: 10,
+                color: 'var(--text-tertiary)',
+                fontFamily: 'var(--font-mono)',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {getExcludeLabel()}
+            </span>
           </div>
         </button>
       </ContextMenu>

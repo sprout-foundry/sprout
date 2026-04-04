@@ -1,0 +1,19 @@
+# https://editorconfig.org
+root = true
+
+# Default for all files
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Go files — indent size 4
+[*.go]
+indent_size = 4
+
+# Makefile — requires tabs
+[Makefile]
+indent_style = tab

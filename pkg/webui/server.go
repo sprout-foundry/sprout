@@ -47,6 +47,7 @@ type ReactWebServer struct {
 	listener                        net.Listener
 	upgrader                        websocket.Upgrader
 	connections                     sync.Map // map[*websocket.Conn]*ConnectionInfo
+	fileWatcher                      *fileWatcher
 	terminalManager                 *TerminalManager
 	isRunning                       bool
 	mutex                           sync.RWMutex
@@ -108,6 +109,7 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int) 
 		sshLauncherURL: strings.TrimSpace(os.Getenv("LEDIT_SSH_LAUNCHER_URL")),
 		sshHomePath:    strings.TrimSpace(os.Getenv("LEDIT_SSH_HOME")),
 		fileConsents:   newFileConsentManager(),
+		fileWatcher:    newFileWatcher(eventBus),
 		clientContexts: make(map[string]*webClientContext),
 		port:           port,
 		upgrader: websocket.Upgrader{
@@ -159,6 +161,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/browse", ws.handleAPIBrowse)
 	mux.HandleFunc("/api/file", ws.handleAPIFile)
 	mux.HandleFunc("/api/file/consent", ws.handleAPIFileConsent)
+	mux.HandleFunc("/api/file/check-modified", ws.handleAPIFileCheckModified)
 	mux.HandleFunc("/api/diagnostics", ws.handleAPIDiagnostics)
 	mux.HandleFunc("/api/config", ws.handleAPIConfig)
 	mux.HandleFunc("/api/workspace", ws.handleAPIWorkspace)
@@ -290,6 +293,9 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	// Start terminal session cleanup worker (every 5 minutes, timeout 30 minutes)
 	ws.terminalManager.StartCleanupWorker(ctx, 5*time.Minute, 30*time.Minute)
 
+	// Start file watcher for detecting external changes to open files.
+	ws.fileWatcher.start(ctx)
+
 	// Wait for context cancellation
 	go func() {
 		<-ctx.Done()
@@ -313,6 +319,9 @@ func (ws *ReactWebServer) Shutdown() error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
+	// Stop the file watcher.
+	ws.fileWatcher.stop()
 
 	// Close all WebSocket connections
 	ws.connections.Range(func(conn, value interface{}) bool {

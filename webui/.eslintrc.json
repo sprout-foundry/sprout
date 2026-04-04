@@ -1,15 +1,68 @@
 {
+  "env": {
+    "browser": true,
+    "es2022": true,
+    "node": false
+  },
   "extends": [
-    "react-app",
+    "eslint:recommended",
+    "plugin:@typescript-eslint/recommended",
     "plugin:react/recommended",
     "plugin:react-hooks/recommended",
+    "plugin:testing-library/react",
     "prettier"
   ],
+  "overrides": [
+    {
+      "files": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.spec.ts",
+        "**/*.spec.tsx"
+      ],
+      "rules": {
+        "@typescript-eslint/no-explicit-any": "off",
+        "@typescript-eslint/no-non-null-assertion": "off",
+        "no-console": "off",
+        "react-hooks/exhaustive-deps": "off"
+      }
+    }
+  ],
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "ecmaFeatures": {
+      "jsx": true
+    },
+    "ecmaVersion": "latest",
+    "project": "./tsconfig.json",
+    "sourceType": "module"
+  },
   "plugins": [
+    "@typescript-eslint",
+    "react",
+    "react-hooks",
     "testing-library"
   ],
+  "root": true,
   "rules": {
-    "@typescript-eslint/consistent-type-imports": "warn",
+    "@typescript-eslint/consistent-type-imports": [
+      "warn",
+      {
+        "fixStyle": "separate-type-imports",
+        "prefer": "type-imports"
+      }
+    ],
+    "@typescript-eslint/explicit-function-return-type": "off",
+    "@typescript-eslint/explicit-module-boundary-types": "off",
+    "@typescript-eslint/no-empty-function": [
+      "warn",
+      {
+        "allow": [
+          "constructors",
+          "methods"
+        ]
+      }
+    ],
     "@typescript-eslint/no-explicit-any": "warn",
     "@typescript-eslint/no-non-null-assertion": "warn",
     "@typescript-eslint/no-shadow": "warn",
@@ -19,6 +72,14 @@
         "argsIgnorePattern": "^_",
         "ignoreRestSiblings": true,
         "varsIgnorePattern": "^_"
+      }
+    ],
+    "@typescript-eslint/no-use-before-define": [
+      "warn",
+      {
+        "classes": true,
+        "functions": false,
+        "variables": true
       }
     ],
     "curly": [
@@ -38,27 +99,6 @@
         ]
       }
     ],
-    "no-restricted-imports": [
-      "warn",
-      {
-        "paths": [
-          {
-            "importNames": [
-              "default"
-            ],
-            "message": "Use named imports from React instead: import { useState } from 'react'",
-            "name": "react"
-          }
-        ]
-      }
-    ],
-    "no-restricted-syntax": [
-      "warn",
-      {
-        "message": "Use for...of or Object.keys() instead of for...in",
-        "selector": "ForInStatement"
-      }
-    ],
     "no-return-await": "warn",
     "no-shadow": "off",
     "no-template-curly-in-string": "off",
@@ -74,6 +114,9 @@
   "settings": {
     "react": {
       "version": "detect"
+    },
+    "testing-library": {
+      "module": "react"
     }
   }
 }

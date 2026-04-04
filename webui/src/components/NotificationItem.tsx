@@ -108,12 +108,7 @@ const NotificationItem: FC<NotificationItemProps> = ({
         {title && <h4 className="notification-title">{title}</h4>}
         <p className="notification-message">{message}</p>
       </div>
-      <button
-        className="notification-dismiss"
-        onClick={handleClose}
-        aria-label="Dismiss notification"
-        type="button"
-      >
+      <button className="notification-dismiss" onClick={handleClose} aria-label="Dismiss notification" type="button">
         ×
       </button>
     </div>

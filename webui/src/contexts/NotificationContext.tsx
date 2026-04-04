@@ -1,6 +1,7 @@
-import { createContext, useContext, useReducer, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useReducer, useCallback, useEffect, type ReactNode } from 'react';
 import type { FC } from 'react';
 import { generateUUID } from '../utils/uuid';
+import { notificationBus } from '../services/notificationBus';
 
 export type NotificationType = 'info' | 'success' | 'warning' | 'error';
 
@@ -32,7 +33,7 @@ type NotificationAction =
 
 const notificationReducer = (state: NotificationState, action: NotificationAction): NotificationState => {
   switch (action.type) {
-    case 'ADD_NOTIFICATION':
+    case 'ADD_NOTIFICATION': {
       const newNotification: Notification = {
         ...action.payload,
         id: action.payload.id ?? generateUUID(),
@@ -42,6 +43,7 @@ const notificationReducer = (state: NotificationState, action: NotificationActio
         ...state,
         notifications: [...state.notifications, newNotification],
       };
+    }
 
     case 'REMOVE_NOTIFICATION':
       return {
@@ -108,6 +110,27 @@ export const NotificationProvider: FC<NotificationProviderProps> = ({ children }
 
   const clearNotifications = useCallback(() => {
     dispatch({ type: 'CLEAR_NOTIFICATIONS' });
+  }, []);
+
+  // Subscribe to external notificationBus events
+  useEffect(() => {
+    const unsubscribe = notificationBus.onNotification((event) => {
+      // Clamp duration between 0 and 60000ms (same as addNotification)
+      const clampedDuration = event.duration !== undefined ? Math.max(0, Math.min(event.duration, 60000)) : undefined;
+
+      dispatch({
+        type: 'ADD_NOTIFICATION',
+        payload: {
+          type: event.type,
+          title: event.title,
+          message: event.message,
+          duration: clampedDuration,
+          id: event.id,
+        },
+      });
+    });
+
+    return unsubscribe;
   }, []);
 
   const value: NotificationContextValue = {

@@ -107,7 +107,9 @@
   color: var(--text-tertiary);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background 0.08s ease, color 0.08s ease;
+  transition:
+    background 0.08s ease,
+    color 0.08s ease;
   padding: 0;
   line-height: 1;
 }

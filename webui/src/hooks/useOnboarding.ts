@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { OnboardingState } from '../types/app';
 import type { OnboardingProviderOption } from '../services/api';
 import { ApiService } from '../services/api';
+import { notificationBus } from '../services/notificationBus';
 
 export interface WindowsOnboardingGuidance {
   tone: string;
@@ -105,7 +106,7 @@ function useOnboarding(): UseOnboardingReturn {
   // Refresh onboarding status on mount
   useEffect(() => {
     refreshStatus().catch((err) => {
-      console.error('Failed to refresh onboarding status:', err);
+      notificationBus.notify('warning', 'Onboarding', 'Failed to refresh setup status: ' + String(err));
     });
   }, [refreshStatus]);
 

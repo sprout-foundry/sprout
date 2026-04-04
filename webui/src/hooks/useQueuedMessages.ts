@@ -9,6 +9,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { AppState } from '../types/app';
+import { notificationBus } from '../services/notificationBus';
 
 export interface UseQueuedMessagesReturn {
   queuedMessages: string[];
@@ -117,6 +118,7 @@ export function useQueuedMessagesAutoSend(
           },
         ],
       }));
+      notificationBus.notify('error', 'Queued Message', 'Failed to send queued message: ' + errorMsg, 8000);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- activeRequestsRef, queuedMessagesRef, setQueuedMessages, and setState are all stable refs/setters, safe to omit
   }, [state.isProcessing, handleSendMessage]);

@@ -1,4 +1,5 @@
 import { clientFetch } from './clientSession';
+import { notificationBus } from './notificationBus';
 import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
 
 interface StatsResponse {
@@ -662,7 +663,11 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      console.error('Failed to get terminal history:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to get terminal history: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -682,7 +687,11 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      console.error('Failed to add terminal history:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to add terminal history: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -709,7 +718,11 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      console.error('Failed to get git status:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to get git status: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -810,7 +823,11 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      console.error('Failed to stage file:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to stage file: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -827,7 +844,11 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      console.error('Failed to unstage file:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to unstage file: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -844,7 +865,11 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      console.error('Failed to discard changes:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to discard changes: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -860,7 +885,11 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      console.error('Failed to stage all:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to stage all: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -876,7 +905,11 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      console.error('Failed to unstage all:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to unstage all: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -893,7 +926,11 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      console.error('Failed to create commit:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to create commit: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -916,7 +953,11 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      console.error('Failed to generate commit message:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to generate commit message: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -990,7 +1031,11 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      console.error('Failed to generate deep review:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to generate deep review: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1011,7 +1056,11 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      console.error('Failed to run deep review fix:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to run deep review fix: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1036,7 +1085,11 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      console.error('Failed to start deep review fix:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to start deep review fix: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1064,7 +1117,11 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      console.error('Failed to fetch deep review fix status:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to fetch deep review fix status: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1085,7 +1142,11 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      console.error('Failed to get git diff:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to get git diff: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1115,7 +1176,11 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      console.error('Failed to get changelog:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to get changelog: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1144,7 +1209,11 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      console.error('Failed to get changes:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to get changes: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1178,7 +1247,11 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      console.error('Failed to get revision details:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to get revision details: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1195,7 +1268,11 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      console.error('Failed to rollback:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to rollback: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1222,7 +1299,11 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      console.error('Failed to get sessions:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to get sessions: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1245,7 +1326,11 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      console.error('Failed to restore session:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to restore session: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1258,7 +1343,11 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      console.error('Failed to get settings:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to get settings: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1273,7 +1362,11 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      console.error('Failed to update settings:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to update settings: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1284,7 +1377,11 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      console.error('Failed to get MCP settings:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to get MCP settings: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1299,7 +1396,11 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      console.error('Failed to update MCP settings:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to update MCP settings: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1314,7 +1415,11 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      console.error('Failed to add MCP server:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to add MCP server: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1329,7 +1434,11 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      console.error('Failed to update MCP server:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to update MCP server: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1342,7 +1451,11 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      console.error('Failed to delete MCP server:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to delete MCP server: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1353,7 +1466,11 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      console.error('Failed to get custom providers:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to get custom providers: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1368,7 +1485,11 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      console.error('Failed to add custom provider:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to add custom provider: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1383,7 +1504,11 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      console.error('Failed to update custom provider:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to update custom provider: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1396,7 +1521,11 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      console.error('Failed to delete custom provider:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to delete custom provider: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1407,7 +1536,11 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      console.error('Failed to get skills:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to get skills: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1422,7 +1555,11 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      console.error('Failed to update skills:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to update skills: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1454,7 +1591,11 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      console.error('Failed to get subagent types:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to get subagent types: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1475,7 +1616,11 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      console.error('Failed to update subagent type:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to update subagent type: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1488,7 +1633,11 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      console.error('Failed to get hotkeys:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to get hotkeys: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1503,7 +1652,11 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      console.error('Failed to update hotkeys:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to update hotkeys: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1518,7 +1671,11 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      console.error('Failed to validate hotkeys:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to validate hotkeys: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1536,7 +1693,11 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      console.error('Failed to apply hotkey preset:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to apply hotkey preset: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1588,7 +1749,11 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      console.error('Failed to search:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to search: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1627,7 +1792,11 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      console.error('Failed to replace:', error);
+      notificationBus.notify(
+        'error',
+        'API Error',
+        `Failed to replace: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -1647,23 +1816,19 @@ class ApiService {
     }>;
     version: string;
   }> {
-    try {
-      const response = await clientFetch('/api/diagnostics', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path, content }),
-      });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      return await response.json();
-    } catch (error) {
-      console.error('Failed to get diagnostics:', error);
-      throw error;
+    // No notification — diagnostics are best-effort and called on every keystroke.
+    // A notification here would spam toasts if the diagnostics endpoint is down.
+    const response = await clientFetch('/api/diagnostics', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, content }),
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
+    return await response.json();
   }
 }
-
 export { ApiService };
 export type { StatsResponse, QueryRequest, FilesResponse, SearchMatch, SearchResult };
 export interface ProvidersResponse {

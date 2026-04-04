@@ -51,7 +51,7 @@ import { notificationBus } from '../services/notificationBus';
 import { File, Loader2, AlertTriangle, Eye, Columns2, WrapText, Link2, PanelRightClose } from 'lucide-react';
 import { copyToClipboard } from '../utils/clipboard';
 import { generateUnifiedDiff } from '../utils/simpleDiff';
-import { useLog, debugLog } from '../utils/log';
+import { useLog, debugLog, warn } from '../utils/log';
 import ContextMenu from './ContextMenu';
 
 interface EditorPaneProps {
@@ -143,7 +143,7 @@ const EditorPane: FC<EditorPaneProps> = ({ paneId }) => {
       .then((ws) => {
         setWorkspaceRoot(ws.workspace_root || '');
       })
-      .catch((err) => { debugLog('Failed to fetch workspace root:', err); });
+      .catch((err) => { warn(`Failed to fetch workspace root: ${err instanceof Error ? err.message : String(err)}`); });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isExternalUpdateRef = useRef<boolean>(false);
@@ -227,6 +227,7 @@ const EditorPane: FC<EditorPaneProps> = ({ paneId }) => {
             }
           } catch (err) {
             // Graceful degradation - just clear diff if API fails
+            debugLog('[EditorPane] Failed to fetch git diff for diagnostics:', err);
             notificationBus.notify('warning', 'Git Diff', 'Failed to fetch git diff for diagnostics');
             clearDiffGutter(viewRef.current);
           }
@@ -342,6 +343,7 @@ const EditorPane: FC<EditorPaneProps> = ({ paneId }) => {
             clearDiffGutter(viewRef.current);
           }
         } catch (err) {
+          debugLog('[EditorPane] Failed to re-fetch git diff after save:', err);
           notificationBus.notify('warning', 'Git Diff', 'Failed to re-fetch git diff after save');
         }
       }
@@ -905,6 +907,7 @@ const EditorPane: FC<EditorPaneProps> = ({ paneId }) => {
               // 'ignore' → dismissed without action (no indicator needed)
             })
             .catch((err) => {
+              debugLog('[EditorPane] File change dialog error:', err);
               notificationBus.notify('error', 'File Change', 'File change dialog error: ' + String(err));
             });
           return;
@@ -950,11 +953,12 @@ const EditorPane: FC<EditorPaneProps> = ({ paneId }) => {
                   setBufferExternallyModified(bufferRefId, diskContent);
                 }
               } catch (err) {
+                debugLog('[EditorPane] Failed to generate diff for external changes:', err);
                 notificationBus.notify('warning', 'Diff Generation', 'Failed to generate diff for external changes');
               }
             }
           })
-          .catch((err) => { debugLog('Failed to read externally modified file:', err); });
+          .catch((err) => { warn(`Failed to read externally modified file: ${err instanceof Error ? err.message : String(err)}`); });
         return;
       }
 

@@ -16,7 +16,10 @@ import (
 	"github.com/alantheprice/ledit/pkg/events"
 	"github.com/alantheprice/ledit/pkg/factory"
 	"github.com/alantheprice/ledit/pkg/mcp"
+	"github.com/alantheprice/ledit/pkg/prompts"
+	"github.com/alantheprice/ledit/pkg/security"
 	"github.com/alantheprice/ledit/pkg/validation"
+	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 const (
@@ -148,6 +151,10 @@ type Agent struct {
 	securityBypassApproved bool
 	securityBypassMu       sync.RWMutex
 
+	// Security concern tracking - track ignored concerns per file to avoid re-prompting
+	ignoredSecurityConcerns map[string]map[string]bool // filePath -> set of concern types that have been ignored
+	ignoredSecurityMu       sync.RWMutex
+
 	// Subagent output batching - buffer events to reduce event bus traffic
 	subagentBatchBuffer     []string            // Buffered subagent output lines
 	subagentBatchCount      int                 // Number of lines in buffer
@@ -275,6 +282,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 			workspaceRoot:             workspaceRoot,
 			securityApprovalMgr:       NewSecurityApprovalManager(),
 			outputRouter:              NewOutputRouter(nil, nil),
+			ignoredSecurityConcerns:   make(map[string]map[string]bool),
 		}
 
 		agent.optimizer.SetLLMClient(agent.client, agent.GetProvider(), func(line string) {
@@ -430,11 +438,12 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		activePersona:             "orchestrator",
 		workspaceRoot:             workspaceRoot,
 		securityApprovalMgr:       NewSecurityApprovalManager(),
-		outputRouter:              NewOutputRouter(nil, nil),
-	}
+			outputRouter:              NewOutputRouter(nil, nil),
+			ignoredSecurityConcerns:   make(map[string]map[string]bool),
+		}
 
-	agent.optimizer.SetLLMClient(agent.client, agent.GetProvider(), func(line string) {
-		agent.PrintLineAsync(line)
+		agent.optimizer.SetLLMClient(agent.client, agent.GetProvider(), func(line string) {
+			agent.PrintLineAsync(line)
 	})
 
 	// Wire output router with the agent reference now that agent exists
@@ -508,6 +517,82 @@ func (a *Agent) SetSecurityBypassApproved() {
 	a.securityBypassMu.Lock()
 	defer a.securityBypassMu.Unlock()
 	a.securityBypassApproved = true
+}
+
+// CheckFileContentSecurity runs security concern detection on file content after a write.
+// In WebUI mode, it uses the event-bus-based SecurityPromptManager to show a dialog.
+// In CLI mode, it falls back to the interactive logger prompt.
+// Ignored concerns are tracked per-file so they are not re-prompted.
+func (a *Agent) CheckFileContentSecurity(filePath string, content string) {
+	// Get prompt manager and event bus
+	promptManager := security.GetGlobalPromptManager()
+	eventBus := a.GetEventBus()
+
+	// If we don't have a mechanism to prompt, skip
+	if promptManager == nil && eventBus == nil {
+		return
+	}
+
+	// Detect security concerns in the content (pass filePath for test-file filtering)
+	concerns, snippets := security.DetectSecurityConcernsWithContext(content, filePath)
+	if len(concerns) == 0 {
+		return
+	}
+
+	// Get logger for CLI mode (always allow prompts for security checks —
+	// the debug flag controls logging verbosity, not security prompting)
+	logger := utils.GetLogger(false)
+
+	// Check each concern
+	for _, concern := range concerns {
+		// Check if this concern has been ignored for this file
+		isIgnored := false
+		a.ignoredSecurityMu.RLock()
+		if fileConcerns, exists := a.ignoredSecurityConcerns[filePath]; exists {
+			_, isIgnored = fileConcerns[concern]
+		}
+		a.ignoredSecurityMu.RUnlock()
+
+		if isIgnored {
+			continue
+		}
+
+		// Build prompt text with a snippet of the matched content
+		snippet := ""
+		if snippets != nil {
+			snippet = snippets[concern]
+		}
+		prompt := prompts.PotentialSecurityConcernsFound(filePath, concern, snippet)
+
+		var userResponse bool
+
+		// Try event-based prompting first (for WebUI)
+		if eventBus != nil && promptManager != nil {
+			extras := map[string]string{
+				"file_path": filePath,
+				"concern":   concern,
+			}
+			userResponse = promptManager.RequestPrompt(eventBus, prompt, true, extras)
+			logger.Logf("Security concern '%s' in %s user response: %v", concern, filePath, userResponse)
+		} else {
+			// Fall back to CLI-based prompting
+			userResponse = logger.AskForConfirmation(prompt, true, false)
+		}
+
+		// Log and track the result
+		if userResponse {
+			logger.Logf("Security concern '%s' in %s noted as an issue.", concern, filePath)
+		} else {
+			logger.Logf("Security concern '%s' in %s noted as unimportant.", concern, filePath)
+			// Only track as ignored when the user explicitly ignored it
+			a.ignoredSecurityMu.Lock()
+			if _, exists := a.ignoredSecurityConcerns[filePath]; !exists {
+				a.ignoredSecurityConcerns[filePath] = make(map[string]bool)
+			}
+			a.ignoredSecurityConcerns[filePath][concern] = true
+			a.ignoredSecurityMu.Unlock()
+		}
+	}
 }
 
 // SetInterruptHandler sets the interrupt handler for UI mode

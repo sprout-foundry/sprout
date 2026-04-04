@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FC } from 'react';
+import { useLog } from '../utils/log';
 import {
   Pencil,
   Plus,
@@ -93,6 +94,7 @@ const sortRevisionsNewestFirst = (revisions: Revision[]): Revision[] => {
 };
 
 const FileEditsPanel: FC<FileEditsPanelProps> = ({ edits, onFileClick }) => {
+  const log = useLog();
   const [showHistory, setShowHistory] = useState(false);
   const [revisions, setRevisions] = useState<Revision[]>([]);
   const [expandedRevisionIds, setExpandedRevisionIds] = useState<Set<string>>(new Set());
@@ -127,7 +129,7 @@ const FileEditsPanel: FC<FileEditsPanelProps> = ({ edits, onFileClick }) => {
       if (requestId !== historyLoadRequestRef.current) {
         return;
       }
-      console.error('Failed to fetch changelog:', error);
+      log.error(`Failed to fetch changelog: ${error instanceof Error ? error.message : String(error)}`, { title: 'Changelog Error' });
       setRollbackError('Failed to fetch revision history');
       setShowHistory(true);
     } finally {
@@ -172,7 +174,7 @@ const FileEditsPanel: FC<FileEditsPanelProps> = ({ edits, onFileClick }) => {
       setShowHistory(false);
       window.location.reload();
     } catch (error) {
-      console.error('Rollback failed:', error);
+      log.error(`Rollback failed: ${error instanceof Error ? error.message : String(error)}`, { title: 'Rollback Error' });
       setRollbackError(error instanceof Error ? error.message : 'Rollback failed');
     } finally {
       setIsLoadingHistory(false);

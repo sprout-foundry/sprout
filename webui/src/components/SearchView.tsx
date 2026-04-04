@@ -3,6 +3,7 @@ import type { ChangeEvent, FC, KeyboardEvent, MouseEvent, ReactNode } from 'reac
 import ContextMenu from './ContextMenu';
 import { ApiService } from '../services/api';
 import { copyToClipboard } from '../utils/clipboard';
+import { useLog } from '../utils/log';
 import {
   Search,
   Replace,
@@ -50,6 +51,7 @@ interface SearchContextMenuState {
 const DEBOUNCE_DELAY = 300;
 
 const SearchView: FC<SearchViewProps> = ({ onFileClick }) => {
+  const log = useLog();
   const [searchQuery, setSearchQuery] = useState('');
   const [replaceQuery, setReplaceQuery] = useState('');
   const [caseSensitive, setCaseSensitive] = useState(false);
@@ -111,14 +113,15 @@ const SearchView: FC<SearchViewProps> = ({ onFileClick }) => {
           setExpandedFiles(new Set([response.results[0].file]));
         }
       } catch (err) {
-        console.error('Search failed:', err);
-        setError(err instanceof Error ? err.message : 'Search failed');
+        const errorMessage = err instanceof Error ? err.message : 'Search failed';
+        log.error(`Search failed: ${errorMessage}`, { title: 'Search Error' });
+        setError(errorMessage);
         setResults(null);
       } finally {
         setIsSearching(false);
       }
     },
-    [caseSensitive, wholeWord, useRegex, excludePatterns, apiService],
+    [caseSensitive, wholeWord, useRegex, excludePatterns, apiService, log],
   );
 
   // Debounced search trigger
@@ -206,8 +209,9 @@ const SearchView: FC<SearchViewProps> = ({ onFileClick }) => {
       // Re-search to show updated results
       await performSearch(searchQuery);
     } catch (err) {
-      console.error('Replace failed:', err);
-      setError(err instanceof Error ? err.message : 'Replace failed');
+      const errorMessage = err instanceof Error ? err.message : 'Replace failed';
+      log.error(`Replace failed: ${errorMessage}`, { title: 'Replace Error' });
+      setError(errorMessage);
     } finally {
       setIsSearching(false);
     }

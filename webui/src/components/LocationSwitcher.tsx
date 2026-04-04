@@ -12,6 +12,7 @@ import {
   SSHWorkspaceOpenError,
 } from '../services/api';
 import { clientFetch, getSSHProxyContext } from '../services/clientSession';
+import { useLog } from '../utils/log';
 
 interface LocationSwitcherProps {
   isConnected: boolean;
@@ -251,6 +252,7 @@ const LocationSwitcher: FC<LocationSwitcherProps> = ({
   onInstanceChange,
   sidebarCollapsed = false,
 }) => {
+  const log = useLog();
   const [isOpen, setIsOpen] = useState(false);
   const [workspaceRoot, setWorkspaceRoot] = useState('');
   const [daemonRoot, setDaemonRoot] = useState('');
@@ -438,7 +440,7 @@ const LocationSwitcher: FC<LocationSwitcherProps> = ({
           setRemoteContext({ hostAlias: proxyCtx.hostAlias });
           addRemoteRecentWorkspace(proxyCtx.hostAlias, '');
         }
-        console.error('Failed to load workspace data:', error);
+        log.error(`Failed to load workspace data: ${error instanceof Error ? error.message : String(error)}`, { title: 'Workspace Load Error' });
       }
     };
 
@@ -447,7 +449,7 @@ const LocationSwitcher: FC<LocationSwitcherProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [addRecentWorkspace, addRemoteRecentWorkspace, isConnected]);
+  }, [addRecentWorkspace, addRemoteRecentWorkspace, isConnected, log]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Show workspace picker when we just navigated from SSH connect.
   useEffect(() => {
@@ -501,7 +503,7 @@ const LocationSwitcher: FC<LocationSwitcherProps> = ({
       })
       .catch((error: unknown) => {
         if (!cancelled) {
-          console.error('Failed to load SSH hosts:', error);
+          log.error(`Failed to load SSH hosts: ${error instanceof Error ? error.message : String(error)}`, { title: 'SSH Load Error' });
           setSshHosts([]);
           setSshSessions([]);
         }
@@ -874,7 +876,7 @@ const LocationSwitcher: FC<LocationSwitcherProps> = ({
       setSuggestionsError(null);
       setSshFailure(null);
     } catch (error) {
-      console.error('Failed to refresh workspace data:', error);
+      log.error(`Failed to refresh workspace data: ${error instanceof Error ? error.message : String(error)}`, { title: 'Workspace Refresh Error' });
       setSwitchingState({
         isSwitching: false,
         error: 'Failed to refresh workspace data',

@@ -9,6 +9,7 @@ import {
   forwardRef,
 } from 'react';
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
+import { useLog } from '../utils/log';
 import {
   Wrench,
   History,
@@ -243,6 +244,7 @@ const normalizeRevision = (raw: unknown): Revision => {
 // ── Component ──────────────────────────────────────────────────────
 
 const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, ref) => {
+  const log = useLog();
   const { context, onPanelWidthChange, onMobileOpenChange, panelWidth: requestedPanelWidth } = props;
 
   // ── Panel infrastructure state ───────────────────────────────────
@@ -298,13 +300,13 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       setExpandedRevisionIds(normalized.length > 0 ? new Set([normalized[0].revision_id]) : new Set());
     } catch (error) {
       if (requestId !== historyLoadRequestRef.current) return;
-      console.error('Failed to load revision history:', error);
+      log.error(`Failed to load revision history: ${error instanceof Error ? error.message : String(error)}`, { title: 'Revision History Error' });
     } finally {
       if (requestId === historyLoadRequestRef.current) {
         setIsLoadingHistory(false);
       }
     }
-  }, [apiService]);
+  }, [apiService, log]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadSessions = useCallback(async () => {
     setIsLoadingSessions(true);
@@ -314,11 +316,11 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       setCurrentSessionId(response.current_session_id || '');
       setSessionsCount(response.sessions?.length || 0);
     } catch (error) {
-      console.error('Failed to load sessions:', error);
+      log.error(`Failed to load sessions: ${error instanceof Error ? error.message : String(error)}`, { title: 'Session Load Error' });
     } finally {
       setIsLoadingSessions(false);
     }
-  }, [apiService]);
+  }, [apiService, log]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Public API via ref ───────────────────────────────────────────
   useImperativeHandle(
@@ -519,12 +521,12 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
         });
         setRevisionDetailsById((prev) => ({ ...prev, [revisionId]: detailsMap }));
       } catch (error) {
-        console.error('Failed to load revision details:', error);
+        log.error(`Failed to load revision details: ${error instanceof Error ? error.message : String(error)}`, { title: 'Revision Details Error' });
       } finally {
         setRevisionDetailsLoading((prev) => ({ ...prev, [revisionId]: false }));
       }
     },
-    [apiService, buildRevisionFileKey, revisionDetailsById, revisionDetailsLoading],
+    [apiService, buildRevisionFileKey, revisionDetailsById, revisionDetailsLoading, log],
   );
 
   // ── Data loading triggers ────────────────────────────────────────

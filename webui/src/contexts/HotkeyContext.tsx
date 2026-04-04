@@ -2,6 +2,7 @@ import { createContext, type ReactNode, useContext, useMemo, useState, useEffect
 import type { FC } from 'react';
 import { ApiService, type HotkeyEntry } from '../services/api';
 import { useNotifications } from './NotificationContext';
+import { error as logError } from '../utils/log';
 
 interface HotkeyContextValue {
   hotkeys: HotkeyEntry[] | null;
@@ -187,7 +188,7 @@ export const HotkeyProvider: FC<HotkeyProviderProps> = ({ children }) => {
       setHotkeys(config.hotkeys);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('Failed to load hotkeys:', error);
+      logError('Failed to load hotkeys: ' + errorMessage);
       addNotification('error', 'Hotkey Load Error', `Failed to load hotkeys: ${errorMessage}`, 5000);
     } finally {
       setIsLoaded(true);

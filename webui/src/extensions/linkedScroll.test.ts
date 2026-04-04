@@ -19,6 +19,15 @@
 
 // ── Mock requestAnimationFrame / cancelAnimationFrame ───────────
 
+// ── Module under test (Jest hoists mocks above imports) ─────────────
+import {
+  linkedScrollExtension,
+  setLinkedScrollEnabled,
+  isLinkedScrollEnabled,
+  suppressScrollSync,
+  _resetModuleStateForTesting,
+} from './linkedScroll';
+
 let _rafIdCounter = 0;
 const _pendingRafCallbacks = new Map<number, FrameRequestCallback>();
 const _cancelledRafIds = new Set<number>();
@@ -90,15 +99,6 @@ jest.mock('@codemirror/view', () => ({
 
 jest.mock('@codemirror/state', () => ({}));
 
-// Module under test — safe to import because CM deps are mocked.
-import {
-  linkedScrollExtension,
-  setLinkedScrollEnabled,
-  isLinkedScrollEnabled,
-  suppressScrollSync,
-  _resetModuleStateForTesting,
-} from './linkedScroll';
-
 // Grab the mock ViewPlugin for helper access.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { ViewPlugin } = require('@codemirror/view');
@@ -111,10 +111,7 @@ const { ViewPlugin } = require('@codemirror/view');
  * `doc.lineAt` returns a line object with the given `number`.
  */
 function createMockView(opts: { viewportFrom?: number; lineCount?: number } = {}) {
-  const {
-    viewportFrom = 0,
-    lineCount = 100,
-  } = opts;
+  const { viewportFrom = 0, lineCount = 100 } = opts;
 
   // Build simple mock lines.  lineAt(pos) searches from the end so that
   // the highest `from <= pos` wins (mirrors real CM behaviour).
@@ -143,10 +140,7 @@ function createMockView(opts: { viewportFrom?: number; lineCount?: number } = {}
 /**
  * Create a minimal ViewUpdate mock — only the fields the plugin reads.
  */
-function createMockUpdate(
-  view: any,
-  overrides: { viewportChanged?: boolean } = {},
-) {
+function createMockUpdate(view: any, overrides: { viewportChanged?: boolean } = {}) {
   return {
     view,
     state: view.state,
@@ -256,10 +250,10 @@ describe('linkedScroll', () => {
     });
 
     it('each call creates a fresh plugin class (distinct closure over paneId)', () => {
-      const ext1 = linkedScrollExtension('pane-A', () => '/a.ts');
+      const _ext1 = linkedScrollExtension('pane-A', () => '/a.ts');
       const classA = ViewPlugin._getCapturedClass();
 
-      const ext2 = linkedScrollExtension('pane-B', () => '/b.ts');
+      const _ext2 = linkedScrollExtension('pane-B', () => '/b.ts');
       const classB = ViewPlugin._getCapturedClass();
 
       // Each call should produce a new class (different closure).

@@ -32,7 +32,7 @@ const minimapBaseTheme = EditorView.baseTheme({
 // ── Stable config (hoisted to avoid re-creation on every doc change) ──
 
 const minimapConfig = {
-  create: (view: EditorView) => {
+  create: (_view: EditorView) => {
     const dom = document.createElement('div');
     dom.className = 'cm-minimap-container';
     return { dom };
@@ -55,8 +55,5 @@ const minimapConfig = {
  * ```
  */
 export function minimapExtension() {
-  return [
-    minimapBaseTheme,
-    showMinimap.compute(['doc'], () => minimapConfig),
-  ];
+  return [minimapBaseTheme, showMinimap.compute(['doc'], () => minimapConfig)];
 }

@@ -9,6 +9,10 @@
 
 // ── Mock CodeMirror modules (ESM internals break Jest 27) ───────────
 
+// ── Module under test (Jest hoists mocks above imports) ─────────────
+import { getSnippetsForLanguage, setSnippetLanguage, getSnippetLanguage, tabExpandSnippets } from './snippets';
+import { keymap } from '@codemirror/view';
+
 jest.mock('@codemirror/view', () => ({
   EditorView: { baseTheme: jest.fn(() => 'mockBaseTheme') },
   keymap: {
@@ -33,15 +37,6 @@ jest.mock('@codemirror/autocomplete', () => ({
   hasNextSnippetField: jest.fn(() => false),
   hasPrevSnippetField: jest.fn(() => false),
 }));
-
-// Module under test — now safe to import because CM deps are mocked.
-import {
-  getSnippetsForLanguage,
-  setSnippetLanguage,
-  getSnippetLanguage,
-  tabExpandSnippets,
-} from './snippets';
-import { keymap } from '@codemirror/view';
 
 // ── getSnippetsForLanguage tests ────────────────────────────────────
 
@@ -1363,7 +1358,26 @@ describe('getSnippetsForLanguage', () => {
     });
 
     it('"if" trigger exists in all supported languages', () => {
-      const languages = ['go', 'typescript', 'javascript', 'python', 'rust', 'java', 'c', 'cpp', 'php', 'ruby', 'shell', 'swift', 'kotlin', 'dart', 'scala', 'csharp', 'lua', 'groovy'];
+      const languages = [
+        'go',
+        'typescript',
+        'javascript',
+        'python',
+        'rust',
+        'java',
+        'c',
+        'cpp',
+        'php',
+        'ruby',
+        'shell',
+        'swift',
+        'kotlin',
+        'dart',
+        'scala',
+        'csharp',
+        'lua',
+        'groovy',
+      ];
       for (const lang of languages) {
         const value = getSnippetsForLanguage(lang).has('if');
         expect(value).toBe(true); // `if` should exist in ${lang}
@@ -1382,7 +1396,32 @@ describe('getSnippetsForLanguage', () => {
     });
 
     it('all 24 registered language IDs return non-empty snippet maps', () => {
-      const allLanguageIds = ['go', 'typescript', 'typescript-jsx', 'javascript', 'javascript-jsx', 'python', 'rust', 'java', 'c', 'cpp', 'php', 'ruby', 'shell', 'html', 'sql', 'yaml', 'markdown', 'swift', 'kotlin', 'dart', 'scala', 'csharp', 'lua', 'groovy'];
+      const allLanguageIds = [
+        'go',
+        'typescript',
+        'typescript-jsx',
+        'javascript',
+        'javascript-jsx',
+        'python',
+        'rust',
+        'java',
+        'c',
+        'cpp',
+        'php',
+        'ruby',
+        'shell',
+        'html',
+        'sql',
+        'yaml',
+        'markdown',
+        'swift',
+        'kotlin',
+        'dart',
+        'scala',
+        'csharp',
+        'lua',
+        'groovy',
+      ];
       for (const langId of allLanguageIds) {
         const snippets = getSnippetsForLanguage(langId);
         expect(snippets.size).toBeGreaterThan(0); // ${langId} should have registered snippets
@@ -1408,11 +1447,34 @@ describe('getSnippetsForLanguage', () => {
 
   describe('Template content', () => {
     it('all templates contain at least one placeholder (${...})', () => {
-      const languagesWithSnippets = ['go', 'typescript', 'javascript', 'python', 'rust', 'java', 'c', 'cpp', 'php', 'ruby', 'shell', 'html', 'sql', 'yaml', 'markdown', 'swift', 'kotlin', 'dart', 'scala', 'csharp', 'lua', 'groovy'];
+      const languagesWithSnippets = [
+        'go',
+        'typescript',
+        'javascript',
+        'python',
+        'rust',
+        'java',
+        'c',
+        'cpp',
+        'php',
+        'ruby',
+        'shell',
+        'html',
+        'sql',
+        'yaml',
+        'markdown',
+        'swift',
+        'kotlin',
+        'dart',
+        'scala',
+        'csharp',
+        'lua',
+        'groovy',
+      ];
       for (const lang of languagesWithSnippets) {
         const snippets = getSnippetsForLanguage(lang);
-        for (const [trigger, template] of snippets) {
-          expect(template).toMatch(/\$\{[^}]+\}/); // ${lang}: "${trigger}" has no placeholders
+        for (const [_trigger, template] of snippets) {
+          expect(template).toMatch(/\$\{[^}]+\}/); // ${lang}: "${_trigger}" has no placeholders
         }
       }
     });
@@ -1425,13 +1487,36 @@ describe('getSnippetsForLanguage', () => {
     });
 
     it('no template has duplicate ${0} placeholders (exit point must be unique)', () => {
-      const languagesWithSnippets = ['go', 'typescript', 'javascript', 'python', 'rust', 'java', 'c', 'cpp', 'php', 'ruby', 'shell', 'html', 'sql', 'yaml', 'markdown', 'swift', 'kotlin', 'dart', 'scala', 'csharp', 'lua', 'groovy'];
+      const languagesWithSnippets = [
+        'go',
+        'typescript',
+        'javascript',
+        'python',
+        'rust',
+        'java',
+        'c',
+        'cpp',
+        'php',
+        'ruby',
+        'shell',
+        'html',
+        'sql',
+        'yaml',
+        'markdown',
+        'swift',
+        'kotlin',
+        'dart',
+        'scala',
+        'csharp',
+        'lua',
+        'groovy',
+      ];
       for (const lang of languagesWithSnippets) {
         const snippets = getSnippetsForLanguage(lang);
-        for (const [trigger, template] of snippets) {
+        for (const [_trigger, template] of snippets) {
           const zeroCount = (template.match(/\$\{0\}/g) || []).length;
           expect(zeroCount).toBeLessThanOrEqual(1);
-          // ${lang}: "${trigger}" has ${zeroCount} ${0} placeholders
+          // ${lang}: "${_trigger}" has ${zeroCount} ${0} placeholders
         }
       }
     });

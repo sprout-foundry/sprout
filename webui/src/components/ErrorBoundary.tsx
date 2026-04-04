@@ -5,7 +5,7 @@
  * logs those errors, and displays a fallback UI.
  */
 
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { Component, type ErrorInfo, type ReactNode } from 'react';
 import { TriangleAlert } from 'lucide-react';
 
 interface ErrorBoundaryProps {
@@ -31,17 +31,18 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     this.state = {
       hasError: false,
       error: null,
-      errorInfo: null
+      errorInfo: null,
     };
   }
 
-  static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
+  static getDerivedStateFromError(_error: Error): Partial<ErrorBoundaryState> {
     // Update state so the next render will show the fallback UI
     return { hasError: true };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // Log the error to the console
+    // eslint-disable-next-line no-console
     console.error('Error Boundary caught an error:', error, errorInfo);
 
     // Call the onError callback if provided
@@ -52,7 +53,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     // Update state with error details
     this.setState({
       error,
-      errorInfo
+      errorInfo,
     });
   }
 
@@ -60,7 +61,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     this.setState({
       hasError: false,
       error: null,
-      errorInfo: null
+      errorInfo: null,
     });
   };
 
@@ -75,20 +76,15 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       return (
         <div className="error-boundary">
           <div className="error-boundary-content">
-            <h2><TriangleAlert size={24} className="inline-block mr-2 align-text-bottom" /> Something went wrong</h2>
-            <p className="error-message">
-              {this.state.error && this.state.error.toString()}
-            </p>
+            <h2>
+              <TriangleAlert size={24} className="inline-block mr-2 align-text-bottom" /> Something went wrong
+            </h2>
+            <p className="error-message">{this.state.error && this.state.error.toString()}</p>
             <details className="error-details">
               <summary>Error Details</summary>
-              <pre className="error-stack">
-                {this.state.errorInfo && this.state.errorInfo.componentStack}
-              </pre>
+              <pre className="error-stack">{this.state.errorInfo && this.state.errorInfo.componentStack}</pre>
             </details>
-            <button
-              className="error-reset-button"
-              onClick={this.handleReset}
-            >
+            <button className="error-reset-button" onClick={this.handleReset}>
               Try Again
             </button>
           </div>

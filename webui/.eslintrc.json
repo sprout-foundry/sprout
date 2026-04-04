@@ -1,21 +1,37 @@
 {
-  "extends": ["react-app", "react-app/jest", "prettier"],
+  "extends": [
+    "react-app",
+    "react-app/jest",
+    "prettier"
+  ],
   "overrides": [
     {
-      "files": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
+      "files": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.spec.ts",
+        "**/*.spec.tsx"
+      ],
       "rules": {
         "@typescript-eslint/no-explicit-any": "off",
-        "no-console": "off"
+        "no-console": "off",
+        "testing-library/no-container": "warn",
+        "testing-library/no-render-in-setup": "warn",
+        "testing-library/no-unnecessary-act": "warn",
+        "testing-library/render-result-naming-convention": "warn"
       }
     }
   ],
   "root": true,
   "rules": {
-    "@typescript-eslint/consistent-type-definitions": ["warn", "interface"],
+    "@typescript-eslint/consistent-type-definitions": [
+      "warn",
+      "interface"
+    ],
     "@typescript-eslint/consistent-type-imports": [
       "warn",
       {
-        "fixStyle": "inline-type-imports",
+        "fixStyle": "separate-type-imports",
         "prefer": "type-imports"
       }
     ],
@@ -30,12 +46,21 @@
         "varsIgnorePattern": "^_"
       }
     ],
-    "curly": ["warn", "multi-line"],
-    "eqeqeq": ["warn", "smart"],
+    "curly": [
+      "warn",
+      "multi-line"
+    ],
+    "eqeqeq": [
+      "warn",
+      "smart"
+    ],
     "no-console": [
       "warn",
       {
-        "allow": ["warn", "error"]
+        "allow": [
+          "warn",
+          "error"
+        ]
       }
     ],
     "no-constant-condition": "warn",

@@ -23,13 +23,7 @@
  *   to inherit the bracket colour instead of their syntax colour.
  */
 
-import {
-  Decoration,
-  DecorationSet,
-  EditorView,
-  ViewPlugin,
-  ViewUpdate,
-} from '@codemirror/view';
+import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view';
 import { type Extension, type Text } from '@codemirror/state';
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -58,6 +52,7 @@ const MATCHING_CLOSE: ReadonlyMap<string, string> = new Map([
 export const MAX_DEPTH = 6;
 
 /** Matches any of the six bracket characters our colorizer cares about. */
+// eslint-disable-next-line no-useless-escape
 const BRACKET_PATTERN = /[\[()\]{}]/;
 
 // ── Pure helpers (exported for testing) ────────────────────────────
@@ -117,10 +112,8 @@ export function computeBracketDecorationsFromDoc(doc: Text): BracketDecoration[]
 // ── Decoration factories ───────────────────────────────────────────
 
 /** Pre-built mark decorations keyed by depth (0–5). Reused across updates. */
-const markDecorations: readonly Decoration[] = Array.from(
-  { length: MAX_DEPTH },
-  (_, depth) =>
-    Decoration.mark({ class: `cm-bracket-depth-${depth}` }),
+const markDecorations: readonly Decoration[] = Array.from({ length: MAX_DEPTH }, (_, depth) =>
+  Decoration.mark({ class: `cm-bracket-depth-${depth}` }),
 );
 
 // ── ViewPlugin ─────────────────────────────────────────────────────
@@ -180,9 +173,7 @@ const bracketPlugin = ViewPlugin.fromClass(
         // A single-char bracket at position `from` overlaps the viewport
         // when `from < viewTo && (from + 1) > viewFrom`.
         if (bracket.from < viewTo && bracket.to > viewFrom) {
-          ranges.push(
-            markDecorations[bracket.depth].range(bracket.from, bracket.to),
-          );
+          ranges.push(markDecorations[bracket.depth].range(bracket.from, bracket.to));
         }
       }
 

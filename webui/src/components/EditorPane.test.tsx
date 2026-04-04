@@ -15,7 +15,7 @@ import { copyToClipboard } from '../utils/clipboard';
 // We need references to configure them in beforeEach because react-scripts
 // sets resetMocks:true, which clears factory-configured implementations.
 import { EditorState, Compartment } from '@codemirror/state';
-import { EditorView } from '@codemirror/view';
+import { EditorView as _EditorView } from '@codemirror/view';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -87,12 +87,17 @@ jest.mock('../extensions/languageRegistry', () => {
   return {
     allLanguageEntries: entries,
     getLanguageExtensions: () => [],
-    resolveLanguageId: (override, ext, name) => {
+    resolveLanguageId: (override, ext, _name) => {
       if (override) return { languageId: override, isAutoDetected: false };
       // Mimic real behaviour: return languageId + sub-variant for known extensions
       const extensionMap: Record<string, string> = {
-        ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
-        py: 'python', css: 'css', json: 'json',
+        ts: 'typescript',
+        tsx: 'typescript',
+        js: 'javascript',
+        jsx: 'javascript',
+        py: 'python',
+        css: 'css',
+        json: 'json',
       };
       const base = extensionMap[ext];
       if (!base) return { languageId: null, isAutoDetected: false };
@@ -102,8 +107,13 @@ jest.mock('../extensions/languageRegistry', () => {
     },
     detectLanguage: (ext) => {
       const map: Record<string, string> = {
-        ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
-        py: 'python', css: 'css', json: 'json',
+        ts: 'typescript',
+        tsx: 'typescript',
+        js: 'javascript',
+        jsx: 'javascript',
+        py: 'python',
+        css: 'css',
+        json: 'json',
       };
       return map[ext] ?? null;
     },
@@ -144,7 +154,7 @@ jest.mock('@codemirror/view', () => ({
   EditorView: class MockEditorView {
     state: any;
     dom: any;
-    constructor({ state, parent }: any) {
+    constructor({ state, _parent }: any) {
       this.state = state;
       this.dom = { querySelector: () => null, classList: { add: () => {} } };
     }
@@ -222,7 +232,7 @@ jest.mock('@codemirror/language', () => ({
   syntaxHighlighting: (s: any) => s,
   defaultHighlightStyle: [],
   codeFolding: () => [],
-  foldGutter: (opts: any) => [],
+  foldGutter: (_opts: any) => [],
   indentOnInput: () => [],
   bracketMatching: () => [],
   highlightSpecialChars: () => [],
@@ -377,9 +387,7 @@ describe('EditorPane', () => {
     root = createRoot(container);
 
     // ── CodeMirror mock setup (resetMocks clears before each test) ──
-    EditorState.create.mockImplementation(({ doc }) =>
-      createMockState(typeof doc === 'string' ? doc : ''),
-    );
+    EditorState.create.mockImplementation(({ doc }) => createMockState(typeof doc === 'string' ? doc : ''));
     (Compartment as jest.Mock).mockImplementation(() => ({
       of: jest.fn().mockReturnValue([]),
       reconfigure: jest.fn().mockReturnValue({}),
@@ -426,365 +434,376 @@ describe('EditorPane', () => {
   // ── Context menu tests ──
 
   describe('context menu', () => {
-  it('renders without crashing', async () => {
-    await act(async () => {
-      root.render(<EditorPane paneId="pane-1" />);
-    });
-    await flushPromises();
-    expect(container.querySelector('.editor-pane')).toBeTruthy();
-  });
-
-  it('context menu appears on right-click in the editor area', async () => {
-    await act(async () => {
-      root.render(<EditorPane paneId="pane-1" />);
-    });
-    await flushPromises();
-
-    const paneContent = container.querySelector('.pane-content');
-    expect(paneContent).toBeTruthy();
-
-    fireContextMenu(paneContent);
-    await act(async () => { await Promise.resolve(); });
-
-    const menu = getMenu();
-    expect(menu).toBeTruthy();
-  });
-
-  it('context menu shows the three expected items when workspace root is available', async () => {
-    await act(async () => {
-      root.render(<EditorPane paneId="pane-1" />);
-    });
-    await flushPromises();
-
-    const paneContent = container.querySelector('.pane-content');
-    fireContextMenu(paneContent);
-    await act(async () => { await Promise.resolve(); });
-
-    const items = getMenuItems();
-    const texts = items.map((el) => el.textContent?.trim());
-
-    expect(texts).toContain('Reveal in File Explorer');
-    expect(texts).toContain('Copy relative path');
-    expect(texts).toContain('Copy absolute path');
-  });
-
-  it('"Reveal in File Explorer" dispatches ledit:reveal-in-explorer event', async () => {
-    await act(async () => {
-      root.render(<EditorPane paneId="pane-1" />);
-    });
-    await flushPromises();
-
-    const listener = jest.fn();
-    window.addEventListener('ledit:reveal-in-explorer', listener);
-
-    const paneContent = container.querySelector('.pane-content');
-    fireContextMenu(paneContent);
-    await act(async () => { await Promise.resolve(); });
-
-    const items = getMenuItems();
-    expect(items[0]).toBeTruthy();
-
-    await act(async () => {
-      items[0].click();
-    });
-    await flushPromises();
-
-    expect(listener).toHaveBeenCalledTimes(1);
-    expect(listener).toHaveBeenCalledWith(
-      expect.objectContaining({
-        detail: { path: 'src/components/EditorPane.tsx' },
-      })
-    );
-
-    window.removeEventListener('ledit:reveal-in-explorer', listener);
-  });
-
-  it('"Copy relative path" calls copyToClipboard with the file path', async () => {
-    await act(async () => {
-      root.render(<EditorPane paneId="pane-1" />);
-    });
-    await flushPromises();
-
-    const paneContent = container.querySelector('.pane-content');
-    fireContextMenu(paneContent);
-    await act(async () => { await Promise.resolve(); });
-
-    const items = getMenuItems();
-    // Second item = "Copy relative path"
-    expect(items[1]).toBeTruthy();
-
-    await act(async () => {
-      items[1].click();
-    });
-    await flushPromises();
-
-    expect(copyToClipboard).toHaveBeenCalledWith('src/components/EditorPane.tsx');
-  });
-
-  it('"Copy absolute path" calls copyToClipboard with workspaceRoot + file path', async () => {
-    await act(async () => {
-      root.render(<EditorPane paneId="pane-1" />);
-    });
-    await flushPromises();
-
-    const paneContent = container.querySelector('.pane-content');
-    fireContextMenu(paneContent);
-    await act(async () => { await Promise.resolve(); });
-
-    const items = getMenuItems();
-    // Third item = "Copy absolute path"
-    expect(items[2]).toBeTruthy();
-
-    await act(async () => {
-      items[2].click();
-    });
-    await flushPromises();
-
-    expect(copyToClipboard).toHaveBeenCalledWith(
-      '/home/user/project/src/components/EditorPane.tsx'
-    );
-  });
-
-  it('context menu closes after clicking an item', async () => {
-    await act(async () => {
-      root.render(<EditorPane paneId="pane-1" />);
-    });
-    await flushPromises();
-
-    const paneContent = container.querySelector('.pane-content');
-    fireContextMenu(paneContent);
-    await act(async () => { await Promise.resolve(); });
-
-    expect(getMenu()).toBeTruthy();
-
-    const items = getMenuItems();
-    await act(async () => {
-      items[0].click();
-    });
-    await flushPromises();
-
-    expect(getMenu()).toBeFalsy();
-  });
-
-  it('"Copy absolute path" item is NOT present when workspace root is empty', async () => {
-    apiServiceMock.getWorkspace.mockResolvedValueOnce({
-      workspace_root: '',
-      daemon_root: '/home/user/project/.ledit',
+    it('renders without crashing', async () => {
+      await act(async () => {
+        root.render(<EditorPane paneId="pane-1" />);
+      });
+      await flushPromises();
+      expect(container.querySelector('.editor-pane')).toBeTruthy();
     });
 
-    await act(async () => {
-      root.render(<EditorPane paneId="pane-1" />);
-    });
-    await flushPromises();
+    it('context menu appears on right-click in the editor area', async () => {
+      await act(async () => {
+        root.render(<EditorPane paneId="pane-1" />);
+      });
+      await flushPromises();
 
-    const paneContent = container.querySelector('.pane-content');
-    fireContextMenu(paneContent);
-    await act(async () => { await Promise.resolve(); });
+      const paneContent = container.querySelector('.pane-content');
+      expect(paneContent).toBeTruthy();
 
-    const texts = getMenuItems().map((el) => el.textContent?.trim());
+      fireContextMenu(paneContent);
+      await act(async () => {
+        await Promise.resolve();
+      });
 
-    expect(texts).toContain('Reveal in File Explorer');
-    expect(texts).toContain('Copy relative path');
-    expect(texts).not.toContain('Copy absolute path');
-  });
-
-  it('context menu closes when clicking outside it', async () => {
-    await act(async () => {
-      root.render(<EditorPane paneId="pane-1" />);
-    });
-    await flushPromises();
-
-    const paneContent = container.querySelector('.pane-content');
-    fireContextMenu(paneContent);
-    await act(async () => { await Promise.resolve(); });
-
-    // Flush RAF so the menu registers its mousedown listener
-    await flushRAF();
-
-    expect(getMenu()).toBeTruthy();
-
-    // Click outside the menu (on the body, not the menu itself)
-    await act(async () => {
-      document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-    });
-    await flushPromises();
-
-    expect(getMenu()).toBeFalsy();
-  });
-
-  it('context menu closes when pressing Escape', async () => {
-    await act(async () => {
-      root.render(<EditorPane paneId="pane-1" />);
-    });
-    await flushPromises();
-
-    const paneContent = container.querySelector('.pane-content');
-    fireContextMenu(paneContent);
-    await act(async () => { await Promise.resolve(); });
-
-    // Flush RAF so the menu registers its keydown listener
-    await flushRAF();
-
-    expect(getMenu()).toBeTruthy();
-
-    await act(async () => {
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    });
-    await flushPromises();
-
-    expect(getMenu()).toBeFalsy();
-  });
-
-  it('context menu does NOT appear when there is no buffer (empty state)', async () => {
-    mockUseEditorManager.mockReturnValue({
-      ...defaultMockEditorManager,
-      panes: [{ id: 'pane-1', bufferId: null, isActive: true }],
-      buffers: new Map(),
+      const menu = getMenu();
+      expect(menu).toBeTruthy();
     });
 
-    await act(async () => {
-      root.render(<EditorPane paneId="pane-1" />);
-    });
-    await flushPromises();
+    it('context menu shows the three expected items when workspace root is available', async () => {
+      await act(async () => {
+        root.render(<EditorPane paneId="pane-1" />);
+      });
+      await flushPromises();
 
-    // Should show empty state
-    const noFileEl = container.querySelector('.no-file-selected');
-    expect(noFileEl).toBeTruthy();
-    // No pane-content should exist for empty state
-    const paneContent = container.querySelector('.pane-content');
-    expect(paneContent).toBeFalsy();
-  });
+      const paneContent = container.querySelector('.pane-content');
+      fireContextMenu(paneContent);
+      await act(async () => {
+        await Promise.resolve();
+      });
 
-  it('context menu does NOT appear for image files', async () => {
-    mockUseEditorManager.mockReturnValue({
-      ...defaultMockEditorManager,
-      buffers: new Map([
-        [
-          'buffer-1',
-          {
-            ...mockBuffer,
-            file: { ...mockBuffer.file, ext: '.png', path: 'images/test.png', name: 'test.png' },
-          },
-        ],
-      ]),
+      const items = getMenuItems();
+      const texts = items.map((el) => el.textContent?.trim());
+
+      expect(texts).toContain('Reveal in File Explorer');
+      expect(texts).toContain('Copy relative path');
+      expect(texts).toContain('Copy absolute path');
     });
 
-    await act(async () => {
-      root.render(<EditorPane paneId="pane-1" />);
+    it('"Reveal in File Explorer" dispatches ledit:reveal-in-explorer event', async () => {
+      await act(async () => {
+        root.render(<EditorPane paneId="pane-1" />);
+      });
+      await flushPromises();
+
+      const listener = jest.fn();
+      window.addEventListener('ledit:reveal-in-explorer', listener);
+
+      const paneContent = container.querySelector('.pane-content');
+      fireContextMenu(paneContent);
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      const items = getMenuItems();
+      expect(items[0]).toBeTruthy();
+
+      await act(async () => {
+        items[0].click();
+      });
+      await flushPromises();
+
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          detail: { path: 'src/components/EditorPane.tsx' },
+        }),
+      );
+
+      window.removeEventListener('ledit:reveal-in-explorer', listener);
     });
-    await flushPromises();
 
-    // Should show ImageViewer
-    const imageView = container.querySelector('[data-testid="image-viewer"]');
-    expect(imageView).toBeTruthy();
-    // No pane-content div for images
-    const paneContent = container.querySelector('.pane-content');
-    expect(paneContent).toBeFalsy();
-  });
+    it('"Copy relative path" calls copyToClipboard with the file path', async () => {
+      await act(async () => {
+        root.render(<EditorPane paneId="pane-1" />);
+      });
+      await flushPromises();
 
+      const paneContent = container.querySelector('.pane-content');
+      fireContextMenu(paneContent);
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      const items = getMenuItems();
+      // Second item = "Copy relative path"
+      expect(items[1]).toBeTruthy();
+
+      await act(async () => {
+        items[1].click();
+      });
+      await flushPromises();
+
+      expect(copyToClipboard).toHaveBeenCalledWith('src/components/EditorPane.tsx');
+    });
+
+    it('"Copy absolute path" calls copyToClipboard with workspaceRoot + file path', async () => {
+      await act(async () => {
+        root.render(<EditorPane paneId="pane-1" />);
+      });
+      await flushPromises();
+
+      const paneContent = container.querySelector('.pane-content');
+      fireContextMenu(paneContent);
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      const items = getMenuItems();
+      // Third item = "Copy absolute path"
+      expect(items[2]).toBeTruthy();
+
+      await act(async () => {
+        items[2].click();
+      });
+      await flushPromises();
+
+      expect(copyToClipboard).toHaveBeenCalledWith('/home/user/project/src/components/EditorPane.tsx');
+    });
+
+    it('context menu closes after clicking an item', async () => {
+      await act(async () => {
+        root.render(<EditorPane paneId="pane-1" />);
+      });
+      await flushPromises();
+
+      const paneContent = container.querySelector('.pane-content');
+      fireContextMenu(paneContent);
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(getMenu()).toBeTruthy();
+
+      const items = getMenuItems();
+      await act(async () => {
+        items[0].click();
+      });
+      await flushPromises();
+
+      expect(getMenu()).toBeFalsy();
+    });
+
+    it('"Copy absolute path" item is NOT present when workspace root is empty', async () => {
+      apiServiceMock.getWorkspace.mockResolvedValueOnce({
+        workspace_root: '',
+        daemon_root: '/home/user/project/.ledit',
+      });
+
+      await act(async () => {
+        root.render(<EditorPane paneId="pane-1" />);
+      });
+      await flushPromises();
+
+      const paneContent = container.querySelector('.pane-content');
+      fireContextMenu(paneContent);
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      const texts = getMenuItems().map((el) => el.textContent?.trim());
+
+      expect(texts).toContain('Reveal in File Explorer');
+      expect(texts).toContain('Copy relative path');
+      expect(texts).not.toContain('Copy absolute path');
+    });
+
+    it('context menu closes when clicking outside it', async () => {
+      await act(async () => {
+        root.render(<EditorPane paneId="pane-1" />);
+      });
+      await flushPromises();
+
+      const paneContent = container.querySelector('.pane-content');
+      fireContextMenu(paneContent);
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      // Flush RAF so the menu registers its mousedown listener
+      await flushRAF();
+
+      expect(getMenu()).toBeTruthy();
+
+      // Click outside the menu (on the body, not the menu itself)
+      await act(async () => {
+        document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      });
+      await flushPromises();
+
+      expect(getMenu()).toBeFalsy();
+    });
+
+    it('context menu closes when pressing Escape', async () => {
+      await act(async () => {
+        root.render(<EditorPane paneId="pane-1" />);
+      });
+      await flushPromises();
+
+      const paneContent = container.querySelector('.pane-content');
+      fireContextMenu(paneContent);
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      // Flush RAF so the menu registers its keydown listener
+      await flushRAF();
+
+      expect(getMenu()).toBeTruthy();
+
+      await act(async () => {
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      });
+      await flushPromises();
+
+      expect(getMenu()).toBeFalsy();
+    });
+
+    it('context menu does NOT appear when there is no buffer (empty state)', async () => {
+      mockUseEditorManager.mockReturnValue({
+        ...defaultMockEditorManager,
+        panes: [{ id: 'pane-1', bufferId: null, isActive: true }],
+        buffers: new Map(),
+      });
+
+      await act(async () => {
+        root.render(<EditorPane paneId="pane-1" />);
+      });
+      await flushPromises();
+
+      // Should show empty state
+      const noFileEl = container.querySelector('.no-file-selected');
+      expect(noFileEl).toBeTruthy();
+      // No pane-content should exist for empty state
+      const paneContent = container.querySelector('.pane-content');
+      expect(paneContent).toBeFalsy();
+    });
+
+    it('context menu does NOT appear for image files', async () => {
+      mockUseEditorManager.mockReturnValue({
+        ...defaultMockEditorManager,
+        buffers: new Map([
+          [
+            'buffer-1',
+            {
+              ...mockBuffer,
+              file: { ...mockBuffer.file, ext: '.png', path: 'images/test.png', name: 'test.png' },
+            },
+          ],
+        ]),
+      });
+
+      await act(async () => {
+        root.render(<EditorPane paneId="pane-1" />);
+      });
+      await flushPromises();
+
+      // Should show ImageViewer
+      const imageView = container.querySelector('[data-testid="image-viewer"]');
+      expect(imageView).toBeTruthy();
+      // No pane-content div for images
+      const paneContent = container.querySelector('.pane-content');
+      expect(paneContent).toBeFalsy();
+    });
   }); // context menu
 
   // ── Language override tests ──
 
   describe('language override', () => {
+    it('renders the LanguageSwitcher in the toolbar zone', async () => {
+      await act(async () => {
+        root.render(<EditorPane paneId="pane-1" />);
+      });
+      await flushPromises();
 
-  it('renders the LanguageSwitcher in the toolbar zone', async () => {
-    await act(async () => {
-      root.render(<EditorPane paneId="pane-1" />);
-    });
-    await flushPromises();
-
-    const languageSwitcher = container.querySelector('[data-testid="language-switcher"]');
-    expect(languageSwitcher).toBeTruthy();
-  });
-
-  it('passes auto-detected language info when no override is set', async () => {
-    await act(async () => {
-      root.render(<EditorPane paneId="pane-1" />);
-    });
-    await flushPromises();
-
-    const languageSwitcher = container.querySelector('[data-testid="language-switcher"]');
-    expect(languageSwitcher?.getAttribute('data-language-id')).toBe('typescript-jsx');
-    expect(languageSwitcher?.getAttribute('data-auto-detected')).toBe('true');
-  });
-
-  it('passes the language override when set', async () => {
-    mockUseEditorManager.mockReturnValue({
-      ...defaultMockEditorManager,
-      buffers: new Map([
-        ['buffer-1', { ...mockBuffer, languageOverride: 'python' }],
-      ]),
+      const languageSwitcher = container.querySelector('[data-testid="language-switcher"]');
+      expect(languageSwitcher).toBeTruthy();
     });
 
-    await act(async () => {
-      root.render(<EditorPane paneId="pane-1" />);
-    });
-    await flushPromises();
+    it('passes auto-detected language info when no override is set', async () => {
+      await act(async () => {
+        root.render(<EditorPane paneId="pane-1" />);
+      });
+      await flushPromises();
 
-    const languageSwitcher = container.querySelector('[data-testid="language-switcher"]');
-    expect(languageSwitcher?.getAttribute('data-language-id')).toBe('python');
-    expect(languageSwitcher?.getAttribute('data-auto-detected')).toBe('false');
-  });
-
-  it('calls setBufferLanguageOverride when language is changed from the switcher', async () => {
-    await act(async () => {
-      root.render(<EditorPane paneId="pane-1" />);
-    });
-    await flushPromises();
-
-    const languageSwitcher = container.querySelector('[data-testid="language-switcher"]');
-
-    await act(async () => {
-      (languageSwitcher as HTMLElement).click();
-    });
-    await flushPromises();
-
-    expect(defaultMockEditorManager.setBufferLanguageOverride).toHaveBeenCalledWith(
-      'buffer-1',
-      'python', // The mock calls onLanguageChange('python') on click
-    );
-  });
-
-  it('shows "Auto" when no language is detected for unknown extension', async () => {
-    mockUseEditorManager.mockReturnValue({
-      ...defaultMockEditorManager,
-      buffers: new Map([
-        [
-          'buffer-1',
-          {
-            ...mockBuffer,
-            file: { ...mockBuffer.file, ext: '.xyz', name: 'file.xyz' },
-          },
-        ],
-      ]),
+      const languageSwitcher = container.querySelector('[data-testid="language-switcher"]');
+      expect(languageSwitcher?.getAttribute('data-language-id')).toBe('typescript-jsx');
+      expect(languageSwitcher?.getAttribute('data-auto-detected')).toBe('true');
     });
 
-    await act(async () => {
-      root.render(<EditorPane paneId="pane-1" />);
+    it('passes the language override when set', async () => {
+      mockUseEditorManager.mockReturnValue({
+        ...defaultMockEditorManager,
+        buffers: new Map([['buffer-1', { ...mockBuffer, languageOverride: 'python' }]]),
+      });
+
+      await act(async () => {
+        root.render(<EditorPane paneId="pane-1" />);
+      });
+      await flushPromises();
+
+      const languageSwitcher = container.querySelector('[data-testid="language-switcher"]');
+      expect(languageSwitcher?.getAttribute('data-language-id')).toBe('python');
+      expect(languageSwitcher?.getAttribute('data-auto-detected')).toBe('false');
     });
-    await flushPromises();
 
-    const languageSwitcher = container.querySelector('[data-testid="language-switcher"]');
-    expect(languageSwitcher?.getAttribute('data-language-id')).toBe('');
-    expect(languageSwitcher?.getAttribute('data-auto-detected')).toBe('false');
-  });
+    it('calls setBufferLanguageOverride when language is changed from the switcher', async () => {
+      await act(async () => {
+        root.render(<EditorPane paneId="pane-1" />);
+      });
+      await flushPromises();
 
-  it('does not render LanguageSwitcher in empty pane state', async () => {
-    mockUseEditorManager.mockReturnValue({
-      ...defaultMockEditorManager,
-      panes: [{ id: 'pane-1', bufferId: null, isActive: true }],
-      buffers: new Map(),
+      const languageSwitcher = container.querySelector('[data-testid="language-switcher"]');
+
+      await act(async () => {
+        (languageSwitcher as HTMLElement).click();
+      });
+      await flushPromises();
+
+      expect(defaultMockEditorManager.setBufferLanguageOverride).toHaveBeenCalledWith(
+        'buffer-1',
+        'python', // The mock calls onLanguageChange('python') on click
+      );
     });
 
-    await act(async () => {
-      root.render(<EditorPane paneId="pane-1" />);
-    });
-    await flushPromises();
+    it('shows "Auto" when no language is detected for unknown extension', async () => {
+      mockUseEditorManager.mockReturnValue({
+        ...defaultMockEditorManager,
+        buffers: new Map([
+          [
+            'buffer-1',
+            {
+              ...mockBuffer,
+              file: { ...mockBuffer.file, ext: '.xyz', name: 'file.xyz' },
+            },
+          ],
+        ]),
+      });
 
-    const languageSwitcher = container.querySelector('[data-testid="language-switcher"]');
-    expect(languageSwitcher).toBeFalsy();
-  });
+      await act(async () => {
+        root.render(<EditorPane paneId="pane-1" />);
+      });
+      await flushPromises();
+
+      const languageSwitcher = container.querySelector('[data-testid="language-switcher"]');
+      expect(languageSwitcher?.getAttribute('data-language-id')).toBe('');
+      expect(languageSwitcher?.getAttribute('data-auto-detected')).toBe('false');
+    });
+
+    it('does not render LanguageSwitcher in empty pane state', async () => {
+      mockUseEditorManager.mockReturnValue({
+        ...defaultMockEditorManager,
+        panes: [{ id: 'pane-1', bufferId: null, isActive: true }],
+        buffers: new Map(),
+      });
+
+      await act(async () => {
+        root.render(<EditorPane paneId="pane-1" />);
+      });
+      await flushPromises();
+
+      const languageSwitcher = container.querySelector('[data-testid="language-switcher"]');
+      expect(languageSwitcher).toBeFalsy();
+    });
   }); // language override
-
 }); // EditorPane

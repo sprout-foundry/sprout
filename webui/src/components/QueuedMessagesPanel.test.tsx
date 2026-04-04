@@ -53,7 +53,7 @@ async function renderPanel(props: Partial<React.ComponentProps<typeof QueuedMess
         onReorder={onReorder}
         onClear={onClear}
         onClose={onClose}
-      />
+      />,
     );
   });
   await flushPromises();
@@ -81,7 +81,7 @@ function fireKeyDown(selector: string, key: string, shiftKey = false): void {
         shiftKey,
         bubbles: true,
         cancelable: true,
-      })
+      }),
     );
   });
 }
@@ -152,7 +152,7 @@ describe('QueuedMessagesPanel – message truncation', () => {
     const textEl = container.querySelector('.queue-panel-item-text');
     expect(textEl).not.toBeNull();
     // Truncated text should end with ellipsis and be 121 chars (120 + \u2026)
-    expect(textEl?.textContent).toBe('A'.repeat(120) + '\u2026');
+    expect(textEl?.textContent).toBe(`${'A'.repeat(120)}\u2026`);
     expect(textEl?.textContent!.length).toBe(121);
   });
 
@@ -234,7 +234,7 @@ describe('QueuedMessagesPanel – reorder buttons', () => {
     // Move up buttons use ChevronUp icon; they are the first action buttons
     const items = container.querySelectorAll('.queue-panel-item');
     // Click the move-up button on the second item (index 1)
-    const upButtons = items[1].querySelectorAll('.queue-panel-action:not(.danger)');
+    const _upButtons = items[1].querySelectorAll('.queue-panel-action:not(.danger)');
 
     // The action buttons order for non-editing: up, down, edit, remove(danger)
     // Find by title attribute
@@ -378,7 +378,8 @@ describe('QueuedMessagesPanel – editing', () => {
       // Simulate the user typing by setting the value and dispatching an input event
       // React uses synthetic events so we set value and dispatch 'input'
       const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-        window.HTMLTextAreaElement.prototype, 'value'
+        window.HTMLTextAreaElement.prototype,
+        'value',
       )?.set!;
       nativeInputValueSetter.call(textarea, 'Updated text');
       textarea.dispatchEvent(new Event('input', { bubbles: true }));
@@ -418,7 +419,8 @@ describe('QueuedMessagesPanel – editing', () => {
     const textarea = container.querySelector('.queue-panel-edit-textarea') as HTMLTextAreaElement;
     act(() => {
       const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-        window.HTMLTextAreaElement.prototype, 'value'
+        window.HTMLTextAreaElement.prototype,
+        'value',
       )?.set!;
       nativeInputValueSetter.call(textarea, 'Changed but cancelled');
       textarea.dispatchEvent(new Event('input', { bubbles: true }));
@@ -443,7 +445,8 @@ describe('QueuedMessagesPanel – editing', () => {
     const textarea = container.querySelector('.queue-panel-edit-textarea') as HTMLTextAreaElement;
     act(() => {
       const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-        window.HTMLTextAreaElement.prototype, 'value'
+        window.HTMLTextAreaElement.prototype,
+        'value',
       )?.set!;
       nativeInputValueSetter.call(textarea, 'Saved via button');
       textarea.dispatchEvent(new Event('input', { bubbles: true }));
@@ -478,7 +481,8 @@ describe('QueuedMessagesPanel – editing', () => {
     const textarea = container.querySelector('.queue-panel-edit-textarea') as HTMLTextAreaElement;
     act(() => {
       const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-        window.HTMLTextAreaElement.prototype, 'value'
+        window.HTMLTextAreaElement.prototype,
+        'value',
       )?.set!;
       nativeInputValueSetter.call(textarea, '');
       textarea.dispatchEvent(new Event('input', { bubbles: true }));
@@ -512,7 +516,8 @@ describe('QueuedMessagesPanel – editing', () => {
     const textarea = container.querySelector('.queue-panel-edit-textarea') as HTMLTextAreaElement;
     act(() => {
       const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-        window.HTMLTextAreaElement.prototype, 'value'
+        window.HTMLTextAreaElement.prototype,
+        'value',
       )?.set!;
       nativeInputValueSetter.call(textarea, '   ');
       textarea.dispatchEvent(new Event('input', { bubbles: true }));
@@ -641,15 +646,11 @@ describe('QueuedMessagesPanel – editing UX polish', () => {
     // Check icon's path data is "M20 6 9 17l-5-5"
     // Verify the save button has the Check icon path
     const paths = svg?.querySelectorAll('path');
-    const checkPath = Array.from(paths!).find(
-      p => p.getAttribute('d') === 'M20 6 9 17l-5-5'
-    );
+    const checkPath = Array.from(paths!).find((p) => p.getAttribute('d') === 'M20 6 9 17l-5-5');
     expect(checkPath).not.toBeNull();
 
     // Verify it's NOT the Pencil icon (which has "M21.174 6.812a1 1 0" path)
-    const pencilPath = Array.from(paths!).find(
-      p => p.getAttribute('d')?.includes('M21.174 6.812a1 1 0')
-    );
+    const pencilPath = Array.from(paths!).find((p) => p.getAttribute('d')?.includes('M21.174 6.812a1 1 0'));
     expect(pencilPath).toBeUndefined();
   });
 });

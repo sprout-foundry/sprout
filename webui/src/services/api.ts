@@ -1,5 +1,6 @@
 import { clientFetch } from './clientSession';
 import { notificationBus } from './notificationBus';
+import { debugLog } from '../utils/log';
 import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
 
 interface StatsResponse {
@@ -230,7 +231,8 @@ class ApiService {
     }
     try {
       return JSON.parse(trimmed);
-    } catch {
+    } catch (err) {
+      debugLog('[parseWorkspacePayload] failed to parse workspace payload:', err);
       return { message: trimmed };
     }
   }
@@ -470,7 +472,8 @@ class ApiService {
     if (text) {
       try {
         data = JSON.parse(text);
-      } catch {
+      } catch (err) {
+        debugLog('[openSSHWorkspace] failed to parse response:', err);
         data = { message: text };
       }
     }
@@ -531,7 +534,8 @@ class ApiService {
     if (text) {
       try {
         data = JSON.parse(text);
-      } catch {
+      } catch (err) {
+        debugLog('[browseSSHDirectory] failed to parse response:', err);
         data = { message: text };
       }
     }
@@ -560,7 +564,8 @@ class ApiService {
     if (text) {
       try {
         data = JSON.parse(text);
-      } catch {
+      } catch (err) {
+        debugLog('[closeSSHSession] failed to parse response:', err);
         data = { message: text };
       }
     }
@@ -646,7 +651,8 @@ class ApiService {
     try {
       const response = await clientFetch('/');
       return response.ok;
-    } catch {
+    } catch (err) {
+      debugLog('[checkHealth] health check failed:', err);
       return false;
     }
   }

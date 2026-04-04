@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import type { TodoItem, ToolExecution } from '../types/app';
+import { debugLog } from '../utils/log';
 
 export function useCurrentTodos(currentTodos: TodoItem[] | undefined, toolExecutions: ToolExecution[]): TodoItem[] {
   return useMemo(() => {
@@ -27,8 +28,8 @@ export function useCurrentTodos(currentTodos: TodoItem[] | undefined, toolExecut
           }));
         }
       }
-    } catch {
-      /* ignore */
+    } catch (err) {
+      debugLog('[useCurrentTodos] failed to parse TodoWrite arguments:', err);
     }
 
     return [];

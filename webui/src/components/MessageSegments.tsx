@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { parseMessageSegments, type MessageSegment } from '../utils/messageSegments';
 import { stripAnsiCodes } from '../utils/ansi';
+import { debugLog } from '../utils/log';
 import MessageContent from './MessageContent';
 
 interface MessageSegmentsProps {
@@ -79,7 +80,8 @@ const MessageSegments: FC<MessageSegmentsProps> = ({ content, toolRefs = [], onT
   let segments: MessageSegment[];
   try {
     segments = parseMessageSegments(stripAnsiCodes(content));
-  } catch {
+  } catch (err) {
+    debugLog('[MessageSegments] parseMessageSegments failed, falling back to plain content:', err);
     return <MessageContent content={content} />;
   }
 

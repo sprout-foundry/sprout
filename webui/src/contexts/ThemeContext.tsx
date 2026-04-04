@@ -9,6 +9,7 @@ import {
   type ThemeMode,
   type ThemePack,
 } from '../themes/themePacks';
+import { debugLog } from '../utils/log';
 import { ThemeImporter, type VSCodeTheme, type ImportResult } from '../themes/themeImport';
 import { notificationBus } from '../services/notificationBus';
 
@@ -53,7 +54,8 @@ function loadImportedThemes(): ThemePack[] {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     return parsed;
-  } catch {
+  } catch (err) {
+    debugLog('[loadImportedThemes] failed to parse imported themes from localStorage:', err);
     return [];
   }
 }

@@ -51,8 +51,7 @@ import { notificationBus } from '../services/notificationBus';
 import { File, Loader2, AlertTriangle, Eye, Columns2, WrapText, Link2, PanelRightClose } from 'lucide-react';
 import { copyToClipboard } from '../utils/clipboard';
 import { generateUnifiedDiff } from '../utils/simpleDiff';
-import { useLog } from '../utils/log';
-import './EditorPane.css';
+import { useLog, debugLog } from '../utils/log';
 import ContextMenu from './ContextMenu';
 
 interface EditorPaneProps {
@@ -786,8 +785,8 @@ const EditorPane: FC<EditorPaneProps> = ({ paneId }) => {
     setMinimapEnabled(next);
     try {
       localStorage.setItem('editor:minimap-enabled', String(next));
-    } catch {
-      // Graceful degradation — preference won't persist
+    } catch (err) {
+      debugLog('[onToggleMinimap] localStorage persist failed:', err);
     }
     viewRef.current?.dispatch({
       effects: minimapCompartment.current.reconfigure(next ? minimapExtension() : []),

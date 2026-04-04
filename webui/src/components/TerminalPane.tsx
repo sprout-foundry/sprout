@@ -8,6 +8,7 @@ import '@xterm/xterm/css/xterm.css';
 import { TerminalWebSocketService } from '../services/terminalWebSocket';
 import type { WsEvent } from '../services/websocket';
 import { useTheme } from '../contexts/ThemeContext';
+import { debugLog } from '../utils/log';
 import { copyToClipboard } from '../utils/clipboard';
 
 export interface TerminalPaneHandle {
@@ -124,7 +125,8 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       try {
         const text = await navigator.clipboard.readText();
         terminalWSRef.current?.sendRawInput(text);
-      } catch {
+      } catch (err) {
+        debugLog('[TerminalPane] clipboard readText failed:', err);
         // Clipboard access denied
       }
       closeContextMenu();
@@ -237,8 +239,8 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       return () => {
         try {
           term.dispose();
-        } catch {
-          // ignore
+        } catch (err) {
+          debugLog('[TerminalPane] failed to dispose xterm instance:', err);
         }
         xtermRef.current = null;
         fitAddonRef.current = null;

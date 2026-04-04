@@ -8,6 +8,7 @@ import InlinePillRow, { type InlinePillItem } from './InlinePillRow';
 import { parseReviewGuidance, reviewGuidanceToMarkdown } from '../utils/reviewFormatting';
 import { stripAnsiCodes } from '../utils/ansi';
 import { showThemedConfirm } from './ThemedDialog';
+import { debugLog } from '../utils/log';
 
 interface DeepReviewResult {
   message: string;
@@ -278,7 +279,8 @@ const ReviewWorkspaceTab: FC<ReviewWorkspaceTabProps> = ({
       const items = collectSelectedItems();
       if (items.length > 0) opts.selectedItems = items;
       onFixFromReview(opts);
-    } catch {
+    } catch (err) {
+      debugLog('[handleFixSelected] unexpected error from fix flow:', err);
       // Swallow unexpected errors from showThemedConfirm or onFixFromReview
       // — major failures are handled internally by those functions
     }

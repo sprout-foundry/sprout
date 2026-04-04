@@ -1,4 +1,5 @@
 import { clientFetch } from './clientSession';
+import { debugLog } from '../utils/log';
 
 export interface FileCheckEntry {
   path: string;
@@ -39,7 +40,8 @@ export async function checkFilesModified(files: FileCheckEntry[]): Promise<FileC
   const text = await response.text();
   try {
     return JSON.parse(text) as FileCheckModifiedResponse;
-  } catch {
+  } catch (err) {
+    debugLog('[checkFilesModified] failed to parse response JSON:', err);
     throw new Error(`File check returned invalid JSON: ${text.slice(0, 200)}`);
   }
 }

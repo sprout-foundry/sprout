@@ -1,6 +1,7 @@
 import { useEffect, type MutableRefObject } from 'react';
 import { type EditorBuffer } from '../types/editor';
 import { readFileWithConsent } from '../services/fileAccess';
+import { debugLog } from '../utils/log';
 
 // ---------------------------------------------------------------------------
 // useAutoReloadCleanBuffers
@@ -70,8 +71,9 @@ export const useAutoReloadCleanBuffers = ({
             detail: { bufferId, content },
           }),
         );
-      } catch {
-        // Silently ignore read failures
+      } catch (err) {
+        // Non-critical: read failures are expected for some file types
+        debugLog('[useAutoReloadCleanBuffers] failed to re-read externally modified file:', err);
       }
     };
 

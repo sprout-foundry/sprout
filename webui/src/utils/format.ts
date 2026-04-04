@@ -1,3 +1,5 @@
+import { debugLog } from './log';
+
 /** Simple relative date formatter (e.g. "3 days ago", "2 hours ago") */
 export function formatRelativeDate(dateStr: string): string {
   try {
@@ -22,7 +24,8 @@ export function formatRelativeDate(dateStr: string): string {
     if (diffWeeks < 5) return `${diffWeeks}w ago`;
     if (diffMonths < 12) return `${diffMonths}mo ago`;
     return `${diffYears}y ago`;
-  } catch {
+  } catch (err) {
+    debugLog('[format] formatRelativeDate failed:', err);
     return dateStr;
   }
 }

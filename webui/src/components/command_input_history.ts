@@ -1,4 +1,5 @@
 import { type ApiService } from '../services/api';
+import { debugLog } from '../utils/log';
 
 const MAX_COMMAND_HISTORY = 100;
 const STORAGE_KEY = 'ledit:chat-history';
@@ -18,8 +19,9 @@ export async function loadCommandHistory(_apiService: ApiService): Promise<strin
         return dedupeCommands(parsed);
       }
     }
-  } catch {
+  } catch (err) {
     // localStorage unavailable or corrupted — start with empty history
+    debugLog('[loadCommandHistory] failed to load command history:', err);
   }
   return [];
 }
@@ -27,8 +29,8 @@ export async function loadCommandHistory(_apiService: ApiService): Promise<strin
 export function persistCommandHistory(commands: string[]): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(commands));
-  } catch {
-    // Storage quota exceeded or unavailable — ignore, in-memory history still works
+  } catch (err) {
+    debugLog('[persistCommandHistory] failed to persist command history:', err);
   }
 }
 

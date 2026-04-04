@@ -1,5 +1,6 @@
 import { clientFetch } from './clientSession';
 import { showThemedConfirm } from '../components/ThemedDialog';
+import { debugLog } from '../utils/log';
 
 const consentTokenHeader = 'X-Ledit-Consent-Token';
 
@@ -37,7 +38,8 @@ async function parseConsentRequired(response: Response): Promise<ConsentRequired
         error: body.error,
       };
     }
-  } catch {
+  } catch (err) {
+    debugLog('[parseConsentRequired] failed to parse consent response:', err);
     return null;
   }
 

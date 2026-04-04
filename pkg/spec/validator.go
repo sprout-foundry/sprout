@@ -2,6 +2,7 @@ package spec
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -36,10 +37,10 @@ func NewScopeValidator(cfg *configuration.Config, logger *utils.Logger) (*ScopeV
 func (v *ScopeValidator) ValidateScope(diff string, spec *CanonicalSpec) (*ScopeReviewResult, error) {
 	// Validate inputs
 	if diff == "" {
-		return nil, fmt.Errorf("diff cannot be empty")
+		return nil, errors.New("diff cannot be empty")
 	}
 	if spec == nil {
-		return nil, fmt.Errorf("spec cannot be nil")
+		return nil, errors.New("spec cannot be nil")
 	}
 
 	// Build spec JSON for LLM

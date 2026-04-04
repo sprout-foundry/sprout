@@ -3,6 +3,7 @@ package mcp
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -246,7 +247,7 @@ func promptForGitHubPAT(reader *bufio.Reader) (string, error) {
 	}
 
 	if len(token) < 10 {
-		return "", fmt.Errorf("token seems too short, please paste the full PAT")
+		return "", errors.New("token seems too short, please paste the full PAT")
 	}
 
 	return token, nil
@@ -268,7 +269,7 @@ func openBrowser(url string) error {
 	case isCommandAvailable("wslview"):
 		cmd = exec.Command("wslview", url)
 	default:
-		return fmt.Errorf("no browser command found")
+		return errors.New("no browser command found")
 	}
 
 	return cmd.Start()

@@ -2,6 +2,7 @@
 package console
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -278,7 +279,7 @@ func (cm *ContextMenu) Render() {
 //         ESC [ < Cb;Cx;Cy M (SGR mode)
 func ParseMouseEvent(data string) (*MouseEvent, error) {
 	if len(data) < 4 || data[0] != '\x1b' || data[1] != '[' || (data[2] != 'M' && data[2] != '<') {
-		return nil, fmt.Errorf("not a mouse event")
+		return nil, errors.New("not a mouse event")
 	}
 
 	event := &MouseEvent{}
@@ -286,13 +287,13 @@ func ParseMouseEvent(data string) (*MouseEvent, error) {
 	if data[2] == 'M' {
 		// X10 mode: ESC [ M Cb Cx Cy
 		if len(data) != 6 {
-			return nil, fmt.Errorf("invalid X10 mouse event length")
+			return nil, errors.New("invalid X10 mouse event length")
 		}
 		event = parseX10MouseEvent(data)
 	} else {
 		// SGR mode: ESC [ < Cb;Cx;Cy M
 		if len(data) < 8 {
-			return nil, fmt.Errorf("invalid SGR mouse event")
+			return nil, errors.New("invalid SGR mouse event")
 		}
 		event = parseSGRMouseEvent(data)
 	}

@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -21,13 +22,13 @@ func (c *SelfReviewGateCommand) Description() string {
 
 func (c *SelfReviewGateCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	if chatAgent == nil {
-		return fmt.Errorf("agent is not initialized")
+		return errors.New("agent is not initialized")
 	}
 
 	configManager := chatAgent.GetConfigManager()
 	cfg := configManager.GetConfig()
 	if cfg == nil {
-		return fmt.Errorf("configuration is not initialized")
+		return errors.New("configuration is not initialized")
 	}
 
 	if len(args) == 0 {
@@ -39,7 +40,7 @@ func (c *SelfReviewGateCommand) Execute(args []string, chatAgent *agent.Agent) e
 		return nil
 	}
 	if len(args) > 1 {
-		return fmt.Errorf("usage: /self-review-gate <off|code|always>")
+		return errors.New("usage: /self-review-gate <off|code|always>")
 	}
 
 	modeInput := strings.TrimSpace(args[0])

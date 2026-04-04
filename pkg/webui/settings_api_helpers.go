@@ -2,6 +2,7 @@ package webui
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -158,7 +159,7 @@ func validateHistoryScope(v string) error {
 
 func validateAPITimeout(t int) error {
 	if t <= 0 {
-		return fmt.Errorf("api_timeout values must be positive integers (seconds)")
+		return errors.New("api_timeout values must be positive integers (seconds)")
 	}
 	return nil
 }

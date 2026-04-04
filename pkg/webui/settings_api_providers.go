@@ -2,6 +2,7 @@ package webui
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -199,13 +200,13 @@ func (ws *ReactWebServer) handleAPISettingsProvidersDelete(w http.ResponseWriter
 
 func validateCustomProvider(p configuration.CustomProviderConfig) error {
 	if p.Name == "" {
-		return fmt.Errorf("provider name is required")
+		return errors.New("provider name is required")
 	}
 	if p.Endpoint == "" {
-		return fmt.Errorf("provider endpoint is required")
+		return errors.New("provider endpoint is required")
 	}
 	if p.ContextSize < 0 {
-		return fmt.Errorf("context_size must be non-negative")
+		return errors.New("context_size must be non-negative")
 	}
 	return nil
 }

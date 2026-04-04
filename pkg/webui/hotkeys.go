@@ -2,6 +2,7 @@ package webui
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -265,15 +266,15 @@ func SaveHotkeys(config *HotkeyConfig) error {
 // ValidateHotkeyConfig validates a hotkeys configuration
 func ValidateHotkeyConfig(config *HotkeyConfig) error {
 	if config == nil {
-		return fmt.Errorf("hotkeys config is nil")
+		return errors.New("hotkeys config is nil")
 	}
 
 	if config.Version == "" {
-		return fmt.Errorf("hotkeys config must have a version field")
+		return errors.New("hotkeys config must have a version field")
 	}
 
 	if config.Hotkeys == nil {
-		return fmt.Errorf("hotkeys config must have a hotkeys array")
+		return errors.New("hotkeys config must have a hotkeys array")
 	}
 
 	// Validate each hotkey entry and check for duplicates.

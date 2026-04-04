@@ -179,7 +179,7 @@ func SafeResolvePath(filePath string) (string, error) {
 // can be enabled via context when user has explicitly approved the operation.
 func SafeResolvePathWithBypass(ctx context.Context, filePath string) (string, error) {
 	if filePath == "" {
-		return "", fmt.Errorf("empty file path provided")
+		return "", errors.New("empty file path provided")
 	}
 
 	// Clean the path
@@ -278,7 +278,7 @@ func SafeResolvePathForWrite(filePath string) (string, error) {
 // Returns the absolute path if it's safe to write, or an error otherwise.
 func SafeResolvePathForWriteWithBypass(ctx context.Context, filePath string) (string, error) {
 	if filePath == "" {
-		return "", fmt.Errorf("empty file path provided")
+		return "", errors.New("empty file path provided")
 	}
 
 	// Clean the path

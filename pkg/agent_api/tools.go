@@ -830,5 +830,27 @@ func GetToolDefinitions() []Tool {
 				},
 			},
 		},
+		{
+			Type: "function",
+			Function: struct {
+				Name        string      `json:"name"`
+				Description string      `json:"description"`
+				Parameters  interface{} `json:"parameters"`
+			}{
+				Name:        "commit",
+				Description: "Commit staged changes with an auto-generated commit message. Use this tool instead of running 'git commit' directly. This tool uses the commit message generation and validation system. For read-only operations like status, log, diff, use shell_command instead.",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"message": map[string]interface{}{
+							"type":        "string",
+							"description": "Commit message (optional). If not provided, a message will be auto-generated based on the staged changes.",
+						},
+					},
+					"required":             []string{},
+					"additionalProperties": false,
+				},
+			},
+		},
 	}
 }

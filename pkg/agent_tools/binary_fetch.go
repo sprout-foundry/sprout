@@ -2,6 +2,7 @@ package tools
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -57,7 +58,7 @@ func FetchBinaryURL(url string, kind ResponseKind) (*BinaryFetchResult, error) {
 			resp.ContentLength, binaryDownloadMaxSize)
 	}
 	if len(data) == 0 {
-		return nil, fmt.Errorf("empty response body")
+		return nil, errors.New("empty response body")
 	}
 
 	effectiveURL := resp.Request.URL.String()
@@ -77,7 +78,7 @@ func processImageBinary(sourceURL string, data []byte) (*BinaryFetchResult, erro
 	// Validate magic bytes
 	_, mimeType := console.DetectImageMagic(data)
 	if mimeType == "" {
-		return nil, fmt.Errorf("URL content is not a valid image (failed magic bytes check)")
+		return nil, errors.New("URL content is not a valid image (failed magic bytes check)")
 	}
 
 	// Optimize: resize if dimensions exceed 4096px, compress if above threshold.
@@ -109,7 +110,7 @@ func processImageBinary(sourceURL string, data []byte) (*BinaryFetchResult, erro
 func processPDFBinary(effectiveURL string, data []byte) (*BinaryFetchResult, error) {
 	// Validate it looks like a PDF
 	if !looksLikePDF(data) {
-		return nil, fmt.Errorf("downloaded content is not a valid PDF (failed PDF header check)")
+		return nil, errors.New("downloaded content is not a valid PDF (failed PDF header check)")
 	}
 
 	// Check size
@@ -164,5 +165,5 @@ func processPDFBinary(effectiveURL string, data []byte) (*BinaryFetchResult, err
 		}, nil
 	}
 
-	return nil, fmt.Errorf("PDF processing produced no output")
+	return nil, errors.New("PDF processing produced no output")
 }

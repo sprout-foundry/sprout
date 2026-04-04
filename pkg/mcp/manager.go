@@ -309,7 +309,7 @@ func (m *DefaultMCPManager) AutoDiscoverGitHubServer(ctx context.Context) error 
 		}
 	}
 
-	return fmt.Errorf("failed to auto-discover GitHub MCP server - please install @modelcontextprotocol/server-github or mcp-server-github")
+	return errors.New("failed to auto-discover GitHub MCP server - please install @modelcontextprotocol/server-github or mcp-server-github")
 }
 
 // GetServerStats returns statistics about all servers

@@ -2,12 +2,16 @@ package commands
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/agent"
+	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/factory"
+	"github.com/alantheprice/ledit/pkg/git"
 	"github.com/alantheprice/ledit/pkg/utils"
 	"golang.org/x/term"
 )
@@ -285,7 +289,7 @@ func (cf *CommitFlow) singleFileCommit() error {
 		selectedFile = allFiles[0]
 		cf.println(fmt.Sprintf("Auto-selected first file: %s", selectedFile))
 	} else {
-		return fmt.Errorf("no files available for selection")
+		return errors.New("no files available for selection")
 	}
 
 	// Reset staging area and stage only the selected file
@@ -336,4 +340,44 @@ func (cf *CommitFlow) executeNonInteractive() error {
 	// Fallback to original commit logic for non-terminal environments
 	commitCmd := &CommitCommand{}
 	return commitCmd.executeMultiFileCommit(cf.agent)
+}
+
+// CommitStagedWithMessage commits staged files with an optional message or auto-generated message
+// This method is designed for non-interactive use by the commit tool
+func (cf *CommitFlow) CommitStagedWithMessage() error {
+	// Check for staged changes first
+	stagedOutput, err := exec.Command("git", "diff", "--staged", "--name-only").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to check for staged changes: %w", err)
+	}
+
+	if len(strings.TrimSpace(string(stagedOutput))) == 0 {
+		return errors.New("no staged changes to commit")
+	}
+
+	// Create LLM client if available
+	var client api.ClientInterface
+	if cf.agent != nil {
+		configManager := cf.agent.GetConfigManager()
+		if configManager != nil {
+			clientType, err := configManager.GetProvider()
+			if err == nil {
+				model := configManager.GetModelForProvider(clientType)
+				client, err = factory.CreateProviderClient(clientType, model)
+				if err != nil {
+					client = nil
+				}
+			}
+		}
+	}
+
+	// Use the shared commit executor with user instructions
+	executor := git.NewCommitExecutor(client, "", cf.userInstructions)
+	commitHash, err := executor.ExecuteCommit()
+	if err != nil {
+		return fmt.Errorf("commit failed: %w", err)
+	}
+
+	cf.println("[OK] Commit created: " + commitHash)
+	return nil
 }

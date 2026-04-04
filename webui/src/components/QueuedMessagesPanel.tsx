@@ -55,6 +55,11 @@ const QueuedMessagesPanel: FC<QueuedMessagesPanelProps> = ({
     setEditValue(messages[index]);
   };
 
+  const handleCancelEdit = () => {
+    setEditingIndex(null);
+    setEditValue('');
+  };
+
   const handleSaveEdit = () => {
     if (editingIndex !== null) {
       const trimmed = editValue.trim();
@@ -75,11 +80,6 @@ const QueuedMessagesPanel: FC<QueuedMessagesPanelProps> = ({
       setEditingIndex(null);
       setEditValue('');
     }
-  };
-
-  const handleCancelEdit = () => {
-    setEditingIndex(null);
-    setEditValue('');
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {

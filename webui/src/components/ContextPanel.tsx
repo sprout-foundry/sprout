@@ -611,11 +611,11 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     }
   };
 
-  const getSubagentLogMessage = useCallback((log: LogEntry): string | null => {
-    if (log.type !== 'agent_message' || !log.data || typeof log.data !== 'object') {
+  const getSubagentLogMessage = useCallback((logEntry: LogEntry): string | null => {
+    if (logEntry.type !== 'agent_message' || !logEntry.data || typeof logEntry.data !== 'object') {
       return null;
     }
-    const d = log.data as Record<string, unknown>;
+    const d = logEntry.data as Record<string, unknown>;
     const raw = typeof d.message === 'string' ? d.message : '';
     if (!raw || (!raw.includes('Subagent:') && !/Spawning subagent/i.test(raw))) {
       return null;
@@ -839,20 +839,21 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       const startMs = tool.startTime.getTime() - 500;
       const endMs = (tool.endTime || new Date()).getTime() + 500;
       const fallbackActivities = subagentLogs
-        .filter((log) => {
-          const message = getSubagentLogMessage(log);
+        .filter((logEntry) => {
+          const message = getSubagentLogMessage(logEntry);
           if (!message) {
             return false;
           }
-          const ts = log.timestamp instanceof Date ? log.timestamp.getTime() : new Date(log.timestamp).getTime();
+          const ts =
+            logEntry.timestamp instanceof Date ? logEntry.timestamp.getTime() : new Date(logEntry.timestamp).getTime();
           return ts >= startMs && ts <= endMs;
         })
-        .map((log) => {
-          const message = getSubagentLogMessage(log) || '';
+        .map((logEntry) => {
+          const message = getSubagentLogMessage(logEntry) || '';
           const normalized = normalizeSubagentActivity(message);
           return {
-            id: log.id,
-            timestamp: log.timestamp,
+            id: logEntry.id,
+            timestamp: logEntry.timestamp,
             taskId: normalized.taskId,
             label: normalized.label,
             isSpawn: normalized.isSpawn,
@@ -1572,7 +1573,12 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
         return (
           <RevisionListPanel
             mode="session"
-            onOpenDiff={(props as ChatContextPanelProps).onOpenRevisionDiff || (() => {})}
+            onOpenDiff={
+              (props as ChatContextPanelProps).onOpenRevisionDiff ||
+              (() => {
+                /* noop */
+              })
+            }
           />
         );
       case 'tasks':

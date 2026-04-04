@@ -33,27 +33,6 @@ const ResizeHandle: FC<ResizeHandleProps> = ({
   const lastDragPos = useRef<{ x: number; y: number } | null>(null);
   const handleRef = useRef<HTMLDivElement>(null);
 
-  // Handle mouse down on resize handle
-  const handleMouseDown = useCallback(
-    (e: ReactMouseEvent) => {
-      e.preventDefault();
-      isDraggingRef.current = true;
-      setIsDragging(true);
-      dragStartPos.current = { x: e.clientX, y: e.clientY };
-      lastDragPos.current = { x: e.clientX, y: e.clientY };
-
-      // Add global event listeners for drag
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-
-      // Prevent text selection during drag
-      document.body.style.userSelect = 'none';
-      document.body.style.cursor = direction === 'horizontal' ? 'col-resize' : 'row-resize';
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [direction],
-  );
-
   // Handle mouse move during drag
   const handleMouseMove = useCallback(
     (e: MouseEvent) => {
@@ -94,6 +73,27 @@ const ResizeHandle: FC<ResizeHandleProps> = ({
     // Notify drag end
     onResizeEnd?.();
   }, [handleMouseMove, onResizeEnd]);
+
+  // Handle mouse down on resize handle
+  const handleMouseDown = useCallback(
+    (e: ReactMouseEvent) => {
+      e.preventDefault();
+      isDraggingRef.current = true;
+      setIsDragging(true);
+      dragStartPos.current = { x: e.clientX, y: e.clientY };
+      lastDragPos.current = { x: e.clientX, y: e.clientY };
+
+      // Add global event listeners for drag
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+
+      // Prevent text selection during drag
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = direction === 'horizontal' ? 'col-resize' : 'row-resize';
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [direction],
+  );
 
   // Cleanup on unmount
   useEffect(() => {

@@ -482,7 +482,18 @@ const LocationSwitcher: FC<LocationSwitcherProps> = ({
     if (!isOpen && !isSshPanelOpen) {
       return;
     }
-    const desktopBridge = (window as any).leditDesktop;
+    const desktopBridge = (
+      window as unknown as {
+        leditDesktop?: {
+          listSshHosts?: () => Promise<unknown>;
+          openSshWorkspace?: (opts: {
+            hostAlias: string;
+            remoteWorkspacePath?: string;
+            forceNewWindow: boolean;
+          }) => Promise<unknown>;
+        };
+      }
+    ).leditDesktop;
 
     let cancelled = false;
     Promise.all([
@@ -516,7 +527,7 @@ const LocationSwitcher: FC<LocationSwitcherProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, isSshPanelOpen]);
+  }, [isOpen, isSshPanelOpen, log]);
 
   useEffect(() => {
     if ((!isOpen && !isSshPanelOpen) || remoteContext || !focusedSshSessionKey) {
@@ -891,7 +902,7 @@ const LocationSwitcher: FC<LocationSwitcherProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [addRecentWorkspace, addRemoteRecentWorkspace, isConnected]);
+  }, [addRecentWorkspace, addRemoteRecentWorkspace, isConnected, log]);
 
   const togglePopover = useCallback(() => {
     setIsOpen((prev) => !prev);
@@ -928,7 +939,18 @@ const LocationSwitcher: FC<LocationSwitcherProps> = ({
   }, [switchingState.error]);
 
   const handleOpenSshHost = useCallback(async (hostAlias: string, explicitRemotePath?: string) => {
-    const desktopBridge = (window as any).leditDesktop;
+    const desktopBridge = (
+      window as unknown as {
+        leditDesktop?: {
+          listSshHosts?: () => Promise<unknown>;
+          openSshWorkspace?: (opts: {
+            hostAlias: string;
+            remoteWorkspacePath?: string;
+            forceNewWindow: boolean;
+          }) => Promise<unknown>;
+        };
+      }
+    ).leditDesktop;
     if (!hostAlias) {
       return;
     }
@@ -1392,7 +1414,7 @@ const LocationSwitcher: FC<LocationSwitcherProps> = ({
           ref={popoverRef}
           className="location-switcher-popover"
           style={{
-            ['--trigger-width' as any]: triggerWidth,
+            ['--trigger-width' as string]: triggerWidth,
           }}
           role="listbox"
           aria-label="Location switcher"

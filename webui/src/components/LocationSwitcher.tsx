@@ -440,7 +440,9 @@ const LocationSwitcher: FC<LocationSwitcherProps> = ({
           setRemoteContext({ hostAlias: proxyCtx.hostAlias });
           addRemoteRecentWorkspace(proxyCtx.hostAlias, '');
         }
-        log.error(`Failed to load workspace data: ${error instanceof Error ? error.message : String(error)}`, { title: 'Workspace Load Error' });
+        log.error(`Failed to load workspace data: ${error instanceof Error ? error.message : String(error)}`, {
+          title: 'Workspace Load Error',
+        });
       }
     };
 
@@ -503,7 +505,9 @@ const LocationSwitcher: FC<LocationSwitcherProps> = ({
       })
       .catch((error: unknown) => {
         if (!cancelled) {
-          log.error(`Failed to load SSH hosts: ${error instanceof Error ? error.message : String(error)}`, { title: 'SSH Load Error' });
+          log.error(`Failed to load SSH hosts: ${error instanceof Error ? error.message : String(error)}`, {
+            title: 'SSH Load Error',
+          });
           setSshHosts([]);
           setSshSessions([]);
         }
@@ -876,7 +880,9 @@ const LocationSwitcher: FC<LocationSwitcherProps> = ({
       setSuggestionsError(null);
       setSshFailure(null);
     } catch (error) {
-      log.error(`Failed to refresh workspace data: ${error instanceof Error ? error.message : String(error)}`, { title: 'Workspace Refresh Error' });
+      log.error(`Failed to refresh workspace data: ${error instanceof Error ? error.message : String(error)}`, {
+        title: 'Workspace Refresh Error',
+      });
       setSwitchingState({
         isSwitching: false,
         error: 'Failed to refresh workspace data',

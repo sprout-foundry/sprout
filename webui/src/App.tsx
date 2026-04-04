@@ -171,85 +171,85 @@ function App() {
             <EditorManagerProvider>
               <UIManager>
                 <AppContent
-                state={state}
-                inputValue={inputValue}
-                onInputChange={setInputValue}
-                isMobile={isMobile}
-                isSidebarOpen={isSidebarOpen}
-                sidebarCollapsed={sidebarCollapsed}
-                isTerminalExpanded={isTerminalExpanded}
-                stats={stats}
-                recentFiles={recentFiles}
-                recentLogs={recentLogs}
-                gitRefreshToken={gitRefreshToken}
-                onSidebarToggle={handleSidebarToggle}
-                onToggleSidebar={toggleSidebar}
-                onCloseSidebar={closeSidebar}
-                onViewChange={handleViewChange}
-                onModelChange={handleModelChange}
-                onProviderChange={handleProviderChange}
-                onPersonaChange={handlePersonaChange}
-                onSendMessage={handleSendMessage}
-                onQueueMessage={handleQueueMessage}
-                onStopProcessing={handleStopProcessing}
-                queuedMessagesCount={queuedMessages.length}
-                queuedMessages={queuedMessages}
-                onQueueMessageRemove={handleRemoveQueuedMessage}
-                onQueueMessageEdit={handleEditQueuedMessage}
-                onQueueReorder={handleReorderQueuedMessages}
-                onClearQueuedMessages={handleClearQueuedMessages}
-                onGitCommit={handleGitCommit}
-                onGitAICommit={handleGitAICommit}
-                onGitStage={handleGitStage}
-                onGitUnstage={handleGitUnstage}
-                onGitDiscard={handleGitDiscard}
-                onTerminalExpandedChange={setIsTerminalExpanded}
-                isConnected={state.isConnected}
-                chatSessions={state.chatSessions}
-                activeChatId={state.activeChatId}
-                onActiveChatChange={handleActiveChatChange}
-                onCreateChat={handleCreateChat}
-                onDeleteChat={handleDeleteChat}
-                onRenameChat={handleRenameChat}
-                perChatCache={state.perChatCache}
-              />
-              {state.securityApprovalRequest && (
-                <SecurityApprovalDialog
-                  requestId={state.securityApprovalRequest.requestId}
-                  toolName={state.securityApprovalRequest.toolName}
-                  riskLevel={state.securityApprovalRequest.riskLevel as 'SAFE' | 'CAUTION' | 'DANGEROUS'}
-                  reasoning={state.securityApprovalRequest.reasoning}
-                  command={state.securityApprovalRequest.command}
-                  riskType={state.securityApprovalRequest.riskType}
-                  target={state.securityApprovalRequest.target}
-                  onRespond={handleSecurityApprovalResponse}
+                  state={state}
+                  inputValue={inputValue}
+                  onInputChange={setInputValue}
+                  isMobile={isMobile}
+                  isSidebarOpen={isSidebarOpen}
+                  sidebarCollapsed={sidebarCollapsed}
+                  isTerminalExpanded={isTerminalExpanded}
+                  stats={stats}
+                  recentFiles={recentFiles}
+                  recentLogs={recentLogs}
+                  gitRefreshToken={gitRefreshToken}
+                  onSidebarToggle={handleSidebarToggle}
+                  onToggleSidebar={toggleSidebar}
+                  onCloseSidebar={closeSidebar}
+                  onViewChange={handleViewChange}
+                  onModelChange={handleModelChange}
+                  onProviderChange={handleProviderChange}
+                  onPersonaChange={handlePersonaChange}
+                  onSendMessage={handleSendMessage}
+                  onQueueMessage={handleQueueMessage}
+                  onStopProcessing={handleStopProcessing}
+                  queuedMessagesCount={queuedMessages.length}
+                  queuedMessages={queuedMessages}
+                  onQueueMessageRemove={handleRemoveQueuedMessage}
+                  onQueueMessageEdit={handleEditQueuedMessage}
+                  onQueueReorder={handleReorderQueuedMessages}
+                  onClearQueuedMessages={handleClearQueuedMessages}
+                  onGitCommit={handleGitCommit}
+                  onGitAICommit={handleGitAICommit}
+                  onGitStage={handleGitStage}
+                  onGitUnstage={handleGitUnstage}
+                  onGitDiscard={handleGitDiscard}
+                  onTerminalExpandedChange={setIsTerminalExpanded}
+                  isConnected={state.isConnected}
+                  chatSessions={state.chatSessions}
+                  activeChatId={state.activeChatId}
+                  onActiveChatChange={handleActiveChatChange}
+                  onCreateChat={handleCreateChat}
+                  onDeleteChat={handleDeleteChat}
+                  onRenameChat={handleRenameChat}
+                  perChatCache={state.perChatCache}
                 />
-              )}
-              {state.securityPromptRequest && (
-                <SecurityPromptDialog
-                  requestId={state.securityPromptRequest.requestId}
-                  prompt={state.securityPromptRequest.prompt}
-                  filePath={state.securityPromptRequest.filePath}
-                  concern={state.securityPromptRequest.concern}
-                  onRespond={handleSecurityPromptResponse}
+                {state.securityApprovalRequest && (
+                  <SecurityApprovalDialog
+                    requestId={state.securityApprovalRequest.requestId}
+                    toolName={state.securityApprovalRequest.toolName}
+                    riskLevel={state.securityApprovalRequest.riskLevel as 'SAFE' | 'CAUTION' | 'DANGEROUS'}
+                    reasoning={state.securityApprovalRequest.reasoning}
+                    command={state.securityApprovalRequest.command}
+                    riskType={state.securityApprovalRequest.riskType}
+                    target={state.securityApprovalRequest.target}
+                    onRespond={handleSecurityApprovalResponse}
+                  />
+                )}
+                {state.securityPromptRequest && (
+                  <SecurityPromptDialog
+                    requestId={state.securityPromptRequest.requestId}
+                    prompt={state.securityPromptRequest.prompt}
+                    filePath={state.securityPromptRequest.filePath}
+                    concern={state.securityPromptRequest.concern}
+                    onRespond={handleSecurityPromptResponse}
+                  />
+                )}
+                <OnboardingDialog
+                  onboarding={onboardingHook.onboarding}
+                  selectedProvider={onboardingHook.selectedProvider}
+                  recommendedProviders={onboardingHook.recommendedProviders}
+                  advancedProviders={onboardingHook.advancedProviders}
+                  windowsGuidance={onboardingHook.windowsGuidance}
+                  onProviderChange={onboardingHook.onProviderChange}
+                  onComplete={onboarding.onComplete}
+                  onRefresh={onboardingHook.refreshStatus}
+                  onInstallWsl={onboardingHook.onInstallWsl}
+                  onInstallGitBash={onboardingHook.onInstallGitBash}
+                  updateOnboarding={onboardingHook.updateOnboarding}
                 />
-              )}
-              <OnboardingDialog
-                onboarding={onboardingHook.onboarding}
-                selectedProvider={onboardingHook.selectedProvider}
-                recommendedProviders={onboardingHook.recommendedProviders}
-                advancedProviders={onboardingHook.advancedProviders}
-                windowsGuidance={onboardingHook.windowsGuidance}
-                onProviderChange={onboardingHook.onProviderChange}
-                onComplete={onboarding.onComplete}
-                onRefresh={onboardingHook.refreshStatus}
-                onInstallWsl={onboardingHook.onInstallWsl}
-                onInstallGitBash={onboardingHook.onInstallGitBash}
-                updateOnboarding={onboardingHook.updateOnboarding}
-              />
-            </UIManager>
-          </EditorManagerProvider>
-          <Notification />
+              </UIManager>
+            </EditorManagerProvider>
+            <Notification />
           </HotkeyProvider>
         </NotificationProvider>
       </ThemeProvider>

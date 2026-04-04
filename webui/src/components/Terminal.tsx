@@ -5,6 +5,7 @@ import './Terminal.css';
 import TerminalPane, { type TerminalPaneHandle } from './TerminalPane';
 import TerminalTabBar, { type TerminalSession } from './TerminalTabBar';
 import { ApiService, type ShellInfo } from '../services/api';
+import { notificationBus } from '../services/notificationBus';
 
 type SplitDirection = 'none' | 'horizontal' | 'vertical';
 
@@ -138,7 +139,7 @@ const Terminal: FC<TerminalProps> = ({
         setShellsLoaded(true);
       })
       .catch((err) => {
-        console.warn('Failed to load available shells:', err);
+        notificationBus.notify('warning', 'Terminal', 'Failed to load available shells: ' + String(err));
         setShellsLoaded(true);
       });
     return () => {

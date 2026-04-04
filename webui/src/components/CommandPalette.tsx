@@ -189,7 +189,9 @@ const CommandPalette: FC<CommandPaletteProps> = ({
 
         if (!cancelled) setAllFiles(indexedFiles);
       } catch (err) {
-        log.error(`Failed to browse files: ${err instanceof Error ? err.message : String(err)}`, { title: 'File Browse Error' });
+        log.error(`Failed to browse files: ${err instanceof Error ? err.message : String(err)}`, {
+          title: 'File Browse Error',
+        });
       } finally {
         if (!cancelled) setIsLoadingFiles(false);
       }
@@ -381,7 +383,9 @@ const CommandPalette: FC<CommandPaletteProps> = ({
           for (const key of keys) {
             try {
               window.localStorage.removeItem(key);
-            } catch {}
+            } catch {
+              // intentionally empty — localStorage may be unavailable in some contexts
+            }
           }
           window.location.reload();
           return; // page is reloading — skip onClose()

@@ -97,7 +97,7 @@ export default function useWebSocketEvents({
 
     // Determine log level and category based on event type
     switch (event.type) {
-      case 'connection_status':
+      case 'connection_status': {
         if (eventData?.client_id && eventData.client_id !== getWebUIClientId()) {
           break;
         }
@@ -131,8 +131,9 @@ export default function useWebSocketEvents({
         }
         debugLog('[link] Connection status updated:', newConnectionState);
         break;
+      }
 
-      case 'query_started':
+      case 'query_started': {
         logEntry.category = 'query';
         logEntry.level = 'info';
         const startedQuery = String(eventData?.query || '');
@@ -159,6 +160,7 @@ export default function useWebSocketEvents({
         }));
         debugLog('[>>] Query started:', startedQuery);
         break;
+      }
 
       case 'query_progress':
         setState((prev) => ({
@@ -168,7 +170,7 @@ export default function useWebSocketEvents({
         debugLog('[>>] Query progress:', eventData);
         break;
 
-      case 'stream_chunk':
+      case 'stream_chunk': {
         logEntry.category = 'stream';
         logEntry.level = 'info';
 
@@ -211,8 +213,9 @@ export default function useWebSocketEvents({
           };
         });
         break;
+      }
 
-      case 'query_completed':
+      case 'query_completed': {
         logEntry.category = 'query';
         logEntry.level = 'success';
         if (activeRequestsRef.current > 0) {
@@ -282,6 +285,7 @@ export default function useWebSocketEvents({
         });
         debugLog('[OK] Query completed');
         break;
+      }
 
       case 'tool_start':
         logEntry.category = 'tool';
@@ -557,7 +561,7 @@ export default function useWebSocketEvents({
         break;
       }
 
-      case 'todo_update':
+      case 'todo_update': {
         logEntry.category = 'tool';
         logEntry.level = 'info';
         const normalizedTodos = normalizeTodoList(eventData?.todos);
@@ -567,6 +571,7 @@ export default function useWebSocketEvents({
           logs: [...prev.logs, logEntry],
         }));
         break;
+      }
 
       case 'file_changed':
         logEntry.category = 'file';
@@ -619,7 +624,7 @@ export default function useWebSocketEvents({
         debugLog('[term] Terminal output received:', eventData);
         break;
 
-      case 'error':
+      case 'error': {
         logEntry.category = 'system';
         logEntry.level = 'error';
         if (activeRequestsRef.current > 0) {
@@ -645,6 +650,7 @@ export default function useWebSocketEvents({
         console.error('[FAIL] Error event:', eventData);
         addNotification('error', 'Agent Error', errorMessage, 8000);
         break;
+      }
 
       case 'metrics_update':
         logEntry.category = 'system';

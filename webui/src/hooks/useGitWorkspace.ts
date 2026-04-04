@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type ApiService } from '../services/api';
 import { WebSocketService } from '../services/websocket';
+import { notificationBus } from '../services/notificationBus';
 import type { WsEvent } from '../services/websocket';
 import type { GitStatusData } from '../types/git-types';
 import type { FileSection } from '../types/git-types';
@@ -420,7 +421,9 @@ export const useGitWorkspace = ({
         }
       })
       .catch((error) => {
-        setGitActionError(error instanceof Error ? error.message : 'Failed to generate commit message');
+        const msg = error instanceof Error ? error.message : 'Failed to generate commit message';
+        setGitActionError(msg);
+        notificationBus.notify('warning', 'AI Commit', msg, 5000);
       })
       .finally(() => {
         setIsGeneratingCommitMessage(false);

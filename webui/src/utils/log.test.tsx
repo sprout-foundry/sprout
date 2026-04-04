@@ -76,9 +76,11 @@ function createHookRunner() {
 describe('useLog', () => {
   it('returns a log object with debug, error, warn, info, and success methods', () => {
     const { App, logRef } = createHookRunner();
-    
-    act(() => { root.render(createElement(App)); });
-    
+
+    act(() => {
+      root.render(createElement(App));
+    });
+
     const log = logRef();
     expect(log).toHaveProperty('debug');
     expect(log).toHaveProperty('error');
@@ -89,14 +91,18 @@ describe('useLog', () => {
 
   it('error() calls console.error AND adds an error notification', () => {
     const { App, logRef, notifRef } = createHookRunner();
-    
-    act(() => { root.render(createElement(App)); });
-    
+
+    act(() => {
+      root.render(createElement(App));
+    });
+
     const log = logRef();
-    act(() => { log.error('Test error message', { title: 'Test Title' }); });
-    
+    act(() => {
+      log.error('Test error message', { title: 'Test Title' });
+    });
+
     expect(console.error).toHaveBeenCalledWith('Test error message');
-    
+
     const notifs = notifRef().notifications;
     expect(notifs).toHaveLength(1);
     expect(notifs[0].type).toBe('error');
@@ -106,12 +112,16 @@ describe('useLog', () => {
 
   it('error() uses default title when no title provided', () => {
     const { App, logRef, notifRef } = createHookRunner();
-    
-    act(() => { root.render(createElement(App)); });
-    
+
+    act(() => {
+      root.render(createElement(App));
+    });
+
     const log = logRef();
-    act(() => { log.error('Test message'); });
-    
+    act(() => {
+      log.error('Test message');
+    });
+
     const notifs = notifRef().notifications;
     expect(notifs).toHaveLength(1);
     expect(notifs[0].title).toBe('Application Log');
@@ -119,14 +129,18 @@ describe('useLog', () => {
 
   it('warn() calls console.warn AND adds a warning notification', () => {
     const { App, logRef, notifRef } = createHookRunner();
-    
-    act(() => { root.render(createElement(App)); });
-    
+
+    act(() => {
+      root.render(createElement(App));
+    });
+
     const log = logRef();
-    act(() => { log.warn('Test warning', { title: 'Warning Title' }); });
-    
+    act(() => {
+      log.warn('Test warning', { title: 'Warning Title' });
+    });
+
     expect(console.warn).toHaveBeenCalledWith('Test warning');
-    
+
     const notifs = notifRef().notifications;
     expect(notifs).toHaveLength(1);
     expect(notifs[0].type).toBe('warning');
@@ -135,14 +149,18 @@ describe('useLog', () => {
 
   it('info() calls console.info AND adds info notification', () => {
     const { App, logRef, notifRef } = createHookRunner();
-    
-    act(() => { root.render(createElement(App)); });
-    
+
+    act(() => {
+      root.render(createElement(App));
+    });
+
     const log = logRef();
-    act(() => { log.info('Test info', { title: 'Info Title' }); });
-    
+    act(() => {
+      log.info('Test info', { title: 'Info Title' });
+    });
+
     expect(console.info).toHaveBeenCalledWith('Test info');
-    
+
     const notifs = notifRef().notifications;
     expect(notifs).toHaveLength(1);
     expect(notifs[0].type).toBe('info');
@@ -151,14 +169,18 @@ describe('useLog', () => {
 
   it('success() calls console.log AND adds success notification', () => {
     const { App, logRef, notifRef } = createHookRunner();
-    
-    act(() => { root.render(createElement(App)); });
-    
+
+    act(() => {
+      root.render(createElement(App));
+    });
+
     const log = logRef();
-    act(() => { log.success('Test success', { title: 'Success Title' }); });
-    
+    act(() => {
+      log.success('Test success', { title: 'Success Title' });
+    });
+
     expect(console.log).toHaveBeenCalledWith('[SUCCESS]', 'Test success');
-    
+
     const notifs = notifRef().notifications;
     expect(notifs).toHaveLength(1);
     expect(notifs[0].type).toBe('success');
@@ -167,14 +189,18 @@ describe('useLog', () => {
 
   it('debug() only logs to console, does NOT add notification', () => {
     const { App, logRef, notifRef } = createHookRunner();
-    
-    act(() => { root.render(createElement(App)); });
-    
+
+    act(() => {
+      root.render(createElement(App));
+    });
+
     const log = logRef();
-    act(() => { log.debug('Debug message', { extra: 'data' }); });
-    
+    act(() => {
+      log.debug('Debug message', { extra: 'data' });
+    });
+
     expect(console.log).toHaveBeenCalledWith('Debug message', { extra: 'data' });
-    
+
     const notifs = notifRef().notifications;
     expect(notifs).toHaveLength(0);
   });

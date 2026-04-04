@@ -41,40 +41,36 @@ export function useBufferPersistence({ buffersRef, setBuffers }: UseBufferPersis
         const trimmedPath = filePath.trim();
 
         // Write the file to disk
-        try {
-          const response = await writeFileWithConsent(trimmedPath, buffer.content);
-          if (!response.ok) {
-            const errorText = await response.text().catch(() => response.statusText);
-            throw new Error(errorText || `Failed to save file: ${response.statusText}`);
-          }
+        const response = await writeFileWithConsent(trimmedPath, buffer.content);
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => response.statusText);
+          throw new Error(errorText || `Failed to save file: ${response.statusText}`);
+        }
 
-          // Update the buffer path to the real file path
-          const ext = trimmedPath.includes('.') ? trimmedPath.split('.').pop() : '';
-          const name = trimmedPath.split('/').pop() || trimmedPath;
+        // Update the buffer path to the real file path
+        const ext = trimmedPath.includes('.') ? trimmedPath.split('.').pop() : '';
+        const name = trimmedPath.split('/').pop() || trimmedPath;
 
-          setBuffers((prev) => {
-            const next = new Map(prev);
-            const buf = next.get(bufferId);
-            if (buf) {
-              next.set(bufferId, {
-                ...buf,
-                file: {
-                  ...buf.file,
-                  name,
-                  path: trimmedPath,
-                  ext: ext || undefined,
-                },
-                originalContent: buf.content,
-                isModified: false,
-              });
-            }
-            return next;
-          });
-          if (!silent) {
-            log.success(`${trimmedPath} saved successfully`, { title: 'File Saved', duration: 3000 });
+        setBuffers((prev) => {
+          const next = new Map(prev);
+          const buf = next.get(bufferId);
+          if (buf) {
+            next.set(bufferId, {
+              ...buf,
+              file: {
+                ...buf.file,
+                name,
+                path: trimmedPath,
+                ext: ext || undefined,
+              },
+              originalContent: buf.content,
+              isModified: false,
+            });
           }
-        } catch (error) {
-          throw error;
+          return next;
+        });
+        if (!silent) {
+          log.success(`${trimmedPath} saved successfully`, { title: 'File Saved', duration: 3000 });
         }
         return;
       }
@@ -118,16 +114,17 @@ export function useBufferPersistence({ buffersRef, setBuffers }: UseBufferPersis
   );
 
   // Save all modified buffers
-  const saveAllBuffers = useCallback(async (options?: { silent?: boolean }) => {
-    const currentBuffers = buffersRef.current;
-    const savePromises = Array.from(currentBuffers.entries())
-      .filter(([_, buffer]) => buffer.isModified && !buffer.file.path.startsWith('__workspace/'))
-      .map(([bufferId, _]) =>
-        saveBuffer(bufferId, options).catch(() => undefined),
-      );
+  const saveAllBuffers = useCallback(
+    async (options?: { silent?: boolean }) => {
+      const currentBuffers = buffersRef.current;
+      const savePromises = Array.from(currentBuffers.entries())
+        .filter(([_, buffer]) => buffer.isModified && !buffer.file.path.startsWith('__workspace/'))
+        .map(([bufferId, _]) => saveBuffer(bufferId, options).catch(() => undefined));
 
-    await Promise.all(savePromises);
-  }, [buffersRef, saveBuffer]);
+      await Promise.all(savePromises);
+    },
+    [buffersRef, saveBuffer],
+  );
 
   return { saveBuffer, saveAllBuffers };
 }

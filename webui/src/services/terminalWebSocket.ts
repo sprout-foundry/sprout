@@ -1,6 +1,7 @@
 import { debugLog } from '../utils/log';
 import { appendClientIdToUrl, getWebUIClientId } from './clientSession';
 import type { WsEvent } from './websocket';
+import { notificationBus } from './notificationBus';
 
 type TerminalEventCallback = (event: WsEvent) => void;
 
@@ -207,7 +208,10 @@ class TerminalWebSocketService {
     };
 
     this.ws.onerror = (error) => {
-      console.error('Terminal WebSocket error:', error);
+      // Only notify on first connection error to avoid spam during reconnect cycles
+      if (this.reconnectAttempts === 0) {
+        notificationBus.notify('error', 'Terminal Connection Error', 'WebSocket error: ' + String(error));
+      }
       this.notifyCallbacks({ type: 'error', data: { message: 'WebSocket connection error' } });
     };
 
@@ -241,7 +245,7 @@ class TerminalWebSocketService {
 
         this.notifyCallbacks(data);
       } catch (error) {
-        console.error('Failed to parse Terminal WebSocket message:', error, event.data);
+        notificationBus.notify('error', 'Terminal WebSocket Error', 'Failed to parse message: ' + String(error));
       }
     };
   }
@@ -287,7 +291,7 @@ class TerminalWebSocketService {
 
   sendCommand(command: string) {
     if (!this.isConnected || !this.sessionId) {
-      console.warn('Terminal not connected or no session, cannot send command:', command);
+      notificationBus.notify('warning', 'Terminal Warning', 'Cannot send command: no session');
       return false;
     }
 
@@ -303,7 +307,7 @@ class TerminalWebSocketService {
       debugLog('Sent terminal command:', command);
       return true;
     } else {
-      console.warn('Terminal WebSocket not ready, cannot send command:', command);
+      notificationBus.notify('warning', 'Terminal Warning', 'Cannot send command: connection not ready');
       return false;
     }
   }

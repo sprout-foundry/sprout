@@ -139,7 +139,7 @@ const FileEditsPanel: FC<FileEditsPanelProps> = ({ edits, onFileClick }) => {
         setIsLoadingHistory(false);
       }
     }
-  }, [apiService]);
+  }, [apiService, log]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {

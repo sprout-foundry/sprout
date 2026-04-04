@@ -180,9 +180,15 @@ const WorkspacePane: FC<WorkspacePaneProps> = ({
             queryProgress={cached.queryProgress ?? null}
             // Disable input for inactive chat tabs since the backend is focused on active chat
             inputValue=""
-            onSendMessage={() => {}}
-            onQueueMessage={() => {}}
-            onStopProcessing={() => {}}
+            onSendMessage={() => {
+              /* noop */
+            }}
+            onQueueMessage={() => {
+              /* noop */
+            }}
+            onStopProcessing={() => {
+              /* noop */
+            }}
           />
         );
       }
@@ -199,9 +205,15 @@ const WorkspacePane: FC<WorkspacePaneProps> = ({
           lastError={null}
           queryProgress={null}
           inputValue=""
-          onSendMessage={() => {}}
-          onQueueMessage={() => {}}
-          onStopProcessing={() => {}}
+          onSendMessage={() => {
+            /* noop */
+          }}
+          onQueueMessage={() => {
+            /* noop */
+          }}
+          onStopProcessing={() => {
+            /* noop */
+          }}
         />
       );
     }

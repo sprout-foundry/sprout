@@ -131,7 +131,10 @@ export function useLayoutPersistence({
 
     if (snapshot.activePaneId && validPaneIds.has(snapshot.activePaneId)) setActivePaneId(snapshot.activePaneId);
     if (snapshot.activeBufferFilePath && pathToBufferId.has(snapshot.activeBufferFilePath)) {
-      setActiveBufferId(pathToBufferId.get(snapshot.activeBufferFilePath)!);
+      const bufferId = pathToBufferId.get(snapshot.activeBufferFilePath);
+      if (bufferId) {
+        setActiveBufferId(bufferId);
+      }
     }
   }, [buffersRef, panesRef, setBuffers, setPanes, setActivePaneId, setActiveBufferId]);
 

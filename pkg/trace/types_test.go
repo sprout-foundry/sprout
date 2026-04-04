@@ -800,3 +800,86 @@ func TestLabelConstants(t *testing.T) {
 		}
 	}
 }
+
+// --- NewJSONLWriter tests ---
+
+func TestNewJSONLWriter_BadDirectory(t *testing.T) {
+	// Create a path in a directory that doesn't exist
+	badPath := filepath.Join(t.TempDir(), "nonexistent", "deep", "nested", "file.jsonl")
+	
+	// Verify directory doesn't exist
+	if _, err := os.Stat(filepath.Dir(badPath)); err == nil {
+		t.Fatal("expected nonexistent directory")
+	}
+
+	// Attempt to create writer - should fail
+	w, err := newJSONLWriter(badPath)
+	if err == nil {
+		t.Fatal("expected error for non-existent directory, got nil")
+	}
+	if !strings.Contains(err.Error(), "no such file or directory") {
+		t.Errorf("expected 'no such file or directory' error, got: %v", err)
+	}
+	if w != nil {
+		t.Error("expected nil writer on error")
+	}
+}
+
+// --- NewTraceSession directory creation tests ---
+
+func TestNewTraceSession_MkdirFails(t *testing.T) {
+	// Create a temporary directory and make it read-only
+	parentDir := t.TempDir()
+	if err := os.Chmod(parentDir, 0555); err != nil {
+		t.Fatalf("failed to make parent directory read-only: %v", err)
+	}
+
+	// Attempt to create session in read-only directory
+	s, err := NewTraceSession(parentDir, "provider", "model")
+	if err == nil {
+		t.Fatal("expected error for read-only directory")
+	}
+	if err == nil && s != nil {
+		s.Close()
+	}
+
+	// Verify error message
+	errMsg := err.Error()
+	if !strings.Contains(errMsg, "failed to create trace run directory") {
+		t.Errorf("expected error containing 'failed to create trace run directory', got: %v", err)
+	}
+}
+
+// --- Close idempotency tests ---
+
+func TestClose_IdempotentAfterRecord(t *testing.T) {
+	traceDir := t.TempDir()
+	s, err := NewTraceSession(traceDir, "anthropic", "claude-3")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// Record a turn to ensure writers are created
+	if err := s.RecordTurn(TurnRecord{
+		RunID:     s.GetRunID(),
+		TurnIndex: 0,
+		Timestamp: "2024-06-15T10:30:00Z",
+	}); err != nil {
+		t.Fatalf("RecordTurn error: %v", err)
+	}
+
+	// Close the session
+	if err := s.Close(); err != nil {
+		t.Fatalf("first Close error: %v", err)
+	}
+
+	// Closing again should be idempotent (no error)
+	if err := s.Close(); err != nil {
+		t.Errorf("second Close should be idempotent, got error: %v", err)
+	}
+
+	// Closing a third time should also be idempotent
+	if err := s.Close(); err != nil {
+		t.Errorf("third Close should be idempotent, got error: %v", err)
+	}
+}

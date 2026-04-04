@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -584,4 +585,334 @@ func TestExtractStagedChangesSummary(t *testing.T) {
 func cwdStr() string {
 	d, _ := os.Getwd()
 	return d
+}
+
+// =============================================================================
+// New coverage-improvement tests
+// =============================================================================
+
+// --- displayVerboseLog ---
+
+// captureStdout captures fmt.Print/Printf output from the given function.
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("failed to create pipe: %v", err)
+	}
+	os.Stdout = w
+	fn()
+	w.Close()
+	os.Stdout = oldStdout
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	return buf.String()
+}
+
+func TestDisplayVerboseLog_NoLeditDir(t *testing.T) {
+	dir := t.TempDir()
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	os.Chdir(dir)
+
+	out := captureStdout(t, displayVerboseLog)
+	if !strings.Contains(out, "does not exist") {
+		t.Errorf("expected 'does not exist' message, got: %s", out)
+	}
+}
+
+func TestDisplayVerboseLog_NoWorkspaceLog(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".ledit"), 0755)
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	os.Chdir(dir)
+
+	out := captureStdout(t, displayVerboseLog)
+	if !strings.Contains(out, "not found") {
+		t.Errorf("expected 'not found' message, got: %s", out)
+	}
+}
+
+func TestDisplayVerboseLog_EmptyLog(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".ledit"), 0755)
+	os.WriteFile(filepath.Join(dir, ".ledit", "workspace.log"), []byte(""), 0644)
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	os.Chdir(dir)
+
+	out := captureStdout(t, displayVerboseLog)
+	if !strings.Contains(out, "is empty") {
+		t.Errorf("expected 'is empty' message, got: %s", out)
+	}
+}
+
+func TestDisplayVerboseLog_WithContent(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".ledit"), 0755)
+	content := "line one\nline two\nline three\n"
+	os.WriteFile(filepath.Join(dir, ".ledit", "workspace.log"), []byte(content), 0644)
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	os.Chdir(dir)
+
+	out := captureStdout(t, displayVerboseLog)
+	if !strings.Contains(out, "line one") {
+		t.Errorf("expected content to be displayed, got: %s", out)
+	}
+	if !strings.Contains(out, "line three") {
+		t.Errorf("expected last line to be displayed, got: %s", out)
+	}
+	if !strings.Contains(out, "workspace.log") {
+		t.Errorf("expected log file path in output, got: %s", out)
+	}
+}
+
+// --- extractFileContextForChanges ---
+
+func TestExtractFileContext_EmptyDiff(t *testing.T) {
+	result := extractFileContextForChanges("")
+	if result != "" {
+		t.Errorf("expected empty string for empty diff, got: %q", result)
+	}
+}
+
+func TestExtractFileContext_ExistingFiles(t *testing.T) {
+	// Test with known existing files within the cmd package
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+
+	// We're already in cmd/ directory when tests run
+
+	diff := `diff --git a/root.go b/root.go
+--- a/root.go
++++ b/root.go
+@@ -1,6 +1,7 @@
+ package cmd
+ 
+ import (
++	"fmt"
+ 	"os"
+ 	"sync"
+ 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
++)
+`
+
+	result := extractFileContextForChanges(diff)
+	if result == "" {
+		t.Fatal("expected non-empty result for diff with existing root.go")
+	}
+	if !strings.Contains(result, "root.go") {
+		t.Errorf("expected root.go in context, got: %s", result)
+	}
+	if !strings.Contains(result, "package cmd") {
+		t.Errorf("expected file content in context, got: %s", result)
+	}
+}
+
+func TestExtractFileContext_DeletedFiles(t *testing.T) {
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	projectRoot, _ := filepath.Abs("..")
+	os.Chdir(projectRoot)
+
+	diff := `diff --git a/nonexistent_deleted_file.go b/nonexistent_deleted_file.go
+deleted file mode 100644
+--- a/nonexistent_deleted_file.go
++++ /dev/null
+@@ -1,5 +0,0 @@
+-package deleted
+-
+-func deletedFunc() {}
+`
+
+	result := extractFileContextForChanges(diff)
+	// Deleted file doesn't exist on disk, should be skipped
+	if result != "" {
+		t.Errorf("expected empty result for diff with only deleted files, got: %q", result)
+	}
+}
+
+func TestExtractFileContext_SkipFiles(t *testing.T) {
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	projectRoot, _ := filepath.Abs("..")
+	os.Chdir(projectRoot)
+
+	diff := `diff --git a/vendor/lib.go b/vendor/lib.go
+--- a/vendor/lib.go
++++ b/vendor/lib.go
+@@ -1,2 +1,3 @@
+ package vendor
++func vendorFunc() {}
+diff --git a/go.sum b/go.sum
+--- a/go.sum
++++ b/go.sum
+@@ -1,2 +1,3 @@
+-sum1
++sum1
++sum2
+`
+
+	result := extractFileContextForChanges(diff)
+	// Both vendor/ and .sum files should be skipped
+	if result != "" {
+		t.Errorf("expected empty result when all files are skipped, got: %q", result)
+	}
+}
+
+func TestExtractFileContext_PathTraversal(t *testing.T) {
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	projectRoot, _ := filepath.Abs("..")
+	os.Chdir(projectRoot)
+
+	diff := `diff --git a/../../../etc/passwd b/../../../etc/passwd
+--- a/../../../etc/passwd
++++ b/../../../etc/passwd
+@@ -1,2 +1,3 @@
+ root:x:0:0
++attacker
+`
+
+	result := extractFileContextForChanges(diff)
+	// Paths with .. should be rejected by isValidRepoFilePath
+	if result != "" {
+		t.Errorf("expected empty result for path traversal attempt, got: %q", result)
+	}
+}
+
+// --- isValidRepoFilePath edge cases ---
+
+func TestIsValidRepoFilePath_RelativePathInCwd(t *testing.T) {
+	// Test with explicit ./ prefix (relative path that resolves inside cwd)
+	relPath := "./main.go"
+	orgDir, _ := os.Getwd()
+	defer os.Chdir(orgDir)
+	projectRoot, _ := filepath.Abs("..")
+	os.Chdir(projectRoot)
+
+	got := isValidRepoFilePath(relPath)
+	if !got {
+		t.Errorf("isValidRepoFilePath(%q) = false, want true", relPath)
+	}
+}
+
+func TestIsValidRepoFilePath_SpecialChars(t *testing.T) {
+	// A path with special characters (unicode) but still a valid relative path.
+	// Even if the file doesn't exist, the path validation should not reject it
+	// based on characters alone — only on traversal and cwd membership.
+	orgDir, _ := os.Getwd()
+	defer os.Chdir(orgDir)
+	projectRoot, _ := filepath.Abs("..")
+	os.Chdir(projectRoot)
+
+	// This is technically a valid path name (no .. traversal)
+	specialPath := "cmd/søme_fíle.go"
+	got := isValidRepoFilePath(specialPath)
+	if !got {
+		t.Errorf("isValidRepoFilePath(%q) = false, want true (special chars are ok)", specialPath)
+	}
+}
+
+func TestIsValidRepoFilePath_AbsPathStartsWithCwd(t *testing.T) {
+	// An absolute path that starts exactly with cwd should be valid
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	projectRoot, _ := filepath.Abs("..")
+	os.Chdir(projectRoot)
+
+	absPath := filepath.Join(projectRoot, "main.go")
+	got := isValidRepoFilePath(absPath)
+	if !got {
+		t.Errorf("isValidRepoFilePath(%q) = false, want true", absPath)
+	}
+}
+
+func TestIsValidRepoFilePath_AbsPathOutsideCwd(t *testing.T) {
+	// An absolute path that does NOT start with cwd should be invalid
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	projectRoot, _ := filepath.Abs("..")
+	os.Chdir(projectRoot)
+
+	// Use /tmp which should not be inside the project root
+	tmpDir := filepath.Clean(os.TempDir())
+	if strings.HasPrefix(tmpDir, projectRoot) {
+		t.Skip("TempDir is inside the project root, cannot test path outside cwd")
+	}
+
+	absPath := filepath.Join(tmpDir, "somefile.txt")
+	got := isValidRepoFilePath(absPath)
+	if got {
+		t.Errorf("isValidRepoFilePath(%q) = true, want false (outside cwd)", absPath)
+	}
+}
+
+// --- extractStagedChangesSummary ---
+
+func TestExtractStagedChangesSummary_NoGitRepo(t *testing.T) {
+	// In a temp directory with no git repo, git diff should fail → returns ""
+	dir := t.TempDir()
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	os.Chdir(dir)
+
+	result := extractStagedChangesSummary()
+	if result != "" {
+		t.Errorf("expected empty string when no git repo, got: %q", result)
+	}
+}
+
+// --- categorizeChanges Documentation category ---
+
+func TestCategorizeChanges_Documentation(t *testing.T) {
+	// Test .md suffix in an added line
+	diff := `diff --git a/README.md b/README.md
+--- a/README.md
++++ b/README.md
+@@ -1,2 +1,3 @@
+ # Readme
+-Old docs
++New docs
++See CHANGELOG.md
+`
+	result := categorizeChanges(diff)
+	if !strings.Contains(result, "Documentation") {
+		t.Errorf("expected Documentation category for .md reference, got: %s", result)
+	}
+}
+
+func TestCategorizeChanges_DocumentKeyword(t *testing.T) {
+	// Test DOCUMENT keyword in added line
+	diff := `diff --git a/handler.go b/handler.go
+--- a/handler.go
++++ b/handler.go
+@@ -1,2 +1,4 @@
+ package handler
+ 
++// DOCUMENT: this function documents the API contract
++func handler() {}
+`
+	result := categorizeChanges(diff)
+	if !strings.Contains(result, "Documentation") {
+		t.Errorf("expected Documentation category for DOCUMENT keyword, got: %s", result)
+	}
+}
+
+func TestCategorizeChanges_CommentKeyword(t *testing.T) {
+	// Test COMMENT keyword triggers Documentation
+	diff := `diff --git a/file.go b/file.go
+--- a/file.go
++++ b/file.go
+@@ -1,2 +1,3 @@
+ package main
++// COMMENT: explains behavior
+`
+	result := categorizeChanges(diff)
+	if !strings.Contains(result, "Documentation") {
+		t.Errorf("expected Documentation category for COMMENT keyword, got: %s", result)
+	}
 }

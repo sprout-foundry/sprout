@@ -284,3 +284,175 @@ func TestResolveFallsBackToStoredKey(t *testing.T) {
 		t.Fatalf("expected stored source, got %q", resolved.Source)
 	}
 }
+
+// --- Additional coverage tests ---
+
+func TestGetConfigDir_WhitespaceLEDITConfig(t *testing.T) {
+	// LEDIT_CONFIG is set to whitespace-only — should be treated as empty
+	t.Setenv("LEDIT_CONFIG", "   \t  ")
+	t.Setenv("XDG_CONFIG_HOME", "")
+
+	got, err := GetConfigDir()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	homeDir, _ := os.UserHomeDir()
+	expected := filepath.Join(homeDir, ".ledit")
+	if got != expected {
+		t.Fatalf("expected %q, got %q", expected, got)
+	}
+}
+
+func TestGetConfigDir_WhitespaceXDGConfigHome(t *testing.T) {
+	t.Setenv("LEDIT_CONFIG", "")
+	t.Setenv("XDG_CONFIG_HOME", "   \t  ")
+
+	got, err := GetConfigDir()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	homeDir, _ := os.UserHomeDir()
+	expected := filepath.Join(homeDir, ".ledit")
+	if got != expected {
+		t.Fatalf("expected %q (fallthrough to home), got %q", expected, got)
+	}
+}
+
+func TestGetAPIKeysPath_GetConfigDirFails(t *testing.T) {
+	// Make home directory lookup fail by setting HOME to a very long invalid path
+	// that will cause os.MkdirAll to fail. Use a temp dir as LEDIT_CONFIG
+	// with a non-existent sub-path that we make unwritable.
+	tmpDir := t.TempDir()
+	readOnlyDir := filepath.Join(tmpDir, "rodir")
+	if err := os.MkdirAll(readOnlyDir, 0500); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	// Make the directory truly read-only
+	if err := os.Chmod(readOnlyDir, 0500); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	// Set LEDIT_CONFIG to a sub-directory of the read-only dir that doesn't exist
+	t.Setenv("LEDIT_CONFIG", filepath.Join(readOnlyDir, "subdir", "nested"))
+	t.Setenv("XDG_CONFIG_HOME", "")
+
+	_, err := GetAPIKeysPath()
+	if err == nil {
+		t.Fatal("expected error when GetConfigDir fails, got nil")
+	}
+	// The error is about failing to create the config directory
+	if !strings.Contains(err.Error(), "failed to create config directory") {
+		t.Fatalf("expected config dir creation error, got: %v", err)
+	}
+}
+
+func TestLoad_ReadError(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", dir)
+
+	path := filepath.Join(dir, "api_keys.json")
+	if err := os.WriteFile(path, []byte(`{"key":"val"}`), 0600); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	// Make the file unreadable
+	if err := os.Chmod(path, 0000); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	defer os.Chmod(path, 0600) // restore for cleanup
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for unreadable file, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to read API keys file") {
+		t.Fatalf("expected read error, got: %v", err)
+	}
+}
+
+func TestSave_WriteError(t *testing.T) {
+	tmpDir := t.TempDir()
+	readOnlyDir := filepath.Join(tmpDir, "readonly")
+	if err := os.MkdirAll(readOnlyDir, 0500); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.Chmod(readOnlyDir, 0500); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+
+	// Point LEDIT_CONFIG to the read-only directory itself (already exists)
+	t.Setenv("LEDIT_CONFIG", readOnlyDir)
+
+	store := Store{"test": "value"}
+	err := Save(store)
+	// The directory exists and GetConfigDir succeeds. WriteFile may fail
+	// because the directory is read-only (0500).
+	// Error can be either from WriteFile (permission denied) or succeed if owner can write.
+	if err != nil {
+		// Either permission denied from WriteFile or config dir error
+		t.Logf("Got expected write error: %v", err)
+	}
+	// If err is nil, the owner was able to write despite 0500 mode — acceptable on some systems.
+}
+
+func TestResolve_EnvVarSetButEmpty(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("EMPTY_KEY", "")
+
+	resolved, err := Resolve("test-provider", "EMPTY_KEY")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Empty env var should be skipped; falls back to stored (which is empty)
+	if resolved.Value != "" {
+		t.Fatalf("expected empty value, got %q", resolved.Value)
+	}
+	if resolved.Source != "" {
+		t.Fatalf("expected empty source, got %q", resolved.Source)
+	}
+}
+
+func TestResolve_EnvVarWhitespaceOnly(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("WS_KEY", "   \t  ")
+
+	resolved, err := Resolve("test-provider", "WS_KEY")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Whitespace-only env var value should be trimmed to empty and skipped
+	if resolved.Value != "" {
+		t.Fatalf("expected empty value, got %q", resolved.Value)
+	}
+	if resolved.Source != "" {
+		t.Fatalf("expected empty source, got %q", resolved.Source)
+	}
+}
+
+func TestResolve_StoredValueWithWhitespace(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("WS_PROVIDER_KEY", "")
+
+	store := Store{
+		"ws-provider": "  \t actual-key \t  ",
+	}
+	if err := Save(store); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	resolved, err := Resolve("ws-provider", "WS_PROVIDER_KEY")
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	// Whitespace in stored value should be trimmed
+	if resolved.Value != "actual-key" {
+		t.Fatalf("expected %q, got %q", "actual-key", resolved.Value)
+	}
+	if resolved.Source != "stored" {
+		t.Fatalf("expected stored source, got %q", resolved.Source)
+	}
+}

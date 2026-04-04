@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import type { FC } from 'react';
 import { Monitor, Server } from 'lucide-react';
 import { ApiService } from '../services/api';
 import { getSSHProxyContext } from '../services/clientSession';
@@ -16,7 +17,7 @@ interface BarState {
   isRemote: boolean;
 }
 
-const WorkspaceBar: React.FC<WorkspaceBarProps> = ({ isConnected, isMobileMenuOpen = false, isMobile = false }) => {
+const WorkspaceBar: FC<WorkspaceBarProps> = ({ isConnected, isMobileMenuOpen = false, isMobile = false }) => {
   const [bar, setBar] = useState<BarState>({ workspacePath: '', hostAlias: null, isRemote: false });
   const apiService = useRef(ApiService.getInstance());
 

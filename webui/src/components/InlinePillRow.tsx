@@ -1,4 +1,4 @@
-import React from 'react';
+import type { FC } from 'react';
 
 export interface InlinePillItem {
   id: string;
@@ -15,7 +15,7 @@ interface InlinePillRowProps {
   className?: string;
 }
 
-const InlinePillRow: React.FC<InlinePillRowProps> = ({ items, ariaLabel, className = '' }) => {
+const InlinePillRow: FC<InlinePillRowProps> = ({ items, ariaLabel, className = '' }) => {
   if (items.length === 0) {
     return null;
   }

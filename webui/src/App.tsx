@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import ErrorBoundary from './components/ErrorBoundary';
 import AppContent from './components/AppContent';
 import UIManager from './components/UIManager';
@@ -121,7 +121,10 @@ function App() {
   usePageVisibility();
 
   // ── 12. Model / provider / view change handlers ───────────────────
-  const { handleModelChange, handleProviderChange, handleViewChange } = useModelProviderHandlers({ state, setState });
+  const { handleModelChange, handleProviderChange, handleViewChange } = useModelProviderHandlers({
+    state,
+    setState,
+  });
 
   // ── 13. Initialisation effect (WS, stats, files, mobile) ──────────
   useAppInitialization({

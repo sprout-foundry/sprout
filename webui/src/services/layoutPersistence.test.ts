@@ -288,7 +288,13 @@ describe('loadLayoutSnapshot', () => {
   it('returns null when JSON is valid but version is not 1', () => {
     window.localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ version: 999, activePaneId: null, activeBufferFilePath: null, buffers: [], bufferOrder: [] }),
+      JSON.stringify({
+        version: 999,
+        activePaneId: null,
+        activeBufferFilePath: null,
+        buffers: [],
+        bufferOrder: [],
+      }),
     );
     expect(loadLayoutSnapshot()).toBeNull();
   });
@@ -376,8 +382,16 @@ describe('buffer deduplication', () => {
   it('deduplicates buffers by filePath, preferring the active entry', () => {
     const snapshot = makeSnapshot({
       buffers: [
-        makeEntry('/duplicate.ts', { paneId: 'pane-1', isActive: false, cursorPosition: makeCursor(5, 10) }),
-        makeEntry('/duplicate.ts', { paneId: 'pane-2', isActive: true, cursorPosition: makeCursor(20, 3) }),
+        makeEntry('/duplicate.ts', {
+          paneId: 'pane-1',
+          isActive: false,
+          cursorPosition: makeCursor(5, 10),
+        }),
+        makeEntry('/duplicate.ts', {
+          paneId: 'pane-2',
+          isActive: true,
+          cursorPosition: makeCursor(20, 3),
+        }),
       ],
       bufferOrder: ['/duplicate.ts', '/duplicate.ts'],
       activePaneId: 'pane-2',
@@ -398,8 +412,16 @@ describe('buffer deduplication', () => {
     // does not replace the first.
     const snapshot = makeSnapshot({
       buffers: [
-        makeEntry('/dup.ts', { paneId: 'pane-1', isActive: false, cursorPosition: makeCursor(1, 0) }),
-        makeEntry('/dup.ts', { paneId: 'pane-2', isActive: false, cursorPosition: makeCursor(99, 99) }),
+        makeEntry('/dup.ts', {
+          paneId: 'pane-1',
+          isActive: false,
+          cursorPosition: makeCursor(1, 0),
+        }),
+        makeEntry('/dup.ts', {
+          paneId: 'pane-2',
+          isActive: false,
+          cursorPosition: makeCursor(99, 99),
+        }),
       ],
       bufferOrder: ['/dup.ts'],
     });

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import type { FC, MouseEvent, WheelEvent } from 'react';
 import { ZoomIn, ZoomOut, Maximize2, Image as ImageIcon, Loader2, AlertTriangle } from 'lucide-react';
 import { readFileWithConsent } from '../services/fileAccess';
+import { useLog } from '../utils/log';
 import './ImageViewer.css';
 
 interface ImageViewerProps {
@@ -16,6 +17,7 @@ interface Dimensions {
 }
 
 const ImageViewer: FC<ImageViewerProps> = ({ filePath, fileName, fileSize }) => {
+  const log = useLog();
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const [imageSrc, setImageSrc] = useState<string | null>(null);
@@ -90,8 +92,9 @@ const ImageViewer: FC<ImageViewerProps> = ({ filePath, fileName, fileSize }) => 
         };
         img.src = url;
       } catch (err) {
-        console.error('[ImageViewer] Error loading image:', err);
-        setError(err instanceof Error ? err.message : 'Unknown error');
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+        log.error(`[ImageViewer] Error loading image: ${errorMessage}`, { title: 'Image Load Error' });
+        setError(errorMessage);
       } finally {
         if (!cancelled) {
           setLoading(false);

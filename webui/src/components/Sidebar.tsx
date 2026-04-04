@@ -6,6 +6,7 @@ import SettingsPanel from './SettingsPanel';
 import type { ProviderLogEntry } from '../providers/types';
 import { useTheme } from '../contexts/ThemeContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
+import { useLog } from '../utils/log';
 import ResizeHandle from './ResizeHandle';
 import {
   ScrollText,
@@ -134,6 +135,7 @@ const Sidebar: FC<SidebarProps> = ({
   isMobile = false,
   gitPanel,
 }) => {
+  const log = useLog();
   const { themePack, availableThemePacks, setThemePack, importTheme, removeTheme } = useTheme();
   const { applyPreset } = useHotkeys();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -167,7 +169,7 @@ const Sidebar: FC<SidebarProps> = ({
     if (stats?.persona && stats.persona !== selectedPersonaState) {
       setSelectedPersonaState(stats.persona);
     }
-  }, [stats?.persona]);
+  }, [stats?.persona, selectedPersonaState]);
 
   // Load settings on mount / connection
   useEffect(() => {
@@ -198,7 +200,7 @@ const Sidebar: FC<SidebarProps> = ({
   const normalizedRecentLogs = useMemo<ProviderLogEntry[]>(
     () =>
       (finalRecentLogs as Array<string | ProviderLogEntry>).filter(
-        (log): log is ProviderLogEntry => typeof log !== 'string',
+        (entry): entry is ProviderLogEntry => typeof entry !== 'string',
       ),
     [finalRecentLogs],
   );
@@ -234,14 +236,14 @@ const Sidebar: FC<SidebarProps> = ({
           }
         }
       } catch (error) {
-        console.error('Failed to fetch providers:', error);
+        log.error(`Failed to fetch providers: ${error instanceof Error ? error.message : String(error)}`, { title: 'Provider Load Error' });
       } finally {
         setIsLoadingProviders(false);
       }
     };
 
     fetchProviders();
-  }, [apiService, isConnected, model, provider, selectedModel]);
+  }, [apiService, isConnected, model, provider, selectedModel, log]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!provider || provider === 'unknown') {
@@ -331,7 +333,7 @@ const Sidebar: FC<SidebarProps> = ({
 
         setPersonas(allPersonas);
       } catch (error) {
-        console.error('Failed to fetch personas:', error);
+        log.error(`Failed to fetch personas: ${error instanceof Error ? error.message : String(error)}`, { title: 'Persona Load Error' });
         // Fallback to just orchestrator
         setPersonas([{ id: 'orchestrator', name: 'Orchestrator', enabled: true }]);
       } finally {
@@ -340,13 +342,13 @@ const Sidebar: FC<SidebarProps> = ({
     };
 
     fetchPersonas();
-  }, [apiService, isConnected]);
+  }, [apiService, isConnected, log]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleHotkeyPresetChange = async (e: ChangeEvent<HTMLSelectElement>) => {
     try {
       await applyPreset(e.target.value);
     } catch (err) {
-      console.error('Failed to apply hotkey preset:', err);
+      log.error(`Failed to apply hotkey preset: ${err instanceof Error ? err.message : String(err)}`, { title: 'Hotkey Error' });
     }
   };
 

@@ -5,10 +5,12 @@ import UIManager from './components/UIManager';
 import { EditorManagerProvider } from './contexts/EditorManagerContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { HotkeyProvider } from './contexts/HotkeyContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import './App.css';
 import useOnboarding from './hooks/useOnboarding';
 import useWebSocketEvents from './hooks/useWebSocketEvents';
 import OnboardingDialog from './components/OnboardingDialog';
+import Notification from './components/Notification';
 import { usePageVisibility } from './hooks/usePageVisibility';
 import { MAX_PERSISTED_LOGS } from './constants/app';
 
@@ -148,9 +150,10 @@ function App() {
     >
       <ThemeProvider>
         <HotkeyProvider>
-          <EditorManagerProvider>
-            <UIManager>
-              <AppContent
+          <NotificationProvider>
+            <EditorManagerProvider>
+              <UIManager>
+                <AppContent
                 state={state}
                 inputValue={inputValue}
                 onInputChange={setInputValue}
@@ -208,6 +211,8 @@ function App() {
               />
             </UIManager>
           </EditorManagerProvider>
+          <Notification />
+        </NotificationProvider>
         </HotkeyProvider>
       </ThemeProvider>
     </ErrorBoundary>

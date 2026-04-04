@@ -55,6 +55,10 @@ const DEBOUNCE_MS = 1_000;
 /** File-path prefix used for virtual / workspace-internal buffers. */
 const VIRTUAL_PATH_PREFIX = '__workspace/';
 
+/** Storage keys for pane layout type and pane sizes (shared with EditorManagerContext). */
+export const PANE_LAYOUT_STORAGE_KEY = 'ledit.editor.paneLayout';
+export const PANE_SIZES_STORAGE_KEY = 'ledit.editor.paneSizes';
+
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------

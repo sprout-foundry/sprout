@@ -2,6 +2,7 @@ package configuration
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,7 +20,7 @@ import (
 func BootstrapIsolatedConfig(configDir string) error {
 	targetDir := strings.TrimSpace(configDir)
 	if targetDir == "" {
-		return fmt.Errorf("isolated config directory is required")
+		return errors.New("isolated config directory is required")
 	}
 	if err := os.MkdirAll(targetDir, 0700); err != nil {
 		return fmt.Errorf("failed to create isolated config directory %q: %w", targetDir, err)

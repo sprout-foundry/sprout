@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -33,12 +34,12 @@ func handleWriteStructuredFile(ctx context.Context, a *Agent, args map[string]in
 
 	format := inferStructuredFormat(path, getOptionalString(args, "format"))
 	if format == "" {
-		return "", fmt.Errorf("unsupported structured format; use json or yaml")
+		return "", errors.New("unsupported structured format; use json or yaml")
 	}
 
 	data, exists := args["data"]
 	if !exists {
-		return "", fmt.Errorf("parameter 'data' is required")
+		return "", errors.New("parameter 'data' is required")
 	}
 
 	if schemaRaw, ok := args["schema"]; ok && schemaRaw != nil {
@@ -56,7 +57,8 @@ func handleWriteStructuredFile(ctx context.Context, a *Agent, args map[string]in
 		return "", err
 	}
 
-	return writeFileContent(ctx, a, path, content, "write_structured_file", true)
+	result, err := writeFileContent(ctx, a, path, content, "write_structured_file", true)
+	return result, err
 }
 
 func handlePatchStructuredFile(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
@@ -82,12 +84,12 @@ func handlePatchStructuredFile(ctx context.Context, a *Agent, args map[string]in
 			}
 			return handleWriteStructuredFile(ctx, a, writeArgs)
 		}
-		return "", fmt.Errorf("parameter 'patch_ops' is required (or provide 'data' for full write)")
+		return "", errors.New("parameter 'patch_ops' is required (or provide 'data' for full write)")
 	}
 
 	format := inferStructuredFormat(path, getOptionalString(args, "format"))
 	if format == "" {
-		return "", fmt.Errorf("unsupported structured format; use json or yaml")
+		return "", errors.New("unsupported structured format; use json or yaml")
 	}
 
 	resolvedPath, err := filesystem.SafeResolvePathWithBypass(ctx, path)
@@ -143,7 +145,8 @@ func handlePatchStructuredFile(ctx context.Context, a *Agent, args map[string]in
 		return "", err
 	}
 
-	return writeFileContent(ctx, a, path, updated, "patch_structured_file", true)
+	result, err := writeFileContent(ctx, a, path, updated, "patch_structured_file", true)
+	return result, err
 }
 
 func inferStructuredFormat(path, provided string) string {
@@ -237,7 +240,7 @@ func normalizeYAMLValue(v interface{}) interface{} {
 func toSchemaMap(v interface{}) (map[string]interface{}, error) {
 	schema, ok := v.(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("parameter 'schema' must be an object")
+		return nil, errors.New("parameter 'schema' must be an object")
 	}
 	return schema, nil
 }
@@ -337,7 +340,7 @@ func validateDataAgainstSchema(data interface{}, schema map[string]interface{}, 
 
 func formatStructuredValidationError(toolName string, errs []string, context string) error {
 	if len(errs) == 0 {
-		return fmt.Errorf("schema validation failed")
+		return errors.New("schema validation failed")
 	}
 
 	paths := extractValidationPaths(errs)
@@ -420,7 +423,7 @@ func isIntegerValue(v interface{}) bool {
 func parsePatchOperations(v interface{}) ([]jsonPatchOperation, error) {
 	rawOps, ok := v.([]interface{})
 	if !ok {
-		return nil, fmt.Errorf("parameter 'patch_ops' must be an array")
+		return nil, errors.New("parameter 'patch_ops' must be an array")
 	}
 
 	ops := make([]jsonPatchOperation, 0, len(rawOps))
@@ -590,7 +593,7 @@ func mutateAtLeaf(node interface{}, token string, value interface{}, op string) 
 
 func parseJSONPointer(path string) ([]string, error) {
 	if path == "" {
-		return nil, fmt.Errorf("patch path cannot be empty")
+		return nil, errors.New("patch path cannot be empty")
 	}
 	if path == "/" {
 		return []string{""}, nil

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -211,7 +212,7 @@ func (c *MCPHTTPClient) Initialize(ctx context.Context) error {
 
 	if !c.running {
 		c.mu.Unlock()
-		return fmt.Errorf("client not started")
+		return errors.New("client not started")
 	}
 	c.mu.Unlock()
 
@@ -251,7 +252,7 @@ func (c *MCPHTTPClient) ListTools(ctx context.Context) ([]MCPTool, error) {
 	c.mu.RLock()
 	if !c.running {
 		c.mu.RUnlock()
-		return nil, fmt.Errorf("client not started")
+		return nil, errors.New("client not started")
 	}
 	needsInit := !c.initialized
 	c.mu.RUnlock()
@@ -272,12 +273,12 @@ func (c *MCPHTTPClient) ListTools(ctx context.Context) ([]MCPTool, error) {
 	if response.Result != nil {
 		resultMap, ok := response.Result.(map[string]interface{})
 		if !ok {
-			return nil, fmt.Errorf("unexpected result type")
+			return nil, errors.New("unexpected result type")
 		}
 
 		toolsData, ok := resultMap["tools"]
 		if !ok {
-			return nil, fmt.Errorf("tools field not found in response")
+			return nil, errors.New("tools field not found in response")
 		}
 
 		toolsBytes, err := json.Marshal(toolsData)
@@ -306,7 +307,7 @@ func (c *MCPHTTPClient) CallTool(ctx context.Context, request MCPToolCallRequest
 	c.mu.RLock()
 	if !c.running {
 		c.mu.RUnlock()
-		return nil, fmt.Errorf("client not started")
+		return nil, errors.New("client not started")
 	}
 	needsInit := !c.initialized
 	c.mu.RUnlock()
@@ -321,7 +322,7 @@ func (c *MCPHTTPClient) CallTool(ctx context.Context, request MCPToolCallRequest
 	c.mu.RLock()
 	if !c.running || !c.initialized {
 		c.mu.RUnlock()
-		return nil, fmt.Errorf("client not started or initialized")
+		return nil, errors.New("client not started or initialized")
 	}
 	c.mu.RUnlock()
 
@@ -358,7 +359,7 @@ func (c *MCPHTTPClient) ListResources(ctx context.Context) ([]MCPResource, error
 	c.mu.RLock()
 	if !c.running || !c.initialized {
 		c.mu.RUnlock()
-		return nil, fmt.Errorf("client not started or initialized")
+		return nil, errors.New("client not started or initialized")
 	}
 	c.mu.RUnlock()
 
@@ -371,12 +372,12 @@ func (c *MCPHTTPClient) ListResources(ctx context.Context) ([]MCPResource, error
 	if response.Result != nil {
 		resultMap, ok := response.Result.(map[string]interface{})
 		if !ok {
-			return nil, fmt.Errorf("unexpected result type")
+			return nil, errors.New("unexpected result type")
 		}
 
 		resourcesData, ok := resultMap["resources"]
 		if !ok {
-			return nil, fmt.Errorf("resources field not found in response")
+			return nil, errors.New("resources field not found in response")
 		}
 
 		resourcesBytes, err := json.Marshal(resourcesData)
@@ -402,7 +403,7 @@ func (c *MCPHTTPClient) ReadResource(ctx context.Context, uri string) (*MCPConte
 	c.mu.RLock()
 	if !c.running || !c.initialized {
 		c.mu.RUnlock()
-		return nil, fmt.Errorf("client not started or initialized")
+		return nil, errors.New("client not started or initialized")
 	}
 	c.mu.RUnlock()
 
@@ -419,12 +420,12 @@ func (c *MCPHTTPClient) ReadResource(ctx context.Context, uri string) (*MCPConte
 	if response.Result != nil {
 		resultMap, ok := response.Result.(map[string]interface{})
 		if !ok {
-			return nil, fmt.Errorf("unexpected result type")
+			return nil, errors.New("unexpected result type")
 		}
 
 		contentsData, ok := resultMap["contents"]
 		if !ok {
-			return nil, fmt.Errorf("contents field not found in response")
+			return nil, errors.New("contents field not found in response")
 		}
 
 		contentsBytes, err := json.Marshal(contentsData)
@@ -438,7 +439,7 @@ func (c *MCPHTTPClient) ReadResource(ctx context.Context, uri string) (*MCPConte
 	}
 
 	if len(contents) == 0 {
-		return nil, fmt.Errorf("no content returned")
+		return nil, errors.New("no content returned")
 	}
 
 	return &contents[0], nil
@@ -449,7 +450,7 @@ func (c *MCPHTTPClient) ListPrompts(ctx context.Context) ([]MCPPrompt, error) {
 	c.mu.RLock()
 	if !c.running || !c.initialized {
 		c.mu.RUnlock()
-		return nil, fmt.Errorf("client not started or initialized")
+		return nil, errors.New("client not started or initialized")
 	}
 	c.mu.RUnlock()
 
@@ -462,12 +463,12 @@ func (c *MCPHTTPClient) ListPrompts(ctx context.Context) ([]MCPPrompt, error) {
 	if response.Result != nil {
 		resultMap, ok := response.Result.(map[string]interface{})
 		if !ok {
-			return nil, fmt.Errorf("unexpected result type")
+			return nil, errors.New("unexpected result type")
 		}
 
 		promptsData, ok := resultMap["prompts"]
 		if !ok {
-			return nil, fmt.Errorf("prompts field not found in response")
+			return nil, errors.New("prompts field not found in response")
 		}
 
 		promptsBytes, err := json.Marshal(promptsData)
@@ -493,7 +494,7 @@ func (c *MCPHTTPClient) GetPrompt(ctx context.Context, name string, args map[str
 	c.mu.RLock()
 	if !c.running || !c.initialized {
 		c.mu.RUnlock()
-		return nil, fmt.Errorf("client not started or initialized")
+		return nil, errors.New("client not started or initialized")
 	}
 	c.mu.RUnlock()
 
@@ -511,12 +512,12 @@ func (c *MCPHTTPClient) GetPrompt(ctx context.Context, name string, args map[str
 	if response.Result != nil {
 		resultMap, ok := response.Result.(map[string]interface{})
 		if !ok {
-			return nil, fmt.Errorf("unexpected result type")
+			return nil, errors.New("unexpected result type")
 		}
 
 		messagesData, ok := resultMap["messages"]
 		if !ok {
-			return nil, fmt.Errorf("messages field not found in response")
+			return nil, errors.New("messages field not found in response")
 		}
 
 		messagesBytes, err := json.Marshal(messagesData)
@@ -530,7 +531,7 @@ func (c *MCPHTTPClient) GetPrompt(ctx context.Context, name string, args map[str
 	}
 
 	if len(messages) == 0 {
-		return nil, fmt.Errorf("no messages returned")
+		return nil, errors.New("no messages returned")
 	}
 
 	return &messages[0], nil

@@ -3,6 +3,7 @@ package tools
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -25,7 +26,7 @@ func ExecuteShellCommand(ctx context.Context, command string) (string, error) {
 // or is captured silently (false, for LLM tool calls).
 func ExecuteShellCommandWithSafety(ctx context.Context, command string, interactiveMode bool, sessionID string, streamOutput bool) (string, error) {
 	if strings.TrimSpace(command) == "" {
-		return "", fmt.Errorf("empty command provided")
+		return "", errors.New("empty command provided")
 	}
 
 	// NOTE: Security validation is handled by the static classifier in security.go, invoked at the tool registry level

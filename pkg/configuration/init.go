@@ -2,6 +2,7 @@ package configuration
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -329,7 +330,7 @@ func EnsureProviderAPIKey(provider string, apiKeys *APIKeys) error {
 	}
 
 	// Choice 2 - select different provider
-	return fmt.Errorf("provider requires API key")
+	return errors.New("provider requires API key")
 }
 
 // GetAvailableProviders returns all supported providers
@@ -397,7 +398,7 @@ func SelectProvider(currentProvider string, apiKeys *APIKeys) (string, error) {
 	available := GetAvailableProviders(apiKeys)
 
 	if len(available) == 0 {
-		return "", fmt.Errorf("no providers available - please configure API keys")
+		return "", errors.New("no providers available - please configure API keys")
 	}
 
 	fmt.Println("[bot] Available providers:")
@@ -438,7 +439,7 @@ func SelectProvider(currentProvider string, apiKeys *APIKeys) (string, error) {
 		return addNewProvider(apiKeys)
 	}
 
-	return "", fmt.Errorf("invalid choice")
+	return "", errors.New("invalid choice")
 }
 
 // addNewProvider guides user through adding a new provider
@@ -457,7 +458,7 @@ func addNewProvider(apiKeys *APIKeys) (string, error) {
 	}
 
 	if len(needsKey) == 0 {
-		return "", fmt.Errorf("all providers already configured")
+		return "", errors.New("all providers already configured")
 	}
 
 	for i, provider := range needsKey {
@@ -490,7 +491,7 @@ func addNewProvider(apiKeys *APIKeys) (string, error) {
 // validateProviderSetup ensures the provider can actually be used
 func validateProviderSetup(provider string, apiKeys *APIKeys) error {
 	if provider == "" {
-		return fmt.Errorf("no provider selected")
+		return errors.New("no provider selected")
 	}
 
 	// Check if provider requires API key

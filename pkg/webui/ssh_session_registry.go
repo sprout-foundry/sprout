@@ -201,7 +201,7 @@ func (ws *ReactWebServer) listSSHSessions() ([]sshSessionEntryDTO, error) {
 func (ws *ReactWebServer) closeSSHSession(sessionKey string) error {
 	sessionKey = strings.TrimSpace(sessionKey)
 	if sessionKey == "" {
-		return fmt.Errorf("ssh session key is required")
+		return errors.New("ssh session key is required")
 	}
 
 	ws.sshSessionsMu.Lock()

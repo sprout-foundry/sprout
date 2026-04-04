@@ -2,6 +2,7 @@ package webui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -244,7 +245,7 @@ func (tm *TerminalManager) resolveShell(shellOverride string) (shell string, she
 	case shellExists("sh"):
 		return "sh", []string{"-l"}, nil
 	default:
-		return "", nil, fmt.Errorf("no suitable shell found")
+		return "", nil, errors.New("no suitable shell found")
 	}
 }
 

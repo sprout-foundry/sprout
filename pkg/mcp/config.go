@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -223,18 +224,18 @@ func (c *MCPConfig) AddGitHubServer(githubToken string) {
 // AddServer adds a custom MCP server to the configuration
 func (c *MCPConfig) AddServer(serverConfig MCPServerConfig) error {
 	if serverConfig.Name == "" {
-		return fmt.Errorf("server name cannot be empty")
+		return errors.New("server name cannot be empty")
 	}
 
 	// Validate command for stdio servers, URL for HTTP servers
 	if serverConfig.Type == "http" {
 		if serverConfig.URL == "" {
-			return fmt.Errorf("server URL cannot be empty for HTTP servers")
+			return errors.New("server URL cannot be empty for HTTP servers")
 		}
 	} else {
 		// stdio server (default)
 		if serverConfig.Command == "" {
-			return fmt.Errorf("server command cannot be empty for stdio servers")
+			return errors.New("server command cannot be empty for stdio servers")
 		}
 	}
 
@@ -268,7 +269,7 @@ func (c *MCPConfig) ValidateConfig() error {
 	}
 
 	if len(c.Servers) == 0 {
-		return fmt.Errorf("no MCP servers configured")
+		return errors.New("no MCP servers configured")
 	}
 
 	for name, server := range c.Servers {

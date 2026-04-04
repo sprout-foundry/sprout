@@ -1,6 +1,7 @@
 package pythonruntime
 
 import (
+	"errors"
 	"fmt"
 	"os/exec"
 	"strconv"
@@ -74,7 +75,7 @@ func inspectInterpreter(alias, path string) (Interpreter, error) {
 
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
 	if len(lines) < 3 {
-		return Interpreter{}, fmt.Errorf("unexpected version response")
+		return Interpreter{}, errors.New("unexpected version response")
 	}
 
 	major, majorErr := strconv.Atoi(strings.TrimSpace(lines[0]))

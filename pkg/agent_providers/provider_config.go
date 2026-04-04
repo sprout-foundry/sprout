@@ -2,6 +2,7 @@ package providers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -158,13 +159,13 @@ func (c *ProviderConfig) GetAuthToken() (string, error) {
 		if c.Auth.Key != "" {
 			return c.Auth.Key, nil
 		}
-		return "", fmt.Errorf("no authentication token configured")
+		return "", errors.New("no authentication token configured")
 	case "basic":
 		// For basic auth, we'd need username/password - not implemented yet
-		return "", fmt.Errorf("basic authentication not yet implemented")
+		return "", errors.New("basic authentication not yet implemented")
 	case "oauth":
 		// OAuth would need flow implementation - not implemented yet
-		return "", fmt.Errorf("OAuth authentication not yet implemented")
+		return "", errors.New("OAuth authentication not yet implemented")
 	default:
 		return "", fmt.Errorf("unsupported authentication type: %s", c.Auth.Type)
 	}
@@ -173,13 +174,13 @@ func (c *ProviderConfig) GetAuthToken() (string, error) {
 // Validate validates the provider configuration
 func (c *ProviderConfig) Validate() error {
 	if c.Name == "" {
-		return fmt.Errorf("provider name is required")
+		return errors.New("provider name is required")
 	}
 	if c.Endpoint == "" {
-		return fmt.Errorf("provider endpoint is required")
+		return errors.New("provider endpoint is required")
 	}
 	if c.Auth.Type == "" {
-		return fmt.Errorf("authentication type is required")
+		return errors.New("authentication type is required")
 	}
 	// Validate model configuration
 	if err := c.validateModelConfig(); err != nil {
@@ -193,7 +194,7 @@ func (c *ProviderConfig) Validate() error {
 func (c *ProviderConfig) validateModelConfig() error {
 	// At least one of default_context_limit or context_limit should be set
 	if c.Models.DefaultContextLimit == 0 && c.Models.ContextLimit == 0 {
-		return fmt.Errorf("either default_context_limit or context_limit must be set")
+		return errors.New("either default_context_limit or context_limit must be set")
 	}
 
 	// Validate model overrides are positive

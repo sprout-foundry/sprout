@@ -4,7 +4,7 @@
 package utils
 
 import (
-	"fmt"
+	"errors"
 	"os"
 	"os/exec"
 	"strconv"
@@ -77,7 +77,7 @@ func getTerminalSizeIOCTL() (*TerminalSize, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("no valid terminal found")
+	return nil, errors.New("no valid terminal found")
 }
 
 // getTerminalSizeTput uses tput commands to get terminal size

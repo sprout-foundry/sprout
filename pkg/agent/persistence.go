@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -55,7 +56,7 @@ func normalizeSessionID(sessionID string) (string, error) {
 	clean := strings.TrimSpace(sessionID)
 	clean = strings.TrimPrefix(clean, legacySessionPrefix)
 	if clean == "" {
-		return "", fmt.Errorf("session ID is required")
+		return "", errors.New("session ID is required")
 	}
 	if strings.Contains(clean, string(os.PathSeparator)) || strings.Contains(clean, "/") {
 		return "", fmt.Errorf("session ID %q cannot contain path separators", sessionID)

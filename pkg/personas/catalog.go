@@ -3,6 +3,7 @@ package personas
 import (
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -81,7 +82,7 @@ func loadEmbeddedDefinitions() (map[string]Definition, error) {
 	}
 
 	if len(merged) == 0 {
-		return nil, fmt.Errorf("no personas found in embedded persona configs")
+		return nil, errors.New("no personas found in embedded persona configs")
 	}
 
 	return merged, nil

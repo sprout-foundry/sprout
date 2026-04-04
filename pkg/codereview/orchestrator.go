@@ -2,6 +2,7 @@ package codereview
 
 import (
 	"crypto/md5"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -15,13 +16,13 @@ func (s *CodeReviewService) PerformReview(ctx *ReviewContext, opts *ReviewOption
 
 	// Validate input parameters
 	if ctx == nil {
-		return nil, fmt.Errorf("review context cannot be nil")
+		return nil, errors.New("review context cannot be nil")
 	}
 	if opts == nil {
-		return nil, fmt.Errorf("review options cannot be nil")
+		return nil, errors.New("review options cannot be nil")
 	}
 	if ctx.Diff == "" {
-		return nil, fmt.Errorf("no diff content provided for review")
+		return nil, errors.New("no diff content provided for review")
 	}
 
 	// Try to load existing context if session ID is provided
@@ -88,13 +89,13 @@ func (s *CodeReviewService) PerformReview(ctx *ReviewContext, opts *ReviewOption
 // PerformAgenticReview performs a deep evidence-focused code review.
 func (s *CodeReviewService) PerformAgenticReview(ctx *ReviewContext, opts *ReviewOptions) (*types.CodeReviewResult, error) {
 	if ctx == nil {
-		return nil, fmt.Errorf("review context cannot be nil")
+		return nil, errors.New("review context cannot be nil")
 	}
 	if opts == nil {
-		return nil, fmt.Errorf("review options cannot be nil")
+		return nil, errors.New("review options cannot be nil")
 	}
 	if strings.TrimSpace(ctx.Diff) == "" {
-		return nil, fmt.Errorf("no diff content provided for deep review")
+		return nil, errors.New("no diff content provided for deep review")
 	}
 	if ctx.History == nil {
 		ctx.History = s.initializeReviewHistory(ctx)
@@ -312,5 +313,5 @@ func (s *CodeReviewService) getMostRecentApprovedResult(ctx *ReviewContext) (*ty
 			return iteration.ReviewResult, nil
 		}
 	}
-	return nil, fmt.Errorf("no approved result found")
+	return nil, errors.New("no approved result found")
 }

@@ -2,6 +2,7 @@ package spec
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -37,10 +38,10 @@ func NewSpecExtractor(cfg *configuration.Config, logger *utils.Logger) (*SpecExt
 func (e *SpecExtractor) ExtractSpec(conversation []Message, userIntent string) (*SpecExtractionResult, error) {
 	// Validate inputs
 	if userIntent == "" {
-		return nil, fmt.Errorf("userIntent cannot be empty")
+		return nil, errors.New("userIntent cannot be empty")
 	}
 	if len(conversation) == 0 {
-		return nil, fmt.Errorf("conversation cannot be empty")
+		return nil, errors.New("conversation cannot be empty")
 	}
 
 	// Build conversation text for LLM
@@ -66,7 +67,7 @@ func (e *SpecExtractor) ExtractSpec(conversation []Message, userIntent string) (
 		// Check for rate limiting or timeout errors
 		errStr := err.Error()
 		if strings.Contains(errStr, "429") || strings.Contains(errStr, "rate limit") {
-			return nil, fmt.Errorf("spec extraction rate limited - please retry later")
+			return nil, errors.New("spec extraction rate limited - please retry later")
 		}
 		return nil, fmt.Errorf("failed to extract spec: %w", err)
 	}

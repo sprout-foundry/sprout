@@ -5,6 +5,7 @@ package agent
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -15,7 +16,7 @@ import (
 // Returns handled=false when the tool name doesn't correspond to an MCP tool.
 func (te *ToolExecutor) tryExecuteMCPTool(toolName string, args map[string]interface{}) (string, error, bool) {
 	if te.agent == nil {
-		return "", fmt.Errorf("agent not initialized"), true
+		return "", errors.New("agent not initialized"), true
 	}
 
 	if strings.HasPrefix(toolName, "mcp_") {

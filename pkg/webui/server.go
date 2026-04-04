@@ -281,7 +281,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	if ws.isRunning {
 		ws.mutex.Unlock()
 		listener.Close()
-		return fmt.Errorf("web server is already running")
+		return errors.New("web server is already running")
 	}
 	ws.listener = listener
 	ws.isRunning = true

@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -50,10 +51,10 @@ func EditFile(ctx context.Context, filePath, oldString, newString string) (strin
 // validateEditInputs validates filePath, oldString, newString and checks for suspicious patterns
 func validateEditInputs(filePath, oldString, newString string) error {
 	if filePath == "" {
-		return fmt.Errorf("empty file path provided")
+		return errors.New("empty file path provided")
 	}
 	if oldString == "" {
-		return fmt.Errorf("empty old string provided")
+		return errors.New("empty old string provided")
 	}
 
 	// Content validation removed - static classifier in security.go handles this
@@ -223,7 +224,7 @@ func verifyEdit(cleanPath string, newString string) error {
 
 	// Check that the replacement actually happened
 	if !strings.Contains(string(updatedContent), newString) {
-		return fmt.Errorf("edit verification failed - new string not found in file after write")
+		return errors.New("edit verification failed - new string not found in file after write")
 	}
 
 	return nil
@@ -310,7 +311,7 @@ func findAndReplaceWithNormalization(content, oldString, newString, normalizedCo
 	// Find position in normalized content
 	normPos := strings.Index(normalizedContent, normalizedOld)
 	if normPos == -1 {
-		return "", fmt.Errorf("normalized string not found in normalized content")
+		return "", errors.New("normalized string not found in normalized content")
 	}
 
 	// Map normalized position back to original content
@@ -364,7 +365,7 @@ func findAndReplaceWithNormalization(content, oldString, newString, normalizedCo
 	// Perform the replacement on the original content
 	newContent := strings.Replace(content, actualOldString, newString, 1)
 	if newContent == content {
-		return "", fmt.Errorf("replacement did not change content")
+		return "", errors.New("replacement did not change content")
 	}
 
 	return newContent, nil

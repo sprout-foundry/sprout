@@ -59,26 +59,44 @@ export function hasAnsiCodes(text: unknown): boolean {
 // ---------------------------------------------------------------------------
 
 const FG_CLASSES: readonly string[] = [
-  'ansi-black', 'ansi-red', 'ansi-green', 'ansi-yellow',
-  'ansi-blue', 'ansi-magenta', 'ansi-cyan', 'ansi-white',
-  'ansi-bright-black', 'ansi-bright-red', 'ansi-bright-green', 'ansi-bright-yellow',
-  'ansi-bright-blue', 'ansi-bright-magenta', 'ansi-bright-cyan', 'ansi-bright-white',
+  'ansi-black',
+  'ansi-red',
+  'ansi-green',
+  'ansi-yellow',
+  'ansi-blue',
+  'ansi-magenta',
+  'ansi-cyan',
+  'ansi-white',
+  'ansi-bright-black',
+  'ansi-bright-red',
+  'ansi-bright-green',
+  'ansi-bright-yellow',
+  'ansi-bright-blue',
+  'ansi-bright-magenta',
+  'ansi-bright-cyan',
+  'ansi-bright-white',
 ];
 
 const BG_CLASSES: readonly string[] = [
-  'ansi-bg-black', 'ansi-bg-red', 'ansi-bg-green', 'ansi-bg-yellow',
-  'ansi-bg-blue', 'ansi-bg-magenta', 'ansi-bg-cyan', 'ansi-bg-white',
+  'ansi-bg-black',
+  'ansi-bg-red',
+  'ansi-bg-green',
+  'ansi-bg-yellow',
+  'ansi-bg-blue',
+  'ansi-bg-magenta',
+  'ansi-bg-cyan',
+  'ansi-bg-white',
 ];
 
 /** Standard 8-color RGB values (indices 0–7). */
 const STD_COLORS: readonly [number, number, number][] = [
-  [0, 0, 0],       // 0  black
-  [224, 57, 57],   // 1  red
-  [57, 224, 57],   // 2  green
-  [224, 224, 57],  // 3  yellow
-  [57, 124, 224],  // 4  blue
-  [224, 57, 224],  // 5  magenta
-  [57, 224, 224],  // 6  cyan
+  [0, 0, 0], // 0  black
+  [224, 57, 57], // 1  red
+  [57, 224, 57], // 2  green
+  [224, 224, 57], // 3  yellow
+  [57, 124, 224], // 4  blue
+  [224, 57, 224], // 5  magenta
+  [57, 224, 224], // 6  cyan
   [224, 224, 224], // 7  white
 ];
 
@@ -87,7 +105,7 @@ const BRIGHT_COLORS: readonly [number, number, number][] = [
   [102, 102, 102], // 8  bright black
   [248, 113, 113], // 9  bright red
   [134, 239, 172], // 10 bright green
-  [253, 224, 71],  // 11 bright yellow
+  [253, 224, 71], // 11 bright yellow
   [147, 197, 253], // 12 bright blue
   [240, 171, 252], // 13 bright magenta
   [103, 232, 249], // 14 bright cyan
@@ -159,7 +177,11 @@ function esc(str: string): string {
 function buildClasses(
   fg: string | null,
   bg: string | null,
-  b: boolean, it: boolean, u: boolean, bl: boolean, rev: boolean,
+  b: boolean,
+  it: boolean,
+  u: boolean,
+  bl: boolean,
+  rev: boolean,
 ): string {
   const c: string[] = [];
   if (fg) c.push(fg);
@@ -240,46 +262,69 @@ export function ansiToHtml(text: unknown): string {
 
     // Parse SGR params  — "CSI <params> m"
     const paramStr = m[1];
-    const params =
-      paramStr === ''
-        ? [0]
-        : paramStr.split(';').map(p => (p === '' ? 0 : parseInt(p, 10) || 0));
+    const params = paramStr === '' ? [0] : paramStr.split(';').map((p) => (p === '' ? 0 : parseInt(p, 10) || 0));
 
     let pi = 0;
     while (pi < params.length) {
       const p = params[pi];
 
       if (p === 0) {
-        fgClass = null; bgClass = null;
-        sBold = false; sItalic = false; sUnderline = false; sBlink = false; sReverse = false;
-      } else if (p === 1) { sBold = true; }
-      else if (p === 3) { sItalic = true; }
-      else if (p === 4) { sUnderline = true; }
-      else if (p === 5 || p === 6) { sBlink = true; }
-      else if (p === 7) { sReverse = true; }
-      else if (p === 22) { sBold = false; }
-      else if (p === 23) { sItalic = false; }
-      else if (p === 24) { sUnderline = false; }
-      else if (p === 25) { sBlink = false; }
-      else if (p === 27) { sReverse = false; }
-      else if (p >= 30 && p <= 37) { fgClass = FG_CLASSES[p - 30]; }
-      else if (p === 38) {
+        fgClass = null;
+        bgClass = null;
+        sBold = false;
+        sItalic = false;
+        sUnderline = false;
+        sBlink = false;
+        sReverse = false;
+      } else if (p === 1) {
+        sBold = true;
+      } else if (p === 3) {
+        sItalic = true;
+      } else if (p === 4) {
+        sUnderline = true;
+      } else if (p === 5 || p === 6) {
+        sBlink = true;
+      } else if (p === 7) {
+        sReverse = true;
+      } else if (p === 22) {
+        sBold = false;
+      } else if (p === 23) {
+        sItalic = false;
+      } else if (p === 24) {
+        sUnderline = false;
+      } else if (p === 25) {
+        sBlink = false;
+      } else if (p === 27) {
+        sReverse = false;
+      } else if (p >= 30 && p <= 37) {
+        fgClass = FG_CLASSES[p - 30];
+      } else if (p === 38) {
         if (params[pi + 1] === 5 && pi + 2 < params.length) {
-          fgClass = color256ToClass(params[pi + 2], 'fg'); pi += 2;
+          fgClass = color256ToClass(params[pi + 2], 'fg');
+          pi += 2;
         } else if (params[pi + 1] === 2 && pi + 4 < params.length) {
-          fgClass = nearestColor(params[pi + 2], params[pi + 3], params[pi + 4]).fg; pi += 4;
+          fgClass = nearestColor(params[pi + 2], params[pi + 3], params[pi + 4]).fg;
+          pi += 4;
         }
-      } else if (p === 39) { fgClass = null; }
-      else if (p >= 40 && p <= 47) { bgClass = BG_CLASSES[p - 40]; }
-      else if (p === 48) {
+      } else if (p === 39) {
+        fgClass = null;
+      } else if (p >= 40 && p <= 47) {
+        bgClass = BG_CLASSES[p - 40];
+      } else if (p === 48) {
         if (params[pi + 1] === 5 && pi + 2 < params.length) {
-          bgClass = color256ToClass(params[pi + 2], 'bg'); pi += 2;
+          bgClass = color256ToClass(params[pi + 2], 'bg');
+          pi += 2;
         } else if (params[pi + 1] === 2 && pi + 4 < params.length) {
-          bgClass = nearestColor(params[pi + 2], params[pi + 3], params[pi + 4]).bg; pi += 4;
+          bgClass = nearestColor(params[pi + 2], params[pi + 3], params[pi + 4]).bg;
+          pi += 4;
         }
-      } else if (p === 49) { bgClass = null; }
-      else if (p >= 90 && p <= 97) { fgClass = FG_CLASSES[8 + (p - 90)]; }
-      else if (p >= 100 && p <= 107) { bgClass = BG_CLASSES[p - 100]; }
+      } else if (p === 49) {
+        bgClass = null;
+      } else if (p >= 90 && p <= 97) {
+        fgClass = FG_CLASSES[8 + (p - 90)];
+      } else if (p >= 100 && p <= 107) {
+        bgClass = BG_CLASSES[p - 100];
+      }
 
       pi++;
     }

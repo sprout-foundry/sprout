@@ -63,7 +63,7 @@ async function withConsentRetry(
   request: () => Promise<Response>,
   path: string,
   operation: 'read' | 'write',
-  retryWithToken: (token: string) => Promise<Response>
+  retryWithToken: (token: string) => Promise<Response>,
 ): Promise<Response> {
   const initial = await request();
   const consent = await parseConsentRequired(initial);
@@ -73,7 +73,7 @@ async function withConsentRetry(
 
   const approved = await showThemedConfirm(
     `External file ${operation} requested.\n\nPath: ${consent.path}\n\nAllow this one-time access?`,
-    { title: 'External File Access', type: 'warning' }
+    { title: 'External File Access', type: 'warning' },
   );
   if (!approved) {
     throw new Error(`External file ${operation} canceled by user: ${consent.path}`);
@@ -93,7 +93,7 @@ export async function readFileWithConsent(filePath: string): Promise<Response> {
     (token) =>
       clientFetch(baseUrl, {
         headers: { [consentTokenHeader]: token },
-      })
+      }),
   );
 }
 
@@ -119,6 +119,6 @@ export async function writeFileWithConsent(filePath: string, content: string): P
           [consentTokenHeader]: token,
         },
         body: JSON.stringify({ content }),
-      })
+      }),
   );
 }

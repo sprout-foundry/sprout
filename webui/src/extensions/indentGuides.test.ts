@@ -6,7 +6,11 @@
  * helper directly — it's a pure function with no CM dependencies.
  */
 
+// ── Module under test (Jest hoists mocks above imports) ─────────────
+import { measureIndent, computeGuidePositions } from './indentGuides';
+
 // ── Mock CodeMirror modules (ESM internals break Jest 27) ───────────
+
 jest.mock('@codemirror/view', () => ({
   WidgetType: class {},
   Decoration: { widget: jest.fn(), none: [], set: jest.fn() },
@@ -17,9 +21,6 @@ jest.mock('@codemirror/language', () => ({
   getIndentUnit: jest.fn(),
 }));
 jest.mock('@codemirror/state', () => ({}));
-
-// Module under test — now safe to import because CM deps are mocked.
-import { measureIndent, computeGuidePositions } from './indentGuides';
 
 // ── measureIndent tests ────────────────────────────────────────────
 
@@ -199,7 +200,6 @@ describe('measureIndent', () => {
     expect(measureIndent('\t', -4)).toBe(0);
   });
 });
-
 
 // ── computeGuidePositions tests ────────────────────────────────────
 

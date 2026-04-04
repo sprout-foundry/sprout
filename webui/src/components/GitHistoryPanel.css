@@ -52,7 +52,9 @@
   border-radius: 8px;
   background: var(--bg-elevated);
   cursor: pointer;
-  transition: border-color 0.12s ease, background 0.12s ease;
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease;
   text-align: left;
   color: inherit;
   font: inherit;
@@ -130,7 +132,9 @@
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.12s ease, border-color 0.12s ease;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease;
 }
 
 .git-history-load-more:hover:not(:disabled) {
@@ -156,5 +160,3 @@
   border-bottom: 1px solid var(--border-default);
   margin-bottom: 2px;
 }
-
-

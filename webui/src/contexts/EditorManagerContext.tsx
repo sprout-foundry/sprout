@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
-import { EditorBuffer, EditorPane, PaneLayout, PaneSize } from '../types/editor';
+import React, { createContext, useContext, useState, useEffect, useRef, type ReactNode } from 'react';
+import { type EditorBuffer, type EditorPane, type PaneLayout, type PaneSize } from '../types/editor';
 import { readStorageItem, PANE_LAYOUT_STORAGE_KEY, PANE_SIZES_STORAGE_KEY } from '../services/layoutPersistence';
 import { useBufferMutations } from '../hooks/useBufferMutations';
 import { useBufferPersistence } from '../hooks/useBufferPersistence';
@@ -28,8 +28,13 @@ interface EditorManagerContextValue {
   openFile: (file: any) => string;
   openWorkspaceBuffer: (options: {
     kind: 'chat' | 'diff' | 'review' | 'file';
-    path: string; title: string; content?: string; ext?: string;
-    isPinned?: boolean; isClosable?: boolean; metadata?: Record<string, any>;
+    path: string;
+    title: string;
+    content?: string;
+    ext?: string;
+    isPinned?: boolean;
+    isClosable?: boolean;
+    metadata?: Record<string, any>;
   }) => string;
   closeBuffer: (bufferId: string) => void;
   closeAllBuffers: () => void;
@@ -76,7 +81,9 @@ export const useEditorManager = () => {
 // Provider — thin orchestrator
 // ---------------------------------------------------------------------------
 
-interface EditorManagerProviderProps { children: ReactNode; }
+interface EditorManagerProviderProps {
+  children: ReactNode;
+}
 
 export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ children }) => {
   // ---------------------------------------------------------------------------
@@ -85,12 +92,19 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
 
   const [buffers, setBuffers] = useState<Map<string, EditorBuffer>>(() => {
     const chatBuffer: EditorBuffer = {
-      id: 'buffer-chat', kind: 'chat',
+      id: 'buffer-chat',
+      kind: 'chat',
       file: { name: 'Chat', path: '__workspace/chat', isDir: false, size: 0, modified: 0, ext: '.chat' },
-      content: '', originalContent: '',
-      cursorPosition: { line: 0, column: 0 }, scrollPosition: { top: 0, left: 0 },
-      isModified: false, isActive: true, paneId: 'pane-1',
-      isPinned: true, isClosable: false, metadata: { chatId: null as string | null },
+      content: '',
+      originalContent: '',
+      cursorPosition: { line: 0, column: 0 },
+      scrollPosition: { top: 0, left: 0 },
+      isModified: false,
+      isActive: true,
+      paneId: 'pane-1',
+      isPinned: true,
+      isClosable: false,
+      metadata: { chatId: null as string | null },
     };
     return new Map([[chatBuffer.id, chatBuffer]]);
   });
@@ -105,15 +119,17 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
 
   const [panes, setPanes] = useState<EditorPane[]>(() => {
     const primary: EditorPane = { id: 'pane-1', bufferId: 'buffer-chat', isActive: true, position: 'primary' };
-    if (initialLayout === 'split-vertical' || initialLayout === 'split-horizontal')
+    if (initialLayout === 'split-vertical' || initialLayout === 'split-horizontal') {
       return [primary, { id: 'pane-2', bufferId: null, isActive: false, position: 'secondary' as const }];
-    if (initialLayout === 'split-grid')
+    }
+    if (initialLayout === 'split-grid') {
       return [
         primary,
         { id: 'pane-2', bufferId: null, isActive: false, position: 'secondary' as const },
         { id: 'pane-3', bufferId: null, isActive: false, position: 'tertiary' as const },
         { id: 'pane-4', bufferId: null, isActive: false, position: 'quaternary' as const },
       ];
+    }
     return [primary];
   });
 
@@ -129,7 +145,9 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     const isGrid = initialLayout === 'split-grid';
     const defaults: PaneSize = isGrid
       ? { 'grid:col': 50, 'grid:row': 50 }
-      : isSplit ? { 'pane-1': 50, 'pane-2': 50 } : { 'pane-1': 100 };
+      : isSplit
+        ? { 'pane-1': 50, 'pane-2': 50 }
+        : { 'pane-1': 100 };
 
     const stored = readStorageItem(PANE_SIZES_STORAGE_KEY);
     if (!stored) return defaults;
@@ -137,20 +155,32 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
       const parsed: PaneSize = JSON.parse(stored);
       const filtered: PaneSize = {};
       for (const key of Object.keys(parsed)) {
-        if ((STABLE.includes(key) || !key.startsWith('pane-')) && typeof parsed[key] === 'number' && isFinite(parsed[key]))
+        if (
+          (STABLE.includes(key) || !key.startsWith('pane-')) &&
+          typeof parsed[key] === 'number' &&
+          isFinite(parsed[key])
+        ) {
           filtered[key] = Math.max(10, Math.min(90, parsed[key]));
+        }
       }
       if (isGrid) {
-        filtered['grid:col'] = filtered['grid:col'] ?? 50; filtered['grid:row'] = filtered['grid:row'] ?? 50;
+        filtered['grid:col'] = filtered['grid:col'] ?? 50;
+        filtered['grid:row'] = filtered['grid:row'] ?? 50;
         for (const k of STABLE) delete filtered[k];
       } else if (isSplit) {
-        filtered['pane-1'] = filtered['pane-1'] ?? 50; filtered['pane-2'] = filtered['pane-2'] ?? 50;
-        delete filtered['grid:col']; delete filtered['grid:row'];
+        filtered['pane-1'] = filtered['pane-1'] ?? 50;
+        filtered['pane-2'] = filtered['pane-2'] ?? 50;
+        delete filtered['grid:col'];
+        delete filtered['grid:row'];
       } else {
-        filtered['pane-1'] = 100; delete filtered['grid:col']; delete filtered['grid:row'];
+        filtered['pane-1'] = 100;
+        delete filtered['grid:col'];
+        delete filtered['grid:row'];
       }
       return filtered;
-    } catch { /* JSON parse error */ }
+    } catch {
+      /* JSON parse error */
+    }
     return defaults;
   });
 
@@ -162,10 +192,14 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   buffersRef.current = buffers; // Synchronous update — event handlers always see latest state
 
   const activePaneIdRef = useRef(activePaneId);
-  useEffect(() => { activePaneIdRef.current = activePaneId; }, [activePaneId]);
+  useEffect(() => {
+    activePaneIdRef.current = activePaneId;
+  }, [activePaneId]);
 
   const panesRef = useRef(panes);
-  useEffect(() => { panesRef.current = panes; }, [panes]);
+  useEffect(() => {
+    panesRef.current = panes;
+  }, [panes]);
 
   // ---------------------------------------------------------------------------
   // Effects that stay in the orchestrator
@@ -188,29 +222,61 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
 
   // 3. Tab management (activate, switch, close, reorder, move)
   const tab = useTabManagement({
-    buffersRef, activePaneIdRef, setBuffers, setPanes, setActiveBufferId, setActivePaneId,
-    activePaneId, activeBufferId, isAutoSaveEnabled, saveBuffer,
+    buffersRef,
+    activePaneIdRef,
+    setBuffers,
+    setPanes,
+    setActiveBufferId,
+    setActivePaneId,
+    activePaneId,
+    activeBufferId,
+    isAutoSaveEnabled,
+    saveBuffer,
   });
 
   // 4. Tab open (openFile, openWorkspaceBuffer — depends on activateBuffer & switchToBuffer)
   const tabOpen = useTabOpen({
-    buffersRef, activePaneIdRef, panesRef,
-    setBuffers, setPanes, setActiveBufferId, setActivePaneId,
-    activePaneId, activateBuffer: tab.activateBuffer, switchToBuffer: tab.switchToBuffer,
+    buffersRef,
+    activePaneIdRef,
+    panesRef,
+    setBuffers,
+    setPanes,
+    setActiveBufferId,
+    setActivePaneId,
+    activePaneId,
+    activateBuffer: tab.activateBuffer,
+    switchToBuffer: tab.switchToBuffer,
   });
 
   // 5. Pane management (split, close, switch, resize)
   const paneMgmt = usePaneManagement({
-    panes, activePaneId, activeBufferId, closeBuffer: tab.closeBuffer,
-    setBuffers, setPanes, setPaneLayoutState, setActivePaneId, setActiveBufferId,
-    setPaneSizes, setIsLinkedScrollEnabled,
+    panes,
+    activePaneId,
+    activeBufferId,
+    closeBuffer: tab.closeBuffer,
+    setBuffers,
+    setPanes,
+    setPaneLayoutState,
+    setActivePaneId,
+    setActiveBufferId,
+    setPaneSizes,
+    setIsLinkedScrollEnabled,
   });
 
   // 6. Layout persistence (restore / save snapshot / beforeunload / cleanup)
   const layoutPersist = useLayoutPersistence({
-    buffersRef, panesRef, buffers, panes,
-    setBuffers, setPanes, activePaneId, activeBufferId,
-    setActivePaneId, setActiveBufferId, paneLayout, paneSizes,
+    buffersRef,
+    panesRef,
+    buffers,
+    panes,
+    setBuffers,
+    setPanes,
+    activePaneId,
+    activeBufferId,
+    setActivePaneId,
+    setActiveBufferId,
+    paneLayout,
+    paneSizes,
   });
 
   // 7. External file change watcher (polls backend for file changes on disk)
@@ -222,7 +288,9 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   // 9. Auto-save interval (stays in orchestrator — ties persistence + state together)
   useEffect(() => {
     if (!isAutoSaveEnabled) return;
-    const id = setInterval(() => { saveAllBuffers(); }, autoSaveInterval);
+    const id = setInterval(() => {
+      saveAllBuffers();
+    }, autoSaveInterval);
     return () => clearInterval(id);
   }, [isAutoSaveEnabled, autoSaveInterval, saveAllBuffers]);
 
@@ -231,8 +299,15 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   // ---------------------------------------------------------------------------
 
   const value: EditorManagerContextValue = {
-    buffers, panes, paneLayout, activePaneId, activeBufferId,
-    isAutoSaveEnabled, autoSaveInterval, isLinkedScrollEnabled, paneSizes,
+    buffers,
+    panes,
+    paneLayout,
+    activePaneId,
+    activeBufferId,
+    isAutoSaveEnabled,
+    autoSaveInterval,
+    isLinkedScrollEnabled,
+    paneSizes,
     openFile: tabOpen.openFile,
     openWorkspaceBuffer: tabOpen.openWorkspaceBuffer,
     closeBuffer: tab.closeBuffer,
@@ -266,9 +341,5 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     restoreLayout: layoutPersist.restoreLayout,
   };
 
-  return (
-    <EditorManagerContext.Provider value={value}>
-      {children}
-    </EditorManagerContext.Provider>
-  );
+  return <EditorManagerContext.Provider value={value}>{children}</EditorManagerContext.Provider>;
 };

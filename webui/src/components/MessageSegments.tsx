@@ -1,5 +1,25 @@
 import React, { type ReactNode } from 'react';
-import { ExternalLink, CheckCircle, Circle, Loader2, Minus, Wrench, Bot, Terminal, BookOpen, Pencil, FileEdit, Search, Eye, FlaskConical, Globe, ArrowDown, ClipboardList, ScrollText, RotateCcw } from 'lucide-react';
+import {
+  ExternalLink,
+  CheckCircle,
+  Circle,
+  Loader2,
+  Minus,
+  Wrench,
+  Bot,
+  Terminal,
+  BookOpen,
+  Pencil,
+  FileEdit,
+  Search,
+  Eye,
+  FlaskConical,
+  Globe,
+  ArrowDown,
+  ClipboardList,
+  ScrollText,
+  RotateCcw,
+} from 'lucide-react';
 import { parseMessageSegments, type MessageSegment } from '../utils/messageSegments';
 import { stripAnsiCodes } from '../utils/ansi';
 import MessageContent from './MessageContent';
@@ -13,47 +33,46 @@ interface MessageSegmentsProps {
 
 const getToolIcon = (toolName: string): ReactNode => {
   const iconMap: { [key: string]: ReactNode } = {
-    'shell_command': <Terminal size={14} />,
-    'read_file': <BookOpen size={14} />,
-    'write_file': <Pencil size={14} />,
-    'edit_file': <FileEdit size={14} />,
-    'search_files': <Search size={14} />,
-    'analyze_ui_screenshot': <Eye size={14} />,
-    'analyze_image_content': <FlaskConical size={14} />,
-    'web_search': <Globe size={14} />,
-    'fetch_url': <ArrowDown size={14} />,
-    'TodoWrite': <ClipboardList size={14} />,
-    'TodoRead': <ClipboardList size={14} />,
-    'view_history': <ScrollText size={14} />,
-    'rollback_changes': <RotateCcw size={14} />,
-    'mcp_tools': <Wrench size={14} />,
-    'run_subagent': <Bot size={14} />,
-    'run_parallel_subagents': <Bot size={14} />,
+    shell_command: <Terminal size={14} />,
+    read_file: <BookOpen size={14} />,
+    write_file: <Pencil size={14} />,
+    edit_file: <FileEdit size={14} />,
+    search_files: <Search size={14} />,
+    analyze_ui_screenshot: <Eye size={14} />,
+    analyze_image_content: <FlaskConical size={14} />,
+    web_search: <Globe size={14} />,
+    fetch_url: <ArrowDown size={14} />,
+    TodoWrite: <ClipboardList size={14} />,
+    TodoRead: <ClipboardList size={14} />,
+    view_history: <ScrollText size={14} />,
+    rollback_changes: <RotateCcw size={14} />,
+    mcp_tools: <Wrench size={14} />,
+    run_subagent: <Bot size={14} />,
+    run_parallel_subagents: <Bot size={14} />,
   };
   return iconMap[toolName] || <Wrench size={14} />;
 };
 
 const SHORT_TOOL_NAMES: { [key: string]: string } = {
-  'read_file': 'read',
-  'write_file': 'write',
-  'edit_file': 'edit',
-  'shell_command': 'shell',
-  'search_files': 'search',
-  'analyze_ui_screenshot': 'screenshot',
-  'analyze_image_content': 'image',
-  'web_search': 'web',
-  'fetch_url': 'fetch',
-  'TodoWrite': 'todo',
-  'TodoRead': 'todo',
-  'view_history': 'history',
-  'rollback_changes': 'rollback',
-  'mcp_tools': 'mcp',
-  'run_subagent': 'subagent',
-  'run_parallel_subagents': 'subagents',
+  read_file: 'read',
+  write_file: 'write',
+  edit_file: 'edit',
+  shell_command: 'shell',
+  search_files: 'search',
+  analyze_ui_screenshot: 'screenshot',
+  analyze_image_content: 'image',
+  web_search: 'web',
+  fetch_url: 'fetch',
+  TodoWrite: 'todo',
+  TodoRead: 'todo',
+  view_history: 'history',
+  rollback_changes: 'rollback',
+  mcp_tools: 'mcp',
+  run_subagent: 'subagent',
+  run_parallel_subagents: 'subagents',
 };
 
-const getShortToolName = (toolName: string): string =>
-  SHORT_TOOL_NAMES[toolName] ?? toolName;
+const getShortToolName = (toolName: string): string => SHORT_TOOL_NAMES[toolName] ?? toolName;
 
 const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, toolRefs = [], onToolClick, onToolRefClick }) => {
   let segments: MessageSegment[];
@@ -126,10 +145,15 @@ const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, toolRefs = [
                 {segment.todos.map((todo, todoIdx) => (
                   <span key={`todo-${todoIdx}`} className={`inline-todo inline-todo-${todo.status}`}>
                     <span className="inline-todo-icon">
-                      {todo.status === 'completed' ? <CheckCircle size={10} /> :
-                       todo.status === 'in_progress' ? <Loader2 size={10} /> :
-                       todo.status === 'cancelled' ? <Minus size={10} /> :
-                       <Circle size={10} />}
+                      {todo.status === 'completed' ? (
+                        <CheckCircle size={10} />
+                      ) : todo.status === 'in_progress' ? (
+                        <Loader2 size={10} />
+                      ) : todo.status === 'cancelled' ? (
+                        <Minus size={10} />
+                      ) : (
+                        <Circle size={10} />
+                      )}
                     </span>
                     {todo.content}
                   </span>

@@ -36,16 +36,18 @@ export function useChatSessionSync({
 }: UseChatSessionSyncOptions): void {
   // Keep a stable ref to the current buffers map to avoid infinite loops in effects
   const buffersRef = useRef(buffers);
-  useEffect(() => { buffersRef.current = buffers; }, [buffers]);
+  useEffect(() => {
+    buffersRef.current = buffers;
+  }, [buffers]);
 
   // Sync chat sessions → editor buffers: update the initial chat buffer with the active
   // session's ID, and open additional buffers for other sessions.
   useEffect(() => {
     if (!chatSessions || chatSessions.length === 0) return;
     const currentBuffers = buffersRef.current;
-    chatSessions.forEach(session => {
+    chatSessions.forEach((session) => {
       const existing = Array.from(currentBuffers.values()).find(
-        b => b.kind === 'chat' && b.metadata?.chatId === session.id
+        (b) => b.kind === 'chat' && b.metadata?.chatId === session.id,
       );
       if (existing) {
         // Update tab title if the session was renamed
@@ -70,7 +72,7 @@ export function useChatSessionSync({
         });
       }
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatSessions, activeChatId]);
 
   // Detect when the user switches to a different chat tab and notify parent
@@ -83,6 +85,6 @@ export function useChatSessionSync({
         onActiveChatChange(chatId);
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- activeChatId intentionally excluded: including it would cause an infinite render loop (parent sets activeChatId → effect re-fires → calls onActiveChatChange → parent re-sets). Buffer-change-driven detection via activeBufferId is sufficient.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- activeChatId intentionally excluded: including it would cause an infinite render loop (parent sets activeChatId → effect re-fires → calls onActiveChatChange → parent re-sets). Buffer-change-driven detection via activeBufferId is sufficient.
   }, [activeBufferId]);
 }

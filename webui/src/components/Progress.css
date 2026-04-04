@@ -58,7 +58,9 @@
 .progress-bar {
   height: 100%;
   border-radius: 4px;
-  transition: width 0.3s ease, background-color 0.3s ease;
+  transition:
+    width 0.3s ease,
+    background-color 0.3s ease;
   min-width: 2px;
 }
 
@@ -97,11 +99,14 @@
 
 /* Pulse animation for active progress */
 .progress-item.active {
-  animation: slideInRight 0.3s ease-out, pulse 2s infinite;
+  animation:
+    slideInRight 0.3s ease-out,
+    pulse 2s infinite;
 }
 
 @keyframes pulse {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   }
   50% {

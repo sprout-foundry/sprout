@@ -50,32 +50,44 @@ export function useHotkeyIntegration({
   onToggleCommandPalette,
   onOpenCommandPalette,
 }: UseHotkeyIntegrationOptions) {
-  const handlePrimaryViewChange = useCallback((view: 'chat' | 'editor' | 'git') => {
-    if (view === 'chat') {
-      openWorkspaceBuffer({
-        kind: 'chat',
-        path: '__workspace/chat',
-        title: 'Chat',
-        ext: '.chat',
-        isPinned: true,
-        isClosable: false,
-      });
-    }
-    onViewChange(view);
-  }, [onViewChange, openWorkspaceBuffer]);
+  const handlePrimaryViewChange = useCallback(
+    (view: 'chat' | 'editor' | 'git') => {
+      if (view === 'chat') {
+        openWorkspaceBuffer({
+          kind: 'chat',
+          path: '__workspace/chat',
+          title: 'Chat',
+          ext: '.chat',
+          isPinned: true,
+          isClosable: false,
+        });
+      }
+      onViewChange(view);
+    },
+    [onViewChange, openWorkspaceBuffer],
+  );
 
-  const focusTabIndex = useCallback((index: number) => {
-    if (!activePaneId || index < 0) return;
-    const paneBuffers = Array.from(buffers.values()).filter((buffer) => buffer.paneId === activePaneId);
-    const target = paneBuffers[index];
-    if (target) {
-      switchPane(activePaneId);
-      switchToBuffer(target.id);
-    }
-  }, [activePaneId, buffers, switchPane, switchToBuffer]);
+  const focusTabIndex = useCallback(
+    (index: number) => {
+      if (!activePaneId || index < 0) return;
+      const paneBuffers = Array.from(buffers.values()).filter((buffer) => buffer.paneId === activePaneId);
+      const target = paneBuffers[index];
+      if (target) {
+        switchPane(activePaneId);
+        switchToBuffer(target.id);
+      }
+    },
+    [activePaneId, buffers, switchPane, switchToBuffer],
+  );
 
   const handleNewFile = useCallback(() => {
-    openWorkspaceBuffer({ kind: 'file', path: `__workspace/untitled-${Date.now()}`, title: 'Untitled', ext: '', isClosable: true });
+    openWorkspaceBuffer({
+      kind: 'file',
+      path: `__workspace/untitled-${Date.now()}`,
+      title: 'Untitled',
+      ext: '',
+      isClosable: true,
+    });
     onViewChange('editor');
   }, [openWorkspaceBuffer, onViewChange]);
 
@@ -96,7 +108,10 @@ export function useHotkeyIntegration({
     onOpenCommandPalette,
     onNewFile: handleNewFile,
     onToggleSidebar,
-    onToggleTerminal: useCallback(() => onTerminalExpandedChange(!isTerminalExpanded), [isTerminalExpanded, onTerminalExpandedChange]),
+    onToggleTerminal: useCallback(
+      () => onTerminalExpandedChange(!isTerminalExpanded),
+      [isTerminalExpanded, onTerminalExpandedChange],
+    ),
     onPrimaryViewChange: handlePrimaryViewChange,
     onFocusTabIndex: focusTabIndex,
     onSplitRequest: handleSplitRequest,

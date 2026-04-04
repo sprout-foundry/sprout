@@ -61,16 +61,23 @@ interface SubagentActivity {
 
 interface WorkspacePaneProps {
   paneId: string;
-  perChatCache?: Record<string, {
-    messages: Message[];
-    toolExecutions?: ToolExecution[];
-    fileEdits?: Array<{ path: string; action: string; timestamp: Date; linesAdded?: number; linesDeleted?: number }>;
-    subagentActivities?: SubagentActivity[];
-    currentTodos?: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }>;
-    queryProgress?: any;
-    lastError?: string | null;
-    isProcessing?: boolean;
-  }>;
+  perChatCache?: Record<
+    string,
+    {
+      messages: Message[];
+      toolExecutions?: ToolExecution[];
+      fileEdits?: Array<{ path: string; action: string; timestamp: Date; linesAdded?: number; linesDeleted?: number }>;
+      subagentActivities?: SubagentActivity[];
+      currentTodos?: Array<{
+        id: string;
+        content: string;
+        status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+      }>;
+      queryProgress?: any;
+      lastError?: string | null;
+      isProcessing?: boolean;
+    }
+  >;
   activeChatId?: string | null;
   chatProps: {
     messages: Message[];
@@ -83,7 +90,11 @@ interface WorkspacePaneProps {
     lastError?: string | null;
     toolExecutions?: ToolExecution[];
     queryProgress?: any;
-    currentTodos?: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }>;
+    currentTodos?: Array<{
+      id: string;
+      content: string;
+      status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+    }>;
     subagentActivities?: SubagentActivity[];
     onToolPillClick?: (toolId: string) => void;
     onStopProcessing?: () => void;
@@ -113,7 +124,14 @@ interface WorkspacePaneProps {
   };
 }
 
-const WorkspacePane: React.FC<WorkspacePaneProps> = ({ paneId, perChatCache, activeChatId, chatProps, reviewProps, diffState }) => {
+const WorkspacePane: React.FC<WorkspacePaneProps> = ({
+  paneId,
+  perChatCache,
+  activeChatId,
+  chatProps,
+  reviewProps,
+  diffState,
+}) => {
   const { panes, buffers } = useEditorManager();
   const pane = panes.find((item) => item.id === paneId);
   const buffer = pane?.bufferId ? buffers.get(pane.bufferId) : null;
@@ -122,7 +140,9 @@ const WorkspacePane: React.FC<WorkspacePaneProps> = ({ paneId, perChatCache, act
     return (
       <div className="editor-pane empty">
         <div className="no-file-selected">
-          <div className="no-file-icon"><File size={32} /></div>
+          <div className="no-file-icon">
+            <File size={32} />
+          </div>
           <div className="no-file-text">Open a file or tab</div>
         </div>
       </div>
@@ -202,8 +222,8 @@ const WorkspacePane: React.FC<WorkspacePaneProps> = ({ paneId, perChatCache, act
       return (
         <DiffWorkspaceTab
           path={diffPath || diffState.activeDiffPath || buffer.file.name}
-          diff={isActiveDiff ? diffState.activeDiff : (buffer.metadata?.diff || null)}
-          diffMode={isActiveDiff ? diffState.diffMode : (buffer.metadata?.diffMode || 'combined')}
+          diff={isActiveDiff ? diffState.activeDiff : buffer.metadata?.diff || null}
+          diffMode={isActiveDiff ? diffState.diffMode : buffer.metadata?.diffMode || 'combined'}
           isLoading={diffState.isDiffLoading && isActiveDiff}
           error={isActiveDiff ? diffState.diffError : null}
           onDiffModeChange={diffState.onDiffModeChange}

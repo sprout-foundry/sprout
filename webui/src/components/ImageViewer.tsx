@@ -111,11 +111,11 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ filePath, fileName, fileSize 
 
   // Zoom handlers
   const handleZoomIn = useCallback(() => {
-    setZoom(prev => Math.min(prev * 1.25, 10));
+    setZoom((prev) => Math.min(prev * 1.25, 10));
   }, []);
 
   const handleZoomOut = useCallback(() => {
-    setZoom(prev => Math.max(prev / 1.25, 0.1));
+    setZoom((prev) => Math.max(prev / 1.25, 0.1));
   }, []);
 
   const handleResetZoom = useCallback(() => {
@@ -125,56 +125,65 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ filePath, fileName, fileSize 
   }, [dimensions]);
 
   // Wheel zoom - zoom centered on cursor
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    if (!imageRef.current || !containerRef.current) return;
+  const handleWheel = useCallback(
+    (e: React.WheelEvent) => {
+      if (!imageRef.current || !containerRef.current) return;
 
-    e.preventDefault();
+      e.preventDefault();
 
-    const container = containerRef.current;
-    const rect = container.getBoundingClientRect();
-    
-    // Calculate mouse position relative to container
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
+      const container = containerRef.current;
+      const rect = container.getBoundingClientRect();
 
-    // Calculate zoom factor
-    const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
-    const newZoom = Math.max(0.1, Math.min(zoom * zoomFactor, 10));
+      // Calculate mouse position relative to container
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
 
-    // Calculate new translation to zoom toward mouse position
-    // Current mouse position in image coordinates
-    const mouseXInImage = (mouseX - translate.x) / zoom;
-    const mouseYInImage = (mouseY - translate.y) / zoom;
+      // Calculate zoom factor
+      const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+      const newZoom = Math.max(0.1, Math.min(zoom * zoomFactor, 10));
 
-    // New translate to keep mouse position stable
-    const newTranslateX = mouseX - mouseXInImage * newZoom;
-    const newTranslateY = mouseY - mouseYInImage * newZoom;
+      // Calculate new translation to zoom toward mouse position
+      // Current mouse position in image coordinates
+      const mouseXInImage = (mouseX - translate.x) / zoom;
+      const mouseYInImage = (mouseY - translate.y) / zoom;
 
-    setZoom(newZoom);
-    setTranslate({ x: newTranslateX, y: newTranslateY });
-  }, [zoom, translate]);
+      // New translate to keep mouse position stable
+      const newTranslateX = mouseX - mouseXInImage * newZoom;
+      const newTranslateY = mouseY - mouseYInImage * newZoom;
+
+      setZoom(newZoom);
+      setTranslate({ x: newTranslateX, y: newTranslateY });
+    },
+    [zoom, translate],
+  );
 
   // Pan handlers
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (zoom <= 1) return; // Only pan when zoomed in
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      if (zoom <= 1) return; // Only pan when zoomed in
 
-    e.preventDefault();
-    setIsDragging(true);
-    setDragStart({ x: e.clientX, y: e.clientY });
-    setTranslateStart({ ...translate });
-  }, [zoom, translate]);
+      e.preventDefault();
+      setIsDragging(true);
+      setDragStart({ x: e.clientX, y: e.clientY });
+      setTranslateStart({ ...translate });
+    },
+    [zoom, translate],
+  );
 
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!isDragging) return;
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (!isDragging) return;
 
-    const dx = e.clientX - dragStart.x;
-    const dy = e.clientY - dragStart.y;
+      const dx = e.clientX - dragStart.x;
+      const dy = e.clientY - dragStart.y;
 
-    setTranslate({
-      x: translateStart.x + dx,
-      y: translateStart.y + dy
-    });
-  }, [isDragging, dragStart, translateStart]);
+      setTranslate({
+        x: translateStart.x + dx,
+        y: translateStart.y + dy,
+      });
+    },
+    [isDragging, dragStart, translateStart],
+  );
 
   const handleMouseUp = useCallback(() => {
     setIsDragging(false);
@@ -241,7 +250,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ filePath, fileName, fileSize 
         </div>
       )}
 
-      <div 
+      <div
         ref={containerRef}
         className={`image-viewer-container${isDragging ? ' dragging' : ''}`}
         onWheel={handleWheel}
@@ -255,7 +264,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ filePath, fileName, fileSize 
           style={{
             transform: `translate(${translate.x}px, ${translate.y}px) scale(${zoom})`,
             transformOrigin: '0 0',
-            transition: isDragging ? 'none' : 'transform 0.1s ease-out'
+            transition: isDragging ? 'none' : 'transform 0.1s ease-out',
           }}
         >
           <img
@@ -273,26 +282,16 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ filePath, fileName, fileSize 
 
       <div className="image-viewer-footer">
         <div className="image-viewer-toolbar">
-          <button
-            className="image-viewer-btn"
-            onClick={handleZoomOut}
-            disabled={zoom <= 0.1}
-            title="Zoom out"
-          >
+          <button className="image-viewer-btn" onClick={handleZoomOut} disabled={zoom <= 0.1} title="Zoom out">
             <ZoomOut size={16} />
           </button>
-          
+
           <span className="image-viewer-zoom-display">{getZoomDisplay()}</span>
-          
-          <button
-            className="image-viewer-btn"
-            onClick={handleZoomIn}
-            disabled={zoom >= 10}
-            title="Zoom in"
-          >
+
+          <button className="image-viewer-btn" onClick={handleZoomIn} disabled={zoom >= 10} title="Zoom in">
             <ZoomIn size={16} />
           </button>
-          
+
           <button
             className="image-viewer-btn"
             onClick={() => dimensions && fitToWindow(dimensions.width, dimensions.height)}
@@ -300,12 +299,8 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ filePath, fileName, fileSize 
           >
             <Maximize2 size={16} />
           </button>
-          
-          <button
-            className="image-viewer-btn"
-            onClick={handleResetZoom}
-            title="1:1 actual size"
-          >
+
+          <button className="image-viewer-btn" onClick={handleResetZoom} title="1:1 actual size">
             1:1
           </button>
         </div>
@@ -314,9 +309,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ filePath, fileName, fileSize 
           <span className="image-viewer-stat">
             {dimensions.width}×{dimensions.height} px
           </span>
-          <span className="image-viewer-stat">
-            {formatFileSize(fileSize)}
-          </span>
+          <span className="image-viewer-stat">{formatFileSize(fileSize)}</span>
         </div>
       </div>
     </div>

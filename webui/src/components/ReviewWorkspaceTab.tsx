@@ -34,11 +34,16 @@ interface ReviewWorkspaceTabProps {
 /** Returns a CSS tone class based on review guidance section severity */
 const getSectionToneClass = (sectionId: string): string => {
   switch (sectionId.toUpperCase()) {
-    case 'MUST_FIX': return 'tone-danger';
-    case 'SHOULD_FIX': return 'tone-warning';
-    case 'VERIFY': return 'tone-info';
-    case 'SUGGEST': return 'tone-neutral';
-    default: return '';
+    case 'MUST_FIX':
+      return 'tone-danger';
+    case 'SHOULD_FIX':
+      return 'tone-warning';
+    case 'VERIFY':
+      return 'tone-info';
+    case 'SUGGEST':
+      return 'tone-neutral';
+    default:
+      return '';
   }
 };
 
@@ -61,11 +66,11 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
 
   const parsedDetailedGuidance = useMemo(
     () => parseReviewGuidance(review?.detailed_guidance || ''),
-    [review?.detailed_guidance]
+    [review?.detailed_guidance],
   );
   const detailedGuidanceMarkdown = useMemo(
     () => reviewGuidanceToMarkdown(parsedDetailedGuidance),
-    [parsedDetailedGuidance]
+    [parsedDetailedGuidance],
   );
   const reviewMetaItems = useMemo<InlinePillItem[]>(() => {
     if (!review) {
@@ -101,7 +106,7 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
 
   const totalItems = useMemo(
     () => parsedDetailedGuidance.sections.reduce((acc, s) => acc + s.entries.length, 0),
-    [parsedDetailedGuidance.sections]
+    [parsedDetailedGuidance.sections],
   );
   const selectedCount = checkedItems.size;
 
@@ -138,54 +143,58 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
     }
   }, [parsedDetailedGuidance.sections, checkedItems]);
 
-  const handleSectionToggle = useCallback((sectionId: string, entriesCount: number, shiftKey: boolean) => {
-    if (entriesCount === 0) return;
-    const sectionKeys: string[] = [];
-    for (let i = 0; i < entriesCount; i++) {
-      sectionKeys.push(`${sectionId}:${i}`);
-    }
-
-    // Shift+Click: select ONLY this section (deselect all others)
-    if (shiftKey) {
-      const allKeys: string[] = [];
-      parsedDetailedGuidance.sections.forEach((section) => {
-        section.entries.forEach((_, idx) => {
-          allKeys.push(`${section.id}:${idx}`);
-        });
-      });
-
-      // If all items in this section are already the only checked items, deselect everything
-      const onlyThisSectionSelected = allKeys.length === sectionKeys.length
-        ? true
-        : allKeys.every((k) => !checkedItems.has(k) || sectionKeys.includes(k));
-
-      if (onlyThisSectionSelected && sectionKeys.every((k) => checkedItems.has(k))) {
-        setCheckedItems(new Set());
-      } else {
-        // Only select items from this section
-        setCheckedItems(new Set(sectionKeys));
+  const handleSectionToggle = useCallback(
+    (sectionId: string, entriesCount: number, shiftKey: boolean) => {
+      if (entriesCount === 0) return;
+      const sectionKeys: string[] = [];
+      for (let i = 0; i < entriesCount; i++) {
+        sectionKeys.push(`${sectionId}:${i}`);
       }
-      return;
-    }
 
-    // Normal click: toggle this section
-    const allSectionChecked = sectionKeys.every((key) => checkedItems.has(key));
-    if (allSectionChecked) {
-      // Deselect all in this section
-      setCheckedItems((prev) => {
-        const next = new Set(prev);
-        sectionKeys.forEach((k) => next.delete(k));
-        return next;
-      });
-    } else {
-      // Select all in this section
-      setCheckedItems((prev) => {
-        const next = new Set(prev);
-        sectionKeys.forEach((k) => next.add(k));
-        return next;
-      });
-    }
-  }, [parsedDetailedGuidance.sections, checkedItems]);
+      // Shift+Click: select ONLY this section (deselect all others)
+      if (shiftKey) {
+        const allKeys: string[] = [];
+        parsedDetailedGuidance.sections.forEach((section) => {
+          section.entries.forEach((_, idx) => {
+            allKeys.push(`${section.id}:${idx}`);
+          });
+        });
+
+        // If all items in this section are already the only checked items, deselect everything
+        const onlyThisSectionSelected =
+          allKeys.length === sectionKeys.length
+            ? true
+            : allKeys.every((k) => !checkedItems.has(k) || sectionKeys.includes(k));
+
+        if (onlyThisSectionSelected && sectionKeys.every((k) => checkedItems.has(k))) {
+          setCheckedItems(new Set());
+        } else {
+          // Only select items from this section
+          setCheckedItems(new Set(sectionKeys));
+        }
+        return;
+      }
+
+      // Normal click: toggle this section
+      const allSectionChecked = sectionKeys.every((key) => checkedItems.has(key));
+      if (allSectionChecked) {
+        // Deselect all in this section
+        setCheckedItems((prev) => {
+          const next = new Set(prev);
+          sectionKeys.forEach((k) => next.delete(k));
+          return next;
+        });
+      } else {
+        // Select all in this section
+        setCheckedItems((prev) => {
+          const next = new Set(prev);
+          sectionKeys.forEach((k) => next.add(k));
+          return next;
+        });
+      }
+    },
+    [parsedDetailedGuidance.sections, checkedItems],
+  );
 
   // Set indeterminate state on section checkboxes after render
   useEffect(() => {
@@ -222,7 +231,7 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
       if (selectedCount === 0 && totalItems > 0) {
         const confirmed = await showThemedConfirm(
           `No items are selected. This will fix ALL ${totalItems} items from the review.\n\nContinue?`,
-          { title: 'Fix All Items', type: 'warning' }
+          { title: 'Fix All Items', type: 'warning' },
         );
         if (!confirmed) return;
       }
@@ -239,13 +248,16 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
     }
   }, [fixPrompt, collectSelectedItems, onFixFromReview, selectedCount, totalItems]);
 
-  const getSectionCheckedCount = useCallback((sectionId: string, entriesCount: number): number => {
-    let count = 0;
-    for (let i = 0; i < entriesCount; i++) {
-      if (checkedItems.has(`${sectionId}:${i}`)) count++;
-    }
-    return count;
-  }, [checkedItems]);
+  const getSectionCheckedCount = useCallback(
+    (sectionId: string, entriesCount: number): number => {
+      let count = 0;
+      for (let i = 0; i < entriesCount; i++) {
+        if (checkedItems.has(`${sectionId}:${i}`)) count++;
+      }
+      return count;
+    },
+    [checkedItems],
+  );
 
   return (
     <div className="chat-shell review-workspace-shell">
@@ -253,7 +265,9 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
         <div className="chat-container">
           {!review && !isReviewLoading && !reviewError ? (
             <div className="welcome-message">
-              <div className="welcome-icon"><ShieldCheck size={32} /></div>
+              <div className="welcome-icon">
+                <ShieldCheck size={32} />
+              </div>
               <div className="welcome-text">No review generated yet.</div>
               <div className="welcome-hint">Stage files, then run review from the git sidebar.</div>
             </div>
@@ -262,7 +276,9 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
           {isReviewLoading ? (
             <div className="processing-indicator">
               <div className="processing-content">
-                <div className="processing-spinner"><Loader2 size={14} /></div>
+                <div className="processing-spinner">
+                  <Loader2 size={14} />
+                </div>
                 <div className="processing-text">Running deep review…</div>
               </div>
             </div>
@@ -288,11 +304,7 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
               </MessageBubble>
 
               {review.warnings && review.warnings.length > 0 ? (
-                <MessageBubble
-                  type="assistant"
-                  ariaLabel="Review warnings"
-                  copyText={review.warnings.join('\n')}
-                >
+                <MessageBubble type="assistant" ariaLabel="Review warnings" copyText={review.warnings.join('\n')}>
                   <InlinePillRow
                     ariaLabel="Review warning metadata"
                     items={[{ id: 'warnings', label: 'Warnings', tone: 'warning' }]}
@@ -303,11 +315,7 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
               ) : null}
 
               {review.detailed_guidance ? (
-                <MessageBubble
-                  type="assistant"
-                  ariaLabel="Detailed guidance"
-                  copyText={detailedGuidanceMarkdown}
-                >
+                <MessageBubble type="assistant" ariaLabel="Detailed guidance" copyText={detailedGuidanceMarkdown}>
                   {parsedDetailedGuidance.sections.length > 0 ? (
                     <div className="review-guidance-groups">
                       {parsedDetailedGuidance.sections.map((section) => {
@@ -321,7 +329,9 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
                             <div className="review-guidance-header">
                               <label className="review-guidance-section-checkbox-label">
                                 <input
-                                  ref={(el) => { sectionCheckboxRefs.current[section.id] = el; }}
+                                  ref={(el) => {
+                                    sectionCheckboxRefs.current[section.id] = el;
+                                  }}
                                   type="checkbox"
                                   checked={allChecked}
                                   onChange={() => handleSectionToggle(section.id, section.entries.length, false)}
@@ -332,7 +342,11 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
                                     }
                                   }}
                                   disabled={isReviewFixing || section.entries.length === 0}
-                                  title={section.entries.length === 0 ? 'No items in this section' : `Select/deselect all ${section.entries.length} items in ${section.title}${allChecked ? ' (Shift+Click to select only this section)' : ''}`}
+                                  title={
+                                    section.entries.length === 0
+                                      ? 'No items in this section'
+                                      : `Select/deselect all ${section.entries.length} items in ${section.title}${allChecked ? ' (Shift+Click to select only this section)' : ''}`
+                                  }
                                 />
                               </label>
                               <h4>{section.title}</h4>
@@ -380,7 +394,12 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
                                         </div>
                                       ) : null}
                                       {Object.entries(entry)
-                                        .filter(([key, value]) => !['issue', 'file', 'evidence', 'suggestion'].includes(key) && typeof value === 'string' && value.trim())
+                                        .filter(
+                                          ([key, value]) =>
+                                            !['issue', 'file', 'evidence', 'suggestion'].includes(key) &&
+                                            typeof value === 'string' &&
+                                            value.trim(),
+                                        )
                                         .map(([key, value]) => (
                                           <div key={key} className="review-guidance-row">
                                             <span className="review-guidance-label">
@@ -407,26 +426,20 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
               ) : null}
 
               {review.suggested_new_prompt ? (
-                <MessageBubble
-                  type="assistant"
-                  ariaLabel="Suggested prompt"
-                  copyText={review.suggested_new_prompt}
-                >
+                <MessageBubble type="assistant" ariaLabel="Suggested prompt" copyText={review.suggested_new_prompt}>
                   <MessageSegments content={review.suggested_new_prompt} />
                 </MessageBubble>
               ) : null}
 
               {reviewFixLogs.length > 0 ? (
-                <MessageBubble
-                  type="assistant"
-                  ariaLabel="Review fix logs"
-                  copyText={reviewFixLogs.join('\n')}
-                >
+                <MessageBubble type="assistant" ariaLabel="Review fix logs" copyText={reviewFixLogs.join('\n')}>
                   <InlinePillRow
                     ariaLabel="Fix workflow metadata"
                     items={[
                       { id: 'fix-session', label: 'Fix session' },
-                      ...(reviewFixSessionID ? [{ id: 'fix-session-id', label: reviewFixSessionID, mono: true as const }] : []),
+                      ...(reviewFixSessionID
+                        ? [{ id: 'fix-session-id', label: reviewFixSessionID, mono: true as const }]
+                        : []),
                     ]}
                     className="review-pill-row"
                   />
@@ -458,11 +471,7 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
               ) : null}
 
               {reviewFixResult ? (
-                <MessageBubble
-                  type="assistant"
-                  ariaLabel="Review fix result"
-                  copyText={reviewFixResult}
-                >
+                <MessageBubble type="assistant" ariaLabel="Review fix result" copyText={reviewFixResult}>
                   <details className="reasoning-block review-disclosure" open>
                     <summary className="reasoning-summary review-details-summary">
                       <span>Fix result</span>
@@ -488,7 +497,11 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
           >
             <span>{fixPromptExpanded ? '▼' : '▶'}</span>
             <span>Add fix instructions (optional)</span>
-            {selectedCount > 0 && <span className="review-fix-prompt-hint">{selectedCount} item{selectedCount !== 1 ? 's' : ''} selected</span>}
+            {selectedCount > 0 && (
+              <span className="review-fix-prompt-hint">
+                {selectedCount} item{selectedCount !== 1 ? 's' : ''} selected
+              </span>
+            )}
           </button>
           {fixPromptExpanded && (
             <>
@@ -513,7 +526,11 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
             className="review-fix-btn review-fix-select-all-btn"
             onClick={handleSelectAll}
             disabled={isReviewFixing || isReviewLoading}
-            title={selectedCount === totalItems ? 'Deselect all items' : 'Select all items (Shift+Click a section to select only that section)'}
+            title={
+              selectedCount === totalItems
+                ? 'Deselect all items'
+                : 'Select all items (Shift+Click a section to select only that section)'
+            }
           >
             {selectedCount === totalItems ? 'Deselect All' : 'Select All'}
           </button>
@@ -529,14 +546,19 @@ const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
           disabled={!review?.review_output || isReviewFixing || isReviewLoading}
         >
           <Wrench size={14} />
-          {isReviewFixing ? 'Applying fixes…' : (selectedCount > 0 ? `Fix ${selectedCount} Item${selectedCount > 1 ? 's' : ''}` : 'Fix From Review')}
+          {isReviewFixing
+            ? 'Applying fixes…'
+            : selectedCount > 0
+              ? `Fix ${selectedCount} Item${selectedCount > 1 ? 's' : ''}`
+              : 'Fix From Review'}
         </button>
       </div>
     </div>
   );
 };
 
-const HTMLISH_LINE_PATTERN = /^(<!DOCTYPE|<\/?(html|head|body|div|span|title|meta|link|script|header|section|p|ul|li)\b|<!--|\*\/|\/\*|<\w+)/i;
+const HTMLISH_LINE_PATTERN =
+  /^(<!DOCTYPE|<\/?(html|head|body|div|span|title|meta|link|script|header|section|p|ul|li)\b|<!--|\*\/|\/\*|<\w+)/i;
 
 const compactReviewFixLogs = (logs: string[]): string[] => {
   const compacted: string[] = [];
@@ -550,7 +572,9 @@ const compactReviewFixLogs = (logs: string[]): string[] => {
   };
 
   logs.forEach((raw) => {
-    const cleaned = stripAnsiCodes(String(raw || '')).replace(/\s+/g, ' ').trim();
+    const cleaned = stripAnsiCodes(String(raw || ''))
+      .replace(/\s+/g, ' ')
+      .trim();
     if (!cleaned) {
       return;
     }

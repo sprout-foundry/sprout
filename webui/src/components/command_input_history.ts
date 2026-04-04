@@ -1,4 +1,4 @@
-import { ApiService } from '../services/api';
+import { type ApiService } from '../services/api';
 
 const MAX_COMMAND_HISTORY = 100;
 const STORAGE_KEY = 'ledit:chat-history';
@@ -33,14 +33,18 @@ export function persistCommandHistory(commands: string[]): void {
 }
 
 // Kept for compatibility but no longer used for the primary save path
-export async function saveCommandHistory(_apiService: ApiService, commands: string[], command: string): Promise<CommandHistoryState> {
+export async function saveCommandHistory(
+  _apiService: ApiService,
+  commands: string[],
+  command: string,
+): Promise<CommandHistoryState> {
   const trimmedCommand = command.trim();
   const nextCommands = dedupeCommands([...commands, trimmedCommand]);
   persistCommandHistory(nextCommands);
   return {
     commands: nextCommands,
     index: -1,
-    tempInput: ''
+    tempInput: '',
   };
 }
 

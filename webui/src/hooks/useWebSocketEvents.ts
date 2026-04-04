@@ -673,6 +673,11 @@ export default function useWebSocketEvents({
       case 'security_approval_request':
         logEntry.category = 'system';
         logEntry.level = 'warning';
+        // Skip status echo events that would briefly re-show the dialog
+        if (eventData?.status === 'responded') {
+          debugLog('[security] Approval response acknowledged:', eventData?.request_id);
+          break;
+        }
         setState((prev) => ({
           ...prev,
           securityApprovalRequest: {
@@ -692,6 +697,16 @@ export default function useWebSocketEvents({
       case 'security_prompt_request':
         logEntry.category = 'system';
         logEntry.level = 'warning';
+        // Skip status echo events (e.g., {"status": "responded"}) that would
+        // briefly re-show the dialog with empty data after the user responds.
+        if (eventData?.status === 'responded') {
+          debugLog('[security] Prompt response acknowledged:', eventData?.request_id);
+          break;
+        }
+        // Only show dialog when there's an actual prompt (not a status echo)
+        if (!eventData?.prompt) {
+          break;
+        }
         setState((prev) => ({
           ...prev,
           securityPromptRequest: {

@@ -120,6 +120,56 @@ export function useBufferMutations(
     });
   }, [setBuffers]);
 
+  const setBufferExternallyModified = useCallback((bufferId: string, diskContent: string, mtime?: number) => {
+    setBuffers(prev => {
+      const next = new Map(prev);
+      const buffer = next.get(bufferId);
+      if (buffer) {
+        next.set(bufferId, {
+          ...buffer,
+          externallyModified: true,
+          diskContent,
+          file: { ...buffer.file, modified: mtime ?? Math.floor(Date.now() / 1000) },
+        });
+      }
+      return next;
+    });
+  }, [setBuffers]);
+
+  const clearBufferExternallyModified = useCallback((bufferId: string) => {
+    setBuffers(prev => {
+      const next = new Map(prev);
+      const buffer = next.get(bufferId);
+      if (buffer) {
+        next.set(bufferId, {
+          ...buffer,
+          externallyModified: false,
+          diskContent: null,
+        });
+      }
+      return next;
+    });
+  }, [setBuffers]);
+
+  const reloadBufferFromDisk = useCallback((bufferId: string, diskContent: string, mtime?: number) => {
+    setBuffers(prev => {
+      const next = new Map(prev);
+      const buffer = next.get(bufferId);
+      if (buffer) {
+        next.set(bufferId, {
+          ...buffer,
+          content: diskContent,
+          originalContent: diskContent,
+          isModified: false,
+          externallyModified: false,
+          diskContent: null,
+          file: { ...buffer.file, modified: mtime ?? Math.floor(Date.now() / 1000) },
+        });
+      }
+      return next;
+    });
+  }, [setBuffers]);
+
   return {
     updateBufferContent,
     updateBufferCursor,
@@ -130,5 +180,8 @@ export function useBufferMutations(
     setBufferOriginalContent,
     setBufferLanguageOverride,
     revertBufferToOriginal,
+    setBufferExternallyModified,
+    clearBufferExternallyModified,
+    reloadBufferFromDisk,
   };
 }

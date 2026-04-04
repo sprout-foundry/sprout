@@ -129,6 +129,21 @@
   font-weight: bold;
 }
 
+.tab-externally-modified {
+  display: inline-block;
+  font-size: 12px;
+  color: var(--accent-info, #6b9fff);
+  flex-shrink: 0;
+  margin-left: 2px;
+  font-weight: bold;
+  animation: pulse-info 2s ease-in-out infinite;
+}
+
+@keyframes pulse-info {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
 .tab-close {
   background: none;
   border: none;

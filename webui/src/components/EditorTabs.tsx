@@ -246,6 +246,7 @@ const EditorTabs: React.FC<EditorTabsProps> = ({ paneId, actions, compact = fals
                     </span>
                   )}
                   {buffer.isModified && <span className="tab-modified">●</span>}
+                  {buffer.externallyModified && <span className="tab-externally-modified" title="File changed on disk">↑</span>}
                   {buffer.isClosable !== false && (
                     <button
                       className="tab-close"

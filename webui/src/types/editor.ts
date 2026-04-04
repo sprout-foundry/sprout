@@ -26,6 +26,8 @@ export interface EditorBuffer {
   paneId?: string | null; // Which pane is displaying this buffer
   isPinned?: boolean;
   isClosable?: boolean;
+  externallyModified?: boolean;
+  diskContent?: string | null;
   metadata?: Record<string, any>;
   languageOverride?: string | null; // Language mode override (null = auto-detect by extension)
 }

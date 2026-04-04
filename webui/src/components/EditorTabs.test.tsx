@@ -1,6 +1,5 @@
 // @ts-nocheck
 
-import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { act } from 'react';
 import EditorTabs from './EditorTabs';
@@ -34,7 +33,14 @@ beforeAll(() => {
 const makeMockBuffer = (id: string, paneId: string, overrides: Partial<any> = {}) => ({
   id,
   kind: 'file',
-  file: { path: `src/${id}.tsx`, name: `${id}.tsx`, ext: '.tsx', isDir: false, size: 123, modified: 0 },
+  file: {
+    path: `src/${id}.tsx`,
+    name: `${id}.tsx`,
+    ext: '.tsx',
+    isDir: false,
+    size: 123,
+    modified: 0,
+  },
   content: 'line1',
   originalContent: 'line1',
   cursorPosition: { line: 0, column: 0 },
@@ -110,7 +116,7 @@ afterEach(() => {
   });
 });
 
-function renderEditorTabs(props: { paneId?: string; actions?: React.ReactNode; compact?: boolean } = {}) {
+function renderEditorTabs(props: { paneId?: string; actions?: ReactNode; compact?: boolean } = {}) {
   act(() => {
     root!.render(<EditorTabs paneId={props.paneId} actions={props.actions} compact={props.compact} />);
   });

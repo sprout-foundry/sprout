@@ -251,7 +251,10 @@ function useOnboarding(): UseOnboardingReturn {
     }
     const result = await desktopBridge.installGitForWindows();
     const msg = result?.message != null ? String(result.message) : null;
-    setOnboarding((prev) => ({ ...prev, platformActionMessage: msg || 'Started Git for Windows setup.' }));
+    setOnboarding((prev) => ({
+      ...prev,
+      platformActionMessage: msg || 'Started Git for Windows setup.',
+    }));
   }, []);
 
   return {

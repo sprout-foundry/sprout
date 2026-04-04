@@ -1,4 +1,4 @@
-import React from 'react';
+import type { FC } from 'react';
 import './Status.css';
 
 interface StatusProps {
@@ -28,7 +28,7 @@ interface StatusProps {
   };
 }
 
-const Status: React.FC<StatusProps> = ({ isConnected, position = 'top', stats }) => {
+const Status: FC<StatusProps> = ({ isConnected, position = 'top', stats }) => {
   const formatTokens = (tokens: number): string => {
     if (tokens >= 1000000) {
       return `${(tokens / 1000000).toFixed(1)}M`;

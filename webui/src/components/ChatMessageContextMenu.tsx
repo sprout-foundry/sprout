@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef, type RefObject } from 'react';
+import { useState, useEffect, useCallback, useRef, type RefObject } from 'react';
+import type { FC } from 'react';
 import { Copy, ArrowDownToLine } from 'lucide-react';
 import { copyToClipboard } from '../utils/clipboard';
 import ContextMenu from './ContextMenu';
@@ -21,7 +22,7 @@ interface ChatMessageContextMenuProps {
  * Listens for `contextmenu` events on the given container ref and shows
  * a menu with Copy / Copy Code Block / Insert at Cursor actions.
  */
-const ChatMessageContextMenu: React.FC<ChatMessageContextMenuProps> = ({ containerRef, onInsertAtCursor }) => {
+const ChatMessageContextMenu: FC<ChatMessageContextMenuProps> = ({ containerRef, onInsertAtCursor }) => {
   const timersRef = useRef<number[]>([]);
 
   // Clean up all pending timers

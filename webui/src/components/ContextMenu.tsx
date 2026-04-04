@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useLayoutEffect } from 'react';
+import { useEffect, useRef, useLayoutEffect } from 'react';
+import type { FC, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import './ContextMenu.css';
 
@@ -7,7 +8,7 @@ interface ContextMenuProps {
   x: number;
   y: number;
   onClose: () => void;
-  children: React.ReactNode;
+  children: ReactNode;
   className?: string;
   zIndex?: number;
 }
@@ -22,7 +23,7 @@ interface ContextMenuProps {
  * Consumers compose their own items using `.context-menu-item` (buttons)
  * and `.context-menu-divider` elements.
  */
-const ContextMenu: React.FC<ContextMenuProps> = ({ isOpen, x, y, onClose, children, className, zIndex = 1400 }) => {
+const ContextMenu: FC<ContextMenuProps> = ({ isOpen, x, y, onClose, children, className, zIndex = 1400 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
   const attachedRef = useRef(false);
 

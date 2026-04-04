@@ -1,4 +1,5 @@
-import React from 'react';
+import { useCallback, useEffect } from 'react';
+import type { FC, KeyboardEvent, ReactElement } from 'react';
 import ReactDOM from 'react-dom/client';
 import './ThemedDialog.css';
 
@@ -15,9 +16,9 @@ interface FileChangeDialogProps {
 
 /* ── Internal dialog component ───────────────────────────────── */
 
-const FileChangeDialog: React.FC<FileChangeDialogProps> = ({ fileName, deleted, hasUnsavedChanges, onResolve }) => {
-  const handleKeyDown = React.useCallback(
-    (e: React.KeyboardEvent) => {
+const FileChangeDialog: FC<FileChangeDialogProps> = ({ fileName, deleted, hasUnsavedChanges, onResolve }) => {
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
         if (deleted) {
@@ -33,7 +34,7 @@ const FileChangeDialog: React.FC<FileChangeDialogProps> = ({ fileName, deleted, 
     [onResolve, deleted, hasUnsavedChanges],
   );
 
-  React.useEffect(() => {
+  useEffect(() => {
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = '';
@@ -162,7 +163,7 @@ const FileChangeDialog: React.FC<FileChangeDialogProps> = ({ fileName, deleted, 
 
 /* ── Portal helper (same pattern as ThemedDialog) ────────────── */
 
-function mountToBody(element: React.ReactElement): () => void {
+function mountToBody(element: ReactElement): () => void {
   const container = document.createElement('div');
   container.setAttribute('data-file-change-dialog-portal', '');
   document.body.appendChild(container);

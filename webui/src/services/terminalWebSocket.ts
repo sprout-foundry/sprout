@@ -188,7 +188,10 @@ class TerminalWebSocketService {
       // On unexpected disconnect, keep it so we can reattach.
       if (!this.intentionalClose) {
         // Keep sessionId for reattach - don't null it
-        this.notifyCallbacks({ type: 'connection_status', data: { connected: false, reattach: this.sessionId } });
+        this.notifyCallbacks({
+          type: 'connection_status',
+          data: { connected: false, reattach: this.sessionId },
+        });
       } else {
         this.sessionId = null;
         this.notifyCallbacks({ type: 'connection_status', data: { connected: false } });

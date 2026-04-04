@@ -530,7 +530,11 @@ export class ThemeImporter {
    * Parses a fontStyle string ("italic", "bold", "bold italic", "underline")
    * into a CodeMirror style object subset.
    */
-  private parseFontStyle(fontStyle?: string): { fontStyle?: string; fontWeight?: string; textDecoration?: string } {
+  private parseFontStyle(fontStyle?: string): {
+    fontStyle?: string;
+    fontWeight?: string;
+    textDecoration?: string;
+  } {
     if (!fontStyle) return {};
     const result: Record<string, string> = {};
     const lower = fontStyle.toLowerCase();

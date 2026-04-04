@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import type { FC, KeyboardEvent } from 'react';
 import './Dropdown.css';
 
 export interface DropdownItem {
@@ -23,7 +24,7 @@ interface DropdownProps {
   isOpen: boolean;
 }
 
-const Dropdown: React.FC<DropdownProps> = ({ items, options, onSelect, onCancel, isOpen }) => {
+const Dropdown: FC<DropdownProps> = ({ items, options, onSelect, onCancel, isOpen }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [filteredItems, setFilteredItems] = useState(items);
@@ -54,7 +55,7 @@ const Dropdown: React.FC<DropdownProps> = ({ items, options, onSelect, onCancel,
     }
   }, [isOpen]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: KeyboardEvent) => {
     switch (e.key) {
       case 'Escape':
         e.preventDefault();

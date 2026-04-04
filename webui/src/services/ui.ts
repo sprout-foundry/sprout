@@ -169,7 +169,11 @@ class UIService {
     return new Promise<string>((resolve, reject) => {
       const id = `input-${Date.now()}-${Math.random()}`;
 
-      this.pendingPrompts.set(id, { resolve: resolve as (value: unknown) => void, reject, type: 'input' });
+      this.pendingPrompts.set(id, {
+        resolve: resolve as (value: unknown) => void,
+        reject,
+        type: 'input',
+      });
 
       const request: UIPromptRequest = {
         id,

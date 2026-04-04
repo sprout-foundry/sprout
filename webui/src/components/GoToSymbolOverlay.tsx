@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import type { FC, KeyboardEvent, MouseEvent } from 'react';
 import { fuzzyFilter, highlightMatches } from '../utils/fuzzyMatch';
 import type { FuzzyResult } from '../utils/fuzzyMatch';
 import './GoToSymbolOverlay.css';
@@ -375,7 +376,7 @@ const GENERIC_PATTERNS: PatternEntry[] = [
 
 // ── Component ────────────────────────────────────────────────────────────
 
-const GoToSymbolOverlay: React.FC<GoToSymbolOverlayProps> = ({
+const GoToSymbolOverlay: FC<GoToSymbolOverlayProps> = ({
   visible,
   content,
   fileExtension,
@@ -445,7 +446,7 @@ const GoToSymbolOverlay: React.FC<GoToSymbolOverlayProps> = ({
   // ── Handle keyboard navigation ────────────────────────────────────────
 
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
+    (e: KeyboardEvent) => {
       e.stopPropagation();
 
       switch (e.key) {
@@ -497,7 +498,7 @@ const GoToSymbolOverlay: React.FC<GoToSymbolOverlayProps> = ({
 
   // ── Stop mousedown from stealing focus ────────────────────────────────
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+  const handleMouseDown = useCallback((e: MouseEvent) => {
     // Don't let the dropdown steal focus from the input
     e.preventDefault();
   }, []);

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { clientFetch } from '../services/clientSession';
+import { clearLayoutSnapshot } from '../services/layoutPersistence';
 import { fuzzyFilter, highlightMatches } from '../utils/fuzzyMatch';
 import type { FuzzyResult } from '../utils/fuzzyMatch';
 import './CommandPalette.css';
@@ -50,6 +51,7 @@ const COMMAND_DEFINITIONS: CommandDef[] = [
   { id: 'editor_toggle_word_wrap', label: 'Toggle Word Wrap', category: 'View' },
   { id: 'toggle_minimap', label: 'Toggle Minimap', category: 'View' },
   { id: 'toggle_linked_scroll', label: 'Toggle Linked Scrolling', category: 'View' },
+  { id: 'reset_saved_layout', label: 'Reset Saved Layout', category: 'View' },
   // Navigation
   { id: 'focus_next_tab', label: 'Focus Next Tab', category: 'Navigation' },
   { id: 'focus_prev_tab', label: 'Focus Previous Tab', category: 'Navigation' },
@@ -370,6 +372,27 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
       case 'focus_prev_tab':
         window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'focus_prev_tab' } }));
         break;
+      case 'reset_saved_layout': {
+        if (!window.confirm('Reset all saved layout settings? This cannot be undone.')) break;
+        clearLayoutSnapshot();
+        const keys = [
+          'ledit.editor.paneLayout',
+          'ledit.editor.paneSizes',
+          'ledit-terminal-height',
+          'ledit-terminal-expanded',
+          'ledit-sidebar-collapsed',
+          'ledit-sidebar-width',
+          'ledit.contextPanel.width',
+          'ledit.contextPanel.collapsed',
+          'editor:minimap-enabled',
+          'filetree-show-ignored',
+        ];
+        for (const key of keys) {
+          try { window.localStorage.removeItem(key); } catch {}
+        }
+        window.location.reload();
+        return; // page is reloading — skip onClose()
+      }
       default:
         break;
     }

@@ -10,7 +10,7 @@ const WEBUI_WORKSPACE_PATH_STORAGE_KEY = 'ledit.workspaceTabPath';
  */
 export function getProxyBase(): string {
   if (typeof window === 'undefined') return '';
-  return (window as any).LEDIT_PROXY_BASE || '';
+  return (window as unknown as Record<string, string>).LEDIT_PROXY_BASE || '';
 }
 
 /**

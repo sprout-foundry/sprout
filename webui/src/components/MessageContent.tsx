@@ -12,7 +12,7 @@ const MessageContent: React.FC<MessageContentProps> = ({ content }) => (
   <ReactMarkdown
     remarkPlugins={[remarkGfm]}
     components={{
-      code({ className, children, ...props }: any) {
+      code({ className, children, ...props }: React.HTMLAttributes<HTMLElement> & { children?: React.ReactNode }) {
         const languageMatch = /language-(\w+)/.exec(className || '');
         const language = languageMatch ? languageMatch[1] : '';
         const codeText = flattenMarkdownText(children);
@@ -35,7 +35,7 @@ const MessageContent: React.FC<MessageContentProps> = ({ content }) => (
           </pre>
         );
       },
-      a({ href, children, ...props }: any) {
+      a({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) {
         return (
           <a href={href} target="_blank" rel="noreferrer" {...props}>
             {children}

@@ -28,7 +28,7 @@ export interface EditorBuffer {
   isClosable?: boolean;
   externallyModified?: boolean;
   diskContent?: string | null;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   languageOverride?: string | null; // Language mode override (null = auto-detect by extension)
 }
 

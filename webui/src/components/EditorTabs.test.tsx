@@ -473,7 +473,6 @@ describe('EditorTabs empty area context menu', () => {
       // The useEffect cleanup removes the menus. Since React hasn't re-rendered yet
       // in the same act(), we need to check that the state is cleared on next render.
       // Flush a tick to let React re-render:
-      act(() => {});
       const menusAfter = getContextMenuElements().length;
       expect(menusAfter).toBe(0);
     });
@@ -494,7 +493,6 @@ describe('EditorTabs empty area context menu', () => {
         window.dispatchEvent(new Event('blur'));
       });
 
-      act(() => {});
       const menusAfter = getContextMenuElements().length;
       expect(menusAfter).toBe(0);
     });

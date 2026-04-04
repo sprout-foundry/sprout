@@ -122,6 +122,7 @@ const flushPromises = async () => {
 async function renderPanel(props: Record<string, unknown>) {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const ContextPanel = require('./ContextPanel').default;
+  // eslint-disable-next-line testing-library/no-unnecessary-act
   await act(async () => {
     root.render(React.createElement(ContextPanel, props));
   });
@@ -334,6 +335,7 @@ describe('ContextPanel live duration – ticking during processing', () => {
     // Re-render with isProcessing: true
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const ContextPanel = require('./ContextPanel').default;
+    // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
       root.render(React.createElement(ContextPanel, makeChatProps({ messages, isProcessing: true })));
     });
@@ -362,6 +364,7 @@ describe('ContextPanel live duration – ticking during processing', () => {
     // Re-render with isProcessing: false
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const ContextPanel = require('./ContextPanel').default;
+    // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
       root.render(React.createElement(ContextPanel, makeChatProps({ messages, isProcessing: false })));
     });

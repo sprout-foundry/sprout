@@ -45,6 +45,7 @@ function renderOverlay(props: {
 
   let _component: GoToSymbolOverlay | null = null;
 
+  // eslint-disable-next-line testing-library/no-unnecessary-act
   act(() => {
     _component = ReactDOM.render(
       <GoToSymbolOverlay
@@ -61,8 +62,10 @@ function renderOverlay(props: {
   // React 18 createRoot returns a different API; ReactDOM.render returns
   // the component instance for class components or null for function
   // components. We just need the container.
+  const el = container;
   return {
     container,
+    el,
     unmount: () =>
       act(() => {
         ReactDOM.unmountComponentAtNode(container);
@@ -409,40 +412,40 @@ describe('extractSymbols', () => {
 
 describe('GoToSymbolOverlay component', () => {
   it('renders nothing when visible=false', () => {
-    const { container } = renderOverlay({ visible: false });
+    const view = renderOverlay({ visible: false });
     // The component returns null when !visible, so the container should be empty
-    expect(container.innerHTML).toBe('');
+    expect(view.container.innerHTML).toBe('');
   });
 
   it('renders the overlay when visible=true', () => {
-    const { container } = renderOverlay({ visible: true, content: '' });
-    expect(container.querySelector('.goto-symbol-overlay')).not.toBeNull();
-    expect(container.querySelector('.goto-symbol-input')).not.toBeNull();
+    const view = renderOverlay({ visible: true, content: '' });
+    expect(view.el.querySelector('.goto-symbol-overlay')).not.toBeNull();
+    expect(view.el.querySelector('.goto-symbol-input')).not.toBeNull();
   });
 
   it('shows symbols extracted from content', () => {
     const content = 'func Hello() {}\nfunc World() {}\n';
-    const { container } = renderOverlay({ visible: true, content, fileExtension: '.go' });
+    const view = renderOverlay({ visible: true, content, fileExtension: '.go' });
     // When no query, all symbols are shown with count heading
-    const countEl = container.querySelector('.goto-symbol-count');
+    const countEl = view.el.querySelector('.goto-symbol-count');
     expect(countEl).not.toBeNull();
     expect(countEl!.textContent).toContain('2 symbols');
     // Items should be visible
-    const items = container.querySelectorAll('.goto-symbol-item');
+    const items = view.el.querySelectorAll('.goto-symbol-item');
     expect(items.length).toBe(2);
   });
 
   it('shows "No symbols found" for empty content with no query', () => {
-    const { container } = renderOverlay({ visible: true, content: '' });
-    const emptyEl = container.querySelector('.goto-symbol-empty');
+    const view = renderOverlay({ visible: true, content: '' });
+    const emptyEl = view.el.querySelector('.goto-symbol-empty');
     expect(emptyEl).not.toBeNull();
     expect(emptyEl!.textContent).toBe('No symbols found');
   });
 
   it('shows symbol count text when no query entered', () => {
     const content = 'func Foo() {}\n';
-    const { container } = renderOverlay({ visible: true, content, fileExtension: '.go' });
-    const countEl = container.querySelector('.goto-symbol-count');
+    const view = renderOverlay({ visible: true, content, fileExtension: '.go' });
+    const countEl = view.el.querySelector('.goto-symbol-count');
     expect(countEl).not.toBeNull();
     expect(countEl!.textContent).toContain('1 symbol');
   });
@@ -450,7 +453,7 @@ describe('GoToSymbolOverlay component', () => {
   it('calls onSelectSymbol with correct line when item is clicked', () => {
     const onSelectSymbol = jest.fn();
     const content = 'func FirstFunc() {}\nfunc SecondFunc() {}\n';
-    const { container } = renderOverlay({
+    const view = renderOverlay({
       visible: true,
       content,
       fileExtension: '.go',
@@ -458,7 +461,7 @@ describe('GoToSymbolOverlay component', () => {
     });
 
     // Click on the first item (FirstFunc on line 1)
-    const items = container.querySelectorAll('.goto-symbol-item');
+    const items = view.el.querySelectorAll('.goto-symbol-item');
     act(() => {
       items[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
@@ -470,14 +473,14 @@ describe('GoToSymbolOverlay component', () => {
   it('calls onClose when Escape is pressed', () => {
     const onClose = jest.fn();
     const content = 'func Foo() {}\n';
-    const { container } = renderOverlay({
+    const view = renderOverlay({
       visible: true,
       content,
       fileExtension: '.go',
       onClose,
     });
 
-    const input = container.querySelector('.goto-symbol-input');
+    const input = view.el.querySelector('.goto-symbol-input');
     act(() => {
       const keyEvent = new KeyboardEvent('keydown', {
         key: 'Escape',
@@ -492,20 +495,20 @@ describe('GoToSymbolOverlay component', () => {
   it('keyboard navigation: ArrowDown, ArrowUp, Enter work', () => {
     const onSelectSymbol = jest.fn();
     const content = 'func Alpha() {}\nfunc Beta() {}\nfunc Gamma() {}\n';
-    const { container } = renderOverlay({
+    const view = renderOverlay({
       visible: true,
       content,
       fileExtension: '.go',
       onSelectSymbol,
     });
 
-    const input = container.querySelector('.goto-symbol-input');
+    const input = view.el.querySelector('.goto-symbol-input');
 
     // Initial selection is index 0. ArrowDown should move to index 1.
     act(() => {
       input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
     });
-    let activeItems = container.querySelectorAll('.goto-symbol-item-active');
+    let activeItems = view.el.querySelectorAll('.goto-symbol-item-active');
     expect(activeItems.length).toBe(1);
     // The second item should now be active (Beta)
     expect(activeItems[0].textContent).toContain('Beta');
@@ -514,14 +517,14 @@ describe('GoToSymbolOverlay component', () => {
     act(() => {
       input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
     });
-    activeItems = container.querySelectorAll('.goto-symbol-item-active');
+    activeItems = view.el.querySelectorAll('.goto-symbol-item-active');
     expect(activeItems[0].textContent).toContain('Gamma');
 
     // ArrowUp → index 1 (Beta)
     act(() => {
       input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
     });
-    activeItems = container.querySelectorAll('.goto-symbol-item-active');
+    activeItems = view.el.querySelectorAll('.goto-symbol-item-active');
     expect(activeItems[0].textContent).toContain('Beta');
 
     // Enter should select Beta (line 2) and call onClose

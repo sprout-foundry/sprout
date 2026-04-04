@@ -83,6 +83,7 @@ interface RenderOptions {
 function renderSwitcher(opts: RenderOptions = {}) {
   const { currentLanguageId = null, isAutoDetected = true, onLanguageChange = jest.fn() } = opts;
 
+  // eslint-disable-next-line testing-library/no-unnecessary-act
   act(() => {
     root = createRoot(mountPoint!);
     root.render(

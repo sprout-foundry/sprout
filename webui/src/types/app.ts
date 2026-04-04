@@ -15,7 +15,7 @@ export interface ToolExecution {
   message?: string;
   startTime: Date;
   endTime?: Date;
-  details?: any;
+  details?: unknown;
   arguments?: string;
   result?: string;
   persona?: string;
@@ -35,7 +35,7 @@ export interface LogEntry {
   id: string;
   type: string;
   timestamp: Date;
-  data: any;
+  data: unknown;
   level: 'info' | 'warning' | 'error' | 'success';
   category: 'query' | 'tool' | 'file' | 'system' | 'stream';
 }
@@ -78,7 +78,7 @@ export interface PerChatState {
   fileEdits: FileEdit[];
   subagentActivities: SubagentActivity[];
   currentTodos: TodoItem[];
-  queryProgress: any;
+  queryProgress: unknown;
   lastError: string | null;
   isProcessing: boolean;
 }
@@ -95,8 +95,8 @@ export interface AppState {
   lastError: string | null;
   currentView: 'chat' | 'editor' | 'git';
   toolExecutions: ToolExecution[];
-  queryProgress: any;
-  stats: any; // Enhanced stats from API
+  queryProgress: unknown;
+  stats: Record<string, unknown>; // Enhanced stats from API
   currentTodos: TodoItem[];
   fileEdits: FileEdit[];
   subagentActivities: SubagentActivity[];

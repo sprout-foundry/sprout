@@ -1,7 +1,8 @@
 import { debugLog } from '../utils/log';
 import { appendClientIdToUrl, getWebUIClientId } from './clientSession';
+import type { WsEvent } from './websocket';
 
-type TerminalEventCallback = (event: any) => void;
+type TerminalEventCallback = (event: WsEvent) => void;
 
 class TerminalWebSocketService {
   private static instance: TerminalWebSocketService;
@@ -141,7 +142,7 @@ class TerminalWebSocketService {
     let wsUrl =
       process.env.REACT_APP_TERMINAL_WS_URL ||
       (() => {
-        const proxyBase = (window as any).LEDIT_PROXY_BASE || '';
+        const proxyBase = (window as unknown as Record<string, string>).LEDIT_PROXY_BASE || '';
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         return `${protocol}//${window.location.host}${proxyBase}/terminal`;
       })();
@@ -274,7 +275,7 @@ class TerminalWebSocketService {
     this.callbacks = this.callbacks.filter((cb) => cb !== callback);
   }
 
-  private notifyCallbacks(event: any) {
+  private notifyCallbacks(event: WsEvent) {
     this.callbacks.forEach((callback) => callback(event));
     if (this.eventHandler) {
       this.eventHandler(event);

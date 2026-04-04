@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react';
 import type { AppState } from '../types/app';
 import type { Message, ToolExecution, LogEntry, SubagentActivity } from '../types/app';
+import type { WsEvent } from '../services/websocket';
 import { getWebUIClientId } from '../services/clientSession';
 import { debugLog } from '../utils/log';
 import { ensureCompletedAssistantMessage } from '../utils/chatCompletion';
@@ -19,7 +20,7 @@ export interface UseWebSocketEventsOptions {
 }
 
 export interface UseWebSocketEventsReturn {
-  handleEvent: (event: any) => void;
+  handleEvent: (event: WsEvent) => void;
   activeChatIdRef: React.MutableRefObject<string | null>;
   activeRequestsRef: React.MutableRefObject<number>;
   /** Ref used by the main useEffect cleanup to clear a pending debounce timer */
@@ -44,7 +45,12 @@ export default function useWebSocketEvents({
   activeChatIdRef.current = state.activeChatId;
 
   // ── The monolithic WebSocket event handler ────────────────────────────
-  const handleEvent = useCallback((event: any) => {
+  const handleEvent = useCallback((event: WsEvent) => {
+    // Type eventData as a loosely-typed record so property lookups compile
+    // without `any`.  All consumers already use defensive access patterns
+    // (typeof / ternary / ??) anyway.
+    const eventData = (event.data ?? {}) as Record<string, unknown>;
+
     // Filter out ping events and webpack dev server events early to prevent console spam
     const filteredEvents = ['liveReload', 'reconnect', 'overlay', 'hash', 'ok', 'hot', 'ping'];
     if (filteredEvents.includes(event.type)) {
@@ -66,21 +72,21 @@ export default function useWebSocketEvents({
     ]);
     if (
       perChatEvents.has(event.type) &&
-      event.data?.chat_id &&
+      eventData?.chat_id &&
       activeChatIdRef.current &&
-      event.data.chat_id !== activeChatIdRef.current
+      eventData.chat_id !== activeChatIdRef.current
     ) {
       return; // event is for a different chat session
     }
 
-    debugLog('[msg] Received event:', event.type, event.data);
+    debugLog('[msg] Received event:', event.type, eventData);
 
     // Create log entry for all events
     const logEntry: LogEntry = {
       id: `${Date.now()}-${Math.random()}`,
       type: event.type,
       timestamp: new Date(),
-      data: event.data,
+      data: eventData,
       level: 'info',
       category: 'system',
     };
@@ -88,15 +94,15 @@ export default function useWebSocketEvents({
     // Determine log level and category based on event type
     switch (event.type) {
       case 'connection_status':
-        if (event.data?.client_id && event.data.client_id !== getWebUIClientId()) {
+        if (eventData?.client_id && eventData.client_id !== getWebUIClientId()) {
           break;
         }
         logEntry.category = 'system';
-        logEntry.level = event.data.connected ? 'success' : 'warning';
-        const incomingSessionId = typeof event.data?.session_id === 'string' ? event.data.session_id : null;
+        logEntry.level = eventData.connected ? 'success' : 'warning';
+        const incomingSessionId = typeof eventData?.session_id === 'string' ? eventData.session_id : null;
 
         // Debounce connection status updates to prevent rapid re-renders
-        const newConnectionState = event.data.connected;
+        const newConnectionState = eventData.connected === true;
 
         // Only update if state actually changed
         if (newConnectionState !== lastConnectionStateRef.current) {
@@ -125,7 +131,7 @@ export default function useWebSocketEvents({
       case 'query_started':
         logEntry.category = 'query';
         logEntry.level = 'info';
-        const startedQuery = event.data?.query || '';
+        const startedQuery = String(eventData?.query || '');
         setState((prev) => ({
           ...prev,
           isProcessing: true,
@@ -153,17 +159,17 @@ export default function useWebSocketEvents({
       case 'query_progress':
         setState((prev) => ({
           ...prev,
-          queryProgress: event.data,
+          queryProgress: eventData,
         }));
-        debugLog('[>>] Query progress:', event.data);
+        debugLog('[>>] Query progress:', eventData);
         break;
 
       case 'stream_chunk':
         logEntry.category = 'stream';
         logEntry.level = 'info';
 
-        const chunkContent = event.data.chunk || '';
-        const chunkType = event.data.content_type || 'assistant_text';
+        const chunkContent = String(eventData.chunk || '');
+        const chunkType = String(eventData.content_type || 'assistant_text');
 
         setState((prev) => {
           const newMessages = [...prev.messages];
@@ -208,10 +214,10 @@ export default function useWebSocketEvents({
         if (activeRequestsRef.current > 0) {
           activeRequestsRef.current -= 1;
         }
-        const completedQuery = String(event.data?.query || '')
+        const completedQuery = String(eventData?.query || '')
           .trim()
           .toLowerCase();
-        const completedResponse = event.data?.response;
+        const completedResponse = eventData?.response;
         const wasClearCommand = completedQuery === '/clear';
         if (wasClearCommand) {
           queuedMessagesRef.current = [];
@@ -275,18 +281,19 @@ export default function useWebSocketEvents({
         logEntry.category = 'tool';
         logEntry.level = 'info';
         setState((prev) => {
-          const toolCallID = String(event.data?.tool_call_id || '');
-          const toolName = String(event.data?.tool_name || 'unknown_tool');
-          const rawArgs = event.data?.arguments != null ? String(event.data.arguments) : undefined;
-          const displayName = String(event.data?.display_name || toolName);
-          const persona = typeof event.data?.persona === 'string' ? event.data.persona : undefined;
-          const isSubagent = !!event.data?.is_subagent;
+          const toolCallID = String(eventData?.tool_call_id || '');
+          const toolName = String(eventData?.tool_name || 'unknown_tool');
+          const rawArgs = eventData?.arguments != null ? String(eventData.arguments) : undefined;
+          const displayName = String(eventData?.display_name || toolName);
+          const persona = typeof eventData?.persona === 'string' ? eventData.persona : undefined;
+          const isSubagent = !!eventData?.is_subagent;
           const subagentType: ToolExecution['subagentType'] =
-            event.data?.subagent_type === 'parallel' ? 'parallel' : isSubagent ? 'single' : undefined;
+            eventData?.subagent_type === 'parallel' ? 'parallel' : isSubagent ? 'single' : undefined;
 
           // Check if we already have this tool from a legacy tool_execution event
           const existingIdx = prev.toolExecutions.findIndex((t) => {
-            const existingID = t.details?.tool_call_id || t.details?.id || t.id;
+            const d = t.details as Record<string, unknown> | undefined;
+            const existingID = d?.tool_call_id || d?.id || t.id;
             return toolCallID && existingID === toolCallID;
           });
 
@@ -300,7 +307,7 @@ export default function useWebSocketEvents({
               startTime: updated[existingIdx].startTime, // keep existing start time
               message: displayName,
               arguments: updated[existingIdx].arguments || rawArgs,
-              details: event.data,
+              details: eventData,
               persona: updated[existingIdx].persona || persona,
               subagentType: updated[existingIdx].subagentType || subagentType,
             };
@@ -330,7 +337,7 @@ export default function useWebSocketEvents({
             status: 'started',
             message: displayName,
             startTime: new Date(),
-            details: event.data,
+            details: eventData,
             arguments: rawArgs,
             persona,
             subagentType,
@@ -359,25 +366,26 @@ export default function useWebSocketEvents({
             logs: [...prev.logs, logEntry],
           };
         });
-        debugLog('[tool] Tool start:', event.data?.tool_name);
+        debugLog('[tool] Tool start:', eventData?.tool_name);
         break;
 
       case 'tool_end':
         logEntry.category = 'tool';
-        logEntry.level = event.data?.status === 'failed' ? 'error' : 'info';
+        logEntry.level = eventData?.status === 'failed' ? 'error' : 'info';
         setState((prev) => {
-          const toolCallID = String(event.data?.tool_call_id || '');
-          const status: ToolExecution['status'] = event.data?.status === 'failed' ? 'error' : 'completed';
-          const result = event.data?.result != null ? String(event.data.result) : undefined;
-          const error = event.data?.error != null ? String(event.data.error) : undefined;
+          const toolCallID = String(eventData?.tool_call_id || '');
+          const status: ToolExecution['status'] = eventData?.status === 'failed' ? 'error' : 'completed';
+          const result = eventData?.result != null ? String(eventData.result) : undefined;
+          const error = eventData?.error != null ? String(eventData.error) : undefined;
 
           let matched = false;
           const updatedExecutions = prev.toolExecutions.map((t) => {
-            const existingID = t.details?.tool_call_id || t.id;
+            const d = t.details as Record<string, unknown> | undefined;
+            const existingID = d?.tool_call_id || t.id;
             const match = toolCallID && existingID === toolCallID;
             if (!match) {
               // Also try matching by tool name + no end time (for backward compat)
-              const nameMatch = !toolCallID && t.tool === event.data?.tool_name && !t.endTime;
+              const nameMatch = !toolCallID && t.tool === eventData?.tool_name && !t.endTime;
               if (!nameMatch) return t;
             }
             matched = true;
@@ -387,21 +395,21 @@ export default function useWebSocketEvents({
               status,
               endTime: new Date(),
               result: t.result || result || error,
-              details: event.data,
+              details: eventData,
               arguments: t.arguments, // preserve arguments from tool_start
             };
           });
 
           if (!matched) {
             const fallbackExecution: ToolExecution = {
-              id: toolCallID || `${event.data?.tool_name || 'tool'}-${Date.now()}`,
-              tool: String(event.data?.tool_name || 'unknown_tool'),
+              id: toolCallID || `${eventData?.tool_name || 'tool'}-${Date.now()}`,
+              tool: String(eventData?.tool_name || 'unknown_tool'),
               status,
-              message: String(event.data?.display_name || event.data?.tool_name || 'Tool'),
+              message: String(eventData?.display_name || eventData?.tool_name || 'Tool'),
               startTime: new Date(),
               endTime: new Date(),
-              details: event.data,
-              arguments: event.data?.arguments != null ? String(event.data.arguments) : undefined,
+              details: eventData,
+              arguments: eventData?.arguments != null ? String(eventData.arguments) : undefined,
               result: result || error,
             };
             return {
@@ -413,7 +421,7 @@ export default function useWebSocketEvents({
 
           return { ...prev, toolExecutions: updatedExecutions, logs: [...prev.logs, logEntry] };
         });
-        debugLog('[tool] Tool end:', event.data?.tool_name, event.data?.status);
+        debugLog('[tool] Tool end:', eventData?.tool_name, eventData?.status);
         break;
 
       case 'subagent_activity':
@@ -422,18 +430,18 @@ export default function useWebSocketEvents({
         setState((prev) => {
           const activity: SubagentActivity = {
             id: String(event.id || `${Date.now()}-${Math.random()}`),
-            toolCallId: String(event.data?.tool_call_id || ''),
-            toolName: String(event.data?.tool_name || 'run_subagent'),
-            phase: event.data?.phase === 'spawn' || event.data?.phase === 'complete' ? event.data.phase : 'output',
-            message: String(event.data?.message || '').trim(),
+            toolCallId: String(eventData?.tool_call_id || ''),
+            toolName: String(eventData?.tool_name || 'run_subagent'),
+            phase: eventData?.phase === 'spawn' || eventData?.phase === 'complete' ? eventData.phase : 'output',
+            message: String(eventData?.message || '').trim(),
             timestamp: new Date(),
-            taskId: typeof event.data?.task_id === 'string' ? event.data.task_id : undefined,
-            persona: typeof event.data?.persona === 'string' ? event.data.persona : undefined,
-            isParallel: event.data?.is_parallel === true,
-            provider: typeof event.data?.provider === 'string' ? event.data.provider : undefined,
-            model: typeof event.data?.model === 'string' ? event.data.model : undefined,
-            taskCount: typeof event.data?.task_count === 'number' ? event.data.task_count : undefined,
-            failures: typeof event.data?.failures === 'number' ? event.data.failures : undefined,
+            taskId: typeof eventData?.task_id === 'string' ? eventData.task_id : undefined,
+            persona: typeof eventData?.persona === 'string' ? eventData.persona : undefined,
+            isParallel: eventData?.is_parallel === true,
+            provider: typeof eventData?.provider === 'string' ? eventData.provider : undefined,
+            model: typeof eventData?.model === 'string' ? eventData.model : undefined,
+            taskCount: typeof eventData?.task_count === 'number' ? eventData.task_count : undefined,
+            failures: typeof eventData?.failures === 'number' ? eventData.failures : undefined,
           };
 
           if (!activity.message) {
@@ -450,8 +458,8 @@ export default function useWebSocketEvents({
 
       case 'agent_message': {
         // Handle agent system messages from the backend
-        let category = String(event.data?.category || 'info');
-        const message = String(event.data?.message || '');
+        let category = String(eventData?.category || 'info');
+        const message = String(eventData?.message || '');
 
         // Clean ANSI codes from the message
         const cleanedMsg = message
@@ -477,8 +485,8 @@ export default function useWebSocketEvents({
           logEntry.category = 'tool';
           logEntry.level = 'info';
 
-          const toolAction = String(event.data?.action || 'tool');
-          const toolTarget = String(event.data?.target || '');
+          const toolAction = String(eventData?.action || 'tool');
+          const toolTarget = String(eventData?.target || '');
           const parsedToolName = extractToolNameFromToolLogTarget(toolTarget);
 
           setState((prev) => {
@@ -546,7 +554,7 @@ export default function useWebSocketEvents({
       case 'todo_update':
         logEntry.category = 'tool';
         logEntry.level = 'info';
-        const normalizedTodos = normalizeTodoList(event.data?.todos);
+        const normalizedTodos = normalizeTodoList(eventData?.todos);
         setState((prev) => ({
           ...prev,
           currentTodos: normalizedTodos,
@@ -562,11 +570,11 @@ export default function useWebSocketEvents({
 
           // Track file edits
           const newFileEdit = {
-            path: event.data.path || event.data.file_path || 'Unknown',
-            action: event.data.action || event.data.operation || 'edited',
+            path: String(eventData.path || eventData.file_path || 'Unknown'),
+            action: String(eventData.action || eventData.operation || 'edited'),
             timestamp: new Date(),
-            linesAdded: event.data.lines_added,
-            linesDeleted: event.data.lines_deleted,
+            linesAdded: typeof eventData.lines_added === 'number' ? eventData.lines_added : undefined,
+            linesDeleted: typeof eventData.lines_deleted === 'number' ? eventData.lines_deleted : undefined,
           };
 
           // Add to file edits (keep last 50)
@@ -574,14 +582,14 @@ export default function useWebSocketEvents({
 
           return { ...prev, logs: newLogs, fileEdits: updatedFileEdits };
         });
-        debugLog('[edit] File changed:', event.data.path);
+        debugLog('[edit] File changed:', eventData.path);
         break;
 
       case 'file_content_changed':
         logEntry.category = 'file';
         logEntry.level = 'warning';
         {
-          const { file_path: fpath, mod_time, size } = event.data;
+          const { file_path: fpath, mod_time, size } = eventData;
           const detail = {
             path: fpath || '',
             mtime: typeof mod_time === 'number' ? mod_time : 0,
@@ -591,7 +599,7 @@ export default function useWebSocketEvents({
           document.dispatchEvent(new CustomEvent('file_externally_modified', { detail }));
           setState((prev) => ({ ...prev, logs: [...prev.logs, logEntry] }));
         }
-        debugLog('[file] File content changed externally:', event.data?.file_path);
+        debugLog('[file] File content changed externally:', eventData?.file_path);
         break;
 
       case 'terminal_output':
@@ -602,7 +610,7 @@ export default function useWebSocketEvents({
           ...prev,
           logs: [...prev.logs, logEntry],
         }));
-        debugLog('[term] Terminal output received:', event.data);
+        debugLog('[term] Terminal output received:', eventData);
         break;
 
       case 'error':
@@ -611,7 +619,7 @@ export default function useWebSocketEvents({
         if (activeRequestsRef.current > 0) {
           activeRequestsRef.current -= 1;
         }
-        const errorMessage = event.data?.message || 'Unknown error';
+        const errorMessage = String(eventData?.message || 'Unknown error');
         setState((prev) => ({
           ...prev,
           isProcessing: activeRequestsRef.current > 0,
@@ -628,7 +636,7 @@ export default function useWebSocketEvents({
           ],
           logs: [...prev.logs, logEntry],
         }));
-        console.error('[FAIL] Error event:', event.data);
+        console.error('[FAIL] Error event:', eventData);
         break;
 
       case 'metrics_update':
@@ -636,11 +644,11 @@ export default function useWebSocketEvents({
         logEntry.level = 'info';
         setState((prev) => ({
           ...prev,
-          provider: event.data?.provider || prev.provider,
-          model: event.data?.model || prev.model,
+          provider: String(eventData?.provider || prev.provider),
+          model: String(eventData?.model || prev.model),
           stats: {
             ...prev.stats,
-            ...event.data,
+            ...eventData,
           },
           logs: [...prev.logs, logEntry],
         }));
@@ -649,8 +657,8 @@ export default function useWebSocketEvents({
       case 'workspace_changed':
         logEntry.category = 'system';
         logEntry.level = 'info';
-        debugLog('[workspace] Workspace changed:', event.data);
-        if (!event.data?.client_id || event.data.client_id === getWebUIClientId()) {
+        debugLog('[workspace] Workspace changed:', eventData);
+        if (!eventData?.client_id || eventData.client_id === getWebUIClientId()) {
           window.location.reload();
         }
         break;
@@ -662,7 +670,7 @@ export default function useWebSocketEvents({
           ...prev,
           logs: [...prev.logs, logEntry],
         }));
-        debugLog('[?] Unknown event type:', event.type, event.data);
+        debugLog('[?] Unknown event type:', event.type, eventData);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- intentionally empty: all external values are accessed via refs or closure-stable setState/setQueuedMessages
 

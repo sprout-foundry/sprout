@@ -222,7 +222,7 @@ class ApiService {
     return ApiService.instance;
   }
 
-  private parseWorkspacePayload(text: string): any {
+  private parseWorkspacePayload(text: string): Record<string, unknown> {
     const trimmed = text.trim();
     if (!trimmed) {
       return {};
@@ -258,7 +258,7 @@ class ApiService {
     const data = this.parseWorkspacePayload(text);
 
     if (!response.ok) {
-      throw new Error(data.error || data.message || 'Failed to fetch workspace');
+      throw new Error(String(data.error || data.message || 'Failed to fetch workspace'));
     }
 
     if (this.isHTMLResponseBody(text)) {
@@ -266,7 +266,7 @@ class ApiService {
     }
 
     if (data && typeof data === 'object' && 'workspace_root' in data && 'daemon_root' in data) {
-      return data as WorkspaceResponse;
+      return data as unknown as WorkspaceResponse;
     }
 
     throw new Error('Workspace API returned malformed response');
@@ -285,7 +285,7 @@ class ApiService {
     const data = this.parseWorkspacePayload(text);
 
     if (!response.ok) {
-      throw new Error(data.error || data.message || 'Failed to update workspace');
+      throw new Error(String(data.error || data.message || 'Failed to update workspace'));
     }
 
     if (this.isHTMLResponseBody(text)) {
@@ -293,7 +293,7 @@ class ApiService {
     }
 
     if (data && typeof data === 'object' && 'workspace_root' in data && 'daemon_root' in data) {
-      return data as WorkspaceResponse & { message: string };
+      return data as unknown as WorkspaceResponse & { message: string };
     }
 
     // Some remote/proxy setups respond to workspace set with a non-JSON success body.
@@ -301,7 +301,7 @@ class ApiService {
     const workspace = await this.getWorkspace();
     return {
       ...workspace,
-      message: data.message || 'Workspace updated',
+      message: String(data.message || 'Workspace updated'),
     };
   }
 
@@ -465,7 +465,7 @@ class ApiService {
     }
 
     const text = await response.text();
-    let data: any = {};
+    let data: Record<string, unknown> = {};
     if (text) {
       try {
         data = JSON.parse(text);
@@ -476,14 +476,14 @@ class ApiService {
 
     if (!response.ok) {
       throw new SSHWorkspaceOpenError({
-        error: data.error || data.message || 'Failed to open SSH workspace',
-        step: data.step,
-        details: data.details,
-        log_path: data.log_path,
+        error: String(data.error || data.message || 'Failed to open SSH workspace'),
+        step: data.step as string | undefined,
+        details: data.details as string | undefined,
+        log_path: data.log_path as string | undefined,
       });
     }
 
-    return data;
+    return data as unknown as SSHOpenResponse;
   }
 
   async getSSHLaunchStatus(hostAlias: string, remoteWorkspacePath?: string): Promise<SSHLaunchStatus> {
@@ -526,7 +526,7 @@ class ApiService {
     });
 
     const text = await response.text();
-    let data: any = {};
+    let data: Record<string, unknown> = {};
     if (text) {
       try {
         data = JSON.parse(text);
@@ -536,7 +536,7 @@ class ApiService {
     }
 
     if (!response.ok) {
-      throw new Error(data.error || data.message || 'Failed to browse SSH directory');
+      throw new Error(String(data.error || data.message || 'Failed to browse SSH directory'));
     }
 
     return {
@@ -555,7 +555,7 @@ class ApiService {
       body: JSON.stringify({ key }),
     });
     const text = await response.text();
-    let data: any = {};
+    let data: Record<string, unknown> = {};
     if (text) {
       try {
         data = JSON.parse(text);
@@ -564,9 +564,9 @@ class ApiService {
       }
     }
     if (!response.ok) {
-      throw new Error(data.error || data.message || 'Failed to close SSH session');
+      throw new Error(String(data.error || data.message || 'Failed to close SSH session'));
     }
-    return data;
+    return data as unknown as { message: string; key: string };
   }
 
   async selectInstance(pid: number): Promise<{ message: string; pid: number }> {
@@ -1261,7 +1261,7 @@ class ApiService {
     }
   }
 
-  async updateSettings(settings: Record<string, any>): Promise<{ message: string }> {
+  async updateSettings(settings: Record<string, unknown>): Promise<{ message: string }> {
     try {
       const response = await clientFetch('/api/settings', {
         method: 'PUT',
@@ -1276,7 +1276,7 @@ class ApiService {
     }
   }
 
-  async getMCPSettings(): Promise<any> {
+  async getMCPSettings(): Promise<Record<string, unknown>> {
     try {
       const response = await clientFetch('/api/settings/mcp');
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -1287,7 +1287,7 @@ class ApiService {
     }
   }
 
-  async updateMCPSettings(settings: any): Promise<{ message: string }> {
+  async updateMCPSettings(settings: Record<string, unknown>): Promise<{ message: string }> {
     try {
       const response = await clientFetch('/api/settings/mcp', {
         method: 'PUT',
@@ -1302,7 +1302,7 @@ class ApiService {
     }
   }
 
-  async addMCPServer(server: any): Promise<{ message: string }> {
+  async addMCPServer(server: Record<string, unknown>): Promise<{ message: string }> {
     try {
       const response = await clientFetch('/api/settings/mcp/servers/', {
         method: 'POST',
@@ -1317,7 +1317,7 @@ class ApiService {
     }
   }
 
-  async updateMCPServer(name: string, server: any): Promise<{ message: string }> {
+  async updateMCPServer(name: string, server: Record<string, unknown>): Promise<{ message: string }> {
     try {
       const response = await clientFetch(`/api/settings/mcp/servers/${encodeURIComponent(name)}`, {
         method: 'PUT',
@@ -1345,7 +1345,7 @@ class ApiService {
     }
   }
 
-  async getCustomProviders(): Promise<any> {
+  async getCustomProviders(): Promise<Record<string, unknown>> {
     try {
       const response = await clientFetch('/api/settings/providers');
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -1356,7 +1356,7 @@ class ApiService {
     }
   }
 
-  async addCustomProvider(provider: any): Promise<{ message: string }> {
+  async addCustomProvider(provider: Record<string, unknown>): Promise<{ message: string }> {
     try {
       const response = await clientFetch('/api/settings/providers', {
         method: 'POST',
@@ -1371,7 +1371,7 @@ class ApiService {
     }
   }
 
-  async updateCustomProvider(name: string, provider: any): Promise<{ message: string }> {
+  async updateCustomProvider(name: string, provider: Record<string, unknown>): Promise<{ message: string }> {
     try {
       const response = await clientFetch(`/api/settings/providers/${encodeURIComponent(name)}`, {
         method: 'PUT',
@@ -1399,7 +1399,7 @@ class ApiService {
     }
   }
 
-  async getSkills(): Promise<any> {
+  async getSkills(): Promise<Record<string, unknown>> {
     try {
       const response = await clientFetch('/api/settings/skills');
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -1410,7 +1410,7 @@ class ApiService {
     }
   }
 
-  async updateSkills(skills: any): Promise<{ message: string }> {
+  async updateSkills(skills: Record<string, unknown>): Promise<{ message: string }> {
     try {
       const response = await clientFetch('/api/settings/skills', {
         method: 'PUT',
@@ -1460,7 +1460,7 @@ class ApiService {
   async updateSubagentType(
     name: string,
     updates: { provider?: string; model?: string },
-  ): Promise<{ success: boolean; type: any }> {
+  ): Promise<{ success: boolean; type: Record<string, unknown> }> {
     try {
       const response = await clientFetch(`/api/settings/subagent-types/${encodeURIComponent(name)}/`, {
         method: 'PUT',
@@ -1701,10 +1701,10 @@ export interface LeditSettings {
     auto_start: boolean;
     auto_discover: boolean;
     timeout: string;
-    servers: Record<string, any>;
+    servers: Record<string, Record<string, unknown>>;
   };
-  custom_providers: Record<string, any>;
-  skills: Record<string, any>;
+  custom_providers: Record<string, Record<string, unknown>>;
+  skills: Record<string, Record<string, unknown>>;
 }
 
 // ── Hotkeys interfaces ─────────────────────────────────────────────

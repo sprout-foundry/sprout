@@ -56,9 +56,18 @@ interface FileEditsPanelProps {
 
 const MAX_RECENT_FILE_ROWS = 12;
 
-const normalizeRevision = (raw: any): Revision => {
-  const files = Array.isArray(raw?.files)
-    ? raw.files.map((file: any) => ({
+const normalizeRevision = (raw: unknown): Revision => {
+  const r = raw as Record<string, unknown> | null | undefined;
+  if (!r) {
+    return {
+      revision_id: 'unknown',
+      timestamp: new Date().toISOString(),
+      files: [],
+      description: '',
+    };
+  }
+  const files = Array.isArray(r.files)
+    ? (r.files as Array<Record<string, unknown>>).map((file: Record<string, unknown>) => ({
         path: typeof file?.path === 'string' ? file.path : 'Unknown',
         operation: typeof file?.operation === 'string' ? file.operation : 'edited',
         lines_added: Number(file?.lines_added || 0),
@@ -67,10 +76,10 @@ const normalizeRevision = (raw: any): Revision => {
     : [];
 
   return {
-    revision_id: typeof raw?.revision_id === 'string' ? raw.revision_id : 'unknown',
-    timestamp: typeof raw?.timestamp === 'string' ? raw.timestamp : new Date().toISOString(),
+    revision_id: typeof r.revision_id === 'string' ? r.revision_id : 'unknown',
+    timestamp: typeof r.timestamp === 'string' ? r.timestamp : new Date().toISOString(),
     files,
-    description: typeof raw?.description === 'string' ? raw.description : '',
+    description: typeof r.description === 'string' ? r.description : '',
   };
 };
 

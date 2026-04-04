@@ -60,16 +60,16 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
         }
 
         const data = await response.json();
-        const directoryFiles: FileNode[] = (data.files || []).map((file: any) => ({
-          id: file.path || `${path}/${file.name}`,
-          name: file.name,
-          path: file.path,
+        const directoryFiles: FileNode[] = (data.files || []).map((file: Record<string, unknown>) => ({
+          id: String(file.path || `${path}/${file.name}`),
+          name: String(file.name),
+          path: String(file.path),
           type: file.type === 'directory' ? 'directory' : 'file',
-          size: file.size,
+          size: typeof file.size === 'number' ? file.size : undefined,
           modified: typeof file.modified === 'number' ? file.modified : undefined,
         }));
 
-        const sortedFiles = directoryFiles.sort((a: any, b: any) => {
+        const sortedFiles = directoryFiles.sort((a, b) => {
           // Directories first
           if (a.type !== b.type) {
             return a.type === 'directory' ? -1 : 1;

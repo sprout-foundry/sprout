@@ -5,7 +5,7 @@ export interface DropdownItem {
   id: string;
   display: string;
   searchText: string;
-  value: any;
+  value: unknown;
 }
 
 export interface DropdownOptions {

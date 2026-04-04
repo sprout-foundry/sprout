@@ -10,7 +10,9 @@
 
 import { useEffect } from 'react';
 import { WebSocketService } from '../services/websocket';
+import type { WsEvent } from '../services/websocket';
 import { ApiService } from '../services/api';
+import type { StatsResponse, FilesResponse } from '../services/api';
 import { registerServiceWorker } from '../services/serviceWorkerRegistration';
 import type { AppState } from '../types/app';
 
@@ -20,8 +22,8 @@ interface RecentFile {
 }
 
 export interface UseAppInitializationOptions {
-  handleEvent: (event: any) => void;
-  connectionTimeoutRef: React.MutableRefObject<any>;
+  handleEvent: (event: WsEvent) => void;
+  connectionTimeoutRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>;
   loadChatSessions: () => void;
   setRecentFiles: React.Dispatch<React.SetStateAction<RecentFile[]>>;
   setIsMobile: React.Dispatch<React.SetStateAction<boolean>>;
@@ -51,12 +53,13 @@ export function useAppInitialization({
     const loadStats = () => {
       apiService
         .getStats()
-        .then((stats: any) => {
+        .then((stats: StatsResponse) => {
+          const statsRecord = stats as unknown as Record<string, unknown>;
           setState((prev) => ({
             ...prev,
             provider: stats.provider,
             model: stats.model,
-            stats: JSON.stringify(prev.stats) === JSON.stringify(stats) ? prev.stats : stats,
+            stats: JSON.stringify(prev.stats) === JSON.stringify(stats) ? prev.stats : statsRecord,
           }));
         })
         .catch(console.error);
@@ -66,10 +69,10 @@ export function useAppInitialization({
     const loadFiles = () => {
       apiService
         .getFiles()
-        .then((response: any) => {
-          if (response && response.files) {
-            const files = response.files.map((file: any) => ({
-              path: file.path || file.name,
+        .then((response: FilesResponse) => {
+          if (response && Array.isArray(response.files)) {
+            const files = response.files.map((file) => ({
+              path: file.path,
               modified: false,
             }));
             setRecentFiles(files);
@@ -95,10 +98,13 @@ export function useAppInitialization({
     checkMobile();
     window.addEventListener('resize', checkMobile);
 
+    // Snapshot ref value for cleanup (ref.current in cleanup triggers exhaustive-deps)
+    const timeoutId = connectionTimeoutRef.current;
+
     // Cleanup
     return () => {
-      if (connectionTimeoutRef.current) {
-        clearTimeout(connectionTimeoutRef.current);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
       }
       wsService.removeEvent(handleEvent);
       wsService.disconnect();

@@ -4,7 +4,7 @@ export interface UIDropdownItem {
   id: string;
   display: string;
   search_text: string;
-  value: any;
+  value: unknown;
 }
 
 export interface UIDropdownOptions {
@@ -36,7 +36,7 @@ export interface UIPromptRequest {
 export interface UIPromptResponse {
   id: string;
   type: string;
-  selected?: any;
+  selected?: unknown;
   value?: string;
   confirmed?: boolean;
   cancelled?: boolean;
@@ -63,7 +63,7 @@ class UIService {
   private pendingPrompts: Map<
     string,
     {
-      resolve: (value: any) => void;
+      resolve: (value: unknown) => void;
       reject: (error: Error) => void;
       type: string;
     }
@@ -126,7 +126,7 @@ class UIService {
     }
   }
 
-  async showDropdown(items: UIDropdownItem[], options: UIDropdownOptions): Promise<any> {
+  async showDropdown(items: UIDropdownItem[], options: UIDropdownOptions): Promise<unknown> {
     return new Promise((resolve, reject) => {
       const id = `dropdown-${Date.now()}-${Math.random()}`;
 
@@ -147,7 +147,7 @@ class UIService {
     });
   }
 
-  async showQuickPrompt(prompt: string, options: UIQuickOption[], horizontal: boolean = true): Promise<any> {
+  async showQuickPrompt(prompt: string, options: UIQuickOption[], horizontal: boolean = true): Promise<unknown> {
     return new Promise((resolve, reject) => {
       const id = `quick-${Date.now()}-${Math.random()}`;
 
@@ -166,10 +166,10 @@ class UIService {
   }
 
   async showInput(prompt: string, defaultValue: string = '', mask: boolean = false): Promise<string> {
-    return new Promise((resolve, reject) => {
+    return new Promise<string>((resolve, reject) => {
       const id = `input-${Date.now()}-${Math.random()}`;
 
-      this.pendingPrompts.set(id, { resolve, reject, type: 'input' });
+      this.pendingPrompts.set(id, { resolve: resolve as (value: unknown) => void, reject, type: 'input' });
 
       const request: UIPromptRequest = {
         id,
@@ -214,7 +214,7 @@ class UIService {
     this.emitUIEvent('progress_update', progress);
   }
 
-  private emitUIEvent(type: string, data: any) {
+  private emitUIEvent(type: string, data: unknown) {
     // Emit custom DOM event for React components to listen to
     const event = new CustomEvent(`ui:${type}`, { detail: data });
     document.dispatchEvent(event);

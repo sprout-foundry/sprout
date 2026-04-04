@@ -33,7 +33,7 @@ interface ToolExecution {
   message?: string;
   startTime: Date;
   endTime?: Date;
-  details?: any;
+  details?: unknown;
   arguments?: string;
   result?: string;
   persona?: string;
@@ -71,7 +71,7 @@ interface ChatProps {
   isProcessing?: boolean;
   lastError?: string | null;
   toolExecutions?: ToolExecution[];
-  queryProgress?: any;
+  queryProgress?: unknown;
   currentTodos?: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }>;
   subagentActivities?: SubagentActivity[];
   onToolPillClick?: (toolId: string) => void;
@@ -479,103 +479,113 @@ const Chat: React.FC<ChatProps> = ({
     >
       <div className="chat-main">
         <div className="chat-container" ref={chatContainerRef} onScroll={handleChatScroll}>
-          {messages.length === 0 ? (
-            <div className="welcome-message">
-              <div className="welcome-icon">
-                <Bot size={32} />
-              </div>
-              <div className="welcome-text">
-                Welcome to ledit! I'm ready to help you with code analysis, editing, and more.
-              </div>
-              <div className="welcome-hint">
-                Try asking: "Show me the project structure" or "Find the main function"
-              </div>
-            </div>
-          ) : (
-            messages.map((message) => (
-              <MessageBubble
-                key={message.id}
-                type={message.type}
-                ariaLabel={`${message.type} message`}
-                copyText={message.content}
-                timestamp={formatTime(message.timestamp)}
-              >
-                {message.type === 'assistant' ? (
-                  <>
-                    {message.reasoning && message.reasoning.trim() && (
-                      <details className="reasoning-block" open={false}>
-                        <summary className="reasoning-summary">
-                          <BrainCircuit size={13} className="reasoning-icon" />
-                          <span>Reasoning</span>
-                          <span className="reasoning-toggle">▶</span>
-                        </summary>
-                        <div className="reasoning-content">
-                          <MessageContent content={message.reasoning} />
-                        </div>
-                      </details>
-                    )}
-                    <MessageSegments
-                      content={message.content}
-                      toolRefs={message.toolRefs}
-                      onToolRefClick={(toolId) => onToolPillClick?.(toolId)}
-                      onToolClick={(toolName) => {
-                        const matchingTool = findMatchingToolExecution(toolName);
-                        if (matchingTool) {
-                          onToolPillClick?.(matchingTool.id);
-                        }
-                      }}
-                    />
-                  </>
-                ) : (
-                  <MessageContent content={message.content} />
-                )}
-              </MessageBubble>
-            ))
-          )}
-
-          {/* Inline subagent activity feed – shows between messages and processing indicators */}
-          {hasSubagentActivity && <SubagentActivityFeed activities={subagentActivities} />}
-
-          {queryProgress && (
-            <div className="query-progress">
-              <div className="progress-header">
-                <span className="progress-icon">
-                  <Zap size={14} />
-                </span>
-                <span className="progress-text">{queryProgress.message || 'Processing...'}</span>
-              </div>
-              {queryProgress.details && <div className="progress-details">{queryProgress.details}</div>}
-            </div>
-          )}
-
-          {isProcessing && toolExecutions.length === 0 && !queryProgress && !hasSubagentActivity && (
-            <div className="processing-indicator">
-              <div className="processing-content">
-                <div className="processing-spinner">
-                  <Zap size={14} />
+          <>
+            {messages.length === 0 ? (
+              <div className="welcome-message">
+                <div className="welcome-icon">
+                  <Bot size={32} />
                 </div>
-                <div className="processing-text">Processing your request...</div>
-              </div>
-            </div>
-          )}
-
-          {lastError && (
-            <div className="error-indicator">
-              <div className="error-content">
-                <div className="error-icon">
-                  <AlertTriangle size={14} />
+                <div className="welcome-text">
+                  Welcome to ledit! I'm ready to help you with code analysis, editing, and more.
                 </div>
-                <div className="error-text">{lastError}</div>
-                {showExpiredSessionRecovery ? (
-                  <div className="error-actions">
-                    <button type="button" className="error-recovery-btn" onClick={handleReloadWithoutSSHPath}>
-                      Reload Without SSH Path
-                    </button>
+                <div className="welcome-hint">
+                  Try asking: "Show me the project structure" or "Find the main function"
+                </div>
+              </div>
+            ) : (
+              messages.map((message) => (
+                <MessageBubble
+                  key={message.id}
+                  type={message.type}
+                  ariaLabel={`${message.type} message`}
+                  copyText={message.content}
+                  timestamp={formatTime(message.timestamp)}
+                >
+                  {message.type === 'assistant' ? (
+                    <>
+                      {message.reasoning && message.reasoning.trim() && (
+                        <details className="reasoning-block" open={false}>
+                          <summary className="reasoning-summary">
+                            <BrainCircuit size={13} className="reasoning-icon" />
+                            <span>Reasoning</span>
+                            <span className="reasoning-toggle">▶</span>
+                          </summary>
+                          <div className="reasoning-content">
+                            <MessageContent content={message.reasoning} />
+                          </div>
+                        </details>
+                      )}
+                      <MessageSegments
+                        content={message.content}
+                        toolRefs={message.toolRefs}
+                        onToolRefClick={(toolId) => onToolPillClick?.(toolId)}
+                        onToolClick={(toolName) => {
+                          const matchingTool = findMatchingToolExecution(toolName);
+                          if (matchingTool) {
+                            onToolPillClick?.(matchingTool.id);
+                          }
+                        }}
+                      />
+                    </>
+                  ) : (
+                    <MessageContent content={message.content} />
+                  )}
+                </MessageBubble>
+              ))
+            )}
+
+            {/* Inline subagent activity feed – shows between messages and processing indicators */}
+            {hasSubagentActivity && <SubagentActivityFeed activities={subagentActivities} />}
+
+            {queryProgress && (
+              <div className="query-progress">
+                <>
+                  <div className="progress-header">
+                    <span className="progress-icon">
+                      <Zap size={14} />
+                    </span>
+                    <span className="progress-text">
+                      {((queryProgress as Record<string, unknown>).message as string) || 'Processing...'}
+                    </span>
                   </div>
-                ) : null}
+                  {(queryProgress as Record<string, unknown>).details && (
+                    <div className="progress-details">
+                      {(queryProgress as Record<string, unknown>).details as React.ReactNode}
+                    </div>
+                  )}
+                </>
               </div>
-            </div>
-          )}
+            )}
+
+            {isProcessing && toolExecutions.length === 0 && !queryProgress && !hasSubagentActivity && (
+              <div className="processing-indicator">
+                <div className="processing-content">
+                  <div className="processing-spinner">
+                    <Zap size={14} />
+                  </div>
+                  <div className="processing-text">Processing your request...</div>
+                </div>
+              </div>
+            )}
+
+            {lastError && (
+              <div className="error-indicator">
+                <div className="error-content">
+                  <div className="error-icon">
+                    <AlertTriangle size={14} />
+                  </div>
+                  <div className="error-text">{lastError}</div>
+                  {showExpiredSessionRecovery ? (
+                    <div className="error-actions">
+                      <button type="button" className="error-recovery-btn" onClick={handleReloadWithoutSSHPath}>
+                        Reload Without SSH Path
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            )}
+          </>
         </div>
       </div>
 

@@ -656,8 +656,10 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
         }
 
         const nextSuggestions = (data.files || [])
-          .filter((file: any) => file.type === 'directory' && !String(file.name || '').startsWith('.'))
-          .map((file: any) => ({
+          .filter(
+            (file: Record<string, unknown>) => file.type === 'directory' && !String(file.name || '').startsWith('.'),
+          )
+          .map((file: Record<string, unknown>) => ({
             name: String(file.name),
             path: normalizePath(String(file.path)),
           }))

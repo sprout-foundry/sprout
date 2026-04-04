@@ -48,8 +48,8 @@ const ResizeHandle: React.FC<ResizeHandleProps> = ({
       // Prevent text selection during drag
       document.body.style.userSelect = 'none';
       document.body.style.cursor = direction === 'horizontal' ? 'col-resize' : 'row-resize';
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [direction],
   );
 

@@ -4,7 +4,7 @@ import type { EditorBuffer } from '../types/editor';
 import type { Dispatch, SetStateAction } from 'react';
 import { writeFileWithConsent } from '../services/fileAccess';
 import { showThemedPrompt } from '../components/ThemedDialog';
-import { useLog, debugLog } from '../utils/log';
+import { useLog, warn, debugLog } from '../utils/log';
 
 interface UseBufferPersistenceParams {
   buffersRef: MutableRefObject<Map<string, EditorBuffer>>;
@@ -43,7 +43,7 @@ export function useBufferPersistence({ buffersRef, setBuffers }: UseBufferPersis
         // Write the file to disk
         const response = await writeFileWithConsent(trimmedPath, buffer.content);
         if (!response.ok) {
-          const errorText = await response.text().catch(() => response.statusText);
+          const errorText = await response.text().catch((err) => { debugLog('[saveNewFile] failed to read error response body:', err); return response.statusText; });
           throw new Error(errorText || `Failed to save file: ${response.statusText}`);
         }
 
@@ -101,7 +101,7 @@ export function useBufferPersistence({ buffersRef, setBuffers }: UseBufferPersis
           }
         } else {
           // Server returned a non-2xx status (e.g., 400 validation error).
-          const errorBody = await response.text().catch(() => 'Unknown error');
+          const errorBody = await response.text().catch((err) => { debugLog('[saveBuffer] failed to read error response body:', err); return 'Unknown error'; });
           throw new Error(`Save failed (${response.status}): ${errorBody}`);
         }
       } catch (error) {
@@ -119,7 +119,7 @@ export function useBufferPersistence({ buffersRef, setBuffers }: UseBufferPersis
       const currentBuffers = buffersRef.current;
       const savePromises = Array.from(currentBuffers.entries())
         .filter(([_, buffer]) => buffer.isModified && !buffer.file.path.startsWith('__workspace/'))
-        .map(([bufferId, _]) => saveBuffer(bufferId, options).catch((err) => { debugLog('Silently skipping failed buffer save:', err); return undefined; }));
+        .map(([bufferId, _]) => saveBuffer(bufferId, options).catch((err) => { warn(`Skipping failed buffer save in saveAllBuffers [${bufferId}]: ${err instanceof Error ? err.message : String(err)}`); return undefined; }));
 
       await Promise.all(savePromises);
     },

@@ -2,6 +2,7 @@ package webui
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -259,19 +260,19 @@ func validateMCPServer(s mcp.MCPServerConfig) error {
 	serverType := strings.TrimSpace(strings.ToLower(s.Type))
 	if serverType == "http" {
 		if strings.TrimSpace(s.URL) == "" {
-			return fmt.Errorf("URL is required for HTTP servers")
+			return errors.New("URL is required for HTTP servers")
 		}
 	} else {
 		// stdio (default)
 		if strings.TrimSpace(s.Command) == "" {
-			return fmt.Errorf("command is required for stdio servers")
+			return errors.New("command is required for stdio servers")
 		}
 	}
 	if s.MaxRestarts < 0 {
-		return fmt.Errorf("max_restarts must be non-negative")
+		return errors.New("max_restarts must be non-negative")
 	}
 	if s.Timeout < 0 {
-		return fmt.Errorf("timeout must be non-negative")
+		return errors.New("timeout must be non-negative")
 	}
 	return nil
 }

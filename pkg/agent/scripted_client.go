@@ -521,7 +521,7 @@ func (c *ScriptedClient) SendChatRequest(messages []api.Message, tools []api.Too
 	if c.rateLimitExceeded {
 		c.mu.Unlock()
 		c.debugLog("Rate limit exceeded after %d attempts", c.rateLimitCounter)
-		return nil, &RateLimitExceededError{Attempts: c.rateLimitCounter, LastError: fmt.Errorf("rate limit exceeded")}
+		return nil, &RateLimitExceededError{Attempts: c.rateLimitCounter, LastError: errors.New("rate limit exceeded")}
 	}
 
 	var resp *ScriptedResponse
@@ -541,7 +541,7 @@ func (c *ScriptedClient) SendChatRequest(messages []api.Message, tools []api.Too
 			c.rateLimitExceeded = true
 			c.mu.Unlock()
 			c.debugLog("Rate limit triggered after %d responses", c.rateLimitCounter)
-			return nil, &RateLimitExceededError{Attempts: c.rateLimitCounter, LastError: fmt.Errorf("rate limit exceeded")}
+			return nil, &RateLimitExceededError{Attempts: c.rateLimitCounter, LastError: errors.New("rate limit exceeded")}
 		}
 	}
 
@@ -612,7 +612,7 @@ func (c *ScriptedClient) SendChatRequestStream(messages []api.Message, tools []a
 	if c.rateLimitExceeded {
 		c.mu.Unlock()
 		c.debugLog("Rate limit exceeded after %d attempts", c.rateLimitCounter)
-		return nil, &RateLimitExceededError{Attempts: c.rateLimitCounter, LastError: fmt.Errorf("rate limit exceeded")}
+		return nil, &RateLimitExceededError{Attempts: c.rateLimitCounter, LastError: errors.New("rate limit exceeded")}
 	}
 
 	var resp *ScriptedResponse
@@ -631,7 +631,7 @@ func (c *ScriptedClient) SendChatRequestStream(messages []api.Message, tools []a
 			c.rateLimitExceeded = true
 			c.mu.Unlock()
 			c.debugLog("Rate limit triggered after %d responses", c.rateLimitCounter)
-			return nil, &RateLimitExceededError{Attempts: c.rateLimitCounter, LastError: fmt.Errorf("rate limit exceeded")}
+			return nil, &RateLimitExceededError{Attempts: c.rateLimitCounter, LastError: errors.New("rate limit exceeded")}
 		}
 	}
 
@@ -780,7 +780,7 @@ func (c *ScriptedClient) SendChatRequestStream(messages []api.Message, tools []a
 // SendVisionRequest sends a vision-enabled chat request
 func (c *ScriptedClient) SendVisionRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
 	if !c.supportsVision {
-		return nil, fmt.Errorf("vision not supported in this test client")
+		return nil, errors.New("vision not supported in this test client")
 	}
 
 	c.mu.Lock()
@@ -810,7 +810,7 @@ func (c *ScriptedClient) SendVisionRequest(messages []api.Message, tools []api.T
 	if c.rateLimitExceeded {
 		c.mu.Unlock()
 		c.debugLog("Vision rate limit exceeded after %d attempts", c.rateLimitCounter)
-		return nil, &RateLimitExceededError{Attempts: c.rateLimitCounter, LastError: fmt.Errorf("rate limit exceeded")}
+		return nil, &RateLimitExceededError{Attempts: c.rateLimitCounter, LastError: errors.New("rate limit exceeded")}
 	}
 
 	// Handle rate limit simulation for vision requests.
@@ -824,7 +824,7 @@ func (c *ScriptedClient) SendVisionRequest(messages []api.Message, tools []api.T
 			c.rateLimitExceeded = true
 			c.mu.Unlock()
 			c.debugLog("Vision rate limit triggered after %d responses", c.rateLimitCounter)
-			return nil, &RateLimitExceededError{Attempts: c.rateLimitCounter, LastError: fmt.Errorf("rate limit exceeded")}
+			return nil, &RateLimitExceededError{Attempts: c.rateLimitCounter, LastError: errors.New("rate limit exceeded")}
 		}
 	}
 
@@ -1019,7 +1019,7 @@ func (c *ScriptedClient) ListModels() ([]api.ModelInfo, error) {
 
 	model := c.TestClient.GetModel()
 	if model == "" {
-		return nil, fmt.Errorf("no model configured")
+		return nil, errors.New("no model configured")
 	}
 
 	models := []api.ModelInfo{

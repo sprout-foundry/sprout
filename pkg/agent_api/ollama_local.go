@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -120,7 +121,7 @@ func newOllamaLocalClientWithFactory(model string, factory ollamaClientFactory) 
 	// If no models specified or empty, use first available model
 	if strings.TrimSpace(model) == "" {
 		if len(listResp.Models) == 0 {
-			return nil, fmt.Errorf("no models available locally. Please pull a model first using 'ollama pull <model>'")
+			return nil, errors.New("no models available locally. Please pull a model first using 'ollama pull <model>'")
 		}
 		model = listResp.Models[0].Name
 	} else {
@@ -445,7 +446,7 @@ func (c *OllamaLocalClient) GetModelContextLimit() (int, error) {
 // SetModel updates the active model after validating it exists locally
 func (c *OllamaLocalClient) SetModel(model string) error {
 	if strings.TrimSpace(model) == "" {
-		return fmt.Errorf("model name cannot be empty")
+		return errors.New("model name cannot be empty")
 	}
 
 	if model == c.model {

@@ -3,6 +3,7 @@ package configuration
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -957,10 +958,10 @@ func (c *Config) Validate() error {
 	// Validate PDF OCR configuration
 	if c.PDFOCREnabled {
 		if c.PDFOCRProvider == "" {
-			return fmt.Errorf("PDF OCR provider cannot be empty when PDF OCR is enabled")
+			return errors.New("PDF OCR provider cannot be empty when PDF OCR is enabled")
 		}
 		if c.PDFOCRModel == "" {
-			return fmt.Errorf("PDF OCR model cannot be empty when PDF OCR is enabled")
+			return errors.New("PDF OCR model cannot be empty when PDF OCR is enabled")
 		}
 	}
 

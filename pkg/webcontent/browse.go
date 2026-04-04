@@ -3,6 +3,7 @@ package webcontent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -19,7 +20,7 @@ func effectiveCtx(opts BrowseOptions) context.Context {
 // It requires the browser build tag and a headless browser (Chromium).
 func BrowseURL(url string, opts BrowseOptions) (string, error) {
 	if url == "" {
-		return "", fmt.Errorf("URL cannot be empty")
+		return "", errors.New("URL cannot be empty")
 	}
 	lower := strings.ToLower(url)
 	if !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://") {
@@ -32,7 +33,7 @@ func BrowseURL(url string, opts BrowseOptions) (string, error) {
 	switch opts.Action {
 	case "screenshot":
 		if opts.ScreenshotPath == "" {
-			return "", fmt.Errorf("screenshot_path is required for action=screenshot")
+			return "", errors.New("screenshot_path is required for action=screenshot")
 		}
 		if hasAdvancedBrowseOptions(opts) {
 			_, err := browser.Run(ctx, url, opts)

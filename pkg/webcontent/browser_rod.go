@@ -5,6 +5,7 @@ package webcontent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -150,7 +151,7 @@ func (r *rodRenderer) connect(ctx context.Context) (*rod.Browser, error) {
 	defer r.mu.Unlock()
 
 	if r.closed {
-		return nil, fmt.Errorf("browser renderer has been closed")
+		return nil, errors.New("browser renderer has been closed")
 	}
 	if r.browser != nil {
 		return r.browser, nil
@@ -632,7 +633,7 @@ func executeBrowseStep(page *rod.Page, step BrowseStep, timeoutMs int, result *B
 	switch action {
 	case "wait_for":
 		if strings.TrimSpace(step.Selector) == "" {
-			return fmt.Errorf("browse step wait_for requires selector")
+			return errors.New("browse step wait_for requires selector")
 		}
 		if _, err := page.Timeout(timeout).Element(step.Selector); err != nil {
 			return fmt.Errorf("wait_for %q: %w", step.Selector, err)
@@ -690,7 +691,7 @@ func executeBrowseStep(page *rod.Page, step BrowseStep, timeoutMs int, result *B
 		return nil
 	case "press":
 		if strings.TrimSpace(step.Key) == "" {
-			return fmt.Errorf("browse step press requires key")
+			return errors.New("browse step press requires key")
 		}
 		if strings.TrimSpace(step.Selector) != "" {
 			el, err := requireElement(page, step.Selector, timeout)
@@ -739,7 +740,7 @@ func executeBrowseStep(page *rod.Page, step BrowseStep, timeoutMs int, result *B
 	case "navigate":
 		target := strings.TrimSpace(step.Value)
 		if target == "" {
-			return fmt.Errorf("browse step navigate requires value URL")
+			return errors.New("browse step navigate requires value URL")
 		}
 		if err := page.Navigate(target); err != nil {
 			return fmt.Errorf("navigate to %q: %w", target, err)
@@ -796,7 +797,7 @@ func executeBrowseStep(page *rod.Page, step BrowseStep, timeoutMs int, result *B
 			expected = strings.TrimSpace(step.Value)
 		}
 		if expected == "" {
-			return fmt.Errorf("browse step assert_text requires expect or value")
+			return errors.New("browse step assert_text requires expect or value")
 		}
 		bodyText, err := evalToJSONString(page, `() => (document.body && (document.body.innerText || document.body.textContent)) || ''`)
 		if err != nil {
@@ -813,7 +814,7 @@ func executeBrowseStep(page *rod.Page, step BrowseStep, timeoutMs int, result *B
 			expected = strings.TrimSpace(step.Value)
 		}
 		if expected == "" {
-			return fmt.Errorf("browse step assert_title requires expect or value")
+			return errors.New("browse step assert_title requires expect or value")
 		}
 		info, err := page.Info()
 		if err != nil {
@@ -830,7 +831,7 @@ func executeBrowseStep(page *rod.Page, step BrowseStep, timeoutMs int, result *B
 			expected = strings.TrimSpace(step.Value)
 		}
 		if expected == "" {
-			return fmt.Errorf("browse step assert_url requires expect or value")
+			return errors.New("browse step assert_url requires expect or value")
 		}
 		info, err := page.Info()
 		if err != nil {
@@ -847,7 +848,7 @@ func executeBrowseStep(page *rod.Page, step BrowseStep, timeoutMs int, result *B
 			expected = strings.TrimSpace(step.Value)
 		}
 		if expected == "" {
-			return fmt.Errorf("browse step wait_for_text requires expect or value")
+			return errors.New("browse step wait_for_text requires expect or value")
 		}
 		if strings.TrimSpace(step.Selector) != "" {
 			el, err := requireElement(page, step.Selector, timeout)
@@ -866,7 +867,7 @@ func executeBrowseStep(page *rod.Page, step BrowseStep, timeoutMs int, result *B
 		return nil
 	case "eval":
 		if strings.TrimSpace(step.Script) == "" {
-			return fmt.Errorf("browse step eval requires script")
+			return errors.New("browse step eval requires script")
 		}
 		value, err := evalToJSONString(page, step.Script)
 		evalResult := EvalResult{Script: step.Script}
@@ -891,7 +892,7 @@ func executeBrowseStep(page *rod.Page, step BrowseStep, timeoutMs int, result *B
 func requireElement(page *rod.Page, selector string, timeout time.Duration) (*rod.Element, error) {
 	selector = strings.TrimSpace(selector)
 	if selector == "" {
-		return nil, fmt.Errorf("selector is required")
+		return nil, errors.New("selector is required")
 	}
 	el, err := page.Timeout(timeout).Element(selector)
 	if err != nil {

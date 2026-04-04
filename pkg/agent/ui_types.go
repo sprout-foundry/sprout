@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"errors"
 	"fmt"
 	"time"
 )
@@ -26,8 +27,8 @@ type QuickOption struct {
 
 // UI errors
 var (
-	ErrUINotAvailable = fmt.Errorf("UI not available")
-	ErrCancelled      = fmt.Errorf("user cancelled")
+	ErrUINotAvailable = errors.New("UI not available")
+	ErrCancelled      = errors.New("user cancelled")
 )
 
 // SessionItem represents a session in dropdown selections

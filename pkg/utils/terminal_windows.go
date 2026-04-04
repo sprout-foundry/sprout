@@ -4,6 +4,7 @@
 package utils
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -107,7 +108,7 @@ func getTerminalSizePowerShell() (*TerminalSize, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("failed to parse PowerShell output")
+	return nil, errors.New("failed to parse PowerShell output")
 }
 
 // IsInteractive checks if the current session is interactive

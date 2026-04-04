@@ -8,11 +8,47 @@ export const DEFAULT_NOTIFICATION_DURATION = 5000;
 // Default title for log-based notifications
 export const DEFAULT_LOG_TITLE = 'Application Log';
 
+// Log level order: debug=0, info=1, success=2, warn=3, error=4
+export const Levels = {
+  debug: 0,
+  info: 1,
+  success: 2,
+  warn: 3,
+  error: 4,
+} as const;
+
+// Type for log levels (key of Levels)
+export type LogLevel = keyof typeof Levels;
+
+// Module-level minimum log level
+// Default to debug in non-production, warn in production
+const getProductionLevel = () => {
+  return process.env.NODE_ENV === 'production' ? Levels.warn : Levels.debug;
+};
+let minLevel: number = getProductionLevel();
+
 /**
- * Debug log - only shows in non-production environments
+ * Set the minimum log level for all log functions.
+ * @param level - Numeric level (0=debug, 1=info, 2=success, 3=warn, 4=error)
+ */
+export function setMinLevel(level: number): void {
+  minLevel = level;
+}
+
+/**
+ * Get the current minimum log level.
+ * @returns Numeric level (0=debug, 1=info, 2=success, 3=warn, 4=error)
+ */
+export function getMinLevel(): number {
+  return minLevel;
+}
+
+/**
+ * Debug log - only shows in non-production environments AND if minLevel <= debug
  */
 export function debugLog(...args: unknown[]) {
-  if (process.env.NODE_ENV !== 'production') {
+  // Check NODE_ENV first (existing behavior)
+  if (process.env.NODE_ENV !== 'production' && minLevel <= Levels.debug) {
     console.log(...args);
   }
 }
@@ -29,11 +65,14 @@ export function error(
     duration?: number;
   },
 ) {
-  console.error(message);
+  // Check minLevel before writing to console
+  if (minLevel <= Levels.error) {
+    console.error(message);
+  }
 
   // showNotification is not supported in non-React context
   // Use useLog() hook for notification support
-  if (options?.showNotification) {
+  if (options?.showNotification && minLevel <= Levels.warn) {
     console.warn('showNotification option is only available when using the useLog() hook inside React components');
   }
 }
@@ -50,9 +89,12 @@ export function warn(
     duration?: number;
   },
 ) {
-  console.warn(message);
+  // Check minLevel before writing to console
+  if (minLevel <= Levels.warn) {
+    console.warn(message);
+  }
 
-  if (options?.showNotification) {
+  if (options?.showNotification && minLevel <= Levels.warn) {
     console.warn('showNotification option is only available when using the useLog() hook inside React components');
   }
 }
@@ -69,9 +111,12 @@ export function info(
     duration?: number;
   },
 ) {
-  console.info(message);
+  // Check minLevel before writing to console
+  if (minLevel <= Levels.info) {
+    console.info(message);
+  }
 
-  if (options?.showNotification) {
+  if (options?.showNotification && minLevel <= Levels.warn) {
     console.warn('showNotification option is only available when using the useLog() hook inside React components');
   }
 }
@@ -88,9 +133,12 @@ export function success(
     duration?: number;
   },
 ) {
-  console.log('[SUCCESS]', message);
+  // Check minLevel before writing to console
+  if (minLevel <= Levels.success) {
+    console.log('[SUCCESS]', message);
+  }
 
-  if (options?.showNotification) {
+  if (options?.showNotification && minLevel <= Levels.warn) {
     console.warn('showNotification option is only available when using the useLog() hook inside React components');
   }
 }
@@ -98,6 +146,10 @@ export function success(
 /**
  * React hook that provides log functions with automatic notification support
  * This should be used instead of the plain functions when inside React components
+ *
+ * NOTE: `minLevel` is a module-level variable, not React state — every invocation
+ * of the methods below reads the live value. It does NOT need to appear in the
+ * useMemo dependency array.
  */
 export function useLog() {
   const { addNotification } = useNotifications();
@@ -113,7 +165,11 @@ export function useLog() {
           duration?: number;
         },
       ) => {
-        console.error(message);
+        // Check minLevel for console output
+        if (minLevel <= Levels.error) {
+          console.error(message);
+        }
+        // Notifications always fire regardless of minLevel
         addNotification('error', options?.title || DEFAULT_LOG_TITLE, message, options?.duration);
       },
 
@@ -124,7 +180,11 @@ export function useLog() {
           duration?: number;
         },
       ) => {
-        console.warn(message);
+        // Check minLevel for console output
+        if (minLevel <= Levels.warn) {
+          console.warn(message);
+        }
+        // Notifications always fire regardless of minLevel
         addNotification('warning', options?.title || DEFAULT_LOG_TITLE, message, options?.duration);
       },
 
@@ -135,7 +195,11 @@ export function useLog() {
           duration?: number;
         },
       ) => {
-        console.info(message);
+        // Check minLevel for console output
+        if (minLevel <= Levels.info) {
+          console.info(message);
+        }
+        // Notifications always fire regardless of minLevel
         addNotification('info', options?.title || DEFAULT_LOG_TITLE, message, options?.duration);
       },
 
@@ -146,7 +210,11 @@ export function useLog() {
           duration?: number;
         },
       ) => {
-        console.log('[SUCCESS]', message);
+        // Check minLevel for console output
+        if (minLevel <= Levels.success) {
+          console.log('[SUCCESS]', message);
+        }
+        // Notifications always fire regardless of minLevel
         addNotification('success', options?.title || DEFAULT_LOG_TITLE, message, options?.duration);
       },
     }),
@@ -155,11 +223,6 @@ export function useLog() {
 
   return log;
 }
-
-/**
- * Type for log levels
- */
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'success';
 
 /**
  * Interface for the log object returned by useLog

@@ -3,7 +3,17 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NotificationProvider, useNotifications } from '../contexts/NotificationContext';
-import { useLog } from '../utils/log';
+import {
+  Levels,
+  setMinLevel,
+  getMinLevel,
+  error,
+  warn,
+  info,
+  success,
+  debugLog,
+  useLog,
+} from '../utils/log';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -49,6 +59,7 @@ afterEach(() => {
   container?.remove();
   jest.useRealTimers();
   jest.restoreAllMocks();
+  setMinLevel(Levels.debug); // safety net: reset minLevel even if a test throws before its inline reset
 });
 
 // Create a test component that captures the log + notification functions
@@ -203,5 +214,146 @@ describe('useLog', () => {
 
     const notifs = notifRef().notifications;
     expect(notifs).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Log level filtering tests
+// ---------------------------------------------------------------------------
+
+describe('log level configuration', () => {
+  it('getMinLevel() returns a number', () => {
+    const level = getMinLevel();
+    expect(typeof level).toBe('number');
+  });
+
+  it('setMinLevel() updates the minimum level', () => {
+    setMinLevel(Levels.error);
+    expect(getMinLevel()).toBe(Levels.error);
+    setMinLevel(Levels.debug); // reset
+  });
+
+  it('default level is debug (0) in non-production', () => {
+    // In test env (NODE_ENV !== 'production'), default should be 0
+    expect(getMinLevel()).toBe(Levels.debug);
+  });
+});
+
+describe('Levels constant', () => {
+  it('has correct numeric values for all levels', () => {
+    expect(Levels.debug).toBe(0);
+    expect(Levels.info).toBe(1);
+    expect(Levels.success).toBe(2);
+    expect(Levels.warn).toBe(3);
+    expect(Levels.error).toBe(4);
+  });
+});
+
+describe('plain functions respect minLevel', () => {
+  it('error logs when minLevel is set to error (4)', () => {
+    setMinLevel(Levels.error);
+    error('test');
+    expect(console.error).toHaveBeenCalled();
+    setMinLevel(Levels.debug); // reset
+  });
+
+  it('warn is suppressed when minLevel is error', () => {
+    setMinLevel(Levels.error);
+    warn('test');
+    expect(console.warn).not.toHaveBeenCalled();
+    setMinLevel(Levels.debug); // reset
+  });
+
+  it('info is suppressed when minLevel is error', () => {
+    setMinLevel(Levels.error);
+    info('test');
+    expect(console.info).not.toHaveBeenCalled();
+    setMinLevel(Levels.debug); // reset
+  });
+
+  it('success is suppressed when minLevel is error', () => {
+    setMinLevel(Levels.error);
+    success('test');
+    expect(console.log).not.toHaveBeenCalled();
+    setMinLevel(Levels.debug); // reset
+  });
+
+  it('debugLog is suppressed when minLevel is error', () => {
+    setMinLevel(Levels.error);
+    debugLog('test');
+    expect(console.log).not.toHaveBeenCalled();
+    setMinLevel(Levels.debug); // reset
+  });
+
+  it('warn and error both log when minLevel is warn (3), but info/success/debug are suppressed', () => {
+    setMinLevel(Levels.warn);
+
+    warn('warn-msg');
+    error('error-msg');
+    info('info-msg');
+    success('success-msg');
+    debugLog('debug-msg');
+
+    expect(console.warn).toHaveBeenCalledWith('warn-msg');
+    expect(console.error).toHaveBeenCalledWith('error-msg');
+    expect(console.info).not.toHaveBeenCalled();
+    // success and debugLog both use console.log — neither should fire
+    expect(console.log).not.toHaveBeenCalled();
+
+    setMinLevel(Levels.debug); // reset
+  });
+});
+
+describe('useLog hook respects minLevel for console but always sends notifications', () => {
+  it('warn does not write to console at error level but still sends notification', () => {
+    const { App, logRef, notifRef } = createHookRunner();
+
+    act(() => {
+      root.render(createElement(App));
+    });
+
+    setMinLevel(Levels.error);
+
+    const log = logRef();
+    act(() => {
+      log.warn('suppressed warn', { title: 'Warn Title' });
+    });
+
+    // Console should be suppressed (warn level < error)
+    expect(console.warn).not.toHaveBeenCalled();
+
+    // But notification should still fire
+    const notifs = notifRef().notifications;
+    expect(notifs).toHaveLength(1);
+    expect(notifs[0].type).toBe('warning');
+    expect(notifs[0].message).toBe('suppressed warn');
+
+    setMinLevel(Levels.debug); // reset
+  });
+
+  it('info does not write to console at warn level but still sends notification', () => {
+    const { App, logRef, notifRef } = createHookRunner();
+
+    act(() => {
+      root.render(createElement(App));
+    });
+
+    setMinLevel(Levels.warn);
+
+    const log = logRef();
+    act(() => {
+      log.info('suppressed info', { title: 'Info Title' });
+    });
+
+    // Console should be suppressed (info level < warn)
+    expect(console.info).not.toHaveBeenCalled();
+
+    // But notification should still fire
+    const notifs = notifRef().notifications;
+    expect(notifs).toHaveLength(1);
+    expect(notifs[0].type).toBe('info');
+    expect(notifs[0].message).toBe('suppressed info');
+
+    setMinLevel(Levels.debug); // reset
   });
 });

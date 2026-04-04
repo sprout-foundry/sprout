@@ -43,10 +43,10 @@ function renderOverlay(props: {
     onClose = jest.fn(),
   } = props;
 
-  let component: GoToSymbolOverlay | null = null;
+  let _component: GoToSymbolOverlay | null = null;
 
   act(() => {
-    component = ReactDOM.render(
+    _component = ReactDOM.render(
       <GoToSymbolOverlay
         visible={visible}
         content={content}
@@ -63,7 +63,11 @@ function renderOverlay(props: {
   // components. We just need the container.
   return {
     container,
-    unmount: () => act(() => { ReactDOM.unmountComponentAtNode(container); document.body.removeChild(container); }),
+    unmount: () =>
+      act(() => {
+        ReactDOM.unmountComponentAtNode(container);
+        document.body.removeChild(container);
+      }),
     rerender: () => {
       // Re-render with same props (useful after updating state internally)
     },
@@ -110,7 +114,7 @@ describe('extractSymbols', () => {
       expect(symbols.length).toBeGreaterThanOrEqual(1);
       expect(symbols[0]).toMatchObject({ name: 'Bar', kind: 'interface' });
       // The space-indented method pattern also catches Do() inside the interface
-      expect(symbols.some(s => s.name === 'Do' && s.kind === 'method')).toBe(true);
+      expect(symbols.some((s) => s.name === 'Do' && s.kind === 'method')).toBe(true);
     });
 
     it('extracts type Baz = as type', () => {
@@ -138,8 +142,8 @@ describe('extractSymbols', () => {
       const content = 'const (\n\tMaxRetries = 3\n\tTimeout    = 30 * time.Second\n)\n';
       const symbols = extractSymbols(content, '.go');
       expect(symbols.length).toBeGreaterThanOrEqual(2);
-      expect(symbols.some(s => s.name === 'MaxRetries' && s.kind === 'constant')).toBe(true);
-      expect(symbols.some(s => s.name === 'Timeout' && s.kind === 'constant')).toBe(true);
+      expect(symbols.some((s) => s.name === 'MaxRetries' && s.kind === 'constant')).toBe(true);
+      expect(symbols.some((s) => s.name === 'Timeout' && s.kind === 'constant')).toBe(true);
     });
   });
 

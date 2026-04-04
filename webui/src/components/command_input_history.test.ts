@@ -1,6 +1,6 @@
 // @ts-nocheck
 
-import { loadCommandHistory, saveCommandHistory, dedupeCommands, persistCommandHistory } from './command_input_history';
+import { loadCommandHistory, saveCommandHistory, dedupeCommands } from './command_input_history';
 
 describe('command_input_history', () => {
   const origGetItem = Object.getOwnPropertyDescriptor(Storage.prototype, 'getItem');

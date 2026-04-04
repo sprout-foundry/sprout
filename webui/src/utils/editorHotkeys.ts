@@ -1,4 +1,4 @@
-import { EditorView, KeyBinding } from '@codemirror/view';
+import { type EditorView, type KeyBinding } from '@codemirror/view';
 import { EditorSelection } from '@codemirror/state';
 import { selectNextOccurrence, selectSelectionMatches } from '@codemirror/search';
 import { navigateCursorBack, navigateCursorForward } from '../extensions/cursorHistory';
@@ -23,7 +23,7 @@ function duplicateCurrentLine(view: EditorView, direction: 'up' | 'down' = 'down
   const cursor = view.state.selection.main.head;
   const line = view.state.doc.lineAt(cursor);
   const lineText = line.text;
-  const insertText = lineText + '\n';
+  const insertText = `${lineText}\n`;
 
   if (direction === 'up') {
     view.dispatch({
@@ -91,7 +91,7 @@ function insertLineBelow(view: EditorView): boolean {
   // cursor at the start of the new line (before the indentation —
   // VS Code places cursor at column 0 of the new indented line).
   const endOfLine = line.to;
-  const insertText = '\n' + indent;
+  const insertText = `\n${indent}`;
   view.dispatch({
     changes: { from: endOfLine, insert: insertText },
     selection: { anchor: endOfLine + 1 },
@@ -107,7 +107,7 @@ function insertLineAbove(view: EditorView): boolean {
   const indent = getLineIndent(line.text);
   // Insert indentation + \n before the current line's start, then place
   // the cursor at the start of the new line (before the indentation).
-  const insertText = indent + '\n';
+  const insertText = `${indent}\n`;
   view.dispatch({
     changes: { from: line.from, insert: insertText },
     selection: { anchor: line.from },
@@ -154,7 +154,7 @@ function moveCurrentLine(view: EditorView, direction: 'up' | 'down'): boolean {
 function insertCursorAbove(view: EditorView): boolean {
   const state = view.state;
   const originalRanges = state.selection.ranges;
-  const addedRanges = originalRanges.flatMap(r => {
+  const addedRanges = originalRanges.flatMap((r) => {
     const line = state.doc.lineAt(r.head);
     if (line.number <= 1) return [];
     const prevLine = state.doc.line(line.number - 1);
@@ -174,7 +174,7 @@ function insertCursorAbove(view: EditorView): boolean {
 function insertCursorBelow(view: EditorView): boolean {
   const state = view.state;
   const originalRanges = state.selection.ranges;
-  const addedRanges = originalRanges.flatMap(r => {
+  const addedRanges = originalRanges.flatMap((r) => {
     const line = state.doc.lineAt(r.head);
     if (line.number >= state.doc.lines) return [];
     const nextLine = state.doc.line(line.number + 1);
@@ -196,7 +196,10 @@ function insertCursorBelow(view: EditorView): boolean {
 // Convert "Ctrl+G" → "Mod-g", "Alt+ArrowUp" → "Alt-ArrowUp"
 // CodeMirror uses: Mod (Cmd/Ctrl), Shift, Alt as prefixes, and capitalised key names.
 function hotkeyToCodeMirror(key: string): string | null {
-  const parts = key.split('+').map(p => p.trim()).filter(Boolean);
+  const parts = key
+    .split('+')
+    .map((p) => p.trim())
+    .filter(Boolean);
   if (parts.length === 0) return null;
 
   const modifiers: string[] = [];
@@ -220,21 +223,21 @@ function hotkeyToCodeMirror(key: string): string | null {
   // Normalise the main key part for CodeMirror.
   // CodeMirror expects ArrowUp, ArrowDown, ArrowLeft, ArrowRight, etc.
   const keyMap: Record<string, string> = {
-    'ArrowUp': 'ArrowUp',
-    'ArrowDown': 'ArrowDown',
-    'ArrowLeft': 'ArrowLeft',
-    'ArrowRight': 'ArrowRight',
-    'Backspace': 'Backspace',
-    'Delete': 'Delete',
-    'Enter': 'Enter',
-    'Escape': 'Escape',
-    'Home': 'Home',
-    'End': 'End',
-    'PageUp': 'PageUp',
-    'PageDown': 'PageDown',
-    'Tab': 'Tab',
-    'Space': 'Space',
-    'Backquote': '`',
+    ArrowUp: 'ArrowUp',
+    ArrowDown: 'ArrowDown',
+    ArrowLeft: 'ArrowLeft',
+    ArrowRight: 'ArrowRight',
+    Backspace: 'Backspace',
+    Delete: 'Delete',
+    Enter: 'Enter',
+    Escape: 'Escape',
+    Home: 'Home',
+    End: 'End',
+    PageUp: 'PageUp',
+    PageDown: 'PageDown',
+    Tab: 'Tab',
+    Space: 'Space',
+    Backquote: '`',
   };
 
   const normalisedKey = keyMap[mainKey] ?? mainKey.toLowerCase();
@@ -281,10 +284,7 @@ const EDITOR_COMMAND_IDS = new Set([
  * from the hotkey list, so the editor always has Save and Go-to-line
  * bound.
  */
-export function getEditorKeymap(
-  hotkeyEntries: HotkeyEntry[] | null,
-  actions: EditorHotkeyActions,
-): KeyBinding[] {
+export function getEditorKeymap(hotkeyEntries: HotkeyEntry[] | null, actions: EditorHotkeyActions): KeyBinding[] {
   const entries = hotkeyEntries ?? [];
 
   // Index entries by command_id for quick lookup.
@@ -296,10 +296,7 @@ export function getEditorKeymap(
     byCommand.set(entry.command_id, list);
   }
 
-  function bindingsFor(
-    commandId: string,
-    run: (view: EditorView) => boolean,
-  ): KeyBinding[] {
+  function bindingsFor(commandId: string, run: (view: EditorView) => boolean): KeyBinding[] {
     const group = byCommand.get(commandId) ?? [];
     const result: KeyBinding[] = [];
     for (const entry of group) {
@@ -319,7 +316,14 @@ export function getEditorKeymap(
   });
   if (saveBindings.length === 0) {
     // Fallback: Mod-s
-    bindings.push({ key: 'Mod-s', preventDefault: true, run: () => { actions.onSave?.(); return true; } });
+    bindings.push({
+      key: 'Mod-s',
+      preventDefault: true,
+      run: () => {
+        actions.onSave?.();
+        return true;
+      },
+    });
   } else {
     bindings.push(...saveBindings);
   }
@@ -331,7 +335,14 @@ export function getEditorKeymap(
   });
   if (gotoBindings.length === 0) {
     // Fallback: Mod-g
-    bindings.push({ key: 'Mod-g', preventDefault: true, run: () => { actions.onGoToLine?.(); return true; } });
+    bindings.push({
+      key: 'Mod-g',
+      preventDefault: true,
+      run: () => {
+        actions.onGoToLine?.();
+        return true;
+      },
+    });
   } else {
     bindings.push(...gotoBindings);
   }
@@ -343,7 +354,14 @@ export function getEditorKeymap(
   });
   if (gotoSymbolBindings.length === 0) {
     // Fallback: Mod-Shift-o (Ctrl+Shift+O / Cmd+Shift+O)
-    bindings.push({ key: 'Mod-Shift-o', preventDefault: true, run: () => { actions.onGoToSymbol?.(); return true; } });
+    bindings.push({
+      key: 'Mod-Shift-o',
+      preventDefault: true,
+      run: () => {
+        actions.onGoToSymbol?.();
+        return true;
+      },
+    });
   } else {
     bindings.push(...gotoSymbolBindings);
   }
@@ -409,7 +427,14 @@ export function getEditorKeymap(
     return true;
   });
   if (toggleWordWrapBindings.length === 0) {
-    bindings.push({ key: 'Alt-z', preventDefault: true, run: () => { actions.onToggleWordWrap?.(); return true; } });
+    bindings.push({
+      key: 'Alt-z',
+      preventDefault: true,
+      run: () => {
+        actions.onToggleWordWrap?.();
+        return true;
+      },
+    });
   } else {
     bindings.push(...toggleWordWrapBindings);
   }
@@ -446,9 +471,11 @@ export function getEditorKeymap(
   // actual split, and return true to prevent CodeMirror's deleteToLineEnd
   // from also firing.
   const splitHorizBindings = bindingsFor('split_editor_horizontal', () => {
-    window.dispatchEvent(new CustomEvent('ledit:hotkey', {
-      detail: { commandId: 'split_editor_horizontal' },
-    }));
+    window.dispatchEvent(
+      new CustomEvent('ledit:hotkey', {
+        detail: { commandId: 'split_editor_horizontal' },
+      }),
+    );
     return true;
   });
   if (splitHorizBindings.length === 0) {
@@ -456,9 +483,11 @@ export function getEditorKeymap(
       key: 'Mod-k',
       preventDefault: true,
       run: () => {
-        window.dispatchEvent(new CustomEvent('ledit:hotkey', {
-          detail: { commandId: 'split_editor_horizontal' },
-        }));
+        window.dispatchEvent(
+          new CustomEvent('ledit:hotkey', {
+            detail: { commandId: 'split_editor_horizontal' },
+          }),
+        );
         return true;
       },
     });
@@ -478,21 +507,29 @@ export function getEditorKeymap(
 
   // Toggle linked scrolling for split panes showing the same file.
   // No default key binding — users must explicitly configure one.
-  bindings.push(...bindingsFor('toggle_linked_scroll', () => {
-    window.dispatchEvent(new CustomEvent('ledit:hotkey', {
-      detail: { commandId: 'toggle_linked_scroll' },
-    }));
-    return true;
-  }));
+  bindings.push(
+    ...bindingsFor('toggle_linked_scroll', () => {
+      window.dispatchEvent(
+        new CustomEvent('ledit:hotkey', {
+          detail: { commandId: 'toggle_linked_scroll' },
+        }),
+      );
+      return true;
+    }),
+  );
 
   // Toggle minimap visibility in the editor gutter.
   // No default key binding — users must explicitly configure one.
-  bindings.push(...bindingsFor('toggle_minimap', () => {
-    window.dispatchEvent(new CustomEvent('ledit:hotkey', {
-      detail: { commandId: 'toggle_minimap' },
-    }));
-    return true;
-  }));
+  bindings.push(
+    ...bindingsFor('toggle_minimap', () => {
+      window.dispatchEvent(
+        new CustomEvent('ledit:hotkey', {
+          detail: { commandId: 'toggle_minimap' },
+        }),
+      );
+      return true;
+    }),
+  );
 
   return bindings;
 }

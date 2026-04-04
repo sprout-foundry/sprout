@@ -1,10 +1,26 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { EditorView, keymap, KeyBinding, lineNumbers, highlightSpecialChars, highlightActiveLine, rectangularSelection, crosshairCursor } from '@codemirror/view';
+import {
+  EditorView,
+  keymap,
+  type KeyBinding,
+  lineNumbers,
+  highlightSpecialChars,
+  highlightActiveLine,
+  rectangularSelection,
+  crosshairCursor,
+} from '@codemirror/view';
 import { EditorState, Compartment } from '@codemirror/state';
 import { defaultKeymap, indentWithTab, history } from '@codemirror/commands';
 import { search, searchKeymap, openSearchPanel, replaceAll } from '@codemirror/search';
 import { autocompletion, closeBrackets } from '@codemirror/autocomplete';
-import { syntaxHighlighting, defaultHighlightStyle, codeFolding, foldGutter, indentOnInput, bracketMatching } from '@codemirror/language';
+import {
+  syntaxHighlighting,
+  defaultHighlightStyle,
+  codeFolding,
+  foldGutter,
+  indentOnInput,
+  bracketMatching,
+} from '@codemirror/language';
 import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark';
 
 import { useEditorManager } from '../contexts/EditorManagerContext';
@@ -30,16 +46,7 @@ import { getLanguageExtensions, resolveLanguageId } from '../extensions/language
 import { minimapExtension } from '../extensions/minimap';
 import { tabExpandSnippets, setSnippetLanguage } from '../extensions/snippets';
 import { ApiService } from '../services/api';
-import {
-  File,
-  Loader2,
-  AlertTriangle,
-  Eye,
-  Columns2,
-  WrapText,
-  Link2,
-  PanelRightClose,
-} from 'lucide-react';
+import { File, Loader2, AlertTriangle, Eye, Columns2, WrapText, Link2, PanelRightClose } from 'lucide-react';
 import { copyToClipboard } from '../utils/clipboard';
 import { generateUnifiedDiff } from '../utils/simpleDiff';
 import './EditorPane.css';
@@ -97,12 +104,21 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   const { hotkeys } = useHotkeys();
 
   // Get buffer for this pane
-  const pane = panes.find(p => p.id === paneId);
+  const pane = panes.find((p) => p.id === paneId);
   const buffer = pane?.bufferId ? buffers.get(pane.bufferId) : null;
 
   // Image extensions that should be viewed as images
   const IMAGE_EXTENSIONS = new Set([
-    '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.ico', '.tiff', '.tif', '.avif'
+    '.png',
+    '.jpg',
+    '.jpeg',
+    '.gif',
+    '.bmp',
+    '.webp',
+    '.ico',
+    '.tiff',
+    '.tif',
+    '.avif',
   ]);
 
   const isImageFile = (ext?: string): boolean => {
@@ -117,107 +133,113 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
 
   // Fetch workspace root on mount (for absolute path copy)
   useEffect(() => {
-    apiService.getWorkspace().then(ws => {
-      setWorkspaceRoot(ws.workspace_root || '');
-    }).catch(() => {
-      // Graceful degradation - absolute path option just won't appear
-    });
+    apiService
+      .getWorkspace()
+      .then((ws) => {
+        setWorkspaceRoot(ws.workspace_root || '');
+      })
+      .catch(() => {
+        // Graceful degradation - absolute path option just won't appear
+      });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadFileRef = useRef<((filePath: string) => Promise<void>) | null>(null);
   const fetchDiagnosticsRef = useRef<(filePath: string, content: string) => void>(() => {});
 
   // Load file content - updates buffer in context to keep it in sync with editor
-  const loadFile = useCallback(async (filePath: string) => {
-    setLoading(true);
-    setError(null);
-    isExternalUpdateRef.current = true;
+  const loadFile = useCallback(
+    async (filePath: string) => {
+      setLoading(true);
+      setError(null);
+      isExternalUpdateRef.current = true;
 
-    try {
-      const response = await readFileWithConsent(filePath);
-      if (!response.ok) {
-        throw new Error(`Failed to load file: ${response.statusText}`);
-      }
+      try {
+        const response = await readFileWithConsent(filePath);
+        if (!response.ok) {
+          throw new Error(`Failed to load file: ${response.statusText}`);
+        }
 
-      // Server returns raw file content as text, not JSON
-      const content = await response.text();
+        // Server returns raw file content as text, not JSON
+        const content = await response.text();
 
-      setLocalContent(content);
+        setLocalContent(content);
 
-      // Update buffer in context to keep it in sync with editor.
-      // Set originalContent so the buffer is NOT marked as modified just
-      // because it was loaded from disk (the content matches what's on disk).
-      if (buffer) {
-        updateBufferContent(buffer.id, content);
-        setBufferOriginalContent(buffer.id, content);
-      }
+        // Update buffer in context to keep it in sync with editor.
+        // Set originalContent so the buffer is NOT marked as modified just
+        // because it was loaded from disk (the content matches what's on disk).
+        if (buffer) {
+          updateBufferContent(buffer.id, content);
+          setBufferOriginalContent(buffer.id, content);
+        }
 
-      // Update editor if it exists
-      if (viewRef.current) {
-        viewRef.current.dispatch({
-          changes: {
-            from: 0,
-            to: viewRef.current.state.doc.length,
-            insert: content
-          }
-        });
-      }
+        // Update editor if it exists
+        if (viewRef.current) {
+          viewRef.current.dispatch({
+            changes: {
+              from: 0,
+              to: viewRef.current.state.doc.length,
+              insert: content,
+            },
+          });
+        }
 
-      // Restore cursor position from buffer state (layout persistence).
-      // Line numbers are 1-based (matching CodeMirror's doc.line().number).
-      // Only restore if non-zero to avoid jarring jumps for files without
-      // saved positions.
-      if (buffer && viewRef.current && (buffer.cursorPosition.line > 0 || buffer.cursorPosition.column > 0)) {
-        const { line, column } = buffer.cursorPosition;
-        const doc = viewRef.current.state.doc;
-        const targetLine = Math.max(0, Math.min(line, doc.lines - 1));
-        const lineInfo = doc.line(targetLine + 1);
-        const pos = lineInfo.from + Math.min(column, lineInfo.length);
-        viewRef.current.dispatch({
-          selection: { anchor: pos },
-        });
-      }
+        // Restore cursor position from buffer state (layout persistence).
+        // Line numbers are 1-based (matching CodeMirror's doc.line().number).
+        // Only restore if non-zero to avoid jarring jumps for files without
+        // saved positions.
+        if (buffer && viewRef.current && (buffer.cursorPosition.line > 0 || buffer.cursorPosition.column > 0)) {
+          const { line, column } = buffer.cursorPosition;
+          const doc = viewRef.current.state.doc;
+          const targetLine = Math.max(0, Math.min(line, doc.lines - 1));
+          const lineInfo = doc.line(targetLine + 1);
+          const pos = lineInfo.from + Math.min(column, lineInfo.length);
+          viewRef.current.dispatch({
+            selection: { anchor: pos },
+          });
+        }
 
-      // Restore scroll position from buffer state (layout persistence).
-      // Uses rAF so the DOM has rendered the new content before scrolling.
-      if (buffer && viewRef.current && (buffer.scrollPosition.top > 0 || buffer.scrollPosition.left > 0)) {
-        const { top, left } = buffer.scrollPosition;
-        requestAnimationFrame(() => {
-          if (viewRef.current) {
-            viewRef.current.scrollDOM.scrollTop = top;
-            viewRef.current.scrollDOM.scrollLeft = left;
-          }
-        });
-      }
+        // Restore scroll position from buffer state (layout persistence).
+        // Uses rAF so the DOM has rendered the new content before scrolling.
+        if (buffer && viewRef.current && (buffer.scrollPosition.top > 0 || buffer.scrollPosition.left > 0)) {
+          const { top, left } = buffer.scrollPosition;
+          requestAnimationFrame(() => {
+            if (viewRef.current) {
+              viewRef.current.scrollDOM.scrollTop = top;
+              viewRef.current.scrollDOM.scrollLeft = left;
+            }
+          });
+        }
 
-      // Fetch git diff after loading file
-      if (filePath && viewRef.current) {
-        try {
-          const diffResponse = await apiService.getGitDiff(filePath);
-          if (diffResponse.diff && diffResponse.diff.trim()) {
-            updateDiffGutter(viewRef.current, diffResponse.diff);
-          } else {
+        // Fetch git diff after loading file
+        if (filePath && viewRef.current) {
+          try {
+            const diffResponse = await apiService.getGitDiff(filePath);
+            if (diffResponse.diff && diffResponse.diff.trim()) {
+              updateDiffGutter(viewRef.current, diffResponse.diff);
+            } else {
+              clearDiffGutter(viewRef.current);
+            }
+          } catch (err) {
+            // Graceful degradation - just clear diff if API fails
+            console.warn('Failed to fetch git diff:', err);
             clearDiffGutter(viewRef.current);
           }
-        } catch (err) {
-          // Graceful degradation - just clear diff if API fails
-          console.warn('Failed to fetch git diff:', err);
-          clearDiffGutter(viewRef.current);
         }
-      }
 
-      // Fetch diagnostics for the loaded file
-      if (viewRef.current) {
-        fetchDiagnosticsRef.current(filePath, content);
+        // Fetch diagnostics for the loaded file
+        if (viewRef.current) {
+          fetchDiagnosticsRef.current(filePath, content);
+        }
+      } catch (err) {
+        console.error('[EditorPane loadFile] Error:', err);
+        setError(err instanceof Error ? err.message : 'Unknown error');
+      } finally {
+        isExternalUpdateRef.current = false;
+        setLoading(false);
       }
-    } catch (err) {
-      console.error('[EditorPane loadFile] Error:', err);
-      setError(err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      isExternalUpdateRef.current = false;
-      setLoading(false);
-    }
-  }, [apiService, buffer, updateBufferContent, setBufferOriginalContent]); // eslint-disable-line react-hooks/exhaustive-deps -- fetchDiagnostics is accessed via ref to avoid forward-reference issue
+    },
+    [apiService, buffer, updateBufferContent, setBufferOriginalContent],
+  ); // eslint-disable-line react-hooks/exhaustive-deps -- fetchDiagnostics is accessed via ref to avoid forward-reference issue
 
   // Keep ref in sync
   loadFileRef.current = loadFile;
@@ -237,7 +259,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
 
     dispatch.dispatch({
       selection: { anchor: pos, head: pos },
-      scrollIntoView: true
+      scrollIntoView: true,
     });
 
     // Focus the editor after navigation
@@ -249,19 +271,24 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     setContextMenu(null);
   }, []);
 
-  const handleEditorContextMenu = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!buffer || !buffer.file || buffer.file.isDir) return;
-    if (buffer.kind !== 'file') return;
-    setContextMenu({ x: e.clientX, y: e.clientY });
-  }, [buffer]);
+  const handleEditorContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!buffer || !buffer.file || buffer.file.isDir) return;
+      if (buffer.kind !== 'file') return;
+      setContextMenu({ x: e.clientX, y: e.clientY });
+    },
+    [buffer],
+  );
 
   const handleRevealInExplorer = useCallback(() => {
     if (!buffer || !buffer.file) return;
-    window.dispatchEvent(new CustomEvent('ledit:reveal-in-explorer', {
-      detail: { path: buffer.file.path }
-    }));
+    window.dispatchEvent(
+      new CustomEvent('ledit:reveal-in-explorer', {
+        detail: { path: buffer.file.path },
+      }),
+    );
     hideContextMenu();
   }, [buffer, hideContextMenu]);
 
@@ -274,7 +301,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   const handleCopyAbsolutePath = useCallback(() => {
     if (!buffer || !buffer.file) return;
     const root = workspaceRoot.replace(/\/+$/, '');
-    copyToClipboard(root + '/' + buffer.file.path);
+    copyToClipboard(`${root}/${buffer.file.path}`);
     hideContextMenu();
   }, [buffer, hideContextMenu, workspaceRoot]);
   // ──────────────────────────────────────────────────────────────
@@ -292,9 +319,11 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       // Notify the external file watcher that this file was saved from the
       // editor, so it updates its known mtime and doesn't re-fire a false
       // "changed externally" notification on the next poll.
-      document.dispatchEvent(new CustomEvent('file:editor-saved', {
-        detail: { path: buffer.file.path, mtime: Math.floor(Date.now() / 1000) },
-      }));
+      document.dispatchEvent(
+        new CustomEvent('file:editor-saved', {
+          detail: { path: buffer.file.path, mtime: Math.floor(Date.now() / 1000) },
+        }),
+      );
 
       // Re-fetch diff after save
       if (buffer.file.path && viewRef.current) {
@@ -319,26 +348,29 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   }, [buffer, saveBuffer, apiService]); // eslint-disable-line react-hooks/exhaustive-deps -- updateDiffGutter/clearDiffGutter are module-level functions
 
   // Fetch diagnostics for the current file and push them into the editor
-  const fetchDiagnostics = useCallback(async (filePath: string, content: string) => {
-    if (!viewRef.current) return;
-    try {
-      const result = await apiService.getDiagnostics(filePath, content);
-      if (result.diagnostics && result.diagnostics.length > 0) {
-        debouncedDiag.current.update(viewRef.current, result.diagnostics);
-      } else {
+  const fetchDiagnostics = useCallback(
+    async (filePath: string, content: string) => {
+      if (!viewRef.current) return;
+      try {
+        const result = await apiService.getDiagnostics(filePath, content);
+        if (result.diagnostics && result.diagnostics.length > 0) {
+          debouncedDiag.current.update(viewRef.current, result.diagnostics);
+        } else {
+          clearDiagnostics(viewRef.current);
+        }
+      } catch {
+        // Diagnostics are best-effort — don't show errors for diagnostic failures
         clearDiagnostics(viewRef.current);
       }
-    } catch {
-      // Diagnostics are best-effort — don't show errors for diagnostic failures
-      clearDiagnostics(viewRef.current);
-    }
-  }, [apiService]); // eslint-disable-line react-hooks/exhaustive-deps
+    },
+    [apiService],
+  ); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep ref in sync so loadFile can call fetchDiagnostics without a forward reference
   fetchDiagnosticsRef.current = fetchDiagnostics;
 
   const isExternalUpdateRef = useRef<boolean>(false);
-  const lastLoadedRef = useRef<{bufferId: string, filePath: string} | null>(null);
+  const lastLoadedRef = useRef<{ bufferId: string; filePath: string } | null>(null);
   const currentBufferIdRef = useRef<string | null>(null);
 
   // Load file when pane has a buffer assigned
@@ -351,8 +383,8 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
           changes: {
             from: 0,
             to: viewRef.current.state.doc.length,
-            insert: ''
-          }
+            insert: '',
+          },
         });
       }
       setError(null);
@@ -375,8 +407,8 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
           changes: {
             from: 0,
             to: viewRef.current.state.doc.length,
-            insert: nextContent
-          }
+            insert: nextContent,
+          },
         });
         clearDiffGutter(viewRef.current);
         clearDiagnostics(viewRef.current);
@@ -407,15 +439,17 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     currentBufferIdRef.current = buffer.id;
 
     // Skip if same buffer and same file already loaded
-    if (lastLoadedRef.current && 
-        lastLoadedRef.current.bufferId === buffer.id && 
-        lastLoadedRef.current.filePath === buffer.file.path) {
+    if (
+      lastLoadedRef.current &&
+      lastLoadedRef.current.bufferId === buffer.id &&
+      lastLoadedRef.current.filePath === buffer.file.path
+    ) {
       return;
     }
 
     // Load file from server
     lastLoadedRef.current = { bufferId: buffer.id, filePath: buffer.file.path };
-    
+
     // Use ref to avoid dependency issues - only pass filePath now
     if (loadFileRef.current) {
       loadFileRef.current(buffer.file.path);
@@ -438,6 +472,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
           }
         } catch {
           // Ignore position errors during large content changes
+          // eslint-disable-next-line no-console
           console.debug('Cursor position update skipped');
         }
       }
@@ -507,9 +542,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
           // After opening the panel, focus the replace input field.
           // The panel is rendered asynchronously, so we use requestAnimationFrame.
           requestAnimationFrame(() => {
-            const replaceInput = view.dom.querySelector<HTMLInputElement>(
-              '.cm-search input[name="replace"]'
-            );
+            const replaceInput = view.dom.querySelector<HTMLInputElement>('.cm-search input[name="replace"]');
             if (replaceInput) {
               replaceInput.focus();
               replaceInput.select();
@@ -552,7 +585,10 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       highlightActiveLine(),
       bracketMatching(),
       bracketColorizationPlugin(),
-      syntaxHighlighting(customHighlightStyle || (themePack.editorSyntaxStyle === 'one-dark' ? oneDarkHighlightStyle : defaultHighlightStyle)),
+      syntaxHighlighting(
+        customHighlightStyle ||
+          (themePack.editorSyntaxStyle === 'one-dark' ? oneDarkHighlightStyle : defaultHighlightStyle),
+      ),
       diffGutter(),
       lintDiagnostics(),
       lineNumbers(),
@@ -568,80 +604,75 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
           fontSize: '13px',
           fontFamily: "'Monaco', 'Menlo', 'Fira Code', monospace",
           backgroundColor: 'var(--cm-bg)',
-          color: 'var(--cm-fg)'
+          color: 'var(--cm-fg)',
         },
         '.cm-content': {
           padding: '16px',
-          caretColor: 'var(--cm-cursor, ' + (themePack.mode === 'dark' ? '#f8f8f2' : '#526fff') + ')'
+          caretColor: `var(--cm-cursor, ${themePack.mode === 'dark' ? '#f8f8f2' : '#526fff'})`,
         },
         '.cm-focused': {
-          outline: 'none'
+          outline: 'none',
         },
         '.cm-gutters': {
           backgroundColor: 'var(--cm-gutter-bg)',
           border: 'none',
-          color: 'var(--cm-gutter-fg)'
+          color: 'var(--cm-gutter-fg)',
         },
         '.cm-scroller': {
           fontFamily: 'inherit',
           overflow: 'auto',
           minHeight: '0',
-          height: '100%'
+          height: '100%',
         },
         '.cm-cursor': {
           borderLeftColor: themePack.mode === 'dark' ? 'var(--cm-cursor, #f8f8f2)' : 'var(--cm-cursor, #526fff)',
-          borderLeftWidth: '2px'
+          borderLeftWidth: '2px',
         },
         '&.cm-focused .cm-cursor': {
           borderLeftColor: themePack.mode === 'dark' ? 'var(--cm-cursor, #f8f8f2)' : 'var(--cm-cursor, #526fff)',
-          borderLeftWidth: '2px'
+          borderLeftWidth: '2px',
         },
         '.cm-dropCursor': {
-          borderLeftColor: themePack.mode === 'dark' ? 'var(--cm-cursor, #f8f8f2)' : 'var(--cm-cursor, #526fff)'
+          borderLeftColor: themePack.mode === 'dark' ? 'var(--cm-cursor, #f8f8f2)' : 'var(--cm-cursor, #526fff)',
         },
         '.cm-selectionBackground, .cm-content ::selection': {
-          backgroundColor: 'var(--cm-selection) !important'
+          backgroundColor: 'var(--cm-selection) !important',
         },
         '&.cm-focused .cm-activeLine': {
-          backgroundColor: 'var(--cm-active-line)'
+          backgroundColor: 'var(--cm-active-line)',
         },
         '.cm-activeLineGutter': {
           backgroundColor: 'var(--cm-active-line-gutter)',
-          color: 'var(--cm-gutter-fg-active)'
+          color: 'var(--cm-gutter-fg-active)',
         },
         '.cm-foldGutter': {
-          width: '20px'
+          width: '20px',
         },
         '.cm-foldGutter .cm-gutterElement': {
           padding: '0 4px',
-          fontSize: '12px'
+          fontSize: '12px',
         },
         '.cm-foldGutter .cm-gutterElement:hover': {
-          color: 'var(--accent-primary, #6366f1)'
-        }
+          color: 'var(--accent-primary, #6366f1)',
+        },
       }),
-      lineWrappingCompartment.current.of(
-        wordWrapEnabled ? EditorView.lineWrapping : []
-      ),
+      lineWrappingCompartment.current.of(wordWrapEnabled ? EditorView.lineWrapping : []),
       languageCompartment.current.of(
         getLanguageExtensions(
-          resolveLanguageId(
-            buffer?.languageOverride,
-            buffer?.file?.ext?.replace(/^\./, ''),
-            buffer?.file?.name,
-          ).languageId,
-        )
+          resolveLanguageId(buffer?.languageOverride, buffer?.file?.ext?.replace(/^\./, ''), buffer?.file?.name)
+            .languageId,
+        ),
       ),
     ];
 
     const state = EditorState.create({
       doc: localContent,
-      extensions
+      extensions,
     });
 
     const view = new EditorView({
       state,
-      parent: editorRef.current
+      parent: editorRef.current,
     });
 
     viewRef.current = view;
@@ -655,7 +686,19 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       view.destroy();
       viewRef.current = null;
     };
-  }, [paneId, buffer?.id, buffer?.file?.ext, theme, themePack.id, hotkeys, customHighlightStyle, updateBufferContent, setBufferModified, updateBufferCursor, updateBufferScroll]); // eslint-disable-line react-hooks/exhaustive-deps -- handleSave intentionally excluded to prevent infinite re-init loop when buffer changes
+  }, [
+    paneId,
+    buffer?.id,
+    buffer?.file?.ext,
+    theme,
+    themePack.id,
+    hotkeys,
+    customHighlightStyle,
+    updateBufferContent,
+    setBufferModified,
+    updateBufferCursor,
+    updateBufferScroll,
+  ]); // eslint-disable-line react-hooks/exhaustive-deps -- handleSave intentionally excluded to prevent infinite re-init loop when buffer changes
 
   // Reconfigure the language compartment when the language override changes,
   // without requiring a full editor re-initialization.
@@ -675,9 +718,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     );
 
     viewRef.current.dispatch({
-      effects: languageCompartment.current.reconfigure(
-        getLanguageExtensions(languageId),
-      ),
+      effects: languageCompartment.current.reconfigure(getLanguageExtensions(languageId)),
     });
   }, [buffer?.id, buffer?.languageOverride, buffer?.file?.ext, buffer?.file?.name]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -715,9 +756,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     wordWrapRef.current = next;
     setWordWrapEnabled(next);
     viewRef.current?.dispatch({
-      effects: lineWrappingCompartment.current.reconfigure(
-        next ? EditorView.lineWrapping : []
-      ),
+      effects: lineWrappingCompartment.current.reconfigure(next ? EditorView.lineWrapping : []),
     });
   }, []);
 
@@ -738,9 +777,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       // Graceful degradation — preference won't persist
     }
     viewRef.current?.dispatch({
-      effects: minimapCompartment.current.reconfigure(
-        next ? minimapExtension() : []
-      ),
+      effects: minimapCompartment.current.reconfigure(next ? minimapExtension() : []),
     });
   }, []);
 
@@ -842,17 +879,32 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
 
       // Skip showing dialog if the user has unsaved changes — don't overwrite silently.
       if (currentBuffer.isModified) {
-        // Fetch the disk content first so we can act on it regardless of user choice.
-        if (detail.deleted) return;
+        // Fetch the disk content for the conflict dialog, or show deletion alert.
+        if (detail.deleted) {
+          showFileChangeDialog(currentBuffer.file.name, { deleted: true, hasUnsavedChanges: true })
+            .then((action) => {
+              if (action === 'keep-mine') {
+                // User wants to keep their unsaved edits in the editor.
+                // Mark as externally modified so the tab shows the indicator.
+                setBufferExternallyModified(currentBuffer.id, '');
+              }
+              // 'ignore' → dismissed without action (no indicator needed)
+            })
+            .catch(() => {});
+          return;
+        }
 
         readFileWithConsent(filePath)
-          .then(response => {
+          .then((response) => {
             if (!response.ok) return;
             return response.text();
           })
-          .then(async diskContent => {
+          .then(async (diskContent) => {
             if (diskContent === undefined) return;
-            const action = await showFileChangeDialog(currentBuffer.file.name, { deleted: false, hasUnsavedChanges: true });
+            const action = await showFileChangeDialog(currentBuffer.file.name, {
+              deleted: false,
+              hasUnsavedChanges: true,
+            });
             if (action === 'reload') {
               if (loadFileRef.current) {
                 loadFileRef.current(filePath);
@@ -930,17 +982,16 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   // (Must be declared before early returns to satisfy React hooks rules)
   const languageInfo = useMemo(() => {
     if (!buffer || !buffer.file) return { languageId: null as string | null, isAutoDetected: false };
-    return resolveLanguageId(
-      buffer.languageOverride ?? null,
-      buffer.file?.ext?.replace(/^\./, ''),
-      buffer.file?.name,
-    );
+    return resolveLanguageId(buffer.languageOverride ?? null, buffer.file?.ext?.replace(/^\./, ''), buffer.file?.name);
   }, [buffer?.languageOverride, buffer?.file?.ext, buffer?.file?.name]);
 
-  const handleLanguageChange = useCallback((languageId: string | null) => {
-    if (!buffer) return;
-    setBufferLanguageOverride(buffer.id, languageId);
-  }, [buffer?.id, setBufferLanguageOverride]);
+  const handleLanguageChange = useCallback(
+    (languageId: string | null) => {
+      if (!buffer) return;
+      setBufferLanguageOverride(buffer.id, languageId);
+    },
+    [buffer?.id, setBufferLanguageOverride],
+  );
 
   // Compute enclosing symbols for breadcrumb display (before early returns).
   // buffer.cursorPosition.line is 0-based; getEnclosingSymbols expects 1-based.
@@ -954,24 +1005,19 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     }
 
     const timer = setTimeout(() => {
-      setEnclosingSymbols(
-        getEnclosingSymbols(
-          localContent,
-          buffer.file.ext,
-          buffer.cursorPosition.line + 1,
-        ),
-      );
+      setEnclosingSymbols(getEnclosingSymbols(localContent, buffer.file.ext, buffer.cursorPosition.line + 1));
     }, 100);
 
     return () => clearTimeout(timer);
   }, [localContent, buffer?.file?.ext, buffer?.cursorPosition.line]);
 
-
   if (!buffer || !buffer.file || buffer.file.isDir) {
     return (
       <div className="editor-pane empty">
         <div className="no-file-selected">
-          <div className="no-file-icon"><File size={40} /></div>
+          <div className="no-file-icon">
+            <File size={40} />
+          </div>
           <div className="no-file-text">Select a file to edit</div>
         </div>
       </div>
@@ -996,7 +1042,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         previewKind: 'svg',
         sourcePath: buffer.file.path,
         sourceName: buffer.file.name,
-      }
+      },
     });
   };
 
@@ -1019,18 +1065,14 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         previewKind: 'svg',
         sourcePath: buffer.file.path,
         sourceName: buffer.file.name,
-      }
+      },
     });
   };
 
   if (imageFile) {
     return (
       <div className="editor-pane">
-        <ImageViewer
-          filePath={buffer.file.path}
-          fileName={buffer.file.name}
-          fileSize={buffer.file.size}
-        />
+        <ImageViewer filePath={buffer.file.path} fileName={buffer.file.name} fileSize={buffer.file.size} />
       </div>
     );
   }
@@ -1093,20 +1135,22 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
               active: minimapEnabled,
               onClick: () => document.dispatchEvent(new CustomEvent('editor-toggle-minimap')),
             },
-            ...(isSvgFile ? [
-              {
-                id: 'svg-preview',
-                title: 'Open SVG preview',
-                icon: <Eye size={16} />,
-                onClick: openSvgPreview,
-              },
-              {
-                id: 'svg-preview-split',
-                title: 'Open SVG preview in split',
-                icon: <Columns2 size={16} />,
-                onClick: openSvgPreviewInSplit,
-              }
-            ] : []),
+            ...(isSvgFile
+              ? [
+                  {
+                    id: 'svg-preview',
+                    title: 'Open SVG preview',
+                    icon: <Eye size={16} />,
+                    onClick: openSvgPreview,
+                  },
+                  {
+                    id: 'svg-preview-split',
+                    title: 'Open SVG preview in split',
+                    icon: <Columns2 size={16} />,
+                    onClick: openSvgPreviewInSplit,
+                  },
+                ]
+              : []),
           ]}
         />
         <GoToSymbolOverlay
@@ -1129,9 +1173,11 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         filePath={buffer.file.path}
         onNavigate={(path) => {
           // Reveal the clicked path segment in the file explorer sidebar
-          window.dispatchEvent(new CustomEvent('ledit:reveal-in-explorer', {
-            detail: { path }
-          }));
+          window.dispatchEvent(
+            new CustomEvent('ledit:reveal-in-explorer', {
+              detail: { path },
+            }),
+          );
         }}
         symbols={enclosingSymbols}
         onNavigateToSymbol={(line) => {

@@ -129,7 +129,9 @@ const FileEditsPanel: FC<FileEditsPanelProps> = ({ edits, onFileClick }) => {
       if (requestId !== historyLoadRequestRef.current) {
         return;
       }
-      log.error(`Failed to fetch changelog: ${error instanceof Error ? error.message : String(error)}`, { title: 'Changelog Error' });
+      log.error(`Failed to fetch changelog: ${error instanceof Error ? error.message : String(error)}`, {
+        title: 'Changelog Error',
+      });
       setRollbackError('Failed to fetch revision history');
       setShowHistory(true);
     } finally {
@@ -174,7 +176,9 @@ const FileEditsPanel: FC<FileEditsPanelProps> = ({ edits, onFileClick }) => {
       setShowHistory(false);
       window.location.reload();
     } catch (error) {
-      log.error(`Rollback failed: ${error instanceof Error ? error.message : String(error)}`, { title: 'Rollback Error' });
+      log.error(`Rollback failed: ${error instanceof Error ? error.message : String(error)}`, {
+        title: 'Rollback Error',
+      });
       setRollbackError(error instanceof Error ? error.message : 'Rollback failed');
     } finally {
       setIsLoadingHistory(false);

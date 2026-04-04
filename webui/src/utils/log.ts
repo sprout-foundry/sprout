@@ -1,4 +1,5 @@
 /* eslint-disable no-console */
+import { useMemo } from 'react';
 import { useNotifications } from '../contexts/NotificationContext';
 
 // Default notification duration in milliseconds
@@ -33,9 +34,7 @@ export function error(
   // showNotification is not supported in non-React context
   // Use useLog() hook for notification support
   if (options?.showNotification) {
-    console.warn(
-      'showNotification option is only available when using the useLog() hook inside React components',
-    );
+    console.warn('showNotification option is only available when using the useLog() hook inside React components');
   }
 }
 
@@ -54,9 +53,7 @@ export function warn(
   console.warn(message);
 
   if (options?.showNotification) {
-    console.warn(
-      'showNotification option is only available when using the useLog() hook inside React components',
-    );
+    console.warn('showNotification option is only available when using the useLog() hook inside React components');
   }
 }
 
@@ -75,9 +72,7 @@ export function info(
   console.info(message);
 
   if (options?.showNotification) {
-    console.warn(
-      'showNotification option is only available when using the useLog() hook inside React components',
-    );
+    console.warn('showNotification option is only available when using the useLog() hook inside React components');
   }
 }
 
@@ -96,9 +91,7 @@ export function success(
   console.log('[SUCCESS]', message);
 
   if (options?.showNotification) {
-    console.warn(
-      'showNotification option is only available when using the useLog() hook inside React components',
-    );
+    console.warn('showNotification option is only available when using the useLog() hook inside React components');
   }
 }
 
@@ -109,53 +102,56 @@ export function success(
 export function useLog() {
   const { addNotification } = useNotifications();
 
-  const log = {
-    debug: (...args: unknown[]) => debugLog(...args),
+  const log = useMemo(
+    () => ({
+      debug: (...args: unknown[]) => debugLog(...args),
 
-    error: (
-      message: string,
-      options?: {
-        title?: string;
-        duration?: number;
+      error: (
+        message: string,
+        options?: {
+          title?: string;
+          duration?: number;
+        },
+      ) => {
+        console.error(message);
+        addNotification('error', options?.title || DEFAULT_LOG_TITLE, message, options?.duration);
       },
-    ) => {
-      console.error(message);
-      addNotification('error', options?.title || DEFAULT_LOG_TITLE, message, options?.duration);
-    },
 
-    warn: (
-      message: string,
-      options?: {
-        title?: string;
-        duration?: number;
+      warn: (
+        message: string,
+        options?: {
+          title?: string;
+          duration?: number;
+        },
+      ) => {
+        console.warn(message);
+        addNotification('warning', options?.title || DEFAULT_LOG_TITLE, message, options?.duration);
       },
-    ) => {
-      console.warn(message);
-      addNotification('warning', options?.title || DEFAULT_LOG_TITLE, message, options?.duration);
-    },
 
-    info: (
-      message: string,
-      options?: {
-        title?: string;
-        duration?: number;
+      info: (
+        message: string,
+        options?: {
+          title?: string;
+          duration?: number;
+        },
+      ) => {
+        console.info(message);
+        addNotification('info', options?.title || DEFAULT_LOG_TITLE, message, options?.duration);
       },
-    ) => {
-      console.info(message);
-      addNotification('info', options?.title || DEFAULT_LOG_TITLE, message, options?.duration);
-    },
 
-    success: (
-      message: string,
-      options?: {
-        title?: string;
-        duration?: number;
+      success: (
+        message: string,
+        options?: {
+          title?: string;
+          duration?: number;
+        },
+      ) => {
+        console.log('[SUCCESS]', message);
+        addNotification('success', options?.title || DEFAULT_LOG_TITLE, message, options?.duration);
       },
-    ) => {
-      console.log('[SUCCESS]', message);
-      addNotification('success', options?.title || DEFAULT_LOG_TITLE, message, options?.duration);
-    },
-  };
+    }),
+    [addNotification],
+  );
 
   return log;
 }

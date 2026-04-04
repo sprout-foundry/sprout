@@ -1,5 +1,6 @@
 import { debugLog } from '../utils/log';
 import { appendClientIdToUrl } from './clientSession';
+import { notificationBus } from './notificationBus';
 
 /** Shape of a WebSocket event coming from / going to the server. */
 export interface WsEvent {
@@ -152,7 +153,11 @@ class WebSocketService {
     };
 
     this.ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
+      // Only notify on the very first connection error. Don't spam toasts during
+      // reconnect cycles — onerror can fire transiently and up to 30 times.
+      if (!this.wasConnectedBefore) {
+        notificationBus.notify('error', 'Connection Error', 'WebSocket error: ' + String(error));
+      }
       // Note: onerror does not necessarily mean the connection is dead.
       // It can fire for transient errors. The onclose handler is the proper
       // place to handle reconnection logic.
@@ -179,7 +184,7 @@ class WebSocketService {
 
         this.notifyCallbacks(data);
       } catch (error) {
-        console.error('Failed to parse WebSocket message:', error, event.data);
+        notificationBus.notify('error', 'WebSocket Error', 'Failed to parse message: ' + String(error));
       }
     };
   }
@@ -280,7 +285,7 @@ class WebSocketService {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(event));
     } else {
-      console.warn('WebSocket not connected, cannot send event:', event);
+      notificationBus.notify('warning', 'WebSocket Warning', 'Cannot send event: connection not active');
     }
   }
 

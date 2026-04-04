@@ -300,7 +300,9 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       setExpandedRevisionIds(normalized.length > 0 ? new Set([normalized[0].revision_id]) : new Set());
     } catch (error) {
       if (requestId !== historyLoadRequestRef.current) return;
-      log.error(`Failed to load revision history: ${error instanceof Error ? error.message : String(error)}`, { title: 'Revision History Error' });
+      log.error(`Failed to load revision history: ${error instanceof Error ? error.message : String(error)}`, {
+        title: 'Revision History Error',
+      });
     } finally {
       if (requestId === historyLoadRequestRef.current) {
         setIsLoadingHistory(false);
@@ -316,7 +318,9 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       setCurrentSessionId(response.current_session_id || '');
       setSessionsCount(response.sessions?.length || 0);
     } catch (error) {
-      log.error(`Failed to load sessions: ${error instanceof Error ? error.message : String(error)}`, { title: 'Session Load Error' });
+      log.error(`Failed to load sessions: ${error instanceof Error ? error.message : String(error)}`, {
+        title: 'Session Load Error',
+      });
     } finally {
       setIsLoadingSessions(false);
     }
@@ -521,7 +525,9 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
         });
         setRevisionDetailsById((prev) => ({ ...prev, [revisionId]: detailsMap }));
       } catch (error) {
-        log.error(`Failed to load revision details: ${error instanceof Error ? error.message : String(error)}`, { title: 'Revision Details Error' });
+        log.error(`Failed to load revision details: ${error instanceof Error ? error.message : String(error)}`, {
+          title: 'Revision Details Error',
+        });
       } finally {
         setRevisionDetailsLoading((prev) => ({ ...prev, [revisionId]: false }));
       }

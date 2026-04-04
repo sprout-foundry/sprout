@@ -106,7 +106,7 @@ const MessageSegments: FC<MessageSegmentsProps> = ({ content, toolRefs = [], onT
               </div>
             );
 
-          case 'tool_call':
+          case 'tool_call': {
             const matchingRef = claimMatchingToolRef(segment.toolName);
             const baseName = segment.toolName.split('(')[0];
             return (
@@ -139,6 +139,7 @@ const MessageSegments: FC<MessageSegmentsProps> = ({ content, toolRefs = [], onT
                 <ExternalLink size={10} className="tool-pill-link-icon" />
               </div>
             );
+          }
 
           case 'todo_update':
             return (

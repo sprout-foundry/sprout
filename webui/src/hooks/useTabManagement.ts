@@ -91,7 +91,7 @@ export function useTabManagement({
       const buffer = buffersRef.current.get(bufferId);
       if (!buffer || buffer.isClosable === false) return;
       if (buffer.isModified && isAutoSaveEnabled) {
-        saveBuffer(bufferId).catch(() => log.error('Failed to save buffer before closing', { title: 'Save Error' }));
+        saveBuffer(bufferId).catch((err) => log.error(`Failed to save buffer before closing: ${err instanceof Error ? err.message : String(err)}`, { title: 'Save Error' }));
       }
       const remain = Array.from(buffersRef.current.values()).filter((c) => c.id !== bufferId);
       const nextPaneBuffer = buffer.paneId
@@ -142,7 +142,7 @@ export function useTabManagement({
       const b = cb.get(bid);
       if (!b) continue;
       if (b.isModified && isAutoSaveEnabled) {
-        saveBuffer(bid).catch(() => log.error('Failed to save buffer', { title: 'Save Error' }));
+        saveBuffer(bid).catch((err) => log.error(`Failed to save buffer: ${err instanceof Error ? err.message : String(err)}`, { title: 'Save Error' }));
       }
       setBuffers((prev) => {
         const n = new Map(prev);
@@ -171,7 +171,7 @@ export function useTabManagement({
         const b = cb.get(bid);
         if (!b) continue;
         if (b.isModified && isAutoSaveEnabled) {
-          saveBuffer(bid).catch(() => log.error('Failed to save buffer', { title: 'Save Error' }));
+          saveBuffer(bid).catch((err) => log.error(`Failed to save buffer: ${err instanceof Error ? err.message : String(err)}`, { title: 'Save Error' }));
         }
         setBuffers((prev) => {
           const n = new Map(prev);

@@ -112,7 +112,7 @@ build-ui:
 	@echo "React web UI build completed in webui/build/"
 
 # Build React web UI and deploy to Go static directory (for embedding)
-deploy-ui:
+deploy-ui: build-ui
 	@echo "Deploying React web UI to Go static directory..."
 	@if [ ! -d "webui" ]; then \
 		echo "Error: webui directory not found"; \

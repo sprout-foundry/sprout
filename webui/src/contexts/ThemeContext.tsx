@@ -139,6 +139,7 @@ export const ThemeProvider: FC<ThemeProviderProps> = ({ children }) => {
     try {
       parsed = JSON.parse(jsonString);
     } catch (err) {
+      debugLog('[importTheme] failed to parse JSON:', err);
       return { success: false, warnings: [`Invalid JSON: ${(err as Error).message}`] };
     }
 

@@ -455,6 +455,7 @@ class ApiService {
         signal: controller.signal,
       });
     } catch (error) {
+      debugLog('[openSSHWorkspace] catch block reached:', error);
       if (error instanceof DOMException && error.name === 'AbortError') {
         throw new SSHWorkspaceOpenError({
           error: 'SSH workspace launch timed out. Check SSH connectivity and ~/.ledit/workspace.log for details.',
@@ -498,7 +499,10 @@ class ApiService {
     }
 
     const response = await clientFetch(`/api/instances/ssh-launch-status?${params.toString()}`);
-    const data = await response.json().catch(() => ({}));
+    const data = await response.json().catch((err) => {
+      debugLog('[getSSHLaunchStatus] failed to parse response JSON:', err);
+      return {};
+    });
     if (!response.ok) {
       throw new Error(data.error || data.message || 'Failed to fetch SSH launch status');
     }

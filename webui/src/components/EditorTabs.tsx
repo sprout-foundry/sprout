@@ -314,7 +314,7 @@ const EditorTabs: FC<EditorTabsProps> = ({ paneId, actions, compact = false }) =
               ) : (
                 <>
                   <p>
-                    You have unsaved changes in <strong>"{showConfirm.fileName}"</strong>.
+                    You have unsaved changes in <strong>&quot;{showConfirm.fileName}&quot;</strong>.
                   </p>
                   <p>Are you sure you want to close the file?</p>
                 </>

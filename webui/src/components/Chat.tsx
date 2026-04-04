@@ -491,10 +491,10 @@ const Chat: FC<ChatProps> = ({
                   <Bot size={32} />
                 </div>
                 <div className="welcome-text">
-                  Welcome to ledit! I'm ready to help you with code analysis, editing, and more.
+                  Welcome to ledit! I&apos;m ready to help you with code analysis, editing, and more.
                 </div>
                 <div className="welcome-hint">
-                  Try asking: "Show me the project structure" or "Find the main function"
+                  Try asking: &quot;Show me the project structure&quot; or &quot;Find the main function&quot;
                 </div>
               </div>
             ) : (

@@ -70,13 +70,13 @@ func (tm *ThemeManager) LoadThemeFromFile(themePath string) error {
 	// Read the file
 	data, err := os.ReadFile(themePath)
 	if err != nil {
-		return fmt.Errorf("error reading theme file: %v", err)
+		return fmt.Errorf("error reading theme file: %w", err)
 	}
 
 	// Parse JSON
 	var theme Theme
 	if err := json.Unmarshal(data, &theme); err != nil {
-		return fmt.Errorf("error parsing theme JSON: %v", err)
+		return fmt.Errorf("error parsing theme JSON: %w", err)
 	}
 
 	tm.theme = theme

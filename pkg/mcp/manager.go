@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -113,7 +114,7 @@ func (m *DefaultMCPManager) StartAll(ctx context.Context) error {
 	}
 	m.mutex.RUnlock()
 
-	var errors []error
+	var errs []error
 	var wg sync.WaitGroup
 
 	for _, server := range servers {
@@ -122,7 +123,7 @@ func (m *DefaultMCPManager) StartAll(ctx context.Context) error {
 			go func(s MCPServer) {
 				defer wg.Done()
 				if err := s.Start(ctx); err != nil {
-					errors = append(errors, fmt.Errorf("failed to start %s: %w", s.GetName(), err))
+					errs = append(errs, fmt.Errorf("failed to start %s: %w", s.GetName(), err))
 				}
 			}(server)
 		}
@@ -130,12 +131,12 @@ func (m *DefaultMCPManager) StartAll(ctx context.Context) error {
 
 	wg.Wait()
 
-	if len(errors) > 0 {
+	if len(errs) > 0 {
 		errorMsg := "Failed to start some MCP servers:"
-		for _, err := range errors {
+		for _, err := range errs {
 			errorMsg += "\n  - " + err.Error()
 		}
-		return fmt.Errorf("%s", errorMsg)
+		return errors.New(errorMsg)
 	}
 
 	if m.logger != nil {
@@ -162,7 +163,7 @@ func (m *DefaultMCPManager) StopAll(ctx context.Context) error {
 	}
 	m.mutex.RUnlock()
 
-	var errors []error
+	var errs []error
 	var wg sync.WaitGroup
 
 	for _, server := range servers {
@@ -170,19 +171,19 @@ func (m *DefaultMCPManager) StopAll(ctx context.Context) error {
 		go func(s MCPServer) {
 			defer wg.Done()
 			if err := s.Stop(ctx); err != nil {
-				errors = append(errors, fmt.Errorf("failed to stop %s: %w", s.GetName(), err))
+				errs = append(errs, fmt.Errorf("failed to stop %s: %w", s.GetName(), err))
 			}
 		}(server)
 	}
 
 	wg.Wait()
 
-	if len(errors) > 0 {
+	if len(errs) > 0 {
 		errorMsg := "Failed to stop some MCP servers:"
-		for _, err := range errors {
+		for _, err := range errs {
 			errorMsg += "\n  - " + err.Error()
 		}
-		return fmt.Errorf("%s", errorMsg)
+		return errors.New(errorMsg)
 	}
 
 	if m.logger != nil && len(servers) > 0 {
@@ -205,7 +206,7 @@ func (m *DefaultMCPManager) GetAllTools(ctx context.Context) ([]MCPTool, error) 
 
 	var allTools []MCPTool
 	var toolsMutex sync.Mutex
-	var errors []error
+	var errs []error
 	var errorsMutex sync.Mutex
 	var wg sync.WaitGroup
 
@@ -217,7 +218,7 @@ func (m *DefaultMCPManager) GetAllTools(ctx context.Context) ([]MCPTool, error) 
 			tools, err := s.ListTools(ctx)
 			if err != nil {
 				errorsMutex.Lock()
-				errors = append(errors, fmt.Errorf("failed to list tools from %s: %w", s.GetName(), err))
+				errs = append(errs, fmt.Errorf("failed to list tools from %s: %w", s.GetName(), err))
 				errorsMutex.Unlock()
 				return
 			}
@@ -230,10 +231,10 @@ func (m *DefaultMCPManager) GetAllTools(ctx context.Context) ([]MCPTool, error) 
 
 	wg.Wait()
 
-	if len(errors) > 0 {
+	if len(errs) > 0 {
 		// Log errors but don't fail completely - return partial results
 		if m.logger != nil {
-			for _, err := range errors {
+			for _, err := range errs {
 				m.logger.LogProcessStep(fmt.Sprintf("[WARN] %v", err))
 			}
 		}

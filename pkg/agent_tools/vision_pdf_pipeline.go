@@ -97,7 +97,7 @@ func ProcessPDFForMultimodal(pdfPath string) (*PDFPipelineResult, error) {
 	}
 
 	if pageErr != nil {
-		return nil, fmt.Errorf("PDF has no extractable text and page rendering failed: %v", pageErr)
+		return nil, fmt.Errorf("PDF has no extractable text and page rendering failed: %w", pageErr)
 	}
 	return nil, fmt.Errorf("PDF has no extractable text and page rendering failed")
 }

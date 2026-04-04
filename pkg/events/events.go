@@ -32,6 +32,7 @@ const (
 	EventTypeMetricsUpdate           = "metrics_update"
 	EventTypeValidation              = "validation"
 	EventTypeSecurityApprovalRequest = "security_approval_request"
+	EventTypeSecurityPromptRequest  = "security_prompt_request"
 	EventTypeAgentMessage            = "agent_message"
 	EventTypeWorkspaceChanged        = "workspace_changed"
 )
@@ -244,13 +245,17 @@ func ToolEndEvent(toolCallID, toolName, status, result, errorMessage string, dur
 }
 
 // SecurityApprovalRequestEvent creates a security approval request event for the webui
-func SecurityApprovalRequestEvent(requestID, toolName, riskLevel, reasoning string) map[string]interface{} {
-	return map[string]interface{}{
+func SecurityApprovalRequestEvent(requestID, toolName, riskLevel, reasoning string, extras map[string]string) map[string]interface{} {
+	payload := map[string]interface{}{
 		"request_id": requestID,
 		"tool_name":  toolName,
 		"risk_level": riskLevel,
 		"reasoning":  reasoning,
 	}
+	for k, v := range extras {
+		payload[k] = v
+	}
+	return payload
 }
 
 // TodoUpdateEvent creates a todo update event
@@ -294,5 +299,26 @@ func WorkspaceChangedEvent(daemonRoot, workspaceRoot, previousWorkspaceRoot stri
 		"daemon_root":             daemonRoot,
 		"workspace_root":          workspaceRoot,
 		"previous_workspace_root": previousWorkspaceRoot,
+	}
+}
+
+// SecurityPromptRequestEvent creates a security prompt request event for the webui
+func SecurityPromptRequestEvent(requestID, prompt string, defaultResponse bool, extras map[string]string) map[string]interface{} {
+	payload := map[string]interface{}{
+		"request_id":      requestID,
+		"prompt":          prompt,
+		"default_response": defaultResponse,
+	}
+	for k, v := range extras {
+		payload[k] = v
+	}
+	return payload
+}
+
+// SecurityPromptResponseEvent creates a security prompt response event
+func SecurityPromptResponseEvent(requestID, response bool) map[string]interface{} {
+	return map[string]interface{}{
+		"request_id": requestID,
+		"response":   response,
 	}
 }

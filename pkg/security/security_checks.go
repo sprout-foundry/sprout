@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/alantheprice/ledit/pkg/events"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
@@ -194,12 +195,16 @@ func CheckFileSecurity(
 	existingSecurityConcerns []string,
 	existingIgnoredSecurityConcerns []string,
 	cfg *configuration.Config,
+	eventBus *events.EventBus,
 ) (
 	updatedSecurityConcerns []string,
 	updatedIgnoredSecurityConcerns []string,
 	skipLLMSummarization bool,
 ) {
 	logger := utils.GetLogger(false)
+
+	// Get global prompt manager (set by webui in WebUI mode) or nil otherwise
+	promptManager := GetGlobalPromptManager()
 
 	concernsForThisFile := make([]string, 0)
 	ignoredConcernsForThisFile := make([]string, 0)
@@ -233,7 +238,21 @@ func CheckFileSecurity(
 			// Prompt the user for a decision.
 			snippet := detectedSnippetsMap[detectedConcern]
 			prompt := prompts.PotentialSecurityConcernsFound(relativePath, detectedConcern, snippet)
-			if logger.AskForConfirmation(prompt, true, false) { // Default to NOT ignoring (i.e., mark as issue)
+			var userResponse bool
+
+			// Try event-based prompting first (for WebUI)
+			if eventBus != nil && promptManager != nil {
+				userResponse = promptManager.RequestPrompt(eventBus, prompt, true, map[string]string{
+					"file_path": relativePath,
+					"concern":   detectedConcern,
+				})
+				logger.Logf("Security concern '%s' in %s user response: %v", detectedConcern, relativePath, userResponse)
+			} else {
+				// Fall back to CLI-based prompting
+				userResponse = logger.AskForConfirmation(prompt, true, false)
+			}
+
+			if userResponse { // User chose to mark as an issue
 				concernsForThisFile = append(concernsForThisFile, detectedConcern)
 				logger.Logf("Security concern '%s' in %s noted as an issue.", detectedConcern, relativePath)
 			} else { // User chose to ignore this specific detected concern

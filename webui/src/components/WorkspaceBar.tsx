@@ -3,6 +3,7 @@ import type { FC } from 'react';
 import { Monitor, Server } from 'lucide-react';
 import { ApiService } from '../services/api';
 import { getSSHProxyContext } from '../services/clientSession';
+import { notificationBus } from '../services/notificationBus';
 
 interface WorkspaceBarProps {
   isConnected: boolean;
@@ -43,7 +44,7 @@ const WorkspaceBar: FC<WorkspaceBarProps> = ({ isConnected, isMobileMenuOpen = f
         setBar({ workspacePath: collapsed, hostAlias, isRemote });
       })
       .catch((err) => {
-        console.error('Failed to load workspace path:', err);
+        notificationBus.notify('warning', 'Workspace', 'Failed to load workspace path: ' + String(err), 5000);
       });
     return () => {
       cancelled = true;
@@ -67,7 +68,7 @@ const WorkspaceBar: FC<WorkspaceBarProps> = ({ isConnected, isMobileMenuOpen = f
           setBar({ workspacePath: collapsed, hostAlias, isRemote });
         })
         .catch((err) => {
-          console.error('Failed to load workspace path:', err);
+          notificationBus.notify('warning', 'Workspace', 'Failed to load workspace path: ' + String(err), 5000);
         });
     };
     window.addEventListener('ledit:workspace-changed', onWorkspaceChange);

@@ -353,7 +353,7 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 	// Get staged diff
 	diffOutput, err := exec.Command("git", "diff", "--staged").CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to get staged diff: %v", err)
+		return fmt.Errorf("failed to get staged diff: %w", err)
 	}
 
 	if len(strings.TrimSpace(string(diffOutput))) == 0 {
@@ -381,14 +381,14 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 	// Get current branch name
 	branchOutput, err := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD").CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to get branch name: %v", err)
+		return fmt.Errorf("failed to get branch name: %w", err)
 	}
 	branch := strings.TrimSpace(string(branchOutput))
 
 	// Get staged files with their status
 	stagedFilesOutput, err := exec.Command("git", "diff", "--cached", "--name-status").CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to get staged files status: %v", err)
+		return fmt.Errorf("failed to get staged files status: %w", err)
 	}
 
 	// Parse file actions and filenames
@@ -456,7 +456,7 @@ retryLoop:
 			UserInstructions: c.userInstructions,
 		})
 		if err != nil {
-			return fmt.Errorf("failed to generate commit message: %v", err)
+			return fmt.Errorf("failed to generate commit message: %w", err)
 		}
 		commitMessage = result.Message
 		c.printf("\n$ Tokens used: ~%d (model: %s/%s)\n", result.ApproxTokens, clientType, model)
@@ -591,14 +591,14 @@ retryLoop:
 	tempFile := "commit_msg.txt"
 	err = os.WriteFile(tempFile, []byte(commitMessage), 0644)
 	if err != nil {
-		return fmt.Errorf("failed to create temporary commit message file: %v", err)
+		return fmt.Errorf("failed to create temporary commit message file: %w", err)
 	}
 	defer os.Remove(tempFile)
 
 	cmd := exec.Command("git", "commit", "-F", tempFile)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to create commit: %v\nOutput: %s", err, string(output))
+		return fmt.Errorf("failed to create commit: %w\nOutput: %s", err, string(output))
 	}
 
 	c.println("[OK] Commit created successfully!")

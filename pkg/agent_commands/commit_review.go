@@ -16,7 +16,7 @@ func generateCommitReview(chatAgent *agent.Agent) (string, error) {
 	// Get staged diff
 	diffOutput, err := exec.Command("git", "diff", "--staged").CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("failed to get staged diff: %v", err)
+		return "", fmt.Errorf("failed to get staged diff: %w", err)
 	}
 
 	diff := strings.TrimSpace(string(diffOutput))
@@ -27,7 +27,7 @@ func generateCommitReview(chatAgent *agent.Agent) (string, error) {
 	// Get staged files
 	stagedFiles, err := getStagedFiles()
 	if err != nil {
-		return "", fmt.Errorf("failed to get staged files: %v", err)
+		return "", fmt.Errorf("failed to get staged files: %w", err)
 	}
 	if len(stagedFiles) == 0 {
 		return "", nil // No staged files to review

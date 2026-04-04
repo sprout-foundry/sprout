@@ -1,7 +1,7 @@
 // @ts-nocheck
 
-import React from 'react';
-import { act } from 'react';
+import { act, createElement } from 'react';
+import type { Dispatch, KeyboardEvent } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { buildKeyString, HotkeyProvider } from './HotkeyContext';
 
@@ -221,7 +221,7 @@ describe('HotkeyProvider', () => {
   it('renders without crashing (smoke test)', () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     act(() => {
-      root.render(React.createElement(HotkeyProvider, null, React.createElement('div')));
+      root.render(createElement(HotkeyProvider, null, createElement('div')));
     });
     // If we get here, the provider mounted successfully
     expect(container.querySelector('div')).not.toBeNull();
@@ -232,7 +232,7 @@ describe('fallback hotkeys are wired to hotkey commands', () => {
   it('dispatches ledit:hotkey when a fallback hotkey matches', async () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     act(() => {
-      root.render(React.createElement(HotkeyProvider, null, React.createElement('div')));
+      root.render(createElement(HotkeyProvider, null, createElement('div')));
     });
 
     // Wait for the provider's async initialization to settle
@@ -253,7 +253,7 @@ describe('fallback hotkeys are wired to hotkey commands', () => {
   it('does not dispatch hotkey when input is focused and hotkey is not global', async () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     act(() => {
-      root.render(React.createElement(HotkeyProvider, null, React.createElement('div')));
+      root.render(createElement(HotkeyProvider, null, createElement('div')));
     });
 
     await flushPromises();
@@ -280,7 +280,7 @@ describe('fallback hotkeys are wired to hotkey commands', () => {
   it('dispatches global hotkey even when input is focused', async () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     act(() => {
-      root.render(React.createElement(HotkeyProvider, null, React.createElement('div')));
+      root.render(createElement(HotkeyProvider, null, createElement('div')));
     });
 
     await flushPromises();
@@ -307,7 +307,7 @@ describe('fallback hotkeys are wired to hotkey commands', () => {
   it('dispatches event with correct detail (commandId and key)', async () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     act(() => {
-      root.render(React.createElement(HotkeyProvider, null, React.createElement('div')));
+      root.render(createElement(HotkeyProvider, null, createElement('div')));
     });
 
     await flushPromises();
@@ -329,7 +329,7 @@ describe('fallback hotkeys are wired to hotkey commands', () => {
   it('does not dispatch event for unrecognized key combinations', async () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     act(() => {
-      root.render(React.createElement(HotkeyProvider, null, React.createElement('div')));
+      root.render(createElement(HotkeyProvider, null, createElement('div')));
     });
 
     await flushPromises();
@@ -382,7 +382,7 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
   it('dispatches ledit:hotkey when onDesktopHotkey fires a global command', async () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     act(() => {
-      root.render(React.createElement(HotkeyProvider, null, React.createElement('div')));
+      root.render(createElement(HotkeyProvider, null, createElement('div')));
     });
 
     await flushPromises();
@@ -406,7 +406,7 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
   it('does NOT dispatch when input is focused and command is not global', async () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     act(() => {
-      root.render(React.createElement(HotkeyProvider, null, React.createElement('div')));
+      root.render(createElement(HotkeyProvider, null, createElement('div')));
     });
 
     await flushPromises();
@@ -432,7 +432,7 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
   it('dispatches non-global command when no input is focused', async () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     act(() => {
-      root.render(React.createElement(HotkeyProvider, null, React.createElement('div')));
+      root.render(createElement(HotkeyProvider, null, createElement('div')));
     });
 
     await flushPromises();
@@ -454,7 +454,7 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
   it('dispatches global command even when contentEditable is focused', async () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     act(() => {
-      root.render(React.createElement(HotkeyProvider, null, React.createElement('div')));
+      root.render(createElement(HotkeyProvider, null, createElement('div')));
     });
 
     await flushPromises();
@@ -481,7 +481,7 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
   it('does not leak IPC listeners on unmount', async () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     act(() => {
-      root.render(React.createElement(HotkeyProvider, null, React.createElement('div')));
+      root.render(createElement(HotkeyProvider, null, createElement('div')));
     });
 
     await flushPromises();
@@ -501,7 +501,7 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
 
     // eslint-disable-next-line testing-library/no-unnecessary-act
     act(() => {
-      root.render(React.createElement(HotkeyProvider, null, React.createElement('div')));
+      root.render(createElement(HotkeyProvider, null, createElement('div')));
     });
 
     await flushPromises();

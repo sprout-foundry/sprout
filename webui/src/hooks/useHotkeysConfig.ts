@@ -38,7 +38,14 @@ export function useHotkeysConfig({
   const handleOpenHotkeysConfig = useCallback(() => {
     if (!hotkeysConfigPath) return;
     const { fileName, fileExt } = parseFilePath(hotkeysConfigPath);
-    openFile({ path: hotkeysConfigPath, name: fileName, isDir: false, size: 0, modified: 0, ext: fileExt });
+    openFile({
+      path: hotkeysConfigPath,
+      name: fileName,
+      isDir: false,
+      size: 0,
+      modified: 0,
+      ext: fileExt,
+    });
     onViewChange('editor');
     onCloseCommandPalette();
   }, [hotkeysConfigPath, openFile, onViewChange, onCloseCommandPalette]);

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import type { FC } from 'react';
 import './Progress.css';
 
 export interface ProgressItem {
@@ -14,7 +15,7 @@ interface ProgressProps {
   items: ProgressItem[];
 }
 
-const Progress: React.FC<ProgressProps> = ({ items }) => {
+const Progress: FC<ProgressProps> = ({ items }) => {
   const [elapsed, setElapsed] = useState<{ [key: string]: number }>({});
 
   useEffect(() => {

@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import type { FC, MouseEvent as ReactMouseEvent } from 'react';
 import {
   EditorView,
   keymap,
@@ -56,7 +57,7 @@ interface EditorPaneProps {
   paneId: string;
 }
 
-const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
+const EditorPane: FC<EditorPaneProps> = ({ paneId }) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const lineWrappingCompartment = useRef(new Compartment());
@@ -272,7 +273,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   }, []);
 
   const handleEditorContextMenu = useCallback(
-    (e: React.MouseEvent) => {
+    (e: ReactMouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
       if (!buffer || !buffer.file || buffer.file.isDir) return;
@@ -875,7 +876,12 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     const filePath = buffer.file.path;
 
     const handleExternalChange = (e: Event) => {
-      const detail = (e as CustomEvent).detail as { path: string; mtime: number; size: number; deleted: boolean };
+      const detail = (e as CustomEvent).detail as {
+        path: string;
+        mtime: number;
+        size: number;
+        deleted: boolean;
+      };
       if (detail.path !== filePath) return;
 
       // Read current buffer state via ref to avoid stale closure.

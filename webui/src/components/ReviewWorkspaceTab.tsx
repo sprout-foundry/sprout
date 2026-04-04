@@ -1,4 +1,5 @@
-import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react';
+import { useMemo, useCallback, useState, useEffect, useRef } from 'react';
+import type { FC } from 'react';
 import { ShieldCheck, Loader2, Wrench } from 'lucide-react';
 import MessageSegments from './MessageSegments';
 import MessageBubble from './MessageBubble';
@@ -47,7 +48,7 @@ const getSectionToneClass = (sectionId: string): string => {
   }
 };
 
-const ReviewWorkspaceTab: React.FC<ReviewWorkspaceTabProps> = ({
+const ReviewWorkspaceTab: FC<ReviewWorkspaceTabProps> = ({
   review,
   reviewError,
   reviewFixResult,

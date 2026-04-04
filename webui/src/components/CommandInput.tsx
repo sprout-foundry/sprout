@@ -1,4 +1,11 @@
-import React, { useState, useRef, useEffect, useCallback, useLayoutEffect, memo } from 'react';
+import { useState, useRef, useEffect, useCallback, useLayoutEffect, memo } from 'react';
+import type {
+  ChangeEvent,
+  ClipboardEvent as ReactClipboardEvent,
+  FC,
+  FormEvent,
+  KeyboardEvent as ReactKeyboardEvent,
+} from 'react';
 import { ScrollText, X, Send, SquarePen, ListPlus, Plus, Square } from 'lucide-react';
 import './CommandInput.css';
 import { ApiService } from '../services/api';
@@ -30,7 +37,7 @@ interface CommandInputProps {
   onClearQueuedMessages?: () => void;
 }
 
-const CommandInput: React.FC<CommandInputProps> = ({
+const CommandInput: FC<CommandInputProps> = ({
   value = '',
   onChange,
   onSend,
@@ -218,7 +225,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
   }, [currentHistoryValue, draftValue, isHistoryMode]);
 
   const trackUpcomingSelection = useCallback(
-    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
       const textarea = inputRef.current;
       if (!textarea) {
         return;
@@ -266,7 +273,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
   );
 
   // Handle paste event for images
-  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+  const handlePaste = useCallback((e: ReactClipboardEvent) => {
     const items = e.clipboardData.items;
     for (let i = 0; i < items.length; i++) {
       if (items[i].type.startsWith('image/')) {
@@ -290,7 +297,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
   }, []);
 
   // Handle file selection from input
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = useCallback((e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const preview = URL.createObjectURL(file);
@@ -357,12 +364,12 @@ const CommandInput: React.FC<CommandInputProps> = ({
     });
   }, [attachedImages]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: ReactKeyboardEvent) => {
     if (disabled) return;
     const textarea = inputRef.current;
     if (!textarea) return;
 
-    trackUpcomingSelection(e as React.KeyboardEvent<HTMLTextAreaElement>);
+    trackUpcomingSelection(e as ReactKeyboardEvent<HTMLTextAreaElement>);
 
     switch (e.key) {
       case 'ArrowUp': {
@@ -439,7 +446,10 @@ const CommandInput: React.FC<CommandInputProps> = ({
         if (isHistoryMode) {
           // Restore temp input and exit history mode
           resetHistoryNavigation();
-          updateValue(history.tempInput, { start: history.tempInput.length, end: history.tempInput.length });
+          updateValue(history.tempInput, {
+            start: history.tempInput.length,
+            end: history.tempInput.length,
+          });
         } else {
           // Clear input if not in history mode
           resetHistoryNavigation();
@@ -618,7 +628,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
 
   const canSend = !!draftValue.trim() && !attachedImages.some((img) => !img.uploadedPath && !img.error);
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!canSend || disabled || isComposingRef.current) {
       return;
@@ -645,7 +655,10 @@ const CommandInput: React.FC<CommandInputProps> = ({
             className="history-exit-btn"
             onClick={() => {
               resetHistoryNavigation();
-              updateValue(history.tempInput, { start: history.tempInput.length, end: history.tempInput.length });
+              updateValue(history.tempInput, {
+                start: history.tempInput.length,
+                end: history.tempInput.length,
+              });
             }}
             title="Exit history mode (Esc)"
           >

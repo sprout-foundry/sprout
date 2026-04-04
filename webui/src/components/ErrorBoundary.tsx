@@ -5,7 +5,7 @@
  * logs those errors, and displays a fallback UI.
  */
 
-import React, { Component, type ErrorInfo, type ReactNode } from 'react';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { TriangleAlert } from 'lucide-react';
 
 interface ErrorBoundaryProps {

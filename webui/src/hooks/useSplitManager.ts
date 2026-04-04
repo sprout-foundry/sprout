@@ -1,4 +1,5 @@
 import { useCallback, useState, useEffect } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import type { EditorPane, PaneLayout } from '../types/editor';
 
 interface NestedSplit {
@@ -23,7 +24,7 @@ export interface UseSplitManagerReturn {
   handleSplitRequest: (direction: 'vertical' | 'horizontal' | 'grid') => void;
   handleCloseAllSplits: () => void;
   nestedSplit: NestedSplit | null;
-  onNestedSplitChange: React.Dispatch<React.SetStateAction<NestedSplit | null>>;
+  onNestedSplitChange: Dispatch<SetStateAction<NestedSplit | null>>;
   canSplit: boolean;
   canSplitGrid: boolean;
   canCloseSplit: boolean;

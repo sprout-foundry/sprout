@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import type { FC, MouseEvent, WheelEvent } from 'react';
 import { ZoomIn, ZoomOut, Maximize2, Image as ImageIcon, Loader2, AlertTriangle } from 'lucide-react';
 import { readFileWithConsent } from '../services/fileAccess';
 import './ImageViewer.css';
@@ -14,7 +15,7 @@ interface Dimensions {
   height: number;
 }
 
-const ImageViewer: React.FC<ImageViewerProps> = ({ filePath, fileName, fileSize }) => {
+const ImageViewer: FC<ImageViewerProps> = ({ filePath, fileName, fileSize }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const [imageSrc, setImageSrc] = useState<string | null>(null);
@@ -126,7 +127,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ filePath, fileName, fileSize 
 
   // Wheel zoom - zoom centered on cursor
   const handleWheel = useCallback(
-    (e: React.WheelEvent) => {
+    (e: WheelEvent) => {
       if (!imageRef.current || !containerRef.current) return;
 
       e.preventDefault();
@@ -159,7 +160,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ filePath, fileName, fileSize 
 
   // Pan handlers
   const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
+    (e: MouseEvent) => {
       if (zoom <= 1) return; // Only pan when zoomed in
 
       e.preventDefault();
@@ -171,7 +172,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ filePath, fileName, fileSize 
   );
 
   const handleMouseMove = useCallback(
-    (e: React.MouseEvent) => {
+    (e: MouseEvent) => {
       if (!isDragging) return;
 
       const dx = e.clientX - dragStart.x;

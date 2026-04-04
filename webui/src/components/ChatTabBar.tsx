@@ -1,4 +1,5 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import type { FC, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react';
 import { Plus, X, Pencil, Trash2 } from 'lucide-react';
 import type { ChatSession } from '../services/chatSessions';
 import ContextMenu from './ContextMenu';
@@ -21,7 +22,7 @@ interface ContextMenuState {
   canDelete: boolean;
 }
 
-const ChatTabBar: React.FC<ChatTabBarProps> = ({ sessions, activeChatId, onSwitch, onCreate, onDelete, onRename }) => {
+const ChatTabBar: FC<ChatTabBarProps> = ({ sessions, activeChatId, onSwitch, onCreate, onDelete, onRename }) => {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({
@@ -77,7 +78,7 @@ const ChatTabBar: React.FC<ChatTabBarProps> = ({ sessions, activeChatId, onSwitc
   }, []);
 
   const handleRenameKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
+    (e: ReactKeyboardEvent) => {
       if (e.key === 'Enter') {
         commitRename();
       } else if (e.key === 'Escape') {
@@ -93,7 +94,7 @@ const ChatTabBar: React.FC<ChatTabBarProps> = ({ sessions, activeChatId, onSwitc
     setContextMenu((prev) => ({ ...prev, visible: false }));
   }, []);
 
-  const handleContextMenu = useCallback((e: React.MouseEvent, session: ChatSession) => {
+  const handleContextMenu = useCallback((e: ReactMouseEvent, session: ChatSession) => {
     e.preventDefault();
     e.stopPropagation();
     setContextMenu({

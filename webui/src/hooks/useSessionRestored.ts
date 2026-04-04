@@ -7,16 +7,19 @@
  */
 
 import { useEffect } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import type { AppState, Message } from '../types/app';
 
 export interface UseSessionRestoredOptions {
-  setState: React.Dispatch<React.SetStateAction<AppState>>;
+  setState: Dispatch<SetStateAction<AppState>>;
 }
 
 export function useSessionRestored({ setState }: UseSessionRestoredOptions): void {
   useEffect(() => {
     const handleSessionRestored = (event: Event) => {
-      const customEvent = event as CustomEvent<{ messages: Array<{ role: string; content: string }> }>;
+      const customEvent = event as CustomEvent<{
+        messages: Array<{ role: string; content: string }>;
+      }>;
       const rawMessages = customEvent.detail?.messages;
       if (!Array.isArray(rawMessages)) return;
 

@@ -1,6 +1,5 @@
 // @ts-nocheck
 
-import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { act } from 'react';
 import TerminalTabBar from './TerminalTabBar';
@@ -681,7 +680,12 @@ describe('TerminalTabBar', () => {
 
     act(() => {
       tab1!.dispatchEvent(
-        new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 100, clientY: 50 }),
+        new MouseEvent('contextmenu', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 100,
+          clientY: 50,
+        }),
       );
     });
 
@@ -700,7 +704,12 @@ describe('TerminalTabBar', () => {
 
     act(() => {
       tab1!.dispatchEvent(
-        new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 100, clientY: 50 }),
+        new MouseEvent('contextmenu', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 100,
+          clientY: 50,
+        }),
       );
     });
 
@@ -719,7 +728,12 @@ describe('TerminalTabBar', () => {
 
     act(() => {
       tab3!.dispatchEvent(
-        new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 100 }),
+        new MouseEvent('contextmenu', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 300,
+          clientY: 100,
+        }),
       );
     });
 
@@ -749,7 +763,12 @@ describe('TerminalTabBar', () => {
 
     act(() => {
       tab2!.dispatchEvent(
-        new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 200, clientY: 100 }),
+        new MouseEvent('contextmenu', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 200,
+          clientY: 100,
+        }),
       );
     });
 
@@ -788,7 +807,12 @@ describe('TerminalTabBar', () => {
 
     act(() => {
       tab1!.dispatchEvent(
-        new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 100, clientY: 50 }),
+        new MouseEvent('contextmenu', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 100,
+          clientY: 50,
+        }),
       );
     });
 
@@ -809,7 +833,12 @@ describe('TerminalTabBar', () => {
 
     act(() => {
       tab1!.dispatchEvent(
-        new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 100, clientY: 50 }),
+        new MouseEvent('contextmenu', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 100,
+          clientY: 50,
+        }),
       );
     });
 
@@ -851,7 +880,12 @@ describe('TerminalTabBar', () => {
 
     act(() => {
       tab1!.dispatchEvent(
-        new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 100, clientY: 50 }),
+        new MouseEvent('contextmenu', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 100,
+          clientY: 50,
+        }),
       );
     });
 

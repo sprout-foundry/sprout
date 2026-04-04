@@ -1,7 +1,7 @@
 // @ts-nocheck
-import React from 'react';
+import { Fragment, act } from 'react';
+import type { ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { act } from 'react';
 import ContextMenu from './ContextMenu';
 
 // ---------------------------------------------------------------------------
@@ -58,7 +58,7 @@ function renderMenu(
     y?: number;
     className?: string;
     zIndex?: number;
-    children?: React.ReactNode;
+    children?: ReactNode;
   } = {},
 ) {
   const {
@@ -241,19 +241,19 @@ describe('ContextMenu', () => {
     const onClose1 = jest.fn();
     const onClose2 = jest.fn();
 
-    // renderMenu creates a root — use it to render two menus via React.Fragment
+    // renderMenu creates a root — use it to render two menus via Fragment
     renderMenu();
 
     act(() => {
       root!.render(
-        <React.Fragment>
+        <Fragment>
           <ContextMenu isOpen={true} x={50} y={50} onClose={onClose1}>
             <button className="context-menu-item">Menu 1</button>
           </ContextMenu>
           <ContextMenu isOpen={true} x={200} y={200} onClose={onClose2}>
             <button className="context-menu-item">Menu 2</button>
           </ContextMenu>
-        </React.Fragment>,
+        </Fragment>,
       );
     });
 
@@ -263,14 +263,14 @@ describe('ContextMenu', () => {
     // Re-render — close the first menu, keep the second open
     act(() => {
       root!.render(
-        <React.Fragment>
+        <Fragment>
           <ContextMenu isOpen={false} x={50} y={50} onClose={onClose1}>
             <button className="context-menu-item">Menu 1</button>
           </ContextMenu>
           <ContextMenu isOpen={true} x={200} y={200} onClose={onClose2}>
             <button className="context-menu-item">Menu 2</button>
           </ContextMenu>
-        </React.Fragment>,
+        </Fragment>,
       );
     });
 
@@ -306,11 +306,11 @@ describe('ContextMenu', () => {
   test('renders danger items and dividers correctly', () => {
     renderMenu({
       children: (
-        <React.Fragment>
+        <Fragment>
           <button className="context-menu-item">Normal item</button>
           <div className="context-menu-divider" />
           <button className="context-menu-item danger">Delete</button>
-        </React.Fragment>
+        </Fragment>
       ),
     });
 

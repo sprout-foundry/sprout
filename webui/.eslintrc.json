@@ -1,74 +1,23 @@
 {
-  "env": {
-    "browser": true,
-    "es2021": true,
-    "node": true
-  },
   "extends": [
-    "eslint:recommended",
-    "plugin:@typescript-eslint/recommended",
+    "react-app",
     "plugin:react/recommended",
     "plugin:react-hooks/recommended",
     "prettier"
   ],
-  "overrides": [
-    {
-      "env": {
-        "jest": true
-      },
-      "files": [
-        "**/*.test.ts",
-        "**/*.test.tsx",
-        "**/*.spec.ts",
-        "**/*.spec.tsx"
-      ],
-      "rules": {
-        "@typescript-eslint/no-explicit-any": "off",
-        "@typescript-eslint/no-var-requires": "off",
-        "no-console": "off",
-        "testing-library/no-container": "warn",
-        "testing-library/no-render-in-lifecycle": "warn",
-        "testing-library/no-unnecessary-act": "warn",
-        "testing-library/render-result-naming-convention": "warn"
-      }
-    }
-  ],
-  "parser": "@typescript-eslint/parser",
-  "parserOptions": {
-    "ecmaFeatures": {
-      "jsx": true
-    },
-    "ecmaVersion": "latest",
-    "sourceType": "module"
-  },
   "plugins": [
-    "@typescript-eslint",
-    "react",
-    "react-hooks",
     "testing-library"
   ],
-  "root": true,
   "rules": {
-    "@typescript-eslint/ban-ts-comment": "off",
-    "@typescript-eslint/consistent-type-definitions": [
-      "warn",
-      "interface"
-    ],
-    "@typescript-eslint/consistent-type-imports": [
-      "warn",
-      {
-        "fixStyle": "separate-type-imports",
-        "prefer": "type-imports"
-      }
-    ],
+    "@typescript-eslint/consistent-type-imports": "warn",
     "@typescript-eslint/no-explicit-any": "warn",
-    "@typescript-eslint/no-non-null-asserted-optional-chain": "off",
+    "@typescript-eslint/no-non-null-assertion": "warn",
     "@typescript-eslint/no-shadow": "warn",
     "@typescript-eslint/no-unused-vars": [
       "warn",
       {
         "argsIgnorePattern": "^_",
-        "caughtErrorsIgnorePattern": "^_",
+        "ignoreRestSiblings": true,
         "varsIgnorePattern": "^_"
       }
     ],
@@ -80,7 +29,6 @@
       "warn",
       "smart"
     ],
-    "no-case-declarations": "off",
     "no-console": [
       "warn",
       {
@@ -90,21 +38,36 @@
         ]
       }
     ],
-    "no-dupe-keys": "error",
-    "no-empty": "off",
-    "no-eval": "warn",
-    "no-unreachable": "error",
-    "no-var": "error",
-    "object-shorthand": "warn",
+    "no-restricted-imports": [
+      "warn",
+      {
+        "paths": [
+          {
+            "importNames": [
+              "default"
+            ],
+            "message": "Use named imports from React instead: import { useState } from 'react'",
+            "name": "react"
+          }
+        ]
+      }
+    ],
+    "no-restricted-syntax": [
+      "warn",
+      {
+        "message": "Use for...of or Object.keys() instead of for...in",
+        "selector": "ForInStatement"
+      }
+    ],
+    "no-return-await": "warn",
+    "no-shadow": "off",
+    "no-template-curly-in-string": "off",
+    "no-var": "warn",
     "prefer-const": "warn",
-    "prefer-object-spread": "warn",
-    "prefer-template": "warn",
-    "react-hooks/exhaustive-deps": "warn",
-    "react-hooks/rules-of-hooks": "error",
-    "react/display-name": "off",
-    "react/no-deprecated": "off",
-    "react/no-render-return-value": "off",
-    "react/no-unescaped-entities": "off",
+    "react/display-name": "warn",
+    "react/no-deprecated": "warn",
+    "react/no-render-return-value": "warn",
+    "react/no-unescaped-entities": "warn",
     "react/prop-types": "off",
     "react/react-in-jsx-scope": "off"
   },

@@ -1,4 +1,5 @@
-import React, { useMemo, useCallback } from 'react';
+import { useMemo, useCallback } from 'react';
+import type { FC, KeyboardEvent } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { type SymbolInfo as BreadcrumbSymbol, type SymbolKind, KIND_ICONS } from './GoToSymbolOverlay';
 import './EditorBreadcrumb.css';
@@ -23,7 +24,7 @@ const getKindIcon = (kind: SymbolKind): string => (KIND_ICONS as Record<string, 
 
 // ── Component ────────────────────────────────────────────────────────────
 
-const EditorBreadcrumb: React.FC<EditorBreadcrumbProps> = ({ filePath, onNavigate, symbols, onNavigateToSymbol }) => {
+const EditorBreadcrumb: FC<EditorBreadcrumbProps> = ({ filePath, onNavigate, symbols, onNavigateToSymbol }) => {
   // ── File path segments ───────────────────────────────────────────────
 
   const segments = useMemo(() => {
@@ -57,7 +58,7 @@ const EditorBreadcrumb: React.FC<EditorBreadcrumbProps> = ({ filePath, onNavigat
 
   // Allow keyboard activation (Enter/Space) on breadcrumb buttons
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent, index: number) => {
+    (e: KeyboardEvent, index: number) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         handleClick(index);
@@ -78,7 +79,7 @@ const EditorBreadcrumb: React.FC<EditorBreadcrumbProps> = ({ filePath, onNavigat
   );
 
   const handleSymbolKeyDown = useCallback(
-    (e: React.KeyboardEvent, line: number) => {
+    (e: KeyboardEvent, line: number) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         handleSymbolClick(line);

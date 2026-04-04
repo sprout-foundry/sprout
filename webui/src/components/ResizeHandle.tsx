@@ -1,4 +1,5 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import type { CSSProperties, FC, MouseEvent as ReactMouseEvent } from 'react';
 import './ResizeHandle.css';
 
 interface ResizeHandleProps {
@@ -8,7 +9,7 @@ interface ResizeHandleProps {
   onDoubleClick?: () => void; // Called when handle is double-clicked
   className?: string;
   position?: 'relative' | 'absolute'; // CSS position of the handle (default: 'relative')
-  style?: React.CSSProperties; // Optional inline styles
+  style?: CSSProperties; // Optional inline styles
 }
 
 /**
@@ -17,7 +18,7 @@ interface ResizeHandleProps {
  * - Horizontal: Vertical divider (drag left/right to resize)
  * - Vertical: Horizontal divider (drag up/down to resize)
  */
-const ResizeHandle: React.FC<ResizeHandleProps> = ({
+const ResizeHandle: FC<ResizeHandleProps> = ({
   direction,
   onResize,
   onResizeEnd,
@@ -34,7 +35,7 @@ const ResizeHandle: React.FC<ResizeHandleProps> = ({
 
   // Handle mouse down on resize handle
   const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
+    (e: ReactMouseEvent) => {
       e.preventDefault();
       isDraggingRef.current = true;
       setIsDragging(true);

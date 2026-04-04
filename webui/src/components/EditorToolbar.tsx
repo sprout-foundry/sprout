@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
+import type { FC, FormEvent, ReactNode } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { Save, X, ArrowDownToLine, Sun, Moon, Loader2 } from 'lucide-react';
 import './EditorToolbar.css';
@@ -13,14 +14,14 @@ interface EditorToolbarProps {
   actions?: Array<{
     id: string;
     title: string;
-    icon: React.ReactNode;
+    icon: ReactNode;
     onClick: () => void;
     active?: boolean;
     disabled?: boolean;
   }>;
 }
 
-const EditorToolbar: React.FC<EditorToolbarProps> = ({
+const EditorToolbar: FC<EditorToolbarProps> = ({
   paneId: _paneId,
   onGoToLine,
   onSave,
@@ -33,7 +34,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
   const [showGoToLineInput, setShowGoToLineInput] = useState(false);
   const [lineInput, setLineInput] = useState('');
 
-  const handleGoToLineSubmit = (e: React.FormEvent) => {
+  const handleGoToLineSubmit = (e: FormEvent) => {
     e.preventDefault();
     const lineNum = parseInt(lineInput, 10);
     if (!isNaN(lineNum) && lineNum > 0) {

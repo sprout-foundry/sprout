@@ -7,6 +7,7 @@
  */
 
 import { useCallback } from 'react';
+import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { AppState, Message } from '../types/app';
 import {
   listChatSessions,
@@ -18,9 +19,9 @@ import {
 import { debugLog } from '../utils/log';
 
 export interface UseChatSessionsOptions {
-  setState: React.Dispatch<React.SetStateAction<AppState>>;
-  activeChatIdRef: React.MutableRefObject<string | null>;
-  activeRequestsRef: React.MutableRefObject<number>;
+  setState: Dispatch<SetStateAction<AppState>>;
+  activeChatIdRef: MutableRefObject<string | null>;
+  activeRequestsRef: MutableRefObject<number>;
 }
 
 export interface UseChatSessionsReturn {

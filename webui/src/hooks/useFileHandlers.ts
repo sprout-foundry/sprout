@@ -34,7 +34,14 @@ export function useFileHandlers({
     (filePath: string, lineNumber?: number) => {
       const { fileName, fileExt } = parseFilePath(filePath);
       onViewChange('editor');
-      openFile({ path: filePath, name: fileName, isDir: false, size: 0, modified: 0, ext: fileExt });
+      openFile({
+        path: filePath,
+        name: fileName,
+        isDir: false,
+        size: 0,
+        modified: 0,
+        ext: fileExt,
+      });
       if (typeof lineNumber === 'number') {
         setTimeout(() => {
           document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line: lineNumber } }));

@@ -1,4 +1,5 @@
 import { useCallback, useRef } from 'react';
+import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { AppState } from '../types/app';
 import type { Message, ToolExecution, LogEntry, SubagentActivity } from '../types/app';
 import type { WsEvent } from '../services/websocket';
@@ -13,18 +14,18 @@ import {
 
 export interface UseWebSocketEventsOptions {
   state: AppState;
-  setState: React.Dispatch<React.SetStateAction<AppState>>;
-  setInputValue: React.Dispatch<React.SetStateAction<string>>;
-  setQueuedMessages: React.Dispatch<React.SetStateAction<string[]>>;
-  queuedMessagesRef: React.MutableRefObject<string[]>;
+  setState: Dispatch<SetStateAction<AppState>>;
+  setInputValue: Dispatch<SetStateAction<string>>;
+  setQueuedMessages: Dispatch<SetStateAction<string[]>>;
+  queuedMessagesRef: MutableRefObject<string[]>;
 }
 
 export interface UseWebSocketEventsReturn {
   handleEvent: (event: WsEvent) => void;
-  activeChatIdRef: React.MutableRefObject<string | null>;
-  activeRequestsRef: React.MutableRefObject<number>;
+  activeChatIdRef: MutableRefObject<string | null>;
+  activeRequestsRef: MutableRefObject<number>;
   /** Ref used by the main useEffect cleanup to clear a pending debounce timer */
-  connectionTimeoutRef: React.MutableRefObject<NodeJS.Timeout | null>;
+  connectionTimeoutRef: MutableRefObject<NodeJS.Timeout | null>;
 }
 
 export default function useWebSocketEvents({

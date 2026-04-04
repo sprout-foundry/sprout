@@ -1,4 +1,5 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import type { FC, KeyboardEvent, MouseEvent } from 'react';
 import { Plus, X, Pencil } from 'lucide-react';
 import ContextMenu from './ContextMenu';
 import './TerminalTabBar.css';
@@ -25,7 +26,7 @@ interface ContextMenuState {
   canClose: boolean;
 }
 
-const TerminalTabBar: React.FC<TerminalTabBarProps> = ({
+const TerminalTabBar: FC<TerminalTabBarProps> = ({
   sessions,
   activeSessionId,
   onSwitch,
@@ -73,7 +74,7 @@ const TerminalTabBar: React.FC<TerminalTabBarProps> = ({
   }, []);
 
   const handleRenameKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
+    (e: KeyboardEvent) => {
       if (e.key === 'Enter') {
         commitRename();
       } else if (e.key === 'Escape') {
@@ -89,7 +90,7 @@ const TerminalTabBar: React.FC<TerminalTabBarProps> = ({
   }, []);
 
   const handleContextMenu = useCallback(
-    (e: React.MouseEvent, session: TerminalSession) => {
+    (e: MouseEvent, session: TerminalSession) => {
       e.preventDefault();
       e.stopPropagation();
       setContextMenu({

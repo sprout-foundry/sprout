@@ -159,7 +159,13 @@ export function useLayoutPersistence({
     );
 
     if (fileBuffers.length === 0) {
-      saveLayoutSnapshot({ version: 1, activePaneId, activeBufferFilePath: null, buffers: [], bufferOrder: [] });
+      saveLayoutSnapshot({
+        version: 1,
+        activePaneId,
+        activeBufferFilePath: null,
+        buffers: [],
+        bufferOrder: [],
+      });
       return;
     }
 

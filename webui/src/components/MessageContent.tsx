@@ -1,4 +1,4 @@
-import React from 'react';
+import type { AnchorHTMLAttributes, FC, HTMLAttributes, ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { stripAnsiCodes } from '../utils/ansi';
@@ -8,11 +8,11 @@ interface MessageContentProps {
   content: string;
 }
 
-const MessageContent: React.FC<MessageContentProps> = ({ content }) => (
+const MessageContent: FC<MessageContentProps> = ({ content }) => (
   <ReactMarkdown
     remarkPlugins={[remarkGfm]}
     components={{
-      code({ className, children, ...props }: React.HTMLAttributes<HTMLElement> & { children?: React.ReactNode }) {
+      code({ className, children, ...props }: HTMLAttributes<HTMLElement> & { children?: ReactNode }) {
         const languageMatch = /language-(\w+)/.exec(className || '');
         const language = languageMatch ? languageMatch[1] : '';
         const codeText = flattenMarkdownText(children);
@@ -35,7 +35,7 @@ const MessageContent: React.FC<MessageContentProps> = ({ content }) => (
           </pre>
         );
       },
-      a({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) {
+      a({ href, children, ...props }: AnchorHTMLAttributes<HTMLAnchorElement>) {
         return (
           <a href={href} target="_blank" rel="noreferrer" {...props}>
             {children}

@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import type { FC } from 'react';
 import { Copy, GitBranch, RotateCcw } from 'lucide-react';
 import type { ApiService } from '../services/api';
 import { copyToClipboard } from '../utils/clipboard';
@@ -24,7 +25,7 @@ interface GitHistoryContextMenuProps {
  * Listens for `contextmenu` events on the document and shows a menu with
  * copy / checkout / revert actions when a `.git-history-commit-row` is targeted.
  */
-const GitHistoryContextMenu: React.FC<GitHistoryContextMenuProps> = ({ apiService, isActing = false }) => {
+const GitHistoryContextMenu: FC<GitHistoryContextMenuProps> = ({ apiService, isActing = false }) => {
   const timersRef = useRef<number[]>([]);
 
   const clearTimers = useCallback(() => {

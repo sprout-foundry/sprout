@@ -1,4 +1,4 @@
-import React from 'react';
+import type { FC } from 'react';
 import { File } from 'lucide-react';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import Chat from './Chat';
@@ -67,7 +67,13 @@ interface WorkspacePaneProps {
     {
       messages: Message[];
       toolExecutions?: ToolExecution[];
-      fileEdits?: Array<{ path: string; action: string; timestamp: Date; linesAdded?: number; linesDeleted?: number }>;
+      fileEdits?: Array<{
+        path: string;
+        action: string;
+        timestamp: Date;
+        linesAdded?: number;
+        linesDeleted?: number;
+      }>;
       subagentActivities?: SubagentActivity[];
       currentTodos?: Array<{
         id: string;
@@ -125,7 +131,7 @@ interface WorkspacePaneProps {
   };
 }
 
-const WorkspacePane: React.FC<WorkspacePaneProps> = ({
+const WorkspacePane: FC<WorkspacePaneProps> = ({
   paneId,
   perChatCache,
   activeChatId,

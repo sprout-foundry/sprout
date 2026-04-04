@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react';
+import type { FC } from 'react';
 import { type HighlightStyle } from '@codemirror/language';
 import {
   DEFAULT_THEME_PACK_ID,
@@ -60,7 +61,7 @@ function saveImportedThemes(themes: ThemePack[]) {
   localStorage.setItem(IMPORTED_THEMES_STORAGE_KEY, JSON.stringify(themes));
 }
 
-export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
+export const ThemeProvider: FC<ThemeProviderProps> = ({ children }) => {
   const [importedThemes, setImportedThemes] = useState<ThemePack[]>(loadImportedThemes);
   const [themePackID, setThemePackID] = useState<string>(() => {
     const storedPack = localStorage.getItem(THEME_PACK_STORAGE_KEY);
@@ -139,7 +140,10 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     }
 
     if (!parsed.name || !Array.isArray(parsed.tokenColors)) {
-      return { success: false, warnings: ['Invalid VSCode theme: missing "name" or "tokenColors"'] };
+      return {
+        success: false,
+        warnings: ['Invalid VSCode theme: missing "name" or "tokenColors"'],
+      };
     }
 
     const result = importer.importVSCodeTheme(parsed);

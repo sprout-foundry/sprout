@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import type { CSSProperties, FC, MouseEvent as ReactMouseEvent } from 'react';
 import { Trash2, Columns2, Rows2, Plus, Check } from 'lucide-react';
 import './Terminal.css';
 import TerminalPane, { type TerminalPaneHandle } from './TerminalPane';
@@ -23,7 +24,7 @@ interface TerminalProps {
   onToggleExpand?: (expanded: boolean) => void;
 }
 
-const Terminal: React.FC<TerminalProps> = ({
+const Terminal: FC<TerminalProps> = ({
   isConnected = true,
   isExpanded: externalIsExpanded = false,
   onToggleExpand,
@@ -314,7 +315,7 @@ const Terminal: React.FC<TerminalProps> = ({
   // ── Split divider drag ────────────────────────────────────────────────────
 
   const handleSplitDividerDragStart = useCallback(
-    (e: React.MouseEvent) => {
+    (e: ReactMouseEvent) => {
       e.preventDefault();
       isDraggingSplit.current = true;
       setIsResizingVertical(true); // disable transitions
@@ -360,7 +361,7 @@ const Terminal: React.FC<TerminalProps> = ({
 
   // Compute inline style for a given pane index (0 = primary, 1 = secondary)
   const splitStyleForPane = useCallback(
-    (paneIndex: number): React.CSSProperties => {
+    (paneIndex: number): CSSProperties => {
       if (splitDirection === 'none') return {};
       const property = splitDirection === 'vertical' ? 'width' : 'height';
       const value = paneIndex === 0 ? `${splitSizes[0]}%` : `${splitSizes[1]}%`;
@@ -372,7 +373,7 @@ const Terminal: React.FC<TerminalProps> = ({
   // ── Vertical resize (terminal height) ──────────────────────────────────────
 
   const handleVerticalResizeStart = useCallback(
-    (e: React.MouseEvent) => {
+    (e: ReactMouseEvent) => {
       e.preventDefault();
       isDraggingVertical.current = true;
       setIsResizingVertical(true);

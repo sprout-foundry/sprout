@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import type { ChangeEvent, FC, KeyboardEvent, MouseEvent } from 'react';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { clientFetch } from '../services/clientSession';
 import { clearLayoutSnapshot } from '../services/layoutPersistence';
@@ -91,7 +92,7 @@ interface PaletteResult {
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-const CommandPalette: React.FC<CommandPaletteProps> = ({
+const CommandPalette: FC<CommandPaletteProps> = ({
   isOpen,
   onClose,
   onOpenFile,
@@ -423,14 +424,14 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
 
   // ── Handle text input ─────────────────────────────────────────────────
 
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
     setQuery(e.target.value);
   }, []);
 
   // ── Handle keyboard navigation ────────────────────────────────────────
 
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
+    (e: KeyboardEvent) => {
       // Prevent browser defaults for Ctrl/Cmd+key
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
@@ -491,7 +492,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
   // ── Handle overlay click ──────────────────────────────────────────────
 
   const handleOverlayClick = useCallback(
-    (e: React.MouseEvent) => {
+    (e: MouseEvent) => {
       if (e.target === e.currentTarget) onClose();
     },
     [onClose],

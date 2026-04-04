@@ -933,7 +933,9 @@ class ApiService {
     total: number;
   }> {
     const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
-    const response = await clientFetch(`/api/git/log?${params.toString()}`, { signal: opts?.signal });
+    const response = await clientFetch(`/api/git/log?${params.toString()}`, {
+      signal: opts?.signal,
+    });
     if (!response.ok) {
       throw new Error(`Failed to get git log: HTTP ${response.status}`);
     }

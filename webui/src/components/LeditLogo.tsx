@@ -1,4 +1,5 @@
-import React from 'react';
+import { useId } from 'react';
+import type { FC } from 'react';
 import './LeditLogo.css';
 
 interface LeditLogoProps {
@@ -7,8 +8,8 @@ interface LeditLogoProps {
   className?: string;
 }
 
-const LeditLogo: React.FC<LeditLogoProps> = ({ showWordmark = true, compact = false, className = '' }) => {
-  const logoTitleId = React.useId();
+const LeditLogo: FC<LeditLogoProps> = ({ showWordmark = true, compact = false, className = '' }) => {
+  const logoTitleId = useId();
 
   return (
     <div className={`ledit-logo ${compact ? 'compact' : ''} ${className}`.trim()}>

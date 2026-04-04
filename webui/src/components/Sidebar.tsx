@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import type { ChangeEvent, FC, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import './Sidebar.css';
 import { ApiService, type ProviderOption, type LeditSettings, type LeditInstance } from '../services/api';
 import SettingsPanel from './SettingsPanel';
@@ -47,7 +48,14 @@ interface SidebarProps {
   recentFiles?: Array<{ path: string; modified: boolean }>;
   recentLogs?:
     | string[]
-    | Array<{ id: string; type: string; timestamp: Date; data: unknown; level: string; category: string }>;
+    | Array<{
+        id: string;
+        type: string;
+        timestamp: Date;
+        data: unknown;
+        level: string;
+        category: string;
+      }>;
   isMobileMenuOpen?: boolean;
   onMobileMenuToggle?: () => void;
   sidebarCollapsed?: boolean;
@@ -94,7 +102,7 @@ const MAX_LOG_ROWS = 1000;
 
 const clampSidebarWidth = (value: number): number => Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, value));
 
-const Sidebar: React.FC<SidebarProps> = ({
+const Sidebar: FC<SidebarProps> = ({
   isConnected,
   instances = [],
   selectedInstancePID = 0,
@@ -123,7 +131,10 @@ const Sidebar: React.FC<SidebarProps> = ({
   const { themePack, availableThemePacks, setThemePack, importTheme, removeTheme } = useTheme();
   const { applyPreset } = useHotkeys();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const fileTreeRef = useRef<{ refresh: () => void; revealFile: (filePath: string) => void } | null>(null);
+  const fileTreeRef = useRef<{
+    refresh: () => void;
+    revealFile: (filePath: string) => void;
+  } | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
     const stored = localStorage.getItem('ledit-sidebar-width');
@@ -259,13 +270,13 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
   }, [providers, selectedProvider, finalSelectedModel]);
 
-  const handleProviderChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleProviderChange = (e: ChangeEvent<HTMLSelectElement>) => {
     const newProvider = e.target.value;
     setSelectedProvider(newProvider);
     onProviderChange?.(newProvider);
   };
 
-  const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleModelChange = (e: ChangeEvent<HTMLSelectElement>) => {
     const newModel = e.target.value;
     // Only update if the model actually changed
     if (newModel !== finalSelectedModel) {
@@ -274,7 +285,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  const handleHotkeyPresetChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleHotkeyPresetChange = async (e: ChangeEvent<HTMLSelectElement>) => {
     try {
       await applyPreset(e.target.value);
     } catch (err) {
@@ -380,7 +391,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   }, [currentView]);
 
   const handleImportTheme = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
+    (e: ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
       setImportError(null);
@@ -508,7 +519,9 @@ const Sidebar: React.FC<SidebarProps> = ({
 
     const downloadLogs = (format: 'txt' | 'json') => {
       const content = format === 'json' ? JSON.stringify(displayLogs, null, 2) : renderedLines.join('\n');
-      const blob = new Blob([content], { type: format === 'json' ? 'application/json' : 'text/plain;charset=utf-8' });
+      const blob = new Blob([content], {
+        type: format === 'json' ? 'application/json' : 'text/plain;charset=utf-8',
+      });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -753,7 +766,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   // Keyboard navigation for tab bars (arrow keys + Home/End)
-  const handleTabBarKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+  const handleTabBarKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
     const tabs = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]:not([disabled])'));
     const currentIndex = tabs.indexOf(document.activeElement as HTMLButtonElement);
     if (currentIndex === -1) return;

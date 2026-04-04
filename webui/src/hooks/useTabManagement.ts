@@ -101,7 +101,11 @@ export function useTabManagement({
         if (buffer.paneId && nextPaneBuffer) {
           const r = next.get(nextPaneBuffer.id);
           if (r) {
-            next.set(nextPaneBuffer.id, { ...r, isActive: currentActivePane === buffer.paneId, paneId: buffer.paneId });
+            next.set(nextPaneBuffer.id, {
+              ...r,
+              isActive: currentActivePane === buffer.paneId,
+              paneId: buffer.paneId,
+            });
           }
         }
         return next;

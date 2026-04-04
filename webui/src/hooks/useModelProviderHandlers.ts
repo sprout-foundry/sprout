@@ -8,13 +8,14 @@
  */
 
 import { useCallback, useEffect, useRef } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import { WebSocketService } from '../services/websocket';
 import { debugLog } from '../utils/log';
 import type { AppState } from '../types/app';
 
 export interface UseModelProviderHandlersOptions {
   state: AppState;
-  setState: React.Dispatch<React.SetStateAction<AppState>>;
+  setState: Dispatch<SetStateAction<AppState>>;
 }
 
 export interface UseModelProviderHandlersReturn {

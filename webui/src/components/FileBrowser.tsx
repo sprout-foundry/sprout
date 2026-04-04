@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import type { FC } from 'react';
 import { Folder, File, ArrowUp, X, FolderOpen } from 'lucide-react';
 import { clientFetch } from '../services/clientSession';
 import './FileBrowser.css';
@@ -23,7 +24,7 @@ interface FileBrowserProps {
   browseEndpoint?: string;
 }
 
-const FileBrowser: React.FC<FileBrowserProps> = ({
+const FileBrowser: FC<FileBrowserProps> = ({
   isOpen,
   initialPath = '/',
   onSelect,

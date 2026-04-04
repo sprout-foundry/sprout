@@ -1,4 +1,5 @@
-import React, { useCallback, useRef } from 'react';
+import { useCallback, useRef, Fragment } from 'react';
+import type { CSSProperties, RefObject, Dispatch, SetStateAction, FC, ReactNode, ComponentProps } from 'react';
 import { X, Columns2, Rows2, LayoutGrid, MessageSquarePlus } from 'lucide-react';
 import EditorTabs from './EditorTabs';
 import WorkspacePane from './WorkspacePane';
@@ -8,7 +9,7 @@ import type { PerChatState, TodoItem, Message, ToolExecution, SubagentActivity }
 import type { OpenWorkspaceBufferFn } from '../hooks/useChatSessionSync';
 import type { GitDiffResponse, DeepReviewResult } from '../hooks/useGitWorkspace';
 
-const toPaneFlex = (weight: number): React.CSSProperties => ({
+const toPaneFlex = (weight: number): CSSProperties => ({
   flexGrow: weight,
   flexShrink: 1,
   flexBasis: 0,
@@ -24,7 +25,7 @@ export interface PaneLayoutManagerProps {
   activeBufferId: string | null;
   buffers: Map<string, EditorBuffer>;
   paneSizes: Record<string, number>;
-  contextPanelRef: React.RefObject<unknown>;
+  contextPanelRef: RefObject<unknown>;
   perChatCache?: Record<string, PerChatState>;
   activeChatId?: string | null;
 
@@ -40,7 +41,7 @@ export interface PaneLayoutManagerProps {
   onQueueReorder: (fromIndex: number, toIndex: number) => void;
   onClearQueuedMessages: () => void;
   inputValue: string;
-  onInputChange: React.Dispatch<React.SetStateAction<string>>;
+  onInputChange: Dispatch<SetStateAction<string>>;
   isProcessing: boolean;
   lastError: string | null;
   toolExecutions: ToolExecution[];
@@ -83,20 +84,28 @@ export interface PaneLayoutManagerProps {
   onCreateChat?: () => Promise<string | null>;
 
   // Nested split state (lifted from PaneLayoutManager for split-request coordination)
-  nestedSplit: { hostPaneId: string; nestedPaneId: string; direction: 'vertical' | 'horizontal' } | null;
+  nestedSplit: {
+    hostPaneId: string;
+    nestedPaneId: string;
+    direction: 'vertical' | 'horizontal';
+  } | null;
   onNestedSplitChange: (
-    split: { hostPaneId: string; nestedPaneId: string; direction: 'vertical' | 'horizontal' } | null,
+    split: {
+      hostPaneId: string;
+      nestedPaneId: string;
+      direction: 'vertical' | 'horizontal';
+    } | null,
   ) => void;
 
   // Outer layout ref for resize math
-  containerRef: React.RefObject<HTMLDivElement | null>;
+  containerRef: RefObject<HTMLDivElement | null>;
 }
 
 /**
  * PaneLayoutManager — owns the nested-split state, pane rendering, resize
  * handles, and the split control buttons for each pane tab bar.
  */
-const PaneLayoutManager: React.FC<PaneLayoutManagerProps> = ({
+const PaneLayoutManager: FC<PaneLayoutManagerProps> = ({
   panes,
   paneLayout,
   activePaneId,
@@ -257,7 +266,7 @@ const PaneLayoutManager: React.FC<PaneLayoutManagerProps> = ({
 
   // ── Sub-components ─────────────────────────────────────────────
 
-  const renderPaneById = (paneId: string, style?: React.CSSProperties) => {
+  const renderPaneById = (paneId: string, style?: CSSProperties) => {
     const pane = panes.find((item) => item.id === paneId);
     if (!pane) {
       return null;
@@ -334,7 +343,12 @@ const PaneLayoutManager: React.FC<PaneLayoutManagerProps> = ({
     const colSplit = Math.max(10, Math.min(90, paneSizes['grid:col'] ?? 50));
     const rowSplit = Math.max(10, Math.min(90, paneSizes['grid:row'] ?? 50));
 
-    const positionOrder: Record<string, number> = { primary: 0, secondary: 1, tertiary: 2, quaternary: 3 };
+    const positionOrder: Record<string, number> = {
+      primary: 0,
+      secondary: 1,
+      tertiary: 2,
+      quaternary: 3,
+    };
     const sortedPanes = [...panes].sort(
       (a, b) => (positionOrder[a.position ?? ''] ?? 99) - (positionOrder[b.position ?? ''] ?? 99),
     );
@@ -411,7 +425,7 @@ const PaneLayoutManager: React.FC<PaneLayoutManagerProps> = ({
           const splitAxis = paneLayout === 'split-horizontal' ? 'vertical' : 'horizontal';
 
           return (
-            <React.Fragment key={pane.id}>
+            <Fragment key={pane.id}>
               {renderPaneById(pane.id, toPaneFlex(paneSize))}
               {showResizeHandles && !isLast && (
                 <ResizeHandle
@@ -420,7 +434,7 @@ const PaneLayoutManager: React.FC<PaneLayoutManagerProps> = ({
                   onResizeEnd={handlePaneResizeEnd(pane.id)}
                 />
               )}
-            </React.Fragment>
+            </Fragment>
           );
         })}
       </>
@@ -473,20 +487,17 @@ const PaneLayoutManager: React.FC<PaneLayoutManagerProps> = ({
 
 // ── Sub-components used by PaneLayoutManager ──────────────────────
 
-export const PaneWrapper: React.FC<{ children: React.ReactNode; style?: React.CSSProperties }> = ({
-  children,
-  style,
-}) => (
+export const PaneWrapper: FC<{ children: ReactNode; style?: CSSProperties }> = ({ children, style }) => (
   <div className="pane-wrapper" style={style}>
     {children}
   </div>
 );
 
-export const EditorPaneWrapper: React.FC<{ children: React.ReactNode; isActive?: boolean; onClick?: () => void }> = ({
-  children,
-  isActive,
-  onClick,
-}) => (
+export const EditorPaneWrapper: FC<{
+  children: ReactNode;
+  isActive?: boolean;
+  onClick?: () => void;
+}> = ({ children, isActive, onClick }) => (
   <div
     className={`editor-pane-wrapper ${isActive ? 'active' : ''}`}
     onClick={onClick}
@@ -497,15 +508,15 @@ export const EditorPaneWrapper: React.FC<{ children: React.ReactNode; isActive?:
   </div>
 );
 
-export const EditorPaneComponent: React.FC<{
+export const EditorPaneComponent: FC<{
   paneId: string;
   isActive?: boolean;
   onClick?: () => void;
   perChatCache?: Record<string, PerChatState>;
   activeChatId?: string | null;
-  chatProps: React.ComponentProps<typeof WorkspacePane>['chatProps'];
-  reviewProps: React.ComponentProps<typeof WorkspacePane>['reviewProps'];
-  diffState: React.ComponentProps<typeof WorkspacePane>['diffState'];
+  chatProps: ComponentProps<typeof WorkspacePane>['chatProps'];
+  reviewProps: ComponentProps<typeof WorkspacePane>['reviewProps'];
+  diffState: ComponentProps<typeof WorkspacePane>['diffState'];
 }> = ({ paneId, onClick, perChatCache, activeChatId, chatProps, reviewProps, diffState }) => (
   <div className="editor-pane-host" onClick={onClick}>
     <WorkspacePane

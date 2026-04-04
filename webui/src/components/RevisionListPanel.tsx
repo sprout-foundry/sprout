@@ -186,14 +186,17 @@ const RevisionListPanel: FC<RevisionListPanelProps> = ({ mode, onOpenDiff, allow
 
   const openFileDiff = useCallback(
     async (revisionId: string, file: RevisionFile, index: number) => {
-      let detailMap = revisionDetailsById[revisionId];
-      if (!detailMap) {
+      let detailMap: Record<string, string> | undefined;
+      if (!revisionDetailsById[revisionId]) {
         const response = await apiService.getRevisionDetails(revisionId);
-        detailMap = {};
+        const newMap: Record<string, string> = {};
         (response.revision?.files || []).forEach((detailFile: RevisionDetailFile, detailIndex: number) => {
-          detailMap![buildRevisionFileKey(detailFile, detailIndex)] = detailFile.diff || '';
+          newMap[buildRevisionFileKey(detailFile, detailIndex)] = detailFile.diff || '';
         });
-        setRevisionDetailsById((prev) => ({ ...prev, [revisionId]: detailMap! }));
+        setRevisionDetailsById((prev) => ({ ...prev, [revisionId]: newMap }));
+        detailMap = newMap;
+      } else {
+        detailMap = revisionDetailsById[revisionId];
       }
 
       const key = buildRevisionFileKey(file, index);

@@ -70,12 +70,24 @@ function getState(pluginInstance: object): CursorHistoryState {
   return s;
 }
 
-// ── Symbol to reach per-instance state from an EditorView ───────────
+// ── Per-view plugin registry ─────────────────────────────────────────
 
-const pluginKey = Symbol('cursorHistoryPlugin');
+const viewPluginMap = new WeakMap<EditorView, object>();
+
+function getPluginForView(view: EditorView): object | null {
+  return viewPluginMap.get(view) ?? null;
+}
+
+function setPluginForView(view: EditorView, plugin: object): void {
+  viewPluginMap.set(view, plugin);
+}
+
+function removePluginForView(view: EditorView): void {
+  viewPluginMap.delete(view);
+}
 
 function getPluginState(view: EditorView): CursorHistoryState | null {
-  const plugin = (view as any)[pluginKey];
+  const plugin = getPluginForView(view);
   if (!plugin) return null;
   return getState(plugin);
 }
@@ -91,7 +103,7 @@ function getPluginState(view: EditorView): CursorHistoryState | null {
  * don't interfere with each other.
  */
 function schedulePush(view: EditorView, pos: number): void {
-  const plugin = (view as any)[pluginKey];
+  const plugin = getPluginForView(view);
   if (!plugin) return;
   const state = getState(plugin);
 
@@ -123,7 +135,7 @@ const MIN_JUMP_DISTANCE = 10;
  * invalidates the forward history (standard browser / VS Code behaviour).
  */
 function pushPosition(view: EditorView, pos: number): void {
-  const plugin = (view as any)[pluginKey];
+  const plugin = getPluginForView(view);
   if (!plugin) return;
   const state = getState(plugin);
 
@@ -174,7 +186,7 @@ function dedupPush(arr: HistoryEntry[], entry: HistoryEntry): void {
 const cursorHistoryPlugin = ViewPlugin.fromClass(
   class CursorHistoryPlugin {
     constructor(public view: EditorView) {
-      (view as any)[pluginKey] = this;
+      setPluginForView(view, this);
 
       const state = getState(this);
       const head = view.state.selection.main.head;
@@ -185,7 +197,7 @@ const cursorHistoryPlugin = ViewPlugin.fromClass(
 
     update(update: ViewUpdate) {
       if (this.view !== update.view) return;
-      (update.view as any)[pluginKey] = this;
+      setPluginForView(update.view, this);
 
       const state = getState(this);
 
@@ -198,7 +210,7 @@ const cursorHistoryPlugin = ViewPlugin.fromClass(
     }
 
     destroy() {
-      delete (this.view as any)[pluginKey];
+      removePluginForView(this.view);
       const state = getState(this);
       if (state._guardTimer !== null) clearTimeout(state._guardTimer);
       if (state._pendingTimer !== null) clearTimeout(state._pendingTimer);
@@ -288,7 +300,8 @@ export function navigateCursorForward(view: EditorView): boolean {
   dedupPush(state.back, { pos: currentPos });
 
   // Pop the forward target.
-  const next = state.forward.pop()!;
+  const next = state.forward.pop();
+  if (!next) return false;
 
   // Set guard.
   setNavigateGuard(state);

@@ -36,6 +36,155 @@ export const KIND_ICONS: Record<SymbolKind, string> = {
   interface: 'I',
 };
 
+// ── Language-specific patterns ───────────────────────────────────────────
+
+/**
+ * Each entry is a tuple of [RegExp, SymbolKind].
+ * The RegExp must have exactly one capture group that extracts the symbol name.
+ * Patterns are NOT global – a fresh regexp.exec() is called per line so
+ * lastIndex is always 0.
+ */
+type PatternEntry = [RegExp, SymbolKind];
+
+const GO_PATTERNS: PatternEntry[] = [
+  // func Foo(...)
+  [/\bfunc\s+(?:\([^)]+\)\s+)?([A-Z][a-zA-Z0-9_]*)\s*\(/, 'method'],
+  // func foo(...)
+  [/\bfunc\s+(?:\([^)]+\)\s+)?([a-z][a-zA-Z0-9_]*)\s*\(/, 'function'],
+  // type Foo struct
+  [/\btype\s+([A-Z][a-zA-Z0-9_]*)\s+struct\b/, 'class'],
+  // type Foo interface
+  [/\btype\s+([A-Z][a-zA-Z0-9_]*)\s+interface\b/, 'interface'],
+  // type Foo = ...
+  [/\btype\s+([A-Z][a-zA-Z0-9_]*)\s+=/, 'type'],
+  // type Foo underlyingType (e.g. type Foo string)
+  [/\btype\s+([A-Z][a-zA-Z0-9_]*)\s+[a-zA-Z]/, 'type'],
+  // var Foo Type
+  [/\bvar\s+([A-Z][a-zA-Z0-9_]*)\s+[a-zA-Z]/, 'variable'],
+  // const Foo = iota / ...
+  [/\bconst\s+([A-Z][a-zA-Z0-9_]*)\s+=/, 'constant'],
+  // go-style interface method inside interface block:  Foo(args)
+  // Accept tab or space indentation
+  [/^\s+([A-Z][a-zA-Z0-9_]*)\s*\(/, 'method'],
+  // go-style const() / var() block items: indented Exported = ...
+  // Distinguish from interface methods by requiring '=' and not '('
+  [/^\s+([A-Z][a-zA-Z0-9_]*)\s*=[^=]/, 'constant'],
+];
+
+const PYTHON_PATTERNS: PatternEntry[] = [
+  // class Foo:
+  [/\bclass\s+([A-Za-z_][a-zA-Z0-9_]*)\s*[:(]/, 'class'],
+  // async def foo(
+  [/\basync\s+def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/, 'function'],
+  // def foo(
+  [/\bdef\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/, 'function'],
+  // FOO = ... (module-level constant convention: upper snake case)
+  [/^([A-Z_][A-Z0-9_]*)\s*=/, 'constant'],
+  // foo = ... (module level variable)
+  [/^([a-z_][a-zA-Z0-9_]*)\s*=[^=]/, 'variable'],
+];
+
+const TYPESCRIPT_PATTERNS: PatternEntry[] = [
+  // export default function foo(
+  [/\bexport\s+default\s+function\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*[<(]/, 'function'],
+  // export function foo(
+  [/\bexport\s+function\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*[<(]/, 'function'],
+  // async function foo(
+  [/\basync\s+function\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*[<(]/, 'function'],
+  // function foo(
+  [/\bfunction\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*[<(]/, 'function'],
+  // export class Foo
+  [/\bexport\s+(?:abstract\s+)?class\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/, 'class'],
+  // class Foo
+  [/\bclass\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/, 'class'],
+  // export interface Foo
+  [/\bexport\s+interface\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/, 'interface'],
+  // interface Foo
+  [/\binterface\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/, 'interface'],
+  // export type Foo =
+  [/\bexport\s+type\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=/, 'type'],
+  // type Foo =
+  [/\btype\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=/, 'type'],
+  // const foo = ( must NOT be treated as function if value is not a function
+  [/\bconst\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*(?:async\s*)?\(/, 'function'],
+  // Arrow function: const foo = () =>
+  [/\bconst\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[a-zA-Z_$][a-zA-Z0-9_$]*)\s*=>/, 'function'],
+  // const foo: Type = ...
+  [/\bconst\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:/, 'variable'],
+  // const foo = value (non-function)
+  [/\bconst\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=/, 'variable'],
+  // let foo = / let foo:
+  [/\blet\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*[=:(]/, 'variable'],
+  // var foo = / var foo:
+  [/\bvar\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*[=:(]/, 'variable'],
+  // class method: foo(args)
+  // Uses a negative lookahead to exclude control-flow keywords
+  // (if/for/while/switch/return/typeof/catch/throw/new delete case)
+  // that could false-positive due to regex backtracking on ^\s+.
+  [
+    /^\s+(?:(?:public|private|protected|static|async|abstract|readonly)\s+)*\s*(?!if\b|for\b|while\b|switch\b|return\b|typeof\b|catch\b|throw\b|new\b|delete\b|case\b)([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/,
+    'method',
+  ],
+  // uppercase const: const FOO = ...
+  [/\bconst\s+([A-Z_][A-Z0-9_]*)\s*=/, 'constant'],
+];
+
+const JAVASCRIPT_PATTERNS: PatternEntry[] = [
+  // export default function foo(
+  [/\bexport\s+default\s+function\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/, 'function'],
+  // export function foo(
+  [/\bexport\s+function\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/, 'function'],
+  // async function foo(
+  [/\basync\s+function\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/, 'function'],
+  // function foo(
+  [/\bfunction\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/, 'function'],
+  // export class Foo
+  [/\bexport\s+class\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/, 'class'],
+  // class Foo
+  [/\bclass\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/, 'class'],
+  // const foo = (...) =>
+  [/\bconst\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[a-zA-Z_$][a-zA-Z0-9_$]*)\s*=>/, 'function'],
+  // const foo = (immediately-invoked function expression)
+  [/\bconst\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*(?:async\s*)?\(/, 'function'],
+  // const foo = ...
+  [/\bconst\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=/, 'variable'],
+  // let foo =
+  [/\blet\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=/, 'variable'],
+  // var foo =
+  [/\bvar\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=/, 'variable'],
+  // class method (non-backtracking, same negative lookahead as TypeScript)
+  [
+    /^\s+(?:(?:public|private|protected|static|async|abstract|readonly)\s+)*\s*(?!if\b|for\b|while\b|switch\b|return\b|typeof\b|catch\b|throw\b|new\b|delete\b|case\b)([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/,
+    'method',
+  ],
+  // uppercase const
+  [/\bconst\s+([A-Z_][A-Z0-9_]*)\s*=/, 'constant'],
+];
+
+const GENERIC_PATTERNS: PatternEntry[] = [
+  // function foo(
+  [/\bfunction\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/, 'function'],
+  // class Foo
+  [/\bclass\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/, 'class'],
+  // interface Foo
+  [/\binterface\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/, 'interface'],
+  // def foo(
+  [/\bdef\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/, 'function'],
+  // func foo(
+  [/\bfunc\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/, 'function'],
+  // const / let / var
+  [/\b(?:const|let|var)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=/, 'variable'],
+  // type Foo struct
+  [/\btype\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+struct/, 'class'],
+  // type Foo interface
+  [/\btype\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+interface/, 'interface'],
+  // Method (non-backtracking, same negative lookahead)
+  [
+    /^\s+(?:(?:public|private|protected|static|async|abstract|readonly)\s+)*\s*(?!if\b|for\b|while\b|switch\b|return\b|typeof\b|catch\b|throw\b|new\b|delete\b|case\b)([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/,
+    'method',
+  ],
+];
+
 // ── Symbol extraction ────────────────────────────────────────────────────
 
 /**
@@ -224,155 +373,6 @@ export function getEnclosingSymbols(
 
   return result;
 }
-
-// ── Language-specific patterns ───────────────────────────────────────────
-
-/**
- * Each entry is a tuple of [RegExp, SymbolKind].
- * The RegExp must have exactly one capture group that extracts the symbol name.
- * Patterns are NOT global – a fresh regexp.exec() is called per line so
- * lastIndex is always 0.
- */
-type PatternEntry = [RegExp, SymbolKind];
-
-const GO_PATTERNS: PatternEntry[] = [
-  // func Foo(...)
-  [/\bfunc\s+(?:\([^)]+\)\s+)?([A-Z][a-zA-Z0-9_]*)\s*\(/, 'method'],
-  // func foo(...)
-  [/\bfunc\s+(?:\([^)]+\)\s+)?([a-z][a-zA-Z0-9_]*)\s*\(/, 'function'],
-  // type Foo struct
-  [/\btype\s+([A-Z][a-zA-Z0-9_]*)\s+struct\b/, 'class'],
-  // type Foo interface
-  [/\btype\s+([A-Z][a-zA-Z0-9_]*)\s+interface\b/, 'interface'],
-  // type Foo = ...
-  [/\btype\s+([A-Z][a-zA-Z0-9_]*)\s+=/, 'type'],
-  // type Foo underlyingType (e.g. type Foo string)
-  [/\btype\s+([A-Z][a-zA-Z0-9_]*)\s+[a-zA-Z]/, 'type'],
-  // var Foo Type
-  [/\bvar\s+([A-Z][a-zA-Z0-9_]*)\s+[a-zA-Z]/, 'variable'],
-  // const Foo = iota / ...
-  [/\bconst\s+([A-Z][a-zA-Z0-9_]*)\s+=/, 'constant'],
-  // go-style interface method inside interface block:  Foo(args)
-  // Accept tab or space indentation
-  [/^\s+([A-Z][a-zA-Z0-9_]*)\s*\(/, 'method'],
-  // go-style const() / var() block items: indented Exported = ...
-  // Distinguish from interface methods by requiring '=' and not '('
-  [/^\s+([A-Z][a-zA-Z0-9_]*)\s*=[^=]/, 'constant'],
-];
-
-const PYTHON_PATTERNS: PatternEntry[] = [
-  // class Foo:
-  [/\bclass\s+([A-Za-z_][a-zA-Z0-9_]*)\s*[:(]/, 'class'],
-  // async def foo(
-  [/\basync\s+def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/, 'function'],
-  // def foo(
-  [/\bdef\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/, 'function'],
-  // FOO = ... (module-level constant convention: upper snake case)
-  [/^([A-Z_][A-Z0-9_]*)\s*=/, 'constant'],
-  // foo = ... (module level variable)
-  [/^([a-z_][a-zA-Z0-9_]*)\s*=[^=]/, 'variable'],
-];
-
-const TYPESCRIPT_PATTERNS: PatternEntry[] = [
-  // export default function foo(
-  [/\bexport\s+default\s+function\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*[<(]/, 'function'],
-  // export function foo(
-  [/\bexport\s+function\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*[<(]/, 'function'],
-  // async function foo(
-  [/\basync\s+function\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*[<(]/, 'function'],
-  // function foo(
-  [/\bfunction\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*[<(]/, 'function'],
-  // export class Foo
-  [/\bexport\s+(?:abstract\s+)?class\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/, 'class'],
-  // class Foo
-  [/\bclass\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/, 'class'],
-  // export interface Foo
-  [/\bexport\s+interface\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/, 'interface'],
-  // interface Foo
-  [/\binterface\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/, 'interface'],
-  // export type Foo =
-  [/\bexport\s+type\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=/, 'type'],
-  // type Foo =
-  [/\btype\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=/, 'type'],
-  // const foo = ( must NOT be treated as function if value is not a function
-  [/\bconst\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*(?:async\s*)?\(/, 'function'],
-  // Arrow function: const foo = () =>
-  [/\bconst\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[a-zA-Z_$][a-zA-Z0-9_$]*)\s*=>/, 'function'],
-  // const foo: Type = ...
-  [/\bconst\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:/, 'variable'],
-  // const foo = value (non-function)
-  [/\bconst\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=/, 'variable'],
-  // let foo = / let foo:
-  [/\blet\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*[=:(]/, 'variable'],
-  // var foo = / var foo:
-  [/\bvar\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*[=:(]/, 'variable'],
-  // class method: foo(args)
-  // Uses a negative lookahead to exclude control-flow keywords
-  // (if/for/while/switch/return/typeof/catch/throw/new delete case)
-  // that could false-positive due to regex backtracking on ^\s+.
-  [
-    /^\s+(?:(?:public|private|protected|static|async|abstract|readonly)\s+)*\s*(?!if\b|for\b|while\b|switch\b|return\b|typeof\b|catch\b|throw\b|new\b|delete\b|case\b)([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/,
-    'method',
-  ],
-  // uppercase const: const FOO = ...
-  [/\bconst\s+([A-Z_][A-Z0-9_]*)\s*=/, 'constant'],
-];
-
-const JAVASCRIPT_PATTERNS: PatternEntry[] = [
-  // export default function foo(
-  [/\bexport\s+default\s+function\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/, 'function'],
-  // export function foo(
-  [/\bexport\s+function\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/, 'function'],
-  // async function foo(
-  [/\basync\s+function\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/, 'function'],
-  // function foo(
-  [/\bfunction\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/, 'function'],
-  // export class Foo
-  [/\bexport\s+class\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/, 'class'],
-  // class Foo
-  [/\bclass\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/, 'class'],
-  // const foo = (...) =>
-  [/\bconst\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[a-zA-Z_$][a-zA-Z0-9_$]*)\s*=>/, 'function'],
-  // const foo = (immediately-invoked function expression)
-  [/\bconst\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*(?:async\s*)?\(/, 'function'],
-  // const foo = ...
-  [/\bconst\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=/, 'variable'],
-  // let foo =
-  [/\blet\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=/, 'variable'],
-  // var foo =
-  [/\bvar\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=/, 'variable'],
-  // class method (non-backtracking, same negative lookahead as TypeScript)
-  [
-    /^\s+(?:(?:public|private|protected|static|async|abstract|readonly)\s+)*\s*(?!if\b|for\b|while\b|switch\b|return\b|typeof\b|catch\b|throw\b|new\b|delete\b|case\b)([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/,
-    'method',
-  ],
-  // uppercase const
-  [/\bconst\s+([A-Z_][A-Z0-9_]*)\s*=/, 'constant'],
-];
-
-const GENERIC_PATTERNS: PatternEntry[] = [
-  // function foo(
-  [/\bfunction\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/, 'function'],
-  // class Foo
-  [/\bclass\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/, 'class'],
-  // interface Foo
-  [/\binterface\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/, 'interface'],
-  // def foo(
-  [/\bdef\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/, 'function'],
-  // func foo(
-  [/\bfunc\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/, 'function'],
-  // const / let / var
-  [/\b(?:const|let|var)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=/, 'variable'],
-  // type Foo struct
-  [/\btype\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+struct/, 'class'],
-  // type Foo interface
-  [/\btype\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+interface/, 'interface'],
-  // Method (non-backtracking, same negative lookahead)
-  [
-    /^\s+(?:(?:public|private|protected|static|async|abstract|readonly)\s+)*\s*(?!if\b|for\b|while\b|switch\b|return\b|typeof\b|catch\b|throw\b|new\b|delete\b|case\b)([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/,
-    'method',
-  ],
-];
 
 // ── Component ────────────────────────────────────────────────────────────
 

@@ -144,12 +144,15 @@ const EditorPane: FC<EditorPaneProps> = ({ paneId }) => {
         setWorkspaceRoot(ws.workspace_root || '');
       })
       .catch(() => {
-        // Graceful degradation - absolute path option just won't appear
+        /* noop - graceful degradation */
       });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const isExternalUpdateRef = useRef<boolean>(false);
   const loadFileRef = useRef<((filePath: string) => Promise<void>) | null>(null);
-  const fetchDiagnosticsRef = useRef<(filePath: string, content: string) => void>(() => {});
+  const fetchDiagnosticsRef = useRef<(filePath: string, content: string) => void>(() => {
+    /* noop */
+  });
 
   // Load file content - updates buffer in context to keep it in sync with editor
   const loadFile = useCallback(
@@ -375,7 +378,6 @@ const EditorPane: FC<EditorPaneProps> = ({ paneId }) => {
   // Keep ref in sync so loadFile can call fetchDiagnostics without a forward reference
   fetchDiagnosticsRef.current = fetchDiagnostics;
 
-  const isExternalUpdateRef = useRef<boolean>(false);
   const lastLoadedRef = useRef<{ bufferId: string; filePath: string } | null>(null);
   const currentBufferIdRef = useRef<string | null>(null);
 
@@ -947,7 +949,10 @@ const EditorPane: FC<EditorPaneProps> = ({ paneId }) => {
                   metadata: { sourcePath: filePath, diffType: 'external-change' },
                 });
 
-                setBufferExternallyModified(bufferRef.current!.id, diskContent);
+                const bufferRefId = bufferRef.current?.id;
+                if (bufferRefId) {
+                  setBufferExternallyModified(bufferRefId, diskContent);
+                }
               } catch (err) {
                 notificationBus.notify('warning', 'Diff Generation', 'Failed to generate diff for external changes');
               }

@@ -26,7 +26,7 @@ interface EditorManagerContextValue {
   isLinkedScrollEnabled: boolean;
   paneSizes: PaneSize;
 
-  openFile: (file: any) => string;
+  openFile: (file: Record<string, unknown>) => string;
   openWorkspaceBuffer: (options: {
     kind: 'chat' | 'diff' | 'review' | 'file';
     path: string;
@@ -35,7 +35,7 @@ interface EditorManagerContextValue {
     ext?: string;
     isPinned?: boolean;
     isClosable?: boolean;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
   }) => string;
   closeBuffer: (bufferId: string) => void;
   closeAllBuffers: () => void;
@@ -52,7 +52,7 @@ interface EditorManagerContextValue {
   updateBufferContent: (bufferId: string, content: string) => void;
   updateBufferCursor: (bufferId: string, position: { line: number; column: number }) => void;
   updateBufferScroll: (bufferId: string, position: { top: number; left: number }) => void;
-  updateBufferMetadata: (bufferId: string, updates: Record<string, any>) => void;
+  updateBufferMetadata: (bufferId: string, updates: Record<string, unknown>) => void;
   updateBufferTitle: (bufferId: string, title: string) => void;
   saveBuffer: (bufferId: string, options?: { silent?: boolean }) => Promise<void>;
   setBufferModified: (bufferId: string, isModified: boolean) => void;

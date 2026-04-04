@@ -604,13 +604,15 @@ const CommandPalette: FC<CommandPaletteProps> = ({
             const isSelected = index === selectedFlatIndex;
 
             if (item.kind === 'command') {
-              const shortcut = hotkeyForCommand(item.commandId!);
+              const cmdId = item.commandId;
+              if (!cmdId) return null;
+              const shortcut = hotkeyForCommand(cmdId);
               return (
                 <div
                   key={`cmd-${item.commandId}`}
                   data-selected={isSelected}
                   className={`command-palette-item ${isSelected ? 'command-palette-selected' : ''}`}
-                  onClick={() => executeCommand(item.commandId!)}
+                  onClick={() => executeCommand(cmdId)}
                   onMouseEnter={() => setSelectedIndex(toNavigableIndex(index))}
                 >
                   <span className="command-palette-label" dangerouslySetInnerHTML={{ __html: item.highlightedLabel }} />
@@ -619,14 +621,15 @@ const CommandPalette: FC<CommandPaletteProps> = ({
               );
             }
 
-            // file
+            const filePath = item.filePath;
+            if (!filePath) return null;
             return (
               <div
-                key={`file-${item.filePath}`}
+                key={`file-${filePath}`}
                 data-selected={isSelected}
                 className={`command-palette-item ${isSelected ? 'command-palette-selected' : ''}`}
                 onClick={() => {
-                  onOpenFile(item.filePath!);
+                  onOpenFile(filePath);
                   onClose();
                 }}
                 onMouseEnter={() => setSelectedIndex(toNavigableIndex(index))}

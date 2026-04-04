@@ -166,7 +166,8 @@ const LanguageSwitcher: FC<LanguageSwitcherProps> = ({ currentLanguageId, isAuto
     if (!isOpen || !buttonRef.current) return;
 
     const positionPopup = () => {
-      const rect = buttonRef.current!.getBoundingClientRect();
+      const rect = buttonRef.current?.getBoundingClientRect();
+      if (!rect) return;
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
       const preferredWidth = 240;

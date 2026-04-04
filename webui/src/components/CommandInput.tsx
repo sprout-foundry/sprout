@@ -366,6 +366,96 @@ const CommandInput: FC<CommandInputProps> = ({
     });
   }, [attachedImages]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const navigateHistory = (direction: number) => {
+    if (history.commands.length === 0) return;
+    const textarea = inputRef.current;
+    if (!textarea) return;
+
+    let newIndex = history.index + direction;
+    const currentInputValue = draftValue;
+
+    if (newIndex < -1) {
+      newIndex = -1;
+    } else if (newIndex >= history.commands.length) {
+      newIndex = history.commands.length - 1;
+    }
+
+    let newInputValue = '';
+
+    if (newIndex === -1) {
+      // Return to temp input
+      newInputValue = history.tempInput;
+      setIsHistoryMode(false);
+    } else {
+      // Navigate to history item
+      newInputValue = history.commands[history.commands.length - 1 - newIndex];
+      setIsHistoryMode(true);
+    }
+
+    setHistory((prev) => ({
+      ...prev,
+      index: newIndex,
+      tempInput: history.index === -1 && !isHistoryMode ? currentInputValue : prev.tempInput,
+    }));
+
+    updateValue(newInputValue, { start: newInputValue.length, end: newInputValue.length });
+  };
+
+  const handleTabCompletion = () => {
+    // Basic auto-completion logic could be added here
+    // For now, just insert a tab character
+    const textarea = inputRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const newInput = `${draftValue.substring(0, start)}\t${draftValue.substring(end)}`;
+    updateValue(newInput, { start: start + 1, end: start + 1 });
+  };
+
+  const handleSend = async () => {
+    const textareaValue = draftValue;
+    if (textareaValue.trim() === '') return;
+
+    // Build query with image paths
+    let commandToSend = textareaValue.trim();
+    const uploadedImages = attachedImages.filter((img) => img.uploadedPath);
+    if (uploadedImages.length > 0) {
+      const imagePaths = uploadedImages.map((img) => `Pasted image saved to disk: ${img.uploadedPath}`).join('\n');
+      commandToSend = `${imagePaths}\n\n${commandToSend}`;
+    }
+
+    // Reset history navigation
+    resetHistoryNavigation();
+
+    // Call the appropriate send handler
+    if (onSend) {
+      onSend(commandToSend);
+    } else if (onSendCommand) {
+      onSendCommand(commandToSend);
+    }
+
+    void saveToHistory(commandToSend);
+
+    // Clear textarea using onChange for controlled component
+    updateValue('', { start: 0, end: 0 });
+
+    // Clear attached images and revoke URLs
+    setAttachedImages((prev) => {
+      prev.forEach((img) => URL.revokeObjectURL(img.preview));
+      // Clean up upload tracking ref
+      prev.forEach((img) => uploadInProgressRef.current.delete(img.id));
+      return [];
+    });
+
+    // Focus back to input
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
+    }, 100);
+  };
+
   const handleKeyDown = (e: ReactKeyboardEvent) => {
     if (disabled) return;
     const textarea = inputRef.current;
@@ -464,96 +554,6 @@ const CommandInput: FC<CommandInputProps> = ({
     if ((e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete') && isHistoryMode) {
       resetHistoryNavigation();
     }
-  };
-
-  const navigateHistory = (direction: number) => {
-    if (history.commands.length === 0) return;
-    const textarea = inputRef.current;
-    if (!textarea) return;
-
-    let newIndex = history.index + direction;
-    const currentInputValue = draftValue;
-
-    if (newIndex < -1) {
-      newIndex = -1;
-    } else if (newIndex >= history.commands.length) {
-      newIndex = history.commands.length - 1;
-    }
-
-    let newInputValue = '';
-
-    if (newIndex === -1) {
-      // Return to temp input
-      newInputValue = history.tempInput;
-      setIsHistoryMode(false);
-    } else {
-      // Navigate to history item
-      newInputValue = history.commands[history.commands.length - 1 - newIndex];
-      setIsHistoryMode(true);
-    }
-
-    setHistory((prev) => ({
-      ...prev,
-      index: newIndex,
-      tempInput: history.index === -1 && !isHistoryMode ? currentInputValue : prev.tempInput,
-    }));
-
-    updateValue(newInputValue, { start: newInputValue.length, end: newInputValue.length });
-  };
-
-  const handleTabCompletion = () => {
-    // Basic auto-completion logic could be added here
-    // For now, just insert a tab character
-    const textarea = inputRef.current;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const newInput = `${draftValue.substring(0, start)}\t${draftValue.substring(end)}`;
-    updateValue(newInput, { start: start + 1, end: start + 1 });
-  };
-
-  const handleSend = async () => {
-    const textareaValue = draftValue;
-    if (textareaValue.trim() === '') return;
-
-    // Build query with image paths
-    let commandToSend = textareaValue.trim();
-    const uploadedImages = attachedImages.filter((img) => img.uploadedPath);
-    if (uploadedImages.length > 0) {
-      const imagePaths = uploadedImages.map((img) => `Pasted image saved to disk: ${img.uploadedPath}`).join('\n');
-      commandToSend = `${imagePaths}\n\n${commandToSend}`;
-    }
-
-    // Reset history navigation
-    resetHistoryNavigation();
-
-    // Call the appropriate send handler
-    if (onSend) {
-      onSend(commandToSend);
-    } else if (onSendCommand) {
-      onSendCommand(commandToSend);
-    }
-
-    void saveToHistory(commandToSend);
-
-    // Clear textarea using onChange for controlled component
-    updateValue('', { start: 0, end: 0 });
-
-    // Clear attached images and revoke URLs
-    setAttachedImages((prev) => {
-      prev.forEach((img) => URL.revokeObjectURL(img.preview));
-      // Clean up upload tracking ref
-      prev.forEach((img) => uploadInProgressRef.current.delete(img.id));
-      return [];
-    });
-
-    // Focus back to input
-    setTimeout(() => {
-      if (inputRef.current) {
-        inputRef.current.focus();
-      }
-    }, 100);
   };
 
   const handleQueue = async () => {
@@ -828,10 +828,30 @@ const CommandInput: FC<CommandInputProps> = ({
               <div className="queue-popover-overlay">
                 <QueuedMessagesPanel
                   messages={queuedMessages}
-                  onRemove={onQueueMessageRemove || (() => {})}
-                  onEdit={onQueueMessageEdit || (() => {})}
-                  onReorder={onQueueReorder || (() => {})}
-                  onClear={onClearQueuedMessages || (() => {})}
+                  onRemove={
+                    onQueueMessageRemove ||
+                    (() => {
+                      /* noop */
+                    })
+                  }
+                  onEdit={
+                    onQueueMessageEdit ||
+                    (() => {
+                      /* noop */
+                    })
+                  }
+                  onReorder={
+                    onQueueReorder ||
+                    (() => {
+                      /* noop */
+                    })
+                  }
+                  onClear={
+                    onClearQueuedMessages ||
+                    (() => {
+                      /* noop */
+                    })
+                  }
                   onClose={() => setShowQueuePanel(false)}
                 />
               </div>

@@ -1,37 +1,51 @@
 {
-  "extends": [
-    "react-app",
-    "react-app/jest",
-    "prettier"
+  "extends": ["react-app", "react-app/jest", "prettier"],
+  "overrides": [
+    {
+      "files": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
+      "rules": {
+        "@typescript-eslint/no-explicit-any": "off",
+        "no-console": "off"
+      }
+    }
   ],
+  "root": true,
   "rules": {
+    "@typescript-eslint/consistent-type-definitions": ["warn", "interface"],
+    "@typescript-eslint/consistent-type-imports": [
+      "warn",
+      {
+        "fixStyle": "inline-type-imports",
+        "prefer": "type-imports"
+      }
+    ],
+    "@typescript-eslint/no-duplicate-imports": "off",
     "@typescript-eslint/no-explicit-any": "warn",
     "@typescript-eslint/no-shadow": "warn",
-    "@typescript-eslint/no-unused-expressions": "warn",
     "@typescript-eslint/no-unused-vars": [
       "warn",
       {
         "argsIgnorePattern": "^_",
+        "caughtErrorsIgnorePattern": "^_",
         "varsIgnorePattern": "^_"
       }
     ],
-    "eqeqeq": [
-      "warn",
-      "smart"
-    ],
+    "curly": ["warn", "multi-line"],
+    "eqeqeq": ["warn", "smart"],
     "no-console": [
       "warn",
       {
-        "allow": [
-          "warn",
-          "error"
-        ]
+        "allow": ["warn", "error"]
       }
     ],
-    "no-duplicate-imports": "warn",
-    "no-shadow": "off",
-    "no-unused-expressions": "off",
-    "no-var": "warn",
-    "prefer-const": "warn"
+    "no-constant-condition": "warn",
+    "no-dupe-keys": "error",
+    "no-template-curly-in-string": "off",
+    "no-unreachable": "error",
+    "no-var": "error",
+    "object-shorthand": "warn",
+    "prefer-const": "warn",
+    "prefer-object-spread": "warn",
+    "prefer-template": "warn"
   }
 }

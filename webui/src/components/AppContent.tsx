@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Menu, PanelRightOpen, PanelRightClose } from 'lucide-react';
 import Sidebar from './Sidebar';
 import WorkspaceBar from './WorkspaceBar';
@@ -12,11 +12,14 @@ import { ApiService } from '../services/api';
 import { useGitWorkspace } from '../hooks/useGitWorkspace';
 import { useInstanceManager } from '../hooks/useInstanceManager';
 import { useChatSessionSync } from '../hooks/useChatSessionSync';
-import { useHotkeyCommandHandler } from '../hooks/useHotkeyCommandHandler';
+import { useHotkeyIntegration } from '../hooks/useHotkeyIntegration';
+import { useCurrentTodos } from '../hooks/useCurrentTodos';
+import { useSplitManager } from '../hooks/useSplitManager';
+import { useHotkeysConfig } from '../hooks/useHotkeysConfig';
+import { useFileHandlers } from '../hooks/useFileHandlers';
+import { usePanelWidth } from '../hooks/usePanelWidth';
 import type { ChatSession } from '../services/chatSessions';
 import type { AppState, LogEntry, PerChatState } from '../types/app';
-
-// ── Props interface ────────────────────────────────────────────────
 
 interface AppContentProps {
   state: AppState;
@@ -64,8 +67,6 @@ interface AppContentProps {
   perChatCache?: Record<string, PerChatState>;
 }
 
-// ── Component ──────────────────────────────────────────────────────
-
 const AppContent: React.FC<AppContentProps> = ({
   state,
   inputValue,
@@ -110,80 +111,40 @@ const AppContent: React.FC<AppContentProps> = ({
 }) => {
   // ── Editor manager ─────────────────────────────────────────────
   const {
-    panes,
-    paneLayout,
-    activePaneId,
-    activeBufferId,
-    buffers,
-    switchPane,
-    switchToBuffer,
-    splitPane,
-    splitIntoGrid,
-    closeSplit,
-    closePane,
-    closeBuffer,
-    closeAllBuffers,
-    closeOtherBuffers,
-    openFile,
-    openWorkspaceBuffer,
-    paneSizes,
-    updatePaneSize,
-    updateBufferMetadata,
-    updateBufferTitle,
-    saveAllBuffers,
+    panes, paneLayout, activePaneId, activeBufferId, buffers,
+    switchPane, switchToBuffer, splitPane, splitIntoGrid, closeSplit, closePane,
+    closeBuffer, closeAllBuffers, closeOtherBuffers, openFile, openWorkspaceBuffer,
+    paneSizes, updatePaneSize, updateBufferMetadata, updateBufferTitle, saveAllBuffers,
   } = useEditorManager();
 
   const apiService = ApiService.getInstance();
 
-  // ── Current todos memo ─────────────────────────────────────────
-  const currentTodos = useMemo(() => {
-    if (state.currentTodos && state.currentTodos.length > 0) {
-      return state.currentTodos;
-    }
+  // ── Hooks & local UI state ─────────────────────────────────────
+  const currentTodos = useCurrentTodos(state.currentTodos, state.toolExecutions);
 
-    const todoWrites = state.toolExecutions
-      .filter(t => t.tool === 'TodoWrite')
-      .sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
-
-    if (todoWrites.length === 0) return [];
-
-    const latest = todoWrites[0];
-    try {
-      if (latest.arguments) {
-        const args = JSON.parse(latest.arguments);
-        if (Array.isArray(args.todos)) {
-          return args.todos.map((todo: any) => ({
-            id: todo.id || `${todo.content}-${todo.status}`,
-            content: todo.content || '',
-            status: (['pending', 'in_progress', 'completed', 'cancelled'].includes(todo.status) ? todo.status : 'pending') as 'pending' | 'in_progress' | 'completed' | 'cancelled'
-          }));
-        }
-      }
-    } catch { /* ignore */ }
-
-    return [];
-  }, [state.currentTodos, state.toolExecutions]);
-
-  // ── Local UI state ─────────────────────────────────────────────
-  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
-  const [isContextPanelMobileOpen, setIsContextPanelMobileOpen] = useState(false);
-  const [hotkeysConfigPath, setHotkeysConfigPath] = useState<string | null>(null);
-  const [nestedSplit, setNestedSplit] = useState<{ hostPaneId: string; nestedPaneId: string; direction: 'vertical' | 'horizontal' } | null>(null);
-  const [panelWidth, setPanelWidth] = useState(() => {
-    if (typeof window === 'undefined') return 360;
-    const storedWidth = Number(window.localStorage.getItem('ledit.contextPanel.width'));
-    if (Number.isFinite(storedWidth) && storedWidth >= 260 && storedWidth <= 600) {
-      return storedWidth;
-    }
-    return 360;
+  const {
+    handleSplitRequest,
+    handleCloseAllSplits,
+    nestedSplit,
+    onNestedSplitChange,
+    canSplit,
+    canSplitGrid,
+    canCloseSplit,
+  } = useSplitManager({
+    activePaneId,
+    panes,
+    paneLayout,
+    splitPane,
+    splitIntoGrid,
+    closeSplit,
+    closePane,
+    updatePaneSize,
+    switchToBuffer,
   });
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem('ledit.contextPanel.width', String(Math.round(panelWidth)));
-  }, [panelWidth]);
-
-  // ── Extracted hooks ────────────────────────────────────────────
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [isContextPanelMobileOpen, setIsContextPanelMobileOpen] = useState(false);
+  const { panelWidth, setPanelWidth } = usePanelWidth();
 
   const { instances, selectedInstancePID, isSwitchingInstance, handleInstanceChange } =
     useInstanceManager({ isConnected, apiService });
@@ -257,150 +218,38 @@ const AppContent: React.FC<AppContentProps> = ({
     updateBufferTitle,
   });
 
-  // ── View / tab / split callbacks ───────────────────────────────
-
-  const initialViewSyncRef = useRef(false);
-
-  const handlePrimaryViewChange = useCallback((view: 'chat' | 'editor' | 'git') => {
-    if (view === 'chat') {
-      openWorkspaceBuffer({
-        kind: 'chat',
-        path: '__workspace/chat',
-        title: 'Chat',
-        ext: '.chat',
-        isPinned: true,
-        isClosable: false,
-      });
-    }
-    onViewChange(view);
-  }, [onViewChange, openWorkspaceBuffer]);
-
-  const focusTabIndex = useCallback((index: number) => {
-    if (!activePaneId || index < 0) return;
-    const paneBuffers = Array.from(buffers.values()).filter((buffer) => buffer.paneId === activePaneId);
-    const target = paneBuffers[index];
-    if (target) {
-      switchPane(activePaneId);
-      switchToBuffer(target.id);
-    }
-  }, [activePaneId, buffers, switchPane, switchToBuffer]);
-
-  const handleSplitRequest = useCallback((direction: 'vertical' | 'horizontal' | 'grid') => {
-    if (direction === 'grid') {
-      if (paneLayout === 'split-grid' && panes.length === 4) {
-        const primaryPane = panes.find(p => p.position === 'primary') || panes[0];
-        if (primaryPane) {
-          const bufId = primaryPane.bufferId;
-          closeSplit();
-          if (bufId) switchToBuffer(bufId);
-        }
-        return;
-      }
-      const primaryPane = panes.find(p => p.position === 'primary') || panes[0];
-      const bufId = primaryPane?.bufferId;
-      splitIntoGrid();
-      if (bufId) switchToBuffer(bufId);
-      return;
-    }
-
-    if (!activePaneId) return;
-
-    const previousPaneCount = panes.length;
-    const newPaneId = splitPane(activePaneId, direction);
-    if (!newPaneId) return;
-
-    if (previousPaneCount === 2) {
-      setNestedSplit({
-        hostPaneId: activePaneId,
-        nestedPaneId: newPaneId,
-        direction,
-      });
-      updatePaneSize(`group:${activePaneId}`, 50);
-      updatePaneSize(`nested:${activePaneId}`, 50);
-    }
-  }, [activePaneId, panes, paneLayout, splitPane, splitIntoGrid, closeSplit, updatePaneSize, switchToBuffer]);
-
-  const handleCloseAllSplits = useCallback(() => {
-    if (paneLayout === 'split-grid' && panes.length === 4) {
-      const primaryPane = panes.find(p => p.position === 'primary') || panes[0];
-      const bufId = primaryPane?.bufferId;
-      closeSplit();
-      if (bufId) switchToBuffer(bufId);
-      return;
-    }
-    if (nestedSplit) {
-      closePane(nestedSplit.nestedPaneId);
-      setNestedSplit(null);
-    } else {
-      closeSplit();
-    }
-  }, [closeSplit, closePane, nestedSplit, paneLayout, panes, switchToBuffer]);
-
-  const canSplit = panes.length < 3;
-  const canSplitGrid = paneLayout !== 'split-grid';
-  const canCloseSplit = panes.length > 1;
-
-  useEffect(() => {
-    if (panes.length < 3 && nestedSplit) {
-      setNestedSplit(null);
-    }
-  }, [nestedSplit, panes.length]);
-
-  // ── Hotkey handler ─────────────────────────────────────────────
-
-  useHotkeyCommandHandler({
-    onToggleCommandPalette: () => setIsCommandPaletteOpen(prev => !prev),
-    onOpenCommandPalette: () => setIsCommandPaletteOpen(true),
-    onNewFile: () => {
-      openWorkspaceBuffer({ kind: 'file', path: `__workspace/untitled-${Date.now()}`, title: 'Untitled', ext: '', isClosable: true });
-      onViewChange('editor');
-    },
-    onToggleSidebar,
-    onToggleTerminal: () => onTerminalExpandedChange(!isTerminalExpanded),
-    onPrimaryViewChange: handlePrimaryViewChange,
-    onFocusTabIndex: focusTabIndex,
-    onSplitRequest: handleSplitRequest,
-    onCloseBuffer: () => { if (activeBufferId) closeBuffer(activeBufferId); },
-    onCloseAllBuffers: closeAllBuffers,
-    onCloseOtherBuffers: () => { if (activeBufferId) closeOtherBuffers(activeBufferId); },
-    onSaveAllBuffers: () => { void saveAllBuffers(); },
-    onSwitchToBuffer: switchToBuffer,
-    onSwitchPane: switchPane,
-    activeBufferId,
-    activePaneId,
-    buffers,
+  useHotkeysConfig({
+    isConnected,
+    apiService,
+    openFile,
+    onViewChange,
+    onCloseCommandPalette: () => setIsCommandPaletteOpen(false),
   });
 
-  // ── Hotkeys config loading ─────────────────────────────────────
-
-  useEffect(() => {
-    if (!isConnected) return;
-    apiService.getHotkeys().then(config => {
-      if (config.path) setHotkeysConfigPath(config.path);
-    }).catch(() => {});
-  }, [isConnected, apiService]);
-
-  const handleOpenHotkeysConfig = useCallback(() => {
-    if (!hotkeysConfigPath) return;
-    const fileName = hotkeysConfigPath.split('/').pop() || 'hotkeys.json';
-    const extensionIndex = fileName.lastIndexOf('.');
-    const fileExt = extensionIndex > 0 ? fileName.slice(extensionIndex) : '';
-    openFile({ path: hotkeysConfigPath, name: fileName, isDir: false, size: 0, modified: 0, ext: fileExt });
-    onViewChange('editor');
-    setIsCommandPaletteOpen(false);
-  }, [hotkeysConfigPath, openFile, onViewChange]);
-
-  useEffect(() => {
-    const handler = () => { handleOpenHotkeysConfig(); };
-    window.addEventListener('ledit:open-hotkeys-config', handler);
-    return () => window.removeEventListener('ledit:open-hotkeys-config', handler);
-  }, [handleOpenHotkeysConfig]);
-
-  // ── Derived state & effects ────────────────────────────────────
-
+  // ── Hotkey integration ─────────────────────────────────────────
+  useHotkeyIntegration({
+    onViewChange,
+    onToggleSidebar,
+    onTerminalExpandedChange,
+    isTerminalExpanded,
+    openWorkspaceBuffer,
+    activePaneId,
+    activeBufferId,
+    buffers,
+    handleSplitRequest,
+    closeBuffer,
+    closeAllBuffers,
+    closeOtherBuffers,
+    saveAllBuffers,
+    switchToBuffer,
+    switchPane,
+    onToggleCommandPalette: () => setIsCommandPaletteOpen(prev => !prev),
+    onOpenCommandPalette: () => setIsCommandPaletteOpen(true),
+  });
   const currentBuffer = activeBufferId ? buffers.get(activeBufferId) : null;
   const contextPanelRef = useRef<ContextPanelHandle>(null);
   const showContextSidebar = currentBuffer?.kind === 'chat';
+  const initialViewSyncRef = useRef(false);
 
   useEffect(() => {
     if (!isMobile || !showContextSidebar) setIsContextPanelMobileOpen(false);
@@ -418,48 +267,11 @@ const AppContent: React.FC<AppContentProps> = ({
     }
   }, [currentBuffer, onViewChange, state.currentView]);
 
-  // ── File click / revision diff handlers ────────────────────────
-
-  const handleFileClick = useCallback((filePath: string, lineNumber?: number) => {
-    const segments = filePath.split('/').filter(Boolean);
-    const fileName = segments[segments.length - 1] || filePath;
-    const extensionIndex = fileName.lastIndexOf('.');
-    const fileExt = extensionIndex > 0 ? fileName.slice(extensionIndex) : '';
-    onViewChange('editor');
-    openFile({ path: filePath, name: fileName, isDir: false, size: 0, modified: 0, ext: fileExt });
-    if (typeof lineNumber === 'number') {
-      setTimeout(() => {
-        document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line: lineNumber } }));
-      }, 100);
-    }
-  }, [onViewChange, openFile]);
-
-  const handleOpenRevisionDiff = useCallback((options: { path: string; diff: string; title: string }) => {
-    onViewChange('editor');
-    openWorkspaceBuffer({
-      kind: 'diff',
-      path: `__workspace/revision/${options.path}-${Date.now()}`,
-      title: `${options.title}: ${options.path.split('/').pop() || options.path}`,
-      ext: '.diff',
-      metadata: {
-        sourcePath: options.path,
-        diff: {
-          message: 'success',
-          path: options.path,
-          has_staged: false,
-          has_unstaged: false,
-          staged_diff: '',
-          unstaged_diff: '',
-          diff: options.diff,
-        },
-        diffMode: 'combined',
-        modeOptions: ['combined'],
-        title: options.title,
-      }
-    });
-  }, [onViewChange, openWorkspaceBuffer]);
-
-  // ── Pane layout container ref ──────────────────────────────────
+  const { handleFileClick, handleOpenRevisionDiff } = useFileHandlers({
+    onViewChange,
+    openFile,
+    openWorkspaceBuffer,
+  });
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -622,7 +434,7 @@ const AppContent: React.FC<AppContentProps> = ({
                   onCloseAllSplits={handleCloseAllSplits}
                   onCreateChat={onCreateChat}
                   nestedSplit={nestedSplit}
-                  onNestedSplitChange={setNestedSplit}
+                  onNestedSplitChange={onNestedSplitChange}
                   containerRef={containerRef}
                 />
               </div>
@@ -661,15 +473,12 @@ const AppContent: React.FC<AppContentProps> = ({
       <CommandPalette
         isOpen={isCommandPaletteOpen}
         onClose={() => setIsCommandPaletteOpen(false)}
-        onOpenFile={(filePath) => {
-          const fileName = filePath.split('/').filter(Boolean).pop() || filePath;
-          const extensionIndex = fileName.lastIndexOf('.');
-          const fileExt = extensionIndex > 0 ? fileName.slice(extensionIndex) : '';
-          openFile({ path: filePath, name: fileName, isDir: false, size: 0, modified: 0, ext: fileExt });
-        }}
+        onOpenFile={handleFileClick}
         onToggleSidebar={onSidebarToggle}
         onToggleTerminal={() => onTerminalExpandedChange(!isTerminalExpanded)}
-        onOpenHotkeysConfig={handleOpenHotkeysConfig}
+        onOpenHotkeysConfig={() => {
+          window.dispatchEvent(new CustomEvent('ledit:open-hotkeys-config'));
+        }}
       />
     </div>
   );

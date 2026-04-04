@@ -19,9 +19,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build and Development Commands
 
 ### Building
+
+**IMPORTANT - Full Build Requirement:**
+When developing, **ALWAYS run `make build-all` after making any code changes.** This builds both the React UI (deployed into Go embed) and the Go binary in one step. A successful build confirms that frontend TypeScript compiles, the React UI bundles, and the Go binary compiles with the embedded UI. Run this at the end of every implementation task before reporting work as complete:
 ```bash
-go build                        # Build the main executable
+make build-all
+```
+
+```bash
+go build                        # Build the main executable only (no UI)
 go install                      # Install to GOPATH/bin
+make deploy-ui                  # Build and embed React UI only
+make build                      # Build Go binary with embedded UI
 ```
 
 ### Testing

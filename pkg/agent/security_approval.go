@@ -2,8 +2,10 @@ package agent
 
 import (
 	"fmt"
+	"log"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/alantheprice/ledit/pkg/events"
 )
@@ -12,14 +14,22 @@ import (
 // the agent and the webui. It allows the agent to block waiting for a user
 // response from the webui when stdin is unavailable.
 type SecurityApprovalManager struct {
-	mu      sync.Mutex
-	pending map[string]chan bool // requestID -> response channel
+	mu              sync.Mutex
+	pending         map[string]chan bool // requestID -> response channel
+	approvalTimeout time.Duration       // how long to wait for a response before rejecting
 }
 
-// NewSecurityApprovalManager creates a new security approval manager.
+// DefaultApprovalTimeout is the maximum time RequestApproval will block
+// waiting for a webui response. After this duration, the request is
+// automatically rejected for safety (the user may have closed the tab).
+const DefaultApprovalTimeout = 5 * time.Minute
+
+// NewSecurityApprovalManager creates a new security approval manager with
+// the default approval timeout.
 func NewSecurityApprovalManager() *SecurityApprovalManager {
 	return &SecurityApprovalManager{
-		pending: make(map[string]chan bool),
+		pending:         make(map[string]chan bool),
+		approvalTimeout: DefaultApprovalTimeout,
 	}
 }
 
@@ -38,7 +48,7 @@ func generateRequestID() string {
 // blocks until the webui responds with an approval or rejection.
 // Returns true if approved, false if rejected.
 // If the event bus is nil, returns false (reject for safety).
-func (sam *SecurityApprovalManager) RequestApproval(eventBus *events.EventBus, clientID, toolName, riskLevel, reasoning string) bool {
+func (sam *SecurityApprovalManager) RequestApproval(eventBus *events.EventBus, clientID, toolName, riskLevel, reasoning string, extras map[string]string) bool {
 	if eventBus == nil {
 		return false
 	}
@@ -58,19 +68,32 @@ func (sam *SecurityApprovalManager) RequestApproval(eventBus *events.EventBus, c
 
 	// Publish the approval request event to the webui
 	payload := events.SecurityApprovalRequestEvent(
-		requestID, toolName, riskLevel, reasoning,
+		requestID, toolName, riskLevel, reasoning, extras,
 	)
 	if trimmedClientID := strings.TrimSpace(clientID); trimmedClientID != "" {
 		payload["client_id"] = trimmedClientID
 	}
 	eventBus.Publish(events.EventTypeSecurityApprovalRequest, payload)
 
-	// Block waiting for response
-	approved, ok := <-responseCh
-	if !ok {
-		return false // channel closed without response
+	// Block waiting for response with a timeout to prevent indefinite hangs
+	// if the user never responds (e.g., closes the tab, navigates away).
+	timeout := sam.approvalTimeout
+	if timeout <= 0 {
+		timeout = DefaultApprovalTimeout
 	}
-	return approved
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	select {
+	case approved, ok := <-responseCh:
+		if !ok {
+			return false // channel closed without response
+		}
+		return approved
+	case <-timer.C:
+		log.Printf("Security approval request %s timed out after %v — rejecting for safety", requestID, timeout)
+		return false // timeout — reject for safety
+	}
 }
 
 // RespondToApproval handles a response from the webui for a pending security request.
@@ -89,5 +112,17 @@ func (sam *SecurityApprovalManager) RespondToApproval(requestID string, approved
 		return true
 	default:
 		return false
+	}
+}
+
+// SetApprovalTimeout sets the maximum duration RequestApproval will block
+// waiting for a user response. A zero or negative value resets to the default.
+func (sam *SecurityApprovalManager) SetApprovalTimeout(d time.Duration) {
+	sam.mu.Lock()
+	defer sam.mu.Unlock()
+	if d <= 0 {
+		sam.approvalTimeout = DefaultApprovalTimeout
+	} else {
+		sam.approvalTimeout = d
 	}
 }

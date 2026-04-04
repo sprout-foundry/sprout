@@ -92,6 +92,17 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Handler: handleGitOperation,
 	})
 
+	// Register commit tool - dedicated commit tool that works without user interaction
+	// Uses the automated commit flow with message generation
+	registry.RegisterTool(ToolConfig{
+		Name:        "commit",
+		Description: "Commit staged changes with an auto-generated commit message. Use this tool instead of running 'git commit' directly. This tool uses the commit message generation and validation system. For read-only operations like status, log, diff, use shell_command instead.",
+		Parameters: []ParameterConfig{
+			{"message", "string", false, []string{"msg"}, "Commit message (optional). If not provided, a message will be auto-generated based on the staged changes."},
+		},
+		Handler: handleCommitTool,
+	})
+
 	// Register read_file tool
 	registry.RegisterTool(ToolConfig{
 		Name:        "read_file",
@@ -437,17 +448,38 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 			canPrompt := logger != nil && logger.IsInteractive() && !isSubagent
 
 			if canPrompt {
-				// INTERACTIVE: prompt user with detailed risk information
+				// INTERACTIVE: prompt user with detailed risk information (CLI mode only)
 				prompt := buildSecurityPrompt(toolName, args, secResult)
 				if !logger.AskForConfirmation(prompt, false, false) {
 					return nil, "", fmt.Errorf("SECURITY_REJECTED: User rejected %s — %s", toolName, secResult.Reasoning)
 				}
 			} else if mgr := agent.GetSecurityApprovalMgr(); mgr != nil && agent.GetEventBus() != nil && !isSubagent {
-				// NON-INTERACTIVE: request approval via webui event bus
+				// NON-INTERACTIVE or WEBUI: request approval via webui event bus
+				// This path is used when running in webui mode, when interactive prompt is not available,
+				// or when eventBus is available (e.g., in webui where stdin is /dev/null)
 				if agent.debug {
 					agent.debugLog("[APPROVAL] Requesting security approval via webui for %s (risk: %s)\n", toolName, secResult.Risk)
 				}
-				if !mgr.RequestApproval(agent.GetEventBus(), agent.GetEventClientID(), toolName, secResult.Risk.String(), secResult.Reasoning) {
+				// Build extras with context the webui dialog needs (command, target, risk type)
+				extras := map[string]string{}
+				if secResult.RiskType != "" {
+					extras["risk_type"] = formatRiskType(secResult.RiskType)
+				}
+				switch toolName {
+				case "shell_command":
+					if cmd, ok := args["command"].(string); ok && cmd != "" {
+						extras["command"] = cmd
+					}
+				case "write_file", "edit_file", "write_structured_file", "patch_structured_file":
+					if path, ok := args["path"].(string); ok && path != "" {
+						extras["target"] = path
+					}
+				case "git":
+					if op, ok := args["operation"].(string); ok && op != "" {
+						extras["target"] = fmt.Sprintf("git %s", op)
+					}
+				}
+				if !mgr.RequestApproval(agent.GetEventBus(), agent.GetEventClientID(), toolName, secResult.Risk.String(), secResult.Reasoning, extras) {
 					return nil, "", fmt.Errorf("SECURITY_REJECTED: User rejected %s — %s", toolName, secResult.Reasoning)
 				}
 			} else if secResult.ShouldBlock {
@@ -560,20 +592,47 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 			return ctx
 		}
 
-		// Prompt user for confirmation (primary agent only)
+		// Check if we're running as a subagent — subagents cannot prompt.
+		// Note: LEDIT_FROM_AGENT is already checked above (returns early), but we also
+		// check LEDIT_SUBAGENT here for completeness.
+		isSubagent := os.Getenv("LEDIT_FROM_AGENT") == "1" || os.Getenv("LEDIT_SUBAGENT") == "1"
+
+		// Determine if we can prompt the user interactively
 		agentConfig := agent.GetConfig()
 		logger := utils.GetLogger(agentConfig != nil && agentConfig.SkipPrompt)
+		canPrompt := logger != nil && logger.IsInteractive() && !isSubagent
 
-		prompt := fmt.Sprintf("[WARN] Filesystem Security Warning\n\nThe tool '%s' is attempting to access a file outside the working directory:\n  %s\n\nDo you want to allow this? (yes/no): ", toolName, filePath)
-
-		if logger.AskForConfirmation(prompt, false, false) {
-			// User approved - enable security bypass for this operation and remember for the session
-			agent.debugLog("User approved file access outside working directory: %s\n", filePath)
-			agent.SetSecurityBypassApproved()
-			return filesystem.WithSecurityBypass(ctx)
+		if canPrompt {
+			// INTERACTIVE: prompt user with CLI prompt
+			prompt := fmt.Sprintf("[WARN] Filesystem Security Warning\n\nThe tool '%s' is attempting to access a file outside the working directory:\n  %s\n\nDo you want to allow this? (yes/no): ", toolName, filePath)
+			if logger.AskForConfirmation(prompt, false, false) {
+				// User approved - enable security bypass for this operation and remember for the session
+				agent.debugLog("User approved file access outside working directory: %s\n", filePath)
+				agent.SetSecurityBypassApproved()
+				return filesystem.WithSecurityBypass(ctx)
+			} else {
+				// User rejected
+				agent.debugLog("User rejected file access outside working directory: %s\n", filePath)
+			}
+		} else if mgr := agent.GetSecurityApprovalMgr(); mgr != nil && agent.GetEventBus() != nil && !isSubagent {
+			// WEBUI/Event path: request approval via event bus
+			prompt := fmt.Sprintf("The tool '%s' is attempting to access a file outside the working directory: %s", toolName, filePath)
+			extras := map[string]string{
+				"risk_type": "Filesystem Security",
+				"target":    filePath,
+			}
+			if mgr.RequestApproval(agent.GetEventBus(), agent.GetEventClientID(), toolName, "CAUTION", prompt, extras) {
+				agent.debugLog("User approved file access outside working directory: %s\n", filePath)
+				agent.SetSecurityBypassApproved()
+				return filesystem.WithSecurityBypass(ctx)
+			} else {
+				agent.debugLog("User rejected file access outside working directory: %s\n", filePath)
+			}
 		} else {
-			// User rejected - error will be returned as-is
-			agent.debugLog("User rejected file access outside working directory: %s\n", filePath)
+			// No prompting available (subagent or no mechanism), return original context (error will propagate)
+			if agent.debug {
+				agent.debugLog("Cannot prompt for filesystem security approval (subagent or no mechanism): %s\n", filePath)
+			}
 		}
 	}
 	return ctx

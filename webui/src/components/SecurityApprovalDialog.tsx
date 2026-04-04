@@ -9,6 +9,7 @@ export interface SecurityApprovalDialogProps {
   reasoning: string;
   command?: string;
   riskType?: string;
+  target?: string;
   onRespond: (requestId: string, approved: boolean) => void;
 }
 
@@ -40,6 +41,7 @@ const SecurityApprovalDialog: FC<SecurityApprovalDialogProps> = ({
   reasoning,
   command,
   riskType,
+  target,
   onRespond,
 }) => {
   const risk = toRiskKey(riskLevel);
@@ -129,6 +131,14 @@ const SecurityApprovalDialog: FC<SecurityApprovalDialogProps> = ({
               >
                 {command}
               </div>
+            </div>
+          )}
+
+          {/* Target (for file write and git operations) */}
+          {target && !command && (
+            <div className="security-approval-target-wrapper">
+              <div className="security-approval-target-label">Target</div>
+              <div className="security-approval-target-box">{target}</div>
             </div>
           )}
         </div>

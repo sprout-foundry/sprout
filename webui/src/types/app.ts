@@ -104,6 +104,21 @@ export interface AppState {
   chatSessions: ChatSession[];
   // Snapshot of per-chat state, saved on switch-away and restored on switch-back
   perChatCache: Record<string, PerChatState>;
+  securityApprovalRequest: {
+    requestId: string;
+    toolName: string;
+    riskLevel: string;
+    reasoning: string;
+    command?: string;
+    riskType?: string;
+    target?: string;
+  } | null;
+  securityPromptRequest: {
+    requestId: string;
+    prompt: string;
+    filePath?: string;
+    concern?: string;
+  } | null;
 }
 
 export interface OnboardingState {

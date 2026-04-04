@@ -7,6 +7,8 @@ import { useTabManagement } from '../hooks/useTabManagement';
 import { useTabOpen } from '../hooks/useTabOpen';
 import { usePaneManagement } from '../hooks/usePaneManagement';
 import { useLayoutPersistence } from '../hooks/useLayoutPersistence';
+import { useExternalFileWatcher } from '../hooks/useExternalFileWatcher';
+import { readFileWithConsent } from '../services/fileAccess';
 
 // ---------------------------------------------------------------------------
 // Context interface & hook — unchanged public API
@@ -50,6 +52,9 @@ interface EditorManagerContextValue {
   setBufferModified: (bufferId: string, isModified: boolean) => void;
   setBufferOriginalContent: (bufferId: string, originalContent: string) => void;
   revertBufferToOriginal: (bufferId: string) => void;
+  setBufferExternallyModified: (bufferId: string, diskContent: string, mtime?: number) => void;
+  clearBufferExternallyModified: (bufferId: string) => void;
+  reloadBufferFromDisk: (bufferId: string, diskContent: string, mtime?: number) => void;
   saveAllBuffers: () => Promise<void>;
   updatePaneSize: (paneId: string, size: number) => void;
   setBufferLanguageOverride: (bufferId: string, languageId: string | null) => void;
@@ -154,7 +159,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   // ---------------------------------------------------------------------------
 
   const buffersRef = useRef(buffers);
-  useEffect(() => { buffersRef.current = buffers; }, [buffers]);
+  buffersRef.current = buffers; // Synchronous update — event handlers always see latest state
 
   const activePaneIdRef = useRef(activePaneId);
   useEffect(() => { activePaneIdRef.current = activePaneId; }, [activePaneId]);
@@ -208,7 +213,60 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     setActivePaneId, setActiveBufferId, paneLayout, paneSizes,
   });
 
-  // 7. Auto-save interval (stays in orchestrator — ties persistence + state together)
+  // 7. External file change watcher (polls backend for file changes on disk)
+  useExternalFileWatcher({ buffers });
+
+  // Auto-reload clean (unmodified) buffers when they change on disk.
+  // Modified files are left to EditorPane's conflict dialog.
+  useEffect(() => {
+    const handleExternalChange = async (e: Event) => {
+      const detail = (e as CustomEvent).detail as { path: string; mtime: number; size: number; deleted: boolean };
+      if (!detail.path || detail.deleted) return;
+
+      // Find the buffer for this file
+      let targetBufferId: string | null = null;
+      buffersRef.current.forEach((b, id) => {
+        if (b.kind === 'file' && b.file.path === detail.path) {
+          targetBufferId = id;
+        }
+      });
+
+      if (!targetBufferId) return;
+
+      const targetBuffer = buffersRef.current.get(targetBufferId);
+      if (!targetBuffer || targetBuffer.kind !== 'file') return;
+
+      // Only auto-reload clean (unmodified) buffers; let EditorPane handle modified ones
+      if (targetBuffer.isModified) return;
+
+      const bufferId: string = targetBufferId;
+
+      // Re-read the file from disk
+      try {
+        const response = await readFileWithConsent(detail.path);
+        if (!response.ok) return;
+        const content = await response.text();
+
+        mutations.reloadBufferFromDisk(bufferId, content, detail.mtime);
+
+        document.dispatchEvent(new CustomEvent('file:editor-saved', {
+          detail: { path: detail.path, mtime: detail.mtime },
+        }));
+
+        // Dispatch an event so EditorPane can reload the CodeMirror view
+        document.dispatchEvent(new CustomEvent('file:auto-reloaded', {
+          detail: { bufferId, content },
+        }));
+      } catch {
+        // Silently ignore read failures
+      }
+    };
+
+    document.addEventListener('file_externally_modified', handleExternalChange);
+    return () => document.removeEventListener('file_externally_modified', handleExternalChange);
+  }, [buffersRef, mutations]);
+
+  // 8. Auto-save interval (stays in orchestrator — ties persistence + state together)
   useEffect(() => {
     if (!isAutoSaveEnabled) return;
     const id = setInterval(() => { saveAllBuffers(); }, autoSaveInterval);
@@ -247,6 +305,9 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     setBufferOriginalContent: mutations.setBufferOriginalContent,
     setBufferLanguageOverride: mutations.setBufferLanguageOverride,
     revertBufferToOriginal: mutations.revertBufferToOriginal,
+    setBufferExternallyModified: mutations.setBufferExternallyModified,
+    clearBufferExternallyModified: mutations.clearBufferExternallyModified,
+    reloadBufferFromDisk: mutations.reloadBufferFromDisk,
     saveBuffer,
     saveAllBuffers,
     restoreLayout: layoutPersist.restoreLayout,

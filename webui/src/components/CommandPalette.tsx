@@ -5,6 +5,7 @@ import { clientFetch } from '../services/clientSession';
 import { clearLayoutSnapshot } from '../services/layoutPersistence';
 import { fuzzyFilter, highlightMatches } from '../utils/fuzzyMatch';
 import type { FuzzyResult } from '../utils/fuzzyMatch';
+import { useLog } from '../utils/log';
 import './CommandPalette.css';
 
 interface CommandPaletteProps {
@@ -101,6 +102,7 @@ const CommandPalette: FC<CommandPaletteProps> = ({
   onOpenHotkeysConfig,
 }) => {
   const { hotkeyForCommand } = useHotkeys();
+  const log = useLog();
 
   // State
   const [query, setQuery] = useState('');
@@ -187,7 +189,7 @@ const CommandPalette: FC<CommandPaletteProps> = ({
 
         if (!cancelled) setAllFiles(indexedFiles);
       } catch (err) {
-        console.error('Failed to browse files:', err);
+        log.error(`Failed to browse files: ${err instanceof Error ? err.message : String(err)}`, { title: 'File Browse Error' });
       } finally {
         if (!cancelled) setIsLoadingFiles(false);
       }
@@ -197,7 +199,7 @@ const CommandPalette: FC<CommandPaletteProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [isOpen]);
+  }, [isOpen, log]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Build unified results: commands first, then files ─────────────────
 

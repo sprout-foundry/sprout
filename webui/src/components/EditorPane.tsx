@@ -50,6 +50,7 @@ import { ApiService } from '../services/api';
 import { File, Loader2, AlertTriangle, Eye, Columns2, WrapText, Link2, PanelRightClose } from 'lucide-react';
 import { copyToClipboard } from '../utils/clipboard';
 import { generateUnifiedDiff } from '../utils/simpleDiff';
+import { useLog } from '../utils/log';
 import './EditorPane.css';
 import ContextMenu from './ContextMenu';
 
@@ -82,6 +83,8 @@ const EditorPane: FC<EditorPaneProps> = ({ paneId }) => {
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [workspaceRoot, setWorkspaceRoot] = useState<string>('');
+
+  const log = useLog();
 
   const {
     panes,
@@ -232,14 +235,15 @@ const EditorPane: FC<EditorPaneProps> = ({ paneId }) => {
           fetchDiagnosticsRef.current(filePath, content);
         }
       } catch (err) {
-        console.error('[EditorPane loadFile] Error:', err);
-        setError(err instanceof Error ? err.message : 'Unknown error');
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+        log.error(`[EditorPane loadFile] Error: ${errorMessage}`, { title: 'File Load Error' });
+        setError(errorMessage);
       } finally {
         isExternalUpdateRef.current = false;
         setLoading(false);
       }
     },
-    [apiService, buffer, updateBufferContent, setBufferOriginalContent],
+    [apiService, buffer, updateBufferContent, setBufferOriginalContent, log],
   ); // eslint-disable-line react-hooks/exhaustive-deps -- fetchDiagnostics is accessed via ref to avoid forward-reference issue
 
   // Keep ref in sync
@@ -342,7 +346,7 @@ const EditorPane: FC<EditorPaneProps> = ({ paneId }) => {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to save file';
       setError(errorMessage);
-      console.error('Save error:', errorMessage);
+      log.error(`Save error: ${errorMessage}`, { title: 'Save Error' });
     } finally {
       setSaving(false);
     }

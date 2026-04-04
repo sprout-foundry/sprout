@@ -69,7 +69,7 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 	cfg, err := configuration.LoadOrInitConfig(true)
 	if err != nil {
 		logger.LogError(fmt.Errorf("failed to load or initialize config: %w", err))
-		return fmt.Errorf("configuration error: %v", err)
+		return fmt.Errorf("configuration error: %w", err)
 	}
 
 	logger.LogProcessStep("Configuration loaded successfully")
@@ -87,7 +87,7 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 			}
 		} else {
 			logger.LogError(fmt.Errorf("failed to check for staged changes: %w", err))
-			return fmt.Errorf("git error: failed to check for staged changes: %v", err)
+			return fmt.Errorf("git error: failed to check for staged changes: %w", err)
 		}
 	} else {
 		logger.LogUserInteraction(fmt.Sprintf("No staged changes found. Please stage your changes before running '/%s'.", commandName))
@@ -99,7 +99,7 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 	stagedDiffBytes, err := cmdDiff.Output()
 	if err != nil {
 		logger.LogError(fmt.Errorf("failed to get staged diff: %w", err))
-		return fmt.Errorf("git error: failed to get staged diff: %v", err)
+		return fmt.Errorf("git error: failed to get staged diff: %w", err)
 	}
 	stagedDiff := string(stagedDiffBytes)
 
@@ -183,7 +183,7 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 	}
 	if err != nil {
 		logger.LogError(fmt.Errorf("failed to get code review from LLM: %w", err))
-		return fmt.Errorf("LLM error: failed to perform %s: %v", commandName, err)
+		return fmt.Errorf("LLM error: failed to perform %s: %w", commandName, err)
 	}
 
 	if deepReview {

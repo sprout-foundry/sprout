@@ -273,17 +273,17 @@ func formatJSONParseError(content string, err error, callerTool string) error {
 	}
 
 	if offset <= 0 {
-		return fmt.Errorf("invalid JSON: %v; next_step=%s", err, sameToolJSONFixHint(callerTool))
+		return fmt.Errorf("invalid JSON: %w; next_step=%s", err, sameToolJSONFixHint(callerTool))
 	}
 
 	line, col := lineColFromOffset(content, offset)
 	snippet := snippetAtLine(content, line)
 	if snippet == "" {
-		return fmt.Errorf("invalid JSON at line=%d col=%d: %v; next_step=%s", line, col, err, sameToolJSONFixHint(callerTool))
+		return fmt.Errorf("invalid JSON at line=%d col=%d: %w; next_step=%s", line, col, err, sameToolJSONFixHint(callerTool))
 	}
 
 	return fmt.Errorf(
-		"invalid JSON at line=%d col=%d: %v; snippet=%q; next_step=%s",
+		"invalid JSON at line=%d col=%d: %w; snippet=%q; next_step=%s",
 		line, col, err, snippet, sameToolJSONFixHint(callerTool),
 	)
 }
@@ -380,6 +380,9 @@ func writeFileContent(ctx context.Context, a *Agent, path, content, toolName str
 	if err == nil {
 		a.publishEvent(events.EventTypeFileChanged, events.FileChangedEvent(path, "write", content))
 		a.debugLog("Published file_changed event: %s (write)\n", path)
+
+		// Check for security concerns in the written content
+		a.CheckFileContentSecurity(path, content)
 	}
 
 	// Start async validation (fire-and-forget)
@@ -439,6 +442,11 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 
 	a.debugLog("Edit file result: %s, error: %v\n", result, err)
 
+	// Check for security concerns in the edited content
+	if err == nil {
+		a.CheckFileContentSecurity(path, newStr)
+	}
+
 	// JSON edits are transparently validated and normalized through structured writes.
 	if err == nil && strings.EqualFold(filepath.Ext(path), ".json") {
 		editedContent, readErr := tools.ReadFile(ctx, path)
@@ -452,9 +460,9 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 				return werr
 			}()
 			if restoreErr != nil {
-				return "", fmt.Errorf("edit would produce invalid JSON in %s (%v) and restore failed: %v", path, parseErr, restoreErr)
+				return "", fmt.Errorf("edit would produce invalid JSON in %s (%v) and restore failed: %w", path, parseErr, restoreErr)
 			}
-			return "", fmt.Errorf("edit would produce invalid JSON in %s: %v", path, parseErr)
+			return "", fmt.Errorf("edit would produce invalid JSON in %s: %w", path, parseErr)
 		}
 		if _, werr := handleWriteStructuredFile(ctx, a, map[string]interface{}{
 			"path":   path,

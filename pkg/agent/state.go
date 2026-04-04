@@ -117,7 +117,7 @@ func (a *Agent) SaveConversationSummary() error {
 	// Save state to file
 	stateFile := ".coder_state.json"
 	if err := a.SaveStateToFile(stateFile); err != nil {
-		return fmt.Errorf("failed to save conversation state: %v", err)
+		return fmt.Errorf("failed to save conversation state: %w", err)
 	}
 
 	if a.debug {

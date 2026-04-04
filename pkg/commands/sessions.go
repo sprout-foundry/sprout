@@ -25,7 +25,7 @@ func (c *SessionsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	// List sessions newest first.
 	sessions, err := agent.ListSessionsWithTimestamps()
 	if err != nil {
-		return fmt.Errorf("failed to list sessions: %v", err)
+		return fmt.Errorf("failed to list sessions: %w", err)
 	}
 
 	if len(sessions) == 0 {
@@ -44,7 +44,7 @@ func (c *SessionsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		sessionID := selected.SessionID
 		state, err := chatAgent.LoadStateScoped(sessionID, selected.WorkingDirectory)
 		if err != nil {
-			return fmt.Errorf("failed to load session: %v", err)
+			return fmt.Errorf("failed to load session: %w", err)
 		}
 
 		chatAgent.ApplyState(state)
@@ -128,7 +128,7 @@ func (c *SessionsCommand) selectSessionWithDropdown(sessions []agent.SessionInfo
 	sessionID := selected.SessionID
 	state, err := chatAgent.LoadStateScoped(sessionID, selected.WorkingDirectory)
 	if err != nil {
-		return fmt.Errorf("failed to load session: %v", err)
+		return fmt.Errorf("failed to load session: %w", err)
 	}
 
 	chatAgent.ApplyState(state)

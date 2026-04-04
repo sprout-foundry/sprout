@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import type { FC } from 'react';
 import './SettingsPanel.css';
 import { ApiService, type LeditSettings, type ProviderOption } from '../services/api';
+import { useNotifications } from '../contexts/NotificationContext';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 
 /* ─── Types ──────────────────────────────────────────────────── */
@@ -24,13 +25,6 @@ type SettingsSubTab = 'general' | 'security' | 'performance' | 'subagents' | 'pd
 interface SettingsPanelProps {
   settings: LeditSettings | null;
   onSettingsChanged: (settings: LeditSettings) => void;
-}
-
-/** Toast auto-dismisses after 2s */
-interface Toast {
-  id: number;
-  message: string;
-  type: 'success' | 'error';
 }
 
 /* ─── Sub-tab definitions ────────────────────────────────────── */
@@ -76,15 +70,15 @@ function setNestedValue(obj: Record<string, unknown>, key: string, value: unknow
   return result;
 }
 
-let toastCounter = 0;
-
 /* ─── Component ──────────────────────────────────────────────── */
 
 const SettingsPanel: FC<SettingsPanelProps> = ({ settings, onSettingsChanged }) => {
   const [activeSubTab, setActiveSubTab] = useState<SettingsSubTab>('general');
   const [savingKey, setSavingKey] = useState<string | null>(null);
-  const [toasts, setToasts] = useState<Toast[]>([]);
   const [textDrafts, setTextDrafts] = useState<Record<string, string>>({});
+
+  // Use the shared notification system instead of local toasts
+  const { addNotification } = useNotifications();
 
   // MCP / Provider form state
   const [editingServer, setEditingServer] = useState<{
@@ -114,7 +108,6 @@ const SettingsPanel: FC<SettingsPanelProps> = ({ settings, onSettingsChanged }) 
   const [subagentSavingPersona, setSubagentSavingPersona] = useState<string | null>(null);
 
   const api = ApiService.getInstance();
-  const toastTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const textSaveTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   // Keep a ref to settings for async mutation callbacks.
@@ -122,15 +115,6 @@ const SettingsPanel: FC<SettingsPanelProps> = ({ settings, onSettingsChanged }) 
   useEffect(() => {
     settingsRef.current = settings;
   }, [settings]);
-
-  // Cleanup toast timer on unmount
-  useEffect(() => {
-    const pendingTextSaveTimers = textSaveTimersRef.current;
-    return () => {
-      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-      Object.values(pendingTextSaveTimers).forEach(clearTimeout);
-    };
-  }, []);
 
   useEffect(() => {
     if (!settings) return;
@@ -171,18 +155,6 @@ const SettingsPanel: FC<SettingsPanelProps> = ({ settings, onSettingsChanged }) 
     };
   }, [activeSubTab, api]);
 
-  /* ─── Toast helpers ──────────────────────────────────────── */
-
-  const showToast = useCallback((message: string, type: 'success' | 'error') => {
-    const id = ++toastCounter;
-    setToasts((prev) => [...prev, { id, message, type }]);
-    // Auto-remove after 2s
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 2000);
-  }, []);
-
   /* ─── Settings mutation helpers ──────────────────────────── */
 
   /**
@@ -205,15 +177,15 @@ const SettingsPanel: FC<SettingsPanelProps> = ({ settings, onSettingsChanged }) 
         ) as unknown as LeditSettings;
         onSettingsChanged(updated);
         await api.updateSettings({ [keyOrPath]: value });
-        showToast('Saved', 'success');
+        addNotification('success', 'Settings', 'Saved', 3000);
       } catch {
         onSettingsChanged(prev);
-        showToast('Save failed', 'error');
+        addNotification('error', 'Settings', 'Save failed', 5000);
       } finally {
         setSavingKey(null);
       }
     },
-    [onSettingsChanged, api, showToast],
+    [onSettingsChanged, api, addNotification],
   );
 
   /* ─── Field render helpers ──────────────────────────────── */
@@ -399,10 +371,10 @@ const SettingsPanel: FC<SettingsPanelProps> = ({ settings, onSettingsChanged }) 
       // Refresh settings
       const fresh = await api.getSettings();
       onSettingsChanged(fresh);
-      showToast('Server added', 'success');
+      addNotification('success', 'Settings', 'Server added', 3000);
       resetServerForm();
     } catch {
-      showToast('Failed to add server', 'error');
+      addNotification('error', 'Settings', 'Failed to add server', 5000);
     } finally {
       setSavingKey(null);
     }
@@ -419,10 +391,10 @@ const SettingsPanel: FC<SettingsPanelProps> = ({ settings, onSettingsChanged }) 
       await api.updateMCPServer(editingServer.originalName, { name: serverName.trim(), ...server });
       const fresh = await api.getSettings();
       onSettingsChanged(fresh);
-      showToast('Server updated', 'success');
+      addNotification('success', 'Settings', 'Server updated', 3000);
       resetServerForm();
     } catch {
-      showToast('Failed to update server', 'error');
+      addNotification('error', 'Settings', 'Failed to update server', 5000);
     } finally {
       setSavingKey(null);
     }
@@ -434,10 +406,10 @@ const SettingsPanel: FC<SettingsPanelProps> = ({ settings, onSettingsChanged }) 
       await api.deleteMCPServer(name);
       const fresh = await api.getSettings();
       onSettingsChanged(fresh);
-      showToast('Server deleted', 'success');
+      addNotification('success', 'Settings', 'Server deleted', 3000);
       if (editingServer?.originalName === name) resetServerForm();
     } catch {
-      showToast('Failed to delete server', 'error');
+      addNotification('error', 'Settings', 'Failed to delete server', 5000);
     } finally {
       setSavingKey(null);
     }
@@ -497,10 +469,10 @@ const SettingsPanel: FC<SettingsPanelProps> = ({ settings, onSettingsChanged }) 
       await api.addCustomProvider({ name: providerName.trim(), ...provider });
       const fresh = await api.getSettings();
       onSettingsChanged(fresh);
-      showToast('Provider added', 'success');
+      addNotification('success', 'Settings', 'Provider added', 3000);
       resetProviderForm();
     } catch {
-      showToast('Failed to add provider', 'error');
+      addNotification('error', 'Settings', 'Failed to add provider', 5000);
     } finally {
       setSavingKey(null);
     }
@@ -549,10 +521,10 @@ const SettingsPanel: FC<SettingsPanelProps> = ({ settings, onSettingsChanged }) 
       });
       const fresh = await api.getSettings();
       onSettingsChanged(fresh);
-      showToast('Provider updated', 'success');
+      addNotification('success', 'Settings', 'Provider updated', 3000);
       resetProviderForm();
     } catch {
-      showToast('Failed to update provider', 'error');
+      addNotification('error', 'Settings', 'Failed to update provider', 5000);
     } finally {
       setSavingKey(null);
     }
@@ -564,10 +536,10 @@ const SettingsPanel: FC<SettingsPanelProps> = ({ settings, onSettingsChanged }) 
       await api.deleteCustomProvider(name);
       const fresh = await api.getSettings();
       onSettingsChanged(fresh);
-      showToast('Provider deleted', 'success');
+      addNotification('success', 'Settings', 'Provider deleted', 3000);
       if (editingProvider?.originalName === name) resetProviderForm();
     } catch {
-      showToast('Failed to delete provider', 'error');
+      addNotification('error', 'Settings', 'Failed to delete provider', 5000);
     } finally {
       setSavingKey(null);
     }
@@ -588,9 +560,9 @@ const SettingsPanel: FC<SettingsPanelProps> = ({ settings, onSettingsChanged }) 
       };
       await api.updateSkills(updatedSkills);
       onSettingsChanged({ ...settings, skills: updatedSkills });
-      showToast(`${skillName} ${enabled ? 'enabled' : 'disabled'}`, 'success');
+      addNotification('success', 'Settings', `${skillName} ${enabled ? 'enabled' : 'disabled'}`, 3000);
     } catch {
-      showToast('Failed to update skill', 'error');
+      addNotification('error', 'Settings', 'Failed to update skill', 5000);
     } finally {
       setSavingKey(null);
     }
@@ -761,9 +733,9 @@ const SettingsPanel: FC<SettingsPanelProps> = ({ settings, onSettingsChanged }) 
                                 model: '',
                               },
                             }));
-                            showToast(`${persona.name}: provider updated`, 'success');
+                            addNotification('success', 'Settings', `${persona.name}: provider updated`, 3000);
                           } catch {
-                            showToast(`Failed to update ${persona.name}`, 'error');
+                            addNotification('error', 'Settings', `Failed to update ${persona.name}`, 5000);
                           } finally {
                             setSubagentSavingPersona(null);
                           }
@@ -790,9 +762,9 @@ const SettingsPanel: FC<SettingsPanelProps> = ({ settings, onSettingsChanged }) 
                               ...prev,
                               [personaId]: { ...prev[personaId], model: e.target.value },
                             }));
-                            showToast(`${persona.name}: model updated`, 'success');
+                            addNotification('success', 'Settings', `${persona.name}: model updated`, 3000);
                           } catch {
-                            showToast(`Failed to update ${persona.name}`, 'error');
+                            addNotification('error', 'Settings', `Failed to update ${persona.name}`, 5000);
                           } finally {
                             setSubagentSavingPersona(null);
                           }
@@ -1208,13 +1180,6 @@ const SettingsPanel: FC<SettingsPanelProps> = ({ settings, onSettingsChanged }) 
 
       {/* Content */}
       {renderContent()}
-
-      {/* Toasts */}
-      {toasts.map((toast) => (
-        <div key={toast.id} className={`settings-toast ${toast.type}`}>
-          {toast.message}
-        </div>
-      ))}
     </div>
   );
 };

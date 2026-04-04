@@ -9,7 +9,7 @@
 import { useState, useCallback } from 'react';
 import { clientFetch } from '../services/clientSession';
 import { ApiService } from '../services/api';
-import { debugLog } from '../utils/log';
+import { debugLog, useLog } from '../utils/log';
 
 interface GitAICommitResult {
   commitMessage: string;
@@ -26,6 +26,7 @@ export interface UseGitActionsReturn {
 }
 
 export function useGitActions(): UseGitActionsReturn {
+  const log = useLog();
   const [gitRefreshToken, setGitRefreshToken] = useState(0);
   const apiService = ApiService.getInstance();
 
@@ -48,10 +49,10 @@ export function useGitActions(): UseGitActionsReturn {
       setGitRefreshToken((k) => k + 1);
       return data;
     } catch (err) {
-      console.error('Failed to commit:', err);
+      log.error('Failed to commit', { title: 'Git Error' });
       throw err;
     }
-  }, []);
+  }, [log]);
 
   const handleGitAICommit = useCallback(async (): Promise<GitAICommitResult> => {
     const response = await apiService.generateCommitMessage();
@@ -76,10 +77,10 @@ export function useGitActions(): UseGitActionsReturn {
       }
       setGitRefreshToken((k) => k + 1);
     } catch (err) {
-      console.error('Failed to stage files:', err);
+      log.error('Failed to stage files', { title: 'Git Error' });
       throw err;
     }
-  }, []);
+  }, [log]);
 
   const handleGitUnstage = useCallback(async (files: string[]) => {
     debugLog('Git unstage:', files);
@@ -96,10 +97,10 @@ export function useGitActions(): UseGitActionsReturn {
       }
       setGitRefreshToken((k) => k + 1);
     } catch (err) {
-      console.error('Failed to unstage files:', err);
+      log.error('Failed to unstage files', { title: 'Git Error' });
       throw err;
     }
-  }, []);
+  }, [log]);
 
   const handleGitDiscard = useCallback(async (files: string[]) => {
     debugLog('Git discard:', files);
@@ -116,10 +117,10 @@ export function useGitActions(): UseGitActionsReturn {
       }
       setGitRefreshToken((k) => k + 1);
     } catch (err) {
-      console.error('Failed to discard files:', err);
+      log.error('Failed to discard changes', { title: 'Git Error' });
       throw err;
     }
-  }, []);
+  }, [log]);
 
   return {
     gitRefreshToken,

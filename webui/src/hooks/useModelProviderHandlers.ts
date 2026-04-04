@@ -51,6 +51,7 @@ export function useModelProviderHandlers({
         data: { provider, model },
       });
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [wsService],
   );
 
@@ -67,6 +68,7 @@ export function useModelProviderHandlers({
         data: { provider },
       });
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [wsService],
   );
 
@@ -75,6 +77,7 @@ export function useModelProviderHandlers({
       ...prev,
       currentView: view,
     }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return { handleModelChange, handleProviderChange, handleViewChange };

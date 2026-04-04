@@ -33,7 +33,7 @@ export function useTabOpen({
 }: UseTabOpenParams) {
   // Open a file in an editor pane
   const openFile = useCallback(
-    (file: any) => {
+    (file: Record<string, unknown>) => {
       const filePath = file.path;
       const currentBuffers = buffersRef.current;
       const currentActivePane = activePaneIdRef.current;
@@ -58,7 +58,7 @@ export function useTabOpen({
       const newBuffer: EditorBuffer = {
         id: bufferId,
         kind: 'file',
-        file,
+        file: file as unknown as EditorBuffer['file'],
         content: '',
         originalContent: '',
         cursorPosition: { line: 0, column: 0 },
@@ -83,8 +83,8 @@ export function useTabOpen({
 
       setActiveBufferId(bufferId);
       return bufferId;
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [activateBuffer, panesRef, setBuffers, setPanes, setActiveBufferId, buffersRef, activePaneIdRef],
   );
 
@@ -108,7 +108,7 @@ export function useTabOpen({
       ext?: string;
       isPinned?: boolean;
       isClosable?: boolean;
-      metadata?: Record<string, any>;
+      metadata?: Record<string, unknown>;
     }) => {
       const currentBuffers = buffersRef.current;
       const existingBufferEntry = Array.from(currentBuffers.entries()).find(

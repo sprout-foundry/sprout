@@ -218,6 +218,7 @@ describe('TerminalPane context menu', () => {
   });
 
   it('context menu appears on right-click in the terminal pane content', async () => {
+    // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
       root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
     });
@@ -235,6 +236,7 @@ describe('TerminalPane context menu', () => {
   it('context menu shows all 4 standard items when selection exists', async () => {
     mockTerm.hasSelection.mockReturnValue(true);
 
+    // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
       root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
     });
@@ -259,6 +261,7 @@ describe('TerminalPane context menu', () => {
   it('Copy is disabled when no selection', async () => {
     mockTerm.hasSelection.mockReturnValue(false);
 
+    // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
       root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
     });
@@ -280,6 +283,7 @@ describe('TerminalPane context menu', () => {
     const urlStartCol = 10;
     setupMockLineWithUrl(url, urlStartCol, 50);
 
+    // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
       root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
     });
@@ -320,6 +324,7 @@ describe('TerminalPane context menu', () => {
     mockTerm.hasSelection.mockReturnValue(true);
     mockTerm.getSelection.mockReturnValue('selected text');
 
+    // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
       root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
     });
@@ -345,6 +350,7 @@ describe('TerminalPane context menu', () => {
     // (handlePaste calls terminalWSRef.current?.sendRawInput(...))
     navigator.clipboard.readText.mockResolvedValue('pasted text');
 
+    // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
       root.render(<TerminalPane isActive={true} isConnected={true} showCloseButton={false} />);
     });
@@ -371,6 +377,7 @@ describe('TerminalPane context menu', () => {
   });
 
   it('Select All action calls term.selectAll()', async () => {
+    // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
       root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
     });
@@ -392,6 +399,7 @@ describe('TerminalPane context menu', () => {
   });
 
   it('Clear Terminal action calls term.clear()', async () => {
+    // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
       root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
     });
@@ -413,6 +421,7 @@ describe('TerminalPane context menu', () => {
   });
 
   it('context menu closes on Escape key', async () => {
+    // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
       root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
     });
@@ -434,6 +443,7 @@ describe('TerminalPane context menu', () => {
   });
 
   it('context menu closes on click outside', async () => {
+    // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
       root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
     });
@@ -459,6 +469,7 @@ describe('TerminalPane context menu', () => {
     // Ensure no URL mock is set — getLine returns null by default
     mockTerm.buffer.active.getLine.mockReturnValue(null);
 
+    // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
       root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
     });
@@ -487,6 +498,7 @@ describe('TerminalPane context menu', () => {
   });
 
   it('context menu closes on scroll', async () => {
+    // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
       root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
     });
@@ -508,6 +520,7 @@ describe('TerminalPane context menu', () => {
   });
 
   it('context menu closes when pane deactivates', async () => {
+    // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
       root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
     });
@@ -520,6 +533,7 @@ describe('TerminalPane context menu', () => {
     expect(getMenu()).toBeTruthy();
 
     // Deactivate the pane
+    // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
       root.render(<TerminalPane isActive={false} isConnected={false} showCloseButton={false} />);
     });

@@ -69,12 +69,16 @@ beforeEach(() => {
   // rendering doesn't wipe out the DOM nodes the component listens to.
   mountPoint = document.createElement('div');
   document.body.appendChild(mountPoint);
+  root = createRoot(mountPoint!);
+});
 
+/** Mount the component (must be called in each test, not in beforeEach). */
+function mountContextMenu() {
+  // eslint-disable-next-line testing-library/no-unnecessary-act
   act(() => {
-    root = createRoot(mountPoint!);
     root.render(<GitHistoryContextMenu apiService={mockApiService as any} />);
   });
-});
+}
 
 afterEach(() => {
   act(() => {
@@ -135,11 +139,13 @@ const flushPromises = async () => {
 describe('GitHistoryContextMenu', () => {
   // 1. Does NOT render menu initially (visible: false)
   test('does not render menu initially', () => {
+    mountContextMenu();
     expect(getMenu()).toBeNull();
   });
 
   // 2. Shows menu on right-click on a .git-history-commit-row with 4 items
   test('shows menu on right-click with 4 menu items', () => {
+    mountContextMenu();
     fireContextMenu(commitRow!);
 
     expect(getMenu()).not.toBeNull();
@@ -156,6 +162,7 @@ describe('GitHistoryContextMenu', () => {
 
   // 3. Does NOT show menu on right-click outside a commit row
   test('does not show menu on right-click outside a commit row', () => {
+    mountContextMenu();
     fireContextMenu(mountPoint!);
 
     expect(getMenu()).toBeNull();
@@ -163,6 +170,7 @@ describe('GitHistoryContextMenu', () => {
 
   // 4. "Copy commit SHA" copies full hash and shows 'Copied!' feedback
   test('"Copy commit SHA" copies full hash and shows Copied! feedback', async () => {
+    mountContextMenu();
     fireContextMenu(commitRow!);
 
     const copyShaBtn = getMenuItems().find((el) => el.textContent?.trim().includes('Copy commit SHA'));
@@ -182,6 +190,7 @@ describe('GitHistoryContextMenu', () => {
 
   // 5. "Copy commit message" copies full message and shows 'Copied!' feedback
   test('"Copy commit message" copies full message and shows Copied! feedback', async () => {
+    mountContextMenu();
     fireContextMenu(commitRow!);
 
     const copyMsgBtn = getMenuItems().find((el) => el.textContent?.trim().includes('Copy commit message'));
@@ -201,6 +210,7 @@ describe('GitHistoryContextMenu', () => {
 
   // 6. Menu closes on Escape key
   test('menu closes on Escape key', () => {
+    mountContextMenu();
     fireContextMenu(commitRow!);
     expect(getMenu()).not.toBeNull();
 
@@ -213,6 +223,7 @@ describe('GitHistoryContextMenu', () => {
 
   // 7. Menu closes when clicking outside the menu
   test('menu closes when clicking outside the menu', () => {
+    mountContextMenu();
     fireContextMenu(commitRow!);
     expect(getMenu()).not.toBeNull();
 
@@ -225,6 +236,7 @@ describe('GitHistoryContextMenu', () => {
 
   // 8. Menu closes when scrolling
   test('menu closes when scrolling', () => {
+    mountContextMenu();
     fireContextMenu(commitRow!);
     expect(getMenu()).not.toBeNull();
 
@@ -237,6 +249,7 @@ describe('GitHistoryContextMenu', () => {
 
   // 9. Menu closes when window loses focus (blur)
   test('menu closes when window loses focus', () => {
+    mountContextMenu();
     fireContextMenu(commitRow!);
     expect(getMenu()).not.toBeNull();
 
@@ -249,6 +262,7 @@ describe('GitHistoryContextMenu', () => {
 
   // 10. Viewport boundary clamping - menu stays on screen when near edges
   test('viewport boundary clamping keeps menu on screen', () => {
+    mountContextMenu();
     const originalWidth = window.innerWidth;
     const originalHeight = window.innerHeight;
 
@@ -271,6 +285,7 @@ describe('GitHistoryContextMenu', () => {
 
   // 11. Timer cleanup - no state updates leak after unmount
   test('timer cleanup on unmount prevents state updates', async () => {
+    mountContextMenu();
     const consoleErrorCalls: string[] = [];
     const origError = console.error;
     console.error = (...args: any[]) => {
@@ -311,6 +326,7 @@ describe('GitHistoryContextMenu', () => {
 
   // 12. Does not show menu when commit row has no data-commit-hash
   test('does not show menu when commit row has no hash', () => {
+    mountContextMenu();
     const rowWithoutHash = document.createElement('button');
     rowWithoutHash.className = 'git-history-commit-row';
     // No data-commit-hash attribute
@@ -324,6 +340,7 @@ describe('GitHistoryContextMenu', () => {
 
   // 13. Checkout calls apiService.checkoutGitCommit with full hash
   test('checkout calls apiService.checkoutGitCommit and shows Checked out feedback', async () => {
+    mountContextMenu();
     jest.spyOn(window, 'confirm').mockReturnValue(true);
 
     fireContextMenu(commitRow!);
@@ -346,6 +363,7 @@ describe('GitHistoryContextMenu', () => {
 
   // 14. Revert calls apiService.revertGitCommit with full hash
   test('revert calls apiService.revertGitCommit and shows Reverted feedback', async () => {
+    mountContextMenu();
     jest.spyOn(window, 'confirm').mockReturnValue(true);
 
     fireContextMenu(commitRow!);
@@ -368,6 +386,7 @@ describe('GitHistoryContextMenu', () => {
 
   // 15. Checkout cancelled (user clicks Cancel) closes menu without calling API
   test('checkout cancelled closes menu without calling API', async () => {
+    mountContextMenu();
     jest.spyOn(window, 'confirm').mockReturnValue(false);
 
     fireContextMenu(commitRow!);
@@ -386,6 +405,7 @@ describe('GitHistoryContextMenu', () => {
 
   // 16. Revert cancelled (user clicks Cancel) closes menu without calling API
   test('revert cancelled closes menu without calling API', async () => {
+    mountContextMenu();
     jest.spyOn(window, 'confirm').mockReturnValue(false);
 
     fireContextMenu(commitRow!);
@@ -404,6 +424,7 @@ describe('GitHistoryContextMenu', () => {
 
   // 17. Checkout error shows error message in actionStatus
   test('checkout error shows error message in actionStatus', async () => {
+    mountContextMenu();
     jest.spyOn(window, 'confirm').mockReturnValue(true);
     mockApiService.checkoutGitCommit.mockRejectedValueOnce(new Error('merge conflict'));
 
@@ -426,6 +447,7 @@ describe('GitHistoryContextMenu', () => {
 
   // 18. Revert error shows error message in actionStatus
   test('revert error shows error message in actionStatus', async () => {
+    mountContextMenu();
     jest.spyOn(window, 'confirm').mockReturnValue(true);
     mockApiService.revertGitCommit.mockRejectedValueOnce(new Error('merge conflict'));
 

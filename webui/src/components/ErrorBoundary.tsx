@@ -45,7 +45,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     // eslint-disable-next-line no-console
     console.error('Error Boundary caught an error:', error, errorInfo);
 
-    // Call the onError callback if provided
+    // Call the onError callback if provided (consumers should show user-facing notification there)
     if (this.props.onError) {
       this.props.onError(error, errorInfo);
     }

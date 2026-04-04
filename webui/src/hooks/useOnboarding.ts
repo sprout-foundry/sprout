@@ -104,7 +104,9 @@ function useOnboarding(): UseOnboardingReturn {
 
   // Refresh onboarding status on mount
   useEffect(() => {
-    refreshStatus().catch(() => {});
+    refreshStatus().catch((err) => {
+      console.error('Failed to refresh onboarding status:', err);
+    });
   }, [refreshStatus]);
 
   const selectedProvider = useMemo(() => {

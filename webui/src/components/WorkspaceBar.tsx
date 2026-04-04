@@ -42,7 +42,9 @@ const WorkspaceBar: FC<WorkspaceBarProps> = ({ isConnected, isMobileMenuOpen = f
           (ws.ssh_context?.is_remote ? ws.ssh_context?.host_alias : null) ?? proxyCtx?.hostAlias ?? null;
         setBar({ workspacePath: collapsed, hostAlias, isRemote });
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.error('Failed to load workspace path:', err);
+      });
     return () => {
       cancelled = true;
     };
@@ -64,7 +66,9 @@ const WorkspaceBar: FC<WorkspaceBarProps> = ({ isConnected, isMobileMenuOpen = f
             (ws.ssh_context?.is_remote ? ws.ssh_context?.host_alias : null) ?? proxyCtx?.hostAlias ?? null;
           setBar({ workspacePath: collapsed, hostAlias, isRemote });
         })
-        .catch(() => {});
+        .catch((err) => {
+          console.error('Failed to load workspace path:', err);
+        });
     };
     window.addEventListener('ledit:workspace-changed', onWorkspaceChange);
     return () => window.removeEventListener('ledit:workspace-changed', onWorkspaceChange);

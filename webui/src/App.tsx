@@ -29,6 +29,7 @@ import { useSecurityApproval } from './hooks/useSecurityApproval';
 import { useSecurityPrompt } from './hooks/useSecurityPrompt';
 import SecurityApprovalDialog from './components/SecurityApprovalDialog';
 import SecurityPromptDialog from './components/SecurityPromptDialog';
+import { notificationBus } from './services/notificationBus';
 
 function App() {
   // ── 1. Core state ──────────────────────────────────────────────────
@@ -156,6 +157,12 @@ function App() {
     <ErrorBoundary
       onError={(error, errorInfo) => {
         console.error('Application error:', error, errorInfo);
+        notificationBus.notify(
+          'error',
+          'Application Error',
+          'An unexpected error occurred. Check the console for details.',
+          8000,
+        );
       }}
     >
       <ThemeProvider>

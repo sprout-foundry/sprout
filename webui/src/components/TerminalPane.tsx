@@ -1,11 +1,4 @@
-import React, {
-  useState,
-  useEffect,
-  useRef,
-  useCallback,
-  useImperativeHandle,
-  forwardRef,
-} from 'react';
+import React, { useState, useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 'react';
 import ContextMenu from './ContextMenu';
 import { X, TriangleAlert, Copy, ClipboardPaste, Trash2, TextSelect, Link2 } from 'lucide-react';
 import { Terminal as XTerm } from '@xterm/xterm';
@@ -105,8 +98,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     }, []);
 
     const sendResize = useCallback(() => {
-      if (!paneConnected || !terminalWSRef.current || !xtermRef.current || !fitAddonRef.current)
-        return;
+      if (!paneConnected || !terminalWSRef.current || !xtermRef.current || !fitAddonRef.current) return;
       fitAddonRef.current.fit();
       terminalWSRef.current.sendResize(xtermRef.current.cols, xtermRef.current.rows);
     }, [paneConnected]);
@@ -119,7 +111,9 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     const handleCopy = useCallback(() => {
       const term = xtermRef.current;
       if (term?.hasSelection()) {
-        copyToClipboard(term.getSelection()).catch(() => { /* clipboard denied */ });
+        copyToClipboard(term.getSelection()).catch(() => {
+          /* clipboard denied */
+        });
       }
       closeContextMenu();
     }, [closeContextMenu]);
@@ -175,6 +169,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
             for (let i = 0; i < line.length; i++) {
               text += line.getCell(i)?.getChars() || '';
             }
+            // eslint-disable-next-line no-useless-escape
             const urlRegex = /https?:\/\/[\w\-._~:/?#\[\]@!$&'()*+,;=%]+/g;
             let match;
             while ((match = urlRegex.exec(text)) !== null) {
@@ -356,14 +351,8 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       <div className="terminal-pane" ref={paneWrapperRef}>
         {showCloseButton && (
           <div className="terminal-pane-header">
-            <span
-              className={`terminal-pane-dot ${paneConnected ? 'connected' : 'disconnected'}`}
-            />
-            <button
-              className="terminal-pane-close"
-              onClick={onClose}
-              title="Close pane"
-            >
+            <span className={`terminal-pane-dot ${paneConnected ? 'connected' : 'disconnected'}`} />
+            <button className="terminal-pane-close" onClick={onClose} title="Close pane">
               <X size={12} />
             </button>
           </div>
@@ -396,39 +385,23 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
             <Copy size={13} />
             <span className="menu-item-label">Copy</span>
           </button>
-          <button
-            className="context-menu-item"
-            onClick={handlePaste}
-            type="button"
-          >
+          <button className="context-menu-item" onClick={handlePaste} type="button">
             <ClipboardPaste size={13} />
             <span className="menu-item-label">Paste</span>
           </button>
           <div className="context-menu-divider" />
-          <button
-            className="context-menu-item"
-            onClick={handleClear}
-            type="button"
-          >
+          <button className="context-menu-item" onClick={handleClear} type="button">
             <Trash2 size={13} />
             <span className="menu-item-label">Clear Terminal</span>
           </button>
-          <button
-            className="context-menu-item"
-            onClick={handleSelectAll}
-            type="button"
-          >
+          <button className="context-menu-item" onClick={handleSelectAll} type="button">
             <TextSelect size={13} />
             <span className="menu-item-label">Select All</span>
           </button>
           {contextMenu?.hasLink && (
             <>
               <div className="context-menu-divider" />
-              <button
-                className="context-menu-item"
-                onClick={handleCopyLink}
-                type="button"
-              >
+              <button className="context-menu-item" onClick={handleCopyLink} type="button">
                 <Link2 size={13} />
                 <span className="menu-item-label">Copy Link</span>
               </button>
@@ -437,7 +410,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         </ContextMenu>
       </div>
     );
-  }
+  },
 );
 
 TerminalPane.displayName = 'TerminalPane';

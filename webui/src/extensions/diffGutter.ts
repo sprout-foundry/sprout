@@ -1,7 +1,7 @@
 import { gutter, GutterMarker } from '@codemirror/view';
 import { StateField, StateEffect, RangeSetBuilder } from '@codemirror/state';
-import { Decoration, DecorationSet, EditorView, ViewPlugin, ViewUpdate } from '@codemirror/view';
-import { DiffLineChange, parseGitDiff } from '../services/gitDiffParser';
+import { Decoration, type DecorationSet, type EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view';
+import { type DiffLineChange, parseGitDiff } from '../services/gitDiffParser';
 
 // State effect to update diff info
 const setDiffEffect = StateEffect.define<DiffLineChange[]>();
@@ -16,22 +16,22 @@ const diffState = StateField.define<DecorationSet>({
       if (effect.is(setDiffEffect)) {
         const changes = effect.value;
         const builder = new RangeSetBuilder<Decoration>();
-        
+
         for (const change of changes) {
           const line = tr.state.doc.line(change.newLine + 1);
           if (line) {
             const deco = Decoration.line({
-              class: `cm-diffLine${change.type.charAt(0).toUpperCase() + change.type.slice(1)}`
+              class: `cm-diffLine${change.type.charAt(0).toUpperCase() + change.type.slice(1)}`,
             });
             builder.add(line.from, line.from, deco);
           }
         }
-        
+
         return builder.finish();
       }
     }
     return decorations;
-  }
+  },
 });
 
 // Gutter extension that uses the diff state
@@ -40,7 +40,7 @@ const diffGutterExtension = gutter({
   markers: (view) => {
     const decorations = view.state.field(diffState);
     const builder = new RangeSetBuilder<GutterMarker>();
-    
+
     // Use the correct iteration pattern for RangeSet
     // cursor.next() is void; cursor.value is null at end
     const cursor = decorations.iter();
@@ -51,7 +51,7 @@ const diffGutterExtension = gutter({
         if (deco.spec.class.includes('cm-diffLineAdded')) markerType = 'added';
         else if (deco.spec.class.includes('cm-diffLineRemoved')) markerType = 'removed';
         else if (deco.spec.class.includes('cm-diffLineModified')) markerType = 'modified';
-        
+
         if (markerType) {
           const marker = new DiffMarker(markerType);
           builder.add(cursor.from, cursor.from, marker);
@@ -59,7 +59,7 @@ const diffGutterExtension = gutter({
       }
       cursor.next();
     }
-    
+
     return builder.finish();
   },
 });
@@ -82,36 +82,35 @@ class DiffMarker extends GutterMarker {
 }
 
 // View plugin to handle diff updates
-const diffUpdatePlugin = ViewPlugin.fromClass(class {
-  constructor(public view: EditorView) {}
-  
-  update(update: ViewUpdate) {
-    // Diff state is managed by StateField, no need for manual updates
-  }
-}, {
-  decorations: (pluginInstance) => pluginInstance.view.state.field(diffState)
-});
+const diffUpdatePlugin = ViewPlugin.fromClass(
+  class {
+    constructor(public view: EditorView) {}
+
+    update(_update: ViewUpdate) {
+      // Diff state is managed by StateField, no need for manual updates
+    }
+  },
+  {
+    decorations: (pluginInstance) => pluginInstance.view.state.field(diffState),
+  },
+);
 
 // Create the gutter extension
 export function diffGutter() {
-  return [
-    diffState,
-    diffUpdatePlugin,
-    diffGutterExtension
-  ];
+  return [diffState, diffUpdatePlugin, diffGutterExtension];
 }
 
 // Function to update the diff gutter with new diff text
 export function updateDiffGutter(view: EditorView, diffText: string) {
   const changes = parseGitDiff(diffText);
   view.dispatch({
-    effects: setDiffEffect.of(changes)
+    effects: setDiffEffect.of(changes),
   });
 }
 
 // Function to clear the diff gutter
 export function clearDiffGutter(view: EditorView) {
   view.dispatch({
-    effects: setDiffEffect.of([])
+    effects: setDiffEffect.of([]),
   });
 }

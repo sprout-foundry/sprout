@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import './Sidebar.css';
-import { ApiService, ProviderOption, LeditSettings, LeditInstance } from '../services/api';
+import { ApiService, type ProviderOption, type LeditSettings, type LeditInstance } from '../services/api';
 import SettingsPanel from './SettingsPanel';
 import type { ProviderLogEntry } from '../providers/types';
 import { useTheme } from '../contexts/ThemeContext';
@@ -45,7 +45,9 @@ interface SidebarProps {
     filesModified: number;
   };
   recentFiles?: Array<{ path: string; modified: boolean }>;
-  recentLogs?: string[] | Array<{ id: string; type: string; timestamp: Date; data: any; level: string; category: string }>;
+  recentLogs?:
+    | string[]
+    | Array<{ id: string; type: string; timestamp: Date; data: any; level: string; category: string }>;
   isMobileMenuOpen?: boolean;
   onMobileMenuToggle?: () => void;
   sidebarCollapsed?: boolean;
@@ -90,8 +92,7 @@ const SIDEBAR_MAX_WIDTH = 600;
 const SIDEBAR_DEFAULT_WIDTH = 288;
 const MAX_LOG_ROWS = 1000;
 
-const clampSidebarWidth = (value: number): number =>
-  Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, value));
+const clampSidebarWidth = (value: number): number => Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, value));
 
 const Sidebar: React.FC<SidebarProps> = ({
   isConnected,
@@ -103,7 +104,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onModelChange,
   availableModels,
   currentView,
-  recentFiles = [],
+  recentFiles: _recentFiles = [],
   recentLogs = [],
   isMobileMenuOpen,
   onMobileMenuToggle,
@@ -117,7 +118,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   isOpen = true,
   onClose,
   isMobile = false,
-  gitPanel
+  gitPanel,
 }) => {
   const { themePack, availableThemePacks, setThemePack, importTheme, removeTheme } = useTheme();
   const { applyPreset } = useHotkeys();
@@ -145,10 +146,17 @@ const Sidebar: React.FC<SidebarProps> = ({
   useEffect(() => {
     if (!isConnected) return;
     let cancelled = false;
-    apiService.getSettings().then((s) => {
-      if (!cancelled) setSettings(s);
-    }).catch(() => { /* silent */ });
-    return () => { cancelled = true; };
+    apiService
+      .getSettings()
+      .then((s) => {
+        if (!cancelled) setSettings(s);
+      })
+      .catch(() => {
+        /* silent */
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [isConnected, apiService]);
 
   const finalSelectedModel = selectedModel || selectedModelState;
@@ -157,18 +165,15 @@ const Sidebar: React.FC<SidebarProps> = ({
     const providerData = providers.find((p) => p.id === selectedProvider);
     return providerData?.models || [];
   }, [providers, selectedProvider]);
-  const finalAvailableModels = availableModels && availableModels.length > 1
-    ? availableModels
-    : availableModelsState;
+  const finalAvailableModels = availableModels && availableModels.length > 1 ? availableModels : availableModelsState;
 
-  const finalRecentLogs = useMemo(() =>
-    recentLogs.length > 0 ? recentLogs : (logs || []),
-    [recentLogs, logs]
-  );
+  const finalRecentLogs = useMemo(() => (recentLogs.length > 0 ? recentLogs : logs || []), [recentLogs, logs]);
   const normalizedRecentLogs = useMemo<ProviderLogEntry[]>(
-    () => (finalRecentLogs as Array<string | ProviderLogEntry>)
-      .filter((log): log is ProviderLogEntry => typeof log !== 'string'),
-    [finalRecentLogs]
+    () =>
+      (finalRecentLogs as Array<string | ProviderLogEntry>).filter(
+        (log): log is ProviderLogEntry => typeof log !== 'string',
+      ),
+    [finalRecentLogs],
   );
 
   const finalIsMobileMenuOpen = isMobileMenuOpen !== undefined ? isMobileMenuOpen : isOpen;
@@ -182,18 +187,18 @@ const Sidebar: React.FC<SidebarProps> = ({
         if (data.providers && data.providers.length > 0) {
           setProviders(data.providers);
           if (!hasHydratedProviderStateRef.current) {
-            const initialProvider = (provider && provider !== 'unknown')
-              ? provider
-              : data.current_provider || data.providers[0]?.id || '';
+            const initialProvider =
+              provider && provider !== 'unknown' ? provider : data.current_provider || data.providers[0]?.id || '';
             if (initialProvider) {
               setSelectedProvider(initialProvider);
             }
 
-            const initialModel = (model && model !== 'unknown')
-              ? model
-              : (selectedModel && selectedModel !== 'unknown')
-                ? selectedModel
-                : data.current_model || '';
+            const initialModel =
+              model && model !== 'unknown'
+                ? model
+                : selectedModel && selectedModel !== 'unknown'
+                  ? selectedModel
+                  : data.current_model || '';
             if (initialModel) {
               setSelectedModelState(initialModel);
             }
@@ -277,23 +282,26 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  const handleSidebarResize = useCallback((delta: number) => {
-    const nextWidth = clampSidebarWidth(sidebarWidthRef.current + delta);
+  const handleSidebarResize = useCallback(
+    (delta: number) => {
+      const nextWidth = clampSidebarWidth(sidebarWidthRef.current + delta);
 
-    // Allow drag-to-expand behavior from collapsed mode.
-    if (effectiveSidebarCollapsed) {
-      setSidebarWidth(nextWidth);
-      if (delta > 0) {
-        onSidebarToggle?.();
+      // Allow drag-to-expand behavior from collapsed mode.
+      if (effectiveSidebarCollapsed) {
+        setSidebarWidth(nextWidth);
+        if (delta > 0) {
+          onSidebarToggle?.();
+        }
+        return;
       }
-      return;
-    }
 
-    setSidebarWidth(nextWidth);
-  }, [effectiveSidebarCollapsed, onSidebarToggle]);
+      setSidebarWidth(nextWidth);
+    },
+    [effectiveSidebarCollapsed, onSidebarToggle],
+  );
 
   const handleSidebarResizeEnd = useCallback(() => {
-    setSidebarWidth(prev => {
+    setSidebarWidth((prev) => {
       localStorage.setItem('ledit-sidebar-width', String(prev));
       return prev;
     });
@@ -337,7 +345,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       const detail = (e as CustomEvent).detail;
       const filePath = detail?.path;
       if (!filePath) return;
-      
+
       // Switch to files tab
       if (effectiveSidebarCollapsed) {
         setSelectedSection('files');
@@ -345,13 +353,13 @@ const Sidebar: React.FC<SidebarProps> = ({
       } else {
         setSelectedSection('files');
       }
-      
+
       // Give the section switch time to render, then reveal
       setTimeout(() => {
         fileTreeRef.current?.revealFile(filePath);
       }, 100);
     };
-    
+
     window.addEventListener('ledit:reveal-in-explorer', handleReveal);
     return () => window.removeEventListener('ledit:reveal-in-explorer', handleReveal);
   }, [effectiveSidebarCollapsed, onSidebarToggle]);
@@ -371,24 +379,27 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
   }, [currentView]);
 
-  const handleImportTheme = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setImportError(null);
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = ev.target?.result;
-      if (typeof text !== 'string') return;
-      const result = importTheme(text);
-      if (!result.success) {
-        setImportError(result.warnings?.join('; ') || 'Import failed');
-      }
-    };
-    reader.onerror = () => setImportError('Failed to read file');
-    reader.readAsText(file);
-    // Reset input so same file can be re-imported
-    e.target.value = '';
-  }, [importTheme]);
+  const handleImportTheme = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setImportError(null);
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const text = ev.target?.result;
+        if (typeof text !== 'string') return;
+        const result = importTheme(text);
+        if (!result.success) {
+          setImportError(result.warnings?.join('; ') || 'Import failed');
+        }
+      };
+      reader.onerror = () => setImportError('Failed to read file');
+      reader.readAsText(file);
+      // Reset input so same file can be re-imported
+      e.target.value = '';
+    },
+    [importTheme],
+  );
 
   // ─── Section Renderers ───────────────────────────────────────────────
 
@@ -397,32 +408,45 @@ const Sidebar: React.FC<SidebarProps> = ({
   const formatLogLine = (log: ProviderLogEntry): string => {
     const d = log.data as any;
     switch (log.type) {
-      case 'query_started': return `Query: ${d?.query?.substring(0, 80) || 'No query'}`;
-      case 'tool_start': return `${d?.display_name || d?.tool_name || 'tool'} started`;
-      case 'tool_end': return `${d?.display_name || d?.tool_name || 'tool'} ${d?.status === 'failed' ? 'FAILED' : 'done'}`;
-      case 'tool_execution': return `${d?.tool || 'tool'}: ${d?.status || 'running'}`;
+      case 'query_started':
+        return `Query: ${d?.query?.substring(0, 80) || 'No query'}`;
+      case 'tool_start':
+        return `${d?.display_name || d?.tool_name || 'tool'} started`;
+      case 'tool_end':
+        return `${d?.display_name || d?.tool_name || 'tool'} ${d?.status === 'failed' ? 'FAILED' : 'done'}`;
+      case 'tool_execution':
+        return `${d?.tool || 'tool'}: ${d?.status || 'running'}`;
       case 'file_changed': {
         const p = d?.path || d?.file_path || 'file';
         return `${d?.action || 'changed'}: ${p.split('/').pop() || p}`;
       }
-      case 'stream_chunk': return `stream: ${(d?.chunk || '').substring(0, 100)}`;
-      case 'error': return `Error: ${d?.message || 'unknown'}`;
-      case 'connection_status': return d?.connected ? 'Connected' : 'Disconnected';
-      case 'query_completed': return 'Query completed';
-      case 'query_progress': return `Step: ${d?.step || '?'}`;
+      case 'stream_chunk':
+        return `stream: ${(d?.chunk || '').substring(0, 100)}`;
+      case 'error':
+        return `Error: ${d?.message || 'unknown'}`;
+      case 'connection_status':
+        return d?.connected ? 'Connected' : 'Disconnected';
+      case 'query_completed':
+        return 'Query completed';
+      case 'query_progress':
+        return `Step: ${d?.step || '?'}`;
       case 'todo_update': {
         const todos = d?.todos;
         if (!Array.isArray(todos)) return 'todos updated';
-        const summary = todos.map((t: any) => `${t.status === 'completed' ? '✓' : t.status === 'in_progress' ? '→' : '○'} ${t.content}`).join('\n  ');
+        const summary = todos
+          .map((t: any) => `${t.status === 'completed' ? '✓' : t.status === 'in_progress' ? '→' : '○'} ${t.content}`)
+          .join('\n  ');
         return `Todos (${todos.filter((t: any) => t.status === 'completed').length}/${todos.length}): ${summary}`;
       }
       case 'agent_message': {
         const msg = String(d?.message || '');
         if (!msg.trim()) return '';
-        return `[agent] ${msg.replace(new RegExp(String.fromCharCode(27) + '\\[[0-9;]*[mGKHJABCD]', 'g'), '').substring(0, 120)}`;
+        return `[agent] ${msg.replace(new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[mGKHJABCD]`, 'g'), '').substring(0, 120)}`;
       }
-      case 'metrics_update': return `Model: ${d?.model || '?'} | Provider: ${d?.provider || '?'}`;
-      default: return `${log.type}: ${JSON.stringify(d || {}).substring(0, 80)}`;
+      case 'metrics_update':
+        return `Model: ${d?.model || '?'} | Provider: ${d?.provider || '?'}`;
+      default:
+        return `${log.type}: ${JSON.stringify(d || {}).substring(0, 80)}`;
     }
   };
 
@@ -432,26 +456,29 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   const buildLogTimestamp = useCallback((value: Date | string) => {
     const date = new Date(value);
-    return date.toLocaleTimeString('en-US', {
+    return `${date.toLocaleTimeString('en-US', {
       hour12: false,
       hour: '2-digit',
       minute: '2-digit',
-      second: '2-digit'
-    }) + '.' + date.getMilliseconds().toString().padStart(3, '0');
+      second: '2-digit',
+    })}.${date.getMilliseconds().toString().padStart(3, '0')}`;
   }, []);
 
-  const getRenderedLogLines = useCallback((entries: typeof normalizedRecentLogs) => {
-    return entries
-      .map((log) => {
-        const message = formatLogLine(log);
-        if (!message) {
-          return null;
-        }
+  const getRenderedLogLines = useCallback(
+    (entries: typeof normalizedRecentLogs) => {
+      return entries
+        .map((log) => {
+          const message = formatLogLine(log);
+          if (!message) {
+            return null;
+          }
 
-        return `${buildLogTimestamp(log.timestamp)} [${log.type}] ${message}`;
-      })
-      .filter((line): line is string => Boolean(line));
-  }, [buildLogTimestamp]);
+          return `${buildLogTimestamp(log.timestamp)} [${log.type}] ${message}`;
+        })
+        .filter((line): line is string => Boolean(line));
+    },
+    [buildLogTimestamp],
+  );
 
   // Auto-scroll to bottom when logs change
   useEffect(() => {
@@ -475,9 +502,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     };
 
     const downloadLogs = (format: 'txt' | 'json') => {
-      const content = format === 'json'
-        ? JSON.stringify(displayLogs, null, 2)
-        : renderedLines.join('\n');
+      const content = format === 'json' ? JSON.stringify(displayLogs, null, 2) : renderedLines.join('\n');
       const blob = new Blob([content], { type: format === 'json' ? 'application/json' : 'text/plain;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
@@ -502,33 +527,41 @@ const Sidebar: React.FC<SidebarProps> = ({
             <span>buffered up to {MAX_LOG_ROWS}</span>
           </div>
           <div className="logs-toolbar-actions">
-            <button className="logs-toolbar-btn" onClick={() => downloadLogs('txt')} title="Download visible logs as text">
+            <button
+              className="logs-toolbar-btn"
+              onClick={() => downloadLogs('txt')}
+              title="Download visible logs as text"
+            >
               <Download size={13} />
               TXT
             </button>
-            <button className="logs-toolbar-btn" onClick={() => downloadLogs('json')} title="Download visible logs as JSON">
+            <button
+              className="logs-toolbar-btn"
+              onClick={() => downloadLogs('json')}
+              title="Download visible logs as JSON"
+            >
               <Download size={13} />
               JSON
             </button>
           </div>
         </div>
         <div className="terminal-logs" ref={logsContainerRef} onScroll={handleLogsScroll}>
-        {displayLogs.map((log) => {
-          const message = formatLogLine(log);
-          // Skip empty log lines
-          if (!message) return null;
+          {displayLogs.map((log) => {
+            const message = formatLogLine(log);
+            // Skip empty log lines
+            if (!message) return null;
 
-          const timestamp = buildLogTimestamp(log.timestamp);
+            const timestamp = buildLogTimestamp(log.timestamp);
 
-          return (
-            <div key={log.id} className={`term-log-line term-log-${log.level}`}>
-              <span className="term-log-time">{timestamp}</span>
-              <span className="term-log-type">[{log.type}]</span>
-              <span className="term-log-msg">{message}</span>
-            </div>
-          );
-        })}
-        <div ref={logsEndRef} />
+            return (
+              <div key={log.id} className={`term-log-line term-log-${log.level}`}>
+                <span className="term-log-time">{timestamp}</span>
+                <span className="term-log-type">[{log.type}]</span>
+                <span className="term-log-msg">{message}</span>
+              </div>
+            );
+          })}
+          <div ref={logsEndRef} />
         </div>
       </div>
     );
@@ -545,7 +578,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         onItemCreated={() => {
           fileTreeRef.current?.refresh();
         }}
-        onDeleteItem={(path) => {
+        onDeleteItem={(_path) => {
           fileTreeRef.current?.refresh();
         }}
       />
@@ -623,9 +656,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               onChange={handleImportTheme}
             />
             {importError && (
-              <div style={{ color: 'var(--accent-error)', fontSize: '12px', marginTop: '2px' }}>
-                {importError}
-              </div>
+              <div style={{ color: 'var(--accent-error)', fontSize: '12px', marginTop: '2px' }}>{importError}</div>
             )}
           </div>
           <div className="config-item">
@@ -636,7 +667,9 @@ const Sidebar: React.FC<SidebarProps> = ({
               onChange={handleHotkeyPresetChange}
               className="styled-select"
             >
-              <option value="" disabled>Choose a preset…</option>
+              <option value="" disabled>
+                Choose a preset…
+              </option>
               <option value="vscode">VS Code</option>
               <option value="webstorm">WebStorm</option>
               <option value="ledit">Ledit (Legacy)</option>
@@ -682,12 +715,12 @@ const Sidebar: React.FC<SidebarProps> = ({
               className="styled-select"
             >
               {providers.length === 0 && (
-                <option value="">
-                  {isLoadingProviders ? 'Loading providers...' : 'No providers available'}
-                </option>
+                <option value="">{isLoadingProviders ? 'Loading providers...' : 'No providers available'}</option>
               )}
-              {providers.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
+              {providers.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
               ))}
             </select>
           </div>
@@ -700,17 +733,16 @@ const Sidebar: React.FC<SidebarProps> = ({
               disabled={!isConnected || finalAvailableModels.length === 0}
               className="styled-select"
             >
-              {finalAvailableModels.map(m => (
-                <option key={m} value={m}>{m}</option>
+              {finalAvailableModels.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
               ))}
             </select>
           </div>
         </div>
 
-        <SettingsPanel
-          settings={settings}
-          onSettingsChanged={(s) => setSettings(s)}
-        />
+        <SettingsPanel settings={settings} onSettingsChanged={(s) => setSettings(s)} />
       </>
     );
   };
@@ -738,7 +770,12 @@ const Sidebar: React.FC<SidebarProps> = ({
           <>
             {/* Sub-tab bar: Current Changes / Commit History */}
             {gitPanel && (
-              <div className="git-sidebar-tab-bar" role="tablist" aria-label="Git sub-sections" onKeyDown={handleTabBarKeyDown}>
+              <div
+                className="git-sidebar-tab-bar"
+                role="tablist"
+                aria-label="Git sub-sections"
+                onKeyDown={handleTabBarKeyDown}
+              >
                 <button
                   type="button"
                   role="tab"
@@ -773,7 +810,12 @@ const Sidebar: React.FC<SidebarProps> = ({
               </div>
             ) : (
               /* Commit History sub-tab: GitHistoryPanel */
-              <div id="git-panel-commit-history" role="tabpanel" aria-labelledby="git-tab-commit-history" className="history-pane">
+              <div
+                id="git-panel-commit-history"
+                role="tabpanel"
+                aria-labelledby="git-tab-commit-history"
+                className="history-pane"
+              >
                 {gitPanel ? (
                   <GitHistoryPanel
                     apiService={gitPanel.apiService!}
@@ -803,66 +845,65 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   /** Search section: find and replace panel */
   const renderSearchSection = () => {
-    return (
-      <SearchView onFileClick={onFileClick} />
-    );
+    return <SearchView onFileClick={onFileClick} />;
   };
 
   return (
     <div className="sidebar-resize-wrapper" style={{ flexShrink: 0 }}>
-      <div className={`sidebar ${isMobile ? 'mobile' : ''} ${finalIsMobileMenuOpen ? 'open' : 'closed'} ${effectiveSidebarCollapsed ? 'collapsed' : ''}`} style={effectiveSidebarCollapsed ? undefined : (isMobile ? undefined : { width: `${sidebarWidth}px` })}>
-      {/* Pinned global header: instance selector */}
-      <div className="sidebar-pinned-header">
-        <button
-          type="button"
-          className="sidebar-brand sidebar-brand-button"
-          onClick={handleLogoToggle}
-          aria-label={isMobile ? 'Close sidebar' : (effectiveSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar')}
-          title={isMobile ? 'Close sidebar' : (effectiveSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar')}
-        >
-          <LeditLogo showWordmark={false} compact />
-        </button>
-        {!effectiveSidebarCollapsed ? (
-          <LocationSwitcher
-            isConnected={isConnected}
-            instances={instances}
-            selectedInstancePID={selectedInstancePID}
-            isSwitchingInstance={isSwitchingInstance}
-            onInstanceChange={onInstanceChange}
-            sidebarCollapsed={effectiveSidebarCollapsed}
-          />
-        ) : null}
-      </div>
-
-      {/* Icon rail (always visible) + Content pane (only when expanded) */}
-      <div className="sidebar-body">
-        {/* Icon Rail */}
-        <div className="sidebar-icon-rail" role="tablist" aria-orientation="vertical">
-          {SECTION_TABS.map((tab) => (
-            <button
-              key={tab.id}
-              role="tab"
-              aria-selected={selectedSection === tab.id}
-              aria-controls="sidebar-tabpanel"
-              className={`rail-icon ${selectedSection === tab.id ? 'active' : ''}`}
-              onClick={() => handleSectionTabClick(tab.id)}
-              title={tab.label}
-              aria-label={tab.label}
-            >
-              <tab.icon size={18} strokeWidth={1.5} />
-            </button>
-          ))}
+      <div
+        className={`sidebar ${isMobile ? 'mobile' : ''} ${finalIsMobileMenuOpen ? 'open' : 'closed'} ${effectiveSidebarCollapsed ? 'collapsed' : ''}`}
+        style={effectiveSidebarCollapsed ? undefined : isMobile ? undefined : { width: `${sidebarWidth}px` }}
+      >
+        {/* Pinned global header: instance selector */}
+        <div className="sidebar-pinned-header">
+          <button
+            type="button"
+            className="sidebar-brand sidebar-brand-button"
+            onClick={handleLogoToggle}
+            aria-label={isMobile ? 'Close sidebar' : effectiveSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={isMobile ? 'Close sidebar' : effectiveSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            <LeditLogo showWordmark={false} compact />
+          </button>
+          {!effectiveSidebarCollapsed ? (
+            <LocationSwitcher
+              isConnected={isConnected}
+              instances={instances}
+              selectedInstancePID={selectedInstancePID}
+              isSwitchingInstance={isSwitchingInstance}
+              onInstanceChange={onInstanceChange}
+              sidebarCollapsed={effectiveSidebarCollapsed}
+            />
+          ) : null}
         </div>
 
-        {/* Content Pane (only when expanded) */}
-        {!effectiveSidebarCollapsed && (
-          <div className="sidebar-content-pane" role="tabpanel" id="sidebar-tabpanel">
-                  <div className="content-pane-scroll">
-              {renderContentPane()}
-            </div>
+        {/* Icon rail (always visible) + Content pane (only when expanded) */}
+        <div className="sidebar-body">
+          {/* Icon Rail */}
+          <div className="sidebar-icon-rail" role="tablist" aria-orientation="vertical">
+            {SECTION_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                role="tab"
+                aria-selected={selectedSection === tab.id}
+                aria-controls="sidebar-tabpanel"
+                className={`rail-icon ${selectedSection === tab.id ? 'active' : ''}`}
+                onClick={() => handleSectionTabClick(tab.id)}
+                title={tab.label}
+                aria-label={tab.label}
+              >
+                <tab.icon size={18} strokeWidth={1.5} />
+              </button>
+            ))}
           </div>
-        )}
-      </div>
+
+          {/* Content Pane (only when expanded) */}
+          {!effectiveSidebarCollapsed && (
+            <div className="sidebar-content-pane" role="tabpanel" id="sidebar-tabpanel">
+              <div className="content-pane-scroll">{renderContentPane()}</div>
+            </div>
+          )}
+        </div>
       </div>
       {!isMobile && (
         <ResizeHandle

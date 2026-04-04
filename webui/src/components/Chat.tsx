@@ -1,5 +1,15 @@
 import React, { useRef, useEffect, useCallback, useState, useMemo, useLayoutEffect } from 'react';
-import { Zap, Bot, AlertTriangle, BrainCircuit, CheckCircle2, XCircle, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
+import {
+  Zap,
+  Bot,
+  AlertTriangle,
+  BrainCircuit,
+  CheckCircle2,
+  XCircle,
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+} from 'lucide-react';
 import CommandInput from './CommandInput';
 import MessageSegments from './MessageSegments';
 import MessageContent from './MessageContent';
@@ -12,7 +22,7 @@ interface Message {
   type: 'user' | 'assistant';
   content: string;
   timestamp: Date;
-  reasoning?: string;  // Chain-of-thought content from content_type: "reasoning"
+  reasoning?: string; // Chain-of-thought content from content_type: "reasoning"
   toolRefs?: Array<{ toolId: string; toolName: string; label: string; parallel?: boolean }>;
 }
 
@@ -202,9 +212,7 @@ const LiveLog: React.FC<{
     <div className="subagent-feed-log" ref={scrollRef} onScroll={handleScroll}>
       {visibleLines.map((line) => (
         <div key={line.id} className="subagent-feed-log-line">
-          {line.taskId && (
-            <span className="subagent-feed-log-task">{line.taskId}</span>
-          )}
+          {line.taskId && <span className="subagent-feed-log-task">{line.taskId}</span>}
           <span className="subagent-feed-log-text">{line.text}</span>
         </div>
       ))}
@@ -221,7 +229,10 @@ const ActiveSubagentCard: React.FC<{ run: SubagentRun }> = ({ run }) => {
   const hasOutput = run.outputLines.length > 0;
 
   return (
-    <div className="subagent-feed-card subagent-feed-card--active" style={{ '--feed-persona-color': color } as React.CSSProperties}>
+    <div
+      className="subagent-feed-card subagent-feed-card--active"
+      style={{ '--feed-persona-color': color } as React.CSSProperties}
+    >
       <button
         className="subagent-feed-card-header"
         onClick={() => hasOutput && setExpanded((prev) => !prev)}
@@ -240,9 +251,7 @@ const ActiveSubagentCard: React.FC<{ run: SubagentRun }> = ({ run }) => {
           {run.outputLines.length > 0 && (
             <span className="subagent-feed-line-count">{run.outputLines.length} lines</span>
           )}
-          {startTime && (
-            <span className="subagent-feed-duration">{formatDuration(startTime)}</span>
-          )}
+          {startTime && <span className="subagent-feed-duration">{formatDuration(startTime)}</span>}
           {hasOutput && (
             <span className="subagent-feed-toggle">
               {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
@@ -251,9 +260,7 @@ const ActiveSubagentCard: React.FC<{ run: SubagentRun }> = ({ run }) => {
         </span>
       </button>
 
-      {expanded && hasOutput && (
-        <LiveLog lines={run.outputLines} maxLines={MAX_ACTIVE_LINES} />
-      )}
+      {expanded && hasOutput && <LiveLog lines={run.outputLines} maxLines={MAX_ACTIVE_LINES} />}
     </div>
   );
 };
@@ -261,15 +268,13 @@ const ActiveSubagentCard: React.FC<{ run: SubagentRun }> = ({ run }) => {
 // ── Completed Subagent Card ────────────────────────────────────────
 
 const CompletedSubagentCard: React.FC<{ run: SubagentRun }> = ({ run }) => {
-  const hasFailures = run.completionMessage?.toLowerCase().includes('fail') || run.completionMessage?.toLowerCase().includes('error');
+  const hasFailures =
+    run.completionMessage?.toLowerCase().includes('fail') || run.completionMessage?.toLowerCase().includes('error');
 
   return (
     <div className="subagent-feed-card subagent-feed-card--completed">
       <span className="subagent-feed-status-dot subagent-feed-status-dot--completed">
-        {hasFailures
-          ? <XCircle size={9} />
-          : <CheckCircle2 size={9} />
-        }
+        {hasFailures ? <XCircle size={9} /> : <CheckCircle2 size={9} />}
       </span>
       <Bot size={13} className="subagent-feed-card-icon" style={{ color: getPersonaColor(run.persona) }} />
       <span className="subagent-feed-persona">{run.persona}</span>
@@ -300,16 +305,8 @@ const SubagentActivityFeed: React.FC<{
   const runs = useMemo(() => groupSubagentRuns(activities), [activities]);
 
   // Separate active and completed runs. Only show the most recent completed runs.
-  const activeRuns = useMemo(
-    () => runs.filter((r) => !r.isComplete),
-    [runs],
-  );
-  const completedRuns = useMemo(
-    () => runs
-      .filter((r) => r.isComplete)
-      .slice(-MAX_COMPLETED_SUMMARIES),
-    [runs],
-  );
+  const activeRuns = useMemo(() => runs.filter((r) => !r.isComplete), [runs]);
+  const completedRuns = useMemo(() => runs.filter((r) => r.isComplete).slice(-MAX_COMPLETED_SUMMARIES), [runs]);
 
   // Show feed only when there are any runs to display
   const hasContent = activeRuns.length > 0 || completedRuns.length > 0;
@@ -369,7 +366,7 @@ const Chat: React.FC<ChatProps> = ({
   lastError = null,
   toolExecutions = [],
   queryProgress = null,
-  currentTodos = [],
+  currentTodos: _currentTodos = [],
   subagentActivities = [],
   onToolPillClick,
   onStopProcessing,
@@ -386,10 +383,13 @@ const Chat: React.FC<ChatProps> = ({
 
   const hasSubagentActivity = subagentActivities.length > 0;
 
-  const isNearBottom = useCallback((node: HTMLDivElement) => {
-    const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight;
-    return distanceFromBottom <= AUTO_SCROLL_THRESHOLD_PX;
-  }, [AUTO_SCROLL_THRESHOLD_PX]);
+  const isNearBottom = useCallback(
+    (node: HTMLDivElement) => {
+      const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight;
+      return distanceFromBottom <= AUTO_SCROLL_THRESHOLD_PX;
+    },
+    [AUTO_SCROLL_THRESHOLD_PX],
+  );
 
   useLayoutEffect(() => {
     const node = inputContainerRef.current;
@@ -417,7 +417,6 @@ const Chat: React.FC<ChatProps> = ({
     };
   }, []);
 
-
   useEffect(() => {
     const node = chatContainerRef.current;
     if (!node || !shouldAutoScrollRef.current) {
@@ -435,15 +434,18 @@ const Chat: React.FC<ChatProps> = ({
     shouldAutoScrollRef.current = isNearBottom(node);
   }, [isNearBottom]);
 
-  const findMatchingToolExecution = useCallback((toolName: string) => {
-    const normalized = toolName.split('(')[0];
-    for (let i = toolExecutions.length - 1; i >= 0; i -= 1) {
-      if (toolExecutions[i].tool === normalized) {
-        return toolExecutions[i];
+  const findMatchingToolExecution = useCallback(
+    (toolName: string) => {
+      const normalized = toolName.split('(')[0];
+      for (let i = toolExecutions.length - 1; i >= 0; i -= 1) {
+        if (toolExecutions[i].tool === normalized) {
+          return toolExecutions[i];
+        }
       }
-    }
-    return undefined;
-  }, [toolExecutions]);
+      return undefined;
+    },
+    [toolExecutions],
+  );
 
   const formatTime = (date: Date) => {
     return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -461,10 +463,13 @@ const Chat: React.FC<ChatProps> = ({
   const showExpiredSessionRecovery =
     !!lastError && lastError.toLowerCase().includes('ssh session not found or expired');
 
-  const handleInsertAtCursor = useCallback((text: string) => {
-    const separator = inputValueRef.current ? '\n' : '';
-    onInputChange(inputValueRef.current + separator + text);
-  }, [onInputChange]);
+  const handleInsertAtCursor = useCallback(
+    (text: string) => {
+      const separator = inputValueRef.current ? '\n' : '';
+      onInputChange(inputValueRef.current + separator + text);
+    },
+    [onInputChange],
+  );
 
   return (
     <div
@@ -476,7 +481,9 @@ const Chat: React.FC<ChatProps> = ({
         <div className="chat-container" ref={chatContainerRef} onScroll={handleChatScroll}>
           {messages.length === 0 ? (
             <div className="welcome-message">
-              <div className="welcome-icon"><Bot size={32} /></div>
+              <div className="welcome-icon">
+                <Bot size={32} />
+              </div>
               <div className="welcome-text">
                 Welcome to ledit! I'm ready to help you with code analysis, editing, and more.
               </div>
@@ -493,63 +500,60 @@ const Chat: React.FC<ChatProps> = ({
                 copyText={message.content}
                 timestamp={formatTime(message.timestamp)}
               >
-                  {message.type === 'assistant'
-                  ? (
-                    <>
-                      {message.reasoning && message.reasoning.trim() && (
-                        <details className="reasoning-block" open={false}>
-                          <summary className="reasoning-summary">
-                            <BrainCircuit size={13} className="reasoning-icon" />
-                            <span>Reasoning</span>
-                            <span className="reasoning-toggle">▶</span>
-                          </summary>
-                          <div className="reasoning-content">
-                            <MessageContent content={message.reasoning} />
-                          </div>
-                        </details>
-                      )}
-                      <MessageSegments
-                        content={message.content}
-                        toolRefs={message.toolRefs}
-                        onToolRefClick={(toolId) => onToolPillClick?.(toolId)}
-                        onToolClick={(toolName) => {
-                          const matchingTool = findMatchingToolExecution(toolName);
-                          if (matchingTool) {
-                            onToolPillClick?.(matchingTool.id);
-                          }
-                        }}
-                      />
-                    </>
-                  )
-                  : <MessageContent content={message.content} />
-                }
+                {message.type === 'assistant' ? (
+                  <>
+                    {message.reasoning && message.reasoning.trim() && (
+                      <details className="reasoning-block" open={false}>
+                        <summary className="reasoning-summary">
+                          <BrainCircuit size={13} className="reasoning-icon" />
+                          <span>Reasoning</span>
+                          <span className="reasoning-toggle">▶</span>
+                        </summary>
+                        <div className="reasoning-content">
+                          <MessageContent content={message.reasoning} />
+                        </div>
+                      </details>
+                    )}
+                    <MessageSegments
+                      content={message.content}
+                      toolRefs={message.toolRefs}
+                      onToolRefClick={(toolId) => onToolPillClick?.(toolId)}
+                      onToolClick={(toolName) => {
+                        const matchingTool = findMatchingToolExecution(toolName);
+                        if (matchingTool) {
+                          onToolPillClick?.(matchingTool.id);
+                        }
+                      }}
+                    />
+                  </>
+                ) : (
+                  <MessageContent content={message.content} />
+                )}
               </MessageBubble>
             ))
           )}
 
           {/* Inline subagent activity feed – shows between messages and processing indicators */}
-          {hasSubagentActivity && (
-            <SubagentActivityFeed activities={subagentActivities} />
-          )}
+          {hasSubagentActivity && <SubagentActivityFeed activities={subagentActivities} />}
 
           {queryProgress && (
             <div className="query-progress">
               <div className="progress-header">
-                <span className="progress-icon"><Zap size={14} /></span>
+                <span className="progress-icon">
+                  <Zap size={14} />
+                </span>
                 <span className="progress-text">{queryProgress.message || 'Processing...'}</span>
               </div>
-              {queryProgress.details && (
-                <div className="progress-details">
-                  {queryProgress.details}
-                </div>
-              )}
+              {queryProgress.details && <div className="progress-details">{queryProgress.details}</div>}
             </div>
           )}
 
           {isProcessing && toolExecutions.length === 0 && !queryProgress && !hasSubagentActivity && (
             <div className="processing-indicator">
               <div className="processing-content">
-                <div className="processing-spinner"><Zap size={14} /></div>
+                <div className="processing-spinner">
+                  <Zap size={14} />
+                </div>
                 <div className="processing-text">Processing your request...</div>
               </div>
             </div>
@@ -558,15 +562,13 @@ const Chat: React.FC<ChatProps> = ({
           {lastError && (
             <div className="error-indicator">
               <div className="error-content">
-                <div className="error-icon"><AlertTriangle size={14} /></div>
+                <div className="error-icon">
+                  <AlertTriangle size={14} />
+                </div>
                 <div className="error-text">{lastError}</div>
                 {showExpiredSessionRecovery ? (
                   <div className="error-actions">
-                    <button
-                      type="button"
-                      className="error-recovery-btn"
-                      onClick={handleReloadWithoutSSHPath}
-                    >
+                    <button type="button" className="error-recovery-btn" onClick={handleReloadWithoutSSHPath}>
                       Reload Without SSH Path
                     </button>
                   </div>
@@ -597,10 +599,7 @@ const Chat: React.FC<ChatProps> = ({
         />
       </div>
 
-      <ChatMessageContextMenu
-        containerRef={chatContainerRef}
-        onInsertAtCursor={handleInsertAtCursor}
-      />
+      <ChatMessageContextMenu containerRef={chatContainerRef} onInsertAtCursor={handleInsertAtCursor} />
     </div>
   );
 };

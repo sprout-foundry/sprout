@@ -35,7 +35,7 @@ describe('fuzzyScore', () => {
 
     it('gives word-boundary bonus', () => {
       const boundary = fuzzyScore('file', 'Go to File');
-      const inside = fuzzyScore('to', 'Go to File');
+      const _inside = fuzzyScore('to', 'Go to File');
       // "to" as a word boundary match should score higher than a random substring
       expect(boundary.score).toBeGreaterThan(100);
     });
@@ -91,7 +91,7 @@ describe('fuzzyFilter', () => {
     // Both start with "save" so they get the same prefix score; tiebreaker
     // is alphabetical.  "Save All Files" < "Save File" alphabetically
     // (because "a" < " ").  Verify both are present.
-    const labels = results.map(r => r.item.label);
+    const labels = results.map((r) => r.item.label);
     expect(labels).toContain('Save File');
     expect(labels).toContain('Save All Files');
   });
@@ -128,7 +128,10 @@ describe('highlightMatches', () => {
   });
 
   it('handles multiple separate matches', () => {
-    const result = highlightMatches('abcdef', [[0, 2], [4, 6]]);
+    const result = highlightMatches('abcdef', [
+      [0, 2],
+      [4, 6],
+    ]);
     expect(result).toBe('<mark>ab</mark>cd<mark>ef</mark>');
   });
 

@@ -29,10 +29,10 @@
  * that same line at the top of their viewport.
  */
 
-import { EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view';
+import { type EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view';
 
 // Type alias for readability — referenced by the factory return type.
-type Extension = import('@codemirror/state').Extension;
+import type { Extension } from '@codemirror/state';
 
 // ── Module-level state ──────────────────────────────────────────────
 
@@ -90,10 +90,7 @@ export function _resetModuleStateForTesting(): void {
  *                     displayed in this pane (or null / empty for
  *                     non-file buffers).
  */
-export function linkedScrollExtension(
-  paneId: string,
-  getFilePath: () => string | null,
-): Extension {
+export function linkedScrollExtension(paneId: string, getFilePath: () => string | null): Extension {
   return ViewPlugin.fromClass(
     class LinkedScrollPlugin {
       /** Pending requestAnimationFrame id for debounced dispatch (one per frame). */

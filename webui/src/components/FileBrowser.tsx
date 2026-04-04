@@ -1,11 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  Folder,
-  File,
-  ArrowUp,
-  X,
-  FolderOpen,
-} from 'lucide-react';
+import { Folder, File, ArrowUp, X, FolderOpen } from 'lucide-react';
 import { clientFetch } from '../services/clientSession';
 import './FileBrowser.css';
 
@@ -36,7 +30,7 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
   onCancel,
   allowDirectories = false,
   allowedExtensions = [],
-  browseEndpoint = '/api/browse'
+  browseEndpoint = '/api/browse',
 }) => {
   const [currentPath, setCurrentPath] = useState(initialPath);
   const [pathInput, setPathInput] = useState(initialPath);
@@ -53,46 +47,49 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
     }
   }, [initialPath, isOpen]);
 
-  const loadDirectory = useCallback(async (path: string) => {
-    setLoading(true);
-    setError(null);
+  const loadDirectory = useCallback(
+    async (path: string) => {
+      setLoading(true);
+      setError(null);
 
-    try {
-      // Use the actual API to browse files
-      const response = await clientFetch(`${browseEndpoint}?path=${encodeURIComponent(path)}`);
-      if (!response.ok) {
-        throw new Error(`Failed to browse directory: ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      const directoryFiles: FileNode[] = (data.files || []).map((file: any) => ({
-        id: file.path || `${path}/${file.name}`,
-        name: file.name,
-        path: file.path,
-        type: file.type === 'directory' ? 'directory' : 'file',
-        size: file.size,
-        modified: typeof file.modified === 'number' ? file.modified : undefined
-      }));
-      
-      const sortedFiles = directoryFiles.sort((a: any, b: any) => {
-        // Directories first
-        if (a.type !== b.type) {
-          return a.type === 'directory' ? -1 : 1;
+      try {
+        // Use the actual API to browse files
+        const response = await clientFetch(`${browseEndpoint}?path=${encodeURIComponent(path)}`);
+        if (!response.ok) {
+          throw new Error(`Failed to browse directory: ${response.statusText}`);
         }
-        // Then alphabetically
-        return a.name.localeCompare(b.name);
-      });
 
-      setFiles(sortedFiles);
-      setSelectedFile(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load directory');
-      setFiles([]);
-      setSelectedFile(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [browseEndpoint]);
+        const data = await response.json();
+        const directoryFiles: FileNode[] = (data.files || []).map((file: any) => ({
+          id: file.path || `${path}/${file.name}`,
+          name: file.name,
+          path: file.path,
+          type: file.type === 'directory' ? 'directory' : 'file',
+          size: file.size,
+          modified: typeof file.modified === 'number' ? file.modified : undefined,
+        }));
+
+        const sortedFiles = directoryFiles.sort((a: any, b: any) => {
+          // Directories first
+          if (a.type !== b.type) {
+            return a.type === 'directory' ? -1 : 1;
+          }
+          // Then alphabetically
+          return a.name.localeCompare(b.name);
+        });
+
+        setFiles(sortedFiles);
+        setSelectedFile(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load directory');
+        setFiles([]);
+        setSelectedFile(null);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [browseEndpoint],
+  );
 
   useEffect(() => {
     if (isOpen) {
@@ -124,7 +121,7 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
   const navigateUp = () => {
     const parts = currentPath.split('/').filter(Boolean);
     parts.pop();
-    const newPath = '/' + parts.join('/') || '/';
+    const newPath = `/${parts.join('/')}` || '/';
     setCurrentPath(newPath);
     setPathInput(newPath);
   };
@@ -136,9 +133,9 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const filterFiles = (files: FileNode[]) => {
-    if (allowedExtensions.length === 0) return files;
-    return files.filter(file => {
+  const filterFiles = (nestedFiles: FileNode[]) => {
+    if (allowedExtensions.length === 0) return nestedFiles;
+    return nestedFiles.filter((file) => {
       if (file.type === 'directory') return true;
       const ext = file.name.split('.').pop()?.toLowerCase();
       return ext && allowedExtensions.includes(ext);
@@ -154,17 +151,17 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
       <div className="filebrowser-container" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="filebrowser-header">
-          <h3><FolderOpen size={16} style={{ marginRight: 6, verticalAlign: 'middle' }} /> File Browser</h3>
-          <button className="filebrowser-close" onClick={onCancel}><X size={16} /></button>
+          <h3>
+            <FolderOpen size={16} style={{ marginRight: 6, verticalAlign: 'middle' }} /> File Browser
+          </h3>
+          <button className="filebrowser-close" onClick={onCancel}>
+            <X size={16} />
+          </button>
         </div>
 
         {/* Navigation */}
         <div className="filebrowser-nav">
-          <button
-            className="filebrowser-nav-button"
-            onClick={navigateUp}
-            disabled={currentPath === '/'}
-          >
+          <button className="filebrowser-nav-button" onClick={navigateUp} disabled={currentPath === '/'}>
             <ArrowUp size={14} style={{ marginRight: 4, verticalAlign: 'middle' }} /> Up
           </button>
           <div className="filebrowser-path">
@@ -191,7 +188,7 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
             <div className="filebrowser-error">{error}</div>
           ) : (
             <div className="filebrowser-list">
-              {filteredFiles.map(file => (
+              {filteredFiles.map((file) => (
                 <div
                   key={file.id}
                   className={`filebrowser-item ${selectedFile?.id === file.id ? 'selected' : ''}`}
@@ -210,18 +207,14 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
                   </div>
                 </div>
               ))}
-              {filteredFiles.length === 0 && (
-                <div className="filebrowser-empty">This directory is empty</div>
-              )}
+              {filteredFiles.length === 0 && <div className="filebrowser-empty">This directory is empty</div>}
             </div>
           )}
         </div>
 
         {/* Footer */}
         <div className="filebrowser-footer">
-          <div className="filebrowser-help">
-            Click to select, double-click to choose
-          </div>
+          <div className="filebrowser-help">Click to select, double-click to choose</div>
           <div className="filebrowser-actions">
             <button className="filebrowser-button secondary" onClick={onCancel}>
               Cancel

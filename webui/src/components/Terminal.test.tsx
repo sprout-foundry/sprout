@@ -10,10 +10,9 @@ import Terminal from './Terminal';
 // ---------------------------------------------------------------------------
 
 jest.mock('./TerminalPane', () => {
-  const React = require('react');
   return React.forwardRef(function MockTerminalPane(
     { isActive, isConnected, showCloseButton, onClose }: any,
-    ref: any
+    ref: any,
   ) {
     // NOTE: jest.fn() inside useImperativeHandle creates fresh mock instances on
     // every re-render. This is acceptable because no test asserts on imperative
@@ -33,11 +32,7 @@ jest.mock('./TerminalPane', () => {
         data-connected={isConnected ? 'true' : 'false'}
       >
         {showCloseButton && (
-          <button
-            className="terminal-pane-close"
-            data-testid="secondary-close-btn"
-            onClick={onClose}
-          >
+          <button className="terminal-pane-close" data-testid="secondary-close-btn" onClick={onClose}>
             ✕
           </button>
         )}
@@ -52,9 +47,7 @@ jest.mock('./TerminalPane', () => {
 
 jest.mock('./TerminalTabBar', () => {
   return function MockTerminalTabBar(props: any) {
-    return (
-      <div data-testid="terminal-tab-bar" data-active={props.activeSessionId} />
-    );
+    return <div data-testid="terminal-tab-bar" data-active={props.activeSessionId} />;
   };
 });
 
@@ -68,9 +61,7 @@ function renderTerminal(props: Record<string, any> = {}) {
   const root = createRoot(container);
 
   act(() => {
-    root.render(
-      <Terminal isConnected={true} isExpanded={false} {...props} />
-    );
+    root.render(<Terminal isConnected={true} isExpanded={false} {...props} />);
   });
 
   return { container, root };
@@ -128,7 +119,7 @@ function dispatchTerminalAction(action: string) {
   window.dispatchEvent(event);
 }
 
-const flushPromises = async () => {
+const _flushPromises = async () => {
   await act(async () => {
     await Promise.resolve();
   });
@@ -199,9 +190,7 @@ describe('Terminal split functionality', () => {
     root = result.root;
 
     // The vertical split button initially has aria-label="Split terminal vertically"
-    const verticalBtn = container.querySelector(
-      '[aria-label="Split terminal vertically"]'
-    ) as HTMLElement;
+    const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]') as HTMLElement;
     expect(verticalBtn).toBeTruthy();
 
     act(() => {
@@ -220,9 +209,7 @@ describe('Terminal split functionality', () => {
     root = result.root;
 
     // Click vertical split
-    const verticalBtn = container.querySelector(
-      '[aria-label="Split terminal vertically"]'
-    ) as HTMLElement;
+    const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]') as HTMLElement;
     act(() => {
       verticalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
@@ -239,9 +226,7 @@ describe('Terminal split functionality', () => {
     container = result.container;
     root = result.root;
 
-    const horizontalBtn = container.querySelector(
-      '[aria-label="Split terminal horizontally"]'
-    ) as HTMLElement;
+    const horizontalBtn = container.querySelector('[aria-label="Split terminal horizontally"]') as HTMLElement;
     expect(horizontalBtn).toBeTruthy();
 
     act(() => {
@@ -262,9 +247,7 @@ describe('Terminal split functionality', () => {
     container = result.container;
     root = result.root;
 
-    const horizontalBtn = container.querySelector(
-      '[aria-label="Split terminal horizontally"]'
-    ) as HTMLElement;
+    const horizontalBtn = container.querySelector('[aria-label="Split terminal horizontally"]') as HTMLElement;
     act(() => {
       horizontalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
@@ -340,9 +323,7 @@ describe('Terminal split functionality', () => {
     container = result.container;
     root = result.root;
 
-    const verticalBtn = container.querySelector(
-      '[aria-label="Split terminal vertically"]'
-    ) as HTMLElement;
+    const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]') as HTMLElement;
 
     // First click: activate
     act(() => {
@@ -351,9 +332,7 @@ describe('Terminal split functionality', () => {
     expect(verticalBtn.classList.contains('split-btn-active')).toBe(true);
 
     // Second click: aria-label is now "Unsplit terminal"
-    const unsplitBtn = container.querySelector(
-      '[aria-label="Unsplit terminal"]'
-    ) as HTMLElement;
+    const unsplitBtn = container.querySelector('[aria-label="Unsplit terminal"]') as HTMLElement;
 
     act(() => {
       unsplitBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -371,9 +350,7 @@ describe('Terminal split functionality', () => {
     container = result.container;
     root = result.root;
 
-    const horizontalBtn = container.querySelector(
-      '[aria-label="Split terminal horizontally"]'
-    ) as HTMLElement;
+    const horizontalBtn = container.querySelector('[aria-label="Split terminal horizontally"]') as HTMLElement;
 
     // Activate
     act(() => {
@@ -385,9 +362,7 @@ describe('Terminal split functionality', () => {
     // There are two buttons with "Unsplit terminal" when horizontal is active
     // We need to find the horizontal one (the second .split-btn)
     const splitBtns = getSplitButtons(container);
-    const activeBtn = splitBtns.find(
-      (btn) => btn.classList.contains('split-btn-active')
-    ) as HTMLElement;
+    const activeBtn = splitBtns.find((btn) => btn.classList.contains('split-btn-active')) as HTMLElement;
 
     act(() => {
       activeBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -402,17 +377,13 @@ describe('Terminal split functionality', () => {
     root = result.root;
 
     // Activate vertical split
-    const verticalBtn = container.querySelector(
-      '[aria-label="Split terminal vertically"]'
-    ) as HTMLElement;
+    const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]') as HTMLElement;
     act(() => {
       verticalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     // Deactivate
-    const unsplitBtn = container.querySelector(
-      '[aria-label="Unsplit terminal"]'
-    ) as HTMLElement;
+    const unsplitBtn = container.querySelector('[aria-label="Unsplit terminal"]') as HTMLElement;
     act(() => {
       unsplitBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
@@ -505,9 +476,7 @@ describe('Terminal split functionality', () => {
     expect(wrappersBefore.length).toBe(1);
 
     // Activate vertical split
-    const verticalBtn = container.querySelector(
-      '[aria-label="Split terminal vertically"]'
-    ) as HTMLElement;
+    const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]') as HTMLElement;
     act(() => {
       verticalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
@@ -526,9 +495,7 @@ describe('Terminal split functionality', () => {
     expect(wrappersBefore.length).toBe(1);
 
     // Activate horizontal split
-    const horizontalBtn = container.querySelector(
-      '[aria-label="Split terminal horizontally"]'
-    ) as HTMLElement;
+    const horizontalBtn = container.querySelector('[aria-label="Split terminal horizontally"]') as HTMLElement;
     act(() => {
       horizontalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
@@ -565,18 +532,14 @@ describe('Terminal split functionality', () => {
     root = result.root;
 
     // Activate split
-    const verticalBtn = container.querySelector(
-      '[aria-label="Split terminal vertically"]'
-    ) as HTMLElement;
+    const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]') as HTMLElement;
     act(() => {
       verticalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
 
     // Deactivate split
-    const unsplitBtn = container.querySelector(
-      '[aria-label="Unsplit terminal"]'
-    ) as HTMLElement;
+    const unsplitBtn = container.querySelector('[aria-label="Unsplit terminal"]') as HTMLElement;
     act(() => {
       unsplitBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
@@ -592,18 +555,14 @@ describe('Terminal split functionality', () => {
     root = result.root;
 
     // Activate split
-    const verticalBtn = container.querySelector(
-      '[aria-label="Split terminal vertically"]'
-    ) as HTMLElement;
+    const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]') as HTMLElement;
     act(() => {
       verticalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(getSplitDivider(container)).toBeTruthy();
 
     // Deactivate
-    const unsplitBtn = container.querySelector(
-      '[aria-label="Unsplit terminal"]'
-    ) as HTMLElement;
+    const unsplitBtn = container.querySelector('[aria-label="Unsplit terminal"]') as HTMLElement;
     act(() => {
       unsplitBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
@@ -650,9 +609,7 @@ describe('Terminal split functionality', () => {
     });
 
     const splitBtns = getSplitButtons(container);
-    const activeBtn = splitBtns.find(
-      (btn) => btn.classList.contains('split-btn-active')
-    ) as HTMLElement;
+    const activeBtn = splitBtns.find((btn) => btn.classList.contains('split-btn-active')) as HTMLElement;
     act(() => {
       activeBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
@@ -883,9 +840,7 @@ describe('Terminal split functionality', () => {
     root = result.root;
 
     act(() => {
-      window.dispatchEvent(
-        new CustomEvent('ledit:terminal-action', { detail: null })
-      );
+      window.dispatchEvent(new CustomEvent('ledit:terminal-action', { detail: null }));
     });
 
     const panesContainer = getPanesContainer(container);
@@ -961,9 +916,7 @@ describe('Terminal split functionality', () => {
     container = result.container;
     root = result.root;
 
-    const verticalBtn = container.querySelector(
-      '[aria-label="Split terminal vertically"]'
-    ) as HTMLElement;
+    const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]') as HTMLElement;
     act(() => {
       verticalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
@@ -976,9 +929,7 @@ describe('Terminal split functionality', () => {
     container = result.container;
     root = result.root;
 
-    const horizontalBtn = container.querySelector(
-      '[aria-label="Split terminal horizontally"]'
-    ) as HTMLElement;
+    const horizontalBtn = container.querySelector('[aria-label="Split terminal horizontally"]') as HTMLElement;
     act(() => {
       horizontalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
@@ -991,12 +942,8 @@ describe('Terminal split functionality', () => {
     container = result.container;
     root = result.root;
 
-    const verticalBtn = container.querySelector(
-      '[aria-label="Split terminal vertically"]'
-    );
-    const horizontalBtn = container.querySelector(
-      '[aria-label="Split terminal horizontally"]'
-    );
+    const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]');
+    const horizontalBtn = container.querySelector('[aria-label="Split terminal horizontally"]');
 
     expect(verticalBtn).toBeTruthy();
     expect(horizontalBtn).toBeTruthy();
@@ -1036,9 +983,7 @@ describe('Terminal split lifecycle and edge cases', () => {
     container = result.container;
     root = result.root;
 
-    const verticalBtn = container.querySelector(
-      '[aria-label="Split terminal vertically"]'
-    ) as HTMLElement;
+    const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]') as HTMLElement;
 
     // First split
     act(() => {
@@ -1065,9 +1010,7 @@ describe('Terminal split lifecycle and edge cases', () => {
     container = result.container;
     root = result.root;
 
-    const verticalBtn = container.querySelector(
-      '[aria-label="Split terminal vertically"]'
-    ) as HTMLElement;
+    const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]') as HTMLElement;
 
     // First split
     act(() => {
@@ -1076,9 +1019,7 @@ describe('Terminal split lifecycle and edge cases', () => {
     expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
 
     // Unsplit via button toggle
-    const unsplitBtn = container.querySelector(
-      '[aria-label="Unsplit terminal"]'
-    ) as HTMLElement;
+    const unsplitBtn = container.querySelector('[aria-label="Unsplit terminal"]') as HTMLElement;
     act(() => {
       unsplitBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
@@ -1315,7 +1256,7 @@ describe('Terminal height persistence', () => {
           bubbles: true,
           clientX: 0,
           clientY: 600,
-        })
+        }),
       );
     });
 
@@ -1325,7 +1266,7 @@ describe('Terminal height persistence', () => {
         new MouseEvent('mouseup', {
           clientX: 0,
           clientY: 600,
-        })
+        }),
       );
     });
 

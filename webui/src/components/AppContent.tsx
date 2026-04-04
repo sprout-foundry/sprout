@@ -105,16 +105,33 @@ const AppContent: React.FC<AppContentProps> = ({
   activeChatId,
   onActiveChatChange,
   onCreateChat,
-  onDeleteChat,
-  onRenameChat,
+  onDeleteChat: _onDeleteChat,
+  onRenameChat: _onRenameChat,
   perChatCache,
 }) => {
   // ── Editor manager ─────────────────────────────────────────────
   const {
-    panes, paneLayout, activePaneId, activeBufferId, buffers,
-    switchPane, switchToBuffer, splitPane, splitIntoGrid, closeSplit, closePane,
-    closeBuffer, closeAllBuffers, closeOtherBuffers, openFile, openWorkspaceBuffer,
-    paneSizes, updatePaneSize, updateBufferMetadata, updateBufferTitle, saveAllBuffers,
+    panes,
+    paneLayout,
+    activePaneId,
+    activeBufferId,
+    buffers,
+    switchPane,
+    switchToBuffer,
+    splitPane,
+    splitIntoGrid,
+    closeSplit,
+    closePane,
+    closeBuffer,
+    closeAllBuffers,
+    closeOtherBuffers,
+    openFile,
+    openWorkspaceBuffer,
+    paneSizes,
+    updatePaneSize,
+    updateBufferMetadata,
+    updateBufferTitle,
+    saveAllBuffers,
   } = useEditorManager();
 
   const apiService = ApiService.getInstance();
@@ -146,8 +163,10 @@ const AppContent: React.FC<AppContentProps> = ({
   const [isContextPanelMobileOpen, setIsContextPanelMobileOpen] = useState(false);
   const { panelWidth, setPanelWidth } = usePanelWidth();
 
-  const { instances, selectedInstancePID, isSwitchingInstance, handleInstanceChange } =
-    useInstanceManager({ isConnected, apiService });
+  const { instances, selectedInstancePID, isSwitchingInstance, handleInstanceChange } = useInstanceManager({
+    isConnected,
+    apiService,
+  });
 
   const {
     gitStatus,
@@ -243,7 +262,7 @@ const AppContent: React.FC<AppContentProps> = ({
     saveAllBuffers,
     switchToBuffer,
     switchPane,
-    onToggleCommandPalette: () => setIsCommandPaletteOpen(prev => !prev),
+    onToggleCommandPalette: () => setIsCommandPaletteOpen((prev) => !prev),
     onOpenCommandPalette: () => setIsCommandPaletteOpen(true),
   });
   const currentBuffer = activeBufferId ? buffers.get(activeBufferId) : null;
@@ -279,9 +298,7 @@ const AppContent: React.FC<AppContentProps> = ({
 
   return (
     <div className="app">
-      {isMobile && isSidebarOpen && (
-        <div className="mobile-overlay" onClick={onCloseSidebar} />
-      )}
+      {isMobile && isSidebarOpen && <div className="mobile-overlay" onClick={onCloseSidebar} />}
 
       <Sidebar
         isConnected={state.isConnected}
@@ -342,12 +359,10 @@ const AppContent: React.FC<AppContentProps> = ({
         }}
       />
 
-      <div className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''} ${isTerminalExpanded ? 'terminal-expanded' : ''}`}>
-        <WorkspaceBar
-          isConnected={state.isConnected}
-          isMobile={isMobile}
-          isMobileMenuOpen={isSidebarOpen}
-        />
+      <div
+        className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''} ${isTerminalExpanded ? 'terminal-expanded' : ''}`}
+      >
+        <WorkspaceBar isConnected={state.isConnected} isMobile={isMobile} isMobileMenuOpen={isSidebarOpen} />
         <div className="main-view-content">
           <div className="editor-view">
             {isMobile && (
@@ -465,10 +480,7 @@ const AppContent: React.FC<AppContentProps> = ({
         <Status isConnected={state.isConnected} position="bottom" stats={state.stats} />
       </div>
 
-      <Terminal
-        isExpanded={isTerminalExpanded}
-        onToggleExpand={onTerminalExpandedChange}
-      />
+      <Terminal isExpanded={isTerminalExpanded} onToggleExpand={onTerminalExpandedChange} />
 
       <CommandPalette
         isOpen={isCommandPaletteOpen}

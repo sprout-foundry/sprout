@@ -2,7 +2,12 @@ import React, { useState, useRef, useEffect, useCallback, useLayoutEffect, memo 
 import { ScrollText, X, Send, SquarePen, ListPlus, Plus, Square } from 'lucide-react';
 import './CommandInput.css';
 import { ApiService } from '../services/api';
-import { CommandHistoryState, dedupeCommands, loadCommandHistory, persistCommandHistory } from './command_input_history';
+import {
+  type CommandHistoryState,
+  dedupeCommands,
+  loadCommandHistory,
+  persistCommandHistory,
+} from './command_input_history';
 import QueuedMessagesPanel from './QueuedMessagesPanel';
 
 interface CommandInputProps {
@@ -31,7 +36,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
   onSend,
   onSendCommand,
   onQueue,
-  placeholder = "Ask me anything about your code...",
+  placeholder = 'Ask me anything about your code...',
   disabled = false,
   multiline = true,
   autoFocus = false,
@@ -48,17 +53,19 @@ const CommandInput: React.FC<CommandInputProps> = ({
   const [history, setHistory] = useState<CommandHistoryState>({
     commands: [],
     index: -1,
-    tempInput: ''
+    tempInput: '',
   });
   const [isHistoryMode, setIsHistoryMode] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-  const [attachedImages, setAttachedImages] = useState<Array<{
-    id: string;
-    file: File;
-    preview: string;
-    uploadedPath?: string;
-    error?: string;
-  }>>([]);
+  const [attachedImages, setAttachedImages] = useState<
+    Array<{
+      id: string;
+      file: File;
+      preview: string;
+      uploadedPath?: string;
+      error?: string;
+    }>
+  >([]);
   const [previewImageId, setPreviewImageId] = useState<string | null>(null);
   const [showQueuePanel, setShowQueuePanel] = useState(false);
   const queuePanelRef = useRef<HTMLDivElement>(null);
@@ -90,10 +97,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
     if (document.activeElement !== inputRef.current) return;
 
     const { start, end } = selectionRef.current;
-    inputRef.current.setSelectionRange(
-      Math.min(start, draftValue.length),
-      Math.min(end, draftValue.length)
-    );
+    inputRef.current.setSelectionRange(Math.min(start, draftValue.length), Math.min(end, draftValue.length));
   }, [draftValue]);
 
   useLayoutEffect(() => {
@@ -147,9 +151,9 @@ const CommandInput: React.FC<CommandInputProps> = ({
     setIsLoadingHistory(true);
     try {
       const commands = await loadCommandHistory(apiService.current);
-      setHistory(prev => ({
+      setHistory((prev) => ({
         ...prev,
-        commands
+        commands,
       }));
     } catch (error) {
       console.error('Failed to load command history:', error);
@@ -167,7 +171,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
     if (!command.trim()) return;
     const trimmedCommand = command.trim();
     // Update local state AND persist to localStorage synchronously
-    setHistory(prev => {
+    setHistory((prev) => {
       const next = dedupeCommands([...prev.commands, trimmedCommand]);
       persistCommandHistory(next);
       return { commands: next, index: -1, tempInput: '' };
@@ -175,25 +179,27 @@ const CommandInput: React.FC<CommandInputProps> = ({
   }, []);
 
   const resetHistoryNavigation = () => {
-    setHistory(prev => ({
+    setHistory((prev) => ({
       ...prev,
       index: -1,
-      tempInput: ''
+      tempInput: '',
     }));
     setIsHistoryMode(false);
   };
 
-  const updateValue = useCallback((nextValue: string, selection?: { start: number; end: number }) => {
-    if (selection) {
-      selectionRef.current = selection;
-    }
-    setDraftValue(nextValue);
-    onChange?.(nextValue);
-  }, [onChange]);
+  const updateValue = useCallback(
+    (nextValue: string, selection?: { start: number; end: number }) => {
+      if (selection) {
+        selectionRef.current = selection;
+      }
+      setDraftValue(nextValue);
+      onChange?.(nextValue);
+    },
+    [onChange],
+  );
 
-  const currentHistoryValue = isHistoryMode && history.index >= 0
-    ? history.commands[history.commands.length - 1 - history.index] ?? ''
-    : null;
+  const currentHistoryValue =
+    isHistoryMode && history.index >= 0 ? (history.commands[history.commands.length - 1 - history.index] ?? '') : null;
 
   useEffect(() => {
     if (!isHistoryMode || currentHistoryValue === null) {
@@ -203,7 +209,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
       return;
     }
 
-    setHistory(prev => ({
+    setHistory((prev) => ({
       ...prev,
       index: -1,
       tempInput: draftValue,
@@ -211,50 +217,53 @@ const CommandInput: React.FC<CommandInputProps> = ({
     setIsHistoryMode(false);
   }, [currentHistoryValue, draftValue, isHistoryMode]);
 
-  const trackUpcomingSelection = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    const textarea = inputRef.current;
-    if (!textarea) {
-      return;
-    }
+  const trackUpcomingSelection = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      const textarea = inputRef.current;
+      if (!textarea) {
+        return;
+      }
 
-    const start = textarea.selectionStart ?? 0;
-    const end = textarea.selectionEnd ?? start;
+      const start = textarea.selectionStart ?? 0;
+      const end = textarea.selectionEnd ?? start;
 
-    if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {
-      const next = start + 1;
-      selectionRef.current = { start: next, end: next };
-      return;
-    }
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {
+        const next = start + 1;
+        selectionRef.current = { start: next, end: next };
+        return;
+      }
 
-    switch (e.key) {
-      case 'Backspace': {
-        const next = start === end ? Math.max(0, start - 1) : start;
-        selectionRef.current = { start: next, end: next };
-        return;
+      switch (e.key) {
+        case 'Backspace': {
+          const next = start === end ? Math.max(0, start - 1) : start;
+          selectionRef.current = { start: next, end: next };
+          return;
+        }
+        case 'Delete':
+          selectionRef.current = { start, end: start };
+          return;
+        case 'ArrowLeft': {
+          const next = start === end ? Math.max(0, start - 1) : start;
+          selectionRef.current = { start: next, end: next };
+          return;
+        }
+        case 'ArrowRight': {
+          const next = start === end ? Math.min(draftValue.length, end + 1) : end;
+          selectionRef.current = { start: next, end: next };
+          return;
+        }
+        case 'Home':
+          selectionRef.current = { start: 0, end: 0 };
+          return;
+        case 'End': {
+          const next = draftValue.length;
+          selectionRef.current = { start: next, end: next };
+          return;
+        }
       }
-      case 'Delete':
-        selectionRef.current = { start, end: start };
-        return;
-      case 'ArrowLeft': {
-        const next = start === end ? Math.max(0, start - 1) : start;
-        selectionRef.current = { start: next, end: next };
-        return;
-      }
-      case 'ArrowRight': {
-        const next = start === end ? Math.min(draftValue.length, end + 1) : end;
-        selectionRef.current = { start: next, end: next };
-        return;
-      }
-      case 'Home':
-        selectionRef.current = { start: 0, end: 0 };
-        return;
-      case 'End': {
-        const next = draftValue.length;
-        selectionRef.current = { start: next, end: next };
-        return;
-      }
-    }
-  }, [draftValue.length]);
+    },
+    [draftValue.length],
+  );
 
   // Handle paste event for images
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
@@ -266,11 +275,14 @@ const CommandInput: React.FC<CommandInputProps> = ({
         if (blob) {
           const preview = URL.createObjectURL(blob);
           const imageId = crypto.randomUUID();
-          setAttachedImages(prev => [...prev, {
-            id: imageId,
-            file: blob,
-            preview,
-          }]);
+          setAttachedImages((prev) => [
+            ...prev,
+            {
+              id: imageId,
+              file: blob,
+              preview,
+            },
+          ]);
         }
         break; // Only handle first image
       }
@@ -283,11 +295,14 @@ const CommandInput: React.FC<CommandInputProps> = ({
     if (file) {
       const preview = URL.createObjectURL(file);
       const imageId = crypto.randomUUID();
-      setAttachedImages(prev => [...prev, {
-        id: imageId,
-        file,
-        preview,
-      }]);
+      setAttachedImages((prev) => [
+        ...prev,
+        {
+          id: imageId,
+          file,
+          preview,
+        },
+      ]);
       // Reset input so same file can be selected again
       e.target.value = '';
       // Focus back to textarea
@@ -302,14 +317,14 @@ const CommandInput: React.FC<CommandInputProps> = ({
 
   // Remove an image from the list
   const removeImage = useCallback((id: string) => {
-    setAttachedImages(prev => {
-      const imageToRemove = prev.find(img => img.id === id);
+    setAttachedImages((prev) => {
+      const imageToRemove = prev.find((img) => img.id === id);
       if (imageToRemove) {
         URL.revokeObjectURL(imageToRemove.preview);
       }
       // Clean up upload tracking ref
       uploadInProgressRef.current.delete(id);
-      return prev.filter(img => img.id !== id);
+      return prev.filter((img) => img.id !== id);
     });
     setPreviewImageId((current) => (current === id ? null : current));
   }, []);
@@ -321,23 +336,21 @@ const CommandInput: React.FC<CommandInputProps> = ({
 
     try {
       const result = await apiService.current.uploadImage(imageFile);
-      setAttachedImages(prev => prev.map(img => 
-        img.id === imageId 
-          ? { ...img, uploadedPath: result.path, error: undefined }
-          : img
-      ));
+      setAttachedImages((prev) =>
+        prev.map((img) => (img.id === imageId ? { ...img, uploadedPath: result.path, error: undefined } : img)),
+      );
     } catch (error) {
-      setAttachedImages(prev => prev.map(img => 
-        img.id === imageId 
-          ? { ...img, error: error instanceof Error ? error.message : 'Upload failed' }
-          : img
-      ));
+      setAttachedImages((prev) =>
+        prev.map((img) =>
+          img.id === imageId ? { ...img, error: error instanceof Error ? error.message : 'Upload failed' } : img,
+        ),
+      );
     }
   }, []);
 
   // Auto-upload images when they are added
   useEffect(() => {
-    attachedImages.forEach(img => {
+    attachedImages.forEach((img) => {
       if (!img.uploadedPath && !img.error) {
         uploadImageAsync(img.id, img.file);
       }
@@ -394,12 +407,12 @@ const CommandInput: React.FC<CommandInputProps> = ({
         if (multiline) {
           if (e.shiftKey) {
             e.preventDefault();
-            const textarea = inputRef.current;
-            if (!textarea) return;
-            const start = textarea.selectionStart;
-            const end = textarea.selectionEnd;
+            const autoTextarea = inputRef.current;
+            if (!autoTextarea) return;
+            const start = autoTextarea.selectionStart;
+            const end = autoTextarea.selectionEnd;
             const currentValue = draftValue;
-            const newValue = currentValue.substring(0, start) + '\n' + currentValue.substring(end);
+            const newValue = `${currentValue.substring(0, start)}\n${currentValue.substring(end)}`;
             updateValue(newValue, { start: start + 1, end: start + 1 });
             setTimeout(() => {
               if (inputRef.current) {
@@ -426,7 +439,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
         if (isHistoryMode) {
           // Restore temp input and exit history mode
           resetHistoryNavigation();
-            updateValue(history.tempInput, { start: history.tempInput.length, end: history.tempInput.length });
+          updateValue(history.tempInput, { start: history.tempInput.length, end: history.tempInput.length });
         } else {
           // Clear input if not in history mode
           resetHistoryNavigation();
@@ -467,10 +480,10 @@ const CommandInput: React.FC<CommandInputProps> = ({
       setIsHistoryMode(true);
     }
 
-    setHistory(prev => ({
+    setHistory((prev) => ({
       ...prev,
       index: newIndex,
-      tempInput: history.index === -1 && !isHistoryMode ? currentInputValue : prev.tempInput
+      tempInput: history.index === -1 && !isHistoryMode ? currentInputValue : prev.tempInput,
     }));
 
     updateValue(newInputValue, { start: newInputValue.length, end: newInputValue.length });
@@ -484,7 +497,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
 
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    const newInput = draftValue.substring(0, start) + '\t' + draftValue.substring(end);
+    const newInput = `${draftValue.substring(0, start)}\t${draftValue.substring(end)}`;
     updateValue(newInput, { start: start + 1, end: start + 1 });
   };
 
@@ -494,9 +507,9 @@ const CommandInput: React.FC<CommandInputProps> = ({
 
     // Build query with image paths
     let commandToSend = textareaValue.trim();
-    const uploadedImages = attachedImages.filter(img => img.uploadedPath);
+    const uploadedImages = attachedImages.filter((img) => img.uploadedPath);
     if (uploadedImages.length > 0) {
-      const imagePaths = uploadedImages.map(img => `Pasted image saved to disk: ${img.uploadedPath}`).join('\n');
+      const imagePaths = uploadedImages.map((img) => `Pasted image saved to disk: ${img.uploadedPath}`).join('\n');
       commandToSend = `${imagePaths}\n\n${commandToSend}`;
     }
 
@@ -516,10 +529,10 @@ const CommandInput: React.FC<CommandInputProps> = ({
     updateValue('', { start: 0, end: 0 });
 
     // Clear attached images and revoke URLs
-    setAttachedImages(prev => {
-      prev.forEach(img => URL.revokeObjectURL(img.preview));
+    setAttachedImages((prev) => {
+      prev.forEach((img) => URL.revokeObjectURL(img.preview));
       // Clean up upload tracking ref
-      prev.forEach(img => uploadInProgressRef.current.delete(img.id));
+      prev.forEach((img) => uploadInProgressRef.current.delete(img.id));
       return [];
     });
 
@@ -537,9 +550,9 @@ const CommandInput: React.FC<CommandInputProps> = ({
 
     // Build query with image paths
     let commandToQueue = textareaValue.trim();
-    const uploadedImages = attachedImages.filter(img => img.uploadedPath);
+    const uploadedImages = attachedImages.filter((img) => img.uploadedPath);
     if (uploadedImages.length > 0) {
-      const imagePaths = uploadedImages.map(img => `Pasted image saved to disk: ${img.uploadedPath}`).join('\n');
+      const imagePaths = uploadedImages.map((img) => `Pasted image saved to disk: ${img.uploadedPath}`).join('\n');
       commandToQueue = `${imagePaths}\n\n${commandToQueue}`;
     }
 
@@ -549,10 +562,10 @@ const CommandInput: React.FC<CommandInputProps> = ({
     updateValue('', { start: 0, end: 0 });
 
     // Clear attached images and revoke URLs
-    setAttachedImages(prev => {
-      prev.forEach(img => URL.revokeObjectURL(img.preview));
+    setAttachedImages((prev) => {
+      prev.forEach((img) => URL.revokeObjectURL(img.preview));
       // Clean up upload tracking ref
-      prev.forEach(img => uploadInProgressRef.current.delete(img.id));
+      prev.forEach((img) => uploadInProgressRef.current.delete(img.id));
       return [];
     });
 
@@ -563,23 +576,26 @@ const CommandInput: React.FC<CommandInputProps> = ({
     }, 100);
   };
 
-  const commandRef = useCallback(async (command: string) => {
-    resetHistoryNavigation();
+  const commandRef = useCallback(
+    async (command: string) => {
+      resetHistoryNavigation();
 
-    if (onSend) {
-      onSend(command);
-    } else if (onSendCommand) {
-      onSendCommand(command);
-    }
-
-    updateValue('', { start: 0, end: 0 });
-
-    setTimeout(() => {
-      if (inputRef.current) {
-        inputRef.current.focus();
+      if (onSend) {
+        onSend(command);
+      } else if (onSendCommand) {
+        onSendCommand(command);
       }
-    }, 100);
-  }, [onSend, onSendCommand, updateValue]);
+
+      updateValue('', { start: 0, end: 0 });
+
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
+      }, 100);
+    },
+    [onSend, onSendCommand, updateValue],
+  );
 
   const handleNewSession = useCallback(() => {
     if (isProcessing) {
@@ -600,7 +616,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
     isComposingRef.current = false;
   };
 
-  const canSend = !!draftValue.trim() && !attachedImages.some(img => !img.uploadedPath && !img.error);
+  const canSend = !!draftValue.trim() && !attachedImages.some((img) => !img.uploadedPath && !img.error);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -610,9 +626,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
     handleSend();
   };
 
-  const previewImage = previewImageId
-    ? attachedImages.find((img) => img.id === previewImageId) || null
-    : null;
+  const previewImage = previewImageId ? attachedImages.find((img) => img.id === previewImageId) || null : null;
 
   return (
     <form className="command-input" onSubmit={handleSubmit}>
@@ -623,9 +637,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
               <ScrollText size={14} /> History ({history.index + 1}/{history.commands.length})
             </span>
           )}
-          {isLoadingHistory && (
-            <span className="loading-indicator">Loading history...</span>
-          )}
+          {isLoadingHistory && <span className="loading-indicator">Loading history...</span>}
           {draftValue.length > 100 && <span className="length-indicator">{draftValue.length}</span>}
         </div>
         {isHistoryMode && (
@@ -649,7 +661,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
           const newValue = e.target.value;
           selectionRef.current = {
             start: e.target.selectionStart,
-            end: e.target.selectionEnd
+            end: e.target.selectionEnd,
           };
           updateValue(newValue);
         }}
@@ -657,7 +669,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
           const target = e.target as HTMLTextAreaElement;
           selectionRef.current = {
             start: target.selectionStart,
-            end: target.selectionEnd
+            end: target.selectionEnd,
           };
         }}
         onKeyDown={handleKeyDown}
@@ -675,7 +687,10 @@ const CommandInput: React.FC<CommandInputProps> = ({
       {attachedImages.length > 0 && (
         <div className="image-preview-strip">
           {attachedImages.map((img) => (
-            <div key={img.id} className={`image-preview-chip ${img.error ? 'error' : ''} ${!img.uploadedPath && !img.error ? 'uploading' : ''}`}>
+            <div
+              key={img.id}
+              className={`image-preview-chip ${img.error ? 'error' : ''} ${!img.uploadedPath && !img.error ? 'uploading' : ''}`}
+            >
               <button
                 type="button"
                 className="image-preview-open"
@@ -711,10 +726,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
           aria-label={`Preview image ${previewImage.file.name}`}
           onClick={() => setPreviewImageId(null)}
         >
-          <div
-            className="image-preview-modal"
-            onClick={(event) => event.stopPropagation()}
-          >
+          <div className="image-preview-modal" onClick={(event) => event.stopPropagation()}>
             <div className="image-preview-modal-header">
               <span>{previewImage.file.name}</span>
               <button
@@ -788,7 +800,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  setShowQueuePanel(prev => !prev);
+                  setShowQueuePanel((prev) => !prev);
                 }}
                 className="queue-badge-button"
                 data-tooltip={`${queuedCount} queued message${queuedCount !== 1 ? 's' : ''} — click to manage`}
@@ -826,11 +838,21 @@ const CommandInput: React.FC<CommandInputProps> = ({
       </div>
 
       <div className="keyboard-hints">
-        <span><kbd>Enter</kbd> Send</span>
-        <span><kbd>Shift+Enter</kbd> New line</span>
-        <span><kbd>↑↓</kbd> History</span>
-        <span><kbd>Esc</kbd> Clear</span>
-        <span><kbd>Ctrl+C</kbd> Copy</span>
+        <span>
+          <kbd>Enter</kbd> Send
+        </span>
+        <span>
+          <kbd>Shift+Enter</kbd> New line
+        </span>
+        <span>
+          <kbd>↑↓</kbd> History
+        </span>
+        <span>
+          <kbd>Esc</kbd> Clear
+        </span>
+        <span>
+          <kbd>Ctrl+C</kbd> Copy
+        </span>
       </div>
     </form>
   );

@@ -9,7 +9,7 @@
 import { useCallback } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { ApiService } from '../services/api';
-import { debugLog } from '../utils/log';
+import { debugLog, useLog } from '../utils/log';
 import type { AppState } from '../types/app';
 
 export interface UseMessageSendingOptions {
@@ -30,6 +30,7 @@ export function useMessageSending({
   activeChatIdRef,
   activeRequestsRef,
 }: UseMessageSendingOptions): UseMessageSendingReturn {
+  const log = useLog();
   const apiService = ApiService.getInstance();
 
   const handleSendMessage = useCallback(
@@ -70,7 +71,7 @@ export function useMessageSending({
         setInputValue('');
         debugLog('[OK] Message sent successfully');
       } catch (error) {
-        console.error('[FAIL] Failed to send message:', error);
+        log.error('Failed to send message', { title: 'Send Error' });
         if (activeRequestsRef.current > 0) {
           activeRequestsRef.current -= 1;
         }
@@ -104,6 +105,7 @@ export function useMessageSending({
       }));
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Failed to stop query';
+      log.error('Failed to stop query', { title: 'Stop Error' });
       setState((prev) => ({
         ...prev,
         lastError: errorMsg,

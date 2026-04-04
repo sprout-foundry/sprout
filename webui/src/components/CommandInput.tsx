@@ -7,6 +7,7 @@ import type {
   KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
 import { ScrollText, X, Send, SquarePen, ListPlus, Plus, Square } from 'lucide-react';
+import { useLog } from '../utils/log';
 import './CommandInput.css';
 import { ApiService } from '../services/api';
 import {
@@ -56,6 +57,7 @@ const CommandInput: FC<CommandInputProps> = ({
   onQueueReorder,
   onClearQueuedMessages,
 }) => {
+  const log = useLog();
   const [draftValue, setDraftValue] = useState(value);
   const [history, setHistory] = useState<CommandHistoryState>({
     commands: [],
@@ -163,11 +165,11 @@ const CommandInput: FC<CommandInputProps> = ({
         commands,
       }));
     } catch (error) {
-      console.error('Failed to load command history:', error);
+      log.warn('Failed to load command history', { title: 'Command History' });
     } finally {
       setIsLoadingHistory(false);
     }
-  }, []);
+  }, [log]);
 
   // Load history from localStorage and terminal on mount
   useEffect(() => {

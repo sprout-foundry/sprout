@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { type ApiService, type LeditInstance } from '../services/api';
 import { INSTANCE_PID_STORAGE_KEY, INSTANCE_SWITCH_RESET_KEY } from '../constants/app';
+import { useLog } from '../utils/log';
 
 export interface UseInstanceManagerOptions {
   isConnected: boolean;
@@ -15,6 +16,8 @@ export interface UseInstanceManagerReturn {
 }
 
 export function useInstanceManager({ isConnected, apiService }: UseInstanceManagerOptions): UseInstanceManagerReturn {
+  const log = useLog();
+
   const [instances, setInstances] = useState<LeditInstance[]>([]);
   const [selectedInstancePID, setSelectedInstancePID] = useState<number>(0);
   const [isSwitchingInstance, setIsSwitchingInstance] = useState(false);
@@ -47,7 +50,7 @@ export function useInstanceManager({ isConnected, apiService }: UseInstanceManag
         }
       } catch (error) {
         if (!cancelled) {
-          console.error('Failed to fetch instances:', error);
+          log.warn('Failed to fetch instances', { title: 'Instance Warning' });
         }
       }
       if (!cancelled) {
@@ -62,7 +65,7 @@ export function useInstanceManager({ isConnected, apiService }: UseInstanceManag
         clearTimeout(timer);
       }
     };
-  }, [apiService, isConnected]);
+  }, [apiService, isConnected, log]);
 
   const handleInstanceChange = useCallback(
     async (pid: number) => {
@@ -83,11 +86,11 @@ export function useInstanceManager({ isConnected, apiService }: UseInstanceManag
         nextURL.port = String(targetInstance.port);
         window.location.assign(nextURL.toString());
       } catch (error) {
-        console.error('Failed to switch instance:', error);
+        log.error('Failed to switch instance', { title: 'Instance Error' });
         setIsSwitchingInstance(false);
       }
     },
-    [instances, selectedInstancePID],
+    [instances, selectedInstancePID, log],
   );
 
   return {

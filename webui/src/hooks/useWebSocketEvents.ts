@@ -5,6 +5,7 @@ import type { Message, ToolExecution, LogEntry, SubagentActivity } from '../type
 import type { WsEvent } from '../services/websocket';
 import { getWebUIClientId } from '../services/clientSession';
 import { debugLog } from '../utils/log';
+import { useNotifications } from '../contexts/NotificationContext';
 import { ensureCompletedAssistantMessage } from '../utils/chatCompletion';
 import {
   shouldSuppressAgentMessageInChat,
@@ -35,6 +36,8 @@ export default function useWebSocketEvents({
   setQueuedMessages,
   queuedMessagesRef,
 }: UseWebSocketEventsOptions): UseWebSocketEventsReturn {
+  const { addNotification } = useNotifications();
+
   // ── Refs used by handleEvent ──────────────────────────────────────────
   const activeRequestsRef = useRef(0);
   const activeChatIdRef = useRef<string | null>(null);
@@ -638,6 +641,7 @@ export default function useWebSocketEvents({
           logs: [...prev.logs, logEntry],
         }));
         console.error('[FAIL] Error event:', eventData);
+        addNotification('error', 'Agent Error', errorMessage, 8000);
         break;
 
       case 'metrics_update':

@@ -129,8 +129,8 @@
 
 ### Code Quality & Structural Improvements
 
-[] - REFACTOR: Break up `App.tsx` (1,987 lines) — this monolithic file likely contains types, state, callbacks, and rendering that should be extracted into separate modules, custom hooks, and smaller components. It is the largest file in the project.
-[] - REFACTOR: Break up `AppContent.tsx` (1,140 lines) — the layout rendering, pane management, and hotkey handling are heavily intertwined and should be decomposed.
+[x] - REFACTOR: Break up `App.tsx` (1,987 lines) — this monolithic file likely contains types, state, callbacks, and rendering that should be extracted into separate modules, custom hooks, and smaller components. It is the largest file in the project. (Duplicate removed)
+[x] - REFACTOR: Break up `AppContent.tsx` (1,140 lines → 486 lines) — extracted useCurrentTodos, useSplitManager, useHotkeysConfig, useFileHandlers, usePanelWidth, useHotkeyIntegration hooks and parseFilePath utility. Now under the 500-line target.
 [] - REFACTOR: Break up `git_api.go` (1,861 lines) — this is the largest Go file in `pkg/webui/` and likely combines multiple API endpoints that could be split by domain (status, staging, commit, history).
 [] - REFACTOR: Break up `tool_executor.go` (1,353 lines) — the agent tool executor has grown large and could benefit from splitting by tool category or lifecycle stage.
 [] - REFACTOR: Break up `EditorManagerContext.tsx` (817 lines) — consider extracting buffer persistence (save/load) and buffer mutation operations into separate hooks or modules.

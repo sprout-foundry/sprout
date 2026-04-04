@@ -18,6 +18,7 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	"github.com/alantheprice/ledit/pkg/events"
+	"github.com/alantheprice/ledit/pkg/security"
 	"github.com/alantheprice/ledit/pkg/providercatalog"
 	"github.com/gorilla/websocket"
 )
@@ -49,6 +50,7 @@ type ReactWebServer struct {
 	connections                     sync.Map // map[*websocket.Conn]*ConnectionInfo
 	fileWatcher                      *fileWatcher
 	terminalManager                 *TerminalManager
+	securityPromptMgr               *security.SecurityPromptManager
 	isRunning                       bool
 	mutex                           sync.RWMutex
 	startTime                       time.Time
@@ -99,17 +101,21 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int) 
 
 	providercatalog.RefreshFromRemoteAsync("")
 
+	securityPromptMgr := security.NewSecurityPromptManager()
+	security.SetGlobalPromptManager(securityPromptMgr)
+
 	return &ReactWebServer{
-		agent:          agent,
-		eventBus:       eventBus,
-		daemonRoot:     daemonRoot,
-		workspaceRoot:  workspaceRoot,
-		sshHostAlias:   strings.TrimSpace(os.Getenv("LEDIT_SSH_HOST_ALIAS")),
-		sshSessionKey:  strings.TrimSpace(os.Getenv("LEDIT_SSH_SESSION_KEY")),
-		sshLauncherURL: strings.TrimSpace(os.Getenv("LEDIT_SSH_LAUNCHER_URL")),
-		sshHomePath:    strings.TrimSpace(os.Getenv("LEDIT_SSH_HOME")),
-		fileConsents:   newFileConsentManager(),
-		fileWatcher:    newFileWatcher(eventBus),
+		agent:           agent,
+		eventBus:        eventBus,
+		daemonRoot:      daemonRoot,
+		workspaceRoot:   workspaceRoot,
+		sshHostAlias:    strings.TrimSpace(os.Getenv("LEDIT_SSH_HOST_ALIAS")),
+		sshSessionKey:   strings.TrimSpace(os.Getenv("LEDIT_SSH_SESSION_KEY")),
+		sshLauncherURL:  strings.TrimSpace(os.Getenv("LEDIT_SSH_LAUNCHER_URL")),
+		sshHomePath:     strings.TrimSpace(os.Getenv("LEDIT_SSH_HOME")),
+		fileConsents:    newFileConsentManager(),
+		fileWatcher:     newFileWatcher(eventBus),
+		securityPromptMgr: securityPromptMgr,
 		clientContexts: make(map[string]*webClientContext),
 		port:           port,
 		upgrader: websocket.Upgrader{
@@ -186,6 +192,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/git/discard", ws.handleAPIGitDiscard)
 	mux.HandleFunc("/api/git/commit", ws.handleAPIGitCommit)
 	mux.HandleFunc("/api/git/commit-message", ws.handleAPIGitCommitMessage)
+	mux.HandleFunc("/api/git/confirm", ws.handleAPIConfirm)
 	mux.HandleFunc("/api/git/deep-review", ws.handleAPIGitDeepReview)
 	mux.HandleFunc("/api/git/deep-review/fix", ws.handleAPIGitDeepReviewFix)
 	mux.HandleFunc("/api/git/deep-review/fix/start", ws.handleAPIGitDeepReviewFixStart)

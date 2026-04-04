@@ -2,7 +2,9 @@ package security
 
 import (
 	"testing"
+	"time"
 
+	"github.com/alantheprice/ledit/pkg/events"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -725,4 +727,147 @@ func TestDetectSecurityConcerns_SortedConcerns(t *testing.T) {
 
 	// Should be sorted alphabetically
 	assert.Equal(t, []string{"API Key Exposure", "Password Exposure"}, concerns)
+}
+
+// --- SecurityPromptManager timeout tests ---
+
+func TestSecurityPromptManager_Timeout(t *testing.T) {
+	eb := events.NewEventBus()
+	mgr := NewSecurityPromptManager()
+
+	// Set a very short timeout so the test doesn't wait 5 minutes
+	mgr.SetPromptTimeout(50 * time.Millisecond)
+
+	// Drain the published event so the EventBus doesn't block
+	eventCh := eb.Subscribe("test_sub")
+	defer eb.Unsubscribe("test_sub")
+
+	done := make(chan bool, 1)
+	go func() {
+		response := mgr.RequestPrompt(eb, "Allow this?", false, nil)
+		done <- response
+	}()
+
+	// Consume the event but intentionally never respond,
+	// so RequestPrompt must hit the timeout path.
+	go func() {
+		<-eventCh // drain the event, then do nothing
+	}()
+
+	select {
+	case response := <-done:
+		if response {
+			t.Error("expected defaultResponse (false) when prompt times out (no response sent)")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("test timed out — RequestPrompt did not return within 2s")
+	}
+}
+
+func TestSecurityPromptManager_TimeoutWithDefaultTrue(t *testing.T) {
+	// When defaultResponse is true, timeout should return true (the safe default)
+	eb := events.NewEventBus()
+	mgr := NewSecurityPromptManager()
+
+	mgr.SetPromptTimeout(50 * time.Millisecond)
+
+	eventCh := eb.Subscribe("test_sub")
+	defer eb.Unsubscribe("test_sub")
+
+	done := make(chan bool, 1)
+	go func() {
+		response := mgr.RequestPrompt(eb, "Allow this?", true, nil)
+		done <- response
+	}()
+
+	// Drain event but don't respond
+	go func() {
+		<-eventCh
+	}()
+
+	select {
+	case response := <-done:
+		if !response {
+			t.Error("expected defaultResponse (true) when prompt times out")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("test timed out")
+	}
+}
+
+func TestSecurityPromptManager_SetPromptTimeout(t *testing.T) {
+	eb := events.NewEventBus()
+	mgr := NewSecurityPromptManager()
+
+	// Set a short custom timeout and verify it takes effect
+	mgr.SetPromptTimeout(30 * time.Millisecond)
+	eventCh := eb.Subscribe("timeout_test")
+	defer eb.Unsubscribe("timeout_test")
+
+	done := make(chan bool, 1)
+	go func() {
+		response := mgr.RequestPrompt(eb, "Continue?", false, nil)
+		done <- response
+	}()
+
+	// Drain event but don't respond
+	go func() {
+		<-eventCh
+	}()
+
+	select {
+	case response := <-done:
+		if response {
+			t.Error("expected false when custom short timeout expires")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("test timed out")
+	}
+
+	// Reset to default via zero value and verify request still works
+	mgr.SetPromptTimeout(0)
+	eventCh2 := eb.Subscribe("timeout_test2")
+	defer eb.Unsubscribe("timeout_test2")
+
+	go func() {
+		event := <-eventCh2
+		data, _ := event.Data.(map[string]interface{})
+		requestID, _ := data["request_id"].(string)
+		mgr.RespondToPrompt(requestID, true)
+	}()
+
+	response := mgr.RequestPrompt(eb, "Continue?", false, nil)
+	if !response {
+		t.Error("expected true after resetting timeout to default (response sent immediately)")
+	}
+}
+
+func TestSecurityPromptManager_TimeoutDoesNotBlockIfResponseArrives(t *testing.T) {
+	eb := events.NewEventBus()
+	mgr := NewSecurityPromptManager()
+
+	// Set a long timeout (10 seconds) but respond immediately
+	mgr.SetPromptTimeout(10 * time.Second)
+
+	eventCh := eb.Subscribe("test_sub")
+	defer eb.Unsubscribe("test_sub")
+
+	// Respond immediately upon receiving the event
+	go func() {
+		event := <-eventCh
+		data, _ := event.Data.(map[string]interface{})
+		requestID, _ := data["request_id"].(string)
+		mgr.RespondToPrompt(requestID, true)
+	}()
+
+	start := time.Now()
+	response := mgr.RequestPrompt(eb, "Allow this?", false, nil)
+	elapsed := time.Since(start)
+
+	if !response {
+		t.Error("expected true when response arrives before timeout")
+	}
+	if elapsed > 2*time.Second {
+		t.Errorf("RequestPrompt took too long (%v) — should have returned immediately on response", elapsed)
+	}
 }

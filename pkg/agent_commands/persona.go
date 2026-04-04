@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -31,7 +32,7 @@ func (p *PersonaCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	configManager := chatAgent.GetConfigManager()
 	config := configManager.GetConfig()
 	if config == nil {
-		return fmt.Errorf("configuration not available")
+		return errors.New("configuration not available")
 	}
 	if err := configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
 		if cfg.SubagentTypes == nil {
@@ -55,7 +56,7 @@ func (p *PersonaCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 	if strings.EqualFold(args[0], "create") {
 		if len(args) < 2 {
-			return fmt.Errorf("usage: /persona create <persona-id>")
+			return errors.New("usage: /persona create <persona-id>")
 		}
 		return p.createPersona(args[1], config, configManager)
 	}
@@ -244,7 +245,7 @@ func (p *PersonaCommand) showPersona(personaID string, persona configuration.Sub
 func (p *PersonaCommand) createPersona(personaID string, config *configuration.Config, configManager *configuration.Manager) error {
 	personaID = normalizePersonaKey(personaID)
 	if personaID == "" {
-		return fmt.Errorf("persona id cannot be empty")
+		return errors.New("persona id cannot be empty")
 	}
 	if _, exists := config.SubagentTypes[personaID]; exists {
 		return fmt.Errorf("persona already exists: %s", personaID)

@@ -2,17 +2,28 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
 
+	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/factory"
+	"github.com/alantheprice/ledit/pkg/git"
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 )
 
-// Tool handler implementations for shell and git operations
+// configManagerInterface defines the interface for accessing config
+type configManagerInterface interface {
+	GetProvider() (api.ClientType, error)
+	GetModelForProvider(provider api.ClientType) string
+}
 
 func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-	command := args["command"].(string)
+	command, err := convertToString(args["command"], "command")
+	if err != nil {
+		return "", err
+	}
 
 	// Block git write operations unless the orchestrator persona has permission
 	// Read-only operations (status, log, diff, etc.) are always allowed through shell_command
@@ -49,7 +60,11 @@ func handleGitOperation(ctx context.Context, a *Agent, args map[string]interface
 	// Extract args parameter (optional)
 	var argsStr string
 	if argsParam, exists := args["args"]; exists {
-		argsStr, _ = convertToString(argsParam, "args")
+		var err error
+		argsStr, err = convertToString(argsParam, "args")
+		if err != nil {
+			return "", err
+		}
 	}
 
 	// For commit operations, use the commit command directly
@@ -108,7 +123,7 @@ func handleGitCommitOperation(a *Agent) (string, error) {
 
 	// For commit operations, we use a simple git commit with a message prompt
 	// This is a simplified version - for full interactive commit flow, users should use /commit
-	return "", fmt.Errorf("git commit requires the interactive commit flow. Please use the '/commit' slash command instead for the full interactive experience with message generation")
+	return "", errors.New("git commit requires the interactive commit flow. Please use the '/commit' slash command instead for the full interactive experience with message generation")
 }
 
 // gitApprovalPrompterAdapter implements the GitApprovalPrompter interface using the Agent
@@ -143,4 +158,63 @@ func (a *gitApprovalPrompterAdapter) PromptForApproval(command string) (bool, er
 	}
 
 	return choice == "y", nil
+}
+
+// handleCommitTool handles the dedicated commit tool
+// This tool allows committing without requiring user interaction,
+// using the automated commit flow with message generation
+func handleCommitTool(_ context.Context, a *Agent, args map[string]interface{}) (string, error) {
+	// Extract optional message parameter
+	var message string
+	if msg, exists := args["message"]; exists {
+		var err error
+		message, err = convertToString(msg, "message")
+		if err != nil {
+			return "", err
+		}
+	}
+
+	// Check for staged changes first
+	stagedOutput, err := exec.Command("git", "diff", "--staged", "--name-only").CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("failed to check for staged changes: %w", err)
+	}
+
+	if len(strings.TrimSpace(string(stagedOutput))) == 0 {
+		return "No staged changes to commit. Stage files first using 'git add' or the git tool, then use the commit tool.", nil
+	}
+
+	// Get the agent's config manager to access provider settings
+	var configManager configManagerInterface
+	if cm := a.GetConfigManager(); cm != nil {
+		configManager = cm
+	}
+
+	// Execute the commit using the shared helper function
+	commitHash, err := executeCommit(message, configManager)
+	if err != nil {
+		return "", fmt.Errorf("commit failed: %w", err)
+	}
+
+	return fmt.Sprintf("Committed successfully: %s", commitHash), nil
+}
+
+// executeCommit performs the actual commit operation using the shared git.CommitExecutor
+func executeCommit(userMessage string, configManager configManagerInterface) (string, error) {
+	// Create LLM client if config manager is available
+	var client api.ClientInterface
+	if configManager != nil {
+		provider, err := configManager.GetProvider()
+		if err == nil {
+			model := configManager.GetModelForProvider(provider)
+			client, err = factory.CreateProviderClient(api.ClientType(provider), model)
+			if err != nil {
+				client = nil
+			}
+		}
+	}
+
+	// Use the shared commit executor
+	executor := git.NewCommitExecutor(client, userMessage, "")
+	return executor.ExecuteCommit()
 }

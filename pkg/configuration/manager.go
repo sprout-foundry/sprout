@@ -2,6 +2,7 @@ package configuration
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -204,7 +205,7 @@ func (m *Manager) UpdateConfig(mutator func(*Config) error) error {
 	defer m.mu.Unlock()
 
 	if m.config == nil {
-		return fmt.Errorf("configuration not loaded")
+		return errors.New("configuration not loaded")
 	}
 	if mutator != nil {
 		if err := mutator(m.config); err != nil {
@@ -224,7 +225,7 @@ func (m *Manager) UpdateConfigNoSave(mutator func(*Config) error) error {
 	defer m.mu.Unlock()
 
 	if m.config == nil {
-		return fmt.Errorf("configuration not loaded")
+		return errors.New("configuration not loaded")
 	}
 	if mutator != nil {
 		return mutator(m.config)
@@ -241,7 +242,7 @@ func (m *Manager) SaveAPIKeys() error {
 func (m *Manager) GetProvider() (api.ClientType, error) {
 	provider := m.config.LastUsedProvider
 	if provider == "" {
-		return "", fmt.Errorf("no provider selected")
+		return "", errors.New("no provider selected")
 	}
 
 	return m.mapStringToClientType(provider)

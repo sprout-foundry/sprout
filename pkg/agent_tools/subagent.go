@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -400,7 +401,7 @@ type ParallelSubagentResult struct {
 // Returns map where key is task ID and value contains that task's result
 func RunParallelSubagents(tasks []ParallelSubagentTask, noTimeout bool, streamCallback StreamCallback) (map[string]map[string]string, error) {
 	if len(tasks) == 0 {
-		return nil, fmt.Errorf("no tasks provided")
+		return nil, errors.New("no tasks provided")
 	}
 
 	var wg sync.WaitGroup
@@ -720,7 +721,7 @@ func spawnSubagent(task ParallelSubagentTask, noTimeout bool, callerMethod strin
 // readSubagentMetrics reads token usage from a metrics file
 func readSubagentMetrics(metricsFile string) (tokens int, cost float64, err error) {
 	if metricsFile == "" {
-		return 0, 0, fmt.Errorf("no metrics file specified")
+		return 0, 0, errors.New("no metrics file specified")
 	}
 
 	data, err := os.ReadFile(metricsFile)

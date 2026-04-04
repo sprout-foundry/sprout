@@ -2,6 +2,7 @@ package configuration
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -185,7 +186,7 @@ func PromptForAPIKey(provider string) (string, error) {
 
 	apiKey := strings.TrimSpace(string(byteKey))
 	if apiKey == "" {
-		return "", fmt.Errorf("no API key provided")
+		return "", errors.New("no API key provided")
 	}
 
 	// Basic validation

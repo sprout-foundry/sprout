@@ -641,7 +641,7 @@ func (a *Agent) GenerateResponse(messages []api.Message) (string, error) {
 	}
 
 	if len(resp.Choices) == 0 {
-		return "", fmt.Errorf("no response generated")
+		return "", errors.New("no response generated")
 	}
 
 	return resp.Choices[0].Message.Content, nil

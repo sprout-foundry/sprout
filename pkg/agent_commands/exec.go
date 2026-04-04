@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -24,7 +25,7 @@ func (c *ExecCommand) Description() string {
 
 func (c *ExecCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: /exec <shell-command-to-execute>")
+		return errors.New("usage: /exec <shell-command-to-execute>")
 	}
 
 	command := strings.Join(args, " ")

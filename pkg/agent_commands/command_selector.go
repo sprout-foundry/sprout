@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -63,12 +64,12 @@ func ShowCommandSelector(registry *CommandRegistry, chatAgent *agent.Agent) (str
 		}
 
 		fmt.Println("\n[i] Type any command to use it")
-		return "", fmt.Errorf("command selector not available in agent console")
+		return "", errors.New("command selector not available in agent console")
 	}
 
 	// Check if we're not in a terminal
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
-		return "", fmt.Errorf("interactive command selection requires a terminal")
+		return "", errors.New("interactive command selection requires a terminal")
 	}
 
 	// UI not available - return first command as default
@@ -76,14 +77,14 @@ func ShowCommandSelector(registry *CommandRegistry, chatAgent *agent.Agent) (str
 	if len(names) > 0 {
 		return "/" + names[0], nil // Return first available command
 	}
-	return "", fmt.Errorf("no commands available")
+	return "", errors.New("no commands available")
 }
 
 // SelectAndExecuteCommand shows command selector and executes the selected command
 func SelectAndExecuteCommand(registry *CommandRegistry, chatAgent *agent.Agent) error {
 	selectedCmd, err := ShowCommandSelector(registry, chatAgent)
 	if err != nil {
-		return fmt.Errorf("command selection cancelled")
+		return errors.New("command selection cancelled")
 	}
 
 	// Parse the command (remove the leading slash)

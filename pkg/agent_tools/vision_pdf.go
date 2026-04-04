@@ -2,6 +2,7 @@ package tools
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -79,7 +80,7 @@ func ProcessPDFForTextOnly(pdfPath string) (string, error) {
 		return processPDFForOCROnly(resolvedPath, pythonExec, client)
 	}
 
-	return "", fmt.Errorf("PDF has no extractable text and Python is unavailable for page rasterization OCR")
+	return "", errors.New("PDF has no extractable text and Python is unavailable for page rasterization OCR")
 }
 
 // processPDFForOCROnly processes a PDF using OCR steps only (skips pypdf text extraction).
@@ -132,10 +133,10 @@ func downloadRemotePDFToTemp(url string) (string, func(), error) {
 		return "", func() {}, fmt.Errorf("failed reading downloaded PDF bytes: %w", err)
 	}
 	if len(data) == 0 {
-		return "", func() {}, fmt.Errorf("downloaded PDF is empty")
+		return "", func() {}, errors.New("downloaded PDF is empty")
 	}
 	if !looksLikePDF(data) {
-		return "", func() {}, fmt.Errorf("downloaded content is not a valid PDF")
+		return "", func() {}, errors.New("downloaded content is not a valid PDF")
 	}
 
 	tmp, err := os.CreateTemp("", "ledit_pdf_*.pdf")
@@ -230,7 +231,7 @@ func processPDFWithOCR(pdfPath, pythonExec string, client api.ClientInterface) (
 	}
 
 	if len(images) == 0 {
-		return "", fmt.Errorf("no images found in PDF (scanned PDF may be single raster image)")
+		return "", errors.New("no images found in PDF (scanned PDF may be single raster image)")
 	}
 
 	if len(images) > maxPDFOCRImages {
@@ -447,7 +448,7 @@ func processPDFWithVisionModel(pdfPath string, client api.ClientInterface) (stri
 	}
 
 	if len(response.Choices) == 0 {
-		return "", fmt.Errorf("no response from OCR model")
+		return "", errors.New("no response from OCR model")
 	}
 
 	return response.Choices[0].Message.Content, nil

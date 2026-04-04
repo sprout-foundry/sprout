@@ -11,7 +11,7 @@ import (
 )
 
 // prepareMessages prepares and optimizes the message list for API submission.
-// Context reduction is checkpoint-compaction-only; no pruning.
+// Context reduction uses checkpoint compaction, structural compaction, and emergency truncation as a last-resort fallback.
 func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 	var optimizedMessages []api.Message
 	ch.transientMessagesMu.Lock()
@@ -63,9 +63,12 @@ func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 	if ch.agent.maxContextTokens > 0 {
 		// Compaction threshold: trigger at 87% to compact before API errors occur.
 		compactionThreshold := int(float64(ch.agent.maxContextTokens) * PruningConfig.Default.StandardPercent)
+		compactionApplied := false
+
 		if currentTokens > compactionThreshold && ch.agent.HasTurnCheckpoints() {
 			checkpointedMessages, remainingCheckpoints := ch.agent.BuildCheckpointCompactedMessages(optimizedMessages)
 			if len(checkpointedMessages) != len(optimizedMessages) {
+				compactionApplied = true
 				// Persist checkpointed messages so future iterations see the compacted history.
 				ch.agent.messages = checkpointedMessages
 				// Persist adjusted remaining checkpoints so indices stay valid against the compacted array.
@@ -99,6 +102,7 @@ func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 				llmHistory = collapseSystemMessagesToFront(llmHistory)
 				llmTokens := ch.apiClient.estimateRequestTokens(llmHistory, tools)
 				if llmTokens < currentTokens {
+					compactionApplied = true
 					ch.agent.messages = llmCompacted
 					ch.agent.clearTurnCheckpoints()
 					optimizedMessages = llmCompacted
@@ -117,10 +121,15 @@ func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 			}
 		}
 
-		// If still over limit and no compaction could help, warn but proceed (no pruning fallback).
-		if currentTokens > compactionThreshold {
-			ch.agent.PrintLineAsync(fmt.Sprintf("[WARN] Context over limit after compaction: %d/%d tokens; proceeding without pruning",
-				currentTokens, ch.agent.maxContextTokens))
+		// Third-pass emergency truncation: only when no compaction was applied.
+		// If checkpoint or structural compaction succeeded, trust the result even
+		// if it's still above threshold (artificially small maxContextTokens in
+		// tests can cause this; in production the model's context window handles it).
+		// Emergency truncation is a last resort for subagents with oversized
+		// single prompts where no compaction strategy can help.
+		if currentTokens > compactionThreshold && !compactionApplied {
+			allMessages, currentTokens = ch.emergencyTruncateContext(
+				allMessages, tools, currentTokens, ch.agent.maxContextTokens, compactionThreshold)
 		}
 	}
 
@@ -266,6 +275,148 @@ func (ch *ConversationHandler) removeOrphanedToolResults(messages []api.Message)
 	}
 
 	return filtered
+}
+
+// emergencyTruncateContext performs aggressive but structured content trimming when
+// both checkpoint and structural compaction failed. This is the last resort before
+// sending an oversized request that would cause API errors.
+//
+// Strategy (applied iteratively until under threshold):
+//  1. Trim tool result messages to a token budget
+//  2. Trim non-recent user messages (keep most recent user message intact)
+//  3. Trim non-recent assistant messages
+//  4. Truncate any remaining message content proportionally
+//
+// Returns the (possibly truncated) messages and updated token estimate.
+func (ch *ConversationHandler) emergencyTruncateContext(
+	messages []api.Message, tools []api.Tool,
+	currentTokens, maxTokens, threshold int,
+) ([]api.Message, int) {
+	// Target 75% of max context to leave comfortable headroom for completion.
+	targetTokens := int(float64(maxTokens) * 0.75)
+	if targetTokens >= currentTokens {
+		return messages, currentTokens
+	}
+
+	// Work on copies to avoid mutating the originals.
+	trimmed := make([]api.Message, len(messages))
+	copy(trimmed, messages)
+
+	// Phase 1: Truncate tool result messages (preserve structure, trim content).
+	const maxToolResultTokens = 500 // ~1500 chars
+	for i := range trimmed {
+		if trimmed[i].Role != "tool" || trimmed[i].Content == "" {
+			continue
+		}
+		toolTokens := EstimateTokens(trimmed[i].Content)
+		if toolTokens > maxToolResultTokens {
+			content := trimmed[i].Content
+			maxChars := maxToolResultTokens * 4
+			if len(content) > maxChars {
+				keepHead := maxChars / 2
+				keepTail := maxChars / 3
+				trimmed[i].Content = content[:keepHead] +
+					"\n\n... [truncated for context limit] ...\n\n" +
+					content[len(content)-keepTail:]
+			}
+		}
+	}
+
+	currentTokens = ch.apiClient.estimateRequestTokens(trimmed, tools)
+	if currentTokens <= targetTokens {
+		ch.agent.PrintLineAsync(fmt.Sprintf("[~] Emergency truncation applied (tool trimming); now %d/%d tokens",
+			currentTokens, maxTokens))
+		return trimmed, currentTokens
+	}
+
+	// Phase 2: Trim older user messages (keep most recent user message intact).
+	lastUserIdx := -1
+	for i := len(trimmed) - 1; i >= 0; i-- {
+		if trimmed[i].Role == "user" {
+			lastUserIdx = i
+			break
+		}
+	}
+
+	for i := range trimmed {
+		if trimmed[i].Role != "user" || i == lastUserIdx || trimmed[i].Content == "" {
+			continue
+		}
+		msgTokens := EstimateTokens(trimmed[i].Content)
+		maxUserTokens := 300
+		if msgTokens > maxUserTokens {
+			maxChars := maxUserTokens * 4
+			if len(trimmed[i].Content) > maxChars {
+				trimmed[i].Content = trimmed[i].Content[:maxChars] +
+					"\n\n... [truncated for context limit] ..."
+			}
+		}
+	}
+
+	currentTokens = ch.apiClient.estimateRequestTokens(trimmed, tools)
+	if currentTokens <= targetTokens {
+		ch.agent.PrintLineAsync(fmt.Sprintf("[~] Emergency truncation applied (user msg trimming); now %d/%d tokens",
+			currentTokens, maxTokens))
+		return trimmed, currentTokens
+	}
+
+	// Phase 3: Trim older assistant messages (keep recent ones intact).
+	recentStart := len(trimmed) - 6
+	if recentStart < 0 {
+		recentStart = 0
+	}
+	for i := range trimmed {
+		if i >= recentStart || trimmed[i].Role != "assistant" || trimmed[i].Content == "" {
+			continue
+		}
+		msgTokens := EstimateTokens(trimmed[i].Content)
+		maxAssistantTokens := 400
+		if msgTokens > maxAssistantTokens {
+			maxChars := maxAssistantTokens * 4
+			if len(trimmed[i].Content) > maxChars {
+				trimmed[i].Content = trimmed[i].Content[:maxChars] +
+					"\n\n... [truncated for context limit] ..."
+			}
+		}
+	}
+
+	currentTokens = ch.apiClient.estimateRequestTokens(trimmed, tools)
+	if currentTokens <= targetTokens {
+		ch.agent.PrintLineAsync(fmt.Sprintf("[~] Emergency truncation applied (assistant msg trimming); now %d/%d tokens",
+			currentTokens, maxTokens))
+		return trimmed, currentTokens
+	}
+
+	// Phase 4: Proportional trimming of all older messages.
+	excessRatio := float64(currentTokens) / float64(targetTokens)
+	if excessRatio > 1.0 {
+		limit := len(trimmed)
+		if recentStart < limit {
+			limit = recentStart
+		}
+		for i := range trimmed[:limit] {
+			if trimmed[i].Role == "system" || trimmed[i].Content == "" {
+				continue
+			}
+			targetLen := int(float64(len(trimmed[i].Content)) / excessRatio)
+			if targetLen < len(trimmed[i].Content) && targetLen > 50 {
+				trimmed[i].Content = trimmed[i].Content[:targetLen] +
+					"\n\n... [truncated for context limit] ..."
+			}
+		}
+	}
+
+	currentTokens = ch.apiClient.estimateRequestTokens(trimmed, tools)
+
+	if currentTokens > threshold {
+		ch.agent.PrintLineAsync(fmt.Sprintf("[WARN] Context over limit after emergency truncation: %d/%d tokens",
+			currentTokens, maxTokens))
+	} else {
+		ch.agent.PrintLineAsync(fmt.Sprintf("[~] Emergency truncation applied; now %d/%d tokens",
+			currentTokens, maxTokens))
+	}
+
+	return trimmed, currentTokens
 }
 
 // validateDeepSeekToolCalls performs additional validation for DeepSeek tool call format

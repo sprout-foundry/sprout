@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -247,14 +248,14 @@ func ExtractJSON(input string) (string, error) {
 		return result, nil
 	}
 
-	return "", fmt.Errorf("no valid JSON found in input")
+	return "", errors.New("no valid JSON found in input")
 }
 
 // extractFromMarkdownJSON handles ```json blocks
 func extractFromMarkdownJSON(input string) (string, error) {
 	jsonStart := strings.Index(input, "```json")
 	if jsonStart == -1 {
-		return "", fmt.Errorf("no ```json marker found")
+		return "", errors.New("no ```json marker found")
 	}
 
 	contentStart := jsonStart + 7 // len("```json")
@@ -271,7 +272,7 @@ func extractFromMarkdownJSON(input string) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("no valid JSON found in ```json block")
+	return "", errors.New("no valid JSON found in ```json block")
 }
 
 // extractFromMarkdownGeneric handles ``` blocks that might contain JSON
@@ -289,7 +290,7 @@ func extractFromMarkdownGeneric(input string) (string, error) {
 	}
 
 	if len(positions) < 2 {
-		return "", fmt.Errorf("insufficient backtick pairs found")
+		return "", errors.New("insufficient backtick pairs found")
 	}
 
 	// Try the most likely combination (first and last backticks)
@@ -303,7 +304,7 @@ func extractFromMarkdownGeneric(input string) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("no valid JSON found in backtick blocks")
+	return "", errors.New("no valid JSON found in backtick blocks")
 }
 
 // extractJSONByBoundaries tries to find JSON by looking for braces/brackets
@@ -323,7 +324,7 @@ func extractJSONByBoundaries(input string) (string, error) {
 	}
 
 	if start == -1 {
-		return "", fmt.Errorf("no JSON object or array found")
+		return "", errors.New("no JSON object or array found")
 	}
 
 	var end int = -1
@@ -334,13 +335,13 @@ func extractJSONByBoundaries(input string) (string, error) {
 	}
 
 	if end == -1 || end <= start {
-		return "", fmt.Errorf("no matching closing brace/bracket found")
+		return "", errors.New("no matching closing brace/bracket found")
 	}
 
 	jsonStr := strings.TrimSpace(input[start : end+1])
 
 	if jsonStr == "" || !isValidJSON(jsonStr) {
-		return "", fmt.Errorf("extracted string is not valid JSON")
+		return "", errors.New("extracted string is not valid JSON")
 	}
 
 	return jsonStr, nil

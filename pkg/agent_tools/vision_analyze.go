@@ -2,6 +2,7 @@ package tools
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"regexp"
@@ -141,7 +142,7 @@ func (vp *VisionProcessor) AnalyzeImage(imagePath string) (VisionAnalysis, error
 
 	// Extract response content
 	if len(response.Choices) == 0 {
-		return VisionAnalysis{}, fmt.Errorf("no response from vision model")
+		return VisionAnalysis{}, errors.New("no response from vision model")
 	}
 
 	resultText := response.Choices[0].Message.Content
@@ -202,7 +203,7 @@ func (vp *VisionProcessor) AnalyzeImageWithPrompt(imagePath string, customPrompt
 
 	// Extract response content
 	if len(response.Choices) == 0 {
-		return VisionAnalysis{}, fmt.Errorf("no response from vision model")
+		return VisionAnalysis{}, errors.New("no response from vision model")
 	}
 
 	resultText := response.Choices[0].Message.Content

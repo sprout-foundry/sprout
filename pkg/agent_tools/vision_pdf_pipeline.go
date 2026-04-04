@@ -3,6 +3,7 @@ package tools
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -48,7 +49,7 @@ func ProcessPDFForMultimodal(pdfPath string) (*PDFPipelineResult, error) {
 		return nil, fmt.Errorf("failed to read PDF header: %w", hdrErr)
 	}
 	if !looksLikePDF(header[:]) {
-		return nil, fmt.Errorf("not a valid PDF file")
+		return nil, errors.New("not a valid PDF file")
 	}
 
 	stat, statErr := f.Stat()
@@ -99,7 +100,7 @@ func ProcessPDFForMultimodal(pdfPath string) (*PDFPipelineResult, error) {
 	if pageErr != nil {
 		return nil, fmt.Errorf("PDF has no extractable text and page rendering failed: %w", pageErr)
 	}
-	return nil, fmt.Errorf("PDF has no extractable text and page rendering failed")
+	return nil, errors.New("PDF has no extractable text and page rendering failed")
 }
 
 // extractTextWithPypdfMultimodal extracts text from a PDF using pypdf with a higher

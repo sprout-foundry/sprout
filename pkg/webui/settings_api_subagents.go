@@ -2,6 +2,7 @@ package webui
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -94,7 +95,7 @@ func (ws *ReactWebServer) handleAPISettingsSubagentTypesPut(w http.ResponseWrite
 		if v, ok := raw["provider"]; ok {
 			s, ok := v.(string)
 			if !ok {
-				return fmt.Errorf("provider must be a string")
+				return errors.New("provider must be a string")
 			}
 			// Empty string means "inherit from default subagent settings"
 			existing.Provider = strings.TrimSpace(s)
@@ -102,7 +103,7 @@ func (ws *ReactWebServer) handleAPISettingsSubagentTypesPut(w http.ResponseWrite
 		if v, ok := raw["model"]; ok {
 			s, ok := v.(string)
 			if !ok {
-				return fmt.Errorf("model must be a string")
+				return errors.New("model must be a string")
 			}
 			// Empty string means "inherit from default subagent settings"
 			existing.Model = strings.TrimSpace(s)

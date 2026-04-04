@@ -3,6 +3,7 @@ package tools
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -57,7 +58,7 @@ func ExecuteGitOperation(ctx context.Context, op GitOperation, sessionID string,
 	// For commit operations, delegate to the commit flow executor
 	if op.Operation == GitOpCommit {
 		if commitFlowExecutor == nil {
-			return "", fmt.Errorf("commit operation requires a commit flow executor")
+			return "", errors.New("commit operation requires a commit flow executor")
 		}
 		return commitFlowExecutor.ExecuteGitCommitFlow()
 	}
@@ -72,7 +73,7 @@ func ExecuteGitOperation(ctx context.Context, op GitOperation, sessionID string,
 			return "", fmt.Errorf("failed to get user approval: %w", err)
 		}
 		if !approved {
-			return "", fmt.Errorf("git operation cancelled by user")
+			return "", errors.New("git operation cancelled by user")
 		}
 	}
 

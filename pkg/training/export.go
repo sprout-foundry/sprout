@@ -4,6 +4,7 @@ package training
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -227,13 +228,13 @@ func validateOptions(opts ExportOptions) error {
 		return fmt.Errorf("unsupported format %q: must be one of sharegpt, openai, alpaca", opts.Format)
 	}
 	if strings.TrimSpace(opts.Output) == "" {
-		return fmt.Errorf("--output is required")
+		return errors.New("--output is required")
 	}
 	if opts.MinTurns < 0 {
-		return fmt.Errorf("--min-turns must be >= 0")
+		return errors.New("--min-turns must be >= 0")
 	}
 	if opts.MinActions < 0 {
-		return fmt.Errorf("--min-actions must be >= 0")
+		return errors.New("--min-actions must be >= 0")
 	}
 	return nil
 }

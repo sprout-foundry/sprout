@@ -1,6 +1,7 @@
 package codereview
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -18,7 +19,7 @@ func (s *CodeReviewService) performStagedReview(ctx *ReviewContext) (*types.Code
 // performAgentBasedCodeReview performs code review using the agent API with enhanced context
 func (s *CodeReviewService) performAgentBasedCodeReview(ctx *ReviewContext, structured bool) (*types.CodeReviewResult, error) {
 	if ctx.AgentClient == nil {
-		return nil, fmt.Errorf("agent client not available for enhanced code review")
+		return nil, errors.New("agent client not available for enhanced code review")
 	}
 
 	// Build enhanced review prompt with workspace context
@@ -49,7 +50,7 @@ func (s *CodeReviewService) performAgentBasedCodeReview(ctx *ReviewContext, stru
 // performDeepAgentBasedCodeReview runs a stricter evidence-focused review and requires JSON output.
 func (s *CodeReviewService) performDeepAgentBasedCodeReview(ctx *ReviewContext) (*types.CodeReviewResult, error) {
 	if ctx.AgentClient == nil {
-		return nil, fmt.Errorf("agent client not available for deep code review")
+		return nil, errors.New("agent client not available for deep code review")
 	}
 
 	prompt := s.buildPreparedReviewPrompt(ctx, false, true)

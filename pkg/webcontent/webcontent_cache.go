@@ -2,6 +2,7 @@ package webcontent
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -148,13 +149,13 @@ func (w *WebContentFetcher) loadReferenceCache(query string) (*ReferenceCacheEnt
 		fmt.Printf("Error unmarshaling cache data from %s: %v\n", filePath, err)
 		// Consider deleting corrupted cache file
 		os.Remove(filePath) // Delete corrupted cache file
-		return nil, fmt.Errorf("corrupted cache file")
+		return nil, errors.New("corrupted cache file")
 	}
 
 	if time.Since(entry.Timestamp) > cacheExpiry {
 		fmt.Printf("Cached entry for query \"%s\" is expired. Deleting and re-fetching.\n", query)
 		os.Remove(filePath) // Delete expired cache
-		return nil, fmt.Errorf("expired cache")
+		return nil, errors.New("expired cache")
 	}
 
 	fmt.Printf("Using cached content for query: \"%s\" (cached on %s)\n", query, entry.Timestamp.Format("2006-01-02"))

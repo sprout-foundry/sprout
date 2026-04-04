@@ -49,27 +49,33 @@ export function useAppInitialization({
 
     // Load initial stats
     const loadStats = () => {
-      apiService.getStats().then((stats: any) => {
-        setState(prev => ({
-          ...prev,
-          provider: stats.provider,
-          model: stats.model,
-          stats: JSON.stringify(prev.stats) === JSON.stringify(stats) ? prev.stats : stats,
-        }));
-      }).catch(console.error);
+      apiService
+        .getStats()
+        .then((stats: any) => {
+          setState((prev) => ({
+            ...prev,
+            provider: stats.provider,
+            model: stats.model,
+            stats: JSON.stringify(prev.stats) === JSON.stringify(stats) ? prev.stats : stats,
+          }));
+        })
+        .catch(console.error);
     };
 
     // Load recent files
     const loadFiles = () => {
-      apiService.getFiles().then((response: any) => {
-        if (response && response.files) {
-          const files = response.files.map((file: any) => ({
-            path: file.path || file.name,
-            modified: false,
-          }));
-          setRecentFiles(files);
-        }
-      }).catch(console.error);
+      apiService
+        .getFiles()
+        .then((response: any) => {
+          if (response && response.files) {
+            const files = response.files.map((file: any) => ({
+              path: file.path || file.name,
+              modified: false,
+            }));
+            setRecentFiles(files);
+          }
+        })
+        .catch(console.error);
     };
 
     // Load initial stats & files
@@ -99,6 +105,6 @@ export function useAppInitialization({
       window.removeEventListener('resize', checkMobile);
       clearInterval(statsInterval);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- setState, setRecentFiles, setIsMobile are stable useState setters; connectionTimeoutRef is a stable ref; wsService/apiService are stable singletons from getInstance(); loadChatSessions is stable (empty useCallback deps)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setState, setRecentFiles, setIsMobile are stable useState setters; connectionTimeoutRef is a stable ref; wsService/apiService are stable singletons from getInstance(); loadChatSessions is stable (empty useCallback deps)
   }, [handleEvent, loadChatSessions]);
 }

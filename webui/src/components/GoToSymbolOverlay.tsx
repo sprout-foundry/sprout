@@ -7,7 +7,7 @@ import './GoToSymbolOverlay.css';
 
 export interface SymbolInfo {
   name: string;
-  line: number;  // 1-based line number
+  line: number; // 1-based line number
   kind: SymbolKind;
 }
 
@@ -100,9 +100,7 @@ export function extractSymbols(content: string, languageId?: string): SymbolInfo
 // ── Enclosing-symbol detection ───────────────────────────────────────────
 
 /** Kinds that can act as scope containers for the breadcrumb. */
-const CONTAINER_KINDS: ReadonlySet<SymbolKind> = new Set<SymbolKind>([
-  'function', 'method', 'class', 'interface',
-]);
+const CONTAINER_KINDS: ReadonlySet<SymbolKind> = new Set<SymbolKind>(['function', 'method', 'class', 'interface']);
 
 /**
  * Find the 1-based end line (inclusive) of a symbol's scope by counting
@@ -211,9 +209,7 @@ export function getEnclosingSymbols(
   const result: SymbolInfo[] = [];
 
   // Filter to container kinds only and process in line order
-  const containers = allSymbols
-    .filter((s) => CONTAINER_KINDS.has(s.kind))
-    .sort((a, b) => a.line - b.line);
+  const containers = allSymbols.filter((s) => CONTAINER_KINDS.has(s.kind)).sort((a, b) => a.line - b.line);
 
   for (const sym of containers) {
     if (sym.line > cursorLine) continue; // symbol starts after cursor
@@ -313,7 +309,10 @@ const TYPESCRIPT_PATTERNS: PatternEntry[] = [
   // Uses a negative lookahead to exclude control-flow keywords
   // (if/for/while/switch/return/typeof/catch/throw/new delete case)
   // that could false-positive due to regex backtracking on ^\s+.
-  [/^\s+(?:(?:public|private|protected|static|async|abstract|readonly)\s+)*\s*(?!if\b|for\b|while\b|switch\b|return\b|typeof\b|catch\b|throw\b|new\b|delete\b|case\b)([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/, 'method'],
+  [
+    /^\s+(?:(?:public|private|protected|static|async|abstract|readonly)\s+)*\s*(?!if\b|for\b|while\b|switch\b|return\b|typeof\b|catch\b|throw\b|new\b|delete\b|case\b)([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/,
+    'method',
+  ],
   // uppercase const: const FOO = ...
   [/\bconst\s+([A-Z_][A-Z0-9_]*)\s*=/, 'constant'],
 ];
@@ -342,7 +341,10 @@ const JAVASCRIPT_PATTERNS: PatternEntry[] = [
   // var foo =
   [/\bvar\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=/, 'variable'],
   // class method (non-backtracking, same negative lookahead as TypeScript)
-  [/^\s+(?:(?:public|private|protected|static|async|abstract|readonly)\s+)*\s*(?!if\b|for\b|while\b|switch\b|return\b|typeof\b|catch\b|throw\b|new\b|delete\b|case\b)([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/, 'method'],
+  [
+    /^\s+(?:(?:public|private|protected|static|async|abstract|readonly)\s+)*\s*(?!if\b|for\b|while\b|switch\b|return\b|typeof\b|catch\b|throw\b|new\b|delete\b|case\b)([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/,
+    'method',
+  ],
   // uppercase const
   [/\bconst\s+([A-Z_][A-Z0-9_]*)\s*=/, 'constant'],
 ];
@@ -365,7 +367,10 @@ const GENERIC_PATTERNS: PatternEntry[] = [
   // type Foo interface
   [/\btype\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+interface/, 'interface'],
   // Method (non-backtracking, same negative lookahead)
-  [/^\s+(?:(?:public|private|protected|static|async|abstract|readonly)\s+)*\s*(?!if\b|for\b|while\b|switch\b|return\b|typeof\b|catch\b|throw\b|new\b|delete\b|case\b)([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/, 'method'],
+  [
+    /^\s+(?:(?:public|private|protected|static|async|abstract|readonly)\s+)*\s*(?!if\b|for\b|while\b|switch\b|return\b|typeof\b|catch\b|throw\b|new\b|delete\b|case\b)([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/,
+    'method',
+  ],
 ];
 
 // ── Component ────────────────────────────────────────────────────────────
@@ -404,10 +409,7 @@ const GoToSymbolOverlay: React.FC<GoToSymbolOverlayProps> = ({
 
   // ── Extract symbols (memoised) ────────────────────────────────────────
 
-  const allSymbols = useMemo(
-    () => extractSymbols(content, fileExtension),
-    [content, fileExtension],
-  );
+  const allSymbols = useMemo(() => extractSymbols(content, fileExtension), [content, fileExtension]);
 
   // ── Filter symbols with fuzzy matching ────────────────────────────────
 
@@ -437,9 +439,7 @@ const GoToSymbolOverlay: React.FC<GoToSymbolOverlayProps> = ({
   // ── Resolve the currently displayed item list and length ──────────────
 
   const hasQuery = query.trim().length > 0;
-  const displayItems: SymbolInfo[] = hasQuery
-    ? filteredResults.map((r) => r.item)
-    : allSymbols;
+  const displayItems: SymbolInfo[] = hasQuery ? filteredResults.map((r) => r.item) : allSymbols;
   const itemCount = displayItems.length;
 
   // ── Handle keyboard navigation ────────────────────────────────────────
@@ -456,9 +456,7 @@ const GoToSymbolOverlay: React.FC<GoToSymbolOverlayProps> = ({
 
         case 'ArrowDown':
           e.preventDefault();
-          setSelectedIndex((prev) =>
-            Math.min(prev + 1, Math.max(itemCount - 1, 0)),
-          );
+          setSelectedIndex((prev) => Math.min(prev + 1, Math.max(itemCount - 1, 0)));
           break;
 
         case 'ArrowUp':
@@ -530,13 +528,9 @@ const GoToSymbolOverlay: React.FC<GoToSymbolOverlayProps> = ({
 
       {/* Symbol list */}
       <div className="goto-symbol-list" ref={listRef} onMouseDown={handleMouseDown}>
-        {isEmpty && hasQuery && (
-          <div className="goto-symbol-empty">No matching symbols</div>
-        )}
+        {isEmpty && hasQuery && <div className="goto-symbol-empty">No matching symbols</div>}
 
-        {isEmpty && !hasQuery && (
-          <div className="goto-symbol-empty">No symbols found</div>
-        )}
+        {isEmpty && !hasQuery && <div className="goto-symbol-empty">No symbols found</div>}
 
         {!isEmpty && !hasQuery && (
           <div className="goto-symbol-count">
@@ -545,9 +539,7 @@ const GoToSymbolOverlay: React.FC<GoToSymbolOverlayProps> = ({
         )}
 
         {displayItems.map((symbol, index) => {
-          const matches = hasQuery && filteredResults[index]
-            ? filteredResults[index].matches
-            : [];
+          const matches = hasQuery && filteredResults[index] ? filteredResults[index].matches : [];
           const isActive = index === selectedIndex;
           const icon = KIND_ICONS[symbol.kind] || '?';
 
@@ -559,15 +551,11 @@ const GoToSymbolOverlay: React.FC<GoToSymbolOverlayProps> = ({
               onClick={() => handleItemClick(symbol)}
               onMouseEnter={() => handleItemMouseEnter(index)}
             >
-              <span className={`goto-symbol-kind goto-symbol-kind-${symbol.kind}`}>
-                {icon}
-              </span>
+              <span className={`goto-symbol-kind goto-symbol-kind-${symbol.kind}`}>{icon}</span>
               <span
                 className="goto-symbol-name"
                 dangerouslySetInnerHTML={{
-                  __html: hasQuery
-                    ? highlightMatches(symbol.name, matches)
-                    : symbol.name,
+                  __html: hasQuery ? highlightMatches(symbol.name, matches) : symbol.name,
                 }}
               />
               <span className="goto-symbol-line">:{symbol.line}</span>

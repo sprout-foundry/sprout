@@ -46,44 +46,47 @@ export function useSplitManager({
 }: UseSplitManagerOptions): UseSplitManagerReturn {
   const [nestedSplit, setNestedSplit] = useState<NestedSplit | null>(null);
 
-  const handleSplitRequest = useCallback((direction: 'vertical' | 'horizontal' | 'grid') => {
-    if (direction === 'grid') {
-      if (paneLayout === 'split-grid' && panes.length === 4) {
-        const primaryPane = panes.find(p => p.position === 'primary') || panes[0];
-        if (primaryPane) {
-          const bufId = primaryPane.bufferId;
-          closeSplit();
-          if (bufId) switchToBuffer(bufId);
+  const handleSplitRequest = useCallback(
+    (direction: 'vertical' | 'horizontal' | 'grid') => {
+      if (direction === 'grid') {
+        if (paneLayout === 'split-grid' && panes.length === 4) {
+          const primaryPane = panes.find((p) => p.position === 'primary') || panes[0];
+          if (primaryPane) {
+            const bufId = primaryPane.bufferId;
+            closeSplit();
+            if (bufId) switchToBuffer(bufId);
+          }
+          return;
         }
+        const primaryPane = panes.find((p) => p.position === 'primary') || panes[0];
+        const bufId = primaryPane?.bufferId;
+        splitIntoGrid();
+        if (bufId) switchToBuffer(bufId);
         return;
       }
-      const primaryPane = panes.find(p => p.position === 'primary') || panes[0];
-      const bufId = primaryPane?.bufferId;
-      splitIntoGrid();
-      if (bufId) switchToBuffer(bufId);
-      return;
-    }
 
-    if (!activePaneId) return;
+      if (!activePaneId) return;
 
-    const previousPaneCount = panes.length;
-    const newPaneId = splitPane(activePaneId, direction);
-    if (!newPaneId) return;
+      const previousPaneCount = panes.length;
+      const newPaneId = splitPane(activePaneId, direction);
+      if (!newPaneId) return;
 
-    if (previousPaneCount === 2) {
-      setNestedSplit({
-        hostPaneId: activePaneId,
-        nestedPaneId: newPaneId,
-        direction,
-      });
-      updatePaneSize(`group:${activePaneId}`, 50);
-      updatePaneSize(`nested:${activePaneId}`, 50);
-    }
-  }, [activePaneId, panes, paneLayout, splitPane, splitIntoGrid, closeSplit, updatePaneSize, switchToBuffer]);
+      if (previousPaneCount === 2) {
+        setNestedSplit({
+          hostPaneId: activePaneId,
+          nestedPaneId: newPaneId,
+          direction,
+        });
+        updatePaneSize(`group:${activePaneId}`, 50);
+        updatePaneSize(`nested:${activePaneId}`, 50);
+      }
+    },
+    [activePaneId, panes, paneLayout, splitPane, splitIntoGrid, closeSplit, updatePaneSize, switchToBuffer],
+  );
 
   const handleCloseAllSplits = useCallback(() => {
     if (paneLayout === 'split-grid' && panes.length === 4) {
-      const primaryPane = panes.find(p => p.position === 'primary') || panes[0];
+      const primaryPane = panes.find((p) => p.position === 'primary') || panes[0];
       const bufId = primaryPane?.bufferId;
       closeSplit();
       if (bufId) switchToBuffer(bufId);

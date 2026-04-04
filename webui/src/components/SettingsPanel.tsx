@@ -1,11 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import './SettingsPanel.css';
-import { ApiService, LeditSettings, ProviderOption } from '../services/api';
-import {
-  Pencil,
-  Plus,
-  Trash2,
-} from 'lucide-react';
+import { ApiService, type LeditSettings, type ProviderOption } from '../services/api';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
 
 /* ─── Types ──────────────────────────────────────────────────── */
 
@@ -22,15 +18,7 @@ interface SubagentTypeEntry {
   enabled: boolean;
 }
 
-type SettingsSubTab =
-  | 'general'
-  | 'security'
-  | 'performance'
-  | 'subagents'
-  | 'pdf-ocr'
-  | 'mcp'
-  | 'providers'
-  | 'skills';
+type SettingsSubTab = 'general' | 'security' | 'performance' | 'subagents' | 'pdf-ocr' | 'mcp' | 'providers' | 'skills';
 
 interface SettingsPanelProps {
   settings: LeditSettings | null;
@@ -118,7 +106,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
 
   // Keep a ref to settings for async mutation callbacks.
   const settingsRef = useRef(settings);
-  useEffect(() => { settingsRef.current = settings; }, [settings]);
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
 
   // Cleanup toast timer on unmount
   useEffect(() => {
@@ -163,7 +153,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
         // Silently fail — dropdowns will just be empty
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [activeSubTab, api]);
 
   /* ─── Toast helpers ──────────────────────────────────────── */
@@ -214,11 +206,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
     const checked = !!getNestedValue(settings as any, settingKey);
     return (
       <label className="styled-toggle">
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={() => updateSetting(settingKey, !checked)}
-        />
+        <input type="checkbox" checked={checked} onChange={() => updateSetting(settingKey, !checked)} />
         <span className="toggle-track" />
         <span className="toggle-label">{label}</span>
       </label>
@@ -247,13 +235,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
     );
   };
 
-  const renderNumberInput = (
-    settingKey: string,
-    label: string,
-    min?: number,
-    max?: number,
-    step = 1,
-  ) => {
+  const renderNumberInput = (settingKey: string, label: string, min?: number, max?: number, step = 1) => {
     if (!settings) return null;
     const value = getNestedValue(settings as any, settingKey);
     return (
@@ -464,11 +446,14 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
     const supportsVision = providerSupportsVision;
     const visionModel = providerVisionModel.trim() || modelName;
     const envVar = providerEnvVar.trim();
-    
+
     // Parse model context sizes from format "model1:8192,model2:131072"
     const modelContextSizes: Record<string, number> = {};
     if (providerModelContextSizes.trim()) {
-      const pairs = providerModelContextSizes.split(',').map(s => s.trim()).filter(Boolean);
+      const pairs = providerModelContextSizes
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
       for (const pair of pairs) {
         const [model, size] = pair.split(':');
         if (model && size) {
@@ -479,7 +464,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
         }
       }
     }
-    
+
     const provider: Record<string, any> = {
       endpoint: providerApiBase.trim(),
       model_name: modelName,
@@ -510,11 +495,14 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
     const supportsVision = providerSupportsVision;
     const visionModel = providerVisionModel.trim() || modelName;
     const envVar = providerEnvVar.trim();
-    
+
     // Parse model context sizes from format "model1:8192,model2:131072"
     const modelContextSizes: Record<string, number> = {};
     if (providerModelContextSizes.trim()) {
-      const pairs = providerModelContextSizes.split(',').map(s => s.trim()).filter(Boolean);
+      const pairs = providerModelContextSizes
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
       for (const pair of pairs) {
         const [model, size] = pair.split(':');
         if (model && size) {
@@ -525,7 +513,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
         }
       }
     }
-    
+
     const provider: Record<string, any> = {
       endpoint: providerApiBase.trim(),
       model_name: modelName,
@@ -647,7 +635,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
         const currentSubModel = String(getNestedValue(settings as any, 'subagent_model') || '');
 
         // Get models for the currently selected provider
-        const selectedProvider = subagentProviders.find(p => p.id === currentSubProvider);
+        const selectedProvider = subagentProviders.find((p) => p.id === currentSubProvider);
         const availableModels = selectedProvider?.models || [];
 
         // Sort personas for display
@@ -669,8 +657,10 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
                 onChange={(e) => updateSetting('subagent_provider', e.target.value)}
               >
                 <option value="">Default (inherit from main agent)</option>
-                {subagentProviders.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
+                {subagentProviders.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
                 ))}
               </select>
             </div>
@@ -685,8 +675,10 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
                 onChange={(e) => updateSetting('subagent_model', e.target.value)}
               >
                 <option value="">Default (use provider's default model)</option>
-                {availableModels.map(m => (
-                  <option key={m} value={m}>{m}</option>
+                {availableModels.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
                 ))}
               </select>
             </div>
@@ -709,18 +701,18 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
             <div style={{ marginTop: 'var(--space-5)' }}>
               <h4>Per-Persona Overrides</h4>
               <div className="config-help" style={{ marginBottom: 'var(--space-4)' }}>
-                Set a specific provider and/or model for individual personas. Empty values inherit from the default subagent settings above.
+                Set a specific provider and/or model for individual personas. Empty values inherit from the default
+                subagent settings above.
               </div>
 
-              {personaEntries.length === 0 && (
-                <div className="settings-empty">No personas available</div>
-              )}
+              {personaEntries.length === 0 && <div className="settings-empty">No personas available</div>}
 
               <div className="persona-mapping-list">
                 {personaEntries.map(([personaId, persona]) => {
                   const isSaving = subagentSavingPersona === personaId;
                   const personaProvider = persona.provider || '';
-                  const personaModelsForProvider = subagentProviders.find(p => p.id === personaProvider)?.models || [];
+                  const personaModelsForProvider =
+                    subagentProviders.find((p) => p.id === personaProvider)?.models || [];
 
                   return (
                     <div key={personaId} className="persona-mapping-row">
@@ -737,7 +729,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
                               provider: e.target.value,
                               model: '', // clear model when provider changes
                             });
-                            setSubagentTypes(prev => ({
+                            setSubagentTypes((prev) => ({
                               ...prev,
                               [personaId]: { ...prev[personaId], provider: e.target.value, model: '' },
                             }));
@@ -751,8 +743,10 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
                         disabled={isSaving}
                       >
                         <option value="">Default</option>
-                        {subagentProviders.map(p => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
+                        {subagentProviders.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
                         ))}
                       </select>
                       <select
@@ -764,7 +758,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
                             await api.updateSubagentType(personaId, {
                               model: e.target.value,
                             });
-                            setSubagentTypes(prev => ({
+                            setSubagentTypes((prev) => ({
                               ...prev,
                               [personaId]: { ...prev[personaId], model: e.target.value },
                             }));
@@ -778,8 +772,10 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
                         disabled={isSaving || personaProvider === ''}
                       >
                         <option value="">Default</option>
-                        {personaModelsForProvider.map(m => (
-                          <option key={m} value={m}>{m}</option>
+                        {personaModelsForProvider.map((m) => (
+                          <option key={m} value={m}>
+                            {m}
+                          </option>
                         ))}
                       </select>
                     </div>
@@ -938,13 +934,13 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
             )}
 
             <div className="crud-list">
-                {providerEntries.map(([name, cfg]: [string, any]) => (
-                  <div key={name} className="crud-item">
-                    <span className="crud-item-name">{name}</span>
-                    <span className="crud-item-detail">{cfg?.endpoint || cfg?.api_base || ''}</span>
-                    <button
-                      type="button"
-                      className="crud-btn"
+              {providerEntries.map(([name, cfg]: [string, any]) => (
+                <div key={name} className="crud-item">
+                  <span className="crud-item-name">{name}</span>
+                  <span className="crud-item-detail">{cfg?.endpoint || cfg?.api_base || ''}</span>
+                  <button
+                    type="button"
+                    className="crud-btn"
                     title="Edit provider"
                     onClick={() => {
                       setEditingProvider({ mode: 'edit', originalName: name });
@@ -1128,11 +1124,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
                   <div key={name} className="skill-item">
                     <span className="skill-item-name">{name}</span>
                     <label className="styled-toggle">
-                      <input
-                        type="checkbox"
-                        checked={enabled}
-                        onChange={() => toggleSkill(name, !enabled)}
-                      />
+                      <input type="checkbox" checked={enabled} onChange={() => toggleSkill(name, !enabled)} />
                       <span className="toggle-track" />
                     </label>
                   </div>

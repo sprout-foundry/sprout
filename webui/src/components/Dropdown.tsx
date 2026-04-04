@@ -23,13 +23,7 @@ interface DropdownProps {
   isOpen: boolean;
 }
 
-const Dropdown: React.FC<DropdownProps> = ({
-  items,
-  options,
-  onSelect,
-  onCancel,
-  isOpen
-}) => {
+const Dropdown: React.FC<DropdownProps> = ({ items, options, onSelect, onCancel, isOpen }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [filteredItems, setFilteredItems] = useState(items);
@@ -41,9 +35,8 @@ const Dropdown: React.FC<DropdownProps> = ({
       setFilteredItems(items);
     } else {
       const query = searchQuery.toLowerCase();
-      const filtered = items.filter(item =>
-        item.searchText.toLowerCase().includes(query) ||
-        item.display.toLowerCase().includes(query)
+      const filtered = items.filter(
+        (item) => item.searchText.toLowerCase().includes(query) || item.display.toLowerCase().includes(query),
       );
       setFilteredItems(filtered);
     }
@@ -75,19 +68,19 @@ const Dropdown: React.FC<DropdownProps> = ({
         break;
       case 'ArrowUp':
         e.preventDefault();
-        setSelectedIndex(prev => Math.max(0, prev - 1));
+        setSelectedIndex((prev) => Math.max(0, prev - 1));
         break;
       case 'ArrowDown':
         e.preventDefault();
-        setSelectedIndex(prev => Math.min(filteredItems.length - 1, prev + 1));
+        setSelectedIndex((prev) => Math.min(filteredItems.length - 1, prev + 1));
         break;
       case 'PageUp':
         e.preventDefault();
-        setSelectedIndex(prev => Math.max(0, prev - 10));
+        setSelectedIndex((prev) => Math.max(0, prev - 10));
         break;
       case 'PageDown':
         e.preventDefault();
-        setSelectedIndex(prev => Math.min(filteredItems.length - 1, prev + 10));
+        setSelectedIndex((prev) => Math.min(filteredItems.length - 1, prev + 10));
         break;
       case 'Home':
         e.preventDefault();
@@ -123,9 +116,7 @@ const Dropdown: React.FC<DropdownProps> = ({
         {/* Header */}
         <div className="dropdown-header">
           <div className="dropdown-prompt">{options.prompt}</div>
-          {getItemCountDisplay() && (
-            <div className="dropdown-count">{getItemCountDisplay()}</div>
-          )}
+          {getItemCountDisplay() && <div className="dropdown-count">{getItemCountDisplay()}</div>}
         </div>
 
         {/* Search */}

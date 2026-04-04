@@ -1,9 +1,9 @@
 // @ts-nocheck
 
 import React from 'react';
-import { createRoot, Root } from 'react-dom/client';
+import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
-import GitSidebarPanel, { GitStatusData } from './GitSidebarPanel';
+import GitSidebarPanel, { type GitStatusData } from './GitSidebarPanel';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -81,7 +81,11 @@ beforeAll(() => {
   // Mock requestAnimationFrame so ContextMenu close-listener effect fires synchronously
   let rafId = 0;
   // @ts-ignore
-  global.requestAnimationFrame = (cb) => { rafId += 1; cb(Date.now()); return rafId; };
+  global.requestAnimationFrame = (cb) => {
+    rafId += 1;
+    cb(Date.now());
+    return rafId;
+  };
   global.cancelAnimationFrame = jest.fn();
 });
 
@@ -128,7 +132,7 @@ function fireContextMenuOnGitFile(filePath: string): void {
           cancelable: true,
           clientX: 150,
           clientY: 250,
-        })
+        }),
       );
       return;
     }
@@ -138,9 +142,7 @@ function fireContextMenuOnGitFile(filePath: string): void {
 
 /** Return all context menu buttons. */
 function getContextButtons(): HTMLButtonElement[] {
-  return Array.from(
-    document.querySelectorAll('.context-menu .context-menu-item')
-  );
+  return Array.from(document.querySelectorAll('.context-menu .context-menu-item'));
 }
 
 /** Get text content of all context menu buttons (trimmed). */
@@ -215,9 +217,7 @@ describe('GitSidebarPanel context menu – clipboard & editor actions', () => {
     fireContextMenuOnGitFile('config.json');
     await flushPromises();
 
-    const copyRelBtn = getContextButtons().find(
-      (btn) => btn.textContent?.trim() === 'Copy relative path'
-    );
+    const copyRelBtn = getContextButtons().find((btn) => btn.textContent?.trim() === 'Copy relative path');
     expect(copyRelBtn).toBeDefined();
 
     await act(async () => {
@@ -234,9 +234,7 @@ describe('GitSidebarPanel context menu – clipboard & editor actions', () => {
     fireContextMenuOnGitFile('src/app.tsx');
     await flushPromises();
 
-    const copyAbsBtn = getContextButtons().find(
-      (btn) => btn.textContent?.trim() === 'Copy absolute path'
-    );
+    const copyAbsBtn = getContextButtons().find((btn) => btn.textContent?.trim() === 'Copy absolute path');
     expect(copyAbsBtn).toBeDefined();
 
     await act(async () => {
@@ -254,9 +252,7 @@ describe('GitSidebarPanel context menu – clipboard & editor actions', () => {
     fireContextMenuOnGitFile('newfile.go');
     await flushPromises();
 
-    const previewBtn = getContextButtons().find(
-      (btn) => btn.textContent?.trim() === 'Preview diff'
-    );
+    const previewBtn = getContextButtons().find((btn) => btn.textContent?.trim() === 'Preview diff');
     expect(previewBtn).toBeDefined();
 
     await act(async () => {
@@ -276,9 +272,7 @@ describe('GitSidebarPanel context menu – clipboard & editor actions', () => {
 
     expect(document.querySelector('.context-menu')).not.toBeNull();
 
-    const copyRelBtn = getContextButtons().find(
-      (btn) => btn.textContent?.trim() === 'Copy relative path'
-    );
+    const copyRelBtn = getContextButtons().find((btn) => btn.textContent?.trim() === 'Copy relative path');
 
     await act(async () => {
       copyRelBtn!.click();
@@ -316,9 +310,7 @@ describe('GitSidebarPanel context menu – clipboard & editor actions', () => {
     fireContextMenuOnGitFile('config.json');
     await flushPromises();
 
-    const openBtn = getContextButtons().find(
-      (btn) => btn.textContent?.trim() === 'Open in editor'
-    );
+    const openBtn = getContextButtons().find((btn) => btn.textContent?.trim() === 'Open in editor');
     expect(openBtn).toBeDefined();
 
     await act(async () => {

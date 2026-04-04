@@ -2,7 +2,12 @@
  * Generate a simple unified diff between two strings.
  * Returns a unified diff string or null if contents are identical.
  */
-export function generateUnifiedDiff(oldText: string, newText: string, oldLabel = 'editor', newLabel = 'disk'): string | null {
+export function generateUnifiedDiff(
+  oldText: string,
+  newText: string,
+  oldLabel = 'editor',
+  newLabel = 'disk',
+): string | null {
   if (oldText === newText) return null;
 
   const oldLines = oldText.split('\n');
@@ -51,11 +56,13 @@ function computeDiff(oldLines: string[], newLines: string[]): DiffLine[] {
 
   // Backtrack to produce diff
   const result: DiffLine[] = [];
-  let i = m, j = n;
+  let i = m,
+    j = n;
   while (i > 0 || j > 0) {
     if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
       result.push({ type: 'equal', value: oldLines[i - 1] });
-      i--; j--;
+      i--;
+      j--;
     } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
       result.push({ type: 'add', value: newLines[j - 1] });
       j--;

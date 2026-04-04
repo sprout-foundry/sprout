@@ -23,10 +23,7 @@ interface DiffWorkspaceTabProps {
   modeOptions?: Array<'combined' | 'staged' | 'unstaged'>;
 }
 
-const getDiffText = (
-  diff: GitDiffResponse | null,
-  diffMode: 'combined' | 'staged' | 'unstaged'
-): string => {
+const getDiffText = (diff: GitDiffResponse | null, diffMode: 'combined' | 'staged' | 'unstaged'): string => {
   if (!diff) return '';
   switch (diffMode) {
     case 'staged':
@@ -48,11 +45,13 @@ const DiffWorkspaceTab: React.FC<DiffWorkspaceTabProps> = ({
   title = 'Git Diff',
   modeOptions,
 }) => {
-  const availableModes = modeOptions || (['combined', 'staged', 'unstaged'] as const).filter((mode) => {
-    if (mode === 'combined') return true;
-    if (mode === 'staged') return !!diff?.has_staged;
-    return !!diff?.has_unstaged;
-  });
+  const availableModes =
+    modeOptions ||
+    (['combined', 'staged', 'unstaged'] as const).filter((mode) => {
+      if (mode === 'combined') return true;
+      if (mode === 'staged') return !!diff?.has_staged;
+      return !!diff?.has_unstaged;
+    });
 
   const diffText = getDiffText(diff, diffMode);
 
@@ -91,7 +90,9 @@ const DiffWorkspaceTab: React.FC<DiffWorkspaceTabProps> = ({
       ) : diffText ? (
         <DiffSurface diffText={diffText} />
       ) : (
-        <div className="workspace-tab-empty"><p>(no diff available)</p></div>
+        <div className="workspace-tab-empty">
+          <p>(no diff available)</p>
+        </div>
       )}
     </div>
   );

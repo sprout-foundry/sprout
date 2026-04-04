@@ -5,7 +5,7 @@
  * and other UI components in an extensible, maintainable, data-driven way.
  */
 
-import { ReactNode } from 'react';
+import { type ReactNode } from 'react';
 
 export interface ProviderLogEntry {
   id: string;

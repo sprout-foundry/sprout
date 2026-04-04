@@ -22,7 +22,9 @@
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
   cursor: col-resize;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
   flex-shrink: 0;
 }
 

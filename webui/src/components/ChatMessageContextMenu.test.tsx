@@ -86,9 +86,7 @@ afterEach(() => {
  * Adds a message bubble to the chat container and renders the component.
  * Returns the bubble element and the containerRef pointing to the chat container.
  */
-function renderWithBubble(
-  innerHtml = '<div data-message-content="Hello world">Hello world</div>',
-) {
+function renderWithBubble(innerHtml = '<div data-message-content="Hello world">Hello world</div>') {
   if (!chatContainer || !mountPoint) throw new Error('setup not run');
 
   const bubbleWrapper = document.createElement('div');
@@ -101,12 +99,7 @@ function renderWithBubble(
 
   act(() => {
     root = createRoot(mountPoint!);
-    root.render(
-      <ChatMessageContextMenu
-        containerRef={containerRef}
-        onInsertAtCursor={onInsertAtCursor}
-      />,
-    );
+    root.render(<ChatMessageContextMenu containerRef={containerRef} onInsertAtCursor={onInsertAtCursor} />);
   });
 
   return { bubble, containerRef };
@@ -161,9 +154,7 @@ describe('ChatMessageContextMenu', () => {
     fireContextMenu(bubble);
 
     expect(getMenu()).not.toBeNull();
-    expect(getMenuTexts()).toEqual(
-      expect.arrayContaining(['Copy message', 'Insert at cursor']),
-    );
+    expect(getMenuTexts()).toEqual(expect.arrayContaining(['Copy message', 'Insert at cursor']));
   });
 
   // 3. Does NOT show menu on right-click outside a message bubble
@@ -177,14 +168,10 @@ describe('ChatMessageContextMenu', () => {
   // 4. "Copy message" button copies messageContent from data-message-content
   test('"Copy message" button copies messageContent', async () => {
     const msg = 'Hello world';
-    const { bubble } = renderWithBubble(
-      `<div data-message-content="${msg}">${msg}</div>`,
-    );
+    const { bubble } = renderWithBubble(`<div data-message-content="${msg}">${msg}</div>`);
     fireContextMenu(bubble);
 
-    const copyBtn = getMenuItems().find(
-      (el) => el.textContent?.trim() === 'Copy message',
-    );
+    const copyBtn = getMenuItems().find((el) => el.textContent?.trim() === 'Copy message');
     expect(copyBtn).toBeDefined();
 
     await act(async () => {
@@ -210,9 +197,7 @@ describe('ChatMessageContextMenu', () => {
     const texts = getMenuTexts();
     expect(texts).toContain('Copy code block');
 
-    const copyCodeBtn = getMenuItems().find(
-      (el) => el.textContent?.trim() === 'Copy code block',
-    );
+    const copyCodeBtn = getMenuItems().find((el) => el.textContent?.trim() === 'Copy code block');
     expect(copyCodeBtn).toBeDefined();
 
     await act(async () => {
@@ -225,9 +210,7 @@ describe('ChatMessageContextMenu', () => {
 
   // 6. "Copy code block" button does NOT appear when NOT inside a <pre>
   test('"Copy code block" button does not appear when not inside a <pre>', () => {
-    const { bubble } = renderWithBubble(
-      `<div data-message-content="No code here">No code here</div>`,
-    );
+    const { bubble } = renderWithBubble(`<div data-message-content="No code here">No code here</div>`);
     fireContextMenu(bubble);
 
     const texts = getMenuTexts();
@@ -239,14 +222,10 @@ describe('ChatMessageContextMenu', () => {
   // 7. "Insert at cursor" calls onInsertAtCursor with message content
   test('"Insert at cursor" calls onInsertAtCursor with message content', () => {
     const msg = 'Insert this text';
-    const { bubble } = renderWithBubble(
-      `<div data-message-content="${msg}">${msg}</div>`,
-    );
+    const { bubble } = renderWithBubble(`<div data-message-content="${msg}">${msg}</div>`);
     fireContextMenu(bubble);
 
-    const insertBtn = getMenuItems().find(
-      (el) => el.textContent?.trim() === 'Insert at cursor',
-    );
+    const insertBtn = getMenuItems().find((el) => el.textContent?.trim() === 'Insert at cursor');
     expect(insertBtn).toBeDefined();
 
     act(() => {
@@ -276,9 +255,7 @@ describe('ChatMessageContextMenu', () => {
     expect(getMenu()).not.toBeNull();
 
     act(() => {
-      document.dispatchEvent(
-        new MouseEvent('mousedown', { bubbles: true }),
-      );
+      document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
     });
 
     expect(getMenu()).toBeNull();
@@ -337,7 +314,7 @@ describe('ChatMessageContextMenu', () => {
 
   // 13. Timer cleanup - no "Copied!" toast state leaks after unmount
   test('timer cleanup on unmount prevents state updates', async () => {
-    let consoleErrorCalls: string[] = [];
+    const consoleErrorCalls: string[] = [];
     const origError = console.error;
     console.error = (...args: any[]) => {
       consoleErrorCalls.push(args[0]);
@@ -347,9 +324,7 @@ describe('ChatMessageContextMenu', () => {
     const { bubble } = renderWithBubble();
     fireContextMenu(bubble);
 
-    const copyBtn = getMenuItems().find(
-      (el) => el.textContent?.trim() === 'Copy message',
-    )!;
+    const copyBtn = getMenuItems().find((el) => el.textContent?.trim() === 'Copy message')!;
     expect(copyBtn).toBeDefined();
 
     // Click copy — schedules a "Copied!" label timer (1200ms) and a close timer (800ms)
@@ -372,7 +347,7 @@ describe('ChatMessageContextMenu', () => {
 
     // No React warnings about updating an unmounted component
     const hasUnmountWarning = consoleErrorCalls.some(
-      (msg) => typeof msg === 'string' && msg.includes('Can\'t perform a React state update on an unmounted component'),
+      (msg) => typeof msg === 'string' && msg.includes("Can't perform a React state update on an unmounted component"),
     );
     expect(hasUnmountWarning).toBe(false);
 

@@ -98,11 +98,13 @@ class WebSocketService {
     // Use environment variable if provided, otherwise use relative URL.
     // When running via the SSH proxy the LEDIT_PROXY_BASE global is injected
     // into the page so WebSocket traffic routes through the same origin.
-    const wsUrl = process.env.REACT_APP_WS_URL || (() => {
-      const proxyBase = (window as any).LEDIT_PROXY_BASE || '';
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      return `${protocol}//${window.location.host}${proxyBase}/ws`;
-    })();
+    const wsUrl =
+      process.env.REACT_APP_WS_URL ||
+      (() => {
+        const proxyBase = (window as any).LEDIT_PROXY_BASE || '';
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        return `${protocol}//${window.location.host}${proxyBase}/ws`;
+      })();
 
     debugLog('Connecting to WebSocket:', wsUrl);
 
@@ -152,13 +154,13 @@ class WebSocketService {
     this.ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        
+
         // Handle pong responses from server
         if (data.type === 'pong') {
           this.handlePong();
           return;
         }
-        
+
         // Handle server ping requests
         if (data.type === 'ping') {
           // Respond to server ping with pong
@@ -167,7 +169,7 @@ class WebSocketService {
           }
           return;
         }
-        
+
         this.notifyCallbacks(data);
       } catch (error) {
         console.error('Failed to parse WebSocket message:', error, event.data);
@@ -234,7 +236,7 @@ class WebSocketService {
     this.stopPingInterval();
     this.stopPongWatchdog();
     if (this.ws) {
-      this.ws.onclose = null;  // Neutralize old handler to prevent double-connect
+      this.ws.onclose = null; // Neutralize old handler to prevent double-connect
       this.ws.onerror = null;
       this.ws.close();
       this.ws = null;
@@ -253,7 +255,7 @@ class WebSocketService {
   }
 
   removeEvent(callback: EventCallback) {
-    this.callbacks = this.callbacks.filter(cb => cb !== callback);
+    this.callbacks = this.callbacks.filter((cb) => cb !== callback);
   }
 
   /** Register a callback that fires when the connection is successfully
@@ -264,7 +266,7 @@ class WebSocketService {
   }
 
   private notifyCallbacks(event: any) {
-    this.callbacks.forEach(callback => callback(event));
+    this.callbacks.forEach((callback) => callback(event));
   }
 
   sendEvent(event: any) {

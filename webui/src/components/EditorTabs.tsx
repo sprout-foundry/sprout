@@ -21,7 +21,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useEditorManager } from '../contexts/EditorManagerContext';
-import { EditorBuffer } from '../types/editor';
+import { type EditorBuffer } from '../types/editor';
 import ContextMenu from './ContextMenu';
 import './EditorTabs.css';
 
@@ -32,7 +32,17 @@ interface EditorTabsProps {
 }
 
 const EditorTabs: React.FC<EditorTabsProps> = ({ paneId, actions, compact = false }) => {
-  const { buffers, panes, activeBufferId, activePaneId, switchPane, switchToBuffer, closeBuffer, reorderBuffers, moveBufferToPane } = useEditorManager();
+  const {
+    buffers,
+    panes,
+    activeBufferId,
+    activePaneId,
+    switchPane,
+    switchToBuffer,
+    closeBuffer,
+    reorderBuffers,
+    moveBufferToPane,
+  } = useEditorManager();
   const [showConfirm, setShowConfirm] = useState<{ bufferId: string; fileName: string } | null>(null);
   const [draggingBufferId, setDraggingBufferId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; bufferId: string } | null>(null);
@@ -72,12 +82,12 @@ const EditorTabs: React.FC<EditorTabsProps> = ({ paneId, actions, compact = fals
 
   const handleTabClose = (e: React.MouseEvent, buffer: EditorBuffer) => {
     e.stopPropagation();
-    
+
     if (buffer.isModified) {
       setShowConfirm({ bufferId: buffer.id, fileName: buffer.file.name });
       return;
     }
-    
+
     closeBuffer(buffer.id);
   };
 
@@ -158,16 +168,18 @@ const EditorTabs: React.FC<EditorTabsProps> = ({ paneId, actions, compact = fals
   };
 
   const closeRelatedBuffers = (predicate: (buffer: EditorBuffer) => boolean) => {
-    const closeTargets = Array.from(buffers.values()).filter((buffer) => buffer.isClosable !== false && predicate(buffer));
+    const closeTargets = Array.from(buffers.values()).filter(
+      (buffer) => buffer.isClosable !== false && predicate(buffer),
+    );
     const modifiedTargets = closeTargets.filter((buffer) => buffer.isModified);
 
     if (modifiedTargets.length > 0) {
-      const names = modifiedTargets.map(b => b.file.name).join(', ');
+      const names = modifiedTargets.map((b) => b.file.name).join(', ');
       setShowConfirm({
         bufferId: '__batch_close__',
         fileName: names.length > 60 ? `${names.slice(0, 60)}… and ${modifiedTargets.length - 1} more` : names,
       });
-      batchCloseTargetsRef.current = closeTargets.map(b => b.id);
+      batchCloseTargetsRef.current = closeTargets.map((b) => b.id);
       return;
     }
 
@@ -196,7 +208,9 @@ const EditorTabs: React.FC<EditorTabsProps> = ({ paneId, actions, compact = fals
       >
         {bufferList.length === 0 ? (
           <div className="no-tabs">
-            <span className="no-tabs-icon"><FolderOpen size={20} /></span>
+            <span className="no-tabs-icon">
+              <FolderOpen size={20} />
+            </span>
             <span className="no-tabs-text">No open tabs</span>
           </div>
         ) : (
@@ -212,7 +226,9 @@ const EditorTabs: React.FC<EditorTabsProps> = ({ paneId, actions, compact = fals
               <div
                 key={buffer.id}
                 className={`tab ${buffer.id === activeBufferId ? 'active' : ''}`}
-                ref={(el) => { tabRefs.current[buffer.id] = el; }}
+                ref={(el) => {
+                  tabRefs.current[buffer.id] = el;
+                }}
                 onClick={() => handleTabClick(buffer)}
                 onAuxClick={(e) => handleTabAuxClick(e, buffer)}
                 onContextMenu={(e) => handleTabContextMenu(e, buffer)}
@@ -246,7 +262,11 @@ const EditorTabs: React.FC<EditorTabsProps> = ({ paneId, actions, compact = fals
                     </span>
                   )}
                   {buffer.isModified && <span className="tab-modified">●</span>}
-                  {buffer.externallyModified && <span className="tab-externally-modified" title="File changed on disk">↑</span>}
+                  {buffer.externallyModified && (
+                    <span className="tab-externally-modified" title="File changed on disk">
+                      ↑
+                    </span>
+                  )}
                   {buffer.isClosable !== false && (
                     <button
                       className="tab-close"
@@ -276,25 +296,33 @@ const EditorTabs: React.FC<EditorTabsProps> = ({ paneId, actions, compact = fals
         <div className="close-confirm-overlay">
           <div className="close-confirm-dialog">
             <div className="dialog-header">
-              <h3><AlertTriangle size={16} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />Unsaved Changes</h3>
+              <h3>
+                <AlertTriangle size={16} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />
+                Unsaved Changes
+              </h3>
             </div>
             <div className="dialog-body">
               {showConfirm.bufferId === '__batch_close__' ? (
                 <>
                   <p>You have unsaved changes in the following files:</p>
-                  <p><strong>{showConfirm.fileName}</strong></p>
+                  <p>
+                    <strong>{showConfirm.fileName}</strong>
+                  </p>
                   <p>Are you sure you want to close them?</p>
                 </>
               ) : (
                 <>
-                  <p>You have unsaved changes in <strong>"{showConfirm.fileName}"</strong>.</p>
+                  <p>
+                    You have unsaved changes in <strong>"{showConfirm.fileName}"</strong>.
+                  </p>
                   <p>Are you sure you want to close the file?</p>
                 </>
               )}
             </div>
             <div className="dialog-actions">
               <button onClick={handleConfirmClose} className="dialog-btn danger">
-                <X size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />Yes, Close
+                <X size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
+                Yes, Close
               </button>
               <button onClick={handleCancelClose} className="dialog-btn primary">
                 Cancel
@@ -316,12 +344,14 @@ const EditorTabs: React.FC<EditorTabsProps> = ({ paneId, actions, compact = fals
           <>
             <button
               className="context-menu-item"
-              onClick={() => handleContextAction(() => {
-                if (activeContextBuffer.paneId) {
-                  switchPane(activeContextBuffer.paneId);
-                }
-                switchToBuffer(activeContextBuffer.id);
-              })}
+              onClick={() =>
+                handleContextAction(() => {
+                  if (activeContextBuffer.paneId) {
+                    switchPane(activeContextBuffer.paneId);
+                  }
+                  switchToBuffer(activeContextBuffer.id);
+                })
+              }
             >
               <Eye size={14} />
               <span>Reveal tab</span>
@@ -330,13 +360,15 @@ const EditorTabs: React.FC<EditorTabsProps> = ({ paneId, actions, compact = fals
               <button
                 key={pane.id}
                 className="context-menu-item"
-                onClick={() => handleContextAction(() => {
-                  moveBufferToPane(activeContextBuffer.id, pane.id);
-                  window.setTimeout(() => {
-                    switchPane(pane.id);
-                    switchToBuffer(activeContextBuffer.id);
-                  }, 0);
-                })}
+                onClick={() =>
+                  handleContextAction(() => {
+                    moveBufferToPane(activeContextBuffer.id, pane.id);
+                    window.setTimeout(() => {
+                      switchPane(pane.id);
+                      switchToBuffer(activeContextBuffer.id);
+                    }, 0);
+                  })
+                }
               >
                 <ArrowRightLeft size={14} />
                 <span>Move to split {paneOrder.get(pane.id) ?? index + 1}</span>
@@ -345,18 +377,24 @@ const EditorTabs: React.FC<EditorTabsProps> = ({ paneId, actions, compact = fals
             <div className="context-menu-divider" />
             <button
               className="context-menu-item"
-              onClick={() => handleContextAction(() => {
-                closeRelatedBuffers((buffer) => buffer.id !== activeContextBuffer.id);
-              })}
+              onClick={() =>
+                handleContextAction(() => {
+                  closeRelatedBuffers((buffer) => buffer.id !== activeContextBuffer.id);
+                })
+              }
             >
               <PanelRightOpen size={14} />
               <span>Close other tabs</span>
             </button>
             <button
               className="context-menu-item"
-              onClick={() => handleContextAction(() => {
-                closeRelatedBuffers((buffer) => buffer.paneId === contextPaneId && buffer.id !== activeContextBuffer.id);
-              })}
+              onClick={() =>
+                handleContextAction(() => {
+                  closeRelatedBuffers(
+                    (buffer) => buffer.paneId === contextPaneId && buffer.id !== activeContextBuffer.id,
+                  );
+                })
+              }
             >
               <PanelRightOpen size={14} />
               <span>Close other tabs in split</span>

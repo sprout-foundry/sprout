@@ -114,9 +114,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     const handleCopy = useCallback(() => {
       const term = xtermRef.current;
       if (term?.hasSelection()) {
-        copyToClipboard(term.getSelection()).catch(() => {
-          /* clipboard denied */
-        });
+        copyToClipboard(term.getSelection()).catch((err) => { debugLog('Clipboard access denied:', err); });
       }
       closeContextMenu();
     }, [closeContextMenu]);

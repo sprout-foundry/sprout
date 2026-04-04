@@ -155,7 +155,8 @@ const readRecentWorkspaces = (): string[] => {
       .map((value) => (typeof value === 'string' ? normalizePath(value) : ''))
       .filter(Boolean)
       .slice(0, MAX_RECENT_WORKSPACES);
-  } catch {
+  } catch (err) {
+    debugLog('[readRecentWorkspaces] localStorage parse failed:', err);
     return [];
   }
 };
@@ -191,7 +192,8 @@ const readRemoteRecentWorkspaces = (): Record<string, string[]> => {
           : [],
       ]),
     );
-  } catch {
+  } catch (err) {
+    debugLog('[readRemoteRecentWorkspaces] localStorage parse failed:', err);
     return {};
   }
 };
@@ -227,7 +229,8 @@ const readSSHFavoriteWorkspaces = (): Record<string, string[]> => {
           : [],
       ]),
     );
-  } catch {
+  } catch (err) {
+    debugLog('[readSSHFavoriteWorkspaces] localStorage parse failed:', err);
     return {};
   }
 };
@@ -497,7 +500,7 @@ const LocationSwitcher: FC<LocationSwitcherProps> = ({
     let cancelled = false;
     Promise.all([
       desktopBridge?.listSshHosts ? desktopBridge.listSshHosts() : apiService.current.getSSHHosts(),
-      apiService.current.getSSHSessions().catch(() => []),
+      apiService.current.getSSHSessions().catch((err) => { debugLog('Failed to fetch SSH sessions:', err); return []; }),
     ])
       .then(([hosts, sessions]) => {
         if (!cancelled) {
@@ -1013,7 +1016,7 @@ const LocationSwitcher: FC<LocationSwitcherProps> = ({
         window.location.assign(targetUrl);
       }
       setIsOpen(false);
-      setSshSessions(await apiService.current.getSSHSessions().catch(() => []));
+      setSshSessions(await apiService.current.getSSHSessions().catch((err) => { debugLog('Failed to fetch SSH sessions after connect:', err); return []; }));
       setSwitchingState({
         isSwitching: false,
         error: null,
@@ -1045,7 +1048,7 @@ const LocationSwitcher: FC<LocationSwitcherProps> = ({
     setIsClosingSshSession(sessionKey);
     try {
       await apiService.current.closeSSHSession(sessionKey);
-      setSshSessions(await apiService.current.getSSHSessions().catch(() => []));
+      setSshSessions(await apiService.current.getSSHSessions().catch((err) => { debugLog('Failed to fetch SSH sessions after close:', err); return []; }));
       setSwitchingState({ isSwitching: false, error: null, status: 'SSH session closed' });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to close SSH session';

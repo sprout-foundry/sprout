@@ -142,9 +142,7 @@ const EditorPane: FC<EditorPaneProps> = ({ paneId }) => {
       .then((ws) => {
         setWorkspaceRoot(ws.workspace_root || '');
       })
-      .catch(() => {
-        /* noop - graceful degradation */
-      });
+      .catch((err) => { debugLog('Failed to fetch workspace root:', err); });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isExternalUpdateRef = useRef<boolean>(false);
@@ -302,14 +300,14 @@ const EditorPane: FC<EditorPaneProps> = ({ paneId }) => {
 
   const handleCopyRelativePath = useCallback(() => {
     if (!buffer || !buffer.file) return;
-    copyToClipboard(buffer.file.path);
+    copyToClipboard(buffer.file.path).catch((err) => { debugLog('Clipboard write failed for relative path:', err); });
     hideContextMenu();
   }, [buffer, hideContextMenu]);
 
   const handleCopyAbsolutePath = useCallback(() => {
     if (!buffer || !buffer.file) return;
     const root = workspaceRoot.replace(/\/+$/, '');
-    copyToClipboard(`${root}/${buffer.file.path}`);
+    copyToClipboard(`${root}/${buffer.file.path}`).catch((err) => { debugLog('Clipboard write failed for absolute path:', err); });
     hideContextMenu();
   }, [buffer, hideContextMenu, workspaceRoot]);
   // ──────────────────────────────────────────────────────────────
@@ -366,8 +364,8 @@ const EditorPane: FC<EditorPaneProps> = ({ paneId }) => {
         } else {
           clearDiagnostics(viewRef.current);
         }
-      } catch {
-        // Diagnostics are best-effort — don't show errors for diagnostic failures
+      } catch (err) {
+        debugLog('[fetchDiagnostics] best-effort diagnostic fetch failed:', err);
         clearDiagnostics(viewRef.current);
       }
     },
@@ -957,9 +955,7 @@ const EditorPane: FC<EditorPaneProps> = ({ paneId }) => {
               }
             }
           })
-          .catch(() => {
-            // Silently ignore read failures
-          });
+          .catch((err) => { debugLog('Failed to read externally modified file:', err); });
         return;
       }
 

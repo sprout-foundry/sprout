@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -35,69 +34,7 @@ func getSearchMaxBytes() int {
 
 // Tool handler implementations for search operations
 
-// normalizePositiveInt normalizes various numeric types to a positive int
-func normalizePositiveInt(value any) int {
-	const maxInt = int(^uint(0) >> 1)
-	switch v := value.(type) {
-	case int:
-		if v > 0 {
-			return v
-		}
-	case int8:
-		if v > 0 {
-			return int(v)
-		}
-	case int16:
-		if v > 0 {
-			return int(v)
-		}
-	case int32:
-		if v > 0 {
-			return int(v)
-		}
-	case int64:
-		if v > 0 && v <= int64(maxInt) {
-			return int(v)
-		}
-	case uint:
-		if v64 := uint64(v); v64 > 0 && v64 <= uint64(maxInt) {
-			return int(v)
-		}
-	case uint8:
-		if v > 0 {
-			return int(v)
-		}
-	case uint16:
-		if v > 0 {
-			return int(v)
-		}
-	case uint32:
-		if v64 := uint64(v); v64 > 0 && v64 <= uint64(maxInt) {
-			return int(v)
-		}
-	case uint64:
-		if v > 0 && v <= uint64(maxInt) {
-			return int(v)
-		}
-	case float32:
-		if v > 0 {
-			return int(v)
-		}
-	case float64:
-		if v > 0 {
-			return int(v)
-		}
-	case json.Number:
-		if i, err := v.Int64(); err == nil {
-			return normalizePositiveInt(i)
-		}
-	case string:
-		if i, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
-			return normalizePositiveInt(i)
-		}
-	}
-	return 0
-}
+
 
 func handleSearchFiles(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	var pattern string

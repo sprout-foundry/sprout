@@ -7,6 +7,7 @@
 
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { TriangleAlert } from 'lucide-react';
+import { error as logError } from '../utils/log';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -41,9 +42,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Log the error to the console
-    // eslint-disable-next-line no-console
-    console.error('Error Boundary caught an error:', error, errorInfo);
+    // Log the error using the centralized logging utility
+    logError('Error Boundary caught an error: ' + String(error) + (errorInfo ? ' ' + String(errorInfo.componentStack) : ''));
 
     // Call the onError callback if provided (consumers should show user-facing notification there)
     // Note: notification is handled by the onError callback — do NOT call notificationBus here

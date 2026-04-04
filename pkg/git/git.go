@@ -69,10 +69,10 @@ func GetFileGitPath(filename string) (string, error) {
 // AddAndCommitFile stages the specified file and commits it with the given message.
 func AddAndCommitFile(newFilename, message string) error {
 	if err := exec.Command("git", "add", newFilename).Run(); err != nil {
-		return fmt.Errorf("error adding changes to git: %v", err)
+		return fmt.Errorf("error adding changes to git: %w", err)
 	}
 	if err := exec.Command("git", "commit", "-m", message).Run(); err != nil {
-		return fmt.Errorf("error committing changes to git: %v", err)
+		return fmt.Errorf("error committing changes to git: %w", err)
 	}
 	logger := utils.GetLogger(true) // Use true for skipPrompt since this is internal
 	logger.Logf("Changes committed to git for %s", newFilename)
@@ -88,7 +88,7 @@ func AddAllAndCommit(message string, timeoutSeconds int) error {
 		select {
 		case err := <-done:
 			if err != nil {
-				return fmt.Errorf("error committing changes to git: %v", err)
+				return fmt.Errorf("error committing changes to git: %w", err)
 			}
 		case <-time.After(time.Duration(timeoutSeconds) * time.Second):
 			_ = cmd.Process.Kill()
@@ -96,7 +96,7 @@ func AddAllAndCommit(message string, timeoutSeconds int) error {
 		}
 	} else {
 		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("error committing changes to git: %v", err)
+			return fmt.Errorf("error committing changes to git: %w", err)
 		}
 	}
 	return nil

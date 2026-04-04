@@ -16,7 +16,7 @@ type SessionsFlow struct{}
 func (f *SessionsFlow) ExecuteSessionList(chatAgent *agent.Agent) (string, error) {
 	sessions, err := agent.ListSessionsWithTimestamps()
 	if err != nil {
-		return "", fmt.Errorf("failed to list sessions: %v", err)
+		return "", fmt.Errorf("failed to list sessions: %w", err)
 	}
 
 	if len(sessions) == 0 {
@@ -63,7 +63,7 @@ func (f *SessionsFlow) ExecuteSessionList(chatAgent *agent.Agent) (string, error
 func (f *SessionsFlow) ExecuteSessionLoad(chatAgent *agent.Agent, args []string) (string, error) {
 	sessions, err := agent.ListSessionsWithTimestamps()
 	if err != nil {
-		return "", fmt.Errorf("failed to list sessions: %v", err)
+		return "", fmt.Errorf("failed to list sessions: %w", err)
 	}
 
 	// Find session by number or ID
@@ -104,7 +104,7 @@ func (f *SessionsFlow) ExecuteSessionLoad(chatAgent *agent.Agent, args []string)
 	// Load state
 	state, err := agent.LoadStateWithoutAgentScoped(selectedSession.SessionID, selectedSession.WorkingDirectory)
 	if err != nil {
-		return "", fmt.Errorf("failed to load session: %v", err)
+		return "", fmt.Errorf("failed to load session: %w", err)
 	}
 
 	chatAgent.ApplyState(state)
@@ -125,7 +125,7 @@ func (f *SessionsFlow) ExecuteSessionRename(chatAgent *agent.Agent, args []strin
 
 	sessions, err := agent.ListSessionsWithTimestamps()
 	if err != nil {
-		return "", fmt.Errorf("failed to list sessions: %v", err)
+		return "", fmt.Errorf("failed to list sessions: %w", err)
 	}
 
 	// Find session by number or ID
@@ -152,7 +152,7 @@ func (f *SessionsFlow) ExecuteSessionRename(chatAgent *agent.Agent, args []strin
 
 	// Load the session state, update name, and save it
 	if err := agent.RenameSessionScoped(selectedSession.SessionID, newName, selectedSession.WorkingDirectory); err != nil {
-		return "", fmt.Errorf("failed to rename session: %v", err)
+		return "", fmt.Errorf("failed to rename session: %w", err)
 	}
 
 	return fmt.Sprintf("[OK] Session renamed to: %s", newName), nil
@@ -166,7 +166,7 @@ func (f *SessionsFlow) ExecuteSessionDelete(args []string) (string, error) {
 
 	sessions, err := agent.ListSessionsWithTimestamps()
 	if err != nil {
-		return "", fmt.Errorf("failed to list sessions: %v", err)
+		return "", fmt.Errorf("failed to list sessions: %w", err)
 	}
 
 	// Find session by number or ID
@@ -190,7 +190,7 @@ func (f *SessionsFlow) ExecuteSessionDelete(args []string) (string, error) {
 
 	// Delete the session file
 	if err := agent.DeleteSessionScoped(selectedSession.SessionID, selectedSession.WorkingDirectory); err != nil {
-		return "", fmt.Errorf("failed to delete session: %v", err)
+		return "", fmt.Errorf("failed to delete session: %w", err)
 	}
 
 	return fmt.Sprintf("[OK] Session deleted: %s", selectedSession.SessionID), nil
@@ -204,7 +204,7 @@ func (f *SessionsFlow) ExecuteSessionExport(args []string) (string, error) {
 
 	sessions, err := agent.ListSessionsWithTimestamps()
 	if err != nil {
-		return "", fmt.Errorf("failed to list sessions: %v", err)
+		return "", fmt.Errorf("failed to list sessions: %w", err)
 	}
 
 	// Find session by number or ID
@@ -229,18 +229,18 @@ func (f *SessionsFlow) ExecuteSessionExport(args []string) (string, error) {
 	// Load state and export to file
 	state, err := agent.LoadStateWithoutAgentScoped(selectedSession.SessionID, selectedSession.WorkingDirectory)
 	if err != nil {
-		return "", fmt.Errorf("failed to load session for export: %v", err)
+		return "", fmt.Errorf("failed to load session for export: %w", err)
 	}
 
 	// Write to file using os.WriteFile
 	filename := args[1]
 	data, err := agent.ExportStateToJSON(state)
 	if err != nil {
-		return "", fmt.Errorf("failed to export session state: %v", err)
+		return "", fmt.Errorf("failed to export session state: %w", err)
 	}
 
 	if err := os.WriteFile(filename, data, 0644); err != nil {
-		return "", fmt.Errorf("failed to write export file: %v", err)
+		return "", fmt.Errorf("failed to write export file: %w", err)
 	}
 
 	return fmt.Sprintf("[OK] Session exported to: %s", filename), nil
@@ -255,7 +255,7 @@ func (f *SessionsFlow) ExecuteSessionImport(chatAgent *agent.Agent, args []strin
 	filename := args[0]
 	state, err := agent.ImportStateFromJSONFile(filename)
 	if err != nil {
-		return "", fmt.Errorf("failed to import session: %v", err)
+		return "", fmt.Errorf("failed to import session: %w", err)
 	}
 
 	chatAgent.ApplyState(state)

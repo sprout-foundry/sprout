@@ -55,7 +55,11 @@
   },
   "devDependencies": {
     "@types/node": "^16.18.0",
+    "@typescript-eslint/eslint-plugin": "5.62.0",
+    "@typescript-eslint/parser": "5.62.0",
+    "eslint": "^8.57.1",
     "eslint-config-prettier": "^9.1.2",
+    "eslint-plugin-react-hooks": "^4.6.2",
     "prettier": "^3.8.1"
   },
   "jest": {
@@ -79,6 +83,7 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\"",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "lint:ci": "eslint \"src/**/*.{ts,tsx}\" --max-warnings=-1",
     "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix",
     "start": "react-scripts start",
     "test": "react-scripts test"

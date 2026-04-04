@@ -1,7 +1,9 @@
 # Ledit Testing and Build Makefile
 # Provides clear commands for different types of tests and builds
 
-.PHONY: help test-unit test-integration test-e2e test-smoke test-all clean build build-version build-ui deploy-ui verify-ui-embedded test-webui
+.PHONY: help test test-unit test-integration test-e2e test-smoke test-all test-ci \
+       clean build build-all build-version build-ui deploy-ui \
+       verify-ui-embedded test-webui lint lint-fix dev
 
 # Default target
 help:
@@ -19,6 +21,8 @@ help:
 	@echo "  make deploy-ui        - Build and deploy React UI to Go static"
 	@echo "  make verify-ui-embedded - Fail if embedded UI assets are stale"
 	@echo "  make test-webui      - Test React web UI server"
+	@echo "  make lint            - Lint frontend code"
+	@echo "  make lint-fix        - Auto-fix frontend linting issues"
 	@echo ""
 	@echo "Version Management:"
 	@echo "  ./scripts/version-manager.sh build    - Build with version info"
@@ -98,6 +102,16 @@ build-version:
 	@echo "Versioned build completed"
 
 # React Web UI Commands
+
+# Lint frontend code
+lint:
+	@echo "Linting frontend code..."
+	@cd webui && npm run lint && npm run format:check && echo "Lint completed successfully"
+
+# Auto-fix frontend linting issues
+lint-fix:
+	@echo "Auto-fixing frontend linting issues..."
+	@cd webui && npm run lint:fix && npm run format && echo "Lint fix completed"
 
 # Build React web UI only (doesn't deploy to Go static)
 build-ui:

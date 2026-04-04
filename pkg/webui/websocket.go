@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/events"
+	"github.com/alantheprice/ledit/pkg/security"
 	"github.com/gorilla/websocket"
 )
 
@@ -217,7 +218,12 @@ func (ws *ReactWebServer) shouldForwardEventToConnection(event events.UIEvent, c
 
 	// Untargeted events should not leak across client windows.
 	// Only allow explicit global events without a client_id.
-	return event.Type == events.EventTypeMetricsUpdate || event.Type == events.EventTypeFileContentChanged
+	switch event.Type {
+	case events.EventTypeMetricsUpdate, events.EventTypeFileContentChanged, events.EventTypeSecurityPromptRequest, events.EventTypeSecurityApprovalRequest:
+		return true
+	default:
+		return false
+	}
 }
 
 // handleWebSocketMessage processes incoming WebSocket messages
@@ -269,6 +275,9 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, msg map[str
 
 	case "security_approval_response":
 		go ws.handleSecurityApprovalResponse(safeConn, msg, clientID)
+
+	case "security_prompt_response":
+		go ws.handleSecurityPromptResponse(safeConn, msg, clientID)
 	}
 }
 
@@ -546,6 +555,54 @@ func (ws *ReactWebServer) handleSecurityApprovalResponse(safeConn *SafeConn, msg
 	}
 
 	log.Printf("Security approval response received: request_id=%s approved=%v", requestID, approved)
+}
+
+// handleSecurityPromptResponse processes security prompt responses from the webui.
+// The webui sends a { "type": "security_prompt_response", "data": { "request_id": "...", "response": true/false } }
+// message when the user responds to a file security concern prompt.
+func (ws *ReactWebServer) handleSecurityPromptResponse(safeConn *SafeConn, msg map[string]interface{}, clientID string) {
+	data, ok := msg["data"].(map[string]interface{})
+	if !ok {
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": "Invalid security prompt response payload"},
+		})
+		return
+	}
+
+	requestID, _ := data["request_id"].(string)
+	if requestID == "" {
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": "request_id is required"},
+		})
+		return
+	}
+
+	response, _ := data["response"].(bool)
+
+	mgr := security.GetGlobalPromptManager()
+	if mgr == nil {
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": "Security prompt manager is not available"},
+		})
+		return
+	}
+
+	if mgr.RespondToPrompt(requestID, response) {
+		ws.publishClientEvent(clientID, events.EventTypeSecurityPromptRequest, map[string]interface{}{
+			"status":     "responded",
+			"request_id": requestID,
+			"response":   response,
+		})
+		log.Printf("Security prompt response received: request_id=%s response=%v", requestID, response)
+	} else {
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": fmt.Sprintf("No pending security prompt with id: %s", requestID)},
+		})
+	}
 }
 
 // handleTerminalWebSocket handles terminal WebSocket connections.

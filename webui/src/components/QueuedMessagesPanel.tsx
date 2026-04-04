@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import type { FC, KeyboardEvent } from 'react';
 import { Pencil, Trash2, X, ChevronUp, ChevronDown, Check } from 'lucide-react';
 import './QueuedMessagesPanel.css';
 
@@ -11,7 +12,7 @@ interface QueuedMessagesPanelProps {
   onClose: () => void;
 }
 
-const QueuedMessagesPanel: React.FC<QueuedMessagesPanelProps> = ({
+const QueuedMessagesPanel: FC<QueuedMessagesPanelProps> = ({
   messages,
   onRemove,
   onEdit,
@@ -81,7 +82,7 @@ const QueuedMessagesPanel: React.FC<QueuedMessagesPanelProps> = ({
     setEditValue('');
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSaveEdit();

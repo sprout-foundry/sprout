@@ -1,4 +1,5 @@
-import React, { useRef, useEffect, useCallback, useState, useMemo, useLayoutEffect } from 'react';
+import { useRef, useEffect, useCallback, useState, useMemo, useLayoutEffect } from 'react';
+import type { CSSProperties, FC, ReactNode } from 'react';
 import {
   Zap,
   Bot,
@@ -72,7 +73,11 @@ interface ChatProps {
   lastError?: string | null;
   toolExecutions?: ToolExecution[];
   queryProgress?: unknown;
-  currentTodos?: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }>;
+  currentTodos?: Array<{
+    id: string;
+    content: string;
+    status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+  }>;
   subagentActivities?: SubagentActivity[];
   onToolPillClick?: (toolId: string) => void;
   onStopProcessing?: () => void;
@@ -175,7 +180,7 @@ const formatDuration = (start: Date, end?: Date): string => {
 
 // ── Live Log Scroller Component ────────────────────────────────────
 
-const LiveLog: React.FC<{
+const LiveLog: FC<{
   lines: Array<{ id: string; text: string; timestamp: Date; taskId?: string }>;
   maxLines: number;
 }> = ({ lines, maxLines }) => {
@@ -222,7 +227,7 @@ const LiveLog: React.FC<{
 
 // ── Active Subagent Card ───────────────────────────────────────────
 
-const ActiveSubagentCard: React.FC<{ run: SubagentRun }> = ({ run }) => {
+const ActiveSubagentCard: FC<{ run: SubagentRun }> = ({ run }) => {
   const [expanded, setExpanded] = useState(true);
   const color = getPersonaColor(run.persona);
   const startTime = run.spawnActivity?.timestamp || run.activities[0]?.timestamp;
@@ -231,7 +236,7 @@ const ActiveSubagentCard: React.FC<{ run: SubagentRun }> = ({ run }) => {
   return (
     <div
       className="subagent-feed-card subagent-feed-card--active"
-      style={{ '--feed-persona-color': color } as React.CSSProperties}
+      style={{ '--feed-persona-color': color } as CSSProperties}
     >
       <button
         className="subagent-feed-card-header"
@@ -267,7 +272,7 @@ const ActiveSubagentCard: React.FC<{ run: SubagentRun }> = ({ run }) => {
 
 // ── Completed Subagent Card ────────────────────────────────────────
 
-const CompletedSubagentCard: React.FC<{ run: SubagentRun }> = ({ run }) => {
+const CompletedSubagentCard: FC<{ run: SubagentRun }> = ({ run }) => {
   const hasFailures =
     run.completionMessage?.toLowerCase().includes('fail') || run.completionMessage?.toLowerCase().includes('error');
 
@@ -297,7 +302,7 @@ const CompletedSubagentCard: React.FC<{ run: SubagentRun }> = ({ run }) => {
 
 // ── Subagent Activity Feed ─────────────────────────────────────────
 
-const SubagentActivityFeed: React.FC<{
+const SubagentActivityFeed: FC<{
   activities: SubagentActivity[];
 }> = ({ activities }) => {
   const [visible, setVisible] = useState(true);
@@ -350,7 +355,7 @@ const SubagentActivityFeed: React.FC<{
 
 // ── Main Chat Component ───────────────────────────────────────────
 
-const Chat: React.FC<ChatProps> = ({
+const Chat: FC<ChatProps> = ({
   messages,
   onSendMessage,
   onQueueMessage,
@@ -475,7 +480,7 @@ const Chat: React.FC<ChatProps> = ({
     <div
       className="chat-shell"
       ref={chatShellRef}
-      style={{ '--chat-input-height': `${inputContainerHeight}px` } as React.CSSProperties}
+      style={{ '--chat-input-height': `${inputContainerHeight}px` } as CSSProperties}
     >
       <div className="chat-main">
         <div className="chat-container" ref={chatContainerRef} onScroll={handleChatScroll}>
@@ -550,7 +555,7 @@ const Chat: React.FC<ChatProps> = ({
                   </div>
                   {(queryProgress as Record<string, unknown>).details && (
                     <div className="progress-details">
-                      {(queryProgress as Record<string, unknown>).details as React.ReactNode}
+                      {(queryProgress as Record<string, unknown>).details as ReactNode}
                     </div>
                   )}
                 </>

@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import type { CSSProperties, FC, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, FileCode } from 'lucide-react';
 import { allLanguageEntries } from '../extensions/languageRegistry';
@@ -20,7 +21,7 @@ const ESTIMATED_POPUP_HEIGHT = 350;
  * searchable popup listing all languages when clicked.  The popup is
  * rendered via a portal to avoid overflow clipping from parent containers.
  */
-const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({ currentLanguageId, isAutoDetected, onLanguageChange }) => {
+const LanguageSwitcher: FC<LanguageSwitcherProps> = ({ currentLanguageId, isAutoDetected, onLanguageChange }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -129,7 +130,7 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({ currentLanguageId, 
     });
   }, [selectedIndex, isOpen]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: ReactKeyboardEvent) => {
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
@@ -160,7 +161,7 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({ currentLanguageId, 
   };
 
   // Compute popup position relative to the button
-  const [popupStyle, setPopupStyle] = useState<React.CSSProperties>({});
+  const [popupStyle, setPopupStyle] = useState<CSSProperties>({});
   useEffect(() => {
     if (!isOpen || !buttonRef.current) return;
 

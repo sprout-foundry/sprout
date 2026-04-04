@@ -1,4 +1,5 @@
-import React from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { FC, KeyboardEvent, ReactElement } from 'react';
 import ReactDOM from 'react-dom/client';
 import './ThemedDialog.css';
 
@@ -49,9 +50,9 @@ interface AlertDialogProps {
   onClose: () => void;
 }
 
-const AlertDialog: React.FC<AlertDialogProps> = ({ title, message, type, onClose }) => {
-  const handleKeyDown = React.useCallback(
-    (e: React.KeyboardEvent) => {
+const AlertDialog: FC<AlertDialogProps> = ({ title, message, type, onClose }) => {
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
       if (e.key === 'Escape' || e.key === 'Enter') {
         e.preventDefault();
         onClose();
@@ -60,7 +61,7 @@ const AlertDialog: React.FC<AlertDialogProps> = ({ title, message, type, onClose
     [onClose],
   );
 
-  React.useEffect(() => {
+  useEffect(() => {
     lockScroll();
     return () => unlockScroll();
   }, []);
@@ -96,7 +97,7 @@ interface ConfirmDialogProps {
   onCancel: () => void;
 }
 
-const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
+const ConfirmDialog: FC<ConfirmDialogProps> = ({
   title,
   message,
   type,
@@ -105,8 +106,8 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onConfirm,
   onCancel,
 }) => {
-  const handleKeyDown = React.useCallback(
-    (e: React.KeyboardEvent) => {
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
         onCancel();
@@ -118,7 +119,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
     [onConfirm, onCancel],
   );
 
-  React.useEffect(() => {
+  useEffect(() => {
     lockScroll();
     return () => unlockScroll();
   }, []);
@@ -174,7 +175,7 @@ interface PromptDialogProps {
   onCancel: () => void;
 }
 
-const PromptDialog: React.FC<PromptDialogProps> = ({
+const PromptDialog: FC<PromptDialogProps> = ({
   title,
   message,
   type,
@@ -183,11 +184,11 @@ const PromptDialog: React.FC<PromptDialogProps> = ({
   onSubmit,
   onCancel,
 }) => {
-  const [value, setValue] = React.useState(defaultValue);
-  const inputRef = React.useRef<HTMLInputElement>(null);
+  const [value, setValue] = useState(defaultValue);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleKeyDown = React.useCallback(
-    (e: React.KeyboardEvent) => {
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
         onCancel();
@@ -199,12 +200,12 @@ const PromptDialog: React.FC<PromptDialogProps> = ({
     [onSubmit, onCancel, value],
   );
 
-  React.useEffect(() => {
+  useEffect(() => {
     lockScroll();
     return () => unlockScroll();
   }, []);
 
-  React.useEffect(() => {
+  useEffect(() => {
     // Focus the input after mount
     const timer = setTimeout(() => {
       if (inputRef.current) {
@@ -262,7 +263,7 @@ const PromptDialog: React.FC<PromptDialogProps> = ({
  * Mount a React element into a temporary container appended to document.body,
  * return a cleanup function that unmounts and removes the container.
  */
-function mountToBody(element: React.ReactElement): () => void {
+function mountToBody(element: ReactElement): () => void {
   const container = document.createElement('div');
   container.setAttribute('data-themed-dialog-portal', '');
   document.body.appendChild(container);

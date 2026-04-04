@@ -13,7 +13,11 @@ export function useBufferMutations(setBuffers: Dispatch<SetStateAction<Map<strin
         const next = new Map(prev);
         const buffer = next.get(bufferId);
         if (buffer) {
-          next.set(bufferId, { ...buffer, content, isModified: content !== buffer.originalContent });
+          next.set(bufferId, {
+            ...buffer,
+            content,
+            isModified: content !== buffer.originalContent,
+          });
         }
         return next;
       });

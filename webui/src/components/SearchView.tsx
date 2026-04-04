@@ -1,4 +1,5 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ChangeEvent, FC, KeyboardEvent, MouseEvent, ReactNode } from 'react';
 import ContextMenu from './ContextMenu';
 import { ApiService } from '../services/api';
 import { copyToClipboard } from '../utils/clipboard';
@@ -48,7 +49,7 @@ interface SearchContextMenuState {
 
 const DEBOUNCE_DELAY = 300;
 
-const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
+const SearchView: FC<SearchViewProps> = ({ onFileClick }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [replaceQuery, setReplaceQuery] = useState('');
   const [caseSensitive, setCaseSensitive] = useState(false);
@@ -150,12 +151,12 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
   }, [searchQuery, performSearch]);
 
   // Handle search input change
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSearchChange = (e: ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
   };
 
   // Handle search input key press
-  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleSearchKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       // Immediate search on Enter
       if (debounceTimerRef.current) {
@@ -262,7 +263,7 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
   }, []);
 
   // Highlight match in line
-  const highlightMatch = (line: string, colStart: number, colEnd: number): React.ReactNode => {
+  const highlightMatch = (line: string, colStart: number, colEnd: number): ReactNode => {
     if (colStart <= 0 || colEnd <= colStart || colEnd > line.length) {
       return line;
     }
@@ -298,23 +299,20 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
 
   // ── Context menu handlers ──────────────────────────────────
 
-  const handleRowContextMenu = useCallback(
-    (e: React.MouseEvent, filePath: string, lineNumber: number, lineText: string) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setContextMenu({
-        x: e.clientX,
-        y: e.clientY,
-        filePath,
-        lineNumber,
-        matchText: lineText,
-        isFileHeader: false,
-      });
-    },
-    [],
-  );
+  const handleRowContextMenu = useCallback((e: MouseEvent, filePath: string, lineNumber: number, lineText: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      filePath,
+      lineNumber,
+      matchText: lineText,
+      isFileHeader: false,
+    });
+  }, []);
 
-  const handleFileHeaderContextMenu = useCallback((e: React.MouseEvent, filePath: string) => {
+  const handleFileHeaderContextMenu = useCallback((e: MouseEvent, filePath: string) => {
     e.preventDefault();
     e.stopPropagation();
     setContextMenu({
@@ -403,7 +401,7 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
   };
 
   // Filter results based on exclude patterns
-  const filteredResults = React.useMemo(() => {
+  const filteredResults = useMemo(() => {
     if (!results || !excludePatterns.trim()) return results;
 
     const patterns = excludePatterns
@@ -426,7 +424,7 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
   }, [results, excludePatterns]);
 
   // Compute displayed counts from filtered results (accurate even when client-side filtering is active)
-  const displayMatches = React.useMemo(
+  const displayMatches = useMemo(
     () => filteredResults?.reduce((sum, r) => sum + r.match_count, 0) ?? 0,
     [filteredResults],
   );

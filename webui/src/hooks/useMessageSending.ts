@@ -7,15 +7,16 @@
  */
 
 import { useCallback } from 'react';
+import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { ApiService } from '../services/api';
 import { debugLog } from '../utils/log';
 import type { AppState } from '../types/app';
 
 export interface UseMessageSendingOptions {
-  setState: React.Dispatch<React.SetStateAction<AppState>>;
-  setInputValue: React.Dispatch<React.SetStateAction<string>>;
-  activeChatIdRef: React.MutableRefObject<string | null>;
-  activeRequestsRef: React.MutableRefObject<number>;
+  setState: Dispatch<SetStateAction<AppState>>;
+  setInputValue: Dispatch<SetStateAction<string>>;
+  activeChatIdRef: MutableRefObject<string | null>;
+  activeRequestsRef: MutableRefObject<number>;
 }
 
 export interface UseMessageSendingReturn {

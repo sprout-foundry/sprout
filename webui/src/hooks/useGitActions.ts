@@ -18,7 +18,7 @@ interface GitAICommitResult {
 
 export interface UseGitActionsReturn {
   gitRefreshToken: number;
-  handleGitCommit: (message: string, files: string[]) => Promise<any>;
+  handleGitCommit: (message: string, files: string[]) => Promise<Record<string, unknown>>;
   handleGitAICommit: () => Promise<GitAICommitResult>;
   handleGitStage: (files: string[]) => Promise<void>;
   handleGitUnstage: (files: string[]) => Promise<void>;

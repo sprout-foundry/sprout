@@ -50,7 +50,7 @@ export function useBufferMutations(setBuffers: Dispatch<SetStateAction<Map<strin
   );
 
   const updateBufferMetadata = useCallback(
-    (bufferId: string, updates: Record<string, any>) => {
+    (bufferId: string, updates: Record<string, unknown>) => {
       setBuffers((prev) => {
         const buf = prev.get(bufferId);
         if (!buf) return prev;

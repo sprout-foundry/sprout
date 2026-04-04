@@ -435,6 +435,7 @@ describe('EditorPane', () => {
 
   describe('context menu', () => {
     it('renders without crashing', async () => {
+      // eslint-disable-next-line testing-library/no-unnecessary-act
       await act(async () => {
         root.render(<EditorPane paneId="pane-1" />);
       });
@@ -443,6 +444,7 @@ describe('EditorPane', () => {
     });
 
     it('context menu appears on right-click in the editor area', async () => {
+      // eslint-disable-next-line testing-library/no-unnecessary-act
       await act(async () => {
         root.render(<EditorPane paneId="pane-1" />);
       });
@@ -461,6 +463,7 @@ describe('EditorPane', () => {
     });
 
     it('context menu shows the three expected items when workspace root is available', async () => {
+      // eslint-disable-next-line testing-library/no-unnecessary-act
       await act(async () => {
         root.render(<EditorPane paneId="pane-1" />);
       });
@@ -481,6 +484,7 @@ describe('EditorPane', () => {
     });
 
     it('"Reveal in File Explorer" dispatches ledit:reveal-in-explorer event', async () => {
+      // eslint-disable-next-line testing-library/no-unnecessary-act
       await act(async () => {
         root.render(<EditorPane paneId="pane-1" />);
       });
@@ -514,6 +518,7 @@ describe('EditorPane', () => {
     });
 
     it('"Copy relative path" calls copyToClipboard with the file path', async () => {
+      // eslint-disable-next-line testing-library/no-unnecessary-act
       await act(async () => {
         root.render(<EditorPane paneId="pane-1" />);
       });
@@ -538,6 +543,7 @@ describe('EditorPane', () => {
     });
 
     it('"Copy absolute path" calls copyToClipboard with workspaceRoot + file path', async () => {
+      // eslint-disable-next-line testing-library/no-unnecessary-act
       await act(async () => {
         root.render(<EditorPane paneId="pane-1" />);
       });
@@ -562,6 +568,7 @@ describe('EditorPane', () => {
     });
 
     it('context menu closes after clicking an item', async () => {
+      // eslint-disable-next-line testing-library/no-unnecessary-act
       await act(async () => {
         root.render(<EditorPane paneId="pane-1" />);
       });
@@ -590,6 +597,7 @@ describe('EditorPane', () => {
         daemon_root: '/home/user/project/.ledit',
       });
 
+      // eslint-disable-next-line testing-library/no-unnecessary-act
       await act(async () => {
         root.render(<EditorPane paneId="pane-1" />);
       });
@@ -609,6 +617,7 @@ describe('EditorPane', () => {
     });
 
     it('context menu closes when clicking outside it', async () => {
+      // eslint-disable-next-line testing-library/no-unnecessary-act
       await act(async () => {
         root.render(<EditorPane paneId="pane-1" />);
       });
@@ -635,6 +644,7 @@ describe('EditorPane', () => {
     });
 
     it('context menu closes when pressing Escape', async () => {
+      // eslint-disable-next-line testing-library/no-unnecessary-act
       await act(async () => {
         root.render(<EditorPane paneId="pane-1" />);
       });
@@ -666,6 +676,7 @@ describe('EditorPane', () => {
         buffers: new Map(),
       });
 
+      // eslint-disable-next-line testing-library/no-unnecessary-act
       await act(async () => {
         root.render(<EditorPane paneId="pane-1" />);
       });
@@ -693,6 +704,7 @@ describe('EditorPane', () => {
         ]),
       });
 
+      // eslint-disable-next-line testing-library/no-unnecessary-act
       await act(async () => {
         root.render(<EditorPane paneId="pane-1" />);
       });
@@ -711,6 +723,7 @@ describe('EditorPane', () => {
 
   describe('language override', () => {
     it('renders the LanguageSwitcher in the toolbar zone', async () => {
+      // eslint-disable-next-line testing-library/no-unnecessary-act
       await act(async () => {
         root.render(<EditorPane paneId="pane-1" />);
       });
@@ -721,6 +734,7 @@ describe('EditorPane', () => {
     });
 
     it('passes auto-detected language info when no override is set', async () => {
+      // eslint-disable-next-line testing-library/no-unnecessary-act
       await act(async () => {
         root.render(<EditorPane paneId="pane-1" />);
       });
@@ -737,6 +751,7 @@ describe('EditorPane', () => {
         buffers: new Map([['buffer-1', { ...mockBuffer, languageOverride: 'python' }]]),
       });
 
+      // eslint-disable-next-line testing-library/no-unnecessary-act
       await act(async () => {
         root.render(<EditorPane paneId="pane-1" />);
       });
@@ -748,6 +763,7 @@ describe('EditorPane', () => {
     });
 
     it('calls setBufferLanguageOverride when language is changed from the switcher', async () => {
+      // eslint-disable-next-line testing-library/no-unnecessary-act
       await act(async () => {
         root.render(<EditorPane paneId="pane-1" />);
       });
@@ -780,6 +796,7 @@ describe('EditorPane', () => {
         ]),
       });
 
+      // eslint-disable-next-line testing-library/no-unnecessary-act
       await act(async () => {
         root.render(<EditorPane paneId="pane-1" />);
       });
@@ -797,6 +814,7 @@ describe('EditorPane', () => {
         buffers: new Map(),
       });
 
+      // eslint-disable-next-line testing-library/no-unnecessary-act
       await act(async () => {
         root.render(<EditorPane paneId="pane-1" />);
       });

@@ -351,31 +351,35 @@ const SearchView: React.FC<SearchViewProps> = ({ onFileClick }) => {
     closeContextMenu();
   }, [contextMenu, closeContextMenu]);
 
-  const handleExcludeFromSearch = useCallback(() => {
-    if (!contextMenu) return;
+  const handleExcludeFromSearch = useCallback(
+    () => {
+      if (!contextMenu) return;
 
-    let patternToExclude: string;
-    if (contextMenu.isFileHeader) {
-      // Exclude the file itself
-      patternToExclude = getRelativePath(contextMenu.filePath);
-    } else {
-      // Exclude the parent directory
-      patternToExclude = getParentDirectory(contextMenu.filePath);
-    }
+      let patternToExclude: string;
+      if (contextMenu.isFileHeader) {
+        // Exclude the file itself
+        patternToExclude = getRelativePath(contextMenu.filePath);
+      } else {
+        // Exclude the parent directory
+        patternToExclude = getParentDirectory(contextMenu.filePath);
+      }
 
-    // Check if pattern already exists in the exclude list
-    const existingPatterns = excludePatterns
-      .split(',')
-      .map((p) => p.trim())
-      .filter((p) => p.length > 0);
+      // Check if pattern already exists in the exclude list
+      const existingPatterns = excludePatterns
+        .split(',')
+        .map((p) => p.trim())
+        .filter((p) => p.length > 0);
 
-    if (!existingPatterns.includes(patternToExclude)) {
-      const newExclude = existingPatterns.length > 0 ? `${excludePatterns},${patternToExclude}` : patternToExclude;
-      setExcludePatterns(newExclude);
-    }
+      if (!existingPatterns.includes(patternToExclude)) {
+        const newExclude = existingPatterns.length > 0 ? `${excludePatterns},${patternToExclude}` : patternToExclude;
+        setExcludePatterns(newExclude);
+      }
 
-    closeContextMenu();
-  }, [contextMenu, excludePatterns, closeContextMenu]);
+      closeContextMenu();
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [contextMenu, excludePatterns, closeContextMenu],
+  );
 
   // Determine the label for the exclude action
   const getExcludeLabel = (): string => {

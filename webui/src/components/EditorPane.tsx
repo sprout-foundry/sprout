@@ -681,11 +681,15 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     // can skip a redundant reconfigure on the same buffer/language combo.
     lastInitLanguageKey.current = `${buffer?.id}:${buffer?.languageOverride ?? ''}:${buffer?.file?.ext ?? ''}:${buffer?.file?.name ?? ''}`;
 
+    // Snapshot ref value for cleanup (ref.current in cleanup triggers exhaustive-deps)
+    const debounced = debouncedDiag.current;
+
     return () => {
-      debouncedDiag.current.cancel();
+      debounced.cancel();
       view.destroy();
       viewRef.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- handleSave intentionally excluded to prevent infinite re-init loop when buffer changes
   }, [
     paneId,
     buffer?.id,
@@ -698,7 +702,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     setBufferModified,
     updateBufferCursor,
     updateBufferScroll,
-  ]); // eslint-disable-line react-hooks/exhaustive-deps -- handleSave intentionally excluded to prevent infinite re-init loop when buffer changes
+  ]);
 
   // Reconfigure the language compartment when the language override changes,
   // without requiring a full editor re-initialization.
@@ -739,6 +743,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     } else {
       setSnippetLanguage(view, null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buffer?.id, buffer?.languageOverride, buffer?.file?.ext, buffer?.file?.name]);
 
   // Toggle word wrap: updates React state (for toolbar button) and
@@ -983,6 +988,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   const languageInfo = useMemo(() => {
     if (!buffer || !buffer.file) return { languageId: null as string | null, isAutoDetected: false };
     return resolveLanguageId(buffer.languageOverride ?? null, buffer.file?.ext?.replace(/^\./, ''), buffer.file?.name);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buffer?.languageOverride, buffer?.file?.ext, buffer?.file?.name]);
 
   const handleLanguageChange = useCallback(
@@ -990,6 +996,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       if (!buffer) return;
       setBufferLanguageOverride(buffer.id, languageId);
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [buffer?.id, setBufferLanguageOverride],
   );
 
@@ -1090,8 +1097,8 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         />
         <SvgPreview
           content={buffer.content || ''}
-          fileName={buffer.metadata?.sourceName || buffer.file.name}
-          sourcePath={buffer.metadata?.sourcePath}
+          fileName={(buffer.metadata?.sourceName || buffer.file.name) as string}
+          sourcePath={buffer.metadata?.sourcePath as string | undefined}
         />
       </div>
     );

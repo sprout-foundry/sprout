@@ -102,6 +102,7 @@ describe('Sidebar provider selection', () => {
 
     const onProviderChange = jest.fn();
 
+    // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
       root.render(
         <Sidebar
@@ -132,6 +133,7 @@ describe('Sidebar provider selection', () => {
     expect(onProviderChange).toHaveBeenCalledWith('anthropic');
     expect(providerSelect.value).toBe('anthropic');
 
+    // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
       root.render(
         <Sidebar
@@ -144,6 +146,7 @@ describe('Sidebar provider selection', () => {
       );
     });
 
+    // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
       root.render(
         <Sidebar
@@ -183,6 +186,7 @@ describe('Sidebar provider selection', () => {
       current_model: 'claude-3-7-sonnet',
     });
 
+    // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
       root.render(<Sidebar isConnected={true} isOpen={true} provider="" model="" />);
     });

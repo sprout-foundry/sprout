@@ -29,6 +29,7 @@ function renderBreadcrumb(
 ) {
   const { filePath = 'src/components/App.tsx', onNavigate, symbols, onNavigateToSymbol } = props;
 
+  // eslint-disable-next-line testing-library/no-unnecessary-act
   act(() => {
     root.render(
       <EditorBreadcrumb

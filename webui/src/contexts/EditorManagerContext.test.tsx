@@ -57,6 +57,7 @@ function TestConsumer() {
  * Mounts the EditorManagerProvider with a TestConsumer child.
  */
 function renderProvider() {
+  // eslint-disable-next-line testing-library/no-unnecessary-act
   act(() => {
     root.render(React.createElement(EditorManagerProvider, null, React.createElement(TestConsumer)));
   });

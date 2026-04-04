@@ -71,6 +71,7 @@ function renderMenu(
   } = props;
   const onClose = jest.fn();
 
+  // eslint-disable-next-line testing-library/no-unnecessary-act
   act(() => {
     root = createRoot(mountPoint!);
     root.render(

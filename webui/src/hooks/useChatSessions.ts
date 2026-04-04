@@ -72,6 +72,7 @@ export function useChatSessions({
     } catch (error) {
       debugLog('[chat] Failed to load chat sessions:', error);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleActiveChatChange = useCallback(async (id: string) => {
@@ -138,7 +139,7 @@ export function useChatSessions({
       // Use backend active_query as the authoritative source of truth for
       // isProcessing — it knows whether the query actually completed, even
       // if we missed the query_completed WebSocket event while on another chat.
-      const backendIsActive = !!(response.chat_session as any).active_query;
+      const backendIsActive = !!(response.chat_session as Record<string, unknown>).active_query;
 
       setState((prev) => {
         // Only update messages if backend has equal or more messages than what's
@@ -164,6 +165,7 @@ export function useChatSessions({
       activeChatIdRef.current = currentId;
       debugLog('[chat] Failed to switch chat session:', error);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleCreateChat = useCallback(async (): Promise<string | null> => {
@@ -179,6 +181,7 @@ export function useChatSessions({
       setState((prev) => ({ ...prev, lastError: message }));
       return null;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleDeleteChat = useCallback(
@@ -202,6 +205,7 @@ export function useChatSessions({
         debugLog('[chat] Failed to delete chat session:', error);
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [handleActiveChatChange],
   );
 
@@ -213,6 +217,7 @@ export function useChatSessions({
     } catch (error) {
       debugLog('[chat] Failed to rename chat session:', error);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return {

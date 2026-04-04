@@ -48,22 +48,28 @@ const SUB_TABS: { id: SettingsSubTab; label: string }[] = [
 /* ─── Helpers ────────────────────────────────────────────────── */
 
 /** Get a nested value from an object using dot-notation key */
-function getNestedValue(obj: Record<string, any>, key: string): any {
-  return key.split('.').reduce((o: any, k: string) => (o && o[k] !== undefined ? o[k] : ''), obj);
+function getNestedValue(obj: Record<string, unknown>, key: string): unknown {
+  return key
+    .split('.')
+    .reduce(
+      (o: unknown, k: string) =>
+        o && typeof o === 'object' && k in (o as Record<string, unknown>) ? (o as Record<string, unknown>)[k] : '',
+      obj,
+    );
 }
 
 /** Set a nested value in an object using dot-notation key (immutable) */
-function setNestedValue(obj: Record<string, any>, key: string, value: any): Record<string, any> {
+function setNestedValue(obj: Record<string, unknown>, key: string, value: unknown): Record<string, unknown> {
   const parts = key.split('.');
   const result = { ...obj };
-  let current: any = result;
+  let current: Record<string, unknown> = result;
   for (let i = 0; i < parts.length - 1; i++) {
     if (current[parts[i]] === undefined || typeof current[parts[i]] !== 'object') {
       current[parts[i]] = {};
     } else {
-      current[parts[i]] = { ...current[parts[i]] };
+      current[parts[i]] = { ...(current[parts[i]] as Record<string, unknown>) };
     }
-    current = current[parts[i]];
+    current = current[parts[i]] as Record<string, unknown>;
   }
   current[parts[parts.length - 1]] = value;
   return result;
@@ -127,7 +133,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
       let changed = false;
 
       Object.entries(prev).forEach(([key, draftValue]) => {
-        const persistedValue = String(getNestedValue(settings as any, key) || '');
+        const persistedValue = String(getNestedValue(settings as unknown as Record<string, unknown>, key) || '');
         if (draftValue === persistedValue) {
           if (next === prev) next = { ...prev };
           delete next[key];
@@ -177,7 +183,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
    * Optimistically updates local state, then persists via API.
    */
   const updateSetting = useCallback(
-    async (keyOrPath: string, value: any) => {
+    async (keyOrPath: string, value: unknown) => {
       const current = settingsRef.current;
       if (!current) return;
 
@@ -185,7 +191,11 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
       setSavingKey(keyOrPath);
 
       try {
-        const updated = setNestedValue(current as any, keyOrPath, value) as LeditSettings;
+        const updated = setNestedValue(
+          current as unknown as Record<string, unknown>,
+          keyOrPath,
+          value,
+        ) as unknown as LeditSettings;
         onSettingsChanged(updated);
         await api.updateSettings({ [keyOrPath]: value });
         showToast('Saved', 'success');
@@ -203,7 +213,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
 
   const renderToggle = (settingKey: string, label: string) => {
     if (!settings) return null;
-    const checked = !!getNestedValue(settings as any, settingKey);
+    const checked = !!getNestedValue(settings as unknown as Record<string, unknown>, settingKey);
     return (
       <label className="styled-toggle">
         <input type="checkbox" checked={checked} onChange={() => updateSetting(settingKey, !checked)} />
@@ -215,7 +225,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
 
   const renderSelect = (settingKey: string, label: string, options: string[]) => {
     if (!settings) return null;
-    const value = String(getNestedValue(settings as any, settingKey) || '');
+    const value = String(getNestedValue(settings as unknown as Record<string, unknown>, settingKey) || '');
     return (
       <div className="config-item">
         <label htmlFor={`setting-${settingKey}`}>{label}</label>
@@ -237,7 +247,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
 
   const renderNumberInput = (settingKey: string, label: string, min?: number, max?: number, step = 1) => {
     if (!settings) return null;
-    const value = getNestedValue(settings as any, settingKey);
+    const value = getNestedValue(settings as unknown as Record<string, unknown>, settingKey);
     return (
       <div className="config-item">
         <label htmlFor={`setting-${settingKey}`}>{label}</label>
@@ -245,7 +255,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
           id={`setting-${settingKey}`}
           type="number"
           className="styled-input config-row-input"
-          value={value ?? ''}
+          value={String(value ?? '')}
           min={min}
           max={max}
           step={step}
@@ -260,7 +270,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
 
   const renderTextInput = (settingKey: string, label: string, placeholder?: string) => {
     if (!settings) return null;
-    const persistedValue = String(getNestedValue(settings as any, settingKey) || '');
+    const persistedValue = String(getNestedValue(settings as unknown as Record<string, unknown>, settingKey) || '');
     const value = textDrafts[settingKey] ?? persistedValue;
     return (
       <div className="config-item">
@@ -308,7 +318,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
     helpText?: string,
   ) => {
     if (!settings) return null;
-    const persistedValue = String(getNestedValue(settings as any, settingKey) || '');
+    const persistedValue = String(getNestedValue(settings as unknown as Record<string, unknown>, settingKey) || '');
     const value = textDrafts[settingKey] ?? persistedValue;
     return (
       <div className="config-item">
@@ -372,7 +382,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
 
   const handleAddServer = async () => {
     if (!serverName.trim()) return;
-    const server: Record<string, any> = { command: serverCommand };
+    const server: Record<string, unknown> = { command: serverCommand };
     if (serverArgs.trim()) {
       server.args = serverArgs.split(/\s+/).filter(Boolean);
     }
@@ -393,7 +403,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
 
   const handleUpdateServer = async () => {
     if (!editingServer?.originalName || !serverName.trim()) return;
-    const server: Record<string, any> = { command: serverCommand };
+    const server: Record<string, unknown> = { command: serverCommand };
     if (serverArgs.trim()) {
       server.args = serverArgs.split(/\s+/).filter(Boolean);
     }
@@ -465,7 +475,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
       }
     }
 
-    const provider: Record<string, any> = {
+    const provider: Record<string, unknown> = {
       endpoint: providerApiBase.trim(),
       model_name: modelName,
       context_size: providerContextSize,
@@ -514,7 +524,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
       }
     }
 
-    const provider: Record<string, any> = {
+    const provider: Record<string, unknown> = {
       endpoint: providerApiBase.trim(),
       model_name: modelName,
       context_size: providerContextSize,
@@ -631,8 +641,12 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
 
       /* ── Subagents ──────────────────────────────────────── */
       case 'subagents': {
-        const currentSubProvider = String(getNestedValue(settings as any, 'subagent_provider') || '');
-        const currentSubModel = String(getNestedValue(settings as any, 'subagent_model') || '');
+        const currentSubProvider = String(
+          getNestedValue(settings as unknown as Record<string, unknown>, 'subagent_provider') || '',
+        );
+        const currentSubModel = String(
+          getNestedValue(settings as unknown as Record<string, unknown>, 'subagent_model') || '',
+        );
 
         // Get models for the currently selected provider
         const selectedProvider = subagentProviders.find((p) => p.id === currentSubProvider);
@@ -823,33 +837,38 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
               )}
 
               <div className="crud-list">
-                {serverEntries.map(([name, cfg]: [string, any]) => (
-                  <div key={name} className="crud-item">
-                    <span className="crud-item-name">{name}</span>
-                    <span className="crud-item-detail">{cfg?.command || ''}</span>
-                    <button
-                      type="button"
-                      className="crud-btn"
-                      title="Edit server"
-                      onClick={() => {
-                        setEditingServer({ mode: 'edit', originalName: name });
-                        setServerName(name);
-                        setServerCommand(cfg?.command || '');
-                        setServerArgs(Array.isArray(cfg?.args) ? cfg.args.join(' ') : '');
-                      }}
-                    >
-                      <Pencil size={12} />
-                    </button>
-                    <button
-                      type="button"
-                      className="crud-btn danger"
-                      title="Delete server"
-                      onClick={() => handleDeleteServer(name)}
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                ))}
+                {serverEntries.map(([name, cfg]) => {
+                  const server = cfg as Record<string, unknown>;
+                  return (
+                    <div key={name} className="crud-item">
+                      <span className="crud-item-name">{name}</span>
+                      <span className="crud-item-detail">{(server.command as string) || ''}</span>
+                      <button
+                        type="button"
+                        className="crud-btn"
+                        title="Edit server"
+                        onClick={() => {
+                          setEditingServer({ mode: 'edit', originalName: name });
+                          setServerName(name);
+                          setServerCommand((server.command as string) || '');
+                          setServerArgs(
+                            Array.isArray(server.args) ? (server.args as unknown[]).map(String).join(' ') : '',
+                          );
+                        }}
+                      >
+                        <Pencil size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        className="crud-btn danger"
+                        title="Delete server"
+                        onClick={() => handleDeleteServer(name)}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  );
+                })}
 
                 {/* Inline form (Add / Edit) */}
                 {editingServer && (
@@ -934,48 +953,55 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
             )}
 
             <div className="crud-list">
-              {providerEntries.map(([name, cfg]: [string, any]) => (
-                <div key={name} className="crud-item">
-                  <span className="crud-item-name">{name}</span>
-                  <span className="crud-item-detail">{cfg?.endpoint || cfg?.api_base || ''}</span>
-                  <button
-                    type="button"
-                    className="crud-btn"
-                    title="Edit provider"
-                    onClick={() => {
-                      setEditingProvider({ mode: 'edit', originalName: name });
-                      setProviderName(name);
-                      setProviderApiBase(cfg?.endpoint || cfg?.api_base || '');
-                      setProviderModelName(
-                        cfg?.model_name || (Array.isArray(cfg?.models) && cfg.models.length > 0 ? cfg.models[0] : ''),
-                      );
-                      setProviderContextSize(cfg?.context_size || 32768);
-                      setProviderEnvVar(cfg?.env_var || '');
-                      setProviderSupportsVision(!!cfg?.supports_vision);
-                      setProviderVisionModel(cfg?.vision_model || '');
-                      // Format model_context_sizes as "model1:8192,model2:131072"
-                      if (cfg?.model_context_sizes && typeof cfg.model_context_sizes === 'object') {
-                        const pairs = Object.entries(cfg.model_context_sizes)
-                          .map(([model, size]) => `${model}:${size}`)
-                          .join(',');
-                        setProviderModelContextSizes(pairs);
-                      } else {
-                        setProviderModelContextSizes('');
-                      }
-                    }}
-                  >
-                    <Pencil size={12} />
-                  </button>
-                  <button
-                    type="button"
-                    className="crud-btn danger"
-                    title="Delete provider"
-                    onClick={() => handleDeleteProvider(name)}
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              ))}
+              {providerEntries.map(([name, cfg]) => {
+                const p = cfg as Record<string, unknown>;
+                return (
+                  <div key={name} className="crud-item">
+                    <span className="crud-item-name">{name}</span>
+                    <span className="crud-item-detail">{(p.endpoint as string) || (p.api_base as string) || ''}</span>
+                    <button
+                      type="button"
+                      className="crud-btn"
+                      title="Edit provider"
+                      onClick={() => {
+                        setEditingProvider({ mode: 'edit', originalName: name });
+                        setProviderName(name);
+                        setProviderApiBase((p.endpoint as string) || (p.api_base as string) || '');
+                        setProviderModelName(
+                          (p.model_name as string) ||
+                            (Array.isArray(p.models) && (p.models as unknown[]).length > 0
+                              ? String((p.models as unknown[])[0])
+                              : ''),
+                        );
+                        setProviderContextSize((p.context_size as number) || 32768);
+                        setProviderEnvVar((p.env_var as string) || '');
+                        setProviderSupportsVision(!!p.supports_vision);
+                        setProviderVisionModel((p.vision_model as string) || '');
+                        // Format model_context_sizes as "model1:8192,model2:131072"
+                        const mcs = p.model_context_sizes;
+                        if (mcs && typeof mcs === 'object') {
+                          const pairs = Object.entries(mcs as Record<string, unknown>)
+                            .map(([model, size]) => `${model}:${size}`)
+                            .join(',');
+                          setProviderModelContextSizes(pairs);
+                        } else {
+                          setProviderModelContextSizes('');
+                        }
+                      }}
+                    >
+                      <Pencil size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      className="crud-btn danger"
+                      title="Delete provider"
+                      onClick={() => handleDeleteProvider(name)}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                );
+              })}
 
               {/* Inline form */}
               {editingProvider && (
@@ -1118,8 +1144,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onSettingsChang
           <div className="section">
             <h4>Skills ({skillEntries.length})</h4>
             <div className="skills-list">
-              {skillEntries.map(([name, cfg]: [string, any]) => {
-                const enabled = !!cfg?.enabled;
+              {skillEntries.map(([name, cfg]: [string, unknown]) => {
+                const enabled = !!(cfg as Record<string, unknown>).enabled;
                 return (
                   <div key={name} className="skill-item">
                     <span className="skill-item-name">{name}</span>

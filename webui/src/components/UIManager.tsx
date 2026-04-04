@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Dropdown, { type DropdownItem } from './Dropdown';
 import QuickPrompt from './QuickPrompt';
 import Progress from './Progress';
-import FileBrowser from './FileBrowser';
+import FileBrowser, { type FileNode } from './FileBrowser';
 import { uiService, type UIDropdownItem, type UIDropdownOptions, type UIQuickOption } from '../services/ui';
 
 interface UIManagerProps {
@@ -65,7 +65,7 @@ const UIManager: React.FC<UIManagerProps> = ({ children }) => {
     initialPath?: string;
     allowDirectories?: boolean;
     allowedExtensions?: string[];
-    resolve?: (file: any) => void;
+    resolve?: (file: Record<string, unknown>) => void;
   }>({
     isOpen: false,
     allowDirectories: false,
@@ -237,9 +237,9 @@ const UIManager: React.FC<UIManagerProps> = ({ children }) => {
     setInputPromptState((prev) => ({ ...prev, isOpen: false, promptId: undefined }));
   };
 
-  const handleFileBrowserSelect = (file: any) => {
+  const handleFileBrowserSelect = (file: FileNode) => {
     if (fileBrowserState.resolve) {
-      fileBrowserState.resolve(file);
+      fileBrowserState.resolve(file as unknown as Record<string, unknown>);
     }
     setFileBrowserState((prev) => ({ ...prev, isOpen: false }));
   };

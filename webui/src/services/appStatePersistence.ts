@@ -58,7 +58,7 @@ export const loadPersistedAppState = (): Partial<AppState> | null => {
 
     const parsed = JSON.parse(raw);
     const parsedMessages: Message[] = Array.isArray(parsed.messages)
-      ? parsed.messages.map((message: any) => ({
+      ? parsed.messages.map((message: Record<string, unknown>) => ({
           ...message,
           timestamp: parseDate(message?.timestamp),
           toolRefs: Array.isArray(message?.toolRefs) ? message.toolRefs : undefined,
@@ -72,7 +72,7 @@ export const loadPersistedAppState = (): Partial<AppState> | null => {
       currentView: ['chat', 'editor', 'git'].includes(parsed.currentView) ? parsed.currentView : 'chat',
       messages: parsedMessages,
       fileEdits: Array.isArray(parsed.fileEdits)
-        ? parsed.fileEdits.map((edit: any) => ({
+        ? parsed.fileEdits.map((edit: Record<string, unknown>) => ({
             ...edit,
             timestamp: parseDate(edit?.timestamp),
           }))

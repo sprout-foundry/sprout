@@ -5,6 +5,7 @@ import Chat from './Chat';
 import DiffSurface from './DiffSurface';
 import EditorPane from './EditorPane';
 import DiffWorkspaceTab from './DiffWorkspaceTab';
+import type { GitDiffResponse } from '../hooks/useGitWorkspace';
 import ReviewWorkspaceTab from './ReviewWorkspaceTab';
 import './WorkspacePane.css';
 
@@ -15,7 +16,7 @@ interface ToolExecution {
   message?: string;
   startTime: Date;
   endTime?: Date;
-  details?: any;
+  details?: unknown;
   arguments?: string;
   result?: string;
   persona?: string;
@@ -73,7 +74,7 @@ interface WorkspacePaneProps {
         content: string;
         status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
       }>;
-      queryProgress?: any;
+      queryProgress?: unknown;
       lastError?: string | null;
       isProcessing?: boolean;
     }
@@ -89,7 +90,7 @@ interface WorkspacePaneProps {
     isProcessing?: boolean;
     lastError?: string | null;
     toolExecutions?: ToolExecution[];
-    queryProgress?: any;
+    queryProgress?: unknown;
     currentTodos?: Array<{
       id: string;
       content: string;
@@ -116,7 +117,7 @@ interface WorkspacePaneProps {
   };
   diffState: {
     activeDiffPath: string | null;
-    activeDiff: any;
+    activeDiff: unknown;
     diffMode: 'combined' | 'staged' | 'unstaged';
     isDiffLoading: boolean;
     diffError: string | null;
@@ -208,7 +209,7 @@ const WorkspacePane: React.FC<WorkspacePaneProps> = ({
             <div className="workspace-tab-header">
               <div>
                 <div className="workspace-tab-eyebrow">Commit Diff</div>
-                <h2>{buffer.metadata?.title || buffer.file.name}</h2>
+                <h2>{String(buffer.metadata?.title || buffer.file.name)}</h2>
               </div>
             </div>
             <DiffSurface diffText={String(metadata.diffContent)} />
@@ -217,18 +218,22 @@ const WorkspacePane: React.FC<WorkspacePaneProps> = ({
       }
 
       // Working-tree diff (existing behavior)
-      const diffPath = buffer.metadata?.sourcePath;
+      const diffPath = buffer.metadata?.sourcePath as string | undefined;
       const isActiveDiff = diffState.activeDiffPath === diffPath;
       return (
         <DiffWorkspaceTab
           path={diffPath || diffState.activeDiffPath || buffer.file.name}
-          diff={isActiveDiff ? diffState.activeDiff : buffer.metadata?.diff || null}
-          diffMode={isActiveDiff ? diffState.diffMode : buffer.metadata?.diffMode || 'combined'}
+          diff={(isActiveDiff ? diffState.activeDiff : buffer.metadata?.diff || null) as GitDiffResponse | null}
+          diffMode={
+            isActiveDiff
+              ? diffState.diffMode
+              : (((buffer.metadata?.diffMode as string) || 'combined') as 'staged' | 'combined' | 'unstaged')
+          }
           isLoading={diffState.isDiffLoading && isActiveDiff}
           error={isActiveDiff ? diffState.diffError : null}
           onDiffModeChange={diffState.onDiffModeChange}
-          title={buffer.metadata?.title}
-          modeOptions={buffer.metadata?.modeOptions}
+          title={buffer.metadata?.title as string | undefined}
+          modeOptions={buffer.metadata?.modeOptions as ('staged' | 'combined' | 'unstaged')[] | undefined}
         />
       );
     }

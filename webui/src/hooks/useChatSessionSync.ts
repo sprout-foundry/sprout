@@ -10,7 +10,7 @@ export type OpenWorkspaceBufferFn = (options: {
   ext?: string;
   isPinned?: boolean;
   isClosable?: boolean;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }) => string;
 
 export interface UseChatSessionSyncOptions {
@@ -20,7 +20,7 @@ export interface UseChatSessionSyncOptions {
   buffers: Map<string, EditorBuffer>;
   onActiveChatChange?: (id: string) => void;
   openWorkspaceBuffer: OpenWorkspaceBufferFn;
-  updateBufferMetadata: (bufferId: string, updates: Record<string, any>) => void;
+  updateBufferMetadata: (bufferId: string, updates: Record<string, unknown>) => void;
   updateBufferTitle: (bufferId: string, title: string) => void;
 }
 

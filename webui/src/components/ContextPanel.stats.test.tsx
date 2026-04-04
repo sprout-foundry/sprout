@@ -155,6 +155,7 @@ const flushPromises = async () => {
 async function renderPanel(props: Record<string, unknown>) {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const ContextPanel = require('./ContextPanel').default;
+  // eslint-disable-next-line testing-library/no-unnecessary-act
   await act(async () => {
     root.render(React.createElement(ContextPanel, props));
   });

@@ -31,7 +31,7 @@ export interface ChatSessionSwitchResponse {
     total_cost?: number;
     session_id?: string;
     agent_state?: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
 }
 

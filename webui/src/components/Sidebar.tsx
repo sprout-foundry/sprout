@@ -47,7 +47,7 @@ interface SidebarProps {
   recentFiles?: Array<{ path: string; modified: boolean }>;
   recentLogs?:
     | string[]
-    | Array<{ id: string; type: string; timestamp: Date; data: any; level: string; category: string }>;
+    | Array<{ id: string; type: string; timestamp: Date; data: unknown; level: string; category: string }>;
   isMobileMenuOpen?: boolean;
   onMobileMenuToggle?: () => void;
   sidebarCollapsed?: boolean;
@@ -73,7 +73,7 @@ interface SidebarProps {
       ext?: string;
       isPinned?: boolean;
       isClosable?: boolean;
-      metadata?: Record<string, any>;
+      metadata?: Record<string, unknown>;
     }) => string;
   };
 }
@@ -406,37 +406,42 @@ const Sidebar: React.FC<SidebarProps> = ({
   /** Logs section: full event/log stream */
   // Terminal-style log formatting helper
   const formatLogLine = (log: ProviderLogEntry): string => {
-    const d = log.data as any;
+    const d = log.data as Record<string, unknown> | null | undefined;
     switch (log.type) {
       case 'query_started':
-        return `Query: ${d?.query?.substring(0, 80) || 'No query'}`;
+        return `Query: ${String(d?.query ?? '').substring(0, 80) || 'No query'}`;
       case 'tool_start':
-        return `${d?.display_name || d?.tool_name || 'tool'} started`;
+        return `${String(d?.display_name || d?.tool_name || 'tool')} started`;
       case 'tool_end':
-        return `${d?.display_name || d?.tool_name || 'tool'} ${d?.status === 'failed' ? 'FAILED' : 'done'}`;
+        return `${String(d?.display_name || d?.tool_name || 'tool')} ${d?.status === 'failed' ? 'FAILED' : 'done'}`;
       case 'tool_execution':
-        return `${d?.tool || 'tool'}: ${d?.status || 'running'}`;
+        return `${String(d?.tool || 'tool')}: ${String(d?.status || 'running')}`;
       case 'file_changed': {
-        const p = d?.path || d?.file_path || 'file';
-        return `${d?.action || 'changed'}: ${p.split('/').pop() || p}`;
+        const p = String(d?.path || d?.file_path || 'file');
+        return `${String(d?.action || 'changed')}: ${p.split('/').pop() || p}`;
       }
       case 'stream_chunk':
-        return `stream: ${(d?.chunk || '').substring(0, 100)}`;
+        return `stream: ${String(d?.chunk || '').substring(0, 100)}`;
       case 'error':
-        return `Error: ${d?.message || 'unknown'}`;
+        return `Error: ${String(d?.message || 'unknown')}`;
       case 'connection_status':
         return d?.connected ? 'Connected' : 'Disconnected';
       case 'query_completed':
         return 'Query completed';
       case 'query_progress':
-        return `Step: ${d?.step || '?'}`;
+        return `Step: ${d?.step ?? '?'}`;
       case 'todo_update': {
         const todos = d?.todos;
         if (!Array.isArray(todos)) return 'todos updated';
         const summary = todos
-          .map((t: any) => `${t.status === 'completed' ? '✓' : t.status === 'in_progress' ? '→' : '○'} ${t.content}`)
+          .map((t: Record<string, unknown>) => {
+            const status = String(t.status);
+            const icon = status === 'completed' ? '✓' : status === 'in_progress' ? '→' : '○';
+            return `${icon} ${String(t.content)}`;
+          })
           .join('\n  ');
-        return `Todos (${todos.filter((t: any) => t.status === 'completed').length}/${todos.length}): ${summary}`;
+        const completedCount = todos.filter((t: Record<string, unknown>) => t.status === 'completed').length;
+        return `Todos (${completedCount}/${todos.length}): ${summary}`;
       }
       case 'agent_message': {
         const msg = String(d?.message || '');
@@ -444,7 +449,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         return `[agent] ${msg.replace(new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[mGKHJABCD]`, 'g'), '').substring(0, 120)}`;
       }
       case 'metrics_update':
-        return `Model: ${d?.model || '?'} | Provider: ${d?.provider || '?'}`;
+        return `Model: ${String(d?.model || '?')} | Provider: ${String(d?.provider || '?')}`;
       default:
         return `${log.type}: ${JSON.stringify(d || {}).substring(0, 80)}`;
     }

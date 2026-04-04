@@ -46,5 +46,5 @@ export function useSessionRestored({ setState }: UseSessionRestoredOptions): voi
 
     window.addEventListener('ledit:session-restored', handleSessionRestored);
     return () => window.removeEventListener('ledit:session-restored', handleSessionRestored);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- setState is a stable useState setter
 }

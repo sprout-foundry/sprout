@@ -28,22 +28,26 @@ interface RevisionListPanelProps {
   allowRollback?: boolean;
 }
 
-const normalizeRevision = (raw: any): Revision => {
-  const files = Array.isArray(raw?.files)
-    ? raw.files.map((file: any) => ({
-        file_revision_hash: typeof file?.file_revision_hash === 'string' ? file.file_revision_hash : undefined,
-        path: typeof file?.path === 'string' ? file.path : 'Unknown',
-        operation: typeof file?.operation === 'string' ? file.operation : 'edited',
-        lines_added: Number(file?.lines_added || 0),
-        lines_deleted: Number(file?.lines_deleted || 0),
-      }))
+const normalizeRevision = (raw: unknown): Revision => {
+  const rec: Record<string, unknown> = raw != null && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const files = Array.isArray(rec.files)
+    ? (rec.files as unknown[]).map((file): RevisionFile => {
+        const f = (file as Record<string, unknown>) ?? {};
+        return {
+          file_revision_hash: typeof f.file_revision_hash === 'string' ? f.file_revision_hash : undefined,
+          path: typeof f.path === 'string' ? f.path : 'Unknown',
+          operation: typeof f.operation === 'string' ? f.operation : 'edited',
+          lines_added: Number(f.lines_added || 0),
+          lines_deleted: Number(f.lines_deleted || 0),
+        };
+      })
     : [];
 
   return {
-    revision_id: typeof raw?.revision_id === 'string' ? raw.revision_id : 'unknown',
-    timestamp: typeof raw?.timestamp === 'string' ? raw.timestamp : new Date().toISOString(),
+    revision_id: typeof rec.revision_id === 'string' ? rec.revision_id : 'unknown',
+    timestamp: typeof rec.timestamp === 'string' ? rec.timestamp : new Date().toISOString(),
     files,
-    description: typeof raw?.description === 'string' ? raw.description : '',
+    description: typeof rec.description === 'string' ? rec.description : '',
   };
 };
 
@@ -104,7 +108,7 @@ const RevisionListPanel: React.FC<RevisionListPanelProps> = ({ mode, onOpenDiff,
     setIsLoading(true);
     setError(null);
     try {
-      let rawItems: any[] = [];
+      let rawItems: unknown[] = [];
       if (mode === 'global') {
         const response = await apiService.getChangelog();
         if (signal.aborted) return;

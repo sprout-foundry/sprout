@@ -110,7 +110,8 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
     const [showIgnoredFiles, setShowIgnoredFiles] = useState<boolean>(() => {
       try {
         return localStorage.getItem('filetree-show-ignored') !== 'false';
-      } catch {
+      } catch (err) {
+        debugLog('Failed to read showIgnoredFiles setting from localStorage:', err);
         return true;
       }
     });
@@ -182,6 +183,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
             return a.name.localeCompare(b.name);
           });
       } catch (err) {
+        debugLog('[fetchFiles] Failed to fetch file list:', err);
         if (err instanceof Error && err.message.includes('Unexpected token')) {
           throw new Error('Backend not connected. Start with: ./ledit agent');
         }
@@ -211,6 +213,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
         setFiles(nextFiles);
         onRefresh?.();
       } catch (err) {
+        debugLog('[refreshTree] Failed to refresh file tree:', err);
         setError(err instanceof Error ? err.message : 'Unknown error');
         setFiles([]);
       } finally {
@@ -403,6 +406,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
         setDraft(null);
         setDraftValue('');
       } catch (err) {
+        debugLog('Failed to save new file/folder:', err);
         setDraftError(err instanceof Error ? err.message : 'Failed to save item');
       } finally {
         setLoading(false);
@@ -443,6 +447,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
           await refreshTree();
           onDeleteItem?.(file.path);
         } catch (err) {
+          debugLog('Failed to delete item:', err);
           setError(err instanceof Error ? err.message : 'Failed to delete item');
         } finally {
           setLoading(false);
@@ -769,6 +774,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
           setInternalSelectedFile(newPath);
           onItemCreated?.();
         } catch (err) {
+          debugLog('Failed to move item:', err);
           setError(err instanceof Error ? err.message : 'Failed to move item');
         } finally {
           setLoading(false);

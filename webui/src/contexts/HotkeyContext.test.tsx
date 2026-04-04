@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { act } from 'react';
-import { createRoot, Root } from 'react-dom/client';
+import { createRoot, type Root } from 'react-dom/client';
 import { buildKeyString, HotkeyProvider } from './HotkeyContext';
 
 // ---------------------------------------------------------------------------
@@ -230,9 +230,7 @@ describe('HotkeyProvider', () => {
 describe('fallback hotkeys are wired to hotkey commands', () => {
   it('dispatches ledit:hotkey when a fallback hotkey matches', async () => {
     act(() => {
-      root.render(
-        React.createElement(HotkeyProvider, null, React.createElement('div')),
-      );
+      root.render(React.createElement(HotkeyProvider, null, React.createElement('div')));
     });
 
     // Wait for the provider's async initialization to settle
@@ -252,9 +250,7 @@ describe('fallback hotkeys are wired to hotkey commands', () => {
 
   it('does not dispatch hotkey when input is focused and hotkey is not global', async () => {
     act(() => {
-      root.render(
-        React.createElement(HotkeyProvider, null, React.createElement('div')),
-      );
+      root.render(React.createElement(HotkeyProvider, null, React.createElement('div')));
     });
 
     await flushPromises();
@@ -280,9 +276,7 @@ describe('fallback hotkeys are wired to hotkey commands', () => {
 
   it('dispatches global hotkey even when input is focused', async () => {
     act(() => {
-      root.render(
-        React.createElement(HotkeyProvider, null, React.createElement('div')),
-      );
+      root.render(React.createElement(HotkeyProvider, null, React.createElement('div')));
     });
 
     await flushPromises();
@@ -308,9 +302,7 @@ describe('fallback hotkeys are wired to hotkey commands', () => {
 
   it('dispatches event with correct detail (commandId and key)', async () => {
     act(() => {
-      root.render(
-        React.createElement(HotkeyProvider, null, React.createElement('div')),
-      );
+      root.render(React.createElement(HotkeyProvider, null, React.createElement('div')));
     });
 
     await flushPromises();
@@ -331,9 +323,7 @@ describe('fallback hotkeys are wired to hotkey commands', () => {
 
   it('does not dispatch event for unrecognized key combinations', async () => {
     act(() => {
-      root.render(
-        React.createElement(HotkeyProvider, null, React.createElement('div')),
-      );
+      root.render(React.createElement(HotkeyProvider, null, React.createElement('div')));
     });
 
     await flushPromises();
@@ -357,18 +347,20 @@ describe('fallback hotkeys are wired to hotkey commands', () => {
 
 describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
   let registeredCallback: ((commandId: string) => void) | null;
-  let cleanupFn: (() => void) | undefined;
+  let _cleanupFn: (() => void) | undefined;
 
   beforeEach(() => {
     registeredCallback = null;
-    cleanupFn = undefined;
+    _cleanupFn = undefined;
     // Install a mock leditDesktop API on the window.
     (window as any).leditDesktop = {
       platform: 'linux',
       onDesktopHotkey: (callback: (commandId: string) => void) => {
         registeredCallback = callback;
-        const handler = () => { registeredCallback = null; };
-        cleanupFn = handler;
+        const handler = () => {
+          registeredCallback = null;
+        };
+        _cleanupFn = handler;
         return handler;
       },
       appVersion: () => Promise.resolve('0.0.0-test'),
@@ -378,14 +370,12 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
   afterEach(() => {
     delete (window as any).leditDesktop;
     registeredCallback = null;
-    cleanupFn = undefined;
+    _cleanupFn = undefined;
   });
 
   it('dispatches ledit:hotkey when onDesktopHotkey fires a global command', async () => {
     act(() => {
-      root.render(
-        React.createElement(HotkeyProvider, null, React.createElement('div')),
-      );
+      root.render(React.createElement(HotkeyProvider, null, React.createElement('div')));
     });
 
     await flushPromises();
@@ -408,9 +398,7 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
 
   it('does NOT dispatch when input is focused and command is not global', async () => {
     act(() => {
-      root.render(
-        React.createElement(HotkeyProvider, null, React.createElement('div')),
-      );
+      root.render(React.createElement(HotkeyProvider, null, React.createElement('div')));
     });
 
     await flushPromises();
@@ -435,9 +423,7 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
 
   it('dispatches non-global command when no input is focused', async () => {
     act(() => {
-      root.render(
-        React.createElement(HotkeyProvider, null, React.createElement('div')),
-      );
+      root.render(React.createElement(HotkeyProvider, null, React.createElement('div')));
     });
 
     await flushPromises();
@@ -458,9 +444,7 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
 
   it('dispatches global command even when contentEditable is focused', async () => {
     act(() => {
-      root.render(
-        React.createElement(HotkeyProvider, null, React.createElement('div')),
-      );
+      root.render(React.createElement(HotkeyProvider, null, React.createElement('div')));
     });
 
     await flushPromises();
@@ -486,9 +470,7 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
 
   it('does not leak IPC listeners on unmount', async () => {
     act(() => {
-      root.render(
-        React.createElement(HotkeyProvider, null, React.createElement('div')),
-      );
+      root.render(React.createElement(HotkeyProvider, null, React.createElement('div')));
     });
 
     await flushPromises();
@@ -507,9 +489,7 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
     delete (window as any).leditDesktop;
 
     act(() => {
-      root.render(
-        React.createElement(HotkeyProvider, null, React.createElement('div')),
-      );
+      root.render(React.createElement(HotkeyProvider, null, React.createElement('div')));
     });
 
     await flushPromises();

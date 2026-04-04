@@ -84,7 +84,9 @@ export interface PaneLayoutManagerProps {
 
   // Nested split state (lifted from PaneLayoutManager for split-request coordination)
   nestedSplit: { hostPaneId: string; nestedPaneId: string; direction: 'vertical' | 'horizontal' } | null;
-  onNestedSplitChange: (split: { hostPaneId: string; nestedPaneId: string; direction: 'vertical' | 'horizontal' } | null) => void;
+  onNestedSplitChange: (
+    split: { hostPaneId: string; nestedPaneId: string; direction: 'vertical' | 'horizontal' } | null,
+  ) => void;
 
   // Outer layout ref for resize math
   containerRef: React.RefObject<HTMLDivElement | null>;
@@ -98,9 +100,7 @@ const PaneLayoutManager: React.FC<PaneLayoutManagerProps> = ({
   panes,
   paneLayout,
   activePaneId,
-  activeBufferId,
-  buffers,
-  paneSizes,
+  activeBufferId: _activeBufferId,  buffers: _buffers,  paneSizes,
   contextPanelRef,
   perChatCache,
   activeChatId,
@@ -137,8 +137,7 @@ const PaneLayoutManager: React.FC<PaneLayoutManagerProps> = ({
   diffError,
   onDiffModeChange,
   switchPane,
-  switchToBuffer,
-  openWorkspaceBuffer,
+  switchToBuffer: _switchToBuffer,  openWorkspaceBuffer,
   canSplit,
   canSplitGrid,
   canCloseSplit,
@@ -148,32 +147,38 @@ const PaneLayoutManager: React.FC<PaneLayoutManagerProps> = ({
   containerRef,
   updatePaneSize,
   nestedSplit,
-  onNestedSplitChange,
-}) => {
+  onNestedSplitChange: _onNestedSplitChange,}) => {
   const dragStartSizeRef = useRef<Map<string, number>>(new Map());
   const isPaneDraggingRef = useRef<Set<string>>(new Set());
 
-  const handlePaneResize = useCallback((sizeKey: string, axis: 'horizontal' | 'vertical', invert = false) => (_deltaPixels: number, totalDeltaPixels: number) => {
-    if (!containerRef.current) return;
+  const handlePaneResize = useCallback(
+    (sizeKey: string, axis: 'horizontal' | 'vertical', invert = false) =>
+      (_deltaPixels: number, totalDeltaPixels: number) => {
+        if (!containerRef.current) return;
 
-    const containerRect = containerRef.current.getBoundingClientRect();
-    const isVertical = axis === 'horizontal';
-    const containerSize = isVertical ? containerRect.width : containerRect.height;
-    const deltaPercent = ((invert ? -totalDeltaPixels : totalDeltaPixels) / containerSize) * 100;
+        const containerRect = containerRef.current.getBoundingClientRect();
+        const isVertical = axis === 'horizontal';
+        const containerSize = isVertical ? containerRect.width : containerRect.height;
+        const deltaPercent = ((invert ? -totalDeltaPixels : totalDeltaPixels) / containerSize) * 100;
 
-    if (!isPaneDraggingRef.current.has(sizeKey)) {
-      isPaneDraggingRef.current.add(sizeKey);
-      dragStartSizeRef.current.set(sizeKey, paneSizes[sizeKey] || 50);
-    }
-    const sizeAtDragStart = dragStartSizeRef.current.get(sizeKey)!;
-    const newSize = Math.max(10, Math.min(90, sizeAtDragStart + deltaPercent));
-    updatePaneSize(sizeKey, newSize);
-  }, [paneSizes, containerRef, updatePaneSize]);
+        if (!isPaneDraggingRef.current.has(sizeKey)) {
+          isPaneDraggingRef.current.add(sizeKey);
+          dragStartSizeRef.current.set(sizeKey, paneSizes[sizeKey] || 50);
+        }
+        const sizeAtDragStart = dragStartSizeRef.current.get(sizeKey)!;
+        const newSize = Math.max(10, Math.min(90, sizeAtDragStart + deltaPercent));
+        updatePaneSize(sizeKey, newSize);
+      },
+    [paneSizes, containerRef, updatePaneSize],
+  );
 
-  const handlePaneResizeEnd = useCallback((sizeKey: string) => () => {
-    isPaneDraggingRef.current.delete(sizeKey);
-    dragStartSizeRef.current.delete(sizeKey);
-  }, []);
+  const handlePaneResizeEnd = useCallback(
+    (sizeKey: string) => () => {
+      isPaneDraggingRef.current.delete(sizeKey);
+      dragStartSizeRef.current.delete(sizeKey);
+    },
+    [],
+  );
 
   // ── Split control buttons ──────────────────────────────────────
 
@@ -257,15 +262,8 @@ const PaneLayoutManager: React.FC<PaneLayoutManagerProps> = ({
     return (
       <PaneWrapper key={pane.id} style={style}>
         <div className="pane-shell">
-          <EditorTabs
-            paneId={pane.id}
-            compact
-            actions={renderSplitControls(pane.id)}
-          />
-          <EditorPaneWrapper
-            isActive={pane.id === activePaneId}
-            onClick={() => switchPane(pane.id)}
-          >
+          <EditorTabs paneId={pane.id} compact actions={renderSplitControls(pane.id)} />
+          <EditorPaneWrapper isActive={pane.id === activePaneId} onClick={() => switchPane(pane.id)}>
             <EditorPaneComponent
               paneId={pane.id}
               isActive={pane.id === activePaneId}
@@ -331,20 +329,25 @@ const PaneLayoutManager: React.FC<PaneLayoutManagerProps> = ({
     const colSplit = Math.max(10, Math.min(90, paneSizes['grid:col'] ?? 50));
     const rowSplit = Math.max(10, Math.min(90, paneSizes['grid:row'] ?? 50));
 
-    const positionOrder: Record<string, number> = { 'primary': 0, 'secondary': 1, 'tertiary': 2, 'quaternary': 3 };
-    const sortedPanes = [...panes].sort((a, b) => (positionOrder[a.position ?? ''] ?? 99) - (positionOrder[b.position ?? ''] ?? 99));
+    const positionOrder: Record<string, number> = { primary: 0, secondary: 1, tertiary: 2, quaternary: 3 };
+    const sortedPanes = [...panes].sort(
+      (a, b) => (positionOrder[a.position ?? ''] ?? 99) - (positionOrder[b.position ?? ''] ?? 99),
+    );
     const [topLeft, topRight, bottomLeft, bottomRight] = sortedPanes;
 
     return (
-      <div className="grid-pane-layout" style={{
-        display: 'grid',
-        gridTemplateColumns: `${colSplit}% ${100 - colSplit}%`,
-        gridTemplateRows: `${rowSplit}% ${100 - rowSplit}%`,
-        flex: 1,
-        minWidth: 0,
-        minHeight: 0,
-        position: 'relative',
-      }}>
+      <div
+        className="grid-pane-layout"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: `${colSplit}% ${100 - colSplit}%`,
+          gridTemplateRows: `${rowSplit}% ${100 - rowSplit}%`,
+          flex: 1,
+          minWidth: 0,
+          minHeight: 0,
+          position: 'relative',
+        }}
+      >
         {renderPaneById(topLeft.id)}
         {topRight && renderPaneById(topRight.id)}
         {bottomLeft && renderPaneById(bottomLeft.id)}
@@ -398,9 +401,7 @@ const PaneLayoutManager: React.FC<PaneLayoutManagerProps> = ({
     return (
       <>
         {panes.map((pane, index) => {
-          const paneSize = panes.length === 1
-            ? 100
-            : (paneSizes[pane.id] || (100 / panes.length));
+          const paneSize = panes.length === 1 ? 100 : paneSizes[pane.id] || 100 / panes.length;
           const isLast = index === panes.length - 1;
           const splitAxis = paneLayout === 'split-horizontal' ? 'vertical' : 'horizontal';
 
@@ -431,7 +432,8 @@ const PaneLayoutManager: React.FC<PaneLayoutManagerProps> = ({
 
   const rootDirection = paneLayout === 'split-horizontal' ? 'column' : 'row';
   const nestedDirection = nestedSplit.direction === 'horizontal' ? 'column' : 'row';
-  const hostIsFirst = panes.findIndex((pane) => pane.id === hostPane.id) < panes.findIndex((pane) => pane.id === siblingPane.id);
+  const hostIsFirst =
+    panes.findIndex((pane) => pane.id === hostPane.id) < panes.findIndex((pane) => pane.id === siblingPane.id);
   const rootSizeKey = `group:${hostPane.id}`;
   const nestedSizeKey = `nested:${hostPane.id}`;
   const groupSize = paneSizes[rootSizeKey] || 50;
@@ -440,10 +442,7 @@ const PaneLayoutManager: React.FC<PaneLayoutManagerProps> = ({
   const nestedHandleDirection = nestedDirection === 'row' ? 'horizontal' : 'vertical';
 
   const nestedGroup = (
-    <div
-      className={`nested-pane-group nested-pane-group-${nestedDirection}`}
-      style={toPaneFlex(groupSize)}
-    >
+    <div className={`nested-pane-group nested-pane-group-${nestedDirection}`} style={toPaneFlex(groupSize)}>
       {renderPaneById(hostPane.id, toPaneFlex(nestedSize))}
       <ResizeHandle
         direction={nestedHandleDirection}
@@ -469,16 +468,25 @@ const PaneLayoutManager: React.FC<PaneLayoutManagerProps> = ({
 
 // ── Sub-components used by PaneLayoutManager ──────────────────────
 
-export const PaneWrapper: React.FC<{ children: React.ReactNode; style?: React.CSSProperties }> = ({ children, style }) => (
-  <div className="pane-wrapper" style={style}>{children}</div>
+export const PaneWrapper: React.FC<{ children: React.ReactNode; style?: React.CSSProperties }> = ({
+  children,
+  style,
+}) => (
+  <div className="pane-wrapper" style={style}>
+    {children}
+  </div>
 );
 
-export const EditorPaneWrapper: React.FC<{ children: React.ReactNode; isActive?: boolean; onClick?: () => void }> = ({ children, isActive, onClick }) => (
+export const EditorPaneWrapper: React.FC<{ children: React.ReactNode; isActive?: boolean; onClick?: () => void }> = ({
+  children,
+  isActive,
+  onClick,
+}) => (
   <div
     className={`editor-pane-wrapper ${isActive ? 'active' : ''}`}
     onClick={onClick}
     tabIndex={isActive ? -1 : 0}
-    onFocus={() => isActive && (onClick?.())}
+    onFocus={() => isActive && onClick?.()}
   >
     {children}
   </div>

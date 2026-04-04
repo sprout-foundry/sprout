@@ -3,6 +3,7 @@ package git
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -266,6 +267,15 @@ func newTestGitRepo(t *testing.T) string {
 	run("init")
 	run("config", "user.email", "test@test.com")
 	run("config", "user.name", "Test")
+
+	// Create an initial commit so HEAD exists (required by many git operations).
+	initPath := filepath.Join(dir, "init.go")
+	if err := os.WriteFile(initPath, []byte("package x\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	run("add", "init.go")
+	run("commit", "-m", "initial commit")
+
 	t.Cleanup(func() { os.RemoveAll(dir) })
 	return dir
 }

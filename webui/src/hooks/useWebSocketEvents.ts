@@ -4,7 +4,7 @@ import type { AppState } from '../types/app';
 import type { Message, ToolExecution, LogEntry, SubagentActivity } from '../types/app';
 import type { WsEvent } from '../services/websocket';
 import { getWebUIClientId } from '../services/clientSession';
-import { debugLog } from '../utils/log';
+import { debugLog, error as logError } from '../utils/log';
 import { useNotifications } from '../contexts/NotificationContext';
 import { ensureCompletedAssistantMessage } from '../utils/chatCompletion';
 import {
@@ -647,7 +647,7 @@ export default function useWebSocketEvents({
           ],
           logs: [...prev.logs, logEntry],
         }));
-        console.error('[FAIL] Error event:', eventData);
+        logError('[FAIL] Error event: ' + String(eventData));
         addNotification('error', 'Agent Error', errorMessage, 8000);
         break;
       }

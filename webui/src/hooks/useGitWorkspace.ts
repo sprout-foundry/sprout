@@ -5,6 +5,7 @@ import type { WsEvent } from '../services/websocket';
 import type { GitStatusData } from '../types/git-types';
 import type { FileSection } from '../types/git-types';
 import { selectionKey, parseSelectionKey } from '../types/git-types';
+import { useLog } from '../utils/log';
 
 export interface GitDiffResponse {
   message: string;
@@ -67,6 +68,8 @@ export const useGitWorkspace = ({
   onGitDiscard,
   openWorkspaceBuffer,
 }: UseGitWorkspaceOptions) => {
+  const log = useLog();
+
   const [gitStatus, setGitStatus] = useState<GitStatusData | null>(null);
   const [commitMessage, setCommitMessage] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
@@ -144,13 +147,13 @@ export const useGitWorkspace = ({
         branches: branchData.branches || [],
       });
     } catch (error) {
-      console.error('Failed to load git status:', error);
+      log.error('Failed to load git status', { title: 'Git Error' });
       setGitStatus(null);
       setGitActionError(error instanceof Error ? error.message : 'Failed to load git status');
     } finally {
       setIsGitLoading(false);
     }
-  }, [apiService]);
+  }, [apiService, log]);
 
   useEffect(() => {
     loadGitStatus();
@@ -220,14 +223,14 @@ export const useGitWorkspace = ({
           },
         });
       } catch (error) {
-        console.error('Failed to load diff:', error);
+        log.error('Failed to load diff', { title: 'Git Error' });
         setDiffError(error instanceof Error ? error.message : 'Failed to load diff');
         setActiveDiff(null);
       } finally {
         setIsDiffLoading(false);
       }
     },
-    [apiService, openWorkspaceBuffer],
+    [apiService, openWorkspaceBuffer, log],
   );
 
   useEffect(() => {

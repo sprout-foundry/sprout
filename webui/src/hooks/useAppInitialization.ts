@@ -16,6 +16,7 @@ import { ApiService } from '../services/api';
 import type { StatsResponse, FilesResponse } from '../services/api';
 import { registerServiceWorker } from '../services/serviceWorkerRegistration';
 import type { AppState } from '../types/app';
+import { useLog } from '../utils/log';
 
 interface RecentFile {
   path: string;
@@ -39,6 +40,7 @@ export function useAppInitialization({
   setIsMobile,
   setState,
 }: UseAppInitializationOptions): void {
+  const log = useLog();
   const wsService = WebSocketService.getInstance();
   const apiService = ApiService.getInstance();
 
@@ -63,10 +65,9 @@ export function useAppInitialization({
             stats: JSON.stringify(prev.stats) === JSON.stringify(stats) ? prev.stats : statsRecord,
           }));
         })
-        .catch(console.error);
+        .catch(() => log.error('Failed to initialize connection', { title: 'Connection Error' }));
     };
 
-    // Load recent files
     const loadFiles = () => {
       apiService
         .getFiles()
@@ -79,7 +80,7 @@ export function useAppInitialization({
             setRecentFiles(files);
           }
         })
-        .catch(console.error);
+        .catch(() => log.error('Failed to load initial data', { title: 'Initialization Error' }));
     };
 
     // Load initial stats & files

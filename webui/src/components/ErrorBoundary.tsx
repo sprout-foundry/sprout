@@ -46,6 +46,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     console.error('Error Boundary caught an error:', error, errorInfo);
 
     // Call the onError callback if provided (consumers should show user-facing notification there)
+    // Note: notification is handled by the onError callback — do NOT call notificationBus here
+    // to avoid duplicate notifications (App.tsx already notifies via its onError handler).
     if (this.props.onError) {
       this.props.onError(error, errorInfo);
     }

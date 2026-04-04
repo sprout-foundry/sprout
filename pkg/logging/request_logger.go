@@ -3,6 +3,7 @@ package logging
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -89,5 +90,7 @@ func WriteLocalCopyRequest(filename string, data []byte) {
 		return
 	}
 	path := filepath.Join(wd, filename)
-	_ = os.WriteFile(path, data, 0o644)
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		log.Printf("[debug] failed to write request log: %v", err)
+	}
 }

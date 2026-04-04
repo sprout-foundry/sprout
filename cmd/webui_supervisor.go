@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -93,7 +94,9 @@ func (s *webUISupervisor) reconcile(ctx context.Context) {
 			return
 		}
 	} else if desired > 0 {
-		_ = clearDesiredWebUIHostPID()
+		if err := clearDesiredWebUIHostPID(); err != nil {
+			log.Printf("[debug] failed to clear desired WebUI host PID: %v", err)
+		}
 	}
 
 	// Another healthy process currently owns the web UI host role.
@@ -124,12 +127,14 @@ func (s *webUISupervisor) reconcile(ctx context.Context) {
 	}
 
 	now := time.Now()
-	_ = saveWebUIHostRecord(webUIHostRecord{
+	if err := saveWebUIHostRecord(webUIHostRecord{
 		PID:       pid,
 		Port:      s.port,
 		StartedAt: now,
 		UpdatedAt: now,
-	})
+	}); err != nil {
+		log.Printf("[debug] failed to save WebUI host record: %v", err)
+	}
 }
 
 func (s *webUISupervisor) cleanupHostRecordIfOwned() {

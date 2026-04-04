@@ -6,7 +6,7 @@ import type { WsEvent } from '../services/websocket';
 import type { GitStatusData } from '../types/git-types';
 import type { FileSection } from '../types/git-types';
 import { selectionKey, parseSelectionKey } from '../types/git-types';
-import { useLog } from '../utils/log';
+import { useLog, debugLog } from '../utils/log';
 
 export interface GitDiffResponse {
   message: string;
@@ -109,7 +109,10 @@ export const useGitWorkspace = ({
     try {
       const [data, branchData] = await Promise.all([
         apiService.getGitStatus(),
-        apiService.getGitBranches().catch(() => ({ current: '', branches: [] })),
+        apiService.getGitBranches().catch((err) => {
+          debugLog('[loadGitStatus] failed to fetch git branches:', err);
+          return { current: '', branches: [] };
+        }),
       ]);
       if (data.message !== 'success') {
         throw new Error(data.message || 'Failed to load git status');
@@ -283,6 +286,7 @@ export const useGitWorkspace = ({
         await loadGitStatus();
         setSelectedFiles(new Set());
       } catch (error) {
+        debugLog('[runGitAction] failed:', error);
         setGitActionError(error instanceof Error ? error.message : fallbackMessage);
       } finally {
         setIsGitActing(false);
@@ -447,6 +451,7 @@ export const useGitWorkspace = ({
       });
       onViewChange('editor');
     } catch (error) {
+      debugLog('[handleRunReview] failed:', error);
       setReviewError(error instanceof Error ? error.message : 'Failed to generate deep review');
       setDeepReview(null);
     } finally {
@@ -489,6 +494,7 @@ export const useGitWorkspace = ({
 
             fixPollTimeoutRef.current = window.setTimeout(poll, 1000);
           } catch (error) {
+            debugLog('[handleFixFromReview] poll error:', error);
             setReviewError(error instanceof Error ? error.message : 'Failed to fetch fix progress');
             setIsReviewFixing(false);
           }
@@ -496,6 +502,7 @@ export const useGitWorkspace = ({
 
         await poll();
       } catch (error) {
+        debugLog('[handleFixFromReview] outer error:', error);
         setReviewError(error instanceof Error ? error.message : 'Failed to apply fixes from deep review');
         setIsReviewFixing(false);
       }

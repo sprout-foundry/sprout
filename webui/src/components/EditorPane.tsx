@@ -75,7 +75,8 @@ const EditorPane: FC<EditorPaneProps> = ({ paneId }) => {
     try {
       const stored = localStorage.getItem('editor:minimap-enabled');
       return stored !== null ? stored === 'true' : true; // default on
-    } catch {
+    } catch (err) {
+      debugLog('Failed to read minimap setting from localStorage:', err);
       return true; // default on if localStorage unavailable
     }
   });
@@ -475,10 +476,8 @@ const EditorPane: FC<EditorPaneProps> = ({ paneId }) => {
             const column = selection.head - update.state.doc.line(selection.head).from;
             updateBufferCursor(buffer.id, { line, column });
           }
-        } catch {
-          // Ignore position errors during large content changes
-          // eslint-disable-next-line no-console
-          console.debug('Cursor position update skipped');
+        } catch (err) {
+          debugLog('Cursor position update skipped:', err);
         }
       }
 

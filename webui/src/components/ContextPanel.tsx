@@ -606,7 +606,8 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     try {
       const args = JSON.parse(tool.arguments);
       return typeof args.prompt === 'string' ? args.prompt : undefined;
-    } catch {
+    } catch (err) {
+      debugLog('Failed to parse subagent prompt arguments:', err);
       return undefined;
     }
   };

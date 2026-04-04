@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2, ChevronRight, Clock, GitCommitHorizontal } from 'lucide-react';
 import type { ApiService } from '../services/api';
 import { formatRelativeDate, firstLine } from '../utils/format';
+import { debugLog } from '../utils/log';
 import type { GitCommitSummary } from '../types/git-types';
 import CommitDetailPanel from './CommitDetailPanel';
 import GitHistoryContextMenu from './GitHistoryContextMenu';
@@ -56,6 +57,7 @@ const GitHistoryPanel = ({ apiService, isActing, openWorkspaceBuffer }: GitHisto
         setHasMore(offset + newCommits.length < total);
       } catch (err) {
         if (signal?.aborted) return;
+        debugLog('Failed to load commit history:', err);
         setError(err instanceof Error ? err.message : 'Failed to load commit history');
       } finally {
         if (!signal?.aborted) {

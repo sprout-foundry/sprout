@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import type { FC } from 'react';
 import { Folder, File, ArrowUp, X, FolderOpen } from 'lucide-react';
 import { clientFetch } from '../services/clientSession';
+import { debugLog } from '../utils/log';
 import './FileBrowser.css';
 
 export interface FileNode {
@@ -82,6 +83,7 @@ const FileBrowser: FC<FileBrowserProps> = ({
         setFiles(sortedFiles);
         setSelectedFile(null);
       } catch (err) {
+        debugLog('[FileBrowser] Failed to load directory:', err);
         setError(err instanceof Error ? err.message : 'Failed to load directory');
         setFiles([]);
         setSelectedFile(null);

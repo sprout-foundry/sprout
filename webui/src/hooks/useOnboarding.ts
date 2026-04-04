@@ -3,6 +3,7 @@ import type { OnboardingState } from '../types/app';
 import type { OnboardingProviderOption } from '../services/api';
 import { ApiService } from '../services/api';
 import { notificationBus } from '../services/notificationBus';
+import { debugLog } from '../utils/log';
 
 export interface WindowsOnboardingGuidance {
   tone: string;
@@ -92,6 +93,7 @@ function useOnboarding(): UseOnboardingReturn {
         error: null,
       });
     } catch (error) {
+      debugLog('[useOnboarding] Failed to refresh setup status:', error);
       setOnboarding((prev) => ({
         ...prev,
         checking: false,
@@ -215,6 +217,7 @@ function useOnboarding(): UseOnboardingReturn {
           apiKey: '',
         }));
       } catch (error) {
+        debugLog('[useOnboarding] Failed to complete setup:', error);
         setOnboarding((prev) => ({
           ...prev,
           submitting: false,

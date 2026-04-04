@@ -9,7 +9,7 @@ import {
   forwardRef,
 } from 'react';
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
-import { useLog } from '../utils/log';
+import { useLog, debugLog } from '../utils/log';
 import {
   Wrench,
   History,
@@ -938,8 +938,8 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
         try {
           const args = t.arguments ? JSON.parse(t.arguments) : {};
           if (args.path) touchedFiles.add(args.path);
-        } catch {
-          /* ignore */
+        } catch (err) {
+          debugLog('[summaryStats] parse tool arguments failed:', err);
         }
       }
     });

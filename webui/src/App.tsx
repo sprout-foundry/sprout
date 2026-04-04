@@ -25,6 +25,10 @@ import { useMessageSending } from './hooks/useMessageSending';
 import { useModelProviderHandlers } from './hooks/useModelProviderHandlers';
 import { useAppInitialization } from './hooks/useAppInitialization';
 import { useSessionRestored } from './hooks/useSessionRestored';
+import { useSecurityApproval } from './hooks/useSecurityApproval';
+import { useSecurityPrompt } from './hooks/useSecurityPrompt';
+import SecurityApprovalDialog from './components/SecurityApprovalDialog';
+import SecurityPromptDialog from './components/SecurityPromptDialog';
 
 function App() {
   // ── 1. Core state ──────────────────────────────────────────────────
@@ -75,7 +79,13 @@ function App() {
     setState,
   );
 
-  // ── 7. Sidebar state (independent) ────────────────────────────────
+  // ── 7. Security approval handler ───────────────────────────────────
+  const { handleSecurityApprovalResponse } = useSecurityApproval(setState);
+
+  // ── 7b. Security prompt handler ─────────────────────────────────
+  const { handleSecurityPromptResponse } = useSecurityPrompt(setState);
+
+  // ── 8. Sidebar state (independent) ────────────────────────────────
   const {
     isMobile,
     isSidebarOpen,
@@ -149,8 +159,8 @@ function App() {
       }}
     >
       <ThemeProvider>
-        <HotkeyProvider>
-          <NotificationProvider>
+        <NotificationProvider>
+          <HotkeyProvider>
             <EditorManagerProvider>
               <UIManager>
                 <AppContent
@@ -196,6 +206,27 @@ function App() {
                 onRenameChat={handleRenameChat}
                 perChatCache={state.perChatCache}
               />
+              {state.securityApprovalRequest && (
+                <SecurityApprovalDialog
+                  requestId={state.securityApprovalRequest.requestId}
+                  toolName={state.securityApprovalRequest.toolName}
+                  riskLevel={state.securityApprovalRequest.riskLevel as 'SAFE' | 'CAUTION' | 'DANGEROUS'}
+                  reasoning={state.securityApprovalRequest.reasoning}
+                  command={state.securityApprovalRequest.command}
+                  riskType={state.securityApprovalRequest.riskType}
+                  target={state.securityApprovalRequest.target}
+                  onRespond={handleSecurityApprovalResponse}
+                />
+              )}
+              {state.securityPromptRequest && (
+                <SecurityPromptDialog
+                  requestId={state.securityPromptRequest.requestId}
+                  prompt={state.securityPromptRequest.prompt}
+                  filePath={state.securityPromptRequest.filePath}
+                  concern={state.securityPromptRequest.concern}
+                  onRespond={handleSecurityPromptResponse}
+                />
+              )}
               <OnboardingDialog
                 onboarding={onboardingHook.onboarding}
                 selectedProvider={onboardingHook.selectedProvider}
@@ -212,8 +243,8 @@ function App() {
             </UIManager>
           </EditorManagerProvider>
           <Notification />
+          </HotkeyProvider>
         </NotificationProvider>
-        </HotkeyProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

@@ -30,6 +30,8 @@ const DEFAULT_APP_STATE: AppState = {
   activeChatId: null,
   chatSessions: [],
   perChatCache: {},
+  securityApprovalRequest: null,
+  securityPromptRequest: null,
 };
 
 export interface UseAppStateReturn {

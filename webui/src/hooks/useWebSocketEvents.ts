@@ -263,6 +263,8 @@ export default function useWebSocketEvents({
             isProcessing: activeRequestsRef.current > 0,
             lastError: null,
             queryProgress: null,
+            securityApprovalRequest: null,
+            securityPromptRequest: null,
             toolExecutions: wasClearCommand
               ? []
               : prev.toolExecutions.map((tool) => {
@@ -666,6 +668,41 @@ export default function useWebSocketEvents({
         if (!eventData?.client_id || eventData.client_id === getWebUIClientId()) {
           window.location.reload();
         }
+        break;
+
+      case 'security_approval_request':
+        logEntry.category = 'system';
+        logEntry.level = 'warning';
+        setState((prev) => ({
+          ...prev,
+          securityApprovalRequest: {
+            requestId: String(eventData?.request_id || ''),
+            toolName: String(eventData?.tool_name || ''),
+            riskLevel: String(eventData?.risk_level || 'CAUTION'),
+            reasoning: String(eventData?.reasoning || ''),
+            command: eventData?.command != null ? String(eventData.command) : undefined,
+            riskType: eventData?.risk_type != null ? String(eventData.risk_type) : undefined,
+            target: eventData?.target != null ? String(eventData.target) : undefined,
+          },
+          logs: [...prev.logs, logEntry],
+        }));
+        debugLog('[security] Approval request:', eventData?.tool_name, eventData?.risk_level);
+        break;
+
+      case 'security_prompt_request':
+        logEntry.category = 'system';
+        logEntry.level = 'warning';
+        setState((prev) => ({
+          ...prev,
+          securityPromptRequest: {
+            requestId: String(eventData?.request_id || ''),
+            prompt: String(eventData?.prompt || ''),
+            filePath: eventData?.file_path != null ? String(eventData.file_path) : undefined,
+            concern: eventData?.concern != null ? String(eventData.concern) : undefined,
+          },
+          logs: [...prev.logs, logEntry],
+        }));
+        debugLog('[security] Prompt request:', eventData?.file_path, eventData?.concern);
         break;
 
       default:

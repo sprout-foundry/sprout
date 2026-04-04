@@ -43,6 +43,7 @@ interface AppContentProps {
   onViewChange: (view: 'chat' | 'editor' | 'git') => void;
   onModelChange: (model: string) => void;
   onProviderChange: (provider: string) => void;
+  onPersonaChange?: (persona: string) => void;
   onSendMessage: (message: string) => void;
   onQueueMessage: (message: string) => void;
   onStopProcessing: () => void;
@@ -86,6 +87,7 @@ const AppContent: FC<AppContentProps> = ({
   onViewChange,
   onModelChange,
   onProviderChange,
+  onPersonaChange,
   onSendMessage,
   onQueueMessage,
   onStopProcessing,
@@ -323,6 +325,7 @@ const AppContent: FC<AppContentProps> = ({
         sidebarCollapsed={sidebarCollapsed}
         onSidebarToggle={onSidebarToggle}
         onProviderChange={onProviderChange}
+        onPersonaChange={onPersonaChange}
         gitPanel={{
           gitStatus,
           gitBranches,

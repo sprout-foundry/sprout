@@ -138,6 +138,7 @@ func (ws *ReactWebServer) publishProviderState(clientID string) {
 	stats := ws.gatherStatsForClientID(clientID)
 	stats["provider"] = agentInst.GetProvider()
 	stats["model"] = agentInst.GetModel()
+	stats["persona"] = agentInst.GetActivePersona()
 	stats["client_id"] = clientID
 	ws.eventBus.Publish(events.EventTypeMetricsUpdate, stats)
 }

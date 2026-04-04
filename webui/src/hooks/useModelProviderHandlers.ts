@@ -22,6 +22,7 @@ export interface UseModelProviderHandlersReturn {
   handleModelChange: (model: string) => void;
   handleProviderChange: (provider: string) => void;
   handleViewChange: (view: 'chat' | 'editor' | 'git') => void;
+  handlePersonaChange: (persona: string) => void;
 }
 
 export function useModelProviderHandlers({
@@ -81,5 +82,17 @@ export function useModelProviderHandlers({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { handleModelChange, handleProviderChange, handleViewChange };
+  const handlePersonaChange = useCallback(
+    (persona: string) => {
+      debugLog('Persona changed to:', persona);
+      wsService.sendEvent({
+        type: 'persona_change',
+        data: { persona },
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [wsService],
+  );
+
+  return { handleModelChange, handleProviderChange, handleViewChange, handlePersonaChange };
 }

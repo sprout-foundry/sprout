@@ -121,7 +121,7 @@ function App() {
   usePageVisibility();
 
   // ── 12. Model / provider / view change handlers ───────────────────
-  const { handleModelChange, handleProviderChange, handleViewChange } = useModelProviderHandlers({
+  const { handleModelChange, handleProviderChange, handleViewChange, handlePersonaChange } = useModelProviderHandlers({
     state,
     setState,
   });
@@ -168,6 +168,7 @@ function App() {
                 onViewChange={handleViewChange}
                 onModelChange={handleModelChange}
                 onProviderChange={handleProviderChange}
+                onPersonaChange={handlePersonaChange}
                 onSendMessage={handleSendMessage}
                 onQueueMessage={handleQueueMessage}
                 onStopProcessing={handleStopProcessing}

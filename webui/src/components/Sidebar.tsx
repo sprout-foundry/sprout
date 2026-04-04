@@ -38,6 +38,8 @@ interface SidebarProps {
   onInstanceChange?: (pid: number) => void;
   selectedModel?: string;
   onModelChange?: (model: string) => void;
+  selectedPersona?: string;
+  onPersonaChange?: (persona: string) => void;
   availableModels?: string[];
   currentView?: 'chat' | 'editor' | 'git';
   onViewChange?: (view: 'chat' | 'editor' | 'git') => void;
@@ -110,6 +112,8 @@ const Sidebar: FC<SidebarProps> = ({
   onInstanceChange,
   selectedModel,
   onModelChange,
+  selectedPersona,
+  onPersonaChange,
   availableModels,
   currentView,
   recentFiles: _recentFiles = [],
@@ -144,6 +148,9 @@ const Sidebar: FC<SidebarProps> = ({
   sidebarWidthRef.current = sidebarWidth;
   const [selectedProvider, setSelectedProvider] = useState(provider || '');
   const [selectedModelState, setSelectedModelState] = useState(model || selectedModel || '');
+  const [selectedPersonaState, setSelectedPersonaState] = useState<string>(selectedPersona || 'orchestrator');
+  const [personas, setPersonas] = useState<{ id: string; name: string; enabled: boolean }[]>([]);
+  const [isLoadingPersonas, setIsLoadingPersonas] = useState(false);
   const [providers, setProviders] = useState<ProviderOption[]>([]);
   const [isLoadingProviders, setIsLoadingProviders] = useState(false);
   const hasHydratedProviderStateRef = useRef(false);
@@ -284,6 +291,47 @@ const Sidebar: FC<SidebarProps> = ({
       onModelChange?.(newModel);
     }
   };
+
+  const handlePersonaChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    const newPersona = e.target.value;
+    setSelectedPersonaState(newPersona);
+    onPersonaChange?.(newPersona);
+  };
+
+  // Load personas from the backend
+  useEffect(() => {
+    if (!isConnected) return;
+
+    const fetchPersonas = async () => {
+      setIsLoadingPersonas(true);
+      try {
+        const data = await apiService.getSubagentTypes();
+        const enabledPersonas = Object.values(data.subagent_types)
+          .filter((p) => p.enabled && p.id && p.name) // Skip empty/corrupted entries
+          .map((p) => ({
+            id: p.id,
+            name: p.name || p.id,
+            enabled: p.enabled,
+          }));
+
+        // Always add orchestrator as an option (it's the default)
+        const allPersonas = [
+          { id: 'orchestrator', name: 'Orchestrator', enabled: true },
+          ...enabledPersonas.filter((p) => p.id !== 'orchestrator'),
+        ];
+
+        setPersonas(allPersonas);
+      } catch (error) {
+        console.error('Failed to fetch personas:', error);
+        // Fallback to just orchestrator
+        setPersonas([{ id: 'orchestrator', name: 'Orchestrator', enabled: true }]);
+      } finally {
+        setIsLoadingPersonas(false);
+      }
+    };
+
+    fetchPersonas();
+  }, [apiService, isConnected]);
 
   const handleHotkeyPresetChange = async (e: ChangeEvent<HTMLSelectElement>) => {
     try {
@@ -756,6 +804,26 @@ const Sidebar: FC<SidebarProps> = ({
                   {m}
                 </option>
               ))}
+            </select>
+          </div>
+          <div className="config-item">
+            <label htmlFor="persona-select">Persona:</label>
+            <select
+              id="persona-select"
+              value={selectedPersonaState}
+              onChange={handlePersonaChange}
+              disabled={!isConnected || isLoadingPersonas}
+              className="styled-select"
+            >
+              {isLoadingPersonas ? (
+                <option value="">Loading personas...</option>
+              ) : (
+                personas.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))
+              )}
             </select>
           </div>
         </div>

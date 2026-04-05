@@ -26,6 +26,8 @@ python3 test_runner.py          # Run E2E tests
 
 **NEVER COMMIT OR PUSH CHANGES.** Only the repository owner decides when to commit. Use `git status`, `git diff`, and other read-only git commands freely.
 
+**Staging files is always allowed.** Although `git add` is technically a write operation, agents may always stage files to prepare commits for the repository owner to review and finalize.
+
 ## Code Quality
 
 - **File size target**: Under 500 lines per file

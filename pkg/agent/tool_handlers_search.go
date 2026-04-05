@@ -12,6 +12,7 @@ import (
 
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 	"github.com/alantheprice/ledit/pkg/filesystem"
+	"github.com/alantheprice/ledit/pkg/utils"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
@@ -228,7 +229,7 @@ func handleWebSearch(ctx context.Context, a *Agent, args map[string]interface{})
 	if err == nil {
 		a.captureWebText("web_search", query, result)
 	}
-	return result, err
+	return result, utils.WrapError(err, "web search")
 }
 
 // handleFetchURLWithImages is the image-capable fetch_url handler.
@@ -244,19 +245,19 @@ func handleFetchURLWithImages(ctx context.Context, a *Agent, args map[string]int
 	// Guard: a is always non-nil from ExecuteTool, but protect against invariant changes
 	if a == nil {
 		result, err := handleFetchURL(ctx, a, args)
-		return nil, result, err
+		return nil, result, utils.WrapError(err, "fetch URL")
 	}
 
 	// GitHub MCP routing takes priority — always use text path for GitHub URLs
 	if result, handled, err := a.tryRouteGitHubToMCP(ctx, url); handled {
 		a.captureWebText("fetch_url", url, result)
-		return nil, result, err
+		return nil, result, utils.WrapError(err, "fetch URL")
 	}
 
 	// Only intercept binary content for multimodal models
 	if a.client == nil || !a.client.SupportsVision() {
 		result, err := handleFetchURL(ctx, a, args)
-		return nil, result, err
+		return nil, result, utils.WrapError(err, "fetch URL")
 	}
 
 	// Probe the URL to check Content-Type
@@ -264,7 +265,7 @@ func handleFetchURLWithImages(ctx context.Context, a *Agent, args map[string]int
 	if !kind.IsBinary() {
 		// Text/HTML — use existing text handler
 		result, err := handleFetchURL(ctx, a, args)
-		return nil, result, err
+		return nil, result, utils.WrapError(err, "fetch URL")
 	}
 
 	a.debugLog("[img] fetch_url detected binary content (%v), processing for multimodal: %s\n", kind, url)
@@ -274,7 +275,7 @@ func handleFetchURLWithImages(ctx context.Context, a *Agent, args map[string]int
 		// Fall back to text handler on binary processing failure
 		a.debugLog("[WARN] Binary fetch failed: %v, falling back to text handler\n", err)
 		result, ferr := handleFetchURL(ctx, a, args)
-		return nil, result, ferr
+		return nil, result, utils.WrapError(ferr, "fetch URL")
 	}
 
 	displayURL := url
@@ -309,7 +310,7 @@ func handleFetchURL(ctx context.Context, a *Agent, args map[string]interface{}) 
 	if result, handled, err := a.tryRouteGitHubToMCP(ctx, url); handled {
 		a.debugLog("GitHub URL routed to MCP\n")
 		a.captureWebText("fetch_url", url, result)
-		return result, err
+		return result, utils.WrapError(err, "fetch URL")
 	}
 
 	result, err := tools.FetchURL(url, a.configManager)
@@ -317,7 +318,7 @@ func handleFetchURL(ctx context.Context, a *Agent, args map[string]interface{}) 
 	if err == nil {
 		a.captureWebText("fetch_url", url, result)
 	}
-	return result, err
+	return result, utils.WrapError(err, "fetch URL")
 }
 
 // Helper functions for search handlers

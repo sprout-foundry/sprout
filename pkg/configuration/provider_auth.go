@@ -97,7 +97,7 @@ func GetProviderEnvVarName(provider string) string {
 func ResolveProviderCredential(provider string, apiKeys *APIKeys) (ResolvedProviderCredential, error) {
 	metadata, err := GetProviderAuthMetadata(provider)
 	if err != nil {
-		return ResolvedProviderCredential{}, err
+		return ResolvedProviderCredential{}, fmt.Errorf("get provider auth metadata for %q: %w", provider, err)
 	}
 	if !metadata.RequiresAPIKey {
 		return ResolvedProviderCredential{
@@ -129,7 +129,7 @@ func ResolveProviderCredential(provider string, apiKeys *APIKeys) (ResolvedProvi
 
 	resolved, err := credentials.Resolve(metadata.Provider, metadata.EnvVar)
 	if err != nil {
-		return ResolvedProviderCredential{}, err
+		return ResolvedProviderCredential{}, fmt.Errorf("resolve credential for %q: %w", metadata.Provider, err)
 	}
 	return ResolvedProviderCredential{
 		Provider: metadata.Provider,

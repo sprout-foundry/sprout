@@ -537,7 +537,7 @@ func (vp *VisionProcessor) GetImageData(imagePath string) (string, string, error
 	}
 
 	if err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("read image file %q: %w", imagePath, err)
 	}
 
 	originalSize := len(data)

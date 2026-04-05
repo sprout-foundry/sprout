@@ -501,7 +501,10 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 		return tool.HandlerImages(ctx, agent, validatedArgs)
 	}
 	result, err := tool.Handler(ctx, agent, validatedArgs)
-	return nil, result, err
+	if err != nil {
+		return nil, result, fmt.Errorf("execute tool %q: %w", toolName, err)
+	}
+	return nil, result, nil
 }
 
 // buildSecurityPrompt constructs a detailed security approval prompt for the user

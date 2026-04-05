@@ -241,7 +241,7 @@ func (c *CommitCommand) selectAndStageFiles(chatAgent *agent.Agent, reader *bufi
 func (c *CommitCommand) checkForAnyChanges(chatAgent *agent.Agent) (bool, error) {
 	validStatusLines, err := getPorcelainStatusLines()
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("get git status: %w", err)
 	}
 	if len(validStatusLines) == 0 {
 		chatAgent.PrintLine("[OK] No changes to commit")

@@ -104,7 +104,7 @@ func ResolveProviderModel(cfg *Config, explicitProvider, explicitModel string) (
 	if providerName != "" {
 		clientType, err = MapProviderStringToClientType(cfg, providerName)
 		if err != nil {
-			return "", "", err
+			return "", "", fmt.Errorf("map provider string to client type: %w", err)
 		}
 	} else {
 		// Pass providerName (from env or config) as lastUsedProvider to enable

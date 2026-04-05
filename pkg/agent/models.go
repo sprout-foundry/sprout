@@ -163,7 +163,7 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 				}
 			} else {
 				// No models available from API and no model specified
-				return fmt.Errorf("no models available from provider %v - please specify a model explicitly", api.GetProviderName(provider))
+				return fmt.Errorf("no models available from provider %s - please specify a model explicitly", api.GetProviderName(provider))
 			}
 		}
 	} else if resolvedModel, ok := resolveModelIDForProvider(model, availableModels); ok {
@@ -246,7 +246,7 @@ func (a *Agent) SetProviderPersisted(provider api.ClientType) error {
 				}
 			} else {
 				// No models available from API and no model specified
-				return fmt.Errorf("no models available from provider %v - please specify a model explicitly", api.GetProviderName(provider))
+				return fmt.Errorf("no models available from provider %s - please specify a model explicitly", api.GetProviderName(provider))
 			}
 		}
 	} else if resolvedModel, ok := resolveModelIDForProvider(model, availableModels); ok {

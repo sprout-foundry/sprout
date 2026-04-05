@@ -523,7 +523,7 @@ func (c *MCPClient) sendRequest(ctx context.Context, method string, params inter
 	case response := <-responseChan:
 		return &response, nil
 	case <-time.After(timeout):
-		return nil, fmt.Errorf("request timeout after %v", timeout)
+		return nil, fmt.Errorf("request timeout after %s", timeout)
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}

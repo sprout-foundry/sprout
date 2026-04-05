@@ -38,6 +38,7 @@ import { readFileWithConsent } from '../services/fileAccess';
 import { showFileChangeDialog } from './FileChangeDialog';
 import { getEditorKeymap } from '../utils/editorHotkeys';
 import { diffGutter, updateDiffGutter, clearDiffGutter } from '../extensions/diffGutter';
+import './EditorPane.css';
 import { lintDiagnostics, clearDiagnostics, createDebouncedDiagnosticsUpdater } from '../extensions/lintDiagnostics';
 import { cursorHistoryPlugin } from '../extensions/cursorHistory';
 import { indentGuidesPlugin } from '../extensions/indentGuides';

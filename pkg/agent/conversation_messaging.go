@@ -6,6 +6,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
@@ -298,12 +299,32 @@ func (ch *ConversationHandler) emergencyTruncateContext(
 		return messages, currentTokens
 	}
 
+	// truncateHeadTail returns a rune-safe truncation keeping headRunes from the
+	// start and tailRunes from the end of s, joined by a marker.
+	truncateHeadTail := func(s string, headRunes, tailRunes int) string {
+		r := []rune(s)
+		if len(r) <= headRunes+tailRunes {
+			return s
+		}
+		return string(r[:headRunes]) + "\n\n... [truncated for context limit] ...\n\n" + string(r[len(r)-tailRunes:])
+	}
+
+	// truncateHead returns a rune-safe truncation keeping only headRunes from the start.
+	truncateHead := func(s string, headRunes int) string {
+		r := []rune(s)
+		if len(r) <= headRunes {
+			return s
+		}
+		return string(r[:headRunes]) + "\n\n... [truncated for context limit] ..."
+	}
+
 	// Work on copies to avoid mutating the originals.
 	trimmed := make([]api.Message, len(messages))
 	copy(trimmed, messages)
 
 	// Phase 1: Truncate tool result messages (preserve structure, trim content).
 	const maxToolResultTokens = 500 // ~1500 chars
+	changed := false
 	for i := range trimmed {
 		if trimmed[i].Role != "tool" || trimmed[i].Content == "" {
 			continue
@@ -311,22 +332,23 @@ func (ch *ConversationHandler) emergencyTruncateContext(
 		toolTokens := EstimateTokens(trimmed[i].Content)
 		if toolTokens > maxToolResultTokens {
 			content := trimmed[i].Content
-			maxChars := maxToolResultTokens * 4
-			if len(content) > maxChars {
-				keepHead := maxChars / 2
-				keepTail := maxChars / 3
-				trimmed[i].Content = content[:keepHead] +
-					"\n\n... [truncated for context limit] ...\n\n" +
-					content[len(content)-keepTail:]
+			maxRunes := maxToolResultTokens * 4
+			if utf8.RuneCountInString(content) > maxRunes {
+				keepHead := maxRunes / 2
+				keepTail := maxRunes / 3
+				trimmed[i].Content = truncateHeadTail(content, keepHead, keepTail)
+				changed = true
 			}
 		}
 	}
 
-	currentTokens = ch.apiClient.estimateRequestTokens(trimmed, tools)
-	if currentTokens <= targetTokens {
-		ch.agent.PrintLineAsync(fmt.Sprintf("[~] Emergency truncation applied (tool trimming); now %d/%d tokens",
-			currentTokens, maxTokens))
-		return trimmed, currentTokens
+	if changed {
+		currentTokens = ch.apiClient.estimateRequestTokens(trimmed, tools)
+		if currentTokens <= targetTokens {
+			ch.agent.PrintLineAsync(fmt.Sprintf("[~] Emergency truncation applied (tool trimming); now %d/%d tokens",
+				currentTokens, maxTokens))
+			return trimmed, currentTokens
+		}
 	}
 
 	// Phase 2: Trim older user messages (keep most recent user message intact).
@@ -338,6 +360,7 @@ func (ch *ConversationHandler) emergencyTruncateContext(
 		}
 	}
 
+	changed = false
 	for i := range trimmed {
 		if trimmed[i].Role != "user" || i == lastUserIdx || trimmed[i].Content == "" {
 			continue
@@ -345,19 +368,21 @@ func (ch *ConversationHandler) emergencyTruncateContext(
 		msgTokens := EstimateTokens(trimmed[i].Content)
 		maxUserTokens := 300
 		if msgTokens > maxUserTokens {
-			maxChars := maxUserTokens * 4
-			if len(trimmed[i].Content) > maxChars {
-				trimmed[i].Content = trimmed[i].Content[:maxChars] +
-					"\n\n... [truncated for context limit] ..."
+			maxRunes := maxUserTokens * 4
+			if utf8.RuneCountInString(trimmed[i].Content) > maxRunes {
+				trimmed[i].Content = truncateHead(trimmed[i].Content, maxRunes)
+				changed = true
 			}
 		}
 	}
 
-	currentTokens = ch.apiClient.estimateRequestTokens(trimmed, tools)
-	if currentTokens <= targetTokens {
-		ch.agent.PrintLineAsync(fmt.Sprintf("[~] Emergency truncation applied (user msg trimming); now %d/%d tokens",
-			currentTokens, maxTokens))
-		return trimmed, currentTokens
+	if changed {
+		currentTokens = ch.apiClient.estimateRequestTokens(trimmed, tools)
+		if currentTokens <= targetTokens {
+			ch.agent.PrintLineAsync(fmt.Sprintf("[~] Emergency truncation applied (user msg trimming); now %d/%d tokens",
+				currentTokens, maxTokens))
+			return trimmed, currentTokens
+		}
 	}
 
 	// Phase 3: Trim older assistant messages (keep recent ones intact).
@@ -365,6 +390,7 @@ func (ch *ConversationHandler) emergencyTruncateContext(
 	if recentStart < 0 {
 		recentStart = 0
 	}
+	changed = false
 	for i := range trimmed {
 		if i >= recentStart || trimmed[i].Role != "assistant" || trimmed[i].Content == "" {
 			continue
@@ -372,19 +398,21 @@ func (ch *ConversationHandler) emergencyTruncateContext(
 		msgTokens := EstimateTokens(trimmed[i].Content)
 		maxAssistantTokens := 400
 		if msgTokens > maxAssistantTokens {
-			maxChars := maxAssistantTokens * 4
-			if len(trimmed[i].Content) > maxChars {
-				trimmed[i].Content = trimmed[i].Content[:maxChars] +
-					"\n\n... [truncated for context limit] ..."
+			maxRunes := maxAssistantTokens * 4
+			if utf8.RuneCountInString(trimmed[i].Content) > maxRunes {
+				trimmed[i].Content = truncateHead(trimmed[i].Content, maxRunes)
+				changed = true
 			}
 		}
 	}
 
-	currentTokens = ch.apiClient.estimateRequestTokens(trimmed, tools)
-	if currentTokens <= targetTokens {
-		ch.agent.PrintLineAsync(fmt.Sprintf("[~] Emergency truncation applied (assistant msg trimming); now %d/%d tokens",
-			currentTokens, maxTokens))
-		return trimmed, currentTokens
+	if changed {
+		currentTokens = ch.apiClient.estimateRequestTokens(trimmed, tools)
+		if currentTokens <= targetTokens {
+			ch.agent.PrintLineAsync(fmt.Sprintf("[~] Emergency truncation applied (assistant msg trimming); now %d/%d tokens",
+				currentTokens, maxTokens))
+			return trimmed, currentTokens
+		}
 	}
 
 	// Phase 4: Proportional trimming of all older messages.
@@ -394,19 +422,22 @@ func (ch *ConversationHandler) emergencyTruncateContext(
 		if recentStart < limit {
 			limit = recentStart
 		}
+		changed = false
 		for i := range trimmed[:limit] {
 			if trimmed[i].Role == "system" || trimmed[i].Content == "" {
 				continue
 			}
-			targetLen := int(float64(len(trimmed[i].Content)) / excessRatio)
-			if targetLen < len(trimmed[i].Content) && targetLen > 50 {
-				trimmed[i].Content = trimmed[i].Content[:targetLen] +
-					"\n\n... [truncated for context limit] ..."
+			runes := []rune(trimmed[i].Content)
+			targetLen := int(float64(len(runes)) / excessRatio)
+			if targetLen < len(runes) && targetLen > 50 {
+				trimmed[i].Content = truncateHead(trimmed[i].Content, targetLen)
+				changed = true
 			}
 		}
+		if changed {
+			currentTokens = ch.apiClient.estimateRequestTokens(trimmed, tools)
+		}
 	}
-
-	currentTokens = ch.apiClient.estimateRequestTokens(trimmed, tools)
 
 	if currentTokens > threshold {
 		ch.agent.PrintLineAsync(fmt.Sprintf("[WARN] Context over limit after emergency truncation: %d/%d tokens",

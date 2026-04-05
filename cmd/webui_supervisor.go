@@ -83,7 +83,9 @@ func (s *webUISupervisor) reconcile(ctx context.Context) {
 	if desired > 0 && isProcessAlive(desired) {
 		if desired != pid {
 			if s.webServer.IsRunning() {
-				_ = s.webServer.Shutdown()
+				if shutdownErr := s.webServer.Shutdown(); shutdownErr != nil {
+					log.Printf("[debug] failed to shutdown web server: %v", shutdownErr)
+				}
 			}
 			s.mu.Lock()
 			if !s.attachedAnnounce && s.announceAttach != nil {
@@ -102,7 +104,9 @@ func (s *webUISupervisor) reconcile(ctx context.Context) {
 	// Another healthy process currently owns the web UI host role.
 	if alive && record.PID != pid {
 		if s.webServer.IsRunning() {
-			_ = s.webServer.Shutdown()
+			if shutdownErr := s.webServer.Shutdown(); shutdownErr != nil {
+				log.Printf("[debug] failed to shutdown web server: %v", shutdownErr)
+			}
 		}
 		s.mu.Lock()
 		if !s.attachedAnnounce && s.announceAttach != nil {
@@ -145,7 +149,9 @@ func (s *webUISupervisor) cleanupHostRecordIfOwned() {
 	if record.PID != os.Getpid() {
 		return
 	}
-	_ = os.Remove(webUIHostFile())
+	if err := os.Remove(webUIHostFile()); err != nil && !os.IsNotExist(err) {
+		log.Printf("[debug] failed to remove WebUI host file: %v", err)
+	}
 }
 
 func webUIHostFile() string {

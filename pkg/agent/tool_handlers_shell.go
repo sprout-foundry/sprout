@@ -121,9 +121,9 @@ func handleGitCommitOperation(a *Agent) (string, error) {
 		return "No staged changes to commit. Use 'git add' to stage files first.", nil
 	}
 
-	// For commit operations, we use a simple git commit with a message prompt
-	// This is a simplified version - for full interactive commit flow, users should use /commit
-	return "", errors.New("git commit requires the interactive commit flow. Please use the '/commit' slash command instead for the full interactive experience with message generation")
+	// For commit operations, we use the dedicated commit tool that handles
+	// the automated commit flow with message generation and security approval.
+	return "", errors.New("git commit operations should use the dedicated 'commit' tool or the '/commit' slash command")
 }
 
 // gitApprovalPrompterAdapter implements the GitApprovalPrompter interface using the Agent
@@ -188,6 +188,24 @@ func handleCommitTool(_ context.Context, a *Agent, args map[string]interface{}) 
 	var configManager configManagerInterface
 	if cm := a.GetConfigManager(); cm != nil {
 		configManager = cm
+	}
+
+	// Prompt user for approval before committing
+	choices := []ChoiceOption{
+		{Label: "Approve", Value: "approve"},
+		{Label: "Deny", Value: "deny"},
+	}
+
+	choice, err := a.PromptChoice("Allow agent to commit staged changes?", choices)
+	if err != nil {
+		if errors.Is(err, ErrUINotAvailable) {
+			// Fall back to allowing the commit when UI is not available,
+			// since this tool is designed for autonomous agents and was explicitly called
+		} else {
+			return "", fmt.Errorf("approval prompt failed: %w", err)
+		}
+	} else if choice != "approve" {
+		return "Commit cancelled by user.", nil
 	}
 
 	// Execute the commit using the shared helper function

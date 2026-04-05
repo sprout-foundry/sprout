@@ -189,7 +189,7 @@ func (c *CommitCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Ag
 func (c *CommitCommand) selectAndStageFiles(chatAgent *agent.Agent, reader *bufio.Reader) ([]string, error) {
 	validStatusLines, err := getPorcelainStatusLines()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get git status: %w", err)
 	}
 	var filesToAdd []string
 	fmt.Println("\n[i] Enter file numbers to commit (comma-separated, 'a' for all, 'q' to quit):")

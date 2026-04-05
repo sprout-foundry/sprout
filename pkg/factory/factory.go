@@ -161,7 +161,7 @@ func CreateGenericProvider(providerName, model string) (api.ClientInterface, err
 		if providerErr == nil {
 			if model != "" {
 				if err := provider.SetModel(model); err != nil {
-					return nil, err
+					return nil, fmt.Errorf("failed to set model: %w", err)
 				}
 			}
 			return provider, nil
@@ -198,11 +198,11 @@ func CreateCustomProvider(providerName, model string) (api.ClientInterface, erro
 
 	client, err := providers.NewGenericProvider(genericConfig)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create generic provider: %w", err)
 	}
 	if model != "" {
 		if err := client.SetModel(model); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to set model: %w", err)
 		}
 	}
 	return client, nil

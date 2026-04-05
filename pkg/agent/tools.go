@@ -76,8 +76,11 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 		if isMCPTool {
 			return a.executeMCPTool(toolName, args)
 		}
-		return "", fmt.Errorf("unknown tool: %s", toolName)
+		return "", fmt.Errorf("unknown tool %q: %w", toolName, err)
 	}
 
-	return result, err
+	if err != nil {
+		return result, fmt.Errorf("execute tool %q: %w", toolName, err)
+	}
+	return result, nil
 }

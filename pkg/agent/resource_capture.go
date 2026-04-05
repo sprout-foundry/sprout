@@ -110,7 +110,9 @@ func (a *Agent) captureVisionInputAndOutput(imagePath, rawResult string) {
 	if meta.FullOutputPath != "" {
 		fullPath := meta.FullOutputPath
 		if strings.HasPrefix(fullPath, "./") || strings.HasPrefix(fullPath, "../") {
-			fullPath = filepath.Join(a.currentWorkspaceRoot(), filepath.FromSlash(strings.TrimPrefix(meta.FullOutputPath, "./")))
+			// Clean and resolve relative paths to prevent path traversal
+			relativePath := filepath.Clean(filepath.FromSlash(meta.FullOutputPath))
+			fullPath = filepath.Join(a.currentWorkspaceRoot(), relativePath)
 		}
 		if info, err := os.Stat(fullPath); err == nil && !info.IsDir() {
 			a.appendResourceCaptureLogWithMeta("saved_full_text", imagePath, meta.FullOutputPath, info.Size(), "", map[string]interface{}{

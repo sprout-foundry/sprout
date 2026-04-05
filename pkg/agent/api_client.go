@@ -260,7 +260,7 @@ func (ac *APIClient) SendWithRetry(messages []api.Message, tools []api.Tool, rea
 			if ac.agent.debug {
 				ac.agent.debugLog("DEBUG: APIClient not retrying error: %v\n", err)
 			}
-			if ac.isRateLimit(err.Error()) {
+			if ac.isRateLimit(err) {
 				return nil, &RateLimitExceededError{Attempts: retry + 1, LastError: err}
 			}
 			return nil, fmt.Errorf("failed to make API request: %w", err)
@@ -276,7 +276,7 @@ func (ac *APIClient) SendWithRetry(messages []api.Message, tools []api.Tool, rea
 		retryDelay *= 2
 	}
 
-	if err != nil && ac.isRateLimit(err.Error()) {
+	if err != nil && ac.isRateLimit(err) {
 		return nil, &RateLimitExceededError{Attempts: ac.maxRetries + 1, LastError: err}
 	}
 
@@ -468,7 +468,7 @@ func (ac *APIClient) sendStreamingRequest(messages []api.Message, tools []api.To
 			}
 
 			if result.err != nil {
-				if !ac.isRateLimit(result.err.Error()) {
+				if !ac.isRateLimit(result.err) {
 					ac.displayAPIError(result.err)
 				}
 				return result.resp, result.err
@@ -531,7 +531,7 @@ func (ac *APIClient) sendRegularRequest(messages []api.Message, tools []api.Tool
 	case result := <-resultChan:
 		logChatResponseDetailed(result.resp, ac.agent.client.GetProvider(), false, ac.agent.currentIteration)
 		if result.err != nil {
-			if !ac.isRateLimit(result.err.Error()) {
+			if !ac.isRateLimit(result.err) {
 				ac.displayAPIError(result.err)
 			}
 		}
@@ -545,10 +545,7 @@ func (ac *APIClient) shouldRetry(err error, attempt int) bool {
 		return false
 	}
 
-	errStr := err.Error()
-
-	// Check for rate limits
-	if ac.isRateLimit(errStr) {
+	if ac.isRateLimit(err) {
 		if ac.agent.debug {
 			ac.agent.debugLog("DEBUG: shouldRetry - rate limit detected: %v\n", err)
 		}
@@ -556,7 +553,7 @@ func (ac *APIClient) shouldRetry(err error, attempt int) bool {
 	}
 
 	// Check other retryable errors
-	isRetryable := ac.isRetryableError(errStr)
+	isRetryable := ac.isRetryableError(err.Error())
 	withinMaxRetries := attempt < ac.maxRetries
 	result := isRetryable && withinMaxRetries
 
@@ -569,12 +566,12 @@ func (ac *APIClient) shouldRetry(err error, attempt int) bool {
 }
 
 // isRateLimit checks if error is a real rate limit (more precise detection)
-func (ac *APIClient) isRateLimit(errStr string) bool {
+func (ac *APIClient) isRateLimit(err error) bool {
 	if ac.rateLimiter == nil {
 		return false
 	}
 
-	return ac.rateLimiter.IsRateLimitError(fmt.Errorf("rate limit check: %s", errStr), nil)
+	return ac.rateLimiter.IsRateLimitError(err, nil)
 }
 
 // handleRateLimit handles rate limit errors with proper backoff
@@ -622,7 +619,7 @@ func (ac *APIClient) isRetryableError(errStr string) bool {
 // calculateBackoff calculates the backoff delay
 func (ac *APIClient) calculateBackoff(err error, attempt int, baseDelay time.Duration) time.Duration {
 	// For rate limits, this is handled separately
-	if ac.isRateLimit(err.Error()) {
+	if ac.isRateLimit(err) {
 		return 0 // Already handled
 	}
 

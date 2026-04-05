@@ -17,6 +17,7 @@ import (
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 	"github.com/alantheprice/ledit/pkg/console"
 	"github.com/alantheprice/ledit/pkg/filesystem"
+	"github.com/alantheprice/ledit/pkg/utils"
 	"github.com/alantheprice/ledit/pkg/webcontent"
 )
 
@@ -271,19 +272,19 @@ func handleAnalyzeImageContent(ctx context.Context, a *Agent, args map[string]in
 func handleAnalyzeImageContentWithImages(ctx context.Context, a *Agent, args map[string]interface{}) ([]api.ImageData, string, error) {
 	if a == nil {
 		result, err := handleAnalyzeImageContent(ctx, a, args)
-		return nil, result, err
+		return nil, result, utils.WrapError(err, "analyze image content")
 	}
 
 	imagePath, ok := args["image_path"].(string)
 	if !ok || imagePath == "" {
 		result, err := handleAnalyzeImageContent(ctx, a, args)
-		return nil, result, err
+		return nil, result, utils.WrapError(err, "analyze image content")
 	}
 
 	// Only use multimodal path when primary model supports vision
 	if a.client == nil || !a.client.SupportsVision() {
 		result, err := handleAnalyzeImageContent(ctx, a, args)
-		return nil, result, err
+		return nil, result, utils.WrapError(err, "analyze image content")
 	}
 
 	// For PDFs, use multimodal pipeline
@@ -308,7 +309,7 @@ func handleAnalyzeImageContentWithImages(ctx context.Context, a *Agent, args map
 		if screenshotErr != nil {
 			// Fall back to standard OCR pipeline
 			result, ferr := handleAnalyzeImageContent(ctx, a, args)
-			return nil, result, ferr
+			return nil, result, utils.WrapError(ferr, "analyze image content")
 		}
 		defer os.Remove(screenshotPath)
 		effectiveImagePath = screenshotPath
@@ -324,18 +325,18 @@ func handleAnalyzeImageContentWithImages(ctx context.Context, a *Agent, args map
 		resp, err := httpClient.Get(effectiveImagePath)
 		if err != nil {
 			result, ferr := handleAnalyzeImageContent(ctx, a, args)
-			return nil, result, ferr
+			return nil, result, utils.WrapError(ferr, "analyze image content")
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			result, ferr := handleAnalyzeImageContent(ctx, a, args)
-			return nil, result, ferr
+			return nil, result, utils.WrapError(ferr, "analyze image content")
 		}
 		// Limit download size to 20MB
 		data, err = io.ReadAll(io.LimitReader(resp.Body, 20*1024*1024))
 		if err != nil {
 			result, ferr := handleAnalyzeImageContent(ctx, a, args)
-			return nil, result, ferr
+			return nil, result, utils.WrapError(ferr, "analyze image content")
 		}
 		resolvedPath = effectiveImagePath
 	} else {
@@ -344,12 +345,12 @@ func handleAnalyzeImageContentWithImages(ctx context.Context, a *Agent, args map
 		resolvedPath, err = filesystem.SafeResolvePathWithBypass(ctx, effectiveImagePath)
 		if err != nil {
 			result, ferr := handleAnalyzeImageContent(ctx, a, args)
-			return nil, result, ferr
+			return nil, result, utils.WrapError(ferr, "analyze image content")
 		}
 		data, err = os.ReadFile(resolvedPath)
 		if err != nil {
 			result, ferr := handleAnalyzeImageContent(ctx, a, args)
-			return nil, result, ferr
+			return nil, result, utils.WrapError(ferr, "analyze image content")
 		}
 	}
 
@@ -358,7 +359,7 @@ func handleAnalyzeImageContentWithImages(ctx context.Context, a *Agent, args map
 	if mimeType == "" {
 		a.debugLog("[WARN] File is not a valid image, falling back to OCR pipeline: %s\n", imagePath)
 		result, err := handleAnalyzeImageContent(ctx, a, args)
-		return nil, result, err
+		return nil, result, utils.WrapError(err, "analyze image content")
 	}
 
 	// Optimize/resize if needed
@@ -376,7 +377,7 @@ func handleAnalyzeImageContentWithImages(ctx context.Context, a *Agent, args map
 	if len(data) > console.MaxPastedImageSize {
 		a.debugLog("[WARN] Optimized image still too large (%d bytes), falling back to OCR\n", len(data))
 		result, err := handleAnalyzeImageContent(ctx, a, args)
-		return nil, result, err
+		return nil, result, utils.WrapError(err, "analyze image content")
 	}
 
 	// Encode to base64
@@ -586,7 +587,7 @@ func handleAnalyzePDFWithImages(ctx context.Context, a *Agent, path string, args
 			a.debugLog("[WARN] Failed to resolve remote PDF: %v\n", resolveErr)
 			// Fall back to text-only pipeline
 			result, err := handleAnalyzeImageContent(ctx, a, args)
-			return nil, result, err
+			return nil, result, utils.WrapError(err, "analyze image content")
 		}
 		effectivePath = resolvedPath
 		cleanup = resolvedCleanup
@@ -595,7 +596,7 @@ func handleAnalyzePDFWithImages(ctx context.Context, a *Agent, path string, args
 		effectivePath, err = filesystem.SafeResolvePathWithBypass(ctx, path)
 		if err != nil {
 			result, ferr := handleAnalyzeImageContent(ctx, a, args)
-			return nil, result, ferr
+			return nil, result, utils.WrapError(ferr, "analyze image content")
 		}
 	}
 
@@ -609,7 +610,7 @@ func handleAnalyzePDFWithImages(ctx context.Context, a *Agent, path string, args
 		// Fall back to full OCR pipeline (existing behavior)
 		a.debugLog("[WARN] Multimodal PDF processing failed: %v, falling back to OCR pipeline\n", err)
 		result, err := handleAnalyzeImageContent(ctx, a, args)
-		return nil, result, err
+		return nil, result, utils.WrapError(err, "analyze image content")
 	}
 
 	// Extract optional analysis_prompt for text result

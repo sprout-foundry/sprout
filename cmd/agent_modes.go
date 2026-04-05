@@ -232,7 +232,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 			cfg.SkipPrompt = agentSkipPrompt
 			return nil
 		}); err != nil {
-			return err
+			return fmt.Errorf("failed to update config for interactive mode: %w", err)
 		}
 
 		// Check if we should prompt for GitHub MCP setup (interactive, non-SkipPrompt)
@@ -244,7 +244,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 			cfg.SkipPrompt = true
 			return nil
 		}); err != nil {
-			return err
+			return fmt.Errorf("failed to update config for direct mode: %w", err)
 		}
 
 		// Direct mode
@@ -306,17 +306,17 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		}
 		workflowState, workflowStateErr := loadWorkflowExecutionState(workflowConfig)
 		if workflowStateErr != nil {
-			return workflowStateErr
+			return fmt.Errorf("failed to load workflow execution state: %w", workflowStateErr)
 		}
 		if restoreErr := restoreWorkflowConversationState(chatAgent, workflowConfig, workflowState); restoreErr != nil {
-			return restoreErr
+			return fmt.Errorf("failed to restore workflow conversation state: %w", restoreErr)
 		}
 		if workflowConfig != nil && workflowConfig.orchestrationEnabled() {
 			if eventErr := emitWorkflowOrchestrationEvent(workflowConfig, "workflow_run_started", map[string]interface{}{
 				"initial_completed": workflowState.InitialCompleted,
 				"next_step_index":   workflowState.NextStepIndex,
 			}); eventErr != nil {
-				return eventErr
+				return fmt.Errorf("failed to emit workflow run started event: %w", eventErr)
 			}
 		}
 
@@ -334,13 +334,13 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				workflowState.FirstError = err.Error()
 			}
 			if persistErr := persistWorkflowCheckpoint(workflowConfig, workflowState, chatAgent); persistErr != nil {
-				return persistErr
+				return fmt.Errorf("failed to persist workflow checkpoint: %w", persistErr)
 			}
 			if eventErr := emitWorkflowOrchestrationEvent(workflowConfig, "workflow_initial_completed", map[string]interface{}{
 				"provider":  workflowState.LastProvider,
 				"has_error": workflowState.HasError,
 			}); eventErr != nil {
-				return eventErr
+				return fmt.Errorf("failed to emit workflow initial completed event: %w", eventErr)
 			}
 		} else {
 			err = nil
@@ -357,7 +357,12 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 			}
 			return workflowErr
 		}
-		return err
+		// At this point: workflowErr is nil, workflowYielded is false
+		// err could be nil or from runDirectMode
+		if err != nil {
+			return err // Already has context from runDirectMode's error wrapping
+		}
+		return nil // No error, workflow completed successfully
 	}
 
 	// Graceful shutdown
@@ -442,14 +447,13 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 					fmt.Println("Use 'exit' or 'quit' to exit.")
 					continue
 				}
-				return err
+				return fmt.Errorf("failed to read input: %w", err)
 			}
 
 			query = strings.TrimSpace(query)
 			if query == "" {
 				continue
 			}
-
 			// Add to agent history
 			chatAgent.AddToHistory(query)
 			// Update input reader history to stay in sync
@@ -505,7 +509,7 @@ func runDirectMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events
 
 	// Try zsh command detection first
 	if executed, err := TryZshCommandExecution(ctx, chatAgent, query); err != nil {
-		return err
+		return fmt.Errorf("zsh command execution failed: %w", err)
 	} else if executed {
 		// Command was executed directly, skip normal agent flow
 		return nil
@@ -513,7 +517,7 @@ func runDirectMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events
 
 	// Try LLM-based fast path: direct command execution
 	if executed, err := TryDirectExecution(ctx, chatAgent, query); err != nil {
-		return err
+		return fmt.Errorf("direct command execution failed: %w", err)
 	} else if executed {
 		// Command was executed directly, skip normal agent flow
 		return nil

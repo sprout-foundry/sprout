@@ -75,14 +75,14 @@ func runCustomModelAdd() error {
 
 	name, err := promptLine(reader, "Provider name (e.g. my-gateway): ")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to prompt for provider name: %w", err)
 	}
 
 	existingProviders := cfg.CustomProviders
 	if _, exists := existingProviders[strings.ToLower(strings.TrimSpace(name))]; exists {
 		answer, err := promptLine(reader, "Provider exists. Replace it? [y/N]: ")
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to prompt for replace confirmation: %w", err)
 		}
 		if !isYes(answer) {
 			return nil
@@ -91,12 +91,12 @@ func runCustomModelAdd() error {
 
 	endpoint, err := promptLine(reader, "Base URL (e.g., https://example.com/v1): ")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to prompt for endpoint URL: %w", err)
 	}
 
 	envVar, err := promptLine(reader, "API key env var (leave empty for no auth): ")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to prompt for API key env var: %w", err)
 	}
 
 	provider := configuration.CustomProviderConfig{
@@ -130,7 +130,7 @@ func runCustomModelAdd() error {
 		for {
 			preferred, err := promptLine(reader, "Preferred default model (name or number, leave empty for first discovered): ")
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to prompt for preferred model: %w", err)
 			}
 			selectedModel, err := resolvePreferredCustomProviderModel(preferred, models)
 			if err != nil {
@@ -164,7 +164,7 @@ func runCustomModelAdd() error {
 	fmt.Printf("\nDefault context size (tokens) for the provider%s: ", defaultCtxHint)
 	ctxInput, err := reader.ReadString('\n')
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read context size input: %w", err)
 	}
 	ctxInput = strings.TrimSpace(ctxInput)
 	if ctxInput != "" {
@@ -178,7 +178,7 @@ func runCustomModelAdd() error {
 
 	visionAnswer, err := promptLine(reader, "Does this provider/model support vision (multimodal images)? [y/N]: ")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to prompt for vision support: %w", err)
 	}
 	if isYes(visionAnswer) {
 		provider.SupportsVision = true
@@ -212,7 +212,7 @@ func runCustomModelAdd() error {
 
 	normalized, err := configuration.NormalizeCustomProviderConfig(provider)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to normalize custom provider config: %w", err)
 	}
 
 	if cfg.ProviderModels == nil {
@@ -276,14 +276,14 @@ func runCustomModelRemove(providerName string) error {
 		}
 		value, err := promptLine(reader, "Provider to remove: ")
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to prompt for provider to remove: %w", err)
 		}
 		providerName = value
 	}
 
 	normalizedName, err := configuration.CanonicalizeCustomProviderName(providerName)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to canonicalize provider name: %w", err)
 	}
 	providerName = normalizedName
 
@@ -293,14 +293,14 @@ func runCustomModelRemove(providerName string) error {
 
 	answer, err := promptLine(reader, fmt.Sprintf("Remove provider '%s'? [y/N]: ", providerName))
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to prompt for removal confirmation: %w", err)
 	}
 	if !isYes(answer) {
 		return nil
 	}
 
 	if err := configuration.DeleteCustomProvider(providerName); err != nil {
-		return err
+		return fmt.Errorf("failed to delete custom provider: %w", err)
 	}
 	delete(cfg.ProviderModels, providerName)
 	cfg.ProviderPriority = removeString(cfg.ProviderPriority, providerName)

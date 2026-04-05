@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"log"
 	"os"
 
@@ -66,7 +67,7 @@ func (b *BaseCommand) Initialize() error {
 	// Load configuration
 	cfg, err := configuration.LoadOrInitConfig(*b.flags.SkipPrompt)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to load or init config: %w", err)
 	}
 
 	// UI has been removed from the project
@@ -83,7 +84,7 @@ func (b *BaseCommand) Initialize() error {
 		model := getModelFromConfig(cfg, *b.flags.Model)
 		traceSession, err = trace.NewTraceSession(traceDir, provider, model)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to initialize trace session: %w", err)
 		}
 		logger.Logf("Dataset tracing enabled: %s", traceSession.GetRunID())
 	}

@@ -139,13 +139,24 @@ type AgentAdapter struct {
 	agent *agent.Agent
 }
 
+// NewAgentAdapter creates a new AgentAdapter wrapping the given agent
+func NewAgentAdapter(agent *agent.Agent) *AgentAdapter {
+	return &AgentAdapter{agent: agent}
+}
+
 func (a *AgentAdapter) GetConfigManager() interface {
 	GetConfig() *configuration.Config
 	UpdateConfig(func(c *configuration.Config) error) error
 } {
+	if a == nil || a.agent == nil {
+		return nil
+	}
 	return a.agent.GetConfigManager()
 }
 
 func (a *AgentAdapter) RefreshMCPTools() error {
+	if a == nil || a.agent == nil {
+		return nil
+	}
 	return a.agent.RefreshMCPTools()
 }

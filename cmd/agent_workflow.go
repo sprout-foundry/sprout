@@ -166,7 +166,7 @@ func (c *AgentWorkflowConfig) validate() error {
 		c.Initial.Prompt = strings.TrimSpace(c.Initial.Prompt)
 		c.Initial.PromptFile = strings.TrimSpace(c.Initial.PromptFile)
 		if err := c.Initial.AgentWorkflowRuntime.validate("initial"); err != nil {
-			return err
+			return fmt.Errorf("validating initial step: %w", err)
 		}
 		if c.Initial.Prompt != "" && c.Initial.PromptFile != "" {
 			return errors.New("initial.prompt and initial.prompt_file are mutually exclusive")
@@ -198,8 +198,9 @@ func (c *AgentWorkflowConfig) validate() error {
 		if !isValidWorkflowWhen(step.When) {
 			return fmt.Errorf("steps[%d].when must be one of: %s, %s, %s", i, workflowWhenAlways, workflowWhenOnSuccess, workflowWhenOnError)
 		}
-		if err := step.AgentWorkflowRuntime.validate(fmt.Sprintf("steps[%d]", i)); err != nil {
-			return err
+		prefix := fmt.Sprintf("steps[%d]", i)
+		if err := step.AgentWorkflowRuntime.validate(prefix); err != nil {
+			return fmt.Errorf("validating step %s: %w", prefix, err)
 		}
 	}
 
@@ -464,7 +465,7 @@ func applyWorkflowRuntimeOverrides(chatAgent *agent.Agent, runtime AgentWorkflow
 			}
 			return nil
 		}); err != nil {
-			return err
+			return fmt.Errorf("failed to apply workflow runtime overrides: %w", err)
 		}
 	}
 	if runtime.MaxIterations != nil {
@@ -512,7 +513,7 @@ func applyWorkflowRuntimeOverrides(chatAgent *agent.Agent, runtime AgentWorkflow
 
 	systemPrompt, err := resolveWorkflowTextOrFile(runtime.SystemPrompt, runtime.SystemPromptFile, "system_prompt")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to resolve workflow system prompt: %w", err)
 	}
 	if systemPrompt != "" {
 		chatAgent.SetSystemPrompt(systemPrompt)
@@ -533,7 +534,7 @@ func applyWorkflowRuntimeOverrides(chatAgent *agent.Agent, runtime AgentWorkflow
 			applyWorkflowSubagentOverrides(cfg.SubagentTypes, runtime.SubagentOverrides)
 			return nil
 		}); err != nil {
-			return err
+			return fmt.Errorf("failed to apply workflow runtime overrides: %w", err)
 		}
 	}
 
@@ -843,7 +844,7 @@ func persistWorkflowConversationState(chatAgent *agent.Agent, cfg *AgentWorkflow
 
 func persistWorkflowCheckpoint(cfg *AgentWorkflowConfig, state *workflowExecutionState, chatAgent *agent.Agent) error {
 	if err := persistWorkflowExecutionState(cfg, state); err != nil {
-		return err
+		return fmt.Errorf("failed to persist workflow checkpoint: %w", err)
 	}
 	return persistWorkflowConversationState(chatAgent, cfg)
 }

@@ -394,7 +394,7 @@ func setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 		// Docker + PAT configuration
 		githubToken, err := promptForGitHubToken(reader)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to prompt for GitHub token: %w", err)
 		}
 
 		serverConfig = mcp.MCPServerConfig{
@@ -413,7 +413,7 @@ func setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 		// npx + PAT configuration
 		githubToken, err := promptForGitHubToken(reader)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to prompt for GitHub token: %w", err)
 		}
 
 		serverConfig = mcp.MCPServerConfig{

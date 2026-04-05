@@ -541,7 +541,10 @@ func LoadOrInitConfig(skipPrompt bool) (*Config, error) {
 
 	// Otherwise, initialize with prompts
 	config, _, err = Initialize()
-	return config, err
+	if err != nil {
+		return config, fmt.Errorf("initialize configuration: %w", err)
+	}
+	return config, nil
 }
 
 // DebugPrintConfig prints current configuration for debugging

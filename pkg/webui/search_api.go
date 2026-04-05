@@ -268,7 +268,7 @@ func (ws *ReactWebServer) performSearch(ctx context.Context, workspaceRoot, quer
 	})
 
 	if err != nil && err != context.DeadlineExceeded {
-		return nil, 0, 0, false, err
+		return nil, 0, 0, false, fmt.Errorf("search files: %w", err)
 	}
 
 	// Sort results by file path for consistent ordering
@@ -283,7 +283,7 @@ func (ws *ReactWebServer) performSearch(ctx context.Context, workspaceRoot, quer
 func (ws *ReactWebServer) searchFile(path string, pattern *regexp.Regexp, contextLines int) ([]SearchMatch, int, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, fmt.Errorf("open file %q: %w", path, err)
 	}
 	defer file.Close()
 
@@ -320,7 +320,7 @@ func (ws *ReactWebServer) searchFile(path string, pattern *regexp.Regexp, contex
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, 0, err
+		return nil, 0, fmt.Errorf("scan file %q: %w", path, err)
 	}
 
 	// If context is requested, do a second pass to collect after-context

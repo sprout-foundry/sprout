@@ -207,7 +207,7 @@ func (c *MCPClient) Initialize(ctx context.Context) error {
 	}
 
 	if response.Error != nil {
-		return fmt.Errorf("MCP server %s initialization error: %s", c.config.Name, response.Error.Message)
+		return fmt.Errorf("MCP server %s initialization error: %w", c.config.Name, response.Error)
 	}
 
 	c.mutex.Lock()
@@ -235,7 +235,7 @@ func (c *MCPClient) ListTools(ctx context.Context) ([]MCPTool, error) {
 	}
 
 	if response.Error != nil {
-		return nil, fmt.Errorf("error listing tools from %s: %s", c.config.Name, response.Error.Message)
+		return nil, fmt.Errorf("error listing tools from %s: %w", c.config.Name, response.Error)
 	}
 
 	var result struct {
@@ -331,7 +331,7 @@ func (c *MCPClient) ListResources(ctx context.Context) ([]MCPResource, error) {
 	}
 
 	if response.Error != nil {
-		return nil, fmt.Errorf("error listing resources from %s: %s", c.config.Name, response.Error.Message)
+		return nil, fmt.Errorf("error listing resources from %s: %w", c.config.Name, response.Error)
 	}
 
 	var result struct {
@@ -373,7 +373,7 @@ func (c *MCPClient) ReadResource(ctx context.Context, uri string) (*MCPContent, 
 	}
 
 	if response.Error != nil {
-		return nil, fmt.Errorf("error reading resource %s from %s: %s", uri, c.config.Name, response.Error.Message)
+		return nil, fmt.Errorf("error reading resource %s from %s: %w", uri, c.config.Name, response.Error)
 	}
 
 	var result struct {
@@ -410,7 +410,7 @@ func (c *MCPClient) ListPrompts(ctx context.Context) ([]MCPPrompt, error) {
 	}
 
 	if response.Error != nil {
-		return nil, fmt.Errorf("error listing prompts from %s: %s", c.config.Name, response.Error.Message)
+		return nil, fmt.Errorf("error listing prompts from %s: %w", c.config.Name, response.Error)
 	}
 
 	var result struct {
@@ -453,7 +453,7 @@ func (c *MCPClient) GetPrompt(ctx context.Context, name string, args map[string]
 	}
 
 	if response.Error != nil {
-		return nil, fmt.Errorf("error getting prompt %s from %s: %s", name, c.config.Name, response.Error.Message)
+		return nil, fmt.Errorf("error getting prompt %s from %s: %w", name, c.config.Name, response.Error)
 	}
 
 	var result struct {

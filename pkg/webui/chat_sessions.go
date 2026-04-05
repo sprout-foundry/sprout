@@ -31,6 +31,8 @@ type chatSession struct {
 	CurrentSessionID string    `json:"current_session_id"`
 	ActiveQuery      bool      `json:"active_query"`
 	CurrentQuery     string    `json:"current_query"`
+	Provider         string    `json:"provider"`
+	Model            string    `json:"model"`
 	Agent            *agent.Agent `json:"-"`
 	mu               sync.Mutex
 }
@@ -211,6 +213,8 @@ type chatSessionInfo struct {
 	ActiveQuery      bool      `json:"active_query"`
 	CurrentQuery     string    `json:"current_query"`
 	MessageCount     int       `json:"message_count"`
+	Provider         string    `json:"provider"`
+	Model            string    `json:"model"`
 }
 
 // toInfo copies the public fields from cs under cs.mu.
@@ -226,6 +230,8 @@ func (cs *chatSession) toInfo() chatSessionInfo {
 		ActiveQuery:      cs.ActiveQuery,
 		CurrentQuery:     cs.CurrentQuery,
 		MessageCount:     cs.messageCountLocked(),
+		Provider:         cs.Provider,
+		Model:            cs.Model,
 	}
 }
 
@@ -455,6 +461,12 @@ func (cs *chatSession) chatSessionSummary(isDefault bool) map[string]interface{}
 		"active_query":     cs.ActiveQuery,
 		"is_default":       isDefault,
 	}
+	if cs.Provider != "" {
+		summary["provider"] = cs.Provider
+	}
+	if cs.Model != "" {
+		summary["model"] = cs.Model
+	}
 	if cs.ActiveQuery && cs.CurrentQuery != "" {
 		summary["current_query"] = cs.CurrentQuery
 	}
@@ -476,6 +488,12 @@ func (cs *chatSession) chatSessionWithMessages() map[string]interface{} {
 		"current_session_id": cs.agentSessionIDLocked(),
 		"active_query":       cs.ActiveQuery,
 		"is_default":         cs.ID == defaultChatID,
+	}
+	if cs.Provider != "" {
+		summary["provider"] = cs.Provider
+	}
+	if cs.Model != "" {
+		summary["model"] = cs.Model
 	}
 	if cs.ActiveQuery && cs.CurrentQuery != "" {
 		summary["current_query"] = cs.CurrentQuery

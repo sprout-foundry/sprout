@@ -331,3 +331,72 @@ func TestConcurrentChatAgentLazyCreation(t *testing.T) {
 		t.Fatal("expected getChatAgent to return the same cached agent instance")
 	}
 }
+
+func TestChatSessionProviderModelScoping(t *testing.T) {
+	ws := setupConcurrentTestServer(t)
+
+	// Create two chat sessions.
+	chatA := createChatSession(t, ws, testConcurrentClientID, "Chat A")
+	chatB := createChatSession(t, ws, testConcurrentClientID, "Chat B")
+
+	// Set provider/model on Chat A, and different values on Chat B, by
+	// directly manipulating the chatSession struct fields.
+	ws.mutex.Lock()
+	ctx := ws.clientContexts[testConcurrentClientID]
+	if csA := ctx.getChatSession(chatA); csA != nil {
+		csA.mu.Lock()
+		csA.Provider = "openai"
+		csA.Model = "gpt-4"
+		csA.mu.Unlock()
+	}
+	if csB := ctx.getChatSession(chatB); csB != nil {
+		csB.mu.Lock()
+		csB.Provider = "anthropic"
+		csB.Model = "claude-3"
+		csB.mu.Unlock()
+	}
+	ws.mutex.Unlock()
+
+	// List all sessions and verify each has its own provider/model via the API.
+	sessions := listChatSessions(t, ws, testConcurrentClientID)
+	for _, s := range sessions {
+		switch s["id"].(string) {
+		case chatA:
+			if s["provider"] != "openai" {
+				t.Errorf("chat A: expected provider 'openai', got %v", s["provider"])
+			}
+			if s["model"] != "gpt-4" {
+				t.Errorf("chat A: expected model 'gpt-4', got %v", s["model"])
+			}
+		case chatB:
+			if s["provider"] != "anthropic" {
+				t.Errorf("chat B: expected provider 'anthropic', got %v", s["provider"])
+			}
+			if s["model"] != "claude-3" {
+				t.Errorf("chat B: expected model 'claude-3', got %v", s["model"])
+			}
+		}
+	}
+
+	// Switch to Chat A and verify the switch response includes provider/model.
+	body, _ := json.Marshal(map[string]string{"id": chatA})
+	req := httptest.NewRequest(http.MethodPost, "/api/chat-sessions/switch", bytes.NewReader(body))
+	req.Header.Set(webClientIDHeader, testConcurrentClientID)
+	rec := httptest.NewRecorder()
+	ws.handleAPIChatSessionsSwitch(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("switch to chat A: status %d (%s)", rec.Code, rec.Body.String())
+	}
+	var switchResp struct {
+		ChatSession map[string]interface{} `json:"chat_session"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &switchResp); err != nil {
+		t.Fatalf("decode switch response: %v", err)
+	}
+	if switchResp.ChatSession["provider"] != "openai" {
+		t.Errorf("switch response: expected provider 'openai', got %v", switchResp.ChatSession["provider"])
+	}
+	if switchResp.ChatSession["model"] != "gpt-4" {
+		t.Errorf("switch response: expected model 'gpt-4', got %v", switchResp.ChatSession["model"])
+	}
+}

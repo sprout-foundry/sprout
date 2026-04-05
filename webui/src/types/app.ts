@@ -81,6 +81,8 @@ export interface PerChatState {
   queryProgress: unknown;
   lastError: string | null;
   isProcessing: boolean;
+  provider: string;
+  model: string;
 }
 
 export interface AppState {

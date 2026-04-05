@@ -130,7 +130,15 @@ func (ws *ReactWebServer) publishProviderState(clientID string) {
 		return
 	}
 
-	agentInst, err := ws.getClientAgent(clientID)
+	// Use the active chat's agent so each session reports its own provider/model.
+	activeChatID := ""
+	ws.mutex.RLock()
+	if ctx := ws.clientContexts[clientID]; ctx != nil {
+		activeChatID = ctx.getActiveChatID()
+	}
+	ws.mutex.RUnlock()
+
+	agentInst, err := ws.getChatAgent(clientID, activeChatID)
 	if err != nil || agentInst == nil {
 		return
 	}

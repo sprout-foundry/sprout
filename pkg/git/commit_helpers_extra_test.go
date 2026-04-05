@@ -9,7 +9,7 @@ import (
 // parseStagedFileChanges — edge cases
 // =============================================================================
 
-func TestParseStagedFileChanges_WhitespaceOnlyLines(t *testing.T) {
+func TestParseStagedFileChanges_WhitespaceOnlyLines_Edge(t *testing.T) {
 	// Lines of pure whitespace should be skipped (fields produces no parts)
 	input := "\t  \n   \n A\tfile.go\n \n"
 	result := parseStagedFileChanges(input)
@@ -19,7 +19,7 @@ func TestParseStagedFileChanges_WhitespaceOnlyLines(t *testing.T) {
 	assertChange(t, result[0], "A", "file.go")
 }
 
-func TestParseStagedFileChanges_FilePathWithSpaces(t *testing.T) {
+func TestParseStagedFileChanges_FilePathWithSpaces_Edge(t *testing.T) {
 	tests := []struct {
 		name string
 		line string

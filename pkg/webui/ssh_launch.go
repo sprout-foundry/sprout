@@ -453,7 +453,7 @@ func stopRemoteSSHBackend(hostAlias string, remotePID int) error {
 		if msg == "" {
 			msg = err.Error()
 		}
-		return fmt.Errorf("%s", msg)
+		return fmt.Errorf("failed to kill SSH process: %s: %w", msg, err)
 	}
 	return nil
 }

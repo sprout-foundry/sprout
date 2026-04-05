@@ -922,7 +922,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 	hasError := state.HasError
 	var firstErr error
 	if strings.TrimSpace(state.FirstError) != "" {
-		firstErr = fmt.Errorf("%s", state.FirstError)
+		firstErr = fmt.Errorf("workflow error: %s", state.FirstError)
 	}
 
 	for i := state.NextStepIndex; i < len(cfg.Steps); i++ {

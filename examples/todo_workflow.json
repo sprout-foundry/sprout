@@ -7,8 +7,8 @@
     "skip_prompt": true,
     "subagent_overrides": {
       "coder": {
-        "model": "zai-org/GLM-4.7-Flash",
-        "provider": "deepinfra"
+        "model": "qwen3.5-35-A3B",
+        "provider": "ai-worker"
       }
     },
     "unsafe": true

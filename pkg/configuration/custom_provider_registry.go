@@ -27,7 +27,7 @@ type ProviderDiscoveryModel struct {
 func GetProvidersDir() (string, error) {
 	configDir, err := GetConfigDir()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get config directory: %w", err)
 	}
 	providersDir := filepath.Join(configDir, ProvidersDirName)
 	if err := os.MkdirAll(providersDir, 0700); err != nil {
@@ -39,11 +39,11 @@ func GetProvidersDir() (string, error) {
 func GetCustomProviderPath(name string) (string, error) {
 	providersDir, err := GetProvidersDir()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get providers directory: %w", err)
 	}
 	normalized, err := CanonicalizeCustomProviderName(name)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to normalize provider name: %w", err)
 	}
 	return filepath.Join(providersDir, normalized+".json"), nil
 }

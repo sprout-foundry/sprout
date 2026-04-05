@@ -402,7 +402,7 @@ func extractSubagentSummary(stdout string) map[string]string {
 func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	prompt, err := convertToString(args["prompt"], "prompt")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to convert prompt parameter: %w", err)
 	}
 
 	a.debugLog("Spawning subagent with task: %s\n", truncateString(prompt, 100))
@@ -680,7 +680,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	resultMap, err := tools.RunSubagent(enhancedPrompt.String(), model, provider, streamCallback, systemPromptPath, systemPromptText, persona)
 	if err != nil {
 		a.debugLog("Subagent spawn error: %v\n", err)
-		return "", err
+		return "", fmt.Errorf("failed to spawn subagent: %w", err)
 	}
 
 	// Truncate output if it exceeds size limit
@@ -921,7 +921,7 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 
 			prompt, err := convertToString(taskMap["prompt"], "prompt")
 			if err != nil {
-				return "", err
+				return "", fmt.Errorf("failed to convert prompt parameter: %w", err)
 			}
 			task.Prompt = prompt
 
@@ -1022,7 +1022,7 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 	resultMap, err := tools.RunParallelSubagents(parallelTasks, false, streamCallback)
 	if err != nil {
 		a.debugLog("Parallel subagents spawn error: %v\n", err)
-		return "", err
+		return "", fmt.Errorf("failed to spawn parallel subagents: %w", err)
 	}
 	failedCount := 0
 	for _, result := range resultMap {

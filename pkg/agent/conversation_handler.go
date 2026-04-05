@@ -89,7 +89,7 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 	images, processedQuery, err := ch.processImagesInQuery(userQuery)
 	if err != nil {
 		ch.agent.publishEvent(events.EventTypeError, events.ErrorEvent("Image processing failed", err))
-		return "", err
+		return "", fmt.Errorf("failed to process images in query: %w", err)
 	}
 
 	// Add user message with optional multimodal images
@@ -667,7 +667,7 @@ func (ch *ConversationHandler) finalizeConversation() (string, error) {
 	if hadTrackedChanges {
 		if err := ch.runSelfReviewGate(); err != nil {
 			ch.agent.publishEvent(events.EventTypeError, events.ErrorEvent("Self-review gate failed", err))
-			return "", err
+			return "", fmt.Errorf("failed self-review gate: %w", err)
 		}
 	}
 

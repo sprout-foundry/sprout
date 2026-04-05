@@ -26,7 +26,7 @@ func GetEmbeddedSystemPrompt() (string, error) {
 	// Extract the prompt content from the markdown
 	promptContent, err := extractSystemPrompt()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to extract system prompt: %w", err)
 	}
 
 	// Add current date and time for temporal context
@@ -95,7 +95,7 @@ func GetEmbeddedPlanningPrompt(createTodos bool) (string, error) {
 	// Extract the prompt content from the markdown
 	promptContent, err := extractPlanningPrompt()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to extract planning prompt: %w", err)
 	}
 
 	// Add current date and time for temporal context

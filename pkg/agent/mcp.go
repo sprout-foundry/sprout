@@ -275,7 +275,7 @@ func (a *Agent) executeMCPTool(toolName string, args map[string]interface{}) (st
 	ctx := context.Background()
 	result, err := a.mcpManager.CallTool(ctx, serverName, actualToolName, args)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to call MCP tool %s/%s: %w", serverName, actualToolName, err)
 	}
 
 	// Convert result to string

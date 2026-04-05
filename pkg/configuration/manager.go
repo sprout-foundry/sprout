@@ -296,14 +296,14 @@ func (m *Manager) SelectNewProvider() (api.ClientType, error) {
 	m.mu.Unlock()
 	selected, err := SelectProvider(currentProvider, m.apiKeys)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to select provider: %w", err)
 	}
 
 	m.mu.Lock()
 	m.config.LastUsedProvider = selected
 	m.mu.Unlock()
 	if err := m.SaveConfig(); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to save config: %w", err)
 	}
 
 	return m.mapStringToClientType(selected)

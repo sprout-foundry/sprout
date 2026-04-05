@@ -46,7 +46,7 @@ func GetPDFPythonExecutable() (string, error) {
 
 	systemPython, err := getSystemPython3Executable()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to find system Python 3: %w", err)
 	}
 
 	configDir, err := configuration.GetConfigDir()
@@ -59,12 +59,12 @@ func GetPDFPythonExecutable() (string, error) {
 
 	if _, err := os.Stat(venvPython); err != nil {
 		if mkErr := createVenv(systemPython, venvDir); mkErr != nil {
-			return "", mkErr
+			return "", fmt.Errorf("failed to create virtual environment: %w", mkErr)
 		}
 	}
 
 	if err := ensurePDFPythonDependencies(venvPython); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to ensure PDF Python dependencies: %w", err)
 	}
 
 	cachedPDFPythonExec = venvPython

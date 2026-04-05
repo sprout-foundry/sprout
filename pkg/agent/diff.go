@@ -227,7 +227,7 @@ func isPythonAvailable() bool {
 func getPythonDiffExecutable() (string, error) {
 	interpreter, err := pythonruntime.FindPython3Interpreter()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to find Python 3 interpreter: %w", err)
 	}
 	return interpreter.Path, nil
 }

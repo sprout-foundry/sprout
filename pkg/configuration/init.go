@@ -426,7 +426,7 @@ func SelectProvider(currentProvider string, apiKeys *APIKeys) (string, error) {
 			// Prompt for API key
 			err := EnsureProviderAPIKey(selectedProvider, apiKeys)
 			if err != nil {
-				return "", err
+				return "", fmt.Errorf("failed to ensure API key for %s: %w", selectedProvider, err)
 			}
 		}
 
@@ -475,7 +475,7 @@ func addNewProvider(apiKeys *APIKeys) (string, error) {
 	// Get API key
 	apiKey, err := PromptForAPIKey(provider)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to prompt for API key: %w", err)
 	}
 
 	apiKeys.SetAPIKey(provider, apiKey)

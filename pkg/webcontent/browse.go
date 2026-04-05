@@ -37,13 +37,13 @@ func BrowseURL(url string, opts BrowseOptions) (string, error) {
 		if hasAdvancedBrowseOptions(opts) {
 			_, err := browser.Run(ctx, url, opts)
 			if err != nil {
-				return "", err
+				return "", fmt.Errorf("failed to run browser for screenshot: %w", err)
 			}
 			return fmt.Sprintf("Screenshot saved to: %s", opts.ScreenshotPath), nil
 		}
 		err := browser.Screenshot(ctx, url, opts.ScreenshotPath, opts.ViewportWidth, opts.ViewportHeight, opts.UserAgent)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("failed to screenshot URL %s: %w", url, err)
 		}
 		return fmt.Sprintf("Screenshot saved to: %s", opts.ScreenshotPath), nil
 
@@ -51,7 +51,7 @@ func BrowseURL(url string, opts BrowseOptions) (string, error) {
 		if hasAdvancedBrowseOptions(opts) {
 			result, err := browser.Run(ctx, url, mergeInspectDefaults(opts, false, true))
 			if err != nil {
-				return "", err
+				return "", fmt.Errorf("failed to run browser for DOM capture: %w", err)
 			}
 			return result.DOM, nil
 		}
@@ -61,20 +61,20 @@ func BrowseURL(url string, opts BrowseOptions) (string, error) {
 		if hasAdvancedBrowseOptions(opts) {
 			result, err := browser.Run(ctx, url, mergeInspectDefaults(opts, true, false))
 			if err != nil {
-				return "", err
+				return "", fmt.Errorf("failed to run browser for text capture: %w", err)
 			}
 			return result.VisibleText, nil
 		}
 		html, err := browser.CaptureDOM(ctx, url, opts.ViewportWidth, opts.ViewportHeight, opts.UserAgent)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("failed to capture DOM for URL %s: %w", url, err)
 		}
 		return HTMLToText(html), nil
 
 	case "inspect", "interact":
 		result, err := browser.Run(ctx, url, mergeInspectDefaults(opts, true, false))
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("failed to run browser for inspect: %w", err)
 		}
 		encoded, err := json.MarshalIndent(result, "", "  ")
 		if err != nil {

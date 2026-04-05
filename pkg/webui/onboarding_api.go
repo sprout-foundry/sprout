@@ -3,6 +3,7 @@ package webui
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -11,6 +12,7 @@ import (
 	"sort"
 	"strings"
 
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/providercatalog"
 )
@@ -438,6 +440,24 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 			writeJSONError(w, http.StatusBadRequest, err.Error())
 			return
 		}
+	}
+
+	// Store provider/model on the chat session for per-session tracking.
+	ws.mutex.RLock()
+	if ctx := ws.clientContexts[clientID]; ctx != nil && ctx.getActiveChatID() != "" {
+		activeChatID := ctx.getActiveChatID()
+		if cs := ctx.getChatSession(activeChatID); cs != nil {
+			cs.mu.Lock()
+			cs.Provider = api.GetProviderName(clientAgent.GetProviderType())
+			cs.Model = clientAgent.GetModel()
+			cs.mu.Unlock()
+		}
+	}
+	ws.mutex.RUnlock()
+
+	// Persist provider/model to config (graceful - log but don't fail).
+	if err := persistProviderModelToConfig(clientAgent, clientAgent.GetProviderType()); err != nil {
+		log.Printf("webui: failed to persist onboarding provider/model to config: %v", err)
 	}
 
 	_ = ws.syncAgentStateForClient(clientID)

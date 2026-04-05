@@ -93,9 +93,14 @@ func isGitWriteCommand(command string) bool {
 		}
 	}
 
+	// Staging operations (git add) are always allowed per policy — not considered a restricted write.
+	if subcommand == "add" {
+		return false
+	}
+
 	// Check if it's a write operation
 	writeCommands := []string{
-		"commit", "push", "add", "rm", "mv", "reset",
+		"commit", "push", "rm", "mv", "reset",
 		"rebase", "merge", "checkout", "clean",
 		"am", "apply", "cherry-pick", "revert",
 		"switch", "restore", "fetch", "pull", "clone",

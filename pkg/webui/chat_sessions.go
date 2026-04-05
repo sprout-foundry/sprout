@@ -102,6 +102,9 @@ func (cs *chatSession) setQueryActive(active bool, query string) {
 // avoid holding it during potentially slow I/O (JSON deserialization, state
 // import). If two goroutines race to create the agent, only one wins and the
 // other's agent becomes unreferenced.
+//
+// When the session has a Provider/Model set, those are applied to the agent
+// after creation, providing per-session provider/model scoping.
 func (cs *chatSession) getOrCreateAgent(workspaceRoot string, eventBus *events.EventBus, clientID string) (*agent.Agent, error) {
 	cs.mu.Lock()
 	if cs.Agent != nil {
@@ -112,6 +115,9 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, eventBus *events.E
 		cs.mu.Unlock()
 		return agentInst, nil
 	}
+	// Capture session-scoped provider/model before releasing the lock
+	sessionProvider := cs.Provider
+	sessionModel := cs.Model
 	cs.mu.Unlock()
 
 	// Create agent outside the lock.
@@ -130,6 +136,23 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, eventBus *events.E
 	if len(snapshot) > 0 {
 		if err := created.ImportState(snapshot); err != nil {
 			log.Printf("chatSession.getOrCreateAgent: warning: failed to import state: %v", err)
+		}
+	}
+
+	// Apply session-scoped provider/model if set on the session.
+	// This provides per-session provider/model scoping without affecting
+	// other sessions or the global config.
+	if sessionProvider != "" {
+		providerType, err := created.GetConfigManager().MapStringToClientType(sessionProvider)
+		if err != nil {
+			log.Printf("chatSession.getOrCreateAgent: warning: invalid session provider %q: %v", sessionProvider, err)
+		} else if err := created.SetProvider(providerType); err != nil {
+			log.Printf("chatSession.getOrCreateAgent: warning: failed to set session provider %q: %v", sessionProvider, err)
+		}
+	}
+	if sessionModel != "" {
+		if err := created.SetModel(sessionModel); err != nil {
+			log.Printf("chatSession.getOrCreateAgent: warning: failed to set session model %q: %v", sessionModel, err)
 		}
 	}
 

@@ -244,7 +244,7 @@ func handleAnalyzeImageContent(ctx context.Context, a *Agent, args map[string]in
 		choice, promptErr := a.PromptChoice(prompt, choices)
 		if promptErr != nil {
 			a.PrintLine(fmt.Sprintf("[WARN] Could not prompt for choice: %v", promptErr))
-			return result, err
+			return result, fmt.Errorf("prompt choice failed: %w", promptErr)
 		}
 
 		if choice == "yes" {
@@ -255,7 +255,7 @@ func handleAnalyzeImageContent(ctx context.Context, a *Agent, args map[string]in
 	}
 
 	if err != nil {
-		return result, err
+		return result, fmt.Errorf("image analysis failed: %w", err)
 	}
 	a.captureVisionInputAndOutput(imagePath, result)
 

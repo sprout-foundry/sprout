@@ -121,7 +121,10 @@ func (a *Agent) executeShellCommandWithTruncation(ctx context.Context, command s
 	// Also record as a task action for conversation summary
 	a.AddTaskAction("command_executed", fmt.Sprintf("Executed: %s", command), command)
 
-	return returnResult, err
+	if err != nil {
+		return returnResult, fmt.Errorf("failed to execute shell command: %w", err)
+	}
+	return returnResult, nil
 }
 
 func countLinesInSegment(segment string) int {

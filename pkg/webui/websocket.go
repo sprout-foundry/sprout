@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/events"
 	"github.com/alantheprice/ledit/pkg/security"
 	"github.com/gorilla/websocket"
@@ -345,7 +346,19 @@ func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, msg ma
 		return
 	}
 
-	_ = ws.syncAgentStateForClient(clientID)
+	// Store provider on the chat session for per-session tracking.
+	ws.mutex.RLock()
+	if ctx := ws.clientContexts[clientID]; ctx != nil && activeChatID != "" {
+		if cs := ctx.getChatSession(activeChatID); cs != nil {
+			cs.mu.Lock()
+			cs.Provider = api.GetProviderName(clientAgent.GetProviderType())
+			cs.Model = clientAgent.GetModel()
+			cs.mu.Unlock()
+		}
+	}
+	ws.mutex.RUnlock()
+
+	_ = ws.syncAgentStateForClientWithChat(clientID, activeChatID)
 	ws.publishProviderState(clientID)
 }
 
@@ -431,7 +444,19 @@ func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, msg map[s
 		return
 	}
 
-	_ = ws.syncAgentStateForClient(clientID)
+	// Store model on the chat session for per-session tracking.
+	ws.mutex.RLock()
+	if ctx := ws.clientContexts[clientID]; ctx != nil && activeChatID != "" {
+		if cs := ctx.getChatSession(activeChatID); cs != nil {
+			cs.mu.Lock()
+			cs.Provider = api.GetProviderName(clientAgent.GetProviderType())
+			cs.Model = clientAgent.GetModel()
+			cs.mu.Unlock()
+		}
+	}
+	ws.mutex.RUnlock()
+
+	_ = ws.syncAgentStateForClientWithChat(clientID, activeChatID)
 	ws.publishProviderState(clientID)
 }
 
@@ -491,7 +516,7 @@ func (ws *ReactWebServer) handlePersonaChangeMessage(safeConn *SafeConn, msg map
 		return
 	}
 
-	_ = ws.syncAgentStateForClient(clientID)
+	_ = ws.syncAgentStateForClientWithChat(clientID, activeChatID)
 	ws.publishProviderState(clientID)
 }
 

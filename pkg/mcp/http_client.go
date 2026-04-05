@@ -194,7 +194,7 @@ func (c *MCPHTTPClient) sendRequest(ctx context.Context, method string, params i
 	}
 
 	if response.Error != nil {
-		return nil, fmt.Errorf("MCP error %d: %s", response.Error.Code, response.Error.Message)
+		return nil, fmt.Errorf("MCP error %d: %w", response.Error.Code, response.Error)
 	}
 
 	return &response, nil

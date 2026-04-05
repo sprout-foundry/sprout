@@ -145,9 +145,5 @@ func executePypdfTextExtraction(cmd *exec.Cmd) (string, bool, error) {
 	if err == nil {
 		return string(output), true, nil
 	}
-	errMsg := strings.TrimSpace(stderr.String())
-	if errMsg == "" {
-		errMsg = strings.TrimSpace(string(output))
-	}
-	return "", false, fmt.Errorf("pypdf extraction failed: %s", errMsg)
+	return "", false, fmt.Errorf("pypdf extraction failed: %w", err)
 }

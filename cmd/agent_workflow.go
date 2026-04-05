@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -148,18 +149,18 @@ func (c *AgentWorkflowConfig) validate() error {
 		}
 		if c.Orchestration.Enabled {
 			if c.Orchestration.StateFile == "" {
-				return fmt.Errorf("orchestration.state_file is required when orchestration.enabled=true")
+				return errors.New("orchestration.state_file is required when orchestration.enabled=true")
 			}
 			if c.Orchestration.EventsFile == "" {
-				return fmt.Errorf("orchestration.events_file is required when orchestration.enabled=true")
+				return errors.New("orchestration.events_file is required when orchestration.enabled=true")
 			}
 			if c.Orchestration.ConversationSessionID == "" {
-				return fmt.Errorf("orchestration.conversation_session_id is required when orchestration.enabled=true")
+				return errors.New("orchestration.conversation_session_id is required when orchestration.enabled=true")
 			}
 		}
 	}
 	if c.WebPort != nil && *c.WebPort < 0 {
-		return fmt.Errorf("web_port must be >= 0")
+		return errors.New("web_port must be >= 0")
 	}
 
 	if c.Initial != nil {
@@ -176,7 +177,7 @@ func (c *AgentWorkflowConfig) validate() error {
 	if len(c.Steps) == 0 {
 		hasInitialPrompt := c.Initial != nil && (c.Initial.Prompt != "" || c.Initial.PromptFile != "")
 		if !hasInitialPrompt {
-			return fmt.Errorf("workflow requires at least one step or an initial prompt/prompt_file")
+			return errors.New("workflow requires at least one step or an initial prompt/prompt_file")
 		}
 	}
 
@@ -190,13 +191,13 @@ func (c *AgentWorkflowConfig) validate() error {
 		step.FileNotExists = normalizeWorkflowPaths(step.FileNotExists)
 
 		if step.Prompt == "" && step.PromptFile == "" {
-			return fmt.Errorf("steps[%d] requires prompt or prompt_file", i)
+			return errors.New(fmt.Sprintf("steps[%d] requires prompt or prompt_file", i))
 		}
 		if step.Prompt != "" && step.PromptFile != "" {
-			return fmt.Errorf("steps[%d].prompt and steps[%d].prompt_file are mutually exclusive", i, i)
+			return errors.New(fmt.Sprintf("steps[%d].prompt and steps[%d].prompt_file are mutually exclusive", i, i))
 		}
 		if !isValidWorkflowWhen(step.When) {
-			return fmt.Errorf("steps[%d].when must be one of: %s, %s, %s", i, workflowWhenAlways, workflowWhenOnSuccess, workflowWhenOnError)
+			return errors.New(fmt.Sprintf("steps[%d].when must be one of: %s, %s, %s", i, workflowWhenAlways, workflowWhenOnSuccess, workflowWhenOnError))
 		}
 		prefix := fmt.Sprintf("steps[%d]", i)
 		if err := step.AgentWorkflowRuntime.validate(prefix); err != nil {
@@ -439,12 +440,12 @@ func resolveStepPrompt(step AgentWorkflowStep) (string, error) {
 
 func applyWorkflowRuntimeOverrides(chatAgent *agent.Agent, runtime AgentWorkflowRuntime) error {
 	if chatAgent == nil {
-		return fmt.Errorf("agent is required")
+		return errors.New("agent is required")
 	}
 
 	cfg := chatAgent.GetConfig()
 	if cfg == nil {
-		return fmt.Errorf("agent config is unavailable")
+		return errors.New("agent config is unavailable")
 	}
 
 	if runtime.SkipPrompt != nil || normalizeReasoningEffort(runtime.ReasoningEffort) != "" {
@@ -774,7 +775,7 @@ func persistWorkflowExecutionState(cfg *AgentWorkflowConfig, state *workflowExec
 	}
 	path := cfg.Orchestration.StateFile
 	if path == "" {
-		return fmt.Errorf("orchestration state file path is empty")
+		return errors.New("orchestration state file path is empty")
 	}
 
 	state.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
@@ -855,7 +856,7 @@ func emitWorkflowOrchestrationEvent(cfg *AgentWorkflowConfig, eventType string, 
 	}
 	path := cfg.Orchestration.EventsFile
 	if path == "" {
-		return fmt.Errorf("orchestration events file path is empty")
+		return errors.New("orchestration events file path is empty")
 	}
 
 	record := map[string]interface{}{

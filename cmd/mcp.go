@@ -3,6 +3,7 @@ package cmd
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -106,7 +107,7 @@ func runMCPAdd() error {
 	templates := registry.ListTemplates()
 
 	if len(templates) == 0 {
-		return fmt.Errorf("no templates available. Add templates to ~/.ledit/mcp_templates.json")
+		return errors.New("no templates available. Add templates to ~/.ledit/mcp_templates.json")
 	}
 
 	// Display templates (filter out generic templates for main menu)
@@ -705,7 +706,7 @@ func setupCustomMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader, regist
 	serverName := strings.TrimSpace(nameInput)
 
 	if serverName == "" {
-		return fmt.Errorf("server name is required")
+		return errors.New("server name is required")
 	}
 
 	// Check if server already exists
@@ -727,7 +728,7 @@ func setupCustomMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader, regist
 	command := strings.TrimSpace(commandInput)
 
 	if command == "" {
-		return fmt.Errorf("command is required")
+		return errors.New("command is required")
 	}
 
 	// Arguments
@@ -1046,7 +1047,7 @@ func runMCPTest(serverName string) error {
 
 	server, exists := manager.GetServer(serverName)
 	if !exists {
-		return fmt.Errorf("failed to get server from manager")
+		return errors.New("failed to get server from manager")
 	}
 
 	fmt.Println("[...] Starting server...")

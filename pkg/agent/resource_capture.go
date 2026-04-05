@@ -159,7 +159,7 @@ func (a *Agent) captureRemoteAsset(source, dir string) (string, int64, error) {
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", 0, fmt.Errorf("HTTP request failed for %s: %w", source, err)
+		return "", 0, fmt.Errorf("failed HTTP request for %s: %w", source, err)
 	}
 	defer resp.Body.Close()
 

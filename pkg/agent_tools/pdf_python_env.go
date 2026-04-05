@@ -102,7 +102,7 @@ func ensurePDFPythonDependencies(venvPython string) error {
 
 	recheckCmd := exec.Command(venvPython, "-c", "import pypdf; from PIL import Image; import pypdfium2")
 	if out, err := recheckCmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("PDF Python dependencies failed validation: %w: %s", err, strings.TrimSpace(string(out)))
+		return fmt.Errorf("failed PDF Python dependencies validation: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 
 	return nil

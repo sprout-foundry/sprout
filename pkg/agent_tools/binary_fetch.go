@@ -144,7 +144,7 @@ func processPDFBinary(effectiveURL string, data []byte) (*BinaryFetchResult, err
 	cleanup()
 
 	if err != nil {
-		return nil, fmt.Errorf("PDF multimodal processing failed: %w", err)
+		return nil, fmt.Errorf("failed PDF multimodal processing: %w", err)
 	}
 
 	// Map PDFPipelineResult to BinaryFetchResult

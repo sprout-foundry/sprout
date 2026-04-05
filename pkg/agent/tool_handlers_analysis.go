@@ -105,7 +105,7 @@ func screenshotHTMLFile(ctx context.Context, a *Agent, htmlPath string, viewport
 
 	// Verify the file exists
 	if _, err := os.Stat(absPath); err != nil {
-		return "", fmt.Errorf("HTML file not found: %s: %w", absPath, err)
+		return "", fmt.Errorf("failed to find HTML file: %s: %w", absPath, err)
 	}
 
 	// Serve only the single HTML file via a temp HTTP server.

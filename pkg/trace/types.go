@@ -153,22 +153,22 @@ func NewTraceSession(traceDir, provider, model string) (*TraceSession, error) {
 
 	runsWriter, err = newJSONLWriter(filepath.Join(runDir, "runs.jsonl"))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create runs writer: %w", err)
 	}
 
 	turnsWriter, err = newJSONLWriter(filepath.Join(runDir, "turns.jsonl"))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create turns writer: %w", err)
 	}
 
 	toolsWriter, err = newJSONLWriter(filepath.Join(runDir, "tool_calls.jsonl"))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create tools writer: %w", err)
 	}
 
 	artifactsWriter, err = newJSONLWriter(filepath.Join(runDir, "artifacts_manifest.jsonl"))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create artifacts writer: %w", err)
 	}
 
 	metadata := RunMetadata{

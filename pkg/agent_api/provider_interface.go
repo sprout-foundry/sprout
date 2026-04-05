@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -167,7 +168,7 @@ func (p *BaseProvider) SupportsReasoning() bool {
 func (p *BaseProvider) MakeAuthRequest(ctx context.Context, method, url string, body io.Reader) (*http.Request, error) {
 	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create auth request: %w", err)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+p.apiKey)

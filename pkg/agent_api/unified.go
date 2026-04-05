@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -68,7 +69,7 @@ func (w *UnifiedProviderWrapper) SendChatRequest(messages []Message, tools []Too
 	duration := time.Since(startTime)
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to generate response: %w", err)
 	}
 
 	// Track TPS
@@ -240,7 +241,7 @@ func (w *UnifiedProviderWrapper) SendVisionRequest(messages []Message, tools []T
 	// Call provider vision method
 	response, err := w.provider.SendVisionRequest(typeMessages, typeTools, reasoning)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to send vision request: %w", err)
 	}
 
 	// Convert response back to API types (same as SendChatRequest)
@@ -374,7 +375,7 @@ func (w *UnifiedProviderWrapper) SendChatRequestStream(messages []Message, tools
 	// Call provider's streaming method
 	response, err := w.provider.SendChatRequestStream(providerMessages, providerTools, reasoning, providerCallback)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to send streaming request: %w", err)
 	}
 
 	// Convert response back to API types

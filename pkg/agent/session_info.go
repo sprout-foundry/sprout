@@ -10,7 +10,7 @@ import (
 func LoadSessionInfo(sessionID string) (*ConversationState, error) {
 	stateDir, err := GetStateDir()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get state directory: %w", err)
 	}
 	workingDir, _ := os.Getwd()
 	stateFile, err := resolveSessionStateFile(stateDir, sessionID, workingDir)

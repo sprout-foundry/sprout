@@ -360,7 +360,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		// At this point: workflowErr is nil, workflowYielded is false
 		// err could be nil or from runDirectMode
 		if err != nil {
-			return err // Already has context from runDirectMode's error wrapping
+			return fmt.Errorf("failed to run direct mode: %w", err)
 		}
 		return nil // No error, workflow completed successfully
 	}
@@ -396,7 +396,10 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		printContinuationHint(chatAgent)
 	}
 
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to run agent: %w", err)
+	}
+	return nil
 }
 
 // SetupAgentEvents configures the agent for event-driven output routing.

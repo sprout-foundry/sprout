@@ -199,11 +199,11 @@ func deserializeStructuredContent(format, content string) (interface{}, error) {
 	switch format {
 	case "json":
 		if err := json.Unmarshal([]byte(content), &doc); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to unmarshal JSON: %w", err)
 		}
 	case "yaml":
 		if err := yaml.Unmarshal([]byte(content), &doc); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to unmarshal YAML: %w", err)
 		}
 	default:
 		return nil, fmt.Errorf("unsupported format: %s", format)
@@ -463,7 +463,7 @@ func parsePatchOperations(v interface{}) ([]jsonPatchOperation, error) {
 func applyPatchOperation(doc interface{}, op jsonPatchOperation) (interface{}, error) {
 	segments, err := parseJSONPointer(op.Path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse JSON pointer: %w", err)
 	}
 
 	switch op.Op {
@@ -476,7 +476,7 @@ func applyPatchOperation(doc interface{}, op jsonPatchOperation) (interface{}, e
 	case "test":
 		actual, err := readPointerValue(doc, segments)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to read pointer value: %w", err)
 		}
 		if !reflect.DeepEqual(actual, op.Value) {
 			return nil, fmt.Errorf("patch test failed at %s", op.Path)
@@ -515,7 +515,7 @@ func applyMutation(node interface{}, segments []string, value interface{}, op st
 		}
 		updatedChild, err := applyMutation(child, segments[1:], value, op)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to apply mutation: %w", err)
 		}
 		typed[token] = updatedChild
 		return typed, nil
@@ -526,7 +526,7 @@ func applyMutation(node interface{}, segments []string, value interface{}, op st
 		}
 		updatedChild, err := applyMutation(typed[idx], segments[1:], value, op)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to apply mutation: %w", err)
 		}
 		typed[idx] = updatedChild
 		return typed, nil

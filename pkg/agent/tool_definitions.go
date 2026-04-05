@@ -417,7 +417,7 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 
 	// CRITICAL: Prevent subagents from creating nested subagents
 	// This check ensures that subagents (identified by LEDIT_SUBAGENT env var)
-	// cannot spawn further subagents, preventing runaway agent chains
+		// cannot spawn further subagents, preventing runaway agent chains
 	if os.Getenv("LEDIT_SUBAGENT") == "1" {
 		if toolName == "run_subagent" || toolName == "run_parallel_subagents" {
 			const errMsg = "SUBAGENT_RESTRICTION: Subagents are not allowed to spawn nested subagents. " +
@@ -427,7 +427,7 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 			if agent != nil && agent.debug {
 				agent.debugLog("[NO] Blocked subagent tool '%s' - nested subagents are not allowed\n", toolName)
 			}
-			return nil, "", fmt.Errorf("%s", errMsg)
+			return nil, "", fmt.Errorf(errMsg)
 		}
 	}
 

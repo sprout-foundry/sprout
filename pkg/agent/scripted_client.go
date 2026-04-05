@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -17,10 +16,10 @@ var _ api.ClientInterface = (*ScriptedClient)(nil)
 
 // ScriptedTokenUsage represents token usage metrics for a scripted response
 type ScriptedTokenUsage struct {
-	PromptTokens        int             `json:"prompt_tokens"`
-	CompletionTokens    int             `json:"completion_tokens"`
-	TotalTokens         int             `json:"total_tokens"`
-	EstimatedCost       float64         `json:"estimated_cost"`
+	PromptTokens        int                 `json:"prompt_tokens"`
+	CompletionTokens    int                 `json:"completion_tokens"`
+	TotalTokens         int                 `json:"total_tokens"`
+	EstimatedCost       float64             `json:"estimated_cost"`
 	PromptTokensDetails PromptTokensDetails `json:"prompt_tokens_details,omitempty"`
 }
 
@@ -110,9 +109,9 @@ type ScriptedClient struct {
 	mu sync.Mutex
 
 	// Rate limit simulation state
-	rateLimitCounter    int
-	rateLimitExceeded   bool
-	rateLimitThreshold  int
+	rateLimitCounter   int
+	rateLimitExceeded  bool
+	rateLimitThreshold int
 
 	// Vision support flag
 	supportsVision bool
@@ -246,7 +245,7 @@ func NewScriptedClient(responses ...*ScriptedResponse) *ScriptedClient {
 		averageTPS:      100.0,
 		supportsVision:  false,
 		responseHistory: make([]*ScriptedResponse, 0),
-		sentRequests:   make([][]api.Message, 0),
+		sentRequests:    make([][]api.Message, 0),
 	}
 
 	return client
@@ -897,13 +896,13 @@ func (c *ScriptedClient) SendVisionRequest(messages []api.Message, tools []api.T
 // ValidateStreamConfig validates a StreamConfig and returns an error if invalid
 func ValidateStreamConfig(sc *StreamConfig) error {
 	if sc == nil {
-		return errors.New("StreamConfig cannot be nil")
+		return fmt.Errorf("StreamConfig cannot be nil")
 	}
 	if len(sc.Chunks) == 0 {
-		return errors.New("StreamConfig.Chunks must not be empty")
+		return fmt.Errorf("StreamConfig.Chunks must not be empty")
 	}
 	if sc.ErrorAfterChunks > len(sc.Chunks) {
-		return errors.New("ErrorAfterChunks cannot exceed number of chunks")
+		return fmt.Errorf("ErrorAfterChunks cannot exceed number of chunks")
 	}
 	return nil
 }

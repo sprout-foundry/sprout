@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -34,7 +33,7 @@ func handleWriteStructuredFile(ctx context.Context, a *Agent, args map[string]in
 
 	format := inferStructuredFormat(path, getOptionalString(args, "format"))
 	if format == "" {
-		return "", fmt.Errorf("unsupported structured format; use json or yaml")
+		return "", fmt.Errorf("unsupported structured format: use json or yaml")
 	}
 
 	data, exists := args["data"]
@@ -92,7 +91,7 @@ func handlePatchStructuredFile(ctx context.Context, a *Agent, args map[string]in
 
 	format := inferStructuredFormat(path, getOptionalString(args, "format"))
 	if format == "" {
-		return "", fmt.Errorf("unsupported structured format; use json or yaml")
+		return "", fmt.Errorf("unsupported structured format: use json or yaml")
 	}
 
 	resolvedPath, err := filesystem.SafeResolvePathWithBypass(ctx, path)
@@ -124,10 +123,8 @@ func handlePatchStructuredFile(ctx context.Context, a *Agent, args map[string]in
 	for i, op := range ops {
 		doc, err = applyPatchOperation(doc, op)
 		if err != nil {
-			return "", fmt.Errorf(
-				"patch operation failed: tool=patch_structured_file index=%d op=%s path=%s applied=%d/%d err=%v",
-				i, op.Op, op.Path, applied, len(ops), err,
-			)
+			return "", fmt.Errorf("patch operation failed: tool=patch_structured_file index=%d op=%s path=%s applied=%d/%d err=%v",
+				i, op.Op, op.Path, applied, len(ops), err)
 		}
 		applied++
 	}
@@ -346,7 +343,7 @@ func validateDataAgainstSchema(data interface{}, schema map[string]interface{}, 
 
 func formatStructuredValidationError(toolName string, errs []string, context string) error {
 	if len(errs) == 0 {
-		return errors.New("schema validation failed: no error details provided")
+		return fmt.Errorf("schema validation failed: no error details provided")
 	}
 
 	paths := extractValidationPaths(errs)

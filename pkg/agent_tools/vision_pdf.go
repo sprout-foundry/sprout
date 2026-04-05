@@ -30,7 +30,7 @@ const (
 func ProcessPDFWithVision(pdfPath string) (string, error) {
 	resolvedPath, cleanup, err := ResolvePDFInputPath(pdfPath)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to resolve PDF input path: %w", err)
 	}
 	defer cleanup()
 
@@ -58,7 +58,7 @@ func ProcessPDFWithVision(pdfPath string) (string, error) {
 func ProcessPDFForTextOnly(pdfPath string) (string, error) {
 	resolvedPath, cleanup, err := ResolvePDFInputPath(pdfPath)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to resolve PDF input path: %w", err)
 	}
 	defer cleanup()
 

@@ -350,7 +350,7 @@ func collectEnvConfig() map[string]string {
 func hashFile(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to read file %s: %w", path, err)
 	}
 	hash := sha256.Sum256(data)
 	return hex.EncodeToString(hash[:]), nil

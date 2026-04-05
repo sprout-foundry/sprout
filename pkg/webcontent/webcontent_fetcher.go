@@ -76,7 +76,7 @@ func (w *WebContentFetcher) FetchWebContent(url string, cfg *configuration.Manag
 
 	content, err := w.fetchContent(url, cfg)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to fetch content for URL %s: %w", url, err)
 	}
 
 	// Cache the raw content so the same entry is valid regardless of how it was fetched.
@@ -217,7 +217,7 @@ func (w *WebContentFetcher) fetchWithJinaReader(url string, cfg *configuration.M
 
 	req, err := createJinaRequest(url, apiKey)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to create Jina request: %w", err)
 	}
 
 	resp, err := w.httpClient.Do(req)
@@ -323,7 +323,7 @@ func localhostOrSPA(url string) string {
 func (w *WebContentFetcher) fetchDirectURL(url string) (string, error) {
 	resp, err := w.httpClient.Get(url)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to fetch URL %s: %w", url, err)
 	}
 	defer resp.Body.Close()
 
@@ -347,7 +347,7 @@ func (w *WebContentFetcher) fetchDirectURL(url string) (string, error) {
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxContentSize+1024))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to read response body for URL %s: %w", url, err)
 	}
 
 	content := string(body)
@@ -370,7 +370,7 @@ func (w *WebContentFetcher) fetchDirectURL(url string) (string, error) {
 	// Truncate if content is too large
 	truncated, err := w.truncateContent(content)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to truncate content: %w", err)
 	}
 	return truncated, nil
 }

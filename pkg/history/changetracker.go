@@ -218,7 +218,7 @@ func PrintRevisionHistory() error {
 func PrintRevisionHistoryBuffer() (string, error) {
 	changes, err := fetchAllChanges() // fetchAllChanges now returns sorted data
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to fetch changes: %w", err)
 	}
 	if len(changes) == 0 {
 		return "No changes recorded.\n", nil

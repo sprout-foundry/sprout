@@ -100,7 +100,7 @@ func DiscoverContextFiles() (*ContextFileInfo, error) {
 func LoadContextFiles() (string, error) {
 	contextFile, err := DiscoverContextFiles()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to discover context files: %w", err)
 	}
 
 	if contextFile == nil {

@@ -114,7 +114,7 @@ func saveUserInputArchive(input string) (string, error) {
 	}
 
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to create user input archive directory: %w", err)
 	}
 
 	timestamp := time.Now().Format("20060102_150405")
@@ -123,7 +123,7 @@ func saveUserInputArchive(input string) (string, error) {
 
 	header := fmt.Sprintf("Captured-At: %s\n\n", time.Now().Format(time.RFC3339))
 	if err := os.WriteFile(path, []byte(header+input), 0o644); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to write user input archive file: %w", err)
 	}
 	return path, nil
 }

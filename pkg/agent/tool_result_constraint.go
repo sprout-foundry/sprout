@@ -68,7 +68,7 @@ func saveFetchURLOutputToFile(args map[string]interface{}, output string) (strin
 	}
 
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to create archive directory: %w", err)
 	}
 
 	timestamp := time.Now().Format("20060102_150405")
@@ -88,7 +88,7 @@ func saveFetchURLOutputToFile(args map[string]interface{}, output string) (strin
 	}
 
 	if err := os.WriteFile(path, []byte(fullOutput), 0o644); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to write fetch URL output file: %w", err)
 	}
 	return path, nil
 }

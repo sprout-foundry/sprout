@@ -45,7 +45,7 @@ func GetConfigDir() (string, error) {
 func GetAPIKeysPath() (string, error) {
 	configDir, err := GetConfigDir()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get config directory: %w", err)
 	}
 	return filepath.Join(configDir, apiKeysFileName), nil
 }

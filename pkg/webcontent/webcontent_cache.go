@@ -19,7 +19,7 @@ const (
 func getHomeSettingsPath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get home directory: %w", err)
 	}
 	return filepath.Join(home, ".ledit"), nil
 }

@@ -236,7 +236,7 @@ func GetConfigDir() (string, error) {
 		var err error
 		configDir, err = getDefaultConfigDir()
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("failed to get default config directory: %w", err)
 		}
 	}
 	if err := os.MkdirAll(configDir, 0700); err != nil {
@@ -268,7 +268,7 @@ func getDefaultConfigDir() (string, error) {
 func GetConfigPath() (string, error) {
 	configDir, err := GetConfigDir()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get config directory: %w", err)
 	}
 	return filepath.Join(configDir, ConfigFileName), nil
 }

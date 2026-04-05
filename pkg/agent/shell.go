@@ -154,7 +154,7 @@ func buildTruncationNotice(headTokens, tailTokens, truncatedTokens, truncatedLin
 func (a *Agent) saveShellOutputToFile(output string) (string, error) {
 	dir := ".ledit/shell_outputs"
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to create shell output directory: %w", err)
 	}
 
 	timestamp := time.Now().Format("20060102_150405")
@@ -162,7 +162,7 @@ func (a *Agent) saveShellOutputToFile(output string) (string, error) {
 	path := filepath.Join(dir, filename)
 
 	if err := os.WriteFile(path, []byte(output), 0o644); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to write shell output file: %w", err)
 	}
 
 	return path, nil

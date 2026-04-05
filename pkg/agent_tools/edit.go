@@ -12,35 +12,35 @@ import (
 func EditFile(ctx context.Context, filePath, oldString, newString string) (string, error) {
 	// Step 1: Validate inputs
 	if err := validateEditInputs(filePath, oldString, newString); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to validate edit inputs: %w", err)
 	}
 
 	// Step 2: Resolve and validate file
 	cleanPath, originalMode, err := resolveAndValidateFile(ctx, filePath)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to resolve and validate file %s: %w", filePath, err)
 	}
 
 	// Step 3: Read file content
 	contentStr, err := readFileContent(cleanPath)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to read file %s: %w", cleanPath, err)
 	}
 
 	// Step 4: Determine and perform replacement
 	newContent, err := determineAndPerformReplacement(contentStr, oldString, newString, cleanPath)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to perform replacement: %w", err)
 	}
 
 	// Step 5: Write file with preserved permissions
 	if err := writeFileWithPermissions(cleanPath, []byte(newContent), originalMode.Perm()); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to write file %s: %w", cleanPath, err)
 	}
 
 	// Step 6: Verify edit was successful
 	if err := verifyEdit(cleanPath, newString); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to verify edit: %w", err)
 	}
 
 	// Return concise confirmation with character counts
@@ -191,13 +191,13 @@ func determineAndPerformReplacement(content, oldString, newString, cleanPath str
 		// Use smart replacement with normalization
 		newContent, err = performNormalizedReplacement(content, oldString, newString)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("failed to perform normalized replacement: %w", err)
 		}
 	} else {
 		// Use standard exact replacement
 		newContent, err = performExactReplacement(content, oldString, newString, cleanPath)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("failed to perform exact replacement: %w", err)
 		}
 	}
 

@@ -41,7 +41,7 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 	// SECURITY: Validate path is within working directory (handles symlinks properly)
 	cleanPath, err := filesystem.SafeResolvePathWithBypass(ctx, filePath)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to resolve file path: %w", err)
 	}
 
 	// Security check passed - now check if file exists

@@ -55,7 +55,7 @@ func handleViewHistory(ctx context.Context, a *Agent, args map[string]interface{
 
 	res, err := tools.ViewHistory(limit, fileFilter, sincePtr, showContent)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to view history: %w", err)
 	}
 
 	a.debugLog("view_history metadata: %+v\n", res.Metadata)
@@ -82,7 +82,7 @@ func handleRollbackChanges(ctx context.Context, a *Agent, args map[string]interf
 
 	res, err := tools.RollbackChanges(revisionID, filePath, confirm)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to rollback changes: %w", err)
 	}
 
 	a.debugLog("rollback_changes success=%v metadata=%+v\n", res.Success, res.Metadata)

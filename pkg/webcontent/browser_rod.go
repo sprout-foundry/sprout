@@ -328,7 +328,7 @@ func (r *rodRenderer) RenderPage(ctx context.Context, url string) (string, error
 
 	incognito, page, err := r.openIncognitoPage(ctx)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to open incognito page: %w", err)
 	}
 	defer func() {
 		_ = page.Close()
@@ -411,7 +411,7 @@ func (r *rodRenderer) CaptureDOM(ctx context.Context, url string, viewportWidth,
 
 	incognito, page, err := r.openIncognitoPage(ctx)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to open incognito page: %w", err)
 	}
 	defer func() {
 		_ = page.Close()
@@ -419,7 +419,7 @@ func (r *rodRenderer) CaptureDOM(ctx context.Context, url string, viewportWidth,
 	}()
 
 	if err := applyViewportAndUA(page, viewportWidth, viewportHeight, userAgent); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to apply viewport and user agent: %w", err)
 	}
 
 	if err := page.Navigate(url); err != nil {
@@ -1097,7 +1097,7 @@ func markCORSBlockedRequests(values []NetworkRequest) []NetworkRequest {
 func evalToJSONString(page *rod.Page, script string) (string, error) {
 	res, err := page.Eval(script)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to eval script: %w", err)
 	}
 	return res.Value.JSON("", "  "), nil
 }

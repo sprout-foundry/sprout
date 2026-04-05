@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -83,7 +84,7 @@ func ShowCommandSelector(registry *CommandRegistry, chatAgent *agent.Agent) (str
 func SelectAndExecuteCommand(registry *CommandRegistry, chatAgent *agent.Agent) error {
 	selectedCmd, err := ShowCommandSelector(registry, chatAgent)
 	if err != nil {
-		return fmt.Errorf("command selection cancelled")
+		return errors.New("command selection cancelled")
 	}
 
 	// Parse the command (remove the leading slash)

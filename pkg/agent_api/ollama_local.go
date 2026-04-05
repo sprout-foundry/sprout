@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -448,7 +449,7 @@ func (c *OllamaLocalClient) GetModelContextLimit() (int, error) {
 // SetModel updates the active model after validating it exists locally
 func (c *OllamaLocalClient) SetModel(model string) error {
 	if strings.TrimSpace(model) == "" {
-		return fmt.Errorf("model name cannot be empty")
+		return errors.New("model name cannot be empty")
 	}
 
 	if model == c.model {

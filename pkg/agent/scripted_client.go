@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -896,13 +897,13 @@ func (c *ScriptedClient) SendVisionRequest(messages []api.Message, tools []api.T
 // ValidateStreamConfig validates a StreamConfig and returns an error if invalid
 func ValidateStreamConfig(sc *StreamConfig) error {
 	if sc == nil {
-		return fmt.Errorf("StreamConfig cannot be nil")
+		return errors.New("StreamConfig cannot be nil")
 	}
 	if len(sc.Chunks) == 0 {
-		return fmt.Errorf("StreamConfig.Chunks must not be empty")
+		return errors.New("StreamConfig.Chunks must not be empty")
 	}
 	if sc.ErrorAfterChunks > len(sc.Chunks) {
-		return fmt.Errorf("ErrorAfterChunks cannot exceed number of chunks")
+		return errors.New("ErrorAfterChunks cannot exceed number of chunks")
 	}
 	return nil
 }

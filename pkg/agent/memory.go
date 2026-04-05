@@ -103,7 +103,7 @@ func LoadMemoryContent(name string) (string, error) {
 
 	content, err := os.ReadFile(filePath)
 	if err != nil {
-		return "", fmt.Errorf("failed to read memory file %s: %w", name, err)
+		return "", fmt.Errorf("failed to read memory file %q: %w", name, err)
 	}
 
 	return string(content), nil
@@ -126,7 +126,7 @@ func SaveMemory(name string, content string) error {
 	// Write the file
 	err := os.WriteFile(filePath, []byte(content), 0644)
 	if err != nil {
-		return fmt.Errorf("failed to write memory file: %w", err)
+		return fmt.Errorf("failed to write memory file %q: %w", sanitized, err)
 	}
 
 	return nil
@@ -174,13 +174,13 @@ func DeleteMemory(name string) error {
 
 	// Check if file exists
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		return fmt.Errorf("memory file does not exist: %s", name)
+		return fmt.Errorf("memory file %q does not exist", name)
 	}
 
 	// Delete the file
 	err := os.Remove(filePath)
 	if err != nil {
-		return fmt.Errorf("failed to delete memory file: %w", err)
+		return fmt.Errorf("failed to delete memory file %q: %w", name, err)
 	}
 
 	return nil

@@ -337,7 +337,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 			fmt.Fprintf(os.Stderr, "[WARN] Provider %s is not configured: %v\n", api.GetProviderName(clientType), err)
 			nextClientType, nextModel, recoverErr := recoverProviderStartup(configManager, clientType, model, err)
 			if recoverErr != nil {
-				return nil, recoverErr
+				return nil, fmt.Errorf("provider recovery failed after ensuring API key: %w", recoverErr)
 			}
 			clientType = nextClientType
 			finalModel = nextModel
@@ -349,7 +349,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		if err != nil {
 			nextClientType, nextModel, recoverErr := recoverProviderStartup(configManager, clientType, model, err)
 			if recoverErr != nil {
-				return nil, recoverErr
+				return nil, fmt.Errorf("provider recovery failed after creating client: %w", recoverErr)
 			}
 			clientType = nextClientType
 			finalModel = nextModel
@@ -367,7 +367,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 			if err := client.CheckConnection(); err != nil {
 				nextClientType, nextModel, recoverErr := recoverProviderStartup(configManager, clientType, model, err)
 				if recoverErr != nil {
-					return nil, recoverErr
+					return nil, fmt.Errorf("provider recovery failed after connection check: %w", recoverErr)
 				}
 				clientType = nextClientType
 				finalModel = nextModel
@@ -641,7 +641,7 @@ func (a *Agent) GenerateResponse(messages []api.Message) (string, error) {
 	}
 
 	if len(resp.Choices) == 0 {
-		return "", fmt.Errorf("no response generated")
+		return "", fmt.Errorf("no response generated for %d messages", len(messages))
 	}
 
 	return resp.Choices[0].Message.Content, nil

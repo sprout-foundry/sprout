@@ -393,7 +393,10 @@ func writeFileContent(ctx context.Context, a *Agent, path, content, toolName str
 		a.validator.RunAsyncValidation(ctx, path, content)
 	}
 
-	return result, fmt.Errorf("failed to write file %s: %w", path, err)
+	if err != nil {
+		return "", fmt.Errorf("failed to write file %s: %w", path, err)
+	}
+	return result, nil
 }
 
 func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
@@ -509,7 +512,10 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 		}
 	}
 
-	return result, fmt.Errorf("failed to edit file %s: %w", path, err)
+	if err != nil {
+		return "", fmt.Errorf("failed to edit file %s: %w", path, err)
+	}
+	return result, nil
 }
 
 // Helper functions for file handlers

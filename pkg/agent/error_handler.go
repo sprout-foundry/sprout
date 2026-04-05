@@ -36,7 +36,7 @@ func (eh *ErrorHandler) HandleAPIFailure(apiErr error, messages []api.Message) (
 		eh.logRateLimit(errorMsg)
 		return eh.buildRateLimitMessage(rlErr.Attempts, rlErr.LastError), nil
 	}
-	if eh.isRateLimitError(errorMsg) {
+	if eh.isRateLimitError(apiErr) {
 		eh.logRateLimit(errorMsg)
 		return eh.buildRateLimitMessage(0, apiErr), nil
 	}
@@ -71,8 +71,7 @@ func (eh *ErrorHandler) buildInteractiveErrorResponse(apiErr error, toolsExecute
 	response += "[!!] **API Request Failed - Conversation Preserved**\n\n"
 
 	// Classify error type
-	errorMsg := apiErr.Error()
-	response += eh.classifyError(errorMsg)
+	response += eh.classifyError(apiErr)
 
 	// Add progress information
 	response += "**Progress So Far:**\n"
@@ -135,7 +134,8 @@ func (eh *ErrorHandler) buildRateLimitMessage(attempts int, lastErr error) strin
 }
 
 // classifyError returns user-friendly error explanation
-func (eh *ErrorHandler) classifyError(errorMsg string) string {
+func (eh *ErrorHandler) classifyError(apiErr error) string {
+	errorMsg := apiErr.Error()
 	if strings.Contains(errorMsg, "timeout") || strings.Contains(errorMsg, "deadline exceeded") {
 		return "The API request timed out, likely due to high server load or a complex request.\n\n"
 	}
@@ -143,7 +143,7 @@ func (eh *ErrorHandler) classifyError(errorMsg string) string {
 	// Rate limit errors should never reach this function anymore
 	// They are handled in HandleAPIFailure before getting here
 	// But if one slips through, just return a generic message
-	if eh.isRateLimitError(errorMsg) {
+	if eh.isRateLimitError(apiErr) {
 		eh.logRateLimit(errorMsg)
 		return "Temporary API issue encountered.\n\n"
 	}
@@ -189,8 +189,8 @@ func (eh *ErrorHandler) formatTokenCount(tokens int) string {
 }
 
 // isRateLimitError checks if an error is a rate limit (same logic as other components)
-func (eh *ErrorHandler) isRateLimitError(errStr string) bool {
-	return utils.NewRateLimitBackoff().IsRateLimitError(fmt.Errorf("rate limit check: %s", errStr), nil)
+func (eh *ErrorHandler) isRateLimitError(err error) bool {
+	return utils.NewRateLimitBackoff().IsRateLimitError(err, nil)
 }
 
 // logRateLimit logs rate limit information

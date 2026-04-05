@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	ollama "github.com/ollama/ollama/api"
@@ -28,7 +29,7 @@ func (s *stubOllamaClient) Chat(ctx context.Context, req *ollama.ChatRequest, fn
 	if fn != nil {
 		for _, resp := range s.chatResponses {
 			if err := fn(resp); err != nil {
-				return err
+				return fmt.Errorf("failed to process chat response: %w", err)
 			}
 		}
 	}

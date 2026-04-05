@@ -299,7 +299,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 					if err == nil {
 						err = restoreErr
 					} else {
-						err = fmt.Errorf("%w (restore: %v)", err, restoreErr)
+						err = fmt.Errorf("%w (restore failed: %w)", err, restoreErr)
 					}
 				}
 			}()
@@ -353,7 +353,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		}
 		if workflowErr != nil {
 			if err != nil {
-				return fmt.Errorf("%w (workflow: %v)", err, workflowErr)
+				return fmt.Errorf("%w (workflow execution failed: %w)", err, workflowErr)
 			}
 			return workflowErr
 		}

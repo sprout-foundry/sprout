@@ -337,8 +337,8 @@ func (a *Agent) SetModel(model string) error {
 		// This provides better error messages and handles case sensitivity
 		models, getModelErr := a.getModelsForProvider(a.clientType)
 		if getModelErr != nil {
-			return fmt.Errorf("failed to set model '%s' on provider %s and couldn't get available models: %w (original error: %v)",
-				model, api.GetProviderName(a.clientType), getModelErr, err)
+			return fmt.Errorf("failed to set model '%s' on provider %s: %w (also failed to get model list: %w)",
+				model, api.GetProviderName(a.clientType), err, getModelErr)
 		}
 
 		// Check if the model exists in the known list (case-insensitive)
@@ -396,8 +396,8 @@ func (a *Agent) SetModelPersisted(model string) error {
 		// This provides better error messages and handles case sensitivity
 		models, getModelErr := a.getModelsForProvider(a.clientType)
 		if getModelErr != nil {
-			return fmt.Errorf("failed to set model '%s' on provider %s and couldn't get available models: %w (original error: %v)",
-				model, api.GetProviderName(a.clientType), getModelErr, err)
+			return fmt.Errorf("failed to set model '%s' on provider %s: %w (also failed to get model list: %w)",
+				model, api.GetProviderName(a.clientType), err, getModelErr)
 		}
 
 		// Check if the model exists in the known list (case-insensitive)

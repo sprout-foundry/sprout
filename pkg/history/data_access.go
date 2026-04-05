@@ -159,7 +159,7 @@ func ensureChangesDirs() error {
 // conversation is the full conversation history (all user/assistant/tool messages)
 func RecordBaseRevision(requestHash, instructions, response string, conversation []APIMessage) (string, error) {
 	if err := ensureChangesDirs(); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to ensure changes directories: %w", err)
 	}
 
 	revisionID := requestHash

@@ -28,7 +28,7 @@ const maxStructuredErrorDetails = 8
 func handleWriteStructuredFile(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	path, err := getFilePath(args)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get file path: %w", err)
 	}
 
 	format := inferStructuredFormat(path, getOptionalString(args, "format"))
@@ -44,7 +44,7 @@ func handleWriteStructuredFile(ctx context.Context, a *Agent, args map[string]in
 	if schemaRaw, ok := args["schema"]; ok && schemaRaw != nil {
 		schema, err := toSchemaMap(schemaRaw)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("failed to parse schema: %w", err)
 		}
 		if errs := validateDataAgainstSchema(data, schema, "$"); len(errs) > 0 {
 			return "", formatStructuredValidationError("write_structured_file", errs, "")
@@ -53,17 +53,20 @@ func handleWriteStructuredFile(ctx context.Context, a *Agent, args map[string]in
 
 	content, err := serializeStructuredContent(format, data)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to serialize structured content: %w", err)
 	}
 
 	result, err := writeFileContent(ctx, a, path, content, "write_structured_file", true)
-	return result, err
+	if err != nil {
+		return "", fmt.Errorf("failed to write structured file %s: %w", path, err)
+	}
+	return result, nil
 }
 
 func handlePatchStructuredFile(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	path, err := getFilePath(args)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get file path: %w", err)
 	}
 
 	opsRaw, ok := args["patch_ops"]
@@ -98,7 +101,7 @@ func handlePatchStructuredFile(ctx context.Context, a *Agent, args map[string]in
 			resolvedPath, err = filesystem.SafeResolvePathWithBypass(ctx2, path)
 		}
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("failed to resolve file path: %w", err)
 		}
 	}
 	contentBytes, err := os.ReadFile(resolvedPath)
@@ -113,7 +116,7 @@ func handlePatchStructuredFile(ctx context.Context, a *Agent, args map[string]in
 
 	ops, err := parsePatchOperations(opsRaw)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to parse patch operations: %w", err)
 	}
 
 	applied := 0
@@ -131,7 +134,7 @@ func handlePatchStructuredFile(ctx context.Context, a *Agent, args map[string]in
 	if schemaRaw, ok := args["schema"]; ok && schemaRaw != nil {
 		schema, err := toSchemaMap(schemaRaw)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("failed to parse schema: %w", err)
 		}
 		if errs := validateDataAgainstSchema(doc, schema, "$"); len(errs) > 0 {
 			context := fmt.Sprintf("applied=%d/%d", applied, len(ops))
@@ -141,11 +144,14 @@ func handlePatchStructuredFile(ctx context.Context, a *Agent, args map[string]in
 
 	updated, err := serializeStructuredContent(format, doc)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to serialize updated content: %w", err)
 	}
 
 	result, err := writeFileContent(ctx, a, path, updated, "patch_structured_file", true)
-	return result, err
+	if err != nil {
+		return "", fmt.Errorf("failed to write patched file %s: %w", path, err)
+	}
+	return result, nil
 }
 
 func inferStructuredFormat(path, provided string) string {

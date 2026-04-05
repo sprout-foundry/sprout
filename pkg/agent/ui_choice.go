@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 )
 
 // ChoiceOption represents a simple label/value option for UI prompts
@@ -39,7 +40,7 @@ func (a *Agent) PromptChoice(prompt string, choices []ChoiceOption) (string, err
 	}
 	selected, err := a.ui.ShowDropdown(context.Background(), items, DropdownOptions{Prompt: prompt})
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to show dropdown: %w", err)
 	}
 	dropdownItem := selected.(DropdownItem)
 	return dropdownItem.Value, nil

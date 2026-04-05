@@ -8,16 +8,21 @@
   background: var(--bg-secondary);
   box-shadow: var(--shadow-elevated);
   animation: context-menu-in 0.12s ease-out;
+  /* Individual transform properties so inline translate doesn't
+     clobber the keyframe scale animation. */
+  translate: var(--menu-translate, 0 0);
+  scale: var(--menu-scale, 1);
+  opacity: var(--menu-opacity, 1);
 }
 
 @keyframes context-menu-in {
   from {
-    opacity: 0;
-    transform: scale(0.95);
+    --menu-scale: 0.95;
+    --menu-opacity: 0;
   }
   to {
-    opacity: 1;
-    transform: scale(1);
+    --menu-scale: 1;
+    --menu-opacity: 1;
   }
 }
 

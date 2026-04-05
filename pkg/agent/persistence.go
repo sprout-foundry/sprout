@@ -55,7 +55,7 @@ func normalizeSessionID(sessionID string) (string, error) {
 	clean := strings.TrimSpace(sessionID)
 	clean = strings.TrimPrefix(clean, legacySessionPrefix)
 	if clean == "" {
-		return "", fmt.Errorf("session ID is required")
+		return "", fmt.Errorf("session ID cannot be empty")
 	}
 	if strings.Contains(clean, string(os.PathSeparator)) || strings.Contains(clean, "/") {
 		return "", fmt.Errorf("session ID %q cannot contain path separators", sessionID)

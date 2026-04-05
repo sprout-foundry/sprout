@@ -92,7 +92,7 @@ func (m *fileConsentManager) clearAll() {
 func canonicalizePath(path string, workspaceRoot string, forWrite bool) (string, error) {
 	trimmed := strings.TrimSpace(path)
 	if trimmed == "" {
-		return "", fmt.Errorf("path is required")
+		return "", fmt.Errorf("file path is required")
 	}
 
 	cleaned := filepath.Clean(trimmed)

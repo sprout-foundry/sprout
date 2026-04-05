@@ -31,7 +31,7 @@ func (a *Agent) SetSystemPromptFromFile(filePath string) error {
 
 	promptContent := strings.TrimSpace(string(content))
 	if promptContent == "" {
-		return fmt.Errorf("system prompt file is empty")
+		return fmt.Errorf("system prompt file %q is empty", filePath)
 	}
 
 	a.systemPrompt = a.ensureStopInformation(promptContent)
@@ -41,7 +41,7 @@ func (a *Agent) SetSystemPromptFromFile(filePath string) error {
 func resolvePromptPath(filePath string) (string, error) {
 	trimmed := strings.TrimSpace(filePath)
 	if trimmed == "" {
-		return "", fmt.Errorf("path is empty")
+		return "", fmt.Errorf("system prompt file path is empty")
 	}
 
 	// Preserve existing behavior first: relative paths resolve from cwd.

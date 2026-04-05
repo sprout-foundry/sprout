@@ -441,7 +441,7 @@ func (ws *ReactWebServer) syncAgentStateForClientWithChat(clientID, chatID strin
 	if err == nil && chatAgent != nil {
 		snapshot, exportErr := chatAgent.ExportState()
 		if exportErr != nil {
-			return exportErr
+			return fmt.Errorf("export chat state: %w", exportErr)
 		}
 		ws.mutex.Lock()
 		defer ws.mutex.Unlock()

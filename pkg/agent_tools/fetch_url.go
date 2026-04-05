@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/alantheprice/ledit/pkg/configuration"
@@ -12,7 +11,7 @@ import (
 // This provides direct URL access as an agent tool.
 func FetchURL(url string, cfg *configuration.Manager) (string, error) {
 	if url == "" {
-		return "", errors.New("URL cannot be empty")
+		return "", fmt.Errorf("URL cannot be empty")
 	}
 
 	fetcher := webcontent.NewWebContentFetcher()

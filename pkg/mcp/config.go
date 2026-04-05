@@ -2,7 +2,6 @@ package mcp
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -32,7 +31,7 @@ func (c *MCPConfig) UnmarshalJSON(data []byte) error {
 	}
 
 	if err := json.Unmarshal(data, aux); err != nil {
-		return err
+		return fmt.Errorf("unmarshal MCP config: %w", err)
 	}
 
 	// Handle timeout field conversion
@@ -224,18 +223,18 @@ func (c *MCPConfig) AddGitHubServer(githubToken string) {
 // AddServer adds a custom MCP server to the configuration
 func (c *MCPConfig) AddServer(serverConfig MCPServerConfig) error {
 	if serverConfig.Name == "" {
-		return errors.New("server name cannot be empty")
+		return fmt.Errorf("server name cannot be empty")
 	}
 
 	// Validate command for stdio servers, URL for HTTP servers
 	if serverConfig.Type == "http" {
 		if serverConfig.URL == "" {
-			return errors.New("server URL cannot be empty for HTTP servers")
+			return fmt.Errorf("server URL cannot be empty for HTTP servers")
 		}
 	} else {
 		// stdio server (default)
 		if serverConfig.Command == "" {
-			return errors.New("server command cannot be empty for stdio servers")
+			return fmt.Errorf("server command cannot be empty for stdio servers")
 		}
 	}
 
@@ -269,7 +268,7 @@ func (c *MCPConfig) ValidateConfig() error {
 	}
 
 	if len(c.Servers) == 0 {
-		return errors.New("no MCP servers configured")
+		return fmt.Errorf("no MCP servers configured")
 	}
 
 	for name, server := range c.Servers {

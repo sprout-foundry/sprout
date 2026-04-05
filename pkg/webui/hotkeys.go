@@ -2,7 +2,6 @@ package webui
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -209,7 +208,7 @@ func DefaultHotkeyConfig() *HotkeyConfig {
 func GetHotkeysPath() (string, error) {
 	configDir, err := configuration.GetConfigDir()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("get config directory: %w", err)
 	}
 	return filepath.Join(configDir, "hotkeys.json"), nil
 }
@@ -242,7 +241,7 @@ func LoadHotkeys() (*HotkeyConfig, error) {
 func SaveHotkeys(config *HotkeyConfig) error {
 	path, err := GetHotkeysPath()
 	if err != nil {
-		return err
+		return fmt.Errorf("get hotkeys path: %w", err)
 	}
 
 	data, err := json.MarshalIndent(config, "", "  ")
@@ -266,15 +265,15 @@ func SaveHotkeys(config *HotkeyConfig) error {
 // ValidateHotkeyConfig validates a hotkeys configuration
 func ValidateHotkeyConfig(config *HotkeyConfig) error {
 	if config == nil {
-		return errors.New("hotkeys config is nil")
+		return fmt.Errorf("hotkeys config is nil")
 	}
 
 	if config.Version == "" {
-		return errors.New("hotkeys config must have a version field")
+		return fmt.Errorf("hotkeys config must have a version field")
 	}
 
 	if config.Hotkeys == nil {
-		return errors.New("hotkeys config must have a hotkeys array")
+		return fmt.Errorf("hotkeys config must have a hotkeys array")
 	}
 
 	// Validate each hotkey entry and check for duplicates.

@@ -2,7 +2,6 @@ package commands
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -153,7 +152,7 @@ func (h *CommitMessageHandler) EditCommitMessage(commitMessage string) (string, 
 
 	editedMessage := strings.TrimSpace(string(editedContent))
 	if editedMessage == "" {
-		return "", errors.New("commit message cannot be empty")
+		return "", fmt.Errorf("commit message cannot be empty")
 	}
 
 	fmt.Println("[OK] Commit message edited successfully")

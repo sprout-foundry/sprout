@@ -1,8 +1,8 @@
 package tools
 
 import (
+	"fmt"
 	"context"
-	"errors"
 	"sync"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
@@ -78,7 +78,7 @@ func ExecuteToolByName(ctx context.Context, toolName string, params Parameters) 
 func RegisterTool(tool Tool) error {
 	executor := GetGlobalExecutor()
 	if executor == nil {
-		return errors.New("global executor not initialized")
+		return fmt.Errorf("global executor not initialized")
 	}
 
 	return executor.registry.RegisterTool(tool)

@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -97,7 +96,7 @@ func LoadAllMemories() ([]MemoryInfo, error) {
 func LoadMemoryContent(name string) (string, error) {
 	memoryDir := getMemoryDir()
 	if memoryDir == "" {
-		return "", errors.New("failed to get memory directory")
+		return "", fmt.Errorf("failed to get memory directory")
 	}
 
 	filePath := filepath.Join(memoryDir, name+".md")
@@ -119,7 +118,7 @@ func SaveMemory(name string, content string) error {
 
 	memoryDir := getMemoryDir()
 	if memoryDir == "" {
-		return errors.New("failed to get memory directory")
+		return fmt.Errorf("failed to get memory directory")
 	}
 
 	filePath := filepath.Join(memoryDir, sanitized+".md")
@@ -163,7 +162,7 @@ func sanitizeMemoryName(name string) string {
 func DeleteMemory(name string) error {
 	memoryDir := getMemoryDir()
 	if memoryDir == "" {
-		return errors.New("failed to get memory directory")
+		return fmt.Errorf("failed to get memory directory")
 	}
 
 	// Ensure .md extension

@@ -3,7 +3,6 @@ package webui
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -215,7 +214,7 @@ func (ws *ReactWebServer) setClientWorkspaceRoot(clientID, path string) (string,
 		return "", fmt.Errorf("stat workspace root: %w", err)
 	}
 	if !info.IsDir() {
-		return "", errors.New("workspace root must be a directory")
+		return "", fmt.Errorf("workspace root must be a directory")
 	}
 
 	ws.mutex.Lock()
@@ -372,10 +371,10 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 		return createErr
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create agent in workspace: %w", err)
 	}
 	if createErr != nil {
-		return nil, createErr
+		return nil, fmt.Errorf("create agent: %w", createErr)
 	}
 
 	created.SetEventBus(ws.eventBus)
@@ -391,7 +390,7 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 	created.EnableStreaming(func(string) {})
 	if len(snapshot) > 0 {
 		if err := created.ImportState(snapshot); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("import agent state: %w", err)
 		}
 	}
 
@@ -425,12 +424,12 @@ func (ws *ReactWebServer) syncAgentStateForClient(clientID string) error {
 
 	agentInst, err := ws.getClientAgent(clientID)
 	if err != nil {
-		return err
+		return fmt.Errorf("get client agent for state sync: %w", err)
 	}
 
 	snapshot, err := agentInst.ExportState()
 	if err != nil {
-		return err
+		return fmt.Errorf("export agent state: %w", err)
 	}
 
 	ws.mutex.Lock()
@@ -459,7 +458,7 @@ func (ws *ReactWebServer) getChatAgent(clientID, chatID string) (*agent.Agent, e
 	ctx := ws.clientContexts[clientID]
 	if ctx == nil {
 		ws.mutex.RUnlock()
-		return nil, errors.New("client context not found")
+		return nil, fmt.Errorf("client context not found")
 	}
 	if ctx.ChatSessions == nil {
 		ws.mutex.RUnlock()
@@ -479,7 +478,7 @@ func (ws *ReactWebServer) getChatAgent(clientID, chatID string) (*agent.Agent, e
 
 	agentInst, err := cs.getOrCreateAgent(workspaceRoot, eventBus, clientID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get or create chat agent: %w", err)
 	}
 
 	// Keep the client-level Agent in sync with the active chat's agent for

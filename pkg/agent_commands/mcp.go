@@ -3,7 +3,6 @@ package commands
 import (
 	"bufio"
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -229,7 +228,7 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 		}
 		customURL = strings.TrimSpace(urlInput)
 		if customURL == "" {
-			return errors.New("URL is required for HTTP servers")
+			return fmt.Errorf("URL is required for HTTP servers")
 		}
 	}
 
@@ -241,7 +240,7 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 		}
 		customCommand = strings.TrimSpace(cmdInput)
 		if customCommand == "" {
-			return errors.New("command is required for stdio servers")
+			return fmt.Errorf("command is required for stdio servers")
 		}
 
 		fmt.Print("Enter arguments (space-separated, or press Enter for none): ")
@@ -508,7 +507,7 @@ func (m *MCPCommand) testServer(serverName string, chatAgent *agent.Agent) error
 
 	server, exists := manager.GetServer(serverName)
 	if !exists {
-		return errors.New("failed to get server from manager")
+		return fmt.Errorf("failed to get server from manager")
 	}
 
 	fmt.Println("[...] Starting server...")

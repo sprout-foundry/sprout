@@ -1,7 +1,6 @@
 package factory
 
 import (
-	"errors"
 	"fmt"
 	"log"
 
@@ -106,7 +105,7 @@ func (t *TestClient) GetVisionModel() string {
 }
 
 func (t *TestClient) SendVisionRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
-	return nil, errors.New("vision not supported in test provider")
+	return nil, fmt.Errorf("vision not supported in test provider")
 }
 
 func (t *TestClient) GetLastTPS() float64 {
@@ -181,7 +180,7 @@ func CreateCustomProvider(providerName, model string) (api.ClientInterface, erro
 	}
 
 	if len(customProviders) == 0 {
-		return nil, errors.New("no custom providers configured")
+		return nil, fmt.Errorf("no custom providers configured")
 	}
 
 	customProvider, exists := customProviders[providerName]

@@ -281,7 +281,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	if ws.isRunning {
 		ws.mutex.Unlock()
 		listener.Close()
-		return errors.New("web server is already running")
+		return fmt.Errorf("web server is already running")
 	}
 	ws.listener = listener
 	ws.isRunning = true
@@ -345,7 +345,7 @@ func (ws *ReactWebServer) Shutdown() error {
 	}
 
 	if err := ws.server.Shutdown(ctx); err != nil && !isExpectedServerCloseError(err) {
-		return err
+		return fmt.Errorf("shutdown web server: %w", err)
 	}
 	return nil
 }
@@ -450,7 +450,7 @@ func filepathAbsEval(path string) (string, error) {
 
 	abs, err := filepath.Abs(expanded)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("resolve absolute path: %w", err)
 	}
 	resolved, err := filepath.EvalSymlinks(abs)
 	if err != nil {
@@ -460,7 +460,7 @@ func filepathAbsEval(path string) (string, error) {
 			// is within the workspace before it's used.
 			return abs, nil
 		}
-		return "", err
+		return "", fmt.Errorf("resolve symlinks: %w", err)
 	}
 	return resolved, nil
 }

@@ -63,7 +63,7 @@ func prepareLocalSSHBinary(remotePlatform, remoteArch string, logger *sshLaunchL
 
 	executablePath, err := currentExecutableForSSH()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("determine current executable: %w", err)
 	}
 	repoRoot := filepath.Dir(executablePath)
 	if _, err := os.Stat(filepath.Join(repoRoot, "go.mod")); err != nil {
@@ -146,7 +146,7 @@ func ensureLocalSSHBinaryArtifactForTag(tag, remotePlatform, remoteArch string, 
 			logger.Logf("failed to resolve %q artifact URL; using stale cached artifact %s (error: %v)", tag, binaryPath, err)
 			return binaryPath, nil
 		}
-		return "", err
+		return "", fmt.Errorf("resolve release asset URL: %w", err)
 	}
 	logger.Logf("resolved release artifact %s for tag %s", assetName, tag)
 
@@ -156,7 +156,7 @@ func ensureLocalSSHBinaryArtifactForTag(tag, remotePlatform, remoteArch string, 
 			logger.Logf("failed to download %q artifact; using stale cached artifact %s (error: %v)", tag, binaryPath, err)
 			return binaryPath, nil
 		}
-		return "", err
+		return "", fmt.Errorf("download release artifact: %w", err)
 	}
 
 	if err := extractTarGzSingleFile(archivePath, binaryPath); err != nil {
@@ -164,10 +164,10 @@ func ensureLocalSSHBinaryArtifactForTag(tag, remotePlatform, remoteArch string, 
 			logger.Logf("failed to extract %q artifact; using stale cached artifact %s (error: %v)", tag, binaryPath, err)
 			return binaryPath, nil
 		}
-		return "", err
+		return "", fmt.Errorf("extract release artifact: %w", err)
 	}
 	if err := os.Chmod(binaryPath, 0755); err != nil {
-		return "", err
+		return "", fmt.Errorf("chmod release artifact: %w", err)
 	}
 	return binaryPath, nil
 }
@@ -200,7 +200,7 @@ func normalizeReleaseTagCandidate(value string) string {
 
 func resolveGitHubReleaseAssetURL(tag, assetName string, logger *sshLaunchLogger) (string, error) {
 	if strings.TrimSpace(assetName) == "" {
-		return "", errors.New("artifact name is required")
+		return "", fmt.Errorf("artifact name is required")
 	}
 	tag = strings.TrimSpace(tag)
 	if tag == "" || tag == "latest" {
@@ -228,16 +228,16 @@ func downloadFile(url, destPath string, logger *sshLaunchLogger) error {
 	tmpPath := destPath + ".tmp"
 	file, err := os.Create(tmpPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("create temp download file: %w", err)
 	}
 	if _, err := io.Copy(file, resp.Body); err != nil {
 		file.Close()
 		_ = os.Remove(tmpPath)
-		return err
+		return fmt.Errorf("write downloaded file: %w", err)
 	}
 	if err := file.Close(); err != nil {
 		_ = os.Remove(tmpPath)
-		return err
+		return fmt.Errorf("close downloaded file: %w", err)
 	}
 	return os.Rename(tmpPath, destPath)
 }
@@ -245,13 +245,13 @@ func downloadFile(url, destPath string, logger *sshLaunchLogger) error {
 func extractTarGzSingleFile(archivePath, destPath string) error {
 	file, err := os.Open(archivePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("open archive: %w", err)
 	}
 	defer file.Close()
 
 	gzReader, err := gzip.NewReader(file)
 	if err != nil {
-		return err
+		return fmt.Errorf("create gzip reader: %w", err)
 	}
 	defer gzReader.Close()
 
@@ -262,23 +262,23 @@ func extractTarGzSingleFile(archivePath, destPath string) error {
 			break
 		}
 		if err != nil {
-			return err
+			return fmt.Errorf("read tar archive: %w", err)
 		}
 		if header.Typeflag != tar.TypeReg {
 			continue
 		}
 		outFile, err := os.Create(destPath)
 		if err != nil {
-			return err
+			return fmt.Errorf("create extracted file: %w", err)
 		}
 		if _, err := io.Copy(outFile, tarReader); err != nil {
 			outFile.Close()
 			_ = os.Remove(destPath)
-			return err
+			return fmt.Errorf("extract archive entry: %w", err)
 		}
 		if err := outFile.Close(); err != nil {
 			_ = os.Remove(destPath)
-			return err
+			return fmt.Errorf("close extracted file: %w", err)
 		}
 		return nil
 	}
@@ -294,7 +294,7 @@ func ensureRemoteSSHBinary(ctx context.Context, hostAlias, localBinary string, r
 	homeCmd := newSSHCommandContext(ctx, hostAlias, `printf "%s" "$HOME"`)
 	homeOut, err := runSSHLoggedCommand(logger, "resolve-remote-home", fmt.Sprintf("ssh %s print $HOME", hostAlias), homeCmd)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("resolve remote home: %w", err)
 	}
 	remoteHome := strings.TrimSpace(string(homeOut))
 	if remoteHome == "" {
@@ -323,7 +323,7 @@ func ensureRemoteSSHBinary(ctx context.Context, hostAlias, localBinary string, r
 
 	mkdir := newSSHCommandContext(ctx, hostAlias, fmt.Sprintf("mkdir -p %s", shellEscapeSSH(remoteDirSSH)))
 	if _, err := runSSHLoggedCommand(logger, "prepare-remote-dir", fmt.Sprintf("ssh %s mkdir -p %s", hostAlias, remoteDirSSH), mkdir); err != nil {
-		return "", err
+		return "", fmt.Errorf("prepare remote directory: %w", err)
 	}
 
 	copyCmd := exec.CommandContext(ctx, "scp",
@@ -336,7 +336,7 @@ func ensureRemoteSSHBinary(ctx context.Context, hostAlias, localBinary string, r
 		fmt.Sprintf("%s:%s", hostAlias, remoteUploadSCP),
 	)
 	if _, err := runSSHLoggedCommand(logger, "upload-backend", fmt.Sprintf("scp %s %s:%s", localBinary, hostAlias, remoteUploadSCP), copyCmd); err != nil {
-		return "", err
+		return "", fmt.Errorf("upload backend via SCP: %w", err)
 	}
 
 	install := newSSHCommandContext(ctx, hostAlias, fmt.Sprintf(
@@ -346,7 +346,7 @@ func ensureRemoteSSHBinary(ctx context.Context, hostAlias, localBinary string, r
 		shellEscapeSSH(remoteBinarySSH),
 	))
 	if _, err := runSSHLoggedCommand(logger, "install-backend", fmt.Sprintf("ssh %s install backend into %s", hostAlias, remoteBinarySSH), install); err != nil {
-		return "", err
+		return "", fmt.Errorf("install remote backend: %w", err)
 	}
 
 	// Verify the uploaded backend can execute on the remote host.
@@ -366,13 +366,13 @@ func ensureRemoteSSHBinary(ctx context.Context, hostAlias, localBinary string, r
 func fingerprintFile(path string) (string, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("open file for fingerprinting: %w", err)
 	}
 	defer file.Close()
 
 	hasher := sha256.New()
 	if _, err := io.Copy(hasher, file); err != nil {
-		return "", err
+		return "", fmt.Errorf("read file for fingerprinting: %w", err)
 	}
 	return hex.EncodeToString(hasher.Sum(nil))[:16], nil
 }

@@ -2,7 +2,6 @@ package commands
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -44,7 +43,7 @@ func (m *ModelsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		}
 	}
 
-	return errors.New("usage: /model [select|<model_id>]")
+	return fmt.Errorf("usage: /model [select|<model_id>]")
 }
 
 // listModels displays all available models for the current provider

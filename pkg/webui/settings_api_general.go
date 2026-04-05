@@ -2,7 +2,6 @@ package webui
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -97,7 +96,7 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 	if v, ok := patch["reasoning_effort"]; ok {
 		s, _ := v.(string)
 		if err := validateReasoningEffort(s); err != nil {
-			return err
+			return fmt.Errorf("validate reasoning_effort: %w", err)
 		}
 		cfg.ReasoningEffort = s
 	}
@@ -121,14 +120,14 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 	if v, ok := patch["history_scope"]; ok {
 		s, _ := v.(string)
 		if err := validateHistoryScope(s); err != nil {
-			return err
+			return fmt.Errorf("validate history_scope: %w", err)
 		}
 		cfg.HistoryScope = s
 	}
 	if v, ok := patch["self_review_gate_mode"]; ok {
 		s, _ := v.(string)
 		if err := validateSelfReviewGateMode(s); err != nil {
-			return err
+			return fmt.Errorf("validate self_review_gate_mode: %w", err)
 		}
 		cfg.SelfReviewGateMode = s
 	}
@@ -167,40 +166,40 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 			if v2, ok2 := atMap["connection_timeout_sec"]; ok2 {
 				n, ok3 := asInt(v2)
 				if !ok3 {
-					return errors.New("api_timeouts.connection_timeout_sec must be a positive integer")
+					return fmt.Errorf("api_timeouts.connection_timeout_sec must be a positive integer")
 				}
 				if err := validateAPITimeout(n); err != nil {
-					return err
+					return fmt.Errorf("validate connection_timeout_sec: %w", err)
 				}
 				cfg.APITimeouts.ConnectionTimeoutSec = n
 			}
 			if v2, ok2 := atMap["first_chunk_timeout_sec"]; ok2 {
 				n, ok3 := asInt(v2)
 				if !ok3 {
-					return errors.New("api_timeouts.first_chunk_timeout_sec must be a positive integer")
+					return fmt.Errorf("api_timeouts.first_chunk_timeout_sec must be a positive integer")
 				}
 				if err := validateAPITimeout(n); err != nil {
-					return err
+					return fmt.Errorf("validate first_chunk_timeout_sec: %w", err)
 				}
 				cfg.APITimeouts.FirstChunkTimeoutSec = n
 			}
 			if v2, ok2 := atMap["chunk_timeout_sec"]; ok2 {
 				n, ok3 := asInt(v2)
 				if !ok3 {
-					return errors.New("api_timeouts.chunk_timeout_sec must be a positive integer")
+					return fmt.Errorf("api_timeouts.chunk_timeout_sec must be a positive integer")
 				}
 				if err := validateAPITimeout(n); err != nil {
-					return err
+					return fmt.Errorf("validate chunk_timeout_sec: %w", err)
 				}
 				cfg.APITimeouts.ChunkTimeoutSec = n
 			}
 			if v2, ok2 := atMap["overall_timeout_sec"]; ok2 {
 				n, ok3 := asInt(v2)
 				if !ok3 {
-					return errors.New("api_timeouts.overall_timeout_sec must be a positive integer")
+					return fmt.Errorf("api_timeouts.overall_timeout_sec must be a positive integer")
 				}
 				if err := validateAPITimeout(n); err != nil {
-					return err
+					return fmt.Errorf("validate overall_timeout_sec: %w", err)
 				}
 				cfg.APITimeouts.OverallTimeoutSec = n
 			}

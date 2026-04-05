@@ -60,7 +60,7 @@ func browseSSHDirectory(hostAlias, requestedPath string) ([]sshRemoteEntry, stri
 		if details == "" {
 			details = err.Error()
 		}
-		return nil, "", "", fmt.Errorf("%s", details)
+		return nil, "", "", fmt.Errorf("SSH command failed: %s: %w", details, err)
 	}
 
 	var payload struct {

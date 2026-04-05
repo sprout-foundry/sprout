@@ -3,6 +3,7 @@ package commands
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -105,13 +106,13 @@ func (r *CommandRegistry) Execute(input string, chatAgent *agent.Agent) error {
 	} else if strings.HasPrefix(trimmed, "!") {
 		prefix = "!"
 	} else {
-		return fmt.Errorf("not a valid command (must start with / or !)")
+		return errors.New("not a valid command (must start with / or !)")
 	}
 
 	// Parse command and arguments
 	parts := strings.Fields(trimmed[1:]) // Remove leading prefix
 	if len(parts) == 0 {
-		return fmt.Errorf("empty command")
+		return errors.New("empty command")
 	}
 
 	commandName := parts[0]

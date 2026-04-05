@@ -280,7 +280,7 @@ Examples:
 			_ = os.Setenv("LEDIT_RESOURCE_DIRECTORY", strings.TrimSpace(agentResourceDirectory))
 		}
 		if agentLastSession && strings.TrimSpace(agentSessionID) != "" {
-			return fmt.Errorf("--session-id and --last-session are mutually exclusive")
+			return fmt.Errorf("flag --session-id and --last-session are mutually exclusive")
 		}
 		if agentLastSession || strings.TrimSpace(agentSessionID) != "" {
 			workingDir, err := os.Getwd()

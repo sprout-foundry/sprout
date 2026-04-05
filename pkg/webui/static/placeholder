@@ -1,0 +1,4 @@
+This directory is populated by the React build ("npm run build" in webui/)
+or by "go generate ./pkg/webui/".
+When present, these files are embedded into the Go binary at compile time.
+If absent, the server falls back to reading from webui/build/ at runtime.

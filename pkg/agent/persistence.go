@@ -121,7 +121,7 @@ func listScopedSessionCandidates(stateDir, sessionID string) ([]string, error) {
 	var candidates []string
 	walkErr := filepath.WalkDir(scopedRoot, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to walk path %s in scoped session directory: %w", path, err)
 		}
 		if d.IsDir() {
 			return nil

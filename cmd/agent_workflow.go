@@ -13,6 +13,7 @@ import (
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/events"
+	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 const (
@@ -940,7 +941,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 				"from_provider":   strings.TrimSpace(state.LastProvider),
 				"to_provider":     workflowEffectiveStepProvider(chatAgent, step),
 			}); err != nil {
-				return false, err
+				return false, utils.WrapError(err, "emit workflow yield event")
 			}
 			state.NextStepIndex = i
 			state.HasError = hasError
@@ -948,7 +949,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 				state.FirstError = firstErr.Error()
 			}
 			if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
-				return false, err
+				return false, utils.WrapError(err, "persist workflow checkpoint")
 			}
 			fmt.Printf("\n[||] Workflow yielded for orchestration before step %s\n", stepName)
 			return true, nil
@@ -957,7 +958,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 		if !shouldRunWorkflowStep(step.When, hasError) {
 			state.NextStepIndex = i + 1
 			if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
-				return false, err
+				return false, utils.WrapError(err, "persist workflow checkpoint")
 			}
 			continue
 		}
@@ -968,7 +969,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 			"step_name":  stepName,
 			"provider":   workflowEffectiveStepProvider(chatAgent, step),
 		}); err != nil {
-			return false, err
+			return false, utils.WrapError(err, "emit workflow step started event")
 		}
 
 		triggersSatisfied, triggerErr := stepFileTriggersSatisfied(step)
@@ -983,7 +984,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 				state.FirstError = firstErr.Error()
 			}
 			if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
-				return false, err
+				return false, utils.WrapError(err, "persist workflow checkpoint")
 			}
 			if !cfg.ContinueOnError {
 				break
@@ -997,11 +998,11 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 				"step_name":  stepName,
 				"reason":     "file_triggers_not_satisfied",
 			}); err != nil {
-				return false, err
+				return false, utils.WrapError(err, "emit workflow step skipped event")
 			}
 			state.NextStepIndex = i + 1
 			if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
-				return false, err
+				return false, utils.WrapError(err, "persist workflow checkpoint")
 			}
 			continue
 		}
@@ -1018,7 +1019,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 			}
 			state.LastProvider = strings.TrimSpace(chatAgent.GetProvider())
 			if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
-				return false, err
+				return false, utils.WrapError(err, "persist workflow checkpoint")
 			}
 			if !cfg.ContinueOnError {
 				break
@@ -1039,7 +1040,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 			}
 			state.LastProvider = strings.TrimSpace(chatAgent.GetProvider())
 			if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
-				return false, err
+				return false, utils.WrapError(err, "persist workflow checkpoint")
 			}
 			if !cfg.ContinueOnError {
 				break
@@ -1058,7 +1059,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 			}
 			state.LastProvider = strings.TrimSpace(chatAgent.GetProvider())
 			if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
-				return false, err
+				return false, utils.WrapError(err, "persist workflow checkpoint")
 			}
 			if !cfg.ContinueOnError {
 				break
@@ -1084,10 +1085,10 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 				"provider":   state.LastProvider,
 				"error":      err.Error(),
 			}); err != nil {
-				return false, err
+				return false, utils.WrapError(err, "emit workflow step failed event")
 			}
 			if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
-				return false, err
+				return false, utils.WrapError(err, "persist workflow checkpoint")
 			}
 			if !cfg.ContinueOnError {
 				break
@@ -1104,10 +1105,10 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 			"step_name":  stepName,
 			"provider":   state.LastProvider,
 		}); err != nil {
-			return false, err
+			return false, utils.WrapError(err, "emit workflow step completed event")
 		}
 		if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
-			return false, err
+			return false, utils.WrapError(err, "persist workflow checkpoint")
 		}
 	}
 
@@ -1117,12 +1118,12 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 		state.HasError = true
 	}
 	if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
-		return false, err
+		return false, utils.WrapError(err, "persist workflow checkpoint")
 	}
 	if err := emitWorkflowOrchestrationEvent(cfg, "workflow_completed", map[string]interface{}{
 		"has_error": state.HasError,
 	}); err != nil {
-		return false, err
+		return false, utils.WrapError(err, "emit workflow completed event")
 	}
 
 	return false, firstErr

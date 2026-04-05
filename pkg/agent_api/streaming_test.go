@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -488,8 +489,8 @@ func TestStreamingErrorScenarios(t *testing.T) {
 		})
 
 		err := sseReader.Read()
-		if err != expectedErr {
-			t.Errorf("Expected error %v, got %v", expectedErr, err)
+		if !errors.Is(err, expectedErr) {
+			t.Errorf("Expected error to contain %v, got %v", expectedErr, err)
 		}
 	})
 

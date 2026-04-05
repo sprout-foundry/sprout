@@ -1,3 +1,4 @@
+import './CommandPalette.css';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { ChangeEvent, FC, KeyboardEvent, MouseEvent } from 'react';
 import { useHotkeys } from '../contexts/HotkeyContext';

@@ -209,11 +209,10 @@ describe('ContextMenu', () => {
     const menu = document.querySelector('.context-menu') as HTMLElement;
     expect(menu).not.toBeNull();
 
-    // After useLayoutEffect clamping:
-    // - rect.right (370) > vw (200) → left = max(8, 200 - 180 - 8) = max(8, 12) = 12
-    // - rect.bottom (290) > vh (200) → top = max(8, 200 - 100 - 8) = max(8, 92) = 92
-    expect(menu.style.left).toBe('12px');
-    expect(menu.style.top).toBe('92px');
+    // After useLayoutEffect clamping via CSS custom property:
+    // - rect.right (370) > vw (200) → translateX = max(8, 200 - 180 - 8) - 190 = -178
+    // - rect.bottom (290) > vh (200) → translateY = max(8, 200 - 100 - 8) - 190 = -98
+    expect(menu.style.getPropertyValue('--menu-translate')).toBe('-178px -98px');
 
     // Restore
     Element.prototype.getBoundingClientRect = originalGetBCR;

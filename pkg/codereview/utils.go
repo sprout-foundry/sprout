@@ -2,7 +2,6 @@ package codereview
 
 import (
 	"crypto/md5"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -128,7 +127,7 @@ func (s *CodeReviewService) calculateSimilarity(str1, str2 string) float64 {
 // applyPatchToContent applies the patch resolution content directly
 func (s *CodeReviewService) applyPatchToContent(patchResolution *types.PatchResolution, feedback string) error {
 	if patchResolution == nil {
-		return errors.New("patch resolution is nil")
+		return fmt.Errorf("patch resolution is nil")
 	}
 
 	// Handle multi-file patches
@@ -148,7 +147,7 @@ func (s *CodeReviewService) applyPatchToContent(patchResolution *types.PatchReso
 		return fmt.Errorf("single-file patch resolution needs to be applied: %d characters", len(patchResolution.SingleFile))
 	}
 
-	return errors.New("patch resolution is empty")
+	return fmt.Errorf("patch resolution is empty")
 }
 
 // validatePatchContent validates the patch resolution content
@@ -162,7 +161,7 @@ func (s *CodeReviewService) validatePatchContent(content string) error {
 	// Check for content that looks like instructions rather than actual code
 	contentLower := strings.ToLower(content)
 	if strings.Contains(contentLower, "replace the") && len(content) < 50 {
-		return errors.New("patch content appears to be replacement instructions rather than actual code")
+		return fmt.Errorf("patch content appears to be replacement instructions rather than actual code")
 	}
 
 	// Check for basic code structure indicators

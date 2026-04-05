@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -13,7 +12,7 @@ import (
 // The agent can then decide which URLs to fetch and process.
 func WebSearch(query string, cfg *configuration.Manager) (string, error) {
 	if query == "" {
-		return "", errors.New("search query cannot be empty")
+		return "", fmt.Errorf("search query cannot be empty")
 	}
 
 	// Get raw search results without LLM processing

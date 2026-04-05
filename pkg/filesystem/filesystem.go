@@ -110,10 +110,10 @@ func SaveFile(filename, content string) error {
 	err := os.WriteFile(filename, normalized, 0644)
 	if err != nil {
 		fmt.Printf("   [FAIL] Failed to write file: %v\n", err)
-	} else {
-		fmt.Print("   [OK] File written successfully\n")
+		return fmt.Errorf("write file %s: %w", filename, err)
 	}
-	return err
+	fmt.Print("   [OK] File written successfully\n")
+	return nil
 }
 
 // ReadFile reads the content of a file.
@@ -179,7 +179,7 @@ func SafeResolvePath(filePath string) (string, error) {
 // can be enabled via context when user has explicitly approved the operation.
 func SafeResolvePathWithBypass(ctx context.Context, filePath string) (string, error) {
 	if filePath == "" {
-		return "", errors.New("empty file path provided")
+		return "", fmt.Errorf("empty file path provided")
 	}
 
 	// Clean the path
@@ -278,7 +278,7 @@ func SafeResolvePathForWrite(filePath string) (string, error) {
 // Returns the absolute path if it's safe to write, or an error otherwise.
 func SafeResolvePathForWriteWithBypass(ctx context.Context, filePath string) (string, error) {
 	if filePath == "" {
-		return "", errors.New("empty file path provided")
+		return "", fmt.Errorf("empty file path provided")
 	}
 
 	// Clean the path

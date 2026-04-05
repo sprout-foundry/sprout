@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/alantheprice/ledit/pkg/configuration"
@@ -34,7 +33,7 @@ func handleSelfReview(ctx context.Context, a *Agent, args map[string]interface{}
 			return "", fmt.Errorf("failed to get revision history: %w", err)
 		}
 		if len(revisionGroups) == 0 {
-			return "", errors.New("no changes found - agent must make changes and commit them before reviewing")
+			return "", fmt.Errorf("no changes found - agent must make changes and commit them before reviewing")
 		}
 		revisionID = revisionGroups[0].RevisionID
 	}

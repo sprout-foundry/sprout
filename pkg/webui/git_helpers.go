@@ -143,7 +143,7 @@ func (ws *ReactWebServer) gitDiffAllowExitOneForWorkspace(workspaceRoot string, 
 			return string(output), nil
 		}
 	}
-	return "", err
+	return "", fmt.Errorf("git diff: %w: %s", err, strings.TrimSpace(string(output)))
 }
 
 func truncateDiffOutput(diff string, maxBytes int) string {
@@ -161,7 +161,7 @@ func gitOutputStringForWorkspace(ws *ReactWebServer, workspaceRoot string, args 
 	cmd := ws.gitCommandForWorkspace(workspaceRoot, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("%w: %s", err, strings.TrimSpace(string(output)))
+		return "", fmt.Errorf("git diff: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 	return strings.TrimSpace(string(output)), nil
 }

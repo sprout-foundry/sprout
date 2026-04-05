@@ -254,7 +254,7 @@ func (c *CommitCommand) printStatus(chatAgent *agent.Agent) error {
 	validStatusLines, err := getPorcelainStatusLines()
 	if err != nil {
 		chatAgent.PrintLine("Failed to get git status")
-		return err
+		return fmt.Errorf("printStatus: %w", err)
 	}
 	// Print the current git status
 	chatAgent.PrintLine("[chart] Current git status:")
@@ -269,27 +269,27 @@ func (c *CommitCommand) printStatus(chatAgent *agent.Agent) error {
 // executeMultiFileCommit handles the original multi-file commit workflow
 func (c *CommitCommand) executeMultiFileCommit(chatAgent *agent.Agent) error {
 	if ok, err := c.checkForAnyChanges(chatAgent); !ok {
-		return err
+		return fmt.Errorf("executeMultiFileCommit: check changes: %w", err)
 	}
 	reader := bufio.NewReader(os.Stdin)
 
 	// Step 1: Check for staged files first
 	staged, err := getStagedFiles()
 	if err != nil {
-		return err
+		return fmt.Errorf("executeMultiFileCommit: get staged files: %w", err)
 	}
 	if len(staged) == 0 {
 		chatAgent.PrintLine("[OK] No staged files found")
 		staged, err = c.selectAndStageFiles(chatAgent, reader)
 		if err != nil {
-			return err
+			return fmt.Errorf("executeMultiFileCommit: select and stage files: %w", err)
 		}
 	} else {
 		chatAgent.PrintLine(fmt.Sprintf("[pkg] Found %d staged file(s):", len(staged)))
 	}
 
 	if err := c.printStatus(chatAgent); err != nil {
-		return err
+		return fmt.Errorf("executeMultiFileCommit: print status: %w", err)
 	}
 
 	if len(staged) == 0 {

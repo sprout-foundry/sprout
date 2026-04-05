@@ -256,7 +256,7 @@ func parseStructuredJSONContent(content string, callerTool string) (interface{},
 	case map[string]interface{}, []interface{}:
 		return parsed, nil
 	default:
-		return nil, errors.New("top-level JSON must be an object or array")
+		return nil, fmt.Errorf("top-level JSON must be an object or array")
 	}
 }
 
@@ -519,7 +519,7 @@ func getFilePath(args map[string]interface{}) (string, error) {
 	if filePath, exists := args["file_path"]; exists {
 		return convertToString(filePath, "file_path")
 	}
-	return "", errors.New("parameter 'path' is required")
+	return "", fmt.Errorf("parameter 'path' is required")
 }
 
 // getRequiredString extracts a required string parameter

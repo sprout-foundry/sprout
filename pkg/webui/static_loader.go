@@ -2,7 +2,7 @@ package webui
 
 import (
 	"embed"
-	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -53,7 +53,7 @@ func readStaticFile(name string) ([]byte, error) {
 	// filesystem fallback with the same constraints the HTTP handlers
 	// already enforce.
 	if name == "" || strings.Contains(name, "..") || strings.HasPrefix(name, "/") || strings.HasPrefix(name, "\\") {
-		return nil, errors.New("static asset: invalid path")
+		return nil, fmt.Errorf("static asset: invalid path")
 	}
 
 	// Try embedded files first (baked into the binary).
@@ -82,7 +82,7 @@ func readStaticFile(name string) ([]byte, error) {
 	// Hashed bundles live under webui/build/static/{name}.
 	data, err = os.ReadFile(filepath.Join(root, "webui", "build", "static", name))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read static file %q: %w", name, err)
 	}
 	return data, nil
 }

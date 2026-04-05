@@ -3,7 +3,6 @@ package console
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -80,7 +79,7 @@ func SavePastedImage(data []byte, baseDir string) (string, error) {
 
 	ext, _ := DetectImageMagic(data)
 	if ext == "" {
-		return "", errors.New("cannot determine image format for saved file")
+		return "", fmt.Errorf("cannot determine image format for saved file")
 	}
 
 	cwd := baseDir

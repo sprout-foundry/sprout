@@ -3,7 +3,6 @@ package webui
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -93,7 +92,7 @@ func (m *fileConsentManager) clearAll() {
 func canonicalizePath(path string, workspaceRoot string, forWrite bool) (string, error) {
 	trimmed := strings.TrimSpace(path)
 	if trimmed == "" {
-		return "", errors.New("path is required")
+		return "", fmt.Errorf("path is required")
 	}
 
 	cleaned := filepath.Clean(trimmed)
@@ -212,21 +211,21 @@ func resolveConfigDir() (string, error) {
 	if d := strings.TrimSpace(os.Getenv("LEDIT_CONFIG")); d != "" {
 		abs, err := filepath.Abs(d)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("resolve LEDIT_CONFIG path: %w", err)
 		}
 		return abs, nil
 	}
 
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("get user home directory: %w", err)
 	}
 
 	configHome := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME"))
 	if configHome != "" {
 		abs, err := filepath.Abs(configHome)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("resolve XDG_CONFIG_HOME path: %w", err)
 		}
 		return filepath.Join(abs, "ledit"), nil
 	}

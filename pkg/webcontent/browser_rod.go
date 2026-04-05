@@ -5,7 +5,6 @@ package webcontent
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -151,7 +150,7 @@ func (r *rodRenderer) connect(ctx context.Context) (*rod.Browser, error) {
 	defer r.mu.Unlock()
 
 	if r.closed {
-		return nil, errors.New("browser renderer has been closed")
+		return nil, fmt.Errorf("browser renderer has been closed")
 	}
 	if r.browser != nil {
 		return r.browser, nil
@@ -240,7 +239,7 @@ func (r *rodRenderer) acquireSession(ctx context.Context, requestedID string) (*
 
 	incognito, page, err := r.openIncognitoPage(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open page: %w", err)
 	}
 	session := &browserSession{
 		id:        sessionID,
@@ -362,7 +361,7 @@ func (r *rodRenderer) Screenshot(ctx context.Context, url string, outputPath str
 
 	incognito, page, err := r.openIncognitoPage(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("screenshot: open incognito page: %w", err)
 	}
 	defer func() {
 		_ = page.Close()
@@ -370,7 +369,7 @@ func (r *rodRenderer) Screenshot(ctx context.Context, url string, outputPath str
 	}()
 
 	if err := applyViewportAndUA(page, viewportWidth, viewportHeight, userAgent); err != nil {
-		return err
+		return fmt.Errorf("screenshot: apply viewport and UA: %w", err)
 	}
 
 	if err := page.Navigate(url); err != nil {
@@ -452,7 +451,7 @@ func (r *rodRenderer) Run(ctx context.Context, url string, opts BrowseOptions) (
 	if persistentSession {
 		session, err := r.acquireSession(ctx, opts.SessionID)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("execute step navigate: %w", err)
 		}
 		page = session.page
 		sessionID = session.id
@@ -466,7 +465,7 @@ func (r *rodRenderer) Run(ctx context.Context, url string, opts BrowseOptions) (
 	} else {
 		incognito, tempPage, err := r.openIncognitoPage(ctx)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("execute step back: %w", err)
 		}
 		page = tempPage
 		cleanup = func() {
@@ -477,7 +476,7 @@ func (r *rodRenderer) Run(ctx context.Context, url string, opts BrowseOptions) (
 	defer cleanup()
 
 	if err := applyViewportAndUA(page, opts.ViewportWidth, opts.ViewportHeight, opts.UserAgent); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("execute step reload: %w", err)
 	}
 
 	var removeInstrumentation func() error
@@ -502,14 +501,14 @@ func (r *rodRenderer) Run(ctx context.Context, url string, opts BrowseOptions) (
 	}
 
 	if err := waitForSelectorIfNeeded(page, opts.WaitForSelector, opts.WaitTimeoutMs); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("execute step wait_for: %w", err)
 	}
 
 	result := &BrowseResult{SessionID: sessionID}
 
 	for _, step := range opts.Steps {
 		if err := executeBrowseStep(page, step, opts.WaitTimeoutMs, result); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("execute step click via JS: %w", err)
 		}
 	}
 
@@ -525,7 +524,7 @@ func (r *rodRenderer) Run(ctx context.Context, url string, opts BrowseOptions) (
 
 	if opts.ScreenshotPath != "" {
 		if err := r.captureCurrentPageScreenshot(page, opts.ScreenshotPath); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("execute step select option: %w", err)
 		}
 		result.ScreenshotPath = opts.ScreenshotPath
 	}
@@ -533,7 +532,7 @@ func (r *rodRenderer) Run(ctx context.Context, url string, opts BrowseOptions) (
 	if len(opts.CaptureSelectors) > 0 {
 		captures, err := captureSelectors(page, opts.CaptureSelectors, opts.ResponseMaxChars)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("execute step screenshot: %w", err)
 		}
 		result.SelectorCaptures = captures
 	}
@@ -557,7 +556,7 @@ func (r *rodRenderer) Run(ctx context.Context, url string, opts BrowseOptions) (
 	if opts.IncludeConsole || opts.CaptureNetwork {
 		consoleMessages, pageErrors, networkRequests, err := captureBrowserDiagnostics(page)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("execute step assert_text: %w", err)
 		}
 		if opts.IncludeConsole {
 			result.ConsoleMessages = truncateStringSlice(consoleMessages, 40, textLimit(opts.ResponseMaxChars))
@@ -582,18 +581,18 @@ func (r *rodRenderer) Run(ctx context.Context, url string, opts BrowseOptions) (
 			return out;
 		}`)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("execute step assert_title: %w", err)
 		}
 		result.Cookies = cookies
 	}
 	if opts.CaptureStorage {
 		localStorage, err := captureStorageMap(page, `() => Object.fromEntries(Object.entries(localStorage))`)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("execute step assert_url: %w", err)
 		}
 		sessionStorage, err := captureStorageMap(page, `() => Object.fromEntries(Object.entries(sessionStorage))`)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("execute step eval: %w", err)
 		}
 		result.LocalStorage = localStorage
 		result.SessionStorage = sessionStorage
@@ -633,7 +632,7 @@ func executeBrowseStep(page *rod.Page, step BrowseStep, timeoutMs int, result *B
 	switch action {
 	case "wait_for":
 		if strings.TrimSpace(step.Selector) == "" {
-			return errors.New("browse step wait_for requires selector")
+			return fmt.Errorf("browse step wait_for requires selector")
 		}
 		if _, err := page.Timeout(timeout).Element(step.Selector); err != nil {
 			return fmt.Errorf("wait_for %q: %w", step.Selector, err)
@@ -643,7 +642,7 @@ func executeBrowseStep(page *rod.Page, step BrowseStep, timeoutMs int, result *B
 	case "click":
 		el, err := requireElement(page, step.Selector, timeout)
 		if err != nil {
-			return err
+			return fmt.Errorf("requireElement for click: %w", err)
 		}
 		if err := el.Click(proto.InputMouseButtonLeft, 1); err != nil {
 			return fmt.Errorf("click %q: %w", step.Selector, err)
@@ -654,7 +653,7 @@ func executeBrowseStep(page *rod.Page, step BrowseStep, timeoutMs int, result *B
 	case "hover":
 		el, err := requireElement(page, step.Selector, timeout)
 		if err != nil {
-			return err
+			return fmt.Errorf("requireElement for hover: %w", err)
 		}
 		if err := el.Hover(); err != nil {
 			return fmt.Errorf("hover %q: %w", step.Selector, err)
@@ -664,7 +663,7 @@ func executeBrowseStep(page *rod.Page, step BrowseStep, timeoutMs int, result *B
 	case "type":
 		el, err := requireElement(page, step.Selector, timeout)
 		if err != nil {
-			return err
+			return fmt.Errorf("requireElement for type: %w", err)
 		}
 		if err := el.Input(step.Value); err != nil {
 			return fmt.Errorf("type into %q: %w", step.Selector, err)
@@ -675,7 +674,7 @@ func executeBrowseStep(page *rod.Page, step BrowseStep, timeoutMs int, result *B
 	case "fill":
 		el, err := requireElement(page, step.Selector, timeout)
 		if err != nil {
-			return err
+			return fmt.Errorf("requireElement for fill: %w", err)
 		}
 		if _, err := el.Eval(`value => {
 			this.focus();
@@ -691,19 +690,19 @@ func executeBrowseStep(page *rod.Page, step BrowseStep, timeoutMs int, result *B
 		return nil
 	case "press":
 		if strings.TrimSpace(step.Key) == "" {
-			return errors.New("browse step press requires key")
+			return fmt.Errorf("browse step press requires key")
 		}
 		if strings.TrimSpace(step.Selector) != "" {
 			el, err := requireElement(page, step.Selector, timeout)
 			if err != nil {
-				return err
+				return fmt.Errorf("requireElement for press focus: %w", err)
 			}
 			if _, err := el.Eval(`() => { this.focus(); return true; }`); err != nil {
 				return fmt.Errorf("focus %q before keypress: %w", step.Selector, err)
 			}
 		}
 		if err := pressPageKey(page, step.Key); err != nil {
-			return err
+			return fmt.Errorf("pressPageKey: %w", err)
 		}
 		_ = page.WaitStable(stableDuration)
 		record(fmt.Sprintf("press %s", step.Key))
@@ -724,7 +723,7 @@ func executeBrowseStep(page *rod.Page, step BrowseStep, timeoutMs int, result *B
 		if strings.TrimSpace(step.Selector) != "" {
 			el, err := requireElement(page, step.Selector, timeout)
 			if err != nil {
-				return err
+				return fmt.Errorf("requireElement for scroll_to: %w", err)
 			}
 			if _, err := el.Eval(`() => { this.scrollIntoView({ block: 'center', inline: 'nearest' }); return true; }`); err != nil {
 				return fmt.Errorf("scroll_to %q: %w", step.Selector, err)
@@ -740,7 +739,7 @@ func executeBrowseStep(page *rod.Page, step BrowseStep, timeoutMs int, result *B
 	case "navigate":
 		target := strings.TrimSpace(step.Value)
 		if target == "" {
-			return errors.New("browse step navigate requires value URL")
+			return fmt.Errorf("browse step navigate requires value URL")
 		}
 		if err := page.Navigate(target); err != nil {
 			return fmt.Errorf("navigate to %q: %w", target, err)
@@ -780,7 +779,7 @@ func executeBrowseStep(page *rod.Page, step BrowseStep, timeoutMs int, result *B
 	case "assert_selector":
 		el, err := requireElement(page, step.Selector, timeout)
 		if err != nil {
-			return err
+			return fmt.Errorf("requireElement for assert_selector: %w", err)
 		}
 		if expect := strings.TrimSpace(step.Expect); expect != "" {
 			text, _ := el.Text()
@@ -797,7 +796,7 @@ func executeBrowseStep(page *rod.Page, step BrowseStep, timeoutMs int, result *B
 			expected = strings.TrimSpace(step.Value)
 		}
 		if expected == "" {
-			return errors.New("browse step assert_text requires expect or value")
+			return fmt.Errorf("browse step assert_text requires expect or value")
 		}
 		bodyText, err := evalToJSONString(page, `() => (document.body && (document.body.innerText || document.body.textContent)) || ''`)
 		if err != nil {
@@ -814,7 +813,7 @@ func executeBrowseStep(page *rod.Page, step BrowseStep, timeoutMs int, result *B
 			expected = strings.TrimSpace(step.Value)
 		}
 		if expected == "" {
-			return errors.New("browse step assert_title requires expect or value")
+			return fmt.Errorf("browse step assert_title requires expect or value")
 		}
 		info, err := page.Info()
 		if err != nil {
@@ -831,7 +830,7 @@ func executeBrowseStep(page *rod.Page, step BrowseStep, timeoutMs int, result *B
 			expected = strings.TrimSpace(step.Value)
 		}
 		if expected == "" {
-			return errors.New("browse step assert_url requires expect or value")
+			return fmt.Errorf("browse step assert_url requires expect or value")
 		}
 		info, err := page.Info()
 		if err != nil {
@@ -848,12 +847,12 @@ func executeBrowseStep(page *rod.Page, step BrowseStep, timeoutMs int, result *B
 			expected = strings.TrimSpace(step.Value)
 		}
 		if expected == "" {
-			return errors.New("browse step wait_for_text requires expect or value")
+			return fmt.Errorf("browse step wait_for_text requires expect or value")
 		}
 		if strings.TrimSpace(step.Selector) != "" {
 			el, err := requireElement(page, step.Selector, timeout)
 			if err != nil {
-				return err
+				return fmt.Errorf("requireElement for wait_for_text: %w", err)
 			}
 			if err := el.Wait(rod.Eval(`expected => (this.innerText || this.textContent || '').includes(expected)`, expected)); err != nil {
 				return fmt.Errorf("wait_for_text on %q expecting %q: %w", step.Selector, expected, err)
@@ -867,7 +866,7 @@ func executeBrowseStep(page *rod.Page, step BrowseStep, timeoutMs int, result *B
 		return nil
 	case "eval":
 		if strings.TrimSpace(step.Script) == "" {
-			return errors.New("browse step eval requires script")
+			return fmt.Errorf("browse step eval requires script")
 		}
 		value, err := evalToJSONString(page, step.Script)
 		evalResult := EvalResult{Script: step.Script}
@@ -892,7 +891,7 @@ func executeBrowseStep(page *rod.Page, step BrowseStep, timeoutMs int, result *B
 func requireElement(page *rod.Page, selector string, timeout time.Duration) (*rod.Element, error) {
 	selector = strings.TrimSpace(selector)
 	if selector == "" {
-		return nil, errors.New("selector is required")
+		return nil, fmt.Errorf("selector is required")
 	}
 	el, err := page.Timeout(timeout).Element(selector)
 	if err != nil {
@@ -904,7 +903,7 @@ func requireElement(page *rod.Page, selector string, timeout time.Duration) (*ro
 func pressPageKey(page *rod.Page, raw string) error {
 	key, err := lookupInputKey(raw)
 	if err != nil {
-		return err
+		return fmt.Errorf("lookup input key: %w", err)
 	}
 	if err := page.Keyboard.Press(key); err != nil {
 		return fmt.Errorf("press key %q: %w", raw, err)

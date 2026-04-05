@@ -29,7 +29,16 @@ func (ws *ReactWebServer) handleAPIProviders(w http.ResponseWriter, r *http.Requ
 	providers := ws.listProviders(clientID)
 	currentProvider := ""
 	currentModel := ""
-	if agentInst, err := ws.getClientAgent(clientID); err == nil && agentInst != nil {
+
+	// Resolve the active chat ID to get the session-scoped provider/model.
+	activeChatID := ""
+	ws.mutex.RLock()
+	if ctx := ws.clientContexts[clientID]; ctx != nil {
+		activeChatID = ctx.getActiveChatID()
+	}
+	ws.mutex.RUnlock()
+
+	if agentInst, err := ws.getChatAgent(clientID, activeChatID); err == nil && agentInst != nil {
 		currentProvider = strings.TrimSpace(agentInst.GetProvider())
 		currentModel = strings.TrimSpace(agentInst.GetModel())
 	}

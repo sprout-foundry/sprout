@@ -15,7 +15,7 @@
 [x] - WEBUI: Missing costs and token counting in the status tab of the webui chat.
 [x] - WEBUI: In the status tab of the webui chat, the duration is not accurate. It appears to anchor to the first time the tab is opened and never progresses
 [X] - WEBUI: Selecting subagents providers and models doesn't work in the ui.
-[] - Provider and model selection should be scoped to the session so if it changes it doesn't affect all agents and just sets the last used provider / model in the config if possible, but fail cleanly if it can't update the config. (RATING note: ChatSession interface has no provider/model fields, perChatCache doesn't save/restore provider/model — provider/model remain global AppState)
+[x] - Provider and model selection should be scoped to the session so if it changes it doesn't affect all agents and just sets the last used provider / model in the config if possible, but fail cleanly if it can't update the config. (RATING note: ChatSession interface has no provider/model fields, perChatCache doesn't save/restore provider/model — provider/model remain global AppState)
 [x] - WEBUI: the git view is not auto-updating as expected when files are edited, deleted, or renamed.
 [x] - WEBUI: Queued prompts need to be able to be modified.
 [x] - WEBUI: prompt history is not preserved past a refresh of the browser (pressing up arrow to scroll through history). It should be using the same history mechanism as the terminal cli so not sure why the behavior is different

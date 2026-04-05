@@ -550,7 +550,7 @@ func TestRegistryThreadSafety(t *testing.T) {
 				tool := NewSimpleStubTool(fmt.Sprintf("tool_%d", idx), CategoryFile)
 				err := registry.RegisterTool(tool)
 				if err != nil {
-					errChan <- fmt.Errorf("goroutine %d register error: %v", idx, err)
+					errChan <- fmt.Errorf("goroutine %d register error: %w", idx, err)
 				}
 			}(i)
 		}

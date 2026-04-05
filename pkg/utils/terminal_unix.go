@@ -73,7 +73,7 @@ func getTerminalSizeIOCTL() (*TerminalSize, error) {
 
 		// Continue trying other file descriptors
 		if errno != 0 && fd == fds[len(fds)-1] {
-			return nil, errno
+			return nil, fmt.Errorf("failed to get terminal size via ioctl: %w", errno)
 		}
 	}
 
@@ -85,23 +85,23 @@ func getTerminalSizeTput() (*TerminalSize, error) {
 	widthCmd := exec.Command("tput", "cols")
 	widthOut, err := widthCmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("get terminal size from fd: %w", err)
+		return nil, fmt.Errorf("tput cols command failed: %w", err)
 	}
 
 	heightCmd := exec.Command("tput", "lines")
 	heightOut, err := heightCmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("get terminal size from fd: %w", err)
+		return nil, fmt.Errorf("tput lines command failed: %w", err)
 	}
 
 	width, err := strconv.Atoi(strings.TrimSpace(string(widthOut)))
 	if err != nil {
-		return nil, fmt.Errorf("get terminal size stty: %w", err)
+		return nil, fmt.Errorf("failed to parse terminal width from tput output: %w", err)
 	}
 
 	height, err := strconv.Atoi(strings.TrimSpace(string(heightOut)))
 	if err != nil {
-		return nil, fmt.Errorf("get terminal size tput cols: %w", err)
+		return nil, fmt.Errorf("failed to parse terminal height from tput output: %w", err)
 	}
 
 	if width <= 0 || height <= 0 {
@@ -120,7 +120,7 @@ func getTerminalSizeStty() (*TerminalSize, error) {
 	cmd.Stdin = os.Stdin
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("get terminal size tput lines: %w", err)
+		return nil, fmt.Errorf("stty command failed: %w", err)
 	}
 
 	parts := strings.Fields(string(out))
@@ -130,12 +130,12 @@ func getTerminalSizeStty() (*TerminalSize, error) {
 
 	height, err := strconv.Atoi(parts[0])
 	if err != nil {
-		return nil, fmt.Errorf("get terminal size fallback: %w", err)
+		return nil, fmt.Errorf("failed to parse stty height value: %w", err)
 	}
 
 	width, err := strconv.Atoi(parts[1])
 	if err != nil {
-		return nil, fmt.Errorf("get terminal size env fallback: %w", err)
+		return nil, fmt.Errorf("failed to parse stty width value: %w", err)
 	}
 
 	if width <= 0 || height <= 0 {

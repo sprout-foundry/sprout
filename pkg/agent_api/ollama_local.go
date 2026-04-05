@@ -94,7 +94,7 @@ func ensureModelAvailable(ctx context.Context, client ollamaClient, model string
 		}
 	}
 
-	return fmt.Errorf("model %s not found locally. Available models: %v", model, availableModels)
+	return fmt.Errorf("model %s not found locally. Available models: %s", model, availableModels)
 }
 
 func newOllamaLocalClientWithFactory(model string, factory ollamaClientFactory) (*OllamaLocalClient, error) {
@@ -145,7 +145,7 @@ func newOllamaLocalClientWithFactory(model string, factory ollamaClientFactory) 
 			fmt.Fprintf(os.Stderr, "[~] Falling back to first available model: %s\n", listResp.Models[0].Name)
 			model = listResp.Models[0].Name
 		} else {
-			return nil, fmt.Errorf("model %s not found locally and no other models available. Available models: %v", model, availableModels)
+			return nil, fmt.Errorf("model %s not found locally and no other models available. Available models: %s", model, availableModels)
 		}
 	}
 
@@ -429,7 +429,10 @@ func (c *OllamaLocalClient) CheckConnection() error {
 	defer cancel()
 
 	_, err = client.List(ctx)
-	return err
+	if err != nil {
+		return fmt.Errorf("ollama connection check failed: %w", err)
+	}
+	return nil
 }
 
 // GetModelContextLimit returns the context limit for the model
@@ -485,7 +488,7 @@ func (c *OllamaLocalClient) SetModel(model string) error {
 		return nil
 	}
 
-	return fmt.Errorf("model %s not found locally and no other models available. Available models: %v", model, availableModels)
+	return fmt.Errorf("model %s not found locally and no other models available. Available models: %s", model, availableModels)
 }
 
 // ListModels returns available local models
@@ -555,7 +558,7 @@ func (c *OllamaLocalClient) SendChatRequestStream(messages []Message, tools []To
 	err = client.Chat(ctx, req, func(res ollama.ChatResponse) error {
 		chunk := convertOllamaResponseToStreamingChunk(res)
 		if err := builder.ProcessChunk(chunk); err != nil {
-			return err
+			return fmt.Errorf("failed to process ollama chat chunk: %w", err)
 		}
 
 		if res.DoneReason != "" {

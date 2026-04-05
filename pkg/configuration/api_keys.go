@@ -92,7 +92,7 @@ func GetAPIKeysPath() (string, error) {
 func LoadAPIKeys() (*APIKeys, error) {
 	store, err := credentials.Load()
 	if err != nil {
-		return nil, fmt.Errorf("create API keys directory: %w", err)
+		return nil, fmt.Errorf("load API keys: %w", err)
 	}
 	keys := APIKeys(store)
 	return &keys, nil

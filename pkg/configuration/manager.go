@@ -399,15 +399,15 @@ func mergeConfigChanges(base, current, latest *Config) (*Config, error) {
 
 	baseMap, err := configToMap(base)
 	if err != nil {
-		return nil, fmt.Errorf("get model for provider: %w", err)
+		return nil, fmt.Errorf("convert base config to map: %w", err)
 	}
 	currentMap, err := configToMap(current)
 	if err != nil {
-		return nil, fmt.Errorf("get model for provider: %w", err)
+		return nil, fmt.Errorf("convert current config to map: %w", err)
 	}
 	latestMap, err := configToMap(latest)
 	if err != nil {
-		return nil, fmt.Errorf("get model for provider: %w", err)
+		return nil, fmt.Errorf("convert latest config to map: %w", err)
 	}
 
 	// Apply changes: start from latest, then merge in current changes
@@ -422,11 +422,11 @@ func configToMap(cfg *Config) (map[string]interface{}, error) {
 	}
 	data, err := json.Marshal(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("get system prompt: %w", err)
+		return nil, fmt.Errorf("marshal config to JSON: %w", err)
 	}
 	var out map[string]interface{}
 	if err := json.Unmarshal(data, &out); err != nil {
-		return nil, fmt.Errorf("get system prompt: %w", err)
+		return nil, fmt.Errorf("unmarshal JSON to config map: %w", err)
 	}
 	return out, nil
 }
@@ -434,11 +434,11 @@ func configToMap(cfg *Config) (map[string]interface{}, error) {
 func mapToConfig(m map[string]interface{}) (*Config, error) {
 	data, err := json.Marshal(m)
 	if err != nil {
-		return nil, fmt.Errorf("get system prompt: %w", err)
+		return nil, fmt.Errorf("marshal config map to JSON: %w", err)
 	}
 	var out Config
 	if err := json.Unmarshal(data, &out); err != nil {
-		return nil, fmt.Errorf("get system prompt: %w", err)
+		return nil, fmt.Errorf("unmarshal JSON to config: %w", err)
 	}
 
 	// Keep canonical zero-value protections that Load() applies.

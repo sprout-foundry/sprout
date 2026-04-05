@@ -346,7 +346,7 @@ except Exception as e:
 
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("pypdfium2 page render failed: %s", strings.TrimSpace(string(output)))
+		return nil, fmt.Errorf("pypdfium2 page render failed: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 
 	return decodeBase64ImagePayload(output), nil
@@ -407,7 +407,7 @@ except Exception as e:
 
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("pypdf image extraction failed: %s", string(output))
+		return nil, fmt.Errorf("pypdf image extraction failed: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 
 	return decodeBase64ImagePayload(output), nil

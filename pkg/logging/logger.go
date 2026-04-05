@@ -18,7 +18,7 @@ func NewLogger() (*Logger, error) {
 	logger := &Logger{}
 	err := logger.init()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to initialize logger: %w", err)
 	}
 	return logger, nil
 }

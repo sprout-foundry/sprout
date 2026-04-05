@@ -258,7 +258,7 @@ func CreateOllamaClient(model string) (api.ClientInterface, error) {
 	model = EnsureOllamaModelTag(model)
 	client, err := factory.CreateProviderClient(api.OllamaClientType, model)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create Ollama client: %w", err)
 	}
 	return client, nil
 }
@@ -588,7 +588,7 @@ func (vp *VisionProcessor) DownloadImage(url string) ([]byte, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Get(url)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to download image: %w", err)
 	}
 	defer resp.Body.Close()
 

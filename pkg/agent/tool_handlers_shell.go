@@ -22,7 +22,7 @@ type configManagerInterface interface {
 func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	command, err := convertToString(args["command"], "command")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to convert command parameter: %w", err)
 	}
 
 	// Block git write operations unless the orchestrator persona has permission.
@@ -45,7 +45,7 @@ func handleGitOperation(ctx context.Context, a *Agent, args map[string]interface
 	// Extract operation parameter
 	operationParam, err := convertToString(args["operation"], "operation")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to convert operation parameter: %w", err)
 	}
 
 	// Parse and validate the operation type
@@ -64,7 +64,7 @@ func handleGitOperation(ctx context.Context, a *Agent, args map[string]interface
 		var err error
 		argsStr, err = convertToString(argsParam, "args")
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("failed to convert args parameter: %w", err)
 		}
 	}
 
@@ -83,7 +83,7 @@ func handleGitOperation(ctx context.Context, a *Agent, args map[string]interface
 	}, "", nil, approvalPrompter)
 
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to execute git operation %s: %w", operation, err)
 	}
 
 	return result, nil
@@ -171,7 +171,7 @@ func handleCommitTool(_ context.Context, a *Agent, args map[string]interface{}) 
 		var err error
 		message, err = convertToString(msg, "message")
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("failed to convert message parameter: %w", err)
 		}
 	}
 
@@ -212,7 +212,7 @@ func handleCommitTool(_ context.Context, a *Agent, args map[string]interface{}) 
 	// Execute the commit using the shared helper function
 	commitHash, err := executeCommit(message, configManager)
 	if err != nil {
-		return "", fmt.Errorf("commit failed: %w", err)
+		return "", fmt.Errorf("failed to execute commit: %w", err)
 	}
 
 	return fmt.Sprintf("Committed successfully: %s", commitHash), nil

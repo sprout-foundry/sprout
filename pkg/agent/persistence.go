@@ -87,11 +87,11 @@ func workingDirectoryScopeHash(workingDir string) string {
 func buildScopedSessionFilePath(stateDir, sessionID, workingDir string) (string, error) {
 	cleanSessionID, err := normalizeSessionID(sessionID)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to normalize session ID: %w", err)
 	}
 	cleanWorkingDir, err := normalizeWorkingDirectory(workingDir)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to normalize working directory: %w", err)
 	}
 	scopeHash := workingDirectoryScopeHash(cleanWorkingDir)
 	return filepath.Join(stateDir, scopedSessionsDirName, scopeHash, fmt.Sprintf("%s%s.json", legacySessionPrefix, cleanSessionID)), nil
@@ -100,7 +100,7 @@ func buildScopedSessionFilePath(stateDir, sessionID, workingDir string) (string,
 func buildLegacySessionFilePath(stateDir, sessionID string) (string, error) {
 	cleanSessionID, err := normalizeSessionID(sessionID)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to normalize session ID: %w", err)
 	}
 	return filepath.Join(stateDir, fmt.Sprintf("%s%s.json", legacySessionPrefix, cleanSessionID)), nil
 }
@@ -147,7 +147,7 @@ func resolveSessionStateFile(stateDir, sessionID, workingDir string) (string, er
 
 	candidates, err := listScopedSessionCandidates(stateDir, sessionID)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to list scoped session candidates: %w", err)
 	}
 	if len(candidates) == 1 {
 		return candidates[0], nil
@@ -158,7 +158,7 @@ func resolveSessionStateFile(stateDir, sessionID, workingDir string) (string, er
 
 	legacyPath, err := buildLegacySessionFilePath(stateDir, sessionID)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to build legacy session file path: %w", err)
 	}
 	if _, err := os.Stat(legacyPath); err == nil {
 		return legacyPath, nil

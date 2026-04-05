@@ -106,7 +106,7 @@ func (e *CommitExecutor) ExecuteCommit() (string, error) {
 	// Create commit using secure temp file
 	commitHash, err := e.createCommit(commitMessage)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to create commit: %w", err)
 	}
 
 	return commitHash, nil

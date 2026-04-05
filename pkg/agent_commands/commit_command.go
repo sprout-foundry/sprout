@@ -52,7 +52,7 @@ func editInEditor(initial string) (string, error) {
 	// Create temp file
 	f, err := os.CreateTemp("", "ledit_commit_*.txt")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to create temp file: %w", err)
 	}
 	path := f.Name()
 	_, _ = f.WriteString(initial)
@@ -72,14 +72,14 @@ func editInEditor(initial string) (string, error) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return "", err
+		return "", fmt.Errorf("editor failed: %w", err)
 	}
 
 	// Read back
 	data, err := os.ReadFile(path)
 	_ = os.Remove(path)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to read edited file: %w", err)
 	}
 	return strings.TrimSpace(string(data)), nil
 }

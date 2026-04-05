@@ -214,7 +214,7 @@ func (ws *ReactWebServer) setClientWorkspaceRoot(clientID, path string) (string,
 		return "", fmt.Errorf("stat workspace root: %w", err)
 	}
 	if !info.IsDir() {
-		return "", fmt.Errorf("workspace root must be a directory")
+		return "", fmt.Errorf("workspace root %q must be a directory", workspaceRoot)
 	}
 
 	ws.mutex.Lock()

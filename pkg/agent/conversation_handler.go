@@ -709,7 +709,7 @@ func (ch *ConversationHandler) finalizeConversation() (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("no assistant response found")
+	return "", fmt.Errorf("no assistant response found in %d messages", len(ch.agent.messages))
 }
 
 func (ch *ConversationHandler) maybeCheckpointCompletedTurn() {

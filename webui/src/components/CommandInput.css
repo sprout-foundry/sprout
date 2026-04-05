@@ -611,6 +611,72 @@
   margin-right: 2px;
 }
 
+.hints-button-wrapper {
+  position: absolute;
+  bottom: 8px;
+  right: 12px;
+  z-index: 10;
+}
+
+.hints-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-radius: 4px;
+  opacity: 0.7;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.hints-button:hover {
+  opacity: 1;
+  background: var(--bg-elevated);
+}
+
+.hints-popover {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 12px 16px;
+  min-width: 200px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.hints-popover-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.hints-popover-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.hints-popover-row kbd {
+  background: color-mix(in srgb, var(--bg-secondary) 60%, transparent);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border-default);
+  font-size: 10px;
+  margin-right: 4px;
+}
+
 @media (max-width: 768px) {
   .command-input {
     min-height: 0;
@@ -622,7 +688,8 @@
     padding: 6px 10px 0;
   }
 
-  .keyboard-hints {
+  .keyboard-hints,
+  .hints-button-wrapper {
     display: none;
   }
 

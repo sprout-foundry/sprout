@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -345,7 +346,7 @@ func validateDataAgainstSchema(data interface{}, schema map[string]interface{}, 
 
 func formatStructuredValidationError(toolName string, errs []string, context string) error {
 	if len(errs) == 0 {
-		return fmt.Errorf("schema validation failed: no error details provided")
+		return errors.New("schema validation failed: no error details provided")
 	}
 
 	paths := extractValidationPaths(errs)

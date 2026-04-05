@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/alantheprice/ledit/pkg/agent"
@@ -19,7 +20,7 @@ func (c *ClearCommand) Description() string {
 
 func (c *ClearCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	if chatAgent == nil {
-		return fmt.Errorf("agent not available")
+		return errors.New("agent not available")
 	}
 
 	chatAgent.ClearConversationHistory()

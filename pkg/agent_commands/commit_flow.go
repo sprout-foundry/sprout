@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -288,7 +289,7 @@ func (cf *CommitFlow) singleFileCommit() error {
 		selectedFile = allFiles[0]
 		cf.println(fmt.Sprintf("Auto-selected first file: %s", selectedFile))
 	} else {
-		return fmt.Errorf("no files available for selection")
+		return errors.New("no files available for selection")
 	}
 
 	// Reset staging area and stage only the selected file
@@ -351,7 +352,7 @@ func (cf *CommitFlow) CommitStagedWithMessage() error {
 	}
 
 	if len(strings.TrimSpace(string(stagedOutput))) == 0 {
-		return fmt.Errorf("no staged changes to commit")
+		return errors.New("no staged changes to commit")
 	}
 
 	// Create LLM client if available

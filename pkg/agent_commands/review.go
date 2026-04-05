@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -91,7 +92,7 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 		}
 	} else {
 		logger.LogUserInteraction(fmt.Sprintf("No staged changes found. Please stage your changes before running '/%s'.", commandName))
-		return fmt.Errorf("no staged changes found")
+		return errors.New("no staged changes found")
 	}
 
 	// Get the diff of staged changes
@@ -105,7 +106,7 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 
 	if strings.TrimSpace(stagedDiff) == "" {
 		logger.LogUserInteraction("No actual diff content found in staged changes. Nothing to review.")
-		return fmt.Errorf("no diff content found")
+		return errors.New("no diff content found")
 	}
 
 	logger.LogProcessStep(fmt.Sprintf("Retrieved staged diff (%d bytes)", len(stagedDiff)))
@@ -141,7 +142,7 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 	}
 	if agentClient == nil {
 		logger.LogError(fmt.Errorf("failed to get default agent client"))
-		return fmt.Errorf("agent client initialization failed")
+		return errors.New("agent client initialization failed")
 	}
 
 	reviewCtx := &codereview.ReviewContext{

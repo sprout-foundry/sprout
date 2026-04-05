@@ -398,7 +398,7 @@ func (ir *InputReader) fallbackReadLine() (string, error) {
 	fmt.Print(ir.prompt)
 	var input string
 	_, err := fmt.Scanln(&input)
-	return input, err
+	return input, fmt.Errorf("failed to read fallback input: %w", err)
 }
 
 // HandleEvent processes an input event

@@ -23,7 +23,7 @@ func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 	// Get file path - supports both "path" (new) and "file_path" (legacy)
 	path, err := getFilePath(args)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get file path: %w", err)
 	}
 
 	// Parse view_range (Claude Code style: [start, end])
@@ -78,7 +78,10 @@ func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 		a.AddTaskAction("file_read", fmt.Sprintf("Read file: %s", path), path)
 	}
 
-	return result, err
+	if err != nil {
+		return "", fmt.Errorf("failed to read file %s: %w", path, err)
+	}
+	return result, nil
 }
 
 // isImageExtension returns true for common image file extensions
@@ -103,7 +106,7 @@ func isPDFExtension(filePath string) bool {
 func handleReadFileWithImages(ctx context.Context, a *Agent, args map[string]interface{}) ([]api.ImageData, string, error) {
 	path, err := getFilePath(args)
 	if err != nil {
-		return nil, "", err
+		return nil, "", fmt.Errorf("failed to get file path: %w", err)
 	}
 
 	// Handle PDFs — either via multimodal pipeline or OCR text extraction
@@ -223,12 +226,12 @@ func preparePDFTextResult(filePath, text string) string {
 func handleWriteFile(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	path, err := getFilePath(args)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get file path: %w", err)
 	}
 
 	content, err := getRequiredString(args, "content")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get content parameter: %w", err)
 	}
 
 	// JSON writes are transparently routed through structured serialization/validation.
@@ -336,7 +339,7 @@ func snippetAtLine(content string, line int) string {
 func writeFileContent(ctx context.Context, a *Agent, path, content, toolName string, allowStructured bool) (string, error) {
 	if !allowStructured {
 		if err := disallowRawStructuredWrite(path, toolName); err != nil {
-			return "", err
+			return "", fmt.Errorf("failed to validate structured write: %w", err)
 		}
 	}
 
@@ -390,23 +393,23 @@ func writeFileContent(ctx context.Context, a *Agent, path, content, toolName str
 		a.validator.RunAsyncValidation(ctx, path, content)
 	}
 
-	return result, err
+	return result, fmt.Errorf("failed to write file %s: %w", path, err)
 }
 
 func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	path, err := getFilePath(args)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get file path: %w", err)
 	}
 
 	oldStr, err := getRequiredString(args, "old_str")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get old_str parameter: %w", err)
 	}
 
 	newStr, err := getRequiredString(args, "new_str")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get new_str parameter: %w", err)
 	}
 
 	if warning := validateJSONContent(newStr, path); warning != "" {
@@ -506,7 +509,7 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 		}
 	}
 
-	return result, err
+	return result, fmt.Errorf("failed to edit file %s: %w", path, err)
 }
 
 // Helper functions for file handlers

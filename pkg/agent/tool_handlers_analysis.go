@@ -61,7 +61,7 @@ func handleAnalyzeUIScreenshot(ctx context.Context, a *Agent, args map[string]in
 		a.debugLog("HTML content detected, rendering via headless browser: %s\n", imagePath)
 		screenshotPath, err := renderHTMLContent(ctx, a, imagePath, viewportWidth, viewportHeight)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("failed to render HTML content: %w", err)
 		}
 		defer os.Remove(screenshotPath)
 		effectiveImagePath = screenshotPath
@@ -70,7 +70,7 @@ func handleAnalyzeUIScreenshot(ctx context.Context, a *Agent, args map[string]in
 	result, err := tools.AnalyzeImage(effectiveImagePath, analysisPrompt, "frontend")
 	a.debugLog("Analyze UI screenshot error: %v\n", err)
 	if err != nil {
-		return result, err
+		return result, fmt.Errorf("failed to analyze UI screenshot %s: %w", imagePath, err)
 	}
 	// Capture using the original path the user provided, not the temp screenshot
 	a.captureVisionInputAndOutput(imagePath, result)
@@ -154,7 +154,7 @@ func screenshotRemoteURL(ctx context.Context, a *Agent, targetURL string, viewpo
 	a.debugLog("Screenshotting remote URL: %s\n", targetURL)
 	screenshotPath, err := captureScreenshot(ctx, a, targetURL, viewportWidth, viewportHeight)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to screenshot URL %s: %w", targetURL, err)
 	}
 
 	a.debugLog("URL screenshot saved to: %s\n", screenshotPath)

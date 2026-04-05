@@ -13,7 +13,7 @@ func WriteFile(ctx context.Context, filePath, content string) (string, error) {
 	// SECURITY: Validate parent directory is safe to access (handles new files)
 	cleanPath, err := filesystem.SafeResolvePathForWriteWithBypass(ctx, filePath)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to resolve file path for write: %w", err)
 	}
 
 	// Security check passed - now create directory if it doesn't exist

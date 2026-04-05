@@ -69,7 +69,7 @@ func resolvePromptPath(filePath string) (string, error) {
 func findRepoRootFromCWD() (string, error) {
 	dir, err := os.Getwd()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get current working directory: %w", err)
 	}
 
 	for {

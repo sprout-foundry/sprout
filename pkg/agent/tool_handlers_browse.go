@@ -14,7 +14,7 @@ func handleBrowseURL(ctx context.Context, a *Agent, args map[string]interface{})
 	// Extract url (required)
 	url, err := convertToString(args["url"], "url")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to convert url parameter: %w", err)
 	}
 
 	// Extract action (optional, default "text")
@@ -92,7 +92,7 @@ func handleBrowseURL(ctx context.Context, a *Agent, args map[string]interface{})
 	if rawSteps, ok := args["steps"].([]interface{}); ok {
 		steps, err := parseBrowseSteps(rawSteps)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("failed to parse browse steps: %w", err)
 		}
 		opts.Steps = steps
 	}
@@ -111,7 +111,7 @@ func handleBrowseURL(ctx context.Context, a *Agent, args map[string]interface{})
 
 	result, err := webcontent.BrowseURL(url, opts)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to browse URL %s (action=%s): %w", url, action, err)
 	}
 
 	return result, nil

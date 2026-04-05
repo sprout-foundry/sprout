@@ -732,7 +732,7 @@ func parseFloat(s string) (float64, error) {
 func resolveCredentialValue(provider, envVar string) (string, error) {
 	resolved, err := credentials.Resolve(provider, envVar)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to resolve credential for %s/%s: %w", provider, envVar, err)
 	}
 	if strings.TrimSpace(resolved.Value) == "" {
 		if strings.TrimSpace(envVar) != "" {

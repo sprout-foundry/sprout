@@ -20,7 +20,7 @@ AI-powered code editing and assistance tool. Leverages LLMs to understand your w
 
 ## Installation
 
-### Quick Install
+### Recommended Installation
 
 **Linux / macOS:**
 ```bash
@@ -54,11 +54,16 @@ curl -fsSL https://raw.githubusercontent.com/alantheprice/ledit/main/scripts/ins
 
 ### From Source
 
-Requires Go 1.25.0+:
+Requires Go 1.25.0+ and Node.js 22+:
 
 ```bash
-go install github.com/alantheprice/ledit@latest
+git clone https://github.com/alantheprice/ledit.git
+cd ledit
+make deploy-ui   # Build and embed the React web UI (requires Node.js)
+go install .
 ```
+
+> **Note:** `go install github.com/alantheprice/ledit@latest` does not currently work for installing via the Go module proxy, because the React web UI assets are built during CI release and committed to the release tag. Clone the repository and use `make deploy-ui` to build the UI assets locally.
 
 ## Getting Started
 

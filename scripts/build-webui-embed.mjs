@@ -40,7 +40,17 @@ function run(command, args, cwd) {
 function copyBuildOutput() {
   mkdirSync(targetDir, { recursive: true });
 
+  // Preserve the placeholder file — it's tracked in git to satisfy
+  // //go:embed static when the directory is otherwise empty on a fresh clone.
+  const placeholderPath = join(targetDir, "placeholder");
+  let hasPlaceholder = false;
+  try {
+    hasPlaceholder = existsSync(placeholderPath);
+  } catch { /* ignore */ }
+
   for (const entry of readdirSync(targetDir)) {
+    // Skip the placeholder so it survives the build
+    if (hasPlaceholder && entry === "placeholder") continue;
     rmSync(join(targetDir, entry), { recursive: true, force: true });
   }
 

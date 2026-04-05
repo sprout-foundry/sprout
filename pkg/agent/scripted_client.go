@@ -679,11 +679,11 @@ func (c *ScriptedClient) SendChatRequestStream(messages []api.Message, tools []a
 		// Validate stream config
 		if len(streamConfig.Chunks) == 0 {
 			c.advanceIndex(resp)
-			return nil, errors.New("StreamConfig.Chunks must not be empty")
+			return nil, fmt.Errorf("StreamConfig.Chunks must not be empty")
 		}
 		if streamConfig.ChunkErrors != nil && len(streamConfig.ChunkErrors) > len(streamConfig.Chunks) {
 			c.advanceIndex(resp)
-			return nil, errors.New("StreamConfig.ChunkErrors length exceeds number of chunks")
+			return nil, fmt.Errorf("StreamConfig.ChunkErrors length exceeds number of chunks")
 		}
 
 		totalTokens := 0
@@ -714,7 +714,7 @@ func (c *ScriptedClient) SendChatRequestStream(messages []api.Message, tools []a
 				if streamConfig.StreamError != nil {
 					return nil, streamConfig.StreamError
 				}
-				return nil, errors.New("simulated stream error after N chunks")
+				return nil, fmt.Errorf("simulated stream error after N chunks")
 			}
 
 			// Add delay between chunks if configured
@@ -780,7 +780,7 @@ func (c *ScriptedClient) SendChatRequestStream(messages []api.Message, tools []a
 // SendVisionRequest sends a vision-enabled chat request
 func (c *ScriptedClient) SendVisionRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
 	if !c.supportsVision {
-		return nil, errors.New("vision not supported in this test client")
+		return nil, fmt.Errorf("vision not supported in this test client")
 	}
 
 	c.mu.Lock()
@@ -897,13 +897,13 @@ func (c *ScriptedClient) SendVisionRequest(messages []api.Message, tools []api.T
 // ValidateStreamConfig validates a StreamConfig and returns an error if invalid
 func ValidateStreamConfig(sc *StreamConfig) error {
 	if sc == nil {
-		return errors.New("StreamConfig cannot be nil")
+		return fmt.Errorf("StreamConfig cannot be nil")
 	}
 	if len(sc.Chunks) == 0 {
-		return errors.New("StreamConfig.Chunks must not be empty")
+		return fmt.Errorf("StreamConfig.Chunks must not be empty")
 	}
 	if sc.ErrorAfterChunks > len(sc.Chunks) {
-		return errors.New("ErrorAfterChunks cannot exceed number of chunks")
+		return fmt.Errorf("ErrorAfterChunks cannot exceed number of chunks")
 	}
 	return nil
 }
@@ -1019,7 +1019,7 @@ func (c *ScriptedClient) ListModels() ([]api.ModelInfo, error) {
 
 	model := c.TestClient.GetModel()
 	if model == "" {
-		return nil, errors.New("no model configured")
+		return nil, fmt.Errorf("no model configured")
 	}
 
 	models := []api.ModelInfo{

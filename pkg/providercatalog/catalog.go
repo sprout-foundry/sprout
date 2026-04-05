@@ -112,7 +112,7 @@ func RefreshFromRemote(ctx context.Context, url string) error {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("create catalog request: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "ledit-provider-catalog/1.0")
@@ -120,7 +120,7 @@ func RefreshFromRemote(ctx context.Context, url string) error {
 	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("fetch catalog: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -131,12 +131,12 @@ func RefreshFromRemote(ctx context.Context, url string) error {
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxCatalogBytes))
 	if err != nil {
-		return err
+		return fmt.Errorf("read catalog response body: %w", err)
 	}
 
 	var catalog Catalog
 	if err := json.Unmarshal(body, &catalog); err != nil {
-		return err
+		return fmt.Errorf("unmarshal catalog: %w", err)
 	}
 
 	SetCatalog(catalog)

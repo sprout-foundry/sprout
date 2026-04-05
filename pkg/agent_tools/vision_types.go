@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -449,7 +448,7 @@ func CreateVisionClient() (api.ClientInterface, error) {
 		return client, nil
 	}
 
-	return nil, errors.New("no vision-capable providers available - please configure a provider vision model or local Ollama OCR model")
+	return nil, fmt.Errorf("no vision-capable providers available - please configure a provider vision model or local Ollama OCR model")
 }
 
 // CreateVisionClientWithModel creates a vision client using a specific model
@@ -969,12 +968,12 @@ func limitVisionOutputText(text string) (string, bool, int) {
 func persistVisionFullTextWithRoot(sourcePath, fullText, workspaceRoot string) (string, error) {
 	fullText = strings.TrimSpace(fullText)
 	if fullText == "" {
-		return "", errors.New("full text is empty")
+		return "", fmt.Errorf("full text is empty")
 	}
 
 	dir := resolveVisionOutputDirectoryWithRoot(workspaceRoot)
 	if dir == "" {
-		return "", errors.New("vision output directory unavailable")
+		return "", fmt.Errorf("vision output directory unavailable")
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("failed to create vision output directory: %w", err)

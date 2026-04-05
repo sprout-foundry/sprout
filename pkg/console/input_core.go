@@ -1,7 +1,6 @@
 package console
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -249,7 +248,7 @@ func (ir *InputReader) ReadLine() (string, error) {
 			if b == 3 { // Ctrl+C
 				fmt.Printf("\r%s", ClearToEndOfLineSeq()) // Clear line
 				fmt.Println("^C")
-				return "", errors.New("interrupted")
+				return "", fmt.Errorf("interrupted")
 			}
 
 			if b == 26 { // Ctrl+Z

@@ -2,7 +2,6 @@ package webcontent
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -106,7 +105,7 @@ func (w *WebContentFetcher) saveURLCache(url string, content string) error {
 
 	filePath, err := getURLCacheFilePath(url)
 	if err != nil {
-		return err
+		return fmt.Errorf("get URL cache file path: %w", err)
 	}
 
 	entry := URLCacheEntry{
@@ -132,7 +131,7 @@ func (w *WebContentFetcher) loadReferenceCache(query string) (*ReferenceCacheEnt
 	filePath, err := getReferenceCacheFilePath(query)
 	if err != nil {
 		fmt.Printf("Error getting cache file path: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("get URL cache directory: %w", err)
 	}
 
 	data, err := os.ReadFile(filePath)
@@ -141,7 +140,7 @@ func (w *WebContentFetcher) loadReferenceCache(query string) (*ReferenceCacheEnt
 			return nil, err // Cache file does not exist
 		}
 		fmt.Printf("Error reading cache file %s: %v\n", filePath, err)
-		return nil, err
+		return nil, fmt.Errorf("get URL cache file path for read: %w", err)
 	}
 
 	var entry ReferenceCacheEntry
@@ -149,13 +148,13 @@ func (w *WebContentFetcher) loadReferenceCache(query string) (*ReferenceCacheEnt
 		fmt.Printf("Error unmarshaling cache data from %s: %v\n", filePath, err)
 		// Consider deleting corrupted cache file
 		os.Remove(filePath) // Delete corrupted cache file
-		return nil, errors.New("corrupted cache file")
+		return nil, fmt.Errorf("corrupted cache file")
 	}
 
 	if time.Since(entry.Timestamp) > cacheExpiry {
 		fmt.Printf("Cached entry for query \"%s\" is expired. Deleting and re-fetching.\n", query)
 		os.Remove(filePath) // Delete expired cache
-		return nil, errors.New("expired cache")
+		return nil, fmt.Errorf("expired cache")
 	}
 
 	fmt.Printf("Using cached content for query: \"%s\" (cached on %s)\n", query, entry.Timestamp.Format("2006-01-02"))
@@ -171,7 +170,7 @@ func (w *WebContentFetcher) saveReferenceCache(query string, entry *ReferenceCac
 
 	filePath, err := getReferenceCacheFilePath(query)
 	if err != nil {
-		return err
+		return fmt.Errorf("get reference cache file path: %w", err)
 	}
 
 	entry.Timestamp = time.Now() // Update timestamp before saving

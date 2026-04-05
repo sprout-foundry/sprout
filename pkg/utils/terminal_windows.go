@@ -4,7 +4,6 @@
 package utils
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -69,13 +68,13 @@ func getTerminalSizeWindows() (*TerminalSize, error) {
 	// Try stdout
 	handle, err := syscall.GetStdHandle(syscall.STD_OUTPUT_HANDLE)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get terminal size powershell width: %w", err)
 	}
 
 	var info consoleScreenBufferInfo
 	r, _, err := getConsoleScreenBufferInfo.Call(uintptr(handle), uintptr(unsafe.Pointer(&info)))
 	if r == 0 {
-		return nil, err
+		return nil, fmt.Errorf("get terminal size powershell height: %w", err)
 	}
 
 	width := int(info.Window.Right - info.Window.Left + 1)
@@ -96,7 +95,7 @@ func getTerminalSizePowerShell() (*TerminalSize, error) {
 	cmd := exec.Command("powershell", "-Command", "$host.ui.rawui.WindowSize.Width; $host.ui.rawui.WindowSize.Height")
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get terminal size powershell mode: %w", err)
 	}
 
 	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
@@ -108,7 +107,7 @@ func getTerminalSizePowerShell() (*TerminalSize, error) {
 		}
 	}
 
-	return nil, errors.New("failed to parse PowerShell output")
+	return nil, fmt.Errorf("failed to parse PowerShell output")
 }
 
 // IsInteractive checks if the current session is interactive

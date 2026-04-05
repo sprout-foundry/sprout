@@ -1,7 +1,7 @@
 package agent
 
 import (
-	"errors"
+	"fmt"
 )
 
 // InjectInputContext injects a new user input using context-based interrupt system
@@ -14,7 +14,7 @@ func (a *Agent) InjectInputContext(input string) error {
 	case a.inputInjectionChan <- input:
 		return nil
 	default:
-		return errors.New("input injection channel full")
+		return fmt.Errorf("input injection channel full")
 	}
 }
 

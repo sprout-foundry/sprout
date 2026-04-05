@@ -1,7 +1,7 @@
 package configuration
 
 import (
-	"errors"
+	"fmt"
 	"strings"
 
 	providers "github.com/alantheprice/ledit/pkg/agent_providers"
@@ -26,7 +26,7 @@ type ResolvedProviderCredential struct {
 func GetProviderAuthMetadata(provider string) (ProviderAuthMetadata, error) {
 	name := strings.ToLower(strings.TrimSpace(provider))
 	if name == "" {
-		return ProviderAuthMetadata{}, errors.New("provider is required")
+		return ProviderAuthMetadata{}, fmt.Errorf("provider is required")
 	}
 
 	switch name {

@@ -104,7 +104,7 @@ func (ws *ReactWebServer) getSSHLaunchStatus(sessionKey string) *sshLaunchStatus
 func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (result *sshLaunchResult, err error) {
 	hostAlias := strings.TrimSpace(req.HostAlias)
 	if hostAlias == "" {
-		return nil, errors.New("SSH host alias is required")
+		return nil, fmt.Errorf("SSH host alias is required")
 	}
 
 	remoteWorkspacePath := strings.TrimSpace(req.RemoteWorkspacePath)
@@ -186,28 +186,28 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (result *s
 	ws.setSSHLaunchStatus(sessionKey, "checking-local-tools", "Checking local SSH tools...", true, "")
 	if err := ensureSSHProgramsAvailable(); err != nil {
 		logger.Logf("ssh program availability check failed: %v", err)
-		return nil, err
+		return nil, fmt.Errorf("check SSH program availability: %w", err)
 	}
 	logger.Logf("ssh and scp detected locally")
 
 	ws.setSSHLaunchStatus(sessionKey, "inspecting-remote", fmt.Sprintf("Inspecting remote host %s...", hostAlias), true, "")
 	remoteInfo, err := inspectRemoteSSHHost(launchCtx, hostAlias, logger)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("inspect remote SSH host: %w", err)
 	}
 	logger.Logf("remote host detected platform=%s arch=%s", remoteInfo.Platform, remoteInfo.Arch)
 
 	ws.setSSHLaunchStatus(sessionKey, "preparing-local-backend", "Preparing local backend binary...", true, "")
 	localBinary, err := prepareLocalSSHBinary(remoteInfo.Platform, remoteInfo.Arch, logger)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("prepare local SSH binary: %w", err)
 	}
 	logger.Logf("local SSH backend binary ready: %s", localBinary)
 
 	ws.setSSHLaunchStatus(sessionKey, "installing-remote-backend", fmt.Sprintf("Installing backend on %s...", hostAlias), true, "")
 	remoteBinary, err := ensureRemoteSSHBinary(launchCtx, hostAlias, localBinary, remoteInfo, logger)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("install remote SSH binary: %w", err)
 	}
 	logger.Logf("remote SSH backend installed at %s", remoteBinary)
 
@@ -215,7 +215,7 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (result *s
 	localPort, err := findFreeLocalPort()
 	if err != nil {
 		logger.Logf("failed to allocate local tunnel port: %v", err)
-		return nil, err
+		return nil, fmt.Errorf("allocate local tunnel port: %w", err)
 	}
 	logger.Logf("allocated local tunnel port %d", localPort)
 
@@ -223,7 +223,7 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (result *s
 	ws.setSSHLaunchStatus(sessionKey, "starting-remote-backend", fmt.Sprintf("Starting remote backend on %s...", hostAlias), true, "")
 	remotePort, remotePID, reusedDaemon, err := startRemoteSSHBackend(launchCtx, hostAlias, sessionKey, launcherURL, remoteWorkspacePath, remoteBinary, logger)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("start remote SSH backend: %w", err)
 	}
 	if reusedDaemon {
 		logger.Logf("reusing existing remote daemon port=%d pid=%d", remotePort, remotePID)
@@ -234,7 +234,7 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (result *s
 	ws.setSSHLaunchStatus(sessionKey, "starting-tunnel", fmt.Sprintf("Starting tunnel for %s...", hostAlias), true, "")
 	tunnelCmd, err := startSSHTunnel(hostAlias, localPort, remotePort, logger)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("start SSH tunnel: %w", err)
 	}
 	logger.Logf("ssh tunnel started local_port=%d remote_port=%d", localPort, remotePort)
 

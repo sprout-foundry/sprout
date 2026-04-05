@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 )
@@ -22,12 +21,12 @@ func NewDefaultRegistry() *DefaultRegistry {
 // RegisterTool registers a new tool
 func (r *DefaultRegistry) RegisterTool(tool Tool) error {
 	if tool == nil {
-		return errors.New("cannot register nil tool")
+		return fmt.Errorf("cannot register nil tool")
 	}
 
 	name := tool.Name()
 	if name == "" {
-		return errors.New("tool name cannot be empty")
+		return fmt.Errorf("tool name cannot be empty")
 	}
 
 	r.mutex.Lock()

@@ -67,7 +67,7 @@ func (s *SubagentConfigCommand) showStatus(config *configuration.Config) error {
 // setProvider sets the subagent provider
 func (s *SubagentConfigCommand) setProvider(provider string, configManager *configuration.Manager) error {
 	if err := validateProvider(provider, configManager); err != nil {
-		return err
+		return fmt.Errorf("setProvider: %w", err)
 	}
 
 	if err := configManager.UpdateConfig(func(c *configuration.Config) error {

@@ -213,7 +213,7 @@ func (cf *CommitFlow) selectFilesToCommit() error {
 
 	_, unstagedFiles, err := cf.getGitStatus()
 	if err != nil {
-		return err
+		return fmt.Errorf("selectFilesToCommit: %w", err)
 	}
 
 	if len(unstagedFiles) == 0 {
@@ -234,7 +234,7 @@ func (cf *CommitFlow) selectFilesToCommit() error {
 	reader := bufio.NewReader(os.Stdin)
 	selectedFiles, err := commitCmd.selectAndStageFiles(cf.agent, reader)
 	if err != nil {
-		return err
+		return fmt.Errorf("selectFilesToCommit: select and stage: %w", err)
 	}
 
 	if len(selectedFiles) == 0 {
@@ -271,7 +271,7 @@ func (cf *CommitFlow) singleFileCommit() error {
 	// Get all available files (staged + unstaged)
 	stagedFiles, unstagedFiles, err := cf.getGitStatus()
 	if err != nil {
-		return err
+		return fmt.Errorf("singleFileCommit: %w", err)
 	}
 
 	allFiles := append(stagedFiles, unstagedFiles...)

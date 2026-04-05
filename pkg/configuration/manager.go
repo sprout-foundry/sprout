@@ -2,7 +2,6 @@ package configuration
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -86,7 +85,7 @@ func NewManager() (*Manager, error) {
 	// Initialize configuration with first-run setup if needed
 	config, apiKeys, err := Initialize()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load configuration: %w", err)
 	}
 
 	return &Manager{
@@ -102,7 +101,7 @@ func NewManagerSilent() (*Manager, error) {
 	// Load configuration silently
 	config, apiKeys, err := loadConfigSilently()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("initialize API keys: %w", err)
 	}
 
 	return &Manager{
@@ -191,7 +190,7 @@ func (m *Manager) SaveConfig() error {
 
 	// Save the current manager config directly
 	if err := m.config.Save(); err != nil {
-		return err
+		return fmt.Errorf("save config: %w", err)
 	}
 
 	// Update lastSaved
@@ -205,15 +204,15 @@ func (m *Manager) UpdateConfig(mutator func(*Config) error) error {
 	defer m.mu.Unlock()
 
 	if m.config == nil {
-		return errors.New("configuration not loaded")
+		return fmt.Errorf("configuration not loaded")
 	}
 	if mutator != nil {
 		if err := mutator(m.config); err != nil {
-			return err
+			return fmt.Errorf("update config mutator: %w", err)
 		}
 	}
 	if err := m.config.Save(); err != nil {
-		return err
+		return fmt.Errorf("update config save: %w", err)
 	}
 	m.lastSaved = cloneConfig(m.config)
 	return nil
@@ -225,7 +224,7 @@ func (m *Manager) UpdateConfigNoSave(mutator func(*Config) error) error {
 	defer m.mu.Unlock()
 
 	if m.config == nil {
-		return errors.New("configuration not loaded")
+		return fmt.Errorf("configuration not loaded")
 	}
 	if mutator != nil {
 		return mutator(m.config)
@@ -242,7 +241,7 @@ func (m *Manager) SaveAPIKeys() error {
 func (m *Manager) GetProvider() (api.ClientType, error) {
 	provider := m.config.LastUsedProvider
 	if provider == "" {
-		return "", errors.New("no provider selected")
+		return "", fmt.Errorf("no provider selected")
 	}
 
 	return m.mapStringToClientType(provider)
@@ -400,15 +399,15 @@ func mergeConfigChanges(base, current, latest *Config) (*Config, error) {
 
 	baseMap, err := configToMap(base)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get model for provider: %w", err)
 	}
 	currentMap, err := configToMap(current)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get model for provider: %w", err)
 	}
 	latestMap, err := configToMap(latest)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get model for provider: %w", err)
 	}
 
 	// Apply changes: start from latest, then merge in current changes
@@ -423,11 +422,11 @@ func configToMap(cfg *Config) (map[string]interface{}, error) {
 	}
 	data, err := json.Marshal(cfg)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get system prompt: %w", err)
 	}
 	var out map[string]interface{}
 	if err := json.Unmarshal(data, &out); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get system prompt: %w", err)
 	}
 	return out, nil
 }
@@ -435,11 +434,11 @@ func configToMap(cfg *Config) (map[string]interface{}, error) {
 func mapToConfig(m map[string]interface{}) (*Config, error) {
 	data, err := json.Marshal(m)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get system prompt: %w", err)
 	}
 	var out Config
 	if err := json.Unmarshal(data, &out); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get system prompt: %w", err)
 	}
 
 	// Keep canonical zero-value protections that Load() applies.

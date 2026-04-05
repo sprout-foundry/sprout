@@ -121,7 +121,7 @@ func (cf *CommitFlow) promptYesNo(question string, defaultYes bool) (bool, error
 func (cf *CommitFlow) selectFilesToCommitConsole() error {
 	_, unstagedFiles, err := cf.getGitStatus()
 	if err != nil {
-		return err
+		return fmt.Errorf("selectFilesToCommitConsole: %w", err)
 	}
 
 	if len(unstagedFiles) == 0 {
@@ -155,7 +155,7 @@ func (cf *CommitFlow) singleFileCommitConsole() error {
 	// Get both staged and unstaged files
 	stagedFiles, unstagedFiles, err := cf.getGitStatus()
 	if err != nil {
-		return err
+		return fmt.Errorf("singleFileCommitConsole: %w", err)
 	}
 
 	// Combine all files

@@ -2,7 +2,6 @@ package mcp
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 
@@ -136,7 +135,7 @@ func (m *DefaultMCPManager) StartAll(ctx context.Context) error {
 		for _, err := range errs {
 			errorMsg += "\n  - " + err.Error()
 		}
-		return errors.New(errorMsg)
+		return fmt.Errorf("%s", errorMsg)
 	}
 
 	if m.logger != nil {
@@ -183,7 +182,7 @@ func (m *DefaultMCPManager) StopAll(ctx context.Context) error {
 		for _, err := range errs {
 			errorMsg += "\n  - " + err.Error()
 		}
-		return errors.New(errorMsg)
+		return fmt.Errorf("%s", errorMsg)
 	}
 
 	if m.logger != nil && len(servers) > 0 {
@@ -309,7 +308,7 @@ func (m *DefaultMCPManager) AutoDiscoverGitHubServer(ctx context.Context) error 
 		}
 	}
 
-	return errors.New("failed to auto-discover GitHub MCP server - please install @modelcontextprotocol/server-github or mcp-server-github")
+	return fmt.Errorf("failed to auto-discover GitHub MCP server - please install @modelcontextprotocol/server-github or mcp-server-github")
 }
 
 // GetServerStats returns statistics about all servers

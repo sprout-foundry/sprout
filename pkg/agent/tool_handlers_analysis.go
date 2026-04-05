@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -25,7 +24,7 @@ import (
 
 func handleAnalyzeUIScreenshot(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	if a == nil {
-		return "", errors.New("agent context is required for analyze_ui_screenshot tool")
+		return "", fmt.Errorf("agent context is required for analyze_ui_screenshot tool")
 	}
 
 	imagePath := args["image_path"].(string)
@@ -193,7 +192,7 @@ func renderHTMLContent(ctx context.Context, a *Agent, htmlPath string, viewportW
 
 func handleAnalyzeImageContent(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	if a == nil {
-		return "", errors.New("agent context is required for analyze_image_content tool")
+		return "", fmt.Errorf("agent context is required for analyze_image_content tool")
 	}
 
 	imagePath := args["image_path"].(string)
@@ -473,7 +472,7 @@ func materializeImageDataForVisionTool(img api.ImageData) (string, func(), error
 
 	encoded := strings.TrimSpace(img.Base64)
 	if encoded == "" {
-		return "", nil, errors.New("attached image has no URL or base64 data")
+		return "", nil, fmt.Errorf("attached image has no URL or base64 data")
 	}
 
 	data, err := base64.StdEncoding.DecodeString(encoded)
@@ -546,7 +545,7 @@ func normalizeVisionToolOutput(result string, preferPlainText bool) (string, err
 		code := strings.TrimSpace(parsed.ErrorCode)
 		msg := strings.TrimSpace(parsed.ErrorMessage)
 		if code == "" && msg == "" {
-			return "", errors.New("vision analysis failed")
+			return "", fmt.Errorf("vision analysis failed")
 		}
 		if code == "" {
 			return "", fmt.Errorf("vision analysis failed: %s", msg)

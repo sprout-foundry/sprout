@@ -24,7 +24,7 @@ func sshSessionRegistryPath() string {
 func readPersistedSSHSession(sessionKey string) (*persistedSSHWorkspaceSession, error) {
 	registry, err := readPersistedSSHSessionRegistry()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read session registry: %w", err)
 	}
 	session, ok := registry[sessionKey]
 	if !ok {
@@ -40,7 +40,7 @@ func readPersistedSSHSessionRegistry() (map[string]persistedSSHWorkspaceSession,
 		if errors.Is(err, os.ErrNotExist) {
 			return map[string]persistedSSHWorkspaceSession{}, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("read SSH session registry file: %w", err)
 	}
 	if len(data) == 0 {
 		return map[string]persistedSSHWorkspaceSession{}, nil
@@ -48,7 +48,7 @@ func readPersistedSSHSessionRegistry() (map[string]persistedSSHWorkspaceSession,
 
 	var registry map[string]persistedSSHWorkspaceSession
 	if err := json.Unmarshal(data, &registry); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse SSH session registry: %w", err)
 	}
 	if registry == nil {
 		registry = map[string]persistedSSHWorkspaceSession{}
@@ -58,15 +58,15 @@ func readPersistedSSHSessionRegistry() (map[string]persistedSSHWorkspaceSession,
 
 func writePersistedSSHSessionRegistry(registry map[string]persistedSSHWorkspaceSession) error {
 	if err := os.MkdirAll(getLeditConfigDir(), 0755); err != nil {
-		return err
+		return fmt.Errorf("create session registry directory: %w", err)
 	}
 	data, err := json.MarshalIndent(registry, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal session registry: %w", err)
 	}
 	tmpPath := sshSessionRegistryPath() + ".tmp"
 	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
-		return err
+		return fmt.Errorf("write session registry temp file: %w", err)
 	}
 	return os.Rename(tmpPath, sshSessionRegistryPath())
 }
@@ -77,7 +77,7 @@ func persistSSHSession(session *sshWorkspaceSession) error {
 	}
 	registry, err := readPersistedSSHSessionRegistry()
 	if err != nil {
-		return err
+		return fmt.Errorf("read session registry for persist: %w", err)
 	}
 	registry[session.Key] = persistedSSHWorkspaceSession{
 		Key:                 session.Key,
@@ -93,7 +93,7 @@ func persistSSHSession(session *sshWorkspaceSession) error {
 func removePersistedSSHSession(sessionKey string) error {
 	registry, err := readPersistedSSHSessionRegistry()
 	if err != nil {
-		return err
+		return fmt.Errorf("read session registry for removal: %w", err)
 	}
 	delete(registry, sessionKey)
 	return writePersistedSSHSessionRegistry(registry)
@@ -102,16 +102,16 @@ func removePersistedSSHSession(sessionKey string) error {
 func (ws *ReactWebServer) restorePersistedSSHSession(sessionKey string) (*sshLaunchResult, error) {
 	persisted, err := readPersistedSSHSession(sessionKey)
 	if err != nil || persisted == nil {
-		return nil, err
+		return nil, fmt.Errorf("read persisted SSH session: %w", err)
 	}
 
 	if err := ensureSSHProgramsAvailable(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ensure SSH programs available: %w", err)
 	}
 
 	localPort, err := findFreeLocalPort()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("allocate local port: %w", err)
 	}
 
 	// SSH remote daemons always listen on the fixed daemon port.
@@ -125,13 +125,13 @@ func (ws *ReactWebServer) restorePersistedSSHSession(sessionKey string) (*sshLau
 	tunnelCmd, err := startSSHTunnel(persisted.HostAlias, localPort, remotePort, nil)
 	if err != nil {
 		_ = removePersistedSSHSession(sessionKey)
-		return nil, err
+		return nil, fmt.Errorf("start SSH tunnel for restored session: %w", err)
 	}
 
 	if err := waitForWebHealth(localPort, sshRestoreHealthTimeout); err != nil {
 		_ = killProcess(tunnelCmd)
 		_ = removePersistedSSHSession(sessionKey)
-		return nil, err
+		return nil, fmt.Errorf("health check for restored session: %w", err)
 	}
 
 	session := &sshWorkspaceSession{
@@ -164,7 +164,7 @@ func (ws *ReactWebServer) restorePersistedSSHSession(sessionKey string) (*sshLau
 func (ws *ReactWebServer) listSSHSessions() ([]sshSessionEntryDTO, error) {
 	registry, err := readPersistedSSHSessionRegistry()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list SSH sessions: %w", err)
 	}
 
 	ws.sshSessionsMu.Lock()
@@ -201,7 +201,7 @@ func (ws *ReactWebServer) listSSHSessions() ([]sshSessionEntryDTO, error) {
 func (ws *ReactWebServer) closeSSHSession(sessionKey string) error {
 	sessionKey = strings.TrimSpace(sessionKey)
 	if sessionKey == "" {
-		return errors.New("ssh session key is required")
+		return fmt.Errorf("ssh session key is required")
 	}
 
 	ws.sshSessionsMu.Lock()

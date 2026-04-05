@@ -139,7 +139,7 @@ func (h *CIOutputHandler) Write(p []byte) (n int, err error) {
 // WriteString writes a string with appropriate formatting
 func (h *CIOutputHandler) WriteString(s string) error {
 	_, err := h.Write([]byte(s))
-	return err
+	return fmt.Errorf("ci output write string: %w", err)
 }
 
 // Printf writes formatted output

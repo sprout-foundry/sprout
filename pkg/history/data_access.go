@@ -192,7 +192,7 @@ func RecordBaseRevision(requestHash, instructions, response string, conversation
 // RecordChangeWithDetails saves a specific file change against a base revision with additional details.
 func RecordChangeWithDetails(baseRevisionID string, filename, originalCode, newCode, description, note string, originalPrompt string, llmMessage string, editingModel string) error {
 	if err := ensureChangesDirs(); err != nil {
-		return err
+		return fmt.Errorf("ensure changes dirs: %w", err)
 	}
 
 	fileRevisionHash := utils.GenerateFileRevisionHash(filename, newCode)
@@ -279,7 +279,7 @@ func updateChangeStatus(fileRevisionHash, status string) error {
 // fetchAllChanges retrieves all change logs from the filesystem.
 func fetchAllChanges() ([]ChangeLog, error) {
 	if err := ensureChangesDirs(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get changes directory: %w", err)
 	}
 
 	var changes []ChangeLog
@@ -394,7 +394,7 @@ func GetAllChanges() ([]ChangeLog, error) {
 func GetChangesSince(since time.Time) ([]ChangeLog, error) {
 	changes, err := fetchAllChanges()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get session file path: %w", err)
 	}
 	var filtered []ChangeLog
 	for _, c := range changes {
@@ -409,7 +409,7 @@ func GetChangesSince(since time.Time) ([]ChangeLog, error) {
 func GetChangedFilesSince(since time.Time) ([]string, error) {
 	changes, err := GetChangesSince(since)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get session file path: %w", err)
 	}
 	seen := map[string]bool{}
 	files := []string{}

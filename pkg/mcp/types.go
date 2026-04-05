@@ -35,7 +35,7 @@ func (s *MCPServerConfig) UnmarshalJSON(data []byte) error {
 	}
 
 	if err := json.Unmarshal(data, aux); err != nil {
-		return err
+		return fmt.Errorf("unmarshal MCP server config: %w", err)
 	}
 
 	// Handle timeout field conversion

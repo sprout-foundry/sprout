@@ -2,7 +2,6 @@ package spec
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -23,7 +22,7 @@ type ScopeValidator struct {
 func NewScopeValidator(cfg *configuration.Config, logger *utils.Logger) (*ScopeValidator, error) {
 	agentClient, err := resolveSpecAgentClient(cfg, logger, "Scope validation")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("agent API call for scope validation: %w", err)
 	}
 
 	return &ScopeValidator{
@@ -37,10 +36,10 @@ func NewScopeValidator(cfg *configuration.Config, logger *utils.Logger) (*ScopeV
 func (v *ScopeValidator) ValidateScope(diff string, spec *CanonicalSpec) (*ScopeReviewResult, error) {
 	// Validate inputs
 	if diff == "" {
-		return nil, errors.New("diff cannot be empty")
+		return nil, fmt.Errorf("diff cannot be empty")
 	}
 	if spec == nil {
-		return nil, errors.New("spec cannot be nil")
+		return nil, fmt.Errorf("spec cannot be nil")
 	}
 
 	// Build spec JSON for LLM

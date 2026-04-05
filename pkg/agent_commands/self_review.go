@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -24,7 +23,7 @@ func (c *SelfReviewCommand) Description() string {
 
 func (c *SelfReviewCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	if chatAgent == nil {
-		return errors.New("agent is not initialized")
+		return fmt.Errorf("agent is not initialized")
 	}
 
 	revisionID := ""

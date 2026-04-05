@@ -116,7 +116,7 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, eventBus *events.E
 	snapshot := append([]byte(nil), cs.AgentState...)
 	created, err := agent.NewAgentWithModel("")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create chat agent: %w", err)
 	}
 
 	if eventBus != nil {

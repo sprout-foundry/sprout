@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -213,7 +212,7 @@ func (w *WebContentFetcher) shouldBypassJina(urlStr string) bool {
 func (w *WebContentFetcher) fetchWithJinaReader(url string, cfg *configuration.Manager) (string, error) { // Use Manager instead of Config
 	apiKey := cfg.GetAPIKeys().GetAPIKey("jinaai")
 	if apiKey == "" {
-		return "", errors.New("JinaAI API key not found")
+		return "", fmt.Errorf("JinaAI API key not found")
 	}
 
 	req, err := createJinaRequest(url, apiKey)
@@ -272,7 +271,7 @@ func parseJinaResponse(body io.Reader) (string, error) {
 	}
 
 	if jinaResponse.Data.Content == "" {
-		return "", errors.New("jina Reader response did not contain expected 'data.content'")
+		return "", fmt.Errorf("jina Reader response did not contain expected 'data.content'")
 	}
 
 	return jinaResponse.Data.Content, nil

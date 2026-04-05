@@ -2,7 +2,6 @@ package commands
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -255,7 +254,7 @@ func (p *ProvidersCommand) setProvider(providerName string, configManager *confi
 // selectModelFromList allows users to interactively select from available models
 func selectModelFromList(models []api.ModelInfo, preferredModel string) (string, error) {
 	if len(models) == 0 {
-		return "", errors.New("no models available")
+		return "", fmt.Errorf("no models available")
 	}
 
 	// If preferred model is available, use it

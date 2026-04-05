@@ -192,7 +192,7 @@ func showPersonaDetails(personaName string, config *configuration.Config) error 
 func setPersonaEnabled(personaName string, enabled bool, configManager *configuration.Manager) error {
 	personaID, personaNameDisplay, err := findPersonaID(personaName, configManager.GetConfig())
 	if err != nil {
-		return err
+		return fmt.Errorf("setPersonaEnabled: %w", err)
 	}
 
 	if err := configManager.UpdateConfig(func(c *configuration.Config) error {
@@ -217,11 +217,11 @@ func setPersonaEnabled(personaName string, enabled bool, configManager *configur
 func setPersonaProvider(personaName, provider string, configManager *configuration.Manager) error {
 	personaID, personaNameDisplay, err := findPersonaID(personaName, configManager.GetConfig())
 	if err != nil {
-		return err
+		return fmt.Errorf("setPersonaProvider: %w", err)
 	}
 
 	if err := validateProvider(provider, configManager); err != nil {
-		return err
+		return fmt.Errorf("setPersonaProvider: validate provider: %w", err)
 	}
 	if err := configManager.UpdateConfig(func(c *configuration.Config) error {
 		persona := c.SubagentTypes[personaID]
@@ -242,7 +242,7 @@ func setPersonaProvider(personaName, provider string, configManager *configurati
 func setPersonaModel(personaName, model string, configManager *configuration.Manager) error {
 	personaID, personaNameDisplay, err := findPersonaID(personaName, configManager.GetConfig())
 	if err != nil {
-		return err
+		return fmt.Errorf("setPersonaModel: %w", err)
 	}
 
 	if err := configManager.UpdateConfig(func(c *configuration.Config) error {

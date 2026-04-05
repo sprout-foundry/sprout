@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -889,13 +888,13 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 		}
 	}
 	if !ok {
-		return "", errors.New("missing tasks, prompts, or subagents argument")
+		return "", fmt.Errorf("missing tasks, prompts, or subagents argument")
 	}
 
 	// Parse the tasks array
 	tasksSlice, ok := tasksRaw.([]interface{})
 	if !ok {
-		return "", errors.New("tasks/prompts must be an array")
+		return "", fmt.Errorf("tasks/prompts must be an array")
 	}
 
 	a.debugLog("Spawning %d parallel subagents\n", len(tasksSlice))
@@ -929,7 +928,7 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 			// Note: model and provider are set from configuration, not from LLM parameters
 			// This ensures consistent subagent behavior configured by the user
 		} else {
-			return "", errors.New("each task must be a string or an object")
+			return "", fmt.Errorf("each task must be a string or an object")
 		}
 
 		parallelTasks = append(parallelTasks, task)

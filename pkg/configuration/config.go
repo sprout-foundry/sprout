@@ -3,7 +3,6 @@ package configuration
 import (
 	"bufio"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -278,7 +277,7 @@ func GetConfigPath() (string, error) {
 func Load() (*Config, error) {
 	configPath, err := GetConfigPath()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get config path for default: %w", err)
 	}
 
 	// If config doesn't exist, return new default config
@@ -314,7 +313,7 @@ func Load() (*Config, error) {
 	}
 	fileCustomProviders, err := MigrateLegacyCustomProviders(&config)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get config path: %w", err)
 	}
 	config.CustomProviders = fileCustomProviders
 	if config.SubagentTypes == nil {
@@ -406,7 +405,7 @@ func Load() (*Config, error) {
 func (c *Config) Save() error {
 	configPath, err := GetConfigPath()
 	if err != nil {
-		return err
+		return fmt.Errorf("get config path for save: %w", err)
 	}
 
 	c.Version = ConfigVersion
@@ -958,10 +957,10 @@ func (c *Config) Validate() error {
 	// Validate PDF OCR configuration
 	if c.PDFOCREnabled {
 		if c.PDFOCRProvider == "" {
-			return errors.New("PDF OCR provider cannot be empty when PDF OCR is enabled")
+			return fmt.Errorf("PDF OCR provider cannot be empty when PDF OCR is enabled")
 		}
 		if c.PDFOCRModel == "" {
-			return errors.New("PDF OCR model cannot be empty when PDF OCR is enabled")
+			return fmt.Errorf("PDF OCR model cannot be empty when PDF OCR is enabled")
 		}
 	}
 

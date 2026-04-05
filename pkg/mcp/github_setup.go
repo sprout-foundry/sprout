@@ -3,7 +3,6 @@ package mcp
 import (
 	"bufio"
 	"context"
-	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -170,7 +169,7 @@ func RunGitHubMCPSetup(_ context.Context, repo *GitHubRepoInfo, reader *bufio.Re
 		// Docker + PAT configuration
 		token, err := promptForGitHubPAT(reader)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("get PAT from user: %w", err)
 		}
 		if token == "" {
 			fmt.Println("   Cancelled.")
@@ -193,7 +192,7 @@ func RunGitHubMCPSetup(_ context.Context, repo *GitHubRepoInfo, reader *bufio.Re
 		// npx + PAT configuration
 		token, err := promptForGitHubPAT(reader)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("read PAT from pipe: %w", err)
 		}
 		if token == "" {
 			fmt.Println("   Cancelled.")
@@ -247,7 +246,7 @@ func promptForGitHubPAT(reader *bufio.Reader) (string, error) {
 	}
 
 	if len(token) < 10 {
-		return "", errors.New("token seems too short, please paste the full PAT")
+		return "", fmt.Errorf("token seems too short, please paste the full PAT")
 	}
 
 	return token, nil
@@ -269,7 +268,7 @@ func openBrowser(url string) error {
 	case isCommandAvailable("wslview"):
 		cmd = exec.Command("wslview", url)
 	default:
-		return errors.New("no browser command found")
+		return fmt.Errorf("no browser command found")
 	}
 
 	return cmd.Start()

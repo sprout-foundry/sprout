@@ -11,6 +11,8 @@ export interface ChatSession {
   current_query?: string;
   is_default: boolean;
   is_active: boolean;
+  provider?: string;
+  model?: string;
 }
 
 export interface ChatSessionsResponse {
@@ -31,6 +33,8 @@ export interface ChatSessionSwitchResponse {
     total_cost?: number;
     session_id?: string;
     agent_state?: string;
+    provider?: string;
+    model?: string;
     [key: string]: unknown;
   };
 }

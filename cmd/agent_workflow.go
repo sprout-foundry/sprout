@@ -191,13 +191,13 @@ func (c *AgentWorkflowConfig) validate() error {
 		step.FileNotExists = normalizeWorkflowPaths(step.FileNotExists)
 
 		if step.Prompt == "" && step.PromptFile == "" {
-			return errors.New(fmt.Sprintf("steps[%d] requires prompt or prompt_file", i))
+			return fmt.Errorf("steps[%d] requires prompt or prompt_file", i)
 		}
 		if step.Prompt != "" && step.PromptFile != "" {
-			return errors.New(fmt.Sprintf("steps[%d].prompt and steps[%d].prompt_file are mutually exclusive", i, i))
+			return fmt.Errorf("steps[%d].prompt and steps[%d].prompt_file are mutually exclusive", i, i)
 		}
 		if !isValidWorkflowWhen(step.When) {
-			return errors.New(fmt.Sprintf("steps[%d].when must be one of: %s, %s, %s", i, workflowWhenAlways, workflowWhenOnSuccess, workflowWhenOnError))
+			return fmt.Errorf("steps[%d].when must be one of: %s, %s, %s", i, workflowWhenAlways, workflowWhenOnSuccess, workflowWhenOnError)
 		}
 		prefix := fmt.Sprintf("steps[%d]", i)
 		if err := step.AgentWorkflowRuntime.validate(prefix); err != nil {

@@ -180,12 +180,12 @@ func saveWebUIHostRecord(record webUIHostRecord) error {
 	}
 	encoded, err := json.MarshalIndent(record, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal webUI host record: %w", err)
 	}
 
 	tmp := webUIHostFile() + ".tmp"
 	if err := os.WriteFile(tmp, encoded, 0644); err != nil {
-		return err
+		return fmt.Errorf("failed to write webUI host record temp file: %w", err)
 	}
 	return os.Rename(tmp, webUIHostFile())
 }
@@ -215,18 +215,18 @@ func saveDesiredWebUIHostPID(pid int) error {
 	}
 	encoded, err := json.MarshalIndent(record, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal desired webUI host PID record: %w", err)
 	}
 	tmp := desiredWebUIHostFile() + ".tmp"
 	if err := os.WriteFile(tmp, encoded, 0644); err != nil {
-		return err
+		return fmt.Errorf("failed to write desired webUI host PID temp file: %w", err)
 	}
 	return os.Rename(tmp, desiredWebUIHostFile())
 }
 
 func clearDesiredWebUIHostPID() error {
 	if err := os.Remove(desiredWebUIHostFile()); err != nil && !os.IsNotExist(err) {
-		return err
+		return fmt.Errorf("failed to remove desired webUI host PID file: %w", err)
 	}
 	return nil
 }

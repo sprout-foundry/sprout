@@ -65,8 +65,12 @@ func (ws *ReactWebServer) handleAPIChatSessions(w http.ResponseWriter, r *http.R
 			"active_query":       info.ActiveQuery,
 			"is_default":         info.ID == activeChatID,
 			"is_active":          info.ID == activeChatID,
-			"provider":           info.Provider,
-			"model":              info.Model,
+		}
+		if info.Provider != "" {
+			entry["provider"] = info.Provider
+		}
+		if info.Model != "" {
+			entry["model"] = info.Model
 		}
 		if info.ActiveQuery && info.CurrentQuery != "" {
 			entry["current_query"] = info.CurrentQuery

@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -191,7 +190,7 @@ func (eh *ErrorHandler) formatTokenCount(tokens int) string {
 
 // isRateLimitError checks if an error is a rate limit (same logic as other components)
 func (eh *ErrorHandler) isRateLimitError(errStr string) bool {
-	return utils.NewRateLimitBackoff().IsRateLimitError(errors.New(errStr), nil)
+	return utils.NewRateLimitBackoff().IsRateLimitError(fmt.Errorf("%s", errStr), nil)
 }
 
 // logRateLimit logs rate limit information

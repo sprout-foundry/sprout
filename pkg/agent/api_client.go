@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -575,7 +574,7 @@ func (ac *APIClient) isRateLimit(errStr string) bool {
 		return false
 	}
 
-	return ac.rateLimiter.IsRateLimitError(errors.New(errStr), nil)
+	return ac.rateLimiter.IsRateLimitError(fmt.Errorf("%s", errStr), nil)
 }
 
 // handleRateLimit handles rate limit errors with proper backoff

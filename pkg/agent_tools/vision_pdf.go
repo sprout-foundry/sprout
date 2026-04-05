@@ -36,7 +36,7 @@ func ProcessPDFWithVision(pdfPath string) (string, error) {
 
 	pythonExec, err := GetPDFPythonExecutable()
 	if err != nil {
-		return "", fmt.Errorf("PDF precheck failed: %w", err)
+		return "", fmt.Errorf("failed PDF precheck: %w", err)
 	}
 
 	client, err := CreateVisionClient()

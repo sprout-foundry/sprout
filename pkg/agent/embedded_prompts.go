@@ -182,5 +182,5 @@ func readEmbeddedPromptFile(filePath string) ([]byte, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("embedded prompt not found: %s", filePath)
+	return nil, fmt.Errorf("failed to find embedded prompt: %s", filePath)
 }

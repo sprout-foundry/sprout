@@ -49,6 +49,7 @@ func NewBaseCommand(use, short, long string) *BaseCommand {
 
 	// Initialize common flags
 	base.flags.SkipPrompt = base.cmd.Flags().Bool("skip-prompt", false, "Skip user confirmation prompts")
+	base.flags.Model = base.cmd.Flags().String("model", "", "Model to use for this command")
 	base.flags.DryRun = base.cmd.Flags().Bool("dry-run", false, "Run in simulation mode")
 	base.flags.TraceDatasetDir = base.cmd.Flags().String("trace-dataset-dir", "", "Enable dataset trace mode and write to directory (also settable via LEDIT_TRACE_DATASET_DIR env var)")
 

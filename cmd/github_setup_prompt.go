@@ -13,27 +13,72 @@ import (
 	"github.com/alantheprice/ledit/pkg/mcp"
 )
 
+// GitHubSetupAgentInterface defines the interface needed from an agent for GitHub MCP setup
+type GitHubSetupAgentInterface interface {
+	GetConfigManager() interface {
+		GetConfig() *configuration.Config
+		UpdateConfig(func(c *configuration.Config) error) error
+	}
+	RefreshMCPTools() error
+}
+
+// Function variables for dependency injection (useful for testing)
+var (
+	getwdFunc                = os.Getwd
+	shouldPromptGitHubSetup  = mcp.ShouldPromptGitHubSetup
+	detectGitHubRepo         = mcp.DetectGitHubRepo
+	runGitHubMCPSetup        = mcp.RunGitHubMCPSetup
+	saveGitHubMCPServer      = mcp.SaveGitHubMCPServer
+	newReaderFromStdin       = func(in *os.File) *bufio.Reader {
+		return bufio.NewReader(in)
+	}
+)
+
 // promptGitHubMCPSetupIfNeeded checks whether we should offer GitHub MCP
 // setup and, in interactive mode, asks the user. It is safe to call for
 // direct/non-interactive invocations too — those will simply return.
-func promptGitHubMCPSetupIfNeeded(chatAgent *agent.Agent) {
-	cfg := chatAgent.GetConfigManager().GetConfig()
+func promptGitHubMCPSetupIfNeeded(chatAgent interface{}) {
+	// Get the config manager from either an interface or *agent.Agent
+	var cfgManager interface {
+		GetConfig() *configuration.Config
+		UpdateConfig(func(c *configuration.Config) error) error
+	}
+	var refreshMCPTools func() error
+
+	switch a := chatAgent.(type) {
+	case GitHubSetupAgentInterface:
+		cfgManager = a.GetConfigManager()
+		refreshMCPTools = a.RefreshMCPTools
+	case *agent.Agent:
+		cfgManager = a.GetConfigManager()
+		refreshMCPTools = a.RefreshMCPTools
+	default:
+		// If it's not a type we recognize, try to use the adapter approach
+		if adapter, ok := chatAgent.(*AgentAdapter); ok {
+			cfgManager = adapter.GetConfigManager()
+			refreshMCPTools = adapter.RefreshMCPTools
+		} else {
+			return
+		}
+	}
+
+	cfg := cfgManager.GetConfig()
 	if cfg == nil || cfg.SkipPrompt {
 		return
 	}
 
-	workingDir, err := os.Getwd()
+	workingDir, err := getwdFunc()
 	if err != nil {
 		return
 	}
 
-	if !mcp.ShouldPromptGitHubSetup(workingDir, cfg.MCP, cfg.DismissedPrompts) {
+	if !shouldPromptGitHubSetup(workingDir, cfg.MCP, cfg.DismissedPrompts) {
 		return
 	}
 
-	repo := mcp.DetectGitHubRepo(workingDir)
+	repo := detectGitHubRepo(workingDir)
 	if repo == nil {
-		return // ShouldPromptGitHubSetup already guards, but be safe.
+		return // shouldPromptGitHubSetup already guards, but be safe.
 	}
 
 	fmt.Println()
@@ -47,7 +92,7 @@ func promptGitHubMCPSetupIfNeeded(chatAgent *agent.Agent) {
 	fmt.Println("  [Enter] Skip for now")
 	fmt.Print("  Choose: ")
 
-	reader := bufio.NewReader(os.Stdin)
+	reader := newReaderFromStdin(os.Stdin)
 	choice, err := reader.ReadString('\n')
 	if err != nil {
 		return
@@ -56,7 +101,7 @@ func promptGitHubMCPSetupIfNeeded(chatAgent *agent.Agent) {
 
 	switch choice {
 	case "s", "setup", "yes", "y":
-		server, setupErr := mcp.RunGitHubMCPSetup(context.Background(), repo, reader)
+		server, setupErr := runGitHubMCPSetup(context.Background(), repo, reader)
 		if setupErr != nil {
 			fmt.Printf("[WARN] GitHub MCP setup failed: %v\n", setupErr)
 			return
@@ -64,16 +109,18 @@ func promptGitHubMCPSetupIfNeeded(chatAgent *agent.Agent) {
 		if server == nil {
 			return // User cancelled
 		}
-		if saveErr := mcp.SaveGitHubMCPServer(server); saveErr != nil {
+		if saveErr := saveGitHubMCPServer(server); saveErr != nil {
 			fmt.Printf("[WARN] Failed to save GitHub MCP config: %v\n", saveErr)
 			return
 		}
 		// Reload MCP in the running agent so tools become available immediately.
-		chatAgent.RefreshMCPTools()
+		if refreshMCPTools != nil {
+			refreshMCPTools()
+		}
 		fmt.Println("   (GitHub tools will be available for this session)")
 
 	case "n", "never", "no":
-		if saveErr := chatAgent.GetConfigManager().UpdateConfig(func(c *configuration.Config) error {
+		if saveErr := cfgManager.UpdateConfig(func(c *configuration.Config) error {
 			if c.DismissedPrompts == nil {
 				c.DismissedPrompts = make(map[string]bool)
 			}
@@ -85,4 +132,20 @@ func promptGitHubMCPSetupIfNeeded(chatAgent *agent.Agent) {
 		fmt.Println("   Won't ask again. Re-enable with: ledit config set dismissed_prompts.github_mcp_setup false")
 	}
 	// Unrecognized choices (including empty/Enter) are silently ignored.
+}
+
+// AgentAdapter wraps *agent.Agent to implement GitHubSetupAgentInterface
+type AgentAdapter struct {
+	agent *agent.Agent
+}
+
+func (a *AgentAdapter) GetConfigManager() interface {
+	GetConfig() *configuration.Config
+	UpdateConfig(func(c *configuration.Config) error) error
+} {
+	return a.agent.GetConfigManager()
+}
+
+func (a *AgentAdapter) RefreshMCPTools() error {
+	return a.agent.RefreshMCPTools()
 }

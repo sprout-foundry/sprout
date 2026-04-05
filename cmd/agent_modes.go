@@ -236,7 +236,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		}
 
 		// Check if we should prompt for GitHub MCP setup (interactive, non-SkipPrompt)
-		promptGitHubMCPSetupIfNeeded(chatAgent)
+		promptGitHubMCPSetupIfNeeded(&AgentAdapter{agent: chatAgent})
 
 		err = runInteractiveMode(ctx, chatAgent, eventBus)
 	} else {

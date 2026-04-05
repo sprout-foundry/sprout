@@ -430,17 +430,17 @@ func (ac *APIClient) sendStreamingRequest(messages []api.Message, tools []api.To
 
 		case <-ctx.Done():
 			ac.displayTimeoutError("Request timed out", ac.overallTimeout)
-			return nil, fmt.Errorf("API request timed out after %v", ac.overallTimeout)
+			return nil, fmt.Errorf("API request timed out after %s", ac.overallTimeout)
 
 		case <-firstChunkTimer.C:
 			if !firstChunkReceived {
 				ac.displayTimeoutError("No response from API", ac.firstChunkTimeout)
-				return nil, fmt.Errorf("no response received within %v", ac.firstChunkTimeout)
+				return nil, fmt.Errorf("no response received within %s", ac.firstChunkTimeout)
 			}
 
 		case <-chunkTimer.C:
 			ac.displayTimeoutError("API stopped responding", ac.chunkTimeout)
-			return nil, fmt.Errorf("no data received for %v", ac.chunkTimeout)
+			return nil, fmt.Errorf("no data received for %s", ac.chunkTimeout)
 
 		case <-chunkReceived:
 			if !firstChunkReceived {
@@ -527,7 +527,7 @@ func (ac *APIClient) sendRegularRequest(messages []api.Message, tools []api.Tool
 
 	case <-ctx.Done():
 		ac.displayTimeoutError("Request timed out", ac.overallTimeout)
-		return nil, fmt.Errorf("API request timed out after %v", ac.overallTimeout)
+		return nil, fmt.Errorf("API request timed out after %s", ac.overallTimeout)
 
 	case result := <-resultChan:
 		logChatResponseDetailed(result.resp, ac.agent.client.GetProvider(), false, ac.agent.currentIteration)

@@ -68,7 +68,7 @@ func FetchBinaryURL(url string, kind ResponseKind) (*BinaryFetchResult, error) {
 	case ResponseKindPDF:
 		return processPDFBinary(effectiveURL, data)
 	default:
-		return nil, fmt.Errorf("unsupported content type for binary fetch: %v", kind)
+		return nil, fmt.Errorf("unsupported content type for binary fetch: %s", kind)
 	}
 }
 

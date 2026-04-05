@@ -54,7 +54,7 @@ func ExecuteCommand(cmd string) (string, error) {
 
 	// Start the command
 	if err := command.Start(); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to start command: %w", err)
 	}
 
 	// Stream stdout and stderr in real-time
@@ -79,7 +79,7 @@ func ExecuteCommand(cmd string) (string, error) {
 
 	// Wait for command to complete
 	if err := command.Wait(); err != nil {
-		return outputBuf.String(), err
+		return outputBuf.String(), fmt.Errorf("command failed: %w", err)
 	}
 
 	return outputBuf.String(), nil

@@ -78,21 +78,29 @@ const ContextMenu: FC<ContextMenuProps> = ({ isOpen, x, y, onClose, children, cl
     if (!isOpen || !menuRef.current) return;
     const el = menuRef.current;
 
-    // Reset any inline styles from a previous open before computing fresh position
-    el.style.left = '';
-    el.style.top = '';
-
+    // In testing environments (jsdom), getBoundingClientRect may return empty values
     const rect = el.getBoundingClientRect();
+    if (!rect || rect.width === 0 || rect.height === 0) {
+      return;
+    }
+
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const pad = 8;
 
+    let translateX = 0;
+    let translateY = 0;
+
     if (rect.right > vw) {
-      el.style.left = `${Math.max(pad, vw - rect.width - pad)}px`;
+      translateX = Math.max(pad, vw - rect.width - pad) - x;
     }
     if (rect.bottom > vh) {
-      el.style.top = `${Math.max(pad, vh - rect.height - pad)}px`;
+      translateY = Math.max(pad, vh - rect.height - pad) - y;
     }
+
+    // Use a CSS custom property so it coexists with the animation scale
+    // instead of clobbering it.
+    el.style.setProperty('--menu-translate', `${translateX}px ${translateY}px`);
   }, [isOpen, x, y]);
 
   if (!isOpen) return null;

@@ -83,7 +83,7 @@ func NewStructuredError(code, message string, severity ErrorSeverity, category E
 		err.StackTrace = captureStackTrace()
 	}
 
-	return err
+	return err // Return the created error (not wrapping another error)
 }
 
 // NewSystemError creates a system-level error

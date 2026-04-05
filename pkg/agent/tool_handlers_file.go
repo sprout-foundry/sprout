@@ -169,7 +169,7 @@ func handleReadImageFileMultimodal(ctx context.Context, a *Agent, filePath strin
 	_, mimeType := console.DetectImageMagic(data)
 	if mimeType == "" {
 		// Not a valid image — fall back to text handler error
-		return nil, "", fmt.Errorf("only text content files can be read. %s appears to be a non-text or unsupported image file", cleanPath)
+		return nil, "", fmt.Errorf("cannot read file %s: not a text file or unsupported image format", cleanPath)
 	}
 
 	// Check size limit
@@ -291,10 +291,7 @@ func formatJSONParseError(content string, err error, callerTool string) error {
 		return fmt.Errorf("invalid JSON at line=%d col=%d: %w; next_step=%s", line, col, err, sameToolJSONFixHint(callerTool))
 	}
 
-	return fmt.Errorf(
-		"invalid JSON at line=%d col=%d: %w; snippet=%q; next_step=%s",
-		line, col, err, snippet, sameToolJSONFixHint(callerTool),
-	)
+	return fmt.Errorf("invalid JSON at line=%d col=%d: %w; snippet=%q; next_step=%s", line, col, err, snippet, sameToolJSONFixHint(callerTool))
 }
 
 func sameToolJSONFixHint(callerTool string) string {
@@ -578,7 +575,7 @@ func disallowRawStructuredWrite(path, toolName string) error {
 	ext := strings.ToLower(filepath.Ext(path))
 	switch ext {
 	case ".json", ".yaml", ".yml":
-		return fmt.Errorf("%s is not allowed for structured files (%s). Use write_structured_file or patch_structured_file", toolName, ext)
+		return fmt.Errorf("%s is not allowed for structured files (%s); use write_structured_file or patch_structured_file instead", toolName, ext)
 	default:
 		return nil
 	}

@@ -90,6 +90,10 @@ jobs:
       run: |
         cd webui && npm ci
 
+    - name: Get the version
+      id: get_version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
     - name: Build and deploy React UI
       shell: bash
       run: make deploy-ui
@@ -98,9 +102,16 @@ jobs:
       shell: bash
       run: make verify-ui-embedded
 
-    - name: Get the version
-      id: get_version
-      run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+    - name: Commit embedded UI assets to release tag
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add pkg/webui/static/
+        git diff --cached --quiet || (
+          git commit -m "chore: embed UI assets for ${{ steps.get_version.outputs.VERSION }}"
+          git tag -f ${{ steps.get_version.outputs.VERSION }} HEAD
+          git push origin ${{ steps.get_version.outputs.VERSION }} --force
+        )
 
     - name: Generate changelog
       run: |

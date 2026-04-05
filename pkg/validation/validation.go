@@ -85,7 +85,7 @@ func (v *Validator) decorateEventPayload(payload map[string]interface{}) map[str
 
 // ValidateSyntax checks if Go code has valid syntax using gofmt
 func (v *Validator) ValidateSyntax(ctx context.Context, path, content string) error {
-	cmd := exec.CommandContext(ctx, "gofmt", "-e", "-l", "-")
+	cmd := exec.CommandContext(ctx, "gofmt", "-e", "-l")
 	cmd.Dir = "."
 
 	var stdout, stderr bytes.Buffer
@@ -152,7 +152,7 @@ func (v *Validator) RunValidation(ctx context.Context, path, content string) Val
 
 // ValidateImports checks for import issues using goimports
 func (v *Validator) ValidateImports(ctx context.Context, path, content string) []Diagnostic {
-	cmd := exec.CommandContext(ctx, "goimports", "-l", "-")
+	cmd := exec.CommandContext(ctx, "goimports", "-l")
 	cmd.Dir = "."
 
 	var stdout, stderr bytes.Buffer

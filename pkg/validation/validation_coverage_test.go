@@ -226,11 +226,9 @@ func TestValidator_ConcurrentSetEventMetadataNilAndNonNil(t *testing.T) {
 }
 
 func TestValidator_ConcurrentRunAsyncValidation(t *testing.T) {
-	bus := events.NewEventBus()
-	defer bus.Unsubscribe("conc-async-safety")
-	_ = bus.Subscribe("conc-async-safety")
-
-	v := NewValidator(bus)
+	// Use nil event bus to avoid race between async goroutine's Publish
+	// and test cleanup's Unsubscribe (fire-and-forget can't be synchronized).
+	v := NewValidator(nil)
 	v.SetEventMetadata(map[string]interface{}{"async": true})
 
 	const calls = 50

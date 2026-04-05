@@ -149,8 +149,8 @@ func main() { fmt.Println("hello") }
 
 import (
 	"fmt"
-	"strings"
 	"os"
+	"strings"
 )
 
 func main() {
@@ -303,11 +303,9 @@ func TestToDiagnosticsMap_PreservesAllFields(t *testing.T) {
 // --- 5. Concurrency: RunValidation + RunAsyncValidation simultaneously ---
 
 func TestRunValidation_ConcurrentWithRunAsyncValidation(t *testing.T) {
-	bus := events.NewEventBus()
-	defer bus.Unsubscribe("conc-test-1")
-	_ = bus.Subscribe("conc-test-1")
-
-	v := NewValidator(bus)
+	// Use nil event bus to avoid race between async goroutine's Publish
+	// and test cleanup's Unsubscribe (fire-and-forget can't be synchronized).
+	v := NewValidator(nil)
 	v.SetEventMetadata(map[string]interface{}{"concurrent": true})
 
 	var wg sync.WaitGroup

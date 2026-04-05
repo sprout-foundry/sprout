@@ -345,7 +345,7 @@ func validateDataAgainstSchema(data interface{}, schema map[string]interface{}, 
 
 func formatStructuredValidationError(toolName string, errs []string, context string) error {
 	if len(errs) == 0 {
-		return fmt.Errorf("schema validation failed")
+		return fmt.Errorf("schema validation failed: no error details provided")
 	}
 
 	paths := extractValidationPaths(errs)
@@ -360,16 +360,10 @@ func formatStructuredValidationError(toolName string, errs []string, context str
 	}
 
 	if context == "" {
-		return fmt.Errorf(
-			"schema validation failed: tool=%s error_count=%d failed_paths=%s details=%s",
-			toolName, len(errs), pathSummary, details,
-		)
+		return fmt.Errorf("schema validation failed: tool=%s error_count=%d failed_paths=%s details=%s", toolName, len(errs), pathSummary, details)
 	}
 
-	return fmt.Errorf(
-		"schema validation failed: tool=%s %s error_count=%d failed_paths=%s details=%s",
-		toolName, context, len(errs), pathSummary, details,
-	)
+	return fmt.Errorf("schema validation failed: tool=%s %s error_count=%d failed_paths=%s details=%s", toolName, context, len(errs), pathSummary, details)
 }
 
 func extractValidationPaths(errs []string) []string {

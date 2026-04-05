@@ -358,6 +358,7 @@ const AppContent: FC<AppContentProps> = ({
           onUnstageFile: handleUnstageFile,
           onDiscardFile: handleDiscardFile,
           onSectionAction: handleSectionAction,
+          onOpenFile: handleFileClick,
           apiService,
           openWorkspaceBuffer,
         }}

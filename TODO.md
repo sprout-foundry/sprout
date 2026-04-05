@@ -144,7 +144,6 @@
 [x] - CODE QUALITY: Reduce silent error swallowing — many catch blocks use `catch {}`, `catch { /* ignore */ }`, or `.catch(() => {})` which silently discard errors. At minimum, these should log at debug/warn level so issues are not invisible during development.
 [x] - CODE QUALITY: Reduce silent error swallowing — many catch blocks use `catch {}`, `catch { /* ignore */ }`, or `.catch(() => {})` which silently discard errors. At minimum, these should log at debug/warn level so issues are not invisible during development. (Go: 12 `_ =` sites across 8 files now log via log.Printf; TS already clean)
 [x] - CODE QUALITY: Improve test coverage across low-coverage packages — `pkg/credentials` (20.0%), `pkg/interfaces/types` (34.8%), `pkg/trace` (48.2%), `pkg/validation` (0%), `pkg/git` (65.9%) have notably low coverage. Several files in `cmd/` have 0% function coverage (copilot.go, plan.go, log.go, diag.go, review_staged.go, github_setup_prompt.go).
-[] - CODE QUALITY: Improve test coverage across low-coverage packages — `pkg/credentials` (20.0%), `pkg/interfaces/types` (34.8%), `pkg/trace` (48.2%), `pkg/validation` (0%), `pkg/git` (65.9%) have notably low coverage. Several files in `cmd/` have 0% function coverage (copilot.go, plan.go, log.go, diag.go, review_staged.go, github_setup_prompt.go).
 [x] - CODE QUALITY: Use standardized error handling in Go — inconsistent patterns of `fmt.Errorf` vs `errors.New` vs returning bare errors across packages. Adopt a project-wide convention (e.g., always use `fmt.Errorf("context: %w", err)` for wrapped errors).
 [] - CODE QUALITY: Use standardized error handling in Go — inconsistent patterns of `fmt.Errorf` vs `errors.New` vs returning bare errors across packages. Adopt a project-wide convention (e.g., always use `fmt.Errorf("context: %w", err)` for wrapped errors).
 [] - CODE QUALITY: Add proper TypeScript strict mode auditing — `tsconfig.json` has `strict: true` but there is no CI step that fails on type errors. Ensure `tsc --noEmit` runs as part of CI/build checks.
@@ -166,3 +165,114 @@
 
 [] - WEBUI: Add support for leveraging worktrees for runnning secondary chats for scoped feature work.
 [] - WEBUI: terminal randomly resetting.
+
+---
+
+## API Key / Credential Handling Improvements
+
+### Security
+
+[ ] - CREDENTIALS: Encrypt API keys at rest — `api_keys.json` stores keys in plaintext. Keys should be encrypted with a key derived from a user passphrase or machine-specific key (e.g., via `age`, `nacl/secretbox`, or OS keyring) so that a compromised `~/.ledit/` directory does not expose all provider secrets.
+[ ] - CREDENTIALS: Support OS-native secret storage (keyring) — Integrate with `keychain` (macOS), `secret-service` (Linux/DBus), or `wincred` (Windows) via a library like `zalando/go-keyring` so keys are never written to disk in any file under `~/.ledit/`. Fall back to encrypted file if keyring is unavailable.
+[ ] - CREDENTIALS: Mask API keys in logs — Ensure resolved credential values are never printed or logged (not even in debug/trace logs). Audit all `log.Printf`/`fmt.Printf` calls that handle `Resolved.Value` or `configCopy.Auth.Key` to confirm no leakage.
+
+### Architecture & Consolidation
+
+[ ] - CREDENTIALS: Consolidate the three parallel credential paths into one — Currently there are three independent ways credentials are resolved: (1) `credentials.Resolve()` in `pkg/credentials/store.go` (env → stored file), (2) `configuration.ResolveProviderCredential()` in `pkg/configuration/provider_auth.go` (env → stored keys → env metadata), and (3) hardcoded `credentials.Resolve(provider, "PROVIDER_API_KEY")` calls scattered in `pkg/agent_api/interface.go` and `pkg/agent_api/models.go`. These should be unified into a single resolution function with a clear precedence chain, eliminating duplication and reducing the risk of inconsistent behavior.
+[ ] - CREDENTIALS: Remove hardcoded	env var names from `pkg/agent_api/interface.go` — The `IsProviderAvailable()` function has a giant switch with 8+ hardcoded `"PROVIDER_API_KEY"` strings. This should delegate to `GetProviderAuthMetadata()` (which already knows the correct env var for every provider) so that adding a new provider never requires editing two places.
+[ ] - CREDENTIALS: Remove hardcoded	env var names from `pkg/agent_api/models.go` — `resolveCredentialValue()` is a thin wrapper around `credentials.Resolve()` that duplicates the env-var string already stored in provider configs and `ProviderAuthMetadata`. Remove it and call through the unified resolution path.
+[ ] - CREDENTIALS: `api_keys.go` `ReachableAPIKey` struct duplicates `ProviderAuthMetadata` — `getSupportedProviders()` returns a hardcoded list of `ProviderAPIKey` structs that duplicates information already in `pkg/agent_providers/configs/*.json` and `GetProviderAuthMetadata()`. Remove `getSupportedProviders()` and drive the supported-provider list from the embedded provider configs + custom providers, with `ProviderAuthMetadata` as the single source of truth.
+
+### Custom Providers
+
+[ ] - CREDENTIALS: Stop storing API keys in provider config JSON — `CustomProviderConfig.APIKey` stores secrets in the main `config.json` file (even though the webui strips it on read-back and the field is tagged `"not recommended for production"`). Remove this field entirely and use the `EnvVar` field (resolved through the unified credential path) or the credential store file as the only storage mechanism. Run a one-time migration that moves any existing `api_key` values into `api_keys.json`.
+[ ] - CREDENTIALS: Custom providers should resolve keys through the same unified path — Currently `CreateCustomProvider()` in `pkg/factory/factory.go` calls `ResolveProviderCredential()` which checks `api_keys.json`. But `GetAuthToken()` in `pkg/agent_providers/provider_config.go` only checks the env var and the hardcoded `Auth.Key` field. These two paths should be consistent. The factory should inject the resolved key into `configCopy.Auth.Key` for custom providers (it already does this for generic providers) and document that `Auth.Key` is runtime-only, never persisted.
+
+### MCP Service Credentials
+
+[ ] - CREDENTIALS: MCP server env vars store secrets in plaintext in `config.json` — MCP server configs allow setting `env` vars (e.g., `GITHUB_PERSONAL_ACCESS_TOKEN`) which are stored alongside the config in `config.json`. These secrets should be migrated to the credential store (or OS keyring) and referenced by a placeholder/pointer in the MCP config, so the main config file never contains raw token values.
+[ ] - CREDENTIALS: Add a dedicated credential management API for MCP servers — Currently the only way to set MCP service credentials is via the env block in the MCP server config or by setting shell environment variables. Add explicit `credentials` fields to `MCPServerConfig` (or a separate `mcp_credentials.json` store) so the webui can present per-service credential input fields and securely store/reference them without users having to know the correct environment variable name.
+
+### WebUI Credential UX
+
+[ ] - CREDENTIALS: Add a credential management page in the webui settings — Currently the webui only exposes credential input during onboarding. There is no settings page to view, add, update, or delete stored API keys for providers (built-in or custom) or MCP services. Users must edit files manually or re-run the CLI onboarding flow.
+[ ] - CREDENTIALS: Show credential status (has key / missing key / env-only) for all providers in the settings UI — The onboarding status endpoint returns `has_credential` per provider, but the general settings pages do not. Users cannot see at a glance which providers are properly configured without starting onboarding.
+[ ] - CREDENTIALS: Allow testing/validating stored credentials from the webui — Add a "Test Connection" button per provider that makes a lightweight API call (e.g., `GET /models`) to verify the stored credential is valid and not expired. Show clear success/failure feedback.
+
+### Per-Provider Key Rotation & Multi-Key Support
+
+[ ] - CREDENTIALS: Support key rotation without service interruption — When a user updates an API key, the new key should be validated before replacing the old one. If validation fails, keep the old key and show an error. Currently `SetAPIKey` → `SaveAPIKeys` is a blind write with no validation that the new key works.
+[ ] - CREDENTIALS: Support multiple keys per provider — Some users may want to use different keys for different projects or to distribute load. Supporting a list of keys per provider with automatic rotation/fallback would help (low priority — env var per-project covers some of this).
+
+### Cleanup & Hardening
+
+[ ] - CREDENTIALS: File permissions audit — `api_keys.json` is written with `0600` which is correct, but `config.json` (which may contain MCP env vars with secrets and the `CustomProviderConfig.APIKey` field) uses whatever `os.WriteFile` default is in `config.go`. Ensure all files containing secrets are created with `0600` and the config directory has `0700`. Add a startup permission check that warns if permissions are too open.
+[ ] - CREDENTIALS: Add credential redaction to config export/debug commands — Any command that dumps config (e.g., `ledit diag`, `ledit log`, config export) should redact all credential values before output. Audit `cmd/diag.go` and any other config-dumping paths.
+
+---
+
+## Onboarding Flow Improvements
+
+### Editor-Only Mode (No Provider Required)
+
+[ ] - ONBOARDING: Allow the webui to be used as a pure editor/terminal without configuring any AI provider — When a fresh user opens the webui, they are blocked by a mandatory onboarding dialog that requires selecting a provider and (for most providers) entering an API key. The webui is a full code editor with file browsing, terminals, and git integration — features that work entirely without an AI provider. The onboarding dialog should have a clear "Skip setup — use as editor" option (or equivalently, not block at all) so users can explore the editor first and set up AI later via Settings. Currently `handleAPIOnboardingStatus` in `pkg/webui/onboarding_api.go` returns `setup_required: true` when `currentProvider == "" || currentProvider == "test"`, which guarantees the modal blocks entry. The `test` provider is already excluded from the "configured" check even though it works fine for non-AI workflows.
+[ ] - ONBOARDING: Allow the webui chat/agent to gracefully degrade when no provider is configured — Once a user dismisses onboarding without a provider, the chat panel should show a friendly prompt explaining that AI features require a provider, with a button to open provider setup (rather than showing an error or a broken chat). The editor, terminal, file tree, and git panels should all remain fully functional. Currently `getClientAgent()` in `pkg/webui/client_context.go` calls `agent.NewAgentWithModel("")` which goes through `EnsureAPIKey` → `SelectNewProvider` and would fail without an interactive terminal. The webui agent creation path should tolerate a missing provider and produce a "no-agent" state that the chat UI can present gracefully.
+[ ] - ONBOARDING: Add "Set up later" / "Use as editor only" to the onboarding dialog — The webui `OnboardingDialog` component (`webui/src/components/OnboardingDialog.tsx`) has only "Refresh" and "Complete Setup" buttons. There is no way to dismiss the dialog without completing setup. Add a prominent "Skip — use as editor" button that dismisses the dialog and stores a `provider: "none"` or `provider: ""` preference so subsequent page loads do not re-trigger onboarding. The skip should be easily reversible (e.g., a banner or settings link saying "Configure AI provider to enable chat features").
+[ ] - ONBOARDING: The CLI `agent` command should not block on provider setup — `NewAgentWithModel` (`pkg/agent/agent.go`) calls `configManager.EnsureAPIKey()` then `client.CheckConnection()` in a retry loop, and falls through to `recoverProviderStartup` which calls `SelectNewProvider()` — a terminal prompt that blocks. In the webui daemon path (non-interactive), this will hang or return an opaque error. The CLI should detect non-interactive environments and either default to `test` or fail fast with a clear message ("No provider configured. Run `ledit agent` interactively or set LEDIT_PROVIDER / configure ~/.ledit/config.json") instead of blocking.
+
+### CLI Onboarding UX
+
+[ ] - ONBOARDING: CLI first-run should offer a clear "skip / use local only" option — `selectInitialProvider()` in `pkg/configuration/init.go` presents all providers and forces the user to pick one, even for users who just want to try the editor or use a local model like Ollama. Add a "Skip provider setup" or "Local only (no cloud API)" option at the top of the list that sets `LastUsedProvider` to a sentinel (e.g., `"none"`) so the CLI can detect it and either skip AI features or prompt again only when AI is actually needed (e.g., the user sends a chat message).
+[ ] - ONBOARDING: CLI onboarding does not mention the webui editor — `ShowWelcomeMessage()` and `ShowNextSteps()` in `pkg/configuration/init.go` only describe CLI agent usage. New users are not told that `ledit agent -d` (daemon mode) opens a full web-based code editor. The welcome message should mention the webui as a first-class interface, especially since it provides a much friendlier setup experience for provider/model configuration.
+
+### Webui Onboarding UX
+
+[ ] - ONBOARDING: Webui onboarding should show which providers are already configured from env vars or existing key files — `handleAPIOnboardingStatus` fetches providers and checks credentials, but the onboarding dialog (`OnboardingDialog.tsx`) does not visually distinguish "already configured" providers from ones needing setup. Badge or mark providers that already have credentials (e.g., from `OPENROUTER_API_KEY` in the environment) so users know they can just click through without entering anything.
+[ ] - ONBOARDING: Webui onboarding model list defaults to first model, not recommended — When a user selects a provider, the model input defaults to `provider.models[0]` (potentially an obscure or expensive model) rather than the `recommended_model`. The `onboarding-models` datalist includes all models but doesn't pre-select the recommended one. Auto-fill the model input with `selectedProvider.recommended_model` and make the recommended model visually distinct in the datalist.
+[ ] - ONBOARDING: Webui onboarding should validate the API key before marking setup complete — `handleAPIOnboardingComplete` saves the API key via `cm.SaveAPIKeys()` but never verifies it works. If the user pastes a bad key, setup succeeds but the first chat message will fail with an unhelpful auth error. After saving, make a lightweight `GET /models` call to the provider endpoint and return validation feedback in the response so the dialog can show success or ask the user to re-enter the key.
+[ ] - ONBOARDING: Webui onboarding should persist the chosen model — The onboarding complete endpoint calls both `clientAgent.SetModel(model)` (in-memory) and `persistProviderModelToConfig`. However, if the agent creation failed (no provider) or the config persist failed (logged but swallowed), the model choice is lost on next launch. Ensure the model is always persisted to `config.ProviderModels` before returning success.
+[ ] - ONBOARDING: Re-onboarding should be accessible from the webui (not just on first run) — Once onboarding is completed, there is no way to re-trigger it from the webui without manually deleting config. Add a "Provider setup" entry in the Settings panel (or a gear icon in the chat panel) that opens the same onboarding flow for changing provider/model/key. This is especially important since users may want to switch providers over time.
+
+---
+
+## Testing & CI Gaps
+
+[ ] - TESTING: Add tests for `pkg/mcp` (zero test files) — The MCP package has no tests at all. It handles server lifecycle, HTTP/stdio transport, tool registration, and config parsing — all critical paths for any user with MCP enabled. At minimum add tests for config loading, server name validation, env-var passthrough, and the registry/template system.
+[ ] - TESTING: Add tests for `pkg/filediscovery` (zero test files) — The file discovery module has no tests. It powers the file tree, search, and `.ledit/.ignore` rule loading. Broken discovery would silently corrupt the UI. Add tests for ignore-rule parsing, file-to-directory mapping, and the glob-based walker.
+[ ] - TESTING: CI has no coverage threshold or race detection — `.github/workflows/build.yml` runs `make test-unit` and `make test-integration` but never checks coverage percentages and does not pass `-race` to `go test`. Add a minimum coverage gate (e.g., `go test -race -coverprofile=...` with a `go tool cover -func` check) so regressions are caught.
+[ ] - TESTING: CI has no frontend type-checking step — The TypeScript build runs via `make deploy-ui` (which bundles), but `tsc --noEmit` is never called in isolation. A type error that happens to be bundled away would go unnoticed. Add `npx tsc --noEmit` to the CI pipeline.
+[ ] - TESTING: E2E tests have no onboarding coverage — There are zero tests for the onboarding API (`handleAPIOnboardingStatus`, `handleAPIOnboardingComplete`) and no frontend tests for `OnboardingDialog.tsx`. The onboarding flow is the very first thing every new user sees — a regression here is high-impact.
+
+---
+
+## Provider Catalog & Registration Gaps
+
+[ ] - PROVIDERS: Cerebras has a provider config but is not wired into the product — `pkg/agent_providers/configs/cerebras.json` exists but there is no `CerebrasClientType` in `pkg/agent_api/interface.go`, no entry in `getSupportedProviders()` in `api_keys.go`, no `IsProviderAvailable` case, no factory mapping, and no onboarding entry. The config is dead code. Either finish wiring it in or remove it to avoid confusion.
+[ ] - PROVIDERS: Adding a new provider requires touching 6+ files — To add a fully-wired provider you must edit: (1) `configs/<name>.json`, (2) `getSupportedProviders()` in `api_keys.go`, (3) `IsProviderAvailable()` in `interface.go`, (4) `mapClientTypeToString()` in `manager.go`, (5) `GetProviderAuthMetadata()` in `provider_auth.go`, and (6) potentially the provider catalog. A new provider auto-discovery system should read the configs directory and generate the registration dynamically so that dropping a JSON file is sufficient.
+
+---
+
+## Remaining Large File Refactors (Go)
+
+All files above the 500-line target that still need splitting: `tool_handlers_subagent.go` (1230), `webcontent/browser_rod.go` (1196), `agent_tools/vision_types.go` (1140), `scripted_client.go` (1089), `agent_tools/security.go` (994), `agent_providers/generic_provider.go` (982), `websocket.go` (968), `configuration/config.go` (968), `api_files.go` (917), `agent_api/tools.go` (856), `conversation_optimizer.go` (855), `fallback_parser.go` (823), `git_api_status.go` (813), `console/input_core.go` (807), `conversation_pruner.go` (789), `conversation_handler.go` (741), and 20 more in the 500–730 range. Previous TODO entries already addressed `App.tsx`, `AppContent.tsx`, `git_api.go`, `tool_executor.go`, and `EditorManagerContext.tsx`.
+
+---
+
+## Remaining Large File Refactors (TypeScript)
+
+18 components still over 500 lines: `LocationSwitcher.tsx` (1850), `ContextPanel.tsx` (1662), `EditorPane.tsx` (1262), `FileTree.tsx` (1243), `SettingsPanel.tsx` (1199), `Sidebar.tsx` (1025), `CommandInput.tsx` (945), `SearchView.tsx` (735), `CommandPalette.tsx` (653), `Chat.tsx` (622), `Terminal.tsx` (619), `ReviewWorkspaceTab.tsx` (598), `GoToSymbolOverlay.tsx` (571), `PaneLayoutManager.tsx` (533), `EditorTabs.tsx` (530), `GitSidebarPanel.tsx` (524), `AppContent.tsx` (504), `FileEditsPanel.tsx` (503).
+
+---
+
+## Reliability & Resilience
+
+[ ] - RELIABILITY: Main chat WebSocket has no reconnection logic — `clientSession.ts` uses `clientFetch` for API calls but the real-time event stream depends on a WebSocket managed elsewhere. The terminal WebSocket (`terminalWebSocket.ts`) has proper reconnect with exponential backoff, but if the main agent-event WebSocket drops mid-conversation, there is no documented reconnect path and the user may silently stop receiving updates. Audit and add reconnect with in-flight message replay.
+[ ] - RELIABILITY: Config version has no migration pipeline — `ConfigVersion` is `"2.0"` and `Load()` applies ad-hoc field-default heuristics (e.g., checking if a key exists in raw JSON to decide whether to apply defaults). There is no `migrate("1.0" → "2.0")` function. As more fields are added, these inline checks will become fragile and hard to test. Add a proper migration registry keyed by version pairs so each upgrade step is isolated and testable.
+[ ] - RELIABILITY: WebSocket panic recovery logs but may leave state inconsistent — `websocket.go` has `recover()` in multiple goroutines that logs the panic and returns, but does not notify the client or clean up agent state. A panicked goroutine could leave the agent in a half-initialized state. After recovery, send an error event to the client and potentially re-initialize or terminate the session cleanly.
+
+---
+
+## Developer Experience
+
+[ ] - DX: Add a `CONTRIBUTING.md` or similar developer setup guide — There is no documentation on how to set up a development environment. The `Makefile` has `help` but there is no guide covering: required Go version (1.25 per CI), Node.js version (22), how to run the webui in dev mode (`npm run dev`), how the embed system works, or the test strategy.
+[ ] - DX: `make lint` and `make lint-fix` exist but are not wired into CI — The Makefile frontend lint targets exist but `.github/workflows/build.yml` never calls them. A PR with a lint error can pass CI and merge silently. Add `make lint` to the CI pipeline (non-blocking initially, then blocking once clean).

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"log"
 	"os"
 	"time"
 
@@ -53,7 +54,9 @@ func startInstanceTracker(ctx context.Context, port int, chatAgent *agent.Agent)
 				LastPing:   now,
 				SessionID:  sessionID,
 			}
-			_ = saveInstances(instances)
+			if err := saveInstances(instances); err != nil {
+				log.Printf("[debug] failed to save instance heartbeat: %v", err)
+			}
 		}
 
 		removeHeartbeat := func() {
@@ -62,7 +65,9 @@ func startInstanceTracker(ctx context.Context, port int, chatAgent *agent.Agent)
 				return
 			}
 			delete(instances, instanceID)
-			_ = saveInstances(instances)
+			if err := saveInstances(instances); err != nil {
+				log.Printf("[debug] failed to save instance heartbeat: %v", err)
+			}
 		}
 
 		writeHeartbeat()

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -48,7 +49,7 @@ func loadInstances() (map[string]InstanceInfo, error) {
 		if os.IsNotExist(err) {
 			return make(map[string]InstanceInfo), nil // No instances file yet
 		}
-		return nil, err
+		return nil, fmt.Errorf("failed to read instances file: %w", err)
 	}
 
 	instances := make(map[string]InstanceInfo)
@@ -57,7 +58,7 @@ func loadInstances() (map[string]InstanceInfo, error) {
 	}
 
 	if err := json.Unmarshal(data, &instances); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to unmarshal instances JSON: %w", err)
 	}
 
 	return instances, nil
@@ -66,18 +67,18 @@ func loadInstances() (map[string]InstanceInfo, error) {
 // saveInstances persists running instances to config.
 func saveInstances(instances map[string]InstanceInfo) error {
 	if err := os.MkdirAll(getConfigDir(), 0755); err != nil {
-		return err
+		return fmt.Errorf("failed to create config dir for instances: %w", err)
 	}
 
 	instancesFile := filepath.Join(getConfigDir(), "instances.json")
 	data, err := json.MarshalIndent(instances, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal instances data: %w", err)
 	}
 
 	tmpFile := instancesFile + ".tmp"
 	if err := os.WriteFile(tmpFile, data, 0644); err != nil {
-		return err
+		return fmt.Errorf("failed to write instances temp file: %w", err)
 	}
 	return os.Rename(tmpFile, instancesFile)
 }

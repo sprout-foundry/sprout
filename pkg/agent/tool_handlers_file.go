@@ -148,7 +148,7 @@ func handleReadImageFileMultimodal(ctx context.Context, a *Agent, filePath strin
 	// Resolve path securely
 	cleanPath, err := filesystem.SafeResolvePathWithBypass(ctx, filePath)
 	if err != nil {
-		return nil, "", err
+		return nil, "", fmt.Errorf("failed to resolve path: %w", err)
 	}
 
 	info, err := os.Stat(cleanPath)

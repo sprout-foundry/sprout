@@ -107,6 +107,7 @@ func processPDFForOCROnly(pdfPath, pythonExec string, client api.ClientInterface
 	return "", fmt.Errorf("PDF has no extractable text. direct OCR error: %s; page OCR error: %s",
 		compactVisionError(directOCRErr), compactVisionError(ocrErr))
 }
+
 // The caller must invoke the returned cleanup function when done with the resolved path.
 func ResolvePDFInputPath(inputPath string) (string, func(), error) {
 	if strings.HasPrefix(inputPath, "http://") || strings.HasPrefix(inputPath, "https://") {
@@ -224,7 +225,7 @@ func processPDFWithOCR(pdfPath, pythonExec string, client api.ClientInterface) (
 	images, err := extractImagesFromPDF(pdfPath, pythonExec)
 	if err != nil {
 		if pageErr != nil {
-			return "", fmt.Errorf("failed page rasterization (%s) and image extraction (%w)", pageErr, err)
+			return "", fmt.Errorf("failed page rasterization (%s) and image extraction (%s)", pageErr, err)
 		}
 		return "", fmt.Errorf("failed to extract images from PDF: %w", err)
 	}
@@ -240,7 +241,7 @@ func processPDFWithOCR(pdfPath, pythonExec string, client api.ClientInterface) (
 	text, ocrErr := processOCRImages(images, client, "Image")
 	if ocrErr != nil {
 		if pageErr != nil {
-			return "", fmt.Errorf("page OCR path failed (%s) and image OCR path failed (%w)", pageErr, ocrErr)
+			return "", fmt.Errorf("page OCR path failed (%s) and image OCR path failed (%s)", pageErr, ocrErr)
 		}
 		return "", ocrErr
 	}

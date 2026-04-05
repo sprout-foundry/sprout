@@ -163,7 +163,7 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 				}
 			} else {
 				// No models available from API and no model specified
-				return fmt.Errorf("no models available from provider %s - please specify a model explicitly", api.GetProviderName(provider))
+				return fmt.Errorf("no models available from provider %s; please specify a model explicitly", api.GetProviderName(provider))
 			}
 		}
 	} else if resolvedModel, ok := resolveModelIDForProvider(model, availableModels); ok {
@@ -246,7 +246,7 @@ func (a *Agent) SetProviderPersisted(provider api.ClientType) error {
 				}
 			} else {
 				// No models available from API and no model specified
-				return fmt.Errorf("no models available from provider %s - please specify a model explicitly", api.GetProviderName(provider))
+				return fmt.Errorf("no models available from provider %s; please specify a model explicitly", api.GetProviderName(provider))
 			}
 		}
 	} else if resolvedModel, ok := resolveModelIDForProvider(model, availableModels); ok {
@@ -350,7 +350,7 @@ func (a *Agent) SetModel(model string) error {
 				model = m.ID
 				// Try again with the exact model ID
 				if retryErr := a.client.SetModel(model); retryErr != nil {
-					return fmt.Errorf("model '%s' found in list but failed to set: %w", model, retryErr)
+					return fmt.Errorf("model '%s' found in list but failed to set; %w", model, retryErr)
 				}
 				break
 			}
@@ -409,7 +409,7 @@ func (a *Agent) SetModelPersisted(model string) error {
 				model = m.ID
 				// Try again with the exact model ID
 				if retryErr := a.client.SetModel(model); retryErr != nil {
-					return fmt.Errorf("model '%s' found in list but failed to set: %w", model, retryErr)
+					return fmt.Errorf("model '%s' found in list but failed to set; %w", model, retryErr)
 				}
 				break
 			}

@@ -14,7 +14,7 @@ func (a *Agent) InjectInputContext(input string) error {
 	case a.inputInjectionChan <- input:
 		return nil
 	default:
-		return fmt.Errorf("input injection channel full")
+		return fmt.Errorf("failed to inject input: input injection channel is full")
 	}
 }
 

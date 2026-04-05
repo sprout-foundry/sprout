@@ -25,8 +25,9 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 		return "", err
 	}
 
-	// Block git write operations unless the orchestrator persona has permission
-	// Read-only operations (status, log, diff, etc.) are always allowed through shell_command
+	// Block git write operations unless the orchestrator persona has permission.
+	// Staging operations (git add) are always allowed per policy.
+	// Read-only operations (status, log, diff, etc.) are always allowed through shell_command.
 	if isGitWriteCommand(command) {
 		if !a.isOrchestratorGitWriteAllowed() {
 			if a.GetActivePersona() == "orchestrator" {

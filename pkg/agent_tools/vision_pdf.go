@@ -443,7 +443,7 @@ func processPDFWithVisionModel(pdfPath string, client api.ClientInterface) (stri
 	// Send request to Ollama
 	response, err := client.SendVisionRequest(messages, nil, "")
 	if err != nil {
-		return "", fmt.Errorf("OCR request failed: %s", compactVisionError(err))
+		return "", fmt.Errorf("OCR request failed: %w", err)
 	}
 
 	if len(response.Choices) == 0 {

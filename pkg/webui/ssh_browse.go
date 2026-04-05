@@ -2,7 +2,6 @@ package webui
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 )
@@ -61,7 +60,7 @@ func browseSSHDirectory(hostAlias, requestedPath string) ([]sshRemoteEntry, stri
 		if details == "" {
 			details = err.Error()
 		}
-		return nil, "", "", errors.New(details)
+		return nil, "", "", fmt.Errorf("%s", details)
 	}
 
 	var payload struct {

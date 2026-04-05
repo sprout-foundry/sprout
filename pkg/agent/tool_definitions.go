@@ -451,7 +451,7 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 				// INTERACTIVE: prompt user with detailed risk information (CLI mode only)
 				prompt := buildSecurityPrompt(toolName, args, secResult)
 				if !logger.AskForConfirmation(prompt, false, false) {
-					return nil, "", fmt.Errorf("SECURITY_REJECTED: User rejected %s — %s", toolName, secResult.Reasoning)
+					return nil, "", fmt.Errorf("security rejected: user rejected %s — %s", toolName, secResult.Reasoning)
 				}
 			} else if mgr := agent.GetSecurityApprovalMgr(); mgr != nil && agent.GetEventBus() != nil && !isSubagent {
 				// NON-INTERACTIVE or WEBUI: request approval via webui event bus
@@ -480,11 +480,11 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 					}
 				}
 				if !mgr.RequestApproval(agent.GetEventBus(), agent.GetEventClientID(), toolName, secResult.Risk.String(), secResult.Reasoning, extras) {
-					return nil, "", fmt.Errorf("SECURITY_REJECTED: User rejected %s — %s", toolName, secResult.Reasoning)
+					return nil, "", fmt.Errorf("security rejected: user rejected %s — %s", toolName, secResult.Reasoning)
 				}
 			} else if secResult.ShouldBlock {
 				// NON-INTERACTIVE + DANGEROUS, no approval mechanism: always block (subagents or no terminal/webui)
-				return nil, "", fmt.Errorf("SECURITY_BLOCK: %s — %s", toolName, secResult.Reasoning)
+				return nil, "", fmt.Errorf("security block: %s — %s", toolName, secResult.Reasoning)
 			}
 			// NON-INTERACTIVE + CAUTION, no approval mechanism: auto-allow
 		}

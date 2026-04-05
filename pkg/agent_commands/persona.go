@@ -63,7 +63,7 @@ func (p *PersonaCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 	personaID, persona, ok := resolvePersona(config, args[0])
 	if !ok {
-		return errors.New(fmt.Sprintf("persona not found: %s", args[0]))
+		return fmt.Errorf("persona not found: %s", args[0])
 	}
 
 	if len(args) == 1 || strings.EqualFold(args[1], "apply") {
@@ -248,7 +248,7 @@ func (p *PersonaCommand) createPersona(personaID string, config *configuration.C
 		return errors.New("persona id cannot be empty")
 	}
 	if _, exists := config.SubagentTypes[personaID]; exists {
-		return errors.New(fmt.Sprintf("persona already exists: %s", personaID))
+		return fmt.Errorf("persona already exists: %s", personaID)
 	}
 
 	if err := configManager.UpdateConfig(func(cfg *configuration.Config) error {

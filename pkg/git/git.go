@@ -16,7 +16,7 @@ func GetGitRootDir() (string, error) {
 	var out []byte
 	var err error
 	if out, err = cmd.CombinedOutput(); err != nil {
-		return "", fmt.Errorf("could not find git root: %v", string(out))
+		return "", fmt.Errorf("could not find git root: %s", string(out))
 	}
 	return strings.TrimSpace(string(out)), nil
 }
@@ -31,7 +31,7 @@ func GetGitRemoteURL() (string, error) {
 		cmd = exec.Command("git", "remote")
 		remotesOut, err := cmd.CombinedOutput()
 		if err != nil {
-			return "", fmt.Errorf("could not find git remotes: %v", string(remotesOut))
+			return "", fmt.Errorf("could not find git remotes: %s", string(remotesOut))
 		}
 
 		remotes := strings.Split(strings.TrimSpace(string(remotesOut)), "\n")
@@ -43,7 +43,7 @@ func GetGitRemoteURL() (string, error) {
 		cmd = exec.Command("git", "remote", "get-url", remotes[0])
 		out, err = cmd.CombinedOutput()
 		if err != nil {
-			return "", fmt.Errorf("could not get git remote URL: %v", string(out))
+			return "", fmt.Errorf("could not get git remote URL: %s", string(out))
 		}
 	}
 	return strings.TrimSpace(string(out)), nil
@@ -113,7 +113,7 @@ func GetGitStatus() (currentBranch string, uncommittedChanges int, stagedChanges
 		if strings.Contains(strings.ToLower(string(branchOut)), "not a git repository") {
 			return "", 0, 0, nil // Not an error if it's just not a git repo
 		}
-		return "", 0, 0, fmt.Errorf("failed to get git branch: %v", string(branchOut))
+		return "", 0, 0, fmt.Errorf("failed to get git branch: %s", string(branchOut))
 	}
 	currentBranch = strings.TrimSpace(string(branchOut))
 
@@ -121,7 +121,7 @@ func GetGitStatus() (currentBranch string, uncommittedChanges int, stagedChanges
 	cmdStatus := exec.Command("git", "status", "--porcelain", "-u", "--no-ahead-behind")
 	statusOut, err := cmdStatus.CombinedOutput()
 	if err != nil {
-		return currentBranch, 0, 0, fmt.Errorf("failed to get git status: %v", string(statusOut))
+		return currentBranch, 0, 0, fmt.Errorf("failed to get git status: %s", string(statusOut))
 	}
 
 	lines := strings.Split(strings.TrimSpace(string(statusOut)), "\n")
@@ -158,7 +158,7 @@ func GetUncommittedChanges() (string, error) {
 	cmd := exec.Command("git", "diff", "--no-color", "--no-ext-diff")
 	diffOut, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("failed to get git diff: %v", string(diffOut))
+		return "", fmt.Errorf("failed to get git diff: %s", string(diffOut))
 	}
 
 	diff := strings.TrimSpace(string(diffOut))
@@ -181,7 +181,7 @@ func GetStagedChanges() (string, error) {
 	cmd := exec.Command("git", "diff", "--cached", "--no-color", "--no-ext-diff")
 	diffOut, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("failed to get staged git diff: %v", string(diffOut))
+		return "", fmt.Errorf("failed to get staged git diff: %s", string(diffOut))
 	}
 
 	diff := strings.TrimSpace(string(diffOut))
@@ -206,7 +206,7 @@ func GetRecentTouchedFiles(numCommits int) ([]string, error) {
 	cmd := exec.Command("git", "log", "-n", fmt.Sprintf("%d", numCommits), "--name-only", "--pretty=format:")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get recent files: %v", string(out))
+		return nil, fmt.Errorf("failed to get recent files: %s", string(out))
 	}
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
 	seen := map[string]bool{}
@@ -232,7 +232,7 @@ func GetRecentFileLog(filePath string, limit int) (string, error) {
 	cmd := exec.Command("git", "log", "-n", fmt.Sprintf("%d", limit), "--pretty=format:%h %ad %an %s", "--date=short", "--", filePath)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("failed to get file log: %v", string(out))
+		return "", fmt.Errorf("failed to get file log: %s", string(out))
 	}
 	log := strings.TrimSpace(string(out))
 	if log == "" {

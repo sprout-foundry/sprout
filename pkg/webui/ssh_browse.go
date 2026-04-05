@@ -12,7 +12,7 @@ func browseSSHDirectory(hostAlias, requestedPath string) ([]sshRemoteEntry, stri
 		return nil, "", "", fmt.Errorf("SSH host alias is required")
 	}
 	if err := ensureSSHProgramsAvailable(); err != nil {
-		return nil, "", "", err
+		return nil, "", "", fmt.Errorf("ensure SSH programs available: %w", err)
 	}
 
 	targetPath := strings.TrimSpace(requestedPath)

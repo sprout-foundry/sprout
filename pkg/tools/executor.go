@@ -104,7 +104,10 @@ func (e *Executor) ExecuteTool(ctx context.Context, tool Tool, params Parameters
 		}
 	}
 
-	return result, err
+	if err != nil {
+		return result, fmt.Errorf("execute tool %q: %w", tool.Name(), err)
+	}
+	return result, nil
 }
 
 // ExecuteToolByName executes a tool by name
@@ -171,7 +174,10 @@ func (e *Executor) ExecuteToolCall(ctx context.Context, toolCall api.ToolCall) (
 		e.sessionTracker.RecordToolCall(sessionID, toolCall.Function.Name, args, responseStr)
 	}
 
-	return result, err
+	if err != nil {
+		return result, fmt.Errorf("execute tool call %q: %w", toolCall.Function.Name, err)
+	}
+	return result, nil
 
 }
 

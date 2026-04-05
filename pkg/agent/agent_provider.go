@@ -91,7 +91,7 @@ func promptProviderRecoveryChoice() (int, error) {
 
 		input, err := reader.ReadString('\n')
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("read user choice: %w", err)
 		}
 
 		choice, err := strconv.Atoi(strings.TrimSpace(input))

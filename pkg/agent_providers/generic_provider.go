@@ -692,7 +692,7 @@ func shouldRetryWithMaxCompletionTokens(errBody []byte) bool {
 func rewriteMaxTokensToMaxCompletionTokens(requestBody []byte) ([]byte, bool, error) {
 	var payload map[string]interface{}
 	if err := json.Unmarshal(requestBody, &payload); err != nil {
-		return nil, false, err
+		return nil, false, fmt.Errorf("parse request body: %w", err)
 	}
 
 	maxTokens, hasMaxTokens := payload["max_tokens"]
@@ -708,7 +708,7 @@ func rewriteMaxTokensToMaxCompletionTokens(requestBody []byte) ([]byte, bool, er
 
 	updated, err := json.Marshal(payload)
 	if err != nil {
-		return nil, false, err
+		return nil, false, fmt.Errorf("marshal updated request body: %w", err)
 	}
 	return updated, true, nil
 }
@@ -720,7 +720,7 @@ func (p *GenericProvider) tryMaxCompletionTokensRetry(originalRequestBody []byte
 
 	retryBody, changed, err := rewriteMaxTokensToMaxCompletionTokens(originalRequestBody)
 	if err != nil {
-		return originalRequestBody, nil, true, err
+		return originalRequestBody, nil, true, fmt.Errorf("rewrite max tokens: %w", err)
 	}
 	if !changed {
 		return originalRequestBody, nil, false, nil
@@ -728,7 +728,7 @@ func (p *GenericProvider) tryMaxCompletionTokensRetry(originalRequestBody []byte
 
 	req, err := p.buildHTTPRequest(retryBody, streaming)
 	if err != nil {
-		return retryBody, nil, true, err
+		return retryBody, nil, true, fmt.Errorf("build HTTP request: %w", err)
 	}
 
 	client := p.httpClient
@@ -737,7 +737,7 @@ func (p *GenericProvider) tryMaxCompletionTokensRetry(originalRequestBody []byte
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return retryBody, nil, true, err
+		return retryBody, nil, true, fmt.Errorf("execute HTTP request: %w", err)
 	}
 
 	return retryBody, resp, true, nil

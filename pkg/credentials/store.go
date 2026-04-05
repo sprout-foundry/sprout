@@ -101,7 +101,7 @@ func Resolve(provider, envVar string) (Resolved, error) {
 	}
 	store, err := Load()
 	if err != nil {
-		return Resolved{}, err
+		return Resolved{}, fmt.Errorf("load credentials store: %w", err)
 	}
 	if value := strings.TrimSpace(store[resolved.Provider]); value != "" {
 		resolved.Value = value

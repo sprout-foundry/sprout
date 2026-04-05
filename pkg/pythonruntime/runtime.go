@@ -69,7 +69,7 @@ func inspectInterpreter(alias, path string) (Interpreter, error) {
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return Interpreter{}, err
+		return Interpreter{}, fmt.Errorf("get Python version: %w", err)
 	}
 
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")

@@ -280,7 +280,10 @@ func (ac *APIClient) SendWithRetry(messages []api.Message, tools []api.Tool, rea
 		return nil, &RateLimitExceededError{Attempts: ac.maxRetries + 1, LastError: err}
 	}
 
-	return resp, err
+	if err != nil {
+		return nil, fmt.Errorf("send request: %w", err)
+	}
+	return resp, nil
 }
 
 // sendRequest sends a single request to the LLM

@@ -91,7 +91,7 @@ func resolveAndValidateFile(ctx context.Context, filePath string) (string, os.Fi
 	// SECURITY: Validate path is within working directory (handles symlinks properly)
 	cleanPath, err := filesystem.SafeResolvePathWithBypass(ctx, filePath)
 	if err != nil {
-		return "", 0, err
+		return "", 0, fmt.Errorf("resolve path %q: %w", filePath, err)
 	}
 
 	// Security check passed - now check if file exists

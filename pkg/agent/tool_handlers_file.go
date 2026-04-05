@@ -59,7 +59,10 @@ func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 			a.AddTaskAction("file_read", fmt.Sprintf("Read file: %s (lines %d-%d)", path, startLine, endLine), path)
 		}
 
-		return result, err
+		if err != nil {
+			return result, fmt.Errorf("read file %q: %w", path, err)
+		}
+		return result, nil
 	}
 
 	a.debugLog("Reading file: %s\n", path)
@@ -131,7 +134,10 @@ func handleReadFileWithImages(ctx context.Context, a *Agent, args map[string]int
 	// Only use image path for files with image extensions and when model supports vision
 	if !isImageExtension(path) || a == nil || a.client == nil || !a.client.SupportsVision() {
 		result, err := handleReadFile(ctx, a, args)
-		return nil, result, err
+		if err != nil {
+			return nil, result, fmt.Errorf("handle read file for %q: %w", path, err)
+		}
+		return nil, result, nil
 	}
 
 	return handleReadImageFileMultimodal(ctx, a, path)
@@ -466,7 +472,7 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 				return werr
 			}()
 			if restoreErr != nil {
-				return "", fmt.Errorf("edit would produce invalid JSON in %s (%s) and restore failed: %w", path, parseErr, restoreErr)
+				return "", fmt.Errorf("edit would produce invalid JSON in %s (%w) and restore failed: %w", path, parseErr, restoreErr)
 			}
 			return "", fmt.Errorf("edit would produce invalid JSON in %s: %w", path, parseErr)
 		}

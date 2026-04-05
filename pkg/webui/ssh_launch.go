@@ -426,7 +426,7 @@ func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherU
 	cmd := newSSHCommandContext(ctx, hostAlias, script)
 	out, err := runSSHLoggedCommand(logger, "start-remote-backend", fmt.Sprintf("ssh %s start remote backend", hostAlias), cmd)
 	if err != nil {
-		return 0, 0, false, err
+		return 0, 0, false, fmt.Errorf("start remote backend for %s: %w", hostAlias, err)
 	}
 
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")

@@ -133,13 +133,19 @@ func (h *CIOutputHandler) Write(p []byte) (n int, err error) {
 		return len(p), nil
 	}
 
-	return n, err
+	if err != nil {
+		return n, fmt.Errorf("write filtered content: %w", err)
+	}
+	return n, nil
 }
 
 // WriteString writes a string with appropriate formatting
 func (h *CIOutputHandler) WriteString(s string) error {
 	_, err := h.Write([]byte(s))
-	return fmt.Errorf("ci output write string: %w", err)
+	if err != nil {
+		return fmt.Errorf("ci output write string: %w", err)
+	}
+	return nil
 }
 
 // Printf writes formatted output

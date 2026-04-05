@@ -141,12 +141,12 @@ func MigrateLegacyCustomProviders(cfg *Config) (map[string]CustomProviderConfig,
 func NormalizeCustomProviderConfig(cfg CustomProviderConfig) (CustomProviderConfig, error) {
 	name, err := CanonicalizeCustomProviderName(cfg.Name)
 	if err != nil {
-		return CustomProviderConfig{}, err
+		return CustomProviderConfig{}, fmt.Errorf("canonicalize provider name: %w", err)
 	}
 
 	endpoint, err := normalizeOpenAIEndpoint(cfg.Endpoint)
 	if err != nil {
-		return CustomProviderConfig{}, err
+		return CustomProviderConfig{}, fmt.Errorf("normalize endpoint: %w", err)
 	}
 
 	cfg.Name = name

@@ -53,15 +53,15 @@ func GetGitRemoteURL() (string, error) {
 func GetFileGitPath(filename string) (string, error) {
 	gitRoot, err := GetGitRootDir()
 	if err != nil {
-		return filename, fmt.Errorf("failed to get git root directory: %w", err)
+		return "", fmt.Errorf("failed to get git root directory: %w", err)
 	}
 	absPath, err := filepath.Abs(filename)
 	if err != nil {
-		return filename, fmt.Errorf("failed to get absolute path for %s: %w", filename, err)
+		return "", fmt.Errorf("failed to get absolute path for %s: %w", filename, err)
 	}
 	relPath, err := filepath.Rel(gitRoot, absPath)
 	if err != nil {
-		return filename, fmt.Errorf("failed to get relative path for %s: %w", filename, err)
+		return "", fmt.Errorf("failed to get relative path for %s: %w", filename, err)
 	}
 	return relPath, nil
 }

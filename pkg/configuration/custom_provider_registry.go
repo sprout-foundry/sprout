@@ -51,7 +51,7 @@ func GetCustomProviderPath(name string) (string, error) {
 func LoadCustomProviders() (map[string]CustomProviderConfig, error) {
 	providersDir, err := GetProvidersDir()
 	if err != nil {
-		return nil, fmt.Errorf("normalize custom provider config: %w", err)
+		return nil, fmt.Errorf("get providers directory: %w", err)
 	}
 
 	files, err := filepath.Glob(filepath.Join(providersDir, "*.json"))
@@ -89,7 +89,7 @@ func SaveCustomProvider(cfg CustomProviderConfig) error {
 
 	path, err := GetCustomProviderPath(normalized.Name)
 	if err != nil {
-		return fmt.Errorf("get custom provider path for save: %w", err)
+		return fmt.Errorf("get custom provider path: %w", err)
 	}
 
 	data, err := json.MarshalIndent(normalized, "", "  ")
@@ -103,7 +103,7 @@ func SaveCustomProvider(cfg CustomProviderConfig) error {
 func DeleteCustomProvider(name string) error {
 	path, err := GetCustomProviderPath(name)
 	if err != nil {
-		return fmt.Errorf("get custom provider path for deletion: %w", err)
+		return fmt.Errorf("get custom provider path: %w", err)
 	}
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove custom provider %s: %w", name, err)
@@ -118,7 +118,7 @@ func MigrateLegacyCustomProviders(cfg *Config) (map[string]CustomProviderConfig,
 
 	fileProviders, err := LoadCustomProviders()
 	if err != nil {
-		return nil, fmt.Errorf("get custom provider path: %w", err)
+		return nil, fmt.Errorf("load custom providers: %w", err)
 	}
 
 	for name, provider := range cfg.CustomProviders {
@@ -180,7 +180,7 @@ func NormalizeCustomProviderConfig(cfg CustomProviderConfig) (CustomProviderConf
 func DiscoverCustomProviderModels(cfg CustomProviderConfig) ([]ProviderDiscoveryModel, error) {
 	normalized, err := NormalizeCustomProviderConfig(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("read custom provider file: %w", err)
+		return nil, fmt.Errorf("normalize custom provider config: %w", err)
 	}
 
 	req, err := http.NewRequest(http.MethodGet, normalized.ModelsEndpoint(), nil)
@@ -248,7 +248,7 @@ func (c CustomProviderConfig) ModelsEndpoint() string {
 func (c CustomProviderConfig) ToProviderConfig() (*providers.ProviderConfig, error) {
 	normalized, err := NormalizeCustomProviderConfig(c)
 	if err != nil {
-		return nil, fmt.Errorf("get custom provider config path: %w", err)
+		return nil, fmt.Errorf("normalize custom provider config: %w", err)
 	}
 
 	authType := "none"

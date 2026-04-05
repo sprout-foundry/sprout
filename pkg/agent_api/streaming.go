@@ -368,7 +368,7 @@ func (r *SSEReader) ReadWithTimeout(timeout time.Duration) error {
 			// Ignore other fields like id:, retry:
 
 		case <-timerChan:
-			return fmt.Errorf("SSE stream timeout after %v", timeout)
+			return fmt.Errorf("SSE stream timeout after %s", timeout)
 		}
 	}
 }

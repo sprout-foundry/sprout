@@ -109,7 +109,7 @@ func validateProvider(provider string, configManager *configuration.Manager) err
 			return nil
 		}
 	}
-	return fmt.Errorf("invalid provider: %s\n\nAvailable providers: %v", provider, available)
+	return fmt.Errorf("invalid provider: %s\n\nAvailable providers: %s", provider, available)
 }
 
 // formatValue formats a config value for display

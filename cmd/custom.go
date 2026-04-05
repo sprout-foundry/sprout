@@ -373,7 +373,7 @@ func promptLine(reader *bufio.Reader, prompt string) (string, error) {
 	fmt.Print(prompt)
 	value, err := reader.ReadString('\n')
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to read input: %w", err)
 	}
 	return strings.TrimSpace(value), nil
 }

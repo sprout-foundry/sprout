@@ -155,7 +155,7 @@ func (a *gitApprovalPrompterAdapter) PromptForApproval(command string) (bool, er
 		if err == ErrUINotAvailable {
 			return tools.PromptForGitApprovalStdin(command)
 		}
-		return false, err
+		return false, fmt.Errorf("failed to prompt for git approval: %w", err)
 	}
 
 	return choice == "y", nil

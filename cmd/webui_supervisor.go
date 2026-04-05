@@ -165,11 +165,11 @@ func desiredWebUIHostFile() string {
 func loadWebUIHostRecord() (webUIHostRecord, error) {
 	data, err := os.ReadFile(webUIHostFile())
 	if err != nil {
-		return webUIHostRecord{}, err
+		return webUIHostRecord{}, fmt.Errorf("failed to read webUI host record file: %w", err)
 	}
 	var record webUIHostRecord
 	if err := json.Unmarshal(data, &record); err != nil {
-		return webUIHostRecord{}, err
+		return webUIHostRecord{}, fmt.Errorf("failed to unmarshal webUI host record: %w", err)
 	}
 	return record, nil
 }

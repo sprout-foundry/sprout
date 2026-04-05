@@ -123,7 +123,7 @@ func handlePatchStructuredFile(ctx context.Context, a *Agent, args map[string]in
 	for i, op := range ops {
 		doc, err = applyPatchOperation(doc, op)
 		if err != nil {
-			return "", fmt.Errorf("patch operation failed: tool=patch_structured_file index=%d op=%s path=%s applied=%d/%d err=%v",
+			return "", fmt.Errorf("patch operation failed: tool=patch_structured_file index=%d op=%s path=%s applied=%d/%d err=%w",
 				i, op.Op, op.Path, applied, len(ops), err)
 		}
 		applied++

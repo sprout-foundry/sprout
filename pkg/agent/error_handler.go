@@ -48,14 +48,12 @@ func (eh *ErrorHandler) HandleAPIFailure(apiErr error, messages []api.Message) (
 
 	// In non-interactive mode, fail fast. For CI/GitHub Actions prefer non-interactive unless running unit tests.
 	if !eh.agent.IsInteractiveMode() || ((os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "") && !isRunningUnderTest()) {
-		errorMsg := fmt.Sprintf("API request failed after %d tools executed: %v", toolsExecuted, apiErr)
-
 		if toolsExecuted > 0 {
-			errorMsg += fmt.Sprintf(" (Progress: %d tools executed, %s tokens used)",
-				toolsExecuted, eh.formatTokenCount(eh.agent.totalTokens))
+			return "", fmt.Errorf("non-interactive: API request failed after %d tools executed (progress: %d tools, %s tokens): %w",
+				toolsExecuted, toolsExecuted, eh.formatTokenCount(eh.agent.totalTokens), apiErr)
 		}
-
-		return "", fmt.Errorf("non-interactive: %s", errorMsg)
+		return "", fmt.Errorf("non-interactive: API request failed after %d tools executed: %w",
+			toolsExecuted, apiErr)
 	}
 
 	// In interactive mode, return helpful error message

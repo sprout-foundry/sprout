@@ -1,8 +1,8 @@
 package webcontent
 
 import (
+	"fmt"
 	"context"
-	"errors"
 )
 
 // BrowserRenderer renders HTML pages using a headless browser.
@@ -156,19 +156,19 @@ var _ BrowserRenderer = (*nopRenderer)(nil)
 var nop = &nopRenderer{}
 
 func (n *nopRenderer) RenderPage(_ context.Context, _ string) (string, error) {
-	return "", errors.New("browser rendering not available")
+	return "", fmt.Errorf("browser rendering not available")
 }
 
 func (n *nopRenderer) Screenshot(_ context.Context, _ string, _ string, _, _ int, _ string) error {
-	return errors.New("browser rendering not available")
+	return fmt.Errorf("browser rendering not available")
 }
 
 func (n *nopRenderer) CaptureDOM(_ context.Context, _ string, _, _ int, _ string) (string, error) {
-	return "", errors.New("browser rendering not available")
+	return "", fmt.Errorf("browser rendering not available")
 }
 
 func (n *nopRenderer) Run(_ context.Context, _ string, _ BrowseOptions) (*BrowseResult, error) {
-	return nil, errors.New("browser rendering not available")
+	return nil, fmt.Errorf("browser rendering not available")
 }
 
 func (n *nopRenderer) Close() {}

@@ -209,22 +209,22 @@ func killProcess(cmd *exec.Cmd) error {
 func findFreeLocalPort() (int, error) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("allocate free local port: %w", err)
 	}
 	defer listener.Close()
 	addr, ok := listener.Addr().(*net.TCPAddr)
 	if !ok {
-		return 0, errors.New("failed to determine local port")
+		return 0, fmt.Errorf("failed to determine local port")
 	}
 	return addr.Port, nil
 }
 
 func ensureSSHProgramsAvailable() error {
 	if _, err := exec.LookPath("ssh"); err != nil {
-		return errors.New("ssh is not available on this machine")
+		return fmt.Errorf("ssh is not available on this machine")
 	}
 	if _, err := exec.LookPath("scp"); err != nil {
-		return errors.New("scp is not available on this machine")
+		return fmt.Errorf("scp is not available on this machine")
 	}
 	return nil
 }

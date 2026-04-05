@@ -2,7 +2,6 @@ package mcp
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -235,10 +234,10 @@ func (r *MCPServerRegistry) SearchTemplates(query string) []MCPServerTemplate {
 // AddTemplate adds a custom template to the registry
 func (r *MCPServerRegistry) AddTemplate(template MCPServerTemplate) error {
 	if template.ID == "" {
-		return errors.New("template ID cannot be empty")
+		return fmt.Errorf("template ID cannot be empty")
 	}
 	if template.Name == "" {
-		return errors.New("template name cannot be empty")
+		return fmt.Errorf("template name cannot be empty")
 	}
 	if template.Type == "" {
 		template.Type = "stdio" // Default

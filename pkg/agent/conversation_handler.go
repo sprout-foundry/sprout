@@ -2,7 +2,6 @@ package agent
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -710,7 +709,7 @@ func (ch *ConversationHandler) finalizeConversation() (string, error) {
 		}
 	}
 
-	return "", errors.New("no assistant response found")
+	return "", fmt.Errorf("no assistant response found")
 }
 
 func (ch *ConversationHandler) maybeCheckpointCompletedTurn() {

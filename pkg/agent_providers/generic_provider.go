@@ -173,7 +173,7 @@ func (p *GenericProvider) SendChatRequestStream(messages []api.Message, tools []
 			response, err := p.handleStreamingResponse(retryResp, callback)
 			if err != nil {
 				logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, true, "streaming_response", err)
-				return nil, err
+				return nil, fmt.Errorf("chat request failed: %w", err)
 			}
 			return response, nil
 		}
@@ -189,7 +189,7 @@ func (p *GenericProvider) SendChatRequestStream(messages []api.Message, tools []
 	if err != nil {
 		// Log request on streaming error
 		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, true, "streaming_response", err)
-		return nil, err
+		return nil, fmt.Errorf("chat request failed (streaming): %w", err)
 	}
 
 	// Success - don't log the request
@@ -199,7 +199,7 @@ func (p *GenericProvider) SendChatRequestStream(messages []api.Message, tools []
 // CheckConnection tests provider connection with current model
 func (p *GenericProvider) CheckConnection() error {
 	if err := p.ensureModel(); err != nil {
-		return err
+		return fmt.Errorf("check connection: failed to ensure model: %w", err)
 	}
 
 	// Send a minimal test request to verify the model works
@@ -211,7 +211,10 @@ func (p *GenericProvider) CheckConnection() error {
 	}
 
 	_, err := p.SendChatRequest(testMessages, nil, "")
-	return err
+	if err != nil {
+		return fmt.Errorf("check connection: test request failed: %w", err)
+	}
+	return nil
 }
 
 // SetDebug enables or disables debug mode
@@ -512,7 +515,7 @@ func (p *GenericProvider) ResetTPSStats() {
 // buildChatRequest builds the request body for chat completion
 func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.Tool, reasoning string, stream bool) ([]byte, error) {
 	if err := p.ensureModel(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ensure model: %w", err)
 	}
 
 	// Convert messages according to provider configuration
@@ -870,7 +873,7 @@ func (p *GenericProvider) convertToolCalls(toolCalls []api.ToolCall) interface{}
 func (p *GenericProvider) buildHTTPRequest(body []byte, streaming bool) (*http.Request, error) {
 	req, err := http.NewRequest("POST", p.config.Endpoint, bytes.NewReader(body))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get model context limit: %w", err)
 	}
 
 	// Check if authentication is needed

@@ -134,7 +134,7 @@ func (f *ProviderFactory) CreateProvider(name string) (api.ClientInterface, erro
 func (f *ProviderFactory) CreateProviderWithModel(name, model string) (api.ClientInterface, error) {
 	provider, err := f.CreateProvider(name)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load embedded provider config: %w", err)
 	}
 
 	// Only set model if it's not empty - otherwise use the default model from config

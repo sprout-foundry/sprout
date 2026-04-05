@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -56,7 +55,7 @@ func normalizeSessionID(sessionID string) (string, error) {
 	clean := strings.TrimSpace(sessionID)
 	clean = strings.TrimPrefix(clean, legacySessionPrefix)
 	if clean == "" {
-		return "", errors.New("session ID is required")
+		return "", fmt.Errorf("session ID is required")
 	}
 	if strings.Contains(clean, string(os.PathSeparator)) || strings.Contains(clean, "/") {
 		return "", fmt.Errorf("session ID %q cannot contain path separators", sessionID)
@@ -192,19 +191,19 @@ func (a *Agent) SaveState(sessionID string) error {
 func (a *Agent) SaveStateScoped(sessionID, workingDir string) error {
 	stateDir, err := GetStateDir()
 	if err != nil {
-		return err
+		return fmt.Errorf("SaveStateScoped: failed to get state dir: %w", err)
 	}
 	cleanSessionID, err := normalizeSessionID(sessionID)
 	if err != nil {
-		return err
+		return fmt.Errorf("SaveStateScoped: invalid session ID: %w", err)
 	}
 	cleanWorkingDir, err := normalizeWorkingDirectory(workingDir)
 	if err != nil {
-		return err
+		return fmt.Errorf("SaveStateScoped: invalid working directory: %w", err)
 	}
 	stateFile, err := buildScopedSessionFilePath(stateDir, cleanSessionID, cleanWorkingDir)
 	if err != nil {
-		return err
+		return fmt.Errorf("SaveStateScoped: failed to build session file path: %w", err)
 	}
 	if err := os.MkdirAll(filepath.Dir(stateFile), 0700); err != nil {
 		return fmt.Errorf("failed to create scoped session directory: %w", err)
@@ -532,11 +531,11 @@ func RenameSession(sessionID string, newName string) error {
 func RenameSessionScoped(sessionID, newName, workingDir string) error {
 	stateDir, err := GetStateDir()
 	if err != nil {
-		return err
+		return fmt.Errorf("RenameSessionScoped: failed to get state dir: %w", err)
 	}
 	stateFile, err := resolveSessionStateFile(stateDir, sessionID, workingDir)
 	if err != nil {
-		return err
+		return fmt.Errorf("RenameSessionScoped: failed to resolve session file: %w", err)
 	}
 
 	data, err := os.ReadFile(stateFile)
@@ -589,11 +588,11 @@ func DeleteSession(sessionID string) error {
 func DeleteSessionScoped(sessionID, workingDir string) error {
 	stateDir, err := GetStateDir()
 	if err != nil {
-		return err
+		return fmt.Errorf("DeleteSessionScoped: failed to get state dir: %w", err)
 	}
 	stateFile, err := resolveSessionStateFile(stateDir, sessionID, workingDir)
 	if err != nil {
-		return err
+		return fmt.Errorf("DeleteSessionScoped: failed to resolve session file: %w", err)
 	}
 	return os.Remove(stateFile)
 }

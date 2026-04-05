@@ -26,7 +26,10 @@ var (
 // CheckPDFPython3Available validates that a compatible Python runtime is available for PDF processing.
 func CheckPDFPython3Available() error {
 	_, err := getSystemPython3Executable()
-	return err
+	if err != nil {
+		return fmt.Errorf("check PDF python3 available: %w", err)
+	}
+	return nil
 }
 
 // GetPDFPythonExecutable ensures a consistent per-user Python environment for PDF extraction.

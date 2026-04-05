@@ -2,7 +2,6 @@ package configuration
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -52,7 +51,7 @@ func GetCustomProviderPath(name string) (string, error) {
 func LoadCustomProviders() (map[string]CustomProviderConfig, error) {
 	providersDir, err := GetProvidersDir()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("normalize custom provider config: %w", err)
 	}
 
 	files, err := filepath.Glob(filepath.Join(providersDir, "*.json"))
@@ -85,12 +84,12 @@ func LoadCustomProviders() (map[string]CustomProviderConfig, error) {
 func SaveCustomProvider(cfg CustomProviderConfig) error {
 	normalized, err := NormalizeCustomProviderConfig(cfg)
 	if err != nil {
-		return err
+		return fmt.Errorf("normalize custom provider: %w", err)
 	}
 
 	path, err := GetCustomProviderPath(normalized.Name)
 	if err != nil {
-		return err
+		return fmt.Errorf("get custom provider path for save: %w", err)
 	}
 
 	data, err := json.MarshalIndent(normalized, "", "  ")
@@ -104,7 +103,7 @@ func SaveCustomProvider(cfg CustomProviderConfig) error {
 func DeleteCustomProvider(name string) error {
 	path, err := GetCustomProviderPath(name)
 	if err != nil {
-		return err
+		return fmt.Errorf("get custom provider path for deletion: %w", err)
 	}
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove custom provider %s: %w", name, err)
@@ -119,7 +118,7 @@ func MigrateLegacyCustomProviders(cfg *Config) (map[string]CustomProviderConfig,
 
 	fileProviders, err := LoadCustomProviders()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get custom provider path: %w", err)
 	}
 
 	for name, provider := range cfg.CustomProviders {
@@ -181,7 +180,7 @@ func NormalizeCustomProviderConfig(cfg CustomProviderConfig) (CustomProviderConf
 func DiscoverCustomProviderModels(cfg CustomProviderConfig) ([]ProviderDiscoveryModel, error) {
 	normalized, err := NormalizeCustomProviderConfig(cfg)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read custom provider file: %w", err)
 	}
 
 	req, err := http.NewRequest(http.MethodGet, normalized.ModelsEndpoint(), nil)
@@ -249,7 +248,7 @@ func (c CustomProviderConfig) ModelsEndpoint() string {
 func (c CustomProviderConfig) ToProviderConfig() (*providers.ProviderConfig, error) {
 	normalized, err := NormalizeCustomProviderConfig(c)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get custom provider config path: %w", err)
 	}
 
 	authType := "none"
@@ -324,13 +323,13 @@ func (c CustomProviderConfig) ToProviderConfig() (*providers.ProviderConfig, err
 func CanonicalizeCustomProviderName(name string) (string, error) {
 	normalized := strings.ToLower(strings.TrimSpace(name))
 	if normalized == "" {
-		return "", errors.New("provider name cannot be empty")
+		return "", fmt.Errorf("provider name cannot be empty")
 	}
 	for _, r := range normalized {
 		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
 			continue
 		}
-		return "", errors.New("provider name must contain only lowercase letters, numbers, '-' or '_'")
+		return "", fmt.Errorf("provider name must contain only lowercase letters, numbers, '-' or '_'")
 	}
 	return normalized, nil
 }
@@ -338,12 +337,12 @@ func CanonicalizeCustomProviderName(name string) (string, error) {
 func normalizeOpenAIEndpoint(raw string) (string, error) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
-		return "", errors.New("endpoint cannot be empty")
+		return "", fmt.Errorf("endpoint cannot be empty")
 	}
 
 	u, err := url.Parse(trimmed)
 	if err != nil || u.Scheme == "" || u.Host == "" {
-		return "", errors.New("endpoint must be a valid absolute URL")
+		return "", fmt.Errorf("endpoint must be a valid absolute URL")
 	}
 
 	path := strings.TrimRight(u.Path, "/")

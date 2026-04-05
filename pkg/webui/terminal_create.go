@@ -2,7 +2,6 @@ package webui
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -58,7 +57,7 @@ func (tm *TerminalManager) createTmuxSession(sessionID string, shellOverride ...
 	}
 	shell, shellArgs, err := tm.resolveShell(override)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("resolve shell for tmux session: %w", err)
 	}
 
 	// Default terminal size
@@ -160,7 +159,7 @@ func (tm *TerminalManager) createUnixSession(sessionID string, shellOverride ...
 	}
 	shell, shellArgs, err := tm.resolveShell(override)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("resolve shell for unix session: %w", err)
 	}
 
 	// Create context for the command
@@ -245,7 +244,7 @@ func (tm *TerminalManager) resolveShell(shellOverride string) (shell string, she
 	case shellExists("sh"):
 		return "sh", []string{"-l"}, nil
 	default:
-		return "", nil, errors.New("no suitable shell found")
+		return "", nil, fmt.Errorf("no suitable shell found")
 	}
 }
 

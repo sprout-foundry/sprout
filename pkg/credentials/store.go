@@ -53,7 +53,7 @@ func GetAPIKeysPath() (string, error) {
 func Load() (Store, error) {
 	path, err := GetAPIKeysPath()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get API keys directory: %w", err)
 	}
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return Store{}, nil
@@ -75,7 +75,7 @@ func Load() (Store, error) {
 func Save(store Store) error {
 	path, err := GetAPIKeysPath()
 	if err != nil {
-		return err
+		return fmt.Errorf("get API keys path: %w", err)
 	}
 	if store == nil {
 		store = Store{}

@@ -2,7 +2,6 @@ package agent
 
 import (
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -421,7 +420,7 @@ func readImageAsImageData(filePath string) (api.ImageData, int, error) {
 	// Validate it is actually an image by checking magic bytes.
 	_, mimeType := console.DetectImageMagic(data)
 	if mimeType == "" {
-		return api.ImageData{}, 0, errors.New("unrecognised image format")
+		return api.ImageData{}, 0, fmt.Errorf("unrecognised image format")
 	}
 
 	// Optimize to cap dimensions at 4096px and compress for context efficiency.

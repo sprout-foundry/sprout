@@ -2,7 +2,6 @@ package configuration
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -317,7 +316,7 @@ func EnsureProviderAPIKey(provider string, apiKeys *APIKeys) error {
 	if choice == 1 {
 		apiKey, err := PromptForAPIKey(provider)
 		if err != nil {
-			return err
+			return fmt.Errorf("prompt for API key: %w", err)
 		}
 
 		apiKeys.SetAPIKey(provider, apiKey)
@@ -330,7 +329,7 @@ func EnsureProviderAPIKey(provider string, apiKeys *APIKeys) error {
 	}
 
 	// Choice 2 - select different provider
-	return errors.New("provider requires API key")
+	return fmt.Errorf("provider requires API key")
 }
 
 // GetAvailableProviders returns all supported providers
@@ -398,7 +397,7 @@ func SelectProvider(currentProvider string, apiKeys *APIKeys) (string, error) {
 	available := GetAvailableProviders(apiKeys)
 
 	if len(available) == 0 {
-		return "", errors.New("no providers available - please configure API keys")
+		return "", fmt.Errorf("no providers available - please configure API keys")
 	}
 
 	fmt.Println("[bot] Available providers:")
@@ -439,7 +438,7 @@ func SelectProvider(currentProvider string, apiKeys *APIKeys) (string, error) {
 		return addNewProvider(apiKeys)
 	}
 
-	return "", errors.New("invalid choice")
+	return "", fmt.Errorf("invalid choice")
 }
 
 // addNewProvider guides user through adding a new provider
@@ -458,7 +457,7 @@ func addNewProvider(apiKeys *APIKeys) (string, error) {
 	}
 
 	if len(needsKey) == 0 {
-		return "", errors.New("all providers already configured")
+		return "", fmt.Errorf("all providers already configured")
 	}
 
 	for i, provider := range needsKey {
@@ -491,7 +490,7 @@ func addNewProvider(apiKeys *APIKeys) (string, error) {
 // validateProviderSetup ensures the provider can actually be used
 func validateProviderSetup(provider string, apiKeys *APIKeys) error {
 	if provider == "" {
-		return errors.New("no provider selected")
+		return fmt.Errorf("no provider selected")
 	}
 
 	// Check if provider requires API key
@@ -504,7 +503,7 @@ func validateProviderSetup(provider string, apiKeys *APIKeys) error {
 		isCI := os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != ""
 		resolved, err := ResolveProviderCredential(provider, apiKeys)
 		if err != nil {
-			return err
+			return fmt.Errorf("validate provider setup: %w", err)
 		}
 		key := resolved.Value
 		if key == "" {

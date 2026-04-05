@@ -225,7 +225,7 @@ func (c *MCPClient) Initialize(ctx context.Context) error {
 func (c *MCPClient) ListTools(ctx context.Context) ([]MCPTool, error) {
 	if !c.initialized {
 		if err := c.Initialize(ctx); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("create client: %w", err)
 		}
 	}
 
@@ -273,7 +273,7 @@ func (c *MCPClient) ListTools(ctx context.Context) ([]MCPTool, error) {
 func (c *MCPClient) CallTool(ctx context.Context, request MCPToolCallRequest) (*MCPToolCallResult, error) {
 	if !c.initialized {
 		if err := c.Initialize(ctx); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("initialize client: %w", err)
 		}
 	}
 
@@ -321,7 +321,7 @@ func (c *MCPClient) CallTool(ctx context.Context, request MCPToolCallRequest) (*
 func (c *MCPClient) ListResources(ctx context.Context) ([]MCPResource, error) {
 	if !c.initialized {
 		if err := c.Initialize(ctx); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("initialize client: %w", err)
 		}
 	}
 
@@ -359,7 +359,7 @@ func (c *MCPClient) ListResources(ctx context.Context) ([]MCPResource, error) {
 func (c *MCPClient) ReadResource(ctx context.Context, uri string) (*MCPContent, error) {
 	if !c.initialized {
 		if err := c.Initialize(ctx); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("initialize client: %w", err)
 		}
 	}
 
@@ -400,7 +400,7 @@ func (c *MCPClient) ReadResource(ctx context.Context, uri string) (*MCPContent, 
 func (c *MCPClient) ListPrompts(ctx context.Context) ([]MCPPrompt, error) {
 	if !c.initialized {
 		if err := c.Initialize(ctx); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("initialize client: %w", err)
 		}
 	}
 
@@ -438,7 +438,7 @@ func (c *MCPClient) ListPrompts(ctx context.Context) ([]MCPPrompt, error) {
 func (c *MCPClient) GetPrompt(ctx context.Context, name string, args map[string]interface{}) (*MCPContent, error) {
 	if !c.initialized {
 		if err := c.Initialize(ctx); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("initialize client: %w", err)
 		}
 	}
 

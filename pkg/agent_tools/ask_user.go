@@ -2,7 +2,6 @@ package tools
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -11,7 +10,7 @@ import (
 // AskUser prompts the user with a question and reads input from stdin.
 func AskUser(question string) (string, error) {
 	if question == "" {
-		return "", errors.New("empty question provided")
+		return "", fmt.Errorf("empty question provided")
 	}
 	// Display the prompt
 	fmt.Printf("%s: ", question)

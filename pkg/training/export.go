@@ -4,7 +4,6 @@ package training
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -118,7 +117,7 @@ type AlpacaExample struct {
 // opts.Output. It returns a summary of the operation.
 func ExportSessions(opts ExportOptions) (*ExportResult, error) {
 	if err := validateOptions(opts); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get config dir: %w", err)
 	}
 
 	// Collect candidate sessions.
@@ -126,7 +125,7 @@ func ExportSessions(opts ExportOptions) (*ExportResult, error) {
 	if opts.Session != "" {
 		cs, err := loadSpecificSession(opts.Session)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("create output directory: %w", err)
 		}
 		if cs != nil {
 			candidates = append(candidates, *cs)
@@ -180,31 +179,31 @@ func ExportSessions(opts ExportOptions) (*ExportResult, error) {
 	case "sharegpt":
 		examples, err := buildShareGPT(qualified, opts)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("load session: %w", err)
 		}
 		result.ExamplesGenerated = len(examples)
 		if err := writeJSONArray(examples, opts.Output); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("load session: %w", err)
 		}
 
 	case "openai":
 		examples, err := buildOpenAI(qualified, opts)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("load session: %w", err)
 		}
 		result.ExamplesGenerated = len(examples)
 		if err := writeJSONL(examples, opts.Output); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("load session: %w", err)
 		}
 
 	case "alpaca":
 		examples, err := buildAlpaca(qualified, opts)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("load session: %w", err)
 		}
 		result.ExamplesGenerated = len(examples)
 		if err := writeJSONArray(examples, opts.Output); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("load session: %w", err)
 		}
 
 	default:
@@ -228,13 +227,13 @@ func validateOptions(opts ExportOptions) error {
 		return fmt.Errorf("unsupported format %q: must be one of sharegpt, openai, alpaca", opts.Format)
 	}
 	if strings.TrimSpace(opts.Output) == "" {
-		return errors.New("--output is required")
+		return fmt.Errorf("--output is required")
 	}
 	if opts.MinTurns < 0 {
-		return errors.New("--min-turns must be >= 0")
+		return fmt.Errorf("--min-turns must be >= 0")
 	}
 	if opts.MinActions < 0 {
-		return errors.New("--min-actions must be >= 0")
+		return fmt.Errorf("--min-actions must be >= 0")
 	}
 	return nil
 }

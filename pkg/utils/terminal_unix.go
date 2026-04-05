@@ -4,7 +4,7 @@
 package utils
 
 import (
-	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"strconv"
@@ -77,7 +77,7 @@ func getTerminalSizeIOCTL() (*TerminalSize, error) {
 		}
 	}
 
-	return nil, errors.New("no valid terminal found")
+	return nil, fmt.Errorf("no valid terminal found")
 }
 
 // getTerminalSizeTput uses tput commands to get terminal size
@@ -85,23 +85,23 @@ func getTerminalSizeTput() (*TerminalSize, error) {
 	widthCmd := exec.Command("tput", "cols")
 	widthOut, err := widthCmd.Output()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get terminal size from fd: %w", err)
 	}
 
 	heightCmd := exec.Command("tput", "lines")
 	heightOut, err := heightCmd.Output()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get terminal size from fd: %w", err)
 	}
 
 	width, err := strconv.Atoi(strings.TrimSpace(string(widthOut)))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get terminal size stty: %w", err)
 	}
 
 	height, err := strconv.Atoi(strings.TrimSpace(string(heightOut)))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get terminal size tput cols: %w", err)
 	}
 
 	if width <= 0 || height <= 0 {
@@ -120,7 +120,7 @@ func getTerminalSizeStty() (*TerminalSize, error) {
 	cmd.Stdin = os.Stdin
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get terminal size tput lines: %w", err)
 	}
 
 	parts := strings.Fields(string(out))
@@ -130,12 +130,12 @@ func getTerminalSizeStty() (*TerminalSize, error) {
 
 	height, err := strconv.Atoi(parts[0])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get terminal size fallback: %w", err)
 	}
 
 	width, err := strconv.Atoi(parts[1])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get terminal size env fallback: %w", err)
 	}
 
 	if width <= 0 || height <= 0 {

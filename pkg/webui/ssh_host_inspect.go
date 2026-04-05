@@ -10,7 +10,7 @@ func inspectRemoteSSHHost(ctx context.Context, hostAlias string, logger *sshLaun
 	cmd := newSSHCommandContext(ctx, hostAlias, "uname -s; uname -m")
 	out, err := runSSHLoggedCommand(logger, "inspect-remote", fmt.Sprintf("ssh %s uname -s; uname -m", hostAlias), cmd)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("inspect remote host: %w", err)
 	}
 
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")

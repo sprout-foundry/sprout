@@ -11,7 +11,7 @@ func (a *Agent) initDebugLogger() error {
 	// Create temp file
 	f, err := os.CreateTemp("", "ledit-debug-*.log")
 	if err != nil {
-		return err
+		return fmt.Errorf("initDebugLogger: failed to create temp file: %w", err)
 	}
 	a.debugLogFile = f
 	a.debugLogPath = f.Name()
@@ -25,7 +25,7 @@ func (a *Agent) initDebugLogger() error {
 	a.debugLogMutex.Lock()
 	defer a.debugLogMutex.Unlock()
 	if _, err := a.debugLogFile.WriteString(header); err != nil {
-		return err
+		return fmt.Errorf("initDebugLogger: failed to write header: %w", err)
 	}
 	return nil
 }

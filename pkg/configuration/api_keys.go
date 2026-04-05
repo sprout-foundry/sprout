@@ -2,7 +2,6 @@ package configuration
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -93,7 +92,7 @@ func GetAPIKeysPath() (string, error) {
 func LoadAPIKeys() (*APIKeys, error) {
 	store, err := credentials.Load()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create API keys directory: %w", err)
 	}
 	keys := APIKeys(store)
 	return &keys, nil
@@ -186,7 +185,7 @@ func PromptForAPIKey(provider string) (string, error) {
 
 	apiKey := strings.TrimSpace(string(byteKey))
 	if apiKey == "" {
-		return "", errors.New("no API key provided")
+		return "", fmt.Errorf("no API key provided")
 	}
 
 	// Basic validation

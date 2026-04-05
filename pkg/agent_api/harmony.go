@@ -1,7 +1,6 @@
 package api
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 )
@@ -147,7 +146,7 @@ func (h *HarmonyFormatter) formatToolParameters(params interface{}) string {
 // validateMessages performs basic validation on messages
 func (h *HarmonyFormatter) validateMessages(messages []Message) error {
 	if len(messages) == 0 {
-		return errors.New("no messages provided")
+		return fmt.Errorf("no messages provided")
 	}
 
 	validRoles := map[string]bool{

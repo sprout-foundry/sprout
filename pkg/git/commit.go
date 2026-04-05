@@ -2,7 +2,6 @@ package git
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -30,7 +29,7 @@ func CheckStagedChanges() error {
 		}
 		return fmt.Errorf("failed to check for staged changes: %w", err)
 	}
-	return errors.New("no staged changes found")
+	return fmt.Errorf("no staged changes found")
 }
 
 // GetStagedDiff returns the diff of staged changes
@@ -201,7 +200,7 @@ func CleanCommitMessage(message string) string {
 func ParseCommitMessage(commitMessage string) (string, string, error) {
 	lines := strings.Split(commitMessage, "\n")
 	if len(lines) < 2 {
-		return "", "", errors.New("failed to parse commit message")
+		return "", "", fmt.Errorf("failed to parse commit message")
 	}
 
 	note := lines[0]

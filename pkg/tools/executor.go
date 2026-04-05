@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -44,7 +43,7 @@ func NewExecutor(registry Registry, permissions PermissionChecker, logger *utils
 // ExecuteTool executes a tool with the given parameters
 func (e *Executor) ExecuteTool(ctx context.Context, tool Tool, params Parameters) (*Result, error) {
 	if tool == nil {
-		return nil, errors.New("cannot execute nil tool")
+		return nil, fmt.Errorf("cannot execute nil tool")
 	}
 
 	// Check if tool is available

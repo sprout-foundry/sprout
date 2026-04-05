@@ -1,9 +1,9 @@
 package codereview
 
 import (
+	"fmt"
 	"bytes"
 	"encoding/json"
-	"errors"
 	"strings"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
@@ -14,7 +14,7 @@ import (
 // parseStructuredReviewResponse parses a structured JSON review response from the agent
 func (s *CodeReviewService) parseStructuredReviewResponse(response *api.ChatResponse) (*types.CodeReviewResult, error) {
 	if len(response.Choices) == 0 {
-		return nil, errors.New("no response choices received from agent")
+		return nil, fmt.Errorf("no response choices received from agent")
 	}
 
 	content := response.Choices[0].Message.Content
@@ -158,7 +158,7 @@ func parseDetailedGuidance(raw json.RawMessage) string {
 // parseHumanReadableReviewResponse parses a human-readable review response from the agent
 func (s *CodeReviewService) parseHumanReadableReviewResponse(response *api.ChatResponse) (*types.CodeReviewResult, error) {
 	if len(response.Choices) == 0 {
-		return nil, errors.New("no response choices received from agent")
+		return nil, fmt.Errorf("no response choices received from agent")
 	}
 
 	content := response.Choices[0].Message.Content

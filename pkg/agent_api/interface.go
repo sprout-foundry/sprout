@@ -1,7 +1,6 @@
 package api
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -57,17 +56,17 @@ func NewUnifiedClient(clientType ClientType) (ClientInterface, error) {
 // NewUnifiedClientWithModel creates a client with a specific model
 func NewUnifiedClientWithModel(clientType ClientType, model string) (ClientInterface, error) {
 	// Use external factory to avoid import cycles
-	return nil, errors.New("use factory.CreateProviderClient instead to avoid import cycles")
+	return nil, fmt.Errorf("use factory.CreateProviderClient instead to avoid import cycles")
 }
 
 // NewDeepInfraClientWrapper creates a DeepInfra client wrapper
 func NewDeepInfraClientWrapper(model string) (ClientInterface, error) {
-	return nil, errors.New("DeepInfra client wrapper removed - use providers.NewDeepInfraProviderWithModel instead")
+	return nil, fmt.Errorf("DeepInfra client wrapper removed - use providers.NewDeepInfraProviderWithModel instead")
 }
 
 // NewOpenRouterClientWrapper is deprecated - use factory.CreateProviderClient instead
 func NewOpenRouterClientWrapper(model string) (ClientInterface, error) {
-	return nil, errors.New("OpenRouter client wrapper deprecated - use factory.CreateProviderClient instead")
+	return nil, fmt.Errorf("OpenRouter client wrapper deprecated - use factory.CreateProviderClient instead")
 }
 
 // NewDeepSeekClientWrapper creates a DeepSeek client wrapper

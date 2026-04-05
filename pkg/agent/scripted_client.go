@@ -678,11 +678,11 @@ func (c *ScriptedClient) SendChatRequestStream(messages []api.Message, tools []a
 		// Validate stream config
 		if len(streamConfig.Chunks) == 0 {
 			c.advanceIndex(resp)
-			return nil, fmt.Errorf("StreamConfig.Chunks must not be empty")
+			return nil, fmt.Errorf("ScriptedResponse.StreamConfig.Chunks must not be empty")
 		}
 		if streamConfig.ChunkErrors != nil && len(streamConfig.ChunkErrors) > len(streamConfig.Chunks) {
 			c.advanceIndex(resp)
-			return nil, fmt.Errorf("StreamConfig.ChunkErrors length exceeds number of chunks")
+			return nil, fmt.Errorf("ScriptedResponse.StreamConfig.ChunkErrors length exceeds number of chunks")
 		}
 
 		totalTokens := 0
@@ -713,7 +713,7 @@ func (c *ScriptedClient) SendChatRequestStream(messages []api.Message, tools []a
 				if streamConfig.StreamError != nil {
 					return nil, streamConfig.StreamError
 				}
-				return nil, fmt.Errorf("simulated stream error after N chunks")
+				return nil, fmt.Errorf("simulated stream error after %d chunks", streamConfig.ErrorAfterChunks)
 			}
 
 			// Add delay between chunks if configured
@@ -779,7 +779,7 @@ func (c *ScriptedClient) SendChatRequestStream(messages []api.Message, tools []a
 // SendVisionRequest sends a vision-enabled chat request
 func (c *ScriptedClient) SendVisionRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
 	if !c.supportsVision {
-		return nil, fmt.Errorf("vision not supported in this test client")
+		return nil, fmt.Errorf("vision requests not supported in ScriptedClient")
 	}
 
 	c.mu.Lock()

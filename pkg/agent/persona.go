@@ -25,12 +25,12 @@ func (a *Agent) ClearActivePersona() {
 func (a *Agent) ApplyPersona(personaID string) error {
 	personaID = normalizeAgentPersonaID(personaID)
 	if a.configManager == nil {
-		return fmt.Errorf("configuration manager is not available")
+		return fmt.Errorf("agent configuration manager is not available for persona %q", personaID)
 	}
 
 	config := a.configManager.GetConfig()
 	if config == nil {
-		return fmt.Errorf("configuration is not available")
+		return fmt.Errorf("agent configuration is not available for persona %q", personaID)
 	}
 
 	persona := config.GetSubagentType(personaID)

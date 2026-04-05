@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/alantheprice/ledit/pkg/agent"
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/events"
 	"github.com/alantheprice/ledit/pkg/security"
@@ -346,6 +347,13 @@ func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, msg ma
 		return
 	}
 
+	// Attempt to persist the provider/model to config as the last used.
+	// This fails gracefully — we log the error but don't fail the operation
+	// since the session-scoped provider/model is already set in the chat session.
+	if err := persistProviderModelToConfig(clientAgent, providerType); err != nil {
+		log.Printf("webui: failed to persist provider/model to config: %v", err)
+	}
+
 	// Store provider on the chat session for per-session tracking.
 	ws.mutex.RLock()
 	if ctx := ws.clientContexts[clientID]; ctx != nil && activeChatID != "" {
@@ -444,6 +452,13 @@ func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, msg map[s
 		return
 	}
 
+	// Attempt to persist the provider/model to config as the last used.
+	// This fails gracefully — we log the error but don't fail the operation
+	// since the session-scoped provider/model is already set in the chat session.
+	if err := persistProviderModelToConfig(clientAgent, clientAgent.GetProviderType()); err != nil {
+		log.Printf("webui: failed to persist provider/model to config: %v", err)
+	}
+
 	// Store model on the chat session for per-session tracking.
 	ws.mutex.RLock()
 	if ctx := ws.clientContexts[clientID]; ctx != nil && activeChatID != "" {
@@ -518,6 +533,29 @@ func (ws *ReactWebServer) handlePersonaChangeMessage(safeConn *SafeConn, msg map
 
 	_ = ws.syncAgentStateForClientWithChat(clientID, activeChatID)
 	ws.publishProviderState(clientID)
+}
+
+// persistProviderModelToConfig attempts to persist the provider and model to the
+// global config file. This gracefully fails on error — the session is already updated,
+// but the preference won't survive a full app restart.
+//
+// Returns nil if successful, or the error from SaveConfig() if it fails.
+func persistProviderModelToConfig(chatAgent *agent.Agent, provider api.ClientType) error {
+	configManager := chatAgent.GetConfigManager()
+	if configManager == nil {
+		return fmt.Errorf("config manager not available")
+	}
+
+	// Update the in-memory config
+	configManager.SetProvider(provider)
+	model := chatAgent.GetModel()
+	if model != "" {
+		configManager.SetModelForProvider(provider, model)
+	}
+
+	// Attempt to persist — this may fail due to file permissions, read-only config, etc.
+	// The caller logs the error but doesn't fail the operation.
+	return configManager.SaveConfig()
 }
 
 // handleSecurityApprovalResponse processes security approval responses from the webui.

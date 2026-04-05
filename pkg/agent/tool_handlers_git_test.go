@@ -19,7 +19,7 @@ func TestIsGitWriteCommand(t *testing.T) {
 		{"git stash list", false},
 		{"git stash show", false},
 		{"git commit -m 'x'", true},
-		{"git add .", true},
+		{"git add .", false}, // staging is always allowed
 		{"git checkout main", true},
 		{"git branch feature-x", true},
 		{"git branch -d feature-x", true},

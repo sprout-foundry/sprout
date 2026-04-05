@@ -1,32 +1,32 @@
-# Error Handling Convention for ledit
+# Error Handling Convention for Ledit
 
-This document defines the standardized error handling patterns for the ledit project.
+## Overview
+
+This document defines the standardized error handling convention for the Ledit project. The goal is to maintain consistency across all Go packages while following Go best practices.
 
 ## Core Principles
 
-1. **Always wrap errors with context** when they're returned from a function
-2. **Use `%w` verb** for error wrapping to preserve error chain
-3. **Use package-level error variables** for sentinel errors
-4. **Keep error messages clear and actionable**
+1. **Always wrap errors with context**: When returning an error from a lower layer, wrap it with context using `%w` to preserve the error chain
+2. **Use sentinel errors sparingly**: Reserve `errors.New` for package-level sentinel errors that are checked with `errors.Is`
+3. **Propagate cache misses directly**: Don't add extra context for expected failures (e.g., cache misses, file not found when optional)
+4. **Use consistent error message format**: Start with lowercase, describe what failed and why
 
 ## Standard Patterns
 
-### 1. Wrapping Errors from Other Functions
-
-When returning an error from another function, always wrap it with context:
+### Pattern 1: Wrapping Errors (Most Common)
 
 ```go
-// ✅ GOOD - Wrap with context
-func LoadConfig(path string) (*Config, error) {
+// ✅ CORRECT: Wrap with context and preserve error chain
+func LoadConfig() (*Config, error) {
     data, err := os.ReadFile(path)
     if err != nil {
-        return nil, fmt.Errorf("failed to read config file %q: %w", path, err)
+        return nil, fmt.Errorf("failed to read config file: %w", err)
     }
     // ...
 }
 
-// ❌ BAD - Bare error return loses context
-func LoadConfig(path string) (*Config, error) {
+// ❌ INCORRECT: Return bare error without context
+func LoadConfig() (*Config, error) {
     data, err := os.ReadFile(path)
     if err != nil {
         return nil, err
@@ -35,167 +35,164 @@ func LoadConfig(path string) (*Config, error) {
 }
 ```
 
-### 2. Creating New Errors
-
-Use `errors.New()` for simple errors that don't wrap another error:
+### Pattern 2: Creating New Errors
 
 ```go
-// ✅ GOOD - Simple error
+// ✅ CORRECT: Create new error with context
 func ValidateInput(input string) error {
     if input == "" {
-        return errors.New("input cannot be empty")
+        return fmt.Errorf("input cannot be empty")
     }
-    return nil
+    // ...
 }
 
-// ✅ ALSO GOOD - fmt.Errorf with formatting
-func ValidateRange(value int, min, max int) error {
-    if value < min || value > max {
-        return fmt.Errorf("value %d is outside range [%d, %d]", value, min, max)
-    }
-    return nil
-}
-```
+// ✅ CORRECT: Use errors.New for sentinel errors (package-level)
+var ErrNotFound = errors.New("resource not found")
 
-### 3. Package-Level Error Variables
-
-Define sentinel errors as package-level variables:
-
-```go
-// ✅ GOOD - Package-level error
-var ErrOutsideWorkingDirectory = errors.New("file access outside working directory")
-
-func (fs *FileSystem) ReadFile(path string) ([]byte, error) {
-    if !fs.isAllowed(path) {
-        return nil, ErrOutsideWorkingDirectory
+func GetResource(id string) (*Resource, error) {
+    if resource == nil {
+        return nil, ErrNotFound
     }
     // ...
 }
 ```
 
-### 4. Validation Errors
-
-Use `fmt.Errorf()` with format verbs for validation errors:
+### Pattern 3: Expected Failures (No Extra Context)
 
 ```go
-// ✅ GOOD - Validation error with context
-func ValidateWorkflowStep(step *Step) error {
-    if step.Prompt == "" && step.PromptFile == "" {
-        return fmt.Errorf("step %s requires prompt or prompt_file", step.Name)
+// ✅ CORRECT: Propagate expected failures directly
+func (c *Cache) Get(key string) (interface{}, error) {
+    data, err := os.ReadFile(c.cachePath(key))
+    if err != nil {
+        if os.IsNotExist(err) {
+            return nil, err // Cache miss - return original error
+        }
+        return nil, fmt.Errorf("failed to read cache file: %w", err)
     }
-    return nil
+    // ...
 }
 ```
 
-### 5. Multiple Errors (Aggregation)
-
-When collecting multiple errors, aggregate them:
+### Pattern 4: Error Checking with Context
 
 ```go
-// ✅ GOOD - Error aggregation
-func ValidateConfig(config *Config) error {
-    var errs []error
-    if config.Provider == "" {
-        errs = append(errs, errors.New("provider is required"))
+// ✅ CORRECT: Check specific errors with context
+func IsRetryable(err error) bool {
+    if errors.Is(err, ErrTemporary) {
+        return true
     }
-    if config.Model == "" {
-        errs = append(errs, errors.New("model is required"))
+    if errors.Is(err, os.ErrNotExist) {
+        return false
     }
-    if len(errs) > 0 {
-        return fmt.Errorf("config validation failed: %w", errors.Join(errs...))
+    // Check for transient network errors
+    var netErr *net.OpError
+    if errors.As(err, &netErr) {
+        return netErr.Timeout()
     }
-    return nil
+    return false
 }
 ```
 
-## Acceptable Exceptions
+## Decision Tree
 
-### Simple Wrapper Functions
+When handling an error, follow this decision tree:
 
-For functions that are simple wrappers where the context is obvious from the function name, bare error returns are acceptable:
+```
+Is this an expected failure (cache miss, optional file, etc.)?
+├─ YES → Return the error directly (don't wrap)
+└─ NO
+    ├─ Is this a package-level sentinel error?
+    │   ├─ YES → Use `errors.New("description")` or return existing sentinel
+    │   └─ NO
+    │       ├─ Does this error need to be checked with `errors.Is`?
+    │       │   ├─ YES → Consider creating a sentinel error
+    │       │   └─ NO → Use `fmt.Errorf("context: %w", err)`
+    │
+    Are we creating a new error (not wrapping)?
+    ├─ YES → Use `fmt.Errorf("description")`
+    └─ NO (wrapping existing error) → Use `fmt.Errorf("context: %w", err)`
+```
+
+## Error Message Format
+
+1. **Start with lowercase** (unless it's a proper noun)
+2. **Describe what failed**, not what went wrong
+3. **Include relevant context** (function names, file paths, IDs)
 
 ```go
-// ✅ ACCEPTABLE - Simple wrapper with clear context
-func (ir *InputReader) fallbackReadLine() (string, error) {
-    fmt.Print(ir.prompt)
-    var input string
-    _, err := fmt.Scanln(&input)
-    return input, err
+// ✅ Good
+fmt.Errorf("failed to read config file: %w", err)
+fmt.Errorf("failed to unmarshal JSON response from API: %w", err)
+fmt.Errorf("failed to create directory %s: %w", dirPath, err)
+
+// ❌ Avoid (too verbose)
+fmt.Errorf("An error occurred while attempting to read the configuration file from disk: %w", err)
+
+// ❌ Avoid (not descriptive)
+fmt.Errorf("read error: %w", err)
+```
+
+## Package-Specific Guidelines
+
+### pkg/agent
+- Wrap errors from API calls with context about the operation being performed
+- Use sentinel errors for expected conditions (e.g., `errProviderStartupClosed`)
+- Include agent state in error context when relevant
+
+### pkg/configuration
+- Wrap filesystem and JSON parsing errors with clear context
+- Distinguish between "not found" (optional) and "failed to read" (error)
+
+### pkg/webcontent
+- Wrap HTTP/network errors with context about the URL and operation
+- Propagate cache misses directly without extra context
+
+### pkg/webui
+- Wrap WebSocket errors with context about the client and operation
+- Include WebSocket connection details in error context when relevant
+
+## Testing
+
+When testing error handling:
+
+```go
+// ✅ Test error wrapping preserves chain
+func TestLoadConfig_Error(t *testing.T) {
+    // Force file read error
+    err := LoadConfig("/nonexistent/path")
+    if err == nil {
+        t.Fatal("expected error, got nil")
+    }
+
+    // Verify error chain is preserved
+    if !os.IsNotExist(err) {
+        t.Errorf("expected file not found error, got: %v", err)
+    }
 }
 
-// ✅ ACCEPTABLE - Transparent wrapper
-func (a *Agent) executeShellCommandWithTruncation(ctx context.Context, command string) (string, error) {
-    fullResult, err := tools.ExecuteShellCommand(ctx, command)
-    // ... truncation logic ...
-    returnResult := fullResult
-    return returnResult, err
+// ✅ Test sentinel errors
+func TestGetResource_NotFound(t *testing.T) {
+    _, err := GetResource("nonexistent")
+    if !errors.Is(err, ErrNotFound) {
+        t.Errorf("expected ErrNotFound, got: %v", err)
+    }
 }
 ```
 
-## Migration Strategy
+## Migration Checklist
 
-When migrating existing code:
+When updating existing code:
 
-1. **Keep validation errors as-is** - They're already using appropriate patterns
-2. **Add context to bare error returns** unless they're simple wrappers
-3. **Use `%w` verb** when wrapping errors
-4. **Keep package-level error variables** as-is (they're already correct)
+- [ ] Replace bare `return err` with wrapped errors (unless it's an expected failure)
+- [ ] Replace `fmt.Errorf("msg")` (without wrapping) with appropriate sentinel errors if needed for `errors.Is`
+- [ ] Ensure all error messages start with lowercase
+- [ ] Verify error messages describe what failed and why
+- [ ] Add context to errors (function names, file paths, IDs)
+- [ ] Run tests to ensure error chains are preserved
+- [ ] Update tests that check error messages to be more flexible
 
-## Common Patterns to Avoid
+## Related Documentation
 
-```go
-// ❌ BAD - Don't lose error context
-func DoSomething() error {
-    if err := someFunction(); err != nil {
-        return err
-    }
-    return nil
-}
-
-// ❌ BAD - Don't mix %s and %w
-func DoSomething() error {
-    if err := someFunction(); err != nil {
-        return fmt.Errorf("something went wrong: %s", err)
-    }
-    return nil
-}
-
-// ❌ BAD - Don't create sentinel errors that could be wrapped
-var ErrFailed = errors.New("failed")
-func DoSomething() error {
-    if err := someFunction(); err != nil {
-        return ErrFailed  // Loses underlying error
-    }
-    return nil
-}
-```
-
-## Testing Error Behavior
-
-When testing error handling, use `errors.Is()` and `errors.As()`:
-
-```go
-func TestValidatePath(t *testing.T) {
-    err := ValidatePath("/etc/passwd")
-    if !errors.Is(err, ErrOutsideWorkingDirectory) {
-        t.Errorf("expected ErrOutsideWorkingDirectory, got %v", err)
-    }
-}
-
-func TestLoadConfig(t *testing.T) {
-    _, err := LoadConfig("/nonexistent/config.json")
-    var pathErr *os.PathError
-    if !errors.As(err, &pathErr) {
-        t.Errorf("expected *os.PathError, got %T", err)
-    }
-}
-```
-
-## Summary
-
-- **Always wrap errors** with context using `fmt.Errorf("context: %w", err)`
-- **Use `errors.New()`** for simple errors and sentinel errors
-- **Keep validation errors** as `fmt.Errorf()` with formatting
-- **Package-level error variables** are appropriate for sentinel errors
-- **Simple wrapper functions** may return errors directly
-- **Test with `errors.Is()` and `errors.As()`** for proper error checking
+- [Go Error Handling Best Practices](https://go.dev/blog/error-handling-and-go)
+- [Working with Errors in Go 1.13+](https://go.dev/blog/go1.13-errors)
+- Project's error utilities: `pkg/utils/errors.go`

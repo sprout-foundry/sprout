@@ -149,7 +149,7 @@ func (c *MCPHTTPClient) sendRequest(ctx context.Context, method string, params i
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		fmt.Printf("[FAIL] REQUEST ERROR: %v\n", err)
-		return nil, fmt.Errorf("HTTP request failed: %w", err)
+		return nil, fmt.Errorf("failed HTTP request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -168,7 +168,7 @@ func (c *MCPHTTPClient) sendRequest(ctx context.Context, method string, params i
 	// fmt.Printf("  Body: %s\n", string(responseBody))
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP request failed with status %d: %s", resp.StatusCode, string(responseBody))
+		return nil, fmt.Errorf("failed HTTP request with status %d: %s", resp.StatusCode, string(responseBody))
 	}
 
 	var response MCPMessage

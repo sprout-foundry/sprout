@@ -646,12 +646,12 @@ func prepareWorkflowRuntimeRestorer(chatAgent *agent.Agent, cfg *AgentWorkflowCo
 
 		if snapshot.Provider != "" && !strings.EqualFold(strings.TrimSpace(chatAgent.GetProvider()), snapshot.Provider) {
 			if err := applyWorkflowRuntimeOverrides(chatAgent, AgentWorkflowRuntime{Provider: snapshot.Provider}); err != nil {
-				restoreErrors = append(restoreErrors, err.Error())
+				restoreErrors = append(restoreErrors, fmt.Sprintf("failed to restore provider %q: %s", snapshot.Provider, err.Error()))
 			}
 		}
 		if snapshot.Model != "" && strings.TrimSpace(chatAgent.GetModel()) != snapshot.Model {
 			if err := chatAgent.SetModelPersisted(snapshot.Model); err != nil {
-				restoreErrors = append(restoreErrors, fmt.Sprintf("failed to restore model %q: %v", snapshot.Model, err))
+				restoreErrors = append(restoreErrors, fmt.Sprintf("failed to restore model %q: %s", snapshot.Model, err.Error()))
 			}
 		}
 		currentPersona := strings.TrimSpace(chatAgent.GetActivePersona())
@@ -659,7 +659,7 @@ func prepareWorkflowRuntimeRestorer(chatAgent *agent.Agent, cfg *AgentWorkflowCo
 			chatAgent.ClearActivePersona()
 		} else if snapshot.Persona != "" && !strings.EqualFold(currentPersona, snapshot.Persona) {
 			if err := chatAgent.ApplyPersona(snapshot.Persona); err != nil {
-				restoreErrors = append(restoreErrors, fmt.Sprintf("failed to restore persona %q: %v", snapshot.Persona, err))
+				restoreErrors = append(restoreErrors, fmt.Sprintf("failed to restore persona %q: %s", snapshot.Persona, err.Error()))
 			}
 		}
 

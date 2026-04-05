@@ -9,7 +9,7 @@
 import { useState, useCallback } from 'react';
 import { clientFetch } from '../services/clientSession';
 import { ApiService } from '../services/api';
-import { debugLog, useLog } from '../utils/log';
+import { debugLog, error } from '../utils/log';
 
 interface GitAICommitResult {
   commitMessage: string;
@@ -26,7 +26,6 @@ export interface UseGitActionsReturn {
 }
 
 export function useGitActions(): UseGitActionsReturn {
-  const log = useLog();
   const [gitRefreshToken, setGitRefreshToken] = useState(0);
   const apiService = ApiService.getInstance();
 
@@ -50,11 +49,11 @@ export function useGitActions(): UseGitActionsReturn {
         setGitRefreshToken((k) => k + 1);
         return data;
       } catch (err) {
-        log.error('Failed to commit', { title: 'Git Error' });
+        error('Failed to commit');
         throw err;
       }
     },
-    [log],
+    [],
   );
 
   const handleGitAICommit = useCallback(async (): Promise<GitAICommitResult> => {
@@ -81,11 +80,11 @@ export function useGitActions(): UseGitActionsReturn {
         }
         setGitRefreshToken((k) => k + 1);
       } catch (err) {
-        log.error('Failed to stage files', { title: 'Git Error' });
+        error('Failed to stage files');
         throw err;
       }
     },
-    [log],
+    [],
   );
 
   const handleGitUnstage = useCallback(
@@ -104,11 +103,11 @@ export function useGitActions(): UseGitActionsReturn {
         }
         setGitRefreshToken((k) => k + 1);
       } catch (err) {
-        log.error('Failed to unstage files', { title: 'Git Error' });
+        error('Failed to unstage files');
         throw err;
       }
     },
-    [log],
+    [],
   );
 
   const handleGitDiscard = useCallback(
@@ -127,11 +126,11 @@ export function useGitActions(): UseGitActionsReturn {
         }
         setGitRefreshToken((k) => k + 1);
       } catch (err) {
-        log.error('Failed to discard changes', { title: 'Git Error' });
+        error('Failed to discard changes');
         throw err;
       }
     },
-    [log],
+    [],
   );
 
   return {

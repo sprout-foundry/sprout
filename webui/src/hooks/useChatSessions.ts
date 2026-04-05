@@ -101,6 +101,8 @@ export function useChatSessions({
               queryProgress: prev.queryProgress,
               lastError: prev.lastError,
               isProcessing: prev.isProcessing,
+              provider: prev.provider,
+              model: prev.model,
             },
           }
         : prev.perChatCache;
@@ -121,6 +123,8 @@ export function useChatSessions({
         currentTodos: cached?.currentTodos ?? [],
         queryProgress: cached?.queryProgress ?? null,
         lastError: cached?.lastError ?? null,
+        provider: cached?.provider ?? prev.provider,
+        model: cached?.model ?? prev.model,
         perChatCache: newCache,
       };
     });
@@ -150,11 +154,15 @@ export function useChatSessions({
         const useBackendMessages = backendMessages.length >= prev.messages.length;
         const finalIsProcessing = backendIsActive;
         activeRequestsRef.current = finalIsProcessing ? 1 : 0;
+        const backendProvider = (response.chat_session as Record<string, unknown>).provider as string | undefined;
+        const backendModel = (response.chat_session as Record<string, unknown>).model as string | undefined;
         return {
           ...prev,
           activeChatId: response.active_chat_id,
           messages: useBackendMessages ? backendMessages : prev.messages,
           isProcessing: finalIsProcessing,
+          ...(backendProvider ? { provider: backendProvider } : {}),
+          ...(backendModel ? { model: backendModel } : {}),
         };
       });
 

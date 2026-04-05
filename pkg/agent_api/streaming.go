@@ -346,7 +346,7 @@ func (r *SSEReader) ReadWithTimeout(timeout time.Duration) error {
 			if line == "" {
 				if dataBuilder.Len() > 0 && r.onEvent != nil {
 					if err := r.onEvent(event, dataBuilder.String()); err != nil {
-						return err
+						return fmt.Errorf("processing SSE event: %w", err)
 					}
 				}
 				// Reset for next event

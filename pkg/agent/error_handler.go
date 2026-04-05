@@ -190,7 +190,7 @@ func (eh *ErrorHandler) formatTokenCount(tokens int) string {
 
 // isRateLimitError checks if an error is a rate limit (same logic as other components)
 func (eh *ErrorHandler) isRateLimitError(errStr string) bool {
-	return utils.NewRateLimitBackoff().IsRateLimitError(fmt.Errorf("%s", errStr), nil)
+	return utils.NewRateLimitBackoff().IsRateLimitError(fmt.Errorf("rate limit check: %s", errStr), nil)
 }
 
 // logRateLimit logs rate limit information

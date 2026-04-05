@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -131,11 +132,7 @@ func (m *DefaultMCPManager) StartAll(ctx context.Context) error {
 	wg.Wait()
 
 	if len(errs) > 0 {
-		errorMsg := "Failed to start some MCP servers:"
-		for _, err := range errs {
-			errorMsg += "\n  - " + err.Error()
-		}
-		return fmt.Errorf("%s", errorMsg)
+		return fmt.Errorf("failed to start some MCP servers: %w", errors.Join(errs...))
 	}
 
 	if m.logger != nil {
@@ -178,11 +175,7 @@ func (m *DefaultMCPManager) StopAll(ctx context.Context) error {
 	wg.Wait()
 
 	if len(errs) > 0 {
-		errorMsg := "Failed to stop some MCP servers:"
-		for _, err := range errs {
-			errorMsg += "\n  - " + err.Error()
-		}
-		return fmt.Errorf("%s", errorMsg)
+		return fmt.Errorf("failed to stop some MCP servers: %w", errors.Join(errs...))
 	}
 
 	if m.logger != nil && len(servers) > 0 {

@@ -574,7 +574,7 @@ func (ac *APIClient) isRateLimit(errStr string) bool {
 		return false
 	}
 
-	return ac.rateLimiter.IsRateLimitError(fmt.Errorf("%s", errStr), nil)
+	return ac.rateLimiter.IsRateLimitError(fmt.Errorf("rate limit check: %s", errStr), nil)
 }
 
 // handleRateLimit handles rate limit errors with proper backoff

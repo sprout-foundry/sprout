@@ -191,7 +191,7 @@ func DeleteMemory(name string) error {
 func ListMemories() ([]MemoryInfo, error) {
 	memories, err := LoadAllMemories()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to load memories: %w", err)
 	}
 
 	// Extract first line (title) for each memory

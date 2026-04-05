@@ -264,7 +264,7 @@ func (ac *APIClient) SendWithRetry(messages []api.Message, tools []api.Tool, rea
 			if ac.isRateLimit(err.Error()) {
 				return nil, &RateLimitExceededError{Attempts: retry + 1, LastError: err}
 			}
-			return nil, err
+			return nil, fmt.Errorf("failed to make API request: %w", err)
 		}
 
 		if ac.agent.debug {

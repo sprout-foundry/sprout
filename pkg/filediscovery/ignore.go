@@ -2,6 +2,7 @@ package filediscovery
 
 import (
 	"bufio"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -38,7 +39,7 @@ func GetIgnoreRules(rootDir string) *ignore.GitIgnore {
 func readIgnoreFile(path string) ([]string, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open ignore file: %w", err)
 	}
 	defer file.Close()
 

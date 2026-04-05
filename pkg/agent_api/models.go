@@ -72,10 +72,10 @@ func createProviderForType(clientType ClientType) (interface{ ListModels() ([]Mo
 	switch clientType {
 	case OllamaClientType, OllamaLocalClientType:
 		client, err := NewOllamaLocalClient("llama3.1:8b") // Use an available model
-		if err != nil {
-			return nil, err
-		}
-		return &ollamaLocalListModelsWrapper{client: client}, nil
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Ollama local client: %w", err)
+	}
+	return &ollamaLocalListModelsWrapper{client: client}, nil
 	case OllamaTurboClientType:
 		return &genericConfigListModelsWrapper{providerName: "ollama-turbo"}, nil
 	case OpenAIClientType:
@@ -108,7 +108,7 @@ type openAIListModelsWrapper struct{}
 func (w *openAIListModelsWrapper) ListModels() ([]ModelInfo, error) {
 	apiKey, err := resolveCredentialValue("openai", "OPENAI_API_KEY")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to resolve OpenAI API key: %w", err)
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -129,7 +129,7 @@ func (w *openAIListModelsWrapper) ListModels() ([]ModelInfo, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("OpenAI API error (status %d): %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("failed to fetch OpenAI models (status %d): %s", resp.StatusCode, string(body))
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -217,7 +217,7 @@ type openRouterListModelsWrapper struct{}
 func (w *openRouterListModelsWrapper) ListModels() ([]ModelInfo, error) {
 	apiKey, err := resolveCredentialValue("openrouter", "OPENROUTER_API_KEY")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to resolve OpenRouter API key: %w", err)
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -238,7 +238,7 @@ func (w *openRouterListModelsWrapper) ListModels() ([]ModelInfo, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("OpenRouter API error (status %d): %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("failed to fetch OpenRouter models (status %d): %s", resp.StatusCode, string(body))
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -301,7 +301,7 @@ type deepInfraListModelsWrapper struct{}
 func (w *deepInfraListModelsWrapper) ListModels() ([]ModelInfo, error) {
 	apiKey, err := resolveCredentialValue("deepinfra", "DEEPINFRA_API_KEY")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to resolve DeepInfra API key: %w", err)
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -323,7 +323,7 @@ func (w *deepInfraListModelsWrapper) ListModels() ([]ModelInfo, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("DeepInfra API error (status %d): %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("failed to fetch DeepInfra models (status %d): %s", resp.StatusCode, string(body))
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -411,7 +411,7 @@ func (w *lmStudioListModelsWrapper) ListModels() ([]ModelInfo, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("LM Studio API error (status %d): %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("failed to fetch LM Studio models (status %d): %s", resp.StatusCode, string(body))
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -452,7 +452,7 @@ type mistralListModelsWrapper struct{}
 func (w *mistralListModelsWrapper) ListModels() ([]ModelInfo, error) {
 	apiKey, err := resolveCredentialValue("mistral", "MISTRAL_API_KEY")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to resolve Mistral API key: %w", err)
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -474,7 +474,7 @@ func (w *mistralListModelsWrapper) ListModels() ([]ModelInfo, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Mistral API error (status %d): %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("failed to fetch Mistral models (status %d): %s", resp.StatusCode, string(body))
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -581,12 +581,12 @@ func (w *genericConfigListModelsWrapper) loadBuiltInProviderModels() ([]ModelInf
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read provider config: %w", err)
 	}
 
 	var providerConfig config
 	if err := json.Unmarshal(data, &providerConfig); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to unmarshal provider config: %w", err)
 	}
 
 	models := make([]ModelInfo, len(providerConfig.Models.ModelInfo))
@@ -631,7 +631,7 @@ func (w *genericConfigListModelsWrapper) loadCustomProviderModels() ([]ModelInfo
 	}
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to fetch models from %s: %w", w.providerName, err)
 	}
 	return nil, fmt.Errorf("no models available for provider %s", w.providerName)
 }
@@ -653,7 +653,7 @@ func fetchOpenAICompatibleModels(providerName, endpoint, envVar, inlineAPIKey st
 	modelsEndpoint := strings.TrimSuffix(strings.TrimSpace(endpoint), "/chat/completions") + "/models"
 	req, err := http.NewRequest("GET", modelsEndpoint, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	apiKey := strings.TrimSpace(inlineAPIKey)
@@ -668,7 +668,7 @@ func fetchOpenAICompatibleModels(providerName, endpoint, envVar, inlineAPIKey st
 	client := &http.Client{Timeout: 20 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to fetch models from %s: %w", providerName, err)
 	}
 	defer resp.Body.Close()
 
@@ -687,7 +687,7 @@ func fetchOpenAICompatibleModels(providerName, endpoint, envVar, inlineAPIKey st
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to decode models response: %w", err)
 	}
 
 	models := make([]ModelInfo, 0, len(payload.Data))

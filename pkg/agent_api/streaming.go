@@ -332,12 +332,12 @@ func (r *SSEReader) ReadWithTimeout(timeout time.Duration) error {
 					// Process any remaining data
 					if dataBuilder.Len() > 0 && r.onEvent != nil {
 						if err := r.onEvent(event, dataBuilder.String()); err != nil {
-							return err
+							return fmt.Errorf("failed to process remaining data: %w", err)
 						}
 					}
 					return nil
 				}
-				return result.err
+				return fmt.Errorf("failed to read stream: %w", result.err)
 			}
 
 			line := strings.TrimSpace(result.line)

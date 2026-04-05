@@ -108,7 +108,7 @@ func buildLegacySessionFilePath(stateDir, sessionID string) (string, error) {
 func listScopedSessionCandidates(stateDir, sessionID string) ([]string, error) {
 	cleanSessionID, err := normalizeSessionID(sessionID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to normalize session ID: %w", err)
 	}
 	scopedRoot := filepath.Join(stateDir, scopedSessionsDirName)
 	if _, err := os.Stat(scopedRoot); err != nil {
@@ -247,11 +247,11 @@ func LoadStateWithoutAgent(sessionID string) (*ConversationState, error) {
 func LoadStateWithoutAgentScoped(sessionID, workingDir string) (*ConversationState, error) {
 	stateDir, err := GetStateDir()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get state directory: %w", err)
 	}
 	stateFile, err := resolveSessionStateFile(stateDir, sessionID, workingDir)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to resolve session state file: %w", err)
 	}
 
 	data, err := os.ReadFile(stateFile)
@@ -287,7 +287,7 @@ func ListSessionsWithTimestamps() ([]SessionInfo, error) {
 func ListAllSessionsWithTimestamps() ([]SessionInfo, error) {
 	stateDir, err := GetStateDir()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get state directory: %w", err)
 	}
 
 	var sessions []SessionInfo
@@ -331,16 +331,16 @@ func ListAllSessionsWithTimestamps() ([]SessionInfo, error) {
 func ListSessionsWithTimestampsScoped(workingDir string) ([]SessionInfo, error) {
 	stateDir, err := GetStateDir()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get state directory: %w", err)
 	}
 	cleanWorkingDir, err := normalizeWorkingDirectory(workingDir)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to normalize working directory: %w", err)
 	}
 
 	sessionFiles, err := listSessionFilesForScope(stateDir, cleanWorkingDir)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to list session files for scope: %w", err)
 	}
 
 	sessions := make([]SessionInfo, 0, len(sessionFiles))
@@ -568,7 +568,7 @@ func RenameSessionScoped(sessionID, newName, workingDir string) error {
 func ListSessions() ([]string, error) {
 	sessions, err := ListSessionsWithTimestamps()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to list sessions: %w", err)
 	}
 
 	var sessionIDs []string

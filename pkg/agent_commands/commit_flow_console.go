@@ -2,7 +2,6 @@ package commands
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -59,7 +58,7 @@ func (cf *CommitFlow) promptForFiles(files []string, prompt string) ([]string, e
 	input = strings.TrimSpace(strings.ToLower(input))
 
 	if input == "q" {
-		return nil, errors.New("selection cancelled")
+		return nil, fmt.Errorf("selection cancelled")
 	}
 
 	if input == "all" {

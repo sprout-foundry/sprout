@@ -2,7 +2,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -281,7 +280,7 @@ Examples:
 			_ = os.Setenv("LEDIT_RESOURCE_DIRECTORY", strings.TrimSpace(agentResourceDirectory))
 		}
 		if agentLastSession && strings.TrimSpace(agentSessionID) != "" {
-			return errors.New("--session-id and --last-session are mutually exclusive")
+			return fmt.Errorf("--session-id and --last-session are mutually exclusive")
 		}
 		if agentLastSession || strings.TrimSpace(agentSessionID) != "" {
 			workingDir, err := os.Getwd()
@@ -327,7 +326,7 @@ Examples:
 			}
 			promptText := strings.TrimSpace(string(promptData))
 			if promptText == "" {
-				return errors.New("--prompt-stdin specified but stdin was empty")
+				return fmt.Errorf("--prompt-stdin specified but stdin was empty")
 			}
 			args = []string{promptText}
 			stdinIsTerminal = false

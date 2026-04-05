@@ -1,7 +1,7 @@
 package commands
 
 import (
-	"errors"
+	"fmt"
 
 	gitops "github.com/alantheprice/ledit/pkg/git"
 )
@@ -36,16 +36,16 @@ type CommitJSONResult struct {
 // Validate checks that required fields are populated
 func (r *CommitJSONResult) Validate() error {
 	if r.Status == "" {
-		return errors.New("status field is required")
+		return fmt.Errorf("status field is required")
 	}
 	switch r.Status {
 	case CommitStatusSuccess:
 		if r.Commit == "" {
-			return errors.New("commit hash required for success status")
+			return fmt.Errorf("commit hash required for success status")
 		}
 	case CommitStatusError:
 		if r.Error == "" {
-			return errors.New("error message required for error status")
+			return fmt.Errorf("error message required for error status")
 		}
 	case CommitStatusDryRun:
 		// Only status required for dry-run

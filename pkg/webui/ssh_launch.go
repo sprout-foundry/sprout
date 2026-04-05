@@ -3,7 +3,6 @@ package webui
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -454,7 +453,7 @@ func stopRemoteSSHBackend(hostAlias string, remotePID int) error {
 		if msg == "" {
 			msg = err.Error()
 		}
-		return errors.New(msg)
+		return fmt.Errorf("%s", msg)
 	}
 	return nil
 }
@@ -509,7 +508,7 @@ func waitForWebHealth(port int, timeout time.Duration) error {
 	}
 
 	if lastErr == nil {
-		lastErr = errors.New("timed out waiting for remote ledit backend")
+		lastErr = fmt.Errorf("timed out waiting for remote ledit backend")
 	}
 	return fmt.Errorf("failed to connect to SSH workspace: %w", lastErr)
 }

@@ -3,7 +3,6 @@ package cmd
 import (
 	"bufio"
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -107,7 +106,7 @@ func runMCPAdd() error {
 	templates := registry.ListTemplates()
 
 	if len(templates) == 0 {
-		return errors.New("no templates available. Add templates to ~/.ledit/mcp_templates.json")
+		return fmt.Errorf("no templates available. Add templates to ~/.ledit/mcp_templates.json")
 	}
 
 	// Display templates (filter out generic templates for main menu)
@@ -496,7 +495,7 @@ func promptForGitHubToken(reader *bufio.Reader) (string, error) {
 		githubToken = strings.TrimSpace(tokenInput)
 
 		if githubToken == "" {
-			return "", errors.New("GitHub token is required for local MCP servers")
+			return "", fmt.Errorf("GitHub token is required for local MCP servers")
 		}
 
 		// Offer to set environment variable in the user's shell profile
@@ -706,7 +705,7 @@ func setupCustomMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader, regist
 	serverName := strings.TrimSpace(nameInput)
 
 	if serverName == "" {
-		return errors.New("server name is required")
+		return fmt.Errorf("server name is required")
 	}
 
 	// Check if server already exists
@@ -728,7 +727,7 @@ func setupCustomMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader, regist
 	command := strings.TrimSpace(commandInput)
 
 	if command == "" {
-		return errors.New("command is required")
+		return fmt.Errorf("command is required")
 	}
 
 	// Arguments
@@ -1047,7 +1046,7 @@ func runMCPTest(serverName string) error {
 
 	server, exists := manager.GetServer(serverName)
 	if !exists {
-		return errors.New("failed to get server from manager")
+		return fmt.Errorf("failed to get server from manager")
 	}
 
 	fmt.Println("[...] Starting server...")

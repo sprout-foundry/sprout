@@ -227,7 +227,7 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		chatAgent, err := createChatAgent()
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to create chat agent: %w", err)
 		}
 
 		// Initialize trace session if requested

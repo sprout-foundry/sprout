@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/events"
@@ -49,16 +51,6 @@ func (ws *ReactWebServer) handleAPIGitDiff(w http.ResponseWriter, r *http.Reques
 	// Convert absolute paths to workspace-relative for git operations.
 	reqPath = makeGitRelativePath(reqPath, workspaceRoot)
 
-	status, err := ws.getGitStatusForWorkspace(workspaceRoot)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to validate path: %v", err), http.StatusInternalServerError)
-		return
-	}
-	if !pathExistsInGitStatus(reqPath, status) {
-		http.Error(w, "File is not part of git changes", http.StatusBadRequest)
-		return
-	}
-
 	stagedDiff, err := ws.gitDiffAllowExitOneForWorkspace(workspaceRoot, "diff", "--cached", "--", reqPath)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to get staged diff: %v", err), http.StatusInternalServerError)
@@ -72,10 +64,18 @@ func (ws *ReactWebServer) handleAPIGitDiff(w http.ResponseWriter, r *http.Reques
 	}
 
 	// For untracked files, generate a synthetic diff against /dev/null.
-	if strings.TrimSpace(stagedDiff) == "" && strings.TrimSpace(unstagedDiff) == "" && containsPath(status.Untracked, reqPath) {
-		untrackedDiff, untrackedErr := ws.gitDiffAllowExitOneForWorkspace(workspaceRoot, "diff", "--no-index", "--", "/dev/null", reqPath)
-		if untrackedErr == nil {
-			unstagedDiff = untrackedDiff
+	if strings.TrimSpace(stagedDiff) == "" && strings.TrimSpace(unstagedDiff) == "" {
+		absPath := reqPath
+		if !filepath.IsAbs(absPath) {
+			absPath = filepath.Join(workspaceRoot, absPath)
+		}
+		// Only try the synthetic diff if the file actually exists on disk
+		// (it may be clean/committed, in which case we just return empty diffs).
+		if _, statErr := os.Stat(absPath); statErr == nil {
+			untrackedDiff, untrackedErr := ws.gitDiffAllowExitOneForWorkspace(workspaceRoot, "diff", "--no-index", "--", "/dev/null", reqPath)
+			if untrackedErr == nil {
+				unstagedDiff = untrackedDiff
+			}
 		}
 	}
 

@@ -2,6 +2,7 @@ package trace
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"sync"
 )
@@ -17,7 +18,7 @@ type jsonlWriter struct {
 func newJSONLWriter(path string) (*jsonlWriter, error) {
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open JSONL file: %w", err)
 	}
 
 	return &jsonlWriter{

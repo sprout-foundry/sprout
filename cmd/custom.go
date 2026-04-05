@@ -185,7 +185,7 @@ func runCustomModelAdd() error {
 		for {
 			visionModelInput, err := promptLine(reader, "Vision model (name or number, leave empty to reuse default model): ")
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to prompt for vision model: %w", err)
 			}
 			trimmed := strings.TrimSpace(visionModelInput)
 			if trimmed == "" {

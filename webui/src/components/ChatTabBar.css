@@ -182,3 +182,38 @@
 .chat-tab-rename-input::selection {
   background: var(--accent-primary-alpha);
 }
+
+/* Worktree badge on chat tab */
+.chat-tab-worktree-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  color: var(--text-secondary, #8b949e);
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.chat-tab:hover .chat-tab-worktree-badge,
+.chat-tab.active .chat-tab-worktree-badge {
+  opacity: 1;
+  color: var(--accent-foreground, #58a6ff);
+}
+
+.chat-tab-new-worktree {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  color: var(--text-secondary, #8b949e);
+  cursor: pointer;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.chat-tab-new-worktree:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.05));
+  color: var(--text-primary, #c9d1d9);
+}

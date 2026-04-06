@@ -7,6 +7,7 @@ import MenuBar from './MenuBar';
 import Terminal from './Terminal';
 import ContextPanel, { type ContextPanelHandle } from './ContextPanel';
 import Status from './Status';
+import StatusBar from './StatusBar';
 import CommandPalette from './CommandPalette';
 import PaneLayoutManager from './PaneLayoutManager';
 import { useEditorManager } from '../contexts/EditorManagerContext';
@@ -560,6 +561,16 @@ function AppContent({
             />
           )}
         </div>
+        <StatusBar 
+          branch={gitBranches.current || gitStatus?.branch}
+          buffer={currentBuffer ? {
+            kind: currentBuffer.kind,
+            file: currentBuffer.file,
+            content: currentBuffer.content,
+            cursorPosition: currentBuffer.cursorPosition,
+            languageOverride: currentBuffer.languageOverride,
+          } : null}
+        />
         <Status isConnected={state.isConnected} position="bottom" stats={state.stats} />
       </div>
 

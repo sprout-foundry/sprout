@@ -528,7 +528,8 @@ func (vp *VisionProcessor) GetImageData(imagePath string) (string, string, error
 	var data []byte
 	var err error
 
-	if strings.HasPrefix(strings.ToLower(imagePath), "http://") || strings.HasPrefix(strings.ToLower(imagePath), "https://") {
+	lowerPath := strings.ToLower(imagePath)
+	if strings.HasPrefix(lowerPath, "http://") || strings.HasPrefix(lowerPath, "https://") {
 		// Download from URL
 		data, err = vp.DownloadImage(imagePath)
 	} else {
@@ -797,7 +798,8 @@ func AnalyzeImage(imagePath string, analysisPrompt string, analysisMode string) 
 	}
 
 	inputType := "unknown"
-	if strings.HasPrefix(imagePath, "http://") || strings.HasPrefix(imagePath, "https://") {
+	lowerPath := strings.ToLower(imagePath)
+	if strings.HasPrefix(lowerPath, "http://") || strings.HasPrefix(lowerPath, "https://") {
 		inputType = "remote_url"
 	} else if imagePath != "" {
 		inputType = "local_file"
@@ -1125,7 +1127,8 @@ func GetBaseName(path string) string {
 // For URLs, it does a HEAD request to check Content-Type.
 // For local files, it checks the file extension.
 func IsHTMLInput(path string) bool {
-	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
+	lp := strings.ToLower(path)
+	if strings.HasPrefix(lp, "http://") || strings.HasPrefix(lp, "https://") {
 		client := &http.Client{Timeout: 10 * time.Second}
 		resp, err := client.Head(path)
 		if err != nil {

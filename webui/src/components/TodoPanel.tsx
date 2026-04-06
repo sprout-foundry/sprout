@@ -1,4 +1,3 @@
-import type { FC } from 'react';
 import { Check, Circle, Loader2, Minus } from 'lucide-react';
 import './TodoPanel.css';
 
@@ -13,7 +12,7 @@ interface TodoPanelProps {
   isLoading?: boolean;
 }
 
-const TodoPanel: FC<TodoPanelProps> = ({ todos, isLoading = false }) => {
+function TodoPanel({ todos, isLoading = false }: TodoPanelProps): JSX.Element {
   const total = todos.length;
   const completed = todos.filter((t) => t.status === 'completed').length;
   const active = todos.filter((t) => t.status === 'pending' || t.status === 'in_progress').length;

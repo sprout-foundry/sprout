@@ -1,6 +1,6 @@
 import './CommandPalette.css';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import type { ChangeEvent, FC, KeyboardEvent, MouseEvent } from 'react';
+import type { ChangeEvent, KeyboardEvent, MouseEvent } from 'react';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { clientFetch } from '../services/clientSession';
 import { clearLayoutSnapshot } from '../services/layoutPersistence';
@@ -93,14 +93,14 @@ interface PaletteResult {
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-const CommandPalette: FC<CommandPaletteProps> = ({
+function CommandPalette({
   isOpen,
   onClose,
   onOpenFile,
   onToggleSidebar,
   onToggleTerminal,
   onOpenHotkeysConfig,
-}) => {
+}: CommandPaletteProps): JSX.Element | null {
   const { hotkeyForCommand } = useHotkeys();
   const log = useLog();
 

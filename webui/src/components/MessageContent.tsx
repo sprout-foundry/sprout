@@ -1,4 +1,4 @@
-import type { AnchorHTMLAttributes, FC, HTMLAttributes, ReactNode } from 'react';
+import type { AnchorHTMLAttributes, HTMLAttributes, ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { stripAnsiCodes } from '../utils/ansi';
@@ -8,7 +8,8 @@ interface MessageContentProps {
   content: string;
 }
 
-const MessageContent: FC<MessageContentProps> = ({ content }) => (
+function MessageContent({ content }: MessageContentProps): JSX.Element {
+  return (
   <ReactMarkdown
     remarkPlugins={[remarkGfm]}
     components={{
@@ -46,6 +47,7 @@ const MessageContent: FC<MessageContentProps> = ({ content }) => (
   >
     {stripAnsiCodes(content)}
   </ReactMarkdown>
-);
+  );
+}
 
 export default MessageContent;

@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
-import type { ChangeEvent, FC, KeyboardEvent as ReactKeyboardEvent } from 'react';
+import type { ChangeEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import './Sidebar.css';
 import { ApiService, type ProviderOption, type LeditSettings, type LeditInstance } from '../services/api';
 import SettingsPanel from './SettingsPanel';
@@ -106,7 +106,7 @@ const MAX_LOG_ROWS = 1000;
 
 const clampSidebarWidth = (value: number): number => Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, value));
 
-const Sidebar: FC<SidebarProps> = ({
+function Sidebar({
   isConnected,
   instances = [],
   selectedInstancePID = 0,
@@ -134,7 +134,7 @@ const Sidebar: FC<SidebarProps> = ({
   onClose,
   isMobile = false,
   gitPanel,
-}) => {
+}: SidebarProps): JSX.Element {
   const log = useLog();
   const { themePack, availableThemePacks, setThemePack, importTheme, removeTheme } = useTheme();
   const { applyPreset } = useHotkeys();

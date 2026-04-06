@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { DragEvent, FC, MouseEvent } from 'react';
+import type { DragEvent, MouseEvent } from 'react';
 import {
   X,
   AlertTriangle,
@@ -118,7 +118,7 @@ const getBufferIcon = (buffer: EditorBuffer): ReactNode => {
   }
 };
 
-const EditorTabs: FC<EditorTabsProps> = ({ paneId, actions, compact = false }) => {
+function EditorTabs({ paneId, actions, compact = false }: EditorTabsProps): JSX.Element {
   const {
     buffers,
     panes,

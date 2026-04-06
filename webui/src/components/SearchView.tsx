@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ChangeEvent, FC, KeyboardEvent, MouseEvent, ReactNode } from 'react';
+import type { ChangeEvent, KeyboardEvent, MouseEvent, ReactNode } from 'react';
 import ContextMenu from './ContextMenu';
 import { ApiService } from '../services/api';
 import { copyToClipboard } from '../utils/clipboard';
@@ -50,7 +50,7 @@ interface SearchContextMenuState {
 
 const DEBOUNCE_DELAY = 300;
 
-const SearchView: FC<SearchViewProps> = ({ onFileClick }) => {
+function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
   const log = useLog();
   const [searchQuery, setSearchQuery] = useState('');
   const [replaceQuery, setReplaceQuery] = useState('');

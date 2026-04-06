@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import type { CSSProperties, FC, MouseEvent as ReactMouseEvent } from 'react';
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import { Trash2, Columns2, Rows2, Plus, Check } from 'lucide-react';
 import './Terminal.css';
 import TerminalPane, { type TerminalPaneHandle } from './TerminalPane';
@@ -26,11 +26,11 @@ interface TerminalProps {
   onToggleExpand?: (expanded: boolean) => void;
 }
 
-const Terminal: FC<TerminalProps> = ({
+function Terminal({
   isConnected = true,
   isExpanded: externalIsExpanded = false,
   onToggleExpand,
-}) => {
+}: TerminalProps): JSX.Element {
   const getCollapsedHeight = useCallback(() => {
     if (typeof window === 'undefined') {
       return 42;

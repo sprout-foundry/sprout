@@ -1,4 +1,3 @@
-import type { FC } from 'react';
 import { Code2, Image as ImageIcon } from 'lucide-react';
 import './SvgPreview.css';
 
@@ -8,7 +7,7 @@ interface SvgPreviewProps {
   sourcePath?: string;
 }
 
-const SvgPreview: FC<SvgPreviewProps> = ({ content, fileName, sourcePath }) => {
+function SvgPreview({ content, fileName, sourcePath }: SvgPreviewProps): JSX.Element {
   if (!content.trim()) {
     return (
       <div className="svg-preview-empty">

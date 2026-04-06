@@ -528,7 +528,7 @@ func (vp *VisionProcessor) GetImageData(imagePath string) (string, string, error
 	var data []byte
 	var err error
 
-	if strings.HasPrefix(imagePath, "http") {
+	if strings.HasPrefix(strings.ToLower(imagePath), "http://") || strings.HasPrefix(strings.ToLower(imagePath), "https://") {
 		// Download from URL
 		data, err = vp.DownloadImage(imagePath)
 	} else {

@@ -612,9 +612,7 @@
 }
 
 .hints-button-wrapper {
-  position: absolute;
-  bottom: 8px;
-  right: 12px;
+  position: relative;
   z-index: 10;
 }
 
@@ -640,9 +638,9 @@
 
 .hints-popover {
   position: absolute;
-  bottom: 100%;
+  top: 100%;
   right: 0;
-  margin-bottom: 8px;
+  margin-top: 8px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-default);
   border-radius: 8px;

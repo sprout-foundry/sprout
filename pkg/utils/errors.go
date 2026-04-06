@@ -1,3 +1,19 @@
+// Package utils provides error handling utilities and conventions for the codebase.
+//
+// This package implements a comprehensive error handling system with:
+// - StructuredError: Rich error type with code, severity, category, and context
+// - Helper functions for creating typed errors (system, network, validation, etc.)
+// - Error utilities for checking, formatting, and wrapping errors
+//
+// For detailed error handling conventions, see:
+//   - pkg/utils/error_handling_convention.go - Full documentation of patterns
+//
+// Quick Reference:
+//   - Wrap errors with context: fmt.Errorf("context: %w", err)
+//   - Standalone errors: errors.New("message")
+//   - Secondary error context: fmt.Errorf("primary: %w (debug: %v)", primary, secondary)
+//
+// See StructuredError for the main error type and its methods.
 package utils
 
 import (

@@ -48,6 +48,10 @@ jobs:
       run: |
         cd webui && npm ci
 
+    - name: Lint frontend code
+      run: |
+        cd webui && npm run lint:ci
+
     - name: Type check
       run: |
         cd webui && npm run type-check

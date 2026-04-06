@@ -3,6 +3,7 @@ package history
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -80,7 +81,7 @@ func RevertChangeByRevisionID(revisionID string) error {
 		return fmt.Errorf("failed to fetch all changes: %w", err)
 	}
 	if len(changes) == 0 {
-		return fmt.Errorf("no changes recorded to revert")
+		return errors.New("no changes recorded to revert")
 	}
 
 	revisionGroups := groupChangesByRevision(changes)

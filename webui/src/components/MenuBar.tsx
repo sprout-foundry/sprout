@@ -3,7 +3,9 @@ import { createPortal } from 'react-dom';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import './MenuBar.css';
 
-// ── Menu item types ───────────────────────────────────────────────────
+const APP_VERSION = '1.0.0';
+
+const activeDropdownRef = { current: null as HTMLDivElement | null };
 
 interface MenuButtonItem {
   label: string;
@@ -18,8 +20,6 @@ interface MenuDef {
   mnemonic: string;
   items: MenuButtonItem[];
 }
-
-// ── Menu definitions ───────────────────────────────────────────────────
 
 const MENUS: MenuDef[] = [
   {
@@ -40,6 +40,18 @@ const MENUS: MenuDef[] = [
     title: 'Edit',
     mnemonic: 'E',
     items: [
+      { label: 'Undo', commandId: 'undo' },
+      { label: 'Redo', commandId: 'redo' },
+      { divider: true, label: '' },
+      { label: 'Cut', commandId: 'editor_cut' },
+      { label: 'Copy', commandId: 'editor_copy' },
+      { label: 'Paste', commandId: 'editor_paste' },
+      { divider: true, label: '' },
+      { label: 'Find', commandId: 'editor_find' },
+      { label: 'Find and Replace', commandId: 'editor_replace' },
+      { divider: true, label: '' },
+      { label: 'Select All', commandId: 'editor_select_all' },
+      { divider: true, label: '' },
       { label: 'Command Palette...', commandId: 'command_palette' },
       { divider: true, label: '' },
       { label: 'Toggle File Explorer', commandId: 'toggle_explorer' },
@@ -57,7 +69,7 @@ const MENUS: MenuDef[] = [
       { divider: true, label: '' },
       { label: 'Toggle Word Wrap', commandId: 'editor_toggle_word_wrap', isToggle: true },
       { label: 'Toggle Minimap', commandId: 'toggle_minimap', isToggle: true },
-      { label: 'Toggle Linked Scrolling', commandId: 'toggle_linked_scroll' },
+      { label: 'Toggle Linked Scrolling', commandId: 'toggle_linked_scroll', isToggle: true },
       { divider: true, label: '' },
       { label: 'Split Editor Vertical', commandId: 'split_editor_vertical' },
       { label: 'Split Editor Horizontal', commandId: 'split_editor_horizontal' },
@@ -73,6 +85,9 @@ const MENUS: MenuDef[] = [
       { label: 'Focus Terminal', commandId: 'toggle_terminal' },
       { label: 'Split Terminal Vertical', commandId: 'split_terminal_vertical' },
       { label: 'Split Terminal Horizontal', commandId: 'split_terminal_horizontal' },
+      { divider: true, label: '' },
+      { label: 'Clear Terminal', commandId: 'clear_terminal' },
+      { label: 'Kill Terminal', commandId: 'kill_terminal' },
     ],
   },
   {
@@ -81,39 +96,41 @@ const MENUS: MenuDef[] = [
     items: [
       { label: 'Keyboard Shortcuts', commandId: 'open_hotkeys_config' },
       { divider: true, label: '' },
+      { label: 'Report Issue', commandId: 'open_report_issue' },
+      { divider: true, label: '' },
       { label: 'About ledit', commandId: 'about' },
     ],
   },
 ];
 
-// ── Helpers ──────────────────────────────────────────────────────────
-
-/** Get actionable (non-divider, non-disabled) items from a menu. */
 function getActionableItems(menu: MenuDef): MenuButtonItem[] {
   return menu.items.filter((i) => !i.divider && !i.disabled);
 }
 
 function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 function getToggleState(commandId: string | undefined): boolean {
   if (!commandId) return false;
-  if (commandId === 'toggle_minimap') {
-    try {
-      return localStorage.getItem('editor:minimap-enabled') === 'true';
-    } catch {
-      return false;
+  try {
+    switch (commandId) {
+      case 'editor_toggle_word_wrap':
+        // Defaults to true: word wrap is enabled unless explicitly disabled
+        return localStorage.getItem('editor:word-wrap-enabled') !== 'false';
+      case 'editor_toggle_linked_scroll':
+        // Defaults to true unless explicitly disabled
+        return localStorage.getItem('editor:linked-scroll-enabled') !== 'false';
+      case 'toggle_minimap':
+        // Defaults to false: minimap is off unless explicitly enabled
+        return localStorage.getItem('editor:minimap-enabled') === 'true';
+      default:
+        return false;
     }
+  } catch {
+    return false;
   }
-  return false;
 }
-
-// ── Component ────────────────────────────────────────────────────────
 
 function MenuBar(): JSX.Element | null {
   const { hotkeyForCommand } = useHotkeys();
@@ -122,44 +139,46 @@ function MenuBar(): JSX.Element | null {
   const [showMnemonics, setShowMnemonics] = useState(false);
   const menuTitleRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
-  // ── Alt key: show/hide mnemonics + open menus via Alt+letter ─────
-
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F10' && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+        e.preventDefault();
+        if (activeMenuIndex !== null) {
+          setActiveMenuIndex(null);
+          setActiveItemIndex(null);
+        } else {
+          setShowMnemonics(true);
+          setActiveMenuIndex(0);
+          setActiveItemIndex(0);
+        }
+        return;
+      }
       if (e.key === 'Alt') {
         if (activeMenuIndex !== null) {
-          // Alt while a menu is open → close it
           e.preventDefault();
           setActiveMenuIndex(null);
           setActiveItemIndex(null);
         }
       } else if (e.altKey && !e.ctrlKey && !e.metaKey) {
-        // Check for Alt+mnemonic to open a menu
         const key = e.key.toLowerCase();
         const menuIndex = MENUS.findIndex((m) => m.mnemonic.toLowerCase() === key);
         if (menuIndex !== -1) {
           e.preventDefault();
           e.stopPropagation();
           setShowMnemonics(true);
-          // If the same menu is already open, close it; otherwise open it
           setActiveMenuIndex((prev) => (prev === menuIndex ? null : menuIndex));
           setActiveItemIndex(0);
         } else if (activeMenuIndex !== null) {
-          // A menu dropdown is open but this Alt+key doesn't match a mnemonic.
-          // Swallow the event so HotkeyContext doesn't fire a command (e.g. Alt+Z
-          // would toggle word wrap behind the open menu).
           e.preventDefault();
           e.stopPropagation();
         }
       }
     };
-
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'Alt') {
+      if (e.key === 'Alt' || e.key === 'F10') {
         setShowMnemonics(false);
       }
     };
-
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     return () => {
@@ -168,11 +187,8 @@ function MenuBar(): JSX.Element | null {
     };
   }, [activeMenuIndex]);
 
-  // ── Keyboard navigation while a menu is open ─────────────────────
-
   useEffect(() => {
     if (activeMenuIndex === null) return;
-
     const handleKeyDown = (e: KeyboardEvent) => {
       switch (e.key) {
         case 'Escape':
@@ -180,19 +196,16 @@ function MenuBar(): JSX.Element | null {
           setActiveMenuIndex(null);
           setActiveItemIndex(null);
           break;
-
         case 'ArrowRight':
           e.preventDefault();
           setActiveMenuIndex((prev) => (prev !== null ? (prev + 1) % MENUS.length : 0));
           setActiveItemIndex(0);
           break;
-
         case 'ArrowLeft':
           e.preventDefault();
           setActiveMenuIndex((prev) => (prev !== null ? (prev - 1 + MENUS.length) % MENUS.length : MENUS.length - 1));
           setActiveItemIndex(0);
           break;
-
         case 'ArrowDown':
           e.preventDefault();
           setActiveItemIndex((prev) => {
@@ -200,56 +213,58 @@ function MenuBar(): JSX.Element | null {
             return Math.min((prev ?? -1) + 1, menuItems.length - 1);
           });
           break;
-
         case 'ArrowUp':
           e.preventDefault();
           setActiveItemIndex((prev) => Math.max((prev ?? 0) - 1, 0));
           break;
-
         case 'Enter':
         case ' ':
           e.preventDefault();
           break;
-
         case 'Alt':
+        case 'F10':
           e.preventDefault();
           setActiveMenuIndex(null);
           setActiveItemIndex(null);
           break;
       }
     };
-
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeMenuIndex]);
-
-  // ── Execute a menu item by menu index + actionable index ─────────
 
   const executeItem = useCallback((menuIndex: number, actionableIndex: number) => {
     const menu = MENUS[menuIndex];
     const item = getActionableItems(menu)[actionableIndex];
     if (!item) return;
-
-    if (item.commandId === 'about') {
-      setActiveMenuIndex(null);
-      setActiveItemIndex(null);
-      window.alert('ledit WebUI\nVersion 1.0.0\n\nA modern, keyboard-accessible code editor.');
-      return;
+    
+    // Special command dispatching before the generic hotkey path
+    switch (item.commandId) {
+      case 'open_hotkeys_config':
+        // Must dispatch to the correct listener in useHotkeysConfig.ts
+        window.dispatchEvent(new CustomEvent('ledit:open-hotkeys-config'));
+        break;
+      case 'about':
+        // Use window.alert for now (a proper dialog component is a separate task)
+        window.alert(`ledit WebUI\nVersion ${APP_VERSION}\n\nA modern, keyboard-accessible code editor.`);
+        break;
+      case 'open_report_issue':
+        window.open('https://github.com/alantheprice/ledit/issues/new', '_blank', 'noopener,noreferrer');
+        break;
+      default:
+        // Generic hotkey dispatch (handles all editor/terminal/view commands)
+        if (item.commandId) {
+          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: item.commandId } }));
+        }
+        break;
     }
-
-    if (item.commandId) {
-      window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: item.commandId } }));
-    }
-
+    
     setActiveMenuIndex(null);
     setActiveItemIndex(null);
   }, []);
 
-  // ── Execute the currently selected item ───────────────────────────
-
   useEffect(() => {
     if (activeMenuIndex === null || activeItemIndex === null) return;
-
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
@@ -257,12 +272,9 @@ function MenuBar(): JSX.Element | null {
         executeItem(activeMenuIndex, activeItemIndex);
       }
     };
-
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeMenuIndex, activeItemIndex, executeItem]);
-
-  // ── Click handlers ────────────────────────────────────────────────
 
   const handleTitleClick = useCallback((index: number) => {
     setActiveMenuIndex((prev) => (prev === index ? null : index));
@@ -276,7 +288,6 @@ function MenuBar(): JSX.Element | null {
   const handleTitleMouseEnter = useCallback(
     (index: number) => {
       if (activeMenuIndex !== null) {
-        // A menu is already open → switch to hovered menu
         setActiveMenuIndex(index);
         setActiveItemIndex(0);
       }
@@ -284,13 +295,11 @@ function MenuBar(): JSX.Element | null {
     [activeMenuIndex],
   );
 
-  // ── Close menus on outside click ──────────────────────────────────
-
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as Node;
-      // Check if click was inside any menu title button
-      const clickedInsideMenu = menuTitleRefs.current.some((ref) => ref?.contains(target));
+      const clickedInsideMenu = menuTitleRefs.current.some((ref) => ref?.contains(target))
+        || activeDropdownRef.current?.contains(target);
       if (!clickedInsideMenu) {
         setActiveMenuIndex(null);
         setActiveItemIndex(null);
@@ -300,23 +309,17 @@ function MenuBar(): JSX.Element | null {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // ── Build HTML with underlined mnemonic ───────────────────────────
-
   const buildLabelHtml = useCallback(
     (label: string): string => {
       if (!showMnemonics) return escapeHtml(label);
-      // Underline the first character as the mnemonic
       const escaped = escapeHtml(label);
       return `<u>${escaped.charAt(0)}</u>${escaped.slice(1)}`;
     },
     [showMnemonics],
   );
 
-  // ── Render ────────────────────────────────────────────────────────
-
   return (
     <>
-      {/* Menu bar strip */}
       <div className="menu-bar" role="menubar">
         {MENUS.map((menu, index) => {
           const isActive = activeMenuIndex === index;
@@ -336,8 +339,6 @@ function MenuBar(): JSX.Element | null {
           );
         })}
       </div>
-
-      {/* Dropdown */}
       {activeMenuIndex !== null &&
         createPortal(
           <MenuBarDropdown
@@ -356,8 +357,6 @@ function MenuBar(): JSX.Element | null {
   );
 }
 
-// ── Dropdown sub-component ──────────────────────────────────────────
-
 interface MenuBarDropdownProps {
   menuDef: MenuDef;
   menuIndex: number;
@@ -369,48 +368,37 @@ interface MenuBarDropdownProps {
   onItemHover: (index: number) => void;
 }
 
-function MenuBarDropdown({
-  menuDef,
-  menuIndex,
-  anchorRef,
-  activeItemIndex,
-  showMnemonics,
-  hotkeyForCommand,
-  onItemAction,
-  onItemHover,
-}: MenuBarDropdownProps): JSX.Element | null {
-  const dropdownRef = useRef<HTMLDivElement>(null);
+function MenuBarDropdown({ menuDef, menuIndex, anchorRef, activeItemIndex, showMnemonics, hotkeyForCommand, onItemAction, onItemHover }: MenuBarDropdownProps): JSX.Element | null {
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
   let actionableCounter = 0;
 
-  // Position the dropdown below the anchor (useLayoutEffect to avoid flicker)
+  // Sync the module-level ref so the parent's click-outside handler can
+  // detect clicks inside the portal dropdown.
+  const setDropdownEl = useCallback((el: HTMLDivElement | null) => {
+    dropdownRef.current = el;
+    activeDropdownRef.current = el;
+  }, []);
+
   useLayoutEffect(() => {
     if (!dropdownRef.current || !anchorRef) return;
-
     const position = () => {
       if (!dropdownRef.current || !anchorRef) return;
-
       const anchorRect = anchorRef.getBoundingClientRect();
       const el = dropdownRef.current;
-
       let left = anchorRect.left;
       let top = anchorRect.bottom + 2;
-
-      // Clamp to viewport
       const vw = window.innerWidth;
       const vh = window.innerHeight;
       const elRect = el.getBoundingClientRect();
-
       if (elRect.right > vw) {
         left = Math.max(2, vw - elRect.width - 4);
       }
       if (elRect.bottom > vh) {
         top = anchorRect.top - elRect.height - 2;
       }
-
       el.style.left = `${left}px`;
       el.style.top = `${top}px`;
     };
-
     position();
     window.addEventListener('resize', position);
     window.addEventListener('scroll', position, true);
@@ -423,18 +411,15 @@ function MenuBarDropdown({
   if (!anchorRef) return null;
 
   return (
-    <div ref={dropdownRef} className="menu-bar-dropdown" role="menu" aria-label={`${menuDef.title} menu`}>
+    <div ref={setDropdownEl} className="menu-bar-dropdown" role="menu" aria-label={`${menuDef.title} menu`}>
       {menuDef.items.map((item, rawIndex) => {
         if (item.divider) {
           return <div key={`d-${rawIndex}`} className="context-menu-divider" role="separator" />;
         }
-
         const currentActionableIndex = actionableCounter;
         actionableCounter++;
-
         const shortcut = item.commandId && item.commandId !== 'about' ? hotkeyForCommand(item.commandId) : null;
         const isChecked = item.isToggle ? getToggleState(item.commandId) : false;
-
         return (
           <button
             key={`i-${rawIndex}`}

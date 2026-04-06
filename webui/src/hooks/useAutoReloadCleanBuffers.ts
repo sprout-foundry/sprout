@@ -1,7 +1,13 @@
-import { useEffect, type MutableRefObject } from 'react';
+import { useEffect, useRef, type MutableRefObject } from 'react';
 import { type EditorBuffer } from '../types/editor';
 import { readFileWithConsent } from '../services/fileAccess';
 import { debugLog } from '../utils/log';
+import { notificationBus } from '../services/notificationBus';
+
+// Per-path notification cooldown to prevent toast storms from rapid
+// WebSocket-originated file_content_changed events (e.g. build tools
+// touching a file multiple times in quick succession).
+const NOTIFY_COOLDOWN_MS = 4000;
 
 // ---------------------------------------------------------------------------
 // useAutoReloadCleanBuffers
@@ -15,12 +21,17 @@ import { debugLog } from '../utils/log';
 interface UseAutoReloadCleanBuffersOptions {
   buffersRef: MutableRefObject<Map<string, EditorBuffer>>;
   reloadBufferFromDisk: (bufferId: string, content: string, mtime?: number) => void;
+  setBufferExternallyModified?: (bufferId: string, diskContent: string, mtime?: number) => void;
 }
 
 export const useAutoReloadCleanBuffers = ({
   buffersRef,
   reloadBufferFromDisk,
+  setBufferExternallyModified,
 }: UseAutoReloadCleanBuffersOptions): void => {
+  // Per-path last-notification timestamp to deduplicate rapid events.
+  const lastNotifiedRef = useRef<Map<string, number>>(new Map());
+
   // Auto-reload clean (unmodified) buffers when they change on disk.
   // Modified files are left to EditorPane's conflict dialog.
   useEffect(() => {
@@ -31,7 +42,7 @@ export const useAutoReloadCleanBuffers = ({
         size: number;
         deleted: boolean;
       };
-      if (!detail.path || detail.deleted) return;
+      if (!detail.path) return;
 
       // Find the buffer for this file
       let targetBufferId: string | null = null;
@@ -50,6 +61,20 @@ export const useAutoReloadCleanBuffers = ({
       if (targetBuffer.isModified) return;
 
       const bufferId: string = targetBufferId;
+
+      // Handle deleted files on clean buffers
+      if (detail.deleted) {
+        const now = Date.now();
+        const lastNotified = lastNotifiedRef.current.get(detail.path) ?? 0;
+        if (now - lastNotified >= NOTIFY_COOLDOWN_MS) {
+          lastNotifiedRef.current.set(detail.path, now);
+          notificationBus.notify('warning', 'File Deleted', `${targetBuffer.file.name} has been deleted from disk.`, 6000);
+        }
+        if (setBufferExternallyModified) {
+          setBufferExternallyModified(bufferId, '');
+        }
+        return;
+      }
 
       // Re-read the file from disk
       try {
@@ -71,6 +96,14 @@ export const useAutoReloadCleanBuffers = ({
             detail: { bufferId, content },
           }),
         );
+
+        // Show notification for successful auto-reload (debounced per-path)
+        const reloadNow = Date.now();
+        const lastReloadNotify = lastNotifiedRef.current.get(detail.path) ?? 0;
+        if (reloadNow - lastReloadNotify >= NOTIFY_COOLDOWN_MS) {
+          lastNotifiedRef.current.set(detail.path, reloadNow);
+          notificationBus.notify('info', 'File Reloaded', `${targetBuffer.file.name} was modified externally and has been reloaded.`, 4000);
+        }
       } catch (err) {
         // Non-critical: read failures are expected for some file types
         debugLog('[useAutoReloadCleanBuffers] failed to re-read externally modified file:', err);
@@ -79,5 +112,5 @@ export const useAutoReloadCleanBuffers = ({
 
     document.addEventListener('file_externally_modified', handleExternalChange);
     return () => document.removeEventListener('file_externally_modified', handleExternalChange);
-  }, [buffersRef, reloadBufferFromDisk]);
+  }, [buffersRef, reloadBufferFromDisk, setBufferExternallyModified]);
 };

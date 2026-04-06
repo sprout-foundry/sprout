@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -87,7 +88,7 @@ func (f *SessionsFlow) ExecuteSessionLoad(chatAgent *agent.Agent, args []string)
 			}
 		}
 	} else {
-		return "", fmt.Errorf("usage: /sessions load <number|id> [--full]")
+		return "", errors.New("usage: /sessions load <number|id> [--full]")
 		// Example: /sessions load 1 --full  (load full context from session 1)
 		//          /sessions load session_1734697500 (load just summary)
 	}

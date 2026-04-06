@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -99,7 +100,7 @@ func handleBrowseURL(ctx context.Context, a *Agent, args map[string]interface{})
 
 	// Validate screenshot_path for screenshot action
 	if action == "screenshot" && opts.ScreenshotPath == "" {
-		return "", fmt.Errorf("screenshot_path is required for action=screenshot")
+		return "", errors.New("screenshot_path is required for action=screenshot")
 	}
 	if opts.ScreenshotPath != "" {
 		if _, err := filepath.Abs(opts.ScreenshotPath); err != nil {

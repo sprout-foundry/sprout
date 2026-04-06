@@ -141,7 +141,7 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 		}
 	}
 	if agentClient == nil {
-		logger.LogError(fmt.Errorf("failed to get default agent client"))
+		logger.LogError(errors.New("failed to get default agent client"))
 		return errors.New("agent client initialization failed")
 	}
 

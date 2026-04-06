@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -308,7 +309,7 @@ func formatMCPResult(result *mcp.MCPToolCallResult) string {
 func (a *Agent) handleMCPToolsCommand(args map[string]interface{}) (string, error) {
 	action, ok := args["action"].(string)
 	if !ok {
-		return "", fmt.Errorf("mcp_tools command requires 'action' parameter")
+		return "", errors.New("mcp_tools command requires 'action' parameter")
 	}
 
 	ctx := context.Background()

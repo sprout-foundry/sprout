@@ -15,12 +15,13 @@ const MAX_DROP_FILE_SIZE = 10 * 1024 * 1024;
 /**
  * Hook that attaches drag-and-drop event listeners to a container element.
  * Tracks file drops from the OS and calls onFilesDropped with the dropped files.
- * Uses relatedTarget in dragleave to handle nested elements properly,
+ * Uses a drag counter to handle nested elements properly,
  * preventing flickering when the mouse moves between child elements.
  */
 export function useFileDropZone({ containerRef, onFilesDropped }: UseFileDropZoneOptions): UseFileDropZoneReturn {
   const [isDragging, setIsDragging] = useState(false);
   const isFileDrag = useRef(false);
+  const dragCounter = useRef(0);
   // Keep callback in a ref to avoid re-registering listeners when it changes.
   const onFilesDroppedRef = useRef(onFilesDropped);
   onFilesDroppedRef.current = onFilesDropped;
@@ -30,43 +31,54 @@ export function useFileDropZone({ containerRef, onFilesDropped }: UseFileDropZon
     if (!container) return;
 
     const handleDragEnter = (e: DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-
       // Check if this is a file drag (OS files)
       const types = e.dataTransfer?.types || [];
       const hasFiles = types.includes('Files');
 
-      if (hasFiles) {
-        isFileDrag.current = true;
-        setIsDragging(true);
+      // Only intercept file drags, let internal drags pass through naturally
+      if (!hasFiles) {
+        return;
       }
-    };
 
-    const handleDragOver = (e: DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
 
-      // Only allow drop if we're tracking a file drag and dataTransfer is available
-      if (isFileDrag.current && e.dataTransfer) {
+      isFileDrag.current = true;
+      dragCounter.current++;
+      setIsDragging(true);
+    };
+
+    const handleDragOver = (e: DragEvent) => {
+      // Only allow drop if we're tracking a file drag
+      if (!isFileDrag.current) {
+        return;
+      }
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (e.dataTransfer) {
         e.dataTransfer.dropEffect = 'copy';
       }
     };
 
     const handleDragLeave = (e: DragEvent) => {
+      // Only handle file drags
+      if (!isFileDrag.current) {
+        return;
+      }
+
       e.preventDefault();
       e.stopPropagation();
 
-      if (!isFileDrag.current) return;
-
-      // Use relatedTarget to detect when the mouse moves between child elements
-      // vs. actually leaving the container. This prevents flickering in some browsers.
-      const relatedTarget = e.relatedTarget as Node | null;
-      if (relatedTarget && container.contains(relatedTarget)) return;
-
-      // Mouse actually left the container — reset everything
-      isFileDrag.current = false;
-      setIsDragging(false);
+      // Decrement counter and check if we've left the container completely
+      dragCounter.current--;
+      if (dragCounter.current === 0) {
+        // Mouse actually left the container — reset everything
+        isFileDrag.current = false;
+        dragCounter.current = 0;
+        setIsDragging(false);
+      }
     };
 
     const handleDrop = (e: DragEvent) => {
@@ -76,6 +88,7 @@ export function useFileDropZone({ containerRef, onFilesDropped }: UseFileDropZon
 
       // Reset state
       isFileDrag.current = false;
+      dragCounter.current = 0;
       setIsDragging(false);
 
       // Get dropped files if this was a file drag, filter by size

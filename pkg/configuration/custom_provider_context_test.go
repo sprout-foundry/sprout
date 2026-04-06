@@ -2,6 +2,7 @@ package configuration
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"testing"
 
@@ -154,13 +155,17 @@ func TestCustomProviderPerModelContextSizes(t *testing.T) {
 func LoadCustomProviderFile(path string) (CustomProviderConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return CustomProviderConfig{}, err
+		return CustomProviderConfig{}, fmt.Errorf("failed to read custom provider file %s: %w", path, err)
 	}
 
 	var cfg CustomProviderConfig
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		return CustomProviderConfig{}, err
+		return CustomProviderConfig{}, fmt.Errorf("failed to parse custom provider file %s: %w", path, err)
 	}
 
-	return NormalizeCustomProviderConfig(cfg)
+	cfg, err = NormalizeCustomProviderConfig(cfg)
+	if err != nil {
+		return CustomProviderConfig{}, fmt.Errorf("failed to normalize custom provider config from %s: %w", path, err)
+	}
+	return cfg, nil
 }

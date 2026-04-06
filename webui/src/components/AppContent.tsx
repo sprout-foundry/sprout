@@ -23,6 +23,8 @@ import { usePanelWidth } from '../hooks/usePanelWidth';
 import { useFileDropZone } from '../hooks/useFileDropZone';
 import FileDropOverlay from './FileDropOverlay';
 import { parseFilePath } from '../utils/filePath';
+import { isBinaryFile } from '../utils/binaryPatterns';
+import { notificationBus } from '../services/notificationBus';
 import type { ChatSession } from '../services/chatSessions';
 import type { AppState, LogEntry, PerChatState } from '../types/app';
 
@@ -308,13 +310,14 @@ function AppContent({
   const handleFilesDropped = useCallback(
     async (files: File[]) => {
       onViewChange('editor');
-      // Heuristic: skip known binary file extensions
-      const binaryExtPattern = /\.(png|jpe?g|gif|bmp|webp|ico|tiff?|avif|mp[34]|wav|ogg|mpg|mpeg|avi|mov|zip|tar|gz|bz2|xz|7z|rar|exe|dll|so|dylib|wasm|pdf|docx?|xlsx?|pptx?|odt|ods|odp|ttf|otf|woff2?|eot|bin|dat|db|sqlite)$/i;
+
+      let skippedCount = 0;
+      let failedCount = 0;
 
       for (const file of files) {
         try {
-          if (binaryExtPattern.test(file.name)) {
-            console.warn(`[AppContent] Dropped file "${file.name}" appears to be binary. Skipping.`);
+          if (isBinaryFile(file.name)) {
+            skippedCount++;
             continue;
           }
           const content = await file.text();
@@ -330,7 +333,23 @@ function AppContent({
             metadata: { sourceKind: 'dropped', originalName: file.name },
           });
         } catch (err) {
+          failedCount++;
           console.warn('[AppContent] Failed to read dropped file:', file.name, err);
+        }
+      }
+
+      // Show user notification if any files were skipped or failed
+      if (skippedCount > 0 || failedCount > 0) {
+        const skippedMsg = skippedCount > 0 ? `${skippedCount} binary file${skippedCount > 1 ? 's' : ''} skipped` : '';
+        const failedMsg = failedCount > 0 ? `${failedCount} file${failedCount > 1 ? 's' : ''} failed to open` : '';
+        const combinedMsg = [skippedMsg, failedMsg].filter(Boolean).join(', ');
+        if (combinedMsg) {
+          notificationBus.notify(
+            'warning',
+            'File Drop',
+            combinedMsg,
+            5000,
+          );
         }
       }
     },

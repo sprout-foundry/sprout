@@ -695,23 +695,33 @@ function CommandInput({
             <div className="hints-popover">
               <div className="hints-popover-title">Keyboard Shortcuts</div>
               <div className="hints-popover-row">
-                <span><kbd>Enter</kbd></span>
+                <span>
+                  <kbd>Enter</kbd>
+                </span>
                 <span>Send message</span>
               </div>
               <div className="hints-popover-row">
-                <span><kbd>Shift+Enter</kbd></span>
+                <span>
+                  <kbd>Shift+Enter</kbd>
+                </span>
                 <span>New line</span>
               </div>
               <div className="hints-popover-row">
-                <span><kbd>↑</kbd> <kbd>↓</kbd></span>
+                <span>
+                  <kbd>↑</kbd> <kbd>↓</kbd>
+                </span>
                 <span>History</span>
               </div>
               <div className="hints-popover-row">
-                <span><kbd>Esc</kbd></span>
+                <span>
+                  <kbd>Esc</kbd>
+                </span>
                 <span>Clear input</span>
               </div>
               <div className="hints-popover-row">
-                <span><kbd>Ctrl+C</kbd></span>
+                <span>
+                  <kbd>Ctrl+C</kbd>
+                </span>
                 <span>Copy to clipboard</span>
               </div>
             </div>
@@ -871,7 +881,7 @@ function CommandInput({
                   setShowQueuePanel((prev) => !prev);
                 }
               }}
-              disabled={isProcessing ? (disabled || !canSend) : queuedCount === 0}
+              disabled={isProcessing ? disabled || !canSend : queuedCount === 0}
               className="queue-button"
               data-tooltip={
                 queuedCount > 0
@@ -920,7 +930,7 @@ function CommandInput({
       </div>
     </form>
   );
-};
+}
 
 // Memoize to prevent unnecessary re-renders that cause cursor jumping
 const MemoizedCommandInput = memo(CommandInput);

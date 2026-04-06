@@ -41,10 +41,16 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeGet(w http.ResponseWriter,
 
 	clientID := ws.resolveClientID(r)
 
-	ws.mutex.Lock()
-	ctx := ws.getOrCreateClientContextLocked(clientID)
+	ws.mutex.RLock()
+	ctx := ws.clientContexts[clientID]
+	if ctx == nil {
+		ws.mutex.RUnlock()
+		ctx = ws.getOrCreateClientContext(clientID)
+		ws.mutex.RLock()
+		ctx = ws.clientContexts[clientID]
+	}
 	worktreePath := ctx.getChatSessionWorktree(chatID)
-	ws.mutex.Unlock()
+	ws.mutex.RUnlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{

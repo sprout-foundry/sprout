@@ -15,7 +15,6 @@ import WorktreePickerDialog from './WorktreePickerDialog';
 import ChatTabBar from './ChatTabBar';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { ApiService } from '../services/api';
-import { deleteChatSession } from '../services/chatSessions';
 import { useGitWorkspace } from '../hooks/useGitWorkspace';
 import { useInstanceManager } from '../hooks/useInstanceManager';
 import { useChatSessionSync } from '../hooks/useChatSessionSync';
@@ -76,7 +75,7 @@ interface AppContentProps {
   activeChatId?: string | null;
   onActiveChatChange?: (id: string) => void;
   onCreateChat?: () => Promise<string | null>;
-  onDeleteChat?: (id: string) => void;
+  onDeleteChat?: (id: string, options?: { removeWorktree?: boolean }) => void;
   onRenameChat?: (id: string, name: string) => void;
   perChatCache?: Record<string, PerChatState>;
   onCreateChatInWorktree?: (branch: string, baseRef?: string, name?: string, autoSwitch?: boolean) => Promise<string | null>;
@@ -313,12 +312,9 @@ function AppContent({
   }, []);
 
   const handleDeleteChatWithWorktree = useCallback(async (id: string) => {
-    try {
-      await deleteChatSession(id, true);
-      await _onDeleteChat?.(id);
-    } catch (err) {
-      console.warn('[AppContent] Failed to delete chat with worktree:', err);
-    }
+    // Delegate to the shared handleDeleteChat which accepts removeWorktree,
+    // ensuring session list refresh and active-chat switching happen correctly.
+    await _onDeleteChat?.(id, { removeWorktree: true });
   }, [_onDeleteChat]);
 
   const handleWorktreePickerSelect = useCallback(async (worktreePath: string, _branch: string) => {

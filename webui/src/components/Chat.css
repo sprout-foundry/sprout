@@ -1553,6 +1553,404 @@
   color: var(--text-primary);
 }
 
+/* ── Worktree Indicator ──────────────────────────────────────── */
+.worktree-indicator {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent-primary) 12%, transparent) 0%,
+    color-mix(in srgb, var(--accent-primary) 6%, transparent) 100%
+  );
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 30%, var(--border-default));
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  animation: worktree-slide-in 0.3s ease-out;
+}
+
+@keyframes worktree-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.worktree-indicator-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.worktree-indicator-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent-primary) 20%, transparent);
+  color: var(--accent-primary);
+}
+
+.worktree-indicator-text {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.worktree-indicator-text strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.worktree-indicator-switch {
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 40%, var(--border-default));
+  background: color-mix(in srgb, var(--accent-primary) 10%, var(--bg-secondary));
+  color: var(--accent-primary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.worktree-indicator-switch:hover {
+  background: color-mix(in srgb, var(--accent-primary) 20%, var(--bg-secondary));
+  border-color: color-mix(in srgb, var(--accent-primary) 60%, var(--border-default));
+}
+
+.worktree-indicator-switch:active {
+  transform: scale(0.98);
+}
+
+/* ── Worktree Selector ───────────────────────────────────────── */
+.worktree-selector {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow-elevated);
+}
+
+.worktree-selector-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-default);
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.worktree-selector-close {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background 0.12s ease;
+}
+
+.worktree-selector-close:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.worktree-selector-error {
+  padding: 12px 16px;
+  color: var(--accent-error);
+  font-size: 13px;
+  background: color-mix(in srgb, var(--accent-error) 8%, transparent);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.worktree-selector-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.worktree-selector-loading .spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.worktree-selector-empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.worktree-selector-empty p {
+  margin: 0 0 16px;
+  font-size: 14px;
+}
+
+.worktree-selector-create-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.worktree-selector-create-btn:hover {
+  background: var(--bg-elevated);
+  border-color: var(--border-focus);
+}
+
+.worktree-selector-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.worktree-selector-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border-default);
+  cursor: pointer;
+  transition: background 0.12s ease;
+  width: 100%;
+  text-align: left;
+}
+
+.worktree-selector-item:last-child {
+  border-bottom: none;
+}
+
+.worktree-selector-item:hover {
+  background: var(--bg-elevated);
+}
+
+.worktree-selector-item.active {
+  background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
+  border-left: 3px solid var(--accent-primary);
+  padding-left: 13px;
+}
+
+.worktree-selector-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.worktree-selector-item-name {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.worktree-selector-item-branch {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+.worktree-selector-item .check-icon {
+  color: var(--accent-primary);
+  flex-shrink: 0;
+}
+
+/* ── Create Worktree Modal ──────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+
+.modal-content {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 480px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-elevated);
+}
+
+.modal-content h3 {
+  margin: 0 0 20px;
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 14px;
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-primary) 15%, transparent);
+}
+
+.form-group input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.form-error {
+  color: var(--accent-error);
+  font-size: 13px;
+  margin-bottom: 16px;
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--accent-error) 8%, transparent);
+  border-radius: 6px;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.btn-secondary,
+.btn-primary {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    transform 0.08s ease;
+}
+
+.btn-secondary {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+}
+
+.btn-secondary:hover {
+  background: var(--bg-elevated);
+  border-color: var(--border-focus);
+}
+
+.btn-primary {
+  background: var(--accent-primary);
+  border: none;
+  color: var(--accent-fg);
+}
+
+.btn-primary:hover {
+  background: color-mix(in srgb, var(--accent-primary) 85%, transparent);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary:disabled:hover {
+  background: var(--accent-primary);
+}
+
+.btn-primary .spinner {
+  animation: spin 1s linear infinite;
+  margin-right: 6px;
+}
+
+/* ── Mobile Worktree Styles ──────────────────────────────────── */
+@media (max-width: 768px) {
+  .worktree-indicator {
+    margin: 12px;
+    padding: 10px 12px;
+  }
+
+  .worktree-indicator-text {
+    font-size: 12px;
+  }
+
+  .worktree-indicator-switch {
+    padding: 4px 10px;
+    font-size: 11px;
+  }
+
+  .modal-content {
+    padding: 20px;
+    margin: 16px;
+  }
+
+  .worktree-selector {
+    border-radius: 12px;
+  }
+}
+
 .segment-tool-call:focus {
   outline: 2px solid var(--accent-primary);
   outline-offset: 2px;

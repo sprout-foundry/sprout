@@ -189,7 +189,7 @@
 
 .wt-picker-badge.assigned {
   background: rgba(255, 165, 0, 0.15);
-  color: #f0a500;
+  color: var(--warning-fg, #f0a500);
 }
 
 /* Footer */

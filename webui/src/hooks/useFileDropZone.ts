@@ -83,6 +83,11 @@ export function useFileDropZone({ containerRef, onFilesDropped }: UseFileDropZon
 
     const handleDrop = (e: DragEvent) => {
       e.preventDefault();
+      // Note: stopPropagation/stopImmediatePropagation only prevent other native
+      // listeners on the same element from firing. React 18+ delegates events to
+      // the root, so child React onDrop handlers (e.g. EditorTabs tab reorder)
+      // may still fire — they guard against OS file drops internally by checking
+      // for internal drag data.
       e.stopPropagation();
       e.stopImmediatePropagation();
 
@@ -109,11 +114,23 @@ export function useFileDropZone({ containerRef, onFilesDropped }: UseFileDropZon
       }
     };
 
+    // Safety net: for intra-page drags that were identified as file drags, the
+    // browser may cancel the drag without firing drop/dragleave (e.g. source
+    // element removed from DOM, Escape pressed while dragging a draggable).
+    // Note: OS-initiated file drags don't fire dragend (no source element),
+    // but they do fire dragleave which the counter already handles.
+    const handleDragEnd = () => {
+      isFileDrag.current = false;
+      dragCounter.current = 0;
+      setIsDragging(false);
+    };
+
     // Attach event listeners
     container.addEventListener('dragenter', handleDragEnter);
     container.addEventListener('dragover', handleDragOver);
     container.addEventListener('dragleave', handleDragLeave);
     container.addEventListener('drop', handleDrop);
+    document.addEventListener('dragend', handleDragEnd);
 
     // Cleanup on unmount
     return () => {
@@ -121,6 +138,7 @@ export function useFileDropZone({ containerRef, onFilesDropped }: UseFileDropZon
       container.removeEventListener('dragover', handleDragOver);
       container.removeEventListener('dragleave', handleDragLeave);
       container.removeEventListener('drop', handleDrop);
+      document.removeEventListener('dragend', handleDragEnd);
     };
   }, [containerRef]);
 

@@ -3,6 +3,7 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { AppState } from '../types/app';
 import type { Message, ToolExecution, LogEntry, SubagentActivity } from '../types/app';
 import type { WsEvent } from '../services/websocket';
+import { ApiService } from '../services/api';
 import { getWebUIClientId } from '../services/clientSession';
 import { debugLog, error as logError } from '../utils/log';
 import { useNotifications } from '../contexts/NotificationContext';
@@ -27,6 +28,8 @@ export interface UseWebSocketEventsReturn {
   activeRequestsRef: MutableRefObject<number>;
   /** Ref used by the main useEffect cleanup to clear a pending debounce timer */
   connectionTimeoutRef: MutableRefObject<NodeJS.Timeout | null>;
+  /** Callback to register with WebSocketService.onReconnect() for stuck-processing recovery. */
+  handleReconnect: () => void;
 }
 
 export default function useWebSocketEvents({
@@ -737,10 +740,53 @@ export default function useWebSocketEvents({
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- intentionally empty: all external values are accessed via refs or closure-stable setState/setQueuedMessages
 
+  // ── Reconnect handler — recovers stuck processing state ──────────
+  // When the WebSocket reconnects after a period of disconnection (tab
+  // freeze, network drop, Chrome throttling, etc.), any query_completed
+  // events that fired while we were offline are lost.  This handler asks
+  // the backend for its actual processing state.  If the backend is idle
+  // but the frontend still thinks a query is active, we reset the stuck
+  // state so the user regains control of the UI.
+  const handleReconnect = useCallback(() => {
+    debugLog('[reconnect] Checking backend processing state for stuck-query recovery');
+    ApiService.getInstance()
+      .getStats()
+      .then((stats) => {
+        const backendProcessing = stats.is_processing === true;
+        if (!backendProcessing && activeRequestsRef.current > 0) {
+          debugLog(
+            '[reconnect] Backend idle but frontend has',
+            activeRequestsRef.current,
+            'active request(s) — resetting stuck processing state',
+          );
+          activeRequestsRef.current = 0;
+          setState((prev) => ({
+            ...prev,
+            isProcessing: false,
+            queryProgress: null,
+            lastError: null,
+            // Finalise any tool executions that were left in a started/running state
+            toolExecutions: prev.toolExecutions.map((tool) => {
+              if (tool.status === 'started' || tool.status === 'running') {
+                return { ...tool, status: 'completed' as const, endTime: tool.endTime || new Date() };
+              }
+              return tool;
+            }),
+          }));
+        } else {
+          debugLog('[reconnect] Processing state is consistent — no recovery needed');
+        }
+      })
+      .catch((err) => {
+        debugLog('[reconnect] Failed to fetch stats for recovery:', err);
+      });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- activeRequestsRef is a stable ref; setState is stable
+
   return {
     handleEvent,
     activeChatIdRef,
     activeRequestsRef,
     connectionTimeoutRef,
+    handleReconnect,
   };
 }

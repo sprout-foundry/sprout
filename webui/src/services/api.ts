@@ -41,6 +41,9 @@ interface StatsResponse {
   // Configuration
   streaming_enabled: boolean;
   debug_mode: boolean;
+
+  // Processing state (set on each stats response)
+  is_processing?: boolean;
 }
 
 interface QueryRequest {

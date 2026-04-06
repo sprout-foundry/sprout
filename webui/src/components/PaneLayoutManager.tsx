@@ -28,6 +28,7 @@ export interface PaneLayoutManagerProps {
   contextPanelRef: RefObject<unknown>;
   perChatCache?: Record<string, PerChatState>;
   activeChatId?: string | null;
+  chatSessions?: Array<{ id: string; worktree_path?: string }>;
 
   // Chat state for active chat pane
   messages: Message[];
@@ -200,6 +201,7 @@ function PaneLayoutManager({
   contextPanelRef,
   perChatCache,
   activeChatId,
+  chatSessions,
   messages,
   onSendMessage,
   onQueueMessage,
@@ -402,6 +404,10 @@ function PaneLayoutManager({
                 currentTodos,
                 subagentActivities,
                 onStopProcessing,
+                chatId: activeChatId || undefined,
+                worktreePath: perChatCache?.[activeChatId || '']?.worktreePath ?? chatSessions?.find((s) => s.id === activeChatId)?.worktree_path,
+                workspaceRoot: undefined,
+                onWorktreeChange: undefined,
                 onToolPillClick: (toolId: string) =>
                   (contextPanelRef.current as { highlightTool?: (id: string) => void } | null)?.highlightTool?.(toolId),
               }}

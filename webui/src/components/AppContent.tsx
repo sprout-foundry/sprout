@@ -524,6 +524,7 @@ function AppContent({
                   contextPanelRef={contextPanelRef}
                   perChatCache={perChatCache}
                   activeChatId={activeChatId}
+                  chatSessions={chatSessions}
                   messages={state.messages}
                   onSendMessage={onSendMessage}
                   onQueueMessage={onQueueMessage}

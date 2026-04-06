@@ -27,6 +27,7 @@ interface UseHotkeyIntegrationOptions {
   saveAllBuffers: () => Promise<void>;
   switchToBuffer: (bufferId: string) => void;
   switchPane: (paneId: string) => void;
+  toggleBufferPin: (bufferId: string) => void;
   onToggleCommandPalette: () => void;
   onOpenCommandPalette: () => void;
 }
@@ -47,6 +48,7 @@ export function useHotkeyIntegration({
   saveAllBuffers,
   switchToBuffer,
   switchPane,
+  toggleBufferPin,
   onToggleCommandPalette,
   onOpenCommandPalette,
 }: UseHotkeyIntegrationOptions) {
@@ -103,6 +105,12 @@ export function useHotkeyIntegration({
     void saveAllBuffers();
   }, [saveAllBuffers]);
 
+  const handleTogglePinTab = useCallback(() => {
+    if (activeBufferId) {
+      toggleBufferPin(activeBufferId);
+    }
+  }, [activeBufferId, toggleBufferPin]);
+
   useHotkeyCommandHandler({
     onToggleCommandPalette,
     onOpenCommandPalette,
@@ -119,6 +127,7 @@ export function useHotkeyIntegration({
     onCloseAllBuffers: closeAllBuffers,
     onCloseOtherBuffers: handleCloseOtherBuffers,
     onSaveAllBuffers: handleSaveAllBuffers,
+    onTogglePinTab: handleTogglePinTab,
     onSwitchToBuffer: switchToBuffer,
     onSwitchPane: switchPane,
     activeBufferId,

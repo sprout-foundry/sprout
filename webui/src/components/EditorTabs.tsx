@@ -373,7 +373,7 @@ function EditorTabs({ paneId, actions, compact = false }: EditorTabsProps): JSX.
                     title={buffer.isPinned ? 'Unpin tab' : 'Pin tab'}
                     disabled={!buffer.isPinned && buffer.isClosable === false}
                   >
-                    <Pin size={12} />
+                    <Pin size={12} fill={buffer.isPinned ? 'currentColor' : 'none'} />
                   </button>
                   {buffer.isClosable !== false && !buffer.isPinned && (
                     <button
@@ -489,7 +489,7 @@ function EditorTabs({ paneId, actions, compact = false }: EditorTabsProps): JSX.
               }
               disabled={!activeContextBuffer.isPinned && activeContextBuffer.isClosable === false}
             >
-              <Pin size={14} />
+              <Pin size={14} fill={activeContextBuffer.isPinned ? 'currentColor' : 'none'} />
               <span>{activeContextBuffer.isPinned ? 'Unpin tab' : 'Pin tab'}</span>
             </button>
             <div className="context-menu-divider" />

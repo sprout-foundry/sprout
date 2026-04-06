@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -13,13 +14,13 @@ import (
 func handleTodoWrite(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	todosRaw, ok := args["todos"]
 	if !ok {
-		return "", fmt.Errorf("missing todos argument")
+		return "", errors.New("missing todos argument")
 	}
 
 	// Parse the todos array
 	todosSlice, ok := todosRaw.([]interface{})
 	if !ok {
-		return "", fmt.Errorf("todos must be an array")
+		return "", errors.New("todos must be an array")
 	}
 
 	var todos []tools.TodoItem
@@ -27,7 +28,7 @@ func handleTodoWrite(ctx context.Context, a *Agent, args map[string]interface{})
 	for _, todoRaw := range todosSlice {
 		todoMap, ok := todoRaw.(map[string]interface{})
 		if !ok {
-			return "", fmt.Errorf("each todo must be an object")
+			return "", errors.New("each todo must be an object")
 		}
 
 		todo := tools.TodoItem{}
@@ -46,10 +47,10 @@ func handleTodoWrite(ctx context.Context, a *Agent, args map[string]interface{})
 		}
 
 		if todo.Content == "" {
-			return "", fmt.Errorf("each todo requires content")
+			return "", errors.New("each todo requires content")
 		}
 		if todo.Status == "" {
-			return "", fmt.Errorf("each todo requires status")
+			return "", errors.New("each todo requires status")
 		}
 		todos = append(todos, todo)
 	}

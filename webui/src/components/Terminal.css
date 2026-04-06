@@ -349,9 +349,10 @@
   letter-spacing: normal !important;
 }
 
-.terminal-xterm .xterm-viewport {
-  overflow-y: auto !important;
-}
+/* xterm.js manages its own viewport scrolling internally.
+   Do NOT override overflow properties on .xterm-viewport or .xterm-screen
+   as it breaks scrollback navigation and can cause scroll events to be
+   misinterpreted as arrow key sequences (e.g. scrolling → history up). */
 
 .terminal-xterm .xterm-rows,
 .terminal-xterm .xterm-rows span {

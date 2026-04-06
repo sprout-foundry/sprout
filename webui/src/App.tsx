@@ -256,7 +256,7 @@ function AppWithProviders({
   );
 
   // ── Chat session management (depends on WS refs) ──────────────
-  const { loadChatSessions, handleActiveChatChange, handleCreateChat, handleDeleteChat, handleRenameChat } =
+  const { loadChatSessions, handleActiveChatChange, handleCreateChat, handleDeleteChat, handleRenameChat, createChatInWorktree } =
     useChatSessions({ setState, activeChatIdRef, activeRequestsRef });
 
   // ── Message sending (depends on WS refs) ──────────────────────
@@ -340,6 +340,7 @@ function AppWithProviders({
         onDeleteChat={handleDeleteChat}
         onRenameChat={handleRenameChat}
         perChatCache={state.perChatCache}
+        onCreateChatInWorktree={createChatInWorktree}
       />
       {state.securityApprovalRequest && (
         <SecurityApprovalDialog

@@ -1,8 +1,8 @@
 package agent
 
 import (
-	"fmt"
 	"encoding/json"
+	"errors"
 	"regexp"
 	"strings"
 )
@@ -35,7 +35,7 @@ func sanitizeToolFailureMessage(msg string) string {
 func parseToolArgumentsWithRepair(raw string) (map[string]interface{}, bool, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return nil, false, fmt.Errorf("empty arguments")
+		return nil, false, errors.New("empty arguments")
 	}
 
 	var args map[string]interface{}
@@ -54,7 +54,7 @@ func parseToolArgumentsWithRepair(raw string) (map[string]interface{}, bool, err
 		}
 	}
 
-	return nil, false, fmt.Errorf("invalid JSON arguments")
+	return nil, false, errors.New("invalid JSON arguments")
 }
 
 func repairJSONArgumentCandidates(raw string) []string {

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -44,7 +45,7 @@ func handleSearchFiles(ctx context.Context, a *Agent, args map[string]interface{
 	} else if p, ok := args["pattern"].(string); ok {
 		pattern = p
 	} else {
-		return "", fmt.Errorf("missing required parameter 'search_pattern'")
+		return "", errors.New("missing required parameter 'search_pattern'")
 	}
 
 	root := "."
@@ -214,14 +215,14 @@ func handleSearchFiles(ctx context.Context, a *Agent, args map[string]interface{
 
 func handleWebSearch(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	if a == nil {
-		return "", fmt.Errorf("agent context is required for web_search tool")
+		return "", errors.New("agent context is required for web_search tool")
 	}
 
 	query := args["query"].(string)
 	a.debugLog("Performing web search: %s\n", query)
 
 	if a.configManager == nil {
-		return "", fmt.Errorf("configuration manager not initialized for web search")
+		return "", errors.New("configuration manager not initialized for web search")
 	}
 
 	result, err := tools.WebSearch(query, a.configManager)
@@ -239,7 +240,7 @@ func handleWebSearch(ctx context.Context, a *Agent, args map[string]interface{})
 func handleFetchURLWithImages(ctx context.Context, a *Agent, args map[string]interface{}) ([]api.ImageData, string, error) {
 	url, ok := args["url"].(string)
 	if !ok || url == "" {
-		return nil, "", fmt.Errorf("missing or invalid 'url' parameter")
+		return nil, "", errors.New("missing or invalid 'url' parameter")
 	}
 
 	// Guard: a is always non-nil from ExecuteTool, but protect against invariant changes
@@ -294,14 +295,14 @@ func handleFetchURLWithImages(ctx context.Context, a *Agent, args map[string]int
 
 func handleFetchURL(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	if a == nil {
-		return "", fmt.Errorf("agent context is required for fetch_url tool")
+		return "", errors.New("agent context is required for fetch_url tool")
 	}
 
 	url := args["url"].(string)
 	a.debugLog("Fetching URL: %s\n", url)
 
 	if a.configManager == nil {
-		return "", fmt.Errorf("configuration manager not initialized for URL fetch")
+		return "", errors.New("configuration manager not initialized for URL fetch")
 	}
 
 	// Try routing GitHub URLs to the GitHub MCP server when available.

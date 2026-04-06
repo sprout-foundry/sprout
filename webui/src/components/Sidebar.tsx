@@ -28,8 +28,9 @@ import type { GitSidebarPanelProps } from './GitSidebarPanel';
 import GitHistoryPanel from './GitHistoryPanel';
 import LeditLogo from './LeditLogo';
 import LocationSwitcher from './LocationSwitcher';
+import WorktreePanel from './WorktreePanel';
 
-type SectionTab = 'git' | 'logs' | 'files' | 'settings' | 'search';
+type SectionTab = 'git' | 'logs' | 'files' | 'settings' | 'search' | 'worktrees';
 
 interface SidebarProps {
   isConnected: boolean;
@@ -97,6 +98,7 @@ const SECTION_TABS: { id: SectionTab; icon: LucideIcon; label: string }[] = [
   { id: 'search', icon: Search, label: 'Search' },
   { id: 'settings', icon: Settings, label: 'Settings' },
   { id: 'logs', icon: ScrollText, label: 'Logs' },
+  { id: 'worktrees', icon: GitBranch, label: 'Worktrees' },
 ];
 
 const SIDEBAR_MIN_WIDTH = 200;
@@ -162,6 +164,7 @@ function Sidebar({
   const hasHydratedProviderStateRef = useRef(false);
   const [selectedSection, setSelectedSection] = useState<SectionTab>('git');
   const [gitSubTab, setGitSubTab] = useState<'changes' | 'history'>('changes');
+  const [worktreePanelOpen, setWorktreePanelOpen] = useState(false);
   const [settings, setSettings] = useState<LeditSettings | null>(null);
   const apiService = ApiService.getInstance();
   const effectiveSidebarCollapsed = !isMobile && !!sidebarCollapsed;
@@ -182,7 +185,9 @@ function Sidebar({
       .then((s) => {
         if (!cancelled) setSettings(s);
       })
-      .catch((err) => { debugLog('Failed to load settings:', err); });
+      .catch((err) => {
+        debugLog('Failed to load settings:', err);
+      });
     return () => {
       cancelled = true;
     };
@@ -872,6 +877,24 @@ function Sidebar({
     return <SearchView onFileClick={onFileClick} />;
   };
 
+  /** Worktrees section: git worktree management */
+  const renderWorktreesSection = () => {
+    if (!worktreePanelOpen) {
+      return (
+        <div className="worktree-panel-trigger" onClick={() => setWorktreePanelOpen(true)}>
+          <GitBranch size={20} />
+          <span>Git Worktrees</span>
+        </div>
+      );
+    }
+
+    return (
+      <div className="worktree-panel-wrapper">
+        <WorktreePanel onClose={() => setWorktreePanelOpen(false)} />
+      </div>
+    );
+  };
+
   const renderContentPane = () => {
     switch (selectedSection) {
       case 'git': {
@@ -945,6 +968,8 @@ function Sidebar({
         return renderFilesSection();
       case 'search':
         return renderSearchSection();
+      case 'worktrees':
+        return renderWorktreesSection();
       case 'settings':
         return renderSettingsSection();
       default:
@@ -1020,6 +1045,6 @@ function Sidebar({
       )}
     </div>
   );
-};
+}
 
 export default Sidebar;

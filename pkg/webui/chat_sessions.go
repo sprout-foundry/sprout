@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
+	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
@@ -33,6 +35,7 @@ type chatSession struct {
 	CurrentQuery     string    `json:"current_query"`
 	Provider         string    `json:"provider"`
 	Model            string    `json:"model"`
+	WorktreePath     string    `json:"worktree_path"`
 	Agent            *agent.Agent `json:"-"`
 	mu               sync.Mutex
 }
@@ -97,6 +100,21 @@ func (cs *chatSession) setQueryActive(active bool, query string) {
 	cs.LastActiveAt = time.Now()
 }
 
+// setWorktreePath sets the worktree path for this chat session.
+func (cs *chatSession) setWorktreePath(path string) {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	cs.WorktreePath = path
+	cs.LastActiveAt = time.Now()
+}
+
+// getWorktreePath returns the worktree path for this chat session.
+func (cs *chatSession) getWorktreePath() string {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	return cs.WorktreePath
+}
+
 // getOrCreateAgent returns the agent for this chat session, creating one
 // lazily if needed. The agent is created outside the chatSession mutex to
 // avoid holding it during potentially slow I/O (JSON deserialization, state
@@ -105,11 +123,19 @@ func (cs *chatSession) setQueryActive(active bool, query string) {
 //
 // When the session has a Provider/Model set, those are applied to the agent
 // after creation, providing per-session provider/model scoping.
+//
+// The agent's workspace root is set to the chat's worktree path if set,
+// otherwise it falls back to the provided workspaceRoot parameter.
 func (cs *chatSession) getOrCreateAgent(workspaceRoot string, eventBus *events.EventBus, clientID string) (*agent.Agent, error) {
 	cs.mu.Lock()
 	if cs.Agent != nil {
+		// Use chat's worktree path if set, otherwise use provided workspaceRoot
+		agentWorkspace := cs.WorktreePath
+		if agentWorkspace == "" {
+			agentWorkspace = workspaceRoot
+		}
 		agentInst := cs.Agent
-		agentInst.SetWorkspaceRoot(workspaceRoot)
+		agentInst.SetWorkspaceRoot(agentWorkspace)
 		agentInst.SetEventMetadata(map[string]interface{}{"client_id": clientID, "chat_id": cs.ID})
 		agentInst.EnableStreaming(func(string) {})
 		cs.mu.Unlock()
@@ -118,7 +144,14 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, eventBus *events.E
 	// Capture session-scoped provider/model before releasing the lock
 	sessionProvider := cs.Provider
 	sessionModel := cs.Model
+	sessionWorktree := cs.WorktreePath
 	cs.mu.Unlock()
+
+	// Use chat's worktree path if set, otherwise use provided workspaceRoot
+	agentWorkspace := sessionWorktree
+	if agentWorkspace == "" {
+		agentWorkspace = workspaceRoot
+	}
 
 	// Create agent outside the lock.
 	snapshot := append([]byte(nil), cs.AgentState...)
@@ -130,7 +163,7 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, eventBus *events.E
 	if eventBus != nil {
 		created.SetEventBus(eventBus)
 	}
-	created.SetWorkspaceRoot(workspaceRoot)
+	created.SetWorkspaceRoot(agentWorkspace)
 	created.SetEventMetadata(map[string]interface{}{"client_id": clientID, "chat_id": cs.ID})
 	created.EnableStreaming(func(string) {})
 	if len(snapshot) > 0 {
@@ -165,7 +198,12 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, eventBus *events.E
 	} else {
 		// Another goroutine beat us — discard ours and return theirs.
 		created = cs.Agent
-		created.SetWorkspaceRoot(workspaceRoot)
+		// Use chat's worktree path if set, otherwise use provided workspaceRoot
+		agentWorkspace := cs.WorktreePath
+		if agentWorkspace == "" {
+			agentWorkspace = workspaceRoot
+		}
+		created.SetWorkspaceRoot(agentWorkspace)
 		created.SetEventMetadata(map[string]interface{}{"client_id": clientID, "chat_id": cs.ID})
 		created.EnableStreaming(func(string) {})
 	}
@@ -238,6 +276,7 @@ type chatSessionInfo struct {
 	MessageCount     int       `json:"message_count"`
 	Provider         string    `json:"provider"`
 	Model            string    `json:"model"`
+	WorktreePath     string    `json:"worktree_path"`
 }
 
 // toInfo copies the public fields from cs under cs.mu.
@@ -255,6 +294,7 @@ func (cs *chatSession) toInfo() chatSessionInfo {
 		MessageCount:     cs.messageCountLocked(),
 		Provider:         cs.Provider,
 		Model:            cs.Model,
+		WorktreePath:     cs.WorktreePath,
 	}
 }
 
@@ -449,6 +489,66 @@ func (cc *webClientContext) setChatQueryActive(chatID string, active bool, query
 	}
 }
 
+// setChatSessionWorktree sets the worktree path for a chat session.
+// Returns an error if the path is invalid or not a valid git worktree.
+func (cc *webClientContext) setChatSessionWorktree(chatID, worktreePath string) error {
+	if cc.ChatSessions == nil {
+		return fmt.Errorf("chat sessions not initialized")
+	}
+	if chatID == "" {
+		chatID = cc.DefaultChatID
+	}
+	cs, ok := cc.ChatSessions[chatID]
+	if !ok {
+		return fmt.Errorf("chat session not found")
+	}
+	
+	// Validate the worktree path
+	if worktreePath != "" {
+		absPath, err := filepathAbsEval(worktreePath)
+		if err != nil {
+			return fmt.Errorf("resolve worktree path: %w", err)
+		}
+		
+		// Check if path exists and is a directory
+		info, err := os.Stat(absPath)
+		if err != nil {
+			return fmt.Errorf("stat worktree path: %w", err)
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("worktree path %q must be a directory", absPath)
+		}
+		
+		// Verify it's a valid git worktree using git rev-parse
+		cmd := exec.Command("git", "rev-parse", "--git-dir")
+		cmd.Dir = absPath
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("worktree path %q is not a valid git repository or worktree", absPath)
+		}
+		
+		worktreePath = absPath
+	}
+	
+	cs.setWorktreePath(worktreePath)
+	return nil
+}
+
+// getChatSessionWorktree returns the worktree path for a chat session.
+// If the chat session doesn't exist or has no worktree set, returns empty string.
+func (cc *webClientContext) getChatSessionWorktree(chatID string) string {
+	if cc.ChatSessions == nil {
+		return ""
+	}
+	if chatID == "" {
+		chatID = cc.DefaultChatID
+	}
+	cs, ok := cc.ChatSessions[chatID]
+	if !ok {
+		return ""
+	}
+	return cs.getWorktreePath()
+}
+
 // generateChatID generates a unique chat session ID.
 func generateChatID() string {
 	return "chat-" + time.Now().Format("20060102-150405") + "-" + randomSuffix(4)
@@ -475,20 +575,23 @@ func (cs *chatSession) chatSessionSummary(isDefault bool) map[string]interface{}
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	summary := map[string]interface{}{
-		"id":               cs.ID,
-		"name":             cs.Name,
-		"created_at":       cs.CreatedAt.UTC().Format(time.RFC3339),
-		"last_active_at":   cs.LastActiveAt.UTC().Format(time.RFC3339),
-		"message_count":    cs.messageCountLocked(),
+		"id":                 cs.ID,
+		"name":               cs.Name,
+		"created_at":         cs.CreatedAt.UTC().Format(time.RFC3339),
+		"last_active_at":     cs.LastActiveAt.UTC().Format(time.RFC3339),
+		"message_count":      cs.messageCountLocked(),
 		"current_session_id": cs.agentSessionIDLocked(),
-		"active_query":     cs.ActiveQuery,
-		"is_default":       isDefault,
+		"active_query":       cs.ActiveQuery,
+		"is_default":         isDefault,
 	}
 	if cs.Provider != "" {
 		summary["provider"] = cs.Provider
 	}
 	if cs.Model != "" {
 		summary["model"] = cs.Model
+	}
+	if cs.WorktreePath != "" {
+		summary["worktree_path"] = cs.WorktreePath
 	}
 	if cs.ActiveQuery && cs.CurrentQuery != "" {
 		summary["current_query"] = cs.CurrentQuery
@@ -517,6 +620,9 @@ func (cs *chatSession) chatSessionWithMessages() map[string]interface{} {
 	}
 	if cs.Model != "" {
 		summary["model"] = cs.Model
+	}
+	if cs.WorktreePath != "" {
+		summary["worktree_path"] = cs.WorktreePath
 	}
 	if cs.ActiveQuery && cs.CurrentQuery != "" {
 		summary["current_query"] = cs.CurrentQuery

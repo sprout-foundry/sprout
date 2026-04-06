@@ -8,6 +8,15 @@
 import type { ChatSession } from '../services/chatSessions';
 import type { OnboardingEnvironment, OnboardingProviderOption } from '../services/api';
 
+export interface WorktreeInfo {
+  path: string;
+  branch: string;
+  is_main?: boolean;
+  is_current?: boolean;
+  parent_path?: string;
+  parent_branch?: string;
+}
+
 export interface ToolExecution {
   id: string;
   tool: string;
@@ -83,6 +92,7 @@ export interface PerChatState {
   isProcessing: boolean;
   provider: string;
   model: string;
+  worktreePath?: string;
 }
 
 export interface AppState {

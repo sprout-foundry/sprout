@@ -198,6 +198,6 @@ function SecurityApprovalDialog({
       </div>
     </div>
   );
-};
+}
 
 export default SecurityApprovalDialog;

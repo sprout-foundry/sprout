@@ -15,12 +15,11 @@ const MAX_DROP_FILE_SIZE = 10 * 1024 * 1024;
 /**
  * Hook that attaches drag-and-drop event listeners to a container element.
  * Tracks file drops from the OS and calls onFilesDropped with the dropped files.
- * Uses a counter to handle nested dragenter/dragleave events properly,
- * with a relatedTarget check to prevent flickering in some browsers.
+ * Uses relatedTarget in dragleave to handle nested elements properly,
+ * preventing flickering when the mouse moves between child elements.
  */
 export function useFileDropZone({ containerRef, onFilesDropped }: UseFileDropZoneOptions): UseFileDropZoneReturn {
   const [isDragging, setIsDragging] = useState(false);
-  const dragCounter = useRef(0);
   const isFileDrag = useRef(false);
   // Keep callback in a ref to avoid re-registering listeners when it changes.
   const onFilesDroppedRef = useRef(onFilesDropped);
@@ -40,7 +39,6 @@ export function useFileDropZone({ containerRef, onFilesDropped }: UseFileDropZon
 
       if (hasFiles) {
         isFileDrag.current = true;
-        dragCounter.current++;
         setIsDragging(true);
       }
     };
@@ -67,7 +65,6 @@ export function useFileDropZone({ containerRef, onFilesDropped }: UseFileDropZon
       if (relatedTarget && container.contains(relatedTarget)) return;
 
       // Mouse actually left the container — reset everything
-      dragCounter.current = 0;
       isFileDrag.current = false;
       setIsDragging(false);
     };
@@ -75,9 +72,9 @@ export function useFileDropZone({ containerRef, onFilesDropped }: UseFileDropZon
     const handleDrop = (e: DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
+      e.stopImmediatePropagation();
 
       // Reset state
-      dragCounter.current = 0;
       isFileDrag.current = false;
       setIsDragging(false);
 
@@ -87,7 +84,7 @@ export function useFileDropZone({ containerRef, onFilesDropped }: UseFileDropZon
         const droppedFiles = Array.from(e.dataTransfer.files).filter((file) => {
           if (file.size > maxSize) {
             console.warn(
-              `[useFileDropZone] Dropped file "${file.name}" is too large (${(file.size / 1024 / 1024).toFixed(1)} MB, limit ${(maxSize / 1024 / 1024)} MB). Skipping.`,
+              `[useFileDropZone] Dropped file "${file.name}" is too large (${(file.size / 1024 / 1024).toFixed(1)} MB, limit ${maxSize / 1024 / 1024} MB). Skipping.`,
             );
             return false;
           }

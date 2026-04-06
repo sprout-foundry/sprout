@@ -37,7 +37,7 @@ func (a *Agent) ExportState() ([]byte, error) {
 func (a *Agent) ImportState(data []byte) error {
 	var state AgentState
 	if err := json.Unmarshal(data, &state); err != nil {
-		return fmt.Errorf("ImportState: %w", err)
+		return fmt.Errorf("failed to import state: %w", err)
 	}
 	a.messages = state.Messages
 	a.replaceTurnCheckpoints(state.TurnCheckpoints)
@@ -60,11 +60,11 @@ func (a *Agent) ImportState(data []byte) error {
 	return nil
 }
 
-// SaveStateToFile saves the agent state to a file
+// SaveStateToFile saves agent state to a file
 func (a *Agent) SaveStateToFile(filename string) error {
 	stateData, err := a.ExportState()
 	if err != nil {
-		return fmt.Errorf("SaveStateToFile: %w", err)
+		return fmt.Errorf("failed to export state: %w", err)
 	}
 	return os.WriteFile(filename, stateData, 0644)
 }
@@ -73,7 +73,7 @@ func (a *Agent) SaveStateToFile(filename string) error {
 func (a *Agent) LoadStateFromFile(filename string) error {
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		return fmt.Errorf("LoadStateFromFile: %w", err)
+		return fmt.Errorf("failed to read state file: %w", err)
 	}
 	return a.ImportState(data)
 }
@@ -82,12 +82,12 @@ func (a *Agent) LoadStateFromFile(filename string) error {
 func (a *Agent) LoadSummaryFromFile(filename string) error {
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		return fmt.Errorf("LoadSummaryFromFile: %w", err)
+		return fmt.Errorf("failed to read summary file: %w", err)
 	}
 
 	var state AgentState
 	if err := json.Unmarshal(data, &state); err != nil {
-		return fmt.Errorf("LoadSummaryFromFile: %w", err)
+		return fmt.Errorf("failed to unmarshal summary: %w", err)
 	}
 
 	// Only load the compact summary, not the full conversation state

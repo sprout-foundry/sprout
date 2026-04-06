@@ -17,7 +17,7 @@ import (
 func (a *Agent) SelectProvider() error {
 	newProvider, err := a.configManager.SelectNewProvider()
 	if err != nil {
-		return fmt.Errorf("SelectProvider: %w", err)
+		return fmt.Errorf("failed to select provider: %w", err)
 	}
 
 	// Update agent's client type

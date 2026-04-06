@@ -1,6 +1,6 @@
 import { useCallback, useRef, Fragment } from 'react';
 import type { CSSProperties, RefObject, Dispatch, SetStateAction, ReactNode, ComponentProps } from 'react';
-import { X, Columns2, Rows2, LayoutGrid, MessageSquarePlus } from 'lucide-react';
+import { X, Columns2, Rows2, LayoutGrid, MessageSquarePlus, GitBranch } from 'lucide-react';
 import EditorTabs from './EditorTabs';
 import WorkspacePane from './WorkspacePane';
 import ResizeHandle from './ResizeHandle';
@@ -86,6 +86,7 @@ export interface PaneLayoutManagerProps {
 
   // Chat creation
   onCreateChat?: () => Promise<string | null>;
+  onCreateChatInWorktree?: () => void;
 
   // Nested split state (lifted from PaneLayoutManager for split-request coordination)
   nestedSplit: {
@@ -240,6 +241,7 @@ function PaneLayoutManager({
   onSplitRequest,
   onCloseAllSplits,
   onCreateChat,
+  onCreateChatInWorktree,
   containerRef,
   updatePaneSize,
   nestedSplit,
@@ -306,6 +308,16 @@ function PaneLayoutManager({
             aria-label="New chat"
           >
             <MessageSquarePlus size={13} />
+          </button>
+        )}
+        {paneId === activePaneId && onCreateChatInWorktree && (
+          <button
+            onClick={onCreateChatInWorktree}
+            className="pane-control-btn compact"
+            title="New chat in worktree"
+            aria-label="New chat in worktree"
+          >
+            <GitBranch size={13} />
           </button>
         )}
         {paneId === activePaneId && canCloseSplit && (

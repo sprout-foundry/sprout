@@ -339,7 +339,7 @@ export function useChatSessions({
       debugLog('[chat] Failed to create chat in worktree:', error);
       const message = error instanceof Error ? error.message : 'Failed to create chat in worktree';
       setState((prev) => ({ ...prev, lastError: message }));
-      return null;
+      throw error;
     }
   }, [handleActiveChatChange]);
 

@@ -215,15 +215,88 @@ describe('useFileDropZone', () => {
       const dt = createNonFileDataTransfer();
       expect(() => fireDragEvent('dragenter', dt)).not.toThrow();
     });
+
+    it('does not call preventDefault for non-file drags', () => {
+      setupHook(jest.fn());
+
+      const spyPrevent = jest.fn();
+      const originalPreventDefault = Event.prototype.preventDefault;
+      Event.prototype.preventDefault = spyPrevent;
+
+      fireDragEvent('dragenter', createNonFileDataTransfer());
+
+      expect(spyPrevent).not.toHaveBeenCalled();
+      Event.prototype.preventDefault = originalPreventDefault;
+    });
+
+    it('does not call stopPropagation for non-file drags', () => {
+      setupHook(jest.fn());
+
+      const spyStop = jest.fn();
+      const originalStopPropagation = Event.prototype.stopPropagation;
+      Event.prototype.stopPropagation = spyStop;
+
+      fireDragEvent('dragenter', createNonFileDataTransfer());
+
+      expect(spyStop).not.toHaveBeenCalled();
+      Event.prototype.stopPropagation = originalStopPropagation;
+    });
+
+    it('calls preventDefault and stopPropagation for file drags', () => {
+      setupHook(jest.fn());
+
+      const spyPrevent = jest.fn();
+      const spyStop = jest.fn();
+      const originalPreventDefault = Event.prototype.preventDefault;
+      const originalStopPropagation = Event.prototype.stopPropagation;
+      Event.prototype.preventDefault = spyPrevent;
+      Event.prototype.stopPropagation = spyStop;
+
+      fireDragEvent('dragenter', createFileDataTransfer(['test.txt']));
+
+      expect(spyPrevent).toHaveBeenCalled();
+      expect(spyStop).toHaveBeenCalled();
+      Event.prototype.preventDefault = originalPreventDefault;
+      Event.prototype.stopPropagation = originalStopPropagation;
+    });
   });
 
   // ── handleDragOver ───────────────────────────────────────────────
 
   describe('handleDragOver', () => {
+    it('does not call preventDefault for non-file drags', () => {
+      setupHook(jest.fn());
+
+      const spyPrevent = jest.fn();
+      const originalPreventDefault = Event.prototype.preventDefault;
+      Event.prototype.preventDefault = spyPrevent;
+
+      fireDragEvent('dragover', createNonFileDataTransfer());
+
+      expect(spyPrevent).not.toHaveBeenCalled();
+      Event.prototype.preventDefault = originalPreventDefault;
+    });
+
+    it('does not call stopPropagation for non-file drags', () => {
+      setupHook(jest.fn());
+
+      const spyStop = jest.fn();
+      const originalStopPropagation = Event.prototype.stopPropagation;
+      Event.prototype.stopPropagation = spyStop;
+
+      fireDragEvent('dragover', createNonFileDataTransfer());
+
+      expect(spyStop).not.toHaveBeenCalled();
+      Event.prototype.stopPropagation = originalStopPropagation;
+    });
+
     it('prevents default for file drags', () => {
       setupHook(jest.fn());
 
-      // Use a spy-wrapped listener to verify preventDefault was called
+      // First trigger dragenter to set isFileDrag
+      fireDragEvent('dragenter', createFileDataTransfer(['test.txt']));
+
+      // Now dragover should call preventDefault
       const spyPrevent = jest.fn();
       const originalPreventDefault = Event.prototype.preventDefault;
       Event.prototype.preventDefault = spyPrevent;
@@ -252,50 +325,78 @@ describe('useFileDropZone', () => {
   // ── handleDragLeave ──────────────────────────────────────────────
 
   describe('handleDragLeave', () => {
-    it('resets drag state when mouse leaves the container completely (relatedTarget outside)', () => {
+    it('resets drag state when counter reaches 0 (leaving container)', () => {
       setupHook(jest.fn());
 
-      // First, trigger a file drag enter
+      // Trigger file drag enter (counter = 1)
       fireDragEvent('dragenter', createFileDataTransfer(['test.txt']));
 
-      // Then leave with relatedTarget being outside the container
-      const outsideEl = document.createElement('div');
-      document.body.appendChild(outsideEl);
-      fireDragEvent('dragleave', null, outsideEl);
-
-      outsideEl.remove();
+      // Leave the container (counter = 0) - should reset state
+      fireDragEvent('dragleave', null, null);
     });
 
-    it('does not reset drag state when mouse moves to a child element', () => {
+    it('does not reset drag state when counter > 0 (moving to child)', () => {
       setupHook(jest.fn());
 
-      // Trigger file drag enter
+      // Trigger file drag enter (counter = 1)
       fireDragEvent('dragenter', createFileDataTransfer(['test.txt']));
 
       // Create a child element inside the container
       const childEl = document.createElement('div');
       container.appendChild(childEl);
 
-      // Simulate dragleave from parent to child — relatedTarget is the child inside container
-      // State should NOT reset because relatedTarget is inside container
+      // Simulate dragleave to child — counter decrements but stays > 0
+      // State should NOT reset because counter is still > 0
       fireDragEvent('dragleave', null, childEl);
     });
 
-    it('resets drag state when relatedTarget is null (mouse left in Chrome behavior)', () => {
+    it('does not reset drag state for non-file drags', () => {
       setupHook(jest.fn());
 
-      // Trigger file drag enter
-      fireDragEvent('dragenter', createFileDataTransfer(['test.txt']));
-
-      // In Chrome, relatedTarget can be null when mouse leaves to outside
-      fireDragEvent('dragleave', null, null);
+      // Fire dragleave without a prior file dragenter — should not reset
+      fireDragEvent('dragleave', createNonFileDataTransfer(), null);
     });
 
-    it('does nothing if isFileDrag was never set (non-file dragleave)', () => {
+    it('does not call preventDefault for non-file drags', () => {
       setupHook(jest.fn());
 
-      // Fire dragleave without a prior dragenter — should not throw
-      fireDragEvent('dragleave', null, null);
+      const spyPrevent = jest.fn();
+      const originalPreventDefault = Event.prototype.preventDefault;
+      Event.prototype.preventDefault = spyPrevent;
+
+      fireDragEvent('dragleave', createNonFileDataTransfer());
+
+      expect(spyPrevent).not.toHaveBeenCalled();
+      Event.prototype.preventDefault = originalPreventDefault;
+    });
+
+    it('does not call stopPropagation for non-file drags', () => {
+      setupHook(jest.fn());
+
+      const spyStop = jest.fn();
+      const originalStopPropagation = Event.prototype.stopPropagation;
+      Event.prototype.stopPropagation = spyStop;
+
+      fireDragEvent('dragleave', createNonFileDataTransfer());
+
+      expect(spyStop).not.toHaveBeenCalled();
+      Event.prototype.stopPropagation = originalStopPropagation;
+    });
+
+    it('handles multiple rapid dragenter events correctly', () => {
+      setupHook(jest.fn());
+
+      const dt = createFileDataTransfer(['test.txt']);
+      
+      // Multiple dragenter events should increment counter
+      fireDragEvent('dragenter', dt);
+      fireDragEvent('dragenter', dt);
+      fireDragEvent('dragenter', dt);
+
+      // Now dragleave should only reset when counter reaches 0
+      fireDragEvent('dragleave', null, null); // counter = 2
+      fireDragEvent('dragleave', null, null); // counter = 1
+      fireDragEvent('dragleave', null, null); // counter = 0, should reset
     });
   });
 

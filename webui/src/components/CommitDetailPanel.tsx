@@ -24,7 +24,12 @@ interface CommitDetailPanelProps {
   }) => string;
 }
 
-function CommitDetailPanel({ apiService, commit, onBack, openWorkspaceBuffer }: CommitDetailPanelProps): JSX.Element | null {
+function CommitDetailPanel({
+  apiService,
+  commit,
+  onBack,
+  openWorkspaceBuffer,
+}: CommitDetailPanelProps): JSX.Element | null {
   const log = useLog();
   const [detail, setDetail] = useState<GitCommitDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -209,6 +214,6 @@ function CommitDetailPanel({ apiService, commit, onBack, openWorkspaceBuffer }: 
       )}
     </div>
   );
-};
+}
 
 export default CommitDetailPanel;

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -166,7 +167,8 @@ func (ws *ReactWebServer) handleAPIChatSessionsDelete(w http.ResponseWriter, r *
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)
 	var req struct {
-		ID string `json:"id"`
+		ID             string `json:"id"`
+		RemoveWorktree bool   `json:"remove_worktree,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -222,6 +224,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsDelete(w http.ResponseWriter, r *
 	}
 	cs.mu.Lock()
 	isActive := cs.ActiveQuery
+	worktreePath := cs.WorktreePath
 	cs.mu.Unlock()
 	if isActive {
 		ws.mutex.Unlock()
@@ -234,16 +237,61 @@ func (ws *ReactWebServer) handleAPIChatSessionsDelete(w http.ResponseWriter, r *
 		})
 		return
 	}
+	workspaceRoot := ctx.WorkspaceRoot
 	delete(ctx.ChatSessions, chatID)
 	ws.mutex.Unlock()
 
 	log.Printf("handleAPIChatSessionsDelete: deleted chat session %s for client %s", chatID, clientID)
 
+	// Safety check: verify no other chat session uses this worktree path
+	if req.RemoveWorktree && worktreePath != "" {
+		ws.mutex.RLock()
+		stillInUse := false
+		for _, other := range ctx.ChatSessions {
+			if other.getWorktreePath() == worktreePath {
+				stillInUse = true
+				break
+			}
+		}
+		ws.mutex.RUnlock()
+		if stillInUse {
+			worktreePath = "" // Clear to skip removal
+		}
+	}
+
+	// Optionally clean up the associated worktree
+	resp := map[string]interface{}{
+		"message":           "Chat session deleted",
+		"id":                chatID,
+		"worktree_removed":  false,
+		"worktree_error":    "",
+	}
+
+	if req.RemoveWorktree && worktreePath != "" {
+		absWorktree, absErr := filepath.Abs(worktreePath)
+		if absErr == nil {
+			absWorkspace, _ := filepath.Abs(workspaceRoot)
+			if absWorktree != absWorkspace {
+				removeCmd := ws.gitCommandForWorkspace(absWorkspace, "worktree", "remove", absWorktree)
+				removeOutput, removeErr := removeCmd.CombinedOutput()
+				if removeErr != nil {
+					log.Printf("handleAPIChatSessionsDelete: failed to remove worktree %s: %v\nOutput: %s",
+						absWorktree, removeErr, string(removeOutput))
+					resp["worktree_removed"] = false
+					resp["worktree_error"] = fmt.Sprintf("%s", removeOutput)
+				} else {
+					log.Printf("handleAPIChatSessionsDelete: removed worktree %s for chat session %s", absWorktree, chatID)
+					resp["worktree_removed"] = true
+				}
+			} else {
+				log.Printf("handleAPIChatSessionsDelete: skipping worktree removal, %s is the current workspace", absWorktree)
+				resp["worktree_error"] = "Cannot remove the current workspace"
+			}
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message": "Chat session deleted",
-		"id":      chatID,
-	})
+	json.NewEncoder(w).Encode(resp)
 }
 
 // handleAPIChatSessionsRename handles POST /api/chat-sessions/rename

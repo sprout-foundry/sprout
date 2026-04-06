@@ -45,6 +45,6 @@ function InlinePillRow({ items, ariaLabel, className = '' }: InlinePillRowProps)
       })}
     </div>
   );
-};
+}
 
 export default InlinePillRow;

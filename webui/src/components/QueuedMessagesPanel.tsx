@@ -219,6 +219,6 @@ function QueuedMessagesPanel({
       </div>
     </div>
   );
-};
+}
 
 export default QueuedMessagesPanel;

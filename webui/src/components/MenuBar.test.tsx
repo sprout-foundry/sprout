@@ -81,17 +81,7 @@ const flushPromises = async () => {
  */
 async function renderMenuBar() {
   await act(async () => {
-    root.render(
-      createElement(
-        NotificationProvider,
-        null,
-        createElement(
-          HotkeyProvider,
-          null,
-          createElement(MenuBar),
-        ),
-      ),
-    );
+    root.render(createElement(NotificationProvider, null, createElement(HotkeyProvider, null, createElement(MenuBar))));
   });
   // Let the hotkey provider's async loadHotkeys() settle
   await flushPromises();
@@ -345,9 +335,7 @@ describe('MenuBar', () => {
     openMenu(2); // View
 
     const items = getDropdownItems();
-    const minimapItem = items.find(
-      (el) => el.textContent?.includes('Toggle Minimap'),
-    );
+    const minimapItem = items.find((el) => el.textContent?.includes('Toggle Minimap'));
     expect(minimapItem).toBeDefined();
 
     const check = minimapItem!.querySelector('.menu-item-check');
@@ -363,9 +351,7 @@ describe('MenuBar', () => {
     openMenu(2); // View
 
     const items = getDropdownItems();
-    const minimapItem = items.find(
-      (el) => el.textContent?.includes('Toggle Minimap'),
-    );
+    const minimapItem = items.find((el) => el.textContent?.includes('Toggle Minimap'));
     expect(minimapItem).toBeDefined();
 
     const check = minimapItem!.querySelector('.menu-item-check');
@@ -381,9 +367,7 @@ describe('MenuBar', () => {
     openMenu(2); // View
 
     const items = getDropdownItems();
-    const minimapItem = items.find(
-      (el) => el.textContent?.includes('Toggle Minimap'),
-    );
+    const minimapItem = items.find((el) => el.textContent?.includes('Toggle Minimap'));
     expect(minimapItem).toBeDefined();
 
     const check = minimapItem!.querySelector('.menu-item-check');
@@ -445,9 +429,7 @@ describe('MenuBar', () => {
     });
 
     expect(alertSpy).toHaveBeenCalledTimes(1);
-    expect(alertSpy).toHaveBeenCalledWith(
-      'ledit WebUI\nVersion 1.0.0\n\nA modern, keyboard-accessible code editor.',
-    );
+    expect(alertSpy).toHaveBeenCalledWith('ledit WebUI\nVersion 1.0.0\n\nA modern, keyboard-accessible code editor.');
 
     // Menu should be closed after clicking
     expect(getDropdown()).toBeNull();
@@ -674,11 +656,7 @@ describe('MenuBar', () => {
 
     const items = getDropdownItems();
     const texts = items.map((el) => el.textContent?.trim());
-    expect(texts).toEqual([
-      'Keyboard Shortcuts',
-      'Report Issue',
-      'About ledit',
-    ]);
+    expect(texts).toEqual(['Keyboard Shortcuts', 'Report Issue', 'About ledit']);
 
     const dividers = getDropdownDividers();
     expect(dividers.length).toBe(2);
@@ -716,7 +694,7 @@ describe('MenuBar', () => {
     window.addEventListener('ledit:open-hotkeys-config', handler);
 
     const items = getDropdownItems();
-    const shortcutsItem = items.find(el => el.textContent?.includes('Keyboard Shortcuts'))!;
+    const shortcutsItem = items.find((el) => el.textContent?.includes('Keyboard Shortcuts'))!;
 
     act(() => {
       shortcutsItem.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -733,7 +711,7 @@ describe('MenuBar', () => {
     openMenu(4); // Help
 
     const items = getDropdownItems();
-    const reportItem = items.find(el => el.textContent?.includes('Report Issue'))!;
+    const reportItem = items.find((el) => el.textContent?.includes('Report Issue'))!;
 
     act(() => {
       reportItem.dispatchEvent(new MouseEvent('click', { bubbles: true }));

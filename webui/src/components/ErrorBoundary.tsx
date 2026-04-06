@@ -43,7 +43,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // Log the error using the centralized logging utility
-    logError('Error Boundary caught an error: ' + String(error) + (errorInfo ? ' ' + String(errorInfo.componentStack) : ''));
+    logError(
+      'Error Boundary caught an error: ' + String(error) + (errorInfo ? ' ' + String(errorInfo.componentStack) : ''),
+    );
 
     // Call the onError callback if provided (consumers should show user-facing notification there)
     // Note: notification is handled by the onError callback — do NOT call notificationBus here

@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GitBranch, X, Loader2, AlertCircle, Plus } from 'lucide-react';
+import { GitBranch, X, Loader2, AlertCircle, Plus, FolderTree, TriangleAlert } from 'lucide-react';
+import { listWorktrees } from '../services/chatSessions';
+import type { WorktreeInfo } from '../services/chatSessions';
 import './WorktreeChatDialog.css';
 
 export interface WorktreeChatDialogProps {
@@ -26,6 +28,8 @@ export const WorktreeChatDialog: React.FC<WorktreeChatDialogProps> = ({
   const [baseRef, setBaseRef] = useState('');
   const [name, setName] = useState('');
   const [autoSwitch, setAutoSwitch] = useState(true);
+  const [existingWorktrees, setExistingWorktrees] = useState<WorktreeInfo[]>([]);
+  const [isLoadingWorktrees, setIsLoadingWorktrees] = useState(false);
   
   const branchInputRef = useRef<HTMLInputElement>(null);
 
@@ -36,11 +40,19 @@ export const WorktreeChatDialog: React.FC<WorktreeChatDialogProps> = ({
       setBaseRef('');
       setName('');
       setAutoSwitch(true);
+      setExistingWorktrees([]);
       
       // Focus the branch input when dialog opens
       setTimeout(() => {
         branchInputRef.current?.focus();
       }, 50);
+
+      // Fetch existing worktrees
+      setIsLoadingWorktrees(true);
+      listWorktrees()
+        .then((resp) => setExistingWorktrees(resp.worktrees))
+        .catch(() => {})
+        .finally(() => setIsLoadingWorktrees(false));
     }
   }, [isOpen]);
 
@@ -89,6 +101,19 @@ export const WorktreeChatDialog: React.FC<WorktreeChatDialogProps> = ({
   const handleCancel = () => {
     onClose();
   };
+
+  // Check if the typed branch already has a worktree
+  const branchHasWorktree =
+    branch.trim() && existingWorktrees.some((wt) => wt.branch === branch.trim());
+
+  // Handle clicking an existing worktree row to pre-fill the branch
+  const handleWorktreeClick = (wt: WorktreeInfo) => {
+    if (wt.is_main) return;
+    setBranch(wt.branch);
+  };
+
+  // Non-main worktrees that are suitable for selection
+  const selectableWorktrees = existingWorktrees.filter((wt) => !wt.is_main);
 
   if (!isOpen) {
     return null;
@@ -143,7 +168,15 @@ export const WorktreeChatDialog: React.FC<WorktreeChatDialogProps> = ({
               required
               autoComplete="off"
             />
-            <small>Create a new branch for this worktree</small>
+            {branchHasWorktree && (
+              <small className="wt-chat-dialog-warning">
+                <TriangleAlert size={12} />
+                A worktree already exists for branch <strong>{branch.trim()}</strong>
+              </small>
+            )}
+            {!branchHasWorktree && (
+              <small>Create a new branch for this worktree</small>
+            )}
           </div>
 
           {/* Base Reference Input */}
@@ -189,6 +222,44 @@ export const WorktreeChatDialog: React.FC<WorktreeChatDialogProps> = ({
             <label htmlFor="wt-auto-switch" className="wt-chat-dialog-checkbox-label">
               Switch workspace to this worktree
             </label>
+          </div>
+
+          {/* Existing Worktrees Section */}
+          <div className="wt-chat-dialog-worktrees-section">
+            <div className="wt-chat-dialog-worktrees-header">
+              <FolderTree size={14} />
+              <span>Existing Worktrees</span>
+            </div>
+            {isLoadingWorktrees ? (
+              <div className="wt-chat-dialog-worktrees-loading">
+                <Loader2 size={14} className="wt-chat-dialog-spinner" />
+                <span>Loading worktrees…</span>
+              </div>
+            ) : selectableWorktrees.length === 0 ? (
+              <div className="wt-chat-dialog-worktrees-empty">
+                No existing worktrees. The branch above will create a new one.
+              </div>
+            ) : (
+              <ul className="wt-chat-dialog-worktrees-list">
+                {selectableWorktrees.map((wt) => (
+                  <li key={wt.path}>
+                    <button
+                      type="button"
+                      className={`wt-chat-dialog-worktree-item ${wt.is_current ? 'current' : ''}`}
+                      onClick={() => handleWorktreeClick(wt)}
+                      title={wt.path}
+                      disabled={isCreating}
+                    >
+                      <GitBranch size={13} />
+                      <span className="wt-chat-dialog-worktree-branch">{wt.branch}</span>
+                      {wt.is_current && (
+                        <span className="wt-chat-dialog-worktree-badge">active</span>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           {/* Actions */}

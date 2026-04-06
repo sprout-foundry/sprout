@@ -4,6 +4,7 @@ package cmd
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -75,7 +76,7 @@ The agent will seamlessly transition from planning to execution upon your approv
 // runPlanMode executes the seamless planning and execution session
 func runPlanMode(args []string) error {
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
-		return fmt.Errorf("interactive planning mode requires a terminal (TTY)")
+		return errors.New("interactive planning mode requires a terminal (TTY)")
 	}
 
 	fmt.Print(`
@@ -116,7 +117,7 @@ func runPlanMode(args []string) error {
 			query = fmt.Sprintf("Continue this planning session. Here is the current state:\n\n%s", string(planContent))
 			fmt.Printf("[doc] Loaded existing plan from: %s\n\n", planOutputFile)
 		} else {
-			return fmt.Errorf("no existing plan file found. Path specified but file doesn't exist.")
+			return errors.New("no existing plan file found. Path specified but file doesn't exist.")
 		}
 	} else if len(args) > 0 {
 		query = args[0]
@@ -127,7 +128,7 @@ func runPlanMode(args []string) error {
 		userQuery, _ := reader.ReadString('\n')
 		query = strings.TrimSpace(userQuery)
 		if query == "" {
-			return fmt.Errorf("no idea provided")
+			return errors.New("no idea provided")
 		}
 		fmt.Println()
 	}

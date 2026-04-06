@@ -2,6 +2,7 @@ package agent
 
 import (
 	"embed"
+	"errors"
 	_ "embed"
 	"fmt"
 	"path/filepath"
@@ -68,7 +69,7 @@ func extractSystemPrompt() (string, error) {
 	// Find the first ``` marker
 	startIdx := strings.Index(systemPromptContent, promptStart)
 	if startIdx == -1 {
-		return "", fmt.Errorf("critical error: system prompt start marker not found in embedded content")
+		return "", errors.New("critical error: system prompt start marker not found in embedded content")
 	}
 
 	// Skip the opening ``` marker and any following newlines
@@ -132,7 +133,7 @@ func extractPlanningPrompt() (string, error) {
 
 	startIdx := strings.Index(planningPromptContent, promptStart)
 	if startIdx == -1 {
-		return "", fmt.Errorf("critical error: planning prompt content not found in embedded content")
+		return "", errors.New("critical error: planning prompt content not found in embedded content")
 	}
 
 	endIdx := strings.Index(planningPromptContent[startIdx:], "```")
@@ -147,7 +148,7 @@ func extractPlanningPrompt() (string, error) {
 func readEmbeddedPromptFile(filePath string) ([]byte, error) {
 	trimmed := strings.TrimSpace(filePath)
 	if trimmed == "" {
-		return nil, fmt.Errorf("embedded prompt file path is empty")
+		return nil, errors.New("embedded prompt file path is empty")
 	}
 
 	normalized := filepath.ToSlash(trimmed)

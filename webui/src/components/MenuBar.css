@@ -59,6 +59,7 @@
 .menu-bar-dropdown {
   position: fixed;
   z-index: 1500;
+  font-family: var(--font-sans);
   min-width: 200px;
   max-width: 320px;
   padding: 6px;
@@ -116,5 +117,13 @@
 
   .menu-bar-dropdown {
     min-width: 180px;
+  }
+}
+
+/* ── Reduced Motion ────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-bar-dropdown {
+    animation: none;
   }
 }

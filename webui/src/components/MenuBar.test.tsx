@@ -198,7 +198,7 @@ describe('MenuBar', () => {
     const titles = getMenuTitles();
     for (const title of titles) {
       expect(title.getAttribute('role')).toBe('menuitem');
-      expect(title.getAttribute('aria-haspopup')).toBe('true');
+      expect(title.getAttribute('aria-haspopup')).toBe('menu');
     }
   });
 
@@ -706,5 +706,42 @@ describe('MenuBar', () => {
     // Mnemonics should no longer be shown
     const htmlAfter = titles[0].innerHTML;
     expect(htmlAfter).not.toContain('<u>');
+  });
+
+  test('clicking "Keyboard Shortcuts" dispatches ledit:open-hotkeys-config event', async () => {
+    await renderMenuBar();
+    openMenu(4); // Help
+
+    const handler = jest.fn();
+    window.addEventListener('ledit:open-hotkeys-config', handler);
+
+    const items = getDropdownItems();
+    const shortcutsItem = items.find(el => el.textContent?.includes('Keyboard Shortcuts'))!;
+
+    act(() => {
+      shortcutsItem.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(handler).toHaveBeenCalledTimes(1);
+
+    window.removeEventListener('ledit:open-hotkeys-config', handler);
+  });
+
+  test('clicking "Report Issue" opens the GitHub issues URL', async () => {
+    const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
+    await renderMenuBar();
+    openMenu(4); // Help
+
+    const items = getDropdownItems();
+    const reportItem = items.find(el => el.textContent?.includes('Report Issue'))!;
+
+    act(() => {
+      reportItem.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const expectedUrl = 'https://github.com/alantheprice/ledit/issues/new';
+    expect(openSpy).toHaveBeenCalledWith(expectedUrl, '_blank', 'noopener,noreferrer');
+
+    openSpy.mockRestore();
   });
 });

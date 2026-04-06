@@ -427,7 +427,7 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 			if agent != nil && agent.debug {
 				agent.debugLog("[NO] Blocked subagent tool '%s' - nested subagents are not allowed\n", toolName)
 			}
-			return nil, "", fmt.Errorf(errMsg)
+			return nil, "", errors.New(errMsg)
 		}
 	}
 

@@ -65,6 +65,7 @@ interface EditorManagerContextValue {
   saveBuffer: (bufferId: string, options?: { silent?: boolean }) => Promise<void>;
   setBufferModified: (bufferId: string, isModified: boolean) => void;
   setBufferPinned: (bufferId: string, isPinned: boolean) => void;
+  setBufferClosable: (bufferId: string, isClosable: boolean) => void;
   setBufferOriginalContent: (bufferId: string, originalContent: string) => void;
   revertBufferToOriginal: (bufferId: string) => void;
   setBufferExternallyModified: (bufferId: string, diskContent: string, mtime?: number) => void;
@@ -454,6 +455,7 @@ export function EditorManagerProvider({ children }: EditorManagerProviderProps):
     updateBufferTitle: mutations.updateBufferTitle,
     setBufferModified: mutations.setBufferModified,
     setBufferPinned: mutations.setBufferPinned,
+    setBufferClosable: mutations.setBufferClosable,
     setBufferOriginalContent: mutations.setBufferOriginalContent,
     setBufferLanguageOverride: mutations.setBufferLanguageOverride,
     revertBufferToOriginal: mutations.revertBufferToOriginal,

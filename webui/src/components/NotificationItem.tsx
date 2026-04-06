@@ -112,6 +112,6 @@ function NotificationItem({
       </button>
     </div>
   );
-};
+}
 
 export default NotificationItem;

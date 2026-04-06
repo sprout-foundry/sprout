@@ -281,6 +281,6 @@ function LanguageSwitcher({ currentLanguageId, isAutoDetected, onLanguageChange 
         )}
     </>
   );
-};
+}
 
 export default LanguageSwitcher;

@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react';
-import { Plus, X, Pencil, Trash2, GitBranch } from 'lucide-react';
+import { Plus, X, Pencil, Trash2, GitBranch, Link2, Unlink2 } from 'lucide-react';
 import type { ChatSession } from '../services/chatSessions';
 import ContextMenu from './ContextMenu';
 import './ChatTabBar.css';
@@ -13,6 +13,9 @@ interface ChatTabBarProps {
   onDelete: (id: string) => void;
   onRename: (id: string, name: string) => void;
   onCreateChatInWorktree?: () => void;
+  onSetWorktree?: (sessionId: string) => void;
+  onClearWorktree?: (sessionId: string) => void;
+  onDeleteWithWorktree?: (id: string) => void;
 }
 
 interface ContextMenuState {
@@ -31,6 +34,9 @@ function ChatTabBar({
   onDelete,
   onRename,
   onCreateChatInWorktree,
+  onSetWorktree,
+  onClearWorktree,
+  onDeleteWithWorktree,
 }: ChatTabBarProps): JSX.Element | null {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -135,6 +141,32 @@ function ChatTabBar({
     closeContextMenu();
   }, [contextMenu.sessionId, contextMenu.canDelete, onDelete, closeContextMenu]);
 
+  const handleMenuDeleteWithWorktree = useCallback(() => {
+    const id = contextMenu.sessionId;
+    if (!id || !contextMenu.canDelete || !onDeleteWithWorktree) return;
+    onDeleteWithWorktree(id);
+    closeContextMenu();
+  }, [contextMenu.sessionId, contextMenu.canDelete, onDeleteWithWorktree, closeContextMenu]);
+
+  const contextSessionWtPath = contextSessionId
+    ? sessions.find((s) => s.id === contextSessionId)?.worktree_path
+    : undefined;
+  const sessionHasWorktree = !!contextSessionWtPath;
+
+  const handleMenuSetWorktree = useCallback(() => {
+    const id = contextMenu.sessionId;
+    if (!id || isDefaultSession) return;
+    onSetWorktree?.(id);
+    closeContextMenu();
+  }, [contextMenu.sessionId, isDefaultSession, onSetWorktree, closeContextMenu]);
+
+  const handleMenuClearWorktree = useCallback(() => {
+    const id = contextMenu.sessionId;
+    if (!id || !sessionHasWorktree) return;
+    onClearWorktree?.(id);
+    closeContextMenu();
+  }, [contextMenu.sessionId, sessionHasWorktree, onClearWorktree, closeContextMenu]);
+
   if (sessions.length === 0) {
     return null;
   }
@@ -237,6 +269,40 @@ function ChatTabBar({
           <Trash2 size={13} />
           <span className="menu-item-label">Delete</span>
         </button>
+        {sessionHasWorktree && onDeleteWithWorktree && (
+          <button
+            className={`context-menu-item ${contextMenu.canDelete ? '' : 'disabled'}`}
+            onClick={handleMenuDeleteWithWorktree}
+            type="button"
+            disabled={!contextMenu.canDelete}
+          >
+            <Trash2 size={13} />
+            <span className="menu-item-label">Delete Chat and Worktree</span>
+          </button>
+        )}
+        {!isDefaultSession && (onSetWorktree || onClearWorktree) && (
+          <>
+            <div className="context-menu-divider" />
+            <button
+              className="context-menu-item"
+              onClick={handleMenuSetWorktree}
+              type="button"
+              disabled={!onSetWorktree}
+            >
+              <Link2 size={13} />
+              <span className="menu-item-label">Set Worktree…</span>
+            </button>
+            <button
+              className={`context-menu-item ${sessionHasWorktree ? '' : 'disabled'}`}
+              onClick={handleMenuClearWorktree}
+              type="button"
+              disabled={!sessionHasWorktree || !onClearWorktree}
+            >
+              <Unlink2 size={13} />
+              <span className="menu-item-label">Clear Worktree</span>
+            </button>
+          </>
+        )}
       </ContextMenu>
     </>
   );

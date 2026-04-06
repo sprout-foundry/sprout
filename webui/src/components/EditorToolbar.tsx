@@ -120,6 +120,6 @@ function EditorToolbar({
       </div>
     </div>
   );
-};
+}
 
 export default EditorToolbar;

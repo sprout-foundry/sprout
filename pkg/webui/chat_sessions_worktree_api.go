@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -335,6 +336,18 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 		return
 	}
 
+	// Check if the worktree path already exists on disk (path collision)
+	if _, statErr := os.Stat(worktreePath); statErr == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error":               "A worktree already exists at the computed path. Use a different branch name or manually remove the existing worktree first.",
+			"code":                "worktree_path_conflict",
+			"worktree_path":       worktreePath,
+		})
+		return
+	}
+
 	// Create the git worktree
 	args := []string{"worktree", "add"}
 	if req.BaseRef != "" {
@@ -407,5 +420,46 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 		"worktree_path":  worktreePath,
 		"branch":         req.Branch,
 		"workspace_root": newWorkspaceRoot,
+	})
+}
+
+// handleAPIChatSessionWorktreeList handles GET /api/chat-sessions/worktree-mappings
+// Returns all chat sessions that have worktree paths, so the UI can display
+// which chats are associated with which worktrees.
+func (ws *ReactWebServer) handleAPIChatSessionWorktreeList(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	clientID := ws.resolveClientID(r)
+
+	ws.mutex.RLock()
+	ctx := ws.clientContexts[clientID]
+	if ctx == nil {
+		ws.mutex.RUnlock()
+		ctx = ws.getOrCreateClientContext(clientID)
+		ws.mutex.RLock()
+		ctx = ws.clientContexts[clientID]
+	}
+
+	sessions := ctx.listChatSessions()
+	ws.mutex.RUnlock()
+
+	mappings := make([]map[string]string, 0)
+	for _, info := range sessions {
+		if info.WorktreePath != "" {
+			mappings = append(mappings, map[string]string{
+				"chat_id":       info.ID,
+				"chat_name":     info.Name,
+				"worktree_path": info.WorktreePath,
+			})
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":  "success",
+		"mappings": mappings,
 	})
 }

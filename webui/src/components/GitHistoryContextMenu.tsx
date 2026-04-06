@@ -228,6 +228,6 @@ function GitHistoryContextMenu({ apiService, isActing = false }: GitHistoryConte
       </button>
     </ContextMenu>
   );
-};
+}
 
 export default GitHistoryContextMenu;

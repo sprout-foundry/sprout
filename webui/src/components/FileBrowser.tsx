@@ -233,6 +233,6 @@ function FileBrowser({
       </div>
     </div>
   );
-};
+}
 
 export default FileBrowser;

@@ -95,6 +95,6 @@ function TodoPanel({ todos, isLoading = false }: TodoPanelProps): JSX.Element {
       </div>
     </div>
   );
-};
+}
 
 export default TodoPanel;

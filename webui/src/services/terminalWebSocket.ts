@@ -423,7 +423,9 @@ class TerminalWebSocketService {
         return saved;
       }
     } catch (err) {
-      warn(`[restorePersistedSessionId] failed to restore session ID: ${err instanceof Error ? err.message : String(err)}`);
+      warn(
+        `[restorePersistedSessionId] failed to restore session ID: ${err instanceof Error ? err.message : String(err)}`,
+      );
       // localStorage may be unavailable
     }
     return null;

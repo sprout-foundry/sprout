@@ -211,6 +211,6 @@ function GitHistoryPanel({ apiService, isActing, openWorkspaceBuffer }: GitHisto
       )}
     </div>
   );
-};
+}
 
 export default GitHistoryPanel;

@@ -238,6 +238,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/chat-sessions/rename", ws.handleAPIChatSessionsRename)
 	mux.HandleFunc("/api/chat-sessions/switch", ws.handleAPIChatSessionsSwitch)
 	mux.HandleFunc("/api/chat-sessions/compact", ws.handleAPIChatSessionsCompact)
+	mux.HandleFunc("/api/chat-sessions/worktree-mappings", ws.handleAPIChatSessionWorktreeList)
 	// Chat session worktree API
 	mux.HandleFunc("/api/chat-session/", ws.handleAPIChatSessionWorktree)
 	// Search API

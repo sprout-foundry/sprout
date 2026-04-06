@@ -69,7 +69,11 @@ export function useAppInitialization({
             stats: JSON.stringify(prev.stats) === JSON.stringify(stats) ? prev.stats : statsRecord,
           }));
         })
-        .catch((err) => log.error(`Failed to initialize connection: ${err instanceof Error ? err.message : String(err)}`, { title: 'Connection Error' }));
+        .catch((err) =>
+          log.error(`Failed to initialize connection: ${err instanceof Error ? err.message : String(err)}`, {
+            title: 'Connection Error',
+          }),
+        );
     };
 
     const loadFiles = () => {
@@ -84,7 +88,11 @@ export function useAppInitialization({
             setRecentFiles(files);
           }
         })
-        .catch((err) => log.error(`Failed to load initial data: ${err instanceof Error ? err.message : String(err)}`, { title: 'Initialization Error' }));
+        .catch((err) =>
+          log.error(`Failed to load initial data: ${err instanceof Error ? err.message : String(err)}`, {
+            title: 'Initialization Error',
+          }),
+        );
     };
 
     // Load initial stats & files

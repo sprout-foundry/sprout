@@ -16,7 +16,14 @@ interface QuickPromptProps {
   isOpen: boolean;
 }
 
-function QuickPrompt({ prompt, options, horizontal = true, onSelect, onCancel, isOpen }: QuickPromptProps): JSX.Element | null {
+function QuickPrompt({
+  prompt,
+  options,
+  horizontal = true,
+  onSelect,
+  onCancel,
+  isOpen,
+}: QuickPromptProps): JSX.Element | null {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   useEffect(() => {
@@ -107,6 +114,6 @@ function QuickPrompt({ prompt, options, horizontal = true, onSelect, onCancel, i
       </div>
     </div>
   );
-};
+}
 
 export default QuickPrompt;

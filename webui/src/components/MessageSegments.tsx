@@ -174,6 +174,6 @@ function MessageSegments({ content, toolRefs = [], onToolClick, onToolRefClick }
       })}
     </div>
   );
-};
+}
 
 export default MessageSegments;

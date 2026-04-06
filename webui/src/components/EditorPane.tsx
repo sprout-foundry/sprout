@@ -49,7 +49,7 @@ import { minimapExtension } from '../extensions/minimap';
 import { tabExpandSnippets, setSnippetLanguage } from '../extensions/snippets';
 import { ApiService } from '../services/api';
 import { notificationBus } from '../services/notificationBus';
-import { File, Loader2, AlertTriangle, Eye, Columns2, WrapText, Link2, PanelRightClose } from 'lucide-react';
+import { Loader2, AlertTriangle, Eye, Columns2 } from 'lucide-react';
 import { copyToClipboard } from '../utils/clipboard';
 import { generateUnifiedDiff } from '../utils/simpleDiff';
 import { useLog, debugLog, warn } from '../utils/log';

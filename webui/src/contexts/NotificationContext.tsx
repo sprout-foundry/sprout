@@ -140,4 +140,4 @@ export function NotificationProvider({ children }: NotificationProviderProps): J
   };
 
   return <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>;
-};
+}

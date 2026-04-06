@@ -18,7 +18,11 @@ interface BarState {
   isRemote: boolean;
 }
 
-function WorkspaceBar({ isConnected, isMobileMenuOpen = false, isMobile = false }: WorkspaceBarProps): JSX.Element | null {
+function WorkspaceBar({
+  isConnected,
+  isMobileMenuOpen = false,
+  isMobile = false,
+}: WorkspaceBarProps): JSX.Element | null {
   const [bar, setBar] = useState<BarState>({ workspacePath: '', hostAlias: null, isRemote: false });
   const apiService = useRef(ApiService.getInstance());
 
@@ -98,6 +102,6 @@ function WorkspaceBar({ isConnected, isMobileMenuOpen = false, isMobile = false 
       </span>
     </div>
   );
-};
+}
 
 export default WorkspaceBar;

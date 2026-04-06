@@ -499,7 +499,10 @@ function LocationSwitcher({
     let cancelled = false;
     Promise.all([
       desktopBridge?.listSshHosts ? desktopBridge.listSshHosts() : apiService.current.getSSHHosts(),
-      apiService.current.getSSHSessions().catch((err) => { debugLog('Failed to fetch SSH sessions:', err); return []; }),
+      apiService.current.getSSHSessions().catch((err) => {
+        debugLog('Failed to fetch SSH sessions:', err);
+        return [];
+      }),
     ])
       .then(([hosts, sessions]) => {
         if (!cancelled) {
@@ -1018,7 +1021,12 @@ function LocationSwitcher({
         window.location.assign(targetUrl);
       }
       setIsOpen(false);
-      setSshSessions(await apiService.current.getSSHSessions().catch((err) => { debugLog('Failed to fetch SSH sessions after connect:', err); return []; }));
+      setSshSessions(
+        await apiService.current.getSSHSessions().catch((err) => {
+          debugLog('Failed to fetch SSH sessions after connect:', err);
+          return [];
+        }),
+      );
       setSwitchingState({
         isSwitching: false,
         error: null,
@@ -1051,7 +1059,12 @@ function LocationSwitcher({
     setIsClosingSshSession(sessionKey);
     try {
       await apiService.current.closeSSHSession(sessionKey);
-      setSshSessions(await apiService.current.getSSHSessions().catch((err) => { debugLog('Failed to fetch SSH sessions after close:', err); return []; }));
+      setSshSessions(
+        await apiService.current.getSSHSessions().catch((err) => {
+          debugLog('Failed to fetch SSH sessions after close:', err);
+          return [];
+        }),
+      );
       setSwitchingState({ isSwitching: false, error: null, status: 'SSH session closed' });
     } catch (error) {
       debugLog('[closeSshSession] Failed to close SSH session:', error);
@@ -1844,6 +1857,6 @@ function LocationSwitcher({
         : null}
     </div>
   );
-};
+}
 
 export default LocationSwitcher;

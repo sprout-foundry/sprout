@@ -221,6 +221,112 @@
   animation: wt-chat-spin 0.8s linear infinite;
 }
 
+/* Existing Worktrees Section */
+.wt-chat-dialog-worktrees-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--bg-primary, rgba(0, 0, 0, 0.15));
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.wt-chat-dialog-worktrees-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.wt-chat-dialog-worktrees-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 4px;
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+
+.wt-chat-dialog-worktrees-empty {
+  padding: 10px 4px;
+  color: var(--text-tertiary);
+  font-size: 13px;
+  font-style: italic;
+}
+
+.wt-chat-dialog-worktrees-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.wt-chat-dialog-worktree-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  padding: 6px 8px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+  text-align: left;
+}
+
+.wt-chat-dialog-worktree-item:hover:not(:disabled) {
+  background: var(--bg-tertiary, rgba(255, 255, 255, 0.05));
+}
+
+.wt-chat-dialog-worktree-item.current {
+  border-left: 2px solid var(--accent-color);
+  padding-left: 6px;
+}
+
+.wt-chat-dialog-worktree-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.wt-chat-dialog-worktree-branch {
+  font-weight: 500;
+}
+
+.wt-chat-dialog-worktree-badge {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(56, 139, 253, 0.15);
+  color: var(--accent-color);
+  flex-shrink: 0;
+}
+
+/* Warning text below branch input */
+.wt-chat-dialog-warning {
+  color: #f0a500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.wt-chat-dialog-warning strong {
+  font-family: monospace;
+  font-size: 12px;
+}
+
 /* Worktree Chat Dialog Responsive */
 @media (max-width: 480px) {
   .wt-chat-dialog-overlay {

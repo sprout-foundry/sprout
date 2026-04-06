@@ -124,6 +124,6 @@ function ResizeHandle({
       <div className="resize-handle-indicator" />
     </div>
   );
-};
+}
 
 export default ResizeHandle;

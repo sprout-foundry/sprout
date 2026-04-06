@@ -58,6 +58,6 @@ function LeditLogo({ showWordmark = true, compact = false, className = '' }: Led
       ) : null}
     </div>
   );
-};
+}
 
 export default LeditLogo;

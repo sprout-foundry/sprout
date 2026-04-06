@@ -318,6 +318,6 @@ function ImageViewer({ filePath, fileName, fileSize }: ImageViewerProps): JSX.El
       </div>
     </div>
   );
-};
+}
 
 export default ImageViewer;

@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { Menu, PanelRightOpen, PanelRightClose } from 'lucide-react';
 import Sidebar from './Sidebar';
@@ -20,6 +20,9 @@ import { useSplitManager } from '../hooks/useSplitManager';
 import { useHotkeysConfig } from '../hooks/useHotkeysConfig';
 import { useFileHandlers } from '../hooks/useFileHandlers';
 import { usePanelWidth } from '../hooks/usePanelWidth';
+import { useFileDropZone } from '../hooks/useFileDropZone';
+import FileDropOverlay from './FileDropOverlay';
+import { parseFilePath } from '../utils/filePath';
 import type { ChatSession } from '../services/chatSessions';
 import type { AppState, LogEntry, PerChatState } from '../types/app';
 
@@ -301,6 +304,41 @@ function AppContent({
 
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // ── File drag-and-drop from OS ──────────────────────────────────
+  const handleFilesDropped = useCallback(
+    async (files: File[]) => {
+      onViewChange('editor');
+      // Heuristic: skip known binary file extensions
+      const binaryExtPattern = /\.(png|jpe?g|gif|bmp|webp|ico|tiff?|avif|mp[34]|wav|ogg|mpg|mpeg|avi|mov|zip|tar|gz|bz2|xz|7z|rar|exe|dll|so|dylib|wasm|pdf|docx?|xlsx?|pptx?|odt|ods|odp|ttf|otf|woff2?|eot|bin|dat|db|sqlite)$/i;
+
+      for (const file of files) {
+        try {
+          if (binaryExtPattern.test(file.name)) {
+            console.warn(`[AppContent] Dropped file "${file.name}" appears to be binary. Skipping.`);
+            continue;
+          }
+          const content = await file.text();
+          const { fileName, fileExt } = parseFilePath(file.name);
+          openWorkspaceBuffer({
+            kind: 'file',
+            path: `__workspace/dropped/${file.name}-${Date.now()}`,
+            title: `${fileName} (dropped)`,
+            content,
+            ext: fileExt || undefined,
+            isPinned: false,
+            isClosable: true,
+            metadata: { sourceKind: 'dropped', originalName: file.name },
+          });
+        } catch (err) {
+          console.warn('[AppContent] Failed to read dropped file:', file.name, err);
+        }
+      }
+    },
+    [onViewChange, openWorkspaceBuffer],
+  );
+
+  const { isDragging } = useFileDropZone({ containerRef, onFilesDropped: handleFilesDropped });
+
   // ── Render ──────────────────────────────────────────────────────
 
   return (
@@ -405,7 +443,8 @@ function AppContent({
             )}
 
             <div className={`editor-workspace ${paneLayout}`}>
-              <div ref={containerRef} className={`panes-container layout-${paneLayout}`}>
+              <div ref={containerRef} className={`panes-container layout-${paneLayout}`} style={{ position: 'relative' }}>
+                <FileDropOverlay visible={isDragging} />
                 <PaneLayoutManager
                   panes={panes}
                   paneLayout={paneLayout}
@@ -514,6 +553,6 @@ function AppContent({
       />
     </div>
   );
-};
+}
 
 export default AppContent;

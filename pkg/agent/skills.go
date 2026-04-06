@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -158,7 +157,7 @@ func handleActivateSkill(ctx context.Context, a *Agent, args map[string]interfac
 	if err != nil {
 		// Try alternative parameter names
 		if skillID, err = getStringArg(args, "skill"); err != nil {
-			return "", errors.New("skill_id is required")
+			return "", fmt.Errorf("skill_id is required: %w", err)
 		}
 	}
 

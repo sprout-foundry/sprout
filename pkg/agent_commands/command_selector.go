@@ -84,7 +84,7 @@ func ShowCommandSelector(registry *CommandRegistry, chatAgent *agent.Agent) (str
 func SelectAndExecuteCommand(registry *CommandRegistry, chatAgent *agent.Agent) error {
 	selectedCmd, err := ShowCommandSelector(registry, chatAgent)
 	if err != nil {
-		return errors.New("command selection cancelled")
+		return fmt.Errorf("command selection cancelled: %w", err)
 	}
 
 	// Parse the command (remove the leading slash)

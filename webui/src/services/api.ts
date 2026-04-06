@@ -720,6 +720,7 @@ class ApiService {
       untracked: Array<{ path: string; status: string; staged: boolean }>;
       deleted: Array<{ path: string; status: string; staged: boolean }>;
       renamed: Array<{ path: string; status: string; staged: boolean }>;
+      truncated: boolean;
     };
     files: Array<{ path: string; status: string; staged?: boolean }>;
   }> {

@@ -29,14 +29,16 @@ type gitFixReviewJob struct {
 
 // GitStatus represents the git status response
 type GitStatus struct {
-	Branch    string    `json:"branch"`
-	Ahead     int       `json:"ahead"`
-	Behind    int       `json:"behind"`
-	Staged    []GitFile `json:"staged"`
-	Modified  []GitFile `json:"modified"`
-	Untracked []GitFile `json:"untracked"`
-	Deleted   []GitFile `json:"deleted"`
-	Renamed   []GitFile `json:"renamed"`
+	Branch      string   `json:"branch"`
+	Ahead       int      `json:"ahead"`
+	Behind      int      `json:"behind"`
+	Staged      []GitFile `json:"staged"`
+	Modified    []GitFile `json:"modified"`
+	Untracked   []GitFile `json:"untracked"`
+	Deleted     []GitFile `json:"deleted"`
+	Renamed     []GitFile `json:"renamed"`
+	// Truncated indicates whether any file lists were truncated due to limits
+	Truncated   bool     `json:"truncated"`
 }
 
 // GitFile represents a file with its git status

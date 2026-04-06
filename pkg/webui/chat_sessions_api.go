@@ -278,7 +278,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsDelete(w http.ResponseWriter, r *
 					log.Printf("handleAPIChatSessionsDelete: failed to remove worktree %s: %v\nOutput: %s",
 						absWorktree, removeErr, string(removeOutput))
 					resp["worktree_removed"] = false
-					resp["worktree_error"] = fmt.Sprintf("%s", removeOutput)
+					resp["worktree_error"] = string(removeOutput)
 				} else {
 					log.Printf("handleAPIChatSessionsDelete: removed worktree %s for chat session %s", absWorktree, chatID)
 					resp["worktree_removed"] = true

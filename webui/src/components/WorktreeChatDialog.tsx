@@ -51,7 +51,9 @@ export const WorktreeChatDialog: React.FC<WorktreeChatDialogProps> = ({
       setIsLoadingWorktrees(true);
       listWorktrees()
         .then((resp) => setExistingWorktrees(resp.worktrees))
-        .catch(() => {})
+        .catch((err) => {
+          console.warn('[WorktreeChatDialog] Failed to load existing worktrees:', err);
+        })
         .finally(() => setIsLoadingWorktrees(false));
     }
   }, [isOpen]);

@@ -229,7 +229,9 @@ function LiveLog({ lines, maxLines }: LiveLogProps): JSX.Element | null {
 
 // ── Active Subagent Card ───────────────────────────────────────────
 
-interface ActiveSubagentCardProps { run: SubagentRun; }
+interface ActiveSubagentCardProps {
+  run: SubagentRun;
+}
 
 function ActiveSubagentCard({ run }: ActiveSubagentCardProps): JSX.Element {
   const [expanded, setExpanded] = useState(true);
@@ -276,7 +278,9 @@ function ActiveSubagentCard({ run }: ActiveSubagentCardProps): JSX.Element {
 
 // ── Completed Subagent Card ────────────────────────────────────────
 
-interface CompletedSubagentCardProps { run: SubagentRun; }
+interface CompletedSubagentCardProps {
+  run: SubagentRun;
+}
 
 function CompletedSubagentCard({ run }: CompletedSubagentCardProps): JSX.Element {
   const hasFailures =
@@ -308,7 +312,9 @@ function CompletedSubagentCard({ run }: CompletedSubagentCardProps): JSX.Element
 
 // ── Subagent Activity Feed ─────────────────────────────────────────
 
-interface SubagentActivityFeedProps { activities: SubagentActivity[]; }
+interface SubagentActivityFeedProps {
+  activities: SubagentActivity[];
+}
 
 function SubagentActivityFeed({ activities }: SubagentActivityFeedProps): JSX.Element | null {
   const [visible, setVisible] = useState(true);

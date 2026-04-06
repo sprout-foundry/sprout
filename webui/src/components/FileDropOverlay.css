@@ -8,7 +8,7 @@
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   z-index: 1000;
-  pointer-events: none;
+  pointer-events: all;
 }
 
 .file-drop-overlay-content {

@@ -66,7 +66,7 @@ func (s *CodeReviewService) PerformReview(ctx *ReviewContext, opts *ReviewOption
 
 	// Only support staged review now
 	if opts.Type != StagedReview {
-		return nil, fmt.Errorf("only staged review type is supported, requested type: %v", opts.Type)
+		return nil, fmt.Errorf("only staged review type is supported")
 	}
 
 	result, err = s.performStagedReview(ctx)
@@ -280,8 +280,9 @@ func (s *CodeReviewService) handleRejected(result *types.CodeReviewResult, ctx *
 	if opts.RollbackOnReject && ctx.RevisionID != "" {
 		if hasActive, _ := history.HasActiveChangesForRevision(ctx.RevisionID); hasActive {
 			if err := history.RevertChangeByRevisionID(ctx.RevisionID); err != nil {
-				s.logger.LogError(fmt.Errorf("failed to rollback changes for revision %s: %w", ctx.RevisionID, err))
-				return nil, fmt.Errorf("changes rejected by automated review, but rollback failed. Feedback: %s", result.Feedback)
+				rollbackErr := fmt.Errorf("failed to rollback changes for revision %s: %w", ctx.RevisionID, err)
+				s.logger.LogError(rollbackErr)
+				return nil, fmt.Errorf("changes rejected by automated review, but rollback failed: %w. Feedback: %s", rollbackErr, result.Feedback)
 			}
 		} else {
 			s.logger.LogProcessStep("No active changes recorded for this revision; skipping rollback.")

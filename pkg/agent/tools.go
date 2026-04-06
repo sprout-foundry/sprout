@@ -56,10 +56,10 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 		// Check for common misnamed tools and suggest corrections
 		suggestion := a.suggestCorrectToolName(toolName)
 		if suggestion != "" {
-			return "", fmt.Errorf("unknown tool '%s'. Did you mean '%s'? Valid tools are: %v",
-				toolName, suggestion, validTools)
+			return "", fmt.Errorf("unknown tool '%s'. Did you mean '%s'? Valid tools are: %s",
+				toolName, suggestion, strings.Join(validTools, ", "))
 		}
-		return "", fmt.Errorf("unknown tool '%s'. Valid tools are: %v", toolName, validTools)
+		return "", fmt.Errorf("unknown tool '%s'. Valid tools are: %s", toolName, strings.Join(validTools, ", "))
 	}
 
 	// Use the tool registry for data-driven tool execution

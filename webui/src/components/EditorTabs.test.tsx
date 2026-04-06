@@ -610,3 +610,146 @@ describe('EditorTabs pin toggle button', () => {
     expect(mockToggleBufferPin).toHaveBeenCalledWith('buf-1');
   });
 });
+
+describe('EditorTabs chat tab close behavior', () => {
+  test('pinned chat tab shows close button and confirmation dialog on close click', () => {
+    const buf1 = makeMockBuffer('buf-chat', 'pane-1', { isPinned: true, kind: 'chat', file: { path: '__workspace/chat', name: 'Chat', ext: '.chat', isDir: false, size: 0, modified: 0 } });
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([['buf-chat', buf1]]),
+      activeBufferId: null,
+    });
+    renderEditorTabs({ paneId: 'pane-1' });
+
+    // Close button should be visible for pinned chat tabs
+    const closeBtn = container!.querySelector('.tab-close') as HTMLElement;
+    expect(closeBtn).not.toBeNull();
+
+    // Clicking close should show confirmation dialog (not be blocked by pin)
+    act(() => {
+      closeBtn.click();
+    });
+    expect(container!.querySelector('.close-confirm-overlay')).not.toBeNull();
+    expect(mockCloseBuffer).not.toHaveBeenCalled();
+  });
+
+  test('pinned non-chat tab does NOT show close button and cannot be closed', () => {
+    const buf1 = makeMockBuffer('buf-1', 'pane-1', { isPinned: true, kind: 'file' });
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([['buf-1', buf1]]),
+      activeBufferId: 'buf-1',
+    });
+    renderEditorTabs({ paneId: 'pane-1' });
+
+    // Close button should NOT be visible for pinned non-chat tabs
+    const closeBtn = container!.querySelector('.tab-close') as HTMLElement;
+    expect(closeBtn).toBeNull();
+  });
+
+  test('non-pinned chat tab closes directly without confirmation', () => {
+    const buf1 = makeMockBuffer('buf-chat', 'pane-1', { kind: 'chat', isPinned: false, file: { path: '__workspace/chat/123', name: 'Chat 2', ext: '.chat', isDir: false, size: 0, modified: 0 } });
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([['buf-chat', buf1]]),
+      activeBufferId: 'buf-chat',
+    });
+    renderEditorTabs({ paneId: 'pane-1' });
+
+    const closeBtn = container!.querySelector('.tab-close') as HTMLElement;
+    expect(closeBtn).not.toBeNull();
+
+    act(() => {
+      closeBtn.click();
+    });
+
+    expect(mockCloseBuffer).toHaveBeenCalledWith('buf-chat');
+    expect(container!.querySelector('.close-confirm-overlay')).toBeNull();
+  });
+
+  test('pinned chat tab close confirmation dialog allows closing', () => {
+    const buf1 = makeMockBuffer('buf-chat', 'pane-1', { isPinned: true, kind: 'chat', file: { path: '__workspace/chat', name: 'Chat', ext: '.chat', isDir: false, size: 0, modified: 0 } });
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([['buf-chat', buf1]]),
+      activeBufferId: null,
+    });
+    renderEditorTabs({ paneId: 'pane-1' });
+
+    const closeBtn = container!.querySelector('.tab-close') as HTMLElement;
+    act(() => {
+      closeBtn.click();
+    });
+
+    // Confirm the close
+    const confirmBtn = container!.querySelector('.dialog-btn.danger') as HTMLElement;
+    act(() => {
+      confirmBtn.click();
+    });
+
+    expect(mockCloseBuffer).toHaveBeenCalledWith('buf-chat');
+  });
+
+  test('pinned chat tab close confirmation dialog cancel does not close', () => {
+    const buf1 = makeMockBuffer('buf-chat', 'pane-1', { isPinned: true, kind: 'chat', file: { path: '__workspace/chat', name: 'Chat', ext: '.chat', isDir: false, size: 0, modified: 0 } });
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([['buf-chat', buf1]]),
+      activeBufferId: null,
+    });
+    renderEditorTabs({ paneId: 'pane-1' });
+
+    const closeBtn = container!.querySelector('.tab-close') as HTMLElement;
+    act(() => {
+      closeBtn.click();
+    });
+
+    // Cancel the close
+    const cancelBtn = container!.querySelector('.dialog-btn.primary') as HTMLElement;
+    act(() => {
+      cancelBtn.click();
+    });
+
+    expect(mockCloseBuffer).not.toHaveBeenCalled();
+    expect(container!.querySelector('.close-confirm-overlay')).toBeNull();
+  });
+
+  test('middle-click on pinned chat tab triggers close confirmation', () => {
+    const buf1 = makeMockBuffer('buf-chat', 'pane-1', { isPinned: true, kind: 'chat', file: { path: '__workspace/chat', name: 'Chat', ext: '.chat', isDir: false, size: 0, modified: 0 } });
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([['buf-chat', buf1]]),
+      activeBufferId: null,
+    });
+    renderEditorTabs({ paneId: 'pane-1' });
+
+    const tab = container!.querySelector('.tab') as HTMLElement;
+    act(() => {
+      tab.dispatchEvent(new MouseEvent('auxclick', { button: 1, bubbles: true }));
+    });
+
+    expect(container!.querySelector('.close-confirm-overlay')).not.toBeNull();
+  });
+
+  test('context menu Close item is visible for pinned chat tab', async () => {
+    const buf1 = makeMockBuffer('buf-chat', 'pane-1', { isPinned: true, kind: 'chat', file: { path: '__workspace/chat', name: 'Chat', ext: '.chat', isDir: false, size: 0, modified: 0 } });
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([['buf-chat', buf1]]),
+      panes: [{ id: 'pane-1', bufferId: null, isActive: true }],
+      activeBufferId: 'buf-chat',
+      activePaneId: 'pane-1',
+    });
+    renderEditorTabs({ paneId: 'pane-1' });
+
+    const tab = container!.querySelector('.tab') as HTMLElement;
+    fireContextMenu(tab, 100, 200);
+
+    const menus = getContextMenuElements();
+    expect(menus.length).toBeGreaterThan(0);
+    const hasClose = menus.some((m) =>
+      Array.from(m.querySelectorAll('.context-menu-item')).some((item) => item.textContent?.includes('Close')),
+    );
+    expect(hasClose).toBe(true);
+  });
+});

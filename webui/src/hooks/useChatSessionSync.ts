@@ -22,6 +22,8 @@ export interface UseChatSessionSyncOptions {
   openWorkspaceBuffer: OpenWorkspaceBufferFn;
   updateBufferMetadata: (bufferId: string, updates: Record<string, unknown>) => void;
   updateBufferTitle: (bufferId: string, title: string) => void;
+  setBufferPinned?: (bufferId: string, isPinned: boolean) => void;
+  setBufferClosable?: (bufferId: string, isClosable: boolean) => void;
 }
 
 export function useChatSessionSync({
@@ -33,6 +35,8 @@ export function useChatSessionSync({
   openWorkspaceBuffer,
   updateBufferMetadata,
   updateBufferTitle,
+  setBufferPinned,
+  setBufferClosable,
 }: UseChatSessionSyncOptions): void {
   // Keep a stable ref to the current buffers map to avoid infinite loops in effects
   const buffersRef = useRef(buffers);
@@ -54,6 +58,16 @@ export function useChatSessionSync({
         if (existing.file.name !== (session.name || 'Chat')) {
           updateBufferTitle(existing.id, session.name || 'Chat');
         }
+        // If the default session buffer exists and is still the default but there are other sessions,
+        // keep it pinned but make it closable so users can close it if they want
+        if (existing && session.is_default && chatSessions.length > 1 && existing.isClosable === false) {
+          setBufferClosable?.(existing.id, true);
+        }
+        // If this is NOT the default session but its buffer is incorrectly pinned/closable, fix it
+        if (existing && !session.is_default && (existing.isPinned || existing.isClosable === false)) {
+          setBufferPinned?.(existing.id, false);
+          setBufferClosable?.(existing.id, true);
+        }
         return;
       }
       // If this is the active session and the initial chat buffer has no chatId yet, claim it
@@ -66,8 +80,8 @@ export function useChatSessionSync({
           kind: 'chat',
           path: `__workspace/chat/${session.id}`,
           title: session.name || 'Chat',
-          isPinned: session.is_default ?? false,
-          isClosable: !(session.is_default ?? false),
+          isPinned: false,
+          isClosable: true,
           metadata: { chatId: session.id },
         });
       }

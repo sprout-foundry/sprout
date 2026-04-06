@@ -107,6 +107,20 @@ export function useBufferMutations(setBuffers: Dispatch<SetStateAction<Map<strin
     [setBuffers],
   );
 
+  const setBufferClosable = useCallback(
+    (bufferId: string, isClosable: boolean) => {
+      setBuffers((prev) => {
+        const next = new Map(prev);
+        const buffer = next.get(bufferId);
+        if (buffer) {
+          next.set(bufferId, { ...buffer, isClosable });
+        }
+        return next;
+      });
+    },
+    [setBuffers],
+  );
+
   // Set the original content baseline for a buffer (e.g., after loading from disk).
   // This also resets isModified to false if the current content matches the new baseline.
   const setBufferOriginalContent = useCallback(
@@ -230,6 +244,7 @@ export function useBufferMutations(setBuffers: Dispatch<SetStateAction<Map<strin
     updateBufferTitle,
     setBufferModified,
     setBufferPinned,
+    setBufferClosable,
     setBufferOriginalContent,
     setBufferLanguageOverride,
     revertBufferToOriginal,

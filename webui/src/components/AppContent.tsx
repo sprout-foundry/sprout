@@ -143,6 +143,8 @@ function AppContent({
     updateBufferTitle,
     saveAllBuffers,
     toggleBufferPin,
+    setBufferPinned,
+    setBufferClosable,
   } = useEditorManager();
 
   const apiService = ApiService.getInstance();
@@ -246,6 +248,8 @@ function AppContent({
     openWorkspaceBuffer,
     updateBufferMetadata,
     updateBufferTitle,
+    setBufferPinned,
+    setBufferClosable,
   });
 
   useHotkeysConfig({

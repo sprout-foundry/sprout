@@ -176,9 +176,14 @@ function EditorTabs({ paneId, actions, compact = false }: EditorTabsProps): JSX.
   const handleTabClose = (e: MouseEvent, buffer: EditorBuffer) => {
     e.stopPropagation();
 
-    if (buffer.isPinned) return;
+    if (buffer.isPinned && buffer.kind !== 'chat') return;
 
     if (buffer.isModified) {
+      setShowConfirm({ bufferId: buffer.id, fileName: buffer.file.name });
+      return;
+    }
+
+    if (buffer.isPinned && buffer.kind === 'chat') {
       setShowConfirm({ bufferId: buffer.id, fileName: buffer.file.name });
       return;
     }
@@ -187,7 +192,7 @@ function EditorTabs({ paneId, actions, compact = false }: EditorTabsProps): JSX.
   };
 
   const handleTabAuxClick = (e: MouseEvent, buffer: EditorBuffer) => {
-    if (e.button !== 1 || buffer.isClosable === false || buffer.isPinned) {
+    if (e.button !== 1 || buffer.isClosable === false || (buffer.isPinned && buffer.kind !== 'chat')) {
       return;
     }
     e.preventDefault();
@@ -375,7 +380,7 @@ function EditorTabs({ paneId, actions, compact = false }: EditorTabsProps): JSX.
                   >
                     <Pin size={12} fill={buffer.isPinned ? 'currentColor' : 'none'} />
                   </button>
-                  {buffer.isClosable !== false && !buffer.isPinned && (
+                  {buffer.isClosable !== false && (buffer.kind === 'chat' || !buffer.isPinned) && (
                     <button
                       className="tab-close"
                       onClick={(e) => handleTabClose(e, buffer)}
@@ -517,7 +522,7 @@ function EditorTabs({ paneId, actions, compact = false }: EditorTabsProps): JSX.
               <PanelRightOpen size={14} />
               <span>Close other tabs in split</span>
             </button>
-            {activeContextBuffer.isClosable !== false && !activeContextBuffer.isPinned ? (
+            {activeContextBuffer.isClosable !== false && (activeContextBuffer.kind === 'chat' || !activeContextBuffer.isPinned) ? (
               <button
                 className="context-menu-item danger"
                 onClick={() => handleContextAction(() => closeBuffer(activeContextBuffer.id))}

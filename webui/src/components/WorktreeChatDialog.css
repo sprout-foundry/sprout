@@ -316,7 +316,7 @@
 
 /* Warning text below branch input */
 .wt-chat-dialog-warning {
-  color: #f0a500;
+  color: var(--warning-fg, #f0a500);
   display: flex;
   align-items: center;
   gap: 4px;

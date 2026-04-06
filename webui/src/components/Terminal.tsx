@@ -310,11 +310,20 @@ function Terminal({
         toggleSplit('horizontal');
       } else if (detail.action === 'split_vertical') {
         toggleSplit('vertical');
+      } else if (detail.action === 'clear') {
+        // Clear the active terminal pane
+        clearActivePane();
+      } else if (detail.action === 'kill') {
+        // Kill the active terminal session (close it)
+        const activeId = activeSessionIdRef.current;
+        if (activeId) {
+          closeSession(activeId);
+        }
       }
     };
     window.addEventListener('ledit:terminal-action', handler as EventListener);
     return () => window.removeEventListener('ledit:terminal-action', handler as EventListener);
-  }, [toggleSplit]);
+  }, [toggleSplit, clearActivePane, closeSession]);
 
   // ── Split divider drag ────────────────────────────────────────────────────
 

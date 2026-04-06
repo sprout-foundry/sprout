@@ -134,6 +134,11 @@ func (ws *ReactWebServer) parseWorktreeListOutput(output, currentBranch, workspa
 		}
 	}
 
+	// Mark the main worktree
+	if mainWorktree != nil {
+		mainWorktree.IsMain = true
+	}
+
 	// Set parent info for all worktrees
 	if mainWorktree != nil {
 		for i := range worktrees {

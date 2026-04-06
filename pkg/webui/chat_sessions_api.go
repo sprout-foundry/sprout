@@ -72,6 +72,9 @@ func (ws *ReactWebServer) handleAPIChatSessions(w http.ResponseWriter, r *http.R
 		if info.Model != "" {
 			entry["model"] = info.Model
 		}
+		if info.WorktreePath != "" {
+			entry["worktree_path"] = info.WorktreePath
+		}
 		if info.ActiveQuery && info.CurrentQuery != "" {
 			entry["current_query"] = info.CurrentQuery
 		}
@@ -370,7 +373,16 @@ func (ws *ReactWebServer) handleAPIChatSessionsSwitch(w http.ResponseWriter, r *
 		snapshot = emptyAgentStateSnapshot()
 	}
 	currentSessionID := cs.CurrentSessionID
+	wtPath := cs.WorktreePath
 	cs.mu.Unlock()
+
+	// Switch workspace root to the target chat's worktree if it has one
+	if wtPath != "" {
+		ctx.WorkspaceRoot = wtPath
+		if clientID == defaultWebClientID {
+			ws.workspaceRoot = wtPath
+		}
+	}
 
 	ctx.AgentState = append([]byte(nil), snapshot...)
 	ctx.CurrentSessionID = currentSessionID

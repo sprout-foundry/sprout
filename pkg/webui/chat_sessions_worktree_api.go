@@ -12,12 +12,13 @@ import (
 	"strings"
 )
 
+var unsafePathCharRe = regexp.MustCompile(`[^a-zA-Z0-9._-]`)
+
 // sanitizePathComponent strips characters that are unsafe or confusing in
 // file-system directory names, keeping only alphanumerics, hyphens, underscores,
 // and dots. This is used to derive a worktree directory name from a git branch.
 func sanitizePathComponent(s string) string {
-	re := regexp.MustCompile(`[^a-zA-Z0-9._-]`)
-	return re.ReplaceAllString(s, "_")
+	return unsafePathCharRe.ReplaceAllString(s, "_")
 }
 
 // handleAPIChatSessionWorktreeGet handles GET /api/chat-session/{chatID}/worktree
@@ -117,6 +118,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSet(w http.ResponseWriter,
 	}
 
 	// Get the updated session for the response
+	isDefault := chatID == ctx.DefaultChatID
 	cs := ctx.getChatSession(chatID)
 	ws.mutex.Unlock()
 
@@ -127,7 +129,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSet(w http.ResponseWriter,
 		"message":       "Worktree set successfully",
 		"chat_id":       chatID,
 		"worktree_path": req.WorktreePath,
-		"chat_session":  cs.chatSessionSummary(chatID == ctx.DefaultChatID),
+		"chat_session":  cs.chatSessionSummary(isDefault),
 	})
 }
 
@@ -385,6 +387,9 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 	// destroy the session we just created.
 	if req.AutoSwitchWorkspace {
 		ctx.WorkspaceRoot = worktreePath
+		if clientID == defaultWebClientID {
+			ws.workspaceRoot = worktreePath
+		}
 	}
 
 	// Capture response data while still holding the lock

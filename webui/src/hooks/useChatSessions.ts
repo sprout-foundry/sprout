@@ -102,6 +102,7 @@ export function useChatSessions({
     // the incoming chat's previously-cached state atomically.
     setState((prev) => {
       const cached = prev.perChatCache[id];
+      const session = prev.chatSessions.find((s) => s.id === currentId);
       const newCache = currentId
         ? {
             ...prev.perChatCache,
@@ -116,6 +117,7 @@ export function useChatSessions({
               isProcessing: prev.isProcessing,
               provider: prev.provider,
               model: prev.model,
+              worktreePath: session?.worktree_path,
             },
           }
         : prev.perChatCache;

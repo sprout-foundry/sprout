@@ -10,6 +10,7 @@ import {
   ChevronDown,
   ChevronRight,
   Loader2,
+  GitBranch,
 } from 'lucide-react';
 import CommandInput from './CommandInput';
 import MessageSegments from './MessageSegments';
@@ -392,6 +393,14 @@ function Chat({
   subagentActivities = [],
   onToolPillClick,
   onStopProcessing,
+  // Worktree support — chatId, workspaceRoot, onWorktreeChange available for future worktree switching
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  chatId: _chatId,
+  worktreePath,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  workspaceRoot: _workspaceRoot,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  onWorktreeChange: _onWorktreeChange,
 }: ChatProps): JSX.Element {
   const AUTO_SCROLL_THRESHOLD_PX = 96;
   const chatShellRef = useRef<HTMLDivElement>(null);
@@ -502,6 +511,18 @@ function Chat({
       <div className="chat-main">
         <div className="chat-container" ref={chatContainerRef} onScroll={handleChatScroll}>
           <>
+            {worktreePath && (
+              <div className="worktree-indicator">
+                <div className="worktree-indicator-content">
+                  <div className="worktree-indicator-icon">
+                    <GitBranch size={14} />
+                  </div>
+                  <span className="worktree-indicator-text" title={worktreePath}>
+                    Worktree: {worktreePath.split('/').pop()}
+                  </span>
+                </div>
+              </div>
+            )}
             {messages.length === 0 ? (
               <div className="welcome-message">
                 <div className="welcome-icon">

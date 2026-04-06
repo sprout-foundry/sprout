@@ -276,7 +276,7 @@ describe('MenuBar', () => {
     ]);
   });
 
-  test('File menu has 1 divider after "Save All"', async () => {
+  test('File menu has 1 divider (after Save All)', async () => {
     await renderMenuBar();
     openMenu(0);
 
@@ -642,8 +642,8 @@ describe('MenuBar', () => {
 
     const dd = getDropdown()!;
     const checkSpans = dd.querySelectorAll('.menu-item-check');
-    // View menu has two toggle items: Toggle Word Wrap, Toggle Minimap
-    expect(checkSpans.length).toBe(2);
+    // View menu has three toggle items: Toggle Word Wrap, Toggle Minimap, Toggle Linked Scrolling
+    expect(checkSpans.length).toBe(3);
   });
 
   test('Edit menu shows correct items', async () => {
@@ -653,6 +653,14 @@ describe('MenuBar', () => {
     const items = getDropdownItems();
     const texts = items.map((el) => el.textContent?.trim());
     expect(texts).toEqual([
+      'Undo',
+      'Redo',
+      'Cut',
+      'Copy',
+      'Paste',
+      'Find',
+      'Find and Replace',
+      'Select All',
       'Command Palette...',
       'Toggle File Explorer',
       'Toggle Sidebar',
@@ -660,7 +668,7 @@ describe('MenuBar', () => {
     ]);
   });
 
-  test('Help menu shows "Keyboard Shortcuts", divider, and "About ledit"', async () => {
+  test('Help menu shows "Keyboard Shortcuts", divider, "Report Issue", divider, and "About ledit"', async () => {
     await renderMenuBar();
     openMenu(4); // Help
 
@@ -668,11 +676,12 @@ describe('MenuBar', () => {
     const texts = items.map((el) => el.textContent?.trim());
     expect(texts).toEqual([
       'Keyboard Shortcuts',
+      'Report Issue',
       'About ledit',
     ]);
 
     const dividers = getDropdownDividers();
-    expect(dividers.length).toBe(1);
+    expect(dividers.length).toBe(2);
   });
 
   // ─── Mnemonic underlining (showMnemonics) ────────────────────────

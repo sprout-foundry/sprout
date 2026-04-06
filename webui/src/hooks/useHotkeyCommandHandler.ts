@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import type { EditorBuffer } from '../types/editor';
+import { clearLayoutSnapshot } from '../services/layoutPersistence';
 
 type ViewMode = 'chat' | 'editor' | 'git';
 
@@ -198,6 +199,69 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
         case 'toggle_minimap':
           document.dispatchEvent(new CustomEvent('editor-toggle-minimap'));
           break;
+        // Editor standard commands (document-level events for CodeMirror)
+        case 'undo':
+          document.dispatchEvent(new CustomEvent('editor-undo'));
+          break;
+        case 'redo':
+          document.dispatchEvent(new CustomEvent('editor-redo'));
+          break;
+        case 'editor_cut':
+          document.dispatchEvent(new CustomEvent('editor-cut'));
+          break;
+        case 'editor_copy':
+          document.dispatchEvent(new CustomEvent('editor-copy'));
+          break;
+        case 'editor_paste':
+          document.dispatchEvent(new CustomEvent('editor-paste'));
+          break;
+        case 'editor_find':
+          document.dispatchEvent(new CustomEvent('editor-find'));
+          break;
+        case 'editor_replace':
+          document.dispatchEvent(new CustomEvent('editor-find-replace'));
+          break;
+        case 'editor_select_all':
+          document.dispatchEvent(new CustomEvent('editor-select-all'));
+          break;
+        case 'clear_terminal':
+          window.dispatchEvent(new CustomEvent('ledit:terminal-action', { detail: { action: 'clear' } }));
+          break;
+        case 'kill_terminal':
+          window.dispatchEvent(new CustomEvent('ledit:terminal-action', { detail: { action: 'kill' } }));
+          break;
+        case 'save_file':
+          // Dispatch to editor save handler for single-file save
+          document.dispatchEvent(new CustomEvent('editor-save-current'));
+          break;
+        case 'reset_saved_layout': {
+          if (!window.confirm('Reset all saved layout settings? This cannot be undone.')) break;
+          // Match CommandPalette reset logic: clear persisted snapshot + all layout keys
+          clearLayoutSnapshot();
+          const keys = [
+            'ledit.editor.paneLayout',
+            'ledit.editor.paneSizes',
+            'ledit-terminal-height',
+            'ledit-terminal-expanded',
+            'ledit-sidebar-collapsed',
+            'ledit-sidebar-width',
+            'ledit.contextPanel.width',
+            'ledit.contextPanel.collapsed',
+            'editor:minimap-enabled',
+            'editor:word-wrap-enabled',
+            'editor:linked-scroll-enabled',
+            'filetree-show-ignored',
+          ];
+          for (const key of keys) {
+            try {
+              localStorage.removeItem(key);
+            } catch {
+              // Ignore storage errors (quota, security policy, etc.)
+            }
+          }
+          window.location.reload();
+          break;
+        }
       }
     };
 

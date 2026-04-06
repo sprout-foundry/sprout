@@ -84,6 +84,8 @@
 .menu-bar-dropdown .context-menu-item.selected {
   background: rgba(97, 175, 239, 0.2);
   color: var(--text-primary);
+  outline: 1px solid rgba(97, 175, 239, 0.4);
+  outline-offset: -1px;
 }
 
 /* ── Toggle item checkmark ────────────────────────────────────────────── */

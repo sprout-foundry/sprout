@@ -1,5 +1,4 @@
 import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from 'react';
-import type { FC } from 'react';
 import { type EditorBuffer, type EditorPane, type PaneLayout, type PaneSize } from '../types/editor';
 import { readStorageItem, PANE_LAYOUT_STORAGE_KEY, PANE_SIZES_STORAGE_KEY } from '../services/layoutPersistence';
 import { useBufferMutations } from '../hooks/useBufferMutations';
@@ -87,7 +86,7 @@ interface EditorManagerProviderProps {
   children: ReactNode;
 }
 
-export const EditorManagerProvider: FC<EditorManagerProviderProps> = ({ children }) => {
+export function EditorManagerProvider({ children }: EditorManagerProviderProps): JSX.Element {
   // ---------------------------------------------------------------------------
   // Base state
   // ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from 'react';
-import type { FC, KeyboardEvent, ReactElement } from 'react';
+import type { KeyboardEvent, ReactElement } from 'react';
 import ReactDOM from 'react-dom/client';
 import './ThemedDialog.css';
 
@@ -16,7 +16,7 @@ interface FileChangeDialogProps {
 
 /* ── Internal dialog component ───────────────────────────────── */
 
-const FileChangeDialog: FC<FileChangeDialogProps> = ({ fileName, deleted, hasUnsavedChanges, onResolve }) => {
+function FileChangeDialog({ fileName, deleted, hasUnsavedChanges, onResolve }: FileChangeDialogProps): JSX.Element {
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === 'Escape') {

@@ -2,7 +2,6 @@ import { useState, useRef, useEffect, useCallback, useLayoutEffect, memo } from 
 import type {
   ChangeEvent,
   ClipboardEvent as ReactClipboardEvent,
-  FC,
   FormEvent,
   KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
@@ -38,7 +37,7 @@ interface CommandInputProps {
   onClearQueuedMessages?: () => void;
 }
 
-const CommandInput: FC<CommandInputProps> = ({
+function CommandInput({
   value = '',
   onChange,
   onSend,
@@ -56,7 +55,7 @@ const CommandInput: FC<CommandInputProps> = ({
   onQueueMessageEdit,
   onQueueReorder,
   onClearQueuedMessages,
-}) => {
+}: CommandInputProps): JSX.Element {
   const log = useLog();
   const [draftValue, setDraftValue] = useState(value);
   const [history, setHistory] = useState<CommandHistoryState>({
@@ -872,7 +871,7 @@ const CommandInput: FC<CommandInputProps> = ({
                   setShowQueuePanel((prev) => !prev);
                 }
               }}
-              disabled={!isProcessing || disabled || !canSend}
+              disabled={isProcessing ? (disabled || !canSend) : queuedCount === 0}
               className="queue-button"
               data-tooltip={
                 queuedCount > 0

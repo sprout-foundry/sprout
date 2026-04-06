@@ -1,5 +1,4 @@
 import { useEffect, useCallback, useRef } from 'react';
-import type { FC } from 'react';
 import './ThemedDialog.css';
 
 export interface SecurityPromptDialogProps {
@@ -10,7 +9,7 @@ export interface SecurityPromptDialogProps {
   onRespond: (requestId: string, response: boolean) => void;
 }
 
-const SecurityPromptDialog: FC<SecurityPromptDialogProps> = ({ requestId, prompt, filePath, concern, onRespond }) => {
+function SecurityPromptDialog({ requestId, prompt, filePath, concern, onRespond }: SecurityPromptDialogProps): JSX.Element {
   const issueBtnRef = useRef<HTMLButtonElement>(null);
   const ignoreBtnRef = useRef<HTMLButtonElement>(null);
 

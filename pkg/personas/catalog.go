@@ -44,7 +44,10 @@ func DefaultDefinitions() (map[string]Definition, error) {
 		}
 	})
 
-	return cloneDefinitions(defaults), defaultsErr
+	if defaultsErr != nil {
+		return cloneDefinitions(defaults), fmt.Errorf("failed to load default persona definitions: %w", defaultsErr)
+	}
+	return cloneDefinitions(defaults), nil
 }
 
 func loadEmbeddedDefinitions() (map[string]Definition, error) {

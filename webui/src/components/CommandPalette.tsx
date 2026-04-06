@@ -40,6 +40,7 @@ const COMMAND_DEFINITIONS: CommandDef[] = [
   { id: 'close_editor', label: 'Close Editor', category: 'File' },
   { id: 'close_all_editors', label: 'Close All Editors', category: 'File' },
   { id: 'close_other_editors', label: 'Close Other Editors', category: 'File' },
+  { id: 'toggle_pin_tab', label: 'Toggle Pin Tab', category: 'File' },
   // View
   { id: 'command_palette', label: 'Show All Commands', category: 'General' },
   { id: 'toggle_explorer', label: 'Toggle File Explorer', category: 'View' },
@@ -359,6 +360,9 @@ function CommandPalette({
         case 'close_other_editors':
           window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'close_other_editors' } }));
           break;
+        case 'toggle_pin_tab':
+          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'toggle_pin_tab' } }));
+          break;
         case 'focus_next_tab':
           window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'focus_next_tab' } }));
           break;
@@ -648,6 +652,6 @@ function CommandPalette({
       </div>
     </div>
   );
-};
+}
 
 export default CommandPalette;

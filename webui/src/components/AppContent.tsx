@@ -141,6 +141,7 @@ function AppContent({
     updateBufferMetadata,
     updateBufferTitle,
     saveAllBuffers,
+    toggleBufferPin,
   } = useEditorManager();
 
   const apiService = ApiService.getInstance();
@@ -273,6 +274,7 @@ function AppContent({
     saveAllBuffers,
     switchToBuffer,
     switchPane,
+    toggleBufferPin,
     onToggleCommandPalette: () => setIsCommandPaletteOpen((prev) => !prev),
     onOpenCommandPalette,
   });

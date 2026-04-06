@@ -211,6 +211,7 @@
 /* Pinned tabs always show the pin indicator */
 .tab.pinned .pin-indicator {
   opacity: 1;
+  color: var(--accent-primary);
 }
 
 .pin-indicator:disabled {

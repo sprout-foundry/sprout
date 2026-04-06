@@ -33,6 +33,8 @@ export interface UseHotkeyCommandHandlerOptions {
   onSwitchToBuffer: (bufferId: string) => void;
   /** Switch to a specific pane */
   onSwitchPane: (paneId: string) => void;
+  /** Toggle pin state of the active buffer */
+  onTogglePinTab: () => void;
   /** Get active buffer ID */
   activeBufferId: string | null;
   /** Get active pane ID */
@@ -59,6 +61,7 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
     onCloseAllBuffers,
     onCloseOtherBuffers,
     onSaveAllBuffers,
+    onTogglePinTab,
     onSwitchToBuffer,
     onSwitchPane,
     activeBufferId,
@@ -175,6 +178,9 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
         case 'save_all_files':
           onSaveAllBuffers();
           break;
+        case 'toggle_pin_tab':
+          onTogglePinTab();
+          break;
         case 'split_editor_vertical':
           onSplitRequest('vertical');
           break;
@@ -280,6 +286,7 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
     onCloseAllBuffers,
     onCloseOtherBuffers,
     onSaveAllBuffers,
+    onTogglePinTab,
     onSwitchToBuffer,
     onSwitchPane,
     activeBufferId,

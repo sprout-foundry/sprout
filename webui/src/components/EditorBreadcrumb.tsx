@@ -1,5 +1,5 @@
 import { useMemo, useCallback } from 'react';
-import type { FC, KeyboardEvent } from 'react';
+import type { KeyboardEvent } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { type SymbolInfo as BreadcrumbSymbol, type SymbolKind, KIND_ICONS } from './GoToSymbolOverlay';
 import './EditorBreadcrumb.css';
@@ -24,7 +24,7 @@ const getKindIcon = (kind: SymbolKind): string => (KIND_ICONS as Record<string, 
 
 // ── Component ────────────────────────────────────────────────────────────
 
-const EditorBreadcrumb: FC<EditorBreadcrumbProps> = ({ filePath, onNavigate, symbols, onNavigateToSymbol }) => {
+function EditorBreadcrumb({ filePath, onNavigate, symbols, onNavigateToSymbol }: EditorBreadcrumbProps): JSX.Element | null {
   // ── File path segments ───────────────────────────────────────────────
 
   const segments = useMemo(() => {

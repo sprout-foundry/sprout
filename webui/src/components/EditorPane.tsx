@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import type { FC, MouseEvent as ReactMouseEvent } from 'react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import {
   EditorView,
   keymap,
@@ -59,7 +59,7 @@ interface EditorPaneProps {
   paneId: string;
 }
 
-const EditorPane: FC<EditorPaneProps> = ({ paneId }) => {
+function EditorPane({ paneId }: EditorPaneProps): JSX.Element {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const lineWrappingCompartment = useRef(new Compartment());

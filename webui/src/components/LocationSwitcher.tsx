@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import type { FC } from 'react';
 import { createPortal } from 'react-dom';
 import './LocationSwitcher.css';
 import { FolderOpen, Monitor, RefreshCw, Loader2, Server } from 'lucide-react';
@@ -246,14 +245,14 @@ const writeSSHFavoriteWorkspaces = (value: Record<string, string[]>) => {
   }
 };
 
-const LocationSwitcher: FC<LocationSwitcherProps> = ({
+function LocationSwitcher({
   isConnected,
   instances = [],
   selectedInstancePID = 0,
   isSwitchingInstance = false,
   onInstanceChange,
   sidebarCollapsed = false,
-}) => {
+}: LocationSwitcherProps): JSX.Element {
   const log = useLog();
   const [isOpen, setIsOpen] = useState(false);
   const [workspaceRoot, setWorkspaceRoot] = useState('');

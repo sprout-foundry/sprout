@@ -1,5 +1,4 @@
 import { useId } from 'react';
-import type { FC } from 'react';
 import './LeditLogo.css';
 
 interface LeditLogoProps {
@@ -8,7 +7,7 @@ interface LeditLogoProps {
   className?: string;
 }
 
-const LeditLogo: FC<LeditLogoProps> = ({ showWordmark = true, compact = false, className = '' }) => {
+function LeditLogo({ showWordmark = true, compact = false, className = '' }: LeditLogoProps): JSX.Element {
   const logoTitleId = useId();
 
   return (

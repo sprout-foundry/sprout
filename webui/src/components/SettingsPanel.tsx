@@ -1,5 +1,4 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import type { FC } from 'react';
 import './SettingsPanel.css';
 import { ApiService, type LeditSettings, type ProviderOption } from '../services/api';
 import { useNotifications } from '../contexts/NotificationContext';
@@ -73,7 +72,7 @@ function setNestedValue(obj: Record<string, unknown>, key: string, value: unknow
 
 /* ─── Component ──────────────────────────────────────────────── */
 
-const SettingsPanel: FC<SettingsPanelProps> = ({ settings, onSettingsChanged }) => {
+function SettingsPanel({ settings, onSettingsChanged }: SettingsPanelProps): JSX.Element {
   const [activeSubTab, setActiveSubTab] = useState<SettingsSubTab>('general');
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [textDrafts, setTextDrafts] = useState<Record<string, string>>({});

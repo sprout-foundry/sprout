@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import type { FC, KeyboardEvent, MouseEvent } from 'react';
+import type { KeyboardEvent, MouseEvent } from 'react';
 import { Plus, X, Pencil } from 'lucide-react';
 import ContextMenu from './ContextMenu';
 import './TerminalTabBar.css';
@@ -26,14 +26,14 @@ interface ContextMenuState {
   canClose: boolean;
 }
 
-const TerminalTabBar: FC<TerminalTabBarProps> = ({
+function TerminalTabBar({
   sessions,
   activeSessionId,
   onSwitch,
   onCreate,
   onClose,
   onRename,
-}) => {
+}: TerminalTabBarProps): JSX.Element {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({

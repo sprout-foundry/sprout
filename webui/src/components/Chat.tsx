@@ -1,5 +1,5 @@
 import { useRef, useEffect, useCallback, useState, useMemo, useLayoutEffect } from 'react';
-import type { CSSProperties, FC, ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import {
   Zap,
   Bot,
@@ -180,10 +180,12 @@ const formatDuration = (start: Date, end?: Date): string => {
 
 // ── Live Log Scroller Component ────────────────────────────────────
 
-const LiveLog: FC<{
+interface LiveLogProps {
   lines: Array<{ id: string; text: string; timestamp: Date; taskId?: string }>;
   maxLines: number;
-}> = ({ lines, maxLines }) => {
+}
+
+function LiveLog({ lines, maxLines }: LiveLogProps): JSX.Element | null {
   const scrollRef = useRef<HTMLDivElement>(null);
   const userScrolledRef = useRef(false);
 
@@ -223,11 +225,13 @@ const LiveLog: FC<{
       ))}
     </div>
   );
-};
+}
 
 // ── Active Subagent Card ───────────────────────────────────────────
 
-const ActiveSubagentCard: FC<{ run: SubagentRun }> = ({ run }) => {
+interface ActiveSubagentCardProps { run: SubagentRun; }
+
+function ActiveSubagentCard({ run }: ActiveSubagentCardProps): JSX.Element {
   const [expanded, setExpanded] = useState(true);
   const color = getPersonaColor(run.persona);
   const startTime = run.spawnActivity?.timestamp || run.activities[0]?.timestamp;
@@ -268,11 +272,13 @@ const ActiveSubagentCard: FC<{ run: SubagentRun }> = ({ run }) => {
       {expanded && hasOutput && <LiveLog lines={run.outputLines} maxLines={MAX_ACTIVE_LINES} />}
     </div>
   );
-};
+}
 
 // ── Completed Subagent Card ────────────────────────────────────────
 
-const CompletedSubagentCard: FC<{ run: SubagentRun }> = ({ run }) => {
+interface CompletedSubagentCardProps { run: SubagentRun; }
+
+function CompletedSubagentCard({ run }: CompletedSubagentCardProps): JSX.Element {
   const hasFailures =
     run.completionMessage?.toLowerCase().includes('fail') || run.completionMessage?.toLowerCase().includes('error');
 
@@ -298,13 +304,13 @@ const CompletedSubagentCard: FC<{ run: SubagentRun }> = ({ run }) => {
       )}
     </div>
   );
-};
+}
 
 // ── Subagent Activity Feed ─────────────────────────────────────────
 
-const SubagentActivityFeed: FC<{
-  activities: SubagentActivity[];
-}> = ({ activities }) => {
+interface SubagentActivityFeedProps { activities: SubagentActivity[]; }
+
+function SubagentActivityFeed({ activities }: SubagentActivityFeedProps): JSX.Element | null {
   const [visible, setVisible] = useState(true);
 
   const runs = useMemo(() => groupSubagentRuns(activities), [activities]);
@@ -351,11 +357,11 @@ const SubagentActivityFeed: FC<{
       )}
     </div>
   );
-};
+}
 
 // ── Main Chat Component ───────────────────────────────────────────
 
-const Chat: FC<ChatProps> = ({
+function Chat({
   messages,
   onSendMessage,
   onQueueMessage,
@@ -375,7 +381,7 @@ const Chat: FC<ChatProps> = ({
   subagentActivities = [],
   onToolPillClick,
   onStopProcessing,
-}) => {
+}: ChatProps): JSX.Element {
   const AUTO_SCROLL_THRESHOLD_PX = 96;
   const chatShellRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -617,6 +623,6 @@ const Chat: FC<ChatProps> = ({
       <ChatMessageContextMenu containerRef={chatContainerRef} onInsertAtCursor={handleInsertAtCursor} />
     </div>
   );
-};
+}
 
 export default Chat;

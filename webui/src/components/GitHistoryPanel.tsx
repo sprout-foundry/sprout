@@ -25,7 +25,7 @@ interface GitHistoryPanelProps {
 
 const PAGE_SIZE = 30;
 
-const GitHistoryPanel = ({ apiService, isActing, openWorkspaceBuffer }: GitHistoryPanelProps): JSX.Element => {
+function GitHistoryPanel({ apiService, isActing, openWorkspaceBuffer }: GitHistoryPanelProps): JSX.Element {
   const [commits, setCommits] = useState<GitCommitSummary[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);

@@ -1,4 +1,3 @@
-import type { FC } from 'react';
 import './NavigationBar.css';
 
 type ViewType = 'chat' | 'editor' | 'git' | 'logs';
@@ -8,7 +7,7 @@ interface NavigationBarProps {
   onViewChange: (view: ViewType) => void;
 }
 
-const NavigationBar: FC<NavigationBarProps> = ({ currentView, onViewChange }) => {
+function NavigationBar({ currentView, onViewChange }: NavigationBarProps): JSX.Element {
   const tabs = [
     { id: 'chat' as ViewType, label: 'Chat' },
     { id: 'editor' as ViewType, label: 'Editor' },

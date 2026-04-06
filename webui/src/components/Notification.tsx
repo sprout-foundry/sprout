@@ -1,4 +1,3 @@
-import type { FC } from 'react';
 import { useNotifications } from '../contexts/NotificationContext';
 import NotificationItem from './NotificationItem';
 import './Notification.css';
@@ -10,7 +9,7 @@ import './Notification.css';
  * as a NotificationItem component. Notifications are stacked in a fixed
  * position at the bottom-right of the viewport.
  */
-const Notification: FC = () => {
+function Notification(): JSX.Element | null {
   const { notifications, removeNotification } = useNotifications();
 
   if (notifications.length === 0) {
@@ -32,6 +31,6 @@ const Notification: FC = () => {
       ))}
     </div>
   );
-};
+}
 
 export default Notification;

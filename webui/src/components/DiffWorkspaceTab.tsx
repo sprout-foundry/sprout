@@ -1,4 +1,3 @@
-import type { FC } from 'react';
 import { GitCompareArrows } from 'lucide-react';
 import DiffSurface from './DiffSurface';
 
@@ -35,7 +34,7 @@ const getDiffText = (diff: GitDiffResponse | null, diffMode: 'combined' | 'stage
   }
 };
 
-const DiffWorkspaceTab: FC<DiffWorkspaceTabProps> = ({
+function DiffWorkspaceTab({
   path,
   diff,
   diffMode,
@@ -44,7 +43,7 @@ const DiffWorkspaceTab: FC<DiffWorkspaceTabProps> = ({
   onDiffModeChange,
   title = 'Git Diff',
   modeOptions,
-}) => {
+}: DiffWorkspaceTabProps): JSX.Element {
   const availableModes =
     modeOptions ||
     (['combined', 'staged', 'unstaged'] as const).filter((mode) => {

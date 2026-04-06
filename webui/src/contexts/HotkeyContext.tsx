@@ -1,5 +1,4 @@
 import { createContext, type ReactNode, useContext, useMemo, useState, useEffect, useCallback } from 'react';
-import type { FC } from 'react';
 import { ApiService, type HotkeyEntry } from '../services/api';
 import { useNotifications } from './NotificationContext';
 import { error as logError } from '../utils/log';
@@ -177,7 +176,7 @@ function isMac(): boolean {
   return navigator.platform.includes('Mac') || navigator.userAgent.includes('Macintosh');
 }
 
-export const HotkeyProvider: FC<HotkeyProviderProps> = ({ children }) => {
+export function HotkeyProvider({ children }: HotkeyProviderProps): JSX.Element {
   const [hotkeys, setHotkeys] = useState<HotkeyEntry[] | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const { addNotification } = useNotifications();

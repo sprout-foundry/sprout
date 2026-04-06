@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { FC, FormEvent, ReactNode } from 'react';
+import type { FormEvent, ReactNode } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { Save, X, ArrowDownToLine, Sun, Moon, Loader2 } from 'lucide-react';
 import './EditorToolbar.css';
@@ -21,7 +21,7 @@ interface EditorToolbarProps {
   }>;
 }
 
-const EditorToolbar: FC<EditorToolbarProps> = ({
+function EditorToolbar({
   paneId: _paneId,
   onGoToLine,
   onSave,
@@ -29,7 +29,7 @@ const EditorToolbar: FC<EditorToolbarProps> = ({
   showGoToLine = true,
   showSave = true,
   actions = [],
-}) => {
+}: EditorToolbarProps): JSX.Element {
   const { theme, themePack, toggleTheme } = useTheme();
   const [showGoToLineInput, setShowGoToLineInput] = useState(false);
   const [lineInput, setLineInput] = useState('');

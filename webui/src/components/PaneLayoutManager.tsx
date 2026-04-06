@@ -1,5 +1,5 @@
 import { useCallback, useRef, Fragment } from 'react';
-import type { CSSProperties, RefObject, Dispatch, SetStateAction, FC, ReactNode, ComponentProps } from 'react';
+import type { CSSProperties, RefObject, Dispatch, SetStateAction, ReactNode, ComponentProps } from 'react';
 import { X, Columns2, Rows2, LayoutGrid, MessageSquarePlus } from 'lucide-react';
 import EditorTabs from './EditorTabs';
 import WorkspacePane from './WorkspacePane';
@@ -103,28 +103,39 @@ export interface PaneLayoutManagerProps {
 
 // ── Sub-components used by PaneLayoutManager ──────────────────────
 
-export const PaneWrapper: FC<{ children: ReactNode; style?: CSSProperties }> = ({ children, style }) => (
+interface PaneWrapperProps {
+  children: ReactNode;
+  style?: CSSProperties;
+}
+
+export function PaneWrapper({ children, style }: PaneWrapperProps): JSX.Element {
+  return (
   <div className="pane-wrapper" style={style}>
     {children}
   </div>
-);
+  );
+}
 
-export const EditorPaneWrapper: FC<{
+interface EditorPaneWrapperProps {
   children: ReactNode;
   isActive?: boolean;
   onClick?: () => void;
-}> = ({ children, isActive, onClick }) => (
-  <div
-    className={`editor-pane-wrapper ${isActive ? 'active' : ''}`}
-    onClick={onClick}
-    tabIndex={isActive ? -1 : 0}
-    onFocus={() => isActive && onClick?.()}
-  >
-    {children}
-  </div>
-);
+}
 
-export const EditorPaneComponent: FC<{
+export function EditorPaneWrapper({ children, isActive, onClick }: EditorPaneWrapperProps): JSX.Element {
+  return (
+    <div
+      className={`editor-pane-wrapper ${isActive ? 'active' : ''}`}
+      onClick={onClick}
+      tabIndex={isActive ? -1 : 0}
+      onFocus={() => isActive && onClick?.()}
+    >
+      {children}
+    </div>
+  );
+}
+
+interface EditorPaneComponentProps {
   paneId: string;
   isActive?: boolean;
   onClick?: () => void;
@@ -133,24 +144,28 @@ export const EditorPaneComponent: FC<{
   chatProps: ComponentProps<typeof WorkspacePane>['chatProps'];
   reviewProps: ComponentProps<typeof WorkspacePane>['reviewProps'];
   diffState: ComponentProps<typeof WorkspacePane>['diffState'];
-}> = ({ paneId, onClick, perChatCache, activeChatId, chatProps, reviewProps, diffState }) => (
-  <div className="editor-pane-host" onClick={onClick}>
-    <WorkspacePane
-      paneId={paneId}
-      perChatCache={perChatCache}
-      activeChatId={activeChatId}
-      chatProps={chatProps}
-      reviewProps={reviewProps}
-      diffState={diffState}
-    />
-  </div>
-);
+}
+
+export function EditorPaneComponent({ paneId, onClick, perChatCache, activeChatId, chatProps, reviewProps, diffState }: EditorPaneComponentProps): JSX.Element {
+  return (
+    <div className="editor-pane-host" onClick={onClick}>
+      <WorkspacePane
+        paneId={paneId}
+        perChatCache={perChatCache}
+        activeChatId={activeChatId}
+        chatProps={chatProps}
+        reviewProps={reviewProps}
+        diffState={diffState}
+      />
+    </div>
+  );
+}
 
 /**
  * PaneLayoutManager — owns the nested-split state, pane rendering, resize
  * handles, and the split control buttons for each pane tab bar.
  */
-const PaneLayoutManager: FC<PaneLayoutManagerProps> = ({
+function PaneLayoutManager({
   panes,
   paneLayout,
   activePaneId,
@@ -205,7 +220,7 @@ const PaneLayoutManager: FC<PaneLayoutManagerProps> = ({
   updatePaneSize,
   nestedSplit,
   onNestedSplitChange: _onNestedSplitChange,
-}) => {
+}: PaneLayoutManagerProps): JSX.Element | null {
   const dragStartSizeRef = useRef<Map<string, number>>(new Map());
   const isPaneDraggingRef = useRef<Set<string>>(new Set());
 

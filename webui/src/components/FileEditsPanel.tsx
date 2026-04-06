@@ -5,7 +5,6 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { FC } from 'react';
 import { useLog } from '../utils/log';
 import {
   Pencil,
@@ -93,7 +92,7 @@ const sortRevisionsNewestFirst = (revisions: Revision[]): Revision[] => {
   });
 };
 
-const FileEditsPanel: FC<FileEditsPanelProps> = ({ edits, onFileClick }) => {
+function FileEditsPanel({ edits, onFileClick }: FileEditsPanelProps): JSX.Element {
   const log = useLog();
   const [showHistory, setShowHistory] = useState(false);
   const [revisions, setRevisions] = useState<Revision[]>([]);

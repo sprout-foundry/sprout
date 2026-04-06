@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
-import type { Dispatch, FC, SetStateAction } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import { Menu, PanelRightOpen, PanelRightClose } from 'lucide-react';
 import Sidebar from './Sidebar';
 import WorkspaceBar from './WorkspaceBar';
@@ -69,7 +69,7 @@ interface AppContentProps {
   perChatCache?: Record<string, PerChatState>;
 }
 
-const AppContent: FC<AppContentProps> = ({
+function AppContent({
   state,
   inputValue,
   onInputChange,
@@ -111,7 +111,7 @@ const AppContent: FC<AppContentProps> = ({
   onDeleteChat: _onDeleteChat,
   onRenameChat: _onRenameChat,
   perChatCache,
-}) => {
+}: AppContentProps): JSX.Element {
   // ── Editor manager ─────────────────────────────────────────────
   const {
     panes,

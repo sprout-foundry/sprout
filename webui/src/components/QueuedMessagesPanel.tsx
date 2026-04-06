@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import type { FC, KeyboardEvent } from 'react';
+import type { KeyboardEvent } from 'react';
 import { Pencil, Trash2, X, ChevronUp, ChevronDown, Check } from 'lucide-react';
 import './QueuedMessagesPanel.css';
 
@@ -12,14 +12,14 @@ interface QueuedMessagesPanelProps {
   onClose: () => void;
 }
 
-const QueuedMessagesPanel: FC<QueuedMessagesPanelProps> = ({
+function QueuedMessagesPanel({
   messages,
   onRemove,
   onEdit,
   onReorder,
   onClear,
   onClose,
-}) => {
+}: QueuedMessagesPanelProps): JSX.Element {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editValue, setEditValue] = useState('');
   const [shakeIndex, setShakeIndex] = useState<number | null>(null);

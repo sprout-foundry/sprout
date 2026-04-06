@@ -1,5 +1,3 @@
-import type { FC } from 'react';
-
 export interface InlinePillItem {
   id: string;
   label: string;
@@ -15,7 +13,7 @@ interface InlinePillRowProps {
   className?: string;
 }
 
-const InlinePillRow: FC<InlinePillRowProps> = ({ items, ariaLabel, className = '' }) => {
+function InlinePillRow({ items, ariaLabel, className = '' }: InlinePillRowProps): JSX.Element | null {
   if (items.length === 0) {
     return null;
   }

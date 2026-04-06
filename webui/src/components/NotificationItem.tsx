@@ -1,5 +1,4 @@
 import { useEffect, useRef, useCallback } from 'react';
-import type { FC } from 'react';
 import type { NotificationType } from '../contexts/NotificationContext';
 
 interface NotificationItemProps {
@@ -21,14 +20,14 @@ const ICONS: Record<NotificationType, string> = {
 const DEFAULT_DURATION = 5000; // 5 seconds
 const EXIT_ANIMATION_DURATION = 200; // 200ms to match CSS
 
-const NotificationItem: FC<NotificationItemProps> = ({
+function NotificationItem({
   id,
   type,
   title,
   message,
   duration = DEFAULT_DURATION,
   onClose,
-}) => {
+}: NotificationItemProps): JSX.Element {
   const exitAnimationRef = useRef<number | null>(null);
   const autoDismissTimerRef = useRef<number | null>(null);
   const isClosingRef = useRef(false);

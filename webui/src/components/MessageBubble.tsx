@@ -1,4 +1,4 @@
-import type { FC, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { Copy } from 'lucide-react';
 import { copyToClipboard } from '../utils/clipboard';
 
@@ -10,7 +10,7 @@ interface MessageBubbleProps {
   children: ReactNode;
 }
 
-const MessageBubble: FC<MessageBubbleProps> = ({ type = 'assistant', ariaLabel, copyText, timestamp, children }) => {
+function MessageBubble({ type = 'assistant', ariaLabel, copyText, timestamp, children }: MessageBubbleProps): JSX.Element {
   const handleCopy = async () => {
     if (copyText) {
       await copyToClipboard(copyText);

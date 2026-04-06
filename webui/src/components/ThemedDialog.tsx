@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { FC, KeyboardEvent, ReactElement } from 'react';
+import type { KeyboardEvent, ReactElement } from 'react';
 import ReactDOM from 'react-dom/client';
 import './ThemedDialog.css';
 
@@ -50,7 +50,7 @@ interface AlertDialogProps {
   onClose: () => void;
 }
 
-const AlertDialog: FC<AlertDialogProps> = ({ title, message, type, onClose }) => {
+function AlertDialog({ title, message, type, onClose }: AlertDialogProps): JSX.Element {
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === 'Escape' || e.key === 'Enter') {
@@ -97,7 +97,7 @@ interface ConfirmDialogProps {
   onCancel: () => void;
 }
 
-const ConfirmDialog: FC<ConfirmDialogProps> = ({
+function ConfirmDialog({
   title,
   message,
   type,
@@ -105,7 +105,7 @@ const ConfirmDialog: FC<ConfirmDialogProps> = ({
   cancelLabel,
   onConfirm,
   onCancel,
-}) => {
+}: ConfirmDialogProps): JSX.Element {
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -175,7 +175,7 @@ interface PromptDialogProps {
   onCancel: () => void;
 }
 
-const PromptDialog: FC<PromptDialogProps> = ({
+function PromptDialog({
   title,
   message,
   type,
@@ -183,7 +183,7 @@ const PromptDialog: FC<PromptDialogProps> = ({
   placeholder,
   onSubmit,
   onCancel,
-}) => {
+}: PromptDialogProps): JSX.Element {
   const [value, setValue] = useState(defaultValue);
   const inputRef = useRef<HTMLInputElement>(null);
 

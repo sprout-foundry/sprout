@@ -1,5 +1,4 @@
 import { createContext, useContext, useReducer, useCallback, useEffect, type ReactNode } from 'react';
-import type { FC } from 'react';
 import { generateUUID } from '../utils/uuid';
 import { notificationBus } from '../services/notificationBus';
 
@@ -87,7 +86,7 @@ const initialState: NotificationState = {
   notifications: [],
 };
 
-export const NotificationProvider: FC<NotificationProviderProps> = ({ children }) => {
+export function NotificationProvider({ children }: NotificationProviderProps): JSX.Element {
   const [state, dispatch] = useReducer(notificationReducer, initialState);
 
   const addNotification = useCallback(

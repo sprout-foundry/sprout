@@ -129,6 +129,15 @@ export const useGitWorkspace = ({
         renamed: [],
       };
 
+      // Show warning if file list was truncated due to limits
+      if (data.status?.truncated) {
+        setGitActionWarning(
+          'Too many files changed. Showing only the first 500 files per section. Use git status or command line to see all files.',
+        );
+      } else {
+        setGitActionWarning(null);
+      }
+
       setGitStatus({
         branch: status.branch || '',
         ahead: status.ahead || 0,
@@ -145,6 +154,7 @@ export const useGitWorkspace = ({
           status.deleted?.length ||
           status.renamed?.length
         ),
+        truncated: status.truncated || false,
       });
       setGitBranches({
         current: branchData.current || status.branch || '',

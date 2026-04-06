@@ -13,6 +13,11 @@ import (
 	gitops "github.com/alantheprice/ledit/pkg/git"
 )
 
+const maxDiffBytes = 200000
+
+// Maximum number of files to return per section in git status to prevent UI hangs
+const maxFilesPerSection = 500
+
 // handleAPIGitStatus handles git status requests
 func (ws *ReactWebServer) handleAPIGitStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -72,14 +77,19 @@ func (ws *ReactWebServer) handleAPIGitDiff(w http.ResponseWriter, r *http.Reques
 		// Only try the synthetic diff if the file actually exists on disk
 		// (it may be clean/committed, in which case we just return empty diffs).
 		if _, statErr := os.Stat(absPath); statErr == nil {
-			untrackedDiff, untrackedErr := ws.gitDiffAllowExitOneForWorkspace(workspaceRoot, "diff", "--no-index", "--", "/dev/null", reqPath)
-			if untrackedErr == nil {
-				unstagedDiff = untrackedDiff
+			// Check if the file is tracked by git. If it is, skip the synthetic diff.
+			cmd := ws.gitCommandForWorkspace(workspaceRoot, "ls-files", "--error-unmatch", "--", reqPath)
+			if cmd.Run() != nil {
+				// File is not tracked, so it's untracked - generate synthetic diff
+				untrackedDiff, untrackedErr := ws.gitDiffAllowExitOneForWorkspace(workspaceRoot, "diff", "--no-index", "--", "/dev/null", reqPath)
+				if untrackedErr == nil {
+					unstagedDiff = untrackedDiff
+				}
 			}
+			// If the file IS tracked, we leave diffs empty (file is clean)
 		}
 	}
 
-	const maxDiffBytes = 200000
 	stagedDiff = truncateDiffOutput(stagedDiff, maxDiffBytes)
 	unstagedDiff = truncateDiffOutput(unstagedDiff, maxDiffBytes)
 
@@ -345,6 +355,7 @@ func (ws *ReactWebServer) getGitStatusForWorkspace(workspaceRoot string) (*GitSt
 			Staged:    []GitFile{},
 			Modified:  []GitFile{},
 			Untracked: []GitFile{},
+			Truncated: false,
 		}, nil
 	}
 
@@ -374,14 +385,21 @@ func (ws *ReactWebServer) getGitStatusForWorkspace(workspaceRoot string) (*GitSt
 	cmd = ws.gitCommandForWorkspace(workspaceRoot, "diff", "--name-status", "--cached")
 	output, err = cmd.Output()
 	if err == nil {
+		allStaged := []GitFile{}
 		for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
 			if statusChar, path, ok := parseNameStatusLine(line); ok {
-				status.Staged = append(status.Staged, GitFile{
+				allStaged = append(allStaged, GitFile{
 					Path:   path,
 					Status: statusChar,
 					Staged: true,
 				})
 			}
+		}
+		if len(allStaged) > maxFilesPerSection {
+			status.Staged = allStaged[:maxFilesPerSection]
+			status.Truncated = true
+		} else {
+			status.Staged = allStaged
 		}
 	}
 
@@ -390,28 +408,31 @@ func (ws *ReactWebServer) getGitStatusForWorkspace(workspaceRoot string) (*GitSt
 	cmd = ws.gitCommandForWorkspace(workspaceRoot, "diff", "--name-status")
 	output, err = cmd.Output()
 	if err == nil {
+		allModified := []GitFile{}
+		allDeleted := []GitFile{}
+		allRenamed := []GitFile{}
 		for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
 			if statusChar, path, ok := parseNameStatusLine(line); ok {
 				if statusChar == "M" {
-					status.Modified = append(status.Modified, GitFile{
+					allModified = append(allModified, GitFile{
 						Path:   path,
 						Status: "M",
 						Staged: false,
 					})
 				} else if statusChar == "D" {
-					status.Deleted = append(status.Deleted, GitFile{
+					allDeleted = append(allDeleted, GitFile{
 						Path:   path,
 						Status: "D",
 						Staged: false,
 					})
 				} else if statusChar == "A" {
-					status.Modified = append(status.Modified, GitFile{
+					allModified = append(allModified, GitFile{
 						Path:   path,
 						Status: "A",
 						Staged: false,
 					})
 				} else if statusChar == "R" {
-					status.Renamed = append(status.Renamed, GitFile{
+					allRenamed = append(allRenamed, GitFile{
 						Path:   path,
 						Status: "R",
 						Staged: false,
@@ -419,21 +440,46 @@ func (ws *ReactWebServer) getGitStatusForWorkspace(workspaceRoot string) (*GitSt
 				}
 			}
 		}
+		if len(allModified) > maxFilesPerSection {
+			status.Modified = allModified[:maxFilesPerSection]
+			status.Truncated = true
+		} else {
+			status.Modified = allModified
+		}
+		if len(allDeleted) > maxFilesPerSection {
+			status.Deleted = allDeleted[:maxFilesPerSection]
+			status.Truncated = true
+		} else {
+			status.Deleted = allDeleted
+		}
+		if len(allRenamed) > maxFilesPerSection {
+			status.Renamed = allRenamed[:maxFilesPerSection]
+			status.Truncated = true
+		} else {
+			status.Renamed = allRenamed
+		}
 	}
 
 	// Get untracked files
 	cmd = ws.gitCommandForWorkspace(workspaceRoot, "ls-files", "--others", "--exclude-standard")
 	output, err = cmd.Output()
 	if err == nil {
+		allUntracked := []GitFile{}
 		for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
 			if line == "" {
 				continue
 			}
-			status.Untracked = append(status.Untracked, GitFile{
+			allUntracked = append(allUntracked, GitFile{
 				Path:   strings.TrimSpace(line),
 				Status: "?",
 				Staged: false,
 			})
+		}
+		if len(allUntracked) > maxFilesPerSection {
+			status.Untracked = allUntracked[:maxFilesPerSection]
+			status.Truncated = true
+		} else {
+			status.Untracked = allUntracked
 		}
 	}
 

@@ -67,4 +67,5 @@ export interface GitStatusData {
   deleted: GitFile[];
   renamed: GitFile[];
   clean: boolean;
+  truncated: boolean;
 }

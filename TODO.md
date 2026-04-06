@@ -167,8 +167,8 @@
 
 ### General
 
+[x] - WEBUI: Add support for leveraging worktrees for runnning secondary chats for scoped feature work.
 [] - WEBUI: Add support for leveraging worktrees for runnning secondary chats for scoped feature work.
-[] - WEBUI: terminal randomly resetting.
 
 ---
 
@@ -251,8 +251,8 @@
 
 ## Provider Catalog & Registration Gaps
 
-[] - PROVIDERS: Cerebras has a provider config but is not wired into the product — `pkg/agent_providers/configs/cerebras.json` exists but there is no `CerebrasClientType` in `pkg/agent_api/interface.go`, no entry in `getSupportedProviders()` in `api_keys.go`, no `IsProviderAvailable` case, no factory mapping, and no onboarding entry. The config is dead code. Either finish wiring it in or remove it to avoid confusion.
 [] - PROVIDERS: Adding a new provider requires touching 6+ files — To add a fully-wired provider you must edit: (1) `configs/<name>.json`, (2) `getSupportedProviders()` in `api_keys.go`, (3) `IsProviderAvailable()` in `interface.go`, (4) `mapClientTypeToString()` in `manager.go`, (5) `GetProviderAuthMetadata()` in `provider_auth.go`, and (6) potentially the provider catalog. A new provider auto-discovery system should read the configs directory and generate the registration dynamically so that dropping a JSON file is sufficient.
+[] - PROVIDERS: Cerebras has a provider config but is not wired into the product — `pkg/agent_providers/configs/cerebras.json` exists but there is no `CerebrasClientType` in `pkg/agent_api/interface.go`, no entry in `getSupportedProviders()` in `api_keys.go`, no `IsProviderAvailable` case, no factory mapping, and no onboarding entry. The config is dead code. Either finish wiring it in or remove it to avoid confusion. -- All of this should be resolved if the above item gets completed
 
 ---
 

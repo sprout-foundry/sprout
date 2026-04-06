@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   AlertTriangle,
   ArrowDown,
@@ -22,6 +22,7 @@ import { copyToClipboard } from '../utils/clipboard';
 import type { FileSection } from '../types/git-types';
 import { FILE_SECTIONS, selectionKey, parseSelectionKey } from '../types/git-types';
 import type { GitFile, GitStatusData } from '../types/git-types';
+import { MAX_FILES_PER_SECTION, MAX_FILES_INITIAL, LOAD_MORE_INCREMENT } from '../constants/git-constants';
 
 // Re-export types so existing consumers (tests, Sidebar, etc.) don't break.
 export type { GitStatusData, GitFile } from '../types/git-types';
@@ -103,6 +104,37 @@ function GitSidebarPanel({
     section: FileSection;
     file: GitFile;
   } | null>(null);
+
+  // Track visible file count per section for pagination
+  const [visibleCounts, setVisibleCounts] = useState<Record<FileSection, number>>({
+    staged: MAX_FILES_INITIAL,
+    modified: MAX_FILES_INITIAL,
+    untracked: MAX_FILES_INITIAL,
+    deleted: MAX_FILES_INITIAL,
+  });
+
+  const handleResetVisibleCounts = useCallback(() => {
+    setVisibleCounts({
+      staged: MAX_FILES_INITIAL,
+      modified: MAX_FILES_INITIAL,
+      untracked: MAX_FILES_INITIAL,
+      deleted: MAX_FILES_INITIAL,
+    });
+  }, []);
+
+  // Reset visible counts when git status changes
+  useEffect(() => {
+    handleResetVisibleCounts();
+  }, [handleResetVisibleCounts]);
+
+  const handleLoadMore = useCallback((section: FileSection) => {
+    setVisibleCounts((prev) => {
+      const current = prev[section];
+      const files = gitStatus?.[section] || [];
+      const newCount = Math.min(current + LOAD_MORE_INCREMENT, MAX_FILES_PER_SECTION, files.length);
+      return { ...prev, [section]: newCount };
+    });
+  }, [gitStatus]);
 
   if (isLoading) {
     return (
@@ -367,7 +399,7 @@ function GitSidebarPanel({
                 </div>
               </div>
               <div className="git-sidebar-file-list">
-                {files.map((file) => {
+                {files.slice(0, visibleCounts[section.id]).map((file) => {
                   const key = selectionKey(section.id, file.path);
                   const isSelected = selectedFiles.has(key);
                   const isPreviewing = activeDiffSelectionKey === key;
@@ -432,6 +464,19 @@ function GitSidebarPanel({
                   );
                 })}
               </div>
+              {files.length > visibleCounts[section.id] && visibleCounts[section.id] < MAX_FILES_PER_SECTION && (
+                <button
+                  className="git-sidebar-load-more"
+                  onClick={() => handleLoadMore(section.id)}
+                >
+                  Show more ({files.length - visibleCounts[section.id]} more files)
+                </button>
+              )}
+              {files.length > MAX_FILES_PER_SECTION && (
+                <div className="git-sidebar-file-limit-note">
+                  Showing up to {MAX_FILES_PER_SECTION} files. Use git status or command line to see all files.
+                </div>
+              )}
             </div>
           );
         })}

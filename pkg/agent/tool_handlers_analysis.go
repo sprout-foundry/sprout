@@ -218,6 +218,16 @@ func handleAnalyzeImageContent(ctx context.Context, a *Agent, args map[string]in
 		effectiveImagePath = resolvedPath
 		fallbackCleanup = cleanup
 	}
+	// Resolve relative paths against the workspace root so that pasted images
+	// (stored relative to the workspace) are found even when the Go process CWD
+	// differs from the client workspace root.
+	if !filepath.IsAbs(effectiveImagePath) && effectiveImagePath != "" && !strings.HasPrefix(strings.ToLower(effectiveImagePath), "http://") && !strings.HasPrefix(strings.ToLower(effectiveImagePath), "https://") {
+		resolved := filepath.Join(a.currentWorkspaceRoot(), effectiveImagePath)
+		if info, err := os.Stat(resolved); err == nil && !info.IsDir() {
+			a.debugLog("[img] Resolved relative image path against workspace root: %s -> %s\n", effectiveImagePath, resolved)
+			effectiveImagePath = resolved
+		}
+	}
 	if isLocalHTMLFile(imagePath) || tools.IsHTMLInput(imagePath) {
 		a.debugLog("HTML content detected, rendering via headless browser: %s\n", imagePath)
 		screenshotPath, screenshotErr := renderHTMLContent(ctx, a, imagePath, 1280, 720)

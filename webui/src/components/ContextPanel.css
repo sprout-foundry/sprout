@@ -84,6 +84,9 @@
     min-width: 100vw;
     max-width: 100vw;
     z-index: 1200;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     background:
       linear-gradient(180deg, color-mix(in srgb, var(--bg-secondary) 96%, transparent), var(--bg-secondary)),
       var(--gradient-subtle);
@@ -102,9 +105,11 @@
     display: none;
   }
 
-  .side-panel-rail {
-    width: auto;
-    min-height: 54px;
+  .context-panel .side-panel-rail {
+    width: 100%;
+    height: auto;
+    flex-shrink: 0;
+    display: flex;
     flex-direction: row;
     align-items: center;
     justify-content: flex-start;
@@ -118,11 +123,11 @@
     scrollbar-width: none;
   }
 
-  .side-panel-rail::-webkit-scrollbar {
+  .context-panel .side-panel-rail::-webkit-scrollbar {
     display: none;
   }
 
-  .side-rail-btn {
+  .context-panel .side-rail-btn {
     width: 36px;
     height: 36px;
     flex-shrink: 0;
@@ -130,16 +135,16 @@
     background: color-mix(in srgb, var(--bg-elevated) 85%, transparent);
   }
 
-  .side-rail-btn.active {
+  .context-panel .side-rail-btn.active {
     border-color: var(--border-focus);
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
   }
 
-  .side-rail-btn.active::before {
+  .context-panel .side-rail-btn.active::before {
     display: none;
   }
 
-  .side-collapse-btn {
+  .context-panel .side-collapse-btn {
     display: inline-flex;
     margin-left: auto;
     width: 36px;
@@ -153,17 +158,22 @@
     color: var(--text-secondary);
   }
 
-  .side-collapse-btn:hover {
+  .context-panel .side-collapse-btn:hover {
     color: var(--text-primary);
     border-color: var(--border-strong);
     background: var(--bg-surface);
   }
 
-  .side-panel-content {
+  .context-panel .side-panel-content {
+    flex: 1 1 0%;
+    min-width: 0;
     min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
   }
 
-  .side-panel-header {
+  .context-panel .side-panel-header {
     position: sticky;
     top: 0;
     z-index: 2;
@@ -176,15 +186,18 @@
     backdrop-filter: blur(10px);
   }
 
-  .side-panel-title h4 {
+  .context-panel .side-panel-title h4 {
     font-size: 13px;
   }
 
-  .side-panel-body {
+  .context-panel .side-panel-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
     padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 0px));
   }
 
-  .side-panel-header-actions {
+  .context-panel .side-panel-header-actions {
     display: flex;
     align-items: center;
     gap: 8px;

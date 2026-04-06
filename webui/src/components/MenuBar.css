@@ -1,0 +1,118 @@
+/* ── Menu Bar Container ───────────────────────────────────────────────── */
+
+.menu-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0 8px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  font-size: var(--text-sm);
+  font-family: var(--font-sans);
+  user-select: none;
+  z-index: 100;
+}
+
+/* ── Menu Title Buttons ───────────────────────────────────────────────── */
+
+.menu-bar-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 0.12s var(--ease-out),
+    color 0.12s var(--ease-out);
+}
+
+.menu-bar-title:hover {
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--text-primary);
+}
+
+.menu-bar-title--active {
+  background: rgba(97, 175, 239, 0.15);
+  color: var(--text-primary);
+}
+
+/* Underline mnemonic when Alt is held */
+.menu-bar-title u,
+.menu-bar-dropdown u {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* ── Dropdown Menu (rendered via portal) ──────────────────────────────── */
+
+.menu-bar-dropdown {
+  position: fixed;
+  z-index: 1500;
+  min-width: 200px;
+  max-width: 320px;
+  padding: 6px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--bg-secondary);
+  box-shadow: var(--shadow-elevated);
+  animation: menu-bar-dropdown-in 0.12s var(--ease-out);
+}
+
+@keyframes menu-bar-dropdown-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Selected state for keyboard navigation */
+.menu-bar-dropdown .context-menu-item.selected {
+  background: rgba(97, 175, 239, 0.2);
+  color: var(--text-primary);
+}
+
+/* ── Toggle item checkmark ────────────────────────────────────────────── */
+
+.menu-item-check {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-primary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* ── Responsive ───────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .menu-bar {
+    padding: 0 6px;
+  }
+
+  .menu-bar-title {
+    padding: 0 8px;
+    font-size: 11px;
+  }
+
+  .menu-bar-dropdown {
+    min-width: 180px;
+  }
+}

@@ -643,16 +643,16 @@ func prepareWorkflowRuntimeRestorer(chatAgent *agent.Agent, cfg *AgentWorkflowCo
 	}
 
 	restore := func() error {
-		var restoreErrors []string
+		var restoreErrors []error
 
 		if snapshot.Provider != "" && !strings.EqualFold(strings.TrimSpace(chatAgent.GetProvider()), snapshot.Provider) {
 			if err := applyWorkflowRuntimeOverrides(chatAgent, AgentWorkflowRuntime{Provider: snapshot.Provider}); err != nil {
-				restoreErrors = append(restoreErrors, fmt.Sprintf("failed to restore provider %q: %s", snapshot.Provider, err.Error()))
+				restoreErrors = append(restoreErrors, fmt.Errorf("failed to restore provider %q: %w", snapshot.Provider, err))
 			}
 		}
 		if snapshot.Model != "" && strings.TrimSpace(chatAgent.GetModel()) != snapshot.Model {
 			if err := chatAgent.SetModelPersisted(snapshot.Model); err != nil {
-				restoreErrors = append(restoreErrors, fmt.Sprintf("failed to restore model %q: %s", snapshot.Model, err.Error()))
+				restoreErrors = append(restoreErrors, fmt.Errorf("failed to restore model %q: %w", snapshot.Model, err))
 			}
 		}
 		currentPersona := strings.TrimSpace(chatAgent.GetActivePersona())
@@ -660,7 +660,7 @@ func prepareWorkflowRuntimeRestorer(chatAgent *agent.Agent, cfg *AgentWorkflowCo
 			chatAgent.ClearActivePersona()
 		} else if snapshot.Persona != "" && !strings.EqualFold(currentPersona, snapshot.Persona) {
 			if err := chatAgent.ApplyPersona(snapshot.Persona); err != nil {
-				restoreErrors = append(restoreErrors, fmt.Sprintf("failed to restore persona %q: %s", snapshot.Persona, err.Error()))
+				restoreErrors = append(restoreErrors, fmt.Errorf("failed to restore persona %q: %w", snapshot.Persona, err))
 			}
 		}
 
@@ -713,7 +713,7 @@ func prepareWorkflowRuntimeRestorer(chatAgent *agent.Agent, cfg *AgentWorkflowCo
 		}
 
 		if len(restoreErrors) > 0 {
-			return fmt.Errorf("failed to restore runtime overrides: %s", strings.Join(restoreErrors, "; "))
+			return fmt.Errorf("failed to restore runtime overrides: %w", errors.Join(restoreErrors...))
 		}
 		return nil
 	}

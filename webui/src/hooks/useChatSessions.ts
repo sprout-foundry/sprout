@@ -15,6 +15,12 @@ import {
   deleteChatSession,
   renameChatSession,
   switchChatSession,
+  getChatSessionWorktree,
+  setChatSessionWorktree,
+  switchChatSessionWorktree,
+  listWorktrees,
+  createWorktree,
+  createChatSessionInWorktree,
 } from '../services/chatSessions';
 import { debugLog } from '../utils/log';
 
@@ -30,6 +36,13 @@ export interface UseChatSessionsReturn {
   handleCreateChat: () => Promise<string | null>;
   handleDeleteChat: (id: string) => Promise<void>;
   handleRenameChat: (id: string, name: string) => Promise<void>;
+  // Worktree operations
+  getChatSessionWorktree: (chatId: string) => Promise<string>;
+  setChatSessionWorktree: (chatId: string, worktreePath: string) => Promise<void>;
+  switchChatSessionWorktree: (chatId: string, worktreePath: string) => Promise<void>;
+  listWorktrees: () => Promise<Array<{ path: string; branch: string; is_main: boolean; is_current: boolean }>>;
+  createWorktree: (path: string, branch: string, baseRef?: string) => Promise<void>;
+  createChatInWorktree: (branch: string, baseRef?: string, name?: string, autoSwitch?: boolean) => Promise<string | null>;
 }
 
 export function useChatSessions({
@@ -229,11 +242,119 @@ export function useChatSessions({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Worktree operations
+  const fetchChatSessionWorktree = useCallback(async (chatId: string): Promise<string> => {
+    try {
+      const response = await getChatSessionWorktree(chatId);
+      return (response as { worktree_path: string }).worktree_path || '';
+    } catch (error) {
+      debugLog('[worktree] Failed to get chat session worktree:', error);
+      return '';
+    }
+  }, []);
+
+  const updateChatSessionWorktree = useCallback(async (chatId: string, worktreePath: string) => {
+    try {
+      const response = await setChatSessionWorktree(chatId, worktreePath);
+      // Refresh session list to reflect updated worktree
+      const sessionsResp = await listChatSessions();
+      setState((prev) => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
+    } catch (error) {
+      debugLog('[worktree] Failed to set chat session worktree:', error);
+      const message = error instanceof Error ? error.message : 'Failed to set worktree';
+      setState((prev) => ({ ...prev, lastError: message }));
+      throw error;
+    }
+  }, []);
+
+  const switchChatSessionWorktreeLocal = useCallback(async (chatId: string, worktreePath: string) => {
+    try {
+      const response = await switchChatSessionWorktree(chatId, worktreePath);
+      // Refresh session list to reflect updated worktree
+      const sessionsResp = await listChatSessions();
+      setState((prev) => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
+      // Also update the active chat ID if this is the active chat
+      if (chatId === activeChatIdRef.current) {
+        const backendMessages: Message[] = (response.chat_session.messages ?? [])
+          .filter((m) => m.role === 'user' || m.role === 'assistant')
+          .map((m, i) => ({
+            id: `chat-${chatId}-${i}`,
+            type: m.role as 'user' | 'assistant',
+            content: typeof m.content === 'string' ? m.content : '',
+            timestamp: new Date(),
+            ...(m.reasoning_content ? { reasoning: m.reasoning_content } : {}),
+          }));
+        const backendIsActive = !!(response.chat_session as Record<string, unknown>).active_query;
+        setState((prev) => ({
+          ...prev,
+          messages: backendMessages,
+          isProcessing: backendIsActive,
+        }));
+      }
+    } catch (error) {
+      debugLog('[worktree] Failed to switch chat session worktree:', error);
+      const message = error instanceof Error ? error.message : 'Failed to switch worktree';
+      setState((prev) => ({ ...prev, lastError: message }));
+      throw error;
+    }
+  }, []);
+
+  const fetchWorktrees = useCallback(async (): Promise<Array<{ path: string; branch: string; is_main: boolean; is_current: boolean }>> => {
+    try {
+      const response = await listWorktrees();
+      return (response as { worktrees: Array<{ path: string; branch: string; is_main: boolean; is_current: boolean }> }).worktrees || [];
+    } catch (error) {
+      debugLog('[worktree] Failed to list worktrees:', error);
+      return [];
+    }
+  }, []);
+
+  const createLocalWorktree = useCallback(async (path: string, branch: string, baseRef?: string) => {
+    try {
+      await createWorktree(path, branch, baseRef);
+      // Refresh worktree list
+      await fetchWorktrees();
+    } catch (error) {
+      debugLog('[worktree] Failed to create worktree:', error);
+      const message = error instanceof Error ? error.message : 'Failed to create worktree';
+      setState((prev) => ({ ...prev, lastError: message }));
+      throw error;
+    }
+  }, [fetchWorktrees]);
+
+  const createChatInWorktree = useCallback(async (branch: string, baseRef?: string, name?: string, autoSwitch?: boolean): Promise<string | null> => {
+    try {
+      const response = await createChatSessionInWorktree({ branch, base_ref: baseRef, name, auto_switch_workspace: autoSwitch });
+      const newId = (response.chat_session as Record<string, unknown>).id as string;
+      const sessionsResp = await listChatSessions();
+      setState((prev) => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
+      
+      // If auto-switch was requested, switch to the new chat
+      if (autoSwitch && newId) {
+        await handleActiveChatChange(newId);
+      }
+      
+      return newId;
+    } catch (error) {
+      debugLog('[chat] Failed to create chat in worktree:', error);
+      const message = error instanceof Error ? error.message : 'Failed to create chat in worktree';
+      setState((prev) => ({ ...prev, lastError: message }));
+      return null;
+    }
+  }, [handleActiveChatChange]);
+
   return {
     loadChatSessions,
     handleActiveChatChange,
     handleCreateChat,
     handleDeleteChat,
     handleRenameChat,
+    // Worktree operations
+    getChatSessionWorktree: fetchChatSessionWorktree,
+    setChatSessionWorktree: updateChatSessionWorktree,
+    switchChatSessionWorktree: switchChatSessionWorktreeLocal,
+    listWorktrees: fetchWorktrees,
+    createWorktree: createLocalWorktree,
+    createChatInWorktree,
   };
 }

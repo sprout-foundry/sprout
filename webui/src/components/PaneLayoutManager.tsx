@@ -114,9 +114,9 @@ interface PaneWrapperProps {
 
 export function PaneWrapper({ children, style }: PaneWrapperProps): JSX.Element {
   return (
-  <div className="pane-wrapper" style={style}>
-    {children}
-  </div>
+    <div className="pane-wrapper" style={style}>
+      {children}
+    </div>
   );
 }
 
@@ -154,7 +154,19 @@ interface EditorPaneComponentProps {
   onStartChat?: () => void;
 }
 
-export function EditorPaneComponent({ paneId, onClick, perChatCache, activeChatId, chatProps, reviewProps, diffState, onOpenCommandPalette, onOpenTerminal, onViewGit, onStartChat }: EditorPaneComponentProps): JSX.Element {
+export function EditorPaneComponent({
+  paneId,
+  onClick,
+  perChatCache,
+  activeChatId,
+  chatProps,
+  reviewProps,
+  diffState,
+  onOpenCommandPalette,
+  onOpenTerminal,
+  onViewGit,
+  onStartChat,
+}: EditorPaneComponentProps): JSX.Element {
   return (
     <div className="editor-pane-host" onClick={onClick}>
       <WorkspacePane
@@ -563,6 +575,6 @@ function PaneLayoutManager({
       {hostIsFirst ? renderPaneById(siblingPane.id, toPaneFlex(100 - groupSize)) : nestedGroup}
     </div>
   );
-};
+}
 
 export default PaneLayoutManager;

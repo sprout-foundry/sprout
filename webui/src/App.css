@@ -81,6 +81,8 @@
 
   /* Editor-specific theme tokens */
   --editor-pane-bg: linear-gradient(135deg, #1e293b 0%, #1f2d46 100%);
+  --editor-pane-bg-secondary: rgba(255, 255, 255, 0.04);
+  --editor-pane-bg-secondary-hover: rgba(255, 255, 255, 0.08);
   --editor-pane-footer-bg: rgba(255, 255, 255, 0.03);
   --editor-pane-footer-fg: rgba(226, 232, 240, 0.65);
   --editor-empty-fg: rgba(226, 232, 240, 0.5);
@@ -98,6 +100,9 @@
   --border-color: rgba(148, 163, 184, 0.25);
   --input-bg: #0f1a2d;
   --input-fg: #e2e8f0;
+  --accent-color: var(--accent-primary);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.15);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.25);
 
   --app-shell-bg: linear-gradient(180deg, #262b33, #282c34);
   --app-main-bg: #282c34;
@@ -142,6 +147,8 @@
   --accent-primary-alpha: rgba(29, 78, 216, 0.16);
 
   --editor-pane-bg: linear-gradient(135deg, #f8fbff 0%, #eef4fb 100%);
+  --editor-pane-bg-secondary: rgba(0, 0, 0, 0.03);
+  --editor-pane-bg-secondary-hover: rgba(0, 0, 0, 0.06);
   --editor-pane-footer-bg: rgba(15, 23, 42, 0.04);
   --editor-pane-footer-fg: rgba(15, 23, 42, 0.65);
   --editor-empty-fg: rgba(15, 23, 42, 0.52);
@@ -158,6 +165,9 @@
   --accent-fg: #ffffff;
   --border-color: rgba(71, 85, 105, 0.26);
   --input-bg: #ffffff;
+  --accent-color: var(--accent-primary);
+  --scrollbar-thumb: rgba(0, 0, 0, 0.15);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.25);
   --input-fg: #0f172a;
 
   --app-shell-bg: linear-gradient(180deg, #f8fbff, #eef4fb);

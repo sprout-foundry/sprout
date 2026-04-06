@@ -322,9 +322,12 @@ function AppContent({
           }
           const content = await file.text();
           const { fileName, fileExt } = parseFilePath(file.name);
-          openWorkspaceBuffer({
+          // Sanitize filename: strip path separators and leading dots to prevent
+        // path traversal or unexpected behavior in the workspace buffer path.
+        const safeName = file.name.replace(/[\\/]/g, '_').replace(/^\.+/, '_');
+        openWorkspaceBuffer({
             kind: 'file',
-            path: `__workspace/dropped/${file.name}-${Date.now()}`,
+            path: `__workspace/dropped/${safeName}-${Date.now()}`,
             title: `${fileName} (dropped)`,
             content,
             ext: fileExt || undefined,

@@ -250,6 +250,8 @@ function AppContent({
   });
 
   // ── Hotkey integration ─────────────────────────────────────────
+  const onOpenCommandPalette = () => setIsCommandPaletteOpen(true);
+
   useHotkeyIntegration({
     onViewChange,
     onToggleSidebar,
@@ -267,8 +269,9 @@ function AppContent({
     switchToBuffer,
     switchPane,
     onToggleCommandPalette: () => setIsCommandPaletteOpen((prev) => !prev),
-    onOpenCommandPalette: () => setIsCommandPaletteOpen(true),
+    onOpenCommandPalette,
   });
+
   const currentBuffer = activeBufferId ? buffers.get(activeBufferId) : null;
   const contextPanelRef = useRef<ContextPanelHandle>(null);
   const showContextSidebar = currentBuffer?.kind === 'chat';
@@ -449,6 +452,7 @@ function AppContent({
                   switchToBuffer={switchToBuffer}
                   updatePaneSize={updatePaneSize}
                   openWorkspaceBuffer={openWorkspaceBuffer}
+                  onOpenCommandPalette={onOpenCommandPalette}
                   canSplit={canSplit}
                   canSplitGrid={canSplitGrid}
                   canCloseSplit={canCloseSplit}

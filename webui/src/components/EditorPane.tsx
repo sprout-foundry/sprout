@@ -54,12 +54,14 @@ import { copyToClipboard } from '../utils/clipboard';
 import { generateUnifiedDiff } from '../utils/simpleDiff';
 import { useLog, debugLog, warn } from '../utils/log';
 import ContextMenu from './ContextMenu';
+import WelcomeTab from './WelcomeTab';
 
 interface EditorPaneProps {
   paneId: string;
+  onOpenCommandPalette?: () => void;
 }
 
-function EditorPane({ paneId }: EditorPaneProps): JSX.Element {
+function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Element {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const lineWrappingCompartment = useRef(new Compartment());
@@ -1037,14 +1039,7 @@ function EditorPane({ paneId }: EditorPaneProps): JSX.Element {
 
   if (!buffer || !buffer.file || buffer.file.isDir) {
     return (
-      <div className="editor-pane empty">
-        <div className="no-file-selected">
-          <div className="no-file-icon">
-            <File size={40} />
-          </div>
-          <div className="no-file-text">Select a file to edit</div>
-        </div>
-      </div>
+      <WelcomeTab onOpenCommandPalette={onOpenCommandPalette} />
     );
   }
 

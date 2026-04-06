@@ -1,0 +1,88 @@
+.statusbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 22px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-subtle);
+  font-size: 11px;
+  font-family: var(--font-sans);
+  color: var(--text-secondary);
+  padding: 0 12px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.statusbar-left,
+.statusbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.statusbar-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background-color 0.15s var(--ease-out);
+  white-space: nowrap;
+}
+
+.statusbar-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.statusbar-item-git {
+  color: var(--accent-primary);
+}
+
+.statusbar-text {
+  font-weight: 500;
+}
+
+.statusbar-right {
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.statusbar-item-cursor {
+  color: var(--text-primary);
+}
+
+.statusbar-item-language {
+  color: var(--accent-secondary);
+  font-weight: 500;
+}
+
+.statusbar-item-encoding,
+.statusbar-item-line-ending,
+.statusbar-item-indentation {
+  color: var(--text-tertiary);
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .statusbar {
+    padding: 0 8px;
+  }
+
+  .statusbar-item-encoding,
+  .statusbar-item-line-ending,
+  .statusbar-item-indentation {
+    display: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .statusbar-item-cursor,
+  .statusbar-item-encoding,
+  .statusbar-item-line-ending,
+  .statusbar-item-indentation {
+    display: none;
+  }
+}

@@ -362,7 +362,19 @@ function EditorTabs({ paneId, actions, compact = false }: EditorTabsProps): JSX.
                       ↑
                     </span>
                   )}
-                  {buffer.isPinned && <span className="pin-indicator" title="Pinned tab"><Pin size={12} /></span>}
+                  <button
+                    className="pin-indicator"
+                    aria-label={buffer.isPinned ? 'Unpin tab' : 'Pin tab'}
+                    aria-pressed={!!buffer.isPinned}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleBufferPin(buffer.id);
+                    }}
+                    title={buffer.isPinned ? 'Unpin tab' : 'Pin tab'}
+                    disabled={!buffer.isPinned && buffer.isClosable === false}
+                  >
+                    <Pin size={12} />
+                  </button>
                   {buffer.isClosable !== false && !buffer.isPinned && (
                     <button
                       className="tab-close"
@@ -475,7 +487,7 @@ function EditorTabs({ paneId, actions, compact = false }: EditorTabsProps): JSX.
               onClick={() =>
                 handleContextAction(() => toggleBufferPin(activeContextBuffer.id))
               }
-              disabled={activeContextBuffer.isClosable === false}
+              disabled={!activeContextBuffer.isPinned && activeContextBuffer.isClosable === false}
             >
               <Pin size={14} />
               <span>{activeContextBuffer.isPinned ? 'Unpin tab' : 'Pin tab'}</span>

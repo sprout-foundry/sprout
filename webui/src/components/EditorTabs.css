@@ -178,6 +178,50 @@
   color: var(--accent-error);
 }
 
+.pin-indicator {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0;
+  margin-left: 4px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+  opacity: 0;
+}
+
+.tab:hover .pin-indicator,
+.tab.active .pin-indicator {
+  opacity: 0.5;
+}
+
+.pin-indicator:hover {
+  opacity: 1;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+/* Pinned tabs always show the pin indicator */
+.tab.pinned .pin-indicator {
+  opacity: 1;
+}
+
+.pin-indicator:disabled {
+  opacity: 0;
+  cursor: not-allowed;
+}
+
+.pin-indicator:disabled:hover {
+  background: none;
+}
+
 .tab.pinned {
   min-width: 40px;
   max-width: 40px;
@@ -190,8 +234,7 @@
 .tab.pinned .tab-name,
 .tab.pinned .tab-pane-badge,
 .tab.pinned .tab-modified,
-.tab.pinned .tab-externally-modified,
-.tab.pinned .pin-indicator {
+.tab.pinned .tab-externally-modified {
   display: none;
 }
 
@@ -285,6 +328,10 @@
 
   .tab-close {
     opacity: 1;
+  }
+
+  .pin-indicator {
+    opacity: 0.5;
   }
 
   .editor-tabs {

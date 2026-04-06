@@ -270,7 +270,13 @@ func (ws *ReactWebServer) handleAPIQueryStop(w http.ResponseWriter, r *http.Requ
 	ctx := ws.clientContexts[clientID]
 	if ctx == nil || !ctx.hasActiveQueryForChat(chatID) {
 		ws.mutex.RUnlock()
-		http.Error(w, "No active query to stop", http.StatusConflict)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":            "ok",
+			"already_completed": true,
+			"timestamp":         time.Now().Unix(),
+		})
 		return
 	}
 	ws.mutex.RUnlock()

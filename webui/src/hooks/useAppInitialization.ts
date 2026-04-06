@@ -30,6 +30,8 @@ export interface UseAppInitializationOptions {
   setRecentFiles: Dispatch<SetStateAction<RecentFile[]>>;
   setIsMobile: Dispatch<SetStateAction<boolean>>;
   setState: Dispatch<SetStateAction<AppState>>;
+  /** Reconnect handler that recovers stuck processing state after WebSocket reconnection. */
+  handleReconnect: () => void;
 }
 
 export function useAppInitialization({
@@ -39,6 +41,7 @@ export function useAppInitialization({
   setRecentFiles,
   setIsMobile,
   setState,
+  handleReconnect,
 }: UseAppInitializationOptions): void {
   const log = useLog();
   const wsService = WebSocketService.getInstance();
@@ -51,6 +54,7 @@ export function useAppInitialization({
     // Initialize WebSocket connection
     wsService.connect();
     wsService.onEvent(handleEvent);
+    wsService.onReconnect(handleReconnect);
 
     // Load initial stats
     const loadStats = () => {
@@ -109,10 +113,11 @@ export function useAppInitialization({
         clearTimeout(timeoutId);
       }
       wsService.removeEvent(handleEvent);
+      wsService.onReconnect(null);
       wsService.disconnect();
       window.removeEventListener('resize', checkMobile);
       clearInterval(statsInterval);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- setState, setRecentFiles, setIsMobile are stable useState setters; connectionTimeoutRef is a stable ref; wsService/apiService are stable singletons from getInstance(); loadChatSessions is stable (empty useCallback deps)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setState, setRecentFiles, setIsMobile are stable useState setters; connectionTimeoutRef is a stable ref; wsService/apiService are stable singletons from getInstance(); loadChatSessions is stable (empty useCallback deps); handleReconnect is stable (useCallback with empty deps)
   }, [handleEvent, loadChatSessions]);
 }

@@ -245,7 +245,7 @@ function AppWithProviders({
   handlePersonaChange: any;
 }) {
   // ── WebSocket event processing (needs NotificationProvider) ────
-  const { handleEvent, activeChatIdRef, activeRequestsRef, connectionTimeoutRef } = useWebSocketEvents({
+  const { handleEvent, activeChatIdRef, activeRequestsRef, connectionTimeoutRef, handleReconnect } = useWebSocketEvents({
     state,
     setState,
     setInputValue,
@@ -287,6 +287,7 @@ function AppWithProviders({
     setRecentFiles,
     setIsMobile,
     setState,
+    handleReconnect,
   });
 
   // ── Session-restored event listener ──────────────────────────

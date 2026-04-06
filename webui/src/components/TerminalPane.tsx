@@ -11,6 +11,9 @@ import { useTheme } from '../contexts/ThemeContext';
 import { debugLog } from '../utils/log';
 import { copyToClipboard } from '../utils/clipboard';
 
+// Font size constants (must match Terminal.tsx)
+const FONT_SIZE_DEFAULT = 13;
+
 export interface TerminalPaneHandle {
   clear: () => void;
   focus: () => void;
@@ -29,6 +32,8 @@ interface TerminalPaneProps {
   onConnectionChange?: (connected: boolean) => void;
   /** Preferred shell name (e.g. "bash", "zsh", "fish") for the initial PTY session. */
   preferredShell?: string | null;
+  /** Font size in pixels (overrides default). */
+  fontSize?: number;
 }
 
 interface TerminalContextMenuState {
@@ -40,7 +45,7 @@ interface TerminalContextMenuState {
 }
 
 const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
-  ({ isActive, isConnected = true, showCloseButton, onClose, onConnectionChange, preferredShell }, ref) => {
+  ({ isActive, isConnected = true, showCloseButton, onClose, onConnectionChange, preferredShell, fontSize }, ref) => {
     const { themePack } = useTheme();
     const [paneConnected, setPaneConnected] = useState(false);
     const [contextMenu, setContextMenu] = useState<TerminalContextMenuState | null>(null);
@@ -114,7 +119,9 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     const handleCopy = useCallback(() => {
       const term = xtermRef.current;
       if (term?.hasSelection()) {
-        copyToClipboard(term.getSelection()).catch((err) => { debugLog('Clipboard access denied:', err); });
+        copyToClipboard(term.getSelection()).catch((err) => {
+          debugLog('Clipboard access denied:', err);
+        });
       }
       closeContextMenu();
     }, [closeContextMenu]);
@@ -211,7 +218,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         cursorBlink: true,
         allowProposedApi: false,
         fontFamily: getTerminalFontFamily(),
-        fontSize: 13,
+        fontSize: fontSize ?? FONT_SIZE_DEFAULT,
         lineHeight: 1.2,
         letterSpacing: 0,
         scrollback: 5000,
@@ -243,15 +250,16 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         xtermRef.current = null;
         fitAddonRef.current = null;
       };
-    }, [isActive, getTerminalTheme, getTerminalFontFamily]);
+    }, [isActive, getTerminalTheme, getTerminalFontFamily, fontSize]);
 
-    // Keep theme in sync
+    // Keep theme and font size in sync
     useEffect(() => {
       if (!xtermRef.current) return;
       xtermRef.current.options.theme = getTerminalTheme();
       xtermRef.current.options.fontFamily = getTerminalFontFamily();
+      xtermRef.current.options.fontSize = fontSize ?? FONT_SIZE_DEFAULT;
       requestAnimationFrame(() => fitAddonRef.current?.fit());
-    }, [themePack.id, getTerminalTheme, getTerminalFontFamily]);
+    }, [themePack.id, getTerminalTheme, getTerminalFontFamily, fontSize]);
 
     // Manage WebSocket connection lifecycle
     useEffect(() => {

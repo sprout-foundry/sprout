@@ -1,5 +1,4 @@
 import { useEffect, useCallback, useRef } from 'react';
-import type { FC } from 'react';
 import './ThemedDialog.css';
 
 export interface SecurityApprovalDialogProps {
@@ -34,7 +33,7 @@ const toRiskKey = (level: string): RiskKey => {
   return 'dangerous';
 };
 
-const SecurityApprovalDialog: FC<SecurityApprovalDialogProps> = ({
+function SecurityApprovalDialog({
   requestId,
   toolName,
   riskLevel,
@@ -43,7 +42,7 @@ const SecurityApprovalDialog: FC<SecurityApprovalDialogProps> = ({
   riskType,
   target,
   onRespond,
-}) => {
+}: SecurityApprovalDialogProps): JSX.Element {
   const risk = toRiskKey(riskLevel);
   const blockBtnRef = useRef<HTMLButtonElement>(null);
   const allowBtnRef = useRef<HTMLButtonElement>(null);

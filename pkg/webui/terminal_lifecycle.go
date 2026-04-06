@@ -120,7 +120,7 @@ func (tm *TerminalManager) CloseAllSessions() error {
 	var firstErr error
 	for _, sessionID := range sessionIDs {
 		if err := tm.CloseSession(sessionID); err != nil && firstErr == nil {
-			firstErr = err
+			firstErr = fmt.Errorf("failed to close session %s during CloseAllSessions: %w", sessionID, err)
 		}
 	}
 	return firstErr

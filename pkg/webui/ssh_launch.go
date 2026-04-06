@@ -113,7 +113,7 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (result *s
 
 	logger, loggerErr := newSSHLaunchLogger(hostAlias, remoteWorkspacePath)
 	if loggerErr != nil {
-		return nil, loggerErr
+		return nil, fmt.Errorf("failed to create SSH launch logger for %s: %w", hostAlias, loggerErr)
 	}
 	defer logger.Close()
 

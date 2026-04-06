@@ -64,6 +64,7 @@ interface EditorManagerContextValue {
   updateBufferTitle: (bufferId: string, title: string) => void;
   saveBuffer: (bufferId: string, options?: { silent?: boolean }) => Promise<void>;
   setBufferModified: (bufferId: string, isModified: boolean) => void;
+  setBufferPinned: (bufferId: string, isPinned: boolean) => void;
   setBufferOriginalContent: (bufferId: string, originalContent: string) => void;
   revertBufferToOriginal: (bufferId: string) => void;
   setBufferExternallyModified: (bufferId: string, diskContent: string, mtime?: number) => void;
@@ -75,6 +76,7 @@ interface EditorManagerContextValue {
   toggleLinkedScroll: () => void;
   restoreLayout: () => void;
   dismissWelcomeBuffer: () => void;
+  toggleBufferPin: (bufferId: string) => void;
 }
 
 const EditorManagerContext = createContext<EditorManagerContextValue | null>(null);
@@ -402,6 +404,19 @@ export function EditorManagerProvider({ children }: EditorManagerProviderProps):
   }, [buffers, hasWelcomeBuffer, dismissWelcomeBuffer]);
 
   // ---------------------------------------------------------------------------
+  // Pin toggle callback
+  // ---------------------------------------------------------------------------
+
+  const toggleBufferPin = useCallback(
+    (bufferId: string) => {
+      const buffer = buffersRef.current.get(bufferId);
+      if (!buffer || buffer.isClosable === false) return;
+      mutations.setBufferPinned(bufferId, !buffer.isPinned);
+    },
+    [mutations, buffersRef],
+  );
+
+  // ---------------------------------------------------------------------------
   // Context value — identical public API
   // ---------------------------------------------------------------------------
 
@@ -438,6 +453,7 @@ export function EditorManagerProvider({ children }: EditorManagerProviderProps):
     updateBufferMetadata: mutations.updateBufferMetadata,
     updateBufferTitle: mutations.updateBufferTitle,
     setBufferModified: mutations.setBufferModified,
+    setBufferPinned: mutations.setBufferPinned,
     setBufferOriginalContent: mutations.setBufferOriginalContent,
     setBufferLanguageOverride: mutations.setBufferLanguageOverride,
     revertBufferToOriginal: mutations.revertBufferToOriginal,
@@ -448,6 +464,7 @@ export function EditorManagerProvider({ children }: EditorManagerProviderProps):
     saveAllBuffers,
     restoreLayout: layoutPersist.restoreLayout,
     dismissWelcomeBuffer,
+    toggleBufferPin,
   };
 
   return <EditorManagerContext.Provider value={value}>{children}</EditorManagerContext.Provider>;

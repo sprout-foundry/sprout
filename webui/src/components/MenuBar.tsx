@@ -108,7 +108,7 @@ function getActionableItems(menu: MenuDef): MenuButtonItem[] {
 }
 
 function escapeHtml(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 function getToggleState(commandId: string | undefined): boolean {
@@ -138,6 +138,12 @@ function MenuBar(): JSX.Element | null {
   const [activeItemIndex, setActiveItemIndex] = useState<number | null>(null);
   const [showMnemonics, setShowMnemonics] = useState(false);
   const menuTitleRefs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  useEffect(() => {
+    return () => {
+      activeDropdownRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -309,15 +315,6 @@ function MenuBar(): JSX.Element | null {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const buildLabelHtml = useCallback(
-    (label: string): string => {
-      if (!showMnemonics) return escapeHtml(label);
-      const escaped = escapeHtml(label);
-      return `<u>${escaped.charAt(0)}</u>${escaped.slice(1)}`;
-    },
-    [showMnemonics],
-  );
-
   return (
     <>
       <div className="menu-bar" role="menubar">
@@ -331,10 +328,10 @@ function MenuBar(): JSX.Element | null {
               onClick={() => handleTitleClick(index)}
               onMouseEnter={() => handleTitleMouseEnter(index)}
               aria-expanded={isActive}
-              aria-haspopup="true"
+              aria-haspopup="menu"
               role="menuitem"
             >
-              <span dangerouslySetInnerHTML={{ __html: buildLabelHtml(menu.title) }} />
+              <span dangerouslySetInnerHTML={{ __html: buildMnemonicLabelHtml(menu.title, showMnemonics) }} />
             </button>
           );
         })}
@@ -411,7 +408,7 @@ function MenuBarDropdown({ menuDef, menuIndex, anchorRef, activeItemIndex, showM
   if (!anchorRef) return null;
 
   return (
-    <div ref={setDropdownEl} className="menu-bar-dropdown" role="menu" aria-label={`${menuDef.title} menu`}>
+    <div ref={setDropdownEl} className="menu-bar-dropdown" role="menu" aria-label={`${menuDef.title} menu`} id="menu-bar-dropdown" aria-activedescendant={activeItemIndex !== null ? `menu-bar-item-${menuIndex}-${activeItemIndex}` : undefined}>
       {menuDef.items.map((item, rawIndex) => {
         if (item.divider) {
           return <div key={`d-${rawIndex}`} className="context-menu-divider" role="separator" />;
@@ -423,14 +420,17 @@ function MenuBarDropdown({ menuDef, menuIndex, anchorRef, activeItemIndex, showM
         return (
           <button
             key={`i-${rawIndex}`}
+            id={`menu-bar-item-${menuIndex}-${currentActionableIndex}`}
+            tabIndex={-1}
             className={`context-menu-item ${activeItemIndex === currentActionableIndex ? 'selected' : ''}`}
             onClick={() => onItemAction(menuIndex, currentActionableIndex)}
             onMouseEnter={() => onItemHover(currentActionableIndex)}
-            role="menuitem"
+            role={item.isToggle ? 'menuitemcheckbox' : 'menuitem'}
+            aria-checked={item.isToggle ? isChecked : undefined}
           >
             <span className="menu-item-label">
               {item.isToggle && <span className="menu-item-check">{isChecked ? '✓' : ''}</span>}
-              <span dangerouslySetInnerHTML={{ __html: buildItemLabelHtml(item.label, showMnemonics) }} />
+              <span dangerouslySetInnerHTML={{ __html: buildMnemonicLabelHtml(item.label, showMnemonics) }} />
             </span>
             {shortcut && <span className="menu-item-shortcut">{shortcut}</span>}
           </button>
@@ -440,7 +440,7 @@ function MenuBarDropdown({ menuDef, menuIndex, anchorRef, activeItemIndex, showM
   );
 }
 
-function buildItemLabelHtml(label: string, showMnemonics: boolean): string {
+function buildMnemonicLabelHtml(label: string, showMnemonics: boolean): string {
   const escaped = escapeHtml(label);
   if (!showMnemonics) return escaped;
   return `<u>${escaped.charAt(0)}</u>${escaped.slice(1)}`;

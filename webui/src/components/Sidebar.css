@@ -1796,6 +1796,33 @@
   font-size: 11px;
 }
 
+.git-sidebar-load-more {
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: 1px dashed var(--border-subtle);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.git-sidebar-load-more:hover {
+  background: var(--bg-secondary);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+.git-sidebar-file-limit-note {
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  text-align: center;
+}
+
 .git-sidebar-file-list {
   display: flex;
   flex-direction: column;

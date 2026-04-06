@@ -99,8 +99,10 @@ export function useMessageSending({
   const handleStopProcessing = useCallback(async () => {
     try {
       await apiService.stopQuery();
+      activeRequestsRef.current = 0;
       setState((prev) => ({
         ...prev,
+        isProcessing: false,
         lastError: null,
       }));
     } catch (error) {

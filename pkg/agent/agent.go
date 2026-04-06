@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,8 +25,6 @@ const (
 	inputInjectionBufferSize = 10
 	asyncOutputBufferSize    = 256
 )
-
-var errProviderStartupClosed = errors.New("provider startup cancelled by user")
 
 // PauseState tracks the state when a task is paused for clarification
 type PauseState struct {

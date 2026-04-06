@@ -117,7 +117,7 @@ func runPlanMode(args []string) error {
 			query = fmt.Sprintf("Continue this planning session. Here is the current state:\n\n%s", string(planContent))
 			fmt.Printf("[doc] Loaded existing plan from: %s\n\n", planOutputFile)
 		} else {
-			return errors.New("no existing plan file found. Path specified but file doesn't exist.")
+			return errors.New("no existing plan file found. path specified but file doesn't exist")
 		}
 	} else if len(args) > 0 {
 		query = args[0]

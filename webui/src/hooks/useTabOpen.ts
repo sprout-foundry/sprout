@@ -101,7 +101,7 @@ export function useTabOpen({
 
   const openWorkspaceBuffer = useCallback(
     (options: {
-      kind: 'chat' | 'diff' | 'review' | 'file';
+      kind: 'chat' | 'diff' | 'review' | 'file' | 'welcome';
       path: string;
       title: string;
       content?: string;

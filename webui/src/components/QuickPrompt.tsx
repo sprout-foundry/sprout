@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { FC } from 'react';
 import './QuickPrompt.css';
 
 export interface QuickOption {
@@ -17,7 +16,7 @@ interface QuickPromptProps {
   isOpen: boolean;
 }
 
-const QuickPrompt: FC<QuickPromptProps> = ({ prompt, options, horizontal = true, onSelect, onCancel, isOpen }) => {
+function QuickPrompt({ prompt, options, horizontal = true, onSelect, onCancel, isOpen }: QuickPromptProps): JSX.Element | null {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   useEffect(() => {

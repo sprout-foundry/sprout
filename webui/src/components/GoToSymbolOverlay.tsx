@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import type { FC, KeyboardEvent, MouseEvent } from 'react';
+import type { KeyboardEvent, MouseEvent } from 'react';
 import { fuzzyFilter, highlightMatches } from '../utils/fuzzyMatch';
 import type { FuzzyResult } from '../utils/fuzzyMatch';
 import './GoToSymbolOverlay.css';
@@ -376,13 +376,13 @@ export function getEnclosingSymbols(
 
 // ── Component ────────────────────────────────────────────────────────────
 
-const GoToSymbolOverlay: FC<GoToSymbolOverlayProps> = ({
+function GoToSymbolOverlay({
   visible,
   content,
   fileExtension,
   onSelectSymbol,
   onClose,
-}) => {
+}: GoToSymbolOverlayProps): JSX.Element | null {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
 

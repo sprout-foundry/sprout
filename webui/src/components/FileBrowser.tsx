@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { FC } from 'react';
 import { Folder, File, ArrowUp, X, FolderOpen } from 'lucide-react';
 import { clientFetch } from '../services/clientSession';
 import { debugLog } from '../utils/log';
@@ -25,7 +24,7 @@ interface FileBrowserProps {
   browseEndpoint?: string;
 }
 
-const FileBrowser: FC<FileBrowserProps> = ({
+function FileBrowser({
   isOpen,
   initialPath = '/',
   onSelect,
@@ -33,7 +32,7 @@ const FileBrowser: FC<FileBrowserProps> = ({
   allowDirectories = false,
   allowedExtensions = [],
   browseEndpoint = '/api/browse',
-}) => {
+}: FileBrowserProps): JSX.Element | null {
   const [currentPath, setCurrentPath] = useState(initialPath);
   const [pathInput, setPathInput] = useState(initialPath);
   const [files, setFiles] = useState<FileNode[]>([]);

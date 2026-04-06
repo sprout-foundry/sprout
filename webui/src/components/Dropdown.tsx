@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import type { FC, KeyboardEvent } from 'react';
+import type { KeyboardEvent } from 'react';
 import './Dropdown.css';
 
 export interface DropdownItem {
@@ -24,7 +24,7 @@ interface DropdownProps {
   isOpen: boolean;
 }
 
-const Dropdown: FC<DropdownProps> = ({ items, options, onSelect, onCancel, isOpen }) => {
+function Dropdown({ items, options, onSelect, onCancel, isOpen }: DropdownProps): JSX.Element | null {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [filteredItems, setFilteredItems] = useState(items);

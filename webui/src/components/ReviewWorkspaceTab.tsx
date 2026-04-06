@@ -1,5 +1,4 @@
 import { useMemo, useCallback, useState, useEffect, useRef } from 'react';
-import type { FC } from 'react';
 import { ShieldCheck, Loader2, Wrench } from 'lucide-react';
 import MessageSegments from './MessageSegments';
 import MessageBubble from './MessageBubble';
@@ -84,7 +83,7 @@ const compactReviewFixLogs = (logs: string[]): string[] => {
   return compacted;
 };
 
-const ReviewWorkspaceTab: FC<ReviewWorkspaceTabProps> = ({
+function ReviewWorkspaceTab({
   review,
   reviewError,
   reviewFixResult,
@@ -93,7 +92,7 @@ const ReviewWorkspaceTab: FC<ReviewWorkspaceTabProps> = ({
   isReviewLoading,
   isReviewFixing,
   onFixFromReview,
-}) => {
+}: ReviewWorkspaceTabProps): JSX.Element {
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
   const [fixPrompt, setFixPrompt] = useState('');
   const [fixPromptExpanded, setFixPromptExpanded] = useState(false);

@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import type { CSSProperties, FC, MouseEvent as ReactMouseEvent } from 'react';
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import './ResizeHandle.css';
 
 interface ResizeHandleProps {
@@ -18,7 +18,7 @@ interface ResizeHandleProps {
  * - Horizontal: Vertical divider (drag left/right to resize)
  * - Vertical: Horizontal divider (drag up/down to resize)
  */
-const ResizeHandle: FC<ResizeHandleProps> = ({
+function ResizeHandle({
   direction,
   onResize,
   onResizeEnd,
@@ -26,7 +26,7 @@ const ResizeHandle: FC<ResizeHandleProps> = ({
   className = '',
   position = 'relative',
   style,
-}) => {
+}: ResizeHandleProps): JSX.Element {
   const [isDragging, setIsDragging] = useState(false);
   const isDraggingRef = useRef(false);
   const dragStartPos = useRef<{ x: number; y: number } | null>(null);

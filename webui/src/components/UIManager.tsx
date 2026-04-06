@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { FC, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import Dropdown, { type DropdownItem } from './Dropdown';
 import QuickPrompt from './QuickPrompt';
 import Progress from './Progress';
@@ -10,7 +10,7 @@ interface UIManagerProps {
   children: ReactNode;
 }
 
-const UIManager: FC<UIManagerProps> = ({ children }) => {
+function UIManager({ children }: UIManagerProps): JSX.Element {
   const [dropdownState, setDropdownState] = useState<{
     isOpen: boolean;
     items: DropdownItem[];

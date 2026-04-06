@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import type { CSSProperties, FC, KeyboardEvent as ReactKeyboardEvent } from 'react';
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, FileCode } from 'lucide-react';
 import { allLanguageEntries } from '../extensions/languageRegistry';
@@ -21,7 +21,7 @@ const ESTIMATED_POPUP_HEIGHT = 350;
  * searchable popup listing all languages when clicked.  The popup is
  * rendered via a portal to avoid overflow clipping from parent containers.
  */
-const LanguageSwitcher: FC<LanguageSwitcherProps> = ({ currentLanguageId, isAutoDetected, onLanguageChange }) => {
+function LanguageSwitcher({ currentLanguageId, isAutoDetected, onLanguageChange }: LanguageSwitcherProps): JSX.Element {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);

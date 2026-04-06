@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { FC, MutableRefObject } from 'react';
+import type { MutableRefObject } from 'react';
 import { ArrowLeft, FileText, GitCompareArrows, Loader2, Clock, FolderOpen } from 'lucide-react';
 import type { ApiService } from '../services/api';
 import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
@@ -24,7 +24,7 @@ interface CommitDetailPanelProps {
   }) => string;
 }
 
-const CommitDetailPanel: FC<CommitDetailPanelProps> = ({ apiService, commit, onBack, openWorkspaceBuffer }) => {
+function CommitDetailPanel({ apiService, commit, onBack, openWorkspaceBuffer }: CommitDetailPanelProps): JSX.Element | null {
   const log = useLog();
   const [detail, setDetail] = useState<GitCommitDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);

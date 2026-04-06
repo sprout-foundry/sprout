@@ -1,4 +1,3 @@
-import type { FC } from 'react';
 import { File } from 'lucide-react';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import Chat from './Chat';
@@ -131,14 +130,14 @@ interface WorkspacePaneProps {
   };
 }
 
-const WorkspacePane: FC<WorkspacePaneProps> = ({
+function WorkspacePane({
   paneId,
   perChatCache,
   activeChatId,
   chatProps,
   reviewProps,
   diffState,
-}) => {
+}: WorkspacePaneProps): JSX.Element {
   const { panes, buffers } = useEditorManager();
   const pane = panes.find((item) => item.id === paneId);
   const buffer = pane?.bufferId ? buffers.get(pane.bufferId) : null;

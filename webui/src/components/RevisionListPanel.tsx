@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { FC } from 'react';
 import { ChevronDown, ChevronRight, RotateCcw } from 'lucide-react';
 import { showThemedConfirm } from './ThemedDialog';
 import { ApiService } from '../services/api';
@@ -82,7 +81,7 @@ const getOperationText = (operation: string) => {
   }
 };
 
-const RevisionListPanel: FC<RevisionListPanelProps> = ({ mode, onOpenDiff, allowRollback = false }) => {
+function RevisionListPanel({ mode, onOpenDiff, allowRollback = false }: RevisionListPanelProps): JSX.Element {
   const apiService = ApiService.getInstance();
   const [revisions, setRevisions] = useState<Revision[]>([]);
   const [expandedRevisionIds, setExpandedRevisionIds] = useState<Set<string>>(new Set());

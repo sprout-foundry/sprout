@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import type { FC, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react';
 import { Plus, X, Pencil, Trash2 } from 'lucide-react';
 import type { ChatSession } from '../services/chatSessions';
 import ContextMenu from './ContextMenu';
@@ -22,7 +22,7 @@ interface ContextMenuState {
   canDelete: boolean;
 }
 
-const ChatTabBar: FC<ChatTabBarProps> = ({ sessions, activeChatId, onSwitch, onCreate, onDelete, onRename }) => {
+function ChatTabBar({ sessions, activeChatId, onSwitch, onCreate, onDelete, onRename }: ChatTabBarProps): JSX.Element | null {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({

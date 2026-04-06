@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import type { FC, MouseEvent, WheelEvent } from 'react';
+import type { MouseEvent, WheelEvent } from 'react';
 import { ZoomIn, ZoomOut, Maximize2, Image as ImageIcon, Loader2, AlertTriangle } from 'lucide-react';
 import { readFileWithConsent } from '../services/fileAccess';
 import { useLog } from '../utils/log';
@@ -16,7 +16,7 @@ interface Dimensions {
   height: number;
 }
 
-const ImageViewer: FC<ImageViewerProps> = ({ filePath, fileName, fileSize }) => {
+function ImageViewer({ filePath, fileName, fileSize }: ImageViewerProps): JSX.Element {
   const log = useLog();
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);

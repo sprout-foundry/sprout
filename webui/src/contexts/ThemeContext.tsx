@@ -1,5 +1,4 @@
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react';
-import type { FC } from 'react';
 import { type HighlightStyle } from '@codemirror/language';
 import {
   DEFAULT_THEME_PACK_ID,
@@ -64,7 +63,7 @@ function saveImportedThemes(themes: ThemePack[]) {
   localStorage.setItem(IMPORTED_THEMES_STORAGE_KEY, JSON.stringify(themes));
 }
 
-export const ThemeProvider: FC<ThemeProviderProps> = ({ children }) => {
+export function ThemeProvider({ children }: ThemeProviderProps): JSX.Element {
   const [importedThemes, setImportedThemes] = useState<ThemePack[]>(loadImportedThemes);
   const [themePackID, setThemePackID] = useState<string>(() => {
     const storedPack = localStorage.getItem(THEME_PACK_STORAGE_KEY);

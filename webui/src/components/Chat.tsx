@@ -81,6 +81,11 @@ interface ChatProps {
   subagentActivities?: SubagentActivity[];
   onToolPillClick?: (toolId: string) => void;
   onStopProcessing?: () => void;
+  // Worktree support
+  chatId?: string;
+  worktreePath?: string;
+  workspaceRoot?: string;
+  onWorktreeChange?: (worktreePath: string) => void;
 }
 
 // ── Subagent Activity Feed ─────────────────────────────────────────

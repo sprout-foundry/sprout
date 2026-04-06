@@ -2,7 +2,7 @@
 
 [x] - WEBUI: Add `go to file in editor` and `copy relative path` and `copy absolute path` to the file system browser and the files listed in the git view.
 [x] - WEBUI: Look for additional context menu improvements throughout the experience of the Webui and then add them in a way consistent with the established patterns used by this codebase
-[X] - WEBUI: Audit the hotkeys and add in any missing keys.
+[x] - WEBUI: Audit the hotkeys and add in any missing keys.
 [x] - WEBUI: [BUG] when a review has been completed and "fixed", the next time the review process runs you see the fixed output from the previous run.
 [x] - WEBUI: When running in daemon mode, the review fix process is using the cwd from the daemon, not the correct one for the workspace.
 [x] - WEBUI: The fix review items process after a review needs to accept a prompt to steer the agent toward fixing the items the should be fixed, or instead have the user select a check by each item they want fixed, then have the fix process run to fix them. That will help the user steer away from "fixing" changes that were intentional, but may have been flagged in the review.
@@ -14,7 +14,7 @@
 [x] - WEBUI: We need to add support for multiple independent chats that can be managed and concurrently run.
 [x] - WEBUI: Missing costs and token counting in the status tab of the webui chat.
 [x] - WEBUI: In the status tab of the webui chat, the duration is not accurate. It appears to anchor to the first time the tab is opened and never progresses
-[X] - WEBUI: Selecting subagents providers and models doesn't work in the ui.
+[x] - WEBUI: Selecting subagents providers and models doesn't work in the ui.
 [x] - Provider and model selection should be scoped to the session so if it changes it doesn't affect all agents and just sets the last used provider / model in the config if possible, but fail cleanly if it can't update the config. (RATING note: ChatSession interface has no provider/model fields, perChatCache doesn't save/restore provider/model — provider/model remain global AppState)
 [x] - WEBUI: the git view is not auto-updating as expected when files are edited, deleted, or renamed.
 [x] - WEBUI: Queued prompts need to be able to be modified.
@@ -145,25 +145,25 @@
 [x] - CODE QUALITY: Reduce silent error swallowing — many catch blocks use `catch {}`, `catch { /* ignore */ }`, or `.catch(() => {})` which silently discard errors. At minimum, these should log at debug/warn level so issues are not invisible during development. (Go: 12 `_ =` sites across 8 files now log via log.Printf; TS already clean)
 [x] - CODE QUALITY: Improve test coverage across low-coverage packages — `pkg/credentials` (20.0%), `pkg/interfaces/types` (34.8%), `pkg/trace` (48.2%), `pkg/validation` (0%), `pkg/git` (65.9%) have notably low coverage. Several files in `cmd/` have 0% function coverage (copilot.go, plan.go, log.go, diag.go, review_staged.go, github_setup_prompt.go).
 [x] - CODE QUALITY: Use standardized error handling in Go — inconsistent patterns of `fmt.Errorf` vs `errors.New` vs returning bare errors across packages. Adopt a project-wide convention (e.g., always use `fmt.Errorf("context: %w", err)` for wrapped errors).
-[] - CODE QUALITY: Add proper TypeScript strict mode auditing — `tsconfig.json` has `strict: true` but there is no CI step that fails on type errors. Ensure `tsc --noEmit` runs as part of CI/build checks.
-[] - CODE QUALITY: Consider migrating from `React.FC` typed components to regular function components with explicit return types — `React.FC` is considered an anti-pattern in modern React (doesn't support generics well, inconsistent with plain functions).
+[x] - CODE QUALITY: Add proper TypeScript strict mode auditing — `tsconfig.json` has `strict: true` but there is no CI step that fails on type errors. Ensure `tsc --noEmit` runs as part of CI/build checks.
+[ ] - CODE QUALITY: Consider migrating from `React.FC` typed components to regular function components with explicit return types — `React.FC` is considered an anti-pattern in modern React (doesn't support generics well, inconsistent with plain functions).
 
 ### General UX Gaps
 
 
-[] - UX: Add keyboard-accessible menu bar (File, Edit, View, Terminal, Help) — VS Code users expect a menu bar for discoverability of features that don't have hotkey assignments.
-[] - UX: Add a welcome/Getting Started tab for new users — when the editor opens with no files, show helpful content instead of a blank pane.
-[] - UX: Add file drag-and-drop from OS into the editor (open dropped files).
-[] - UX: Add "Unsaved changes" indicator on close — when closing a tab or the browser window, warn if there are unsaved editor buffers.
-[] - UX: Add notifications for file changes detected on disk (when a file is modified externally, prompt the user to reload).
-[] - UX: Add the ability to pin tabs to prevent accidental closure (type partially supported in `EditorBuffer` but no UI toggle for it).
-[] - UX: Add a status bar at the bottom showing current branch, file type, encoding, line endings, indentation settings — currently cursor position is in the editor footer but there is no global status bar.
-[] - UX: Add "zoom into/zoom out of terminal" controls or a font size setting for the integrated terminal.
+[ ] - UX: Add keyboard-accessible menu bar (File, Edit, View, Terminal, Help) — VS Code users expect a menu bar for discoverability of features that don't have hotkey assignments.
+[ ] - UX: Add a welcome/Getting Started tab for new users — when the editor opens with no files, show helpful content instead of a blank pane.
+[ ] - UX: Add file drag-and-drop from OS into the editor (open dropped files).
+[ ] - UX: Add "Unsaved changes" indicator on close — when closing a tab or the browser window, warn if there are unsaved editor buffers.
+[ ] - UX: Add notifications for file changes detected on disk (when a file is modified externally, prompt the user to reload).
+[ ] - UX: Add the ability to pin tabs to prevent accidental closure (type partially supported in `EditorBuffer` but no UI toggle for it).
+[ ] - UX: Add a status bar at the bottom showing current branch, file type, encoding, line endings, indentation settings — currently cursor position is in the editor footer but there is no global status bar.
+[ ] - UX: Add "zoom into/zoom out of terminal" controls or a font size setting for the integrated terminal.
 
 ### General
 
-[] - WEBUI: Add support for leveraging worktrees for runnning secondary chats for scoped feature work.
-[] - WEBUI: terminal randomly resetting.
+[ ] - WEBUI: Add support for leveraging worktrees for runnning secondary chats for scoped feature work.
+[ ] - WEBUI: terminal randomly resetting.
 
 ---
 

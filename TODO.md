@@ -37,7 +37,7 @@
 [x] - E2E-TESTING: Add e2e test for streaming responses through `ProcessQuery`: validate streaming callbacks fire, content accumulates in `streamingBuffer`, and buffer content is preferred over choice content.
 [x] - E2E-TESTING: Add e2e test for API retry/error recovery: transient error → retry with backoff → success.
 [x] - E2E-TESTING: Add e2e test for API retry/error recovery: transient error → retry with backoff → success.
-[ ] - E2E-TESTING: Add e2e test for rate limit handling: model returns rate limit error → `RateLimitExceededError` path exercised. (Unit tests exist in scripted_client_test.go but no e2e_rate_limit_test.go — no E2E test through ProcessQuery)
+[x] - E2E-TESTING: Add e2e test for rate limit handling: model returns rate limit error → `RateLimitExceededError` path exercised. (Unit tests exist in scripted_client_test.go but no e2e_rate_limit_test.go — no E2E test through ProcessQuery)
 [x] - E2E-TESTING: Add e2e test for input injection/interrupt mid-conversation: conversation running → user injects input via channel → input becomes new user message → conversation continues.
 [x] - E2E-TESTING: Add e2e test for input injection/interrupt mid-conversation: conversation running → user injects input via channel → input becomes new user message → conversation continues.
 [x] - E2E-TESTING: Add e2e test for tentative post-tool rejection through full `ProcessQuery`: model stops with tentative text after tool results → rejected → continues up to 2x.

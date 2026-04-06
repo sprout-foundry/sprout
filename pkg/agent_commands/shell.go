@@ -3,6 +3,7 @@ package commands
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -37,7 +38,7 @@ func (c *ShellCommand) Description() string {
 
 func (c *ShellCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: /shell <description-of-shell-script-to-generate>")
+		return errors.New("usage: /shell <description-of-shell-script-to-generate>")
 	}
 
 	description := strings.Join(args, " ")
@@ -101,7 +102,7 @@ Generate the command/script now:`, description, envContext)
 	}
 
 	if generatedScript == "" {
-		return fmt.Errorf("model did not generate a valid shell script")
+		return errors.New("model did not generate a valid shell script")
 	}
 
 	// Clean up markdown code blocks if present
@@ -132,7 +133,7 @@ Example format: find . -name "*.go" | wc -l`, description)},
 		}
 
 		if !c.isValidShellCode(generatedScript) {
-			return fmt.Errorf("failed to generate valid executable shell code")
+			return errors.New("failed to generate valid executable shell code")
 		}
 	}
 

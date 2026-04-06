@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -29,7 +30,7 @@ func (ch *ConversationHandler) runSelfReviewGate() error {
 
 	revisionID := strings.TrimSpace(ch.agent.GetRevisionID())
 	if revisionID == "" {
-		return fmt.Errorf("self-review gate blocked completion: no revision ID available for changed task")
+		return errors.New("self-review gate blocked completion: no revision ID available for changed task")
 	}
 
 	var cfgErr error

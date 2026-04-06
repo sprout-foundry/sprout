@@ -118,6 +118,10 @@ func VsCodeHotkeyConfig() *HotkeyConfig {
 		{Key: "Cmd+Alt+ArrowUp", CommandID: "editor_insert_cursor_above", Description: "Insert cursor above (Mac)"},
 		{Key: "Ctrl+Alt+ArrowDown", CommandID: "editor_insert_cursor_below", Description: "Insert cursor below"},
 		{Key: "Cmd+Alt+ArrowDown", CommandID: "editor_insert_cursor_below", Description: "Insert cursor below (Mac)"},
+		{Key: "Ctrl+/", CommandID: "editor_toggle_line_comment", Description: "Toggle line comment"},
+		{Key: "Cmd+/", CommandID: "editor_toggle_line_comment", Description: "Toggle line comment (Mac)"},
+		{Key: "Ctrl+Shift+/", CommandID: "editor_toggle_block_comment", Description: "Toggle block comment"},
+		{Key: "Cmd+Shift+/", CommandID: "editor_toggle_block_comment", Description: "Toggle block comment (Mac)"},
 	}
 	all := append(sharedUniversalHotkeys(), editor...)
 	return &HotkeyConfig{Version: "1.0", Hotkeys: all}
@@ -151,6 +155,10 @@ func WebStormHotkeyConfig() *HotkeyConfig {
 		{Key: "Cmd+Alt+ArrowUp", CommandID: "editor_insert_cursor_above", Description: "Insert cursor above (Mac)"},
 		{Key: "Ctrl+Alt+ArrowDown", CommandID: "editor_insert_cursor_below", Description: "Insert cursor below"},
 		{Key: "Cmd+Alt+ArrowDown", CommandID: "editor_insert_cursor_below", Description: "Insert cursor below (Mac)"},
+		{Key: "Ctrl+/", CommandID: "editor_toggle_line_comment", Description: "Toggle line comment"},
+		{Key: "Cmd+/", CommandID: "editor_toggle_line_comment", Description: "Toggle line comment (Mac)"},
+		{Key: "Ctrl+Shift+/", CommandID: "editor_toggle_block_comment", Description: "Toggle block comment"},
+		{Key: "Cmd+Shift+/", CommandID: "editor_toggle_block_comment", Description: "Toggle block comment (Mac)"},
 	}
 	all := append(sharedUniversalHotkeys(), editor...)
 	return &HotkeyConfig{Version: "1.0", Hotkeys: all}
@@ -200,6 +208,10 @@ func DefaultHotkeyConfig() *HotkeyConfig {
 		{Key: "Cmd+Alt+ArrowUp", CommandID: "editor_insert_cursor_above", Description: "Insert cursor above (Mac)"},
 		{Key: "Ctrl+Alt+ArrowDown", CommandID: "editor_insert_cursor_below", Description: "Insert cursor below"},
 		{Key: "Cmd+Alt+ArrowDown", CommandID: "editor_insert_cursor_below", Description: "Insert cursor below (Mac)"},
+		{Key: "Ctrl+/", CommandID: "editor_toggle_line_comment", Description: "Toggle line comment"},
+		{Key: "Cmd+/", CommandID: "editor_toggle_line_comment", Description: "Toggle line comment (Mac)"},
+		{Key: "Ctrl+Shift+/", CommandID: "editor_toggle_block_comment", Description: "Toggle block comment"},
+		{Key: "Cmd+Shift+/", CommandID: "editor_toggle_block_comment", Description: "Toggle block comment (Mac)"},
 	}
 	all := append(sharedUniversalHotkeys(), editor...)
 	return &HotkeyConfig{Version: "1.0", Hotkeys: all}
@@ -285,7 +297,7 @@ func ValidateHotkeyConfig(config *HotkeyConfig) error {
 	// prefix (Ctrl or Cmd) is used more than once for that command_id.
 	seenWithCtrl := make(map[string]bool)
 	seenWithCmd := make(map[string]bool)
-	keyPattern := regexp.MustCompile("^(?:(?:Ctrl|Cmd|Shift|Alt|Meta)\\+)*(?:[a-zA-Z0-9]|F[0-9]{1,2}|Backspace|Tab|Enter|Escape|Space|ArrowUp|ArrowDown|ArrowLeft|ArrowRight|Delete|Home|End|PageUp|PageDown|Insert|Backquote|[`\x60\\\\])$")
+	keyPattern := regexp.MustCompile("^(?:(?:Ctrl|Cmd|Shift|Alt|Meta)\\+)*(?:[a-zA-Z0-9]|F[0-9]{1,2}|Backspace|Tab|Enter|Escape|Space|ArrowUp|ArrowDown|ArrowLeft|ArrowRight|Delete|Home|End|PageUp|PageDown|Insert|Backquote|[`/\\\\])$")
 
 	for i, entry := range config.Hotkeys {
 		// Validate key format

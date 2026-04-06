@@ -469,7 +469,7 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 				return werr
 			}()
 			if restoreErr != nil {
-				return "", fmt.Errorf("edit would produce invalid JSON in %s (%s) and restore failed: %s", path, parseErr, restoreErr)
+				return "", fmt.Errorf("edit would produce invalid JSON in %s and restore failed: %w (original parse error: %v)", path, restoreErr, parseErr)
 			}
 			return "", fmt.Errorf("edit would produce invalid JSON in %s: %w", path, parseErr)
 		}

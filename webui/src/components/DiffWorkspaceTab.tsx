@@ -95,6 +95,6 @@ function DiffWorkspaceTab({
       )}
     </div>
   );
-};
+}
 
 export default DiffWorkspaceTab;

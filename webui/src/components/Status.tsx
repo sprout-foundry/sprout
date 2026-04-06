@@ -154,6 +154,6 @@ function Status({ isConnected, position = 'top', stats }: StatusProps): JSX.Elem
       </div>
     </div>
   );
-};
+}
 
 export default Status;

@@ -1193,6 +1193,6 @@ function SettingsPanel({ settings, onSettingsChanged }: SettingsPanelProps): JSX
       {renderContent()}
     </div>
   );
-};
+}
 
 export default SettingsPanel;

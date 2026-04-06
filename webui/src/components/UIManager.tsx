@@ -349,6 +349,6 @@ function UIManager({ children }: UIManagerProps): JSX.Element {
       />
     </>
   );
-};
+}
 
 export default UIManager;

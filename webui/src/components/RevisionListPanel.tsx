@@ -304,6 +304,6 @@ function RevisionListPanel({ mode, onOpenDiff, allowRollback = false }: Revision
         })}
     </div>
   );
-};
+}
 
 export default RevisionListPanel;

@@ -93,6 +93,6 @@ function Progress({ items }: ProgressProps): JSX.Element | null {
       ))}
     </div>
   );
-};
+}
 
 export default Progress;

@@ -592,6 +592,6 @@ function ReviewWorkspaceTab({
       </div>
     </div>
   );
-};
+}
 
 export default ReviewWorkspaceTab;

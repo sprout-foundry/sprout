@@ -331,6 +331,6 @@ export function HotkeyProvider({ children }: HotkeyProviderProps): JSX.Element {
   );
 
   return <HotkeyContext.Provider value={value}>{children}</HotkeyContext.Provider>;
-};
+}
 
 export default HotkeyContext;

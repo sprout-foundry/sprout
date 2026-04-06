@@ -768,7 +768,12 @@ export default function useWebSocketEvents({
             // Finalise any tool executions that were left in a started/running state
             toolExecutions: prev.toolExecutions.map((tool) => {
               if (tool.status === 'started' || tool.status === 'running') {
-                return { ...tool, status: 'error' as const, endTime: tool.endTime || new Date(), result: 'Interrupted — connection lost during execution' };
+                return {
+                  ...tool,
+                  status: 'error' as const,
+                  endTime: tool.endTime || new Date(),
+                  result: 'Interrupted — connection lost during execution',
+                };
               }
               return tool;
             }),

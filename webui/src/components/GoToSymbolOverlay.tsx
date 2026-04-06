@@ -566,6 +566,6 @@ function GoToSymbolOverlay({
       </div>
     </div>
   );
-};
+}
 
 export default GoToSymbolOverlay;

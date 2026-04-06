@@ -83,7 +83,7 @@ function AlertDialog({ title, message, type, onClose }: AlertDialogProps): JSX.E
       </div>
     </div>
   );
-};
+}
 
 /* ── Internal confirm dialog component ───────────────────────── */
 
@@ -161,7 +161,7 @@ function ConfirmDialog({
       </div>
     </div>
   );
-};
+}
 
 /* ── Internal prompt dialog component ────────────────────────── */
 
@@ -255,7 +255,7 @@ function PromptDialog({
       </div>
     </div>
   );
-};
+}
 
 /* ── Portal helpers ──────────────────────────────────────────── */
 

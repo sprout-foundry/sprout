@@ -206,6 +206,6 @@ function TerminalTabBar({
       </ContextMenu>
     </>
   );
-};
+}
 
 export default TerminalTabBar;

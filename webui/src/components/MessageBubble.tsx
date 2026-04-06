@@ -10,7 +10,13 @@ interface MessageBubbleProps {
   children: ReactNode;
 }
 
-function MessageBubble({ type = 'assistant', ariaLabel, copyText, timestamp, children }: MessageBubbleProps): JSX.Element {
+function MessageBubble({
+  type = 'assistant',
+  ariaLabel,
+  copyText,
+  timestamp,
+  children,
+}: MessageBubbleProps): JSX.Element {
   const handleCopy = async () => {
     if (copyText) {
       await copyToClipboard(copyText);
@@ -34,6 +40,6 @@ function MessageBubble({ type = 'assistant', ariaLabel, copyText, timestamp, chi
       </div>
     </div>
   );
-};
+}
 
 export default MessageBubble;

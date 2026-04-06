@@ -162,6 +162,6 @@ function Dropdown({ items, options, onSelect, onCancel, isOpen }: DropdownProps)
       </div>
     </div>
   );
-};
+}
 
 export default Dropdown;

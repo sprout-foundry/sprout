@@ -159,7 +159,7 @@ function FileChangeDialog({ fileName, deleted, hasUnsavedChanges, onResolve }: F
       </div>
     </div>
   );
-};
+}
 
 /* ── Portal helper (same pattern as ThemedDialog) ────────────── */
 

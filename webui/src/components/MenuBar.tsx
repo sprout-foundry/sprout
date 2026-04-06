@@ -108,7 +108,12 @@ function getActionableItems(menu: MenuDef): MenuButtonItem[] {
 }
 
 function escapeHtml(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function getToggleState(commandId: string | undefined): boolean {
@@ -243,7 +248,7 @@ function MenuBar(): JSX.Element | null {
     const menu = MENUS[menuIndex];
     const item = getActionableItems(menu)[actionableIndex];
     if (!item) return;
-    
+
     // Special command dispatching before the generic hotkey path
     switch (item.commandId) {
       case 'open_hotkeys_config':
@@ -264,7 +269,7 @@ function MenuBar(): JSX.Element | null {
         }
         break;
     }
-    
+
     setActiveMenuIndex(null);
     setActiveItemIndex(null);
   }, []);
@@ -287,9 +292,12 @@ function MenuBar(): JSX.Element | null {
     setActiveItemIndex(0);
   }, []);
 
-  const handleItemAction = useCallback((menuIndex: number, actionableIndex: number) => {
-    executeItem(menuIndex, actionableIndex);
-  }, [executeItem]);
+  const handleItemAction = useCallback(
+    (menuIndex: number, actionableIndex: number) => {
+      executeItem(menuIndex, actionableIndex);
+    },
+    [executeItem],
+  );
 
   const handleTitleMouseEnter = useCallback(
     (index: number) => {
@@ -304,8 +312,8 @@ function MenuBar(): JSX.Element | null {
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as Node;
-      const clickedInsideMenu = menuTitleRefs.current.some((ref) => ref?.contains(target))
-        || activeDropdownRef.current?.contains(target);
+      const clickedInsideMenu =
+        menuTitleRefs.current.some((ref) => ref?.contains(target)) || activeDropdownRef.current?.contains(target);
       if (!clickedInsideMenu) {
         setActiveMenuIndex(null);
         setActiveItemIndex(null);
@@ -323,7 +331,9 @@ function MenuBar(): JSX.Element | null {
           return (
             <button
               key={menu.mnemonic}
-              ref={(el) => { menuTitleRefs.current[index] = el; }}
+              ref={(el) => {
+                menuTitleRefs.current[index] = el;
+              }}
               className={`menu-bar-title ${isActive ? 'menu-bar-title--active' : ''}`}
               onClick={() => handleTitleClick(index)}
               onMouseEnter={() => handleTitleMouseEnter(index)}
@@ -365,7 +375,16 @@ interface MenuBarDropdownProps {
   onItemHover: (index: number) => void;
 }
 
-function MenuBarDropdown({ menuDef, menuIndex, anchorRef, activeItemIndex, showMnemonics, hotkeyForCommand, onItemAction, onItemHover }: MenuBarDropdownProps): JSX.Element | null {
+function MenuBarDropdown({
+  menuDef,
+  menuIndex,
+  anchorRef,
+  activeItemIndex,
+  showMnemonics,
+  hotkeyForCommand,
+  onItemAction,
+  onItemHover,
+}: MenuBarDropdownProps): JSX.Element | null {
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   let actionableCounter = 0;
 
@@ -408,7 +427,14 @@ function MenuBarDropdown({ menuDef, menuIndex, anchorRef, activeItemIndex, showM
   if (!anchorRef) return null;
 
   return (
-    <div ref={setDropdownEl} className="menu-bar-dropdown" role="menu" aria-label={`${menuDef.title} menu`} id="menu-bar-dropdown" aria-activedescendant={activeItemIndex !== null ? `menu-bar-item-${menuIndex}-${activeItemIndex}` : undefined}>
+    <div
+      ref={setDropdownEl}
+      className="menu-bar-dropdown"
+      role="menu"
+      aria-label={`${menuDef.title} menu`}
+      id="menu-bar-dropdown"
+      aria-activedescendant={activeItemIndex !== null ? `menu-bar-item-${menuIndex}-${activeItemIndex}` : undefined}
+    >
       {menuDef.items.map((item, rawIndex) => {
         if (item.divider) {
           return <div key={`d-${rawIndex}`} className="context-menu-divider" role="separator" />;

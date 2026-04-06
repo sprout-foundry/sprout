@@ -33,6 +33,6 @@ function NavigationBar({ currentView, onViewChange }: NavigationBarProps): JSX.E
       </div>
     </div>
   );
-};
+}
 
 export default NavigationBar;

@@ -9,7 +9,13 @@ export interface SecurityPromptDialogProps {
   onRespond: (requestId: string, response: boolean) => void;
 }
 
-function SecurityPromptDialog({ requestId, prompt, filePath, concern, onRespond }: SecurityPromptDialogProps): JSX.Element {
+function SecurityPromptDialog({
+  requestId,
+  prompt,
+  filePath,
+  concern,
+  onRespond,
+}: SecurityPromptDialogProps): JSX.Element {
   const issueBtnRef = useRef<HTMLButtonElement>(null);
   const ignoreBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -109,6 +115,6 @@ function SecurityPromptDialog({ requestId, prompt, filePath, concern, onRespond 
       </div>
     </div>
   );
-};
+}
 
 export default SecurityPromptDialog;

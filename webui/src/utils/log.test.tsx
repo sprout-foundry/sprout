@@ -3,17 +3,7 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NotificationProvider, useNotifications } from '../contexts/NotificationContext';
-import {
-  Levels,
-  setMinLevel,
-  getMinLevel,
-  error,
-  warn,
-  info,
-  success,
-  debugLog,
-  useLog,
-} from '../utils/log';
+import { Levels, setMinLevel, getMinLevel, error, warn, info, success, debugLog, useLog } from '../utils/log';
 
 // ---------------------------------------------------------------------------
 // Mocks

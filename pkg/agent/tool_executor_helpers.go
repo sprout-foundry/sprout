@@ -21,7 +21,10 @@ func (te *ToolExecutor) tryExecuteMCPTool(toolName string, args map[string]inter
 
 	if strings.HasPrefix(toolName, "mcp_") {
 		result, err := te.agent.executeMCPTool(toolName, args)
-		return result, err, true
+		if err != nil {
+			return result, fmt.Errorf("failed to execute MCP tool %s: %w", toolName, err), true
+		}
+		return result, nil, true
 	}
 
 	return "", nil, false

@@ -10,6 +10,7 @@ import Status from './Status';
 import StatusBar from './StatusBar';
 import CommandPalette from './CommandPalette';
 import PaneLayoutManager from './PaneLayoutManager';
+import { WorktreeChatDialog } from './WorktreeChatDialog';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { ApiService } from '../services/api';
 import { useGitWorkspace } from '../hooks/useGitWorkspace';
@@ -74,6 +75,7 @@ interface AppContentProps {
   onDeleteChat?: (id: string) => void;
   onRenameChat?: (id: string, name: string) => void;
   perChatCache?: Record<string, PerChatState>;
+  onCreateChatInWorktree?: (branch: string, baseRef?: string, name?: string, autoSwitch?: boolean) => Promise<string | null>;
 }
 
 function AppContent({
@@ -118,6 +120,7 @@ function AppContent({
   onDeleteChat: _onDeleteChat,
   onRenameChat: _onRenameChat,
   perChatCache,
+  onCreateChatInWorktree,
 }: AppContentProps): JSX.Element {
   // ── Editor manager ─────────────────────────────────────────────
   const {
@@ -251,6 +254,43 @@ function AppContent({
     setBufferPinned,
     setBufferClosable,
   });
+
+  const [worktreeDialogOpen, setWorktreeDialogOpen] = useState(false);
+  const [worktreeCreating, setWorktreeCreating] = useState(false);
+  const [worktreeError, setWorktreeError] = useState<string | null>(null);
+
+  const handleWorktreeSubmit = useCallback(async (params: {
+    branch: string;
+    baseRef: string;
+    name: string;
+    autoSwitch: boolean;
+  }) => {
+    setWorktreeCreating(true);
+    setWorktreeError(null);
+    try {
+      const chatId = await onCreateChatInWorktree?.(
+        params.branch,
+        params.baseRef || undefined,
+        params.name || undefined,
+        params.autoSwitch,
+      );
+      if (chatId) {
+        openWorkspaceBuffer({
+          kind: 'chat',
+          path: `__workspace/chat/${chatId}`,
+          title: 'Worktree Chat',
+          isPinned: false,
+          isClosable: true,
+          metadata: { chatId },
+        });
+      }
+      setWorktreeDialogOpen(false);
+    } catch (err) {
+      setWorktreeError(err instanceof Error ? err.message : 'Failed to create chat in worktree');
+    } finally {
+      setWorktreeCreating(false);
+    }
+  }, [onCreateChatInWorktree, openWorkspaceBuffer]);
 
   useHotkeysConfig({
     isConnected,
@@ -536,6 +576,7 @@ function AppContent({
                   onSplitRequest={handleSplitRequest}
                   onCloseAllSplits={handleCloseAllSplits}
                   onCreateChat={onCreateChat}
+                  onCreateChatInWorktree={() => setWorktreeDialogOpen(true)}
                   nestedSplit={nestedSplit}
                   onNestedSplitChange={onNestedSplitChange}
                   containerRef={containerRef}
@@ -579,6 +620,14 @@ function AppContent({
       </div>
 
       <Terminal isExpanded={isTerminalExpanded} onToggleExpand={onTerminalExpandedChange} />
+
+      <WorktreeChatDialog
+        isOpen={worktreeDialogOpen}
+        onClose={() => setWorktreeDialogOpen(false)}
+        onSubmit={handleWorktreeSubmit}
+        isCreating={worktreeCreating}
+        error={worktreeError}
+      />
 
       <CommandPalette
         isOpen={isCommandPaletteOpen}

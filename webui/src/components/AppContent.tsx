@@ -453,6 +453,15 @@ function AppContent({
                   updatePaneSize={updatePaneSize}
                   openWorkspaceBuffer={openWorkspaceBuffer}
                   onOpenCommandPalette={onOpenCommandPalette}
+                  onOpenTerminal={() => {
+                    onTerminalExpandedChange(true);
+                    onViewChange('editor');
+                  }}
+                  onViewGit={() => onViewChange('git')}
+                  onStartChat={() => {
+                    switchToBuffer('buffer-chat');
+                    onViewChange('chat');
+                  }}
                   canSplit={canSplit}
                   canSplitGrid={canSplitGrid}
                   canCloseSplit={canCloseSplit}

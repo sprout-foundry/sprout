@@ -19,6 +19,7 @@ import {
   ArrowRightLeft,
   PanelRightOpen,
   Eye,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react';
 import { useEditorManager } from '../contexts/EditorManagerContext';
@@ -79,6 +80,7 @@ const getFileIconColor = (ext?: string): string => {
   if (ext === '.chat') return 'var(--accent-primary)';
   if (ext === '.diff') return '#22c55e';
   if (ext === '.review') return '#f59e0b';
+  if (ext === '.welcome') return 'var(--accent-color)';
   if (!ext) return '#9ca3af';
 
   switch (ext.toLowerCase()) {
@@ -113,6 +115,8 @@ const getBufferIcon = (buffer: EditorBuffer): ReactNode => {
       return <GitCompareArrows size={FILE_ICON_SIZE} />;
     case 'review':
       return <ShieldCheck size={FILE_ICON_SIZE} />;
+    case 'welcome':
+      return <Sparkles size={FILE_ICON_SIZE} />;
     default:
       return getFileIcon(buffer.file.ext);
   }

@@ -13,6 +13,37 @@
   text-align: center;
   padding: 40px 20px 20px;
   border-bottom: 1px solid var(--border-subtle);
+  position: relative;
+}
+
+.welcome-header-content {
+  display: inline-block;
+}
+
+.welcome-dismiss-btn {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.welcome-dismiss-btn:hover {
+  background: var(--editor-pane-bg-secondary);
+  color: var(--text-primary);
+}
+
+.welcome-dismiss-btn:focus {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
 }
 
 .welcome-header h1 {

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
 import { type EditorBuffer, type EditorPane, type PaneLayout, type PaneSize } from '../types/editor';
 import { readStorageItem, PANE_LAYOUT_STORAGE_KEY, PANE_SIZES_STORAGE_KEY } from '../services/layoutPersistence';
 import { useBufferMutations } from '../hooks/useBufferMutations';
@@ -10,6 +10,12 @@ import { useLayoutPersistence } from '../hooks/useLayoutPersistence';
 import { debugLog } from '../utils/log';
 import { useExternalFileWatcher } from '../hooks/useExternalFileWatcher';
 import { useAutoReloadCleanBuffers } from '../hooks/useAutoReloadCleanBuffers';
+
+const WELCOME_DISMISSED_STORAGE_KEY = 'ledit-welcome-dismissed';
+const WELCOME_BUFFER_ID = 'buffer-welcome';
+
+/** Check whether the user has previously dismissed the welcome tab (runs once at module load). */
+const isWelcomeDismissed = (): boolean => localStorage.getItem(WELCOME_DISMISSED_STORAGE_KEY) === 'true';
 
 // ---------------------------------------------------------------------------
 // Context interface & hook — unchanged public API
@@ -25,10 +31,11 @@ interface EditorManagerContextValue {
   autoSaveInterval: number;
   isLinkedScrollEnabled: boolean;
   paneSizes: PaneSize;
+  hasWelcomeBuffer: boolean;
 
   openFile: (file: Record<string, unknown>) => string;
   openWorkspaceBuffer: (options: {
-    kind: 'chat' | 'diff' | 'review' | 'file';
+    kind: 'chat' | 'diff' | 'review' | 'file' | 'welcome';
     path: string;
     title: string;
     content?: string;
@@ -66,6 +73,7 @@ interface EditorManagerContextValue {
   setBufferLanguageOverride: (bufferId: string, languageId: string | null) => void;
   toggleLinkedScroll: () => void;
   restoreLayout: () => void;
+  dismissWelcomeBuffer: () => void;
 }
 
 const EditorManagerContext = createContext<EditorManagerContextValue | null>(null);
@@ -92,6 +100,39 @@ export function EditorManagerProvider({ children }: EditorManagerProviderProps):
   // ---------------------------------------------------------------------------
 
   const [buffers, setBuffers] = useState<Map<string, EditorBuffer>>(() => {
+    // Check if user has previously dismissed the welcome tab
+    const hasDismissedWelcome = isWelcomeDismissed();
+
+    const buffersMap = new Map<string, EditorBuffer>();
+
+    // Add welcome buffer for first-time users
+    if (!hasDismissedWelcome) {
+      const welcomeBuffer: EditorBuffer = {
+        id: WELCOME_BUFFER_ID,
+        kind: 'welcome',
+        file: {
+          name: 'Welcome',
+          path: '__workspace/welcome',
+          isDir: false,
+          size: 0,
+          modified: 0,
+          ext: '.welcome',
+        },
+        content: '',
+        originalContent: '',
+        cursorPosition: { line: 0, column: 0 },
+        scrollPosition: { top: 0, left: 0 },
+        isModified: false,
+        isActive: true,
+        paneId: 'pane-1',
+        isPinned: true,
+        isClosable: false,
+        metadata: {},
+      };
+      buffersMap.set(welcomeBuffer.id, welcomeBuffer);
+    }
+
+    // Always add chat buffer
     const chatBuffer: EditorBuffer = {
       id: 'buffer-chat',
       kind: 'chat',
@@ -108,13 +149,15 @@ export function EditorManagerProvider({ children }: EditorManagerProviderProps):
       cursorPosition: { line: 0, column: 0 },
       scrollPosition: { top: 0, left: 0 },
       isModified: false,
-      isActive: true,
+      isActive: !hasDismissedWelcome, // Chat is active if welcome was shown
       paneId: 'pane-1',
       isPinned: true,
       isClosable: false,
       metadata: { chatId: null as string | null },
     };
-    return new Map([[chatBuffer.id, chatBuffer]]);
+    buffersMap.set(chatBuffer.id, chatBuffer);
+
+    return buffersMap;
   });
 
   const initialLayout: PaneLayout = (() => {
@@ -126,9 +169,10 @@ export function EditorManagerProvider({ children }: EditorManagerProviderProps):
   const [paneLayout, setPaneLayoutState] = useState<PaneLayout>(initialLayout);
 
   const [panes, setPanes] = useState<EditorPane[]>(() => {
+    const hasWelcomeBuffer = !isWelcomeDismissed();
     const primary: EditorPane = {
       id: 'pane-1',
-      bufferId: 'buffer-chat',
+      bufferId: hasWelcomeBuffer ? WELCOME_BUFFER_ID : 'buffer-chat',
       isActive: true,
       position: 'primary',
     };
@@ -147,7 +191,10 @@ export function EditorManagerProvider({ children }: EditorManagerProviderProps):
   });
 
   const [activePaneId, setActivePaneId] = useState<string | null>('pane-1');
-  const [activeBufferId, setActiveBufferId] = useState<string | null>('buffer-chat');
+  const [activeBufferId, setActiveBufferId] = useState<string | null>(() => {
+    const showWelcome = !isWelcomeDismissed();
+    return showWelcome ? WELCOME_BUFFER_ID : 'buffer-chat';
+  });
   const [isAutoSaveEnabled] = useState(true);
   const [autoSaveInterval] = useState(30000);
   const [isLinkedScrollEnabled, setIsLinkedScrollEnabled] = useState(false);
@@ -309,6 +356,44 @@ export function EditorManagerProvider({ children }: EditorManagerProviderProps):
   }, [isAutoSaveEnabled, autoSaveInterval, saveAllBuffers]);
 
   // ---------------------------------------------------------------------------
+  // Welcome buffer management
+  // ---------------------------------------------------------------------------
+
+  // Compute hasWelcomeBuffer from current state
+  const hasWelcomeBuffer = buffers.has(WELCOME_BUFFER_ID);
+
+  // Ref guard to ensure auto-dismiss only fires once
+  const welcomeDismissedRef = useRef(false);
+
+  // Dismiss the welcome buffer: remove it from state, switch to chat, set localStorage flag
+  const dismissWelcomeBuffer = useCallback(() => {
+    setBuffers((prev) => {
+      const next = new Map(prev);
+      next.delete(WELCOME_BUFFER_ID);
+      // Activate the chat buffer in its place
+      const chatBuffer = next.get('buffer-chat');
+      if (chatBuffer) {
+        next.set('buffer-chat', { ...chatBuffer, isActive: true });
+      }
+      return next;
+    });
+    setActiveBufferId('buffer-chat');
+    // Update any pane that was showing the welcome buffer to point to chat
+    setPanes((prev) => prev.map((p) => (p.bufferId === WELCOME_BUFFER_ID ? { ...p, bufferId: 'buffer-chat' } : p)));
+    localStorage.setItem(WELCOME_DISMISSED_STORAGE_KEY, 'true');
+    welcomeDismissedRef.current = true;
+  }, []);
+
+  // Auto-dismiss welcome when user opens their first real file
+  useEffect(() => {
+    if (welcomeDismissedRef.current) return;
+    const hasFileBuffer = Array.from(buffers.values()).some((b) => b.kind === 'file');
+    if (hasFileBuffer && hasWelcomeBuffer) {
+      dismissWelcomeBuffer();
+    }
+  }, [buffers, hasWelcomeBuffer, dismissWelcomeBuffer]);
+
+  // ---------------------------------------------------------------------------
   // Context value — identical public API
   // ---------------------------------------------------------------------------
 
@@ -322,6 +407,7 @@ export function EditorManagerProvider({ children }: EditorManagerProviderProps):
     autoSaveInterval,
     isLinkedScrollEnabled,
     paneSizes,
+    hasWelcomeBuffer,
     openFile: tabOpen.openFile,
     openWorkspaceBuffer: tabOpen.openWorkspaceBuffer,
     closeBuffer: tab.closeBuffer,
@@ -353,7 +439,8 @@ export function EditorManagerProvider({ children }: EditorManagerProviderProps):
     saveBuffer,
     saveAllBuffers,
     restoreLayout: layoutPersist.restoreLayout,
+    dismissWelcomeBuffer,
   };
 
   return <EditorManagerContext.Provider value={value}>{children}</EditorManagerContext.Provider>;
-};
+}

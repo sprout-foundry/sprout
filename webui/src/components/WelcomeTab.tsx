@@ -1,11 +1,21 @@
-import { File, Folder, Terminal, GitBranch, MessageSquare, Zap, BookOpen, Settings, Command } from 'lucide-react';
+import { File, Folder, Terminal, GitBranch, MessageSquare, Zap, BookOpen, Settings, Command, X } from 'lucide-react';
 import './WelcomeTab.css';
 
 interface WelcomeTabProps {
+  onDismiss?: () => void;
   onOpenCommandPalette?: () => void;
+  onOpenTerminal?: () => void;
+  onViewGit?: () => void;
+  onStartChat?: () => void;
 }
 
-function WelcomeTab({ onOpenCommandPalette }: WelcomeTabProps): JSX.Element {
+function WelcomeTab({
+  onDismiss,
+  onOpenCommandPalette,
+  onOpenTerminal,
+  onViewGit,
+  onStartChat,
+}: WelcomeTabProps): JSX.Element {
   // Sample quick actions
   const quickActions = [
     {
@@ -18,19 +28,19 @@ function WelcomeTab({ onOpenCommandPalette }: WelcomeTabProps): JSX.Element {
       icon: <Terminal size={20} />,
       title: 'Open Terminal',
       description: 'Run commands and shell scripts',
-      action: () => console.log('Open terminal'),
+      action: onOpenTerminal,
     },
     {
       icon: <GitBranch size={20} />,
       title: 'View Git History',
       description: 'Browse commits and file history',
-      action: () => console.log('View git history'),
+      action: onViewGit,
     },
     {
       icon: <MessageSquare size={20} />,
       title: 'Start Chat',
       description: 'Ask for code help or analysis',
-      action: () => console.log('Start chat'),
+      action: onStartChat,
     },
   ];
 
@@ -51,15 +61,22 @@ function WelcomeTab({ onOpenCommandPalette }: WelcomeTabProps): JSX.Element {
       icon: <Zap size={18} />,
       title: 'Keyboard Shortcuts',
       description: 'Master the shortcuts',
-      action: () => console.log('Keyboard shortcuts would display here'),
+      action: onOpenCommandPalette,
     },
   ];
 
   return (
     <div className="welcome-tab">
       <div className="welcome-header">
-        <h1>Welcome to ledit</h1>
-        <p>Your AI-powered code editor</p>
+        <div className="welcome-header-content">
+          <h1>Welcome to ledit</h1>
+          <p>Your AI-powered code editor</p>
+        </div>
+        {onDismiss && (
+          <button className="welcome-dismiss-btn" onClick={onDismiss} title="Dismiss welcome tab">
+            <X size={18} />
+          </button>
+        )}
       </div>
 
       <div className="welcome-content">
@@ -67,12 +84,7 @@ function WelcomeTab({ onOpenCommandPalette }: WelcomeTabProps): JSX.Element {
           <h2>Quick Actions</h2>
           <div className="quick-actions-grid">
             {quickActions.map((action, index) => (
-              <button
-                key={index}
-                className="quick-action-card"
-                onClick={action.action}
-                type="button"
-              >
+              <button key={index} className="quick-action-card" onClick={() => action.action?.()} type="button">
                 <div className="quick-action-icon">{action.icon}</div>
                 <div className="quick-action-content">
                   <div className="quick-action-title">{action.title}</div>
@@ -152,12 +164,7 @@ function WelcomeTab({ onOpenCommandPalette }: WelcomeTabProps): JSX.Element {
           <h2>Resources</h2>
           <div className="resources-grid">
             {helpfulLinks.map((link, index) => (
-              <button
-                key={index}
-                className="resource-card"
-                type="button"
-                onClick={link.action}
-              >
+              <button key={index} className="resource-card" type="button" onClick={() => link.action?.()}>
                 <div className="resource-icon">{link.icon}</div>
                 <div className="resource-content">
                   <div className="resource-title">{link.title}</div>
@@ -171,8 +178,7 @@ function WelcomeTab({ onOpenCommandPalette }: WelcomeTabProps): JSX.Element {
 
       <div className="welcome-footer">
         <p>
-          Pro tip: Press{' '}
-          <kbd>Ctrl+P</kbd> to open the command palette and search for any command or file
+          Pro tip: Press <kbd>Ctrl+P</kbd> to open the command palette and search for any command or file
         </p>
       </div>
     </div>

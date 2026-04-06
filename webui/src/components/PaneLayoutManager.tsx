@@ -72,6 +72,7 @@ export interface PaneLayoutManagerProps {
   switchToBuffer: (bufferId: string) => void;
   updatePaneSize: (paneId: string, size: number) => void;
   openWorkspaceBuffer: OpenWorkspaceBufferFn;
+  onOpenCommandPalette: () => void;
 
   // Split handling
   canSplit: boolean;
@@ -144,9 +145,10 @@ interface EditorPaneComponentProps {
   chatProps: ComponentProps<typeof WorkspacePane>['chatProps'];
   reviewProps: ComponentProps<typeof WorkspacePane>['reviewProps'];
   diffState: ComponentProps<typeof WorkspacePane>['diffState'];
+  onOpenCommandPalette?: () => void;
 }
 
-export function EditorPaneComponent({ paneId, onClick, perChatCache, activeChatId, chatProps, reviewProps, diffState }: EditorPaneComponentProps): JSX.Element {
+export function EditorPaneComponent({ paneId, onClick, perChatCache, activeChatId, chatProps, reviewProps, diffState, onOpenCommandPalette }: EditorPaneComponentProps): JSX.Element {
   return (
     <div className="editor-pane-host" onClick={onClick}>
       <WorkspacePane
@@ -156,6 +158,7 @@ export function EditorPaneComponent({ paneId, onClick, perChatCache, activeChatI
         chatProps={chatProps}
         reviewProps={reviewProps}
         diffState={diffState}
+        onOpenCommandPalette={onOpenCommandPalette}
       />
     </div>
   );
@@ -220,6 +223,7 @@ function PaneLayoutManager({
   updatePaneSize,
   nestedSplit,
   onNestedSplitChange: _onNestedSplitChange,
+  onOpenCommandPalette,
 }: PaneLayoutManagerProps): JSX.Element | null {
   const dragStartSizeRef = useRef<Map<string, number>>(new Map());
   const isPaneDraggingRef = useRef<Set<string>>(new Set());
@@ -383,6 +387,7 @@ function PaneLayoutManager({
                 diffError,
                 onDiffModeChange,
               }}
+              onOpenCommandPalette={onOpenCommandPalette}
             />
           </EditorPaneWrapper>
         </div>

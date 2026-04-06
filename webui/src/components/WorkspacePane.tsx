@@ -128,6 +128,7 @@ interface WorkspacePaneProps {
     diffError: string | null;
     onDiffModeChange: (mode: 'combined' | 'staged' | 'unstaged') => void;
   };
+  onOpenCommandPalette?: () => void;
 }
 
 function WorkspacePane({
@@ -137,6 +138,7 @@ function WorkspacePane({
   chatProps,
   reviewProps,
   diffState,
+  onOpenCommandPalette,
 }: WorkspacePaneProps): JSX.Element {
   const { panes, buffers } = useEditorManager();
   const pane = panes.find((item) => item.id === paneId);
@@ -257,7 +259,7 @@ function WorkspacePane({
     case 'review':
       return <ReviewWorkspaceTab {...reviewProps} />;
     default:
-      return <EditorPane paneId={paneId} />;
+      return <EditorPane paneId={paneId} onOpenCommandPalette={onOpenCommandPalette} />;
   }
 };
 

@@ -83,6 +83,7 @@ interface WorkspacePaneProps {
       queryProgress?: unknown;
       lastError?: string | null;
       isProcessing?: boolean;
+      worktreePath?: string;
     }
   >;
   activeChatId?: string | null;
@@ -110,6 +111,11 @@ interface WorkspacePaneProps {
     onQueueMessageEdit?: (index: number, newText: string) => void;
     onQueueReorder?: (fromIndex: number, toIndex: number) => void;
     onClearQueuedMessages?: () => void;
+    worktreePath?: string;
+    workspaceRoot?: string;
+    chatId?: string;
+    onWorktreeChange?: (worktreePath: string) => void;
+    onCreateChatInWorktree?: () => void;
   };
   reviewProps: {
     review: DeepReviewResult | null;
@@ -186,6 +192,10 @@ function WorkspacePane({
             currentTodos={cached.currentTodos ?? []}
             lastError={cached.lastError ?? null}
             queryProgress={cached.queryProgress ?? null}
+            worktreePath={cached.worktreePath}
+            chatId={chatProps.chatId}
+            workspaceRoot={chatProps.workspaceRoot}
+            onWorktreeChange={chatProps.onWorktreeChange}
             // Disable input for inactive chat tabs since the backend is focused on active chat
             inputValue=""
             onSendMessage={() => {
@@ -213,6 +223,9 @@ function WorkspacePane({
           lastError={null}
           queryProgress={null}
           inputValue=""
+          chatId={chatProps.chatId}
+          workspaceRoot={chatProps.workspaceRoot}
+          onWorktreeChange={chatProps.onWorktreeChange}
           onSendMessage={() => {
             /* noop */
           }}
@@ -278,6 +291,6 @@ function WorkspacePane({
     default:
       return <EditorPane paneId={paneId} onOpenCommandPalette={onOpenCommandPalette} />;
   }
-};
+}
 
 export default WorkspacePane;

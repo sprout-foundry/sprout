@@ -89,9 +89,13 @@ export function useTabManagement({
   const closeBuffer = useCallback(
     (bufferId: string) => {
       const buffer = buffersRef.current.get(bufferId);
-      if (!buffer || buffer.isClosable === false) return;
+      if (!buffer || buffer.isClosable === false || buffer.isPinned) return;
       if (buffer.isModified && isAutoSaveEnabled) {
-        saveBuffer(bufferId).catch((err) => log.error(`Failed to save buffer before closing: ${err instanceof Error ? err.message : String(err)}`, { title: 'Save Error' }));
+        saveBuffer(bufferId).catch((err) =>
+          log.error(`Failed to save buffer before closing: ${err instanceof Error ? err.message : String(err)}`, {
+            title: 'Save Error',
+          }),
+        );
       }
       const remain = Array.from(buffersRef.current.values()).filter((c) => c.id !== bufferId);
       const nextPaneBuffer = buffer.paneId
@@ -136,13 +140,17 @@ export function useTabManagement({
   const closeAllBuffers = useCallback(() => {
     const cb = buffersRef.current;
     const closableIds = Array.from(cb.entries())
-      .filter(([_, b]) => b.isClosable !== false)
+      .filter(([_, b]) => b.isClosable !== false && !b.isPinned)
       .map(([id]) => id);
     for (const bid of closableIds) {
       const b = cb.get(bid);
       if (!b) continue;
       if (b.isModified && isAutoSaveEnabled) {
-        saveBuffer(bid).catch((err) => log.error(`Failed to save buffer: ${err instanceof Error ? err.message : String(err)}`, { title: 'Save Error' }));
+        saveBuffer(bid).catch((err) =>
+          log.error(`Failed to save buffer: ${err instanceof Error ? err.message : String(err)}`, {
+            title: 'Save Error',
+          }),
+        );
       }
       setBuffers((prev) => {
         const n = new Map(prev);
@@ -165,13 +173,17 @@ export function useTabManagement({
     (keepBufferId: string) => {
       const cb = buffersRef.current;
       const ids = Array.from(cb.entries())
-        .filter(([id, b]) => id !== keepBufferId && b.isClosable !== false)
+        .filter(([id, b]) => id !== keepBufferId && b.isClosable !== false && !b.isPinned)
         .map(([id]) => id);
       for (const bid of ids) {
         const b = cb.get(bid);
         if (!b) continue;
         if (b.isModified && isAutoSaveEnabled) {
-          saveBuffer(bid).catch((err) => log.error(`Failed to save buffer: ${err instanceof Error ? err.message : String(err)}`, { title: 'Save Error' }));
+          saveBuffer(bid).catch((err) =>
+            log.error(`Failed to save buffer: ${err instanceof Error ? err.message : String(err)}`, {
+              title: 'Save Error',
+            }),
+          );
         }
         setBuffers((prev) => {
           const n = new Map(prev);

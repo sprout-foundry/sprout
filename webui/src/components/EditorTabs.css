@@ -178,6 +178,37 @@
   color: var(--accent-error);
 }
 
+.tab.pinned {
+  min-width: 40px;
+  max-width: 40px;
+  padding: 0;
+  justify-content: center;
+  background: var(--bg-secondary);
+  border-bottom-color: var(--accent-primary);
+}
+
+.tab.pinned .tab-name,
+.tab.pinned .tab-pane-badge,
+.tab.pinned .tab-modified,
+.tab.pinned .tab-externally-modified,
+.tab.pinned .pin-indicator {
+  display: none;
+}
+
+.tab.pinned .tab-content {
+  justify-content: center;
+}
+
+.tab.pinned .tab-icon {
+  margin: 0;
+}
+
+.tab.active.pinned {
+  background: var(--accent-primary-alpha);
+  border-color: var(--border-focus);
+  border-bottom-color: var(--accent-primary);
+}
+
 .no-tabs {
   display: flex;
   align-items: center;

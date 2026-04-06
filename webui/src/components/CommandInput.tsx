@@ -682,6 +682,42 @@ const CommandInput: FC<CommandInputProps> = ({
             <X size={12} />
           </button>
         )}
+        <div className="hints-button-wrapper">
+          <button
+            type="button"
+            className="hints-button"
+            onClick={() => setShowHints(!showHints)}
+            aria-label="Show keyboard shortcuts"
+            aria-expanded={showHints}
+          >
+            <Info size={14} />
+          </button>
+          {showHints && (
+            <div className="hints-popover">
+              <div className="hints-popover-title">Keyboard Shortcuts</div>
+              <div className="hints-popover-row">
+                <span><kbd>Enter</kbd></span>
+                <span>Send message</span>
+              </div>
+              <div className="hints-popover-row">
+                <span><kbd>Shift+Enter</kbd></span>
+                <span>New line</span>
+              </div>
+              <div className="hints-popover-row">
+                <span><kbd>↑</kbd> <kbd>↓</kbd></span>
+                <span>History</span>
+              </div>
+              <div className="hints-popover-row">
+                <span><kbd>Esc</kbd></span>
+                <span>Clear input</span>
+              </div>
+              <div className="hints-popover-row">
+                <span><kbd>Ctrl+C</kbd></span>
+                <span>Copy to clipboard</span>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       <textarea
@@ -824,21 +860,30 @@ const CommandInput: FC<CommandInputProps> = ({
             <Square size={15} />
           </button>
         )}
-        {(queuedCount > 0 || showQueuePanel) && (
+        {(isProcessing || queuedCount > 0 || showQueuePanel) && (
           <div className="queue-button-wrapper" ref={queuePanelRef}>
-            {queuedCount > 0 && (
-              <button
-                type="button"
-                onClick={() => {
+            <button
+              type="button"
+              onClick={() => {
+                if (isProcessing && canSend && !disabled) {
+                  handleQueue();
+                }
+                if (queuedCount > 0) {
                   setShowQueuePanel((prev) => !prev);
-                }}
-                className="queue-badge-button"
-                data-tooltip={`${queuedCount} queued message${queuedCount !== 1 ? 's' : ''} — click to manage`}
-                aria-label="View queued messages"
-              >
-                {queuedCount}
-              </button>
-            )}
+                }
+              }}
+              disabled={!isProcessing || disabled || !canSend}
+              className="queue-button"
+              data-tooltip={
+                queuedCount > 0
+                  ? `${queuedCount} queued message${queuedCount !== 1 ? 's' : ''} — click to manage`
+                  : 'Queue for after current run'
+              }
+              aria-label={queuedCount > 0 ? `View ${queuedCount} queued messages` : 'Queue message'}
+            >
+              <ListPlus size={16} />
+              {queuedCount > 0 && <span className="queue-count">{queuedCount}</span>}
+            </button>
             {showQueuePanel && (
               <div className="queue-popover-overlay">
                 <QueuedMessagesPanel
@@ -871,66 +916,6 @@ const CommandInput: FC<CommandInputProps> = ({
                 />
               </div>
             )}
-          </div>
-        )}
-        {isProcessing && (
-          <button
-            type="button"
-            onClick={handleQueue}
-            disabled={disabled || !canSend}
-            className="queue-button"
-            data-tooltip="Queue for after current run"
-            aria-label="Queue message"
-          >
-            <ListPlus size={16} />
-          </button>
-        )}
-      </div>
-
-      <div className="hints-button-wrapper">
-        <button
-          type="button"
-          className="hints-button"
-          onClick={() => setShowHints(!showHints)}
-          aria-label="Show keyboard shortcuts"
-          aria-expanded={showHints}
-        >
-          <Info size={14} />
-        </button>
-        {showHints && (
-          <div className="hints-popover">
-            <div className="hints-popover-title">Keyboard Shortcuts</div>
-            <div className="hints-popover-row">
-              <span>
-                <kbd>Enter</kbd>
-              </span>
-              <span>Send message</span>
-            </div>
-            <div className="hints-popover-row">
-              <span>
-                <kbd>Shift+Enter</kbd>
-              </span>
-              <span>New line</span>
-            </div>
-            <div className="hints-popover-row">
-              <span>
-                <kbd>↑</kbd>
-                <kbd>↓</kbd>
-              </span>
-              <span>History</span>
-            </div>
-            <div className="hints-popover-row">
-              <span>
-                <kbd>Esc</kbd>
-              </span>
-              <span>Clear input</span>
-            </div>
-            <div className="hints-popover-row">
-              <span>
-                <kbd>Ctrl+C</kbd>
-              </span>
-              <span>Copy to clipboard</span>
-            </div>
           </div>
         )}
       </div>

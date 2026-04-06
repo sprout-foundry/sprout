@@ -192,19 +192,19 @@ func (a *Agent) SaveState(sessionID string) error {
 func (a *Agent) SaveStateScoped(sessionID, workingDir string) error {
 	stateDir, err := GetStateDir()
 	if err != nil {
-		return fmt.Errorf("SaveStateScoped: failed to get state dir: %w", err)
+		return fmt.Errorf("failed to get state directory: %w", err)
 	}
 	cleanSessionID, err := normalizeSessionID(sessionID)
 	if err != nil {
-		return fmt.Errorf("SaveStateScoped: invalid session ID: %w", err)
+		return fmt.Errorf("invalid session ID: %w", err)
 	}
 	cleanWorkingDir, err := normalizeWorkingDirectory(workingDir)
 	if err != nil {
-		return fmt.Errorf("SaveStateScoped: invalid working directory: %w", err)
+		return fmt.Errorf("invalid working directory: %w", err)
 	}
 	stateFile, err := buildScopedSessionFilePath(stateDir, cleanSessionID, cleanWorkingDir)
 	if err != nil {
-		return fmt.Errorf("SaveStateScoped: failed to build session file path: %w", err)
+		return fmt.Errorf("failed to build session file path: %w", err)
 	}
 	if err := os.MkdirAll(filepath.Dir(stateFile), 0700); err != nil {
 		return fmt.Errorf("failed to create scoped session directory: %w", err)
@@ -532,11 +532,11 @@ func RenameSession(sessionID string, newName string) error {
 func RenameSessionScoped(sessionID, newName, workingDir string) error {
 	stateDir, err := GetStateDir()
 	if err != nil {
-		return fmt.Errorf("RenameSessionScoped: failed to get state dir: %w", err)
+		return fmt.Errorf("failed to get state directory: %w", err)
 	}
 	stateFile, err := resolveSessionStateFile(stateDir, sessionID, workingDir)
 	if err != nil {
-		return fmt.Errorf("RenameSessionScoped: failed to resolve session file: %w", err)
+		return fmt.Errorf("failed to resolve session file: %w", err)
 	}
 
 	data, err := os.ReadFile(stateFile)
@@ -589,13 +589,16 @@ func DeleteSession(sessionID string) error {
 func DeleteSessionScoped(sessionID, workingDir string) error {
 	stateDir, err := GetStateDir()
 	if err != nil {
-		return fmt.Errorf("DeleteSessionScoped: failed to get state dir: %w", err)
+		return fmt.Errorf("failed to get state directory: %w", err)
 	}
 	stateFile, err := resolveSessionStateFile(stateDir, sessionID, workingDir)
 	if err != nil {
-		return fmt.Errorf("DeleteSessionScoped: failed to resolve session file: %w", err)
+		return fmt.Errorf("failed to resolve session file: %w", err)
 	}
-	return os.Remove(stateFile)
+	if err := os.Remove(stateFile); err != nil {
+		return fmt.Errorf("failed to delete session file %q: %w", stateFile, err)
+	}
+	return nil
 }
 
 // GenerateSessionSummary creates a summary of previous actions for continuity

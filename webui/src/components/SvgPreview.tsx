@@ -36,6 +36,6 @@ function SvgPreview({ content, fileName, sourcePath }: SvgPreviewProps): JSX.Ele
       </div>
     </div>
   );
-};
+}
 
 export default SvgPreview;

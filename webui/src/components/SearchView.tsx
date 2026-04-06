@@ -730,6 +730,6 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
       </ContextMenu>
     </div>
   );
-};
+}
 
 export default SearchView;

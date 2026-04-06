@@ -497,6 +497,6 @@ function FileEditsPanel({ edits, onFileClick }: FileEditsPanelProps): JSX.Elemen
       )}
     </div>
   );
-};
+}
 
 export default FileEditsPanel;

@@ -127,14 +127,17 @@ function GitSidebarPanel({
     handleResetVisibleCounts();
   }, [handleResetVisibleCounts]);
 
-  const handleLoadMore = useCallback((section: FileSection) => {
-    setVisibleCounts((prev) => {
-      const current = prev[section];
-      const files = gitStatus?.[section] || [];
-      const newCount = Math.min(current + LOAD_MORE_INCREMENT, MAX_FILES_PER_SECTION, files.length);
-      return { ...prev, [section]: newCount };
-    });
-  }, [gitStatus]);
+  const handleLoadMore = useCallback(
+    (section: FileSection) => {
+      setVisibleCounts((prev) => {
+        const current = prev[section];
+        const files = gitStatus?.[section] || [];
+        const newCount = Math.min(current + LOAD_MORE_INCREMENT, MAX_FILES_PER_SECTION, files.length);
+        return { ...prev, [section]: newCount };
+      });
+    },
+    [gitStatus],
+  );
 
   if (isLoading) {
     return (
@@ -465,10 +468,7 @@ function GitSidebarPanel({
                 })}
               </div>
               {files.length > visibleCounts[section.id] && visibleCounts[section.id] < MAX_FILES_PER_SECTION && (
-                <button
-                  className="git-sidebar-load-more"
-                  onClick={() => handleLoadMore(section.id)}
-                >
+                <button className="git-sidebar-load-more" onClick={() => handleLoadMore(section.id)}>
                   Show more ({files.length - visibleCounts[section.id]} more files)
                 </button>
               )}

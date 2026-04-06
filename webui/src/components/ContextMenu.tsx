@@ -23,7 +23,15 @@ interface ContextMenuProps {
  * Consumers compose their own items using `.context-menu-item` (buttons)
  * and `.context-menu-divider` elements.
  */
-function ContextMenu({ isOpen, x, y, onClose, children, className, zIndex = 1400 }: ContextMenuProps): JSX.Element | null {
+function ContextMenu({
+  isOpen,
+  x,
+  y,
+  onClose,
+  children,
+  className,
+  zIndex = 1400,
+}: ContextMenuProps): JSX.Element | null {
   const menuRef = useRef<HTMLDivElement>(null);
   const attachedRef = useRef(false);
 
@@ -119,6 +127,6 @@ function ContextMenu({ isOpen, x, y, onClose, children, className, zIndex = 1400
     </div>,
     document.body,
   );
-};
+}
 
 export default ContextMenu;

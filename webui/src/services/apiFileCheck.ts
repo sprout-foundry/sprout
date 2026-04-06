@@ -33,7 +33,10 @@ export async function checkFilesModified(files: FileCheckEntry[]): Promise<FileC
   });
 
   if (!response.ok) {
-    const text = await response.text().catch((err) => { debugLog('[checkFilesModified] failed to read error response body:', err); return response.statusText; });
+    const text = await response.text().catch((err) => {
+      debugLog('[checkFilesModified] failed to read error response body:', err);
+      return response.statusText;
+    });
     throw new Error(`File check failed (${response.status}): ${text.slice(0, 200)}`);
   }
 

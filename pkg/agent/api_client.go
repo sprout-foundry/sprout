@@ -474,13 +474,13 @@ func (ac *APIClient) sendStreamingRequest(messages []api.Message, tools []api.To
 				if !ac.isRateLimit(result.err) {
 					ac.displayAPIError(result.err)
 				}
-				return result.resp, result.err
+				return result.resp, fmt.Errorf("failed to execute streaming API request: %w", result.err)
 			}
 
 			// Note: Tool execution and response processing is handled by the main conversation handler
 			// The streaming handler only manages the streaming output and timeout
 
-			return result.resp, result.err
+			return result.resp, nil
 		}
 	}
 }
@@ -537,8 +537,9 @@ func (ac *APIClient) sendRegularRequest(messages []api.Message, tools []api.Tool
 			if !ac.isRateLimit(result.err) {
 				ac.displayAPIError(result.err)
 			}
+			return result.resp, fmt.Errorf("failed to execute regular API request: %w", result.err)
 		}
-		return result.resp, result.err
+		return result.resp, nil
 	}
 }
 

@@ -10,6 +10,7 @@ import { useLayoutPersistence } from '../hooks/useLayoutPersistence';
 import { debugLog } from '../utils/log';
 import { useExternalFileWatcher } from '../hooks/useExternalFileWatcher';
 import { useAutoReloadCleanBuffers } from '../hooks/useAutoReloadCleanBuffers';
+import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning';
 
 const WELCOME_DISMISSED_STORAGE_KEY = 'ledit-welcome-dismissed';
 const WELCOME_BUFFER_ID = 'buffer-welcome';
@@ -354,6 +355,9 @@ export function EditorManagerProvider({ children }: EditorManagerProviderProps):
     }, autoSaveInterval);
     return () => clearInterval(id);
   }, [isAutoSaveEnabled, autoSaveInterval, saveAllBuffers]);
+
+  // 10. Unsaved changes warning on beforeunload
+  useUnsavedChangesWarning({ buffersRef });
 
   // ---------------------------------------------------------------------------
   // Welcome buffer management

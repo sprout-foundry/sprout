@@ -3,6 +3,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import { Menu, PanelRightOpen, PanelRightClose } from 'lucide-react';
 import Sidebar from './Sidebar';
 import WorkspaceBar from './WorkspaceBar';
+import MenuBar from './MenuBar';
 import Terminal from './Terminal';
 import ContextPanel, { type ContextPanelHandle } from './ContextPanel';
 import Status from './Status';
@@ -367,6 +368,7 @@ function AppContent({
       <div
         className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''} ${isTerminalExpanded ? 'terminal-expanded' : ''}`}
       >
+        {!isMobile && <MenuBar />}
         <WorkspaceBar isConnected={state.isConnected} isMobile={isMobile} isMobileMenuOpen={isSidebarOpen} />
         <div className="main-view-content">
           <div className="editor-view">

@@ -345,7 +345,11 @@ export function EditorManagerProvider({ children }: EditorManagerProviderProps):
   useExternalFileWatcher({ buffers });
 
   // 8. Auto-reload clean buffers when they change on disk
-  useAutoReloadCleanBuffers({ buffersRef, reloadBufferFromDisk: mutations.reloadBufferFromDisk });
+  useAutoReloadCleanBuffers({
+    buffersRef,
+    reloadBufferFromDisk: mutations.reloadBufferFromDisk,
+    setBufferExternallyModified: mutations.setBufferExternallyModified,
+  });
 
   // 9. Auto-save interval (stays in orchestrator — ties persistence + state together)
   useEffect(() => {

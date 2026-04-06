@@ -204,7 +204,10 @@ func getConfigDir() (string, error) {
 	configDirOnce.Do(func() {
 		configDirCache, configDirErr = resolveConfigDir()
 	})
-	return configDirCache, configDirErr
+	if configDirErr != nil {
+		return "", fmt.Errorf("failed to get config directory: %w", configDirErr)
+	}
+	return configDirCache, nil
 }
 
 func resolveConfigDir() (string, error) {

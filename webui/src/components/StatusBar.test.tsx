@@ -45,7 +45,7 @@ jest.mock('lucide-react', () => ({
 function makeBuffer(overrides: Record<string, any> = {}) {
   return {
     kind: 'file',
-    file: { name: 'app.tsx', ext: 'tsx' },
+    file: { name: 'app.tsx', ext: '.tsx' },
     content: 'hello world\n',
     cursorPosition: { line: 0, column: 0 },
     languageOverride: null,
@@ -129,7 +129,7 @@ describe('StatusBar', () => {
     render(
       <StatusBar
         buffer={makeBuffer({
-          file: { name: 'app.ts', ext: 'ts' },
+          file: { name: 'app.ts', ext: '.ts' },
         })}
       />,
     );
@@ -142,7 +142,7 @@ describe('StatusBar', () => {
     render(
       <StatusBar
         buffer={makeBuffer({
-          file: { name: 'app.ts', ext: 'ts' },
+          file: { name: 'app.ts', ext: '.ts' },
           languageOverride: 'go',
         })}
       />,
@@ -254,7 +254,7 @@ describe('StatusBar', () => {
     render(
       <StatusBar
         buffer={makeBuffer({
-          file: { name: 'data.xyz', ext: 'xyz' },
+          file: { name: 'data.xyz', ext: '.xyz' },
         })}
       />,
     );
@@ -288,5 +288,19 @@ describe('StatusBar', () => {
     render(<StatusBar branch="" />);
 
     expect(screen.getByText('No Git')).toBeInTheDocument();
+  });
+
+  // ---- 16. Custom encoding when provided ----
+  test('shows custom encoding when encoding prop is provided', () => {
+    render(<StatusBar buffer={makeBuffer()} encoding="ISO-8859-1" />);
+
+    expect(screen.getByText('ISO-8859-1')).toBeInTheDocument();
+  });
+
+  // ---- 17. Custom indentation when provided ----
+  test('shows custom indentation when indentation prop is provided', () => {
+    render(<StatusBar buffer={makeBuffer()} indentation="Tabs: 4" />);
+
+    expect(screen.getByText('Tabs: 4')).toBeInTheDocument();
   });
 });

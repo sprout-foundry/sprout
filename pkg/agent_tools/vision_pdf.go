@@ -225,6 +225,7 @@ func processPDFWithOCR(pdfPath, pythonExec string, client api.ClientInterface) (
 	images, err := extractImagesFromPDF(pdfPath, pythonExec)
 	if err != nil {
 		if pageErr != nil {
+			// Note: pageErr is included with %v for context but not wrapped - only err is the primary error
 			return "", fmt.Errorf("failed page rasterization and image extraction: %w (rasterization error: %v)", err, pageErr)
 		}
 		return "", fmt.Errorf("failed to extract images from PDF: %w", err)
@@ -241,9 +242,10 @@ func processPDFWithOCR(pdfPath, pythonExec string, client api.ClientInterface) (
 	text, ocrErr := processOCRImages(images, client, "Image")
 	if ocrErr != nil {
 		if pageErr != nil {
+			// Note: pageErr is included with %v for context but not wrapped - only ocrErr is the primary error
 			return "", fmt.Errorf("both OCR paths failed: page=%v, image=%w", pageErr, ocrErr)
 		}
-		return "", ocrErr
+		return "", fmt.Errorf("OCR image processing failed: %w", ocrErr)
 	}
 
 	return text, nil

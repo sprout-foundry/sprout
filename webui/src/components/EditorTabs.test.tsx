@@ -58,6 +58,7 @@ const mockSwitchToBuffer = jest.fn();
 const mockSwitchPane = jest.fn();
 const mockReorderBuffers = jest.fn();
 const mockMoveBufferToPane = jest.fn();
+const mockToggleBufferPin = jest.fn();
 
 const defaultMockEditorManager = {
   buffers: new Map<string, any>(),
@@ -69,6 +70,7 @@ const defaultMockEditorManager = {
   closeBuffer: mockCloseBuffer,
   reorderBuffers: mockReorderBuffers,
   moveBufferToPane: mockMoveBufferToPane,
+  toggleBufferPin: mockToggleBufferPin,
 };
 
 const mockUseEditorManager = useEditorManager as jest.MockedFunction<typeof useEditorManager>;
@@ -87,6 +89,7 @@ beforeEach(() => {
   mockSwitchPane.mockClear();
   mockReorderBuffers.mockClear();
   mockMoveBufferToPane.mockClear();
+  mockToggleBufferPin.mockClear();
 
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -502,5 +505,108 @@ describe('EditorTabs empty area context menu', () => {
       const menusAfter = getContextMenuElements().length;
       expect(menusAfter).toBe(0);
     });
+  });
+});
+
+describe('EditorTabs pin toggle button', () => {
+  test('renders pin button on non-pinned tab with "Pin tab" title and not disabled', () => {
+    const buf1 = makeMockBuffer('buf-1', 'pane-1');
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([['buf-1', buf1]]),
+      activeBufferId: 'buf-1',
+    });
+    renderEditorTabs({ paneId: 'pane-1' });
+
+    const pinBtn = container!.querySelector('.pin-indicator') as HTMLElement;
+    expect(pinBtn).not.toBeNull();
+    expect(pinBtn.title).toBe('Pin tab');
+    expect(pinBtn.disabled).toBe(false);
+  });
+
+  test('renders pin button on pinned tab with "Unpin tab" title and tab has .pinned class', () => {
+    const buf1 = makeMockBuffer('buf-1', 'pane-1', { isPinned: true });
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([['buf-1', buf1]]),
+      activeBufferId: 'buf-1',
+    });
+    renderEditorTabs({ paneId: 'pane-1' });
+
+    const tab = container!.querySelector('.tab')!;
+    expect(tab.classList.contains('pinned')).toBe(true);
+
+    const pinBtn = container!.querySelector('.pin-indicator') as HTMLElement;
+    expect(pinBtn).not.toBeNull();
+    expect(pinBtn.title).toBe('Unpin tab');
+  });
+
+  test('clicking pin button on non-pinned tab calls toggleBufferPin', () => {
+    const buf1 = makeMockBuffer('buf-1', 'pane-1');
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([['buf-1', buf1]]),
+      activeBufferId: 'buf-1',
+    });
+    renderEditorTabs({ paneId: 'pane-1' });
+
+    const pinBtn = container!.querySelector('.pin-indicator') as HTMLElement;
+    act(() => {
+      pinBtn.click();
+    });
+
+    expect(mockToggleBufferPin).toHaveBeenCalledTimes(1);
+    expect(mockToggleBufferPin).toHaveBeenCalledWith('buf-1');
+  });
+
+  test('clicking pin button does NOT switch to buffer (stopPropagation)', () => {
+    const buf1 = makeMockBuffer('buf-1', 'pane-1');
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([['buf-1', buf1]]),
+      activeBufferId: null, // buffer is NOT active
+    });
+    renderEditorTabs({ paneId: 'pane-1' });
+
+    const pinBtn = container!.querySelector('.pin-indicator') as HTMLElement;
+    act(() => {
+      pinBtn.click();
+    });
+
+    expect(mockToggleBufferPin).toHaveBeenCalledWith('buf-1');
+    expect(mockSwitchToBuffer).not.toHaveBeenCalled();
+  });
+
+  test('pin button is disabled for non-closable buffers that are not pinned', () => {
+    const buf1 = makeMockBuffer('buf-1', 'pane-1', { isClosable: false });
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([['buf-1', buf1]]),
+      activeBufferId: 'buf-1',
+    });
+    renderEditorTabs({ paneId: 'pane-1' });
+
+    const pinBtn = container!.querySelector('.pin-indicator') as HTMLElement;
+    expect(pinBtn).not.toBeNull();
+    expect(pinBtn.disabled).toBe(true);
+  });
+
+  test('clicking unpin on pinned tab calls toggleBufferPin', () => {
+    const buf1 = makeMockBuffer('buf-1', 'pane-1', { isPinned: true });
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([['buf-1', buf1]]),
+      activeBufferId: 'buf-1',
+    });
+    renderEditorTabs({ paneId: 'pane-1' });
+
+    const pinBtn = container!.querySelector('.pin-indicator') as HTMLElement;
+    expect(pinBtn.title).toBe('Unpin tab');
+    act(() => {
+      pinBtn.click();
+    });
+
+    expect(mockToggleBufferPin).toHaveBeenCalledTimes(1);
+    expect(mockToggleBufferPin).toHaveBeenCalledWith('buf-1');
   });
 });

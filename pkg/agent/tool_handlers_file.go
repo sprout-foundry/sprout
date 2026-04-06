@@ -116,11 +116,15 @@ func handleReadFileWithImages(ctx context.Context, a *Agent, args map[string]int
 	if isPDFExtension(path) {
 		cleanPath, resolveErr := filesystem.SafeResolvePathWithBypass(ctx, path)
 		if resolveErr != nil {
-			return nil, "", resolveErr
+			return nil, "", fmt.Errorf("failed to resolve PDF path %s: %w", path, resolveErr)
 		}
 
 		if a != nil && a.client != nil && a.client.SupportsVision() {
-			return handleReadPDFFileMultimodal(ctx, a, cleanPath)
+			images, text, err := handleReadPDFFileMultimodal(ctx, a, cleanPath)
+			if err != nil {
+				return nil, "", fmt.Errorf("failed to read PDF file %s: %w", path, err)
+			}
+			return images, text, nil
 		}
 
 		// Non-multimodal: extract text via OCR
@@ -469,6 +473,7 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 				return werr
 			}()
 			if restoreErr != nil {
+				// Note: parseErr is included with %v for context but not wrapped - only restoreErr is the primary error
 				return "", fmt.Errorf("edit would produce invalid JSON in %s and restore failed: %w (original parse error: %v)", path, restoreErr, parseErr)
 			}
 			return "", fmt.Errorf("edit would produce invalid JSON in %s: %w", path, parseErr)

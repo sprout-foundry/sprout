@@ -137,7 +137,10 @@ func (w *WebContentFetcher) loadReferenceCache(query string) (*ReferenceCacheEnt
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, err // Cache miss - return original error
+			// Cache miss - return original error without wrapping.
+			// The caller checks err == nil to distinguish between cache miss and other errors.
+			// This bare error return is intentional and used as a control flow signal.
+			return nil, err
 		}
 		fmt.Printf("Error reading cache file %s: %v\n", filePath, err)
 		return nil, fmt.Errorf("get URL cache file path for read: %w", err)

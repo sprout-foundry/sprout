@@ -1,5 +1,6 @@
 import './StatusBar.css';
 
+import { useMemo } from 'react';
 import { GitBranch } from 'lucide-react';
 import { allLanguageEntries, resolveLanguageId } from '../extensions/languageRegistry';
 
@@ -12,9 +13,11 @@ interface StatusBarProps {
     cursorPosition?: { line: number; column: number };
     languageOverride?: string | null;
   } | null;
+  encoding?: string;
+  indentation?: string;
 }
 
-function StatusBar({ branch, buffer }: StatusBarProps): JSX.Element {
+function StatusBar({ branch, buffer, encoding, indentation }: StatusBarProps): JSX.Element {
   const showRightSection = buffer != null;
   const cursorPosition = buffer?.cursorPosition;
   const hasCursor =
@@ -23,32 +26,37 @@ function StatusBar({ branch, buffer }: StatusBarProps): JSX.Element {
     typeof cursorPosition.column === 'number';
 
   // Language name
-  let languageName = 'Plain Text';
-  if (buffer) {
-    if (buffer.kind === 'file' && buffer.file) {
-      const { languageId } = resolveLanguageId(
-        buffer.languageOverride,
-        buffer.file.ext,
-        buffer.file.name,
-      );
-      if (languageId) {
-        const entry = allLanguageEntries.find((e) => e.id === languageId);
-        if (entry) {
-          languageName = entry.name;
+  const languageName = useMemo(() => {
+    let name = 'Plain Text';
+    if (buffer) {
+      if (buffer.kind === 'file' && buffer.file) {
+        const { languageId } = resolveLanguageId(
+          buffer.languageOverride,
+          buffer.file.ext?.replace(/^\./, ''),
+          buffer.file.name,
+        );
+        if (languageId) {
+          const entry = allLanguageEntries.find((e) => e.id === languageId);
+          if (entry) {
+            name = entry.name;
+          }
         }
+      } else {
+        name = buffer.kind.charAt(0).toUpperCase() + buffer.kind.slice(1);
       }
-    } else {
-      languageName = buffer.kind.charAt(0).toUpperCase() + buffer.kind.slice(1);
     }
-  }
+    return name;
+  }, [buffer?.kind, buffer?.file, buffer?.languageOverride]);
 
   // Line endings detection — sample first 1024 chars to avoid scanning large files on every keystroke.
   // Strip out all \r\n sequences first, then check for any remaining \n.
   // This avoids a lookbehind regex and is safe across all JS environments.
-  const sample = (buffer?.content || '').slice(0, 1024);
-  const hasCRLF = /\r\n/.test(sample);
-  const hasBareLF = /\n/.test(sample.replace(/\r\n/g, ''));
-  const lineEnding = hasCRLF && !hasBareLF ? 'CRLF' : hasCRLF && hasBareLF ? 'Mixed' : 'LF';
+  const lineEnding = useMemo(() => {
+    const sample = (buffer?.content || '').slice(0, 1024);
+    const hasCRLF = /\r\n/.test(sample);
+    const hasBareLF = /\n/.test(sample.replace(/\r\n/g, ''));
+    return hasCRLF && !hasBareLF ? 'CRLF' : hasCRLF && hasBareLF ? 'Mixed' : 'LF';
+  }, [buffer?.content]);
 
   return (
     <footer className="statusbar" aria-label="Editor status bar">
@@ -79,7 +87,7 @@ function StatusBar({ branch, buffer }: StatusBarProps): JSX.Element {
 
           {/* Encoding */}
           <span className="statusbar-item statusbar-item-encoding" title="File encoding">
-            UTF-8
+            {encoding || 'UTF-8'}
           </span>
 
           {/* Line endings */}
@@ -87,9 +95,9 @@ function StatusBar({ branch, buffer }: StatusBarProps): JSX.Element {
             {lineEnding}
           </span>
 
-          {/* Indentation (default — hardcoded since not yet tracked by the editor) */}
+          {/* Indentation */}
           <span className="statusbar-item statusbar-item-indentation" title="Indentation">
-            Spaces: 2
+            {indentation || 'Spaces: 2'}
           </span>
         </div>
       )}

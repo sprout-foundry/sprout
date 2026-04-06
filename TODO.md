@@ -163,7 +163,7 @@
 [x] - UX: Add the ability to pin tabs to prevent accidental closure (type partially supported in `EditorBuffer` but no UI toggle for it). (duplicate — see above)
 [x] - UX: Add a status bar at the bottom showing current branch, file type, encoding, line endings, indentation settings — currently cursor position is in the editor footer but there is no global status bar.
 [x] - UX: Add a status bar at the bottom showing current branch, file type, encoding, line endings, indentation settings — currently cursor position is in the editor footer but there is no global status bar.
-[] - UX: Add "zoom into/zoom out of terminal" controls or a font size setting for the integrated terminal.
+[x] - UX: Add "zoom into/zoom out of terminal" controls or a font size setting for the integrated terminal.
 
 ### General
 

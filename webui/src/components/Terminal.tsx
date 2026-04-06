@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
-import { Trash2, Columns2, Rows2, Plus, Check } from 'lucide-react';
+import { Trash2, Columns2, Rows2, Plus, Check, ZoomIn, ZoomOut, Type } from 'lucide-react';
 import './Terminal.css';
 import TerminalPane, { type TerminalPaneHandle } from './TerminalPane';
 import TerminalTabBar, { type TerminalSession } from './TerminalTabBar';
@@ -15,9 +15,20 @@ const TERMINAL_HEIGHT_DEFAULT = 400;
 const TERMINAL_HEIGHT_MAX_FACTOR = 100; // max = innerHeight - this
 const TERMINAL_HEIGHT_STORAGE_KEY = 'ledit-terminal-height';
 
+// Font size constants and storage
+const FONT_SIZE_MIN = 8;
+const FONT_SIZE_MAX = 32;
+const FONT_SIZE_DEFAULT = 13;
+const FONT_SIZE_STORAGE_KEY = 'ledit-terminal-font-size';
+
 const clampTerminalHeight = (value: number): number => {
   if (!Number.isFinite(value)) return TERMINAL_HEIGHT_DEFAULT;
   return Math.max(TERMINAL_HEIGHT_MIN, Math.min(window.innerHeight - TERMINAL_HEIGHT_MAX_FACTOR, value));
+};
+
+const clampFontSize = (value: number): number => {
+  if (!Number.isFinite(value)) return FONT_SIZE_DEFAULT;
+  return Math.max(FONT_SIZE_MIN, Math.min(FONT_SIZE_MAX, value));
 };
 
 interface TerminalProps {
@@ -60,6 +71,19 @@ function Terminal({
   const shellPickerRef = useRef<HTMLDivElement>(null);
   // Track which shell each session should use (map: sessionId → shell name | null)
   const sessionShellsRef = useRef<Map<string, string | null>>(new Map());
+
+  // ── Font size state ───────────────────────────────────────────────────────
+  const [fontSize, setFontSize] = useState<number>(() => {
+    if (typeof window === 'undefined') return FONT_SIZE_DEFAULT;
+    try {
+      const stored = localStorage.getItem(FONT_SIZE_STORAGE_KEY);
+      const parsed = stored ? Number(stored) : FONT_SIZE_DEFAULT;
+      return clampFontSize(parsed);
+    } catch (err) {
+      debugLog('[Terminal] failed to read font size from localStorage:', err);
+      return FONT_SIZE_DEFAULT;
+    }
+  });
 
   // ── Split state ──────────────────────────────────────────────────────────
   const [splitDirection, setSplitDirection] = useState<SplitDirection>('none');
@@ -181,6 +205,39 @@ function Terminal({
       return next;
     });
   }, [onToggleExpand]);
+
+  const zoomIn = useCallback(() => {
+    setFontSize((prev) => {
+      const next = Math.min(FONT_SIZE_MAX, prev + 1);
+      try {
+        localStorage.setItem(FONT_SIZE_STORAGE_KEY, String(next));
+      } catch (err) {
+        debugLog('[Terminal] failed to persist font size:', err);
+      }
+      return next;
+    });
+  }, []);
+
+  const zoomOut = useCallback(() => {
+    setFontSize((prev) => {
+      const next = Math.max(FONT_SIZE_MIN, prev - 1);
+      try {
+        localStorage.setItem(FONT_SIZE_STORAGE_KEY, String(next));
+      } catch (err) {
+        debugLog('[Terminal] failed to persist font size:', err);
+      }
+      return next;
+    });
+  }, []);
+
+  const resetFontSize = useCallback(() => {
+    setFontSize(FONT_SIZE_DEFAULT);
+    try {
+      localStorage.setItem(FONT_SIZE_STORAGE_KEY, String(FONT_SIZE_DEFAULT));
+    } catch (err) {
+      debugLog('[Terminal] failed to persist font size:', err);
+    }
+  }, []);
 
   const clearActivePane = useCallback(() => {
     const handle = paneHandles.current.get(activeSessionIdRef.current);
@@ -477,6 +534,30 @@ function Terminal({
             <span>Terminal</span>
           </div>
           <div className="terminal-controls" onClick={(e) => e.stopPropagation()}>
+            <button
+              className="terminal-btn font-btn"
+              onClick={zoomOut}
+              title="Zoom out (decrease font size)"
+              aria-label="Zoom out"
+            >
+              <ZoomOut size={16} />
+            </button>
+            <button
+              className="terminal-btn font-btn"
+              onClick={zoomIn}
+              title="Zoom in (increase font size)"
+              aria-label="Zoom in"
+            >
+              <ZoomIn size={16} />
+            </button>
+            <button
+              className="terminal-btn font-btn"
+              onClick={resetFontSize}
+              title={`Reset font size (${fontSize}px)`}
+              aria-label="Reset font size"
+            >
+              <Type size={14} />
+            </button>
             <button className="terminal-btn clear-btn" onClick={clearActivePane} title="Clear terminal">
               <Trash2 size={16} />
             </button>
@@ -587,6 +668,7 @@ function Terminal({
                 isConnected={isConnected}
                 showCloseButton={false}
                 preferredShell={sessionShellsRef.current.get(activeSessionId) ?? null}
+                fontSize={fontSize}
               />
             </div>
           )}
@@ -616,6 +698,7 @@ function Terminal({
                 showCloseButton={true}
                 onClose={closeSecondaryPane}
                 preferredShell={sessionShellsRef.current.get(secondarySessionId) ?? null}
+                fontSize={fontSize}
               />
             </div>
           )}
@@ -623,6 +706,6 @@ function Terminal({
       </div>
     </div>
   );
-};
+}
 
 export default Terminal;

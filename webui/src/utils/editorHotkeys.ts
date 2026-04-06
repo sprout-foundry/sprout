@@ -2,6 +2,7 @@ import { type EditorView, type KeyBinding } from '@codemirror/view';
 import { EditorSelection } from '@codemirror/state';
 import { selectNextOccurrence, selectSelectionMatches } from '@codemirror/search';
 import { navigateCursorBack, navigateCursorForward } from '../extensions/cursorHistory';
+import { toggleLineComment, toggleBlockComment } from '@codemirror/commands';
 import type { HotkeyEntry } from '../services/api';
 
 interface EditorHotkeyActions {
@@ -268,6 +269,8 @@ const EDITOR_COMMAND_IDS = new Set([
   'split_editor_horizontal',
   'editor_insert_cursor_above',
   'editor_insert_cursor_below',
+  'editor_toggle_line_comment',
+  'editor_toggle_block_comment',
   'toggle_linked_scroll',
   'toggle_minimap',
 ]);
@@ -518,6 +521,40 @@ export function getEditorKeymap(hotkeyEntries: HotkeyEntry[] | null, actions: Ed
   // No fallback: only bound when explicitly configured to avoid
   // conflicts with Alt+ArrowDown (move line down).
   bindings.push(...bindingsFor('editor_insert_cursor_below', (v) => insertCursorBelow(v)));
+
+  // Toggle line comment — fallback to Mod-/ (Ctrl+/ in VS Code).
+  // NOTE: CodeMirror's defaultKeymap also binds Mod-/ → toggleComment.
+  // This explicit binding overrides it to use toggleLineComment instead,
+  // which always uses line comments (matching VS Code behavior) rather
+  // than auto-detecting between line and block comments.
+  const toggleLineCommentBindings = bindingsFor('editor_toggle_line_comment', (v) => {
+    return toggleLineComment(v);
+  });
+  if (toggleLineCommentBindings.length === 0) {
+    bindings.push({
+      key: 'Mod-/',
+      preventDefault: true,
+      run: (v) => toggleLineComment(v),
+    });
+  } else {
+    bindings.push(...toggleLineCommentBindings);
+  }
+
+  // Toggle block comment — fallback to Mod-Shift-/ (Ctrl+Shift+/ in VS Code).
+  // CodeMirror's defaultKeymap binds Shift-Alt-a → toggleBlockComment instead.
+  // Our binding uses the more standard Ctrl+Shift+/ (VS Code convention).
+  const toggleBlockCommentBindings = bindingsFor('editor_toggle_block_comment', (v) => {
+    return toggleBlockComment(v);
+  });
+  if (toggleBlockCommentBindings.length === 0) {
+    bindings.push({
+      key: 'Mod-Shift-/',
+      preventDefault: true,
+      run: (v) => toggleBlockComment(v),
+    });
+  } else {
+    bindings.push(...toggleBlockCommentBindings);
+  }
 
   // Toggle linked scrolling for split panes showing the same file.
   // No default key binding — users must explicitly configure one.

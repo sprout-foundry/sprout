@@ -146,7 +146,9 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       .then((ws) => {
         setWorkspaceRoot(ws.workspace_root || '');
       })
-      .catch((err) => { warn(`Failed to fetch workspace root: ${err instanceof Error ? err.message : String(err)}`); });
+      .catch((err) => {
+        warn(`Failed to fetch workspace root: ${err instanceof Error ? err.message : String(err)}`);
+      });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isExternalUpdateRef = useRef<boolean>(false);
@@ -305,14 +307,18 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
 
   const handleCopyRelativePath = useCallback(() => {
     if (!buffer || !buffer.file) return;
-    copyToClipboard(buffer.file.path).catch((err) => { debugLog('Clipboard write failed for relative path:', err); });
+    copyToClipboard(buffer.file.path).catch((err) => {
+      debugLog('Clipboard write failed for relative path:', err);
+    });
     hideContextMenu();
   }, [buffer, hideContextMenu]);
 
   const handleCopyAbsolutePath = useCallback(() => {
     if (!buffer || !buffer.file) return;
     const root = workspaceRoot.replace(/\/+$/, '');
-    copyToClipboard(`${root}/${buffer.file.path}`).catch((err) => { debugLog('Clipboard write failed for absolute path:', err); });
+    copyToClipboard(`${root}/${buffer.file.path}`).catch((err) => {
+      debugLog('Clipboard write failed for absolute path:', err);
+    });
     hideContextMenu();
   }, [buffer, hideContextMenu, workspaceRoot]);
   // ──────────────────────────────────────────────────────────────
@@ -961,7 +967,9 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
               }
             }
           })
-          .catch((err) => { warn(`Failed to read externally modified file: ${err instanceof Error ? err.message : String(err)}`); });
+          .catch((err) => {
+            warn(`Failed to read externally modified file: ${err instanceof Error ? err.message : String(err)}`);
+          });
         return;
       }
 
@@ -1038,9 +1046,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   }, [localContent, buffer?.file?.ext, buffer?.cursorPosition.line]);
 
   if (!buffer || !buffer.file || buffer.file.isDir) {
-    return (
-      <WelcomeTab onOpenCommandPalette={onOpenCommandPalette} />
-    );
+    return <WelcomeTab onOpenCommandPalette={onOpenCommandPalette} />;
   }
 
   // Detect if this is an image file
@@ -1133,27 +1139,6 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
           onSave={handleSave}
           saving={saving}
           actions={[
-            {
-              id: 'word-wrap-toggle',
-              title: 'Toggle word wrap (Alt+Z)',
-              icon: <WrapText size={16} />,
-              active: wordWrapEnabled,
-              onClick: () => document.dispatchEvent(new CustomEvent('editor-toggle-word-wrap')),
-            },
-            {
-              id: 'linked-scroll-toggle',
-              title: isLinkedScrollEnabled ? 'Disable linked scrolling' : 'Enable linked scrolling',
-              icon: <Link2 size={16} />,
-              active: isLinkedScrollEnabled,
-              onClick: () => toggleLinkedScroll(),
-            },
-            {
-              id: 'minimap-toggle',
-              title: minimapEnabled ? 'Hide minimap' : 'Show minimap',
-              icon: <PanelRightClose size={16} />,
-              active: minimapEnabled,
-              onClick: () => document.dispatchEvent(new CustomEvent('editor-toggle-minimap')),
-            },
             ...(isSvgFile
               ? [
                   {
@@ -1252,6 +1237,6 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       </ContextMenu>
     </div>
   );
-};
+}
 
 export default EditorPane;

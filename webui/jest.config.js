@@ -4,7 +4,7 @@ module.exports = {
     '^.+\\.(tsx?|jsx?)$': [
       'babel-jest',
       {
-        presets: ['babel-preset-react-app'],
+        presets: [['babel-preset-react-app', { runtime: 'automatic' }]],
       },
     ],
   },

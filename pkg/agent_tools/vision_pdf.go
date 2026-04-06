@@ -104,8 +104,8 @@ func processPDFForOCROnly(pdfPath, pythonExec string, client api.ClientInterface
 		return ocrText, nil
 	}
 
-	return "", fmt.Errorf("PDF has no extractable text. direct OCR error: %s; page OCR error: %s",
-		compactVisionError(directOCRErr), compactVisionError(ocrErr))
+	return "", fmt.Errorf("PDF has no extractable text. direct OCR error: %v; page OCR error: %w",
+		directOCRErr, ocrErr)
 }
 
 // The caller must invoke the returned cleanup function when done with the resolved path.
@@ -193,8 +193,8 @@ func processPDFWithProvider(pdfPath, pythonExec string, client api.ClientInterfa
 		if ocrErr == nil && len(strings.TrimSpace(ocrText)) > 0 {
 			return ocrText, nil
 		}
-		return "", fmt.Errorf("PDF has no extractable text. direct OCR error: %s; image OCR error: %s",
-			compactVisionError(directOCRErr), compactVisionError(ocrErr))
+		return "", fmt.Errorf("PDF has no extractable text. direct OCR error: %v; image OCR error: %w",
+			directOCRErr, ocrErr)
 	}
 
 	return text, nil

@@ -1,0 +1,108 @@
+.file-drop-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.file-drop-overlay-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 32px;
+  background: rgba(30, 41, 59, 0.9);
+  border: 2px dashed var(--accent-primary);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  animation: drop-pulse 2s ease-in-out infinite;
+}
+
+@keyframes drop-pulse {
+  0%,
+  100% {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  }
+  50% {
+    box-shadow: 0 8px 48px rgba(97, 175, 239, 0.3);
+  }
+}
+
+.file-drop-overlay-icon {
+  font-size: 48px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 8px rgba(97, 175, 239, 0.4));
+  animation: icon-bounce 1.5s ease-in-out infinite;
+}
+
+@keyframes icon-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.file-drop-overlay-text {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+  text-align: center;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Light theme adjustments */
+:root[data-theme='light'] .file-drop-overlay {
+  background: rgba(244, 247, 251, 0.85);
+}
+
+:root[data-theme='light'] .file-drop-overlay-content {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: var(--accent-primary);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+}
+
+:root[data-theme='light'] .file-drop-overlay-text {
+  color: var(--text-primary);
+  text-shadow: none;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .file-drop-overlay-content {
+    padding: 20px 24px;
+    gap: 10px;
+  }
+
+  .file-drop-overlay-icon {
+    font-size: 40px;
+  }
+
+  .file-drop-overlay-text {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .file-drop-overlay-content {
+    padding: 16px 20px;
+    gap: 8px;
+  }
+
+  .file-drop-overlay-icon {
+    font-size: 32px;
+  }
+
+  .file-drop-overlay-text {
+    font-size: 13px;
+  }
+}

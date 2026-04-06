@@ -33,6 +33,9 @@ beforeEach(() => {
   root = createRoot(container);
   jest.clearAllMocks();
   latestContext = undefined;
+  // Ensure the welcome buffer is NOT created in tests so they run
+  // against the same initial state (only buffer-chat) as before.
+  localStorage.setItem('ledit-welcome-dismissed', 'true');
 });
 
 afterEach(() => {
@@ -743,5 +746,78 @@ describe('paneId preservation fix', () => {
     const pane2 = ctx().panes.find((p) => p.id === pane2Id);
     expect(pane2).toBeDefined();
     expect(pane2.bufferId).toBe(file3Buffer.id);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Welcome buffer behavior
+// ---------------------------------------------------------------------------
+
+describe('Welcome buffer behavior', () => {
+  afterEach(() => {
+    // Restore the dismissed flag so other tests are unaffected
+    localStorage.setItem('ledit-welcome-dismissed', 'true');
+  });
+
+  it('creates welcome buffer when not previously dismissed', () => {
+    localStorage.removeItem('ledit-welcome-dismissed');
+    renderProvider();
+
+    // buffer-welcome should exist in the buffers map
+    const welcomeBuffer = ctx().buffers.get('buffer-welcome');
+    expect(welcomeBuffer).toBeDefined();
+    expect(welcomeBuffer.kind).toBe('welcome');
+    expect(welcomeBuffer.isActive).toBe(true);
+
+    // hasWelcomeBuffer should be true
+    expect(ctx().hasWelcomeBuffer).toBe(true);
+
+    // The active buffer should be the welcome buffer
+    expect(ctx().activeBufferId).toBe('buffer-welcome');
+  });
+
+  it('does not create welcome buffer when previously dismissed', () => {
+    // The beforeEach already sets this to 'true', but be explicit
+    localStorage.setItem('ledit-welcome-dismissed', 'true');
+    renderProvider();
+
+    // buffer-welcome should NOT exist
+    expect(ctx().buffers.get('buffer-welcome')).toBeUndefined();
+
+    // hasWelcomeBuffer should be false
+    expect(ctx().hasWelcomeBuffer).toBe(false);
+
+    // The active buffer should be buffer-chat
+    expect(ctx().activeBufferId).toBe('buffer-chat');
+  });
+
+  it('dismissWelcomeBuffer removes welcome buffer, sets localStorage flag, and switches to chat', async () => {
+    localStorage.removeItem('ledit-welcome-dismissed');
+    renderProvider();
+
+    // Verify welcome exists initially
+    expect(ctx().buffers.get('buffer-welcome')).toBeDefined();
+    expect(ctx().hasWelcomeBuffer).toBe(true);
+    expect(ctx().activeBufferId).toBe('buffer-welcome');
+
+    // Dismiss the welcome buffer
+    await actAndUpdate(() => {
+      ctx().dismissWelcomeBuffer();
+    });
+
+    // Welcome buffer should be removed
+    expect(ctx().buffers.get('buffer-welcome')).toBeUndefined();
+    expect(ctx().hasWelcomeBuffer).toBe(false);
+
+    // localStorage flag should be set
+    expect(localStorage.getItem('ledit-welcome-dismissed')).toBe('true');
+
+    // Active buffer should switch to buffer-chat
+    expect(ctx().activeBufferId).toBe('buffer-chat');
+
+    // Chat buffer should be active
+    const chatBuffer = ctx().buffers.get('buffer-chat');
+    expect(chatBuffer).toBeDefined();
+    expect(chatBuffer.isActive).toBe(true);
   });
 });

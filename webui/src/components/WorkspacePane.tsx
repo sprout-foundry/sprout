@@ -6,6 +6,7 @@ import EditorPane from './EditorPane';
 import DiffWorkspaceTab from './DiffWorkspaceTab';
 import type { GitDiffResponse } from '../hooks/useGitWorkspace';
 import ReviewWorkspaceTab from './ReviewWorkspaceTab';
+import WelcomeTab from './WelcomeTab';
 import './WorkspacePane.css';
 
 interface ToolExecution {
@@ -129,6 +130,9 @@ interface WorkspacePaneProps {
     onDiffModeChange: (mode: 'combined' | 'staged' | 'unstaged') => void;
   };
   onOpenCommandPalette?: () => void;
+  onOpenTerminal?: () => void;
+  onViewGit?: () => void;
+  onStartChat?: () => void;
 }
 
 function WorkspacePane({
@@ -139,8 +143,11 @@ function WorkspacePane({
   reviewProps,
   diffState,
   onOpenCommandPalette,
+  onOpenTerminal,
+  onViewGit,
+  onStartChat,
 }: WorkspacePaneProps): JSX.Element {
-  const { panes, buffers } = useEditorManager();
+  const { panes, buffers, dismissWelcomeBuffer } = useEditorManager();
   const pane = panes.find((item) => item.id === paneId);
   const buffer = pane?.bufferId ? buffers.get(pane.bufferId) : null;
 
@@ -258,6 +265,16 @@ function WorkspacePane({
     }
     case 'review':
       return <ReviewWorkspaceTab {...reviewProps} />;
+    case 'welcome':
+      return (
+        <WelcomeTab
+          onDismiss={dismissWelcomeBuffer}
+          onOpenCommandPalette={onOpenCommandPalette}
+          onOpenTerminal={onOpenTerminal}
+          onViewGit={onViewGit}
+          onStartChat={onStartChat}
+        />
+      );
     default:
       return <EditorPane paneId={paneId} onOpenCommandPalette={onOpenCommandPalette} />;
   }

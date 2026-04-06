@@ -73,6 +73,9 @@ export interface PaneLayoutManagerProps {
   updatePaneSize: (paneId: string, size: number) => void;
   openWorkspaceBuffer: OpenWorkspaceBufferFn;
   onOpenCommandPalette: () => void;
+  onOpenTerminal: () => void;
+  onViewGit: () => void;
+  onStartChat: () => void;
 
   // Split handling
   canSplit: boolean;
@@ -146,9 +149,12 @@ interface EditorPaneComponentProps {
   reviewProps: ComponentProps<typeof WorkspacePane>['reviewProps'];
   diffState: ComponentProps<typeof WorkspacePane>['diffState'];
   onOpenCommandPalette?: () => void;
+  onOpenTerminal?: () => void;
+  onViewGit?: () => void;
+  onStartChat?: () => void;
 }
 
-export function EditorPaneComponent({ paneId, onClick, perChatCache, activeChatId, chatProps, reviewProps, diffState, onOpenCommandPalette }: EditorPaneComponentProps): JSX.Element {
+export function EditorPaneComponent({ paneId, onClick, perChatCache, activeChatId, chatProps, reviewProps, diffState, onOpenCommandPalette, onOpenTerminal, onViewGit, onStartChat }: EditorPaneComponentProps): JSX.Element {
   return (
     <div className="editor-pane-host" onClick={onClick}>
       <WorkspacePane
@@ -159,6 +165,9 @@ export function EditorPaneComponent({ paneId, onClick, perChatCache, activeChatI
         reviewProps={reviewProps}
         diffState={diffState}
         onOpenCommandPalette={onOpenCommandPalette}
+        onOpenTerminal={onOpenTerminal}
+        onViewGit={onViewGit}
+        onStartChat={onStartChat}
       />
     </div>
   );
@@ -224,6 +233,9 @@ function PaneLayoutManager({
   nestedSplit,
   onNestedSplitChange: _onNestedSplitChange,
   onOpenCommandPalette,
+  onOpenTerminal,
+  onViewGit,
+  onStartChat,
 }: PaneLayoutManagerProps): JSX.Element | null {
   const dragStartSizeRef = useRef<Map<string, number>>(new Map());
   const isPaneDraggingRef = useRef<Set<string>>(new Set());
@@ -388,6 +400,9 @@ function PaneLayoutManager({
                 onDiffModeChange,
               }}
               onOpenCommandPalette={onOpenCommandPalette}
+              onOpenTerminal={onOpenTerminal}
+              onViewGit={onViewGit}
+              onStartChat={onStartChat}
             />
           </EditorPaneWrapper>
         </div>

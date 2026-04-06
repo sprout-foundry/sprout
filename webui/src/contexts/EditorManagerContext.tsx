@@ -357,7 +357,7 @@ export function EditorManagerProvider({ children }: EditorManagerProviderProps):
   }, [isAutoSaveEnabled, autoSaveInterval, saveAllBuffers]);
 
   // 10. Unsaved changes warning on beforeunload
-  useUnsavedChangesWarning({ buffersRef });
+  useUnsavedChangesWarning({ buffersRef, buffers, activeBufferId });
 
   // ---------------------------------------------------------------------------
   // Welcome buffer management

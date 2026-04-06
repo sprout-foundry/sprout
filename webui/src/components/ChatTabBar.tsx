@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react';
-import { Plus, X, Pencil, Trash2 } from 'lucide-react';
+import { Plus, X, Pencil, Trash2, GitBranch } from 'lucide-react';
 import type { ChatSession } from '../services/chatSessions';
 import ContextMenu from './ContextMenu';
 import './ChatTabBar.css';
@@ -12,6 +12,7 @@ interface ChatTabBarProps {
   onCreate: () => void;
   onDelete: (id: string) => void;
   onRename: (id: string, name: string) => void;
+  onCreateChatInWorktree?: () => void;
 }
 
 interface ContextMenuState {
@@ -22,7 +23,15 @@ interface ContextMenuState {
   canDelete: boolean;
 }
 
-function ChatTabBar({ sessions, activeChatId, onSwitch, onCreate, onDelete, onRename }: ChatTabBarProps): JSX.Element | null {
+function ChatTabBar({
+  sessions,
+  activeChatId,
+  onSwitch,
+  onCreate,
+  onDelete,
+  onRename,
+  onCreateChatInWorktree,
+}: ChatTabBarProps): JSX.Element | null {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({
@@ -151,6 +160,11 @@ function ChatTabBar({ sessions, activeChatId, onSwitch, onCreate, onDelete, onRe
               type="button"
             >
               {session.active_query && !isActive && <span className="chat-tab-activity-dot" />}
+              {session.worktree_path && (
+                <span className="chat-tab-worktree-badge" title={`Worktree: ${session.worktree_path}`}>
+                  <GitBranch size={11} />
+                </span>
+              )}
               {isRenaming ? (
                 <input
                   ref={renameInputRef}
@@ -190,6 +204,17 @@ function ChatTabBar({ sessions, activeChatId, onSwitch, onCreate, onDelete, onRe
         >
           <Plus size={14} />
         </button>
+        {onCreateChatInWorktree && (
+          <button
+            className="chat-tab-new-worktree"
+            onClick={onCreateChatInWorktree}
+            title="New chat in worktree"
+            type="button"
+            aria-label="New chat in worktree"
+          >
+            <GitBranch size={14} />
+          </button>
+        )}
       </div>
 
       <ContextMenu isOpen={contextMenu.visible} x={contextMenu.x} y={contextMenu.y} onClose={closeContextMenu}>
@@ -215,6 +240,6 @@ function ChatTabBar({ sessions, activeChatId, onSwitch, onCreate, onDelete, onRe
       </ContextMenu>
     </>
   );
-};
+}
 
 export default ChatTabBar;

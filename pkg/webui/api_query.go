@@ -92,9 +92,14 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 	}
 
 	log.Printf("handleAPIQuery: processing query: %s", query.Query)
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	clientID := ws.resolveClientID(r)
 	chatID := ws.resolveChatID(r, clientID)
+
+	// Resolve workspace root with worktree awareness - check if chat has a worktree path
+	workspaceRoot := ws.resolveWorkspaceRootForChat(clientID, chatID)
+	if workspaceRoot == "" {
+		workspaceRoot = ws.getWorkspaceRootForRequest(r)
+	}
 
 	ws.mutex.RLock()
 	ctx := ws.clientContexts[clientID]

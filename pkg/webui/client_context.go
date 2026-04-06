@@ -581,3 +581,20 @@ func (ws *ReactWebServer) startClientContextCleanupWorker(ctx context.Context, i
 		}
 	}
 }
+
+// resolveWorkspaceRootForChat returns the appropriate workspace root for a given chat session.
+// If the chat session has a worktree path set, it returns that. Otherwise, it returns the
+// client context's workspace root.
+func (ws *ReactWebServer) resolveWorkspaceRootForChat(clientID, chatID string) string {
+	ws.mutex.RLock()
+	defer ws.mutex.RUnlock()
+	ctx := ws.clientContexts[clientID]
+	if ctx == nil {
+		return ""
+	}
+	wtPath := ctx.getChatSessionWorktree(chatID)
+	if wtPath != "" {
+		return wtPath
+	}
+	return ctx.WorkspaceRoot
+}

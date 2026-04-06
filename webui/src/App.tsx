@@ -245,13 +245,15 @@ function AppWithProviders({
   handlePersonaChange: any;
 }) {
   // ── WebSocket event processing (needs NotificationProvider) ────
-  const { handleEvent, activeChatIdRef, activeRequestsRef, connectionTimeoutRef, handleReconnect } = useWebSocketEvents({
-    state,
-    setState,
-    setInputValue,
-    setQueuedMessages,
-    queuedMessagesRef,
-  });
+  const { handleEvent, activeChatIdRef, activeRequestsRef, connectionTimeoutRef, handleReconnect } = useWebSocketEvents(
+    {
+      state,
+      setState,
+      setInputValue,
+      setQueuedMessages,
+      queuedMessagesRef,
+    },
+  );
 
   // ── Chat session management (depends on WS refs) ──────────────
   const { loadChatSessions, handleActiveChatChange, handleCreateChat, handleDeleteChat, handleRenameChat } =

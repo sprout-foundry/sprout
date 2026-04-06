@@ -106,7 +106,7 @@ build-version:
 # Lint frontend code
 lint:
 	@echo "Linting frontend code..."
-	@cd webui && npm run lint && npm run format:check && echo "Lint completed successfully"
+	@cd webui && npm run lint && npm run format:check && npm run type-check && echo "Lint completed successfully"
 
 # Auto-fix frontend linting issues
 lint-fix:

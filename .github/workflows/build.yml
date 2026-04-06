@@ -48,6 +48,10 @@ jobs:
       run: |
         cd webui && npm ci
 
+    - name: Type check
+      run: |
+        cd webui && npm run type-check
+
     - name: Build and deploy React UI
       run: make deploy-ui
 

@@ -11,8 +11,11 @@ import StatusBar from './StatusBar';
 import CommandPalette from './CommandPalette';
 import PaneLayoutManager from './PaneLayoutManager';
 import { WorktreeChatDialog } from './WorktreeChatDialog';
+import WorktreePickerDialog from './WorktreePickerDialog';
+import ChatTabBar from './ChatTabBar';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { ApiService } from '../services/api';
+import { deleteChatSession } from '../services/chatSessions';
 import { useGitWorkspace } from '../hooks/useGitWorkspace';
 import { useInstanceManager } from '../hooks/useInstanceManager';
 import { useChatSessionSync } from '../hooks/useChatSessionSync';
@@ -28,6 +31,7 @@ import { parseFilePath } from '../utils/filePath';
 import { isBinaryFile } from '../utils/binaryPatterns';
 import { notificationBus } from '../services/notificationBus';
 import type { ChatSession } from '../services/chatSessions';
+import { setChatSessionWorktree } from '../services/chatSessions';
 import type { AppState, LogEntry, PerChatState } from '../types/app';
 
 interface AppContentProps {
@@ -259,6 +263,9 @@ function AppContent({
   const [worktreeCreating, setWorktreeCreating] = useState(false);
   const [worktreeError, setWorktreeError] = useState<string | null>(null);
 
+  const [worktreePickerOpen, setWorktreePickerOpen] = useState(false);
+  const [worktreePickerSessionId, setWorktreePickerSessionId] = useState<string | null>(null);
+
   const handleWorktreeSubmit = useCallback(async (params: {
     branch: string;
     baseRef: string;
@@ -291,6 +298,51 @@ function AppContent({
       setWorktreeCreating(false);
     }
   }, [onCreateChatInWorktree, openWorkspaceBuffer]);
+
+  const handleSetWorktree = useCallback((sessionId: string) => {
+    setWorktreePickerSessionId(sessionId);
+    setWorktreePickerOpen(true);
+  }, []);
+
+  const handleClearWorktree = useCallback(async (sessionId: string) => {
+    try {
+      await setChatSessionWorktree(sessionId, '');
+    } catch (err) {
+      console.warn('[AppContent] Failed to clear worktree:', err);
+    }
+  }, []);
+
+  const handleDeleteChatWithWorktree = useCallback(async (id: string) => {
+    try {
+      await deleteChatSession(id, true);
+      await _onDeleteChat?.(id);
+    } catch (err) {
+      console.warn('[AppContent] Failed to delete chat with worktree:', err);
+    }
+  }, [_onDeleteChat]);
+
+  const handleWorktreePickerSelect = useCallback(async (worktreePath: string, _branch: string) => {
+    if (!worktreePickerSessionId) return;
+    try {
+      await setChatSessionWorktree(worktreePickerSessionId, worktreePath);
+    } catch (err) {
+      console.warn('[AppContent] Failed to set worktree for chat:', err);
+    } finally {
+      setWorktreePickerOpen(false);
+      setWorktreePickerSessionId(null);
+    }
+  }, [worktreePickerSessionId]);
+
+  const handleWorktreePickerClose = useCallback(() => {
+    setWorktreePickerOpen(false);
+    setWorktreePickerSessionId(null);
+  }, []);
+
+  // Compute worktree paths already assigned to other chat sessions
+  const assignedWorktreePaths = (chatSessions ?? [])
+    .filter((s) => s.worktree_path)
+    .filter((s) => s.id !== worktreePickerSessionId)
+    .map((s) => s.worktree_path!);
 
   useHotkeysConfig({
     isConnected,
@@ -480,6 +532,20 @@ function AppContent({
       >
         {!isMobile && <MenuBar />}
         <WorkspaceBar isConnected={state.isConnected} isMobile={isMobile} isMobileMenuOpen={isSidebarOpen} />
+        {chatSessions && chatSessions.length > 0 && (
+          <ChatTabBar
+            sessions={chatSessions}
+            activeChatId={activeChatId || ''}
+            onSwitch={(id) => onActiveChatChange?.(id)}
+            onCreate={() => onCreateChat?.()}
+            onDelete={(id) => _onDeleteChat?.(id)}
+            onRename={(id, name) => _onRenameChat?.(id, name)}
+            onCreateChatInWorktree={() => setWorktreeDialogOpen(true)}
+            onSetWorktree={handleSetWorktree}
+            onClearWorktree={handleClearWorktree}
+            onDeleteWithWorktree={handleDeleteChatWithWorktree}
+          />
+        )}
         <div className="main-view-content">
           <div className="editor-view">
             {isMobile && (
@@ -624,10 +690,20 @@ function AppContent({
 
       <WorktreeChatDialog
         isOpen={worktreeDialogOpen}
-        onClose={() => setWorktreeDialogOpen(false)}
+        onClose={() => {
+          setWorktreeDialogOpen(false);
+          setWorktreeError(null);
+        }}
         onSubmit={handleWorktreeSubmit}
         isCreating={worktreeCreating}
         error={worktreeError}
+      />
+
+      <WorktreePickerDialog
+        isOpen={worktreePickerOpen}
+        onClose={handleWorktreePickerClose}
+        onSelect={handleWorktreePickerSelect}
+        disabledPaths={assignedWorktreePaths}
       />
 
       <CommandPalette

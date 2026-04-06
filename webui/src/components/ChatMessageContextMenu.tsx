@@ -166,6 +166,6 @@ function ChatMessageContextMenu({ containerRef, onInsertAtCursor }: ChatMessageC
       </button>
     </ContextMenu>
   );
-};
+}
 
 export default ChatMessageContextMenu;

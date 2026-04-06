@@ -24,7 +24,12 @@ const getKindIcon = (kind: SymbolKind): string => (KIND_ICONS as Record<string, 
 
 // ── Component ────────────────────────────────────────────────────────────
 
-function EditorBreadcrumb({ filePath, onNavigate, symbols, onNavigateToSymbol }: EditorBreadcrumbProps): JSX.Element | null {
+function EditorBreadcrumb({
+  filePath,
+  onNavigate,
+  symbols,
+  onNavigateToSymbol,
+}: EditorBreadcrumbProps): JSX.Element | null {
   // ── File path segments ───────────────────────────────────────────────
 
   const segments = useMemo(() => {
@@ -176,6 +181,6 @@ function EditorBreadcrumb({ filePath, onNavigate, symbols, onNavigateToSymbol }:
       </ol>
     </nav>
   );
-};
+}
 
 export default EditorBreadcrumb;

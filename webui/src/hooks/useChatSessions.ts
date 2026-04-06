@@ -34,7 +34,7 @@ export interface UseChatSessionsReturn {
   loadChatSessions: () => Promise<void>;
   handleActiveChatChange: (id: string) => Promise<void>;
   handleCreateChat: () => Promise<string | null>;
-  handleDeleteChat: (id: string) => Promise<void>;
+  handleDeleteChat: (id: string, options?: { removeWorktree?: boolean }) => Promise<void>;
   handleRenameChat: (id: string, name: string) => Promise<void>;
   // Worktree operations
   getChatSessionWorktree: (chatId: string) => Promise<string>;
@@ -209,9 +209,9 @@ export function useChatSessions({
   }, []);
 
   const handleDeleteChat = useCallback(
-    async (id: string) => {
+    async (id: string, options?: { removeWorktree?: boolean }) => {
       try {
-        await deleteChatSession(id);
+        await deleteChatSession(id, options?.removeWorktree);
         if (id === activeChatIdRef.current) {
           const sessionsResp = await listChatSessions();
           if (sessionsResp.chat_sessions.length > 0) {

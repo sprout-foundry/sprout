@@ -79,6 +79,8 @@ func TestSave_GetAPIKeysPathError(t *testing.T) {
 // TestResolve_LoadError covers lines 103-105: Resolve returns an error when
 // Load() fails (no env var set, and Load cannot find/access the keys file).
 func TestResolve_LoadError(t *testing.T) {
+	ResetStorageBackend() // Reset backend cache for this test
+
 	origHome := os.Getenv("HOME")
 	t.Setenv("HOME", "")
 	defer func() {
@@ -101,6 +103,8 @@ func TestResolve_LoadError(t *testing.T) {
 // TestResolve_LoadErrorWithEnvVarUnsetButNamed covers Resolve → Load error
 // when env var name is provided but the variable is not set.
 func TestResolve_LoadErrorWithEnvVarUnsetButNamed(t *testing.T) {
+	ResetStorageBackend() // Reset backend cache for this test
+
 	origHome := os.Getenv("HOME")
 	t.Setenv("HOME", "")
 	defer func() {

@@ -262,8 +262,12 @@ func TestResolvePrefersEnvironmentOverStoredKey(t *testing.T) {
 }
 
 func TestResolveFallsBackToStoredKey(t *testing.T) {
+	ResetStorageBackend() // Reset backend cache for this test
+
 	configDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", configDir)
+	// Force file backend to avoid keyring state pollution
+	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
 
 	store := Store{
 		"test-provider": "stored-key",
@@ -396,8 +400,12 @@ func TestSave_WriteError(t *testing.T) {
 }
 
 func TestResolve_EnvVarSetButEmpty(t *testing.T) {
+	ResetStorageBackend() // Reset backend cache for this test
+
 	dir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", dir)
+	// Force file backend to avoid keyring state pollution
+	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
 	t.Setenv("EMPTY_KEY", "")
 
 	resolved, err := Resolve("test-provider", "EMPTY_KEY")
@@ -414,8 +422,12 @@ func TestResolve_EnvVarSetButEmpty(t *testing.T) {
 }
 
 func TestResolve_EnvVarWhitespaceOnly(t *testing.T) {
+	ResetStorageBackend() // Reset backend cache for this test
+
 	dir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", dir)
+	// Force file backend to avoid keyring state pollution
+	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
 	t.Setenv("WS_KEY", "   \t  ")
 
 	resolved, err := Resolve("test-provider", "WS_KEY")
@@ -434,6 +446,9 @@ func TestResolve_EnvVarWhitespaceOnly(t *testing.T) {
 func TestResolve_StoredValueWithWhitespace(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", dir)
+	// Force file backend to avoid keyring state pollution
+	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	ResetStorageBackend() // Reset backend cache for this test
 	t.Setenv("WS_PROVIDER_KEY", "")
 
 	store := Store{

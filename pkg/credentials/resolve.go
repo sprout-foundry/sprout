@@ -5,6 +5,7 @@
 package credentials
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -106,6 +107,27 @@ func providerRequiresAPIKey(provider string) bool {
 func ResolveProvider(provider string) (Resolved, error) {
 	info := getProviderInfo(provider)
 	return Resolve(provider, info.EnvVar)
+}
+
+// ResolveProviderAPIKey resolves a provider's API key and validates it's non-empty.
+// This is a convenience wrapper around ResolveProvider that returns just the key value
+// with a clear error message when no credential is available.
+//
+// This eliminates the duplicated "resolve → check empty → format error" pattern
+// previously scattered across multiple files.
+func ResolveProviderAPIKey(provider, displayName string) (string, error) {
+	resolved, err := ResolveProvider(provider)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve %s API key: %w", displayName, err)
+	}
+	apiKey := strings.TrimSpace(resolved.Value)
+	if apiKey == "" {
+		if resolved.EnvVar != "" {
+			return "", fmt.Errorf("failed to resolve %s API key: %s not set and no stored API key configured", displayName, resolved.EnvVar)
+		}
+		return "", fmt.Errorf("failed to resolve %s API key: no stored API key configured for %s", displayName, provider)
+	}
+	return apiKey, nil
 }
 
 // ProviderEnvVar returns the standard environment variable name for a provider's API key.

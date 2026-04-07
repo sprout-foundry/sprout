@@ -1,4 +1,7 @@
 import { clientFetch } from './clientSession';
+import type { WorktreeInfo } from '../types/app';
+
+export type { WorktreeInfo };
 
 export interface ChatSession {
   id: string;
@@ -39,15 +42,6 @@ export interface ChatSessionSwitchResponse {
     worktree_path?: string;
     [key: string]: unknown;
   };
-}
-
-export interface WorktreeInfo {
-  path: string;
-  branch: string;
-  is_main: boolean;
-  is_current: boolean;
-  parent_path?: string;
-  parent_branch?: string;
 }
 
 export interface WorktreeListResponse {

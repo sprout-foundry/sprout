@@ -289,6 +289,8 @@ function AppContent({
           isClosable: true,
           metadata: { chatId },
         });
+      } else {
+        setWorktreeError('Failed to create chat session in worktree');
       }
       setWorktreeDialogOpen(false);
     } catch (err) {

@@ -41,14 +41,8 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeGet(w http.ResponseWriter,
 
 	clientID := ws.resolveClientID(r)
 
+	ctx := ws.getOrCreateClientContext(clientID)
 	ws.mutex.RLock()
-	ctx := ws.clientContexts[clientID]
-	if ctx == nil {
-		ws.mutex.RUnlock()
-		ctx = ws.getOrCreateClientContext(clientID)
-		ws.mutex.RLock()
-		ctx = ws.clientContexts[clientID]
-	}
 	worktreePath := ctx.getChatSessionWorktree(chatID)
 	ws.mutex.RUnlock()
 
@@ -440,15 +434,8 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeList(w http.ResponseWriter
 
 	clientID := ws.resolveClientID(r)
 
+	ctx := ws.getOrCreateClientContext(clientID)
 	ws.mutex.RLock()
-	ctx := ws.clientContexts[clientID]
-	if ctx == nil {
-		ws.mutex.RUnlock()
-		ctx = ws.getOrCreateClientContext(clientID)
-		ws.mutex.RLock()
-		ctx = ws.clientContexts[clientID]
-	}
-
 	sessions := ctx.listChatSessions()
 	ws.mutex.RUnlock()
 

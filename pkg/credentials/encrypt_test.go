@@ -550,10 +550,10 @@ func TestSave_RespectsMachineKeyMode(t *testing.T) {
 	assert.Equal(t, store, loaded)
 }
 
-// TestDecryptStore_SetsMachineKeyMode verifies that DecryptStore writes the
-// encryption mode file to "machine-key" after successfully decrypting with
-// the machine key.
-func TestDecryptStore_SetsMachineKeyMode(t *testing.T) {
+// TestDecryptStore_DoesNotSetMachineKeyMode verifies that DecryptStore does NOT
+// write the mode file as a side-effect. Mode file writing is the responsibility
+// of Save() and the CLI encrypt command, not DecryptStore (a read-path function).
+func TestDecryptStore_DoesNotSetMachineKeyMode(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", tmpDir)
 
@@ -570,20 +570,20 @@ func TestDecryptStore_SetsMachineKeyMode(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "", mode, "mode file should not exist before decrypt")
 
-	// DecryptStore should set the mode file
+	// DecryptStore should NOT set the mode file
 	decrypted, err := DecryptStore(encrypted)
 	require.NoError(t, err)
 	assert.Equal(t, plaintext, decrypted)
 
+	// Mode should still be empty — DecryptStore doesn't write mode files
 	mode, err = GetEncryptionMode()
 	require.NoError(t, err)
-	assert.Equal(t, "machine-key", mode)
+	assert.Equal(t, "", mode, "DecryptStore should not create mode file as side-effect")
 }
 
-// TestDecryptStore_SetsPassphraseMode verifies that DecryptStore writes the
-// encryption mode file to "passphrase" after successfully decrypting with
-// the LEDIT_KEY_PASSPHRASE environment variable.
-func TestDecryptStore_SetsPassphraseMode(t *testing.T) {
+// TestDecryptStore_DoesNotSetPassphraseMode verifies that DecryptStore does NOT
+// write the mode file as a side-effect when decrypting via passphrase.
+func TestDecryptStore_DoesNotSetPassphraseMode(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", tmpDir)
 
@@ -605,9 +605,10 @@ func TestDecryptStore_SetsPassphraseMode(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, plaintext, decrypted)
 
+	// Mode should still be empty — DecryptStore doesn't write mode files
 	mode, err = GetEncryptionMode()
 	require.NoError(t, err)
-	assert.Equal(t, "passphrase", mode)
+	assert.Equal(t, "", mode, "DecryptStore should not create mode file as side-effect")
 }
 
 // TestCheckEncryptionStatus_UsesModeFile verifies that CheckEncryptionStatus
@@ -656,6 +657,125 @@ func TestDecryptWithPassphrase_SizeLimit(t *testing.T) {
 	_, err := DecryptWithPassphrase(largeData, "some-passphrase")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "encrypted file too large")
+}
+
+// TestDecryptStore_PlaintextSizeLimit verifies that DecryptStore rejects
+// plaintext JSON files that exceed MaxDecryptedSize.
+func TestDecryptStore_PlaintextSizeLimit(t *testing.T) {
+	t.Run("rejects_above_limit", func(t *testing.T) {
+		// Build a valid JSON object that's larger than MaxDecryptedSize (10 MB)
+		template := `{"key": "`
+		pad := make([]byte, MaxDecryptedSize+1)
+		for i := range pad {
+			pad[i] = 'x'
+		}
+		largeJSON := []byte(template + string(pad) + `"}`)
+
+		_, err := DecryptStore(largeJSON)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "too large")
+	})
+
+	t.Run("accepts_at_limit", func(t *testing.T) {
+		// Build a valid JSON object that's exactly MaxDecryptedSize bytes
+		template := `{"key": "`
+		suffix := `"}`                 // 2 bytes
+		payloadSize := MaxDecryptedSize - len(template) - len(suffix)
+		payload := make([]byte, payloadSize)
+		for i := range payload {
+			payload[i] = 'y'
+		}
+		exactJSON := []byte(template + string(payload) + suffix)
+
+		// Confirm the constructed JSON is exactly MaxDecryptedSize bytes
+		assert.Equal(t, MaxDecryptedSize, len(exactJSON),
+			"test setup error: JSON should be exactly MaxDecryptedSize bytes")
+
+		// Should NOT return an error — size is at the boundary (<=), not above it
+		data, err := DecryptStore(exactJSON)
+		require.NoError(t, err)
+		assert.Equal(t, exactJSON, data)
+	})
+}
+
+// TestSave_AutoSetsMachineKeyMode verifies that Save() auto-creates the mode
+// file set to "machine-key" when no mode file exists yet.
+func TestSave_AutoSetsMachineKeyMode(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	// Ensure LEDIT_KEY_PASSPHRASE is not set
+	originalPassphrase := os.Getenv("LEDIT_KEY_PASSPHRASE")
+	t.Setenv("LEDIT_KEY_PASSPHRASE", "")
+	defer os.Setenv("LEDIT_KEY_PASSPHRASE", originalPassphrase)
+
+	// Ensure no mode file exists
+	mode, err := GetEncryptionMode()
+	require.NoError(t, err)
+	assert.Equal(t, "", mode)
+
+	// Save should auto-set the mode to machine-key
+	store := Store{"provider": "secret-key"}
+	err = Save(store)
+	require.NoError(t, err)
+
+	mode, err = GetEncryptionMode()
+	require.NoError(t, err)
+	assert.Equal(t, "machine-key", mode)
+}
+
+// TestSave_LegacyPassphraseFilePreserved saves passphrase-encrypted data to disk
+// without a mode file (simulating a legacy file), then verifies that Save()
+// re-encrypts with the passphrase (not machine-key) when LEDIT_KEY_PASSPHRASE is set.
+func TestSave_LegacyPassphraseFilePreserved(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+
+	passphrase := "LegacyPassphrase123"
+	store := Store{"provider": "legacy-secret-key"}
+
+	// Encrypt data with passphrase and write directly (simulating a legacy file
+	// that was created before mode tracking existed — no api_keys.mode file).
+	jsonData, err := json.MarshalIndent(store, "", "  ")
+	require.NoError(t, err)
+	encrypted, err := EncryptWithPassphrase(jsonData, passphrase)
+	require.NoError(t, err)
+	apiKeysPath := filepath.Join(tmpDir, "api_keys.json")
+	err = os.WriteFile(apiKeysPath, encrypted, 0600)
+	require.NoError(t, err)
+
+	// Confirm no mode file exists (legacy state)
+	mode, err := GetEncryptionMode()
+	require.NoError(t, err)
+	assert.Equal(t, "", mode, "mode file should not exist for legacy file")
+
+	// Set LEDIT_KEY_PASSPHRASE so the legacy file can be decrypted AND re-saved
+	t.Setenv("LEDIT_KEY_PASSPHRASE", passphrase)
+
+	// Load the legacy store to verify it's accessible
+	loaded, err := Load()
+	require.NoError(t, err)
+	assert.Equal(t, store, loaded)
+
+	// Save the store back — should use passphrase mode, NOT machine-key
+	err = Save(store)
+	require.NoError(t, err)
+
+	// Verify mode was set to "passphrase" (not "machine-key")
+	mode, err = GetEncryptionMode()
+	require.NoError(t, err)
+	assert.Equal(t, "passphrase", mode,
+		"Save should auto-detect passphrase mode for legacy files when LEDIT_KEY_PASSPHRASE is set")
+
+	// Verify the file is still passphrase-encrypted (loaded successfully via env var)
+	reloaded, err := Load()
+	require.NoError(t, err)
+	assert.Equal(t, store, reloaded)
+
+	// Verify machine key was NOT used: delete/passphrase-encrypt and try to load
+	// without LEDIT_KEY_PASSPHRASE
+	t.Setenv("LEDIT_KEY_PASSPHRASE", "")
+	_, err = Load()
+	require.Error(t, err, "file should not be readable without passphrase")
 }
 
 // TestDecryptStore_NoMachineKeyNoPassphrase verifies clear error when neither

@@ -16,8 +16,8 @@ import (
 	"github.com/gofrs/flock"
 )
 
-// isPlaintextJSON checks if the data is plaintext JSON (legacy format).
-func isPlaintextJSON(data []byte) bool {
+// IsPlaintextJSON checks if the data is plaintext JSON (legacy unencrypted format).
+func IsPlaintextJSON(data []byte) bool {
 	trimmed := bytes.TrimSpace(data)
 	if !bytes.HasPrefix(trimmed, []byte("{")) && !bytes.HasPrefix(trimmed, []byte("null")) {
 		return false
@@ -205,31 +205,53 @@ func EncryptStore(plaintext []byte) ([]byte, error) {
 // resolve the issue.
 //
 // Maximum decrypted size is limited to 10 MB to prevent memory exhaustion attacks.
-const maxDecryptedSize = 10 << 20 // 10 MB
+// MaxDecryptedSize is the maximum size of decrypted API keys data (10 MB).
+// This limit prevents memory exhaustion attacks from crafted encrypted files.
+const MaxDecryptedSize = 10 << 20 // 10 MB
 
 func DecryptStore(data []byte) ([]byte, error) {
 	// Check if already plaintext JSON (legacy format)
-	if isPlaintextJSON(data) {
+	if IsPlaintextJSON(data) {
 		return data, nil
 	}
 
-	// Must be encrypted, try with machine key
+	// Sanity check: reject excessively large encrypted files before reading
+	// age format overhead: ~100 bytes header + per-chunk framing ≈ ~1KB
+	const maxEncryptedSize = MaxDecryptedSize + (10 << 20) // 20 MB overhead for age framing
+	if len(data) > maxEncryptedSize {
+		return nil, fmt.Errorf("encrypted file too large (%d bytes, max %d)", len(data), maxEncryptedSize)
+	}
+
+	// Try machine key first
 	identity, err := loadMachineKey()
-	if err != nil {
-		// Provide actionable guidance when machine key is missing
-		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("machine key not found. Run 'ledit keys migrate' to generate a new machine key, "+
-				"or set LEDIT_PASSPHRASE environment variable to decrypt with passphrase: %w", err)
+	if err == nil {
+		r, err := age.Decrypt(bytes.NewReader(data), identity)
+		if err == nil {
+			return io.ReadAll(io.LimitReader(r, MaxDecryptedSize))
 		}
-		return nil, fmt.Errorf("failed to load machine key: %w", err)
+		// Machine key decryption failed — data may be passphrase-encrypted
+		// or the key file may have been regenerated after corruption
 	}
 
-	r, err := age.Decrypt(bytes.NewReader(data), identity)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decrypt with machine key: %w", err)
+	// Fallback: try environment passphrase
+	if passphrase := strings.TrimSpace(os.Getenv("LEDIT_KEY_PASSPHRASE")); passphrase != "" {
+		decrypted, passErr := DecryptWithPassphrase(data, passphrase)
+		if passErr == nil {
+			return decrypted, nil
+		}
+		// Passphrase decryption also failed
+		return nil, fmt.Errorf("failed to decrypt API keys (tried machine key and LEDIT_KEY_PASSPHRASE): %w", passErr)
 	}
 
-	return io.ReadAll(io.LimitReader(r, maxDecryptedSize))
+	// Neither worked — provide actionable guidance
+	if os.IsNotExist(err) || identity == nil {
+		return nil, fmt.Errorf("machine key not found and LEDIT_KEY_PASSPHRASE not set. "+
+			"Recovery options:\n"+
+			"  1. Run 'ledit keys migrate' to generate a new machine key (existing encrypted keys will be lost)\n"+
+			"  2. Set LEDIT_KEY_PASSPHRASE=<your-passphrase> if you previously encrypted with a passphrase: %w", err)
+	}
+	return nil, fmt.Errorf("failed to decrypt API keys with machine key (file may be corrupted, or key.age was regenerated). "+
+		"Set LEDIT_KEY_PASSPHRASE if the file was passphrase-encrypted: %w", err)
 }
 
 // EncryptWithPassphrase encrypts plaintext data using a passphrase-derived key.
@@ -290,7 +312,7 @@ func DecryptWithPassphrase(data []byte, passphrase string) ([]byte, error) {
 		return nil, fmt.Errorf("failed to decrypt with passphrase: %w", err)
 	}
 
-	return io.ReadAll(io.LimitReader(r, maxDecryptedSize))
+	return io.ReadAll(io.LimitReader(r, MaxDecryptedSize))
 }
 
 // Load loads the API keys store from disk.
@@ -459,7 +481,7 @@ func CheckEncryptionStatus() (EncryptionStatus, error) {
 		return status, fmt.Errorf("failed to read API keys file: %w", err)
 	}
 
-	if isPlaintextJSON(data) {
+	if IsPlaintextJSON(data) {
 		status.Encrypted = false
 		status.Mode = "plaintext"
 	} else if isEncrypted(data) {

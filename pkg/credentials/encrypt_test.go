@@ -33,7 +33,7 @@ func TestEncryptDecryptRoundTrip(t *testing.T) {
 	encrypted, err := EncryptStore(jsonData)
 	require.NoError(t, err)
 	require.NotEmpty(t, encrypted)
-	require.False(t, isPlaintextJSON(encrypted))
+	require.False(t, IsPlaintextJSON(encrypted))
 
 	// Decrypt
 	decrypted, err := DecryptStore(encrypted)
@@ -50,23 +50,23 @@ func TestEncryptDecryptRoundTrip(t *testing.T) {
 func TestPlaintextDetection(t *testing.T) {
 	// Test plaintext JSON detection
 	plaintext := []byte(`{"key": "value"}`)
-	assert.True(t, isPlaintextJSON(plaintext))
+	assert.True(t, IsPlaintextJSON(plaintext))
 
 	// Test null JSON
 	nullJSON := []byte(`null`)
-	assert.True(t, isPlaintextJSON(nullJSON))
+	assert.True(t, IsPlaintextJSON(nullJSON))
 
 	// Test whitespace + JSON
 	whitespaceJSON := []byte("  {\"key\": \"value\"}  ")
-	assert.True(t, isPlaintextJSON(whitespaceJSON))
+	assert.True(t, IsPlaintextJSON(whitespaceJSON))
 
 	// Test encrypted data (should not be detected as plaintext)
 	encryptedMagic := []byte("age-encryption.org/v1")
-	assert.False(t, isPlaintextJSON(encryptedMagic))
+	assert.False(t, IsPlaintextJSON(encryptedMagic))
 
 	// Test random binary data
 	binary := []byte{0x00, 0x01, 0x02, 0x03}
-	assert.False(t, isPlaintextJSON(binary))
+	assert.False(t, IsPlaintextJSON(binary))
 }
 
 func TestEncryptionStatus(t *testing.T) {
@@ -126,7 +126,7 @@ func TestLoadSaveRoundTrip(t *testing.T) {
 	apiKeysPath := filepath.Join(tmpDir, "api_keys.json")
 	data, err := os.ReadFile(apiKeysPath)
 	require.NoError(t, err)
-	assert.False(t, isPlaintextJSON(data))
+	assert.False(t, IsPlaintextJSON(data))
 
 	// Load and verify
 	loaded, err := Load()
@@ -349,4 +349,123 @@ func TestConcurrentMachineKeyGeneration(t *testing.T) {
 	loadedIdentity, err := age.ParseX25519Identity(string(keyData))
 	require.NoError(t, err)
 	assert.Equal(t, first, loadedIdentity.String())
+}
+
+// TestDecryptStore_WithPassphraseEnvVar verifies that DecryptStore falls back to
+// LEDIT_KEY_PASSPHRASE when machine key decryption fails (e.g., data was
+// encrypted with passphrase via `ledit keys encrypt --passphrase`).
+func TestDecryptStore_WithPassphraseEnvVar(t *testing.T) {
+	tmpDir := t.TempDir()
+	originalConfig := os.Getenv("LEDIT_CONFIG")
+	os.Setenv("LEDIT_CONFIG", tmpDir)
+	defer os.Setenv("LEDIT_CONFIG", originalConfig)
+
+	passphrase := "TestPassphrase123"
+	plaintext := []byte(`{"provider": "sk-secret-key"}`)
+
+	// Encrypt with passphrase (no machine key will match this)
+	encrypted, err := EncryptWithPassphrase(plaintext, passphrase)
+	require.NoError(t, err)
+
+	// Set the env var so DecryptStore can fall back to it
+	originalPassphrase := os.Getenv("LEDIT_KEY_PASSPHRASE")
+	os.Setenv("LEDIT_KEY_PASSPHRASE", passphrase)
+	defer os.Setenv("LEDIT_KEY_PASSPHRASE", originalPassphrase)
+
+	// DecryptStore should succeed via passphrase fallback
+	decrypted, err := DecryptStore(encrypted)
+	require.NoError(t, err)
+	assert.Equal(t, plaintext, decrypted)
+}
+
+// TestDecryptStore_WrongPassphraseInEnvVar verifies that DecryptStore returns
+// a clear error when both machine key and LEDIT_KEY_PASSPHRASE are tried but fail.
+func TestDecryptStore_WrongPassphraseInEnvVar(t *testing.T) {
+	tmpDir := t.TempDir()
+	originalConfig := os.Getenv("LEDIT_CONFIG")
+	os.Setenv("LEDIT_CONFIG", tmpDir)
+	defer os.Setenv("LEDIT_CONFIG", originalConfig)
+
+	passphrase := "CorrectPassphrase123"
+	plaintext := []byte(`{"provider": "sk-secret-key"}`)
+
+	encrypted, err := EncryptWithPassphrase(plaintext, passphrase)
+	require.NoError(t, err)
+
+	// Set a WRONG passphrase env var
+	originalPassphrase := os.Getenv("LEDIT_KEY_PASSPHRASE")
+	os.Setenv("LEDIT_KEY_PASSPHRASE", "WrongPassphrase456")
+	defer os.Setenv("LEDIT_KEY_PASSPHRASE", originalPassphrase)
+
+	_, err = DecryptStore(encrypted)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to decrypt API keys")
+	assert.Contains(t, err.Error(), "LEDIT_KEY_PASSPHRASE")
+}
+
+// TestDecryptStore_SizeLimit verifies that DecryptStore rejects excessively large files.
+func TestDecryptStore_SizeLimit(t *testing.T) {
+	// Create a large buffer that exceeds the max encrypted size (10MB data + 10MB overhead = 20MB)
+	// Build a valid-looking age header followed by garbage bytes
+	header := []byte("age-encryption.org/v1\n")
+	largeData := make([]byte, 31<<20) // 32 MB
+	copy(largeData, header)
+
+	_, err := DecryptStore(largeData)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "encrypted file too large")
+}
+
+// TestDecryptStore_MachineKeyPreferredOverPassphrase verifies that when both
+// machine key and passphrase env var are available, machine key is tried first.
+func TestDecryptStore_MachineKeyPreferredOverPassphrase(t *testing.T) {
+	tmpDir := t.TempDir()
+	originalConfig := os.Getenv("LEDIT_CONFIG")
+	os.Setenv("LEDIT_CONFIG", tmpDir)
+	defer os.Setenv("LEDIT_CONFIG", originalConfig)
+
+	// Ensure a machine key exists
+	identity, err := LoadOrCreateMachineKey()
+	require.NoError(t, err)
+	require.NotNil(t, identity)
+
+	plaintext := []byte(`{"provider": "machine-encrypted-key"}`)
+
+	// Encrypt with machine key
+	encrypted, err := EncryptStore(plaintext)
+	require.NoError(t, err)
+
+	// Set a wrong passphrase env var — machine key should still work
+	originalPassphrase := os.Getenv("LEDIT_KEY_PASSPHRASE")
+	os.Setenv("LEDIT_KEY_PASSPHRASE", "WrongPassphrase999")
+	defer os.Setenv("LEDIT_KEY_PASSPHRASE", originalPassphrase)
+
+	decrypted, err := DecryptStore(encrypted)
+	require.NoError(t, err)
+	assert.Equal(t, plaintext, decrypted)
+}
+
+// TestDecryptStore_NoMachineKeyNoPassphrase verifies clear error when neither
+// machine key nor passphrase is available.
+func TestDecryptStore_NoMachineKeyNoPassphrase(t *testing.T) {
+	tmpDir := t.TempDir()
+	originalConfig := os.Getenv("LEDIT_CONFIG")
+	os.Setenv("LEDIT_CONFIG", tmpDir)
+	defer os.Setenv("LEDIT_CONFIG", originalConfig)
+
+	passphrase := "TestPass123"
+	plaintext := []byte(`{"provider": "sk-key"}`)
+	encrypted, err := EncryptWithPassphrase(plaintext, passphrase)
+	require.NoError(t, err)
+
+	// Clear passphrase env var
+	originalPassphrase := os.Getenv("LEDIT_KEY_PASSPHRASE")
+	os.Setenv("LEDIT_KEY_PASSPHRASE", "")
+	defer os.Setenv("LEDIT_KEY_PASSPHRASE", originalPassphrase)
+
+	// No machine key exists (no key.age file), no passphrase — should fail with guidance
+	_, err = DecryptStore(encrypted)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "machine key not found")
+	assert.Contains(t, err.Error(), "LEDIT_KEY_PASSPHRASE")
 }

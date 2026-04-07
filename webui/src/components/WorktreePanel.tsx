@@ -126,7 +126,7 @@ export default function WorktreePanel({ onClose }: WorktreePanelProps) {
   const [expandedWorktrees, setExpandedWorktrees] = useState<boolean>(true);
 
   const handleCreate = async (path: string, branch: string, baseRef?: string) => {
-    await createWorktree({ path, branch, base_ref: baseRef });
+    await createWorktree(path, branch, baseRef);
   };
 
   const handleRemove = async (path: string) => {
@@ -207,20 +207,20 @@ export default function WorktreePanel({ onClose }: WorktreePanelProps) {
           </div>
         ) : (
           <div className="worktree-list">
-            {expandedWorktrees && (
-              <div className="worktree-item">
-                <div className="worktree-item-header">
-                  <button className="worktree-expand-btn" onClick={toggleExpand} aria-label="Collapse">
-                    <ChevronDown size={16} />
-                  </button>
-                  <div className="worktree-item-info">
-                    <GitBranch size={16} className="worktree-branch-icon" />
-                    <span className="worktree-branch">{currentBranch || 'HEAD'}</span>
-                    <span className="worktree-path">{worktrees[0]?.path}</span>
-                  </div>
+            <div className="worktree-item is-main">
+              <div className="worktree-item-header">
+                <button className="worktree-expand-btn" onClick={toggleExpand} aria-label={expandedWorktrees ? 'Collapse' : 'Expand'}>
+                  {expandedWorktrees ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                </button>
+                <div className="worktree-item-info">
+                  <GitBranch size={16} className="worktree-branch-icon" />
+                  <span className="worktree-branch">{currentBranch || 'HEAD'}</span>
+                  {expandedWorktrees && worktrees[0] && (
+                    <span className="worktree-path">{worktrees[0].path}</span>
+                  )}
                 </div>
               </div>
-            )}
+            </div>
 
             {worktrees
               .filter((wt) => !wt.is_current)

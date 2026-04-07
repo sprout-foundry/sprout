@@ -11,6 +11,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/alantheprice/ledit/pkg/events"
 )
 
 var unsafePathCharRe = regexp.MustCompile(`[^a-zA-Z0-9._-]`)
@@ -83,7 +85,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSet(w http.ResponseWriter,
 
 	// Validate worktree path if provided
 	if req.WorktreePath != "" {
-		absPath, err := filepath.Abs(req.WorktreePath)
+		absPath, err := filepathAbsEval(req.WorktreePath)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Invalid worktree path: %v", err), http.StatusBadRequest)
 			return
@@ -167,7 +169,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSwitch(w http.ResponseWrit
 		return
 	}
 
-	absPath, err := filepath.Abs(req.WorktreePath)
+	absPath, err := filepathAbsEval(req.WorktreePath)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Invalid worktree path: %v", err), http.StatusBadRequest)
 		return
@@ -207,6 +209,9 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSwitch(w http.ResponseWrit
 	if clientID == defaultWebClientID {
 		ws.workspaceRoot = absPath
 	}
+	// Clear transient state (agent, terminals) like handleAPIGitWorktreeCheckout does.
+	ctx.Agent = nil
+	ctx.Terminal = nil
 
 	// Capture response data while still holding the lock
 	cs := ctx.getChatSession(chatID)
@@ -216,6 +221,12 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSwitch(w http.ResponseWrit
 		http.Error(w, "Chat session not found after workspace switch", http.StatusInternalServerError)
 		return
 	}
+
+	// Publish event so frontend can update workspace state.
+	ws.publishClientEvent(clientID, events.EventTypeWorkspaceChanged, map[string]interface{}{
+		"daemon_root":    ws.GetDaemonRoot(),
+		"workspace_root": absPath,
+	})
 
 	log.Printf("handleAPIChatSessionWorktreeSwitch: switched chat session %s to worktree %s", chatID, absPath)
 
@@ -321,7 +332,7 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 	safeBranch := sanitizePathComponent(sanitizedBranch)
 	worktreePath := filepath.Join(filepath.Dir(workspaceRoot), safeBranch+"-worktree")
 	var err error
-	worktreePath, err = filepath.Abs(worktreePath)
+	worktreePath, err = filepathAbsEval(worktreePath)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Invalid worktree path: %v", err), http.StatusBadRequest)
 		return
@@ -403,12 +414,23 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 		if clientID == defaultWebClientID {
 			ws.workspaceRoot = worktreePath
 		}
+		// Clear transient state (agent, terminals) like other workspace-switch handlers.
+		ctx.Agent = nil
+		ctx.Terminal = nil
 	}
 
 	// Capture response data while still holding the lock
 	chatSession := cs.chatSessionWithMessages()
 	newWorkspaceRoot := ctx.WorkspaceRoot
 	ws.mutex.Unlock()
+
+	// Notify frontend of workspace change if auto-switched.
+	if req.AutoSwitchWorkspace {
+		ws.publishClientEvent(clientID, events.EventTypeWorkspaceChanged, map[string]interface{}{
+			"daemon_root":    ws.GetDaemonRoot(),
+			"workspace_root": worktreePath,
+		})
+	}
 
 	log.Printf("handleAPIChatSessionCreateInWorktree: created chat session %s (%s) with worktree %s for client %s",
 		chatID, name, worktreePath, clientID)

@@ -116,11 +116,14 @@ func (c *MCPHTTPClient) sendRequest(ctx context.Context, method string, params i
 
 	req.Header.Set("Content-Type", "application/json")
 
-	// Resolve credential placeholders (Env + Credentials) in env for auth headers
-	resolvedEnv, envErr := BuildFullEnvForServer(c.config.Name, &c.config)
-	if envErr == nil {
-		if token, exists := resolvedEnv["GITHUB_PERSONAL_ACCESS_TOKEN"]; exists && token != "" {
-			req.Header.Set("Authorization", "Bearer "+token)
+	// Add auth headers based on resolved credentials
+	if authHeaders, authErr := buildAuthHeaders(c.config.Name, &c.config); authErr != nil {
+		if c.logger != nil {
+			c.logger.LogProcessStep(fmt.Sprintf("[WARN] Failed to build auth headers for %s: %v", c.config.Name, authErr))
+		}
+	} else {
+		for headerName, headerValue := range authHeaders {
+			req.Header.Set(headerName, headerValue)
 		}
 	}
 
@@ -135,23 +138,8 @@ func (c *MCPHTTPClient) sendRequest(ctx context.Context, method string, params i
 		c.logger.LogProcessStep(fmt.Sprintf("[~] Sending MCP HTTP request: %s to %s", method, c.config.URL))
 	}
 
-	// Debug: Log detailed request information
-	// fmt.Printf("[search] REQUEST DEBUG:\n")
-	// fmt.Printf("  Method: %s\n", method)
-	// fmt.Printf("  URL: %s\n", req.URL.String())
-	// fmt.Printf("  Headers:\n")
-	// for k, v := range req.Header {
-	// 	if k == "Authorization" && len(v) > 0 && len(v[0]) > 20 {
-	// 		fmt.Printf("    %s: %s...\n", k, v[0][:20])
-	// 	} else {
-	// 		fmt.Printf("    %s: %v\n", k, v)
-	// 	}
-	// }
-	// fmt.Printf("  Body: %s\n", string(jsonData))
-
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		fmt.Printf("[FAIL] REQUEST ERROR: %v\n", err)
 		return nil, fmt.Errorf("failed HTTP request: %w", err)
 	}
 	defer resp.Body.Close()
@@ -161,27 +149,14 @@ func (c *MCPHTTPClient) sendRequest(ctx context.Context, method string, params i
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	// Debug: Log detailed response information
-	// fmt.Printf("[search] RESPONSE DEBUG:\n")
-	// fmt.Printf("  Status: %d %s\n", resp.StatusCode, resp.Status)
-	// fmt.Printf("  Headers:\n")
-	// for k, v := range resp.Header {
-	// 	fmt.Printf("    %s: %v\n", k, v)
-	// }
-	// fmt.Printf("  Body: %s\n", string(responseBody))
-
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed HTTP request with status %d: %s", resp.StatusCode, string(responseBody))
 	}
 
 	var response MCPMessage
 	if err := json.Unmarshal(responseBody, &response); err != nil {
-		fmt.Printf("[FAIL] JSON UNMARSHAL ERROR: %v\n", err)
-		fmt.Printf("Raw response: %s\n", string(responseBody))
-		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal MCP response: %w", err)
 	}
-
-	// fmt.Printf("[OK] PARSED RESPONSE: %+v\n", response)
 
 	// Extract session ID from response header if this is an initialize request
 	if method == "initialize" {
@@ -192,7 +167,6 @@ func (c *MCPHTTPClient) sendRequest(ctx context.Context, method string, params i
 			if c.logger != nil {
 				c.logger.LogProcessStep(fmt.Sprintf("[key] Captured session ID: %s", sessionID))
 			}
-			fmt.Printf("[key] Session ID captured: %s\n", sessionID)
 		}
 	}
 

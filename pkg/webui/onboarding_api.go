@@ -287,7 +287,7 @@ func (ws *ReactWebServer) handleAPIOnboardingStatus(w http.ResponseWriter, r *ht
 
 	for _, desc := range descriptors {
 		meta, _ := configuration.GetProviderAuthMetadata(desc.ID)
-		hasCredential := configuration.HasProviderCredential(desc.ID, apiKeys)
+		hasCredential := configuration.HasProviderAuth(desc.ID, apiKeys)
 		entry := onboardingProvider{
 			ID:             desc.ID,
 			Name:           desc.Name,
@@ -415,7 +415,7 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 	}
 
 	meta, _ := configuration.GetProviderAuthMetadata(req.Provider)
-	hasCredential := configuration.HasProviderCredential(req.Provider, cm.GetAPIKeys())
+	hasCredential := configuration.HasProviderAuth(req.Provider, cm.GetAPIKeys())
 
 	if meta.RequiresAPIKey && !hasCredential && req.APIKey == "" {
 		writeJSONError(w, http.StatusBadRequest, "api_key is required for this provider")

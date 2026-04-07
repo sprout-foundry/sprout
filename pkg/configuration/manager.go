@@ -60,7 +60,7 @@ func loadConfigSilently() (*Config, *APIKeys, error) {
 		// If no env provider, check for saved API keys
 		if config.LastUsedProvider == "" {
 			for _, provider := range allProviders {
-				if provider.RequiresKey && HasProviderCredential(provider.Name, apiKeys) {
+				if provider.RequiresKey && HasProviderAuth(provider.Name, apiKeys) {
 					config.LastUsedProvider = provider.Name
 					break
 				}
@@ -286,7 +286,7 @@ func (m *Manager) EnsureAPIKey(clientType api.ClientType) error {
 // HasAPIKey checks if a provider has an API key
 func (m *Manager) HasAPIKey(clientType api.ClientType) bool {
 	provider := mapClientTypeToString(clientType)
-	return HasProviderCredential(provider, m.apiKeys)
+	return HasProviderAuth(provider, m.apiKeys)
 }
 
 // SelectNewProvider allows interactive provider selection

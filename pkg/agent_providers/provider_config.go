@@ -27,7 +27,7 @@ type ProviderConfig struct {
 type AuthConfig struct {
 	Type   string `json:"type"`    // "bearer", "api_key", "basic", "oauth"
 	EnvVar string `json:"env_var"` // Environment variable containing the auth token
-	Key    string `json:"key"`     // Runtime-only API key; injected at startup, never persisted
+	Key    string `json:"-"` // Runtime-only API key; injected at startup, never persisted
 }
 
 // RequestDefaults defines default request parameters
@@ -142,22 +142,33 @@ func LoadProviderRegistry(registryPath string) (*ProviderRegistry, error) {
 	return &registry, nil
 }
 
-// GetAuthToken retrieves the authentication token based on the auth configuration
+// GetAuthToken retrieves the authentication token based on the auth configuration.
+//
+// For "bearer" and "api_key" auth types, token resolution follows this precedence:
+//  1. Auth.Key — runtime-resolved key injected by the provider factory via the
+//     unified credential path (credentials.ResolveProvider). This is the primary
+//     source because it checks env vars, keyring, and the encrypted file store.
+//  2. Auth.EnvVar — direct os.Getenv lookup as a fallback (only used when the
+//     factory did not pre-resolve credentials, e.g., in unit tests).
+//
+// Auth.Key is runtime-only and must never be persisted to disk.
 func (c *ProviderConfig) GetAuthToken() (string, error) {
 	switch c.Auth.Type {
 	case "none":
 		// No authentication required
 		return "", nil
 	case "bearer", "api_key":
+		// Priority 1: Runtime-resolved key (injected by factory via unified credential path)
+		if c.Auth.Key != "" {
+			return c.Auth.Key, nil
+		}
+		// Priority 2: Direct env var lookup (fallback for non-factory paths)
 		if c.Auth.EnvVar != "" {
 			token := os.Getenv(c.Auth.EnvVar)
 			if token == "" {
 				return "", fmt.Errorf("environment variable %s is not set", c.Auth.EnvVar)
 			}
 			return token, nil
-		}
-		if c.Auth.Key != "" {
-			return c.Auth.Key, nil
 		}
 		return "", errors.New("no authentication token configured")
 	case "basic":

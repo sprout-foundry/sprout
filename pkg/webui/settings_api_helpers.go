@@ -73,16 +73,15 @@ func sanitizedConfig(cfg *configuration.Config) map[string]interface{} {
 	return out
 }
 
-// sanitizedCustomProviders strips sensitive api_key fields from each provider.
+// sanitizedCustomProviders returns a copy of the providers map.
+// Sensitive fields (if any) are excluded from the CustomProviderConfig JSON tags.
 func sanitizedCustomProviders(providers map[string]configuration.CustomProviderConfig) map[string]configuration.CustomProviderConfig {
 	if providers == nil {
 		return nil
 	}
 	clean := make(map[string]configuration.CustomProviderConfig, len(providers))
 	for k, v := range providers {
-		cp := v
-		cp.APIKey = "" // never send stored API key to browser
-		clean[k] = cp
+		clean[k] = v
 	}
 	return clean
 }

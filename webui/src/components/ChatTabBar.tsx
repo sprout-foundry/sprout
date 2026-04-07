@@ -144,6 +144,7 @@ function ChatTabBar({
   const handleMenuDeleteWithWorktree = useCallback(() => {
     const id = contextMenu.sessionId;
     if (!id || !contextMenu.canDelete || !onDeleteWithWorktree) return;
+    if (!window.confirm('This will permanently delete the chat session and remove the git worktree directory from disk. Are you sure?')) return;
     onDeleteWithWorktree(id);
     closeContextMenu();
   }, [contextMenu.sessionId, contextMenu.canDelete, onDeleteWithWorktree, closeContextMenu]);

@@ -560,7 +560,6 @@ type customProviderFile struct {
 	Endpoint string `json:"endpoint"`
 	Model    string `json:"model_name,omitempty"`
 	EnvVar   string `json:"env_var,omitempty"`
-	APIKey   string `json:"api_key,omitempty"`
 }
 
 func (w *genericConfigListModelsWrapper) ListModels() ([]ModelInfo, error) {
@@ -614,7 +613,7 @@ func (w *genericConfigListModelsWrapper) loadCustomProviderModels() ([]ModelInfo
 		return nil, fmt.Errorf("failed to parse %s provider config: %w", w.providerName, err)
 	}
 
-	models, err := fetchOpenAICompatibleModels(w.providerName, providerConfig.Endpoint, providerConfig.EnvVar, providerConfig.APIKey)
+	models, err := fetchOpenAICompatibleModels(w.providerName, providerConfig.Endpoint)
 	if err == nil && len(models) > 0 {
 		for i := range models {
 			models[i].Provider = w.providerName
@@ -649,14 +648,14 @@ func customProviderFilePath(providerName string) string {
 	return filepath.Join(configRoot, "providers", providerName+".json")
 }
 
-func fetchOpenAICompatibleModels(providerName, endpoint, envVar, inlineAPIKey string) ([]ModelInfo, error) {
+func fetchOpenAICompatibleModels(providerName, endpoint string) ([]ModelInfo, error) {
 	modelsEndpoint := strings.TrimSuffix(strings.TrimSpace(endpoint), "/chat/completions") + "/models"
 	req, err := http.NewRequest("GET", modelsEndpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	apiKey := strings.TrimSpace(inlineAPIKey)
+	var apiKey string
 	if resolved, err := credentials.ResolveProviderAPIKey(strings.TrimSpace(providerName), strings.TrimSpace(providerName)); err == nil {
 		apiKey = resolved
 	}

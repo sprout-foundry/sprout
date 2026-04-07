@@ -94,7 +94,7 @@ func TestResolve_LoadError(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", "")
 
 	// No env var set, so Resolve falls through to Load()
-	_, err := Resolve("some-provider", "")
+	_, err := resolve("some-provider", "")
 	if err == nil {
 		t.Fatal("expected error from Resolve when Load fails")
 	}
@@ -119,7 +119,7 @@ func TestResolve_LoadErrorWithEnvVarUnsetButNamed(t *testing.T) {
 	// Explicitly unset the named env var so os.Getenv returns empty
 	t.Setenv("SOME_UNSET_VAR", "")
 
-	_, err := Resolve("some-provider", "SOME_UNSET_VAR")
+	_, err := resolve("some-provider", "SOME_UNSET_VAR")
 	if err == nil {
 		t.Fatal("expected error from Resolve when Load fails after empty env var check")
 	}
@@ -209,7 +209,7 @@ func TestResolve_SpecialCharProviderNames(t *testing.T) {
 	}
 
 	for provider, expected := range store {
-		resolved, err := Resolve(provider, "")
+		resolved, err := resolve(provider, "")
 		if err != nil {
 			t.Fatalf("resolve %q: %v", provider, err)
 		}
@@ -247,7 +247,7 @@ func TestResolve_EnvVarSpecialChars(t *testing.T) {
 			// With spaces around the value to test trimming
 			t.Setenv(envName, "  "+tc.envVal+"  ")
 
-			resolved, err := Resolve("provider", envName)
+			resolved, err := resolve("provider", envName)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -305,7 +305,7 @@ func TestResolve_NilLikeEmptyProvider(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", dir)
 
-	resolved, err := Resolve("", "")
+	resolved, err := resolve("", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -353,7 +353,7 @@ func TestResolve_EnvVarSetButProvidedNameNotInEnv(t *testing.T) {
 	}
 
 	// Intentionally don't set NONEXISTENT_ENV_VAR
-	resolved, err := Resolve("fallback-provider", "NONEXISTENT_ENV_VAR")
+	resolved, err := resolve("fallback-provider", "NONEXISTENT_ENV_VAR")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

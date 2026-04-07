@@ -407,7 +407,7 @@ func TestResolve_WithKeyringBackend(t *testing.T) {
 	require.NoError(t, err)
 
 	// Resolve should find it in keyring
-	resolved, err := Resolve("test-provider", "")
+	resolved, err := resolve("test-provider", "")
 	require.NoError(t, err)
 	assert.Equal(t, "test-provider", resolved.Provider)
 	assert.Equal(t, "keyring-value", resolved.Value)
@@ -437,7 +437,7 @@ func TestResolve_EnvironmentPriorityOverKeyring(t *testing.T) {
 	defer os.Setenv("TEST_PROVIDER_KEY", originalEnv)
 
 	// Resolve should prefer env var
-	resolved, err := Resolve("test-provider", "TEST_PROVIDER_KEY")
+	resolved, err := resolve("test-provider", "TEST_PROVIDER_KEY")
 	require.NoError(t, err)
 	assert.Equal(t, "test-provider", resolved.Provider)
 	assert.Equal(t, "env-value", resolved.Value)
@@ -471,7 +471,7 @@ func TestResolve_KeyringPriorityOverFile(t *testing.T) {
 	require.NoError(t, err)
 
 	// Resolve should prefer keyring (active backend)
-	resolved, err := Resolve("test-provider", "")
+	resolved, err := resolve("test-provider", "")
 	require.NoError(t, err)
 	assert.Equal(t, "keyring-value", resolved.Value)
 	assert.Equal(t, "keyring", resolved.Source)
@@ -495,7 +495,7 @@ func TestResolve_NoCredential(t *testing.T) {
 	
 
 	// No credentials anywhere
-	resolved, err := Resolve("non-existent-provider", "")
+	resolved, err := resolve("non-existent-provider", "")
 	require.NoError(t, err)
 	assert.Equal(t, "non-existent-provider", resolved.Provider)
 	assert.Equal(t, "", resolved.Value)
@@ -746,7 +746,7 @@ func TestResolve_WhitespaceTrimmedProvider(t *testing.T) {
 	require.NoError(t, err)
 
 	// Resolve with whitespace
-	resolved, err := Resolve("  test-provider  ", "")
+	resolved, err := resolve("  test-provider  ", "")
 	require.NoError(t, err)
 	assert.Equal(t, "test-provider", resolved.Provider)
 	assert.Equal(t, "test-value", resolved.Value)

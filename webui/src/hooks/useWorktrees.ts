@@ -15,8 +15,7 @@ import {
   removeWorktree,
   checkoutWorktree,
   type WorktreeInfo,
-  type WorktreeCreateRequest,
-} from '../services/worktrees';
+} from '../services/chatSessions';
 import { debugLog } from '../utils/log';
 
 export interface UseWorktreesReturn {
@@ -25,7 +24,7 @@ export interface UseWorktreesReturn {
   isLoading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
-  createWorktree: (request: WorktreeCreateRequest) => Promise<string | null>;
+  createWorktree: (path: string, branch: string, baseRef?: string) => Promise<string | null>;
   removeWorktree: (path: string) => Promise<void>;
   checkoutWorktree: (path: string) => Promise<void>;
 }
@@ -60,12 +59,12 @@ export function useWorktrees(): UseWorktreesReturn {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const createWorktreeHandler = useCallback(async (request: WorktreeCreateRequest): Promise<string | null> => {
+  const createWorktreeHandler = useCallback(async (path: string, branch: string, baseRef?: string): Promise<string | null> => {
     try {
-      await createWorktree(request);
+      await createWorktree(path, branch, baseRef);
       // Refresh the list after creating
       await refresh();
-      return request.path;
+      return path;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create worktree';
       setError(message);

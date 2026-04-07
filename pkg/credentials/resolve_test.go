@@ -23,13 +23,13 @@ func TestProviderEnvVar(t *testing.T) {
 		{"ollama-turbo", "OLLAMA_API_KEY"},
 		{"minimax", "MINIMAX_API_KEY"},
 		{"mistral", "MISTRAL_API_KEY"},
+		{"chutes", "CHUTES_API_KEY"},
 
 		// Local providers that don't require API keys
 		{"lmstudio", ""},
 		{"test", ""},
 
 		// Custom/unrecognized provider falls through to default
-		{"chutes", ""},
 		{"unknown-custom-provider", ""},
 		{"", ""}, // empty string
 	}

@@ -114,10 +114,27 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSet(w http.ResponseWriter,
 	ctx := ws.getOrCreateClientContextLocked(clientID)
 	ctx.ensureDefaultChatSession()
 
+	// Capture old worktree path before overwriting.
+	oldWorktreePath := ctx.getChatSessionWorktree(chatID)
+
 	if err := ctx.setChatSessionWorktree(chatID, req.WorktreePath); err != nil {
 		ws.mutex.Unlock()
 		http.Error(w, fmt.Sprintf("Failed to set worktree: %v", err), http.StatusBadRequest)
 		return
+	}
+
+	// When clearing a worktree from the active chat, if the client's
+	// workspace root was pointing at that worktree, reset it to the
+	// daemon root so subsequent file operations use the main workspace.
+	didResetWorkspace := false
+	if req.WorktreePath == "" && oldWorktreePath != "" && chatID == ctx.DefaultChatID && ctx.WorkspaceRoot == oldWorktreePath {
+		ctx.WorkspaceRoot = ws.daemonRoot
+		if clientID == defaultWebClientID {
+			ws.workspaceRoot = ws.daemonRoot
+		}
+		ctx.Agent = nil
+		ctx.Terminal = nil
+		didResetWorkspace = true
 	}
 
 	// Get the updated session for the response
@@ -126,6 +143,16 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSet(w http.ResponseWriter,
 	ws.mutex.Unlock()
 
 	log.Printf("handleAPIChatSessionWorktreeSet: set worktree %q for chat session %s", req.WorktreePath, chatID)
+
+	// Notify frontend if the workspace root was reset to daemon root.
+	if didResetWorkspace {
+		ws.publishClientEvent(clientID, events.EventTypeWorkspaceChanged, map[string]interface{}{
+			"daemon_root":             ws.GetDaemonRoot(),
+			"workspace_root":          ws.daemonRoot,
+			"previous_workspace_root": oldWorktreePath,
+			"source":                  "worktree_clear",
+		})
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -203,6 +230,9 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSwitch(w http.ResponseWrit
 		return
 	}
 
+	// Capture the previous workspace root before switching.
+	previousWorkspaceRoot := ctx.WorkspaceRoot
+
 	// Switch workspace root directly — do NOT call setClientWorkspaceRoot
 	// because it nukes all chat sessions (including the one we just updated).
 	ctx.WorkspaceRoot = absPath
@@ -224,8 +254,10 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSwitch(w http.ResponseWrit
 
 	// Publish event so frontend can update workspace state.
 	ws.publishClientEvent(clientID, events.EventTypeWorkspaceChanged, map[string]interface{}{
-		"daemon_root":    ws.GetDaemonRoot(),
-		"workspace_root": absPath,
+		"daemon_root":             ws.GetDaemonRoot(),
+		"workspace_root":          absPath,
+		"previous_workspace_root": previousWorkspaceRoot,
+		"source":                  "worktree_switch",
 	})
 
 	log.Printf("handleAPIChatSessionWorktreeSwitch: switched chat session %s to worktree %s", chatID, absPath)
@@ -370,7 +402,24 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 	cmd := ws.gitCommandForWorkspace(workspaceRoot, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to create worktree: %v\nOutput: %s", err, string(output)), http.StatusInternalServerError)
+		// Check if the error is due to branch already existing
+		outputStr := strings.TrimSpace(string(output))
+		if strings.Contains(outputStr, "already exists") || strings.Contains(outputStr, "ref already exists") {
+			// Clean up any partial worktree directory that may have been created
+			if removeErr := ws.gitCommandForWorkspace(workspaceRoot, "worktree", "remove", "--force", worktreePath).Run(); removeErr != nil {
+				// Also try to remove the directory if git worktree remove failed
+				_ = os.RemoveAll(worktreePath)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"error":         fmt.Sprintf("Branch '%s' already exists", req.Branch),
+				"code":          "branch_exists",
+				"worktree_path": worktreePath,
+			})
+			return
+		}
+		http.Error(w, fmt.Sprintf("Failed to create worktree: %v\nOutput: %s", err, outputStr), http.StatusInternalServerError)
 		return
 	}
 
@@ -391,6 +440,10 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 	// Check if a session with this ID already exists
 	if _, ok := ctx.ChatSessions[chatID]; ok {
 		ws.mutex.Unlock()
+		// Clean up the orphan worktree that was created before the conflict
+		if removeErr := ws.gitCommandForWorkspace(workspaceRoot, "worktree", "remove", "--force", worktreePath).Run(); removeErr != nil {
+			log.Printf("handleAPIChatSessionCreateInWorktree: warning: failed to clean up orphan worktree %q: %v", worktreePath, removeErr)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusConflict)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -409,6 +462,7 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 	// We update WorkspaceRoot directly instead of calling setClientWorkspaceRoot
 	// because setClientWorkspaceRoot resets all chat sessions, which would
 	// destroy the session we just created.
+	previousWorkspaceRoot := ctx.WorkspaceRoot
 	if req.AutoSwitchWorkspace {
 		ctx.WorkspaceRoot = worktreePath
 		if clientID == defaultWebClientID {
@@ -427,8 +481,10 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 	// Notify frontend of workspace change if auto-switched.
 	if req.AutoSwitchWorkspace {
 		ws.publishClientEvent(clientID, events.EventTypeWorkspaceChanged, map[string]interface{}{
-			"daemon_root":    ws.GetDaemonRoot(),
-			"workspace_root": worktreePath,
+			"daemon_root":             ws.GetDaemonRoot(),
+			"workspace_root":          worktreePath,
+			"previous_workspace_root": previousWorkspaceRoot,
+			"source":                  "worktree_switch",
 		})
 	}
 

@@ -220,7 +220,17 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCreate(w http.ResponseWriter, r *h
 	cmd := ws.gitCommandForWorkspace(workspaceRoot, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to create worktree: %v\nOutput: %s", err, string(output)), http.StatusInternalServerError)
+		outputStr := string(output)
+		if strings.Contains(outputStr, "already exists") {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": fmt.Sprintf("Branch '%s' already exists", req.Branch),
+				"code":  "branch_exists",
+			})
+			return
+		}
+		http.Error(w, fmt.Sprintf("Failed to create worktree: %v\nOutput: %s", err, outputStr), http.StatusInternalServerError)
 		return
 	}
 
@@ -384,6 +394,7 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCheckout(w http.ResponseWriter, r 
 		"daemon_root":             ws.GetDaemonRoot(),
 		"workspace_root":          absPath,
 		"previous_workspace_root": workspaceRoot,
+		"source":                  "checkout",
 	})
 
 	w.Header().Set("Content-Type", "application/json")

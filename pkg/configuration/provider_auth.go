@@ -16,18 +16,9 @@ type ProviderAuthMetadata struct {
 	AuthType       string
 }
 
-type ResolvedProviderCredential struct {
-	Provider string
-	EnvVar   string
-	Value    string
-	Source   string
-}
-
-// String returns a safe string representation with the value always masked.
-func (r ResolvedProviderCredential) String() string {
-	return fmt.Sprintf(`Resolved{Provider: %q, EnvVar: %q, Value: %q, Source: %q}`,
-		r.Provider, r.EnvVar, credentials.MaskValue(r.Value), r.Source)
-}
+// ResolvedProviderCredential is deprecated. Use credentials.Resolved directly.
+// Kept as a type alias for backward compatibility.
+type ResolvedProviderCredential = credentials.Resolved
 
 func GetProviderAuthMetadata(provider string) (ProviderAuthMetadata, error) {
 	name := strings.ToLower(strings.TrimSpace(provider))

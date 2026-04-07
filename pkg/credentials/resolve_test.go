@@ -185,6 +185,36 @@ func TestHasProviderCredential_EmptyEnvVarValue(t *testing.T) {
 		"whitespace-only env var should not count as a credential")
 }
 
+// TestResolveProvider_LocalProviderShortCircuit verifies that ResolveProvider
+// short-circuits for local providers that don't require API keys. These providers
+// should return Source="none" with an empty Value immediately, without hitting
+// disk/keyring, and the Provider field should be preserved as-is.
+//
+// When the credentials package is imported standalone (without the configuration
+// package), no ProviderInfoFunc is registered, so getProviderInfo uses the built-in
+// fallback where providerRequiresAPIKey returns false for local providers.
+func TestResolveProvider_LocalProviderShortCircuit(t *testing.T) {
+	t.Setenv("LEDIT_CONFIG", t.TempDir())
+	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	ResetStorageBackend()
+
+	localProviders := []string{"ollama", "ollama-local", "lmstudio", "test"}
+
+	for _, provider := range localProviders {
+		t.Run(provider, func(t *testing.T) {
+			resolved, err := ResolveProvider(provider)
+
+			assert.NoError(t, err, "ResolveProvider should not return an error for local provider %q", provider)
+			assert.Equal(t, "none", resolved.Source,
+				"Source should be 'none' for local provider %q", provider)
+			assert.Empty(t, resolved.Value,
+				"Value should be empty for local provider %q", provider)
+			assert.Equal(t, provider, resolved.Provider,
+				"Provider should be preserved as-is for local provider %q", provider)
+		})
+	}
+}
+
 // TestProviderEnvVar_ConsistentWithHasProviderCredential verifies that
 // the env var name returned by ProviderEnvVar is actually the one checked
 // by HasProviderCredential when resolving from the environment.

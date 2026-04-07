@@ -412,6 +412,20 @@ func Load() (*Config, error) {
 
 // Save saves the configuration to file
 func (c *Config) Save() error {
+	// Migrate any plaintext secrets in MCP server env blocks to the
+	// credential store before persisting. This is defense-in-depth: most
+	// callers already migrate before reaching here, but this ensures the
+	// main config file never contains raw token values regardless.
+	for name := range c.MCP.Servers {
+		s := c.MCP.Servers[name]
+		count, err := mcp.MigrateEnvSecretsFromServer(name, &s)
+		if err != nil {
+			log.Printf("[config] Warning: failed to migrate MCP secrets for server %s: %v", name, err)
+		} else if count > 0 {
+			c.MCP.Servers[name] = s
+		}
+	}
+
 	configPath, err := GetConfigPath()
 	if err != nil {
 		return fmt.Errorf("get config path for save: %w", err)

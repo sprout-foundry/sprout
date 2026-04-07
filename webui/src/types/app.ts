@@ -11,8 +11,8 @@ import type { OnboardingEnvironment, OnboardingProviderOption } from '../service
 export interface WorktreeInfo {
   path: string;
   branch: string;
-  is_main?: boolean;
-  is_current?: boolean;
+  is_main: boolean;
+  is_current: boolean;
   parent_path?: string;
   parent_branch?: string;
 }

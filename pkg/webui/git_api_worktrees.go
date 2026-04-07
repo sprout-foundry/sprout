@@ -160,6 +160,7 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCreate(w http.ResponseWriter, r *h
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)
 	var req struct {
 		Path     string `json:"path"`
 		Branch   string `json:"branch"`
@@ -185,6 +186,22 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCreate(w http.ResponseWriter, r *h
 
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 
+	// Resolve path to absolute
+	absPath, err := filepath.Abs(req.Path)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Invalid worktree path: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	// Validate the resolved worktree path stays within daemon root
+	ws.mutex.RLock()
+	daemonRoot := ws.daemonRoot
+	ws.mutex.RUnlock()
+	if !isWithinWorkspace(absPath, daemonRoot) && absPath != daemonRoot {
+		http.Error(w, "Worktree path must stay within workspace boundary", http.StatusBadRequest)
+		return
+	}
+
 	// Validate branch name
 	validateCmd := ws.gitCommandForWorkspace(workspaceRoot, "check-ref-format", "--branch", req.Branch)
 	if output, err := validateCmd.CombinedOutput(); err != nil {
@@ -195,9 +212,9 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCreate(w http.ResponseWriter, r *h
 	// Build the git worktree add command
 	args := []string{"worktree", "add"}
 	if req.BaseRef != "" {
-		args = append(args, "-b", req.Branch, req.Path, req.BaseRef)
+		args = append(args, "-b", req.Branch, absPath, req.BaseRef)
 	} else {
-		args = append(args, "-b", req.Branch, req.Path)
+		args = append(args, "-b", req.Branch, absPath)
 	}
 
 	cmd := ws.gitCommandForWorkspace(workspaceRoot, args...)
@@ -207,12 +224,12 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCreate(w http.ResponseWriter, r *h
 		return
 	}
 
-	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent("", "git_worktree_create", req.Path))
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent("", "git_worktree_create", absPath))
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"message":  "Worktree created successfully",
-		"path":     req.Path,
+		"path":     absPath,
 		"branch":   req.Branch,
 		"output":   strings.TrimSpace(string(output)),
 	})
@@ -225,6 +242,7 @@ func (ws *ReactWebServer) handleAPIGitWorktreeRemove(w http.ResponseWriter, r *h
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)
 	var req struct {
 		Path string `json:"path"`
 	}
@@ -240,27 +258,43 @@ func (ws *ReactWebServer) handleAPIGitWorktreeRemove(w http.ResponseWriter, r *h
 		return
 	}
 
+	// Resolve path to absolute
+	absPath, err := filepath.Abs(req.Path)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Invalid worktree path: %v", err), http.StatusBadRequest)
+		return
+	}
+
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 
 	// Prevent removing the current worktree
-	if req.Path == workspaceRoot {
+	if absPath == workspaceRoot {
 		http.Error(w, "Cannot remove the current worktree", http.StatusBadRequest)
 		return
 	}
 
-	cmd := ws.gitCommandForWorkspace(workspaceRoot, "worktree", "remove", req.Path)
+	// Validate the resolved path stays within daemon root
+	ws.mutex.RLock()
+	daemonRoot := ws.daemonRoot
+	ws.mutex.RUnlock()
+	if !isWithinWorkspace(absPath, daemonRoot) && absPath != daemonRoot {
+		http.Error(w, "Worktree path must stay within workspace boundary", http.StatusBadRequest)
+		return
+	}
+
+	cmd := ws.gitCommandForWorkspace(workspaceRoot, "worktree", "remove", absPath)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to remove worktree: %v\nOutput: %s", err, string(output)), http.StatusInternalServerError)
 		return
 	}
 
-	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent("", "git_worktree_remove", req.Path))
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent("", "git_worktree_remove", absPath))
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"message":  "Worktree removed successfully",
-		"path":     req.Path,
+		"path":     absPath,
 		"output":   strings.TrimSpace(string(output)),
 	})
 }
@@ -272,6 +306,7 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCheckout(w http.ResponseWriter, r 
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)
 	var req struct {
 		Path string `json:"path"`
 	}
@@ -287,8 +322,17 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCheckout(w http.ResponseWriter, r 
 		return
 	}
 
+	// Resolve path to absolute
+	absPath, err := filepath.Abs(req.Path)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Invalid worktree path: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+
 	// Check if the path exists and is a valid worktree
-	checkCmd := ws.gitCommandForWorkspace(ws.getWorkspaceRootForRequest(r), "worktree", "list", "--porcelain")
+	checkCmd := ws.gitCommandForWorkspace(workspaceRoot, "worktree", "list", "--porcelain")
 	checkOutput, err := checkCmd.CombinedOutput()
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to list worktrees: %v", err), http.StatusInternalServerError)
@@ -299,7 +343,7 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCheckout(w http.ResponseWriter, r 
 	for _, line := range strings.Split(string(checkOutput), "\n") {
 		if strings.HasPrefix(line, "worktree ") {
 			path := strings.TrimPrefix(line, "worktree ")
-			if path == req.Path {
+			if path == absPath {
 				worktreeExists = true
 				break
 			}
@@ -311,18 +355,42 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCheckout(w http.ResponseWriter, r 
 		return
 	}
 
-	// Switch workspace root
-	_, err = ws.setClientWorkspaceRoot(ws.resolveClientID(r), req.Path)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to switch workspace: %v", err), http.StatusInternalServerError)
+	// Validate the resolved path stays within daemon root
+	ws.mutex.RLock()
+	daemonRoot := ws.daemonRoot
+	ws.mutex.RUnlock()
+	if !isWithinWorkspace(absPath, daemonRoot) && absPath != daemonRoot {
+		http.Error(w, "Worktree path must stay within workspace boundary", http.StatusBadRequest)
 		return
 	}
 
+	// Switch workspace root directly — do NOT call setClientWorkspaceRoot
+	// because it nukes all chat sessions. We preserve chat sessions but
+	// clear transient state (agent, terminals) like setClientWorkspaceRoot does.
+	clientID := ws.resolveClientID(r)
+	ws.mutex.Lock()
+	ctx := ws.getOrCreateClientContextLocked(clientID)
+	ctx.WorkspaceRoot = absPath
+	if clientID == defaultWebClientID {
+		ws.workspaceRoot = absPath
+	}
+	// Clear transient state like setClientWorkspaceRoot does
+	ctx.Agent = nil
+	ctx.Terminal = nil
+	ws.mutex.Unlock()
+
+	// Publish event to notify frontend of workspace change
+	ws.publishClientEvent(clientID, events.EventTypeWorkspaceChanged, map[string]interface{}{
+		"daemon_root":             ws.GetDaemonRoot(),
+		"workspace_root":          absPath,
+		"previous_workspace_root": workspaceRoot,
+	})
+
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"message":  "Switched to worktree successfully",
-		"path":     req.Path,
-		"workspace": req.Path,
+		"message":   "Switched to worktree successfully",
+		"path":      absPath,
+		"workspace": absPath,
 	})
 }
 

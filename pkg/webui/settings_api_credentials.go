@@ -149,6 +149,8 @@ type setCredentialRequest struct {
 }
 
 func (ws *ReactWebServer) handleAPISettingsCredentialsPut(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxSettingsBodyBytes)
+
 	// Extract provider name from URL path
 	provider := extractPathSegment(r.URL.Path, "/api/settings/credentials/")
 	if provider == "" {
@@ -160,8 +162,6 @@ func (ws *ReactWebServer) handleAPISettingsCredentialsPut(w http.ResponseWriter,
 	if cm == nil {
 		return
 	}
-
-	r.Body = http.MaxBytesReader(w, r.Body, maxSettingsBodyBytes)
 
 	var req setCredentialRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -206,6 +206,8 @@ func (ws *ReactWebServer) handleAPISettingsCredentialsPut(w http.ResponseWriter,
 // ---------------------------------------------------------------------------
 
 func (ws *ReactWebServer) handleAPISettingsCredentialsDelete(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxSettingsBodyBytes)
+
 	// Extract provider name from URL path
 	provider := extractPathSegment(r.URL.Path, "/api/settings/credentials/")
 	if provider == "" {

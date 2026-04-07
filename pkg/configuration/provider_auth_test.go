@@ -7,7 +7,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/credentials"
 )
 
-func TestResolveProviderAuth_CustomProviderUsesStoredKey(t *testing.T) {
+func TestCredentialsResolveProvider_CustomProviderUsesStoredKey(t *testing.T) {
 	configDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", configDir)
 
@@ -27,7 +27,7 @@ func TestResolveProviderAuth_CustomProviderUsesStoredKey(t *testing.T) {
 		t.Fatalf("save credentials: %v", err)
 	}
 
-	resolved, err := ResolveProviderAuth("gateway")
+	resolved, err := credentials.ResolveProvider("gateway")
 	if err != nil {
 		t.Fatalf("resolve provider credential: %v", err)
 	}
@@ -42,13 +42,13 @@ func TestResolveProviderAuth_CustomProviderUsesStoredKey(t *testing.T) {
 	}
 }
 
-// --- Tests for ResolveProviderAuth and HasProviderAuth ---
+// --- Tests for credentials.ResolveProvider and HasProviderAuth ---
 
-func TestResolveProviderAuth_LocalProviderReturnsNone(t *testing.T) {
+func TestCredentialsResolveProvider_LocalProviderReturnsNone(t *testing.T) {
 	configDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", configDir)
 
-	resolved, err := ResolveProviderAuth("ollama")
+	resolved, err := credentials.ResolveProvider("ollama")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -63,7 +63,7 @@ func TestResolveProviderAuth_LocalProviderReturnsNone(t *testing.T) {
 	}
 }
 
-func TestResolveProviderAuth_EnvVarTakesPrecedence(t *testing.T) {
+func TestCredentialsResolveProvider_EnvVarTakesPrecedence(t *testing.T) {
 	configDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("OPENAI_API_KEY", "env-openai-priority-key")
@@ -71,7 +71,7 @@ func TestResolveProviderAuth_EnvVarTakesPrecedence(t *testing.T) {
 	// Clear any stored credentials to ensure env var takes precedence
 	credentials.ResetStorageBackend()
 
-	resolved, err := ResolveProviderAuth("openai")
+	resolved, err := credentials.ResolveProvider("openai")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestResolveProviderAuth_EnvVarTakesPrecedence(t *testing.T) {
 	}
 }
 
-func TestResolveProviderAuth_UsesCredentialStore(t *testing.T) {
+func TestCredentialsResolveProvider_UsesCredentialStore(t *testing.T) {
 	configDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", configDir)
 	// Clear any ambient OPENAI_API_KEY so the store is used instead
@@ -98,7 +98,7 @@ func TestResolveProviderAuth_UsesCredentialStore(t *testing.T) {
 		t.Fatalf("save credentials: %v", err)
 	}
 
-	resolved, err := ResolveProviderAuth("openai")
+	resolved, err := credentials.ResolveProvider("openai")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -110,7 +110,7 @@ func TestResolveProviderAuth_UsesCredentialStore(t *testing.T) {
 	}
 }
 
-func TestResolveProviderAuth_FallsBackToCredentialStore(t *testing.T) {
+func TestCredentialsResolveProvider_FallsBackToCredentialStore(t *testing.T) {
 	configDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
@@ -124,7 +124,7 @@ func TestResolveProviderAuth_FallsBackToCredentialStore(t *testing.T) {
 		t.Fatalf("save credentials: %v", err)
 	}
 
-	resolved, err := ResolveProviderAuth("openai")
+	resolved, err := credentials.ResolveProvider("openai")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestResolveProviderAuth_FallsBackToCredentialStore(t *testing.T) {
 	}
 }
 
-func TestResolveProviderAuth_NoCredentialAvailable(t *testing.T) {
+func TestCredentialsResolveProvider_NoCredentialAvailable(t *testing.T) {
 	configDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
@@ -146,7 +146,7 @@ func TestResolveProviderAuth_NoCredentialAvailable(t *testing.T) {
 	os.Unsetenv("OPENAI_API_KEY")
 
 	// No key in store
-	resolved, err := ResolveProviderAuth("openai")
+	resolved, err := credentials.ResolveProvider("openai")
 	if err != nil {
 		t.Fatalf("unexpected error for missing credential: %v", err)
 	}

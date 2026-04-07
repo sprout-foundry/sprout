@@ -106,16 +106,9 @@ func createProviderForType(clientType ClientType) (interface{ ListModels() ([]Mo
 type openAIListModelsWrapper struct{}
 
 func (w *openAIListModelsWrapper) ListModels() ([]ModelInfo, error) {
-	resolved, err := credentials.ResolveProvider("openai")
+	apiKey, err := credentials.ResolveProviderAPIKey("openai", "OpenAI")
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve OpenAI API key: %w", err)
-	}
-	apiKey := resolved.Value
-	if strings.TrimSpace(apiKey) == "" {
-		if resolved.EnvVar != "" {
-			return nil, fmt.Errorf("failed to resolve OpenAI API key: %s not set and no stored API key configured", resolved.EnvVar)
-		}
-		return nil, fmt.Errorf("failed to resolve OpenAI API key: no stored API key configured for openai")
+		return nil, err
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -222,16 +215,9 @@ func (w *ollamaLocalListModelsWrapper) ListModels() ([]ModelInfo, error) {
 type openRouterListModelsWrapper struct{}
 
 func (w *openRouterListModelsWrapper) ListModels() ([]ModelInfo, error) {
-	resolved, err := credentials.ResolveProvider("openrouter")
+	apiKey, err := credentials.ResolveProviderAPIKey("openrouter", "OpenRouter")
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve OpenRouter API key: %w", err)
-	}
-	apiKey := resolved.Value
-	if strings.TrimSpace(apiKey) == "" {
-		if resolved.EnvVar != "" {
-			return nil, fmt.Errorf("failed to resolve OpenRouter API key: %s not set and no stored API key configured", resolved.EnvVar)
-		}
-		return nil, fmt.Errorf("failed to resolve OpenRouter API key: no stored API key configured for openrouter")
+		return nil, err
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -313,16 +299,9 @@ func (w *openRouterListModelsWrapper) ListModels() ([]ModelInfo, error) {
 type deepInfraListModelsWrapper struct{}
 
 func (w *deepInfraListModelsWrapper) ListModels() ([]ModelInfo, error) {
-	resolved, err := credentials.ResolveProvider("deepinfra")
+	apiKey, err := credentials.ResolveProviderAPIKey("deepinfra", "DeepInfra")
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve DeepInfra API key: %w", err)
-	}
-	apiKey := resolved.Value
-	if strings.TrimSpace(apiKey) == "" {
-		if resolved.EnvVar != "" {
-			return nil, fmt.Errorf("failed to resolve DeepInfra API key: %s not set and no stored API key configured", resolved.EnvVar)
-		}
-		return nil, fmt.Errorf("failed to resolve DeepInfra API key: no stored API key configured for deepinfra")
+		return nil, err
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -471,16 +450,9 @@ func (w *lmStudioListModelsWrapper) ListModels() ([]ModelInfo, error) {
 type mistralListModelsWrapper struct{}
 
 func (w *mistralListModelsWrapper) ListModels() ([]ModelInfo, error) {
-	resolved, err := credentials.ResolveProvider("mistral")
+	apiKey, err := credentials.ResolveProviderAPIKey("mistral", "Mistral")
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve Mistral API key: %w", err)
-	}
-	apiKey := resolved.Value
-	if strings.TrimSpace(apiKey) == "" {
-		if resolved.EnvVar != "" {
-			return nil, fmt.Errorf("failed to resolve Mistral API key: %s not set and no stored API key configured", resolved.EnvVar)
-		}
-		return nil, fmt.Errorf("failed to resolve Mistral API key: no stored API key configured for mistral")
+		return nil, err
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -685,8 +657,8 @@ func fetchOpenAICompatibleModels(providerName, endpoint, envVar, inlineAPIKey st
 	}
 
 	apiKey := strings.TrimSpace(inlineAPIKey)
-	if resolved, err := credentials.ResolveProvider(strings.TrimSpace(providerName)); err == nil && strings.TrimSpace(resolved.Value) != "" {
-		apiKey = strings.TrimSpace(resolved.Value)
+	if resolved, err := credentials.ResolveProviderAPIKey(strings.TrimSpace(providerName), strings.TrimSpace(providerName)); err == nil {
+		apiKey = resolved
 	}
 	if apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+apiKey)

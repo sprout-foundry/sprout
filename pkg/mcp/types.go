@@ -14,7 +14,8 @@ type MCPServerConfig struct {
 	Command     string            `json:"command,omitempty"` // For stdio servers
 	Args        []string          `json:"args,omitempty"`    // For stdio servers
 	URL         string            `json:"url,omitempty"`     // For HTTP servers
-	Env         map[string]string `json:"env,omitempty"`
+	Env         map[string]string `json:"env,omitempty"`     // Non-secret environment variables
+	Credentials map[string]string `json:"credentials,omitempty"` // Secret credentials (env var name -> placeholder)
 	WorkingDir  string            `json:"working_dir,omitempty"` // For stdio servers
 	Timeout     time.Duration     `json:"timeout,omitempty"`
 	AutoStart   bool              `json:"auto_start"`
@@ -63,6 +64,60 @@ func (s *MCPServerConfig) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
+}
+
+// MarshalJSON implements custom JSON marshaling for MCPServerConfig.
+// This wrapper avoids infinite recursion with the custom UnmarshalJSON implementation.
+// Note: this serializes credentials as-is (placeholder refs). Masking for API
+// responses is handled at the HTTP layer via mcpServerResponse / maskCredentials.
+func (s MCPServerConfig) MarshalJSON() ([]byte, error) {
+	// Create an alias to avoid infinite recursion
+	type MCPServerConfigAlias MCPServerConfig
+
+	alias := &struct {
+		Name        string            `json:"name"`
+		Type        string            `json:"type,omitempty"`
+		Command     string            `json:"command,omitempty"`
+		Args        []string          `json:"args,omitempty"`
+		URL         string            `json:"url,omitempty"`
+		Env         map[string]string `json:"env,omitempty"`
+		Credentials map[string]string `json:"credentials,omitempty"`
+		WorkingDir  string            `json:"working_dir,omitempty"`
+		Timeout     time.Duration     `json:"timeout,omitempty"`
+		AutoStart   bool              `json:"auto_start"`
+		MaxRestarts int               `json:"max_restarts"`
+	}{
+		Name:        s.Name,
+		Type:        s.Type,
+		Command:     s.Command,
+		Args:        s.Args,
+		URL:         s.URL,
+		Env:         s.Env,
+		Credentials: s.Credentials,
+		WorkingDir:  s.WorkingDir,
+		Timeout:     s.Timeout,
+		AutoStart:   s.AutoStart,
+		MaxRestarts: s.MaxRestarts,
+	}
+
+	return json.Marshal(alias)
+}
+
+// GetCredentialNames returns the list of credential env var names for this server
+func (s MCPServerConfig) GetCredentialNames() []string {
+	if s.Credentials == nil || len(s.Credentials) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(s.Credentials))
+	for name := range s.Credentials {
+		names = append(names, name)
+	}
+	return names
+}
+
+// HasCredentials returns true if the server has any credentials configured
+func (s MCPServerConfig) HasCredentials() bool {
+	return s.Credentials != nil && len(s.Credentials) > 0
 }
 
 // MCPTool represents a tool available via MCP

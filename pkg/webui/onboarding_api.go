@@ -426,7 +426,8 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 		keys := cm.GetAPIKeys()
 		keys.SetAPIKey(req.Provider, req.APIKey)
 		if err := cm.SaveAPIKeys(); err != nil {
-			writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to save API key: %v", err))
+			log.Printf("[WARN] failed to save API key: %v", err)
+			writeJSONError(w, http.StatusInternalServerError, "Failed to save API key")
 			return
 		}
 	}

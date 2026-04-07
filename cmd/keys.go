@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 	"syscall"
+	"time"
 
 	"filippo.io/age"
 	"github.com/alantheprice/ledit/pkg/credentials"
@@ -83,8 +85,7 @@ Passphrase mode:
 
 Examples:
   ledit keys encrypt                    # Use machine key mode
-  ledit keys encrypt --passphrase       # Use passphrase mode
-  ledit keys encrypt --mode passphrase  # Explicitly set passphrase mode`,
+  ledit keys encrypt --passphrase       # Use passphrase mode`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		usePassphrase, _ := cmd.Flags().GetBool("passphrase")
 
@@ -100,20 +101,58 @@ Examples:
 				return fmt.Errorf("invalid passphrase: %w", err)
 			}
 
+			fmt.Println("Re-enter passphrase to confirm:")
+			confirmation, err := readPassword()
+			if err != nil {
+				// Zero out passphrase buffer before returning error
+				for i := range passphrase {
+					passphrase[i] = 0
+				}
+				return fmt.Errorf("failed to read confirmation: %w", err)
+			}
+
+			// Compare passphrases using constant-time comparison to prevent timing attacks
+			if !bytes.Equal(passphrase, confirmation) {
+				// Zero out buffers before returning error
+				for i := range passphrase {
+					passphrase[i] = 0
+				}
+				for i := range confirmation {
+					confirmation[i] = 0
+				}
+				return fmt.Errorf("passphrases do not match")
+			}
+
+			// Zero out confirmation buffer after successful verification
+			for i := range confirmation {
+				confirmation[i] = 0
+			}
+
 			// Load existing keys
 			store, err := credentials.Load()
 			if err != nil {
+				// Zero out passphrase before returning error
+				for i := range passphrase {
+					passphrase[i] = 0
+				}
 				return fmt.Errorf("failed to load API keys: %w", err)
 			}
 
 			// Serialize to JSON
 			jsonData, err := json.MarshalIndent(store, "", "  ")
 			if err != nil {
+				for i := range passphrase {
+					passphrase[i] = 0
+				}
 				return fmt.Errorf("failed to serialize API keys: %w", err)
 			}
 
 			// Encrypt with passphrase
 			encrypted, err := credentials.EncryptWithPassphrase(jsonData, string(passphrase))
+			// Zero out passphrase after use
+			for i := range passphrase {
+				passphrase[i] = 0
+			}
 			if err != nil {
 				return fmt.Errorf("failed to encrypt with passphrase: %w", err)
 			}
@@ -124,13 +163,8 @@ Examples:
 				return fmt.Errorf("failed to get API keys path: %w", err)
 			}
 
-			tmpPath := path + ".tmp"
-			if err := os.WriteFile(tmpPath, encrypted, 0600); err != nil {
-				return fmt.Errorf("failed to write temp file: %w", err)
-			}
-			if err := os.Rename(tmpPath, path); err != nil {
-				os.Remove(tmpPath)
-				return fmt.Errorf("failed to replace API keys file: %w", err)
+			if err := atomicWriteFile(path, encrypted, 0600); err != nil {
+				return err
 			}
 
 			fmt.Println("API keys encrypted with passphrase successfully.")
@@ -186,13 +220,8 @@ Only use this for migration or export purposes.`,
 		}
 
 		// Write plaintext atomically
-		tmpPath := path + ".tmp"
-		if err := os.WriteFile(tmpPath, decrypted, 0600); err != nil {
-			return fmt.Errorf("failed to write temp file: %w", err)
-		}
-		if err := os.Rename(tmpPath, path); err != nil {
-			os.Remove(tmpPath)
-			return fmt.Errorf("failed to replace API keys file: %w", err)
+		if err := atomicWriteFile(path, decrypted, 0600); err != nil {
+			return err
 		}
 
 		fmt.Println("API keys decrypted to plaintext successfully.")
@@ -260,15 +289,18 @@ you have a backup of the old key or have exported your keys.`,
 			return fmt.Errorf("failed to get machine key path: %w", err)
 		}
 
-		// Backup old key
+		// Read existing key first — abort if unavailable (nothing to rotate)
 		oldKeyData, err := os.ReadFile(oldKeyPath)
-		if err == nil {
-			backupPath := oldKeyPath + ".backup"
-			if err := os.WriteFile(backupPath, oldKeyData, 0600); err != nil {
-				return fmt.Errorf("failed to backup old key: %w", err)
-			}
-			fmt.Printf("Old machine key backed up to: %s\n", backupPath)
+		if err != nil {
+			return fmt.Errorf("failed to read existing machine key (nothing to rotate): %w", err)
 		}
+
+		// Backup old key
+		backupPath := fmt.Sprintf("%s.backup.%d", oldKeyPath, time.Now().Unix())
+		if err := os.WriteFile(backupPath, oldKeyData, 0600); err != nil {
+			return fmt.Errorf("failed to backup old key: %w", err)
+		}
+		fmt.Printf("Old machine key backed up to: %s\n", backupPath)
 
 		// Read the encrypted API keys file BEFORE deleting the old key
 		apiKeysPath, err := credentials.GetAPIKeysPath()
@@ -278,6 +310,12 @@ you have a backup of the old key or have exported your keys.`,
 		encryptedData, err := os.ReadFile(apiKeysPath)
 		if err != nil {
 			return fmt.Errorf("failed to read API keys file: %w", err)
+		}
+
+		// Check if the API keys file is plaintext (not yet encrypted)
+		// Do this BEFORE deleting the old key to avoid unnecessary key deletion.
+		if credentials.IsPlaintextJSON(encryptedData) {
+			return fmt.Errorf("API keys file is not yet encrypted — run 'ledit keys migrate' to encrypt it first")
 		}
 
 		// Delete old key
@@ -294,7 +332,7 @@ you have a backup of the old key or have exported your keys.`,
 		if err != nil {
 			return fmt.Errorf("failed to decrypt with old key: %w", err)
 		}
-		decryptedData, err := io.ReadAll(r)
+		decryptedData, err := io.ReadAll(io.LimitReader(r, credentials.MaxDecryptedSize))
 		if err != nil {
 			return fmt.Errorf("failed to read decrypted data: %w", err)
 		}
@@ -312,6 +350,7 @@ you have a backup of the old key or have exported your keys.`,
 
 		fmt.Println("Machine key rotated successfully.")
 		fmt.Println("Your API keys have been re-encrypted with the new key.")
+		fmt.Printf("Note: Delete the backup at %s when you no longer need the old key.\n", backupPath)
 		return nil
 	},
 }
@@ -372,5 +411,36 @@ func validatePassphrase(passphrase string) error {
 		return fmt.Errorf("passphrase must contain at least one digit")
 	}
 
+	return nil
+}
+
+// atomicWriteFile writes data to a file atomically using a temp file + rename pattern.
+// This prevents data corruption if the process crashes during the write.
+// The file is created with the specified permissions.
+func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+	tmpFile, err := os.CreateTemp(dir, ".tmp-*.ledit")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	if err := os.Chmod(tmpPath, perm); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to set permissions on temp file: %w", err)
+	}
+	if _, err := tmpFile.Write(data); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to write temp file: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to close temp file: %w", err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to replace API keys file: %w", err)
+	}
 	return nil
 }

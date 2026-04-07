@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/alantheprice/ledit/pkg/credentials"
 )
 
 // MCPConfig represents the MCP configuration
@@ -216,8 +218,11 @@ func isPlaywrightAvailable() bool {
 
 // SaveMCPConfig saves MCP configuration to file
 func SaveMCPConfig(mcpConfig *MCPConfig) error {
-	// Before persisting, migrate any plaintext secrets to the credential store.
-	// This is the persistence boundary — all save paths go through here.
+	// Migrate secrets before persisting. This is a defense-in-depth measure:
+	// migrateSecretsOnLoad (called by LoadMCPConfig) also migrates on read.
+	// Both paths are intentional — if secrets are somehow injected between
+	// load and save, they will still be caught here. Already-migrated refs
+	// are safely skipped, so the double-check is idempotent and low-cost.
 	for name := range mcpConfig.Servers {
 		s := mcpConfig.Servers[name]
 		count, err := MigrateEnvSecretsFromServer(name, &s)
@@ -307,6 +312,18 @@ func (c *MCPConfig) AddServer(serverConfig MCPServerConfig) error {
 
 // RemoveServer removes an MCP server from the configuration
 func (c *MCPConfig) RemoveServer(name string) {
+	// Clean up stored credentials for this server
+	if server, exists := c.Servers[name]; exists && server.Env != nil {
+		for envVarName, value := range server.Env {
+			if IsSecretRef(value) {
+				key := CredentialKey(name, envVarName)
+				if err := credentials.DeleteFromActiveBackend(key); err != nil {
+					log.Printf("[mcp] Failed to delete credential %s: %v", key, err)
+				}
+			}
+		}
+	}
+
 	delete(c.Servers, name)
 
 	// Disable MCP if no servers remain

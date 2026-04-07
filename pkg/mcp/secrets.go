@@ -144,41 +144,48 @@ func ResolveEnvVars(serverName string, env map[string]string) (map[string]string
 // MigrateEnvSecrets detects plaintext secrets in an environment map and migrates them
 // to the credential store, replacing them with placeholders.
 // Returns the updated map and count of migrated secrets.
+//
+// The migration is two-phase: all secrets are stored in the credential backend first;
+// only if all writes succeed is the returned map updated with placeholder values.
 func MigrateEnvSecrets(serverName string, env map[string]string) (map[string]string, int, error) {
 	result := make(map[string]string, len(env))
-	migrated := 0
 
+	// Phase 1: collect plaintext secrets to migrate
+	pending := make(map[string]string, len(env))
 	for name, value := range env {
-		// Skip already-migrated and pass through unchanged
 		if IsSecretRef(value) {
+			result[name] = value // Already migrated
+			continue
+		}
+		if value == "{{stored}}" || value == "" {
 			result[name] = value
 			continue
 		}
-		// Skip display-only sentinel and pass through
-		if value == "{{stored}}" {
-			result[name] = value
-			continue
-		}
-		if value == "" {
-			result[name] = value
-			continue
-		}
-
-		// Check if this looks like a secret
 		if IsSecretEnvVar(name) {
-			key := CredentialKey(serverName, name)
-			if err := credentials.SetToActiveBackend(key, value); err != nil {
-				log.Printf("[mcp-secrets] Failed to store credential %s: %v", key, err)
-				return result, migrated, err
-			}
-
-			log.Printf("[mcp-secrets] Migrated secret %s for server %s to credential store", name, serverName)
-			result[name] = SecretRef(serverName, name)
-			migrated++
+			pending[name] = value
 		} else {
-			// Non-secret value passes through unchanged
 			result[name] = value
 		}
+	}
+
+	if len(pending) == 0 {
+		return result, 0, nil
+	}
+
+	// Phase 2: store all secrets in the credential backend
+	for name, value := range pending {
+		key := CredentialKey(serverName, name)
+		if err := credentials.SetToActiveBackend(key, value); err != nil {
+			log.Printf("[mcp-secrets] Failed to store credential %s: %v", key, err)
+			return result, 0, err // result has plaintext values for pending items
+		}
+	}
+
+	// Phase 3: all writes succeeded — update result with refs
+	migrated := len(pending)
+	for name := range pending {
+		result[name] = SecretRef(serverName, name)
+		log.Printf("[mcp-secrets] Migrated secret %s for server %s to credential store", name, serverName)
 	}
 
 	return result, migrated, nil

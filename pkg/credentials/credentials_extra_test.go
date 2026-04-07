@@ -21,7 +21,7 @@ func TestResolve_EnvVarAndStoredBothPresent(t *testing.T) {
 
 	t.Setenv("MY_PROVIDER_KEY", "env-secret-key-67890")
 
-	resolved, err := Resolve("my-provider", "MY_PROVIDER_KEY")
+	resolved, err := resolve("my-provider", "MY_PROVIDER_KEY")
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestResolve_EnvVarHasLeadingTrailingSpaces(t *testing.T) {
 	// Set env var with surrounding spaces; trim should yield a valid value
 	t.Setenv("SPACED_PROVIDER_KEY", "  env-key-with-spaces  ")
 
-	resolved, err := Resolve("spaced-provider", "SPACED_PROVIDER_KEY")
+	resolved, err := resolve("spaced-provider", "SPACED_PROVIDER_KEY")
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
@@ -149,7 +149,7 @@ func TestResolve_WhitespaceOnlyProvider(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", dir)
 
-	resolved, err := Resolve("   \t  ", "")
+	resolved, err := resolve("   \t  ", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -171,7 +171,7 @@ func TestResolve_WhitespaceProviderWithEnvVar(t *testing.T) {
 	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("MY_KEY", "env-value-42")
 
-	resolved, err := Resolve("   \t  ", "MY_KEY")
+	resolved, err := resolve("   \t  ", "MY_KEY")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

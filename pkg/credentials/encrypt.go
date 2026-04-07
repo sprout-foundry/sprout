@@ -442,19 +442,14 @@ func Save(store Store) error {
 	return nil
 }
 
-// Resolve resolves a credential for a provider.
+// resolve is the internal credential resolution function.
+// Use ResolveProvider() for the public API.
 //
-// This function attempts to resolve a credential in the following order:
+// Resolution order:
 // 1. Environment variable (if envVar is provided and set)
 // 2. Keyring backend (if keyring backend is active and key exists)
 // 3. Encrypted file store
-//
-// The returned Resolved struct contains the credential value, the source
-// ("environment", "keyring", or "stored"), and metadata about the provider and env var.
-//
-// This function is useful for applications that want to support both
-// environment variables and stored credentials as fallback.
-func Resolve(provider, envVar string) (Resolved, error) {
+func resolve(provider, envVar string) (Resolved, error) {
 	resolved := Resolved{
 		Provider: strings.TrimSpace(provider),
 		EnvVar:   strings.TrimSpace(envVar),

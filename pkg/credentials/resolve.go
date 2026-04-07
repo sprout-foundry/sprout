@@ -115,7 +115,7 @@ func ResolveProvider(provider string) (Resolved, error) {
 		return Resolved{Provider: strings.TrimSpace(provider), Source: "none"}, nil
 	}
 
-	return Resolve(provider, info.EnvVar)
+	return resolve(provider, info.EnvVar)
 }
 
 // ResolveProviderAPIKey resolves a provider's API key and validates it's non-empty.
@@ -192,7 +192,7 @@ func HasProviderCredential(provider string) bool {
 	}
 
 	// Check stored credentials (keyring/file)
-	resolved, err := Resolve(provider, info.EnvVar)
+	resolved, err := resolve(provider, info.EnvVar)
 	if err != nil {
 		return false
 	}

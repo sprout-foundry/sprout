@@ -152,7 +152,7 @@ func TestResolveWithEnvVar(t *testing.T) {
 
 	os.Setenv("TEST_API_KEY", "env-value")
 
-	resolved, err := Resolve("test", "TEST_API_KEY")
+	resolved, err := resolve("test", "TEST_API_KEY")
 	require.NoError(t, err)
 	assert.Equal(t, "test", resolved.Provider)
 	assert.Equal(t, "TEST_API_KEY", resolved.EnvVar)
@@ -179,7 +179,7 @@ func TestResolveWithStoredKey(t *testing.T) {
 	defer os.Setenv("TEST_API_KEY", originalEnv)
 	os.Unsetenv("TEST_API_KEY")
 
-	resolved, err := Resolve("test", "TEST_API_KEY")
+	resolved, err := resolve("test", "TEST_API_KEY")
 	require.NoError(t, err)
 	assert.Equal(t, "test", resolved.Provider)
 	assert.Equal(t, "TEST_API_KEY", resolved.EnvVar)

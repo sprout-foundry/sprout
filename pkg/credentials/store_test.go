@@ -201,7 +201,7 @@ func TestResolve_NoEnvVarAndNoStored(t *testing.T) {
 	t.Setenv("LEDIT_CONFIG", dir)
 	// Don't set any env var or store anything
 
-	resolved, err := Resolve("missing-provider", "")
+	resolved, err := resolve("missing-provider", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -222,7 +222,7 @@ func TestResolve_WhitespaceTrimmedEnvVar(t *testing.T) {
 	// Store an env var with surrounding whitespace
 	t.Setenv("TRIM_ME_KEY", "  trim-value  ")
 
-	resolved, err := Resolve("  provider  ", "TRIM_ME_KEY")
+	resolved, err := resolve("  provider  ", "TRIM_ME_KEY")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -249,7 +249,7 @@ func TestResolvePrefersEnvironmentOverStoredKey(t *testing.T) {
 		t.Fatalf("save store: %v", err)
 	}
 
-	resolved, err := Resolve("test-provider", "TEST_PROVIDER_API_KEY")
+	resolved, err := resolve("test-provider", "TEST_PROVIDER_API_KEY")
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
@@ -276,7 +276,7 @@ func TestResolveFallsBackToStoredKey(t *testing.T) {
 		t.Fatalf("save store: %v", err)
 	}
 
-	resolved, err := Resolve("test-provider", "TEST_PROVIDER_API_KEY")
+	resolved, err := resolve("test-provider", "TEST_PROVIDER_API_KEY")
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
@@ -408,7 +408,7 @@ func TestResolve_EnvVarSetButEmpty(t *testing.T) {
 	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
 	t.Setenv("EMPTY_KEY", "")
 
-	resolved, err := Resolve("test-provider", "EMPTY_KEY")
+	resolved, err := resolve("test-provider", "EMPTY_KEY")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -430,7 +430,7 @@ func TestResolve_EnvVarWhitespaceOnly(t *testing.T) {
 	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
 	t.Setenv("WS_KEY", "   \t  ")
 
-	resolved, err := Resolve("test-provider", "WS_KEY")
+	resolved, err := resolve("test-provider", "WS_KEY")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -458,7 +458,7 @@ func TestResolve_StoredValueWithWhitespace(t *testing.T) {
 		t.Fatalf("save: %v", err)
 	}
 
-	resolved, err := Resolve("ws-provider", "WS_PROVIDER_KEY")
+	resolved, err := resolve("ws-provider", "WS_PROVIDER_KEY")
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/agent_providers"
+	"github.com/alantheprice/ledit/pkg/credentials"
 )
 
 // readInput reads a line of input from stdin without conflicting with other input systems
@@ -501,7 +502,7 @@ func validateProviderSetup(provider string) error {
 
 		// Basic API key format validation - skip in CI/test environments
 		isCI := os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != ""
-		resolved, err := ResolveProviderAuth(provider)
+		resolved, err := credentials.ResolveProvider(provider)
 		if err != nil {
 			return fmt.Errorf("validate provider setup: %w", err)
 		}

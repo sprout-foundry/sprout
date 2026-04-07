@@ -12,6 +12,7 @@ import (
 	"time"
 
 	providers "github.com/alantheprice/ledit/pkg/agent_providers"
+	"github.com/alantheprice/ledit/pkg/credentials"
 )
 
 const ProvidersDirName = "providers"
@@ -188,7 +189,7 @@ func DiscoverCustomProviderModels(cfg CustomProviderConfig) ([]ProviderDiscovery
 		return nil, fmt.Errorf("failed to create discovery request: %w", err)
 	}
 
-	if resolved, err := ResolveProviderAuth(normalized.Name); err == nil && strings.TrimSpace(resolved.Value) != "" {
+	if resolved, err := credentials.ResolveProvider(normalized.Name); err == nil && strings.TrimSpace(resolved.Value) != "" {
 		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(resolved.Value))
 	} else if strings.TrimSpace(normalized.APIKey) != "" {
 		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(normalized.APIKey))

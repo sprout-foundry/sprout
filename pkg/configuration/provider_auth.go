@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	providers "github.com/alantheprice/ledit/pkg/agent_providers"
-	"github.com/alantheprice/ledit/pkg/credentials"
 )
 
 type ProviderAuthMetadata struct {
@@ -15,10 +14,6 @@ type ProviderAuthMetadata struct {
 	EnvVar         string
 	AuthType       string
 }
-
-// ResolvedProviderCredential is deprecated. Use credentials.Resolved directly.
-// Kept as a type alias for backward compatibility.
-type ResolvedProviderCredential = credentials.Resolved
 
 func GetProviderAuthMetadata(provider string) (ProviderAuthMetadata, error) {
 	name := strings.ToLower(strings.TrimSpace(provider))

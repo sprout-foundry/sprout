@@ -1,13 +1,16 @@
 package webui
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"sort"
 	"strings"
+	"time"
 
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/credentials"
 )
@@ -16,14 +19,17 @@ import (
 // Method router — Credentials settings
 // ---------------------------------------------------------------------------
 
-// handleAPISettingsCredentials dispatches GET and PUT/DELETE /api/settings/credentials and /api/settings/credentials/{provider}.
+// handleAPISettingsCredentials dispatches GET, PUT, DELETE, and POST /api/settings/credentials[/...].
 // Exact path (/api/settings/credentials) maps here for GET; trailing-slash (/api/settings/credentials/) maps here for PUT/DELETE.
+// POST /api/settings/credentials/{provider}/test also routes here for credential validation.
 func (ws *ReactWebServer) handleAPISettingsCredentials(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		ws.handleAPISettingsCredentialsGet(w, r)
 	case http.MethodPut:
 		ws.handleAPISettingsCredentialsPut(w, r)
+	case http.MethodPost:
+		ws.handleAPISettingsCredentialsTest(w, r)
 	case http.MethodDelete:
 		ws.handleAPISettingsCredentialsDelete(w, r)
 	default:
@@ -199,6 +205,122 @@ func (ws *ReactWebServer) handleAPISettingsCredentialsPut(w http.ResponseWriter,
 		"success":  true,
 		"provider": provider,
 	})
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/settings/credentials/{provider}/test
+// ---------------------------------------------------------------------------
+
+// testCredentialResponse is the response for POST /api/settings/credentials/{provider}/test.
+type testCredentialResponse struct {
+	Success      bool     `json:"success"`
+	Provider     string   `json:"provider"`
+	ModelCount   int      `json:"model_count,omitempty"`
+	SampleModels []string `json:"sample_models,omitempty"`
+	Error        string   `json:"error,omitempty"`
+}
+
+func (ws *ReactWebServer) handleAPISettingsCredentialsTest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract provider name from URL path: /api/settings/credentials/{provider}/test
+	provider := extractPathSegment(r.URL.Path, "/api/settings/credentials/")
+	if provider == "" {
+		writeJSONError(w, http.StatusBadRequest, "provider name is required in URL path")
+		return
+	}
+
+	// Trim trailing /test from the extracted segment
+	provider = strings.TrimSuffix(provider, "/test")
+
+	if provider == "" {
+		writeJSONError(w, http.StatusBadRequest, "provider name is required in URL path")
+		return
+	}
+
+	// Validate provider is known
+	if _, err := configuration.GetProviderAuthMetadata(provider); err != nil {
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("unknown provider %q: %v", provider, err))
+		return
+	}
+
+	// For the "test" mock provider, return success immediately
+	if provider == "test" {
+		writeJSON(w, http.StatusOK, testCredentialResponse{
+			Success:      true,
+			Provider:     provider,
+			ModelCount:   1,
+			SampleModels: []string{"test-model"},
+		})
+		return
+	}
+
+	// Parse provider name to ClientType
+	clientType, err := api.ParseProviderName(provider)
+	if err != nil {
+		writeJSON(w, http.StatusOK, testCredentialResponse{
+			Success:  false,
+			Provider: provider,
+			Error:    fmt.Sprintf("unsupported provider: %s", provider),
+		})
+		return
+	}
+
+	// Use ListModels (GET /models) to validate the credential — free, no tokens consumed.
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+
+	type modelsResult struct {
+		models []api.ModelInfo
+		err    error
+	}
+	resultCh := make(chan modelsResult, 1)
+	go func() {
+		models, err := api.GetModelsForProvider(clientType)
+		resultCh <- modelsResult{models: models, err: err}
+	}()
+
+	select {
+	case <-ctx.Done():
+		writeJSON(w, http.StatusGatewayTimeout, testCredentialResponse{
+			Success:  false,
+			Provider: provider,
+			Error:    "connection test timed out (20s)",
+		})
+		return
+	case result := <-resultCh:
+		if result.err != nil {
+			errMsg := result.err.Error()
+			if len(errMsg) > 500 {
+				errMsg = errMsg[:500] + "…"
+			}
+			writeJSON(w, http.StatusOK, testCredentialResponse{
+				Success:  false,
+				Provider: provider,
+				Error:    errMsg,
+			})
+			return
+		}
+
+		// Build sample model list (first 5)
+		sampleModels := make([]string, 0, 5)
+		for i, m := range result.models {
+			if i >= 5 {
+				break
+			}
+			sampleModels = append(sampleModels, m.ID)
+		}
+
+		writeJSON(w, http.StatusOK, testCredentialResponse{
+			Success:      true,
+			Provider:     provider,
+			ModelCount:   len(result.models),
+			SampleModels: sampleModels,
+		})
+	}
 }
 
 // ---------------------------------------------------------------------------

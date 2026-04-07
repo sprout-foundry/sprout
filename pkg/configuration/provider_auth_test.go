@@ -7,7 +7,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/credentials"
 )
 
-func TestResolveProviderCredentialPrefersEnvironment(t *testing.T) {
+func TestResolveProviderAuth_EnvVarTakesPrecedenceWithAPIKeys(t *testing.T) {
 	configDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("OPENAI_API_KEY", "env-openai-key")
@@ -16,7 +16,7 @@ func TestResolveProviderCredentialPrefersEnvironment(t *testing.T) {
 		"openai": "stored-openai-key",
 	}
 
-	resolved, err := ResolveProviderCredential("openai", &keys)
+	resolved, err := ResolveProviderAuth("openai", &keys)
 	if err != nil {
 		t.Fatalf("resolve provider credential: %v", err)
 	}
@@ -28,7 +28,7 @@ func TestResolveProviderCredentialPrefersEnvironment(t *testing.T) {
 	}
 }
 
-func TestResolveProviderCredentialUsesStoredCustomProviderKey(t *testing.T) {
+func TestResolveProviderAuth_CustomProviderUsesStoredKey(t *testing.T) {
 	configDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", configDir)
 
@@ -46,7 +46,7 @@ func TestResolveProviderCredentialUsesStoredCustomProviderKey(t *testing.T) {
 		"gateway": "stored-gateway-key",
 	}
 
-	resolved, err := ResolveProviderCredential("gateway", &keys)
+	resolved, err := ResolveProviderAuth("gateway", &keys)
 	if err != nil {
 		t.Fatalf("resolve provider credential: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestResolveProviderCredentialUsesStoredCustomProviderKey(t *testing.T) {
 	if resolved.Source != "stored" {
 		t.Fatalf("expected stored source, got %q", resolved.Source)
 	}
-	if !HasProviderCredential("gateway", &keys) {
+	if !HasProviderAuth("gateway", &keys) {
 		t.Fatalf("expected custom provider credential to be available")
 	}
 }

@@ -685,7 +685,7 @@ func fetchOpenAICompatibleModels(providerName, endpoint, envVar, inlineAPIKey st
 	}
 
 	apiKey := strings.TrimSpace(inlineAPIKey)
-	if resolved, err := credentials.Resolve(strings.TrimSpace(providerName), strings.TrimSpace(envVar)); err == nil && strings.TrimSpace(resolved.Value) != "" {
+	if resolved, err := credentials.ResolveProvider(strings.TrimSpace(providerName)); err == nil && strings.TrimSpace(resolved.Value) != "" {
 		apiKey = strings.TrimSpace(resolved.Value)
 	}
 	if apiKey != "" {

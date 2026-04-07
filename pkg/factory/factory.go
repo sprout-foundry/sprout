@@ -153,7 +153,7 @@ func init() {
 func CreateGenericProvider(providerName, model string) (api.ClientInterface, error) {
 	if config, err := globalProviderFactory.GetProviderConfig(providerName); err == nil {
 		configCopy := *config
-		resolved, resolveErr := configuration.ResolveProviderCredential(providerName, nil)
+		resolved, resolveErr := configuration.ResolveProviderAuth(providerName, nil)
 		if resolveErr == nil && resolved.Value != "" {
 			configCopy.Auth.Key = resolved.Value
 		}
@@ -192,7 +192,7 @@ func CreateCustomProvider(providerName, model string) (api.ClientInterface, erro
 	if err != nil {
 		return nil, fmt.Errorf("failed to build provider config: %w", err)
 	}
-	if resolved, resolveErr := configuration.ResolveProviderCredential(providerName, nil); resolveErr == nil && resolved.Value != "" {
+	if resolved, resolveErr := configuration.ResolveProviderAuth(providerName, nil); resolveErr == nil && resolved.Value != "" {
 		genericConfig.Auth.Key = resolved.Value
 	}
 

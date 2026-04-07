@@ -101,46 +101,5 @@ func GetProviderEnvVarName(provider string) string {
 }
 
 func ResolveProviderCredential(provider string, apiKeys *APIKeys) (ResolvedProviderCredential, error) {
-	metadata, err := GetProviderAuthMetadata(provider)
-	if err != nil {
-		return ResolvedProviderCredential{}, fmt.Errorf("get provider auth metadata for %q: %w", provider, err)
-	}
-	if !metadata.RequiresAPIKey {
-		return ResolvedProviderCredential{
-			Provider: metadata.Provider,
-			EnvVar:   metadata.EnvVar,
-		}, nil
-	}
-
-	if apiKeys != nil {
-		if value := strings.TrimSpace(apiKeys.GetAPIKey(metadata.Provider)); value != "" {
-			if envValue := strings.TrimSpace(metadata.EnvVar); envValue != "" {
-				if envResolved, err := credentials.Resolve(metadata.Provider, envValue); err == nil && envResolved.Source == "environment" {
-					return ResolvedProviderCredential{
-						Provider: metadata.Provider,
-						EnvVar:   envResolved.EnvVar,
-						Value:    envResolved.Value,
-						Source:   envResolved.Source,
-					}, nil
-				}
-			}
-			return ResolvedProviderCredential{
-				Provider: metadata.Provider,
-				EnvVar:   metadata.EnvVar,
-				Value:    value,
-				Source:   "stored",
-			}, nil
-		}
-	}
-
-	resolved, err := credentials.Resolve(metadata.Provider, metadata.EnvVar)
-	if err != nil {
-		return ResolvedProviderCredential{}, fmt.Errorf("resolve credential for %q: %w", metadata.Provider, err)
-	}
-	return ResolvedProviderCredential{
-		Provider: metadata.Provider,
-		EnvVar:   resolved.EnvVar,
-		Value:    resolved.Value,
-		Source:   resolved.Source,
-	}, nil
+	return ResolveProviderAuth(provider, apiKeys)
 }

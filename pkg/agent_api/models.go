@@ -106,7 +106,7 @@ func createProviderForType(clientType ClientType) (interface{ ListModels() ([]Mo
 type openAIListModelsWrapper struct{}
 
 func (w *openAIListModelsWrapper) ListModels() ([]ModelInfo, error) {
-	apiKey, err := resolveCredentialValue("openai", "OPENAI_API_KEY")
+	apiKey, err := resolveCredentialValue("openai")
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve OpenAI API key: %w", err)
 	}
@@ -215,7 +215,7 @@ func (w *ollamaLocalListModelsWrapper) ListModels() ([]ModelInfo, error) {
 type openRouterListModelsWrapper struct{}
 
 func (w *openRouterListModelsWrapper) ListModels() ([]ModelInfo, error) {
-	apiKey, err := resolveCredentialValue("openrouter", "OPENROUTER_API_KEY")
+	apiKey, err := resolveCredentialValue("openrouter")
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve OpenRouter API key: %w", err)
 	}
@@ -299,7 +299,7 @@ func (w *openRouterListModelsWrapper) ListModels() ([]ModelInfo, error) {
 type deepInfraListModelsWrapper struct{}
 
 func (w *deepInfraListModelsWrapper) ListModels() ([]ModelInfo, error) {
-	apiKey, err := resolveCredentialValue("deepinfra", "DEEPINFRA_API_KEY")
+	apiKey, err := resolveCredentialValue("deepinfra")
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve DeepInfra API key: %w", err)
 	}
@@ -450,7 +450,7 @@ func (w *lmStudioListModelsWrapper) ListModels() ([]ModelInfo, error) {
 type mistralListModelsWrapper struct{}
 
 func (w *mistralListModelsWrapper) ListModels() ([]ModelInfo, error) {
-	apiKey, err := resolveCredentialValue("mistral", "MISTRAL_API_KEY")
+	apiKey, err := resolveCredentialValue("mistral")
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve Mistral API key: %w", err)
 	}
@@ -729,13 +729,14 @@ func parseFloat(s string) (float64, error) {
 	return strconv.ParseFloat(cleaned, 64)
 }
 
-func resolveCredentialValue(provider, envVar string) (string, error) {
+func resolveCredentialValue(provider string) (string, error) {
+	envVar := credentials.ProviderEnvVar(provider)
 	resolved, err := credentials.Resolve(provider, envVar)
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve credential for %s/%s: %w", provider, envVar, err)
+		return "", fmt.Errorf("failed to resolve credential for %s: %w", provider, err)
 	}
 	if strings.TrimSpace(resolved.Value) == "" {
-		if strings.TrimSpace(envVar) != "" {
+		if envVar != "" {
 			return "", fmt.Errorf("%s not set and no stored API key configured", envVar)
 		}
 		return "", fmt.Errorf("no stored API key configured for %s", provider)

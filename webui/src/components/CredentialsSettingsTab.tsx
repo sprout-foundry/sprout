@@ -50,6 +50,12 @@ function CredentialsSettingsTab(): JSX.Element {
 
   useEffect(() => {
     fetchCredentials();
+    return () => {
+      if (deleteTimerRef.current) {
+        clearTimeout(deleteTimerRef.current);
+        deleteTimerRef.current = null;
+      }
+    };
   }, [fetchCredentials]);
 
   const handleEditStart = (provider: CredentialProvider) => {
@@ -121,8 +127,6 @@ function CredentialsSettingsTab(): JSX.Element {
         return 'OS keyring';
       case 'stored':
         return 'encrypted file';
-      case 'file':
-        return 'encrypted file';
       default:
         return storageBackend || 'storage';
     }
@@ -143,11 +147,11 @@ function CredentialsSettingsTab(): JSX.Element {
 
     switch (source) {
       case 'environment':
-        return <span style={{ ...baseStyle, background: '#e8f5e9', color: '#2e7d32' }}>env</span>;
+        return <span style={{ ...baseStyle, background: 'color-mix(in srgb, var(--color-success, #22c55e) 15%, var(--bg-elevated, #fff))', color: 'var(--color-success, #22c55e)' }}>env</span>;
       case 'stored':
-        return <span style={{ ...baseStyle, background: '#e3f2fd', color: '#1565c0' }}>stored</span>;
+        return <span style={{ ...baseStyle, background: 'color-mix(in srgb, var(--color-info, #3b82f6) 15%, var(--bg-elevated, #fff))', color: 'var(--color-info, #3b82f6)' }}>stored</span>;
       default:
-        return <span style={{ ...baseStyle, background: '#f5f5f5', color: '#757575' }}>none</span>;
+        return <span style={{ ...baseStyle, background: 'color-mix(in srgb, var(--text-muted, #888) 10%, var(--bg-elevated, #fff))', color: 'var(--text-muted, #888)' }}>none</span>;
     }
   };
 
@@ -263,7 +267,7 @@ function CredentialsSettingsTab(): JSX.Element {
                         onClick={() => handleDelete(provider)}
                         style={
                           pendingDeleteProvider === provider.provider
-                            ? { animation: 'pulse 1s infinite' }
+                            ? { animation: 'settings-pulse 1s ease-in-out infinite' }
                             : undefined
                         }
                       >

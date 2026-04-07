@@ -46,7 +46,7 @@ func GetProviderAuthMetadata(provider string) (ProviderAuthMetadata, error) {
 			return ProviderAuthMetadata{
 				Provider:       name,
 				DisplayName:    custom.Name,
-				RequiresAPIKey: custom.RequiresAPIKey || strings.TrimSpace(custom.EnvVar) != "" || strings.TrimSpace(custom.APIKey) != "",
+				RequiresAPIKey: custom.RequiresAPIKey || strings.TrimSpace(custom.EnvVar) != "",
 				EnvVar:         strings.TrimSpace(custom.EnvVar),
 				AuthType:       "bearer",
 			}, nil

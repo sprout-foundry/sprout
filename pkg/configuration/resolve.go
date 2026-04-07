@@ -3,8 +3,6 @@
 package configuration
 
 import (
-	"fmt"
-
 	"github.com/alantheprice/ledit/pkg/credentials"
 )
 
@@ -24,36 +22,12 @@ func init() {
 	})
 }
 
-// ResolveProviderAuth resolves a credential for a provider using the unified resolution chain:
-//   1. Environment variable (from ProviderInfoFunc or built-in metadata)
-//   2. Keyring backend (if active)
-//   3. Encrypted file store
+// ResolveProviderAuth resolves a credential for a provider.
 //
-// Returns ResolvedProviderCredential with the resolved value and source.
-// If the provider does not require an API key, returns with Value="" and Source="none".
+// Deprecated: Use credentials.ResolveProvider(provider) directly.
+// This function is kept for backward compatibility.
 func ResolveProviderAuth(provider string) (ResolvedProviderCredential, error) {
-	metadata, err := GetProviderAuthMetadata(provider)
-	if err != nil {
-		return ResolvedProviderCredential{}, fmt.Errorf("get auth metadata for %q: %w", provider, err)
-	}
-	if !metadata.RequiresAPIKey {
-		return ResolvedProviderCredential{
-			Provider: metadata.Provider,
-			Source:   "none",
-		}, nil
-	}
-
-	// Delegate to the unified credential resolution path
-	resolved, err := credentials.ResolveProvider(provider)
-	if err != nil {
-		return ResolvedProviderCredential{}, fmt.Errorf("resolve credential for %q: %w", provider, err)
-	}
-	return ResolvedProviderCredential{
-		Provider: metadata.Provider,
-		EnvVar:   resolved.EnvVar,
-		Value:    resolved.Value,
-		Source:   resolved.Source,
-	}, nil
+	return credentials.ResolveProvider(provider)
 }
 
 // HasProviderAuth checks whether a provider has a configured credential.

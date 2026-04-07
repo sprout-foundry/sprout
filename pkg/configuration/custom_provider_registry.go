@@ -3,6 +3,7 @@ package configuration
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -191,8 +192,6 @@ func DiscoverCustomProviderModels(cfg CustomProviderConfig) ([]ProviderDiscovery
 
 	if resolved, err := credentials.ResolveProvider(normalized.Name); err == nil && strings.TrimSpace(resolved.Value) != "" {
 		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(resolved.Value))
-	} else if strings.TrimSpace(normalized.APIKey) != "" {
-		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(normalized.APIKey))
 	}
 	req.Header.Set("Content-Type", "application/json")
 
@@ -253,7 +252,7 @@ func (c CustomProviderConfig) ToProviderConfig() (*providers.ProviderConfig, err
 	}
 
 	authType := "none"
-	if normalized.RequiresAPIKey || normalized.EnvVar != "" || normalized.APIKey != "" {
+	if normalized.RequiresAPIKey || normalized.EnvVar != "" {
 		authType = "api_key"
 	}
 
@@ -284,7 +283,7 @@ func (c CustomProviderConfig) ToProviderConfig() (*providers.ProviderConfig, err
 		Auth: providers.AuthConfig{
 			Type:   authType,
 			EnvVar: normalized.EnvVar,
-			Key:    normalized.APIKey,
+			Key:    "",
 		},
 		Headers: map[string]string{},
 		Defaults: providers.RequestDefaults{
@@ -389,4 +388,60 @@ func normalizeUniqueStrings(values []string) []string {
 		out = append(out, trimmed)
 	}
 	return out
+}
+
+// MigrateEmbeddedAPIKeys moves any api_key values found in custom provider JSON files
+// into the unified credential store, then strips the key from the file.
+// This runs on every Load() and is idempotent.
+func MigrateEmbeddedAPIKeys(providers map[string]CustomProviderConfig) error {
+	if len(providers) == 0 {
+		return nil
+	}
+	providersDir, err := GetProvidersDir()
+	if err != nil {
+		return err
+	}
+	files, err := filepath.Glob(filepath.Join(providersDir, "*.json"))
+	if err != nil {
+		return err
+	}
+	for _, path := range files {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		var raw struct {
+			Name   string `json:"name"`
+			APIKey string `json:"api_key"`
+		}
+		if err := json.Unmarshal(data, &raw); err != nil {
+			continue
+		}
+		if strings.TrimSpace(raw.APIKey) == "" {
+			continue
+		}
+		providerName := raw.Name
+		if providerName == "" {
+			providerName = strings.TrimSuffix(filepath.Base(path), ".json")
+		}
+		if err := credentials.SetToActiveBackend(providerName, strings.TrimSpace(raw.APIKey)); err != nil {
+			log.Printf("[migration] failed to migrate api_key for %s to credential store: %v", providerName, err)
+			continue
+		}
+		var cfgMap map[string]interface{}
+		if err := json.Unmarshal(data, &cfgMap); err != nil {
+			continue
+		}
+		delete(cfgMap, "api_key")
+		cleaned, err := json.MarshalIndent(cfgMap, "", "  ")
+		if err != nil {
+			continue
+		}
+		if err := os.WriteFile(path, cleaned, 0600); err != nil {
+			log.Printf("[migration] failed to clean api_key from %s: %v", path, err)
+			continue
+		}
+		log.Printf("[migration] migrated api_key for provider %q to credential store", providerName)
+	}
+	return nil
 }

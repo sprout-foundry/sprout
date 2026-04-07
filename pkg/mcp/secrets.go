@@ -464,4 +464,62 @@ func BuildFullEnvForServer(serverName string, config *MCPServerConfig) (map[stri
 	return result, nil
 }
 
+// buildAuthHeaders returns HTTP headers to set based on resolved credentials.
+// It iterates through all resolved env/credential values and maps them to HTTP headers:
+// - Authorization or GITHUB_PERSONAL_ACCESS_TOKEN -> "Authorization: Bearer {value}"
+// - Other credentials containing "-" (like X-API-Key, X-Auth-Token) -> header name as-is
+// This allows users to configure arbitrary auth headers for HTTP MCP servers
+// through the credential management UI.
+func buildAuthHeaders(serverName string, config *MCPServerConfig) (map[string]string, error) {
+	// Get all resolved environment variables (Env + Credentials)
+	resolvedEnv, err := BuildFullEnvForServer(serverName, config)
+	if err != nil {
+		return nil, err
+	}
+
+	headers := make(map[string]string)
+
+	for envVarName, value := range resolvedEnv {
+		if value == "" {
+			continue
+		}
+
+		envVarUpper := strings.ToUpper(envVarName)
+
+		// Handle Authorization header
+		if envVarUpper == "AUTHORIZATION" || envVarUpper == "GITHUB_PERSONAL_ACCESS_TOKEN" {
+			headers["Authorization"] = "Bearer " + value
+		} else if strings.Contains(envVarUpper, "-") {
+			// Handle header-like env vars (e.g., X-API-Key, X-Auth-Token)
+			// Normalize: convert env var name to HTTP header format
+			// e.g., "X_API_KEY" -> "X-Api-Key", "x_auth_token" -> "X-Auth-Token"
+			headerName := normalizeHeaderName(envVarName)
+			headers[headerName] = value
+		}
+	}
+
+	return headers, nil
+}
+
+// normalizeHeaderName converts an environment variable name to HTTP header format.
+// Splits on both underscores and hyphens, capitalizes each segment, and joins with hyphens.
+// e.g., "X_API_KEY" -> "X-Api-Key", "x-auth_token" -> "X-Auth-Token", "X-API-Key" -> "X-Api-Key"
+func normalizeHeaderName(name string) string {
+	parts := strings.FieldsFunc(name, func(r rune) bool {
+		return r == '_' || r == '-'
+	})
+	if len(parts) == 0 {
+		return ""
+	}
+
+	// Capitalize first letter and lowercase the rest of each part, then join with hyphens
+	for i, part := range parts {
+		if len(part) > 0 {
+			parts[i] = strings.ToUpper(part[:1]) + strings.ToLower(part[1:])
+		}
+	}
+
+	return strings.Join(parts, "-")
+}
+
 

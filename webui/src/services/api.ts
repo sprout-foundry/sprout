@@ -1590,6 +1590,23 @@ class ApiService {
     return await response.json();
   }
 
+  async testProviderConnection(provider: string): Promise<{
+    success: boolean;
+    provider: string;
+    model_count?: number;
+    sample_models?: string[];
+    error?: string;
+  }> {
+    const response = await clientFetch(`/api/settings/credentials/${encodeURIComponent(provider)}/test`, {
+      method: 'POST',
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => 'Unknown error');
+      throw new Error(text || `HTTP error! status: ${response.status}`);
+    }
+    return await response.json();
+  }
+
   async getCustomProviders(): Promise<Record<string, unknown>> {
     try {
       const response = await clientFetch('/api/settings/providers');

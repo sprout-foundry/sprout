@@ -2,6 +2,7 @@ package credentials
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,21 +11,26 @@ import (
 	"time"
 
 	"filippo.io/age"
+	"github.com/gofrs/flock"
 )
 
 // isPlaintextJSON checks if the data is plaintext JSON (legacy format).
 func isPlaintextJSON(data []byte) bool {
 	trimmed := bytes.TrimSpace(data)
-	return bytes.HasPrefix(trimmed, []byte("{")) || bytes.HasPrefix(trimmed, []byte("null"))
+	if !bytes.HasPrefix(trimmed, []byte("{")) && !bytes.HasPrefix(trimmed, []byte("null")) {
+		return false
+	}
+	var v json.RawMessage
+	return json.Unmarshal(trimmed, &v) == nil
 }
 
 // isEncrypted checks if the data is encrypted with age.
 func isEncrypted(data []byte) bool {
-	return bytes.HasPrefix(data, []byte(encryptedMagic))
+	return bytes.HasPrefix(bytes.TrimSpace(data), []byte(encryptedMagic))
 }
 
 // LoadOrCreateMachineKey loads the machine key from disk or generates a new one.
-// Uses file locking to prevent race conditions when multiple processes try to generate the key concurrently.
+// Uses flock-based locking to prevent race conditions when multiple processes try to generate the key concurrently.
 func LoadOrCreateMachineKey() (*age.X25519Identity, error) {
 	keyPath, err := GetMachineKeyPath()
 	if err != nil {
@@ -37,39 +43,20 @@ func LoadOrCreateMachineKey() (*age.X25519Identity, error) {
 		if err == nil {
 			return identity, nil
 		}
-		// If parsing fails, we need to generate a new key
+		// If parsing fails, the key file is corrupted - return error
+		return nil, fmt.Errorf("machine key file exists but is corrupted: %w", err)
 	}
 
-	// Use a lock file to prevent race conditions when generating new keys.
-	// The lock file path is the same as the key path with ".lock" appended.
-	lockPath := keyPath + ".lock"
-
-	// Try to acquire the lock using O_EXCL (fails if file already exists)
-	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0600)
+	// Use flock for proper file locking that survives process death
+	fileLock := flock.New(keyPath + ".lock")
+	locked, err := fileLock.TryLockContext(context.Background(), 5*time.Second)
 	if err != nil {
-		// Lock acquisition failed, another process may be generating the key.
-		// Try reading the key file again - the other process may have finished.
-		if data, err := os.ReadFile(keyPath); err == nil {
-			identity, err := parseKeyFile(data)
-			if err == nil {
-				return identity, nil
-			}
-		}
-		// If we still can't read the key, wait and try to acquire the lock again
-		// with retries to handle the race condition
-		for i := 0; i < 10; i++ {
-			time.Sleep(10 * time.Millisecond)
-			lockFile, err = os.OpenFile(lockPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0600)
-			if err == nil {
-				break
-			}
-		}
-		if err != nil {
-			return nil, fmt.Errorf("failed to acquire lock for key generation after retries: %w", err)
-		}
+		return nil, fmt.Errorf("failed to acquire lock for key generation: %w", err)
 	}
-	defer lockFile.Close()
-	defer os.Remove(lockPath) // Clean up lock file on exit
+	if !locked {
+		return nil, fmt.Errorf("timed out waiting for machine key lock - another process may be generating it")
+	}
+	defer fileLock.Unlock()
 
 	// Double-check: another process may have created the key while we were waiting for the lock
 	if data, err := os.ReadFile(keyPath); err == nil {
@@ -77,6 +64,7 @@ func LoadOrCreateMachineKey() (*age.X25519Identity, error) {
 		if err == nil {
 			return identity, nil
 		}
+		return nil, fmt.Errorf("machine key file exists but is corrupted: %w", err)
 	}
 
 	// Generate new key
@@ -115,10 +103,18 @@ func loadMachineKey() (*age.X25519Identity, error) {
 
 // parseKeyFile parses an age key file and returns the identity.
 func parseKeyFile(data []byte) (*age.X25519Identity, error) {
-	// Try unarmored format first
+	// Try raw format first
 	identity, err := age.ParseX25519Identity(string(data))
 	if err == nil {
 		return identity, nil
+	}
+
+	// Try armored format via generic ParseIdentities
+	identities, err := age.ParseIdentities(bytes.NewReader(data))
+	if err == nil && len(identities) > 0 {
+		if id, ok := identities[0].(*age.X25519Identity); ok {
+			return id, nil
+		}
 	}
 
 	return nil, fmt.Errorf("failed to parse key file: %w", err)
@@ -169,6 +165,10 @@ func EncryptStore(plaintext []byte) ([]byte, error) {
 // Returns the decrypted data as a byte slice. If decryption fails due to
 // a missing machine key, an error is returned with guidance on how to
 // resolve the issue.
+//
+// Maximum decrypted size is limited to 10 MB to prevent memory exhaustion attacks.
+const maxDecryptedSize = 10 << 20 // 10 MB
+
 func DecryptStore(data []byte) ([]byte, error) {
 	// Check if already plaintext JSON (legacy format)
 	if isPlaintextJSON(data) {
@@ -179,7 +179,7 @@ func DecryptStore(data []byte) ([]byte, error) {
 	identity, err := loadMachineKey()
 	if err != nil {
 		// Provide actionable guidance when machine key is missing
-		if os.IsNotExist(err) || strings.Contains(err.Error(), "failed to read") {
+		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("machine key not found. Run 'ledit keys migrate' to generate a new machine key, "+
 				"or set LEDIT_PASSPHRASE environment variable to decrypt with passphrase: %w", err)
 		}
@@ -191,7 +191,7 @@ func DecryptStore(data []byte) ([]byte, error) {
 		return nil, fmt.Errorf("failed to decrypt with machine key: %w", err)
 	}
 
-	return io.ReadAll(r)
+	return io.ReadAll(io.LimitReader(r, maxDecryptedSize))
 }
 
 // EncryptWithPassphrase encrypts plaintext data using a passphrase-derived key.
@@ -237,6 +237,8 @@ func EncryptWithPassphrase(plaintext []byte, passphrase string) ([]byte, error) 
 //
 // Returns the decrypted data as a byte slice. Returns an error if the passphrase
 // is incorrect or if the data cannot be decrypted.
+//
+// Maximum decrypted size is limited to 10 MB to prevent memory exhaustion attacks.
 func DecryptWithPassphrase(data []byte, passphrase string) ([]byte, error) {
 	identity, err := age.NewScryptIdentity(passphrase)
 	if err != nil {
@@ -250,7 +252,7 @@ func DecryptWithPassphrase(data []byte, passphrase string) ([]byte, error) {
 		return nil, fmt.Errorf("failed to decrypt with passphrase: %w", err)
 	}
 
-	return io.ReadAll(r)
+	return io.ReadAll(io.LimitReader(r, maxDecryptedSize))
 }
 
 // Load loads the API keys store from disk.
@@ -297,7 +299,8 @@ func Load() (Store, error) {
 // key, and writes the encrypted data to the configured API keys file.
 //
 // The file is created with permissions 0600 (read/write for owner only) to ensure
-// API keys are stored securely on disk.
+// API keys are stored securely on disk. The write is atomic (using a temp file + rename)
+// to prevent data corruption if the process crashes during the write.
 func Save(store Store) error {
 	path, err := GetAPIKeysPath()
 	if err != nil {
@@ -317,7 +320,19 @@ func Save(store Store) error {
 		return fmt.Errorf("failed to encrypt API keys: %w", err)
 	}
 
-	return os.WriteFile(path, encrypted, 0600)
+	// Write to temp file in the same directory (ensures same filesystem for atomic rename)
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, encrypted, 0600); err != nil {
+		return fmt.Errorf("failed to write temp file: %w", err)
+	}
+
+	// Atomically replace the original
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath) // cleanup
+		return fmt.Errorf("failed to replace API keys file: %w", err)
+	}
+
+	return nil
 }
 
 // Resolve resolves a credential for a provider.
@@ -368,8 +383,10 @@ type EncryptionStatus struct {
 // - The encryption mode (machine-key, passphrase, or plaintext)
 // - Whether a machine key exists on disk
 //
-// This is useful for displaying status information to users or for
-// making decisions about whether encryption needs to be enabled.
+// Note: The Mode field is a best-effort heuristic. It cannot definitively distinguish
+// between passphrase-encrypted and foreign-encrypted data without attempting decryption.
+// If a machine key exists, it reports "machine-key" as the likely mode, but this may
+// be incorrect if the data was encrypted with a different key.
 func CheckEncryptionStatus() (EncryptionStatus, error) {
 	status := EncryptionStatus{}
 
@@ -391,12 +408,12 @@ func CheckEncryptionStatus() (EncryptionStatus, error) {
 		status.Mode = "plaintext"
 	} else if isEncrypted(data) {
 		status.Encrypted = true
-		// Try to determine mode
+		// Try to determine mode - this is a best-effort heuristic
 		_, err := loadMachineKey()
 		if err == nil {
-			status.Mode = "machine-key"
+			status.Mode = "machine-key" // Likely, but not certain
 		} else {
-			status.Mode = "passphrase"
+			status.Mode = "passphrase" // Likely, but not certain
 		}
 	}
 

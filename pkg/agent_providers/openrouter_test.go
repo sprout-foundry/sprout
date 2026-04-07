@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
@@ -25,7 +26,7 @@ func TestListModelsParsing(t *testing.T) {
 	}
 
 	// Test that we can list models
-	models, err := p.ListModels()
+	models, err := p.ListModels(context.Background())
 	if err != nil {
 		t.Fatal("ListModels failed:", err)
 	}
@@ -60,7 +61,7 @@ func TestListModelsParsing(t *testing.T) {
 	}
 
 	// Test that model caching works
-	models2, err := p.ListModels()
+	models2, err := p.ListModels(context.Background())
 	if err != nil {
 		t.Fatal("Second ListModels call failed:", err)
 	}

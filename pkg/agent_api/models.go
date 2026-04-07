@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,7 +11,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/alantheprice/ledit/pkg/credentials"
 )
@@ -49,6 +49,11 @@ func GetAvailableModels() ([]ModelInfo, error) {
 
 // GetModelsForProvider returns available models for a specific provider
 func GetModelsForProvider(clientType ClientType) ([]ModelInfo, error) {
+	return GetModelsForProviderCtx(context.Background(), clientType)
+}
+
+// GetModelsForProviderCtx returns available models for a specific provider with context support
+func GetModelsForProviderCtx(ctx context.Context, clientType ClientType) ([]ModelInfo, error) {
 	// Use the provider's ListModels method
 	provider, err := createProviderForType(clientType)
 	if err != nil {
@@ -59,7 +64,7 @@ func GetModelsForProvider(clientType ClientType) ([]ModelInfo, error) {
 		return nil, fmt.Errorf("provider %s does not support model listing", clientType)
 	}
 
-	models, listErr := provider.ListModels()
+	models, listErr := provider.ListModels(ctx)
 	if listErr != nil {
 		return nil, fmt.Errorf("failed to list models for %s: %w", clientType, listErr)
 	}
@@ -68,7 +73,7 @@ func GetModelsForProvider(clientType ClientType) ([]ModelInfo, error) {
 }
 
 // createProviderForType creates a provider instance for the given client type
-func createProviderForType(clientType ClientType) (interface{ ListModels() ([]ModelInfo, error) }, error) {
+func createProviderForType(clientType ClientType) (interface{ ListModels(context.Context) ([]ModelInfo, error) }, error) {
 	switch clientType {
 	case OllamaClientType, OllamaLocalClientType:
 		client, err := NewOllamaLocalClient("llama3.1:8b") // Use an available model
@@ -105,15 +110,14 @@ func createProviderForType(clientType ClientType) (interface{ ListModels() ([]Mo
 
 type openAIListModelsWrapper struct{}
 
-func (w *openAIListModelsWrapper) ListModels() ([]ModelInfo, error) {
+func (w *openAIListModelsWrapper) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	apiKey, err := credentials.ResolveProviderAPIKey("openai", "OpenAI")
 	if err != nil {
 		return nil, err
 	}
 
-	client := &http.Client{Timeout: 30 * time.Second}
-
-	req, err := http.NewRequest("GET", "https://api.openai.com/v1/models", nil)
+	// Use context for request timeout - no need for separate client timeout
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.openai.com/v1/models", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -121,6 +125,7 @@ func (w *openAIListModelsWrapper) ListModels() ([]ModelInfo, error) {
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
+	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch OpenAI models: %w", err)
@@ -208,21 +213,19 @@ type ollamaLocalListModelsWrapper struct {
 	client *OllamaLocalClient
 }
 
-func (w *ollamaLocalListModelsWrapper) ListModels() ([]ModelInfo, error) {
-	return w.client.ListModels()
+func (w *ollamaLocalListModelsWrapper) ListModels(ctx context.Context) ([]ModelInfo, error) {
+	return w.client.ListModels(ctx)
 }
 
 type openRouterListModelsWrapper struct{}
 
-func (w *openRouterListModelsWrapper) ListModels() ([]ModelInfo, error) {
+func (w *openRouterListModelsWrapper) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	apiKey, err := credentials.ResolveProviderAPIKey("openrouter", "OpenRouter")
 	if err != nil {
 		return nil, err
 	}
 
-	client := &http.Client{Timeout: 30 * time.Second}
-
-	req, err := http.NewRequest("GET", "https://openrouter.ai/api/v1/models", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://openrouter.ai/api/v1/models", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -230,6 +233,7 @@ func (w *openRouterListModelsWrapper) ListModels() ([]ModelInfo, error) {
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
+	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch OpenRouter models: %w", err)
@@ -298,16 +302,14 @@ func (w *openRouterListModelsWrapper) ListModels() ([]ModelInfo, error) {
 
 type deepInfraListModelsWrapper struct{}
 
-func (w *deepInfraListModelsWrapper) ListModels() ([]ModelInfo, error) {
+func (w *deepInfraListModelsWrapper) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	apiKey, err := credentials.ResolveProviderAPIKey("deepinfra", "DeepInfra")
 	if err != nil {
 		return nil, err
 	}
 
-	client := &http.Client{Timeout: 30 * time.Second}
-
 	// Use the OpenAI-compatible endpoint like the DeepInfra provider does
-	req, err := http.NewRequest("GET", "https://api.deepinfra.com/v1/openai/models", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.deepinfra.com/v1/openai/models", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -315,6 +317,7 @@ func (w *deepInfraListModelsWrapper) ListModels() ([]ModelInfo, error) {
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
+	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch DeepInfra models: %w", err)
@@ -388,21 +391,20 @@ func (w *deepInfraListModelsWrapper) ListModels() ([]ModelInfo, error) {
 
 type lmStudioListModelsWrapper struct{}
 
-func (w *lmStudioListModelsWrapper) ListModels() ([]ModelInfo, error) {
+func (w *lmStudioListModelsWrapper) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	baseURL := os.Getenv("LMSTUDIO_BASE_URL")
 	if baseURL == "" {
 		baseURL = "http://127.0.0.1:1234/v1"
 	}
 
-	client := &http.Client{Timeout: 30 * time.Second}
-
-	req, err := http.NewRequest("GET", baseURL+"/models", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", baseURL+"/models", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 
+	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch LM Studio models: %w", err)
@@ -449,16 +451,14 @@ func (w *lmStudioListModelsWrapper) ListModels() ([]ModelInfo, error) {
 
 type mistralListModelsWrapper struct{}
 
-func (w *mistralListModelsWrapper) ListModels() ([]ModelInfo, error) {
+func (w *mistralListModelsWrapper) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	apiKey, err := credentials.ResolveProviderAPIKey("mistral", "Mistral")
 	if err != nil {
 		return nil, err
 	}
 
-	client := &http.Client{Timeout: 30 * time.Second}
-
 	// Use OpenAI-compatible models endpoint
-	req, err := http.NewRequest("GET", "https://api.mistral.ai/v1/models", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.mistral.ai/v1/models", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -466,6 +466,7 @@ func (w *mistralListModelsWrapper) ListModels() ([]ModelInfo, error) {
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
+	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch Mistral models: %w", err)
@@ -562,12 +563,12 @@ type customProviderFile struct {
 	EnvVar   string `json:"env_var,omitempty"`
 }
 
-func (w *genericConfigListModelsWrapper) ListModels() ([]ModelInfo, error) {
+func (w *genericConfigListModelsWrapper) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	if builtInModels, err := w.loadBuiltInProviderModels(); err == nil {
 		return builtInModels, nil
 	}
 
-	return w.loadCustomProviderModels()
+	return w.loadCustomProviderModels(ctx)
 }
 
 func (w *genericConfigListModelsWrapper) loadBuiltInProviderModels() ([]ModelInfo, error) {
@@ -602,7 +603,7 @@ func (w *genericConfigListModelsWrapper) loadBuiltInProviderModels() ([]ModelInf
 	return models, nil
 }
 
-func (w *genericConfigListModelsWrapper) loadCustomProviderModels() ([]ModelInfo, error) {
+func (w *genericConfigListModelsWrapper) loadCustomProviderModels(ctx context.Context) ([]ModelInfo, error) {
 	data, err := os.ReadFile(customProviderFilePath(w.providerName))
 	if err != nil {
 		return nil, fmt.Errorf("failed to load %s provider config: %w", w.providerName, err)
@@ -613,7 +614,7 @@ func (w *genericConfigListModelsWrapper) loadCustomProviderModels() ([]ModelInfo
 		return nil, fmt.Errorf("failed to parse %s provider config: %w", w.providerName, err)
 	}
 
-	models, err := fetchOpenAICompatibleModels(w.providerName, providerConfig.Endpoint)
+	models, err := fetchOpenAICompatibleModels(ctx, w.providerName, providerConfig.Endpoint)
 	if err == nil && len(models) > 0 {
 		for i := range models {
 			models[i].Provider = w.providerName
@@ -648,9 +649,9 @@ func customProviderFilePath(providerName string) string {
 	return filepath.Join(configRoot, "providers", providerName+".json")
 }
 
-func fetchOpenAICompatibleModels(providerName, endpoint string) ([]ModelInfo, error) {
+func fetchOpenAICompatibleModels(ctx context.Context, providerName, endpoint string) ([]ModelInfo, error) {
 	modelsEndpoint := strings.TrimSuffix(strings.TrimSpace(endpoint), "/chat/completions") + "/models"
-	req, err := http.NewRequest("GET", modelsEndpoint, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", modelsEndpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -664,7 +665,7 @@ func fetchOpenAICompatibleModels(providerName, endpoint string) ([]ModelInfo, er
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{Timeout: 20 * time.Second}
+	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch models from %s: %w", providerName, err)

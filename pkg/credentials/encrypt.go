@@ -446,10 +446,11 @@ func Save(store Store) error {
 //
 // This function attempts to resolve a credential in the following order:
 // 1. Environment variable (if envVar is provided and set)
-// 2. Stored credential (from the API keys file)
+// 2. Keyring backend (if keyring backend is active and key exists)
+// 3. Encrypted file store
 //
 // The returned Resolved struct contains the credential value, the source
-// ("environment" or "stored"), and metadata about the provider and env var.
+// ("environment", "keyring", or "stored"), and metadata about the provider and env var.
 //
 // This function is useful for applications that want to support both
 // environment variables and stored credentials as fallback.
@@ -465,6 +466,22 @@ func Resolve(provider, envVar string) (Resolved, error) {
 			return resolved, nil
 		}
 	}
+
+	// Try keyring backend first (if active and not file backend)
+	// Skip the backend check if it's a FileBackend to avoid dual decryption
+	// since we'll fall through to the file store lookup below anyway.
+	backend, err := GetStorageBackend()
+	if err == nil {
+		if _, isFile := backend.(*FileBackend); !isFile {
+			if value, err := backend.Get(resolved.Provider); err == nil && value != "" {
+				resolved.Value = value
+				resolved.Source = backend.Source()
+				return resolved, nil
+			}
+		}
+	}
+
+	// Fall back to encrypted file store
 	store, err := Load()
 	if err != nil {
 		return Resolved{}, fmt.Errorf("load credentials store: %w", err)

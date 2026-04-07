@@ -161,6 +161,9 @@ func TestResolveWithEnvVar(t *testing.T) {
 }
 
 func TestResolveWithStoredKey(t *testing.T) {
+	ResetStorageBackend() // Reset backend cache for this test
+	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+
 	tmpDir := t.TempDir()
 	originalConfig := os.Getenv("LEDIT_CONFIG")
 	os.Setenv("LEDIT_CONFIG", tmpDir)

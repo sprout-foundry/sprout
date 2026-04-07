@@ -3,6 +3,7 @@ package mcp
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -100,6 +101,8 @@ func LoadMCPConfig() (MCPConfig, error) {
 		if err := json.Unmarshal(data, &mcpConfig); err != nil {
 			return mcpConfig, fmt.Errorf("failed to parse MCP config file: %w", err)
 		}
+		// Auto-migrate any plaintext secrets found in the config file
+		migrateSecretsOnLoad(&mcpConfig)
 	}
 
 	// Override with environment variables if present
@@ -152,7 +155,39 @@ func LoadMCPConfig() (MCPConfig, error) {
 		}
 	}
 
+	// Auto-migrate any secrets from auto-discovered servers
+	migrateSecretsOnLoad(&mcpConfig)
+
 	return mcpConfig, nil
+}
+
+// migrateSecretsOnLoad auto-migrates plaintext secrets in all server env blocks
+// to the credential store. This is a best-effort migration: errors are logged but
+// do not fail the config load. If any secrets were migrated, the updated config
+// is saved back to disk so the config file no longer contains raw token values.
+func migrateSecretsOnLoad(config *MCPConfig) {
+	if config == nil || len(config.Servers) == 0 {
+		return
+	}
+	totalMigrated := 0
+	for name := range config.Servers {
+		s := config.Servers[name]
+		count, err := MigrateEnvSecretsFromServer(name, &s)
+		if err != nil {
+			log.Printf("[mcp-secrets] Warning: failed to auto-migrate secrets for server %s: %v", name, err)
+		}
+		if count > 0 {
+			config.Servers[name] = s
+			totalMigrated += count
+		}
+	}
+	if totalMigrated > 0 {
+		if err := SaveMCPConfig(config); err != nil {
+			log.Printf("[mcp-secrets] Warning: failed to persist migrated config: %v", err)
+		} else {
+			log.Printf("[mcp-secrets] Auto-migrated %d secret(s) from MCP config to credential store", totalMigrated)
+		}
+	}
 }
 
 // isPlaywrightAvailable checks if Playwright MCP packages are likely available
@@ -181,6 +216,18 @@ func isPlaywrightAvailable() bool {
 
 // SaveMCPConfig saves MCP configuration to file
 func SaveMCPConfig(mcpConfig *MCPConfig) error {
+	// Before persisting, migrate any plaintext secrets to the credential store.
+	// This is the persistence boundary — all save paths go through here.
+	for name := range mcpConfig.Servers {
+		s := mcpConfig.Servers[name]
+		count, err := MigrateEnvSecretsFromServer(name, &s)
+		if err != nil {
+			log.Printf("[mcp-secrets] Warning: failed to migrate secrets for server %s: %v", name, err)
+		} else if count > 0 {
+			mcpConfig.Servers[name] = s
+		}
+	}
+
 	configDir, err := getConfigDir()
 	if err != nil {
 		return fmt.Errorf("failed to get config directory: %w", err)
@@ -206,7 +253,10 @@ func SaveMCPConfig(mcpConfig *MCPConfig) error {
 
 // AddGitHubServer adds a GitHub MCP server to the configuration
 func (c *MCPConfig) AddGitHubServer(githubToken string) {
-	c.Servers["github"] = MCPServerConfig{
+	if c.Servers == nil {
+		c.Servers = make(map[string]MCPServerConfig)
+	}
+	server := MCPServerConfig{
 		Name:        "github",
 		Command:     "npx",
 		Args:        []string{"-y", "@modelcontextprotocol/server-github"},
@@ -217,6 +267,10 @@ func (c *MCPConfig) AddGitHubServer(githubToken string) {
 			"GITHUB_PERSONAL_ACCESS_TOKEN": githubToken,
 		},
 	}
+	if _, err := MigrateEnvSecretsFromServer("github", &server); err != nil {
+		log.Printf("[mcp-secrets] Warning: failed to migrate GitHub token: %v", err)
+	}
+	c.Servers["github"] = server
 	c.Enabled = true
 }
 

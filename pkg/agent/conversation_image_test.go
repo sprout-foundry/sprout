@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/base64"
 	"os"
 	"path/filepath"
@@ -238,7 +239,7 @@ func (v *visionSupportingClient) GetVisionModel() string {
 func (v *visionSupportingClient) SendVisionRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
 	return nil, nil
 }
-func (v *visionSupportingClient) ListModels() ([]api.ModelInfo, error) {
+func (v *visionSupportingClient) ListModels(ctx context.Context) ([]api.ModelInfo, error) {
 	return nil, nil
 }
 

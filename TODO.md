@@ -167,8 +167,7 @@
 
 ### General
 
-[x] - WEBUI: Add support for leveraging worktrees for runnning secondary chats for scoped feature work.
-[] - WEBUI: Add support for leveraging worktrees for runnning secondary chats for scoped feature work.
+[x] - WEBUI: Add support for leveraging worktrees for running secondary chats for scoped feature work.
 
 ---
 

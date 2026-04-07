@@ -675,7 +675,24 @@ export default function useWebSocketEvents({
         logEntry.level = 'info';
         debugLog('[workspace] Workspace changed:', eventData);
         if (!eventData?.client_id || eventData.client_id === getWebUIClientId()) {
-          window.location.reload();
+          if (eventData?.source === 'worktree_switch' || eventData?.source === 'worktree_clear') {
+            // Worktree chat switches and clears should NOT hard-reload — they
+            // change the workspace root for the active chat but the browser
+            // tab and all in-memory React state should stay intact.  Dispatch
+            // a DOM event so workspace-dependent UI (file tree, breadcrumbs…)
+            // refreshes.
+            debugLog('[workspace] Worktree switch/clear detected — refreshing workspace state without page reload');
+            setState((prev) => ({ ...prev, logs: [...prev.logs, logEntry] }));
+            const detail = {
+              workspaceRoot: String(eventData.workspace_root || ''),
+              daemonRoot: String(eventData.daemon_root || ''),
+            };
+            window.dispatchEvent(new CustomEvent('ledit:workspace-changed', { detail }));
+          } else {
+            // Full workspace change (e.g. switch-to-worktree from the worktree
+            // panel, SSH navigation, etc.) — reload to pick up the new root.
+            window.location.reload();
+          }
         }
         break;
 

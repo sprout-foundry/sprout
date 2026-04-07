@@ -103,9 +103,18 @@ func providerRequiresAPIKey(provider string) bool {
 //  2. Keyring backend (if active)
 //  3. Encrypted file store
 //
+// For providers that don't require API keys (local providers), returns immediately
+// with Source="none" and Value="".
+//
 // Returns credentials.Resolved with the value and source.
 func ResolveProvider(provider string) (Resolved, error) {
 	info := getProviderInfo(provider)
+
+	// Providers that don't require API keys (local providers) skip resolution
+	if !info.RequiresAPIKey {
+		return Resolved{Provider: strings.TrimSpace(provider), Source: "none"}, nil
+	}
+
 	return Resolve(provider, info.EnvVar)
 }
 

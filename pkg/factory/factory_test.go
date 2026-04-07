@@ -1,6 +1,7 @@
 package factory
 
 import (
+	"context"
 	"testing"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
@@ -157,7 +158,7 @@ func TestTestClient_GetModelContextLimit(t *testing.T) {
 func TestTestClient_ListModels(t *testing.T) {
 	client := &TestClient{}
 
-	models, err := client.ListModels()
+	models, err := client.ListModels(context.Background())
 	if err != nil {
 		t.Fatalf("ListModels failed: %v", err)
 	}
@@ -285,7 +286,7 @@ func TestCreateProviderClient_TestClientType_FullInterface(t *testing.T) {
 	// Test all interface methods work without panic
 	_ = client.GetProvider()
 	_, _ = client.GetModelContextLimit()
-	_, _ = client.ListModels()
+	_, _ = client.ListModels(context.Background())
 	_ = client.SupportsVision()
 	_ = client.GetVisionModel()
 	_, _ = client.SendChatRequest(nil, nil, "")

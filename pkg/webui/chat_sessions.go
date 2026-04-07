@@ -7,8 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
-	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
@@ -490,7 +488,9 @@ func (cc *webClientContext) setChatQueryActive(chatID string, active bool, query
 }
 
 // setChatSessionWorktree sets the worktree path for a chat session.
-// Returns an error if the path is invalid or not a valid git worktree.
+// The caller is responsible for validating the path before calling this function.
+// Callers must provide an absolute path. This function trusts its caller and
+// stores the path as-is without any normalization.
 func (cc *webClientContext) setChatSessionWorktree(chatID, worktreePath string) error {
 	if cc.ChatSessions == nil {
 		return fmt.Errorf("chat sessions not initialized")
@@ -501,32 +501,6 @@ func (cc *webClientContext) setChatSessionWorktree(chatID, worktreePath string) 
 	cs, ok := cc.ChatSessions[chatID]
 	if !ok {
 		return fmt.Errorf("chat session not found")
-	}
-	
-	// Validate the worktree path
-	if worktreePath != "" {
-		absPath, err := filepathAbsEval(worktreePath)
-		if err != nil {
-			return fmt.Errorf("resolve worktree path: %w", err)
-		}
-		
-		// Check if path exists and is a directory
-		info, err := os.Stat(absPath)
-		if err != nil {
-			return fmt.Errorf("stat worktree path: %w", err)
-		}
-		if !info.IsDir() {
-			return fmt.Errorf("worktree path %q must be a directory", absPath)
-		}
-		
-		// Verify it's a valid git worktree using git rev-parse
-		cmd := exec.Command("git", "rev-parse", "--git-dir")
-		cmd.Dir = absPath
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("worktree path %q is not a valid git repository or worktree", absPath)
-		}
-		
-		worktreePath = absPath
 	}
 	
 	cs.setWorktreePath(worktreePath)

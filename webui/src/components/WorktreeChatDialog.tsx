@@ -30,6 +30,7 @@ export const WorktreeChatDialog: React.FC<WorktreeChatDialogProps> = ({
   const [autoSwitch, setAutoSwitch] = useState(true);
   const [existingWorktrees, setExistingWorktrees] = useState<WorktreeInfo[]>([]);
   const [isLoadingWorktrees, setIsLoadingWorktrees] = useState(false);
+  const [worktreesError, setWorktreesError] = useState(false);
   
   const branchInputRef = useRef<HTMLInputElement>(null);
 
@@ -41,6 +42,7 @@ export const WorktreeChatDialog: React.FC<WorktreeChatDialogProps> = ({
       setName('');
       setAutoSwitch(true);
       setExistingWorktrees([]);
+      setWorktreesError(false);
       
       // Focus the branch input when dialog opens
       setTimeout(() => {
@@ -53,6 +55,7 @@ export const WorktreeChatDialog: React.FC<WorktreeChatDialogProps> = ({
         .then((resp) => setExistingWorktrees(resp.worktrees))
         .catch((err) => {
           console.warn('[WorktreeChatDialog] Failed to load existing worktrees:', err);
+          setWorktreesError(true);
         })
         .finally(() => setIsLoadingWorktrees(false));
     }
@@ -88,6 +91,10 @@ export const WorktreeChatDialog: React.FC<WorktreeChatDialogProps> = ({
 
     // Validate branch is non-empty
     if (!branch.trim()) {
+      return;
+    }
+
+    if (branchHasWorktree === true) {
       return;
     }
 
@@ -237,6 +244,11 @@ export const WorktreeChatDialog: React.FC<WorktreeChatDialogProps> = ({
                 <Loader2 size={14} className="wt-chat-dialog-spinner" />
                 <span>Loading worktrees…</span>
               </div>
+            ) : worktreesError ? (
+              <div className="wt-chat-dialog-worktrees-empty wt-chat-dialog-worktrees-error">
+                <AlertCircle size={14} />
+                Could not load existing worktrees.
+              </div>
             ) : selectableWorktrees.length === 0 ? (
               <div className="wt-chat-dialog-worktrees-empty">
                 No existing worktrees. The branch above will create a new one.
@@ -277,7 +289,7 @@ export const WorktreeChatDialog: React.FC<WorktreeChatDialogProps> = ({
             <button
               type="submit"
               className="wt-chat-dialog-btn-create"
-              disabled={isCreating || !branch.trim()}
+              disabled={isCreating || !branch.trim() || branchHasWorktree === true}
             >
               {isCreating ? (
                 <>

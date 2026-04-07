@@ -68,9 +68,6 @@ func (ws *ReactWebServer) handleAPISettingsProvidersPost(w http.ResponseWriter, 
 		return
 	}
 
-	// Strip any incoming API key — never accept from the browser.
-	provider.APIKey = ""
-
 	if err := validateCustomProvider(provider); err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -124,8 +121,6 @@ func (ws *ReactWebServer) handleAPISettingsProvidersPut(w http.ResponseWriter, r
 
 	// Ensure name in body matches URL
 	provider.Name = name
-	// Strip incoming API key
-	provider.APIKey = ""
 
 	if err := validateCustomProvider(provider); err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
@@ -139,9 +134,6 @@ func (ws *ReactWebServer) handleAPISettingsProvidersPut(w http.ResponseWriter, r
 		if _, exists := cfg.CustomProviders[name]; !exists {
 			return fmt.Errorf("custom provider %q not found (use POST to create)", name)
 		}
-		// Preserve the existing API key if stored
-		existing := cfg.CustomProviders[name]
-		provider.APIKey = existing.APIKey
 		cfg.CustomProviders[name] = provider
 		return nil
 	})

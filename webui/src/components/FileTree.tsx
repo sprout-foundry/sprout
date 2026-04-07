@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef, useMemo, forwardRef, useImperativeHandle, Fragment } from 'react';
-import type { KeyboardEvent, ReactNode, DragEvent } from 'react';
-import { showThemedConfirm } from './ThemedDialog';
+import type { KeyboardEvent, MouseEvent, ReactNode, DragEvent } from 'react';
+import { showThemedConfirm, showThemedPrompt } from './ThemedDialog';
 import ContextMenu from './ContextMenu';
+import SelectionActionBar from './SelectionActionBar';
 import {
   FolderOpen,
   Folder,
@@ -28,6 +29,9 @@ import {
   Check,
   Eye,
   EyeOff,
+  Trash2,
+  FolderInput,
+  ClipboardCopy,
 } from 'lucide-react';
 import './FileTree.css';
 import { ApiService } from '../services/api';
@@ -35,8 +39,9 @@ import { clientFetch } from '../services/clientSession';
 import { copyToClipboard } from '../utils/clipboard';
 import { fuzzyScore, highlightMatches } from '../utils/fuzzyMatch';
 import { debugLog } from '../utils/log';
+import { useMultiSelect, flattenVisibleFiles } from '../hooks/useMultiSelect';
 
-interface FileInfo {
+export interface FileInfo {
   name: string;
   path: string;
   isDir: boolean;
@@ -120,6 +125,9 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
     const [draggedPath, setDraggedPath] = useState<string | null>(null);
     const [dropTargetPath, setDropTargetPath] = useState<string | null>(null);
     const [isDropOnRoot, setIsDropOnRoot] = useState(false);
+
+    // ── Multi-select state ─────────────────────────────────────────────
+    const [multiSelect, multiActions] = useMultiSelect();
 
     const findFileByPath = useCallback((fileList: FileInfo[], targetPath: string): FileInfo | null => {
       for (const file of fileList) {
@@ -584,6 +592,12 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
 
     const treeData = isFiltering ? filteredFiles : visibleFiles;
 
+    // Flattened visible order for shift-click range selection
+    const visibleOrder = useMemo(() => flattenVisibleFiles(treeData), [treeData]);
+
+    // Whether multi-select is disabled (during draft mode)
+    const multiSelectDisabled = draft !== null;
+
     const handleFilterKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
       if (e.key === 'Escape') {
         e.preventDefault();
@@ -593,7 +607,40 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
     }, []);
 
     const handleClick = useCallback(
-      async (file: FileInfo) => {
+      async (file: FileInfo, e?: MouseEvent) => {
+        const isModKey = e && (e.ctrlKey || e.metaKey);
+        const isShift = e && e.shiftKey;
+
+        // During draft mode, disable multi-select entirely
+        if (multiSelectDisabled) {
+          if (file.isDir && !isFiltering) {
+            await toggleDir(file.path);
+            return;
+          }
+          if (!file.isDir) {
+            onFileSelect(file);
+          }
+          return;
+        }
+
+        // Shift+Click: range select but don't open file/dir
+        if (isShift && !isModKey) {
+          e?.preventDefault();
+          multiActions.handleShiftClick(file.path, visibleOrder);
+          return;
+        }
+
+        // Ctrl/Cmd+Click: toggle item in/out of selection
+        if (isModKey && !isShift) {
+          e?.preventDefault();
+          multiActions.handleCtrlClick(file.path);
+          return;
+        }
+
+        // Normal click: clear multi-selection (handled by handleNormalClick),
+        // then proceed with default behavior
+        multiActions.handleNormalClick(file.path);
+
         if (file.isDir && !isFiltering) {
           await toggleDir(file.path);
           return;
@@ -603,7 +650,148 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
           onFileSelect(file);
         }
       },
-      [isFiltering, onFileSelect, toggleDir],
+      [isFiltering, onFileSelect, toggleDir, multiActions, multiSelectDisabled, visibleOrder],
+    );
+
+    // ── Batch operations ──────────────────────────────────────────────
+
+    const handleBatchDelete = useCallback(async () => {
+      const paths = Array.from(multiSelect.selectedPaths);
+      if (paths.length === 0) return;
+
+      const confirmed = await showThemedConfirm(
+        `Delete ${paths.length} item${paths.length !== 1 ? 's' : ''}? This action cannot be undone.`,
+        { title: 'Confirm Delete', type: 'danger' },
+      );
+      if (!confirmed) return;
+
+      setContextMenu(null);
+      multiActions.setBatchBusy(true);
+      let failed = 0;
+
+      for (let i = 0; i < paths.length; i++) {
+        multiActions.setBatchProgress(`Deleting ${i + 1}/${paths.length}…`);
+        try {
+          await apiService.deleteItem(paths[i]);
+          onDeleteItem?.(paths[i]);
+        } catch (err) {
+          debugLog(`[batchDelete] Failed to delete "${paths[i]}":`, err);
+          setError(err instanceof Error ? err.message : `Failed to delete ${paths[i]}`);
+          failed++;
+        }
+      }
+
+      multiActions.setBatchProgress(null);
+      multiActions.setBatchBusy(false);
+      multiActions.clearSelection();
+      await refreshTree();
+
+      if (failed > 0 && failed < paths.length) {
+        debugLog(`[batchDelete] ${failed}/${paths.length} items failed to delete`);
+      }
+    }, [multiSelect.selectedPaths, apiService, onDeleteItem, refreshTree, multiActions]);
+
+    const handleBatchMove = useCallback(async () => {
+      const paths = Array.from(multiSelect.selectedPaths);
+      if (paths.length === 0) return;
+
+      // Compute common parent
+      const computeCommonParent = (pathList: string[]): string => {
+        if (pathList.length === 0) return rootPath;
+        const first = pathList[0].split('/').filter(Boolean);
+        first.pop(); // remove filename
+        let common = first;
+        for (let i = 1; i < pathList.length; i++) {
+          const parts = pathList[i].split('/').filter(Boolean);
+          parts.pop();
+          const minLen = Math.min(common.length, parts.length);
+          common = common.slice(0, minLen);
+          for (let j = 0; j < minLen; j++) {
+            if (common[j] !== parts[j]) {
+              common = common.slice(0, j);
+              break;
+            }
+          }
+        }
+        return common.length > 0 ? common.join('/') : rootPath;
+      };
+
+      const defaultDir = computeCommonParent(paths);
+      const targetDir = await showThemedPrompt('Move selected items to directory:', {
+        title: 'Move Items',
+        defaultValue: defaultDir,
+        placeholder: 'Target directory path',
+      });
+
+      if (!targetDir || !targetDir.trim()) return;
+
+      setContextMenu(null);
+      multiActions.setBatchBusy(true);
+      let failed = 0;
+
+      for (let i = 0; i < paths.length; i++) {
+        multiActions.setBatchProgress(`Moving ${i + 1}/${paths.length}…`);
+        const sourceName = paths[i].split('/').pop() || '';
+        const prefix = targetDir === rootPath ? '' : `${targetDir}/`;
+        const newPath = `${prefix}${sourceName}`;
+
+        try {
+          await apiService.renameItem(paths[i], newPath);
+        } catch (err) {
+          debugLog(`[batchMove] Failed to move "${paths[i]}":`, err);
+          setError(err instanceof Error ? err.message : `Failed to move ${paths[i]}`);
+          failed++;
+        }
+      }
+
+      multiActions.setBatchProgress(null);
+      multiActions.setBatchBusy(false);
+      if (failed > 0) {
+        debugLog(`[batchMove] ${failed}/${paths.length} items failed to move`);
+      }
+      multiActions.clearSelection();
+      await refreshTree();
+    }, [multiSelect.selectedPaths, apiService, refreshTree, multiActions, rootPath]);
+
+    const handleCopyPaths = useCallback(
+      (absolute = false) => {
+        const paths = Array.from(multiSelect.selectedPaths);
+        if (paths.length === 0) return;
+        const text = absolute && workspaceRoot
+          ? paths.map((p) => `${workspaceRoot.replace(/\/+$/, '')}/${p}`).join('\n')
+          : paths.join('\n');
+        copyToClipboard(text);
+        setContextMenu(null);
+      },
+      [multiSelect.selectedPaths, workspaceRoot],
+    );
+
+    // ── Keyboard handler for file-list ────────────────────────────────
+
+    const handleFileListKeyDown = useCallback(
+      (e: KeyboardEvent) => {
+        // Escape: clear multi-selection (or cancel draft)
+        if (e.key === 'Escape') {
+          if (draft) {
+            handleCancelDraft();
+            return;
+          }
+          if (multiSelect.selectedPaths.size > 0) {
+            e.preventDefault();
+            multiActions.clearSelection();
+            return;
+          }
+        }
+
+        // Ctrl+A: select all visible files (only when file-list is focused,
+        // not when filter input is focused)
+        if ((e.ctrlKey || e.metaKey) && e.key === 'a' && !isFilterFocused && !multiSelectDisabled) {
+          e.preventDefault();
+          multiActions.selectAll(visibleOrder);
+          return;
+        }
+      },
+      [draft, handleCancelDraft, multiSelect, multiActions, visibleOrder, isFilterFocused, multiSelectDisabled],
     );
 
     const getFileIcon = (file: FileInfo): ReactNode => {
@@ -855,6 +1043,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
       fileList.map((file) => {
         const isExpanded = isFiltering ? true : expandedDirs.has(file.path);
         const isSelected = (internalSelectedFile ?? selectedFile) === file.path;
+        const isMultiSelected = multiActions.isSelected(file.path);
         const hasChildren = file.isDir && Array.isArray(file.children) && file.children.length > 0;
         const isRenaming = draft?.mode === 'rename' && draft.targetPath === file.path;
         const matchInfo = isFiltering ? filterMatches.get(file.path) : undefined;
@@ -874,33 +1063,68 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
             })()
           : undefined;
 
+        // Build CSS class list
+        const itemClasses = [
+          'file-tree-item',
+          file.isDir ? 'directory' : 'file',
+          isSelected ? 'selected' : '',
+          isMultiSelected ? 'multi-selected' : '',
+          file.gitStatus ? `git-${file.gitStatus}` : '',
+          dropTargetPath === file.path ? 'drop-target' : '',
+          draggedPath === file.path ? 'dragging' : '',
+        ]
+          .filter(Boolean)
+          .join(' ');
+
+        // Disable drag when multi-select is active
+        const canDrag = !draft && multiSelect.selectedPaths.size === 0;
+
+        // Handle context menu: show batch menu if item is in multi-selection
+        const handleItemContextMenu = (event: MouseEvent) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setBgContextMenu(null);
+
+          // If right-clicking on a multi-selected item with ≥2 items, show batch context menu
+          if (!multiSelectDisabled && multiSelect.selectedPaths.size >= 2 && multiActions.isSelected(file.path)) {
+            setContextMenu({
+              x: event.clientX,
+              y: event.clientY,
+              file,
+            });
+            return;
+          }
+
+          // Right-clicking unselected item: clear multi-selection, show single-item menu
+          if (multiSelect.selectedPaths.size > 0) {
+            multiActions.clearSelection();
+          }
+
+          setContextMenu({
+            x: event.clientX,
+            y: event.clientY,
+            file,
+          });
+        };
+
         return (
           <Fragment key={file.path}>
             <div
-              className={`file-tree-item ${file.isDir ? 'directory' : 'file'} ${isSelected ? 'selected' : ''}${file.gitStatus ? ` git-${file.gitStatus}` : ''}${dropTargetPath === file.path ? ' drop-target' : ''}${draggedPath === file.path ? ' dragging' : ''}`}
+              className={itemClasses}
               style={{ paddingLeft: `${depth * 16 + 8}px` }}
               data-ext={file.ext || ''}
               data-git-status={file.gitStatus || ''}
-              draggable={!draft}
-              onClick={() => handleClick(file)}
+              draggable={canDrag}
+              onClick={(e) => handleClick(file, e)}
               onDragStart={(event) => handleDragStart(event, file.path)}
               onDragEnd={handleDragEnd}
               onDragOver={(event) => handleDragOver(event, file.path, file)}
               onDragLeave={handleDragLeave}
               onDrop={(event) => handleDrop(event, file.path)}
-              onContextMenu={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                setBgContextMenu(null);
-                setContextMenu({
-                  x: event.clientX,
-                  y: event.clientY,
-                  file,
-                });
-              }}
+              onContextMenu={handleItemContextMenu}
               role="treeitem"
               tabIndex={0}
-              aria-selected={isSelected}
+              aria-selected={isSelected || isMultiSelected}
               aria-expanded={file.isDir ? isExpanded : undefined}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' || event.key === ' ') {
@@ -908,12 +1132,36 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
                   handleClick(file);
                   return;
                 }
-                if (event.key === 'Delete') {
+                if (event.key === 'Delete' && !multiSelectDisabled && multiSelect.selectedPaths.size >= 2) {
+                  // Don't handle Delete for batch — only for single item
+                }
+                if (event.key === 'Delete' && (!multiSelect.selectedPaths || multiSelect.selectedPaths.size === 0)) {
                   event.preventDefault();
                   handleDeleteTreeItem(file);
                 }
+                if (event.key === 'Escape' && !draft && multiSelect.selectedPaths.size > 0) {
+                  event.preventDefault();
+                  multiActions.clearSelection();
+                }
               }}
             >
+              {/* Multi-select checkbox */}
+              {multiSelect.showCheckboxes && (
+                <div
+                  className={`file-tree-checkbox ${isMultiSelected ? 'checked' : ''}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!multiSelectDisabled) {
+                      multiActions.togglePath(file.path);
+                    }
+                  }}
+                  role="checkbox"
+                  aria-checked={isMultiSelected}
+                  tabIndex={-1}
+                >
+                  {isMultiSelected && <Check size={10} />}
+                </div>
+              )}
               <div className="file-tree-icon">{getFileIcon(file)}</div>
               {file.isDir && (
                 <span className="file-tree-expand">
@@ -1065,6 +1313,8 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
           ref={fileListRef}
           role="tree"
           aria-label="File tree"
+          tabIndex={-1}
+          onKeyDown={handleFileListKeyDown}
           onContextMenu={(event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -1073,6 +1323,8 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
           }}
           onDragOver={(e) => {
             if (!draggedPath) return;
+            // Disable root drop when multi-select active
+            if (multiSelect.selectedPaths.size > 0) return;
             const currentParent = getParentPath(draggedPath);
             if (currentParent === rootPath) return;
             e.preventDefault();
@@ -1117,14 +1369,73 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
               <span>No files matching &quot;{filterQuery}&quot;</span>
             </div>
           ) : null}
+          {multiSelect.selectedPaths.size > 0 && (
+            <SelectionActionBar
+              count={multiSelect.selectedPaths.size}
+              onClear={multiActions.clearSelection}
+            />
+          )}
         </div>
 
-        <ContextMenu
-          isOpen={contextMenu !== null}
-          x={contextMenu?.x ?? 0}
-          y={contextMenu?.y ?? 0}
-          onClose={() => setContextMenu(null)}
-        >
+        {/* Batch progress indicator */}
+        {multiSelect.batchProgress && (
+          <div className="batch-progress-bar">
+            <div className="spinner">
+              <Zap size={16} />
+            </div>
+            <span className="batch-progress">{multiSelect.batchProgress}</span>
+          </div>
+        )}
+
+        {/* Batch context menu (replaces normal menu when ≥2 selected) */}
+        {contextMenu !== null && !multiSelectDisabled && multiSelect.selectedPaths.size >= 2 && multiActions.isSelected(contextMenu.file.path) ? (
+          <ContextMenu
+            isOpen={contextMenu !== null}
+            x={contextMenu.x}
+            y={contextMenu.y}
+            onClose={() => setContextMenu(null)}
+          >
+            <button
+              className="context-menu-item danger"
+              onClick={handleBatchDelete}
+              disabled={multiSelect.isBatchBusy}
+            >
+              <Trash2 size={14} />
+              <span>Delete ({multiSelect.selectedPaths.size} items)</span>
+            </button>
+            <button
+              className="context-menu-item"
+              onClick={handleBatchMove}
+              disabled={multiSelect.isBatchBusy}
+            >
+              <FolderInput size={14} />
+              <span>Move to…</span>
+            </button>
+            <div className="context-menu-divider" />
+            <button
+              className="context-menu-item"
+              onClick={() => handleCopyPaths(false)}
+            >
+              <ClipboardCopy size={14} />
+              <span>Copy relative paths</span>
+            </button>
+            {workspaceRoot && (
+              <button
+                className="context-menu-item"
+                onClick={() => handleCopyPaths(true)}
+              >
+                <ClipboardCopy size={14} />
+                <span>Copy absolute paths</span>
+              </button>
+            )}
+          </ContextMenu>
+        ) : (
+          <ContextMenu
+            isOpen={contextMenu !== null}
+            x={contextMenu?.x ?? 0}
+            y={contextMenu?.y ?? 0}
+            onClose={() => setContextMenu(null)}
+          >
           {contextMenu?.file.isDir ? (
             <>
               <button
@@ -1207,6 +1518,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
             </button>
           )}
         </ContextMenu>
+        )}
 
         <ContextMenu
           isOpen={bgContextMenu !== null}

@@ -110,6 +110,26 @@ func SetEncryptionMode(mode string) error {
 	return AtomicWriteFile(modePath, []byte(mode+"\n"), 0600)
 }
 
+// MaskValue returns a masked version of the credential value for safe logging.
+func MaskValue(value string) string {
+	if value == "" {
+		return ""
+	}
+	if len(value) >= 8 {
+		return value[:4] + "****"
+	}
+	if len(value) >= 4 {
+		return value[:2] + "****"
+	}
+	return "****"
+}
+
+// String returns a safe string representation with the value always masked.
+func (r Resolved) String() string {
+	return fmt.Sprintf(`Resolved{Provider: %q, EnvVar: %q, Value: %q, Source: %q}`,
+		r.Provider, r.EnvVar, MaskValue(r.Value), r.Source)
+}
+
 // AtomicWriteFile writes data to a file atomically using temp file + rename pattern.
 // This prevents data corruption if the process crashes during the write.
 // The file is created with the specified permissions.

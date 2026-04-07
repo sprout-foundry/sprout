@@ -18,7 +18,7 @@ func TestResolveCredentialValueReturnsStoredKey(t *testing.T) {
 		t.Fatalf("save credentials: %v", err)
 	}
 
-	value, err := resolveCredentialValue("openai", "OPENAI_API_KEY")
+	value, err := resolveCredentialValue("openai")
 	if err != nil {
 		t.Fatalf("expected stored key to resolve, got error: %v", err)
 	}
@@ -32,7 +32,7 @@ func TestResolveCredentialValueReturnsExplicitMissingCredentialError(t *testing.
 	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("OPENAI_API_KEY", "")
 
-	value, err := resolveCredentialValue("openai", "OPENAI_API_KEY")
+	value, err := resolveCredentialValue("openai")
 	if err == nil {
 		t.Fatalf("expected missing credential error, got value %q", value)
 	}

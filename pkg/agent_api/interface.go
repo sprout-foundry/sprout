@@ -163,45 +163,10 @@ func ParseProviderName(name string) (ClientType, error) {
 	}
 }
 
-// IsProviderAvailable checks if a provider can be used
+// IsProviderAvailable checks if a provider can be used.
+// Uses credentials.HasProviderCredential to avoid hardcoding env var strings.
 func IsProviderAvailable(provider ClientType) bool {
-	switch provider {
-	case OllamaClientType, OllamaLocalClientType:
-		// Ollama local is always available (we'll check actual model availability later)
-		return true
-	case TestClientType:
-		// Test provider is always available for CI/testing
-		return true
-	case LMStudioClientType:
-		// LM Studio is a local provider and doesn't require API key
-		return true
-	case OllamaTurboClientType:
-		resolved, _ := credentials.Resolve(string(provider), "OLLAMA_API_KEY")
-		return strings.TrimSpace(resolved.Value) != ""
-	case OpenAIClientType:
-		resolved, _ := credentials.Resolve(string(provider), "OPENAI_API_KEY")
-		return strings.TrimSpace(resolved.Value) != ""
-	case ZAIClientType:
-		resolved, _ := credentials.Resolve(string(provider), "ZAI_API_KEY")
-		return strings.TrimSpace(resolved.Value) != ""
-	case OpenRouterClientType:
-		resolved, _ := credentials.Resolve(string(provider), "OPENROUTER_API_KEY")
-		return strings.TrimSpace(resolved.Value) != ""
-	case DeepInfraClientType:
-		resolved, _ := credentials.Resolve(string(provider), "DEEPINFRA_API_KEY")
-		return strings.TrimSpace(resolved.Value) != ""
-	case DeepSeekClientType:
-		resolved, _ := credentials.Resolve(string(provider), "DEEPSEEK_API_KEY")
-		return strings.TrimSpace(resolved.Value) != ""
-	case MinimaxClientType:
-		resolved, _ := credentials.Resolve(string(provider), "MINIMAX_API_KEY")
-		return strings.TrimSpace(resolved.Value) != ""
-	case MistralClientType:
-		resolved, _ := credentials.Resolve(string(provider), "MISTRAL_API_KEY")
-		return strings.TrimSpace(resolved.Value) != ""
-	default:
-		return strings.TrimSpace(string(provider)) != ""
-	}
+	return credentials.HasProviderCredential(string(provider))
 }
 
 // GetAvailableProviders returns a list of all available providers

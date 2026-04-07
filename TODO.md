@@ -200,8 +200,8 @@
 
 ### WebUI Credential UX
 
-[] - CREDENTIALS: Add a credential management page in the webui settings — Currently the webui only exposes credential input during onboarding. There is no settings page to view, add, update, or delete stored API keys for providers (built-in or custom) or MCP services. Users must edit files manually or re-run the CLI onboarding flow.
-[] - CREDENTIALS: Show credential status (has key / missing key / env-only) for all providers in the settings UI — The onboarding status endpoint returns `has_credential` per provider, but the general settings pages do not. Users cannot see at a glance which providers are properly configured without starting onboarding.
+[x] - CREDENTIALS: Add a credential management page in the webui settings — Currently the webui only exposes credential input during onboarding. There is no settings page to view, add, update, or delete stored API keys for providers (built-in or custom) or MCP services. Users must edit files manually or re-run the CLI onboarding flow.
+[x] - CREDENTIALS: Show credential status (has key / missing key / env-only) for all providers in the settings UI — The onboarding status endpoint returns `has_credential` per provider, but the general settings pages do not. Users cannot see at a glance which providers are properly configured without starting onboarding.
 [] - CREDENTIALS: Allow testing/validating stored credentials from the webui — Add a "Test Connection" button per provider that makes a lightweight API call (e.g., `GET /models`) to verify the stored credential is valid and not expired. Show clear success/failure feedback.
 
 ### Per-Provider Key Rotation & Multi-Key Support

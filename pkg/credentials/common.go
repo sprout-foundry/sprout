@@ -63,3 +63,80 @@ func GetMachineKeyPath() (string, error) {
 	}
 	return filepath.Join(configDir, machineKeyFileName), nil
 }
+
+// encryptionModePath returns the path to the encryption mode file.
+// The mode file tracks whether API keys are encrypted with "machine-key" or "passphrase".
+func encryptionModePath() (string, error) {
+	configDir, err := GetConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(configDir, "api_keys.mode"), nil
+}
+
+// GetEncryptionMode returns the current encryption mode ("machine-key", "passphrase", or "").
+// Returns an empty string if no mode file exists (legacy or plaintext files).
+func GetEncryptionMode() (string, error) {
+	modePath, err := encryptionModePath()
+	if err != nil {
+		return "", fmt.Errorf("failed to get mode file path: %w", err)
+	}
+
+	data, err := os.ReadFile(modePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil // No mode file yet
+		}
+		return "", fmt.Errorf("failed to read mode file: %w", err)
+	}
+
+	mode := strings.TrimSpace(string(data))
+	if mode == "machine-key" || mode == "passphrase" {
+		return mode, nil
+	}
+	return "", nil
+}
+
+// SetEncryptionMode writes the encryption mode file.
+// mode should be "machine-key" or "passphrase".
+func SetEncryptionMode(mode string) error {
+	if mode != "machine-key" && mode != "passphrase" {
+		return fmt.Errorf("invalid encryption mode: %q (must be 'machine-key' or 'passphrase')", mode)
+	}
+	modePath, err := encryptionModePath()
+	if err != nil {
+		return fmt.Errorf("failed to get mode file path: %w", err)
+	}
+	return AtomicWriteFile(modePath, []byte(mode+"\n"), 0600)
+}
+
+// AtomicWriteFile writes data to a file atomically using temp file + rename pattern.
+// This prevents data corruption if the process crashes during the write.
+// The file is created with the specified permissions.
+func AtomicWriteFile(path string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+	tmpFile, err := os.CreateTemp(dir, ".tmp-*.ledit")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	if err := os.Chmod(tmpPath, perm); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to set permissions on temp file: %w", err)
+	}
+	if _, err := tmpFile.Write(data); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to write temp file: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to close temp file: %w", err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to replace file: %w", err)
+	}
+	return nil
+}

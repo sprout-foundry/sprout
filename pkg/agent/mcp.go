@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"time"
@@ -128,6 +129,11 @@ func (a *Agent) initializeMCP() error {
 					Env: map[string]string{
 						"GITHUB_PERSONAL_ACCESS_TOKEN": githubToken,
 					},
+				}
+
+				// Migrate secrets BEFORE adding to manager
+				if _, err := mcp.MigrateEnvSecretsFromServer("github", &githubServer); err != nil {
+					log.Printf("[mcp-secrets] Warning: failed to migrate secrets for auto-discovered GitHub server: %v", err)
 				}
 
 				if err := a.mcpManager.AddServer(githubServer); err == nil {

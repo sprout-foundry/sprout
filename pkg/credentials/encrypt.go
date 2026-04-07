@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -320,15 +321,33 @@ func Save(store Store) error {
 		return fmt.Errorf("failed to encrypt API keys: %w", err)
 	}
 
-	// Write to temp file in the same directory (ensures same filesystem for atomic rename)
-	tmpPath := path + ".tmp"
-	if err := os.WriteFile(tmpPath, encrypted, 0600); err != nil {
+	// Write to a unique temp file in the same directory (ensures same filesystem for atomic rename).
+	// Using a unique name prevents race conditions when multiple processes call Save() concurrently.
+	dir := filepath.Dir(path)
+	tmpFile, err := os.CreateTemp(dir, ".api_keys-*.tmp")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	// Tighten permissions to 0600 before writing secrets.
+	// os.CreateTemp respects umask, so we must chmod explicitly
+	// to ensure the file is never world-readable with encrypted data in it.
+	if err := os.Chmod(tmpPath, 0600); err != nil {
+		tmpFile.Close()
+		return fmt.Errorf("failed to set permissions on temp file: %w", err)
+	}
+	defer os.Remove(tmpPath) // no-op after successful rename; cleans up on any error path
+
+	if _, err := tmpFile.Write(encrypted); err != nil {
+		tmpFile.Close()
 		return fmt.Errorf("failed to write temp file: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temp file: %w", err)
 	}
 
 	// Atomically replace the original
 	if err := os.Rename(tmpPath, path); err != nil {
-		os.Remove(tmpPath) // cleanup
 		return fmt.Errorf("failed to replace API keys file: %w", err)
 	}
 

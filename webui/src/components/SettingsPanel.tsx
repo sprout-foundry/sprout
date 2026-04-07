@@ -3,7 +3,7 @@ import './SettingsPanel.css';
 import { ApiService, type LeditSettings, type ProviderOption } from '../services/api';
 import { useNotifications } from '../contexts/NotificationContext';
 import { debugLog } from '../utils/log';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Trash2, Lock } from 'lucide-react';
 
 /* ─── Types ──────────────────────────────────────────────────── */
 
@@ -91,6 +91,13 @@ function SettingsPanel({ settings, onSettingsChanged }: SettingsPanelProps): JSX
   const [serverEnvVars, setServerEnvVars] = useState<Array<{ key: string; value: string }>>([]);
   const [newEnvKey, setNewEnvKey] = useState('');
   const [newEnvValue, setNewEnvValue] = useState('');
+
+  // Credential management state
+  const [credentialServer, setCredentialServer] = useState<string | null>(null);
+  const [credentialEntries, setCredentialEntries] = useState<Array<{ key: string; value: string; status: string }>>([]);
+  const [credentialLoading, setCredentialLoading] = useState(false);
+  const [newCredentialKey, setNewCredentialKey] = useState('');
+  const [newCredentialValue, setNewCredentialValue] = useState('');
 
   const [editingProvider, setEditingProvider] = useState<{
     mode: 'add' | 'edit';
@@ -438,6 +445,101 @@ function SettingsPanel({ settings, onSettingsChanged }: SettingsPanelProps): JSX
     } finally {
       setSavingKey(null);
     }
+  };
+
+  /* ─── MCP credential management ───────────────────────── */
+
+  const resetCredentialForm = () => {
+    setCredentialServer(null);
+    setCredentialEntries([]);
+    setCredentialLoading(false);
+    setNewCredentialKey('');
+    setNewCredentialValue('');
+  };
+
+  const handleLoadCredentials = async (serverName: string) => {
+    setCredentialServer(serverName);
+    setCredentialLoading(true);
+    setCredentialEntries([]);
+    setNewCredentialKey('');
+    setNewCredentialValue('');
+    try {
+      const resp = await api.getMCPServerCredentials(serverName);
+      const entries = Object.entries(resp.credentials || {}).map(([key, info]) => ({
+        key,
+        value: '',
+        status: info.status === 'set' ? 'set' : 'missing',
+      }));
+      setCredentialEntries(entries);
+    } catch (err) {
+      debugLog('[SettingsPanel] failed to load credentials:', err);
+      addNotification('error', 'Settings', 'Failed to load credentials', 5000);
+      resetCredentialForm();
+    } finally {
+      setCredentialLoading(false);
+    }
+  };
+
+  const handleSaveCredential = async () => {
+    if (!credentialServer) return;
+    const credentials: Record<string, string> = {};
+    for (const entry of credentialEntries) {
+      if (entry.value.trim()) {
+        credentials[entry.key] = entry.value.trim();
+      }
+    }
+    if (newCredentialKey.trim() && newCredentialValue.trim()) {
+      credentials[newCredentialKey.trim()] = newCredentialValue.trim();
+    }
+    if (Object.keys(credentials).length === 0) {
+      addNotification('info', 'Settings', 'No credentials to save', 3000);
+      return;
+    }
+    setSavingKey('mcp-credential-save');
+    try {
+      await api.updateMCPServerCredentials(credentialServer, credentials);
+      const fresh = await api.getSettings();
+      onSettingsChanged(fresh);
+      addNotification('success', 'Settings', 'Credentials saved', 3000);
+      // Refresh the credential list
+      await handleLoadCredentials(credentialServer);
+    } catch (err) {
+      debugLog('[SettingsPanel] failed to save credentials:', err);
+      addNotification('error', 'Settings', 'Failed to save credentials', 5000);
+    } finally {
+      setSavingKey(null);
+    }
+  };
+
+  const handleDeleteCredential = async (credName: string) => {
+    if (!credentialServer) return;
+    setSavingKey('mcp-credential-delete');
+    try {
+      await api.deleteMCPServerCredential(credentialServer, credName);
+      const fresh = await api.getSettings();
+      onSettingsChanged(fresh);
+      addNotification('success', 'Settings', 'Credential deleted', 3000);
+      await handleLoadCredentials(credentialServer);
+    } catch (err) {
+      debugLog('[SettingsPanel] failed to delete credential:', err);
+      addNotification('error', 'Settings', 'Failed to delete credential', 5000);
+    } finally {
+      setSavingKey(null);
+    }
+  };
+
+  const handleAddCredentialEntry = () => {
+    if (!newCredentialKey.trim() || !newCredentialValue.trim()) return;
+    setCredentialEntries((prev) => [
+      ...prev,
+      { key: newCredentialKey.trim(), value: newCredentialValue.trim(), status: 'pending' },
+    ]);
+    setNewCredentialKey('');
+    setNewCredentialValue('');
+  };
+
+  const handleCloseCredentials = () => {
+    resetCredentialForm();
   };
 
   /* ─── Custom Provider CRUD ─────────────────────────────── */
@@ -863,6 +965,14 @@ function SettingsPanel({ settings, onSettingsChanged }: SettingsPanelProps): JSX
                       <button
                         type="button"
                         className="crud-btn"
+                        title="Manage credentials"
+                        onClick={() => handleLoadCredentials(name)}
+                      >
+                        <Lock size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        className="crud-btn"
                         title="Edit server"
                         onClick={() => {
                           setEditingServer({ mode: 'edit', originalName: name });
@@ -1060,6 +1170,132 @@ function SettingsPanel({ settings, onSettingsChanged }: SettingsPanelProps): JSX
                   </button>
                 )}
               </div>
+
+              {/* Credential management panel */}
+              {credentialServer && (
+                <div style={{ marginTop: 'var(--space-4)' }}>
+                  <h4>Credentials — {credentialServer}</h4>
+
+                  {credentialLoading ? (
+                    <div className="settings-empty">Loading credentials…</div>
+                  ) : (
+                    <div className="crud-inline-form">
+                      {credentialEntries.length > 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+                          {credentialEntries.map((entry, idx) => (
+                            <div key={entry.key} style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                              <span
+                                title={entry.status === 'set' ? 'Credential is set' : 'Credential is missing'}
+                                style={{
+                                  display: 'inline-block',
+                                  width: '8px',
+                                  height: '8px',
+                                  borderRadius: '50%',
+                                  backgroundColor: entry.status === 'set' ? 'var(--color-success, #22c55e)' : 'var(--text-muted, #888)',
+                                  flexShrink: 0,
+                                }}
+                              />
+                              <span
+                                style={{
+                                  flex: 1.2,
+                                  fontFamily: 'monospace',
+                                  fontSize: '12px',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                                title={entry.key}
+                              >
+                                {entry.key}
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: '11px',
+                                  color: entry.status === 'set' ? 'var(--color-success, #22c55e)' : 'var(--text-muted, #888)',
+                                  width: '56px',
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {entry.status === 'set' ? 'Set' : 'Missing'}
+                              </span>
+                              <input
+                                type="password"
+                                className="styled-input"
+                                value={entry.value}
+                                onChange={(e) => {
+                                  const updated = [...credentialEntries];
+                                  updated[idx] = { ...updated[idx], value: e.target.value };
+                                  setCredentialEntries(updated);
+                                }}
+                                placeholder="Leave empty to keep current"
+                                style={{ flex: 1 }}
+                              />
+                              <button
+                                type="button"
+                                className="crud-btn danger"
+                                title="Delete credential"
+                                onClick={() => handleDeleteCredential(entry.key)}
+                                disabled={savingKey === 'mcp-credential-delete'}
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Add new credential row */}
+                      <div className="form-row" style={{ marginTop: '8px' }}>
+                        <label>Add credential</label>
+                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flex: 1 }}>
+                          <input
+                            type="text"
+                            className="styled-input"
+                            value={newCredentialKey}
+                            onChange={(e) => setNewCredentialKey(e.target.value)}
+                            placeholder="ENV_VAR_NAME"
+                            style={{ flex: 1.2 }}
+                          />
+                          <input
+                            type="password"
+                            className="styled-input"
+                            value={newCredentialValue}
+                            onChange={(e) => setNewCredentialValue(e.target.value)}
+                            placeholder="secret value"
+                            style={{ flex: 1 }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleAddCredentialEntry();
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className="crud-btn"
+                            title="Add credential"
+                            onClick={handleAddCredentialEntry}
+                            disabled={!newCredentialKey.trim() || !newCredentialValue.trim()}
+                          >
+                            <Plus size={12} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="form-actions">
+                        <button
+                          type="button"
+                          className="form-btn primary"
+                          onClick={handleSaveCredential}
+                          disabled={savingKey === 'mcp-credential-save'}
+                        >
+                          Save
+                        </button>
+                        <button type="button" className="form-btn cancel" onClick={handleCloseCredentials}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         );

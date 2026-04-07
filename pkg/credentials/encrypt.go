@@ -8,7 +8,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -89,35 +88,14 @@ func LoadOrCreateMachineKey() (*age.X25519Identity, error) {
 		return nil, fmt.Errorf("failed to generate machine key: %w", err)
 	}
 
-	// Write key to disk atomically (same pattern as Save func — temp file + rename).
+	// Write key to disk atomically using AtomicWriteFile.
 	// This prevents a partially-written key file on crash/signal/power loss.
 	keyData, err := serializeKeyFile(identity)
 	if err != nil {
 		return nil, fmt.Errorf("failed to serialize machine key: %w", err)
 	}
 
-	dir := filepath.Dir(keyPath)
-	tmpFile, err := os.CreateTemp(dir, ".key.age-*.tmp")
-	if err != nil {
-		return nil, fmt.Errorf("failed to create temp key file: %w", err)
-	}
-	tmpPath := tmpFile.Name()
-	if err := os.Chmod(tmpPath, 0600); err != nil {
-		tmpFile.Close()
-		os.Remove(tmpPath)
-		return nil, fmt.Errorf("failed to set permissions on temp key file: %w", err)
-	}
-	if _, err := tmpFile.Write(keyData); err != nil {
-		tmpFile.Close()
-		os.Remove(tmpPath)
-		return nil, fmt.Errorf("failed to write temp key file: %w", err)
-	}
-	if err := tmpFile.Close(); err != nil {
-		os.Remove(tmpPath)
-		return nil, fmt.Errorf("failed to close temp key file: %w", err)
-	}
-	if err := os.Rename(tmpPath, keyPath); err != nil {
-		os.Remove(tmpPath)
+	if err := AtomicWriteFile(keyPath, keyData, 0600); err != nil {
 		return nil, fmt.Errorf("failed to write machine key: %w", err)
 	}
 
@@ -209,6 +187,11 @@ func EncryptStore(plaintext []byte) ([]byte, error) {
 // This limit prevents memory exhaustion attacks from crafted encrypted files.
 const MaxDecryptedSize = 10 << 20 // 10 MB
 
+// MaxEncryptedSize is the maximum size of encrypted API keys data (20 MB).
+// This limit prevents memory exhaustion attacks from crafted encrypted files.
+// It accounts for the MaxDecryptedSize plus age encryption overhead (~10 MB).
+const MaxEncryptedSize = MaxDecryptedSize + (10 << 20) // 20 MB
+
 func DecryptStore(data []byte) ([]byte, error) {
 	// Check if already plaintext JSON (legacy format)
 	if IsPlaintextJSON(data) {
@@ -217,9 +200,8 @@ func DecryptStore(data []byte) ([]byte, error) {
 
 	// Sanity check: reject excessively large encrypted files before reading
 	// age format overhead: ~100 bytes header + per-chunk framing ≈ ~1KB
-	const maxEncryptedSize = MaxDecryptedSize + (10 << 20) // 20 MB overhead for age framing
-	if len(data) > maxEncryptedSize {
-		return nil, fmt.Errorf("encrypted file too large (%d bytes, max %d)", len(data), maxEncryptedSize)
+	if len(data) > MaxEncryptedSize {
+		return nil, fmt.Errorf("encrypted file too large (%d bytes, max %d)", len(data), MaxEncryptedSize)
 	}
 
 	// Try machine key first
@@ -227,6 +209,10 @@ func DecryptStore(data []byte) ([]byte, error) {
 	if err == nil {
 		r, err := age.Decrypt(bytes.NewReader(data), identity)
 		if err == nil {
+			// Successfully decrypted with machine key — track the mode
+			if err := SetEncryptionMode("machine-key"); err != nil {
+				log.Printf("[WARN] failed to write encryption mode file: %v", err)
+			}
 			return io.ReadAll(io.LimitReader(r, MaxDecryptedSize))
 		}
 		// Machine key decryption failed — data may be passphrase-encrypted
@@ -237,6 +223,10 @@ func DecryptStore(data []byte) ([]byte, error) {
 	if passphrase := strings.TrimSpace(os.Getenv("LEDIT_KEY_PASSPHRASE")); passphrase != "" {
 		decrypted, passErr := DecryptWithPassphrase(data, passphrase)
 		if passErr == nil {
+			// Successfully decrypted with passphrase — track the mode
+			if err := SetEncryptionMode("passphrase"); err != nil {
+				log.Printf("[WARN] failed to write encryption mode file: %v", err)
+			}
 			return decrypted, nil
 		}
 		// Passphrase decryption also failed
@@ -300,6 +290,11 @@ func EncryptWithPassphrase(plaintext []byte, passphrase string) ([]byte, error) 
 //
 // Maximum decrypted size is limited to 10 MB to prevent memory exhaustion attacks.
 func DecryptWithPassphrase(data []byte, passphrase string) ([]byte, error) {
+	// Sanity check: reject excessively large encrypted files before reading
+	if len(data) > MaxEncryptedSize {
+		return nil, fmt.Errorf("encrypted file too large (%d bytes, max %d)", len(data), MaxEncryptedSize)
+	}
+
 	identity, err := age.NewScryptIdentity(passphrase)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create scrypt identity: %w", err)
@@ -324,6 +319,9 @@ func DecryptWithPassphrase(data []byte, passphrase string) ([]byte, error) {
 // If the file does not exist, an empty Store is returned without error.
 // This allows the application to start cleanly even if no API keys have been
 // configured yet.
+//
+// Uses flock-based locking to prevent race conditions when multiple processes
+// read the file concurrently.
 func Load() (Store, error) {
 	path, err := GetAPIKeysPath()
 	if err != nil {
@@ -332,6 +330,19 @@ func Load() (Store, error) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return Store{}, nil
 	}
+
+	// Acquire shared lock for reading (allows concurrent reads)
+	lockPath := path + ".lock"
+	fileLock := flock.New(lockPath)
+	locked, err := fileLock.TryRLockContext(context.Background(), 5*time.Second)
+	if err != nil {
+		return nil, fmt.Errorf("failed to acquire lock for load: %w", err)
+	}
+	if !locked {
+		return nil, fmt.Errorf("timed out waiting for load lock - another process may be saving")
+	}
+	defer fileLock.Unlock()
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read API keys file: %w", err)
@@ -355,12 +366,18 @@ func Load() (Store, error) {
 
 // Save saves the API keys store to disk, encrypting it first.
 //
-// This function marshals the Store to JSON, encrypts it using the machine-specific
-// key, and writes the encrypted data to the configured API keys file.
+// This function marshals the Store to JSON, encrypts it using the appropriate
+// encryption mode (machine-key or passphrase), and writes the encrypted data
+// to the configured API keys file.
 //
 // The file is created with permissions 0600 (read/write for owner only) to ensure
 // API keys are stored securely on disk. The write is atomic (using a temp file + rename)
 // to prevent data corruption if the process crashes during the write.
+//
+// If the API keys are passphrase-encrypted, this function requires the
+// LEDIT_KEY_PASSPHRASE environment variable to be set. Otherwise, it returns
+// an error directing the user to set the environment variable or switch to
+// machine-key mode.
 func Save(store Store) error {
 	path, err := GetAPIKeysPath()
 	if err != nil {
@@ -374,40 +391,44 @@ func Save(store Store) error {
 		return fmt.Errorf("failed to marshal API keys: %w", err)
 	}
 
-	// Encrypt before writing
-	encrypted, err := EncryptStore(data)
+	// Check encryption mode
+	mode, err := GetEncryptionMode()
+	if err != nil {
+		return fmt.Errorf("failed to get encryption mode: %w", err)
+	}
+
+	var encrypted []byte
+	if mode == "passphrase" {
+		// Passphrase mode requires LEDIT_KEY_PASSPHRASE
+		passphrase := strings.TrimSpace(os.Getenv("LEDIT_KEY_PASSPHRASE"))
+		if passphrase == "" {
+			return fmt.Errorf("cannot save: API keys are passphrase-encrypted but LEDIT_KEY_PASSPHRASE is not set. "+
+				"Set LEDIT_KEY_PASSPHRASE or run 'ledit keys encrypt' to switch to machine-key mode")
+		}
+		encrypted, err = EncryptWithPassphrase(data, passphrase)
+	} else {
+		// Machine-key mode or no mode (new file)
+		encrypted, err = EncryptStore(data)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to encrypt API keys: %w", err)
 	}
 
-	// Write to a unique temp file in the same directory (ensures same filesystem for atomic rename).
-	// Using a unique name prevents race conditions when multiple processes call Save() concurrently.
-	dir := filepath.Dir(path)
-	tmpFile, err := os.CreateTemp(dir, ".api_keys-*.tmp")
+	// Acquire exclusive lock for writing
+	lockPath := path + ".lock"
+	fileLock := flock.New(lockPath)
+	locked, err := fileLock.TryLockContext(context.Background(), 5*time.Second)
 	if err != nil {
-		return fmt.Errorf("failed to create temp file: %w", err)
+		return fmt.Errorf("failed to acquire lock for save: %w", err)
 	}
-	tmpPath := tmpFile.Name()
-	// Tighten permissions to 0600 before writing secrets.
-	// os.CreateTemp respects umask, so we must chmod explicitly
-	// to ensure the file is never world-readable with encrypted data in it.
-	if err := os.Chmod(tmpPath, 0600); err != nil {
-		tmpFile.Close()
-		return fmt.Errorf("failed to set permissions on temp file: %w", err)
+	if !locked {
+		return fmt.Errorf("timed out waiting for save lock - another process may be saving")
 	}
-	defer os.Remove(tmpPath) // no-op after successful rename; cleans up on any error path
+	defer fileLock.Unlock()
 
-	if _, err := tmpFile.Write(encrypted); err != nil {
-		tmpFile.Close()
-		return fmt.Errorf("failed to write temp file: %w", err)
-	}
-	if err := tmpFile.Close(); err != nil {
-		return fmt.Errorf("failed to close temp file: %w", err)
-	}
-
-	// Atomically replace the original
-	if err := os.Rename(tmpPath, path); err != nil {
-		return fmt.Errorf("failed to replace API keys file: %w", err)
+	// Write atomically
+	if err := AtomicWriteFile(path, encrypted, 0600); err != nil {
+		return err
 	}
 
 	return nil
@@ -486,12 +507,18 @@ func CheckEncryptionStatus() (EncryptionStatus, error) {
 		status.Mode = "plaintext"
 	} else if isEncrypted(data) {
 		status.Encrypted = true
-		// Try to determine mode - this is a best-effort heuristic
-		_, err := loadMachineKey()
-		if err == nil {
-			status.Mode = "machine-key" // Likely, but not certain
+		// Use the mode file as the primary signal
+		mode, _ := GetEncryptionMode()
+		if mode != "" {
+			status.Mode = mode
 		} else {
-			status.Mode = "passphrase" // Likely, but not certain
+			// Legacy fallback: heuristic for files without a mode file
+			_, err := loadMachineKey()
+			if err == nil {
+				status.Mode = "machine-key"
+			} else {
+				status.Mode = "passphrase"
+			}
 		}
 	}
 

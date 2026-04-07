@@ -88,6 +88,9 @@ function SettingsPanel({ settings, onSettingsChanged }: SettingsPanelProps): JSX
   const [serverName, setServerName] = useState('');
   const [serverCommand, setServerCommand] = useState('');
   const [serverArgs, setServerArgs] = useState('');
+  const [serverEnvVars, setServerEnvVars] = useState<Array<{ key: string; value: string }>>([]);
+  const [newEnvKey, setNewEnvKey] = useState('');
+  const [newEnvValue, setNewEnvValue] = useState('');
 
   const [editingProvider, setEditingProvider] = useState<{
     mode: 'add' | 'edit';
@@ -359,6 +362,9 @@ function SettingsPanel({ settings, onSettingsChanged }: SettingsPanelProps): JSX
     setServerName('');
     setServerCommand('');
     setServerArgs('');
+    setServerEnvVars([]);
+    setNewEnvKey('');
+    setNewEnvValue('');
   };
 
   const handleAddServer = async () => {
@@ -366,6 +372,13 @@ function SettingsPanel({ settings, onSettingsChanged }: SettingsPanelProps): JSX
     const server: Record<string, unknown> = { command: serverCommand };
     if (serverArgs.trim()) {
       server.args = serverArgs.split(/\s+/).filter(Boolean);
+    }
+    if (serverEnvVars.length > 0) {
+      const env: Record<string, string> = {};
+      for (const ev of serverEnvVars) {
+        if (ev.key.trim() && ev.value !== '{{stored}}') env[ev.key.trim()] = ev.value;
+      }
+      if (Object.keys(env).length > 0) server.env = env;
     }
     setSavingKey('mcp-server-add');
     try {
@@ -388,6 +401,13 @@ function SettingsPanel({ settings, onSettingsChanged }: SettingsPanelProps): JSX
     const server: Record<string, unknown> = { command: serverCommand };
     if (serverArgs.trim()) {
       server.args = serverArgs.split(/\s+/).filter(Boolean);
+    }
+    if (serverEnvVars.length > 0) {
+      const env: Record<string, string> = {};
+      for (const ev of serverEnvVars) {
+        if (ev.key.trim() && ev.value !== '{{stored}}') env[ev.key.trim()] = ev.value;
+      }
+      if (Object.keys(env).length > 0) server.env = env;
     }
     setSavingKey('mcp-server-update');
     try {
@@ -851,6 +871,12 @@ function SettingsPanel({ settings, onSettingsChanged }: SettingsPanelProps): JSX
                           setServerArgs(
                             Array.isArray(server.args) ? (server.args as unknown[]).map(String).join(' ') : '',
                           );
+                          const existingEnv = (server.env as Record<string, string>) || {};
+                          setServerEnvVars(
+                            Object.entries(existingEnv).map(([key, value]) => ({ key, value })),
+                          );
+                          setNewEnvKey('');
+                          setNewEnvValue('');
                         }}
                       >
                         <Pencil size={12} />
@@ -901,6 +927,106 @@ function SettingsPanel({ settings, onSettingsChanged }: SettingsPanelProps): JSX
                         placeholder="--flag value"
                       />
                     </div>
+                    <div className="form-row" style={{ flexDirection: 'column' }}>
+                      <label>Environment Variables</label>
+                      {serverEnvVars.length > 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
+                          {serverEnvVars.map((ev, idx) => (
+                            <div key={idx} style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                              <input
+                                type="text"
+                                className="styled-input"
+                                value={ev.key}
+                                onChange={(e) => {
+                                  const updated = [...serverEnvVars];
+                                  updated[idx] = { ...updated[idx], key: e.target.value };
+                                  setServerEnvVars(updated);
+                                }}
+                                placeholder="VAR_NAME"
+                                style={{ flex: 1 }}
+                              />
+                              <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>=</span>
+                              {ev.value === '{{stored}}' ? (
+                                <span
+                                  style={{
+                                    flex: 1.5,
+                                    padding: '4px 8px',
+                                    borderRadius: '4px',
+                                    background: 'var(--bg-secondary)',
+                                    color: 'var(--text-muted)',
+                                    fontSize: '12px',
+                                    border: '1px solid var(--border)',
+                                  }}
+                                >
+                                  🔒 Stored in credential manager
+                                </span>
+                              ) : (
+                                <input
+                                  type="password"
+                                  className="styled-input"
+                                  value={ev.value}
+                                  onChange={(e) => {
+                                    const updated = [...serverEnvVars];
+                                    updated[idx] = { ...updated[idx], value: e.target.value };
+                                    setServerEnvVars(updated);
+                                  }}
+                                  placeholder="value"
+                                  style={{ flex: 1.5 }}
+                                />
+                              )}
+                              <button
+                                type="button"
+                                className="crud-btn danger"
+                                title="Remove"
+                                onClick={() => setServerEnvVars(serverEnvVars.filter((_, i) => i !== idx))}
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                        <input
+                          type="text"
+                          className="styled-input"
+                          value={newEnvKey}
+                          onChange={(e) => setNewEnvKey(e.target.value)}
+                          placeholder="NEW_VAR"
+                          style={{ flex: 1 }}
+                        />
+                        <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>=</span>
+                        <input
+                          type="password"
+                          className="styled-input"
+                          value={newEnvValue}
+                          onChange={(e) => setNewEnvValue(e.target.value)}
+                          placeholder="secret value"
+                          style={{ flex: 1.5 }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && newEnvKey.trim() && newEnvValue.trim()) {
+                              setServerEnvVars([...serverEnvVars, { key: newEnvKey.trim(), value: newEnvValue.trim() }]);
+                              setNewEnvKey('');
+                              setNewEnvValue('');
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="crud-btn"
+                          title="Add env var"
+                          onClick={() => {
+                            if (newEnvKey.trim() && newEnvValue.trim()) {
+                              setServerEnvVars([...serverEnvVars, { key: newEnvKey.trim(), value: newEnvValue.trim() }]);
+                              setNewEnvKey('');
+                              setNewEnvValue('');
+                            }
+                          }}
+                        >
+                          <Plus size={12} />
+                        </button>
+                      </div>
+                    </div>
                     <div className="form-actions">
                       <button
                         type="button"
@@ -925,6 +1051,9 @@ function SettingsPanel({ settings, onSettingsChanged }: SettingsPanelProps): JSX
                       setServerName('');
                       setServerCommand('');
                       setServerArgs('');
+                      setServerEnvVars([]);
+                      setNewEnvKey('');
+                      setNewEnvValue('');
                     }}
                   >
                     <Plus size={14} /> Add server

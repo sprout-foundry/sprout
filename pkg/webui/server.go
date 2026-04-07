@@ -178,6 +178,8 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/settings/mcp/servers/", ws.handleAPISettingsMCPServers)
 	mux.HandleFunc("/api/settings/providers", ws.handleAPISettingsProviders)
 	mux.HandleFunc("/api/settings/providers/", ws.handleAPISettingsProviders)
+	mux.HandleFunc("/api/settings/credentials", ws.handleAPISettingsCredentials)
+	mux.HandleFunc("/api/settings/credentials/", ws.handleAPISettingsCredentials)
 	mux.HandleFunc("/api/settings/skills", ws.handleAPISettingsSkills)
 	mux.HandleFunc("/api/settings/subagent-types", ws.handleAPISettingsSubagentTypes)
 	mux.HandleFunc("/api/settings/subagent-types/", ws.handleAPISettingsSubagentTypes)

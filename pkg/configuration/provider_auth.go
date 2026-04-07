@@ -23,6 +23,12 @@ type ResolvedProviderCredential struct {
 	Source   string
 }
 
+// String returns a safe string representation with the value always masked.
+func (r ResolvedProviderCredential) String() string {
+	return fmt.Sprintf(`Resolved{Provider: %q, EnvVar: %q, Value: %q, Source: %q}`,
+		r.Provider, r.EnvVar, credentials.MaskValue(r.Value), r.Source)
+}
+
 func GetProviderAuthMetadata(provider string) (ProviderAuthMetadata, error) {
 	name := strings.ToLower(strings.TrimSpace(provider))
 	if name == "" {

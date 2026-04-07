@@ -27,7 +27,7 @@ type ProviderConfig struct {
 type AuthConfig struct {
 	Type   string `json:"type"`    // "bearer", "api_key", "basic", "oauth"
 	EnvVar string `json:"env_var"` // Environment variable containing the auth token
-	Key    string `json:"key"`     // Fixed API key (not recommended for production)
+	Key    string `json:"key"`     // Runtime-only API key; injected at startup, never persisted
 }
 
 // RequestDefaults defines default request parameters

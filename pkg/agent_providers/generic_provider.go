@@ -3,6 +3,7 @@ package providers
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -257,7 +258,7 @@ func (p *GenericProvider) GetModelContextLimit() (int, error) {
 // 2. Enrich endpoint data with config (context_length, tags, name)
 // 3. Fall back to config model_info if endpoint fails
 // 4. Final fallback: return just current model
-func (p *GenericProvider) ListModels() ([]api.ModelInfo, error) {
+func (p *GenericProvider) ListModels(ctx context.Context) ([]api.ModelInfo, error) {
 	if p.modelsCached && len(p.models) > 0 {
 		return p.models, nil
 	}
@@ -266,7 +267,7 @@ func (p *GenericProvider) ListModels() ([]api.ModelInfo, error) {
 
 	// Try to fetch models from provider API (OpenAI-compatible endpoint)
 	modelsEndpoint := strings.TrimSuffix(p.config.Endpoint, "/chat/completions") + "/models"
-	req, err := http.NewRequest("GET", modelsEndpoint, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", modelsEndpoint, nil)
 	if err != nil {
 		// Endpoint construction failed, skip to fallback
 		return p.fallbackToConfigOrCurrent()
@@ -580,7 +581,7 @@ func (p *GenericProvider) ensureModel() error {
 		return nil
 	}
 
-	models, err := p.ListModels()
+	models, err := p.ListModels(context.Background())
 	if err != nil {
 		return fmt.Errorf("failed to discover models for provider %s: %w", p.config.Name, err)
 	}

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -19,7 +20,7 @@ type ClientInterface interface {
 	GetModel() string
 	GetProvider() string
 	GetModelContextLimit() (int, error)
-	ListModels() ([]ModelInfo, error)
+	ListModels(ctx context.Context) ([]ModelInfo, error)
 	SupportsVision() bool
 	GetVisionModel() string
 	SendVisionRequest(messages []Message, tools []Tool, reasoning string) (*ChatResponse, error)

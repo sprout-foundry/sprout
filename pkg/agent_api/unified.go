@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"time"
 )
@@ -184,8 +185,8 @@ func (w *UnifiedProviderWrapper) GetModelContextLimit() (int, error) {
 	return w.provider.GetModelContextLimit()
 }
 
-func (w *UnifiedProviderWrapper) ListModels() ([]ModelInfo, error) {
-	return w.provider.ListModels()
+func (w *UnifiedProviderWrapper) ListModels(ctx context.Context) ([]ModelInfo, error) {
+	return w.provider.ListModels(ctx)
 }
 
 func (w *UnifiedProviderWrapper) SupportsVision() bool {

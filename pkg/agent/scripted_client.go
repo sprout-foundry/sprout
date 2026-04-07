@@ -1013,7 +1013,7 @@ func (c *ScriptedClient) GetModelContextLimit() (int, error) {
 }
 
 // ListModels returns available models
-func (c *ScriptedClient) ListModels() ([]api.ModelInfo, error) {
+func (c *ScriptedClient) ListModels(ctx context.Context) ([]api.ModelInfo, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 

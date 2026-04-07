@@ -21,6 +21,14 @@ interface CredentialsResponse {
   providers: CredentialProvider[];
 }
 
+/** Truncate long error messages for display */
+function truncateError(error: string, maxLength: number = 100): string {
+  if (error.length <= maxLength) {
+    return error;
+  }
+  return error.slice(0, maxLength) + '…';
+}
+
 function CredentialsSettingsTab(): JSX.Element {
   const [providers, setProviders] = useState<CredentialProvider[]>([]);
   const [loading, setLoading] = useState(true);
@@ -300,9 +308,9 @@ function CredentialsSettingsTab(): JSX.Element {
                     }}
                   >
                     {testResults[provider.provider].success ? '✓' : '✗'}
-                    {testResults[provider.provider].success
+                    {testResults[provider.provider]?.success
                       ? `Connected — ${testResults[provider.provider].model_count ?? 0} models available`
-                      : testResults[provider.provider].error}
+                      : truncateError(testResults[provider.provider]?.error || 'Unknown error')}
                   </span>
                 )}
               </div>
@@ -340,24 +348,25 @@ function CredentialsSettingsTab(): JSX.Element {
                         <Trash2 size={12} />
                       </button>
                     )}
-                    {(provider.has_stored_credential || provider.has_env_credential || !provider.requires_api_key) && (
-                      <button
-                        type="button"
-                        className="crud-btn"
-                        title={testingProvider === provider.provider
-                          ? 'Testing connection…'
-                          : !provider.requires_api_key
-                            ? 'Test if local provider service is reachable'
-                            : 'Test connection'}
-                        onClick={() => handleTestConnection(provider)}
-                        disabled={testingProvider === provider.provider}
-                      >
-                        <RefreshCw
-                          size={12}
-                          style={testingProvider === provider.provider ? { animation: 'spin 1s linear infinite' } : undefined}
-                        />
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      className="crud-btn"
+                      title={testingProvider === provider.provider
+                        ? 'Testing connection…'
+                        : !provider.requires_api_key
+                          ? 'Test if local provider service is reachable'
+                          : provider.has_stored_credential || provider.has_env_credential
+                            ? 'Test connection'
+                            : 'No credential configured - save a key first'}
+                      onClick={() => handleTestConnection(provider)}
+                      disabled={testingProvider === provider.provider ||
+                        (provider.requires_api_key && !provider.has_stored_credential && !provider.has_env_credential)}
+                    >
+                      <RefreshCw
+                        size={12}
+                        style={testingProvider === provider.provider ? { animation: 'spin 1s linear infinite' } : undefined}
+                      />
+                    </button>
                   </>
                 )}
               </div>

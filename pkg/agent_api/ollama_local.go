@@ -493,14 +493,11 @@ func (c *OllamaLocalClient) SetModel(model string) error {
 }
 
 // ListModels returns available local models
-func (c *OllamaLocalClient) ListModels() ([]ModelInfo, error) {
+func (c *OllamaLocalClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	client, err := c.newClient()
 	if err != nil {
 		return nil, fmt.Errorf("could not create ollama client: %w", err)
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 
 	listResp, err := client.List(ctx)
 	if err != nil {

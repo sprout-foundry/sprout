@@ -1216,7 +1216,7 @@ func (m *mockAPIClient) SetModel(string) error       { return nil }
 func (m *mockAPIClient) GetModel() string            { return "mock" }
 func (m *mockAPIClient) GetProvider() string         { return "mock" }
 func (m *mockAPIClient) GetModelContextLimit() (int, error) { return 4096, nil }
-func (m *mockAPIClient) ListModels() ([]api.ModelInfo, error) { return nil, nil }
+func (m *mockAPIClient) ListModels(ctx context.Context) ([]api.ModelInfo, error) { return nil, nil }
 func (m *mockAPIClient) SupportsVision() bool        { return false }
 func (m *mockAPIClient) GetVisionModel() string      { return "" }
 func (m *mockAPIClient) SendVisionRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {

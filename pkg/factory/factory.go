@@ -1,6 +1,7 @@
 package factory
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"strings"
@@ -92,7 +93,7 @@ func (t *TestClient) GetModelContextLimit() (int, error) {
 	return 4096, nil
 }
 
-func (t *TestClient) ListModels() ([]api.ModelInfo, error) {
+func (t *TestClient) ListModels(ctx context.Context) ([]api.ModelInfo, error) {
 	return []api.ModelInfo{
 		{Name: "test-model", ContextLength: 4096},
 	}, nil

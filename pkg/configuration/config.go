@@ -285,6 +285,12 @@ func Load() (*Config, error) {
 		return NewConfig(), nil
 	}
 
+	// Migrate any api_key values from config.json custom_providers to the credential store
+	// before the Config struct unmarshal (which would silently discard api_key fields).
+	if err := MigrateConfigFileAPIKeys(configPath); err != nil {
+		log.Printf("[config] warning: config.json api_key migration failed: %v", err)
+	}
+
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)

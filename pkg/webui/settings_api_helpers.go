@@ -73,8 +73,10 @@ func sanitizedConfig(cfg *configuration.Config) map[string]interface{} {
 	return out
 }
 
-// sanitizedCustomProviders returns a copy of the providers map.
-// Sensitive fields (if any) are excluded from the CustomProviderConfig JSON tags.
+// sanitizedCustomProviders returns a defensive copy of the providers map.
+// The CustomProviderConfig struct no longer contains sensitive fields (API keys are
+// stored in the credential store), but the copy prevents accidental mutation of
+// the in-memory config.
 func sanitizedCustomProviders(providers map[string]configuration.CustomProviderConfig) map[string]configuration.CustomProviderConfig {
 	if providers == nil {
 		return nil

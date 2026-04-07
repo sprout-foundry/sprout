@@ -1,12 +1,15 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"regexp"
 	"syscall"
 
+	"filippo.io/age"
 	"github.com/alantheprice/ledit/pkg/credentials"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -115,14 +118,19 @@ Examples:
 				return fmt.Errorf("failed to encrypt with passphrase: %w", err)
 			}
 
-			// Write encrypted data
+			// Write encrypted data atomically
 			path, err := credentials.GetAPIKeysPath()
 			if err != nil {
 				return fmt.Errorf("failed to get API keys path: %w", err)
 			}
 
-			if err := os.WriteFile(path, encrypted, 0600); err != nil {
-				return fmt.Errorf("failed to write encrypted API keys: %w", err)
+			tmpPath := path + ".tmp"
+			if err := os.WriteFile(tmpPath, encrypted, 0600); err != nil {
+				return fmt.Errorf("failed to write temp file: %w", err)
+			}
+			if err := os.Rename(tmpPath, path); err != nil {
+				os.Remove(tmpPath)
+				return fmt.Errorf("failed to replace API keys file: %w", err)
 			}
 
 			fmt.Println("API keys encrypted with passphrase successfully.")
@@ -177,9 +185,14 @@ Only use this for migration or export purposes.`,
 			return fmt.Errorf("failed to decrypt API keys: %w", err)
 		}
 
-		// Write plaintext
-		if err := os.WriteFile(path, decrypted, 0600); err != nil {
-			return fmt.Errorf("failed to write plaintext API keys: %w", err)
+		// Write plaintext atomically
+		tmpPath := path + ".tmp"
+		if err := os.WriteFile(tmpPath, decrypted, 0600); err != nil {
+			return fmt.Errorf("failed to write temp file: %w", err)
+		}
+		if err := os.Rename(tmpPath, path); err != nil {
+			os.Remove(tmpPath)
+			return fmt.Errorf("failed to replace API keys file: %w", err)
 		}
 
 		fmt.Println("API keys decrypted to plaintext successfully.")
@@ -257,15 +270,39 @@ you have a backup of the old key or have exported your keys.`,
 			fmt.Printf("Old machine key backed up to: %s\n", backupPath)
 		}
 
+		// Read the encrypted API keys file BEFORE deleting the old key
+		apiKeysPath, err := credentials.GetAPIKeysPath()
+		if err != nil {
+			return fmt.Errorf("failed to get API keys path: %w", err)
+		}
+		encryptedData, err := os.ReadFile(apiKeysPath)
+		if err != nil {
+			return fmt.Errorf("failed to read API keys file: %w", err)
+		}
+
 		// Delete old key
 		if err := os.Remove(oldKeyPath); err != nil {
 			return fmt.Errorf("failed to remove old machine key: %w", err)
 		}
 
-		// Load old keys using the old key
-		store, err := credentials.Load()
+		// Decrypt using the old key (load from memory)
+		identity, err := age.ParseX25519Identity(string(oldKeyData))
 		if err != nil {
-			return fmt.Errorf("failed to load API keys with old key: %w", err)
+			return fmt.Errorf("failed to parse old machine key: %w", err)
+		}
+		r, err := age.Decrypt(bytes.NewReader(encryptedData), identity)
+		if err != nil {
+			return fmt.Errorf("failed to decrypt with old key: %w", err)
+		}
+		decryptedData, err := io.ReadAll(r)
+		if err != nil {
+			return fmt.Errorf("failed to read decrypted data: %w", err)
+		}
+
+		// Parse the decrypted JSON into a store
+		var store credentials.Store
+		if err := json.Unmarshal(decryptedData, &store); err != nil {
+			return fmt.Errorf("failed to parse API keys: %w", err)
 		}
 
 		// Generate new key and re-encrypt

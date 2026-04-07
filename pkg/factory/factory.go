@@ -3,6 +3,7 @@ package factory
 import (
 	"fmt"
 	"log"
+	"strings"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/agent_providers"
@@ -155,8 +156,8 @@ func CreateGenericProvider(providerName, model string) (api.ClientInterface, err
 	if config, err := globalProviderFactory.GetProviderConfig(providerName); err == nil {
 		configCopy := *config
 		resolved, resolveErr := credentials.ResolveProvider(providerName)
-		if resolveErr == nil && resolved.Value != "" {
-			configCopy.Auth.Key = resolved.Value
+		if resolveErr == nil && strings.TrimSpace(resolved.Value) != "" {
+			configCopy.Auth.Key = strings.TrimSpace(resolved.Value)
 		}
 		provider, providerErr := providers.NewGenericProvider(&configCopy)
 		if providerErr == nil {
@@ -193,8 +194,8 @@ func CreateCustomProvider(providerName, model string) (api.ClientInterface, erro
 	if err != nil {
 		return nil, fmt.Errorf("failed to build provider config: %w", err)
 	}
-	if resolved, resolveErr := credentials.ResolveProvider(providerName); resolveErr == nil && resolved.Value != "" {
-		genericConfig.Auth.Key = resolved.Value
+	if resolved, resolveErr := credentials.ResolveProvider(providerName); resolveErr == nil && strings.TrimSpace(resolved.Value) != "" {
+		genericConfig.Auth.Key = strings.TrimSpace(resolved.Value)
 	}
 
 	client, err := providers.NewGenericProvider(genericConfig)

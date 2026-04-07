@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/credentials"
 )
 
 //go:embed configs/*.json
@@ -127,7 +129,16 @@ func (f *ProviderFactory) CreateProvider(name string) (api.ClientInterface, erro
 		return nil, fmt.Errorf("provider config not found: %s", name)
 	}
 
-	return NewGenericProvider(config)
+	// Make a copy so we don't mutate the stored config
+	configCopy := *config
+
+	// Inject resolved credentials via the unified path (env → keyring → file store).
+	// TrimSpace guards against whitespace in stored values.
+	if resolved, resolveErr := credentials.ResolveProvider(name); resolveErr == nil && strings.TrimSpace(resolved.Value) != "" {
+		configCopy.Auth.Key = strings.TrimSpace(resolved.Value)
+	}
+
+	return NewGenericProvider(&configCopy)
 }
 
 // CreateProviderWithModel creates a provider instance with a specific model

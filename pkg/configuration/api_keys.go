@@ -12,76 +12,42 @@ import (
 	"golang.org/x/term"
 )
 
-type ProviderAPIKey struct {
-	Name            string `json:"name,omitempty"`
-	FormattedName   string `json:"formatted_name,omitempty"`
-	RequiresKey     bool   `json:"requires_key,omitempty"`
-	Key             string `json:"key,omitempty"`
-	EnvVariableName string `json:"env_variable_name,omitempty"`
+// knownProviderNames is the canonical list of built-in provider names.
+// This is the single source of truth for provider ordering in CLI/UI.
+var knownProviderNames = []string{
+	"chutes",
+	"openrouter",
+	"zai",
+	"openai",
+	"deepinfra",
+	"deepseek",
+	"minimax",
+	"ollama",
+	"ollama-local",
+	"ollama-turbo",
+	"lmstudio",
+	"mistral",
+	"jinaai",
 }
 
-func getSupportedProviders() []ProviderAPIKey {
-	return []ProviderAPIKey{
-		{
-			Name:            "chutes",
-			FormattedName:   "Chutes",
-			RequiresKey:     true,
-			EnvVariableName: "CHUTES_API_KEY",
-		},
-		{
-			Name:            "openrouter",
-			FormattedName:   "OpenRouter (Recommended)",
-			RequiresKey:     true,
-			EnvVariableName: "OPENROUTER_API_KEY",
-		},
-		{
-			Name:            "zai",
-			FormattedName:   "Z.AI Coding Plan",
-			RequiresKey:     true,
-			EnvVariableName: "ZAI_API_KEY",
-		},
-		{
-			Name:            "openai",
-			FormattedName:   "OpenAI",
-			RequiresKey:     true,
-			EnvVariableName: "OPENAI_API_KEY",
-		},
-		{
-			Name:            "deepinfra",
-			FormattedName:   "DeepInfra",
-			RequiresKey:     true,
-			EnvVariableName: "DEEPINFRA_API_KEY",
-		},
-		{
-			Name:          "ollama",
-			FormattedName: "Ollama (local)",
-			RequiresKey:   false,
-		},
-		{
-			Name:            "ollama-turbo",
-			FormattedName:   "Ollama (turbo)",
-			RequiresKey:     true,
-			EnvVariableName: "OLLAMA_API_KEY",
-		},
-		{
-			Name:            "lmstudio",
-			FormattedName:   "LM Studio",
-			RequiresKey:     false,
-			EnvVariableName: "LMSTUDIO_API_KEY",
-		},
-		{
-			Name:            "mistral",
-			FormattedName:   "Mistral",
-			RequiresKey:     true,
-			EnvVariableName: "MISTRAL_API_KEY",
-		},
-		{
-			Name:            "jinaai",
-			FormattedName:   "JinaAI",
-			RequiresKey:     true,
-			EnvVariableName: "JINA_API_KEY",
-		},
-	}
+// knownProviderDisplayNames maps provider names to their display names.
+// This is the single source of truth for provider display names in CLI/UI.
+// getProviderDisplayName() consults this map to avoid a circular dependency
+// with GetProviderAuthMetadata() (which calls getProviderDisplayName for display names).
+var knownProviderDisplayNames = map[string]string{
+	"chutes":       "Chutes",
+	"openrouter":   "OpenRouter (Recommended)",
+	"zai":          "Z.AI Coding Plan",
+	"openai":       "OpenAI",
+	"deepinfra":    "DeepInfra",
+	"deepseek":     "DeepSeek",
+	"minimax":      "MiniMax",
+	"ollama":       "Ollama (local)",
+	"ollama-local": "Ollama (Local)",
+	"ollama-turbo": "Ollama (turbo)",
+	"lmstudio":     "LM Studio",
+	"mistral":      "Mistral",
+	"jinaai":       "JinaAI",
 }
 
 // GetAPIKeysPath returns the full path to the API keys file
@@ -233,9 +199,13 @@ func SaveAPIKeys(keys *APIKeys) error {
 // PopulateFromEnvironment populates API keys from environment variables
 // This is called on startup only to detect whether environment credentials are available.
 func (keys *APIKeys) PopulateFromEnvironment() bool {
-	for _, provider := range getSupportedProviders() {
-		if provider.RequiresKey && provider.EnvVariableName != "" {
-			if envKey := strings.TrimSpace(os.Getenv(provider.EnvVariableName)); envKey != "" {
+	for _, name := range knownProviderNames {
+		metadata, err := GetProviderAuthMetadata(name)
+		if err != nil {
+			continue
+		}
+		if metadata.RequiresAPIKey && metadata.EnvVar != "" {
+			if envKey := strings.TrimSpace(os.Getenv(metadata.EnvVar)); envKey != "" {
 				return true
 			}
 		}
@@ -327,13 +297,16 @@ func PromptForAPIKey(provider string) (string, error) {
 	return apiKey, nil
 }
 
-// getProviderDisplayName returns a user-friendly name for the provider
+// getProviderDisplayName returns a user-friendly name for the provider.
+// For known built-in providers, uses the static display name map.
+// For custom providers, falls back to the custom provider config.
 func getProviderDisplayName(provider string) string {
-	for _, p := range getSupportedProviders() {
-		if p.Name == provider {
-			return p.FormattedName
-		}
+	// Check static display names for built-in providers first
+	if displayName, ok := knownProviderDisplayNames[provider]; ok {
+		return displayName
 	}
+
+	// Fall back to custom providers
 	if cfg, err := Load(); err == nil {
 		if custom, exists := cfg.CustomProviders[provider]; exists {
 			if custom.Name != "" {
@@ -341,6 +314,7 @@ func getProviderDisplayName(provider string) string {
 			}
 		}
 	}
+
 	return provider
 }
 

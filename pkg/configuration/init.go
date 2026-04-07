@@ -148,14 +148,17 @@ func Initialize() (*Config, *APIKeys, error) {
 func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 	// Check which providers have API keys already
 	providersWithKeys := []string{}
-	allProviders := getSupportedProviders()
 
 	// First, check for providers that have environment variables set
 	envProviders := []string{}
-	for _, provider := range allProviders {
-		if provider.RequiresKey && provider.EnvVariableName != "" {
-			if envKey := os.Getenv(provider.EnvVariableName); envKey != "" {
-				envProviders = append(envProviders, provider.Name)
+	for _, name := range knownProviderNames {
+		metadata, err := GetProviderAuthMetadata(name)
+		if err != nil {
+			continue
+		}
+		if metadata.RequiresAPIKey && metadata.EnvVar != "" {
+			if envKey := os.Getenv(metadata.EnvVar); envKey != "" {
+				envProviders = append(envProviders, name)
 			}
 		}
 	}
@@ -164,14 +167,9 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 	if len(envProviders) > 0 {
 		fmt.Println("[>>] Found providers with environment variables set:")
 		for i, providerName := range envProviders {
-			// Find the provider struct to get the environment variable name
-			var envVarName string
-			for _, provider := range allProviders {
-				if provider.Name == providerName {
-					envVarName = provider.EnvVariableName
-					break
-				}
-			}
+			// Get the environment variable name for display
+			metadata, _ := GetProviderAuthMetadata(providerName)
+			envVarName := metadata.EnvVar
 			fmt.Printf("  %d. %s (from %s)", i+1, getProviderDisplayName(providerName), envVarName)
 			fmt.Println()
 		}
@@ -183,9 +181,13 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 	}
 
 	// Check which providers have API keys already (from file)
-	for _, provider := range allProviders {
-		if !provider.RequiresKey || HasProviderAuth(provider.Name) {
-			providersWithKeys = append(providersWithKeys, provider.Name)
+	for _, name := range knownProviderNames {
+		metadata, err := GetProviderAuthMetadata(name)
+		if err != nil {
+			continue
+		}
+		if !metadata.RequiresAPIKey || HasProviderAuth(name) {
+			providersWithKeys = append(providersWithKeys, name)
 		}
 	}
 
@@ -204,20 +206,25 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 
 	// Show all provider options with clear descriptions
 	fmt.Println("[bot] All available AI providers:")
-	for i, provider := range allProviders {
+	for i, name := range knownProviderNames {
+		metadata, err := GetProviderAuthMetadata(name)
+		if err != nil {
+			continue
+		}
+
 		status := ""
 		description := ""
 
-		if provider.RequiresKey && !HasProviderAuth(provider.Name) {
+		if metadata.RequiresAPIKey && !HasProviderAuth(name) {
 			status = " (needs API key)"
-		} else if provider.RequiresKey && HasProviderAuth(provider.Name) {
+		} else if metadata.RequiresAPIKey && HasProviderAuth(name) {
 			status = " [OK]"
 		} else {
 			status = " (local, no key needed)"
 		}
 
 		// Add helpful descriptions
-		switch provider.Name {
+		switch name {
 		case "openrouter":
 			description = " - 100+ models, free options, pay-as-you-go"
 		case "openai":
@@ -234,25 +241,26 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 			description = " - Specialized in embeddings and search"
 		}
 
-		fmt.Printf("  %d. %s%s%s\n", i+1, provider.FormattedName, status, description)
+		fmt.Printf("  %d. %s%s%s\n", i+1, getProviderDisplayName(name), status, description)
 	}
 	fmt.Println()
 
 	// Get user choice
-	choice, err := readIntInput(fmt.Sprintf("Select a provider (1-%d): ", len(allProviders)), 1, len(allProviders))
+	choice, err := readIntInput(fmt.Sprintf("Select a provider (1-%d): ", len(knownProviderNames)), 1, len(knownProviderNames))
 	if err != nil {
 		return "", fmt.Errorf("invalid choice: %w", err)
 	}
 
-	selectedProvider := allProviders[choice-1]
+	selectedProvider := knownProviderNames[choice-1]
 
 	// Check if API key is needed
-	if selectedProvider.RequiresKey && !HasProviderAuth(selectedProvider.Name) {
+	metadata, _ := GetProviderAuthMetadata(selectedProvider)
+	if metadata.RequiresAPIKey && !HasProviderAuth(selectedProvider) {
 		fmt.Println()
-		fmt.Printf("[list] Setting up %s:\n", selectedProvider.FormattedName)
+		fmt.Printf("[list] Setting up %s:\n", getProviderDisplayName(selectedProvider))
 
 		// Provide helpful information about getting API keys
-		switch selectedProvider.Name {
+		switch selectedProvider {
 		case "openai":
 			fmt.Println("   • Visit: https://platform.openai.com/api-keys")
 			fmt.Println("   • Create an account and generate an API key")
@@ -271,24 +279,24 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 		}
 		fmt.Println()
 
-		apiKey, err := PromptForAPIKey(selectedProvider.Name)
+		apiKey, err := PromptForAPIKey(selectedProvider)
 		if err != nil {
 			return "", fmt.Errorf("failed to get API key: %w", err)
 		}
 
-		apiKeys.SetAPIKey(selectedProvider.Name, apiKey)
+		apiKeys.SetAPIKey(selectedProvider, apiKey)
 		if err := SaveAPIKeys(apiKeys); err != nil {
 			return "", fmt.Errorf("failed to save API key: %w", err)
 		}
 
-		fmt.Printf("[OK] API key saved for %s\n", selectedProvider.FormattedName)
-	} else if selectedProvider.RequiresKey {
-		fmt.Printf("[OK] Using existing API key for %s\n", selectedProvider.FormattedName)
+		fmt.Printf("[OK] API key saved for %s\n", getProviderDisplayName(selectedProvider))
+	} else if metadata.RequiresAPIKey {
+		fmt.Printf("[OK] Using existing API key for %s\n", getProviderDisplayName(selectedProvider))
 	} else {
-		fmt.Printf("[OK] Selected %s (no API key required)\n", selectedProvider.FormattedName)
+		fmt.Printf("[OK] Selected %s (no API key required)\n", getProviderDisplayName(selectedProvider))
 	}
 
-	return selectedProvider.Name, nil
+	return selectedProvider, nil
 }
 
 // EnsureProviderAPIKey ensures the provider has an API key, prompting if needed

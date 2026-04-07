@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { ApiService } from '../services/api';
 import { useNotifications } from '../contexts/NotificationContext';
-import { Pencil, Plus, Trash2, Lock } from 'lucide-react';
+import { Pencil, Plus, Trash2, Lock, RefreshCw } from 'lucide-react';
 import { debugLog } from '../utils/log';
 import './SettingsPanel.css';
 
@@ -30,6 +30,8 @@ function CredentialsSettingsTab(): JSX.Element {
   const [saving, setSaving] = useState(false);
   const [pendingDeleteProvider, setPendingDeleteProvider] = useState<string | null>(null);
   const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [testingProvider, setTestingProvider] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<Record<string, { success: boolean; error?: string; model_count?: number }>>({});
 
   const { addNotification } = useNotifications();
   const api = ApiService.getInstance();
@@ -78,6 +80,7 @@ function CredentialsSettingsTab(): JSX.Element {
     try {
       await api.setProviderCredential(editingProvider, editValue.trim());
       addNotification('success', 'Credentials', 'API key saved', 3000);
+      setTestResults({});
       handleEditCancel();
       await fetchCredentials();
     } catch (err) {
@@ -105,6 +108,11 @@ function CredentialsSettingsTab(): JSX.Element {
       api.deleteProviderCredential(provider.provider)
         .then(() => {
           addNotification('success', 'Credentials', `${provider.display_name} credential deleted`, 3000);
+          setTestResults(prev => {
+            const next = { ...prev };
+            delete next[provider.provider];
+            return next;
+          });
           fetchCredentials();
         })
         .catch((err) => {
@@ -118,6 +126,37 @@ function CredentialsSettingsTab(): JSX.Element {
         setPendingDeleteProvider(null);
         deleteTimerRef.current = null;
       }, 3000);
+    }
+  };
+
+  const handleTestConnection = async (provider: CredentialProvider) => {
+    setTestingProvider(provider.provider);
+    setTestResults(prev => {
+      const next = { ...prev };
+      delete next[provider.provider];
+      return next;
+    });
+
+    try {
+      const result = await api.testProviderConnection(provider.provider);
+      setTestResults(prev => ({
+        ...prev,
+        [provider.provider]: {
+          success: result.success,
+          error: result.error,
+          model_count: result.model_count,
+        },
+      }));
+    } catch (err) {
+      setTestResults(prev => ({
+        ...prev,
+        [provider.provider]: {
+          success: false,
+          error: err instanceof Error ? err.message : String(err),
+        },
+      }));
+    } finally {
+      setTestingProvider(null);
     }
   };
 
@@ -187,6 +226,12 @@ function CredentialsSettingsTab(): JSX.Element {
 
   return (
     <div className="section">
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
       {/* Header with storage info */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 'var(--space-4)' }}>
         <Lock size={16} color="var(--text-muted)" />
@@ -239,6 +284,27 @@ function CredentialsSettingsTab(): JSX.Element {
                     {provider.env_var}
                   </span>
                 )}
+                {testResults[provider.provider] && (
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      marginTop: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      color: testResults[provider.provider].success
+                        ? 'var(--color-success, #22c55e)'
+                        : 'var(--color-error, #ef4444)',
+                      maxWidth: '420px',
+                      wordBreak: 'break-word',
+                    }}
+                  >
+                    {testResults[provider.provider].success ? '✓' : '✗'}
+                    {testResults[provider.provider].success
+                      ? `Connected — ${testResults[provider.provider].model_count ?? 0} models available`
+                      : testResults[provider.provider].error}
+                  </span>
+                )}
               </div>
 
               {/* Actions */}
@@ -272,6 +338,24 @@ function CredentialsSettingsTab(): JSX.Element {
                         }
                       >
                         <Trash2 size={12} />
+                      </button>
+                    )}
+                    {(provider.has_stored_credential || provider.has_env_credential || !provider.requires_api_key) && (
+                      <button
+                        type="button"
+                        className="crud-btn"
+                        title={testingProvider === provider.provider
+                          ? 'Testing connection…'
+                          : !provider.requires_api_key
+                            ? 'Test if local provider service is reachable'
+                            : 'Test connection'}
+                        onClick={() => handleTestConnection(provider)}
+                        disabled={testingProvider === provider.provider}
+                      >
+                        <RefreshCw
+                          size={12}
+                          style={testingProvider === provider.provider ? { animation: 'spin 1s linear infinite' } : undefined}
+                        />
                       </button>
                     )}
                   </>

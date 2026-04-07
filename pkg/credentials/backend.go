@@ -140,6 +140,12 @@ func removeTrackedProvider(provider string) error {
 	return saveTrackedKeyringProviders(newProviders)
 }
 
+// GetBackendModePath returns the path to the backend mode file.
+// This is the exported version of getBackendModePath() for use by external packages.
+func GetBackendModePath() (string, error) {
+	return getBackendModePath()
+}
+
 // GetStorageMode returns the persisted storage mode ("keyring", "file", or "").
 // Returns empty string if no mode file exists (will be auto-detected on first use).
 func GetStorageMode() (string, error) {

@@ -97,7 +97,7 @@ function Terminal({
   const [sessionState] = useState(() => {
     paneIdCounter.current += 1;
     const id = `pane-${paneIdCounter.current}`;
-    return { initialId: id, initialSessions: [{ id, name: 'Session 1' }] };
+    return { initialId: id, initialSessions: [{ id, name: 'Session 1', is_pinned: false }] };
   });
   const [sessions, setSessions] = useState<TerminalSession[]>(sessionState.initialSessions);
   const [activeSessionId, setActiveSessionId] = useState(sessionState.initialId);
@@ -258,6 +258,7 @@ function Terminal({
       const newSession: TerminalSession = {
         id,
         name: `Session ${sessionCounterRef.current}`,
+        is_pinned: false,
       };
       // Track which shell this session should use
       sessionShellsRef.current.set(id, shell ?? selectedShell ?? null);
@@ -321,6 +322,10 @@ function Terminal({
     setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, name } : s)));
   }, []);
 
+  const togglePinSession = useCallback((id: string) => {
+    setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, is_pinned: !s.is_pinned } : s)));
+  }, []);
+
   const switchSession = useCallback((id: string) => {
     setActiveSessionId(id);
   }, []);
@@ -343,6 +348,7 @@ function Terminal({
           const newSession: TerminalSession = {
             id: newId,
             name: `Session ${sessionCounterRef.current}`,
+            is_pinned: false,
           };
           // Track the shell for the new split pane session
           sessionShellsRef.current.set(newId, selectedShell ?? null);
@@ -600,6 +606,7 @@ function Terminal({
                 onSwitch={switchSession}
                 onClose={closeSession}
                 onRename={renameSession}
+                onTogglePin={togglePinSession}
               />
             </div>
             <div className="shell-picker-dropdown" ref={shellPickerRef}>

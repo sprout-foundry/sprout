@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -31,6 +32,12 @@ func (ws *ReactWebServer) handleAPISettingsMCP(w http.ResponseWriter, r *http.Re
 
 // handleAPISettingsMCPServers dispatches POST/PUT/DELETE /api/settings/mcp/servers/{name}.
 func (ws *ReactWebServer) handleAPISettingsMCPServers(w http.ResponseWriter, r *http.Request) {
+	// If the path ends with /credentials, delegate to the credentials handler
+	if strings.HasSuffix(r.URL.Path, "/credentials") {
+		ws.handleAPISettingsMCPServerCredentials(w, r)
+		return
+	}
+
 	switch r.Method {
 	case http.MethodPost:
 		// POST without a name in URL means list-level create
@@ -58,7 +65,7 @@ type mcpConfigResponse struct {
 	Timeout      time.Duration                  `json:"timeout"`
 }
 
-// mcpServerResponse wraps MCPServerConfig with masked env vars for the API response.
+// mcpServerResponse wraps MCPServerConfig with masked env vars and credentials for the API response.
 type mcpServerResponse struct {
 	Name        string            `json:"name"`
 	Type        string            `json:"type,omitempty"`
@@ -66,6 +73,7 @@ type mcpServerResponse struct {
 	Args        []string          `json:"args,omitempty"`
 	URL         string            `json:"url,omitempty"`
 	Env         map[string]string `json:"env,omitempty"`
+	Credentials map[string]string `json:"credentials,omitempty"` // Credential env var names (masked values)
 	WorkingDir  string            `json:"working_dir,omitempty"`
 	Timeout     time.Duration     `json:"timeout,omitempty"`
 	AutoStart   bool              `json:"auto_start"`
@@ -83,6 +91,7 @@ func newMCPConfigResponse(cfg mcp.MCPConfig) mcpConfigResponse {
 			Args:        s.Args,
 			URL:         s.URL,
 			Env:         mcp.MaskEnvVars(s.Env),
+			Credentials: maskCredentials(s.Credentials),
 			WorkingDir:  s.WorkingDir,
 			Timeout:     s.Timeout,
 			AutoStart:   s.AutoStart,
@@ -107,11 +116,29 @@ func newMCPServerResponse(s mcp.MCPServerConfig) mcpServerResponse {
 		Args:        s.Args,
 		URL:         s.URL,
 		Env:         mcp.MaskEnvVars(s.Env),
+		Credentials: maskCredentials(s.Credentials),
 		WorkingDir:  s.WorkingDir,
 		Timeout:     s.Timeout,
 		AutoStart:   s.AutoStart,
 		MaxRestarts: s.MaxRestarts,
 	}
+}
+
+// maskCredentials masks credential placeholder values for safe display.
+// Credential placeholders are shown as "{{stored}}".
+func maskCredentials(credentials map[string]string) map[string]string {
+	if credentials == nil {
+		return nil
+	}
+	result := make(map[string]string, len(credentials))
+	for name, value := range credentials {
+		if mcp.IsSecretRef(value) {
+			result[name] = "{{stored}}"
+		} else {
+			result[name] = value
+		}
+	}
+	return result
 }
 
 // ---------------------------------------------------------------------------
@@ -205,16 +232,9 @@ func (ws *ReactWebServer) handleAPISettingsMCPServersPost(w http.ResponseWriter,
 		return
 	}
 
-	// Validate server config BEFORE migrating secrets to avoid orphaning
-	// credentials if validation fails.
+	// Validate server config BEFORE doing any work to avoid unnecessary side effects.
 	if err := validateMCPServer(server); err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	// Migrate any plaintext secrets in the env var block to the credential store
-	if _, err := mcp.MigrateEnvSecretsFromServer(server.Name, &server); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to store server credentials: %v", err))
 		return
 	}
 
@@ -225,12 +245,23 @@ func (ws *ReactWebServer) handleAPISettingsMCPServersPost(w http.ResponseWriter,
 		if _, exists := cfg.MCP.Servers[server.Name]; exists {
 			return fmt.Errorf("MCP server %q already exists (use PUT to update)", server.Name)
 		}
+
+		// Migrate secrets AFTER confirming the server doesn't exist, so that
+		// no backend entries are orphaned if the existence check fails.
+		if _, migrateErr := mcp.MigrateEnvSecretsFromServer(server.Name, &server); migrateErr != nil {
+			return fmt.Errorf("failed to store server credentials: %w", migrateErr)
+		}
+
 		cfg.MCP.Servers[server.Name] = server
 		cfg.MCP.Enabled = true
 		return nil
 	})
 	if err != nil {
-		writeJSONError(w, http.StatusConflict, err.Error())
+		if strings.Contains(err.Error(), "failed to store server credentials") {
+			writeJSONError(w, http.StatusInternalServerError, err.Error())
+		} else {
+			writeJSONError(w, http.StatusConflict, err.Error())
+		}
 		return
 	}
 
@@ -267,16 +298,9 @@ func (ws *ReactWebServer) handleAPISettingsMCPServersPut(w http.ResponseWriter, 
 	// Ensure the name in the body matches the URL (and always have Name populated)
 	server.Name = name
 
-	// Validate server config BEFORE migrating secrets to avoid orphaning
-	// credentials if validation fails.
+	// Validate server config BEFORE doing any work to avoid unnecessary side effects.
 	if err := validateMCPServer(server); err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	// Migrate any plaintext secrets in the env var block to the credential store
-	if _, err := mcp.MigrateEnvSecretsFromServer(server.Name, &server); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to store server credentials: %v", err))
 		return
 	}
 
@@ -287,11 +311,22 @@ func (ws *ReactWebServer) handleAPISettingsMCPServersPut(w http.ResponseWriter, 
 		if _, exists := cfg.MCP.Servers[name]; !exists {
 			return fmt.Errorf("MCP server %q not found (use POST to create)", name)
 		}
+
+		// Migrate secrets AFTER confirming the server exists, so that
+		// no backend entries are orphaned if the existence check fails.
+		if _, migrateErr := mcp.MigrateEnvSecretsFromServer(server.Name, &server); migrateErr != nil {
+			return fmt.Errorf("failed to store server credentials: %w", migrateErr)
+		}
+
 		cfg.MCP.Servers[name] = server
 		return nil
 	})
 	if err != nil {
-		writeJSONError(w, http.StatusNotFound, err.Error())
+		if strings.Contains(err.Error(), "failed to store server credentials") {
+			writeJSONError(w, http.StatusInternalServerError, err.Error())
+		} else {
+			writeJSONError(w, http.StatusNotFound, err.Error())
+		}
 		return
 	}
 
@@ -326,8 +361,8 @@ func (ws *ReactWebServer) handleAPISettingsMCPServersDelete(w http.ResponseWrite
 			return fmt.Errorf("MCP server %q not found", name)
 		}
 
-		// Clean up stored secrets for this server
-		cleanupMCPServerSecrets(name, server.Env)
+		// Clean up stored secrets for this server from both Env and Credentials
+		cleanupMCPServerSecrets(name, server)
 
 		delete(cfg.MCP.Servers, name)
 		return nil
@@ -344,12 +379,10 @@ func (ws *ReactWebServer) handleAPISettingsMCPServersDelete(w http.ResponseWrite
 }
 
 // cleanupMCPServerSecrets removes credential store entries for env vars that are
-// stored as secrets for a given MCP server.
-func cleanupMCPServerSecrets(serverName string, env map[string]string) {
-	if env == nil {
-		return
-	}
-	for envVarName, value := range env {
+// stored as secrets for a given MCP server. It checks both the Env and Credentials
+// maps to handle all migration states (refs may live in either or both locations).
+func cleanupMCPServerSecrets(serverName string, server mcp.MCPServerConfig) {
+	for envVarName, value := range server.Env {
 		if mcp.IsSecretRef(value) {
 			key := mcp.CredentialKey(serverName, envVarName)
 			if err := credentials.DeleteFromActiveBackend(key); err != nil {
@@ -357,11 +390,373 @@ func cleanupMCPServerSecrets(serverName string, env map[string]string) {
 			}
 		}
 	}
+	if server.Credentials != nil {
+		for envVarName, value := range server.Credentials {
+			if mcp.IsSecretRef(value) {
+				_, actualEnvVarName, ok := mcp.ParseSecretRef(value)
+				if !ok {
+					actualEnvVarName = envVarName
+				}
+				key := mcp.CredentialKey(serverName, actualEnvVarName)
+				if err := credentials.DeleteFromActiveBackend(key); err != nil {
+					log.Printf("[mcp] Failed to delete credential %s: %v", key, err)
+				}
+			}
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// GET/PUT/DELETE /api/settings/mcp/servers/{name}/credentials
+// ---------------------------------------------------------------------------
+
+// handleAPISettingsMCPServerCredentials dispatches GET/PUT/DELETE for
+// /api/settings/mcp/servers/{name}/credentials.
+func (ws *ReactWebServer) handleAPISettingsMCPServerCredentials(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		ws.handleGetServerCredentials(w, r)
+	case http.MethodPut:
+		ws.handlePutServerCredentials(w, r)
+	case http.MethodDelete:
+		ws.handleDeleteServerCredentials(w, r)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// credentialStatusResponse represents the status of a single credential.
+type credentialStatusResponse struct {
+	Status    string `json:"status"`     // "set" or "missing"
+	HasValue  bool   `json:"has_value"`
+}
+
+// getServerCredentialsResponse is the response for GET /api/settings/mcp/servers/{name}/credentials.
+type getServerCredentialsResponse struct {
+	Server      string                          `json:"server"`
+	Credentials map[string]credentialStatusResponse `json:"credentials"`
+}
+
+// handleGetServerCredentials returns the credential status for a server.
+// extractServerNameFromCredentialsPath extracts the server name from paths like
+// /api/settings/mcp/servers/{name}/credentials. It strips the fixed /credentials
+// suffix after extracting with extractPathSegment.
+func extractServerNameFromCredentialsPath(path string) string {
+	segment := extractPathSegment(path, "/api/settings/mcp/servers/")
+	// Remove the /credentials suffix
+	return strings.TrimSuffix(segment, "/credentials")
+}
+
+func (ws *ReactWebServer) handleGetServerCredentials(w http.ResponseWriter, r *http.Request) {
+	name := extractServerNameFromCredentialsPath(r.URL.Path)
+	if name == "" {
+		writeJSONError(w, http.StatusBadRequest, "server name is required in URL path")
+		return
+	}
+
+	cm := ws.getConfigManager(r, w)
+	if cm == nil {
+		return
+	}
+
+	cfg := cm.GetConfig()
+	server, exists := cfg.MCP.Servers[name]
+	if !exists {
+		writeJSONError(w, http.StatusNotFound, fmt.Sprintf("MCP server %q not found", name))
+		return
+	}
+
+	// Build credential status map
+	credStatusMap := make(map[string]credentialStatusResponse)
+
+	// Check Credentials map first
+	if server.Credentials != nil {
+		for envVarName, value := range server.Credentials {
+			if mcp.IsSecretRef(value) {
+				// Parse the placeholder to get the actual env var name
+				_, actualEnvVarName, ok := mcp.ParseSecretRef(value)
+				if !ok {
+					// Invalid placeholder, mark as missing
+					credStatusMap[envVarName] = credentialStatusResponse{
+						Status:   "missing",
+						HasValue: false,
+					}
+					continue
+				}
+
+				// Try to get from credential store
+				key := mcp.CredentialKey(name, actualEnvVarName)
+				credValue, _, err := credentials.GetFromActiveBackend(key)
+				if err != nil || credValue == "" {
+					// Fall back to OS environment
+					credValue = os.Getenv(actualEnvVarName)
+				}
+
+				if credValue != "" {
+					credStatusMap[envVarName] = credentialStatusResponse{
+						Status:   "set",
+						HasValue: true,
+					}
+				} else {
+					credStatusMap[envVarName] = credentialStatusResponse{
+						Status:   "missing",
+						HasValue: false,
+					}
+				}
+			}
+		}
+	}
+
+	// Also check Env block for backward compatibility (credentials stored as secrets)
+	if server.Env != nil {
+		for envVarName, value := range server.Env {
+			if mcp.IsSecretRef(value) {
+				// Check if already added from Credentials map
+				if _, exists := credStatusMap[envVarName]; exists {
+					continue
+				}
+
+				// Parse the placeholder to get the actual env var name
+				_, actualEnvVarName, ok := mcp.ParseSecretRef(value)
+				if !ok {
+					continue
+				}
+
+				// Try to get from credential store
+				key := mcp.CredentialKey(name, actualEnvVarName)
+				credValue, _, err := credentials.GetFromActiveBackend(key)
+				if err != nil || credValue == "" {
+					// Fall back to OS environment
+					credValue = os.Getenv(actualEnvVarName)
+				}
+
+				if credValue != "" {
+					credStatusMap[envVarName] = credentialStatusResponse{
+						Status:   "set",
+						HasValue: true,
+					}
+				} else {
+					credStatusMap[envVarName] = credentialStatusResponse{
+						Status:   "missing",
+						HasValue: false,
+					}
+				}
+			}
+		}
+	}
+
+	response := getServerCredentialsResponse{
+		Server:      name,
+		Credentials: credStatusMap,
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+// putServerCredentialsRequest is the request body for PUT /api/settings/mcp/servers/{name}/credentials.
+type putServerCredentialsRequest struct {
+	Credentials map[string]string `json:"credentials"`
+}
+
+// handlePutServerCredentials sets credentials for a server.
+func (ws *ReactWebServer) handlePutServerCredentials(w http.ResponseWriter, r *http.Request) {
+	name := extractServerNameFromCredentialsPath(r.URL.Path)
+	if name == "" {
+		writeJSONError(w, http.StatusBadRequest, "server name is required in URL path")
+		return
+	}
+
+	cm := ws.getConfigManager(r, w)
+	if cm == nil {
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxSettingsBodyBytes)
+
+	var req putServerCredentialsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("Invalid JSON: %v", err))
+		return
+	}
+
+	if len(req.Credentials) == 0 {
+		writeJSONError(w, http.StatusBadRequest, "credentials map cannot be empty")
+		return
+	}
+
+	err := cm.UpdateConfig(func(cfg *configuration.Config) error {
+		if cfg.MCP.Servers == nil {
+			return fmt.Errorf("MCP server %q not found", name)
+		}
+		server, exists := cfg.MCP.Servers[name]
+		if !exists {
+			return fmt.Errorf("MCP server %q not found", name)
+		}
+
+		// Process each credential with rollback on failure.
+		// Track successfully written backend keys so they can be rolled back
+		// if a subsequent write fails, preventing orphaned credentials.
+		var writtenKeys []string
+		for envVarName, plaintextValue := range req.Credentials {
+			if plaintextValue == "" {
+				continue // Skip empty values
+			}
+			if !isValidEnvVarName(envVarName) {
+				return fmt.Errorf("invalid credential name %q: must match [A-Za-z_][A-Za-z0-9_]*", envVarName)
+			}
+
+			// Store the plaintext value in the credential backend
+			key := mcp.CredentialKey(name, envVarName)
+			if err := credentials.SetToActiveBackend(key, plaintextValue); err != nil {
+				// Rollback: remove any credentials we already wrote
+				for _, rollbackKey := range writtenKeys {
+					if delErr := credentials.DeleteFromActiveBackend(rollbackKey); delErr != nil {
+						log.Printf("[mcp] Failed to rollback credential %s: %v", rollbackKey, delErr)
+					}
+				}
+				return fmt.Errorf("failed to store credential %s: %w", key, err)
+			}
+			writtenKeys = append(writtenKeys, key)
+
+			// Set the server.Credentials entry to the placeholder
+			if server.Credentials == nil {
+				server.Credentials = make(map[string]string)
+			}
+			server.Credentials[envVarName] = mcp.SecretRef(name, envVarName)
+
+			// Remove from Env if it exists there (migration)
+			if server.Env != nil {
+				delete(server.Env, envVarName)
+			}
+		}
+
+		// Update the server config
+		cfg.MCP.Servers[name] = server
+		cfg.MCP.Enabled = true
+
+		return nil
+	})
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			writeJSONError(w, http.StatusNotFound, err.Error())
+		} else {
+			writeJSONError(w, http.StatusBadRequest, err.Error())
+		}
+		return
+	}
+
+	// Return the updated credential status
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"server":  name,
+	})
+}
+
+// deleteServerCredentialsRequest is the request body for DELETE /api/settings/mcp/servers/{name}/credentials.
+type deleteServerCredentialsRequest struct {
+	CredentialName string `json:"credential_name"`
+}
+
+// handleDeleteServerCredentials deletes a credential for a server.
+func (ws *ReactWebServer) handleDeleteServerCredentials(w http.ResponseWriter, r *http.Request) {
+	name := extractServerNameFromCredentialsPath(r.URL.Path)
+	if name == "" {
+		writeJSONError(w, http.StatusBadRequest, "server name is required in URL path")
+		return
+	}
+
+	cm := ws.getConfigManager(r, w)
+	if cm == nil {
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxSettingsBodyBytes)
+
+	var req deleteServerCredentialsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("Invalid JSON: %v", err))
+		return
+	}
+
+	if req.CredentialName == "" {
+		writeJSONError(w, http.StatusBadRequest, "credential_name is required")
+		return
+	}
+	if !isValidEnvVarName(req.CredentialName) {
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid credential name %q: must match [A-Za-z_][A-Za-z0-9_]*", req.CredentialName))
+		return
+	}
+
+	err := cm.UpdateConfig(func(cfg *configuration.Config) error {
+		if cfg.MCP.Servers == nil {
+			return fmt.Errorf("MCP server %q not found", name)
+		}
+		server, exists := cfg.MCP.Servers[name]
+		if !exists {
+			return fmt.Errorf("MCP server %q not found", name)
+		}
+
+		// Delete from credential store
+		key := mcp.CredentialKey(name, req.CredentialName)
+		if err := credentials.DeleteFromActiveBackend(key); err != nil {
+			log.Printf("[mcp] Failed to delete credential %s: %v", key, err)
+			// Don't fail the request if delete fails - it might not exist
+		}
+
+		// Remove from server.Credentials
+		if server.Credentials != nil {
+			delete(server.Credentials, req.CredentialName)
+		}
+		// Also remove from server.Env (defense-in-depth for stale refs)
+		if server.Env != nil {
+			delete(server.Env, req.CredentialName)
+		}
+
+		// Update the server config
+		cfg.MCP.Servers[name] = server
+
+		return nil
+	})
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			writeJSONError(w, http.StatusNotFound, err.Error())
+		} else {
+			writeJSONError(w, http.StatusBadRequest, err.Error())
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success":            true,
+		"server":             name,
+		"deleted_credential": req.CredentialName,
+	})
 }
 
 // ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
+
+// isValidEnvVarName returns true if name looks like a valid environment variable
+// name (e.g. "MY_VAR_1"). This is used to validate credential key names in the
+// credential management API to prevent storing under nonsensical keys.
+func isValidEnvVarName(name string) bool {
+	if name == "" || len(name) > 256 {
+		return false
+	}
+	for i, c := range name {
+		if i == 0 {
+			if !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_') {
+				return false
+			}
+		} else {
+			if !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_') {
+				return false
+			}
+		}
+	}
+	return true
+}
 
 func validateMCPServer(s mcp.MCPServerConfig) error {
 	if s.Name == "" {

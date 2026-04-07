@@ -164,9 +164,10 @@ func LoadMCPConfig() (MCPConfig, error) {
 }
 
 // migrateSecretsOnLoad auto-migrates plaintext secrets in all server env blocks
-// to the credential store. This is a best-effort migration: errors are logged but
-// do not fail the config load. If any secrets were migrated, the updated config
-// is saved back to disk so the config file no longer contains raw token values.
+// to the credential store and the Credentials field. This is a best-effort migration:
+// errors are logged but do not fail the config load. If any secrets were migrated,
+// the updated config is saved back to disk so the config file no longer contains
+// raw token values in the Env block.
 func migrateSecretsOnLoad(config *MCPConfig) {
 	if config == nil || len(config.Servers) == 0 {
 		return
@@ -174,9 +175,9 @@ func migrateSecretsOnLoad(config *MCPConfig) {
 	totalMigrated := 0
 	for name := range config.Servers {
 		s := config.Servers[name]
-		count, err := MigrateEnvSecretsFromServer(name, &s)
+		count, err := MigrateSecretsToCredentialsField(name, &s)
 		if err != nil {
-			log.Printf("[mcp-secrets] Warning: failed to auto-migrate secrets for server %s: %v", name, err)
+			log.Printf("[mcp-secrets] Warning: failed to migrate secrets for server %s: %v", name, err)
 		}
 		if count > 0 {
 			config.Servers[name] = s
@@ -187,7 +188,7 @@ func migrateSecretsOnLoad(config *MCPConfig) {
 		if err := SaveMCPConfig(config); err != nil {
 			log.Printf("[mcp-secrets] Warning: failed to persist migrated config: %v", err)
 		} else {
-			log.Printf("[mcp-secrets] Auto-migrated %d secret(s) from MCP config to credential store", totalMigrated)
+			log.Printf("[mcp-secrets] Auto-migrated %d secret(s) from MCP config Env to Credentials field", totalMigrated)
 		}
 	}
 }
@@ -225,7 +226,7 @@ func SaveMCPConfig(mcpConfig *MCPConfig) error {
 	// are safely skipped, so the double-check is idempotent and low-cost.
 	for name := range mcpConfig.Servers {
 		s := mcpConfig.Servers[name]
-		count, err := MigrateEnvSecretsFromServer(name, &s)
+		count, err := MigrateSecretsToCredentialsField(name, &s)
 		if err != nil {
 			log.Printf("[mcp-secrets] Warning: failed to migrate secrets for server %s: %v", name, err)
 		} else if count > 0 {
@@ -272,7 +273,7 @@ func (c *MCPConfig) AddGitHubServer(githubToken string) {
 			"GITHUB_PERSONAL_ACCESS_TOKEN": githubToken,
 		},
 	}
-	if _, err := MigrateEnvSecretsFromServer("github", &server); err != nil {
+	if _, err := MigrateSecretsToCredentialsField("github", &server); err != nil {
 		log.Printf("[mcp-secrets] Warning: failed to migrate GitHub token: %v", err)
 	}
 	c.Servers["github"] = server
@@ -312,13 +313,31 @@ func (c *MCPConfig) AddServer(serverConfig MCPServerConfig) error {
 
 // RemoveServer removes an MCP server from the configuration
 func (c *MCPConfig) RemoveServer(name string) {
-	// Clean up stored credentials for this server
-	if server, exists := c.Servers[name]; exists && server.Env != nil {
-		for envVarName, value := range server.Env {
-			if IsSecretRef(value) {
-				key := CredentialKey(name, envVarName)
-				if err := credentials.DeleteFromActiveBackend(key); err != nil {
-					log.Printf("[mcp] Failed to delete credential %s: %v", key, err)
+	// Clean up stored credentials for this server from both Env and Credentials
+	if server, exists := c.Servers[name]; exists {
+		// Clean up from Env
+		if server.Env != nil {
+			for envVarName, value := range server.Env {
+				if IsSecretRef(value) {
+					key := CredentialKey(name, envVarName)
+					if err := credentials.DeleteFromActiveBackend(key); err != nil {
+						log.Printf("[mcp] Failed to delete credential %s: %v", key, err)
+					}
+				}
+			}
+		}
+		// Clean up from Credentials field
+		if server.Credentials != nil {
+			for envVarName, value := range server.Credentials {
+				if IsSecretRef(value) {
+					_, actualEnvVarName, ok := ParseSecretRef(value)
+					if !ok {
+						actualEnvVarName = envVarName
+					}
+					key := CredentialKey(name, actualEnvVarName)
+					if err := credentials.DeleteFromActiveBackend(key); err != nil {
+						log.Printf("[mcp] Failed to delete credential %s: %v", key, err)
+					}
 				}
 			}
 		}

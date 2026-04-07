@@ -58,8 +58,8 @@ func (c *MCPClient) Start(ctx context.Context) error {
 	// Set up the command
 	c.cmd = exec.CommandContext(c.ctx, c.config.Command, c.config.Args...)
 
-	// Resolve credential placeholders in environment variables
-	resolvedEnv, envErr := ResolveEnvVars(c.config.Name, c.config.Env)
+	// Resolve credential placeholders (Env + Credentials) for environment variables
+	resolvedEnv, envErr := BuildFullEnvForServer(c.config.Name, &c.config)
 	if envErr != nil {
 		return fmt.Errorf("failed to resolve env vars for MCP server %s: %w", c.config.Name, envErr)
 	}

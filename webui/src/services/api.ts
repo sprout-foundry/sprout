@@ -1502,6 +1502,56 @@ class ApiService {
     }
   }
 
+  async getMCPServerCredentials(serverName: string): Promise<{
+    server: string;
+    credentials: Record<string, {
+      status: 'set' | 'missing';
+      has_value: boolean;
+    }>;
+  }> {
+    try {
+      const response = await clientFetch(`/api/settings/mcp/servers/${encodeURIComponent(serverName)}/credentials`);
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      debugLog('[api] Failed to get MCP server credentials:', error);
+      notificationBus.notify('error', 'API Error', `Failed to get MCP server credentials: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
+    }
+  }
+
+  async updateMCPServerCredentials(serverName: string, credentials: Record<string, string>): Promise<{ success: boolean; server: string }> {
+    try {
+      const response = await clientFetch(`/api/settings/mcp/servers/${encodeURIComponent(serverName)}/credentials`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credentials }),
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      debugLog('[api] Failed to update MCP server credentials:', error);
+      notificationBus.notify('error', 'API Error', `Failed to update MCP server credentials: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
+    }
+  }
+
+  async deleteMCPServerCredential(serverName: string, credentialName: string): Promise<{ success: boolean; server: string; deleted_credential: string }> {
+    try {
+      const response = await clientFetch(`/api/settings/mcp/servers/${encodeURIComponent(serverName)}/credentials`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential_name: credentialName }),
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      debugLog('[api] Failed to delete MCP server credential:', error);
+      notificationBus.notify('error', 'API Error', `Failed to delete MCP server credential: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
+    }
+  }
+
   async getCustomProviders(): Promise<Record<string, unknown>> {
     try {
       const response = await clientFetch('/api/settings/providers');

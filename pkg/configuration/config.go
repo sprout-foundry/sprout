@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -138,7 +139,6 @@ type CustomProviderConfig struct {
 	Parameters             map[string]interface{}      `json:"parameters,omitempty"`          // Optional provider-specific default parameters
 	RequiresAPIKey         bool                        `json:"requires_api_key"`
 	ToolCalls              []string                    `json:"tool_calls,omitempty"`               // Optional explicit tool allowlist; when set, only these tools are exposed
-	APIKey                 string                      `json:"api_key,omitempty"`                  // Stored in config (not recommended for production)
 	EnvVar                 string                      `json:"env_var,omitempty"`                  // Environment variable name for API key
 	ChunkTimeoutMs         int                         `json:"chunk_timeout_ms,omitempty"`         // Streaming chunk timeout in milliseconds
 	Conversion             providers.MessageConversion `json:"message_conversion,omitempty"`       // Message conversion configuration
@@ -316,6 +316,9 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("get config path: %w", err)
 	}
 	config.CustomProviders = fileCustomProviders
+	if err := MigrateEmbeddedAPIKeys(config.CustomProviders); err != nil {
+		log.Printf("[config] warning: credential migration failed: %v", err)
+	}
 	if config.SubagentTypes == nil {
 		config.SubagentTypes = make(map[string]SubagentType)
 	}

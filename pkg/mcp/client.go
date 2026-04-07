@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -57,11 +58,18 @@ func (c *MCPClient) Start(ctx context.Context) error {
 	// Set up the command
 	c.cmd = exec.CommandContext(c.ctx, c.config.Command, c.config.Args...)
 
-	// Set environment variables
-	if c.config.Env != nil {
-		for key, value := range c.config.Env {
-			c.cmd.Env = append(c.cmd.Env, fmt.Sprintf("%s=%s", key, value))
-		}
+	// Resolve credential placeholders in environment variables
+	resolvedEnv, envErr := ResolveEnvVars(c.config.Name, c.config.Env)
+	if envErr != nil {
+		return fmt.Errorf("failed to resolve env vars for MCP server %s: %w", c.config.Name, envErr)
+	}
+
+	// Start with the parent process environment so PATH, SHELL, etc. are available
+	c.cmd.Env = os.Environ()
+
+	// Set / override environment variables (resolved secrets + non-secret config env)
+	for key, value := range resolvedEnv {
+		c.cmd.Env = append(c.cmd.Env, fmt.Sprintf("%s=%s", key, value))
 	}
 
 	// Set working directory

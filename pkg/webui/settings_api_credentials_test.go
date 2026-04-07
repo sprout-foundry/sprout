@@ -425,6 +425,108 @@ func TestProviderCredentials_PatchMethodNotAllowed(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// POST /api/settings/credentials/{provider}/test — handleAPISettingsCredentialsTest
+// ---------------------------------------------------------------------------
+
+func TestTestProviderCredential_TestProvider_ReturnsSuccess(t *testing.T) {
+	ws, _ := setupMCPCredTestServer(t)
+
+	req := makeCredRequest(t, http.MethodPost, "/api/settings/credentials/test/test", nil)
+	rec := httptest.NewRecorder()
+	ws.handleAPISettingsCredentialsTest(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var resp testCredentialResponse
+	decodeJSON(t, rec, &resp)
+
+	assert.True(t, resp.Success, "success should be true for test provider")
+	assert.Equal(t, "test", resp.Provider, "provider should be 'test'")
+	assert.Equal(t, 1, resp.ModelCount, "model_count should be 1")
+	assert.Equal(t, []string{"test-model"}, resp.SampleModels, "sample_models should contain test-model")
+}
+
+func TestTestProviderCredential_MissingProvider(t *testing.T) {
+	ws, _ := setupMCPCredTestServer(t)
+
+	// Empty provider (double slash after prefix)
+	req := makeCredRequest(t, http.MethodPost, "/api/settings/credentials//test", nil)
+	rec := httptest.NewRecorder()
+	ws.handleAPISettingsCredentialsTest(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+	var resp map[string]interface{}
+	decodeJSON(t, rec, &resp)
+	assert.Contains(t, resp["error"], "provider name is required", "error should mention provider name required")
+}
+
+func TestTestProviderCredential_UnknownProvider(t *testing.T) {
+	ws, _ := setupMCPCredTestServer(t)
+
+	req := makeCredRequest(t, http.MethodPost, "/api/settings/credentials/nonexistent_provider_xyz/test", nil)
+	rec := httptest.NewRecorder()
+	ws.handleAPISettingsCredentialsTest(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+	var resp map[string]interface{}
+	decodeJSON(t, rec, &resp)
+	assert.Contains(t, resp["error"], `unknown provider "nonexistent_provider_xyz"`, "error should include quoted provider name")
+}
+
+func TestTestProviderCredential_MissingTestSuffix_Returns405(t *testing.T) {
+	ws, _ := setupMCPCredTestServer(t)
+
+	// POST to /api/settings/credentials/openai/ (no /test suffix) should return 405
+	req := makeCredRequest(t, http.MethodPost, "/api/settings/credentials/openai/", nil)
+	rec := httptest.NewRecorder()
+	ws.handleAPISettingsCredentialsTest(rec, req)
+
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+func TestTestProviderCredential_ResponseFields(t *testing.T) {
+	ws, _ := setupMCPCredTestServer(t)
+
+	req := makeCredRequest(t, http.MethodPost, "/api/settings/credentials/test/test", nil)
+	rec := httptest.NewRecorder()
+	ws.handleAPISettingsCredentialsTest(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var resp testCredentialResponse
+	decodeJSON(t, rec, &resp)
+
+	// Verify required fields exist and have correct types
+	assert.IsType(t, true, resp.Success, "success field should be boolean")
+	assert.IsType(t, "", resp.Provider, "provider field should be string")
+	assert.NotEmpty(t, resp.Provider, "provider should not be empty")
+}
+
+func TestTestProviderCredential_NoCredential_ReturnsFriendlyError(t *testing.T) {
+	// Ensure OPENAI_API_KEY is not set in the test environment
+	t.Setenv("OPENAI_API_KEY", "")
+
+	ws, _ := setupMCPCredTestServer(t)
+
+	// Test with a provider that requires API key but has no credential set
+	// We'll use the test server which doesn't set any credentials for real providers
+	req := makeCredRequest(t, http.MethodPost, "/api/settings/credentials/openai/test", nil)
+	rec := httptest.NewRecorder()
+	ws.handleAPISettingsCredentialsTest(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var resp testCredentialResponse
+	decodeJSON(t, rec, &resp)
+
+	assert.False(t, resp.Success, "success should be false when no credential")
+	assert.Equal(t, "openai", resp.Provider, "provider should be 'openai'")
+	assert.Contains(t, resp.Error, "No credential configured", "error should be user-friendly")
+}
+
+// ---------------------------------------------------------------------------
 // Local provider — does not require API key
 // ---------------------------------------------------------------------------
 

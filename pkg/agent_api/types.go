@@ -1,5 +1,7 @@
 package api
 
+import "context"
+
 // Common types used across all providers
 
 type ImageData struct {
@@ -85,7 +87,7 @@ type ProviderInterface interface {
 	GetModel() string
 	GetProvider() string
 	GetModelContextLimit() (int, error)
-	ListModels() ([]ModelInfo, error)
+	ListModels(ctx context.Context) ([]ModelInfo, error)
 	SupportsVision() bool
 	SendVisionRequest(messages []Message, tools []Tool, reasoning string) (*ChatResponse, error)
 }

@@ -222,7 +222,13 @@ type testCredentialResponse struct {
 
 func (ws *ReactWebServer) handleAPISettingsCredentialsTest(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	// Only handle paths ending with /test
+	if !strings.HasSuffix(r.URL.Path, "/test") {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -241,9 +247,26 @@ func (ws *ReactWebServer) handleAPISettingsCredentialsTest(w http.ResponseWriter
 		return
 	}
 
+	cm := ws.getConfigManager(r, w)
+	if cm == nil {
+		return
+	}
+
 	// Validate provider is known
-	if _, err := configuration.GetProviderAuthMetadata(provider); err != nil {
-		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("unknown provider %q: %v", provider, err))
+	knownProviders := cm.GetAvailableProviders()
+	validProvider := false
+	for _, p := range knownProviders {
+		if string(p) == provider {
+			validProvider = true
+			break
+		}
+	}
+	// Also accept "test" as a valid provider (mock provider for testing)
+	if provider == "test" {
+		validProvider = true
+	}
+	if !validProvider {
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("unknown provider %q", provider))
 		return
 	}
 
@@ -254,6 +277,16 @@ func (ws *ReactWebServer) handleAPISettingsCredentialsTest(w http.ResponseWriter
 			Provider:     provider,
 			ModelCount:   1,
 			SampleModels: []string{"test-model"},
+		})
+		return
+	}
+
+	// Check if credentials exist before making API call
+	if !configuration.HasProviderAuth(provider) {
+		writeJSON(w, http.StatusOK, testCredentialResponse{
+			Success:  false,
+			Provider: provider,
+			Error:    "No credential configured. Save an API key first.",
 		})
 		return
 	}
@@ -273,54 +306,45 @@ func (ws *ReactWebServer) handleAPISettingsCredentialsTest(w http.ResponseWriter
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 
-	type modelsResult struct {
-		models []api.ModelInfo
-		err    error
-	}
-	resultCh := make(chan modelsResult, 1)
-	go func() {
-		models, err := api.GetModelsForProvider(clientType)
-		resultCh <- modelsResult{models: models, err: err}
-	}()
-
-	select {
-	case <-ctx.Done():
-		writeJSON(w, http.StatusGatewayTimeout, testCredentialResponse{
-			Success:  false,
-			Provider: provider,
-			Error:    "connection test timed out (20s)",
-		})
-		return
-	case result := <-resultCh:
-		if result.err != nil {
-			errMsg := result.err.Error()
-			if len(errMsg) > 500 {
-				errMsg = errMsg[:500] + "…"
-			}
-			writeJSON(w, http.StatusOK, testCredentialResponse{
+	models, err := api.GetModelsForProviderCtx(ctx, clientType)
+	if err != nil {
+		// Check if this was a timeout
+		if ctx.Err() == context.DeadlineExceeded {
+			writeJSON(w, http.StatusGatewayTimeout, testCredentialResponse{
 				Success:  false,
 				Provider: provider,
-				Error:    errMsg,
+				Error:    "connection test timed out (20s)",
 			})
 			return
 		}
 
-		// Build sample model list (first 5)
-		sampleModels := make([]string, 0, 5)
-		for i, m := range result.models {
-			if i >= 5 {
-				break
-			}
-			sampleModels = append(sampleModels, m.ID)
+		errMsg := err.Error()
+		if len(errMsg) > 500 {
+			errMsg = errMsg[:500] + "…"
 		}
-
 		writeJSON(w, http.StatusOK, testCredentialResponse{
-			Success:      true,
-			Provider:     provider,
-			ModelCount:   len(result.models),
-			SampleModels: sampleModels,
+			Success:  false,
+			Provider: provider,
+			Error:    errMsg,
 		})
+		return
 	}
+
+	// Build sample model list (first 5)
+	sampleModels := make([]string, 0, 5)
+	for i, m := range models {
+		if i >= 5 {
+			break
+		}
+		sampleModels = append(sampleModels, m.ID)
+	}
+
+	writeJSON(w, http.StatusOK, testCredentialResponse{
+		Success:      true,
+		Provider:     provider,
+		ModelCount:   len(models),
+		SampleModels: sampleModels,
+	})
 }
 
 // ---------------------------------------------------------------------------

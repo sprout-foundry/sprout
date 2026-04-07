@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"testing"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
@@ -44,7 +45,7 @@ func (c *captureToolsClient) SetModel(model string) error {
 func (c *captureToolsClient) GetModel() string                     { return "test-model" }
 func (c *captureToolsClient) GetProvider() string                  { return "deepinfra" }
 func (c *captureToolsClient) GetModelContextLimit() (int, error)   { return 128000, nil }
-func (c *captureToolsClient) ListModels() ([]api.ModelInfo, error) { return nil, nil }
+func (c *captureToolsClient) ListModels(ctx context.Context) ([]api.ModelInfo, error) { return nil, nil }
 func (c *captureToolsClient) SupportsVision() bool                 { return true }
 func (c *captureToolsClient) GetVisionModel() string               { return "google/gemma-3-27b-it" }
 func (c *captureToolsClient) SendVisionRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {

@@ -116,9 +116,12 @@ func (c *MCPHTTPClient) sendRequest(ctx context.Context, method string, params i
 
 	req.Header.Set("Content-Type", "application/json")
 
-	// Add GitHub token authentication if available
-	if token, exists := c.config.Env["GITHUB_PERSONAL_ACCESS_TOKEN"]; exists && token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
+	// Resolve credential placeholders in env for auth headers
+	resolvedEnv, envErr := ResolveEnvVars(c.config.Name, c.config.Env)
+	if envErr == nil {
+		if token, exists := resolvedEnv["GITHUB_PERSONAL_ACCESS_TOKEN"]; exists && token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
 	}
 
 	// Add session ID header if available (for subsequent requests after initialize)

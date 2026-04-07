@@ -3,10 +3,12 @@ package webui
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/alantheprice/ledit/pkg/credentials"
 	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/mcp"
 )
@@ -44,6 +46,75 @@ func (ws *ReactWebServer) handleAPISettingsMCPServers(w http.ResponseWriter, r *
 }
 
 // ---------------------------------------------------------------------------
+// Helpers — MCP config with masked secrets
+// ---------------------------------------------------------------------------
+
+// mcpConfigResponse wraps MCPConfig for JSON serialization with masked env vars.
+type mcpConfigResponse struct {
+	Enabled      bool                           `json:"enabled"`
+	Servers      map[string]mcpServerResponse    `json:"servers"`
+	AutoStart    bool                           `json:"auto_start"`
+	AutoDiscover bool                           `json:"auto_discover"`
+	Timeout      time.Duration                  `json:"timeout"`
+}
+
+// mcpServerResponse wraps MCPServerConfig with masked env vars for the API response.
+type mcpServerResponse struct {
+	Name        string            `json:"name"`
+	Type        string            `json:"type,omitempty"`
+	Command     string            `json:"command,omitempty"`
+	Args        []string          `json:"args,omitempty"`
+	URL         string            `json:"url,omitempty"`
+	Env         map[string]string `json:"env,omitempty"`
+	WorkingDir  string            `json:"working_dir,omitempty"`
+	Timeout     time.Duration     `json:"timeout,omitempty"`
+	AutoStart   bool              `json:"auto_start"`
+	MaxRestarts int               `json:"max_restarts"`
+}
+
+// newMCPConfigResponse builds a response object with secret env var values masked.
+func newMCPConfigResponse(cfg mcp.MCPConfig) mcpConfigResponse {
+	servers := make(map[string]mcpServerResponse, len(cfg.Servers))
+	for name, s := range cfg.Servers {
+		servers[name] = mcpServerResponse{
+			Name:        s.Name,
+			Type:        s.Type,
+			Command:     s.Command,
+			Args:        s.Args,
+			URL:         s.URL,
+			Env:         mcp.MaskEnvVars(s.Env),
+			WorkingDir:  s.WorkingDir,
+			Timeout:     s.Timeout,
+			AutoStart:   s.AutoStart,
+			MaxRestarts: s.MaxRestarts,
+		}
+	}
+	return mcpConfigResponse{
+		Enabled:      cfg.Enabled,
+		Servers:      servers,
+		AutoStart:    cfg.AutoStart,
+		AutoDiscover: cfg.AutoDiscover,
+		Timeout:      cfg.Timeout,
+	}
+}
+
+// newMCPServerResponse builds a response for a single server with masked env vars.
+func newMCPServerResponse(s mcp.MCPServerConfig) mcpServerResponse {
+	return mcpServerResponse{
+		Name:        s.Name,
+		Type:        s.Type,
+		Command:     s.Command,
+		Args:        s.Args,
+		URL:         s.URL,
+		Env:         mcp.MaskEnvVars(s.Env),
+		WorkingDir:  s.WorkingDir,
+		Timeout:     s.Timeout,
+		AutoStart:   s.AutoStart,
+		MaxRestarts: s.MaxRestarts,
+	}
+}
+
+// ---------------------------------------------------------------------------
 // GET /api/settings/mcp
 // ---------------------------------------------------------------------------
 
@@ -54,7 +125,8 @@ func (ws *ReactWebServer) handleAPISettingsMCPGet(w http.ResponseWriter, r *http
 	}
 
 	cfg := cm.GetConfig()
-	writeJSON(w, http.StatusOK, cfg.MCP)
+	response := newMCPConfigResponse(cfg.MCP)
+	writeJSON(w, http.StatusOK, response)
 }
 
 // ---------------------------------------------------------------------------
@@ -106,7 +178,7 @@ func (ws *ReactWebServer) handleAPISettingsMCPPut(w http.ResponseWriter, r *http
 	updated := cm.GetConfig()
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
-		"mcp":     updated.MCP,
+		"mcp":     newMCPConfigResponse(updated.MCP),
 	})
 }
 
@@ -133,9 +205,16 @@ func (ws *ReactWebServer) handleAPISettingsMCPServersPost(w http.ResponseWriter,
 		return
 	}
 
-	// Validate server config
+	// Validate server config BEFORE migrating secrets to avoid orphaning
+	// credentials if validation fails.
 	if err := validateMCPServer(server); err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// Migrate any plaintext secrets in the env var block to the credential store
+	if _, err := mcp.MigrateEnvSecretsFromServer(server.Name, &server); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to store server credentials: %v", err))
 		return
 	}
 
@@ -157,7 +236,7 @@ func (ws *ReactWebServer) handleAPISettingsMCPServersPost(w http.ResponseWriter,
 
 	writeJSON(w, http.StatusCreated, map[string]interface{}{
 		"success": true,
-		"server":  server,
+		"server":  newMCPServerResponse(server),
 	})
 }
 
@@ -188,8 +267,16 @@ func (ws *ReactWebServer) handleAPISettingsMCPServersPut(w http.ResponseWriter, 
 	// Ensure the name in the body matches the URL (and always have Name populated)
 	server.Name = name
 
+	// Validate server config BEFORE migrating secrets to avoid orphaning
+	// credentials if validation fails.
 	if err := validateMCPServer(server); err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// Migrate any plaintext secrets in the env var block to the credential store
+	if _, err := mcp.MigrateEnvSecretsFromServer(server.Name, &server); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to store server credentials: %v", err))
 		return
 	}
 
@@ -210,7 +297,7 @@ func (ws *ReactWebServer) handleAPISettingsMCPServersPut(w http.ResponseWriter, 
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
-		"server":  server,
+		"server":  newMCPServerResponse(server),
 	})
 }
 
@@ -234,9 +321,14 @@ func (ws *ReactWebServer) handleAPISettingsMCPServersDelete(w http.ResponseWrite
 		if cfg.MCP.Servers == nil {
 			return fmt.Errorf("MCP server %q not found", name)
 		}
-		if _, exists := cfg.MCP.Servers[name]; !exists {
+		server, exists := cfg.MCP.Servers[name]
+		if !exists {
 			return fmt.Errorf("MCP server %q not found", name)
 		}
+
+		// Clean up stored secrets for this server
+		cleanupMCPServerSecrets(name, server.Env)
+
 		delete(cfg.MCP.Servers, name)
 		return nil
 	})
@@ -251,11 +343,36 @@ func (ws *ReactWebServer) handleAPISettingsMCPServersDelete(w http.ResponseWrite
 	})
 }
 
+// cleanupMCPServerSecrets removes credential store entries for env vars that are
+// stored as secrets for a given MCP server.
+func cleanupMCPServerSecrets(serverName string, env map[string]string) {
+	if env == nil {
+		return
+	}
+	for envVarName, value := range env {
+		if mcp.IsSecretRef(value) {
+			key := mcp.CredentialKey(serverName, envVarName)
+			if err := credentials.DeleteFromActiveBackend(key); err != nil {
+				log.Printf("[mcp] Failed to delete credential %s: %v", key, err)
+			}
+		}
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
 
 func validateMCPServer(s mcp.MCPServerConfig) error {
+	if s.Name == "" {
+		return fmt.Errorf("server name cannot be empty")
+	}
+	if strings.ContainsAny(s.Name, "/\\") {
+		return fmt.Errorf("server name cannot contain slashes")
+	}
+	if strings.Contains(s.Name, "..") {
+		return fmt.Errorf("server name cannot contain '..'")
+	}
 	serverType := strings.TrimSpace(strings.ToLower(s.Type))
 	if serverType == "http" {
 		if strings.TrimSpace(s.URL) == "" {

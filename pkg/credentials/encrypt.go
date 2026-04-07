@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,14 +39,22 @@ func LoadOrCreateMachineKey() (*age.X25519Identity, error) {
 		return nil, fmt.Errorf("failed to get machine key path: %w", err)
 	}
 
+	// Track whether we already warned about corruption on the fast path,
+	// so the double-check inside the lock doesn't produce a duplicate warning
+	// for the single-process (most common) case.
+	warned := false
+
 	// Try to load existing key first (fast path for most cases)
 	if data, err := os.ReadFile(keyPath); err == nil {
 		identity, err := parseKeyFile(data)
 		if err == nil {
 			return identity, nil
 		}
-		// If parsing fails, the key file is corrupted - return error
-		return nil, fmt.Errorf("machine key file exists but is corrupted: %w", err)
+		// Key file is corrupted (possibly partially written by a prior process).
+		// Fall through to the lock-and-regenerate path rather than failing.
+		log.Printf("[WARN] Machine key file is corrupted and will be regenerated. " +
+			"Previously encrypted API keys may no longer be recoverable.")
+		warned = true
 	}
 
 	// Use flock for proper file locking that survives process death
@@ -59,13 +68,19 @@ func LoadOrCreateMachineKey() (*age.X25519Identity, error) {
 	}
 	defer fileLock.Unlock()
 
-	// Double-check: another process may have created the key while we were waiting for the lock
+	// Double-check: another process may have created (or corrupted) the key
+	// while we were waiting for the lock.
 	if data, err := os.ReadFile(keyPath); err == nil {
 		identity, err := parseKeyFile(data)
 		if err == nil {
 			return identity, nil
 		}
-		return nil, fmt.Errorf("machine key file exists but is corrupted: %w", err)
+		// Key file is corrupted (possibly partially written). Since we hold the lock,
+		// we are the authoritative writer — regenerate the key below.
+		if !warned {
+			log.Printf("[WARN] Machine key file is corrupted and will be regenerated. " +
+				"Previously encrypted API keys may no longer be recoverable.")
+		}
 	}
 
 	// Generate new key
@@ -74,13 +89,35 @@ func LoadOrCreateMachineKey() (*age.X25519Identity, error) {
 		return nil, fmt.Errorf("failed to generate machine key: %w", err)
 	}
 
-	// Write key to disk with secure permissions
+	// Write key to disk atomically (same pattern as Save func — temp file + rename).
+	// This prevents a partially-written key file on crash/signal/power loss.
 	keyData, err := serializeKeyFile(identity)
 	if err != nil {
 		return nil, fmt.Errorf("failed to serialize machine key: %w", err)
 	}
 
-	if err := os.WriteFile(keyPath, keyData, 0600); err != nil {
+	dir := filepath.Dir(keyPath)
+	tmpFile, err := os.CreateTemp(dir, ".key.age-*.tmp")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temp key file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	if err := os.Chmod(tmpPath, 0600); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpPath)
+		return nil, fmt.Errorf("failed to set permissions on temp key file: %w", err)
+	}
+	if _, err := tmpFile.Write(keyData); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpPath)
+		return nil, fmt.Errorf("failed to write temp key file: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		os.Remove(tmpPath)
+		return nil, fmt.Errorf("failed to close temp key file: %w", err)
+	}
+	if err := os.Rename(tmpPath, keyPath); err != nil {
+		os.Remove(tmpPath)
 		return nil, fmt.Errorf("failed to write machine key: %w", err)
 	}
 

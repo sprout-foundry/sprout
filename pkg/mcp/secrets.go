@@ -283,4 +283,185 @@ func MigrateEnvSecretsFromServer(serverName string, config *MCPServerConfig) (in
 	return len(pending), nil
 }
 
+// MigrateSecretsToCredentialsField migrates secrets from the Env map to the Credentials field.
+// This is a one-time migration for existing configs that used Env for secrets.
+// Returns the count of migrated secrets and any error.
+//
+// The migration:
+// 1. Reads all secrets from config.Env (which may contain plaintext or placeholders)
+// 2. Stores them in the credential backend (if not already stored)
+// 3. Removes them from config.Env
+// 4. Adds them to config.Credentials with placeholder values
+func MigrateSecretsToCredentialsField(serverName string, config *MCPServerConfig) (int, error) {
+	if config.Env == nil || len(config.Env) == 0 {
+		return 0, nil
+	}
+
+	// Phase 1: collect secrets from Env (both plaintext and placeholders)
+	pending := make(map[string]string, len(config.Env))
+	for name, value := range config.Env {
+		if IsSecretRef(value) {
+			// Already a placeholder - extract env var name and ensure it's in credential store
+			_, envVarName, ok := ParseSecretRef(value)
+			if !ok {
+				continue // Invalid placeholder, skip
+			}
+			// Check if already in Credentials
+			if config.Credentials != nil && config.Credentials[envVarName] == value {
+				continue // Already migrated
+			}
+			pending[name] = value
+		} else if IsSecretEnvVar(name) && value != "" && value != "{{stored}}" {
+			// Plaintext secret - needs to be stored
+			pending[name] = value
+		}
+	}
+
+	if len(pending) == 0 {
+		return 0, nil
+	}
+
+	// Phase 2: ensure all secrets are in the credential backend
+	for name, value := range pending {
+		var key string
+		var actualValue string
+
+		if IsSecretRef(value) {
+			// Extract env var name from placeholder
+			_, envVarName, ok := ParseSecretRef(value)
+			if !ok {
+				continue
+			}
+			key = CredentialKey(serverName, envVarName)
+			// Verify the credential exists in the store
+			_, _, err := credentials.GetFromActiveBackend(key)
+			if err != nil {
+				log.Printf("[mcp-secrets] Warning: credential %s not found, skipping", key)
+				continue
+			}
+			actualValue = value // Keep the placeholder
+		} else {
+			// Plaintext value - store it
+			key = CredentialKey(serverName, name)
+			if err := credentials.SetToActiveBackend(key, value); err != nil {
+				log.Printf("[mcp-secrets] Failed to store credential %s: %v", key, err)
+				return 0, err
+			}
+			actualValue = SecretRef(serverName, name)
+		}
+
+		// Add to Credentials map
+		if config.Credentials == nil {
+			config.Credentials = make(map[string]string)
+		}
+		config.Credentials[name] = actualValue
+	}
+
+	// Phase 3: remove migrated secrets from Env
+	for name := range pending {
+		delete(config.Env, name)
+	}
+
+	return len(pending), nil
+}
+
+// ResolveCredentialsForServer resolves all credential placeholders for a server
+// and returns a map of env var name -> actual value.
+// This is used when starting an MCP server to build the full environment.
+func ResolveCredentialsForServer(serverName string, config *MCPServerConfig) (map[string]string, error) {
+	if config.Credentials == nil || len(config.Credentials) == 0 {
+		return nil, nil
+	}
+
+	result := make(map[string]string, len(config.Credentials))
+
+	for envVarName, value := range config.Credentials {
+		if !IsSecretRef(value) {
+			// Not a placeholder, use as-is (shouldn't happen, but be safe)
+			result[envVarName] = value
+			continue
+		}
+
+		// Parse the placeholder
+		_, actualEnvVarName, ok := ParseSecretRef(value)
+		if !ok {
+			log.Printf("[mcp-secrets] Invalid credential placeholder for %s/%s, skipping", serverName, envVarName)
+			continue
+		}
+
+		// Get from credential store
+		key := CredentialKey(serverName, actualEnvVarName)
+		credValue, _, err := credentials.GetFromActiveBackend(key)
+		if err != nil {
+			log.Printf("[mcp-secrets] Error getting credential %s: %v", key, err)
+			continue
+		}
+
+		// If empty, fall back to OS environment
+		if credValue == "" {
+			credValue = os.Getenv(actualEnvVarName)
+			if credValue == "" {
+				log.Printf("[mcp-secrets] Credential %s not found in store or OS env, skipping", key)
+				continue
+			}
+		}
+
+		result[envVarName] = credValue
+	}
+
+	return result, nil
+}
+
+// BuildFullEnvForServer combines non-secret Env vars with resolved credentials.
+// Returns the complete environment map to use when starting the MCP server.
+// It resolves both the Credentials map and any placeholder refs that remain in Env
+// (e.g. when MigrateEnvSecretsFromServer was called but MigrateSecretsToCredentialsField
+// has not yet moved the placeholders from Env to Credentials).
+func BuildFullEnvForServer(serverName string, config *MCPServerConfig) (map[string]string, error) {
+	// Start with non-secret Env vars
+	result := make(map[string]string)
+	if config.Env != nil {
+		for k, v := range config.Env {
+			result[k] = v
+		}
+	}
+
+	// Resolve credentials from the Credentials map
+	creds, err := ResolveCredentialsForServer(serverName, config)
+	if err != nil {
+		return result, err
+	}
+
+	for k, v := range creds {
+		result[k] = v
+	}
+
+	// Also resolve any placeholder refs that remain in result (from Env map)
+	// where Credentials may not have been populated yet.
+	for k, v := range result {
+		if IsSecretRef(v) {
+			_, actualEnvVarName, ok := ParseSecretRef(v)
+			if !ok {
+				continue
+			}
+			key := CredentialKey(serverName, actualEnvVarName)
+			credValue, _, getErr := credentials.GetFromActiveBackend(key)
+			if getErr != nil {
+				log.Printf("[mcp-secrets] Error resolving env placeholder %s: %v", key, getErr)
+				continue
+			}
+			if credValue == "" {
+				credValue = os.Getenv(actualEnvVarName)
+			}
+			if credValue != "" {
+				result[k] = credValue
+			} else {
+				log.Printf("[mcp-secrets] Credential %s not found in store or OS env", key)
+			}
+		}
+	}
+
+	return result, nil
+}
+
 

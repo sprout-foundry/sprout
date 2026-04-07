@@ -51,6 +51,7 @@ type rawServerOnDisk struct {
 	Args        []string          `json:"args,omitempty"`
 	URL         string            `json:"url,omitempty"`
 	Env         map[string]string `json:"env,omitempty"`
+	Credentials map[string]string `json:"credentials,omitempty"`
 	WorkingDir  string            `json:"working_dir,omitempty"`
 	Timeout     interface{}      `json:"timeout,omitempty"`
 	AutoStart   bool              `json:"auto_start"`
@@ -98,18 +99,26 @@ func TestSaveMCPConfig_MigratesSecretsBeforePersisting(t *testing.T) {
 	err := SaveMCPConfig(&config)
 	require.NoError(t, err)
 
-	// Assert: the in-memory config was updated with refs
-	assert.True(t, IsSecretRef(config.Servers["testserver"].Env["OPENAI_API_KEY"]),
-		"OPENAI_API_KEY should be a credential ref in memory after save")
+	// Assert: the in-memory config was updated with refs in Credentials, removed from Env
+	require.NotNil(t, config.Servers["testserver"].Credentials,
+		"credentials map should exist in memory")
+	assert.True(t, IsSecretRef(config.Servers["testserver"].Credentials["OPENAI_API_KEY"]),
+		"OPENAI_API_KEY should be a credential ref in Credentials after save")
+	_, stillInEnv := config.Servers["testserver"].Env["OPENAI_API_KEY"]
+	assert.False(t, stillInEnv,
+		"OPENAI_API_KEY should be removed from Env after migration")
 	assert.Equal(t, "/usr/bin", config.Servers["testserver"].Env["PATH"],
 		"PATH should be unchanged in memory")
 
-	// Assert: the on-disk file contains the ref, not plaintext
+	// Assert: the on-disk file contains the ref in credentials, not env
 	raw := readRawConfigFile(t, filepath.Join(dir, ".ledit"))
-	require.NotNil(t, raw.Servers["testserver"].Env,
-		"env map should exist on disk")
-	assert.True(t, IsSecretRef(raw.Servers["testserver"].Env["OPENAI_API_KEY"]),
-		"OPENAI_API_KEY should be a credential ref on disk")
+	require.NotNil(t, raw.Servers["testserver"].Credentials,
+		"credentials map should exist on disk")
+	assert.True(t, IsSecretRef(raw.Servers["testserver"].Credentials["OPENAI_API_KEY"]),
+		"OPENAI_API_KEY should be a credential ref in credentials on disk")
+	_, secretStillInEnv := raw.Servers["testserver"].Env["OPENAI_API_KEY"]
+	assert.False(t, secretStillInEnv,
+		"OPENAI_API_KEY should not be in env on disk")
 	assert.Equal(t, "/usr/bin", raw.Servers["testserver"].Env["PATH"],
 		"PATH should be /usr/bin on disk")
 
@@ -153,10 +162,14 @@ func TestLoadMCPConfig_AutoMigratesSecrets(t *testing.T) {
 	loaded, err := LoadMCPConfig()
 	require.NoError(t, err)
 
-	// Assert: the returned config has refs, not plaintext
-	require.NotNil(t, loaded.Servers["myserver"].Env)
-	assert.True(t, IsSecretRef(loaded.Servers["myserver"].Env["AUTH_TOKEN"]),
-		"AUTH_TOKEN should be a credential ref after LoadMCPConfig")
+	// Assert: the returned config has refs in Credentials, not Env
+	require.NotNil(t, loaded.Servers["myserver"].Credentials,
+		"credentials map should exist after load")
+	assert.True(t, IsSecretRef(loaded.Servers["myserver"].Credentials["AUTH_TOKEN"]),
+		"AUTH_TOKEN should be a credential ref in Credentials after LoadMCPConfig")
+	_, secretInEnv := loaded.Servers["myserver"].Env["AUTH_TOKEN"]
+	assert.False(t, secretInEnv,
+		"AUTH_TOKEN should be removed from Env after migration")
 	assert.Equal(t, "/usr/local/bin", loaded.Servers["myserver"].Env["PATH"],
 		"PATH should be unchanged")
 
@@ -166,10 +179,15 @@ func TestLoadMCPConfig_AutoMigratesSecrets(t *testing.T) {
 	assert.Equal(t, "plaintext-secret-token", val,
 		"credential store should have the original secret value")
 
-	// Assert: the on-disk file was re-saved with refs
+	// Assert: the on-disk file was re-saved with refs in credentials
 	raw := readRawConfigFile(t, configDir)
-	assert.True(t, IsSecretRef(raw.Servers["myserver"].Env["AUTH_TOKEN"]),
-		"AUTH_TOKEN should be migrated to a ref in the on-disk config file")
+	require.NotNil(t, raw.Servers["myserver"].Credentials,
+		"credentials map should exist on disk after migration")
+	assert.True(t, IsSecretRef(raw.Servers["myserver"].Credentials["AUTH_TOKEN"]),
+		"AUTH_TOKEN should be migrated to a ref in credentials on disk")
+	_, secretOnDiskEnv := raw.Servers["myserver"].Env["AUTH_TOKEN"]
+	assert.False(t, secretOnDiskEnv,
+		"AUTH_TOKEN should not be in env on disk after migration")
 	assert.Equal(t, "/usr/local/bin", raw.Servers["myserver"].Env["PATH"],
 		"PATH should remain /usr/local/bin on disk")
 }
@@ -206,8 +224,13 @@ func TestMigrateSecretsOnLoad_Idempotent(t *testing.T) {
 	// Act (first load) — should migrate
 	first, err := LoadMCPConfig()
 	require.NoError(t, err)
-	assert.True(t, IsSecretRef(first.Servers["idemserver"].Env["AUTH_TOKEN"]),
-		"first load should migrate AUTH_TOKEN to a ref")
+	require.NotNil(t, first.Servers["idemserver"].Credentials,
+		"credentials map should exist after first load")
+	assert.True(t, IsSecretRef(first.Servers["idemserver"].Credentials["AUTH_TOKEN"]),
+		"first load should migrate AUTH_TOKEN to a ref in Credentials")
+	_, envHasKey := first.Servers["idemserver"].Env["AUTH_TOKEN"]
+	assert.False(t, envHasKey,
+		"first load should remove AUTH_TOKEN from Env")
 
 	// Verify credential store has the original value (not overwritten)
 	val, _, err := credentials.GetFromActiveBackend("mcp/idemserver/AUTH_TOKEN")
@@ -215,13 +238,18 @@ func TestMigrateSecretsOnLoad_Idempotent(t *testing.T) {
 	assert.Equal(t, "first-secret-value", val,
 		"credential store should have the value from the first migration")
 
-	// Act (second load) — file now has refs, should be idempotent
+	// Act (second load) — file now has refs in Credentials, should be idempotent
 	second, err := LoadMCPConfig()
 	require.NoError(t, err)
 
-	// The ref should still be a ref (not double-migrated or altered)
-	assert.True(t, IsSecretRef(second.Servers["idemserver"].Env["AUTH_TOKEN"]),
-		"second load should not change the migrated ref")
+	// The ref should still be a ref in Credentials (not double-migrated or altered)
+	require.NotNil(t, second.Servers["idemserver"].Credentials,
+		"credentials map should exist after second load")
+	assert.True(t, IsSecretRef(second.Servers["idemserver"].Credentials["AUTH_TOKEN"]),
+		"second load should not change the migrated ref in Credentials")
+	_, envHasKey2 := second.Servers["idemserver"].Env["AUTH_TOKEN"]
+	assert.False(t, envHasKey2,
+		"AUTH_TOKEN should not be in Env after second load")
 
 	// Verify the credential is still the original value
 	val2, _, err := credentials.GetFromActiveBackend("mcp/idemserver/AUTH_TOKEN")
@@ -266,14 +294,26 @@ func TestSaveMCPConfig_AlreadyMigratedRefsPreserved(t *testing.T) {
 	err = SaveMCPConfig(&config)
 	require.NoError(t, err)
 
-	// Assert: in-memory ref is unchanged (not double-migrated)
-	assert.Equal(t, expectedRef, config.Servers["refserver"].Env["OPENAI_API_KEY"],
-		"ref should be preserved in memory after save")
+	// Assert: in-memory ref was moved from Env to Credentials
+	require.NotNil(t, config.Servers["refserver"].Credentials,
+		"credentials map should exist in memory")
+	assert.Equal(t, expectedRef, config.Servers["refserver"].Credentials["OPENAI_API_KEY"],
+		"ref should be in Credentials in memory after save")
+	_, refStillInEnv := config.Servers["refserver"].Env["OPENAI_API_KEY"]
+	assert.False(t, refStillInEnv,
+		"OPENAI_API_KEY should be removed from Env after migration to Credentials")
+	assert.Equal(t, "/usr/bin", config.Servers["refserver"].Env["PATH"],
+		"non-secret PATH should remain in Env")
 
-	// Assert: on-disk ref is preserved
+	// Assert: on-disk ref is in credentials, not env
 	raw := readRawConfigFile(t, filepath.Join(dir, ".ledit"))
-	assert.Equal(t, expectedRef, raw.Servers["refserver"].Env["OPENAI_API_KEY"],
-		"ref should be preserved on disk")
+	require.NotNil(t, raw.Servers["refserver"].Credentials,
+		"credentials map should exist on disk")
+	assert.Equal(t, expectedRef, raw.Servers["refserver"].Credentials["OPENAI_API_KEY"],
+		"ref should be in credentials on disk")
+	_, refOnDiskEnv := raw.Servers["refserver"].Env["OPENAI_API_KEY"]
+	assert.False(t, refOnDiskEnv,
+		"OPENAI_API_KEY should not be in env on disk")
 	assert.Equal(t, "/usr/bin", raw.Servers["refserver"].Env["PATH"],
 		"non-secret PATH should remain /usr/bin on disk")
 
@@ -321,10 +361,23 @@ func TestSaveMCPConfig_MultipleServersMigrateIndependently(t *testing.T) {
 	err := SaveMCPConfig(&config)
 	require.NoError(t, err)
 
-	// Both servers should have migrated
-	assert.True(t, IsSecretRef(config.Servers["server-a"].Env["OPENAI_API_KEY"]))
+	// Both servers should have migrated to Credentials
+	require.NotNil(t, config.Servers["server-a"].Credentials,
+		"server-a credentials map should exist")
+	assert.True(t, IsSecretRef(config.Servers["server-a"].Credentials["OPENAI_API_KEY"]),
+		"server-a OPENAI_API_KEY should be a credential ref in Credentials")
+	_, secretAInEnv := config.Servers["server-a"].Env["OPENAI_API_KEY"]
+	assert.False(t, secretAInEnv,
+		"server-a OPENAI_API_KEY should be removed from Env")
 	assert.Equal(t, "gpt-4", config.Servers["server-a"].Env["MODEL"])
-	assert.True(t, IsSecretRef(config.Servers["server-b"].Env["AUTH_TOKEN"]))
+
+	require.NotNil(t, config.Servers["server-b"].Credentials,
+		"server-b credentials map should exist")
+	assert.True(t, IsSecretRef(config.Servers["server-b"].Credentials["AUTH_TOKEN"]),
+		"server-b AUTH_TOKEN should be a credential ref in Credentials")
+	_, secretBInEnv := config.Servers["server-b"].Env["AUTH_TOKEN"]
+	assert.False(t, secretBInEnv,
+		"server-b AUTH_TOKEN should be removed from Env")
 
 	// Check credentials
 	valA, _, err := credentials.GetFromActiveBackend("mcp/server-a/OPENAI_API_KEY")
@@ -337,9 +390,21 @@ func TestSaveMCPConfig_MultipleServersMigrateIndependently(t *testing.T) {
 
 	// Check on-disk
 	raw := readRawConfigFile(t, filepath.Join(dir, ".ledit"))
-	assert.True(t, IsSecretRef(raw.Servers["server-a"].Env["OPENAI_API_KEY"]))
+	require.NotNil(t, raw.Servers["server-a"].Credentials,
+		"server-a credentials map should exist on disk")
+	assert.True(t, IsSecretRef(raw.Servers["server-a"].Credentials["OPENAI_API_KEY"]),
+		"server-a OPENAI_API_KEY should be a credential ref in credentials on disk")
+	_, secretAOnDiskEnv := raw.Servers["server-a"].Env["OPENAI_API_KEY"]
+	assert.False(t, secretAOnDiskEnv,
+		"server-a OPENAI_API_KEY should not be in env on disk")
 	assert.Equal(t, "gpt-4", raw.Servers["server-a"].Env["MODEL"])
-	assert.True(t, IsSecretRef(raw.Servers["server-b"].Env["AUTH_TOKEN"]))
+	require.NotNil(t, raw.Servers["server-b"].Credentials,
+		"server-b credentials map should exist on disk")
+	assert.True(t, IsSecretRef(raw.Servers["server-b"].Credentials["AUTH_TOKEN"]),
+		"server-b AUTH_TOKEN should be a credential ref in credentials on disk")
+	_, secretBOnDiskEnv := raw.Servers["server-b"].Env["AUTH_TOKEN"]
+	assert.False(t, secretBOnDiskEnv,
+		"server-b AUTH_TOKEN should not be in env on disk")
 }
 
 // ---------------------------------------------------------------------------

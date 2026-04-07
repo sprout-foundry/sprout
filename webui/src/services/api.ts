@@ -1552,6 +1552,44 @@ class ApiService {
     }
   }
 
+  /* ── Provider credential management ─────────────────────── */
+
+  async getProviderCredentials(): Promise<{
+    storage_backend: string;
+    providers: Array<{
+      provider: string;
+      display_name: string;
+      env_var: string;
+      requires_api_key: boolean;
+      has_stored_credential: boolean;
+      has_env_credential: boolean;
+      credential_source: string;
+      masked_value: string;
+    }>;
+  }> {
+    const response = await clientFetch('/api/settings/credentials');
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    return await response.json();
+  }
+
+  async setProviderCredential(provider: string, value: string): Promise<{ success: boolean; provider: string }> {
+    const response = await clientFetch(`/api/settings/credentials/${encodeURIComponent(provider)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value }),
+    });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    return await response.json();
+  }
+
+  async deleteProviderCredential(provider: string): Promise<{ success: boolean; provider: string }> {
+    const response = await clientFetch(`/api/settings/credentials/${encodeURIComponent(provider)}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    return await response.json();
+  }
+
   async getCustomProviders(): Promise<Record<string, unknown>> {
     try {
       const response = await clientFetch('/api/settings/providers');

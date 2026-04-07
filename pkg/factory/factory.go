@@ -7,6 +7,7 @@ import (
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/agent_providers"
 	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/alantheprice/ledit/pkg/credentials"
 )
 
 // TestClient implements a mock client for CI/testing environments
@@ -153,7 +154,7 @@ func init() {
 func CreateGenericProvider(providerName, model string) (api.ClientInterface, error) {
 	if config, err := globalProviderFactory.GetProviderConfig(providerName); err == nil {
 		configCopy := *config
-		resolved, resolveErr := configuration.ResolveProviderAuth(providerName)
+		resolved, resolveErr := credentials.ResolveProvider(providerName)
 		if resolveErr == nil && resolved.Value != "" {
 			configCopy.Auth.Key = resolved.Value
 		}
@@ -192,7 +193,7 @@ func CreateCustomProvider(providerName, model string) (api.ClientInterface, erro
 	if err != nil {
 		return nil, fmt.Errorf("failed to build provider config: %w", err)
 	}
-	if resolved, resolveErr := configuration.ResolveProviderAuth(providerName); resolveErr == nil && resolved.Value != "" {
+	if resolved, resolveErr := credentials.ResolveProvider(providerName); resolveErr == nil && resolved.Value != "" {
 		genericConfig.Auth.Key = resolved.Value
 	}
 

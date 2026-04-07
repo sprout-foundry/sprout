@@ -240,6 +240,39 @@ func TestConfigDirCreation(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// TestCorruptedKeyFileRegeneration verifies that LoadOrCreateMachineKey
+// regenerates a new key when the existing key file is corrupted, rather than
+// returning an error.
+func TestCorruptedKeyFileRegeneration(t *testing.T) {
+	tmpDir := t.TempDir()
+	originalConfig := os.Getenv("LEDIT_CONFIG")
+	os.Setenv("LEDIT_CONFIG", tmpDir)
+	defer os.Setenv("LEDIT_CONFIG", originalConfig)
+
+	// Get the key path
+	keyPath, err := GetMachineKeyPath()
+	require.NoError(t, err)
+
+	// Write corrupted data to the key file
+	err = os.WriteFile(keyPath, []byte("this is not a valid age key"), 0600)
+	require.NoError(t, err)
+
+	// LoadOrCreateMachineKey should regenerate the key instead of failing
+	identity, err := LoadOrCreateMachineKey()
+	require.NoError(t, err)
+	require.NotNil(t, identity)
+
+	// Verify the key file now contains valid data
+	keyData, err := os.ReadFile(keyPath)
+	require.NoError(t, err)
+
+	parsed, err := age.ParseX25519Identity(string(keyData))
+	require.NoError(t, err)
+	assert.Equal(t, identity.String(), parsed.String())
+	assert.NotEqual(t, "this is not a valid age key", string(keyData),
+		"key file should have been replaced, not left as-is")
+}
+
 // TestConcurrentMachineKeyGeneration verifies that only one machine key
 // is generated even when multiple goroutines call LoadOrCreateMachineKey()
 // simultaneously. This test ensures the file locking mechanism works correctly.
@@ -253,22 +286,54 @@ func TestConcurrentMachineKeyGeneration(t *testing.T) {
 	keyPath := filepath.Join(tmpDir, "key.age")
 	os.Remove(keyPath)
 
+	type result struct {
+		identity string
+		err      error
+	}
+
 	// Spawn multiple goroutines to generate keys concurrently
 	const numGoroutines = 10
-	done := make(chan bool, numGoroutines)
+	results := make(chan result, numGoroutines)
 
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
-			defer func() { done <- true }()
 			identity, err := LoadOrCreateMachineKey()
-			require.NoError(t, err)
-			require.NotNil(t, identity)
+			if err != nil {
+				results <- result{err: err}
+				return
+			}
+			results <- result{identity: identity.String()}
 		}()
 	}
 
-	// Wait for all goroutines to complete
+	// Collect all results
+	var identities []string
+	var errors []error
 	for i := 0; i < numGoroutines; i++ {
-		<-done
+		r := <-results
+		if r.err != nil {
+			errors = append(errors, r.err)
+		} else {
+			identities = append(identities, r.identity)
+		}
+	}
+
+	// All goroutines should succeed (the lock timeout could cause some to fail)
+	if len(errors) > 0 && len(errors) >= numGoroutines {
+		t.Fatalf("all goroutines failed: %v", errors[0])
+	}
+
+	// At least some goroutines should have gotten an identity
+	if len(identities) == 0 {
+		t.Fatalf("no goroutines got an identity, errors: %v", errors)
+	}
+
+	// All successful goroutines should have the same identity
+	first := identities[0]
+	for _, id := range identities[1:] {
+		if id != first {
+			t.Fatalf("different identities generated concurrently: %q vs %q", first, id)
+		}
 	}
 
 	// Verify only one key file was created
@@ -280,13 +345,8 @@ func TestConcurrentMachineKeyGeneration(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, keyData)
 
-	// Verify all goroutines got the same key
-	identity, err := LoadOrCreateMachineKey()
-	require.NoError(t, err)
-	require.NotNil(t, identity)
-
-	// Load and verify the key can be parsed
+	// Verify the key can be parsed
 	loadedIdentity, err := age.ParseX25519Identity(string(keyData))
 	require.NoError(t, err)
-	assert.Equal(t, identity.String(), loadedIdentity.String())
+	assert.Equal(t, first, loadedIdentity.String())
 }

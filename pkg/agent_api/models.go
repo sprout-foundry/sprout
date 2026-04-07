@@ -657,7 +657,7 @@ func fetchOpenAICompatibleModels(providerName, endpoint, envVar, inlineAPIKey st
 	}
 
 	apiKey := strings.TrimSpace(inlineAPIKey)
-	if resolved, err := credentials.Resolve(strings.TrimSpace(providerName), strings.TrimSpace(envVar)); err == nil && strings.TrimSpace(resolved.Value) != "" {
+	if resolved, err := credentials.ResolveProvider(strings.TrimSpace(providerName)); err == nil && strings.TrimSpace(resolved.Value) != "" {
 		apiKey = strings.TrimSpace(resolved.Value)
 	}
 	if apiKey != "" {
@@ -730,14 +730,13 @@ func parseFloat(s string) (float64, error) {
 }
 
 func resolveCredentialValue(provider string) (string, error) {
-	envVar := credentials.ProviderEnvVar(provider)
-	resolved, err := credentials.Resolve(provider, envVar)
+	resolved, err := credentials.ResolveProvider(provider)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve credential for %s: %w", provider, err)
 	}
 	if strings.TrimSpace(resolved.Value) == "" {
-		if envVar != "" {
-			return "", fmt.Errorf("%s not set and no stored API key configured", envVar)
+		if resolved.EnvVar != "" {
+			return "", fmt.Errorf("%s not set and no stored API key configured", resolved.EnvVar)
 		}
 		return "", fmt.Errorf("no stored API key configured for %s", provider)
 	}

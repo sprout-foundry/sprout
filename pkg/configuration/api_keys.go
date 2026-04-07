@@ -344,31 +344,11 @@ func getProviderDisplayName(provider string) string {
 	return provider
 }
 
-// RequiresAPIKey checks if a provider requires an API key
+// RequiresAPIKey checks if a provider requires an API key.
 func RequiresAPIKey(provider string) bool {
-	// First check hardcoded providers
-	switch provider {
-	case "ollama-local":
-		return false
-	case "test":
-		// Test provider is for CI/testing and doesn't require API key
-		return false
-	case "lmstudio":
-		// LM Studio is a local provider and doesn't require API key
-		return false
-	case "ollama-turbo":
-		// Ollama turbo requires API key for remote acceleration
-		return true
+	metadata, err := GetProviderAuthMetadata(provider)
+	if err != nil {
+		return true // default to requiring key for unknown providers
 	}
-
-	// Check if it's a custom provider
-	config, err := Load()
-	if err == nil && config.CustomProviders != nil {
-		if customProvider, exists := config.CustomProviders[provider]; exists {
-			return customProvider.RequiresAPIKey
-		}
-	}
-
-	// Default to true for unknown providers
-	return true
+	return metadata.RequiresAPIKey
 }

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -112,7 +113,7 @@ Examples:
 			}
 
 			// Compare passphrases using constant-time comparison to prevent timing attacks
-			if !bytes.Equal(passphrase, confirmation) {
+			if subtle.ConstantTimeCompare(passphrase, confirmation) != 1 {
 				// Zero out buffers before returning error
 				for i := range passphrase {
 					passphrase[i] = 0
@@ -147,6 +148,16 @@ Examples:
 				return fmt.Errorf("failed to serialize API keys: %w", err)
 			}
 
+			// Set encryption mode FIRST (before writing encrypted data).
+			// If we crash after this but before writing, Load() will see the
+			// old plaintext data — self-healing because IsPlaintextJSON passes through.
+			if err := credentials.SetEncryptionMode("passphrase"); err != nil {
+				for i := range passphrase {
+					passphrase[i] = 0
+				}
+				return fmt.Errorf("failed to set encryption mode: %w", err)
+			}
+
 			// Encrypt with passphrase
 			encrypted, err := credentials.EncryptWithPassphrase(jsonData, string(passphrase))
 			// Zero out passphrase after use
@@ -165,11 +176,6 @@ Examples:
 
 			if err := credentials.AtomicWriteFile(path, encrypted, 0600); err != nil {
 				return err
-			}
-
-			// Set encryption mode to passphrase
-			if err := credentials.SetEncryptionMode("passphrase"); err != nil {
-				log.Printf("[WARN] failed to set encryption mode: %v", err)
 			}
 
 			fmt.Println("API keys encrypted with passphrase successfully.")

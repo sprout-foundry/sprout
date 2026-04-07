@@ -195,6 +195,9 @@ const MaxEncryptedSize = MaxDecryptedSize + (10 << 20) // 20 MB
 func DecryptStore(data []byte) ([]byte, error) {
 	// Check if already plaintext JSON (legacy format)
 	if IsPlaintextJSON(data) {
+		if len(data) > MaxDecryptedSize {
+			return nil, fmt.Errorf("API keys file too large (%d bytes, max %d)", len(data), MaxDecryptedSize)
+		}
 		return data, nil
 	}
 
@@ -209,10 +212,6 @@ func DecryptStore(data []byte) ([]byte, error) {
 	if err == nil {
 		r, err := age.Decrypt(bytes.NewReader(data), identity)
 		if err == nil {
-			// Successfully decrypted with machine key — track the mode
-			if err := SetEncryptionMode("machine-key"); err != nil {
-				log.Printf("[WARN] failed to write encryption mode file: %v", err)
-			}
 			return io.ReadAll(io.LimitReader(r, MaxDecryptedSize))
 		}
 		// Machine key decryption failed — data may be passphrase-encrypted
@@ -223,10 +222,6 @@ func DecryptStore(data []byte) ([]byte, error) {
 	if passphrase := strings.TrimSpace(os.Getenv("LEDIT_KEY_PASSPHRASE")); passphrase != "" {
 		decrypted, passErr := DecryptWithPassphrase(data, passphrase)
 		if passErr == nil {
-			// Successfully decrypted with passphrase — track the mode
-			if err := SetEncryptionMode("passphrase"); err != nil {
-				log.Printf("[WARN] failed to write encryption mode file: %v", err)
-			}
 			return decrypted, nil
 		}
 		// Passphrase decryption also failed
@@ -399,16 +394,29 @@ func Save(store Store) error {
 
 	var encrypted []byte
 	if mode == "passphrase" {
-		// Passphrase mode requires LEDIT_KEY_PASSPHRASE
+		// Passphrase mode: encrypt with the user's passphrase
 		passphrase := strings.TrimSpace(os.Getenv("LEDIT_KEY_PASSPHRASE"))
 		if passphrase == "" {
 			return fmt.Errorf("cannot save: API keys are passphrase-encrypted but LEDIT_KEY_PASSPHRASE is not set. "+
 				"Set LEDIT_KEY_PASSPHRASE or run 'ledit keys encrypt' to switch to machine-key mode")
 		}
 		encrypted, err = EncryptWithPassphrase(data, passphrase)
+	} else if mode == "" && strings.TrimSpace(os.Getenv("LEDIT_KEY_PASSPHRASE")) != "" {
+		// Legacy passphrase-encrypted file with no mode file: the user has
+		// LEDIT_KEY_PASSPHRASE set (required to have loaded the file), so
+		// preserve their passphrase encryption rather than silently downgrading
+		// to machine-key mode.
+		encrypted, err = EncryptWithPassphrase(data, strings.TrimSpace(os.Getenv("LEDIT_KEY_PASSPHRASE")))
+		if err == nil {
+			_ = SetEncryptionMode("passphrase")
+		}
 	} else {
-		// Machine-key mode or no mode (new file)
+		// Machine-key mode or no mode with no passphrase (new file) —
+		// always auto-set machine-key mode
 		encrypted, err = EncryptStore(data)
+		if err == nil && mode == "" {
+			_ = SetEncryptionMode("machine-key")
+		}
 	}
 	if err != nil {
 		return fmt.Errorf("failed to encrypt API keys: %w", err)

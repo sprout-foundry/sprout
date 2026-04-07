@@ -4,6 +4,7 @@ import { ApiService, type LeditSettings, type ProviderOption } from '../services
 import { useNotifications } from '../contexts/NotificationContext';
 import { debugLog } from '../utils/log';
 import { Pencil, Plus, Trash2, Lock } from 'lucide-react';
+import CredentialsSettingsTab from './CredentialsSettingsTab';
 
 /* ─── Types ──────────────────────────────────────────────────── */
 
@@ -20,7 +21,7 @@ interface SubagentTypeEntry {
   enabled: boolean;
 }
 
-type SettingsSubTab = 'general' | 'security' | 'performance' | 'subagents' | 'pdf-ocr' | 'mcp' | 'providers' | 'skills';
+type SettingsSubTab = 'general' | 'security' | 'credentials' | 'performance' | 'subagents' | 'pdf-ocr' | 'mcp' | 'providers' | 'skills';
 
 interface SettingsPanelProps {
   settings: LeditSettings | null;
@@ -32,6 +33,7 @@ interface SettingsPanelProps {
 const SUB_TABS: { id: SettingsSubTab; label: string }[] = [
   { id: 'general', label: 'General' },
   { id: 'security', label: 'Security' },
+  { id: 'credentials', label: 'Credentials' },
   { id: 'performance', label: 'Perf' },
   { id: 'subagents', label: 'Subagents' },
   { id: 'pdf-ocr', label: 'OCR' },
@@ -739,6 +741,10 @@ function SettingsPanel({ settings, onSettingsChanged }: SettingsPanelProps): JSX
             </div>
           </div>
         );
+
+      /* ── Credentials ─────────────────────────────────────── */
+      case 'credentials':
+        return <CredentialsSettingsTab />;
 
       /* ── Performance ─────────────────────────────────────── */
       case 'performance':

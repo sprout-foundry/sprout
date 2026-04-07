@@ -196,7 +196,7 @@
 
 ### MCP Service Credentials
 
-[] - CREDENTIALS: MCP server env vars store secrets in plaintext in `config.json` — MCP server configs allow setting `env` vars (e.g., `GITHUB_PERSONAL_ACCESS_TOKEN`) which are stored alongside the config in `config.json`. These secrets should be migrated to the credential store (or OS keyring) and referenced by a placeholder/pointer in the MCP config, so the main config file never contains raw token values.
+[x] - CREDENTIALS: MCP server env vars store secrets in plaintext in `config.json` — MCP server configs allow setting `env` vars (e.g., `GITHUB_PERSONAL_ACCESS_TOKEN`) which are stored alongside the config in `config.json`. These secrets should be migrated to the credential store (or OS keyring) and referenced by a placeholder/pointer in the MCP config, so the main config file never contains raw token values.
 [] - CREDENTIALS: Add a dedicated credential management API for MCP servers — Currently the only way to set MCP service credentials is via the env block in the MCP server config or by setting shell environment variables. Add explicit `credentials` fields to `MCPServerConfig` (or a separate `mcp_credentials.json` store) so the webui can present per-service credential input fields and securely store/reference them without users having to know the correct environment variable name.
 
 ### WebUI Credential UX

@@ -5,12 +5,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/agent"
+	"github.com/alantheprice/ledit/pkg/credentials"
 	"github.com/alantheprice/ledit/pkg/mcp"
 )
 
@@ -345,6 +347,18 @@ func (m *MCPCommand) removeServer(serverName string, chatAgent *agent.Agent) err
 	if strings.ToLower(strings.TrimSpace(confirm)) != "y" {
 		fmt.Println("Removal cancelled.")
 		return nil
+	}
+
+	// Clean up stored credentials before removing
+	if server, exists := mcpConfig.Servers[serverName]; exists && server.Env != nil {
+		for envVarName, value := range server.Env {
+			if mcp.IsSecretRef(value) {
+				key := mcp.CredentialKey(serverName, envVarName)
+				if err := credentials.DeleteFromActiveBackend(key); err != nil {
+					log.Printf("[mcp] Failed to delete credential %s: %v", key, err)
+				}
+			}
+		}
 	}
 
 	// Remove server

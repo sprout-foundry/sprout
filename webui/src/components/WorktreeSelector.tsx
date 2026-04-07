@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { GitBranch, Plus, X, Check, Loader2 } from 'lucide-react';
 import type { WorktreeInfo } from '../services/chatSessions';
 import { listWorktrees, createWorktree } from '../services/chatSessions';
@@ -42,9 +42,10 @@ export function WorktreeSelector({
     }
   }, []);
 
-  useState(() => {
+  // Load worktrees on mount
+  useEffect(() => {
     loadWorktrees();
-  });
+  }, [loadWorktrees]);
 
   const handleSelectWorktree = useCallback(
     async (worktreePath: string) => {

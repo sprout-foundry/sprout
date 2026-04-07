@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/alantheprice/ledit/pkg/credentials"
 	"github.com/alantheprice/ledit/pkg/mcp"
 	"github.com/spf13/cobra"
 )
@@ -505,7 +506,7 @@ func promptForGitHubToken(reader *bufio.Reader) (string, error) {
 		if strings.ToLower(strings.TrimSpace(setEnv)) == "y" {
 			fmt.Println()
 			fmt.Println("Add this to your shell profile (~/.bashrc, ~/.zshrc, etc.):")
-			fmt.Printf("  export GITHUB_PERSONAL_ACCESS_TOKEN=\"%s\"\n", githubToken)
+			fmt.Printf("  export GITHUB_PERSONAL_ACCESS_TOKEN=\"%s\"\n", credentials.MaskValue(githubToken))
 			fmt.Println()
 		}
 	}

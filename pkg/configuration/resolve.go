@@ -22,14 +22,6 @@ func init() {
 	})
 }
 
-// ResolveProviderAuth resolves a credential for a provider.
-//
-// Deprecated: Use credentials.ResolveProvider(provider) directly.
-// This function is kept for backward compatibility.
-func ResolveProviderAuth(provider string) (ResolvedProviderCredential, error) {
-	return credentials.ResolveProvider(provider)
-}
-
 // HasProviderAuth checks whether a provider has a configured credential.
 // For providers that don't require an API key (local providers), always returns true.
 func HasProviderAuth(provider string) bool {

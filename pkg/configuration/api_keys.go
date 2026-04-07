@@ -275,18 +275,6 @@ func (keys *APIKeys) HasAPIKey(provider string) bool {
 	return false
 }
 
-func HasProviderCredential(provider string, apiKeys *APIKeys) bool {
-	metadata, _ := GetProviderAuthMetadata(provider)
-	if !metadata.RequiresAPIKey {
-		return true
-	}
-	resolved, err := ResolveProviderCredential(provider, apiKeys)
-	if err != nil {
-		return false
-	}
-	return strings.TrimSpace(resolved.Value) != ""
-}
-
 // PromptForAPIKey prompts the user for an API key with helpful guidance
 func PromptForAPIKey(provider string) (string, error) {
 	providerName := getProviderDisplayName(provider)

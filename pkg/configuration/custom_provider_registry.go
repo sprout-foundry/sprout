@@ -188,7 +188,7 @@ func DiscoverCustomProviderModels(cfg CustomProviderConfig) ([]ProviderDiscovery
 		return nil, fmt.Errorf("failed to create discovery request: %w", err)
 	}
 
-	if resolved, err := ResolveProviderCredential(normalized.Name, nil); err == nil && strings.TrimSpace(resolved.Value) != "" {
+	if resolved, err := ResolveProviderAuth(normalized.Name, nil); err == nil && strings.TrimSpace(resolved.Value) != "" {
 		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(resolved.Value))
 	} else if strings.TrimSpace(normalized.APIKey) != "" {
 		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(normalized.APIKey))

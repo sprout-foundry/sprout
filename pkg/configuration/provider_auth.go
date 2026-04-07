@@ -99,7 +99,3 @@ func GetProviderEnvVarName(provider string) string {
 	}
 	return metadata.EnvVar
 }
-
-func ResolveProviderCredential(provider string, apiKeys *APIKeys) (ResolvedProviderCredential, error) {
-	return ResolveProviderAuth(provider, apiKeys)
-}

@@ -97,8 +97,10 @@ func TestLoad_InvalidJSON(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for invalid JSON, got nil")
 	}
-	if !strings.Contains(err.Error(), "failed to parse API keys file") {
-		t.Fatalf("expected parse error, got: %v", err)
+	// The file doesn't start with age magic or JSON, so it fails at decryption
+	// Either a decryption error or a parse error is acceptable
+	if !strings.Contains(err.Error(), "failed to decrypt") && !strings.Contains(err.Error(), "failed to parse") {
+		t.Fatalf("expected decrypt or parse error, got: %v", err)
 	}
 }
 
@@ -131,13 +133,13 @@ func TestSave_NilStore(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Verify it wrote an empty object
+	// Verify it wrote encrypted data (starts with age magic)
 	data, err := os.ReadFile(filepath.Join(dir, "api_keys.json"))
 	if err != nil {
 		t.Fatalf("read file: %v", err)
 	}
-	if string(data) != "{}" {
-		t.Fatalf("expected '{}', got %s", string(data))
+	if !strings.HasPrefix(string(data), "age-encryption.org/v1") {
+		t.Fatalf("expected encrypted data starting with age magic, got: %s", string(data))
 	}
 }
 
@@ -150,16 +152,13 @@ func TestSave_ValidStore(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Verify file contents
+	// Verify file is encrypted (not plaintext)
 	data, err := os.ReadFile(filepath.Join(dir, "api_keys.json"))
 	if err != nil {
 		t.Fatalf("read file: %v", err)
 	}
-	if !strings.Contains(string(data), "sk-test123") {
-		t.Fatalf("expected file to contain openai key, got: %s", string(data))
-	}
-	if !strings.Contains(string(data), "sk-abc") {
-		t.Fatalf("expected file to contain anthropic key, got: %s", string(data))
+	if !strings.HasPrefix(string(data), "age-encryption.org/v1") {
+		t.Fatalf("expected encrypted data, got plaintext: %s", string(data))
 	}
 
 	// Verify file permissions (0600)

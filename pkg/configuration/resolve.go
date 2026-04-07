@@ -10,13 +10,26 @@ import (
 	"github.com/alantheprice/ledit/pkg/credentials"
 )
 
+func init() {
+	// Register the unified provider info callback so credentials.ResolveProvider
+	// and credentials.HasProviderCredential can look up custom provider env vars
+	// and auth requirements through GetProviderAuthMetadata.
+	credentials.SetProviderInfoFunc(func(provider string) credentials.ProviderInfo {
+		metadata, err := GetProviderAuthMetadata(provider)
+		if err != nil {
+			return credentials.ProviderInfo{}
+		}
+		return credentials.ProviderInfo{
+			EnvVar:         metadata.EnvVar,
+			RequiresAPIKey: metadata.RequiresAPIKey,
+		}
+	})
+}
+
 // ResolveProviderAuth resolves a credential for a provider using a single precedence chain:
 //   1. Environment variable (from ProviderAuthMetadata.EnvVar)
 //   2. API keys map (if apiKeys is non-nil)
-//   3. credentials.Resolve (keyring → encrypted file store)
-//
-// This is the authoritative resolution function for high-level credential resolution
-// that needs to know about custom providers and provider metadata.
+//   3. credentials.ResolveProvider (env → keyring → encrypted file store)
 //
 // Returns ResolvedProviderCredential with the resolved value and source.
 // If the provider does not require an API key, returns with Value="" and Source="none".
@@ -32,7 +45,7 @@ func ResolveProviderAuth(provider string, apiKeys *APIKeys) (ResolvedProviderCre
 		}, nil
 	}
 
-	// 1. Check environment variable (from metadata, not hardcoded)
+	// 1. Check environment variable
 	if metadata.EnvVar != "" {
 		if value := strings.TrimSpace(os.Getenv(metadata.EnvVar)); value != "" {
 			return ResolvedProviderCredential{
@@ -56,8 +69,8 @@ func ResolveProviderAuth(provider string, apiKeys *APIKeys) (ResolvedProviderCre
 		}
 	}
 
-	// 3. Check keyring / encrypted file store via credentials.Resolve
-	resolved, err := credentials.Resolve(metadata.Provider, metadata.EnvVar)
+	// 3. Check stored credentials via the unified credential resolution path
+	resolved, err := credentials.ResolveProvider(metadata.Provider)
 	if err != nil {
 		return ResolvedProviderCredential{}, fmt.Errorf("resolve credential for %q: %w", metadata.Provider, err)
 	}

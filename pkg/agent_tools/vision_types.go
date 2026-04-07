@@ -424,7 +424,7 @@ func CreateVisionClient() (api.ClientInterface, error) {
 	providers = append(providers, api.OllamaClientType)
 
 	for _, providerType := range providers {
-		if !configuration.HasProviderCredential(string(providerType), nil) {
+		if !configuration.HasProviderAuth(string(providerType), nil) {
 			continue // Skip if API key not set
 		}
 
@@ -456,7 +456,7 @@ func CreateVisionClientWithModel(modelName string) (api.ClientInterface, error) 
 	// Determine which provider supports this model
 	if strings.HasPrefix(modelName, "google/") || strings.HasPrefix(modelName, "meta-llama/") {
 		// DeepInfra model - use new generic provider system
-		if configuration.HasProviderCredential("deepinfra", nil) {
+		if configuration.HasProviderAuth("deepinfra", nil) {
 			provider, err := factory.CreateGenericProvider("deepinfra", modelName)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create DeepInfra client: %w", err)
@@ -495,7 +495,7 @@ func HasVisionCapability() bool {
 			continue // Skip providers without vision support
 		}
 
-		if !configuration.HasProviderCredential(string(providerType), nil) {
+		if !configuration.HasProviderAuth(string(providerType), nil) {
 			switch providerType {
 			case api.OllamaClientType, api.OllamaLocalClientType:
 				// Local providers do not require API keys.

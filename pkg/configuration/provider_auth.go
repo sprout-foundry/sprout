@@ -29,6 +29,16 @@ func GetProviderAuthMetadata(provider string) (ProviderAuthMetadata, error) {
 			RequiresAPIKey: false,
 			AuthType:       "none",
 		}, nil
+	case "jinaai":
+		// jinaai is used only for web content search/embeddings (not as an LLM provider).
+		// It has no provider config JSON file, so it's handled explicitly here.
+		return ProviderAuthMetadata{
+			Provider:       name,
+			DisplayName:    getProviderDisplayName(name),
+			RequiresAPIKey: true,
+			EnvVar:         "JINA_API_KEY",
+			AuthType:       "bearer",
+		}, nil
 	}
 
 	if cfg, err := Load(); err == nil {
@@ -55,19 +65,6 @@ func GetProviderAuthMetadata(provider string) (ProviderAuthMetadata, error) {
 				AuthType:       providerConfig.Auth.Type,
 			}, nil
 		}
-	}
-
-	for _, supported := range getSupportedProviders() {
-		if supported.Name != name {
-			continue
-		}
-		return ProviderAuthMetadata{
-			Provider:       name,
-			DisplayName:    supported.FormattedName,
-			RequiresAPIKey: supported.RequiresKey,
-			EnvVar:         strings.TrimSpace(supported.EnvVariableName),
-			AuthType:       "bearer",
-		}, nil
 	}
 
 	return ProviderAuthMetadata{

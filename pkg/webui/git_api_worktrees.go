@@ -187,7 +187,7 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCreate(w http.ResponseWriter, r *h
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 
 	// Resolve path to absolute
-	absPath, err := filepath.Abs(req.Path)
+	absPath, err := filepathAbsEval(req.Path)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Invalid worktree path: %v", err), http.StatusBadRequest)
 		return
@@ -259,7 +259,7 @@ func (ws *ReactWebServer) handleAPIGitWorktreeRemove(w http.ResponseWriter, r *h
 	}
 
 	// Resolve path to absolute
-	absPath, err := filepath.Abs(req.Path)
+	absPath, err := filepathAbsEval(req.Path)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Invalid worktree path: %v", err), http.StatusBadRequest)
 		return
@@ -323,7 +323,7 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCheckout(w http.ResponseWriter, r 
 	}
 
 	// Resolve path to absolute
-	absPath, err := filepath.Abs(req.Path)
+	absPath, err := filepathAbsEval(req.Path)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Invalid worktree path: %v", err), http.StatusBadRequest)
 		return

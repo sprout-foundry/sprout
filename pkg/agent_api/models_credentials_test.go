@@ -6,7 +6,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/credentials"
 )
 
-func TestResolveCredentialValueReturnsStoredKey(t *testing.T) {
+func TestResolveProviderReturnsStoredKey(t *testing.T) {
 	configDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("OPENAI_API_KEY", "")
@@ -18,26 +18,28 @@ func TestResolveCredentialValueReturnsStoredKey(t *testing.T) {
 		t.Fatalf("save credentials: %v", err)
 	}
 
-	value, err := resolveCredentialValue("openai")
+	resolved, err := credentials.ResolveProvider("openai")
 	if err != nil {
 		t.Fatalf("expected stored key to resolve, got error: %v", err)
 	}
-	if value != "stored-openai-key" {
-		t.Fatalf("expected stored key, got %q", value)
+	if resolved.Value != "stored-openai-key" {
+		t.Fatalf("expected stored key, got %q", resolved.Value)
 	}
 }
 
-func TestResolveCredentialValueReturnsExplicitMissingCredentialError(t *testing.T) {
+func TestResolveProviderReturnsEmptyWithMissingCredential(t *testing.T) {
 	configDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("OPENAI_API_KEY", "")
 
-	value, err := resolveCredentialValue("openai")
-	if err == nil {
-		t.Fatalf("expected missing credential error, got value %q", value)
+	resolved, err := credentials.ResolveProvider("openai")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	expected := "OPENAI_API_KEY not set and no stored API key configured"
-	if err.Error() != expected {
-		t.Fatalf("expected %q, got %q", expected, err.Error())
+	if resolved.Value != "" {
+		t.Fatalf("expected empty value, got %q", resolved.Value)
+	}
+	if resolved.EnvVar != "OPENAI_API_KEY" {
+		t.Fatalf("expected env var OPENAI_API_KEY, got %q", resolved.EnvVar)
 	}
 }

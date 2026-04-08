@@ -747,6 +747,17 @@ func (ws *ReactWebServer) handleFileRead(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	if info.Size() > maxFileReadSize {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusRequestEntityTooLarge)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error":    "file too large to open in editor",
+			"size":     info.Size(),
+			"max_size": maxFileReadSize,
+		})
+		return
+	}
+
 	if !isWithinWorkspace(canonicalPath, workspaceRoot) && !isAppConfigPath(canonicalPath) {
 		consentToken := strings.TrimSpace(r.Header.Get(consentTokenHeader))
 		if consentToken == "" {

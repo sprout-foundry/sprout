@@ -58,6 +58,8 @@
 
 .menu-bar-dropdown {
   position: fixed;
+  top: 0;
+  left: 0;
   z-index: 1500;
   font-family: var(--font-sans);
   min-width: 200px;
@@ -68,6 +70,7 @@
   background: var(--bg-secondary);
   box-shadow: var(--shadow-elevated);
   animation: menu-bar-dropdown-in 0.12s var(--ease-out);
+  transform-origin: top center;
 }
 
 @keyframes menu-bar-dropdown-in {

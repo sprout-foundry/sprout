@@ -6,9 +6,10 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
+
+	"github.com/alantheprice/ledit/pkg/credentials"
 )
 
 // RunLogger writes structured JSONL events for a single agent run.
@@ -64,24 +65,14 @@ func (r *RunLogger) LogEvent(eventType string, fields map[string]any) {
 	for k, v := range fields {
 		payload[k] = v
 	}
-	// Basic secret redactions
-	redact := func(s string) string {
-		replacements := []string{"AWS_SECRET", "AWS_ACCESS_KEY", "OPENAI_API_KEY", "DEEPINFRA_API_KEY"}
-		out := s
-		for _, k := range replacements {
-			out = strings.ReplaceAll(out, k, "<REDACTED>")
+	// Redact credential patterns from all string-valued payload fields.
+	// This is safer than maintaining a hardcoded allowlist of field names,
+	// since any future field added to LogEvent calls will be automatically
+	// covered.
+	for k, v := range payload {
+		if s, ok := v.(string); ok {
+			payload[k] = credentials.RedactLogLine(s)
 		}
-		return out
-	}
-	// Redact common string fields
-	if msg, ok := payload["response"].(string); ok {
-		payload["response"] = redact(msg)
-	}
-	if msg, ok := payload["request"].(string); ok {
-		payload["request"] = redact(msg)
-	}
-	if msgs, ok := payload["messages"].(string); ok {
-		payload["messages"] = redact(msgs)
 	}
 	b, err := json.Marshal(payload)
 	if err != nil {

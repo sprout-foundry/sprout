@@ -518,8 +518,14 @@ function AppContent({
       <div
         className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''} ${isTerminalExpanded ? 'terminal-expanded' : ''}`}
       >
-        {!isMobile && <MenuBar />}
-        <WorkspaceBar isConnected={state.isConnected} isMobile={isMobile} isMobileMenuOpen={isSidebarOpen} />
+        {!isMobile ? (
+          <div className="header-bar">
+            <MenuBar />
+            <WorkspaceBar isConnected={state.isConnected} isMobile={isMobile} isMobileMenuOpen={isSidebarOpen} />
+          </div>
+        ) : (
+          <WorkspaceBar isConnected={state.isConnected} isMobile={isMobile} isMobileMenuOpen={isSidebarOpen} />
+        )}
         <div className="main-view-content">
           <div className="editor-view">
             {isMobile && (

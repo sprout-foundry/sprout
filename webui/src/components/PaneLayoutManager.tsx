@@ -114,6 +114,9 @@ export interface PaneLayoutManagerProps {
     } | null,
   ) => void;
 
+  // Drag-and-drop between panes
+  moveBufferToPane: (bufferId: string, paneId: string) => void;
+
   // Outer layout ref for resize math
   containerRef: RefObject<HTMLDivElement | null>;
 }
@@ -270,6 +273,7 @@ function PaneLayoutManager({
   onStartChat,
   providerAvailable,
   onRequestProviderSetup,
+  moveBufferToPane,
 }: PaneLayoutManagerProps): JSX.Element | null {
   const dragStartSizeRef = useRef<Map<string, number>>(new Map());
   const isPaneDraggingRef = useRef<Set<string>>(new Set());
@@ -431,7 +435,20 @@ function PaneLayoutManager({
 
     return (
       <PaneWrapper key={pane.id} style={style}>
-        <div className="pane-shell">
+        <div
+          className="pane-shell"
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            const bufferId = e.dataTransfer.getData('text/plain');
+            if (bufferId) {
+              moveBufferToPane(bufferId, pane.id);
+            }
+          }}
+        >
           <EditorTabs
             paneId={pane.id}
             compact

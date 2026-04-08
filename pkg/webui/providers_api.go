@@ -2,6 +2,7 @@ package webui
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"sort"
@@ -9,6 +10,7 @@ import (
 
 	agentpkg "github.com/alantheprice/ledit/pkg/agent"
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/events"
 	"github.com/alantheprice/ledit/pkg/providercatalog"
 )
@@ -52,18 +54,40 @@ func (ws *ReactWebServer) handleAPIProviders(w http.ResponseWriter, r *http.Requ
 }
 
 func (ws *ReactWebServer) listProviders(clientID string) []providerDescriptor {
+	var configManager *configuration.Manager
+
 	agentInst, err := ws.getClientAgent(clientID)
-	if err != nil || agentInst == nil || agentInst.GetConfigManager() == nil {
+	if err == nil && agentInst != nil && agentInst.GetConfigManager() != nil {
+		configManager = agentInst.GetConfigManager()
+	} else if errors.Is(err, ErrNoProviderConfigured) {
+		// If no provider is configured, create a config manager directly
+		// so we can still list available providers during onboarding.
+		cm, createErr := configuration.NewManagerSilent()
+		if createErr != nil {
+			return []providerDescriptor{}
+		}
+		configManager = cm
+		agentInst = nil
+	} else {
 		return []providerDescriptor{}
 	}
 
-	configManager := agentInst.GetConfigManager()
+	if configManager == nil {
+		return []providerDescriptor{}
+	}
+
 	providerTypes := configManager.GetAvailableProviders()
 	descriptors := make([]providerDescriptor, 0, len(providerTypes))
 
 	for _, providerType := range providerTypes {
 		providerID := string(providerType)
-		models := ws.modelsForProvider(providerType, agentInst)
+		var models []string
+		if agentInst != nil {
+			models = ws.modelsForProvider(providerType, agentInst)
+		} else {
+			// No agent available - try to get models from the API or catalog
+			models = ws.modelsForProviderNoAgent(providerType)
+		}
 		descriptors = append(descriptors, providerDescriptor{
 			ID:     providerID,
 			Name:   api.GetProviderName(providerType),
@@ -134,6 +158,47 @@ func (ws *ReactWebServer) modelsForProvider(providerType api.ClientType, agentIn
 	return []string{fallback}
 }
 
+// modelsForProviderNoAgent is like modelsForProvider but doesn't require an
+// agent instance. Used during onboarding when no provider is configured yet.
+func (ws *ReactWebServer) modelsForProviderNoAgent(providerType api.ClientType) []string {
+	models, err := api.GetModelsForProvider(providerType)
+	if err == nil && len(models) > 0 {
+		modelIDs := make([]string, 0, len(models))
+		for _, model := range models {
+			id := strings.TrimSpace(model.ID)
+			if id == "" {
+				continue
+			}
+			modelIDs = append(modelIDs, id)
+		}
+		if len(modelIDs) > 0 {
+			return modelIDs
+		}
+	}
+
+	if provider, ok := providercatalog.FindProvider(string(providerType)); ok && len(provider.Models) > 0 {
+		modelIDs := make([]string, 0, len(provider.Models))
+		for _, model := range provider.Models {
+			id := strings.TrimSpace(model.ID)
+			if id == "" {
+				continue
+			}
+			modelIDs = append(modelIDs, id)
+		}
+		if len(modelIDs) > 0 {
+			if err != nil {
+				log.Printf("webui: using provider catalog fallback for %s after model discovery failure: %v", providerType, err)
+			}
+			return modelIDs
+		}
+	}
+
+	if err != nil {
+		log.Printf("webui: model discovery failed for provider %s: %v", providerType, err)
+	}
+	return []string{}
+}
+
 func (ws *ReactWebServer) publishProviderState(clientID string) {
 	if ws.eventBus == nil {
 		return
@@ -149,6 +214,14 @@ func (ws *ReactWebServer) publishProviderState(clientID string) {
 
 	agentInst, err := ws.getChatAgent(clientID, activeChatID)
 	if err != nil || agentInst == nil {
+		// If no provider is configured, publish an empty provider state so
+		// the frontend can immediately show the degraded UI instead of
+		// waiting for the next stats poll.
+		stats := ws.gatherStatsForClientID(clientID)
+		stats["provider"] = ""
+		stats["model"] = ""
+		stats["client_id"] = clientID
+		ws.eventBus.Publish(events.EventTypeMetricsUpdate, stats)
 		return
 	}
 

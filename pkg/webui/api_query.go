@@ -2,6 +2,7 @@ package webui
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -26,6 +27,9 @@ const (
 func isProviderConfigError(err error) bool {
 	if err == nil {
 		return false
+	}
+	if errors.Is(err, ErrNoProviderConfigured) {
+		return true
 	}
 	s := err.Error()
 	return strings.Contains(s, "provider recovery failed") ||

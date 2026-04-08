@@ -3,6 +3,7 @@ package webui
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -658,6 +659,10 @@ func (ws *ReactWebServer) syncAgentStateForClientWithChat(clientID, chatID strin
 	// Fallback to client-level agent (e.g. chat sessions not initialized).
 	agentInst, err := ws.getClientAgent(clientID)
 	if err != nil {
+		// If no provider is configured, that's expected — just return.
+		if errors.Is(err, ErrNoProviderConfigured) {
+			return nil
+		}
 		return fmt.Errorf("get client agent for chat state sync: %w", err)
 	}
 

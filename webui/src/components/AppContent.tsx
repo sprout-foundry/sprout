@@ -153,6 +153,7 @@ function AppContent({
     toggleBufferPin,
     setBufferPinned,
     setBufferClosable,
+    moveBufferToPane,
   } = useEditorManager();
 
   const apiService = ApiService.getInstance();
@@ -627,6 +628,7 @@ function AppContent({
                   containerRef={containerRef}
                   providerAvailable={providerAvailable}
                   onRequestProviderSetup={onRequestProviderSetup}
+                  moveBufferToPane={moveBufferToPane}
                 />
               </div>
             </div>

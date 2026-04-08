@@ -2,6 +2,7 @@ package webui
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -126,11 +127,21 @@ func writeJSONErr(w http.ResponseWriter, status int, code, message string) {
 func (ws *ReactWebServer) getConfigManager(r *http.Request, w http.ResponseWriter) *configuration.Manager {
 	clientID := ws.resolveClientID(r)
 	agentInst, err := ws.getClientAgent(clientID)
-	if err != nil || agentInst == nil || agentInst.GetConfigManager() == nil {
-		writeJSONErr(w, http.StatusServiceUnavailable, "config_unavailable", "Configuration manager is not available")
-		return nil
+	if err == nil && agentInst != nil && agentInst.GetConfigManager() != nil {
+		return agentInst.GetConfigManager()
 	}
-	return agentInst.GetConfigManager()
+	// If getClientAgent failed because no provider is configured, create a
+	// config manager directly so we can still list providers during onboarding.
+	if errors.Is(err, ErrNoProviderConfigured) {
+		cm, createErr := configuration.NewManagerSilent()
+		if createErr != nil {
+			writeJSONErr(w, http.StatusServiceUnavailable, "config_unavailable", "Configuration manager is not available")
+			return nil
+		}
+		return cm
+	}
+	writeJSONErr(w, http.StatusServiceUnavailable, "config_unavailable", "Configuration manager is not available")
+	return nil
 }
 
 // ---------------------------------------------------------------------------

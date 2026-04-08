@@ -6,13 +6,11 @@ import WorkspaceBar from './WorkspaceBar';
 import MenuBar from './MenuBar';
 import Terminal from './Terminal';
 import ContextPanel, { type ContextPanelHandle } from './ContextPanel';
-import Status from './Status';
 import StatusBar from './StatusBar';
 import CommandPalette from './CommandPalette';
 import PaneLayoutManager from './PaneLayoutManager';
 import { WorktreeChatDialog } from './WorktreeChatDialog';
 import WorktreePickerDialog from './WorktreePickerDialog';
-import ChatTabBar from './ChatTabBar';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { ApiService } from '../services/api';
 import { useGitWorkspace } from '../hooks/useGitWorkspace';
@@ -79,6 +77,8 @@ interface AppContentProps {
   onRenameChat?: (id: string, name: string) => void;
   perChatCache?: Record<string, PerChatState>;
   onCreateChatInWorktree?: (branch: string, baseRef?: string, name?: string, autoSwitch?: boolean) => Promise<string | null>;
+  providerAvailable?: boolean;
+  onRequestProviderSetup?: () => void;
 }
 
 function AppContent({
@@ -124,6 +124,8 @@ function AppContent({
   onRenameChat: _onRenameChat,
   perChatCache,
   onCreateChatInWorktree,
+  providerAvailable,
+  onRequestProviderSetup,
 }: AppContentProps): JSX.Element {
   // ── Editor manager ─────────────────────────────────────────────
   const {
@@ -299,19 +301,6 @@ function AppContent({
       setWorktreeCreating(false);
     }
   }, [onCreateChatInWorktree, openWorkspaceBuffer]);
-
-  const handleSetWorktree = useCallback((sessionId: string) => {
-    setWorktreePickerSessionId(sessionId);
-    setWorktreePickerOpen(true);
-  }, []);
-
-  const handleClearWorktree = useCallback(async (sessionId: string) => {
-    try {
-      await setChatSessionWorktree(sessionId, '');
-    } catch (err) {
-      console.warn('[AppContent] Failed to clear worktree:', err);
-    }
-  }, []);
 
   const handleDeleteChatWithWorktree = useCallback(async (id: string) => {
     // Delegate to the shared handleDeleteChat which accepts removeWorktree,
@@ -530,20 +519,6 @@ function AppContent({
       >
         {!isMobile && <MenuBar />}
         <WorkspaceBar isConnected={state.isConnected} isMobile={isMobile} isMobileMenuOpen={isSidebarOpen} />
-        {chatSessions && chatSessions.length > 0 && (
-          <ChatTabBar
-            sessions={chatSessions}
-            activeChatId={activeChatId || ''}
-            onSwitch={(id) => onActiveChatChange?.(id)}
-            onCreate={() => onCreateChat?.()}
-            onDelete={(id) => _onDeleteChat?.(id)}
-            onRename={(id, name) => _onRenameChat?.(id, name)}
-            onCreateChatInWorktree={() => setWorktreeDialogOpen(true)}
-            onSetWorktree={handleSetWorktree}
-            onClearWorktree={handleClearWorktree}
-            onDeleteWithWorktree={handleDeleteChatWithWorktree}
-          />
-        )}
         <div className="main-view-content">
           <div className="editor-view">
             {isMobile && (
@@ -607,6 +582,8 @@ function AppContent({
                   queryProgress={state.queryProgress}
                   currentTodos={currentTodos}
                   subagentActivities={state.subagentActivities}
+                  isConnected={state.isConnected}
+                  stats={state.stats}
                   deepReview={deepReview}
                   reviewError={reviewError}
                   reviewFixResult={reviewFixResult}
@@ -642,9 +619,14 @@ function AppContent({
                   onCloseAllSplits={handleCloseAllSplits}
                   onCreateChat={onCreateChat}
                   onCreateChatInWorktree={() => setWorktreeDialogOpen(true)}
+                  onActiveChatChange={onActiveChatChange}
+                  onRenameChat={_onRenameChat}
+                  onDeleteChatWithWorktree={handleDeleteChatWithWorktree}
                   nestedSplit={nestedSplit}
                   onNestedSplitChange={onNestedSplitChange}
                   containerRef={containerRef}
+                  providerAvailable={providerAvailable}
+                  onRequestProviderSetup={onRequestProviderSetup}
                 />
               </div>
             </div>
@@ -671,7 +653,7 @@ function AppContent({
             />
           )}
         </div>
-        <StatusBar 
+        <StatusBar
           branch={gitBranches.current || gitStatus?.branch}
           buffer={currentBuffer ? {
             kind: currentBuffer.kind,
@@ -681,7 +663,6 @@ function AppContent({
             languageOverride: currentBuffer.languageOverride,
           } : null}
         />
-        <Status isConnected={state.isConnected} position="bottom" stats={state.stats} />
       </div>
 
       <Terminal isExpanded={isTerminalExpanded} onToggleExpand={onTerminalExpandedChange} />

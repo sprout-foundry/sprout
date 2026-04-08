@@ -17,6 +17,8 @@ export interface UseMessageSendingOptions {
   setInputValue: Dispatch<SetStateAction<string>>;
   activeChatIdRef: MutableRefObject<string | null>;
   activeRequestsRef: MutableRefObject<number>;
+  /** Called when a query fails because no AI provider is configured. */
+  onRequestProviderSetup?: () => void;
 }
 
 export interface UseMessageSendingReturn {
@@ -29,6 +31,7 @@ export function useMessageSending({
   setInputValue,
   activeChatIdRef,
   activeRequestsRef,
+  onRequestProviderSetup,
 }: UseMessageSendingOptions): UseMessageSendingReturn {
   const log = useLog();
   const apiService = ApiService.getInstance();
@@ -71,10 +74,23 @@ export function useMessageSending({
         setInputValue('');
         debugLog('[OK] Message sent successfully');
       } catch (error) {
-        log.error('Failed to send message', { title: 'Send Error' });
         if (activeRequestsRef.current > 0) {
           activeRequestsRef.current -= 1;
         }
+
+        // Detect no-provider errors and trigger onboarding reopen.
+        const errorCode = error instanceof Error ? (error as unknown as Record<string, unknown>).code as string : undefined;
+        if (errorCode === 'no_provider' && onRequestProviderSetup) {
+          onRequestProviderSetup();
+          setState((prev) => ({
+            ...prev,
+            isProcessing: false,
+            lastError: null,
+          }));
+          return;
+        }
+
+        log.error('Failed to send message', { title: 'Send Error' });
         const errorMsg = error instanceof Error ? error.message : 'Failed to send message';
         setState((prev) => ({
           ...prev,

@@ -271,6 +271,7 @@ function AppWithProviders({
     setInputValue,
     activeChatIdRef,
     activeRequestsRef,
+    onRequestProviderSetup: () => onboardingHook.refreshStatus(),
   });
 
   // ── Auto-send queued messages (depends on handleSendMessage) ──
@@ -347,6 +348,8 @@ function AppWithProviders({
         onRenameChat={handleRenameChat}
         perChatCache={state.perChatCache}
         onCreateChatInWorktree={createChatInWorktree}
+        providerAvailable={state.provider !== '' && state.provider !== 'editor'}
+        onRequestProviderSetup={() => onboardingHook.refreshStatus()}
       />
       {state.securityApprovalRequest && (
         <SecurityApprovalDialog

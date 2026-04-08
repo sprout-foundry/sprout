@@ -619,6 +619,20 @@ class ApiService {
     });
 
     if (!response.ok) {
+      // Try to extract structured error details from the response body.
+      let serverError: Error | null = null;
+      try {
+        const body = await response.json();
+        if (body.code === 'no_provider') {
+          serverError = new Error(body.error || 'No provider configured');
+          (serverError as unknown as Record<string, unknown>).code = 'no_provider';
+        }
+      } catch {
+        // Not JSON or parsing failed — fall through to generic error
+      }
+      if (serverError) {
+        throw serverError;
+      }
       throw new Error('Failed to send query');
     }
   }

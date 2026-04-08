@@ -142,7 +142,7 @@ export function useTabOpen({
 
       const currentPanes = panesRef.current;
       const targetPane =
-        options.kind === 'chat' ? getRightmostPane(currentPanes) : currentPanes.find((p) => p.id === activePaneId);
+        currentPanes.find((p) => p.id === activePaneId) || getRightmostPane(currentPanes);
       const targetPaneId = targetPane?.id ?? activePaneId;
 
       const bufferId = `buffer-${options.kind}-${Date.now()}`;

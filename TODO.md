@@ -214,7 +214,8 @@
 ### Cleanup & Hardening
 
 [x] - CREDENTIALS: File permissions audit — `api_keys.json` is written with `0600` which is correct, but `config.json` (which may contain MCP env vars with secrets and the `CustomProviderConfig.APIKey` field) uses whatever `os.WriteFile` default is in `config.go`. Ensure all files containing secrets are created with `0600` and the config directory has `0700`. Add a startup permission check that warns if permissions are too open.
-[] - CREDENTIALS: Add credential redaction to config export/debug commands — Any command that dumps config (e.g., `ledit diag`, `ledit log`, config export) should redact all credential values before output. Audit `cmd/diag.go` and any other config-dumping paths.
+[x] - CREDENTIALS: Add credential redaction to config export/debug commands — Any command that dumps config (e.g., `ledit diag`, `ledit log`, config export) should redact all credential values before output. Audit `cmd/diag.go` and any other config-dumping paths.
+[] - CREDENTIALS: Add credential redaction to config export/debug commands — Any command that dumps config (e.g., `ledit diag`, `ledit log`, config export) should redact all credential values before output. Audit `cmd/diag.go` and any other config-dumping paths. → Addressed: Created `RedactConfig()` in `pkg/configuration/redact.go`, added `ledit config show` command, fixed unredacted Args in `cmd/mcp.go` and `pkg/agent_commands/mcp.go`, deep-copied Args in `RedactServerConfig`.
 
 ---
 

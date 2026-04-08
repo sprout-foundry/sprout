@@ -15,7 +15,7 @@ import (
 // response from the webui when stdin is unavailable.
 type SecurityApprovalManager struct {
 	mu              sync.Mutex
-	pending         map[string]chan bool // requestID -> response channel
+	pending         map[string]chan ApprovalResult // requestID -> response channel
 	approvalTimeout time.Duration       // how long to wait for a response before rejecting
 }
 
@@ -28,7 +28,7 @@ const DefaultApprovalTimeout = 5 * time.Minute
 // the default approval timeout.
 func NewSecurityApprovalManager() *SecurityApprovalManager {
 	return &SecurityApprovalManager{
-		pending:         make(map[string]chan bool),
+		pending:         make(map[string]chan ApprovalResult),
 		approvalTimeout: DefaultApprovalTimeout,
 	}
 }
@@ -44,6 +44,30 @@ func generateRequestID() string {
 	return fmt.Sprintf("sec_%d", nextRequestID)
 }
 
+// ApprovalResult encodes the outcome of a security approval request.
+type ApprovalResult int
+
+const (
+	// ApprovalRejected means the user explicitly rejected or the request was not
+	// delivered (nil event bus, channel closed, or drained by slow consumer).
+	ApprovalRejected ApprovalResult = iota
+	// ApprovalGranted means the user explicitly approved the request.
+	ApprovalGranted
+	// ApprovalTimeout means the request timed out waiting for a response.
+	ApprovalTimeout
+)
+
+func (ar ApprovalResult) String() string {
+	switch ar {
+	case ApprovalGranted:
+		return "granted"
+	case ApprovalTimeout:
+		return "timed_out"
+	default:
+		return "rejected"
+	}
+}
+
 // RequestApproval publishes a security approval event to the event bus and
 // blocks until the webui responds with an approval or rejection.
 // Returns true if approved, false if rejected.
@@ -54,7 +78,7 @@ func (sam *SecurityApprovalManager) RequestApproval(eventBus *events.EventBus, c
 	}
 
 	requestID := generateRequestID()
-	responseCh := make(chan bool, 1)
+	responseCh := make(chan ApprovalResult, 1)
 
 	sam.mu.Lock()
 	sam.pending[requestID] = responseCh
@@ -85,11 +109,11 @@ func (sam *SecurityApprovalManager) RequestApproval(eventBus *events.EventBus, c
 	defer timer.Stop()
 
 	select {
-	case approved, ok := <-responseCh:
+	case result, ok := <-responseCh:
 		if !ok {
 			return false // channel closed without response
 		}
-		return approved
+		return result == ApprovalGranted
 	case <-timer.C:
 		log.Printf("Security approval request %s timed out after %v — rejecting for safety", requestID, timeout)
 		return false // timeout — reject for safety
@@ -107,8 +131,13 @@ func (sam *SecurityApprovalManager) RespondToApproval(requestID string, approved
 		return false
 	}
 
+	result := ApprovalRejected
+	if approved {
+		result = ApprovalGranted
+	}
+
 	select {
-	case ch <- approved:
+	case ch <- result:
 		return true
 	default:
 		return false

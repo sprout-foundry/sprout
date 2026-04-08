@@ -17,10 +17,13 @@ var commonSecretPrefixes = []string{
 	"NPM", "NVM", "CARGO", "RUSTUP", "LEDIT_", "MCP_",
 }
 
-// secretKeywords are keywords that indicate an env var likely contains secrets
+// secretKeywords are keywords that indicate an env var likely contains secrets.
+// NOTE: Keep this list aligned with pkg/credentials/redact.go secretKeywords.
+// Due to a circular-import constraint (pkg/mcp → pkg/credentials), the list is
+// duplicated. If you add a keyword here, also add it there.
 var secretKeywords = []string{
 	"TOKEN", "KEY", "SECRET", "PASSWORD", "PASSWD", "CREDENTIAL",
-	"PRIVATE", "AUTH", "PAT", "BEARER",
+	"PRIVATE", "AUTH", "PAT", "BEARER", "API_KEY",
 }
 
 // knownSecretVars are specific env var names that are known to be secrets

@@ -802,6 +802,6 @@ func TestDecryptStore_NoMachineKeyNoPassphrase(t *testing.T) {
 	// No machine key exists (no key.age file), no passphrase — should fail with guidance
 	_, err = DecryptStore(encrypted)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "machine key not found")
+	assert.Contains(t, err.Error(), "no decryption key")
 	assert.Contains(t, err.Error(), "LEDIT_KEY_PASSPHRASE")
 }

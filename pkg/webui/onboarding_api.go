@@ -382,12 +382,10 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 	}
 
 	clientID := ws.resolveClientID(r)
-	clientAgent, err := ws.getClientAgent(clientID)
-	if err != nil || clientAgent == nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "Agent is not available")
-		return
-	}
 
+	// Use getConfigManager as the source of truth — it works even in
+	// editor-only mode by creating a fresh config manager when no agent
+	// has been initialised yet.
 	cm := ws.getConfigManager(r, w)
 	if cm == nil {
 		return
@@ -434,6 +432,32 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 		}
 	}
 
+	// Persist the provider into config BEFORE creating the agent.
+	// This is critical for recovery from "editor" mode: updating
+	// LastUsedProvider in config clears the editor-only sentinel so that
+	// getClientAgent will succeed on the next call.
+	if err := cm.SetProvider(providerType); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to persist provider: %v", err))
+		return
+	}
+	if req.Model != "" {
+		cm.SetModelForProvider(providerType, req.Model)
+	}
+	if err := cm.SaveConfig(); err != nil {
+		log.Printf("webui: failed to save onboarding config: %v", err)
+	}
+
+	// Clear any cached agent so it is re-created with the updated config.
+	ws.clearCachedAgent(clientID)
+
+	// Create (or get) the agent — this now succeeds because config has a
+	// real provider instead of "editor".
+	clientAgent, err := ws.getClientAgent(clientID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to create agent after provider setup: %v", err))
+		return
+	}
+
 	if err := clientAgent.SetProvider(providerType); err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -457,11 +481,6 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 		}
 	}
 	ws.mutex.RUnlock()
-
-	// Persist provider/model to config (graceful - log but don't fail).
-	if err := persistProviderModelToConfig(clientAgent, clientAgent.GetProviderType()); err != nil {
-		log.Printf("webui: failed to persist onboarding provider/model to config: %v", err)
-	}
 
 	_ = ws.syncAgentStateForClient(clientID)
 	ws.publishProviderState(clientID)

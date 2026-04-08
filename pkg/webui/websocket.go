@@ -3,6 +3,7 @@ package webui
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/events"
 	"github.com/alantheprice/ledit/pkg/security"
 	"github.com/gorilla/websocket"
@@ -294,10 +296,79 @@ func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, msg ma
 	ws.mutex.RUnlock()
 
 	clientAgent, err := ws.getChatAgent(clientID, activeChatID)
-	if err != nil || clientAgent == nil || clientAgent.GetConfigManager() == nil {
+	if err != nil || clientAgent == nil {
+		// If no provider is configured (editor mode), update the config
+		// first so that a new agent can be created with the requested provider.
+		if errors.Is(err, ErrNoProviderConfigured) || (err != nil && isProviderConfigError(err)) {
+			data, ok := msg["data"].(map[string]interface{})
+			if !ok {
+				_ = safeConn.WriteJSON(map[string]interface{}{
+					"type": "error",
+					"data": map[string]string{"message": "Invalid provider change payload"},
+				})
+				return
+			}
+			providerName, _ := data["provider"].(string)
+			providerName = strings.TrimSpace(providerName)
+			if providerName == "" {
+				_ = safeConn.WriteJSON(map[string]interface{}{
+					"type": "error",
+					"data": map[string]string{"message": "Provider is required"},
+				})
+				return
+			}
+
+			// Use a fresh config manager to update the provider directly.
+			cm, createErr := configuration.NewManagerSilent()
+			if createErr != nil {
+				_ = safeConn.WriteJSON(map[string]interface{}{
+					"type": "error",
+					"data": map[string]string{"message": "Failed to create config manager"},
+				})
+				return
+			}
+			providerType, parseErr := cm.MapStringToClientType(providerName)
+			if parseErr != nil {
+				_ = safeConn.WriteJSON(map[string]interface{}{
+					"type": "error",
+					"data": map[string]string{"message": parseErr.Error()},
+				})
+				return
+			}
+
+			// Persist the provider to config and clear cached agent.
+			if setErr := cm.SetProvider(providerType); setErr != nil {
+				_ = safeConn.WriteJSON(map[string]interface{}{
+					"type": "error",
+					"data": map[string]string{"message": fmt.Sprintf("Failed to set provider: %v", setErr)},
+				})
+				return
+			}
+			if saveErr := cm.SaveConfig(); saveErr != nil {
+				log.Printf("webui: failed to save provider change config: %v", saveErr)
+			}
+			ws.clearCachedAgent(clientID)
+			clientAgent, err = ws.getChatAgent(clientID, activeChatID)
+			if err != nil || clientAgent == nil {
+				_ = safeConn.WriteJSON(map[string]interface{}{
+					"type": "error",
+					"data": map[string]string{"message": "Agent is not available after provider update"},
+				})
+				return
+			}
+		} else {
+			_ = safeConn.WriteJSON(map[string]interface{}{
+				"type": "error",
+				"data": map[string]string{"message": "Agent is not available"},
+			})
+			return
+		}
+	}
+
+	if clientAgent.GetConfigManager() == nil {
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
-			"data": map[string]string{"message": "Agent is not available"},
+			"data": map[string]string{"message": "Agent config is not available"},
 		})
 		return
 	}
@@ -356,7 +427,7 @@ func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, msg ma
 
 	// Store provider on the chat session for per-session tracking.
 	ws.mutex.RLock()
-	if ctx := ws.clientContexts[clientID]; ctx != nil && activeChatID != "" {
+	if ctx != nil && activeChatID != "" {
 		if cs := ctx.getChatSession(activeChatID); cs != nil {
 			cs.mu.Lock()
 			cs.Provider = api.GetProviderName(clientAgent.GetProviderType())

@@ -105,7 +105,9 @@ func (ws *ReactWebServer) listProviders(clientID string) []providerDescriptor {
 	return descriptors
 }
 
-func (ws *ReactWebServer) modelsForProvider(providerType api.ClientType, agentInst *agentpkg.Agent) []string {
+// modelsForProviderFromAPI looks up models from the provider API and the
+// embedded provider catalog. Returns nil when no models are found.
+func modelsForProviderFromAPI(providerType api.ClientType) []string {
 	models, err := api.GetModelsForProvider(providerType)
 	if err == nil && len(models) > 0 {
 		modelIDs := make([]string, 0, len(models))
@@ -138,6 +140,15 @@ func (ws *ReactWebServer) modelsForProvider(providerType api.ClientType, agentIn
 		}
 	}
 
+	return nil
+}
+
+func (ws *ReactWebServer) modelsForProvider(providerType api.ClientType, agentInst *agentpkg.Agent) []string {
+	if models := modelsForProviderFromAPI(providerType); len(models) > 0 {
+		return models
+	}
+
+	// Agent-specific fallback when no API/catalog models are available.
 	if agentInst == nil || agentInst.GetConfigManager() == nil {
 		return []string{}
 	}
@@ -147,11 +158,12 @@ func (ws *ReactWebServer) modelsForProvider(providerType api.ClientType, agentIn
 		fallback = strings.TrimSpace(agentInst.GetModel())
 	}
 	if fallback == "" {
-		if err != nil {
-			log.Printf("webui: model discovery failed for provider %s and no fallback model is configured: %v", providerType, err)
-		}
+		// Log only if the API/catalog lookup also failed with an error
+		// (modelsForProviderFromAPI handles its own catalog-fallback log).
 		return []string{}
 	}
+
+	_, err := api.GetModelsForProvider(providerType)
 	if err != nil {
 		log.Printf("webui: model discovery failed for provider %s, using configured fallback model %q: %v", providerType, fallback, err)
 	}
@@ -161,39 +173,11 @@ func (ws *ReactWebServer) modelsForProvider(providerType api.ClientType, agentIn
 // modelsForProviderNoAgent is like modelsForProvider but doesn't require an
 // agent instance. Used during onboarding when no provider is configured yet.
 func (ws *ReactWebServer) modelsForProviderNoAgent(providerType api.ClientType) []string {
-	models, err := api.GetModelsForProvider(providerType)
-	if err == nil && len(models) > 0 {
-		modelIDs := make([]string, 0, len(models))
-		for _, model := range models {
-			id := strings.TrimSpace(model.ID)
-			if id == "" {
-				continue
-			}
-			modelIDs = append(modelIDs, id)
-		}
-		if len(modelIDs) > 0 {
-			return modelIDs
-		}
+	if models := modelsForProviderFromAPI(providerType); len(models) > 0 {
+		return models
 	}
 
-	if provider, ok := providercatalog.FindProvider(string(providerType)); ok && len(provider.Models) > 0 {
-		modelIDs := make([]string, 0, len(provider.Models))
-		for _, model := range provider.Models {
-			id := strings.TrimSpace(model.ID)
-			if id == "" {
-				continue
-			}
-			modelIDs = append(modelIDs, id)
-		}
-		if len(modelIDs) > 0 {
-			if err != nil {
-				log.Printf("webui: using provider catalog fallback for %s after model discovery failure: %v", providerType, err)
-			}
-			return modelIDs
-		}
-	}
-
-	if err != nil {
+	if _, err := api.GetModelsForProvider(providerType); err != nil {
 		log.Printf("webui: model discovery failed for provider %s: %v", providerType, err)
 	}
 	return []string{}
@@ -211,6 +195,17 @@ func (ws *ReactWebServer) publishProviderState(clientID string) {
 		activeChatID = ctx.getActiveChatID()
 	}
 	ws.mutex.RUnlock()
+
+	// Fast check: if no provider is configured, skip the expensive
+	// getChatAgent call and publish empty provider state immediately.
+	if !isProviderAvailable() {
+		stats := ws.gatherStatsForClientID(clientID)
+		stats["provider"] = ""
+		stats["model"] = ""
+		stats["client_id"] = clientID
+		ws.eventBus.Publish(events.EventTypeMetricsUpdate, stats)
+		return
+	}
 
 	agentInst, err := ws.getChatAgent(clientID, activeChatID)
 	if err != nil || agentInst == nil {

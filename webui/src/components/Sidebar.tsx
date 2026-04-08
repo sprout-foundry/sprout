@@ -18,6 +18,7 @@ import {
   Trash2,
   Search,
   GitBranch,
+  GitFork,
   History,
   type LucideIcon,
 } from 'lucide-react';
@@ -921,7 +922,7 @@ function Sidebar({
                   className={`git-sidebar-tab ${gitSubTab === 'worktrees' ? 'active' : ''}`}
                   onClick={() => setGitSubTab('worktrees')}
                 >
-                  <GitBranch size={14} />
+                  <GitFork size={14} />
                   <span>Worktrees</span>
                 </button>
               </div>

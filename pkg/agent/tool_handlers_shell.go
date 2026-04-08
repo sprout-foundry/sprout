@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -175,6 +176,16 @@ func handleCommitTool(_ context.Context, a *Agent, args map[string]interface{}) 
 		}
 	}
 
+	// Extract optional notes parameter (for context to integrate into auto-generated commit message)
+	var notes string
+	if n, exists := args["notes"]; exists {
+		var err error
+		notes, err = convertToString(n, "notes")
+		if err != nil {
+			return "", fmt.Errorf("failed to convert notes parameter: %w", err)
+		}
+	}
+
 	// Check for staged changes first
 	stagedOutput, err := exec.Command("git", "diff", "--staged", "--name-only").CombinedOutput()
 	if err != nil {
@@ -191,26 +202,30 @@ func handleCommitTool(_ context.Context, a *Agent, args map[string]interface{}) 
 		configManager = cm
 	}
 
-	// Prompt user for approval before committing
-	choices := []ChoiceOption{
-		{Label: "Approve", Value: "approve"},
-		{Label: "Deny", Value: "deny"},
-	}
-
-	choice, err := a.PromptChoice("Allow agent to commit staged changes?", choices)
-	if err != nil {
-		if errors.Is(err, ErrUINotAvailable) {
-			// Fall back to allowing the commit when UI is not available,
-			// since this tool is designed for autonomous agents and was explicitly called
-		} else {
-			return "", fmt.Errorf("approval prompt failed: %w", err)
+	// Auto-approve commits when running as a subagent (no interactive UI available)
+	isSubagent := os.Getenv("LEDIT_FROM_AGENT") == "1" || os.Getenv("LEDIT_SUBAGENT") == "1"
+	if !isSubagent {
+		// Prompt user for approval before committing (only in interactive mode)
+		choices := []ChoiceOption{
+			{Label: "Approve", Value: "approve"},
+			{Label: "Deny", Value: "deny"},
 		}
-	} else if choice != "approve" {
-		return "Commit cancelled by user.", nil
+
+		choice, err := a.PromptChoice("Allow agent to commit staged changes?", choices)
+		if err != nil {
+			if errors.Is(err, ErrUINotAvailable) {
+				// Fall back to allowing the commit when UI is not available,
+				// since this tool is designed for autonomous agents and was explicitly called
+			} else {
+				return "", fmt.Errorf("approval prompt failed: %w", err)
+			}
+		} else if choice != "approve" {
+			return "Commit cancelled by user.", nil
+		}
 	}
 
 	// Execute the commit using the shared helper function
-	commitHash, err := executeCommit(message, configManager)
+	commitHash, err := executeCommit(message, notes, configManager)
 	if err != nil {
 		return "", fmt.Errorf("failed to execute commit: %w", err)
 	}
@@ -219,7 +234,7 @@ func handleCommitTool(_ context.Context, a *Agent, args map[string]interface{}) 
 }
 
 // executeCommit performs the actual commit operation using the shared git.CommitExecutor
-func executeCommit(userMessage string, configManager configManagerInterface) (string, error) {
+func executeCommit(userMessage, notes string, configManager configManagerInterface) (string, error) {
 	// Create LLM client if config manager is available
 	var client api.ClientInterface
 	if configManager != nil {
@@ -233,7 +248,8 @@ func executeCommit(userMessage string, configManager configManagerInterface) (st
 		}
 	}
 
-	// Use the shared commit executor
-	executor := git.NewCommitExecutor(client, userMessage, "")
+	// Use the shared commit executor — notes are passed as userInstructions to
+	// provide context for generating a better commit message (ignored if userMessage is set)
+	executor := git.NewCommitExecutor(client, userMessage, notes)
 	return executor.ExecuteCommit()
 }

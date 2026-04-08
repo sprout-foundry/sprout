@@ -73,6 +73,9 @@ temp/
 webui/build/
 webui/node_modules/
 
+# Desktop build artifacts (pre-built Electron releases, cross-compiled backends)
+desktop/dist/
+
 # Playwright test files
 playwright-report/
 playwright.config.js

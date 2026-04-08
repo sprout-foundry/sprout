@@ -15,31 +15,48 @@ import (
 )
 
 // readInput reads a line of input from stdin without conflicting with other input systems
-func readInput() string {
+func readInput() (string, error) {
 	reader := bufio.NewReader(os.Stdin)
-	input, _ := reader.ReadString('\n')
-	return strings.TrimSpace(input)
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return "", fmt.Errorf("failed to read input: %w", err)
+	}
+	return strings.TrimSpace(input), nil
 }
 
 // readIntInput reads an integer from stdin with validation
 func readIntInput(prompt string, min int, max int) (int, error) {
-	for {
-		fmt.Print(prompt)
-		input := readInput()
+	input, err := readInput()
+	if err != nil {
+		return 0, fmt.Errorf("failed to read input: %w", err)
+	}
 
-		choice, err := strconv.Atoi(input)
+	choice, err := strconv.Atoi(input)
+	if err != nil {
+		fmt.Printf("Please enter a valid number between %d and %d\n", min, max)
+		// Recursion is bounded - each call prompts the user once.
+		// We only recurse on invalid input, and user must eventually
+		// enter valid input or exhaust retries.
+		choice, err = readIntInput(prompt, min, max)
 		if err != nil {
-			fmt.Printf("Please enter a valid number between %d and %d\n", min, max)
-			continue
+			return 0, err
 		}
-
-		if choice < min || choice > max {
-			fmt.Printf("Please enter a number between %d and %d\n", min, max)
-			continue
-		}
-
 		return choice, nil
 	}
+
+	if choice < min || choice > max {
+		fmt.Printf("Please enter a number between %d and %d\n", min, max)
+		// Recursion is bounded - each call prompts the user once.
+		// We only recurse on invalid input, and user must eventually
+		// enter valid input or exhaust retries.
+		choice, err = readIntInput(prompt, min, max)
+		if err != nil {
+			return 0, err
+		}
+		return choice, nil
+	}
+
+	return choice, nil
 }
 
 // Initialize loads or creates configuration with first-run setup
@@ -147,6 +164,11 @@ func Initialize() (*Config, *APIKeys, error) {
 
 // selectInitialProvider guides user through initial provider selection
 func selectInitialProvider(apiKeys *APIKeys) (string, error) {
+	// Non-interactive environments cannot prompt for provider selection.
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return "", fmt.Errorf("no provider configured. Running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `ledit agent` interactively")
+	}
+
 	// Check which providers have API keys already
 	providersWithKeys := []string{}
 
@@ -411,6 +433,11 @@ func GetAvailableProviders() []string {
 
 // SelectProvider allows user to select a provider interactively
 func SelectProvider(currentProvider string, apiKeys *APIKeys) (string, error) {
+	// Non-interactive environments cannot prompt for provider selection.
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return "", fmt.Errorf("no provider configured. Running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `ledit agent` interactively")
+	}
+
 	available := GetAvailableProviders()
 
 	if len(available) == 0 {

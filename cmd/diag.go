@@ -70,7 +70,7 @@ func runDiag() {
 		fmt.Printf("Custom providers found: %d\n", len(config.CustomProviders))
 		for name, provider := range config.CustomProviders {
 			fmt.Printf("  • %s\n", name)
-			fmt.Printf("    Endpoint: %s\n", provider.Endpoint)
+			fmt.Printf("    Endpoint: %s\n", credentials.RedactLogLine(provider.Endpoint))
 			fmt.Printf("    Model: %s\n", provider.ModelName)
 			fmt.Printf("    Context: %d tokens\n", provider.ContextSize)
 		}

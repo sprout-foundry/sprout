@@ -208,3 +208,9 @@ func HasProviderCredential(provider string) bool {
 
 	return false
 }
+
+// RotateProviderKey advances the key rotation for a provider.
+// Call this when a 429 rate-limit error is encountered to skip to the next key.
+func RotateProviderKey(provider string) {
+	DefaultRotator.Advance(strings.TrimSpace(provider))
+}

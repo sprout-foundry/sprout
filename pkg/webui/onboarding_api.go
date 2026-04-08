@@ -436,6 +436,11 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 	// This is critical for recovery from "editor" mode: updating
 	// LastUsedProvider in config clears the editor-only sentinel so that
 	// getClientAgent will succeed on the next call.
+	// Skip the test/mock provider — it's not a real API endpoint.
+	if providerType == api.TestClientType {
+		writeJSONError(w, http.StatusBadRequest, "test provider cannot be used as a persistent provider")
+		return
+	}
 	if err := cm.SetProvider(providerType); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to persist provider: %v", err))
 		return

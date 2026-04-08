@@ -222,7 +222,12 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 
 // SetProviderPersisted switches to a specific provider and persists the choice to config.
 // This is intended for CLI use where the selection should be saved.
+// The test/mock provider is rejected since it should never be the persisted default.
 func (a *Agent) SetProviderPersisted(provider api.ClientType) error {
+	if provider == api.TestClientType {
+		return fmt.Errorf("test provider cannot be persisted as the active provider")
+	}
+
 	prevProvider := a.GetProvider()
 	prevModel := a.GetModel()
 	availableModels, _ := a.getModelsForProvider(provider)

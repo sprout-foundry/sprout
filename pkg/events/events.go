@@ -72,7 +72,9 @@ func (eb *EventBus) Unsubscribe(name string) {
 	}
 }
 
-// Publish broadcasts an event to all subscribers
+// Publish broadcasts an event to all subscribers.
+// Critical events (security approvals, prompts) are never silently dropped
+// — if the channel is full, they replace the oldest event to make room.
 func (eb *EventBus) Publish(eventType string, data any) {
 	eb.mutex.Lock()
 	eb.nextID++
@@ -88,13 +90,31 @@ func (eb *EventBus) Publish(eventType string, data any) {
 	}
 	eb.mutex.Unlock()
 
+	isCritical := eventType == EventTypeSecurityApprovalRequest ||
+		eventType == EventTypeSecurityPromptRequest
+
 	// Publish to all subscribers without holding the lock
 	for _, ch := range subscribers {
-		select {
-		case ch <- event:
-		default:
-			// Channel is full, skip this subscriber
-			// This prevents blocking if a subscriber is slow
+		if isCritical {
+			// For critical events, drain one stale event to make room
+			// so the security dialog is always delivered to the client.
+			select {
+			case ch <- event:
+			default:
+				select {
+				case <-ch:
+					ch <- event
+				default:
+					// Channel is empty but concurrently closed; give up.
+				}
+			}
+		} else {
+			select {
+			case ch <- event:
+			default:
+				// Channel is full, skip this subscriber
+				// This prevents blocking if a subscriber is slow
+			}
 		}
 	}
 }

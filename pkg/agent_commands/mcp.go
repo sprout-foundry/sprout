@@ -273,9 +273,9 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 	fmt.Printf("[OK] %s configured successfully!\n", template.Name)
 	if serverConfig.Type == "http" {
 		fmt.Printf("Type: Remote HTTP server\n")
-		fmt.Printf("URL: %s\n", serverConfig.URL)
+		fmt.Printf("URL: %s\n", credentials.RedactLogLine(serverConfig.URL))
 	} else {
-		fmt.Printf("Command: %s %v\n", serverConfig.Command, serverConfig.Args)
+		fmt.Printf("Command: %s %v\n", serverConfig.Command, credentials.RedactLogLine(fmt.Sprintf("%v", serverConfig.Args)))
 	}
 	fmt.Println()
 	fmt.Printf("To test the configuration, run: /mcp test %s\n", serverName)
@@ -416,7 +416,7 @@ func (m *MCPCommand) listServers() error {
 			fmt.Printf("   Type: HTTP Remote Server\n")
 			fmt.Printf("   URL: %s\n", credentials.RedactLogLine(server.URL))
 		} else {
-			fmt.Printf("   Command: %s %v\n", server.Command, server.Args)
+			fmt.Printf("   Command: %s %v\n", server.Command, credentials.RedactLogLine(fmt.Sprintf("%v", server.Args)))
 		}
 		fmt.Printf("   Auto-start: %t\n", server.AutoStart)
 		fmt.Printf("   Max restarts: %d\n", server.MaxRestarts)
@@ -510,9 +510,9 @@ func (m *MCPCommand) testServer(serverName string, chatAgent *agent.Agent) error
 	fmt.Println("========================")
 	if serverConfig.Type == "http" {
 		fmt.Printf("Type: HTTP Remote Server\n")
-		fmt.Printf("URL: %s\n", serverConfig.URL)
+		fmt.Printf("URL: %s\n", credentials.RedactLogLine(serverConfig.URL))
 	} else {
-		fmt.Printf("Command: %s %v\n", serverConfig.Command, serverConfig.Args)
+		fmt.Printf("Command: %s %v\n", serverConfig.Command, credentials.RedactLogLine(fmt.Sprintf("%v", serverConfig.Args)))
 	}
 	fmt.Println()
 

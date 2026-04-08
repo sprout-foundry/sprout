@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { ApiService } from '../services/api';
 import { useNotifications } from '../contexts/NotificationContext';
-import { Pencil, Plus, Trash2, Lock, RefreshCw } from 'lucide-react';
+import { Pencil, Plus, Trash2, Lock, RefreshCw, ChevronDown, ChevronRight, Key } from 'lucide-react';
 import { debugLog } from '../utils/log';
 import './SettingsPanel.css';
 
@@ -14,6 +14,7 @@ interface CredentialProvider {
   has_env_credential: boolean;
   credential_source: string;
   masked_value: string;
+  key_pool_size: number;
 }
 
 interface CredentialsResponse {
@@ -40,6 +41,10 @@ function CredentialsSettingsTab(): JSX.Element {
   const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [testingProvider, setTestingProvider] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, { success: boolean; error?: string; model_count?: number }>>({});
+  const [expandedPoolProvider, setExpandedPoolProvider] = useState<string | null>(null);
+  const [poolKeys, setPoolKeys] = useState<Record<string, string[]>>({});
+  const [addPoolValue, setAddPoolValue] = useState('');
+  const [poolActionLoading, setPoolActionLoading] = useState(false);
 
   const { addNotification } = useNotifications();
   const api = ApiService.getInstance();
@@ -168,6 +173,86 @@ function CredentialsSettingsTab(): JSX.Element {
     }
   };
 
+  const handlePoolToggle = async (provider: CredentialProvider) => {
+    if (expandedPoolProvider === provider.provider) {
+      setExpandedPoolProvider(null);
+      return;
+    }
+
+    try {
+      setPoolActionLoading(true);
+      const poolData = await api.getKeyPool(provider.provider);
+      setPoolKeys(prev => ({
+        ...prev,
+        [provider.provider]: poolData.masked_keys || [],
+      }));
+      setExpandedPoolProvider(provider.provider);
+      setAddPoolValue('');
+    } catch (err) {
+      debugLog('[CredentialsSettingsTab] failed to fetch pool keys:', err);
+      addNotification('error', 'Credentials', 'Failed to load key pool', 5000);
+    } finally {
+      setPoolActionLoading(false);
+    }
+  };
+
+  const handleAddToPool = async (provider: CredentialProvider) => {
+    if (!addPoolValue.trim()) {
+      addNotification('info', 'Credentials', 'Please enter a key value', 3000);
+      return;
+    }
+
+    setPoolActionLoading(true);
+    try {
+      await api.addKeyToPool(provider.provider, addPoolValue.trim());
+      addNotification('success', 'Credentials', 'Key added to pool', 3000);
+      setAddPoolValue('');
+      await fetchCredentials();
+      // Refresh pool keys if expanded
+      if (expandedPoolProvider === provider.provider) {
+        const poolData = await api.getKeyPool(provider.provider);
+        setPoolKeys(prev => ({
+          ...prev,
+          [provider.provider]: poolData.masked_keys || [],
+        }));
+      }
+    } catch (err) {
+      debugLog('[CredentialsSettingsTab] failed to add key to pool:', err);
+      addNotification('error', 'Credentials', 'Failed to add key to pool', 5000);
+    } finally {
+      setPoolActionLoading(false);
+    }
+  };
+
+  const handleRemoveFromPool = async (provider: CredentialProvider, index: number) => {
+    setPoolActionLoading(true);
+    try {
+      await api.removeKeyFromPool(provider.provider, index);
+      addNotification('success', 'Credentials', 'Key removed from pool', 3000);
+      // Refresh pool keys and provider list
+      const [poolData] = await Promise.all([
+        api.getKeyPool(provider.provider).catch(() => null),
+        fetchCredentials(),
+      ]);
+      if (poolData) {
+        setPoolKeys(prev => ({
+          ...prev,
+          [provider.provider]: poolData.masked_keys || [],
+        }));
+      }
+      // Collapse pool view if only 1 key remains (back to single-key edit mode)
+      if (expandedPoolProvider === provider.provider && poolData && poolData.key_count <= 1) {
+        setExpandedPoolProvider(null);
+        setPoolKeys((prev) => ({ ...prev, [provider.provider]: [] }));
+      }
+    } catch (err) {
+      debugLog('[CredentialsSettingsTab] failed to remove key from pool:', err);
+      addNotification('error', 'Credentials', 'Failed to remove key from pool', 5000);
+    } finally {
+      setPoolActionLoading(false);
+    }
+  };
+
   const getStorageBackendLabel = (): string => {
     switch (storageBackend) {
       case 'keyring':
@@ -179,7 +264,7 @@ function CredentialsSettingsTab(): JSX.Element {
     }
   };
 
-  const renderSourceBadge = (source: string) => {
+  const renderSourceBadge = (source: string, keyPoolSize: number = 0) => {
     const baseStyle = {
       display: 'inline-flex',
       alignItems: 'center',
@@ -191,6 +276,10 @@ function CredentialsSettingsTab(): JSX.Element {
       marginLeft: '8px',
       flexShrink: 0,
     };
+
+    if (keyPoolSize > 1) {
+      return <span style={{ ...baseStyle, background: 'color-mix(in srgb, var(--color-warning, #f59e0b) 15%, var(--bg-elevated, #fff))', color: 'var(--color-warning, #f59e0b)' }}>pool</span>;
+    }
 
     switch (source) {
       case 'environment':
@@ -257,13 +346,27 @@ function CredentialsSettingsTab(): JSX.Element {
         {providers.map((provider) => {
           const isEditing = editingProvider === provider.provider;
           const isEnvOnly = provider.has_env_credential && !provider.has_stored_credential;
+          const isPoolExpanded = expandedPoolProvider === provider.provider;
+          const providerPoolKeys = poolKeys[provider.provider] || [];
+          const hasPool = provider.key_pool_size > 1;
 
           return (
             <div key={provider.provider} className="crud-item">
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                   <span className="crud-item-name">{provider.display_name}</span>
-                  {renderSourceBadge(provider.credential_source)}
+                  {renderSourceBadge(provider.credential_source, provider.key_pool_size)}
+                  {hasPool && (
+                    <span
+                      style={{
+                        fontSize: '10px',
+                        color: 'var(--text-tertiary)',
+                        marginLeft: '4px',
+                      }}
+                    >
+                      ({provider.key_pool_size} keys)
+                    </span>
+                  )}
                   {renderStatusIndicator(provider)}
                 </div>
                 {provider.masked_value && (
@@ -319,17 +422,29 @@ function CredentialsSettingsTab(): JSX.Element {
               <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
                 {!isEditing && (
                   <>
-                    {provider.requires_api_key && (
+                    {hasPool ? (
                       <button
                         type="button"
                         className="crud-btn"
-                        title={isEnvOnly ? 'Add stored key' : 'Edit API key'}
-                        onClick={() => handleEditStart(provider)}
+                        title={isPoolExpanded ? 'Collapse pool' : 'Expand pool'}
+                        onClick={() => handlePoolToggle(provider)}
+                        disabled={poolActionLoading}
                       >
-                        {isEnvOnly ? <Plus size={12} /> : <Pencil size={12} />}
+                        {isPoolExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                       </button>
+                    ) : (
+                      provider.requires_api_key && (
+                        <button
+                          type="button"
+                          className="crud-btn"
+                          title={isEnvOnly ? 'Add stored key' : 'Edit API key'}
+                          onClick={() => handleEditStart(provider)}
+                        >
+                          {isEnvOnly ? <Plus size={12} /> : <Pencil size={12} />}
+                        </button>
+                      )
                     )}
-                    {provider.has_stored_credential && (
+                    {provider.has_stored_credential && !hasPool && (
                       <button
                         type="button"
                         className="crud-btn danger"
@@ -370,6 +485,73 @@ function CredentialsSettingsTab(): JSX.Element {
                   </>
                 )}
               </div>
+
+              {/* Pool section (when expanded) */}
+              {hasPool && isPoolExpanded && (
+                <div className="crud-inline-form" style={{ marginTop: 'var(--space-3)' }}>
+                  <div style={{ marginBottom: 'var(--space-3)' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Key size={12} />
+                      Configured Keys ({providerPoolKeys.length})
+                    </div>
+                    {providerPoolKeys.length === 0 ? (
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic' }}>No keys in pool</div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {providerPoolKeys.map((maskedKey, idx) => (
+                          <div
+                            key={idx}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              padding: '6px 8px',
+                              background: 'var(--bg-surface)',
+                              borderRadius: '6px',
+                              fontSize: '11px',
+                              fontFamily: 'monospace',
+                            }}
+                          >
+                            <span style={{ color: 'var(--text-secondary)', flex: 1 }}>{maskedKey}</span>
+                            <button
+                              type="button"
+                              className="crud-btn danger"
+                              title="Remove key"
+                              onClick={() => handleRemoveFromPool(provider, idx)}
+                              disabled={poolActionLoading}
+                            >
+                              <Trash2 size={10} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Add key form */}
+                  <div className="form-row">
+                    <label>Add New Key</label>
+                    <input
+                      type="password"
+                      className="styled-input"
+                      value={addPoolValue}
+                      onChange={(e) => setAddPoolValue(e.target.value)}
+                      placeholder="Enter new API key"
+                      disabled={poolActionLoading}
+                    />
+                  </div>
+                  <div className="form-actions">
+                    <button
+                      type="button"
+                      className="form-btn primary"
+                      onClick={() => handleAddToPool(provider)}
+                      disabled={poolActionLoading || !addPoolValue.trim()}
+                    >
+                      {poolActionLoading ? 'Adding…' : 'Add to Pool'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}

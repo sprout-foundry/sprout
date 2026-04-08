@@ -208,6 +208,7 @@
 
 [x] - CREDENTIALS: Support key rotation without service interruption — When a user updates an API key, the new key should be validated before replacing the old one. If validation fails, keep the old key and show an error. Currently `SetAPIKey` → `SaveAPIKeys` is a blind write with no validation that the new key works.
 [x] - CREDENTIALS: Support key rotation without service interruption — When a user updates an API key, the new key should be validated before replacing the old one. If validation fails, keep the old key and show an error. Currently `SetAPIKey` → `SaveAPIKeys` is a blind write with no validation that the new key works. (ValidateAndSaveAPIKey validates before persisting and restores old key on failure; Manager.RefreshAPIKeys keeps in-memory cache in sync; deprecated blind-write SaveAPIKeys)
+[x] - CREDENTIALS: Support multiple keys per provider — Some users may want to use different keys for different projects or to distribute load. Supporting a list of keys per provider with automatic rotation/fallback would help (low priority — env var per-project covers some of this).
 [] - CREDENTIALS: Support multiple keys per provider — Some users may want to use different keys for different projects or to distribute load. Supporting a list of keys per provider with automatic rotation/fallback would help (low priority — env var per-project covers some of this).
 
 ### Cleanup & Hardening

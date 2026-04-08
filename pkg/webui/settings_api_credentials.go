@@ -305,6 +305,7 @@ type keyPoolResponse struct {
 // poolCredentialRequest is the request body for POST/DELETE /api/settings/credentials/{provider}/pool.
 type poolCredentialRequest struct {
 	Value string `json:"value"`
+	Index *int   `json:"index,omitempty"` // For DELETE: remove by index instead of value
 }
 
 // Per-provider rate limiter for the test-connection endpoint.
@@ -521,13 +522,9 @@ func (ws *ReactWebServer) handleAPISettingsCredentialsDelete(w http.ResponseWrit
 		return
 	}
 
-	// Clean up any pool entries (provider__pool_N) that may exist for keyring backend
-	backend, _ := credentials.GetStorageBackend()
-	if _, isKeyring := backend.(*credentials.OSKeyringBackend); isKeyring {
-		for i := 1; i < credentials.MaxPoolEntries; i++ {
-			poolKey := fmt.Sprintf("%s__pool_%d", provider, i)
-			_ = credentials.DeleteFromActiveBackend(poolKey)
-		}
+	// Cascade-delete pool entries (SaveKeyPool handles keyring cleanup)
+	if err := credentials.SaveKeyPool(provider, &credentials.KeyPool{Keys: []string{}}); err != nil {
+		log.Printf("[credentials] Warning: failed to clean up pool entries for %q: %v", provider, err)
 	}
 
 	// Reset rotation counter for this provider
@@ -668,6 +665,11 @@ func (ws *ReactWebServer) handleAPISettingsCredentialsPoolPost(w http.ResponseWr
 		return
 	}
 
+	// Sync the Manager's in-memory cache with the backend after pool modification
+	if err := cm.RefreshAPIKeys(); err != nil {
+		log.Printf("[credentials] Warning: failed to refresh API keys after pool addition: %v", err)
+	}
+
 	// Get the updated pool size
 	poolSize, err := credentials.GetPoolSize(provider)
 	if err != nil {
@@ -718,12 +720,6 @@ func (ws *ReactWebServer) handleAPISettingsCredentialsPoolDelete(w http.Response
 		return
 	}
 
-	// Validate value is non-empty
-	if strings.TrimSpace(req.Value) == "" {
-		writeJSONError(w, http.StatusBadRequest, "key value cannot be empty")
-		return
-	}
-
 	// Validate provider is known
 	knownProviders := cm.GetAvailableProviders()
 	validProvider := false
@@ -738,10 +734,27 @@ func (ws *ReactWebServer) handleAPISettingsCredentialsPoolDelete(w http.Response
 		return
 	}
 
-	// Remove the key from the pool
-	if err := credentials.RemoveKeyFromPool(provider, req.Value); err != nil {
-		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("failed to remove key from pool: %v", err))
+	// Support two removal modes:
+	// 1. Index-based (preferred by UI): { "index": 0 }
+	// 2. Value-based (backward compat): { "value": "sk-..." }
+	var removeErr error
+	if req.Index != nil {
+		removeErr = credentials.RemoveKeyFromPoolByIndex(provider, *req.Index)
+	} else if strings.TrimSpace(req.Value) != "" {
+		removeErr = credentials.RemoveKeyFromPool(provider, req.Value)
+	} else {
+		writeJSONError(w, http.StatusBadRequest, "provide either \"index\" or \"value\" to identify the key to remove")
 		return
+	}
+
+	if removeErr != nil {
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("failed to remove key from pool: %v", removeErr))
+		return
+	}
+
+	// Sync the Manager's in-memory cache with the backend after pool modification
+	if err := cm.RefreshAPIKeys(); err != nil {
+		log.Printf("[credentials] Warning: failed to refresh API keys after pool removal: %v", err)
 	}
 
 	// Get the updated pool size

@@ -1565,6 +1565,7 @@ class ApiService {
       has_env_credential: boolean;
       credential_source: string;
       masked_value: string;
+      key_pool_size: number;
     }>;
   }> {
     const response = await clientFetch('/api/settings/credentials');
@@ -1601,9 +1602,35 @@ class ApiService {
       method: 'POST',
     });
     if (!response.ok) {
-      const text = await response.text().catch(() => 'Unknown error');
-      throw new Error(text || `HTTP error! status: ${response.status}`);
+      const data = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+      throw new Error(data.error || `HTTP error! status: ${response.status}`);
     }
+    return await response.json();
+  }
+
+  async getKeyPool(provider: string): Promise<{ provider: string; key_count: number; masked_keys: string[] }> {
+    const response = await clientFetch(`/api/settings/credentials/${encodeURIComponent(provider)}/pool`);
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    return await response.json();
+  }
+
+  async addKeyToPool(provider: string, value: string): Promise<{ success: boolean; provider: string; key_count: number }> {
+    const response = await clientFetch(`/api/settings/credentials/${encodeURIComponent(provider)}/pool`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value }),
+    });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    return await response.json();
+  }
+
+  async removeKeyFromPool(provider: string, index: number): Promise<{ success: boolean; provider: string; key_count: number }> {
+    const response = await clientFetch(`/api/settings/credentials/${encodeURIComponent(provider)}/pool`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ index }),
+    });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     return await response.json();
   }
 

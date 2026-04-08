@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/credentials"
 	"github.com/alantheprice/ledit/pkg/logging"
 	modelsettings "github.com/alantheprice/ledit/pkg/model_settings"
 )
@@ -226,6 +227,26 @@ func (p *GenericProvider) SetDebug(debug bool) {
 // SetModel sets the current model
 func (p *GenericProvider) SetModel(model string) error {
 	p.model = model
+	return nil
+}
+
+// RefreshAPIKey re-resolves the provider's API key from the credential store,
+// updating the cached key in p.config.Auth.Key. This is called after a rate-limit
+// rotation advances the key pool counter, so subsequent requests use the new key.
+func (p *GenericProvider) RefreshAPIKey() error {
+	if p.config == nil {
+		return nil
+	}
+	if p.config.Auth.Type == "none" {
+		return nil
+	}
+
+	resolved, err := credentials.ResolveProvider(p.config.Name)
+	if err != nil {
+		return fmt.Errorf("failed to re-resolve API key for %q: %w", p.config.Name, err)
+	}
+
+	p.config.Auth.Key = resolved.Value
 	return nil
 }
 

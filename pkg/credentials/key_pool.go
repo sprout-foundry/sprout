@@ -170,6 +170,32 @@ func isKeyringBackend(backend Backend) bool {
 	return ok
 }
 
+// cleanupKeyringPoolEntriesFrom deletes keyring pool_N entries starting at fromIndex.
+// It probes provider__pool_fromIndex, provider__pool_fromIndex+1, ... and stops
+// as soon as a pool entry is not found (contiguous-key assumption).
+func cleanupKeyringPoolEntriesFrom(provider string, fromIndex int) {
+	for i := fromIndex; i < MaxPoolEntries; i++ {
+		poolKey := fmt.Sprintf("%s__pool_%d", provider, i)
+		existing, _, err := GetFromActiveBackend(poolKey)
+		if err != nil {
+			continue
+		}
+		if existing != "" {
+			if err := DeleteFromActiveBackend(poolKey); err != nil {
+				log.Printf("[credentials] Warning: failed to cleanup old pool entry %q: %v", poolKey, err)
+			}
+		} else {
+			break
+		}
+	}
+}
+
+// cleanupKeyringPoolEntries is a convenience wrapper that cleans up all pool_N
+// entries (starting from index 1). Used when deleting an entire provider's pool.
+func cleanupKeyringPoolEntries(provider string) {
+	cleanupKeyringPoolEntriesFrom(provider, 1)
+}
+
 // SaveKeyPool saves the key pool to the active backend.
 // For file backend, stores as JSON array if len > 1, plain string if len == 1.
 // For keyring backend, stores provider (first key), provider__pool_1, etc.
@@ -194,7 +220,8 @@ func SaveKeyPool(provider string, pool *KeyPool) error {
 	if isKeyring {
 		// Keyring backend: store each key separately
 		if len(pool.Keys) == 0 {
-			// Empty pool - delete the main entry
+			// Empty pool — clean up any leftover pool_N entries, then delete the main entry
+			cleanupKeyringPoolEntries(provider)
 			return DeleteFromActiveBackend(provider)
 		}
 
@@ -212,25 +239,7 @@ func SaveKeyPool(provider string, pool *KeyPool) error {
 		}
 
 		// Clean up old pool entries that are no longer in the pool
-		// We need to check and delete entries that were previously stored
-		// but are now beyond the current pool size
-		for i := len(pool.Keys); i < MaxPoolEntries; i++ {
-			poolKey := fmt.Sprintf("%s__pool_%d", provider, i)
-			existing, _, err := GetFromActiveBackend(poolKey)
-			if err != nil {
-				// Error getting - might not exist, continue
-				continue
-			}
-			if existing != "" {
-				// Entry exists but not in current pool - delete it
-				if err := DeleteFromActiveBackend(poolKey); err != nil {
-					log.Printf("[credentials] Warning: failed to cleanup old pool entry %q: %v", poolKey, err)
-				}
-			} else {
-				// No more pool entries - we can stop checking
-				break
-			}
-		}
+		cleanupKeyringPoolEntriesFrom(provider, len(pool.Keys))
 
 		log.Printf("[credentials] Saved %d keys for provider %q to keyring", len(pool.Keys), provider)
 		return nil
@@ -361,6 +370,41 @@ func GetPoolSize(provider string) (int, error) {
 		return 0, fmt.Errorf("failed to load key pool for %q: %w", provider, err)
 	}
 	return len(result.Pool.Keys), nil
+}
+
+// RemoveKeyFromPoolByIndex removes the key at the given index from a provider's pool.
+// Index is 0-based. This is the safe way to remove keys when the caller only
+// has access to masked values (e.g., from a WebUI that displays masked keys).
+// Returns an error if the index is out of bounds.
+func RemoveKeyFromPoolByIndex(provider string, index int) error {
+	provider = strings.TrimSpace(provider)
+	if provider == "" {
+		return fmt.Errorf("provider name cannot be empty")
+	}
+	if index < 0 {
+		return fmt.Errorf("index cannot be negative")
+	}
+
+	result, err := LoadKeyPool(provider)
+	if err != nil {
+		return fmt.Errorf("failed to load key pool for %q: %w", provider, err)
+	}
+
+	pool := result.Pool
+
+	if index >= len(pool.Keys) {
+		return fmt.Errorf("index %d out of bounds (pool has %d keys) for %q", index, len(pool.Keys), provider)
+	}
+
+	// Remove key at index
+	pool.Keys = append(pool.Keys[:index], pool.Keys[index+1:]...)
+
+	if err := SaveKeyPool(provider, pool); err != nil {
+		return fmt.Errorf("failed to save key pool for %q: %w", provider, err)
+	}
+
+	log.Printf("[credentials] Removed key at index %d from pool for %q (now %d keys)", index, provider, len(pool.Keys))
+	return nil
 }
 
 // NextKey returns the next key using round-robin rotation.

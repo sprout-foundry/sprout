@@ -12,6 +12,10 @@ interface StatusProps {
   };
 }
 
+interface OpenSettingsFocusEventDetail {
+  focus?: 'persona' | 'provider';
+}
+
 function Status({ isConnected, stats }: StatusProps): JSX.Element {
   const formatTokens = (tokens: number): string => {
     if (tokens >= 1000000) {
@@ -32,14 +36,16 @@ function Status({ isConnected, stats }: StatusProps): JSX.Element {
   };
 
   const handlePersonaClick = () => {
-    window.dispatchEvent(new CustomEvent('ledit:open-settings-focus', { detail: { focus: 'persona' } }));
+    window.dispatchEvent(new CustomEvent<OpenSettingsFocusEventDetail>('ledit:open-settings-focus', { detail: { focus: 'persona' } }));
   };
 
   const handleProviderModelClick = () => {
-    window.dispatchEvent(new CustomEvent('ledit:open-settings-focus', { detail: { focus: 'provider' } }));
+    window.dispatchEvent(new CustomEvent<OpenSettingsFocusEventDetail>('ledit:open-settings-focus', { detail: { focus: 'provider' } }));
   };
 
-  /** Format the internal persona ID (e.g. "code_reviewer") into a display label (e.g. "Code Reviewer"). */
+  /** Format the internal persona ID (e.g. "code_reviewer") into a display label (e.g. "Code Reviewer").
+      Persona IDs are expected to be ASCII-only (lowercase letters and underscores).
+  */
   const formatPersonaLabel = (id: string): string => {
     return id
       .replace(/_/g, ' ')

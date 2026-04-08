@@ -520,3 +520,211 @@ func TestIsCredentialRef(t *testing.T) {
 		assert.False(t, isCredentialRef("some random text"))
 	})
 }
+
+// ---------------------------------------------------------------------------
+// RedactString
+// ---------------------------------------------------------------------------
+
+func TestRedactString(t *testing.T) {
+	t.Run("identical_to_RedactLogLine", func(t *testing.T) {
+		testCases := []string{
+			"normal text without secrets",
+			"Authorization: Bearer sk-abc12345678901234567",
+			"api_key=sk-abcdef1234567890abcdef1234567890",
+			"token: ghp_abcdefghijklmnopqrstuvwxyz1234567890",
+		}
+		for _, tc := range testCases {
+			t.Run(tc, func(t *testing.T) {
+				assert.Equal(t, RedactLogLine(tc), RedactString(tc),
+					"RedactString should produce identical output to RedactLogLine")
+			})
+		}
+	})
+
+	t.Run("noop_on_non_secrets", func(t *testing.T) {
+		assert.Equal(t, "hello world", RedactString("hello world"))
+		assert.Equal(t, "the key is here", RedactString("the key is here"))
+	})
+
+	t.Run("redacts_api_keys", func(t *testing.T) {
+		assert.Contains(t, RedactString("sk-abc12345678901234567"), "[REDACTED]")
+		assert.Contains(t, RedactString("ghp_abcdefghijklmnopqrstuvwxyz1234567890"), "[REDACTED]")
+	})
+}
+
+// ---------------------------------------------------------------------------
+// RedactJSONBytes
+// ---------------------------------------------------------------------------
+
+func TestRedactJSONBytes(t *testing.T) {
+	t.Run("nil_input", func(t *testing.T) {
+		result, err := RedactJSONBytes(nil)
+		assert.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("empty_object", func(t *testing.T) {
+		input := []byte(`{}`)
+		result, err := RedactJSONBytes(input)
+		assert.NoError(t, err)
+		assert.Equal(t, "{}", string(result))
+	})
+
+	t.Run("non_sensitive_content_preserved", func(t *testing.T) {
+		input := []byte(`{"name": "John", "age": 30, "city": "NYC"}`)
+		result, err := RedactJSONBytes(input)
+		assert.NoError(t, err)
+		// Should preserve the content (may have different formatting)
+		assert.Contains(t, string(result), "John")
+		assert.Contains(t, string(result), "30")
+		assert.Contains(t, string(result), "NYC")
+	})
+
+	t.Run("redacts_nested_strings", func(t *testing.T) {
+		input := []byte(`{"token": "sk-abc12345678901234567", "name": "test"}`)
+		result, err := RedactJSONBytes(input)
+		assert.NoError(t, err)
+		assert.Contains(t, string(result), "[REDACTED]")
+		assert.NotContains(t, string(result), "sk-abc12345678901234567")
+		assert.Contains(t, string(result), "test")
+	})
+
+	t.Run("redacts_deeply_nested_structures", func(t *testing.T) {
+		input := []byte(`{
+			"level1": {
+				"level2": {
+					"token": "ghp_abcdefghijklmnopqrstuvwxyz1234567890",
+					"secret_key": "sk-abcdef1234567890abcdef1234567890"
+				}
+			},
+			"array": [
+				{"key": "xoxb-123456789012-123456789012-abcdefghijklmnop"},
+				{"normal": "value"}
+			]
+		}`)
+		result, err := RedactJSONBytes(input)
+		assert.NoError(t, err)
+		// All sensitive values should be redacted (value-based patterns)
+		assert.NotContains(t, string(result), "ghp_abcdefghijklmnopqrstuvwxyz1234567890")
+		assert.NotContains(t, string(result), "sk-abcdef1234567890abcdef1234567890")
+		assert.NotContains(t, string(result), "xoxb-123456789012-123456789012-abcdefghijklmnop")
+		assert.Contains(t, string(result), "[REDACTED]")
+		// Non-sensitive values should be preserved
+		assert.Contains(t, string(result), "normal")
+		assert.Contains(t, string(result), "value")
+		assert.Contains(t, string(result), "level1")
+		assert.Contains(t, string(result), "level2")
+	})
+
+	t.Run("preserves_non_string_values", func(t *testing.T) {
+		input := []byte(`{
+			"number": 42,
+			"float": 3.14,
+			"boolean": true,
+			"null_value": null,
+			"array": [1, 2, 3],
+			"object": {"nested": "value"}
+		}`)
+		result, err := RedactJSONBytes(input)
+		assert.NoError(t, err)
+		assert.Contains(t, string(result), "42")
+		assert.Contains(t, string(result), "3.14")
+		assert.Contains(t, string(result), "true")
+		assert.Contains(t, string(result), "null")
+		assert.Contains(t, string(result), "1")
+		assert.Contains(t, string(result), "2")
+		assert.Contains(t, string(result), "3")
+		assert.Contains(t, string(result), "value")
+	})
+
+	t.Run("invalid_json_returns_error", func(t *testing.T) {
+		input := []byte(`{invalid json}`)
+		result, err := RedactJSONBytes(input)
+		assert.Error(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("redacts_json_authorization_header", func(t *testing.T) {
+		input := []byte(`{"Authorization": "Bearer sk-abc12345678901234567"}`)
+		result, err := RedactJSONBytes(input)
+		assert.NoError(t, err)
+		assert.Contains(t, string(result), "[REDACTED]")
+		assert.NotContains(t, string(result), "Bearer sk-abc12345678901234567")
+	})
+
+	t.Run("redacts_multiple_credentials_in_one_object", func(t *testing.T) {
+		input := []byte(`{
+			"api_key": "sk-abc12345678901234567",
+			"token": "ghp_abcdefghijklmnopqrstuvwxyz1234567890",
+			"secret_key": "sk-abcdef1234567890abcdef1234567890",
+			"password": "sk-12345678901234567890123456789012"
+		}`)
+		result, err := RedactJSONBytes(input)
+		assert.NoError(t, err)
+		// Count redactions - should have at least 4 (value-based + key-aware patterns)
+		count := strings.Count(string(result), "[REDACTED]")
+		assert.GreaterOrEqual(t, count, 4,
+			"expected at least 4 redactions, got %d", count)
+	})
+
+	t.Run("key_aware_redacts_generic_secrets", func(t *testing.T) {
+		// Values that don't match structural patterns (sk-, ghp_, etc.) but sit
+		// under sensitive-looking keys should still be redacted.
+		input := []byte(`{
+			"password": "hunter2",
+			"secret": "my-generic-secret",
+			"api_token": "s3cr3tvalue",
+			"display_name": "Alice"
+		}`)
+		result, err := RedactJSONBytes(input)
+		assert.NoError(t, err)
+
+		// Key-aware redactions
+		assert.NotContains(t, string(result), "hunter2",
+			"generic password value should be redacted by key name")
+		assert.NotContains(t, string(result), "my-generic-secret",
+			"generic secret value should be redacted by key name")
+		assert.NotContains(t, string(result), "s3cr3tvalue",
+			"generic api_token value should be redacted by key name")
+
+		// Non-sensitive values preserved
+		assert.Contains(t, string(result), "Alice",
+			"non-sensitive display_name should be preserved")
+
+		// Should have exactly 3 [REDACTED] markers (one per sensitive key)
+		count := strings.Count(string(result), "[REDACTED]")
+		assert.Equal(t, 3, count,
+			"expected exactly 3 redactions for 3 sensitive keys, got %d", count)
+	})
+
+	t.Run("key_aware_redacts_nested_sensitive_keys", func(t *testing.T) {
+		input := []byte(`{
+			"config": {
+				"db_password": "supersecret123",
+				"host": "localhost"
+			}
+		}`)
+		result, err := RedactJSONBytes(input)
+		assert.NoError(t, err)
+		assert.NotContains(t, string(result), "supersecret123",
+			"nested password value should be redacted by key name")
+		assert.Contains(t, string(result), "localhost",
+			"non-sensitive nested value should be preserved")
+	})
+
+	t.Run("key_aware_non_string_values_preserved", func(t *testing.T) {
+		// If a sensitive key holds a non-string value (e.g., bool, number),
+		// value-based redaction still runs but numeric/bool values pass through.
+		input := []byte(`{
+			"token_count": 42,
+			"KEY_ENABLED": true
+		}`)
+		result, err := RedactJSONBytes(input)
+		assert.NoError(t, err)
+		// These keys contain "KEY" and "TOKEN" but their values aren't strings,
+		// so the key-aware branch is skipped and the value passes through.
+		assert.Contains(t, string(result), "42")
+		assert.Contains(t, string(result), "true")
+	})
+}
+

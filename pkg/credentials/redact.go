@@ -1,6 +1,7 @@
 package credentials
 
 import (
+	"encoding/json"
 	"regexp"
 	"strings"
 )
@@ -150,4 +151,72 @@ func RedactLogLine(line string) string {
 		redacted = pattern.ReplaceAllString(redacted, "[REDACTED]")
 	}
 	return redacted
+}
+
+// RedactString applies credential redaction patterns to a string.
+// This is a readability alias for RedactLogLine, intended for non-log contexts
+// where the same pattern-based redaction is needed (e.g., config display, exports).
+func RedactString(s string) string {
+	return RedactLogLine(s)
+}
+
+// RedactJSONBytes applies credential redaction to JSON-encoded data. It
+// unmarshals the data, recursively redacts string values, and re-marshals
+// with indentation. Two redaction strategies are applied:
+//  1. Key-aware: map keys that look like credential field names (e.g.,
+//     "password", "api_key", "token") have their string values replaced
+//     with "[REDACTED]" wholesale.
+//  2. Value-based: all string values are scanned for known credential
+//     patterns (e.g., sk-..., ghp_..., Bearer tokens) regardless of key.
+//
+// Returns the redacted JSON bytes or an error if the input is not valid JSON.
+func RedactJSONBytes(data []byte) ([]byte, error) {
+	if data == nil {
+		return nil, nil
+	}
+
+	var v interface{}
+	if err := json.Unmarshal(data, &v); err != nil {
+		return nil, err
+	}
+
+	redacted := redactValue(v)
+
+	// Marshal with indentation for readability
+	return json.MarshalIndent(redacted, "", "  ")
+}
+
+// redactValue recursively redacts string values in a JSON-like structure.
+// For maps, keys are checked with IsSensitiveEnvName; if sensitive, string
+// values are replaced with "[REDACTED]". For all strings, RedactString()
+// is applied (value-based pattern matching). For slices, it recurses. For
+// everything else (numbers, bools, null), it returns as-is.
+func redactValue(v interface{}) interface{} {
+	switch val := v.(type) {
+	case string:
+		return RedactString(val)
+	case map[string]interface{}:
+		redacted := make(map[string]interface{}, len(val))
+		for k, v := range val {
+			// Key-aware redaction: if the key looks like a credential field
+			// name, replace string values with "[REDACTED]" wholesale.
+			if IsSensitiveEnvName(k) {
+				if _, ok := v.(string); ok {
+					redacted[k] = "[REDACTED]"
+					continue
+				}
+			}
+			redacted[k] = redactValue(v)
+		}
+		return redacted
+	case []interface{}:
+		redacted := make([]interface{}, len(val))
+		for i, v := range val {
+			redacted[i] = redactValue(v)
+		}
+		return redacted
+	default:
+		// Numbers, bools, null, etc. pass through unchanged
+		return v
+	}
 }

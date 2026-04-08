@@ -12,6 +12,7 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/credentials"
 )
 
 // ---------------------------------------------------------------------------
@@ -354,6 +355,10 @@ func flattenStandardMessages(messages []api.Message, opts ExportOptions) []api.M
 			continue
 		}
 		result = append(result, m)
+	}
+	// Apply credential redaction to all message content after cleaning
+	for i := range result {
+		result[i].Content = credentials.RedactLogLine(result[i].Content)
 	}
 	return deduplicateConsecutive(result)
 }

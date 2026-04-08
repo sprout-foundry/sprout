@@ -81,6 +81,11 @@ func (ws *ReactWebServer) gatherStatsForClientIDLocked(clientID string) map[stri
 		agentInst = clientCtx.Agent
 	}
 
+	// Always include provider/model in stats so the frontend can reliably
+	// detect whether a provider is configured (empty = none).
+	stats["provider"] = ""
+	stats["model"] = ""
+
 	// Add agent-specific stats if available
 	if agentInst != nil {
 		stats["provider"] = agentInst.GetProvider()

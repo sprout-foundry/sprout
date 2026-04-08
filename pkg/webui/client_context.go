@@ -3,6 +3,7 @@ package webui
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -364,6 +365,15 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 	snapshot := append([]byte(nil), ctx.AgentState...)
 	ws.mutex.Unlock()
 
+	// Fast check: if no provider is configured, return immediately with a
+	// sentinel error instead of attempting expensive agent creation.
+	// NOTE: A narrow TOCTOU race exists between this config read and the
+	// config read inside agent.NewAgentWithModel. Acceptable since the worst
+	// case is a single unnecessary retry after the user configures a provider.
+	if !isProviderAvailable() {
+		return nil, ErrNoProviderConfigured
+	}
+
 	var created *agent.Agent
 	var createErr error
 	err := ws.withAgentWorkspace(workspaceRoot, func() error {
@@ -424,6 +434,10 @@ func (ws *ReactWebServer) syncAgentStateForClient(clientID string) error {
 
 	agentInst, err := ws.getClientAgent(clientID)
 	if err != nil {
+		// If no provider is configured, that's expected — just return.
+		if errors.Is(err, ErrNoProviderConfigured) {
+			return nil
+		}
 		return fmt.Errorf("get client agent for state sync: %w", err)
 	}
 

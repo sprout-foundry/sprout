@@ -152,6 +152,15 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, eventBus *events.E
 		agentWorkspace = workspaceRoot
 	}
 
+	// Fast check: if no provider is configured, return immediately with a
+	// sentinel error instead of attempting expensive agent creation.
+	// NOTE: A narrow TOCTOU race exists between this config read and the
+	// config read inside agent.NewAgentWithModel. Acceptable since the worst
+	// case is a single unnecessary retry after the user configures a provider.
+	if !isProviderAvailable() {
+		return nil, ErrNoProviderConfigured
+	}
+
 	// Create agent outside the lock.
 	snapshot := append([]byte(nil), cs.AgentState...)
 	created, err := agent.NewAgentWithModel("")

@@ -618,6 +618,7 @@ function EditorTabs({
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => {
                     e.preventDefault();
+                    e.stopPropagation();
                     const droppedBufferId = resolveDraggedBufferId(e);
                     if (!droppedBufferId || droppedBufferId === buffer.id) {
                       setDraggingBufferId(null);
@@ -655,11 +656,6 @@ function EditorTabs({
                       />
                     ) : (
                       <span className="tab-name">{buffer.file.name}</span>
-                    )}
-                    {buffer.paneId && paneOrder.has(buffer.paneId) && (
-                      <span className={`tab-pane-badge ${buffer.paneId === activePaneId ? 'active-pane' : ''}`}>
-                        {paneOrder.get(buffer.paneId)}
-                      </span>
                     )}
                     {buffer.isModified && <span className="tab-modified">●</span>}
                     {buffer.externallyModified && (

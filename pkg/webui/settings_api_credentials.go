@@ -516,15 +516,11 @@ func (ws *ReactWebServer) handleAPISettingsCredentialsDelete(w http.ResponseWrit
 		return
 	}
 
-	// Delete the credential (idempotent — treat "not found" as success)
-	if err := credentials.DeleteFromActiveBackend(provider); err != nil {
+	// Delete the provider's pool (all keys including pool_N entries).
+	// DeleteProviderPool holds the internal poolMu for thread safety.
+	if err := credentials.DeleteProviderPool(provider); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to delete credential: %v", err))
 		return
-	}
-
-	// Cascade-delete pool entries (SaveKeyPool handles keyring cleanup)
-	if err := credentials.SaveKeyPool(provider, &credentials.KeyPool{Keys: []string{}}); err != nil {
-		log.Printf("[credentials] Warning: failed to clean up pool entries for %q: %v", provider, err)
 	}
 
 	// Reset rotation counter for this provider

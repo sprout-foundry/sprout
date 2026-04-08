@@ -263,16 +263,9 @@ func (ac *APIClient) SendWithRetry(messages []api.Message, tools []api.Tool, rea
 				ac.agent.debugLog("DEBUG: APIClient not retrying error: %v\n", err)
 			}
 			if ac.isRateLimit(err) {
-				// Rate limit on stored credentials — rotate to next key before retry.
-				// This is only useful when the provider has multiple keys in its pool;
-				// for env-var credentials, rotation is a no-op but harmless.
-				poolSize, poolErr := credentials.GetPoolSize(ac.agent.GetProvider())
-				if poolErr == nil && poolSize > 1 {
-					credentials.RotateProviderKey(ac.agent.GetProvider())
-					if ac.agent.debug {
-						ac.agent.debugLog("DEBUG: APIClient rotated key for provider %q (pool size %d) after rate limit\n", ac.agent.GetProvider(), poolSize)
-					}
-				}
+				// Rate limit reached — return error. The rotation counter was
+				// already advanced by NextKey() during the failed resolve(),
+				// so the next call will naturally use a different key.
 				return nil, &RateLimitExceededError{Attempts: retry + 1, LastError: err}
 			}
 			return nil, fmt.Errorf("failed to make API request: %w", err)
@@ -591,15 +584,10 @@ func (ac *APIClient) isRateLimit(err error) bool {
 }
 
 // handleRateLimit handles rate limit errors with proper backoff.
-// When the provider has multiple keys (pool), it rotates to the next key
-// before sleeping, so the subsequent retry uses a different key.
-// It also refreshes the cached API key in the provider client so that
-// subsequent requests actually use the rotated key.
-//
-// Note: The rotation uses a two-step Advance + Resolve pattern:
-// Advance increments the counter without modular arithmetic, then
-// Resolve (via RefreshAPIKey → NextKey) applies modular selection.
-// This ensures the rate-limited key is skipped entirely.
+// When the provider has multiple keys (pool), it refreshes the cached API key
+// so the next request uses a different key. RefreshAPIKey calls resolve() →
+// NextKey(), which auto-advances the rotation counter — no additional Advance()
+// is needed.
 func (ac *APIClient) handleRateLimit(err error, attempt int) bool {
 	// Log the rate limit
 	ac.rateLimiter.LogRateLimit(ac.agent.GetProvider(), ac.agent.GetModel(),
@@ -610,15 +598,17 @@ func (ac *APIClient) handleRateLimit(err error, attempt int) bool {
 		return false
 	}
 
-	// Rotate to the next key in the pool (no-op if single key or env var)
+	// If the provider has multiple keys, refresh the cached key so the next
+	// resolve picks a different one. (No-op if single key or env var.)
 	provider := ac.agent.GetProvider()
 	poolSize, poolErr := credentials.GetPoolSize(provider)
 	if poolErr == nil && poolSize > 1 {
-		credentials.RotateProviderKey(provider)
 		if ac.agent.debug {
-			ac.agent.debugLog("DEBUG: rotated key for provider %q (pool size %d) after rate limit on attempt %d\n", provider, poolSize, attempt)
+			ac.agent.debugLog("DEBUG: rotating key for provider %q (pool size %d) after rate limit on attempt %d\n", provider, poolSize, attempt)
 		}
-		// Refresh the cached key in the provider client so the next request uses it
+		// Refresh the cached key in the provider client so the next request uses it.
+		// resolve() → NextKey() naturally advances the rotation counter, so no
+		// explicit Advance() call is needed — NextKey's auto-advance handles it.
 		if refreshable, ok := ac.agent.client.(interface{ RefreshAPIKey() error }); ok {
 			if refreshErr := refreshable.RefreshAPIKey(); refreshErr != nil {
 				log.Printf("[agent] Warning: failed to refresh API key after rotation for %q: %v\n", provider, refreshErr)

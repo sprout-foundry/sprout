@@ -30,6 +30,12 @@ type KeyRotator struct {
 // resolution layer and other components.
 var DefaultRotator = NewKeyRotator()
 
+// poolMu protects the Load→modify→Save sequence in AddKeyToPool,
+// RemoveKeyFromPool, RemoveKeyFromPoolByIndex, DeleteProviderPool, and
+// SaveKeyPool. It prevents concurrent HTTP handlers from losing updates
+// due to the read-modify-write TOCTOU race.
+var poolMu sync.Mutex
+
 // NewKeyRotator creates a new KeyRotator instance with initialized state.
 // The counters map is created here to ensure it's never nil.
 func NewKeyRotator() *KeyRotator {
@@ -64,10 +70,14 @@ func parseKeyArray(value string) (*KeyPool, error) {
 			log.Printf("[credentials] Warning: value for provider looks like JSON array but failed to parse, treating as plain string")
 			return &KeyPool{Keys: []string{trimmed}}, nil
 		}
-		// Trim whitespace from each key
-		for i, key := range keys {
-			keys[i] = strings.TrimSpace(key)
+		// Trim whitespace from each key and filter out empty strings
+		filtered := make([]string, 0, len(keys))
+		for _, key := range keys {
+			if trimmed := strings.TrimSpace(key); trimmed != "" {
+				filtered = append(filtered, trimmed)
+			}
 		}
+		keys = filtered
 		// Ensure non-nil slice invariant (json.Unmarshal on "[]" returns nil)
 		if keys == nil {
 			keys = []string{}
@@ -200,6 +210,7 @@ func cleanupKeyringPoolEntries(provider string) {
 // For file backend, stores as JSON array if len > 1, plain string if len == 1.
 // For keyring backend, stores provider (first key), provider__pool_1, etc.
 // Cleans up removed pool entries (only for keyring backend).
+// Note: The caller must hold poolMu when calling this function.
 func SaveKeyPool(provider string, pool *KeyPool) error {
 	provider = strings.TrimSpace(provider)
 	if provider == "" {
@@ -289,8 +300,11 @@ func AddKeyToPool(provider, key string) error {
 		return fmt.Errorf("key value cannot be empty")
 	}
 
+	poolMu.Lock()
+
 	result, err := LoadKeyPool(provider)
 	if err != nil {
+		poolMu.Unlock()
 		return fmt.Errorf("failed to load key pool for %q: %w", provider, err)
 	}
 
@@ -299,6 +313,7 @@ func AddKeyToPool(provider, key string) error {
 	// Check for duplicates
 	for _, existingKey := range pool.Keys {
 		if existingKey == key {
+			poolMu.Unlock()
 			return fmt.Errorf("key already exists in pool for %q", provider)
 		}
 	}
@@ -307,8 +322,11 @@ func AddKeyToPool(provider, key string) error {
 	pool.Keys = append(pool.Keys, key)
 
 	if err := SaveKeyPool(provider, pool); err != nil {
+		poolMu.Unlock()
 		return fmt.Errorf("failed to save key pool for %q: %w", provider, err)
 	}
+
+	poolMu.Unlock()
 
 	log.Printf("[credentials] Added key to pool for %q (now %d keys)", provider, len(pool.Keys))
 	return nil
@@ -327,14 +345,18 @@ func RemoveKeyFromPool(provider, key string) error {
 		return fmt.Errorf("key value cannot be empty")
 	}
 
+	poolMu.Lock()
+
 	result, err := LoadKeyPool(provider)
 	if err != nil {
+		poolMu.Unlock()
 		return fmt.Errorf("failed to load key pool for %q: %w", provider, err)
 	}
 
 	pool := result.Pool
 
 	if len(pool.Keys) == 0 {
+		poolMu.Unlock()
 		return fmt.Errorf("no keys found in pool for %q", provider)
 	}
 
@@ -350,14 +372,18 @@ func RemoveKeyFromPool(provider, key string) error {
 	}
 
 	if !found {
+		poolMu.Unlock()
 		return fmt.Errorf("key not found in pool for %q", provider)
 	}
 
 	pool.Keys = newKeys
 
 	if err := SaveKeyPool(provider, pool); err != nil {
+		poolMu.Unlock()
 		return fmt.Errorf("failed to save key pool for %q: %w", provider, err)
 	}
+
+	poolMu.Unlock()
 
 	log.Printf("[credentials] Removed key from pool for %q (now %d keys)", provider, len(pool.Keys))
 	return nil
@@ -370,6 +396,26 @@ func GetPoolSize(provider string) (int, error) {
 		return 0, fmt.Errorf("failed to load key pool for %q: %w", provider, err)
 	}
 	return len(result.Pool.Keys), nil
+}
+
+// DeleteProviderPool removes all keys for a provider by saving an empty pool.
+// This is the thread-safe way to delete a provider's entire pool — it holds
+// poolMu for the full Load→modify→Save sequence. Use this from other packages
+// instead of calling SaveKeyPool with an empty pool directly.
+func DeleteProviderPool(provider string) error {
+	provider = strings.TrimSpace(provider)
+	if provider == "" {
+		return fmt.Errorf("provider name cannot be empty")
+	}
+
+	poolMu.Lock()
+	defer poolMu.Unlock()
+
+	if err := SaveKeyPool(provider, &KeyPool{Keys: []string{}}); err != nil {
+		return fmt.Errorf("failed to delete provider pool for %q: %w", provider, err)
+	}
+
+	return nil
 }
 
 // RemoveKeyFromPoolByIndex removes the key at the given index from a provider's pool.
@@ -385,14 +431,18 @@ func RemoveKeyFromPoolByIndex(provider string, index int) error {
 		return fmt.Errorf("index cannot be negative")
 	}
 
+	poolMu.Lock()
+
 	result, err := LoadKeyPool(provider)
 	if err != nil {
+		poolMu.Unlock()
 		return fmt.Errorf("failed to load key pool for %q: %w", provider, err)
 	}
 
 	pool := result.Pool
 
 	if index >= len(pool.Keys) {
+		poolMu.Unlock()
 		return fmt.Errorf("index %d out of bounds (pool has %d keys) for %q", index, len(pool.Keys), provider)
 	}
 
@@ -400,8 +450,11 @@ func RemoveKeyFromPoolByIndex(provider string, index int) error {
 	pool.Keys = append(pool.Keys[:index], pool.Keys[index+1:]...)
 
 	if err := SaveKeyPool(provider, pool); err != nil {
+		poolMu.Unlock()
 		return fmt.Errorf("failed to save key pool for %q: %w", provider, err)
 	}
+
+	poolMu.Unlock()
 
 	log.Printf("[credentials] Removed key at index %d from pool for %q (now %d keys)", index, provider, len(pool.Keys))
 	return nil
@@ -434,10 +487,13 @@ func (r *KeyRotator) NextKey(provider string, pool *KeyPool) string {
 	return key
 }
 
-// Advance manually advances to the next key for a provider.
-// This is called on 429/rate-limit errors to skip to the next key.
+// Advance manually advances the rotation counter by 1 for a provider.
+// This is useful when a caller wants to skip a key (e.g., manual rejection).
 // The counter is incremented without bounds; NextKey applies modular
 // arithmetic when selecting from the pool.
+//
+// Note: NextKey() also auto-advances the counter after each call, so calling
+// Advance immediately after NextKey will skip two positions, not one.
 func (r *KeyRotator) Advance(provider string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -473,8 +529,10 @@ func (r *KeyRotator) CurrentIndex(provider string) int {
 	return -1
 }
 
-// RotateKey is a convenience function that advances the default rotator
-// for a provider. This is the primary API for callers to invoke on 429 errors.
+// RotateKey advances the default rotator for a provider by one position.
+// Callers can use this to manually skip a key without going through the
+// full resolve path. (The rate-limit handler uses RefreshAPIKey instead,
+// which resolves and auto-advances via NextKey.)
 func RotateKey(provider string) {
 	DefaultRotator.Advance(provider)
 }

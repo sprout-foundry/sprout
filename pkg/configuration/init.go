@@ -11,6 +11,7 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/agent_providers"
 	"github.com/alantheprice/ledit/pkg/credentials"
+	"golang.org/x/term"
 )
 
 // readInput reads a line of input from stdin without conflicting with other input systems
@@ -308,6 +309,11 @@ func EnsureProviderAPIKey(provider string, apiKeys *APIKeys) error {
 
 	if HasProviderAuth(provider) {
 		return nil
+	}
+
+	// Non-interactive environments cannot prompt for API keys.
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return fmt.Errorf("no API key for %s. running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `ledit agent` interactively", getProviderDisplayName(provider))
 	}
 
 	fmt.Println()

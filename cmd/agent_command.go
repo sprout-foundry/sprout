@@ -12,6 +12,7 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/alantheprice/ledit/pkg/noninteractive"
 	"github.com/alantheprice/ledit/pkg/security"
 	"github.com/alantheprice/ledit/pkg/trace"
 	"github.com/spf13/cobra"
@@ -81,6 +82,13 @@ func createChatAgent() (*agent.Agent, error) {
 	}
 
 	if err != nil {
+		if noninteractive.IsNonInteractiveHint(err) {
+			// The agent startup failed specifically because no provider is
+			// configured and stdin is not a terminal. Print the guidance
+			// prominently and exit with a non-zero status.
+			fmt.Fprintf(os.Stderr, "\n%s\n\n", err)
+			return nil, err
+		}
 		return nil, fmt.Errorf("failed to initialize agent: %w", err)
 	}
 

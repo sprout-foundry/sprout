@@ -232,8 +232,8 @@ func runCustomModelAdd() error {
 	path, _ := configuration.GetCustomProviderPath(normalized.Name)
 	fmt.Println()
 	fmt.Printf("Saved provider '%s'\n", normalized.Name)
-	fmt.Printf("  Chat endpoint: %s\n", normalized.Endpoint)
-	fmt.Printf("  Models endpoint: %s\n", normalized.ModelsEndpoint())
+	fmt.Printf("  Chat endpoint: %s\n", credentials.RedactLogLine(normalized.Endpoint))
+	fmt.Printf("  Models endpoint: %s\n", credentials.RedactLogLine(normalized.ModelsEndpoint()))
 	if normalized.EnvVar != "" {
 		fmt.Printf("  API key env: %s\n", normalized.EnvVar)
 	}

@@ -435,3 +435,131 @@
 .close-confirm-dialog .dialog-btn.danger:hover {
   filter: brightness(0.95);
 }
+
+/* ── Chat-specific tab styles (from ChatTabBar) ───────────────── */
+
+/* Activity dot — pulsing indicator for chat tabs with active queries */
+.chat-tab-activity-dot {
+  position: absolute;
+  right: -2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  min-width: 6px;
+  border-radius: 50%;
+  background: var(--accent-primary, #f59e0b);
+  flex-shrink: 0;
+  animation: chat-tab-pulse 1.2s ease-in-out infinite;
+  z-index: 3;
+}
+
+@keyframes chat-tab-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: translateY(-50%) scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-50%) scale(1.15);
+  }
+}
+
+/* Worktree badge on chat tab */
+.tab-worktree-badge {
+  display: flex;
+  align-items: center;
+  margin-right: 3px;
+  color: var(--text-secondary, #8b949e);
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.tab:hover .tab-worktree-badge,
+.tab.active .tab-worktree-badge {
+  opacity: 1;
+  color: var(--accent-foreground, #58a6ff);
+}
+
+/* Hide worktree badge on pinned tabs (collapsed) */
+.tab.pinned .tab-worktree-badge {
+  display: none;
+}
+
+/* New Chat button (+ icon at end of tabs) */
+.tab.new-chat {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  min-width: 28px;
+  max-width: 28px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  border-radius: 4px 4px 0 0;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.12s ease, color 0.12s ease;
+  flex-shrink: 0;
+}
+
+.tab.new-chat:hover {
+  color: var(--text-primary);
+  background: rgba(148, 163, 184, 0.08);
+}
+
+/* New Chat in Worktree button (GitBranch icon) */
+.tab.new-worktree {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  min-width: 28px;
+  max-width: 28px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: none;
+  color: var(--text-secondary, #8b949e);
+  cursor: pointer;
+  border-radius: 4px 4px 0 0;
+  flex-shrink: 0;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.tab.new-worktree:hover {
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--accent-primary);
+}
+
+/* Inline rename input for chat tabs */
+.tab .chat-tab-rename-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  background: var(--bg-surface, var(--bg-primary));
+  border: 1px solid var(--border-strong, var(--accent-primary));
+  border-radius: 3px;
+  padding: 0 6px;
+  font-size: 13px;
+  font-family: var(--font-mono, inherit);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.tab .chat-tab-rename-input:focus {
+  border-color: var(--accent-primary);
+}
+
+.tab .chat-tab-rename-input::selection {
+  background: var(--accent-primary-alpha);
+}
+
+/* Don't show activity dot on pinned chat tabs (they're collapsed) */
+.tab.pinned .chat-tab-activity-dot {
+  display: none;
+}

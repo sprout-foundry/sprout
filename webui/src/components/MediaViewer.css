@@ -1,0 +1,80 @@
+.media-viewer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.media-viewer-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  max-width: 100%;
+  padding: 24px;
+}
+
+/* ── Audio layout ────────────────────────────────────────────── */
+.media-viewer-audio {
+  width: 100%;
+  max-width: 480px;
+}
+
+/* ── Video layout ────────────────────────────────────────────── */
+.media-viewer-video {
+  width: 100%;
+  max-width: 100%;
+}
+
+.media-viewer-video .media-viewer-player {
+  width: 100%;
+  max-width: 100%;
+  max-height: calc(100vh - 140px);
+  border-radius: 4px;
+  background: #000;
+}
+
+/* ── Player styling ──────────────────────────────────────────── */
+.media-viewer-player {
+  width: 100%;
+  border-radius: 4px;
+  background: var(--bg-code, #1e1e2e);
+  outline: none;
+}
+
+.media-viewer-audio .media-viewer-player {
+  width: 100%;
+  max-width: 400px;
+}
+
+/* ── Metadata ────────────────────────────────────────────────── */
+.media-viewer-filename {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  word-break: break-all;
+  text-align: center;
+}
+
+.media-viewer-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+/* ── Loading / Error ─────────────────────────────────────────── */
+.media-viewer-loading,
+.media-viewer-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.media-viewer-error {
+  color: var(--text-error, #ef4444);
+}

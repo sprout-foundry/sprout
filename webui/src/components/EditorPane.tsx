@@ -29,11 +29,14 @@ import { useHotkeys } from '../contexts/HotkeyContext';
 import { useTheme } from '../contexts/ThemeContext';
 import EditorToolbar from './EditorToolbar';
 import EditorBreadcrumb, { type BreadcrumbSymbol } from './EditorBreadcrumb';
+import { isImageFile, isAudioFile, isVideoFile, isBinaryFile } from '../utils/mediaPatterns';
 import ImageViewer from './ImageViewer';
 import SvgPreview from './SvgPreview';
 import GoToSymbolOverlay from './GoToSymbolOverlay';
 import { getEnclosingSymbols } from './GoToSymbolOverlay';
 import LanguageSwitcher from './LanguageSwitcher';
+import BinaryFileViewer from './BinaryFileViewer';
+import MediaViewer from './MediaViewer';
 import { readFileWithConsent } from '../services/fileAccess';
 import { showFileChangeDialog } from './FileChangeDialog';
 import { getEditorKeymap } from '../utils/editorHotkeys';
@@ -114,24 +117,6 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   // Get buffer for this pane
   const pane = panes.find((p) => p.id === paneId);
   const buffer = pane?.bufferId ? buffers.get(pane.bufferId) : null;
-
-  // Image extensions that should be viewed as images
-  const IMAGE_EXTENSIONS = new Set([
-    '.png',
-    '.jpg',
-    '.jpeg',
-    '.gif',
-    '.bmp',
-    '.webp',
-    '.ico',
-    '.tiff',
-    '.tif',
-    '.avif',
-  ]);
-
-  const isImageFile = (ext?: string): boolean => {
-    return !!ext && IMAGE_EXTENSIONS.has(ext.toLowerCase());
-  };
 
   // API service instance (singleton)
   const apiService = useRef(ApiService.getInstance()).current;
@@ -466,6 +451,18 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
 
     // Load file from server
     lastLoadedRef.current = { bufferId: buffer.id, filePath: buffer.file.path };
+
+    // Skip loading content for binary/media buffers — they are rendered by
+    // dedicated viewers (ImageViewer, MediaViewer, BinaryFileViewer) that
+    // fetch the file themselves as blobs.
+    const fileExt = buffer.file.ext?.toLowerCase();
+    if (
+      fileExt &&
+      (isImageFile(fileExt) || isAudioFile(fileExt) || isVideoFile(fileExt) || isBinaryFile(fileExt))
+    ) {
+      // Still track the buffer so we don't re-process it on re-render
+      return;
+    }
 
     // Use ref to avoid dependency issues - only pass filePath now
     if (loadFileRef.current) {
@@ -1049,8 +1046,12 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     return <WelcomeTab onOpenCommandPalette={onOpenCommandPalette} />;
   }
 
-  // Detect if this is an image file
-  const imageFile = buffer && buffer.file && !buffer.file.isDir && isImageFile(buffer.file.ext);
+  // Detect file type for specialized viewers
+  const ext = buffer?.file?.ext?.toLowerCase();
+  const isImage = !!ext && isImageFile(ext);
+  const isAudio = !!ext && isAudioFile(ext);
+  const isVideo = !!ext && isVideoFile(ext);
+  const isBinary = !!ext && isBinaryFile(ext);
   const isSvgFile = buffer?.kind === 'file' && buffer?.file?.ext?.toLowerCase() === '.svg';
   const isSvgPreviewBuffer = buffer?.metadata?.previewKind === 'svg';
 
@@ -1094,11 +1095,32 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     });
   };
 
-  if (imageFile) {
+  if (isImage && buffer) {
     return (
       <div className="editor-pane">
         <ImageViewer filePath={buffer.file.path} fileName={buffer.file.name} fileSize={buffer.file.size} />
       </div>
+    );
+  }
+
+  if ((isAudio || isVideo) && buffer) {
+    return (
+      <MediaViewer
+        filePath={buffer.file.path}
+        fileName={buffer.file.name}
+        fileSize={buffer.file.size}
+        mediaType={isAudio ? 'audio' : 'video'}
+      />
+    );
+  }
+
+  if (isBinary && buffer) {
+    return (
+      <BinaryFileViewer
+        fileName={buffer.file.name}
+        filePath={buffer.file.path}
+        fileSize={buffer.file.size}
+      />
     );
   }
 

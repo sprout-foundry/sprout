@@ -19,6 +19,21 @@ const (
 	consentTokenHeader   = "X-Ledit-Consent-Token"
 )
 
+// isProviderConfigError reports whether err originated from the agent
+// creation path because no AI provider is configured (or the configured
+// provider lacks credentials). The substrings mirror the error messages
+// returned by pkg/agent and pkg/configuration.
+func isProviderConfigError(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	return strings.Contains(s, "provider recovery failed") ||
+		strings.Contains(s, "failed to initialize provider") ||
+		strings.Contains(s, "failed to select provider") ||
+		strings.Contains(s, "provider_not_configured")
+}
+
 func (ws *ReactWebServer) incrementActiveQueries(clientID string) {
 	ws.mutex.Lock()
 	ws.activeQueries++
@@ -118,7 +133,11 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 
 	clientAgent, err := ws.getChatAgent(clientID, chatID)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("failed to initialize chat agent: %v", err), http.StatusInternalServerError)
+		if isProviderConfigError(err) {
+			writeJSONErr(w, http.StatusServiceUnavailable, "no_provider", "AI features require a provider. Please configure one in settings.")
+		} else {
+			http.Error(w, fmt.Sprintf("failed to initialize chat agent: %v", err), http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -243,7 +262,11 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 
 	clientAgent, err := ws.getChatAgent(clientID, chatID)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to access chat agent: %v", err), http.StatusInternalServerError)
+		if isProviderConfigError(err) {
+			writeJSONErr(w, http.StatusServiceUnavailable, "no_provider", "AI features require a provider. Please configure one in settings.")
+		} else {
+			http.Error(w, fmt.Sprintf("Failed to access chat agent: %v", err), http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -289,7 +312,11 @@ func (ws *ReactWebServer) handleAPIQueryStop(w http.ResponseWriter, r *http.Requ
 
 	clientAgent, err := ws.getChatAgent(clientID, chatID)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to access chat agent: %v", err), http.StatusInternalServerError)
+		if isProviderConfigError(err) {
+			writeJSONErr(w, http.StatusServiceUnavailable, "no_provider", "AI features require a provider. Please configure one in settings.")
+		} else {
+			http.Error(w, fmt.Sprintf("Failed to access chat agent: %v", err), http.StatusInternalServerError)
+		}
 		return
 	}
 

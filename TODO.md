@@ -233,7 +233,7 @@
 
 ### CLI Onboarding UX
 
-[] - ONBOARDING: CLI first-run should offer a clear "skip / use local only" option — `selectInitialProvider()` in `pkg/configuration/init.go` presents all providers and forces the user to pick one, even for users who just want to try the editor or use a local model like Ollama. Add a "Skip provider setup" or "Local only (no cloud API)" option at the top of the list that sets `LastUsedProvider` to a sentinel (e.g., `"none"`) so the CLI can detect it and either skip AI features or prompt again only when AI is actually needed (e.g., the user sends a chat message).
+[x] - ONBOARDING: CLI first-run should offer a clear "skip / use local only" option — `selectInitialProvider()` in `pkg/configuration/init.go` presents all providers and forces the user to pick one, even for users who just want to try the editor or use a local model like Ollama. Add a "Skip provider setup" or "Local only (no cloud API)" option at the top of the list that sets `LastUsedProvider` to a sentinel (e.g., `"none"`) so the CLI can detect it and either skip AI features or prompt again only when AI is actually needed (e.g., the user sends a chat message).
 [] - ONBOARDING: CLI onboarding does not mention the webui editor — `ShowWelcomeMessage()` and `ShowNextSteps()` in `pkg/configuration/init.go` only describe CLI agent usage. New users are not told that `ledit agent -d` (daemon mode) opens a full web-based code editor. The welcome message should mention the webui as a first-class interface, especially since it provides a much friendlier setup experience for provider/model configuration.
 
 ### Webui Onboarding UX

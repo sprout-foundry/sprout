@@ -13,6 +13,13 @@ import (
 	"golang.org/x/term"
 )
 
+// isNonInteractive returns true if the process is running in non-interactive
+// mode (stdin is not a terminal). Used to prevent blocking prompts when
+// running as a daemon, in tests, or piped input.
+func isNonInteractive() bool {
+	return !term.IsTerminal(int(os.Stdin.Fd()))
+}
+
 // SelectProvider allows interactive provider selection
 func (a *Agent) SelectProvider() error {
 	newProvider, err := a.configManager.SelectNewProvider()
@@ -55,7 +62,7 @@ func recoverProviderStartup(configManager *configuration.Manager, failedProvider
 	fmt.Fprintf(os.Stderr, "[WARN] Failed to initialize provider '%s': %v\n", failedProviderName, startupErr)
 
 	// Non-interactive mode cannot recover via prompt.
-	if !term.IsTerminal(int(os.Stdin.Fd())) {
+	if isNonInteractive() {
 		return "", "", fmt.Errorf("failed to initialize provider %s: running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `ledit agent` interactively: %w", failedProviderName, startupErr)
 	}
 

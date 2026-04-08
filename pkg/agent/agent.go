@@ -19,7 +19,6 @@ import (
 	"github.com/alantheprice/ledit/pkg/security"
 	"github.com/alantheprice/ledit/pkg/validation"
 	"github.com/alantheprice/ledit/pkg/utils"
-	"golang.org/x/term"
 )
 
 const (
@@ -314,11 +313,31 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		return agent, nil
 	}
 
+	// Non-interactive fast-fail: check provider availability before entering
+	// the retry loop. In non-interactive mode (daemon, piped input, CI),
+	// we cannot prompt for provider selection or API keys, so fail early with
+	// a clear message if no provider is usable.
+	//
+	// NOTE: This early-exit path is not directly testable under `go test`
+	// because isRunningUnderTest() returns true for all test binaries
+	// (which inject -test.* flags into os.Args). End-to-end validation is
+	// covered by webui integration tests and manual daemon testing.
+	if isNonInteractive() && !isRunningUnderTest() {
+		resolvedType, _, resolveErr := configManager.ResolveProviderModel("", model)
+		if resolveErr != nil {
+			return nil, fmt.Errorf("no provider configured. running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `ledit agent` interactively: %w", resolveErr)
+		}
+		// Provider resolved — ensure API key exists without prompting.
+		if keyErr := configManager.EnsureAPIKey(resolvedType); keyErr != nil {
+			return nil, fmt.Errorf("no provider configured. running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `ledit agent` interactively: %w", keyErr)
+		}
+	}
+
 	clientType, finalModel, err = configManager.ResolveProviderModel("", model)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[WARN] Failed to resolve configured provider/model: %v\n", err)
 		// Non-interactive: don't call SelectNewProvider (it prompts on stdin)
-		if !term.IsTerminal(int(os.Stdin.Fd())) {
+		if isNonInteractive() {
 			return nil, fmt.Errorf("no provider configured. running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `ledit agent` interactively")
 		}
 		fmt.Fprintf(os.Stderr, "[tool] Selecting an available provider...\n")

@@ -662,8 +662,8 @@ export default function useWebSocketEvents({
         logEntry.level = 'info';
         setState((prev) => ({
           ...prev,
-          provider: String(eventData?.provider || prev.provider),
-          model: String(eventData?.model || prev.model),
+          provider: String(eventData?.provider ?? prev.provider),
+          model: String(eventData?.model ?? prev.model),
           stats: {
             ...prev.stats,
             ...eventData,

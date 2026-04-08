@@ -3,6 +3,7 @@ package webui
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -80,6 +81,12 @@ func decodeJSON(t *testing.T, rec *httptest.ResponseRecorder, v interface{}) {
 func getConfigManager(t *testing.T, ws *ReactWebServer) *configuration.Manager {
 	t.Helper()
 	agentInst, err := ws.getClientAgent("test-client")
+	if err != nil && errors.Is(err, ErrNoProviderConfigured) {
+		// If no provider is configured, create a config manager directly.
+		cm, createErr := configuration.NewManagerSilent()
+		require.NoError(t, createErr)
+		return cm
+	}
 	require.NoError(t, err)
 	require.NotNil(t, agentInst)
 	cm := agentInst.GetConfigManager()

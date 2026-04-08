@@ -1,18 +1,18 @@
 import { useState } from 'react';
 import {
-  FolderGit2,
   Plus,
   X,
   ChevronRight,
   ChevronDown,
   GitBranch,
   AlertCircle,
+  RefreshCw,
 } from 'lucide-react';
 import { useWorktrees } from '../hooks/useWorktrees';
 import './WorktreePanel.css';
 
 interface WorktreePanelProps {
-  onClose: () => void;
+  onClose?: () => void;
 }
 
 interface CreateWorktreeDialogProps {
@@ -118,7 +118,7 @@ function CreateWorktreeDialog({ isOpen, onClose, onCreate }: CreateWorktreeDialo
   );
 }
 
-export default function WorktreePanel({ onClose }: WorktreePanelProps) {
+export default function WorktreePanel({ onClose: _onClose }: WorktreePanelProps) {
   const { worktrees, currentBranch, isLoading, error, refresh, createWorktree, removeWorktree, checkoutWorktree } =
     useWorktrees();
 
@@ -147,16 +147,7 @@ export default function WorktreePanel({ onClose }: WorktreePanelProps) {
 
   if (isLoading) {
     return (
-      <div className="worktree-panel">
-        <div className="worktree-panel-header">
-          <h2>
-            <FolderGit2 size={20} />
-            Git Worktrees
-          </h2>
-          <button className="worktree-panel-close" onClick={onClose} aria-label="Close">
-            <X size={18} />
-          </button>
-        </div>
+      <div className="worktree-panel embedded">
         <div className="worktree-panel-content worktree-loading">
           <p>Loading worktrees...</p>
         </div>
@@ -165,24 +156,14 @@ export default function WorktreePanel({ onClose }: WorktreePanelProps) {
   }
 
   return (
-    <div className="worktree-panel">
-      <div className="worktree-panel-header">
-        <h2>
-          <FolderGit2 size={20} />
-          Git Worktrees
-        </h2>
-        <button className="worktree-panel-close" onClick={onClose} aria-label="Close">
-          <X size={18} />
-        </button>
-      </div>
-
+    <div className="worktree-panel embedded">
       <div className="worktree-panel-toolbar">
         <button className="worktree-btn-secondary" onClick={() => setIsCreateDialogOpen(true)}>
           <Plus size={16} />
           New Worktree
         </button>
-        <button className="worktree-btn-icon" onClick={refresh} aria-label="Refresh">
-          <GitBranch size={16} />
+        <button className="worktree-btn-icon" onClick={refresh} aria-label="Refresh worktrees">
+          <RefreshCw size={16} />
         </button>
       </div>
 

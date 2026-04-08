@@ -3,7 +3,11 @@
   flex-direction: column;
   height: 100%;
   background: var(--panel-bg);
-  border-left: 1px solid var(--border-color);
+}
+
+.worktree-panel.embedded {
+  border-left: none;
+  background: transparent;
 }
 
 .worktree-panel-header {

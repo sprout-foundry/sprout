@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/agent"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/events"
 	"github.com/alantheprice/ledit/pkg/security"
 	"github.com/alantheprice/ledit/pkg/providercatalog"
@@ -103,6 +104,21 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int) 
 
 	securityPromptMgr := security.NewSecurityPromptManager()
 	security.SetGlobalPromptManager(securityPromptMgr)
+
+	// Run startup permission check
+	if configDir, err := configuration.GetConfigDir(); err == nil {
+		// Check for symlinks pointing outside the config directory
+		symlinkWarnings := security.CheckAllSymlinks(configDir)
+		if len(symlinkWarnings) > 0 {
+			log.Printf("[security] Symlink warnings:")
+			for _, warn := range symlinkWarnings {
+				log.Printf("  %s", warn)
+			}
+		}
+
+		// Run the full permission check
+		security.RunStartupCheck(configDir)
+	}
 
 	return &ReactWebServer{
 		agent:           agent,

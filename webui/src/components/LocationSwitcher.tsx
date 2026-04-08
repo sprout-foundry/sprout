@@ -44,6 +44,8 @@ interface RemoteWorkspaceContext {
   sessionKey?: string;
   launcherUrl?: string;
   homePath?: string;
+  /** True when this daemon was reached via an SSH proxy (nested SSH not allowed). */
+  isProxy?: boolean;
 }
 
 interface SSHBrowseQuery {
@@ -404,12 +406,13 @@ function LocationSwitcher({
         setWorkspaceRoot(nextWorkspaceRoot);
         setDaemonRoot(nextDaemonRoot);
         setInputValue(nextWorkspaceRoot);
-        if (workspace.ssh_context?.is_remote && workspace.ssh_context.host_alias) {
+                if (workspace.ssh_context?.is_remote && workspace.ssh_context.host_alias) {
           const nextRemoteContext = {
             hostAlias: workspace.ssh_context.host_alias,
             sessionKey: workspace.ssh_context.session_key,
             launcherUrl: workspace.ssh_context.launcher_url,
             homePath: workspace.ssh_context.home_path,
+            isProxy: true,
           };
           setRemoteContext(nextRemoteContext);
           if (nextRemoteContext.homePath) {
@@ -419,8 +422,7 @@ function LocationSwitcher({
             }));
           }
           addRemoteRecentWorkspace(nextRemoteContext.hostAlias, nextWorkspaceRoot);
-        } else {
-          // ssh_context absent — fall back to the proxy base injected when
+        } else {// ssh_context absent — fall back to the proxy base injected when
           // serving the SSH proxy page (covers older remote binaries).
           const proxyCtx = getSSHProxyContext();
           if (proxyCtx) {
@@ -792,6 +794,7 @@ function LocationSwitcher({
             sessionKey: response.ssh_context.session_key,
             launcherUrl: response.ssh_context.launcher_url,
             homePath: response.ssh_context.home_path,
+            isProxy: true,
           };
           setRemoteContext(nextRemoteContext);
           if (nextRemoteContext.homePath) {
@@ -876,6 +879,7 @@ function LocationSwitcher({
           sessionKey: workspace.ssh_context.session_key,
           launcherUrl: workspace.ssh_context.launcher_url,
           homePath: workspace.ssh_context.home_path,
+          isProxy: true,
         };
         setRemoteContext(nextRemoteContext);
         if (nextRemoteContext.homePath) {
@@ -1149,22 +1153,34 @@ function LocationSwitcher({
       }`}
     >
       {/* ── Host / connection indicator button (icon only) ── */}
-      <button
-        ref={sshBtnRef}
-        type="button"
-        className={`location-host-btn ${remoteContext ? 'ssh-active' : ''}`}
-        onClick={toggleSshPanel}
-        aria-expanded={isSshPanelOpen}
-        aria-haspopup="listbox"
-        disabled={!isConnected}
-        title={remoteContext ? `SSH: ${remoteContext.hostAlias} — click to manage` : 'Local — click to connect via SSH'}
-      >
-        {remoteContext ? (
+      {remoteContext?.isProxy ? (
+        <button
+          type="button"
+          className="location-host-btn ssh-active"
+          title={`SSH: ${remoteContext.hostAlias} (remote session)`}
+          tabIndex={-1}
+          aria-label={`Connected via SSH to ${remoteContext.hostAlias}`}
+        >
           <Server size={13} className="location-host-btn-icon" />
-        ) : (
-          <Monitor size={13} className="location-host-btn-icon" />
-        )}
-      </button>
+        </button>
+      ) : (
+        <button
+          ref={sshBtnRef}
+          type="button"
+          className={`location-host-btn ${remoteContext ? 'ssh-active' : ''}`}
+          onClick={toggleSshPanel}
+          aria-expanded={isSshPanelOpen}
+          aria-haspopup="listbox"
+          disabled={!isConnected}
+          title={remoteContext ? `SSH: ${remoteContext.hostAlias} — click to manage` : 'Local — click to connect via SSH'}
+        >
+          {remoteContext ? (
+            <Server size={13} className="location-host-btn-icon" />
+          ) : (
+            <Monitor size={13} className="location-host-btn-icon" />
+          )}
+        </button>
+      )}
 
       {/* ── Workspace picker button ── */}
       <button
@@ -1186,8 +1202,8 @@ function LocationSwitcher({
         )}
       </button>
 
-      {/* ── SSH panel popover ── */}
-      {isSshPanelOpen ? (
+      {/* ── SSH panel popover (hidden in SSH proxy mode — no SSH-hopping) ── */}
+      {isSshPanelOpen && !remoteContext?.isProxy ? (
         <div
           ref={sshPanelRef}
           className="location-switcher-popover location-ssh-panel"

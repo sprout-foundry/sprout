@@ -46,5 +46,45 @@ func RedactConfig(cfg *Config) Config {
 		}
 	}
 
+	// Deep-copy APITimeouts (pointer field)
+	if cfg.APITimeouts != nil {
+		timeoutCopy := *cfg.APITimeouts
+		redacted.APITimeouts = &timeoutCopy
+	}
+
+	// Deep-copy SubagentTypes (map of structs with slice fields)
+	if cfg.SubagentTypes != nil {
+		redacted.SubagentTypes = make(map[string]SubagentType, len(cfg.SubagentTypes))
+		for k, v := range cfg.SubagentTypes {
+			// Deep copy the struct's slice fields
+			subagentCopy := v
+			if v.AllowedTools != nil {
+				subagentCopy.AllowedTools = make([]string, len(v.AllowedTools))
+				copy(subagentCopy.AllowedTools, v.AllowedTools)
+			}
+			if v.Aliases != nil {
+				subagentCopy.Aliases = make([]string, len(v.Aliases))
+				copy(subagentCopy.Aliases, v.Aliases)
+			}
+			redacted.SubagentTypes[k] = subagentCopy
+		}
+	}
+
+	// Deep-copy Skills (map of structs with map fields)
+	if cfg.Skills != nil {
+		redacted.Skills = make(map[string]Skill, len(cfg.Skills))
+		for k, v := range cfg.Skills {
+			// Deep copy the struct's map field
+			skillCopy := v
+			if v.Metadata != nil {
+				skillCopy.Metadata = make(map[string]string, len(v.Metadata))
+				for mk, mv := range v.Metadata {
+					skillCopy.Metadata[mk] = mv
+				}
+			}
+			redacted.Skills[k] = skillCopy
+		}
+	}
+
 	return redacted
 }

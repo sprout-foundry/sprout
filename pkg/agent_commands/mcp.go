@@ -392,16 +392,19 @@ func (m *MCPCommand) listServers() error {
 		return fmt.Errorf("failed to load MCP config: %w", err)
 	}
 
+	// Redact MCP config to remove sensitive data before displaying
+	redactedConfig := mcp.RedactMCPConfig(mcpConfig)
+
 	fmt.Println("MCP Configuration")
 	fmt.Println("==================")
-	fmt.Printf("Enabled: %t\n", mcpConfig.Enabled)
-	fmt.Printf("Auto-start: %t\n", mcpConfig.AutoStart)
-	fmt.Printf("Auto-discover: %t\n", mcpConfig.AutoDiscover)
-	fmt.Printf("Default timeout: %v\n", mcpConfig.Timeout)
-	fmt.Printf("Total servers: %d\n", len(mcpConfig.Servers))
+	fmt.Printf("Enabled: %t\n", redactedConfig.Enabled)
+	fmt.Printf("Auto-start: %t\n", redactedConfig.AutoStart)
+	fmt.Printf("Auto-discover: %t\n", redactedConfig.AutoDiscover)
+	fmt.Printf("Default timeout: %v\n", redactedConfig.Timeout)
+	fmt.Printf("Total servers: %d\n", len(redactedConfig.Servers))
 	fmt.Println()
 
-	if len(mcpConfig.Servers) == 0 {
+	if len(redactedConfig.Servers) == 0 {
 		fmt.Println("No MCP servers configured.")
 		fmt.Println("Run '/mcp add' to add a server.")
 		return nil
@@ -410,7 +413,7 @@ func (m *MCPCommand) listServers() error {
 	fmt.Println("Configured Servers:")
 	fmt.Println("-------------------")
 
-	for name, server := range mcpConfig.Servers {
+	for name, server := range redactedConfig.Servers {
 		fmt.Printf("[signal] %s\n", name)
 		if server.Type == "http" {
 			fmt.Printf("   Type: HTTP Remote Server\n")
@@ -428,9 +431,8 @@ func (m *MCPCommand) listServers() error {
 
 		if len(server.Env) > 0 {
 			fmt.Printf("   Environment vars: ")
-			redactedEnv := credentials.RedactEnvMap(server.Env)
-			envEntries := make([]string, 0, len(redactedEnv))
-			for key, value := range redactedEnv {
+			envEntries := make([]string, 0, len(server.Env))
+			for key, value := range server.Env {
 				envEntries = append(envEntries, key+"="+value)
 			}
 			fmt.Printf("%s\n", strings.Join(envEntries, ", "))
@@ -439,9 +441,8 @@ func (m *MCPCommand) listServers() error {
 		// Show credentials if present (placeholder references are safe; actual secrets are masked)
 		if len(server.Credentials) > 0 {
 			fmt.Printf("   Credentials: ")
-			redactedCreds := credentials.RedactMap(server.Credentials)
-			credEntries := make([]string, 0, len(redactedCreds))
-			for key, value := range redactedCreds {
+			credEntries := make([]string, 0, len(server.Credentials))
+			for key, value := range server.Credentials {
 				credEntries = append(credEntries, key+"="+value)
 			}
 			fmt.Printf("%s\n", strings.Join(credEntries, ", "))

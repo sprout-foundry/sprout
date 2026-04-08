@@ -14,7 +14,10 @@ import (
 // commonSecretPrefixes are env var prefixes that are typically NOT secrets
 var commonSecretPrefixes = []string{
 	"PATH", "HOME", "NODE", "PYTHON", "JAVA", "GO", "GOPATH", "GOROOT",
-	"NPM", "NVM", "CARGO", "RUSTUP", "LEDIT_", "MCP_",
+	"NPM", "NVM", "CARGO", "RUSTUP", "MCP_",
+	"LEDIT_CONFIG", "LEDIT_MODE", "LEDIT_WORKSPACE", "LEDIT_PROVIDER",
+	"LEDIT_MODEL", "LEDIT_FEATURE", "LEDIT_SESSION", "LEDIT_TAB",
+	"LEDIT_EDITOR", "LEDIT_THEME", "LEDIT_TERMINAL",
 }
 
 // secretKeywords are keywords that indicate an env var likely contains secrets.
@@ -38,6 +41,19 @@ var knownSecretVars = []string{
 	"OPENROUTER_API_KEY",
 	"LMSTUDIO_API_KEY",
 	"JINAAI_API_KEY",
+	"BIGQUERY_API_KEY",
+	"FIREWORKS_API_KEY",
+	"FIREWORKS_AI_API_KEY",
+	"GOOGLE_API_KEY",
+	"GOOGLE_GENERATIVE_AI_API_KEY",
+	"GROQ_API_KEY",
+	"MISTRAL_API_KEY",
+	"DEEPSEEK_API_KEY",
+	"TOGETHER_API_KEY",
+	"TOGETHER_AI_API_KEY",
+	"PERPLEXITY_API_KEY",
+	"COHERE_API_KEY",
+	"VOYAGE_API_KEY",
 }
 
 // IsSecretEnvVar returns true if the env var name looks like it contains credentials.

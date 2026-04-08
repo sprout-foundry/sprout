@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"sort"
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/alantheprice/ledit/pkg/security"
 	"github.com/alantheprice/ledit/pkg/trace"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -40,6 +42,29 @@ var (
 	agentPromptStdin           bool
 )
 
+// runStartupPermissionCheck performs a security check on config file permissions
+// and logs warnings if any files have insecure permissions.
+func runStartupPermissionCheck() error {
+	configDir, err := configuration.GetConfigDir()
+	if err != nil {
+		return fmt.Errorf("failed to get config directory: %w", err)
+	}
+
+	// Check for symlinks pointing outside the config directory
+	symlinkWarnings := security.CheckAllSymlinks(configDir)
+	if len(symlinkWarnings) > 0 {
+		log.Printf("[security] Symlink warnings:")
+		for _, warn := range symlinkWarnings {
+			log.Printf("  %s", warn)
+		}
+	}
+
+	// Run the full permission check
+	security.RunStartupCheck(configDir)
+
+	return nil
+}
+
 func createChatAgent() (*agent.Agent, error) {
 	var chatAgent *agent.Agent
 	var err error
@@ -57,6 +82,11 @@ func createChatAgent() (*agent.Agent, error) {
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize agent: %w", err)
+	}
+
+	// Run startup permission check
+	if err := runStartupPermissionCheck(); err != nil {
+		log.Printf("[security] %v", err)
 	}
 
 	if agentSystemPrompt != "" {

@@ -67,8 +67,8 @@ export const loadPersistedAppState = (): Partial<AppState> | null => {
         }))
       : [];
     return {
-      provider: typeof parsed.provider === 'string' ? parsed.provider : '',
-      model: typeof parsed.model === 'string' ? parsed.model : '',
+      provider: typeof parsed.provider === 'string' ? (parsed.provider || '') : '',
+      model: typeof parsed.model === 'string' ? (parsed.model || '') : '',
       sessionId: typeof parsed.sessionId === 'string' ? parsed.sessionId : null,
       queryCount: typeof parsed.queryCount === 'number' ? parsed.queryCount : 0,
       currentView: ['chat', 'editor', 'git'].includes(parsed.currentView) ? parsed.currentView : 'chat',

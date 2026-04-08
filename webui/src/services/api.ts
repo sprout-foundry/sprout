@@ -364,6 +364,17 @@ class ApiService {
     return response.json();
   }
 
+  async skipOnboarding(): Promise<{ success: boolean; provider: string; model: string }> {
+    const response = await clientFetch('/api/onboarding/skip', {
+      method: 'POST',
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || 'Failed to skip onboarding');
+    }
+    return response.json();
+  }
+
   async getFiles(): Promise<FilesResponse> {
     const response = await clientFetch('/api/files');
     if (!response.ok) {

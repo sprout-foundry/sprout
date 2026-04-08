@@ -76,7 +76,7 @@ func Initialize() (*Config, *APIKeys, error) {
 	needsSetup := false
 	if !isFirstRun {
 		currentProvider := config.LastUsedProvider
-		if RequiresAPIKey(currentProvider) && !HasProviderAuth(currentProvider) {
+		if currentProvider != "editor" && RequiresAPIKey(currentProvider) && !HasProviderAuth(currentProvider) {
 			needsSetup = true
 			if !isCI {
 				fmt.Printf("\n[WARN] Current provider '%s' requires an API key but none is configured.\n", getProviderDisplayName(currentProvider))
@@ -501,6 +501,9 @@ func addNewProvider(apiKeys *APIKeys) (string, error) {
 
 // validateProviderSetup ensures the provider can actually be used
 func validateProviderSetup(provider string) error {
+	if provider == "editor" {
+		return nil // Editor-only mode — no provider validation needed
+	}
 	if provider == "" {
 		return fmt.Errorf("no provider selected")
 	}

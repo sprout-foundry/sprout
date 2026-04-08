@@ -12,6 +12,8 @@ export interface OnboardingDialogProps {
   onProviderChange: (providerID: string) => void;
   /** Callback: complete onboarding (parent should bake in any state updater). */
   onComplete: () => Promise<void>;
+  /** Callback: skip onboarding and use as editor-only mode */
+  onSkip: () => Promise<void>;
   onRefresh: () => Promise<void>;
   onInstallWsl: () => Promise<void>;
   onInstallGitBash: () => Promise<void>;
@@ -27,6 +29,7 @@ function OnboardingDialog({
   windowsGuidance,
   onProviderChange,
   onComplete,
+  onSkip,
   onRefresh,
   onInstallWsl,
   onInstallGitBash,
@@ -221,7 +224,12 @@ function OnboardingDialog({
         {onboarding.error && <div className="onboarding-error">{onboarding.error}</div>}
         {onboarding.platformActionMessage && <div className="onboarding-help">{onboarding.platformActionMessage}</div>}
 
+        <div className="onboarding-editor-only-note">Want to explore first? You can set up AI later from Settings.</div>
+
         <div className="onboarding-actions">
+          <button type="button" className="onboarding-skip-btn" onClick={onSkip} disabled={onboarding.submitting || onboarding.checking}>
+            Skip — use as editor
+          </button>
           <button type="button" onClick={onRefresh} disabled={onboarding.submitting}>
             Refresh
           </button>

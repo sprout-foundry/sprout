@@ -1169,3 +1169,37 @@ body,
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+.onboarding-skip-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 6px 12px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.onboarding-skip-btn:hover:not(:disabled) {
+  color: var(--text-primary);
+}
+
+.onboarding-skip-btn:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+.onboarding-skip-btn:focus-visible {
+  text-decoration: none;
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.onboarding-editor-only-note {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  opacity: 0.8;
+}

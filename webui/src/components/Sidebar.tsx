@@ -30,7 +30,7 @@ import LeditLogo from './LeditLogo';
 import LocationSwitcher from './LocationSwitcher';
 import WorktreePanel from './WorktreePanel';
 
-type SectionTab = 'git' | 'logs' | 'files' | 'settings' | 'search' | 'worktrees';
+type SectionTab = 'git' | 'logs' | 'files' | 'settings' | 'search';
 
 interface SidebarProps {
   isConnected: boolean;
@@ -98,7 +98,6 @@ const SECTION_TABS: { id: SectionTab; icon: LucideIcon; label: string }[] = [
   { id: 'search', icon: Search, label: 'Search' },
   { id: 'settings', icon: Settings, label: 'Settings' },
   { id: 'logs', icon: ScrollText, label: 'Logs' },
-  { id: 'worktrees', icon: GitBranch, label: 'Worktrees' },
 ];
 
 const SIDEBAR_MIN_WIDTH = 200;
@@ -163,8 +162,7 @@ function Sidebar({
   const [isLoadingProviders, setIsLoadingProviders] = useState(false);
   const hasHydratedProviderStateRef = useRef(false);
   const [selectedSection, setSelectedSection] = useState<SectionTab>('git');
-  const [gitSubTab, setGitSubTab] = useState<'changes' | 'history'>('changes');
-  const [worktreePanelOpen, setWorktreePanelOpen] = useState(false);
+  const [gitSubTab, setGitSubTab] = useState<'changes' | 'history' | 'worktrees'>('changes');
   const [settings, setSettings] = useState<LeditSettings | null>(null);
   const apiService = ApiService.getInstance();
   const effectiveSidebarCollapsed = !isMobile && !!sidebarCollapsed;
@@ -877,24 +875,6 @@ function Sidebar({
     return <SearchView onFileClick={onFileClick} />;
   };
 
-  /** Worktrees section: git worktree management */
-  const renderWorktreesSection = () => {
-    if (!worktreePanelOpen) {
-      return (
-        <div className="worktree-panel-trigger" onClick={() => setWorktreePanelOpen(true)}>
-          <GitBranch size={20} />
-          <span>Git Worktrees</span>
-        </div>
-      );
-    }
-
-    return (
-      <div className="worktree-panel-wrapper">
-        <WorktreePanel onClose={() => setWorktreePanelOpen(false)} />
-      </div>
-    );
-  };
-
   const renderContentPane = () => {
     switch (selectedSection) {
       case 'git': {
@@ -932,16 +912,30 @@ function Sidebar({
                   <History size={14} />
                   <span>Commit History</span>
                 </button>
+                <button
+                  type="button"
+                  role="tab"
+                  id="git-tab-worktrees"
+                  aria-controls="git-panel-worktrees"
+                  aria-selected={gitSubTab === 'worktrees'}
+                  className={`git-sidebar-tab ${gitSubTab === 'worktrees' ? 'active' : ''}`}
+                  onClick={() => setGitSubTab('worktrees')}
+                >
+                  <GitBranch size={14} />
+                  <span>Worktrees</span>
+                </button>
               </div>
             )}
 
             {/* Current Changes sub-tab: working tree panel */}
-            {gitSubTab === 'changes' ? (
+            {gitSubTab === 'changes' && (
               <div id="git-panel-current-changes" role="tabpanel" aria-labelledby="git-tab-current-changes">
                 {gitPanel ? <GitSidebarPanel {...gitPanel} /> : <div className="empty">Git unavailable</div>}
               </div>
-            ) : (
-              /* Commit History sub-tab: GitHistoryPanel */
+            )}
+
+            {/* Commit History sub-tab: GitHistoryPanel */}
+            {gitSubTab === 'history' && (
               <div
                 id="git-panel-commit-history"
                 role="tabpanel"
@@ -959,6 +953,13 @@ function Sidebar({
                 )}
               </div>
             )}
+
+            {/* Worktrees sub-tab: WorktreePanel */}
+            {gitSubTab === 'worktrees' && (
+              <div id="git-panel-worktrees" role="tabpanel" aria-labelledby="git-tab-worktrees">
+                <WorktreePanel onClose={() => setGitSubTab('changes')} />
+              </div>
+            )}
           </>
         );
       }
@@ -968,8 +969,6 @@ function Sidebar({
         return renderFilesSection();
       case 'search':
         return renderSearchSection();
-      case 'worktrees':
-        return renderWorktreesSection();
       case 'settings':
         return renderSettingsSection();
       default:

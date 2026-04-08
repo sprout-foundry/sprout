@@ -353,7 +353,11 @@ func (ws *ReactWebServer) handleAPIOnboardingStatus(w http.ResponseWriter, r *ht
 
 	setupRequired := false
 	reason := ""
-	if currentProvider == "" || currentProvider == "test" {
+	// If user has explicitly chosen editor-only mode, don't require setup
+	if currentProvider == "editor" {
+		setupRequired = false
+		reason = ""
+	} else if currentProvider == "" || currentProvider == "test" {
 		setupRequired = true
 		reason = "provider_not_configured"
 	} else if p, ok := indexByID[currentProvider]; ok && p.RequiresAPIKey && !p.HasCredential {
@@ -467,5 +471,32 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 		"message":  "Onboarding completed",
 		"provider": clientAgent.GetProvider(),
 		"model":    clientAgent.GetModel(),
+	})
+}
+
+func (ws *ReactWebServer) handleAPIOnboardingSkip(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	cm := ws.getConfigManager(r, w)
+	if cm == nil {
+		return
+	}
+
+	// Set last used provider to "editor" to indicate editor-only mode
+	if err := cm.UpdateConfig(func(cfg *configuration.Config) error {
+		cfg.LastUsedProvider = "editor"
+		return nil
+	}); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to skip onboarding: %v", err))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success":  true,
+		"provider": "editor",
+		"model":    "",
 	})
 }

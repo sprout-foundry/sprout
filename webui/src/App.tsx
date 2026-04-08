@@ -1,4 +1,4 @@
-import { useState, useMemo, type Dispatch, type SetStateAction } from 'react';
+import { useState, useMemo, useRef, type Dispatch, type SetStateAction } from 'react';
 import ErrorBoundary from './components/ErrorBoundary';
 import AppContent from './components/AppContent';
 import UIManager from './components/UIManager';
@@ -265,6 +265,10 @@ function AppWithProviders({
   const { loadChatSessions, handleActiveChatChange, handleCreateChat, handleDeleteChat, handleRenameChat, createChatInWorktree } =
     useChatSessions({ setState, activeChatIdRef, activeRequestsRef });
 
+  // ── Keep a ref in sync so sendMessage can check connection ────
+  const isConnectedRef = useRef(state.isConnected);
+  isConnectedRef.current = state.isConnected;
+
   // ── Message sending (depends on WS refs) ──────────────────────
   const { handleSendMessage, handleStopProcessing } = useMessageSending({
     setState,
@@ -272,6 +276,7 @@ function AppWithProviders({
     activeChatIdRef,
     activeRequestsRef,
     onRequestProviderSetup: () => onboardingHook.openProviderSetup(),
+    isConnectedRef,
   });
 
   // ── Auto-send queued messages (depends on handleSendMessage) ──

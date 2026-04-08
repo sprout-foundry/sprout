@@ -401,10 +401,17 @@ function MenuBarDropdown({
       if (!dropdownRef.current || !anchorRef) return;
       const anchorRect = anchorRef.getBoundingClientRect();
       const el = dropdownRef.current;
-      let left = anchorRect.left;
-      let top = anchorRect.bottom + 2;
       const vw = window.innerWidth;
       const vh = window.innerHeight;
+
+      // Pass 1: position below the anchor first
+      let left = anchorRect.left;
+      let top = anchorRect.bottom + 2;
+
+      el.style.left = `${left}px`;
+      el.style.top = `${top}px`;
+
+      // Pass 2: now read the actual rect at the positioned location
       const elRect = el.getBoundingClientRect();
       if (elRect.right > vw) {
         left = Math.max(2, vw - elRect.width - 4);
@@ -412,6 +419,10 @@ function MenuBarDropdown({
       if (elRect.bottom > vh) {
         top = anchorRect.top - elRect.height - 2;
       }
+      if (top < 0) {
+        top = 2;
+      }
+
       el.style.left = `${left}px`;
       el.style.top = `${top}px`;
     };

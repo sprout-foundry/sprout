@@ -392,7 +392,7 @@ func sanitizeValidationError(err error) string {
 
 	// Common error patterns to sanitize
 	switch {
-	case strings.Contains(errMsg, "401") || strings.Contains(errMsg, "unauthorized") || strings.Contains(errMsg, "invalid"):
+	case strings.Contains(errMsg, "401") || strings.Contains(errMsg, "unauthorized") || strings.Contains(errMsg, "invalid api key") || strings.Contains(errMsg, "authentication"):
 		return "Invalid API key. Please check your credentials and try again."
 	case strings.Contains(errMsg, "403") || strings.Contains(errMsg, "forbidden"):
 		return "Access forbidden. Your API key may not have the required permissions."
@@ -405,6 +405,7 @@ func sanitizeValidationError(err error) string {
 	case strings.Contains(errMsg, "network") || strings.Contains(errMsg, "dial"):
 		return "Network error. Please check your internet connection and try again."
 	default:
-		return fmt.Sprintf("Validation failed: %s", errMsg)
+		// Don't leak raw error messages - they may contain internal paths or details
+		return "Validation failed. Please check your API key and network connection."
 	}
 }

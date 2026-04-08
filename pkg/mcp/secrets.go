@@ -26,9 +26,18 @@ var secretKeywords = []string{
 	"PRIVATE", "AUTH", "PAT", "BEARER", "API_KEY",
 }
 
-// knownSecretVars are specific env var names that are known to be secrets
+// knownSecretVars are specific env var names that are known to be secrets.
+// NOTE: Keep this list aligned with pkg/credentials/redact.go knownSecretVars.
+// Due to a circular-import constraint (pkg/mcp → pkg/credentials), the list is
+// duplicated. If you add a var here, also add it there.
 var knownSecretVars = []string{
 	"GITHUB_PERSONAL_ACCESS_TOKEN",
+	"OPENAI_API_KEY",
+	"ANTHROPIC_API_KEY",
+	"DEEPINFRA_API_KEY",
+	"OPENROUTER_API_KEY",
+	"LMSTUDIO_API_KEY",
+	"JINAAI_API_KEY",
 }
 
 // IsSecretEnvVar returns true if the env var name looks like it contains credentials.

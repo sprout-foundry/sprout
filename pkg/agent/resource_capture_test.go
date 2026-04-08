@@ -117,7 +117,7 @@ func TestResourceDirectory_UsesConfigFallbackAndIsRelativeToWorkingDir(t *testin
 	}
 	t.Cleanup(func() { _ = os.Chdir(originalWD) })
 
-	manager, err := configuration.NewManager()
+	manager, err := configuration.NewManagerSilent()
 	if err != nil {
 		t.Fatalf("failed to create config manager: %v", err)
 	}

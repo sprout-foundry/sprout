@@ -18,8 +18,8 @@ import (
 	"github.com/alantheprice/ledit/pkg/noninteractive"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/alantheprice/ledit/pkg/security"
-	"github.com/alantheprice/ledit/pkg/validation"
 	"github.com/alantheprice/ledit/pkg/utils"
+	"github.com/alantheprice/ledit/pkg/validation"
 )
 
 const (
@@ -344,7 +344,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		fmt.Fprintf(os.Stderr, "[WARN] Failed to resolve configured provider/model: %v\n", err)
 		// Non-interactive: don't call SelectNewProvider (it prompts on stdin)
 		if isNonInteractive() {
-			return nil, fmt.Errorf("no provider configured. Running in non-interactive mode. "+noninteractive.HelpHint)
+			return nil, fmt.Errorf("no provider configured. Running in non-interactive mode. " + noninteractive.HelpHint)
 		}
 		fmt.Fprintf(os.Stderr, "[tool] Selecting an available provider...\n")
 		clientType, err = configManager.SelectNewProvider()
@@ -465,12 +465,12 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		activePersona:             "orchestrator",
 		workspaceRoot:             workspaceRoot,
 		securityApprovalMgr:       NewSecurityApprovalManager(),
-			outputRouter:              NewOutputRouter(nil, nil),
-			ignoredSecurityConcerns:   make(map[string]map[string]bool),
-		}
+		outputRouter:              NewOutputRouter(nil, nil),
+		ignoredSecurityConcerns:   make(map[string]map[string]bool),
+	}
 
-		agent.optimizer.SetLLMClient(agent.client, agent.GetProvider(), func(line string) {
-			agent.PrintLineAsync(line)
+	agent.optimizer.SetLLMClient(agent.client, agent.GetProvider(), func(line string) {
+		agent.PrintLineAsync(line)
 	})
 
 	// Wire output router with the agent reference now that agent exists

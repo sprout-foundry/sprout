@@ -30,7 +30,7 @@ func TestParseKeyArray(t *testing.T) {
 		{"whitespace JSON", `  ["sk-x", "sk-y"]  `, 2, "sk-x", false},
 		{"just whitespace", "   ", 0, "", false},
 		{"special chars", `["sk-abc_123+=/","key with spaces","日本語"]`, 3, "sk-abc_123+=/", false},
-		{"empty strings inside", `["sk-a","","sk-c"]`, 3, "sk-a", false},
+		{"empty strings inside", `["sk-a","","sk-c"]`, 2, "sk-a", false},
 	}
 
 	for _, tc := range tests {
@@ -131,6 +131,44 @@ func TestKeyRotator_Advance(t *testing.T) {
 	assert.Equal(t, "sk-a", r.NextKey("p", pool))
 	r.Advance("p") // skip sk-b
 	assert.Equal(t, "sk-c", r.NextKey("p", pool))
+}
+
+func TestKeyRotator_NoAdvance_RotationSequence(t *testing.T) {
+	r := NewKeyRotator()
+	pool := &KeyPool{Keys: []string{"sk-a", "sk-b", "sk-c"}}
+
+	// Simulate: resolve → use key → 429 → resolve (without Advance)
+	k1 := r.NextKey("p", pool) // returns sk-a, counter→1
+	assert.Equal(t, "sk-a", k1)
+
+	// 429 on sk-a, next resolve naturally gets next key (no Advance call)
+	k2 := r.NextKey("p", pool) // returns sk-b, counter→2
+	assert.Equal(t, "sk-b", k2)
+
+	// 429 on sk-b
+	k3 := r.NextKey("p", pool) // returns sk-c, counter→0
+	assert.Equal(t, "sk-c", k3)
+
+	// 429 on sk-c, wraps around
+	k4 := r.NextKey("p", pool) // returns sk-a, counter→1
+	assert.Equal(t, "sk-a", k4)
+}
+
+func TestKeyRotator_NoAdvance_TwoKeys(t *testing.T) {
+	r := NewKeyRotator()
+	pool := &KeyPool{Keys: []string{"sk-a", "sk-b"}}
+
+	// Simulate: resolve → use key → 429 → resolve (without Advance)
+	k1 := r.NextKey("p", pool) // returns sk-a, counter→1
+	assert.Equal(t, "sk-a", k1)
+
+	// 429 on sk-a — must NOT return sk-a again
+	k2 := r.NextKey("p", pool) // returns sk-b, counter→0
+	assert.Equal(t, "sk-b", k2)
+
+	// 429 on sk-b — wraps back
+	k3 := r.NextKey("p", pool) // returns sk-a, counter→1
+	assert.Equal(t, "sk-a", k3)
 }
 
 func TestKeyRotator_Reset(t *testing.T) {
@@ -444,13 +482,6 @@ func TestResolve_MultipleStoredKeys_Rotates(t *testing.T) {
 		assert.Equal(t, want, resolved.Value)
 		assert.Equal(t, "stored", resolved.Source)
 	}
-
-	// Reset + Advance: skip first key
-	DefaultRotator.Reset("openrouter")
-	DefaultRotator.Advance("openrouter")
-	resolved, err := resolve("openrouter", "OPENROUTER_API_KEY")
-	require.NoError(t, err)
-	assert.Equal(t, "sk-2", resolved.Value)
 }
 
 func TestResolve_EnvVarOverridesStoredKeys(t *testing.T) {

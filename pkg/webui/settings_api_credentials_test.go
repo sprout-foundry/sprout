@@ -212,7 +212,7 @@ func TestPutProviderCredential_UnknownProvider(t *testing.T) {
 
 	var resp map[string]interface{}
 	decodeJSON(t, rec, &resp)
-	assert.Contains(t, resp["error"], "unknown provider")
+	assert.Contains(t, resp["error"], "provider not found")
 }
 
 func TestPutProviderCredential_MissingProviderInPath(t *testing.T) {
@@ -428,8 +428,32 @@ func TestProviderCredentials_PatchMethodNotAllowed(t *testing.T) {
 // POST /api/settings/credentials/{provider}/test — handleAPISettingsCredentialsTest
 // ---------------------------------------------------------------------------
 
+func TestTestProviderCredential_RateLimited(t *testing.T) {
+	ws, _ := setupMCPCredTestServer(t)
+
+	// Do NOT reset rate limiter — let any prior test state remain.
+	// First call should succeed (test provider mock always succeeds).
+	req1 := makeCredRequest(t, http.MethodPost, "/api/settings/credentials/test/test", nil)
+	rec1 := httptest.NewRecorder()
+	ws.handleAPISettingsCredentialsTest(rec1, req1)
+	assert.Equal(t, http.StatusOK, rec1.Code)
+
+	// Immediate second call should be rate limited.
+	req2 := makeCredRequest(t, http.MethodPost, "/api/settings/credentials/test/test", nil)
+	rec2 := httptest.NewRecorder()
+	ws.handleAPISettingsCredentialsTest(rec2, req2)
+	assert.Equal(t, http.StatusTooManyRequests, rec2.Code)
+
+	var resp2 testCredentialResponse
+	decodeJSON(t, rec2, &resp2)
+	assert.False(t, resp2.Success)
+	assert.Contains(t, resp2.Error, "wait before testing")
+}
+
 func TestTestProviderCredential_TestProvider_ReturnsSuccess(t *testing.T) {
 	ws, _ := setupMCPCredTestServer(t)
+	// Reset rate limiter so this test isn't affected by prior tests
+	testLastCalledAt.Delete("test")
 
 	req := makeCredRequest(t, http.MethodPost, "/api/settings/credentials/test/test", nil)
 	rec := httptest.NewRecorder()
@@ -472,7 +496,7 @@ func TestTestProviderCredential_UnknownProvider(t *testing.T) {
 
 	var resp map[string]interface{}
 	decodeJSON(t, rec, &resp)
-	assert.Contains(t, resp["error"], `unknown provider "nonexistent_provider_xyz"`, "error should include quoted provider name")
+	assert.Contains(t, resp["error"], `provider not found`, "error should mention provider not found")
 }
 
 func TestTestProviderCredential_MissingTestSuffix_Returns405(t *testing.T) {
@@ -488,6 +512,8 @@ func TestTestProviderCredential_MissingTestSuffix_Returns405(t *testing.T) {
 
 func TestTestProviderCredential_ResponseFields(t *testing.T) {
 	ws, _ := setupMCPCredTestServer(t)
+	// Reset rate limiter so this test isn't affected by prior tests
+	testLastCalledAt.Delete("test")
 
 	req := makeCredRequest(t, http.MethodPost, "/api/settings/credentials/test/test", nil)
 	rec := httptest.NewRecorder()

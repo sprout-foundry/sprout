@@ -31,6 +31,7 @@ type chatSession struct {
 	CurrentSessionID string    `json:"current_session_id"`
 	ActiveQuery      bool      `json:"active_query"`
 	CurrentQuery     string    `json:"current_query"`
+	IsPinned         bool      `json:"is_pinned"`
 	Provider         string    `json:"provider"`
 	Model            string    `json:"model"`
 	WorktreePath     string    `json:"worktree_path"`
@@ -220,6 +221,7 @@ func newChatSession(id, name string) *chatSession {
 		CreatedAt:    now,
 		LastActiveAt: now,
 		AgentState:   emptyAgentStateSnapshot(),
+		IsPinned:     false,
 	}
 }
 
@@ -275,6 +277,7 @@ type chatSessionInfo struct {
 	Provider         string    `json:"provider"`
 	Model            string    `json:"model"`
 	WorktreePath     string    `json:"worktree_path"`
+	IsPinned         bool      `json:"is_pinned"`
 }
 
 // toInfo copies the public fields from cs under cs.mu.
@@ -293,6 +296,7 @@ func (cs *chatSession) toInfo() chatSessionInfo {
 		Provider:         cs.Provider,
 		Model:            cs.Model,
 		WorktreePath:     cs.WorktreePath,
+		IsPinned:         cs.IsPinned,
 	}
 }
 
@@ -557,6 +561,7 @@ func (cs *chatSession) chatSessionSummary(isDefault bool) map[string]interface{}
 		"current_session_id": cs.agentSessionIDLocked(),
 		"active_query":       cs.ActiveQuery,
 		"is_default":         isDefault,
+		"is_pinned":          cs.IsPinned,
 	}
 	if cs.Provider != "" {
 		summary["provider"] = cs.Provider
@@ -588,6 +593,7 @@ func (cs *chatSession) chatSessionWithMessages() map[string]interface{} {
 		"current_session_id": cs.agentSessionIDLocked(),
 		"active_query":       cs.ActiveQuery,
 		"is_default":         cs.ID == defaultChatID,
+		"is_pinned":          cs.IsPinned,
 	}
 	if cs.Provider != "" {
 		summary["provider"] = cs.Provider

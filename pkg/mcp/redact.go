@@ -13,6 +13,12 @@ import (
 func RedactServerConfig(server MCPServerConfig) MCPServerConfig {
 	redacted := server
 
+	// Deep-copy slices to prevent shared-backing-array mutation via the returned value.
+	if len(server.Args) > 0 {
+		redacted.Args = make([]string, len(server.Args))
+		copy(redacted.Args, server.Args)
+	}
+
 	// Redact the Credentials map (keep placeholder refs as-is, mask actual values)
 	if server.Credentials != nil {
 		redacted.Credentials = credentials.RedactMap(server.Credentials)

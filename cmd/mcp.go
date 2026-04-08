@@ -221,7 +221,7 @@ func runMCPAdd() error {
 
 	fmt.Println()
 	fmt.Printf("[OK] %s configured successfully!\n", serverConfig.Name)
-	fmt.Printf("Command: %s %v\n", serverConfig.Command, serverConfig.Args)
+	fmt.Printf("Command: %s %v\n", serverConfig.Command, credentials.RedactLogLine(fmt.Sprintf("%v", serverConfig.Args)))
 	fmt.Println()
 	fmt.Printf("To test the configuration, run: ledit mcp test %s\n", serverName)
 	fmt.Println()
@@ -313,7 +313,7 @@ func setupGitMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
 
 	fmt.Println()
 	fmt.Println("[OK] Git MCP Server configured successfully!")
-	fmt.Printf("Command: %s %v\n", serverConfig.Command, serverConfig.Args)
+	fmt.Printf("Command: %s %v\n", serverConfig.Command, credentials.RedactLogLine(fmt.Sprintf("%v", serverConfig.Args)))
 	fmt.Println()
 	fmt.Println("To test the configuration, run: ledit mcp test git")
 	fmt.Println()
@@ -446,9 +446,9 @@ func setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 	fmt.Println("[OK] GitHub MCP Server configured successfully!")
 	if serverConfig.Type == "http" {
 		fmt.Printf("   Type: Remote HTTP server (OAuth)\n")
-		fmt.Printf("   URL:  %s\n", serverConfig.URL)
+		fmt.Printf("   URL:  %s\n", credentials.RedactLogLine(serverConfig.URL))
 	} else {
-		fmt.Printf("   Command: %s %v\n", serverConfig.Command, serverConfig.Args)
+		fmt.Printf("   Command: %s %v\n", serverConfig.Command, credentials.RedactLogLine(fmt.Sprintf("%v", serverConfig.Args)))
 	}
 	fmt.Println()
 
@@ -592,7 +592,7 @@ func setupPlaywrightMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) er
 
 	fmt.Println()
 	fmt.Println("[OK] Playwright MCP Server configured successfully!")
-	fmt.Printf("Command: %s %v\n", serverConfig.Command, serverConfig.Args)
+	fmt.Printf("Command: %s %v\n", serverConfig.Command, credentials.RedactLogLine(fmt.Sprintf("%v", serverConfig.Args)))
 	fmt.Println()
 	fmt.Println("To test the configuration, run: ledit mcp test playwright")
 	fmt.Println()
@@ -673,7 +673,7 @@ func setupChromeDevToolsMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader
 
 	fmt.Println()
 	fmt.Println("[OK] Chrome DevTools MCP Server configured successfully!")
-	fmt.Printf("Command: %s %v\n", serverConfig.Command, serverConfig.Args)
+	fmt.Printf("Command: %s %v\n", serverConfig.Command, credentials.RedactLogLine(fmt.Sprintf("%v", serverConfig.Args)))
 	fmt.Println()
 	fmt.Println("To test the configuration, run: ledit mcp test chrome-devtools")
 	fmt.Println()
@@ -819,7 +819,7 @@ func setupCustomMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader, regist
 
 	fmt.Println()
 	fmt.Printf("[OK] Custom MCP Server '%s' configured successfully!\n", serverName)
-	fmt.Printf("Command: %s %v\n", serverConfig.Command, serverConfig.Args)
+	fmt.Printf("Command: %s %v\n", serverConfig.Command, credentials.RedactLogLine(fmt.Sprintf("%v", serverConfig.Args)))
 	fmt.Println()
 	fmt.Printf("To test the configuration, run: ledit mcp test %s\n", serverName)
 
@@ -1040,7 +1040,7 @@ func runMCPTest(serverName string) error {
 
 	fmt.Printf("[test] Testing MCP Server: %s\n", serverName)
 	fmt.Println("========================")
-	fmt.Printf("Command: %s %v\n", serverConfig.Command, serverConfig.Args)
+	fmt.Printf("Command: %s %v\n", serverConfig.Command, credentials.RedactLogLine(fmt.Sprintf("%v", serverConfig.Args)))
 	fmt.Println()
 
 	// Create manager and client

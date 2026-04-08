@@ -480,6 +480,7 @@ func (ws *ReactWebServer) handleAPIOnboardingSkip(w http.ResponseWriter, r *http
 		return
 	}
 
+	clientID := ws.resolveClientID(r)
 	cm := ws.getConfigManager(r, w)
 	if cm == nil {
 		return
@@ -493,6 +494,11 @@ func (ws *ReactWebServer) handleAPIOnboardingSkip(w http.ResponseWriter, r *http
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to skip onboarding: %v", err))
 		return
 	}
+
+	// Sync state and notify the client so the frontend picks up the
+	// provider change without requiring a full status poll.
+	_ = ws.syncAgentStateForClient(clientID)
+	ws.publishProviderState(clientID)
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success":  true,

@@ -22,13 +22,20 @@
 }
 
 .input-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  min-height: 0;
+  align-items: flex-start;
   padding: 8px 12px 0;
-  border-bottom: none;
-  margin-bottom: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.input-header > * {
+  pointer-events: auto;
 }
 
 .input-info {
@@ -74,7 +81,7 @@
   line-height: 1.55;
   resize: none;
   outline: none;
-  padding: 14px 16px 12px 16px;
+  padding: 14px 16px 60px 16px;
   min-height: 56px;
   flex: 0 0 auto;
   overflow-y: auto;
@@ -265,6 +272,34 @@
 
 .queue-button-wrapper {
   position: relative;
+}
+
+.queue-add-button {
+  position: relative;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px dashed var(--border-default);
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.queue-add-button:hover:not(:disabled) {
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+  background: var(--bg-elevated);
+}
+
+.queue-add-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .queue-badge-button {
@@ -696,7 +731,7 @@
   .input-field {
     font-size: 16px;
     min-height: 44px;
-    padding: 10px 12px 44px 12px;
+    padding: 10px 12px 60px 12px;
   }
 
   .input-actions {

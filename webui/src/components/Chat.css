@@ -620,6 +620,25 @@
   box-shadow: var(--shadow-elevated);
 }
 
+.welcome-message.no-provider-state {
+  background: color-mix(in srgb, var(--bg-tertiary) 60%, var(--bg-secondary));
+  border-color: var(--border-subtle);
+}
+
+.welcome-message.no-provider-state .welcome-text {
+  color: var(--text-secondary);
+}
+
+.welcome-message.no-provider-state .welcome-hint {
+  color: var(--text-tertiary);
+  opacity: 0.85;
+}
+
+.welcome-message.no-provider-state .welcome-icon {
+  opacity: 0.5;
+  filter: grayscale(0.5);
+}
+
 .welcome-icon {
   font-size: 34px;
 }

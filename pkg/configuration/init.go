@@ -11,6 +11,7 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/agent_providers"
 	"github.com/alantheprice/ledit/pkg/credentials"
+	"github.com/alantheprice/ledit/pkg/noninteractive"
 	"golang.org/x/term"
 )
 
@@ -166,7 +167,7 @@ func Initialize() (*Config, *APIKeys, error) {
 func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 	// Non-interactive environments cannot prompt for provider selection.
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
-		return "", fmt.Errorf("no provider configured. Running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `ledit agent` interactively")
+		return "", fmt.Errorf("no provider configured. Running in non-interactive mode. "+noninteractive.HelpHint)
 	}
 
 	// Check which providers have API keys already
@@ -335,7 +336,7 @@ func EnsureProviderAPIKey(provider string, apiKeys *APIKeys) error {
 
 	// Non-interactive environments cannot prompt for API keys.
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
-		return fmt.Errorf("no API key for %s. running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `ledit agent` interactively", getProviderDisplayName(provider))
+		return fmt.Errorf("no API key for %s. Running in non-interactive mode. "+noninteractive.HelpHint, getProviderDisplayName(provider))
 	}
 
 	fmt.Println()
@@ -435,7 +436,7 @@ func GetAvailableProviders() []string {
 func SelectProvider(currentProvider string, apiKeys *APIKeys) (string, error) {
 	// Non-interactive environments cannot prompt for provider selection.
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
-		return "", fmt.Errorf("no provider configured. Running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `ledit agent` interactively")
+		return "", fmt.Errorf("no provider configured. Running in non-interactive mode. "+noninteractive.HelpHint)
 	}
 
 	available := GetAvailableProviders()

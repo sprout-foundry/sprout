@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
+	"path"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
@@ -154,12 +157,37 @@ type setCredentialRequest struct {
 	Value string `json:"value"`
 }
 
+// validateAndSetCredential validates a new API key before storing it.
+// If validation fails, the old key is preserved and an error is returned.
+// Returns true if validation succeeded and key was stored, false otherwise.
+func (ws *ReactWebServer) validateAndSetCredential(provider, newValue string) (bool, error) {
+	// Use the shared ValidateAndSaveAPIKey function which handles:
+	// - Mutex-protected read-modify-write (prevents race conditions)
+	// - Validation via ListModels API call
+	// - Restoration of old key on failure
+	modelCount, err := configuration.ValidateAndSaveAPIKey(provider, newValue)
+	if err != nil {
+		return false, fmt.Errorf("validation failed: %w", err)
+	}
+
+	// Validation succeeded - key is already stored in backend
+	log.Printf("[config] API key for %q validated successfully (%d models available)", provider, modelCount)
+	return true, nil
+}
+
 func (ws *ReactWebServer) handleAPISettingsCredentialsPut(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxSettingsBodyBytes)
 
 	// Extract provider name from URL path
 	provider := extractPathSegment(r.URL.Path, "/api/settings/credentials/")
 	if provider == "" {
+		writeJSONError(w, http.StatusBadRequest, "provider name is required in URL path")
+		return
+	}
+
+	// Sanitize provider name to prevent path traversal attacks
+	provider = path.Base(provider)
+	if provider == "" || provider == "." {
 		writeJSONError(w, http.StatusBadRequest, "provider name is required in URL path")
 		return
 	}
@@ -191,15 +219,25 @@ func (ws *ReactWebServer) handleAPISettingsCredentialsPut(w http.ResponseWriter,
 		}
 	}
 	if !validProvider {
-		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("unknown provider %q", provider))
+		writeJSONError(w, http.StatusBadRequest, "provider not found")
 		return
 	}
 
-	// Store the credential
-	if err := credentials.SetToActiveBackend(provider, req.Value); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to store credential: %v", err))
+	// Validate the new key BEFORE storing it
+	// This ensures we never replace a working key with a broken one
+	success, err := ws.validateAndSetCredential(provider, req.Value)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("API key validation failed: %s", sanitizeTestError(err)))
 		return
 	}
+
+	if !success {
+		writeJSONError(w, http.StatusBadRequest, "Failed to validate API key")
+		return
+	}
+
+	// Key validated successfully - the key is already stored by validateAndSetCredential
+	// No additional save needed - SetToActiveBackend was called in validation
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success":  true,
@@ -220,12 +258,35 @@ type testCredentialResponse struct {
 	Error        string   `json:"error,omitempty"`
 }
 
-func (ws *ReactWebServer) handleAPISettingsCredentialsTest(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
+// Per-provider rate limiter for the test-connection endpoint.
+var testLastCalledAt sync.Map // map[string]time.Time
 
+const testCooldown = 5 * time.Second
+
+// sanitizeTestError maps internal API errors to user-friendly messages.
+// Raw error strings may contain server-internal details (filesystem paths,
+// stack traces) that should not be exposed to the browser.
+func sanitizeTestError(err error) string {
+	lower := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(lower, "status 401") || strings.Contains(lower, "unauthorized"):
+		return "API key is invalid or expired"
+	case strings.Contains(lower, "status 403") || strings.Contains(lower, "forbidden"):
+		return "API key does not have permission to list models"
+	case strings.Contains(lower, "status 429") || strings.Contains(lower, "rate limit"):
+		return "Rate limited — please wait a moment and try again"
+	case strings.Contains(lower, "no such host") || strings.Contains(lower, "connection refused") || strings.Contains(lower, "network is unreachable"):
+		return "Unable to reach provider API. Check your network connection"
+	case strings.Contains(lower, "tls") || strings.Contains(lower, "certificate"):
+		return "TLS/SSL error connecting to provider API"
+	case strings.Contains(lower, "context canceled"):
+		return "Connection test was canceled"
+	default:
+		return "Connection test failed. Check your API key and network connection."
+	}
+}
+
+func (ws *ReactWebServer) handleAPISettingsCredentialsTest(w http.ResponseWriter, r *http.Request) {
 	// Only handle paths ending with /test
 	if !strings.HasSuffix(r.URL.Path, "/test") {
 		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -242,7 +303,10 @@ func (ws *ReactWebServer) handleAPISettingsCredentialsTest(w http.ResponseWriter
 	// Trim trailing /test from the extracted segment
 	provider = strings.TrimSuffix(provider, "/test")
 
-	if provider == "" {
+	// Sanitize: take only the base name to prevent path traversal
+	provider = path.Base(provider)
+
+	if provider == "" || provider == "." {
 		writeJSONError(w, http.StatusBadRequest, "provider name is required in URL path")
 		return
 	}
@@ -266,9 +330,24 @@ func (ws *ReactWebServer) handleAPISettingsCredentialsTest(w http.ResponseWriter
 		validProvider = true
 	}
 	if !validProvider {
-		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("unknown provider %q", provider))
+		writeJSONError(w, http.StatusBadRequest, "provider not found")
 		return
 	}
+
+	// Rate limiting: allow at most one test per provider every 5 seconds.
+	if last, ok := testLastCalledAt.Load(provider); ok {
+		if t, ok := last.(time.Time); ok {
+			if time.Since(t) < testCooldown {
+				writeJSON(w, http.StatusTooManyRequests, testCredentialResponse{
+					Success:  false,
+					Provider: provider,
+					Error:    "Please wait before testing again",
+				})
+				return
+			}
+		}
+	}
+	testLastCalledAt.Store(provider, time.Now())
 
 	// For the "test" mock provider, return success immediately
 	if provider == "test" {
@@ -318,14 +397,10 @@ func (ws *ReactWebServer) handleAPISettingsCredentialsTest(w http.ResponseWriter
 			return
 		}
 
-		errMsg := err.Error()
-		if len(errMsg) > 500 {
-			errMsg = errMsg[:500] + "…"
-		}
 		writeJSON(w, http.StatusOK, testCredentialResponse{
 			Success:  false,
 			Provider: provider,
-			Error:    errMsg,
+			Error:    sanitizeTestError(err),
 		})
 		return
 	}
@@ -361,8 +436,33 @@ func (ws *ReactWebServer) handleAPISettingsCredentialsDelete(w http.ResponseWrit
 		return
 	}
 
+	// Sanitize provider name to prevent path traversal attacks
+	provider = path.Base(provider)
+	if provider == "" || provider == "." {
+		writeJSONError(w, http.StatusBadRequest, "provider name is required in URL path")
+		return
+	}
+
 	cm := ws.getConfigManager(r, w)
 	if cm == nil {
+		return
+	}
+
+	// Validate provider is known before allowing deletion
+	knownProviders := cm.GetAvailableProviders()
+	validProvider := false
+	for _, p := range knownProviders {
+		if string(p) == provider {
+			validProvider = true
+			break
+		}
+	}
+	// Also accept "test" as a valid provider (mock provider for testing)
+	if provider == "test" {
+		validProvider = true
+	}
+	if !validProvider {
+		writeJSONError(w, http.StatusBadRequest, "provider not found")
 		return
 	}
 

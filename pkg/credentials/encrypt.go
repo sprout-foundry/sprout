@@ -333,6 +333,122 @@ func DecryptWithPassphrase(data []byte, passphrase string) ([]byte, error) {
 	return io.ReadAll(io.LimitReader(r, MaxDecryptedSize))
 }
 
+// apiKeysLockPath returns the path to the API keys lock file.
+func apiKeysLockPath() (string, error) {
+	path, err := GetAPIKeysPath()
+	if err != nil {
+		return "", err
+	}
+	return path + ".lock", nil
+}
+
+// loadUnlocked reads and decrypts the API keys file without acquiring a lock.
+// The caller MUST hold an exclusive lock on the file's lock file.
+func loadUnlocked() (Store, error) {
+	path, err := GetAPIKeysPath()
+	if err != nil {
+		return nil, fmt.Errorf("get API keys path: %w", err)
+	}
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return Store{}, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read API keys file: %w", err)
+	}
+	data, err = DecryptStore(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt API keys: %w", err)
+	}
+	var store Store
+	if err := json.Unmarshal(data, &store); err != nil {
+		return nil, fmt.Errorf("failed to parse API keys file: %w", err)
+	}
+	if store == nil {
+		store = Store{}
+	}
+	return store, nil
+}
+
+// saveUnlocked encrypts and writes the API keys file without acquiring a lock.
+// The caller MUST hold an exclusive lock on the file's lock file.
+// This is identical to Save() but skips lock acquisition.
+func saveUnlocked(store Store) error {
+	path, err := GetAPIKeysPath()
+	if err != nil {
+		return fmt.Errorf("get API keys path: %w", err)
+	}
+	if store == nil {
+		store = Store{}
+	}
+	data, err := json.MarshalIndent(store, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal API keys: %w", err)
+	}
+	mode, err := GetEncryptionMode()
+	if err != nil {
+		return fmt.Errorf("failed to get encryption mode: %w", err)
+	}
+	var encrypted []byte
+	if mode == "passphrase" {
+		passphrase := strings.TrimSpace(os.Getenv("LEDIT_KEY_PASSPHRASE"))
+		if passphrase == "" {
+			return fmt.Errorf("cannot save: API keys are passphrase-encrypted but LEDIT_KEY_PASSPHRASE is not set. "+
+				"Set LEDIT_KEY_PASSPHRASE or run 'ledit keys encrypt' to switch to machine-key mode")
+		}
+		encrypted, err = EncryptWithPassphrase(data, passphrase)
+	} else if mode == "" && strings.TrimSpace(os.Getenv("LEDIT_KEY_PASSPHRASE")) != "" {
+		encrypted, err = EncryptWithPassphrase(data, strings.TrimSpace(os.Getenv("LEDIT_KEY_PASSPHRASE")))
+		if err == nil {
+			_ = SetEncryptionMode("passphrase")
+		}
+	} else {
+		encrypted, err = EncryptStore(data)
+		if err == nil && mode == "" {
+			_ = SetEncryptionMode("machine-key")
+		}
+	}
+	if err != nil {
+		return fmt.Errorf("failed to encrypt API keys: %w", err)
+	}
+	if err := AtomicWriteFile(path, encrypted, 0600); err != nil {
+		return err
+	}
+	return nil
+}
+
+// AtomicModify acquires an exclusive lock, loads the API keys store,
+// calls fn to modify it, and saves it back. The entire load-modify-save
+// cycle is protected by the exclusive lock, preventing TOCTOU races.
+// Uses a 15-second timeout to account for slow encryption operations.
+func AtomicModify(fn func(Store) error) error {
+	lockPath, err := apiKeysLockPath()
+	if err != nil {
+		return err
+	}
+	fileLock := flock.New(lockPath)
+	locked, err := fileLock.TryLockContext(context.Background(), 15*time.Second)
+	if err != nil {
+		return fmt.Errorf("failed to acquire lock for atomic modify: %w", err)
+	}
+	if !locked {
+		return fmt.Errorf("timed out waiting for lock during atomic modify — another process may be saving credentials")
+	}
+	defer fileLock.Unlock()
+
+	store, err := loadUnlocked()
+	if err != nil {
+		return fmt.Errorf("failed to load credentials for atomic modify: %w", err)
+	}
+	if store == nil {
+		store = Store{}
+	}
+	if err := fn(store); err != nil {
+		return err
+	}
+	return saveUnlocked(store)
+}
+
 // Load loads the API keys store from disk.
 //
 // This function reads the API keys file from the configured location, decrypts
@@ -357,12 +473,12 @@ func Load() (Store, error) {
 	// Acquire shared lock for reading (allows concurrent reads)
 	lockPath := path + ".lock"
 	fileLock := flock.New(lockPath)
-	locked, err := fileLock.TryRLockContext(context.Background(), 5*time.Second)
+	locked, err := fileLock.TryRLockContext(context.Background(), 15*time.Second)
 	if err != nil {
 		return nil, fmt.Errorf("failed to acquire lock for load: %w", err)
 	}
 	if !locked {
-		return nil, fmt.Errorf("timed out waiting for load lock - another process may be saving")
+		return nil, fmt.Errorf("timed out waiting for load lock — another process may be saving (lock timeout is generous to allow for slow encryption)")
 	}
 	defer fileLock.Unlock()
 
@@ -453,12 +569,12 @@ func Save(store Store) error {
 	// Acquire exclusive lock for writing
 	lockPath := path + ".lock"
 	fileLock := flock.New(lockPath)
-	locked, err := fileLock.TryLockContext(context.Background(), 5*time.Second)
+	locked, err := fileLock.TryLockContext(context.Background(), 15*time.Second)
 	if err != nil {
 		return fmt.Errorf("failed to acquire lock for save: %w", err)
 	}
 	if !locked {
-		return fmt.Errorf("timed out waiting for save lock - another process may be saving")
+		return fmt.Errorf("timed out waiting for save lock — another process may be saving (lock timeout is generous to allow for slow encryption)")
 	}
 	defer fileLock.Unlock()
 

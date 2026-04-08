@@ -10,6 +10,7 @@ import (
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/factory"
+	"github.com/alantheprice/ledit/pkg/noninteractive"
 	"golang.org/x/term"
 )
 
@@ -63,7 +64,7 @@ func recoverProviderStartup(configManager *configuration.Manager, failedProvider
 
 	// Non-interactive mode cannot recover via prompt.
 	if isNonInteractive() {
-		return "", "", fmt.Errorf("failed to initialize provider %s: running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `ledit agent` interactively: %w", failedProviderName, startupErr)
+		return "", "", fmt.Errorf("failed to initialize provider %s: Running in non-interactive mode. %s: %w", failedProviderName, noninteractive.HelpHint, startupErr)
 	}
 
 	choice, err := promptProviderRecoveryChoice()

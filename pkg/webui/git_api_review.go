@@ -639,6 +639,11 @@ func (ws *ReactWebServer) gitReviewExtractFileContextForChanges(workspaceRoot, d
 			continue
 		}
 
+		// Skip files that exceed the read size limit
+		if fi, statErr := os.Stat(absPath); statErr == nil && fi.Size() > maxFileReadSize {
+			continue
+		}
+
 		content, err := os.ReadFile(absPath)
 		if err != nil {
 			continue

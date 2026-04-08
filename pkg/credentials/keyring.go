@@ -154,6 +154,8 @@ func (b *FileBackend) Source() string {
 }
 
 // Set stores a credential in the encrypted file store.
+// Uses AtomicModify to ensure the load-modify-save cycle is atomic,
+// preventing TOCTOU races when multiple processes modify the store concurrently.
 func (b *FileBackend) Set(provider, value string) error {
 	provider = strings.TrimSpace(provider)
 	if provider == "" {
@@ -165,44 +167,25 @@ func (b *FileBackend) Set(provider, value string) error {
 	// Trim whitespace from value to store canonical form
 	value = strings.TrimSpace(value)
 
-	store, err := Load()
-	if err != nil {
-		return fmt.Errorf("failed to load credentials from file store: %w", err)
-	}
-
-	store[provider] = value
-
-	if err := Save(store); err != nil {
-		return fmt.Errorf("failed to save credentials to file store: %w", err)
-	}
-
-	return nil
+	return AtomicModify(func(store Store) error {
+		store[provider] = value
+		return nil
+	})
 }
 
 // Delete removes a credential from the encrypted file store.
+// Uses AtomicModify to ensure the load-modify-save cycle is atomic,
+// preventing TOCTOU races when multiple processes modify the store concurrently.
 func (b *FileBackend) Delete(provider string) error {
 	provider = strings.TrimSpace(provider)
 	if provider == "" {
 		return fmt.Errorf("provider name cannot be empty")
 	}
 
-	store, err := Load()
-	if err != nil {
-		return fmt.Errorf("failed to load credentials from file store: %w", err)
-	}
-
-	if _, exists := store[provider]; !exists {
-		// Key doesn't exist - this is not an error
+	return AtomicModify(func(store Store) error {
+		delete(store, provider)
 		return nil
-	}
-
-	delete(store, provider)
-
-	if err := Save(store); err != nil {
-		return fmt.Errorf("failed to save credentials to file store: %w", err)
-	}
-
-	return nil
+	})
 }
 
 // IsKeyringAvailable checks if the OS keyring is available for use.

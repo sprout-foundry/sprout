@@ -677,6 +677,7 @@ function Chat({
           multiline={true}
           autoFocus={providerAvailable !== false}
           isProcessing={isProcessing}
+          isConnected={isConnected}
           disabled={providerAvailable === false}
           queuedCount={queuedMessagesCount}
           queuedMessages={queuedMessages}

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/alantheprice/ledit/pkg/credentials"
 	"github.com/spf13/cobra"
 )
 
@@ -339,8 +340,8 @@ func runCustomModelList() error {
 		provider := cfg.CustomProviders[name]
 		path, _ := configuration.GetCustomProviderPath(name)
 		fmt.Printf("%s\n", name)
-		fmt.Printf("  Chat endpoint: %s\n", provider.Endpoint)
-		fmt.Printf("  Models endpoint: %s\n", provider.ModelsEndpoint())
+		fmt.Printf("  Chat endpoint: %s\n", credentials.RedactLogLine(provider.Endpoint))
+		fmt.Printf("  Models endpoint: %s\n", credentials.RedactLogLine(provider.ModelsEndpoint()))
 		if provider.EnvVar != "" {
 			fmt.Printf("  API key env: %s\n", provider.EnvVar)
 		} else {

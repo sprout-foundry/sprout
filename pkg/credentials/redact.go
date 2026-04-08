@@ -71,6 +71,11 @@ func IsSensitiveEnvName(name string) bool {
 // Values that look like credential reference placeholders (e.g., "{{credential:...}}")
 // are kept as-is since they are already safe indirect references, not actual secrets.
 // Uses MaskValue for each value.
+//
+// NOTE: MaskValue preserves the first 2–4 characters for debugging/verification
+// purposes (e.g., "sk-a****"). This is intentional — it lets operators confirm the
+// correct key is in place without exposing the full value. For fully opaque redaction
+// (e.g., log exports), use RedactEnvMap or RedactJSONBytes instead.
 func RedactMap(m map[string]string) map[string]string {
 	if m == nil {
 		return nil
@@ -188,7 +193,7 @@ func RedactJSONBytes(data []byte) ([]byte, error) {
 
 // redactValue recursively redacts string values in a JSON-like structure.
 // For maps, keys are checked with IsSensitiveEnvName; if sensitive, string
-// values are replaced with "[REDACTED]". For all strings, RedactString()
+// values are replaced with "[REDACTED]" wholesale. For all strings, RedactString()
 // is applied (value-based pattern matching). For slices, it recurses. For
 // everything else (numbers, bools, null), it returns as-is.
 func redactValue(v interface{}) interface{} {

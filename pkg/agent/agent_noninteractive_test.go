@@ -158,9 +158,9 @@ func TestNonInteractiveErrorMessageContent(t *testing.T) {
 
 	t.Run("NewAgentWithModel provider resolution error", func(t *testing.T) {
 		// From agent.go — early non-interactive fast-fail:
-		//   "no provider configured. running in non-interactive mode. Set LEDIT_PROVIDER
+		//   "no provider configured. Running in non-interactive mode. Set LEDIT_PROVIDER
 		//    / configure ~/.ledit/config.json, or run `ledit agent` interactively: %w"
-		errMsg := "no provider configured. running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `ledit agent` interactively: some error"
+		errMsg := "no provider configured. Running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `ledit agent` interactively: some error"
 
 		expectedPhrases := []struct {
 			name   string
@@ -182,9 +182,9 @@ func TestNonInteractiveErrorMessageContent(t *testing.T) {
 	t.Run("NewAgentWithModel API key error", func(t *testing.T) {
 		// From agent.go — second non-interactive check after resolution succeeds
 		// but EnsureAPIKey fails:
-		//   "no provider configured. running in non-interactive mode. Set LEDIT_PROVIDER
+		//   "no provider configured. Running in non-interactive mode. Set LEDIT_PROVIDER
 		//    / configure ~/.ledit/config.json, or run `ledit agent` interactively: %w"
-		errMsg := "no provider configured. running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `ledit agent` interactively: some error"
+		errMsg := "no provider configured. Running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `ledit agent` interactively: some error"
 
 		required := []string{"non-interactive mode", "LEDIT_PROVIDER", "~/.ledit/config.json"}
 		for _, phrase := range required {
@@ -196,14 +196,13 @@ func TestNonInteractiveErrorMessageContent(t *testing.T) {
 
 	t.Run("ResolveProviderModel fallback error", func(t *testing.T) {
 		// From agent.go — the fallback path when ResolveProviderModel fails
-		// and stdin is not a terminal (uses lowercase 'running'):
-		//   "no provider configured. running in non-interactive mode. Set LEDIT_PROVIDER
+		// and stdin is not a terminal (now uses canonical 'Running'):
+		//   "no provider configured. Running in non-interactive mode. Set LEDIT_PROVIDER
 		//    / configure ~/.ledit/config.json, or run `ledit agent` interactively"
-		errMsg := "no provider configured. running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `ledit agent` interactively"
+		errMsg := "no provider configured. Running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `ledit agent` interactively"
 
-		// Use case-insensitive check for "non-interactive mode" since agent.go
-		// uses "running" (lowercase) in the fallback path vs "Running" (uppercase)
-		// in the early check.
+		// Use case-insensitive check for "non-interactive mode" since test
+		// uses canonical "Running" now for consistency.
 		if !strings.Contains(strings.ToLower(errMsg), "non-interactive mode") {
 			t.Errorf("expected error to contain 'non-interactive mode' (case-insensitive), got: %s", errMsg)
 		}
@@ -217,10 +216,10 @@ func TestNonInteractiveErrorMessageContent(t *testing.T) {
 
 	t.Run("recoverProviderStartup error", func(t *testing.T) {
 		// From agent_provider.go — recoverProviderStartup non-interactive path:
-		//   "failed to initialize provider %s: running in non-interactive mode.
+		//   "failed to initialize provider %s: Running in non-interactive mode.
 		//    Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `ledit agent`
 		//    interactively: %w"
-		errMsg := "failed to initialize provider OpenAI: running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `ledit agent` interactively: API key not configured"
+		errMsg := "failed to initialize provider OpenAI: Running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `ledit agent` interactively: API key not configured"
 
 		required := []string{
 			"non-interactive",

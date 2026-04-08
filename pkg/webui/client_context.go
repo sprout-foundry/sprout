@@ -426,6 +426,35 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 	return ctx.Agent, nil
 }
 
+// clearCachedAgent removes the cached agent from both the client context
+// and its active chat session. Used after a config change (e.g. switching
+// away from "editor" mode) so the next agent access creates a fresh agent
+// with the updated provider.
+func (ws *ReactWebServer) clearCachedAgent(clientID string) {
+	clientID = strings.TrimSpace(clientID)
+	if clientID == "" {
+		clientID = defaultWebClientID
+	}
+
+	ws.mutex.Lock()
+	defer ws.mutex.Unlock()
+
+	ctx := ws.clientContexts[clientID]
+	if ctx == nil {
+		return
+	}
+	ctx.Agent = nil
+
+	// Also clear from all chat sessions so per-session agents are recreated.
+	for _, cs := range ctx.ChatSessions {
+		if cs != nil {
+			cs.mu.Lock()
+			cs.Agent = nil
+			cs.mu.Unlock()
+		}
+	}
+}
+
 func (ws *ReactWebServer) syncAgentStateForClient(clientID string) error {
 	clientID = strings.TrimSpace(clientID)
 	if clientID == "" {

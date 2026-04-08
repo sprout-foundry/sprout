@@ -1,12 +1,13 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import type { KeyboardEvent, MouseEvent } from 'react';
-import { Plus, X, Pencil } from 'lucide-react';
+import { Plus, X, Pencil, Pin } from 'lucide-react';
 import ContextMenu from './ContextMenu';
 import './TerminalTabBar.css';
 
 export interface TerminalSession {
   id: string;
   name: string;
+  is_pinned: boolean;
 }
 
 interface TerminalTabBarProps {
@@ -16,6 +17,7 @@ interface TerminalTabBarProps {
   onCreate?: () => void;
   onClose: (id: string) => void;
   onRename: (id: string, name: string) => void;
+  onTogglePin?: (id: string) => void;
 }
 
 interface ContextMenuState {
@@ -33,6 +35,7 @@ function TerminalTabBar({
   onCreate,
   onClose,
   onRename,
+  onTogglePin,
 }: TerminalTabBarProps): JSX.Element {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -192,6 +195,20 @@ function TerminalTabBar({
         <button className="context-menu-item" onClick={handleMenuRename} type="button">
           <Pencil size={13} />
           <span className="menu-item-label">Rename</span>
+        </button>
+        <button
+          className="context-menu-item"
+          onClick={() => {
+            if (onTogglePin && contextMenu.sessionId) {
+              onTogglePin(contextMenu.sessionId);
+              closeContextMenu();
+            }
+          }}
+          type="button"
+          disabled={!onTogglePin || !contextMenu.sessionId}
+        >
+          <Pin size={13} />
+          <span className="menu-item-label">{sessions.find((s) => s.id === contextMenu.sessionId)?.is_pinned ? 'Unpin' : 'Pin'}</span>
         </button>
         <div className="context-menu-divider" />
         <button

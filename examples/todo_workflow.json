@@ -7,8 +7,8 @@
     "skip_prompt": true,
     "subagent_overrides": {
       "coder": {
-        "model": "qwen3.5-35-A3B",
-        "provider": "ai-worker"
+        "model": "glm-4.7",
+        "provider": "zai"
       }
     },
     "unsafe": true

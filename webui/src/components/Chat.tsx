@@ -11,12 +11,14 @@ import {
   ChevronRight,
   Loader2,
   GitBranch,
+  Settings,
 } from 'lucide-react';
 import CommandInput from './CommandInput';
 import MessageSegments from './MessageSegments';
 import MessageContent from './MessageContent';
 import MessageBubble from './MessageBubble';
 import ChatMessageContextMenu from './ChatMessageContextMenu';
+import Status from './Status';
 import './Chat.css';
 
 interface Message {
@@ -87,6 +89,12 @@ interface ChatProps {
   worktreePath?: string;
   workspaceRoot?: string;
   onWorktreeChange?: (worktreePath: string) => void;
+  // Provider availability
+  providerAvailable?: boolean;
+  onRequestProviderSetup?: () => void;
+  // Status bar
+  stats?: Record<string, unknown>;
+  isConnected?: boolean;
 }
 
 // ── Subagent Activity Feed ─────────────────────────────────────────
@@ -401,6 +409,12 @@ function Chat({
   workspaceRoot: _workspaceRoot,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   onWorktreeChange: _onWorktreeChange,
+  // Provider availability
+  providerAvailable,
+  onRequestProviderSetup,
+  // Status bar
+  stats,
+  isConnected,
 }: ChatProps): JSX.Element {
   const AUTO_SCROLL_THRESHOLD_PX = 96;
   const chatShellRef = useRef<HTMLDivElement>(null);
@@ -524,17 +538,37 @@ function Chat({
               </div>
             )}
             {messages.length === 0 ? (
-              <div className="welcome-message">
-                <div className="welcome-icon">
-                  <Bot size={32} />
+              providerAvailable === false ? (
+                <div className="welcome-message">
+                  <div className="welcome-icon">
+                    <Bot size={32} />
+                  </div>
+                  <div className="welcome-text">
+                    No AI provider configured
+                  </div>
+                  <div className="welcome-hint">
+                    AI features require a provider to be set up. The editor, terminal, file tree, and git panels are fully functional without one.
+                  </div>
+                  {onRequestProviderSetup && (
+                    <button type="button" className="provider-setup-btn" onClick={onRequestProviderSetup} aria-label="Open provider setup">
+                      <Settings size={14} />
+                      Configure Provider
+                    </button>
+                  )}
                 </div>
-                <div className="welcome-text">
-                  Welcome to ledit! I&apos;m ready to help you with code analysis, editing, and more.
+              ) : (
+                <div className="welcome-message">
+                  <div className="welcome-icon">
+                    <Bot size={32} />
+                  </div>
+                  <div className="welcome-text">
+                    Welcome to ledit! I&apos;m ready to help you with code analysis, editing, and more.
+                  </div>
+                  <div className="welcome-hint">
+                    Try asking: &quot;Show me the project structure&quot; or &quot;Find the main function&quot;
+                  </div>
                 </div>
-                <div className="welcome-hint">
-                  Try asking: &quot;Show me the project structure&quot; or &quot;Find the main function&quot;
-                </div>
-              </div>
+              )
             ) : (
               messages.map((message) => (
                 <MessageBubble
@@ -639,10 +673,11 @@ function Chat({
           onSend={onSendMessage}
           onQueue={onQueueMessage}
           onStop={onStopProcessing}
-          placeholder="Ask me anything about your code..."
+          placeholder={providerAvailable === false ? 'Configure a provider to start chatting...' : 'Ask me anything about your code...'}
           multiline={true}
-          autoFocus={true}
+          autoFocus={providerAvailable !== false}
           isProcessing={isProcessing}
+          disabled={providerAvailable === false}
           queuedCount={queuedMessagesCount}
           queuedMessages={queuedMessages}
           onQueueMessageRemove={onQueueMessageRemove}
@@ -652,6 +687,7 @@ function Chat({
         />
       </div>
 
+      <Status isConnected={!!isConnected} stats={stats} />
       <ChatMessageContextMenu containerRef={chatContainerRef} onInsertAtCursor={handleInsertAtCursor} />
     </div>
   );

@@ -1,4 +1,4 @@
-import { useCallback, useRef, Fragment } from 'react';
+import { useCallback, useMemo, useRef, Fragment } from 'react';
 import type { CSSProperties, RefObject, Dispatch, SetStateAction, ReactNode, ComponentProps } from 'react';
 import { X, Columns2, Rows2, LayoutGrid, MessageSquarePlus, GitBranch } from 'lucide-react';
 import EditorTabs from './EditorTabs';
@@ -28,7 +28,7 @@ export interface PaneLayoutManagerProps {
   contextPanelRef: RefObject<unknown>;
   perChatCache?: Record<string, PerChatState>;
   activeChatId?: string | null;
-  chatSessions?: Array<{ id: string; worktree_path?: string }>;
+  chatSessions?: Array<{ id: string; name?: string; is_pinned?: boolean; is_default?: boolean; active_query?: boolean; worktree_path?: string }>;
 
   // Chat state for active chat pane
   messages: Message[];
@@ -49,6 +49,8 @@ export interface PaneLayoutManagerProps {
   queryProgress: unknown;
   currentTodos: TodoItem[];
   subagentActivities: SubagentActivity[];
+  isConnected: boolean;
+  stats: Record<string, unknown>;
 
   // Review state
   deepReview: DeepReviewResult | null;
@@ -88,6 +90,15 @@ export interface PaneLayoutManagerProps {
   // Chat creation
   onCreateChat?: () => Promise<string | null>;
   onCreateChatInWorktree?: () => void;
+
+  // Chat tab bar features (migrated from ChatTabBar)
+  onActiveChatChange?: (id: string) => void;
+  onRenameChat?: (id: string, name: string) => void;
+  onDeleteChatWithWorktree?: (id: string) => void;
+
+  // Provider availability (for graceful degradation)
+  providerAvailable?: boolean;
+  onRequestProviderSetup?: () => void;
 
   // Nested split state (lifted from PaneLayoutManager for split-request coordination)
   nestedSplit: {
@@ -220,6 +231,8 @@ function PaneLayoutManager({
   queryProgress,
   currentTodos,
   subagentActivities,
+  isConnected,
+  stats,
   deepReview,
   reviewError,
   reviewFixResult,
@@ -244,6 +257,9 @@ function PaneLayoutManager({
   onCloseAllSplits,
   onCreateChat,
   onCreateChatInWorktree,
+  onActiveChatChange,
+  onRenameChat,
+  onDeleteChatWithWorktree,
   containerRef,
   updatePaneSize,
   nestedSplit,
@@ -252,9 +268,48 @@ function PaneLayoutManager({
   onOpenTerminal,
   onViewGit,
   onStartChat,
+  providerAvailable,
+  onRequestProviderSetup,
 }: PaneLayoutManagerProps): JSX.Element | null {
   const dragStartSizeRef = useRef<Map<string, number>>(new Map());
   const isPaneDraggingRef = useRef<Set<string>>(new Set());
+
+  // ── Derive chat-specific data for EditorTabs props ────────────
+  const activeChatQueries = useMemo(() => {
+    const set = new Set<string>();
+    if (chatSessions) {
+      for (const session of chatSessions) {
+        if (session.active_query) {
+          set.add(session.id);
+        }
+      }
+    }
+    return set;
+  }, [chatSessions]);
+
+  const defaultChatIds = useMemo(() => {
+    const set = new Set<string>();
+    if (chatSessions) {
+      for (const session of chatSessions) {
+        if (session.is_default) {
+          set.add(session.id);
+        }
+      }
+    }
+    return set;
+  }, [chatSessions]);
+
+  const chatWorktreePaths = useMemo(() => {
+    const map = new Map<string, string>();
+    if (chatSessions) {
+      for (const session of chatSessions) {
+        if (session.worktree_path) {
+          map.set(session.id, session.worktree_path);
+        }
+      }
+    }
+    return map;
+  }, [chatSessions]);
 
   const handlePaneResize = useCallback(
     (sizeKey: string, axis: 'horizontal' | 'vertical', invert = false) =>
@@ -377,7 +432,20 @@ function PaneLayoutManager({
     return (
       <PaneWrapper key={pane.id} style={style}>
         <div className="pane-shell">
-          <EditorTabs paneId={pane.id} compact actions={renderSplitControls(pane.id)} />
+          <EditorTabs
+            paneId={pane.id}
+            compact
+            actions={renderSplitControls(pane.id)}
+            onActiveChatChange={onActiveChatChange}
+            activeChatQueries={activeChatQueries}
+            defaultChatIds={defaultChatIds}
+            chatWorktreePaths={chatWorktreePaths}
+            onCreateChat={onCreateChat ? () => { onCreateChat().catch((err) => console.warn('[EditorTabs] Failed to create chat:', err)); } : undefined}
+            onCreateChatInWorktree={onCreateChatInWorktree}
+            onDeleteChatWithWorktree={onDeleteChatWithWorktree}
+            onRenameChat={onRenameChat}
+            chatSessions={chatSessions}
+          />
           <EditorPaneWrapper isActive={pane.id === activePaneId} onClick={() => switchPane(pane.id)}>
             <EditorPaneComponent
               paneId={pane.id}
@@ -410,6 +478,10 @@ function PaneLayoutManager({
                 onWorktreeChange: undefined,
                 onToolPillClick: (toolId: string) =>
                   (contextPanelRef.current as { highlightTool?: (id: string) => void } | null)?.highlightTool?.(toolId),
+                isConnected,
+                stats,
+                providerAvailable,
+                onRequestProviderSetup,
               }}
               reviewProps={{
                 review: deepReview,

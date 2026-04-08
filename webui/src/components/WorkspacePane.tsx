@@ -116,6 +116,11 @@ interface WorkspacePaneProps {
     chatId?: string;
     onWorktreeChange?: (worktreePath: string) => void;
     onCreateChatInWorktree?: () => void;
+    // Status bar
+    isConnected?: boolean;
+    stats?: Record<string, unknown>;
+    providerAvailable?: boolean;
+    onRequestProviderSetup?: () => void;
   };
   reviewProps: {
     review: DeepReviewResult | null;

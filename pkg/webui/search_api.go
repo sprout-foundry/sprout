@@ -428,7 +428,11 @@ func (ws *ReactWebServer) performReplace(clientID, workspaceRoot string, req Rep
 			absFilePath = filepath.Join(workspaceRoot, filePath)
 		}
 
-		// Open file
+		// Open file, skipping files that exceed the read size limit
+		if info, statErr := os.Stat(absFilePath); statErr == nil && info.Size() > maxFileReadSize {
+			log.Printf("Skipping file %s: size %d exceeds max read size %d", absFilePath, info.Size(), maxFileReadSize)
+			continue
+		}
 		content, err := os.ReadFile(absFilePath)
 		if err != nil {
 			log.Printf("Error reading file %s: %v", absFilePath, err)

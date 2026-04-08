@@ -37,6 +37,8 @@ export interface UseOnboardingReturn {
   onComplete: (applyAppState: (values: { provider: string; model: string }) => void) => Promise<void>;
   /** Callback: skip onboarding and use as editor-only mode */
   onSkip: () => Promise<void>;
+  /** Force-open the onboarding dialog (for re-entering setup from editor-only mode) */
+  openProviderSetup: () => Promise<void>;
   /** Callback: install WSL via the desktop bridge */
   onInstallWsl: () => Promise<void>;
   /** Callback: install Git for Windows via the desktop bridge */
@@ -251,6 +253,42 @@ function useOnboarding(): UseOnboardingReturn {
     }
   }, [apiService]);
 
+  const openProviderSetup = useCallback(async () => {
+    setOnboarding((prev) => ({ ...prev, checking: true, error: null }));
+    try {
+      const status = await apiService.getOnboardingStatus();
+      const providers = Array.isArray(status.providers) ? status.providers : [];
+      const preferredProvider =
+        status.current_provider || providers.find((p) => p.recommended)?.id || providers[0]?.id || '';
+      const providerInfo = providers.find((p) => p.id === preferredProvider) || providers[0];
+      const preferredModel = status.current_model || providerInfo?.recommended_model || providerInfo?.models?.[0] || '';
+      setOnboarding({
+        checking: false,
+        open: true,
+        reason: status.reason || '',
+        providers,
+        environment: status.environment || null,
+        provider: preferredProvider,
+        model: preferredModel,
+        apiKey: '',
+        showAllProviders: false,
+        submitting: false,
+        platformActionMessage: null,
+        error: null,
+      });
+    } catch (error) {
+      debugLog('[useOnboarding] Failed to open provider setup:', error);
+      setOnboarding((prev) => ({
+        ...prev,
+        checking: false,
+        open: true,
+        showAllProviders: false,
+        platformActionMessage: null,
+        error: error instanceof Error ? error.message : 'Failed to load provider setup',
+      }));
+    }
+  }, [apiService]);
+
   const onInstallWsl = useCallback(async () => {
     const desktopBridge = (
       window as unknown as Record<string, Record<string, (...args: unknown[]) => Promise<Record<string, unknown>>>>
@@ -296,6 +334,7 @@ function useOnboarding(): UseOnboardingReturn {
     onProviderChange,
     onComplete,
     onSkip,
+    openProviderSetup,
     onInstallWsl,
     onInstallGitBash,
     updateOnboarding,

@@ -226,6 +226,35 @@ body {
 }
 
 /* ── Workspace bar ────────────────────────────────────────────── */
+
+/* Unified desktop header: MenuBar (left) + WorkspaceBar (right) */
+.header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 35px;
+  min-height: 35px;
+  padding: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+  overflow: hidden;
+  z-index: 100;
+}
+
+/* When .workspace-bar lives inside .header-bar it renders as an inline right-side element */
+.header-bar .workspace-bar {
+  height: auto;
+  min-height: 0;
+  padding: 0 14px;
+  border-bottom: none;
+  background: transparent;
+  flex-shrink: 1;
+  overflow: hidden;
+  font-size: 12px;
+}
+
+/* Standalone workspace bar (mobile) */
 .workspace-bar {
   display: flex;
   align-items: center;

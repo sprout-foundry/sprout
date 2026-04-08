@@ -11,8 +11,8 @@ import type { AppState } from '../types/app';
 import { loadPersistedAppState } from '../services/appStatePersistence';
 
 const DEFAULT_APP_STATE: AppState = {
-  provider: 'unknown',
-  model: 'unknown',
+  provider: '',
+  model: '',
   sessionId: null,
   queryCount: 0,
   messages: [],

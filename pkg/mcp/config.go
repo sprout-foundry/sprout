@@ -241,7 +241,7 @@ func SaveMCPConfig(mcpConfig *MCPConfig) error {
 	configPath := filepath.Join(configDir, "mcp_config.json")
 
 	// Create config directory if it doesn't exist
-	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(configPath), 0700); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 

@@ -99,28 +99,6 @@
   color: var(--text-primary);
 }
 
-.tab-pane-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-default);
-  color: var(--text-secondary);
-  font-size: 10px;
-  font-weight: 600;
-  flex-shrink: 0;
-}
-
-.tab-pane-badge.active-pane {
-  color: var(--accent-primary);
-  border-color: var(--border-focus);
-  background: rgba(var(--accent-primary-rgb, 99, 102, 241), 0.12);
-}
-
 .tab-modified {
   font-size: 12px;
   color: var(--accent-warning);
@@ -233,7 +211,6 @@
 }
 
 .tab.pinned .tab-name,
-.tab.pinned .tab-pane-badge,
 .tab.pinned .tab-modified,
 .tab.pinned .tab-externally-modified {
   display: none;

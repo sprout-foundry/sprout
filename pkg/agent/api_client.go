@@ -14,6 +14,7 @@ import (
 	"time"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/credentials"
 	"github.com/alantheprice/ledit/pkg/logging"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
@@ -262,6 +263,16 @@ func (ac *APIClient) SendWithRetry(messages []api.Message, tools []api.Tool, rea
 				ac.agent.debugLog("DEBUG: APIClient not retrying error: %v\n", err)
 			}
 			if ac.isRateLimit(err) {
+				// Rate limit on stored credentials — rotate to next key before retry.
+				// This is only useful when the provider has multiple keys in its pool;
+				// for env-var credentials, rotation is a no-op but harmless.
+				poolSize, poolErr := credentials.GetPoolSize(ac.agent.GetProvider())
+				if poolErr == nil && poolSize > 1 {
+					credentials.RotateProviderKey(ac.agent.GetProvider())
+					if ac.agent.debug {
+						ac.agent.debugLog("DEBUG: APIClient rotated key for provider %q (pool size %d) after rate limit\n", ac.agent.GetProvider(), poolSize)
+					}
+				}
 				return nil, &RateLimitExceededError{Attempts: retry + 1, LastError: err}
 			}
 			return nil, fmt.Errorf("failed to make API request: %w", err)
@@ -579,7 +590,16 @@ func (ac *APIClient) isRateLimit(err error) bool {
 	return ac.rateLimiter.IsRateLimitError(err, nil)
 }
 
-// handleRateLimit handles rate limit errors with proper backoff
+// handleRateLimit handles rate limit errors with proper backoff.
+// When the provider has multiple keys (pool), it rotates to the next key
+// before sleeping, so the subsequent retry uses a different key.
+// It also refreshes the cached API key in the provider client so that
+// subsequent requests actually use the rotated key.
+//
+// Note: The rotation uses a two-step Advance + Resolve pattern:
+// Advance increments the counter without modular arithmetic, then
+// Resolve (via RefreshAPIKey → NextKey) applies modular selection.
+// This ensures the rate-limited key is skipped entirely.
 func (ac *APIClient) handleRateLimit(err error, attempt int) bool {
 	// Log the rate limit
 	ac.rateLimiter.LogRateLimit(ac.agent.GetProvider(), ac.agent.GetModel(),
@@ -588,6 +608,22 @@ func (ac *APIClient) handleRateLimit(err error, attempt int) bool {
 	// Check if we should retry
 	if !ac.rateLimiter.ShouldRetry(attempt) {
 		return false
+	}
+
+	// Rotate to the next key in the pool (no-op if single key or env var)
+	provider := ac.agent.GetProvider()
+	poolSize, poolErr := credentials.GetPoolSize(provider)
+	if poolErr == nil && poolSize > 1 {
+		credentials.RotateProviderKey(provider)
+		if ac.agent.debug {
+			ac.agent.debugLog("DEBUG: rotated key for provider %q (pool size %d) after rate limit on attempt %d\n", provider, poolSize, attempt)
+		}
+		// Refresh the cached key in the provider client so the next request uses it
+		if refreshable, ok := ac.agent.client.(interface{ RefreshAPIKey() error }); ok {
+			if refreshErr := refreshable.RefreshAPIKey(); refreshErr != nil {
+				log.Printf("[agent] Warning: failed to refresh API key after rotation for %q: %v\n", provider, refreshErr)
+			}
+		}
 	}
 
 	// Calculate and wait for backoff

@@ -4,9 +4,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/alantheprice/ledit/pkg/credentials"
+	"github.com/alantheprice/ledit/pkg/mcp"
 	"github.com/alantheprice/ledit/pkg/pythonruntime"
 	"github.com/spf13/cobra"
 )
@@ -70,6 +73,66 @@ func runDiag() {
 			fmt.Printf("    Endpoint: %s\n", provider.Endpoint)
 			fmt.Printf("    Model: %s\n", provider.ModelName)
 			fmt.Printf("    Context: %d tokens\n", provider.ContextSize)
+		}
+	}
+	fmt.Println()
+
+	// MCP diagnostics
+	fmt.Println("MCP Configuration")
+	fmt.Println("=================")
+	mcpConfig, err := mcp.LoadMCPConfig()
+	if err != nil {
+		fmt.Printf("  [FAIL] Error loading MCP config: %v\n", err)
+	} else {
+		fmt.Printf("  Enabled: %t\n", mcpConfig.Enabled)
+		fmt.Printf("  Auto-start: %t\n", mcpConfig.AutoStart)
+		fmt.Printf("  Auto-discover: %t\n", mcpConfig.AutoDiscover)
+		fmt.Printf("  Total servers: %d\n", len(mcpConfig.Servers))
+		fmt.Println()
+
+		if len(mcpConfig.Servers) == 0 {
+			fmt.Println("  [INFO] No MCP servers configured")
+		} else {
+			fmt.Println("  Configured Servers:")
+			for name, server := range mcpConfig.Servers {
+				fmt.Printf("    • %s\n", name)
+				if server.Type == "http" {
+					fmt.Printf("      Type: HTTP Remote Server\n")
+					fmt.Printf("      URL: %s\n", credentials.RedactLogLine(server.URL))
+				} else {
+					fmt.Printf("      Command: %s %v\n", server.Command, server.Args)
+				}
+				fmt.Printf("      Auto-start: %t\n", server.AutoStart)
+				fmt.Printf("      Max restarts: %d\n", server.MaxRestarts)
+				fmt.Printf("      Timeout: %v\n", server.Timeout)
+
+				if server.WorkingDir != "" {
+					fmt.Printf("      Working dir: %s\n", server.WorkingDir)
+				}
+
+				// Show redacted env vars
+				if len(server.Env) > 0 {
+					redactedEnv := credentials.RedactEnvMap(server.Env)
+					fmt.Printf("      Env vars (%d): ", len(redactedEnv))
+					envEntries := make([]string, 0, len(redactedEnv))
+					for k, v := range redactedEnv {
+						envEntries = append(envEntries, fmt.Sprintf("%s=%s", k, v))
+					}
+					fmt.Printf("%s\n", strings.Join(envEntries, ", "))
+				}
+
+				// Show credentials (placeholder references are safe; actual secrets are masked)
+				if len(server.Credentials) > 0 {
+					redactedCreds := credentials.RedactMap(server.Credentials)
+					credEntries := make([]string, 0, len(redactedCreds))
+					for k, v := range redactedCreds {
+						credEntries = append(credEntries, fmt.Sprintf("%s=%s", k, v))
+					}
+					fmt.Printf("      Credentials (%d): %s\n", len(redactedCreds), strings.Join(credEntries, ", "))
+				}
+
+				fmt.Println()
+			}
 		}
 	}
 	fmt.Println()

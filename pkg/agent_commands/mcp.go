@@ -414,7 +414,7 @@ func (m *MCPCommand) listServers() error {
 		fmt.Printf("[signal] %s\n", name)
 		if server.Type == "http" {
 			fmt.Printf("   Type: HTTP Remote Server\n")
-			fmt.Printf("   URL: %s\n", server.URL)
+			fmt.Printf("   URL: %s\n", credentials.RedactLogLine(server.URL))
 		} else {
 			fmt.Printf("   Command: %s %v\n", server.Command, server.Args)
 		}
@@ -428,18 +428,23 @@ func (m *MCPCommand) listServers() error {
 
 		if len(server.Env) > 0 {
 			fmt.Printf("   Environment vars: ")
-			envKeys := make([]string, 0, len(server.Env))
-			for key := range server.Env {
-				// Don't expose sensitive values
-				if strings.Contains(strings.ToLower(key), "token") ||
-					strings.Contains(strings.ToLower(key), "key") ||
-					strings.Contains(strings.ToLower(key), "secret") {
-					envKeys = append(envKeys, key+"=***")
-				} else {
-					envKeys = append(envKeys, key+"="+server.Env[key])
-				}
+			redactedEnv := credentials.RedactEnvMap(server.Env)
+			envEntries := make([]string, 0, len(redactedEnv))
+			for key, value := range redactedEnv {
+				envEntries = append(envEntries, key+"="+value)
 			}
-			fmt.Printf("%s\n", strings.Join(envKeys, ", "))
+			fmt.Printf("%s\n", strings.Join(envEntries, ", "))
+		}
+
+		// Show credentials if present (placeholder references are safe; actual secrets are masked)
+		if len(server.Credentials) > 0 {
+			fmt.Printf("   Credentials: ")
+			redactedCreds := credentials.RedactMap(server.Credentials)
+			credEntries := make([]string, 0, len(redactedCreds))
+			for key, value := range redactedCreds {
+				credEntries = append(credEntries, key+"="+value)
+			}
+			fmt.Printf("%s\n", strings.Join(credEntries, ", "))
 		}
 
 		fmt.Println()

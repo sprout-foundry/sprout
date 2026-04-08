@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/agent"
+	"github.com/alantheprice/ledit/pkg/credentials"
 )
 
 // SessionsFlow handles advanced session operations
@@ -240,7 +241,12 @@ func (f *SessionsFlow) ExecuteSessionExport(args []string) (string, error) {
 		return "", fmt.Errorf("failed to export session state: %w", err)
 	}
 
-	if err := os.WriteFile(filename, data, 0644); err != nil {
+	redacted, err := credentials.RedactJSONBytes(data)
+	if err != nil {
+		return "", fmt.Errorf("failed to redact exported session: %w", err)
+	}
+
+	if err := os.WriteFile(filename, redacted, 0600); err != nil {
 		return "", fmt.Errorf("failed to write export file: %w", err)
 	}
 

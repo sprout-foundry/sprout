@@ -160,18 +160,24 @@ type setCredentialRequest struct {
 // validateAndSetCredential validates a new API key before storing it.
 // If validation fails, the old key is preserved and an error is returned.
 // Returns true if validation succeeded and key was stored, false otherwise.
-func (ws *ReactWebServer) validateAndSetCredential(provider, newValue string) (bool, error) {
+func (ws *ReactWebServer) validateAndSetCredential(cm *configuration.Manager, provider, newValue string) (bool, error) {
 	// Use the shared ValidateAndSaveAPIKey function which handles:
 	// - Mutex-protected read-modify-write (prevents race conditions)
 	// - Validation via ListModels API call
 	// - Restoration of old key on failure
-	modelCount, err := configuration.ValidateAndSaveAPIKey(provider, newValue)
+	_, err := configuration.ValidateAndSaveAPIKey(provider, newValue)
 	if err != nil {
 		return false, fmt.Errorf("validation failed: %w", err)
 	}
 
-	// Validation succeeded - key is already stored in backend
-	log.Printf("[config] API key for %q validated successfully (%d models available)", provider, modelCount)
+	// Sync the Manager's in-memory cache with the backend
+	if err := cm.RefreshAPIKeys(); err != nil {
+		log.Printf("[config] Warning: failed to refresh API keys cache: %v", err)
+		// Continue anyway - the key is saved in backend, just cache is stale
+	}
+
+	// Validation succeeded - key is already stored in backend via ValidateAndSaveAPIKey
+	// (ValidateAndSaveAPIKey logs success with model count, so no duplicate log here)
 	return true, nil
 }
 
@@ -225,14 +231,8 @@ func (ws *ReactWebServer) handleAPISettingsCredentialsPut(w http.ResponseWriter,
 
 	// Validate the new key BEFORE storing it
 	// This ensures we never replace a working key with a broken one
-	success, err := ws.validateAndSetCredential(provider, req.Value)
-	if err != nil {
+	if _, err := ws.validateAndSetCredential(cm, provider, req.Value); err != nil {
 		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("API key validation failed: %s", sanitizeTestError(err)))
-		return
-	}
-
-	if !success {
-		writeJSONError(w, http.StatusBadRequest, "Failed to validate API key")
 		return
 	}
 
@@ -470,6 +470,11 @@ func (ws *ReactWebServer) handleAPISettingsCredentialsDelete(w http.ResponseWrit
 	if err := credentials.DeleteFromActiveBackend(provider); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to delete credential: %v", err))
 		return
+	}
+
+	// Sync the Manager's in-memory cache with the backend after deletion
+	if err := cm.RefreshAPIKeys(); err != nil {
+		log.Printf("[config] Warning: failed to refresh API keys after deletion: %v", err)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{

@@ -32,6 +32,10 @@ export const useAutoReloadCleanBuffers = ({
   // Per-path last-notification timestamp to deduplicate rapid events.
   const lastNotifiedRef = useRef<Map<string, number>>(new Map());
 
+  // Paths that have already been notified as deleted. Cleared when the
+  // file reappears (non-deleted event) or the buffer is removed.
+  const deletedNotifiedRef = useRef<Set<string>>(new Set());
+
   // Auto-reload clean (unmodified) buffers when they change on disk.
   // Modified files are left to EditorPane's conflict dialog.
   useEffect(() => {
@@ -64,6 +68,8 @@ export const useAutoReloadCleanBuffers = ({
 
       // Handle deleted files on clean buffers
       if (detail.deleted) {
+        if (deletedNotifiedRef.current.has(detail.path)) return;
+        deletedNotifiedRef.current.add(detail.path);
         const now = Date.now();
         const lastNotified = lastNotifiedRef.current.get(detail.path) ?? 0;
         if (now - lastNotified >= NOTIFY_COOLDOWN_MS) {
@@ -78,6 +84,10 @@ export const useAutoReloadCleanBuffers = ({
 
       // Re-read the file from disk
       try {
+        // If the file was previously notified as deleted, clear that tracking
+        // now that it has reappeared.
+        deletedNotifiedRef.current.delete(detail.path);
+
         const response = await readFileWithConsent(detail.path);
         if (!response.ok) return;
         const content = await response.text();

@@ -445,11 +445,15 @@ function Sidebar({
     return () => window.removeEventListener('ledit:reveal-in-explorer', handleReveal);
   }, [effectiveSidebarCollapsed, onSidebarToggle]);
 
+  interface OpenSettingsFocusEventDetail {
+    focus?: 'persona' | 'provider';
+  }
+
   // Handle open-settings-focus event (from Status bar clicks)
   useEffect(() => {
     const handleOpenSettingsFocus = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      const focusTarget = detail?.focus as 'persona' | 'provider' | undefined;
+      const detail = (e as CustomEvent<OpenSettingsFocusEventDetail>).detail;
+      const focusTarget = detail?.focus;
       if (focusTarget !== 'persona' && focusTarget !== 'provider') return;
 
       // On mobile, open the sidebar first

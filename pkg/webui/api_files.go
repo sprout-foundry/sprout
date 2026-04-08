@@ -152,6 +152,13 @@ func (ws *ReactWebServer) handleAPIBrowse(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Determine whether to filter out gitignored entries
+	filterIgnored := r.URL.Query().Get("ignore") == "true"
+	var ignoreRules *ignore.GitIgnore
+	if filterIgnored {
+		ignoreRules = filediscovery.GetIgnoreRules(workspaceRoot)
+	}
+
 	// Read directory
 	entries, err := os.ReadDir(canonicalDir)
 	if err != nil {
@@ -162,18 +169,35 @@ func (ws *ReactWebServer) handleAPIBrowse(w http.ResponseWriter, r *http.Request
 	// Convert to JSON response
 	var files []map[string]interface{}
 	for _, entry := range entries {
+		name := entry.Name()
+		isDir := entry.IsDir()
+
+		// Always skip the .git directory
+		if isDir && name == ".git" {
+			continue
+		}
+
+		// Skip entries that match gitignore rules when filtering is enabled
+		if filterIgnored && ignoreRules != nil {
+			absPath := filepath.Join(canonicalDir, name)
+			relPath, _ := filepath.Rel(workspaceRoot, absPath)
+			if ignoreRules.MatchesPath(relPath) || (isDir && ignoreRules.MatchesPath(relPath+"/")) {
+				continue
+			}
+		}
+
 		info, err := entry.Info()
 		if err != nil {
 			continue
 		}
 
 		fileInfo := map[string]interface{}{
-			"name": entry.Name(),
-			"path": filepath.Join(canonicalDir, entry.Name()),
+			"name": name,
+			"path": filepath.Join(canonicalDir, name),
 			"type": "file",
 		}
 
-		if entry.IsDir() {
+		if isDir {
 			fileInfo["type"] = "directory"
 		}
 
@@ -543,7 +567,7 @@ func (ws *ReactWebServer) handleAPIRenameItem(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	newCanonicalPath, err := canonicalizePath(req.NewPath, workspaceRoot, false)
+	newCanonicalPath, err := canonicalizePath(req.NewPath, workspaceRoot, true)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)

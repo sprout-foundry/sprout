@@ -15,6 +15,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/events"
 	"github.com/alantheprice/ledit/pkg/factory"
 	"github.com/alantheprice/ledit/pkg/mcp"
+	"github.com/alantheprice/ledit/pkg/noninteractive"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/alantheprice/ledit/pkg/security"
 	"github.com/alantheprice/ledit/pkg/validation"
@@ -325,20 +326,25 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	if isNonInteractive() && !isRunningUnderTest() {
 		resolvedType, _, resolveErr := configManager.ResolveProviderModel("", model)
 		if resolveErr != nil {
-			return nil, fmt.Errorf("no provider configured. running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `ledit agent` interactively: %w", resolveErr)
+			return nil, fmt.Errorf("no provider configured. Running in non-interactive mode. "+noninteractive.HelpHint+": %w", resolveErr)
 		}
 		// Provider resolved — ensure API key exists without prompting.
 		if keyErr := configManager.EnsureAPIKey(resolvedType); keyErr != nil {
-			return nil, fmt.Errorf("no provider configured. running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `ledit agent` interactively: %w", keyErr)
+			return nil, fmt.Errorf("no provider configured. Running in non-interactive mode. "+noninteractive.HelpHint+": %w", keyErr)
 		}
 	}
 
+	// NOTE: The early check above ensures that in non-interactive mode the
+	// provider resolves and has an API key before reaching the retry loop
+	// below. The retry loop's recoverProviderStartup calls include their
+	// own non-interactive guards and serve as defense-in-depth, but are
+	// unreachable via the non-interactive path when this early check succeeds.
 	clientType, finalModel, err = configManager.ResolveProviderModel("", model)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[WARN] Failed to resolve configured provider/model: %v\n", err)
 		// Non-interactive: don't call SelectNewProvider (it prompts on stdin)
 		if isNonInteractive() {
-			return nil, fmt.Errorf("no provider configured. running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `ledit agent` interactively")
+			return nil, fmt.Errorf("no provider configured. Running in non-interactive mode. "+noninteractive.HelpHint)
 		}
 		fmt.Fprintf(os.Stderr, "[tool] Selecting an available provider...\n")
 		clientType, err = configManager.SelectNewProvider()

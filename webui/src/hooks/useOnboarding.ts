@@ -35,6 +35,8 @@ export interface UseOnboardingReturn {
    * changes to its own state.
    */
   onComplete: (applyAppState: (values: { provider: string; model: string }) => void) => Promise<void>;
+  /** Callback: skip onboarding and use as editor-only mode */
+  onSkip: () => Promise<void>;
   /** Callback: install WSL via the desktop bridge */
   onInstallWsl: () => Promise<void>;
   /** Callback: install Git for Windows via the desktop bridge */
@@ -229,6 +231,26 @@ function useOnboarding(): UseOnboardingReturn {
     [apiService, onboarding.apiKey, onboarding.model, onboarding.provider, selectedProvider],
   );
 
+  const onSkip = useCallback(async () => {
+    setOnboarding((prev) => ({ ...prev, submitting: true, error: null }));
+    try {
+      await apiService.skipOnboarding();
+      setOnboarding((prev) => ({
+        ...prev,
+        open: false,
+        submitting: false,
+        provider: 'editor',
+      }));
+    } catch (error) {
+      debugLog('[useOnboarding] Failed to skip setup:', error);
+      setOnboarding((prev) => ({
+        ...prev,
+        submitting: false,
+        error: error instanceof Error ? error.message : 'Failed to skip setup',
+      }));
+    }
+  }, [apiService]);
+
   const onInstallWsl = useCallback(async () => {
     const desktopBridge = (
       window as unknown as Record<string, Record<string, (...args: unknown[]) => Promise<Record<string, unknown>>>>
@@ -273,6 +295,7 @@ function useOnboarding(): UseOnboardingReturn {
     refreshStatus,
     onProviderChange,
     onComplete,
+    onSkip,
     onInstallWsl,
     onInstallGitBash,
     updateOnboarding,

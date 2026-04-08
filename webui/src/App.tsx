@@ -91,6 +91,10 @@ function App() {
   const onboarding = {
     ...onboardingHook,
     onComplete: () => onboardingHook.onComplete((values) => setState((prev) => ({ ...prev, ...values }))),
+    onSkip: () =>
+      onboardingHook.onSkip().then(() => {
+        setState((prev) => ({ ...prev, provider: 'editor', model: '' }));
+      }),
   };
 
   const { handleModelChange, handleProviderChange, handleViewChange, handlePersonaChange } = useModelProviderHandlers({
@@ -371,6 +375,7 @@ function AppWithProviders({
         windowsGuidance={onboardingHook.windowsGuidance}
         onProviderChange={onboardingHook.onProviderChange}
         onComplete={onboarding.onComplete}
+        onSkip={onboardingHook.onSkip}
         onRefresh={onboardingHook.refreshStatus}
         onInstallWsl={onboardingHook.onInstallWsl}
         onInstallGitBash={onboardingHook.onInstallGitBash}

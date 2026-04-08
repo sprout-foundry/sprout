@@ -176,6 +176,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/providers", ws.handleAPIProviders)
 	mux.HandleFunc("/api/onboarding/status", ws.handleAPIOnboardingStatus)
 	mux.HandleFunc("/api/onboarding/complete", ws.handleAPIOnboardingComplete)
+	mux.HandleFunc("/api/onboarding/skip", ws.handleAPIOnboardingSkip)
 	mux.HandleFunc("/api/files", ws.handleAPIFiles)
 	mux.HandleFunc("/api/create", ws.handleAPICreateFile)
 	mux.HandleFunc("/api/delete", ws.handleAPIDeleteItem)

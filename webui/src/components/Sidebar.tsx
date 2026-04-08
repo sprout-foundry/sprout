@@ -165,6 +165,7 @@ function Sidebar({
   const [selectedSection, setSelectedSection] = useState<SectionTab>('git');
   const [gitSubTab, setGitSubTab] = useState<'changes' | 'history' | 'worktrees'>('changes');
   const [settings, setSettings] = useState<LeditSettings | null>(null);
+  const [settingsFocusTarget, setSettingsFocusTarget] = useState<'persona' | 'provider' | null>(null);
   const apiService = ApiService.getInstance();
   const effectiveSidebarCollapsed = !isMobile && !!sidebarCollapsed;
 
@@ -443,6 +444,49 @@ function Sidebar({
     window.addEventListener('ledit:reveal-in-explorer', handleReveal);
     return () => window.removeEventListener('ledit:reveal-in-explorer', handleReveal);
   }, [effectiveSidebarCollapsed, onSidebarToggle]);
+
+  // Handle open-settings-focus event (from Status bar clicks)
+  useEffect(() => {
+    const handleOpenSettingsFocus = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      const focusTarget = detail?.focus as 'persona' | 'provider' | undefined;
+      if (focusTarget !== 'persona' && focusTarget !== 'provider') return;
+
+      // On mobile, open the sidebar first
+      if (isMobile) {
+        finalOnMobileMenuToggle?.();
+      }
+
+      // If collapsed, expand the sidebar
+      if (effectiveSidebarCollapsed) {
+        onSidebarToggle?.();
+      }
+
+      // Switch to settings tab
+      setSelectedSection('settings');
+      setSettingsFocusTarget(focusTarget);
+    };
+
+    window.addEventListener('ledit:open-settings-focus', handleOpenSettingsFocus);
+    return () => window.removeEventListener('ledit:open-settings-focus', handleOpenSettingsFocus);
+  }, [effectiveSidebarCollapsed, isMobile, onSidebarToggle, finalOnMobileMenuToggle]);
+
+  // Focus the targeted settings control once it renders
+  useEffect(() => {
+    if (!settingsFocusTarget) return;
+
+    // Brief delay to allow the settings section to mount
+    const timerId = setTimeout(() => {
+      if (settingsFocusTarget === 'persona') {
+        document.getElementById('persona-select')?.focus();
+      } else if (settingsFocusTarget === 'provider') {
+        document.getElementById('provider-select')?.focus();
+      }
+      setSettingsFocusTarget(null);
+    }, 80);
+
+    return () => clearTimeout(timerId);
+  }, [settingsFocusTarget]);
 
   const handleLogoToggle = useCallback(() => {
     if (isMobile) {

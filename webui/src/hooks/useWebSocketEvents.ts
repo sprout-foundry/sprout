@@ -269,8 +269,10 @@ export default function useWebSocketEvents({
             isProcessing: activeRequestsRef.current > 0,
             lastError: null,
             queryProgress: null,
-            securityApprovalRequest: null,
-            securityPromptRequest: null,
+            // Preserve pending security dialogs — they may outlive a failed query
+            // when a tool was blocked by security but the agent continued processing.
+            securityApprovalRequest: wasClearCommand ? null : prev.securityApprovalRequest,
+            securityPromptRequest: wasClearCommand ? null : prev.securityPromptRequest,
             toolExecutions: wasClearCommand
               ? []
               : prev.toolExecutions.map((tool) => {

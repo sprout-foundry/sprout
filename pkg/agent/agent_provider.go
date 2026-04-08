@@ -59,6 +59,13 @@ func looksLikeProviderModelSpecifier(configManager *configuration.Manager, model
 }
 
 func recoverProviderStartup(configManager *configuration.Manager, failedProvider api.ClientType, modelArg string, startupErr error) (api.ClientType, string, error) {
+	// Check if editor mode was the "failed" provider — this isn't a real failure
+	// since editor mode has no provider to initialize
+	if failedProvider == api.EditorClientType {
+		return "", "", fmt.Errorf("editor mode is active — no AI provider configured. "+
+			"Set up a provider with: ledit agent --provider <provider> or via webui settings (ledit agent -d)")
+	}
+
 	failedProviderName := api.GetProviderName(failedProvider)
 	fmt.Fprintf(os.Stderr, "[WARN] Failed to initialize provider '%s': %v\n", failedProviderName, startupErr)
 

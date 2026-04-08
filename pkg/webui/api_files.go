@@ -81,15 +81,19 @@ func (ws *ReactWebServer) gatherStatsForClientIDLocked(clientID string) map[stri
 		agentInst = clientCtx.Agent
 	}
 
-	// Always include provider/model in stats so the frontend can reliably
+	// Always include provider/model/persona in stats so the frontend can reliably
 	// detect whether a provider is configured (empty = none).
 	stats["provider"] = ""
 	stats["model"] = ""
+	stats["persona"] = ""
 
 	// Add agent-specific stats if available
 	if agentInst != nil {
 		stats["provider"] = agentInst.GetProvider()
 		stats["model"] = agentInst.GetModel()
+		// persona is "" when the default orchestrator is active (no override applied).
+		// The frontend hides the badge when empty to avoid showing "Orchestrator" for the default state.
+		stats["persona"] = agentInst.GetActivePersona()
 		stats["session_id"] = agentInst.GetSessionID()
 		stats["total_tokens"] = agentInst.GetTotalTokens()
 		stats["prompt_tokens"] = agentInst.GetPromptTokens()

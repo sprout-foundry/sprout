@@ -42,6 +42,40 @@
   font-size: 10px;
 }
 
+.status-persona {
+  font-weight: 600;
+  font-size: 10px;
+  text-transform: capitalize;
+  letter-spacing: 0.02em;
+}
+
+.status-persona.clickable,
+.status-provider.clickable {
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.status-persona.clickable:hover,
+.status-provider.clickable:hover {
+  background: var(--bg-elevated);
+  border-color: var(--border-focus);
+  color: var(--text-primary);
+}
+
+.status-persona.clickable:focus-visible,
+.status-provider.clickable:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+.status-persona.clickable:active,
+.status-provider.clickable:active {
+  transform: scale(0.97);
+}
+
 @media (max-width: 768px) {
   .status-bar {
     padding: 3px 8px;

@@ -19,6 +19,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/security"
 	"github.com/alantheprice/ledit/pkg/validation"
 	"github.com/alantheprice/ledit/pkg/utils"
+	"golang.org/x/term"
 )
 
 const (
@@ -316,6 +317,10 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	clientType, finalModel, err = configManager.ResolveProviderModel("", model)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[WARN] Failed to resolve configured provider/model: %v\n", err)
+		// Non-interactive: don't call SelectNewProvider (it prompts on stdin)
+		if !term.IsTerminal(int(os.Stdin.Fd())) {
+			return nil, fmt.Errorf("no provider configured. running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `ledit agent` interactively")
+		}
 		fmt.Fprintf(os.Stderr, "[tool] Selecting an available provider...\n")
 		clientType, err = configManager.SelectNewProvider()
 		if err != nil {

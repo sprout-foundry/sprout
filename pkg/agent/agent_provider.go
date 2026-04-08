@@ -56,7 +56,7 @@ func recoverProviderStartup(configManager *configuration.Manager, failedProvider
 
 	// Non-interactive mode cannot recover via prompt.
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
-		return "", "", fmt.Errorf("failed to initialize provider '%s': %w", failedProviderName, startupErr)
+		return "", "", fmt.Errorf("failed to initialize provider %s: running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `ledit agent` interactively: %w", failedProviderName, startupErr)
 	}
 
 	choice, err := promptProviderRecoveryChoice()

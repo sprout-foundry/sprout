@@ -225,17 +225,24 @@ func (ws *ReactWebServer) handleUploadImage(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Save the image
-	relativePath, err := console.SavePastedImage(data, workspaceRoot)
+	savedPath, err := console.SavePastedImage(data, workspaceRoot)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to save image: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	filename := filepath.Base(relativePath)
+	// Return an absolute path so the model message contains the full path,
+	// avoiding the model burning tokens trying to resolve relative paths.
+	absolutePath := savedPath
+	if !filepath.IsAbs(savedPath) && workspaceRoot != "" {
+		absolutePath = filepath.Join(workspaceRoot, savedPath)
+	}
+
+	filename := filepath.Base(savedPath)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"path":     relativePath,
+		"path":     absolutePath,
 		"filename": filename,
 	})
 }

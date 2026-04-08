@@ -59,7 +59,17 @@ func handleAnalyzeUIScreenshot(ctx context.Context, a *Agent, args map[string]in
 		effectiveImagePath = resolvedPath
 		fallbackCleanup = cleanup
 	}
-	if isLocalHTMLFile(imagePath) || tools.IsHTMLInput(imagePath) {
+	// Resolve relative paths against the workspace root so that pasted images
+	// (stored relative to the workspace) are found even when the Go process CWD
+	// differs from the client workspace root.
+	if !filepath.IsAbs(effectiveImagePath) && effectiveImagePath != "" && !strings.HasPrefix(strings.ToLower(effectiveImagePath), "http://") && !strings.HasPrefix(strings.ToLower(effectiveImagePath), "https://") {
+		resolved := filepath.Join(a.currentWorkspaceRoot(), effectiveImagePath)
+		if info, err := os.Stat(resolved); err == nil && !info.IsDir() {
+			a.debugLog("[img] Resolved relative image path against workspace root: %s -> %s\n", effectiveImagePath, resolved)
+			effectiveImagePath = resolved
+		}
+	}
+	if isLocalHTMLFile(effectiveImagePath) || tools.IsHTMLInput(effectiveImagePath) {
 		a.debugLog("HTML content detected, rendering via headless browser: %s\n", imagePath)
 		screenshotPath, err := renderHTMLContent(ctx, a, imagePath, viewportWidth, viewportHeight)
 		if err != nil {
@@ -313,6 +323,16 @@ func handleAnalyzeImageContentWithImages(ctx context.Context, a *Agent, args map
 		a.debugLog("[img] Falling back to attached image for multimodal analysis: %s -> %s\n", imagePath, resolvedPath)
 		effectiveImagePath = resolvedPath
 		fallbackCleanup = cleanup
+	}
+	// Resolve relative paths against the workspace root so that pasted images
+	// (stored relative to the workspace) are found even when the Go process CWD
+	// differs from the client workspace root.
+	if !filepath.IsAbs(effectiveImagePath) && effectiveImagePath != "" && !strings.HasPrefix(strings.ToLower(effectiveImagePath), "http://") && !strings.HasPrefix(strings.ToLower(effectiveImagePath), "https://") {
+		resolved := filepath.Join(a.currentWorkspaceRoot(), effectiveImagePath)
+		if info, err := os.Stat(resolved); err == nil && !info.IsDir() {
+			a.debugLog("[img] Resolved relative image path against workspace root: %s -> %s\n", effectiveImagePath, resolved)
+			effectiveImagePath = resolved
+		}
 	}
 	if isLocalHTMLFile(effectiveImagePath) || tools.IsHTMLInput(effectiveImagePath) {
 		a.debugLog("HTML content detected, rendering via headless browser: %s\n", effectiveImagePath)

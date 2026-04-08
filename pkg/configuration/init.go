@@ -666,6 +666,12 @@ func ShowWelcomeMessage() {
 	fmt.Println("   Requires models with tool-calling support for code editing.")
 	fmt.Println("   Get started with low-cost AI models - no lock-in, maximum flexibility.")
 	fmt.Println()
+	fmt.Println("[i] Start with the web-based code editor:")
+	fmt.Println("   • Run 'ledit agent -d' to launch at http://localhost:54000")
+	fmt.Println("   • Full code editor with AI integration built in")
+	fmt.Println("   • Friendly setup experience for providers and models")
+	fmt.Println("   • Use it side-by-side with the CLI for the best experience")
+	fmt.Println()
 	fmt.Println("[i] Recommended for beginners:")
 	fmt.Println("   • OpenRouter - Access to 100+ AI models through one API")
 	fmt.Println("   • Tool-calling models are required for ledit to function properly")
@@ -681,16 +687,16 @@ func ShowNextSteps(provider, configDir string) {
 	if provider == "editor" {
 		fmt.Println("You're in editor-only mode. AI-powered features are not available.")
 		fmt.Println()
-		fmt.Println("To enable AI features later:")
-		fmt.Println("  • Run 'ledit' and use the provider setup options")
-		fmt.Println("  • Or start the webui with 'ledit agent -d' and configure via Settings")
-		fmt.Println("  • Or set LEDIT_PROVIDER environment variable")
+		fmt.Println("To enable AI features:")
+		fmt.Println("  • Run 'ledit agent -d' to launch the webui and configure providers")
+		fmt.Println("  • Or set the LEDIT_PROVIDER environment variable")
 		fmt.Println()
 		return
 	}
 
 	fmt.Println("Next steps:")
-	fmt.Println("  • Run 'ledit' to start the interactive mode")
+	fmt.Println("  • Run 'ledit agent -d' to start the web-based code editor")
+	fmt.Println("  • Run 'ledit' to start the interactive CLI mode")
 	fmt.Println("  • Run 'ledit agent \"your task here\"' for direct commands")
 
 	// Add specific recommendations based on provider
@@ -702,8 +708,8 @@ func ShowNextSteps(provider, configDir string) {
 		fmt.Println("  • Note: Avoid models without tool-calling support - they won't work with ledit")
 		fmt.Println()
 		fmt.Println("[read] Usage examples:")
-		fmt.Println("  ledit agent -m \"qwen/qwen3-coder-30b-a3b-instruct\" \"Add error handling to my function\"")
-		fmt.Println("  ledit agent -p openrouter \"Explain this code and suggest improvements\"")
+		fmt.Println("  ledit agent -m \"qwen/qwen3-coder-30b-a3b-instruct\" \"Add error handling\"")
+		fmt.Println("  ledit agent -p openrouter \"Explain this code\"")
 	}
 
 	fmt.Println()

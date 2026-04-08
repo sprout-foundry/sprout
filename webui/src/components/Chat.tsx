@@ -539,7 +539,7 @@ function Chat({
             )}
             {messages.length === 0 ? (
               providerAvailable === false ? (
-                <div className="welcome-message">
+                <div className="welcome-message no-provider-state">
                   <div className="welcome-icon">
                     <Bot size={32} />
                   </div>

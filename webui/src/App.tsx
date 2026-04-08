@@ -94,6 +94,8 @@ function App() {
     onSkip: () =>
       onboardingHook.onSkip().then(() => {
         setState((prev) => ({ ...prev, provider: 'editor', model: '' }));
+      }).catch(() => {
+        /* error already surfaced by the hook — no-op here */
       }),
   };
 
@@ -375,7 +377,7 @@ function AppWithProviders({
         windowsGuidance={onboardingHook.windowsGuidance}
         onProviderChange={onboardingHook.onProviderChange}
         onComplete={onboarding.onComplete}
-        onSkip={onboardingHook.onSkip}
+        onSkip={onboarding.onSkip}
         onRefresh={onboardingHook.refreshStatus}
         onInstallWsl={onboardingHook.onInstallWsl}
         onInstallGitBash={onboardingHook.onInstallGitBash}

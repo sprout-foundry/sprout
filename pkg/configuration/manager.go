@@ -15,7 +15,7 @@ import (
 
 // Manager provides a unified interface for configuration management
 type Manager struct {
-	mu        sync.Mutex
+	mu        sync.RWMutex
 	config    *Config
 	apiKeys   *APIKeys
 	lastSaved *Config // Track last saved state, not initial snapshot
@@ -183,7 +183,9 @@ func (m *Manager) GetConfig() *Config {
 
 // GetAPIKeys returns the current API keys
 func (m *Manager) GetAPIKeys() *APIKeys {
-	return m.apiKeys
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return cloneAPIKeys(m.apiKeys)
 }
 
 // SaveConfig saves the configuration to disk
@@ -235,9 +237,32 @@ func (m *Manager) UpdateConfigNoSave(mutator func(*Config) error) error {
 	return nil
 }
 
-// SaveAPIKeys saves the API keys to disk
+// SaveAPIKeys saves the API keys to disk.
+//
+// Deprecated: This performs a blind write with no validation.
+// Use ValidateAndSaveAPIKey instead, which validates the key before saving
+// and preserves the old key on validation failure.
+// This method is retained for backward compatibility only.
 func (m *Manager) SaveAPIKeys() error {
-	return SaveAPIKeys(m.apiKeys)
+	m.mu.RLock()
+	keys := m.apiKeys
+	m.mu.RUnlock()
+	return SaveAPIKeys(keys)
+}
+
+// RefreshAPIKeys reloads API keys from the backend into the in-memory cache.
+// This must be called after any external mutation of the credential backend
+// (e.g., ValidateAndSaveAPIKey) to keep the Manager's in-memory map in sync.
+func (m *Manager) RefreshAPIKeys() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	keys, err := LoadAPIKeys()
+	if err != nil {
+		return fmt.Errorf("refresh API keys: %w", err)
+	}
+	m.apiKeys = keys
+	return nil
 }
 
 // GetProvider returns the currently selected provider as ClientType
@@ -276,6 +301,8 @@ func (m *Manager) SetModelForProvider(clientType api.ClientType, model string) e
 
 // GetAPIKeyForProvider returns the API key for a provider
 func (m *Manager) GetAPIKeyForProvider(clientType api.ClientType) string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	provider := mapClientTypeToString(clientType)
 	return m.apiKeys.GetAPIKey(provider)
 }
@@ -283,7 +310,10 @@ func (m *Manager) GetAPIKeyForProvider(clientType api.ClientType) string {
 // EnsureAPIKey ensures a provider has an API key, prompting if needed
 func (m *Manager) EnsureAPIKey(clientType api.ClientType) error {
 	provider := mapClientTypeToString(clientType)
-	return EnsureProviderAPIKey(provider, m.apiKeys)
+	m.mu.RLock()
+	keys := m.apiKeys
+	m.mu.RUnlock()
+	return EnsureProviderAPIKey(provider, keys)
 }
 
 // HasAPIKey checks if a provider has an API key
@@ -294,10 +324,11 @@ func (m *Manager) HasAPIKey(clientType api.ClientType) bool {
 
 // SelectNewProvider allows interactive provider selection
 func (m *Manager) SelectNewProvider() (api.ClientType, error) {
-	m.mu.Lock()
+	m.mu.RLock()
 	currentProvider := m.config.LastUsedProvider
-	m.mu.Unlock()
-	selected, err := SelectProvider(currentProvider, m.apiKeys)
+	apiKeys := m.apiKeys
+	m.mu.RUnlock()
+	selected, err := SelectProvider(currentProvider, apiKeys)
 	if err != nil {
 		return "", fmt.Errorf("failed to select provider: %w", err)
 	}
@@ -390,6 +421,17 @@ func cloneConfig(cfg *Config) *Config {
 		return nil
 	}
 	return &out
+}
+
+func cloneAPIKeys(keys *APIKeys) *APIKeys {
+	if keys == nil {
+		return nil
+	}
+	clone := make(APIKeys, len(*keys))
+	for k, v := range *keys {
+		clone[k] = v
+	}
+	return &clone
 }
 
 func mergeConfigChanges(base, current, latest *Config) (*Config, error) {

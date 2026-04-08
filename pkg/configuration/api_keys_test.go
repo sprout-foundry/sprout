@@ -1,7 +1,9 @@
 package configuration
 
 import (
+	"errors"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/alantheprice/ledit/pkg/credentials"
@@ -109,4 +111,44 @@ func TestValidateAndSaveAPIKey_NoOldKey(t *testing.T) {
 
 	// Clean up - delete the test key
 	_ = credentials.DeleteFromActiveBackend("test")
+}
+
+// TestValidateAndSaveAPIKey_UnsupportedProvider tests error for unknown provider
+func TestValidateAndSaveAPIKey_UnsupportedProvider(t *testing.T) {
+	// Unknown providers are accepted as ClientType, but validation will fail
+	// since there's no real API to validate against
+	_, err := ValidateAndSaveAPIKey("totally-fake-provider-xyz", "some-key")
+	if err == nil {
+		t.Fatal("Expected error for unsupported provider")
+	}
+	// The error should indicate validation failure (not "unsupported provider")
+	// since ParseProviderName accepts any string
+	if !strings.Contains(err.Error(), "validation failed") {
+		t.Errorf("Expected 'validation failed' error, got: %v", err)
+	}
+}
+
+// TestSanitizeValidationError tests error message sanitization
+func TestSanitizeValidationError(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"401 error", "status 401 unauthorized", "Invalid API key"},
+		{"403 error", "forbidden", "Access forbidden"},
+		{"429 error", "status 429 rate limit exceeded", "Rate limit exceeded"},
+		{"500 error", "internal server error 500", "Service temporarily unavailable"},
+		{"timeout", "request timed out deadline exceeded", "Request timed out"},
+		{"network", "network dial tcp", "Network error"},
+		{"generic", "some random error", "Validation failed"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := sanitizeValidationError(errors.New(tc.input))
+			if !strings.Contains(result, tc.expected) {
+				t.Errorf("sanitizeValidationError(%q) = %q, want substring %q", tc.input, result, tc.expected)
+			}
+		})
+	}
 }

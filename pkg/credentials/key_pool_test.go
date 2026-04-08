@@ -363,6 +363,53 @@ func TestLoadKeyPool_EmptyProvider(t *testing.T) {
 	assert.Empty(t, result.Pool.Keys)
 }
 
+func TestRemoveKeyFromPoolByIndex(t *testing.T) {
+	setupFileBackend(t)
+	require.NoError(t, SaveKeyPool("idx", &KeyPool{Keys: []string{"sk-a", "sk-b", "sk-c"}}))
+
+	// Remove middle key (index 1)
+	require.NoError(t, RemoveKeyFromPoolByIndex("idx", 1))
+	result, err := LoadKeyPool("idx")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"sk-a", "sk-c"}, result.Pool.Keys)
+
+	// Remove first key (index 0)
+	require.NoError(t, RemoveKeyFromPoolByIndex("idx", 0))
+	result, err = LoadKeyPool("idx")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"sk-c"}, result.Pool.Keys)
+
+	// Remove last key
+	require.NoError(t, RemoveKeyFromPoolByIndex("idx", 0))
+	result, err = LoadKeyPool("idx")
+	require.NoError(t, err)
+	assert.Empty(t, result.Pool.Keys)
+}
+
+func TestRemoveKeyFromPoolByIndex_Errors(t *testing.T) {
+	setupFileBackend(t)
+
+	// Negative index
+	err := RemoveKeyFromPoolByIndex("idx", -1)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "negative")
+
+	// Empty provider
+	err = RemoveKeyFromPoolByIndex("", 0)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "provider name cannot be empty")
+
+	// Index out of bounds
+	require.NoError(t, SaveKeyPool("idx", &KeyPool{Keys: []string{"sk-a"}}))
+	err = RemoveKeyFromPoolByIndex("idx", 1)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "out of bounds")
+
+	// Non-existent provider
+	err = RemoveKeyFromPoolByIndex("nope", 0)
+	require.Error(t, err)
+}
+
 // ---------------------------------------------------------------------------
 // 6. Resolution with rotation integration (using resolve())
 // ---------------------------------------------------------------------------

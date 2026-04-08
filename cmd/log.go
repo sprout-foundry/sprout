@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/alantheprice/ledit/pkg/credentials"
 	"github.com/alantheprice/ledit/pkg/history"
 	"github.com/spf13/cobra"
 )
@@ -84,7 +85,9 @@ func displayVerboseLog() {
 	buffer.WriteString(strings.Repeat("=", 80) + "\n")
 
 	for _, line := range displayLines {
-		buffer.WriteString(line + "\n")
+		// Redact credential patterns from log lines
+		redactedLine := credentials.RedactLogLine(line)
+		buffer.WriteString(redactedLine + "\n")
 	}
 
 	buffer.WriteString(strings.Repeat("=", 80) + "\n")

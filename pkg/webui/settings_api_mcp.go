@@ -124,16 +124,19 @@ func newMCPServerResponse(s mcp.MCPServerConfig) mcpServerResponse {
 	}
 }
 
-// maskCredentials masks credential placeholder values for safe display.
+// maskCredentials masks credential values for safe display.
 // Credential placeholders are shown as "{{stored}}".
-func maskCredentials(credentials map[string]string) map[string]string {
-	if credentials == nil {
+// Raw (non-placeholder) values are masked via credentials.MaskValue.
+func maskCredentials(creds map[string]string) map[string]string {
+	if creds == nil {
 		return nil
 	}
-	result := make(map[string]string, len(credentials))
-	for name, value := range credentials {
+	result := make(map[string]string, len(creds))
+	for name, value := range creds {
 		if mcp.IsSecretRef(value) {
 			result[name] = "{{stored}}"
+		} else if value != "" {
+			result[name] = credentials.MaskValue(value)
 		} else {
 			result[name] = value
 		}

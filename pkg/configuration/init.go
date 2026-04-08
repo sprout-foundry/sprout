@@ -284,12 +284,13 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 			return "", fmt.Errorf("failed to get API key: %w", err)
 		}
 
-		apiKeys.SetAPIKey(selectedProvider, apiKey)
-		if err := SaveAPIKeys(apiKeys); err != nil {
-			return "", fmt.Errorf("failed to save API key: %w", err)
+		// Validate the API key before saving
+		modelCount, err := ValidateAndSaveAPIKey(selectedProvider, apiKey)
+		if err != nil {
+			return "", fmt.Errorf("failed to validate and save API key: %w", err)
 		}
 
-		fmt.Printf("[OK] API key saved for %s\n", getProviderDisplayName(selectedProvider))
+		fmt.Printf("[OK] API key saved for %s (%d models available)\n", getProviderDisplayName(selectedProvider), modelCount)
 	} else if metadata.RequiresAPIKey {
 		fmt.Printf("[OK] Using existing API key for %s\n", getProviderDisplayName(selectedProvider))
 	} else {
@@ -328,12 +329,13 @@ func EnsureProviderAPIKey(provider string, apiKeys *APIKeys) error {
 			return fmt.Errorf("prompt for API key: %w", err)
 		}
 
-		apiKeys.SetAPIKey(provider, apiKey)
-		if err := SaveAPIKeys(apiKeys); err != nil {
-			return fmt.Errorf("failed to save API key: %w", err)
+		// Validate the API key before saving
+		modelCount, err := ValidateAndSaveAPIKey(provider, apiKey)
+		if err != nil {
+			return fmt.Errorf("failed to validate and save API key: %w", err)
 		}
 
-		fmt.Printf("[OK] API key saved for %s\n", getProviderDisplayName(provider))
+		fmt.Printf("[OK] API key saved for %s (%d models available)\n", getProviderDisplayName(provider), modelCount)
 		return nil
 	}
 
@@ -487,12 +489,13 @@ func addNewProvider(apiKeys *APIKeys) (string, error) {
 		return "", fmt.Errorf("failed to prompt for API key: %w", err)
 	}
 
-	apiKeys.SetAPIKey(provider, apiKey)
-	if err := SaveAPIKeys(apiKeys); err != nil {
-		return "", fmt.Errorf("failed to save API key: %w", err)
+	// Validate the API key before saving
+	modelCount, err := ValidateAndSaveAPIKey(provider, apiKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to validate and save API key: %w", err)
 	}
 
-	fmt.Printf("[OK] Added %s\n", getProviderDisplayName(provider))
+	fmt.Printf("[OK] Added %s (%d models available)\n", getProviderDisplayName(provider), modelCount)
 	return provider, nil
 }
 

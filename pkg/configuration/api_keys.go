@@ -2,12 +2,16 @@ package configuration
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"log"
 	"os"
 	"strings"
 	"syscall"
+	"sync"
+	"time"
 
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/credentials"
 	"golang.org/x/term"
 )
@@ -49,6 +53,9 @@ var knownProviderDisplayNames = map[string]string{
 	"mistral":      "Mistral",
 	"jinaai":       "JinaAI",
 }
+
+// keyValidationMutex protects ValidateAndSaveAPIKey from concurrent access.
+var keyValidationMutex sync.Mutex
 
 // GetAPIKeysPath returns the full path to the API keys file
 func GetAPIKeysPath() (string, error) {
@@ -229,6 +236,58 @@ func (keys *APIKeys) SetAPIKey(provider, key string) {
 	(*keys)[provider] = key
 }
 
+// ValidateAndSaveAPIKey validates a new API key before storing it.
+// If validation fails, the old key is preserved and an error is returned.
+// Returns the number of models available if validation succeeds.
+func ValidateAndSaveAPIKey(provider, key string) (int, error) {
+	keyValidationMutex.Lock()
+	defer keyValidationMutex.Unlock()
+
+	// Parse provider name to ClientType
+	clientType, err := api.ParseProviderName(provider)
+	if err != nil {
+		return 0, fmt.Errorf("unsupported provider: %s", provider)
+	}
+
+	// Get the old key for restoration if validation fails
+	oldValue, hasOldValue := "", false
+	if val, _, err := credentials.GetFromActiveBackend(provider); err == nil && strings.TrimSpace(val) != "" {
+		oldValue = val
+		hasOldValue = true
+	}
+
+	// Set the new key temporarily
+	if err := credentials.SetToActiveBackend(provider, key); err != nil {
+		// Failed to set key at all - restore old if it existed
+		if hasOldValue {
+			_ = credentials.SetToActiveBackend(provider, oldValue)
+		}
+		return 0, fmt.Errorf("failed to store temporary key: %w", err)
+	}
+
+	// Validate the new key by calling ListModels
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	models, err := api.GetModelsForProviderCtx(ctx, clientType)
+	if err != nil {
+		// Validation failed - restore old key if it existed
+		if hasOldValue {
+			if restoreErr := credentials.SetToActiveBackend(provider, oldValue); restoreErr != nil {
+				log.Printf("[config] Warning: failed to restore old key for %q: %v", provider, restoreErr)
+			}
+		} else {
+			// No old key existed, remove the bad key
+			_ = credentials.DeleteFromActiveBackend(provider)
+		}
+		return 0, fmt.Errorf("validation failed: %s", sanitizeValidationError(err))
+	}
+
+	// Validation succeeded - key is already stored in backend via SetToActiveBackend above
+	log.Printf("[config] API key for %q validated successfully (%d models available)", provider, len(models))
+	return len(models), nil
+}
+
 // HasAPIKey checks if a provider has an API key set.
 // Checks the in-memory map first, then falls back to the active backend
 // (keyring or file store) for credentials not in the map.
@@ -325,4 +384,27 @@ func RequiresAPIKey(provider string) bool {
 		return true // default to requiring key for unknown providers
 	}
 	return metadata.RequiresAPIKey
+}
+
+// sanitizeValidationError maps internal API errors to user-friendly messages.
+func sanitizeValidationError(err error) string {
+	errMsg := err.Error()
+
+	// Common error patterns to sanitize
+	switch {
+	case strings.Contains(errMsg, "401") || strings.Contains(errMsg, "unauthorized") || strings.Contains(errMsg, "invalid"):
+		return "Invalid API key. Please check your credentials and try again."
+	case strings.Contains(errMsg, "403") || strings.Contains(errMsg, "forbidden"):
+		return "Access forbidden. Your API key may not have the required permissions."
+	case strings.Contains(errMsg, "429") || strings.Contains(errMsg, "rate limit") || strings.Contains(errMsg, "too many requests"):
+		return "Rate limit exceeded. Please wait a moment and try again."
+	case strings.Contains(errMsg, "500") || strings.Contains(errMsg, "internal"):
+		return "Service temporarily unavailable. Please try again later."
+	case strings.Contains(errMsg, "timeout") || strings.Contains(errMsg, "deadline"):
+		return "Request timed out. Please check your network connection and try again."
+	case strings.Contains(errMsg, "network") || strings.Contains(errMsg, "dial"):
+		return "Network error. Please check your internet connection and try again."
+	default:
+		return fmt.Sprintf("Validation failed: %s", errMsg)
+	}
 }

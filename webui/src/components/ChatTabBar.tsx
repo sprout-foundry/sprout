@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react';
-import { Plus, X, Pencil, Trash2, GitBranch, Link2, Unlink2 } from 'lucide-react';
+import { Plus, X, Pencil, Trash2, GitBranch, Link2, Unlink2, Pin } from 'lucide-react';
 import type { ChatSession } from '../services/chatSessions';
 import ContextMenu from './ContextMenu';
 import './ChatTabBar.css';
@@ -12,6 +12,7 @@ interface ChatTabBarProps {
   onCreate: () => void;
   onDelete: (id: string) => void;
   onRename: (id: string, name: string) => void;
+  onTogglePin?: (id: string) => void;
   onCreateChatInWorktree?: () => void;
   onSetWorktree?: (sessionId: string) => void;
   onClearWorktree?: (sessionId: string) => void;
@@ -33,6 +34,7 @@ function ChatTabBar({
   onCreate,
   onDelete,
   onRename,
+  onTogglePin,
   onCreateChatInWorktree,
   onSetWorktree,
   onClearWorktree,
@@ -259,6 +261,20 @@ function ChatTabBar({
         >
           <Pencil size={13} />
           <span className="menu-item-label">Rename</span>
+        </button>
+        <button
+          className="context-menu-item"
+          onClick={() => {
+            if (onTogglePin && contextMenu.sessionId) {
+              onTogglePin(contextMenu.sessionId);
+              closeContextMenu();
+            }
+          }}
+          type="button"
+          disabled={!onTogglePin || !contextMenu.sessionId}
+        >
+          <Pin size={13} />
+          <span className="menu-item-label">{contextSessionId ? sessions.find((s) => s.id === contextSessionId)?.is_pinned ? 'Unpin' : 'Pin' : 'Pin'}</span>
         </button>
         <div className="context-menu-divider" />
         <button

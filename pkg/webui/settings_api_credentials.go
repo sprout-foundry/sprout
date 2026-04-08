@@ -25,16 +25,31 @@ import (
 // handleAPISettingsCredentials dispatches GET, PUT, DELETE, and POST /api/settings/credentials[/...].
 // Exact path (/api/settings/credentials) maps here for GET; trailing-slash (/api/settings/credentials/) maps here for PUT/DELETE.
 // POST /api/settings/credentials/{provider}/test also routes here for credential validation.
+// Pool endpoints: GET/POST/DELETE /api/settings/credentials/{provider}/pool
 func (ws *ReactWebServer) handleAPISettingsCredentials(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		ws.handleAPISettingsCredentialsGet(w, r)
+		if strings.HasSuffix(r.URL.Path, "/pool") {
+			ws.handleAPISettingsCredentialsPoolGet(w, r)
+		} else {
+			ws.handleAPISettingsCredentialsGet(w, r)
+		}
 	case http.MethodPut:
 		ws.handleAPISettingsCredentialsPut(w, r)
 	case http.MethodPost:
-		ws.handleAPISettingsCredentialsTest(w, r)
+		if strings.HasSuffix(r.URL.Path, "/pool") {
+			ws.handleAPISettingsCredentialsPoolPost(w, r)
+		} else if strings.HasSuffix(r.URL.Path, "/test") {
+			ws.handleAPISettingsCredentialsTest(w, r)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
 	case http.MethodDelete:
-		ws.handleAPISettingsCredentialsDelete(w, r)
+		if strings.HasSuffix(r.URL.Path, "/pool") {
+			ws.handleAPISettingsCredentialsPoolDelete(w, r)
+		} else {
+			ws.handleAPISettingsCredentialsDelete(w, r)
+		}
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -54,6 +69,7 @@ type providerCredentialStatusResponse struct {
 	HasEnvCredential    bool   `json:"has_env_credential"`
 	CredentialSource    string `json:"credential_source"` // "stored", "environment", or "none"
 	MaskedValue         string `json:"masked_value"`
+	KeyPoolSize         int    `json:"key_pool_size"` // Number of keys in the pool
 }
 
 // getCredentialsResponse is the response for GET /api/settings/credentials.
@@ -106,6 +122,9 @@ func (ws *ReactWebServer) handleAPISettingsCredentialsGet(w http.ResponseWriter,
 			hasStoredCred = true
 		}
 
+		// Get pool size (ignore errors - default to 0)
+		poolSize, _ := credentials.GetPoolSize(providerStr)
+
 		// Determine credential source and masked value
 		var source string
 		var maskedValue string
@@ -117,7 +136,11 @@ func (ws *ReactWebServer) handleAPISettingsCredentialsGet(w http.ResponseWriter,
 			}
 		} else if hasStoredCred {
 			source = "stored"
-			maskedValue = credentials.MaskValue(storedValue)
+			if poolSize > 1 {
+				maskedValue = fmt.Sprintf("(%d keys configured)", poolSize)
+			} else {
+				maskedValue = credentials.MaskValue(storedValue)
+			}
 		} else {
 			source = "none"
 			maskedValue = ""
@@ -132,6 +155,7 @@ func (ws *ReactWebServer) handleAPISettingsCredentialsGet(w http.ResponseWriter,
 			HasEnvCredential:    hasEnvCred,
 			CredentialSource:    source,
 			MaskedValue:         maskedValue,
+			KeyPoolSize:         poolSize,
 		})
 	}
 
@@ -229,6 +253,19 @@ func (ws *ReactWebServer) handleAPISettingsCredentialsPut(w http.ResponseWriter,
 		return
 	}
 
+	// Warn if provider has an existing multi-key pool that would be overwritten
+	if existingSize, _ := credentials.GetPoolSize(provider); existingSize > 1 {
+		writeJSON(w, http.StatusConflict, map[string]interface{}{
+			"success": false,
+			"provider": provider,
+			"warning": fmt.Sprintf(
+				"Provider %q has %d keys in its pool. Use the pool API (POST/DELETE /api/settings/credentials/%s/pool) to manage keys individually.",
+				provider, existingSize, provider,
+			),
+		})
+		return
+	}
+
 	// Validate the new key BEFORE storing it
 	// This ensures we never replace a working key with a broken one
 	if _, err := ws.validateAndSetCredential(cm, provider, req.Value); err != nil {
@@ -256,6 +293,18 @@ type testCredentialResponse struct {
 	ModelCount   int      `json:"model_count,omitempty"`
 	SampleModels []string `json:"sample_models,omitempty"`
 	Error        string   `json:"error,omitempty"`
+}
+
+// keyPoolResponse is the response for GET /api/settings/credentials/{provider}/pool.
+type keyPoolResponse struct {
+	Provider   string   `json:"provider"`
+	KeyCount   int      `json:"key_count"`
+	MaskedKeys []string `json:"masked_keys"`
+}
+
+// poolCredentialRequest is the request body for POST/DELETE /api/settings/credentials/{provider}/pool.
+type poolCredentialRequest struct {
+	Value string `json:"value"`
 }
 
 // Per-provider rate limiter for the test-connection endpoint.
@@ -472,6 +521,18 @@ func (ws *ReactWebServer) handleAPISettingsCredentialsDelete(w http.ResponseWrit
 		return
 	}
 
+	// Clean up any pool entries (provider__pool_N) that may exist for keyring backend
+	backend, _ := credentials.GetStorageBackend()
+	if _, isKeyring := backend.(*credentials.OSKeyringBackend); isKeyring {
+		for i := 1; i < credentials.MaxPoolEntries; i++ {
+			poolKey := fmt.Sprintf("%s__pool_%d", provider, i)
+			_ = credentials.DeleteFromActiveBackend(poolKey)
+		}
+	}
+
+	// Reset rotation counter for this provider
+	credentials.DefaultRotator.Reset(provider)
+
 	// Sync the Manager's in-memory cache with the backend after deletion
 	if err := cm.RefreshAPIKeys(); err != nil {
 		log.Printf("[config] Warning: failed to refresh API keys after deletion: %v", err)
@@ -480,5 +541,219 @@ func (ws *ReactWebServer) handleAPISettingsCredentialsDelete(w http.ResponseWrit
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success":  true,
 		"provider": provider,
+	})
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/settings/credentials/{provider}/pool
+// ---------------------------------------------------------------------------
+
+func (ws *ReactWebServer) handleAPISettingsCredentialsPoolGet(w http.ResponseWriter, r *http.Request) {
+	// Extract provider name from URL path: /api/settings/credentials/{provider}/pool
+	provider := extractPathSegment(r.URL.Path, "/api/settings/credentials/")
+	if provider == "" {
+		writeJSONError(w, http.StatusBadRequest, "provider name is required in URL path")
+		return
+	}
+
+	// Trim trailing /pool from the extracted segment
+	provider = strings.TrimSuffix(provider, "/pool")
+
+	// Sanitize: take only the base name to prevent path traversal
+	provider = path.Base(provider)
+
+	if provider == "" || provider == "." {
+		writeJSONError(w, http.StatusBadRequest, "provider name is required in URL path")
+		return
+	}
+
+	cm := ws.getConfigManager(r, w)
+	if cm == nil {
+		return
+	}
+
+	// Validate provider is known
+	knownProviders := cm.GetAvailableProviders()
+	validProvider := false
+	for _, p := range knownProviders {
+		if string(p) == provider {
+			validProvider = true
+			break
+		}
+	}
+	if !validProvider {
+		writeJSONError(w, http.StatusBadRequest, "provider not found")
+		return
+	}
+
+	// Load the key pool
+	result, err := credentials.LoadKeyPool(provider)
+	if err != nil {
+		log.Printf("[credentials] Warning: failed to load key pool for %q: %v", provider, err)
+		result = &credentials.KeyPoolResult{Pool: &credentials.KeyPool{Keys: []string{}}}
+	}
+
+	// Mask each key
+	maskedKeys := make([]string, 0, len(result.Pool.Keys))
+	for _, key := range result.Pool.Keys {
+		maskedKeys = append(maskedKeys, credentials.MaskValue(key))
+	}
+
+	writeJSON(w, http.StatusOK, keyPoolResponse{
+		Provider:   provider,
+		KeyCount:   len(result.Pool.Keys),
+		MaskedKeys: maskedKeys,
+	})
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/settings/credentials/{provider}/pool
+// ---------------------------------------------------------------------------
+
+func (ws *ReactWebServer) handleAPISettingsCredentialsPoolPost(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxSettingsBodyBytes)
+
+	// Extract provider name from URL path: /api/settings/credentials/{provider}/pool
+	provider := extractPathSegment(r.URL.Path, "/api/settings/credentials/")
+	if provider == "" {
+		writeJSONError(w, http.StatusBadRequest, "provider name is required in URL path")
+		return
+	}
+
+	// Trim trailing /pool from the extracted segment
+	provider = strings.TrimSuffix(provider, "/pool")
+
+	// Sanitize: take only the base name to prevent path traversal
+	provider = path.Base(provider)
+
+	if provider == "" || provider == "." {
+		writeJSONError(w, http.StatusBadRequest, "provider name is required in URL path")
+		return
+	}
+
+	cm := ws.getConfigManager(r, w)
+	if cm == nil {
+		return
+	}
+
+	var req poolCredentialRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("Invalid JSON: %v", err))
+		return
+	}
+
+	// Validate value is non-empty
+	if strings.TrimSpace(req.Value) == "" {
+		writeJSONError(w, http.StatusBadRequest, "key value cannot be empty")
+		return
+	}
+
+	// Validate provider is known
+	knownProviders := cm.GetAvailableProviders()
+	validProvider := false
+	for _, p := range knownProviders {
+		if string(p) == provider {
+			validProvider = true
+			break
+		}
+	}
+	if !validProvider {
+		writeJSONError(w, http.StatusBadRequest, "provider not found")
+		return
+	}
+
+	// Add the key to the pool
+	if err := credentials.AddKeyToPool(provider, req.Value); err != nil {
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("failed to add key to pool: %v", err))
+		return
+	}
+
+	// Get the updated pool size
+	poolSize, err := credentials.GetPoolSize(provider)
+	if err != nil {
+		log.Printf("[credentials] Warning: failed to get pool size for %q: %v", provider, err)
+		poolSize = -1
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success":   true,
+		"provider":  provider,
+		"key_count": poolSize,
+	})
+}
+
+// ---------------------------------------------------------------------------
+// DELETE /api/settings/credentials/{provider}/pool
+// ---------------------------------------------------------------------------
+
+func (ws *ReactWebServer) handleAPISettingsCredentialsPoolDelete(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxSettingsBodyBytes)
+
+	// Extract provider name from URL path: /api/settings/credentials/{provider}/pool
+	provider := extractPathSegment(r.URL.Path, "/api/settings/credentials/")
+	if provider == "" {
+		writeJSONError(w, http.StatusBadRequest, "provider name is required in URL path")
+		return
+	}
+
+	// Trim trailing /pool from the extracted segment
+	provider = strings.TrimSuffix(provider, "/pool")
+
+	// Sanitize: take only the base name to prevent path traversal
+	provider = path.Base(provider)
+
+	if provider == "" || provider == "." {
+		writeJSONError(w, http.StatusBadRequest, "provider name is required in URL path")
+		return
+	}
+
+	cm := ws.getConfigManager(r, w)
+	if cm == nil {
+		return
+	}
+
+	var req poolCredentialRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("Invalid JSON: %v", err))
+		return
+	}
+
+	// Validate value is non-empty
+	if strings.TrimSpace(req.Value) == "" {
+		writeJSONError(w, http.StatusBadRequest, "key value cannot be empty")
+		return
+	}
+
+	// Validate provider is known
+	knownProviders := cm.GetAvailableProviders()
+	validProvider := false
+	for _, p := range knownProviders {
+		if string(p) == provider {
+			validProvider = true
+			break
+		}
+	}
+	if !validProvider {
+		writeJSONError(w, http.StatusBadRequest, "provider not found")
+		return
+	}
+
+	// Remove the key from the pool
+	if err := credentials.RemoveKeyFromPool(provider, req.Value); err != nil {
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("failed to remove key from pool: %v", err))
+		return
+	}
+
+	// Get the updated pool size
+	poolSize, err := credentials.GetPoolSize(provider)
+	if err != nil {
+		log.Printf("[credentials] Warning: failed to get pool size for %q: %v", provider, err)
+		poolSize = -1
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success":   true,
+		"provider":  provider,
+		"key_count": poolSize,
 	})
 }

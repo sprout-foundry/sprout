@@ -242,6 +242,7 @@ Only use this for migration or export purposes.`,
 
 		fmt.Println("API keys decrypted to plaintext successfully.")
 		fmt.Println("WARNING: Your API keys are now stored in unencrypted format.")
+		fmt.Println("Run 'ledit keys encrypt' to re-enable encryption when done.")
 		return nil
 	},
 }

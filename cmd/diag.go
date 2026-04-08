@@ -94,13 +94,14 @@ func runDiag() {
 			fmt.Println("  [INFO] No MCP servers configured")
 		} else {
 			fmt.Println("  Configured Servers:")
-			for name, server := range mcpConfig.Servers {
+			redactedConfig := mcp.RedactMCPConfig(mcpConfig)
+			for name, server := range redactedConfig.Servers {
 				fmt.Printf("    • %s\n", name)
 				if server.Type == "http" {
 					fmt.Printf("      Type: HTTP Remote Server\n")
 					fmt.Printf("      URL: %s\n", credentials.RedactLogLine(server.URL))
 				} else {
-					fmt.Printf("      Command: %s %v\n", server.Command, server.Args)
+					fmt.Printf("      Command: %s %v\n", server.Command, credentials.RedactLogLine(fmt.Sprintf("%v", server.Args)))
 				}
 				fmt.Printf("      Auto-start: %t\n", server.AutoStart)
 				fmt.Printf("      Max restarts: %d\n", server.MaxRestarts)

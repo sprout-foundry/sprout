@@ -506,7 +506,8 @@ func promptForGitHubToken(reader *bufio.Reader) (string, error) {
 		if strings.ToLower(strings.TrimSpace(setEnv)) == "y" {
 			fmt.Println()
 			fmt.Println("Add this to your shell profile (~/.bashrc, ~/.zshrc, etc.):")
-			fmt.Printf("  export GITHUB_PERSONAL_ACCESS_TOKEN=\"%s\"\n", credentials.MaskValue(githubToken))
+			fmt.Printf("  export GITHUB_PERSONAL_ACCESS_TOKEN=\"<your-token-here>\"\n")
+			fmt.Println("(Paste the token you just entered above.)")
 			fmt.Println()
 		}
 	}
@@ -944,7 +945,7 @@ func runMCPList() error {
 			fmt.Printf("   Type: HTTP Remote Server\n")
 			fmt.Printf("   URL: %s\n", credentials.RedactLogLine(server.URL))
 		} else {
-			fmt.Printf("   Command: %s %v\n", server.Command, server.Args)
+			fmt.Printf("   Command: %s %v\n", server.Command, credentials.RedactLogLine(fmt.Sprintf("%v", server.Args)))
 		}
 		fmt.Printf("   Auto-start: %t\n", server.AutoStart)
 		fmt.Printf("   Max restarts: %d\n", server.MaxRestarts)

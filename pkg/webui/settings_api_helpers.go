@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/alantheprice/ledit/pkg/mcp"
 )
 
 // ---------------------------------------------------------------------------
@@ -49,7 +50,7 @@ func sanitizedConfig(cfg *configuration.Config) map[string]interface{} {
 		"last_used_provider":             cfg.LastUsedProvider,
 		"provider_models":                cfg.ProviderModels,
 		"provider_priority":              cfg.ProviderPriority,
-		"mcp":                            cfg.MCP,
+		"mcp":                            mcp.RedactMCPConfig(cfg.MCP),
 		"enable_pre_write_validation":    cfg.EnablePreWriteValidation,
 		"allow_orchestrator_git_write":   cfg.AllowOrchestratorGitWrite,
 		"resource_directory":             cfg.ResourceDirectory,

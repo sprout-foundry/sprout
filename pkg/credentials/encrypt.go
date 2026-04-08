@@ -207,12 +207,25 @@ func DecryptStore(data []byte) ([]byte, error) {
 		return nil, fmt.Errorf("encrypted file too large (%d bytes, max %d)", len(data), MaxEncryptedSize)
 	}
 
+	// Detect encrypted files early to provide a clear message if decryption
+	// ultimately fails (instead of falling through and producing a confusing
+	// JSON parse error about "invalid character 'a'" from the age header).
+	encrypted := isEncrypted(data)
+
 	// Try machine key first
 	identity, err := loadMachineKey()
 	if err == nil {
 		r, err := age.Decrypt(bytes.NewReader(data), identity)
 		if err == nil {
-			return io.ReadAll(io.LimitReader(r, MaxDecryptedSize))
+			decrypted, readErr := io.ReadAll(io.LimitReader(r, MaxDecryptedSize))
+			if readErr != nil {
+				return nil, fmt.Errorf("failed to read decrypted data: %w", readErr)
+			}
+			if !IsPlaintextJSON(decrypted) {
+				return nil, fmt.Errorf("decrypted data is not valid JSON — the machine key may be wrong (was key.age regenerated?). "+
+					"Run 'ledit keys migrate' to re-encrypt with the current machine key")
+			}
+			return decrypted, nil
 		}
 		// Machine key decryption failed — data may be passphrase-encrypted
 		// or the key file may have been regenerated after corruption
@@ -222,6 +235,9 @@ func DecryptStore(data []byte) ([]byte, error) {
 	if passphrase := strings.TrimSpace(os.Getenv("LEDIT_KEY_PASSPHRASE")); passphrase != "" {
 		decrypted, passErr := DecryptWithPassphrase(data, passphrase)
 		if passErr == nil {
+			if !IsPlaintextJSON(decrypted) {
+				return nil, fmt.Errorf("decrypted data is not valid JSON — the passphrase may be incorrect")
+			}
 			return decrypted, nil
 		}
 		// Passphrase decryption also failed
@@ -229,14 +245,26 @@ func DecryptStore(data []byte) ([]byte, error) {
 	}
 
 	// Neither worked — provide actionable guidance
-	if os.IsNotExist(err) || identity == nil {
-		return nil, fmt.Errorf("machine key not found and LEDIT_KEY_PASSPHRASE not set. "+
-			"Recovery options:\n"+
-			"  1. Run 'ledit keys migrate' to generate a new machine key (existing encrypted keys will be lost)\n"+
-			"  2. Set LEDIT_KEY_PASSPHRASE=<your-passphrase> if you previously encrypted with a passphrase: %w", err)
+	if !encrypted {
+		return nil, fmt.Errorf("API keys file is not valid JSON and not encrypted — file may be corrupted. "+
+			"Restore from backup or delete %s to start fresh", "api_keys.json")
 	}
-	return nil, fmt.Errorf("failed to decrypt API keys with machine key (file may be corrupted, or key.age was regenerated). "+
-		"Set LEDIT_KEY_PASSPHRASE if the file was passphrase-encrypted: %w", err)
+
+	if os.IsNotExist(err) || identity == nil {
+		return nil, fmt.Errorf("API keys file is encrypted (age format) but no decryption key is available.\n"+
+			"This usually means you need to update your ledit binary to a version that supports encryption,\n"+
+			"or the machine key file (key.age) was deleted.\n\n"+
+			"Recovery options:\n"+
+			"  1. Update ledit to the latest version if you're running an older build\n"+
+			"  2. Set LEDIT_KEY_PASSPHRASE=<your-passphrase> if you previously used passphrase encryption\n"+
+			"  3. Run 'ledit keys migrate' to generate a new machine key (existing encrypted keys will be lost): %w", err)
+	}
+	return nil, fmt.Errorf("API keys file is encrypted but decryption with the machine key failed.\n"+
+		"The machine key (key.age) may have been regenerated, making the old encrypted data unreadable.\n\n"+
+		"Recovery options:\n"+
+		"  1. If you have a backup of api_keys.json from before encryption, restore it\n"+
+		"  2. Set LEDIT_KEY_PASSPHRASE if the file was passphrase-encrypted\n"+
+		"  3. Delete api_keys.json and re-enter your API keys: %w", err)
 }
 
 // EncryptWithPassphrase encrypts plaintext data using a passphrase-derived key.
@@ -446,14 +474,19 @@ func Save(store Store) error {
 // Use ResolveProvider() for the public API.
 //
 // Resolution order:
-// 1. Environment variable (if envVar is provided and set)
-// 2. Keyring backend (if keyring backend is active and key exists)
-// 3. Encrypted file store
+//  1. Environment variable (if envVar is provided and set, highest priority)
+//  2. Key pool with round-robin rotation from stored credentials
+//
+// For keyring backends, the keyring entries are loaded via the active backend.
+// For file backends, Load() is called directly to read the file store
+// (avoiding cached backend path issues when LEDIT_CONFIG changes between tests).
 func resolve(provider, envVar string) (Resolved, error) {
 	resolved := Resolved{
 		Provider: strings.TrimSpace(provider),
 		EnvVar:   strings.TrimSpace(envVar),
 	}
+
+	// 1. Environment variable takes highest priority (single key, no rotation)
 	if resolved.EnvVar != "" {
 		if value := strings.TrimSpace(os.Getenv(resolved.EnvVar)); value != "" {
 			resolved.Value = value
@@ -462,29 +495,25 @@ func resolve(provider, envVar string) (Resolved, error) {
 		}
 	}
 
-	// Try keyring backend first (if active and not file backend)
-	// Skip the backend check if it's a FileBackend to avoid dual decryption
-	// since we'll fall through to the file store lookup below anyway.
-	backend, err := GetStorageBackend()
-	if err == nil {
-		if _, isFile := backend.(*FileBackend); !isFile {
-			if value, err := backend.Get(resolved.Provider); err == nil && value != "" {
-				resolved.Value = value
-				resolved.Source = backend.Source()
-				return resolved, nil
-			}
-		}
-	}
-
-	// Fall back to encrypted file store
-	store, err := Load()
+	// 2. Load provider's key pool from backend and use round-robin rotation.
+	// Use the active backend (keyring or file) to load the pool.
+	// For keyring, GetFromActiveBackend reads from keyring and returns source="keyring".
+	// For file, GetFromActiveBackend reads from encrypted file and returns source="stored".
+	result, err := LoadKeyPool(resolved.Provider)
 	if err != nil {
 		return Resolved{}, fmt.Errorf("load credentials store: %w", err)
 	}
-	if value := strings.TrimSpace(store[resolved.Provider]); value != "" {
-		resolved.Value = value
-		resolved.Source = "stored"
+	if len(result.Pool.Keys) == 0 {
+		return resolved, nil
 	}
+
+	key := DefaultRotator.NextKey(resolved.Provider, result.Pool)
+	if key == "" {
+		return resolved, nil
+	}
+	resolved.Value = key
+	resolved.Source = result.Source
+
 	return resolved, nil
 }
 

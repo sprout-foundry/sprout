@@ -284,23 +284,64 @@ func MigrateFileToKeyring(clearFile bool) ([]string, error) {
 	// Migrate each credential
 	migrated := make([]string, 0, len(store))
 	for provider, value := range store {
-		if err := keyringBackend.Set(provider, value); err != nil {
+		// Parse the value to detect multi-key JSON arrays.
+		// File backend stores multiple keys as '["key1","key2"]'.
+		// Keyring backend stores each key separately (provider, provider__pool_1, …).
+		// We must convert between these formats during migration.
+		pool, parseErr := parseKeyArray(value)
+		if parseErr != nil {
+			// Parse error is unexpected (parseKeyArray falls back to plain string
+			// on invalid JSON arrays), but handle it defensively.
+			pool = &KeyPool{Keys: []string{value}}
+		}
+
+		if len(pool.Keys) == 0 {
+			continue
+		}
+
+		// Store primary key
+		if err := keyringBackend.Set(provider, pool.Keys[0]); err != nil {
 			// Rollback: delete any credentials that were already migrated
 			for _, p := range migrated {
-				_ = keyringBackend.Delete(p) // best-effort rollback
+				_ = keyringBackend.Delete(p)
+				for j := 1; j < MaxPoolEntries; j++ {
+					_ = keyringBackend.Delete(fmt.Sprintf("%s__pool_%d", p, j))
+				}
 			}
-			// Clear tracking to prevent orphaned tracking entries
 			_ = saveTrackedKeyringProviders([]string{})
 			return nil, fmt.Errorf("failed to migrate credential for %q to keyring: %w", provider, err)
 		}
 
+		// Store additional keys in keyring pool format
+		for i := 1; i < len(pool.Keys); i++ {
+			poolKey := fmt.Sprintf("%s__pool_%d", provider, i)
+			if err := keyringBackend.Set(poolKey, pool.Keys[i]); err != nil {
+				// Rollback
+				_ = keyringBackend.Delete(provider)
+				for _, p := range migrated {
+					_ = keyringBackend.Delete(p)
+					for j := 1; j < MaxPoolEntries; j++ {
+						_ = keyringBackend.Delete(fmt.Sprintf("%s__pool_%d", p, j))
+					}
+				}
+				_ = saveTrackedKeyringProviders([]string{})
+				return nil, fmt.Errorf("failed to migrate pool key %d for %q to keyring: %w", i, provider, err)
+			}
+		}
+
 		// Track this provider in the keyring
 		if err := addTrackedProvider(provider); err != nil {
-			// Rollback: delete any credentials that were already migrated
-			for _, p := range migrated {
-				_ = keyringBackend.Delete(p) // best-effort rollback
+			// Rollback: delete the keys we just stored plus any previously migrated
+			_ = keyringBackend.Delete(provider)
+			for j := 1; j < len(pool.Keys); j++ {
+				_ = keyringBackend.Delete(fmt.Sprintf("%s__pool_%d", provider, j))
 			}
-			// Clear tracking to prevent orphaned tracking entries
+			for _, p := range migrated {
+				_ = keyringBackend.Delete(p)
+				for j := 1; j < MaxPoolEntries; j++ {
+					_ = keyringBackend.Delete(fmt.Sprintf("%s__pool_%d", p, j))
+				}
+			}
 			_ = saveTrackedKeyringProviders([]string{})
 			return nil, fmt.Errorf("failed to track provider %q in keyring: %w", provider, err)
 		}
@@ -315,6 +356,9 @@ func MigrateFileToKeyring(clearFile bool) ([]string, error) {
 			// Rollback: delete migrated credentials from keyring if file clear fails
 			for _, p := range migrated {
 				_ = keyringBackend.Delete(p)
+				for j := 1; j < MaxPoolEntries; j++ {
+					_ = keyringBackend.Delete(fmt.Sprintf("%s__pool_%d", p, j))
+				}
 			}
 			_ = saveTrackedKeyringProviders([]string{})
 			return nil, fmt.Errorf("failed to clear file store: %w", err)
@@ -354,7 +398,7 @@ func MigrateKeyringToFile(clearKeyring bool) ([]string, error) {
 		if err != nil {
 			// Rollback: delete any credentials already written to file
 			for _, p := range migrated {
-				_ = fileBackend.Delete(p) // best-effort rollback
+				_ = fileBackend.Delete(p)
 			}
 			return nil, fmt.Errorf("failed to get credential for %q from keyring: %w", provider, err)
 		}
@@ -364,10 +408,38 @@ func MigrateKeyringToFile(clearKeyring bool) ([]string, error) {
 			continue
 		}
 
-		if err := fileBackend.Set(provider, value); err != nil {
+		// Reassemble multi-key pool from keyring's __pool_N entries.
+		// Keyring stores: provider -> key0, provider__pool_1 -> key1, …
+		// File stores: provider -> '["key0","key1",…]' JSON array.
+		keys := []string{value}
+		for i := 1; i < MaxPoolEntries; i++ {
+			poolKey := fmt.Sprintf("%s__pool_%d", provider, i)
+			poolValue, err := keyringBackend.Get(poolKey)
+			if err != nil || poolValue == "" {
+				break
+			}
+			keys = append(keys, poolValue)
+		}
+
+		// Store in file backend format (plain string for single key, JSON array for multiple)
+		var fileValue string
+		if len(keys) == 1 {
+			fileValue = keys[0]
+		} else {
+			jsonBytes, jsonErr := json.Marshal(keys)
+			if jsonErr != nil {
+				for _, p := range migrated {
+					_ = fileBackend.Delete(p)
+				}
+				return nil, fmt.Errorf("failed to serialize key pool for %q: %w", provider, jsonErr)
+			}
+			fileValue = string(jsonBytes)
+		}
+
+		if err := fileBackend.Set(provider, fileValue); err != nil {
 			// Rollback: delete any credentials already written to file
 			for _, p := range migrated {
-				_ = fileBackend.Delete(p) // best-effort rollback
+				_ = fileBackend.Delete(p)
 			}
 			return nil, fmt.Errorf("failed to migrate credential for %q to file store: %w", provider, err)
 		}
@@ -381,6 +453,14 @@ func MigrateKeyringToFile(clearKeyring bool) ([]string, error) {
 		for _, provider := range providers {
 			if err := keyringBackend.Delete(provider); err != nil {
 				log.Printf("[credentials] Warning: failed to delete %q from keyring: %v", provider, err)
+			}
+			// Also clean up pool entries
+			for i := 1; i < MaxPoolEntries; i++ {
+				poolKey := fmt.Sprintf("%s__pool_%d", provider, i)
+				if err := keyringBackend.Delete(poolKey); err != nil {
+					log.Printf("[credentials] Warning: failed to delete %q from keyring: %v", poolKey, err)
+					continue // Keep trying; entries may not be contiguous after add/remove
+				}
 			}
 			if err := removeTrackedProvider(provider); err != nil {
 				log.Printf("[credentials] Warning: failed to remove %q from tracking: %v", provider, err)

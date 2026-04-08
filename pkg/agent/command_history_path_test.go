@@ -29,7 +29,7 @@ func newHistoryTestAgent(t *testing.T, workDir string) *Agent {
 	t.Setenv("HOME", homeDir)
 	withWorkingDir(t, workDir)
 
-	manager, err := configuration.NewManager()
+	manager, err := configuration.NewManagerSilent()
 	if err != nil {
 		t.Fatalf("failed to initialize config manager: %v", err)
 	}

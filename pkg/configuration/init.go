@@ -149,7 +149,15 @@ func Initialize() (*Config, *APIKeys, error) {
 			return nil, nil, fmt.Errorf("failed to save config: %w", err)
 		}
 
-		fmt.Printf("[done] Setup complete! You can now use ledit with %s.\n\n", getProviderDisplayName(provider))
+		if provider == "editor" {
+			fmt.Println("[done] Setup complete! Editor mode selected — AI features are not configured.")
+			fmt.Println("   You can set up an AI provider later:")
+			fmt.Println("   • Run 'ledit agent --provider openrouter' to use AI features")
+			fmt.Println("   • Or set up a provider via the webui: ledit agent -d")
+			fmt.Println()
+		} else {
+			fmt.Printf("[done] Setup complete! You can now use ledit with %s.\n\n", getProviderDisplayName(provider))
+		}
 
 		// Show helpful next steps
 		ShowNextSteps(provider, configDir)
@@ -170,6 +178,14 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 		return "", fmt.Errorf("no provider configured. Running in non-interactive mode. "+noninteractive.HelpHint)
 	}
 
+	// Show skip option first
+	fmt.Println("[bot] Skip provider setup:")
+	fmt.Println("  0. Skip provider setup — use as editor only (no AI features needed)")
+	fmt.Println("     Select this if you just want to try the editor or use a local model")
+	fmt.Println("     like Ollama without configuring an API key now. You can always")
+	fmt.Println("     set up an AI provider later.")
+	fmt.Println()
+
 	// Check which providers have API keys already
 	providersWithKeys := []string{}
 
@@ -187,21 +203,32 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 		}
 	}
 
-	// If we have providers with environment variables, prioritize them
+	// If we have providers with environment variables, offer them with skip option
 	if len(envProviders) > 0 {
-		fmt.Println("[>>] Found providers with environment variables set:")
+		fmt.Println("[>>] Detected providers from environment variables:")
+		fmt.Println("  0. Skip — use as editor only (no AI features needed)")
 		for i, providerName := range envProviders {
-			// Get the environment variable name for display
 			metadata, _ := GetProviderAuthMetadata(providerName)
 			envVarName := metadata.EnvVar
-			fmt.Printf("  %d. %s (from %s)", i+1, getProviderDisplayName(providerName), envVarName)
-			fmt.Println()
+			fmt.Printf("  %d. %s (from %s)\n", i+1, getProviderDisplayName(providerName), envVarName)
 		}
 		fmt.Println()
 
-		// Auto-select the first provider with environment variable
-		fmt.Printf("[OK] Auto-selecting %s (environment variable detected)\n", getProviderDisplayName(envProviders[0]))
-		return envProviders[0], nil
+		choice, err := readIntInput(fmt.Sprintf("Select a provider (0-%d, 0 to skip, default 1): ", len(envProviders)), 0, len(envProviders))
+		if err != nil {
+			return "", fmt.Errorf("invalid choice: %w", err)
+		}
+
+		if choice == 0 {
+			return "editor", nil
+		}
+
+		selected := envProviders[0]
+		if choice > 0 && choice <= len(envProviders) {
+			selected = envProviders[choice-1]
+		}
+		fmt.Printf("[OK] Using %s (environment variable detected)\n", getProviderDisplayName(selected))
+		return selected, nil
 	}
 
 	// Check which providers have API keys already (from file)
@@ -270,9 +297,14 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 	fmt.Println()
 
 	// Get user choice
-	choice, err := readIntInput(fmt.Sprintf("Select a provider (1-%d): ", len(knownProviderNames)), 1, len(knownProviderNames))
+	choice, err := readIntInput(fmt.Sprintf("Select a provider (0-%d, 0 to skip): ", len(knownProviderNames)), 0, len(knownProviderNames))
 	if err != nil {
 		return "", fmt.Errorf("invalid choice: %w", err)
+	}
+
+	// Handle skip option (choice 0)
+	if choice == 0 {
+		return "editor", nil
 	}
 
 	selectedProvider := knownProviderNames[choice-1]
@@ -646,6 +678,17 @@ func ShowWelcomeMessage() {
 
 // ShowNextSteps displays helpful next steps after successful setup
 func ShowNextSteps(provider, configDir string) {
+	if provider == "editor" {
+		fmt.Println("You're in editor-only mode. AI-powered features are not available.")
+		fmt.Println()
+		fmt.Println("To enable AI features later:")
+		fmt.Println("  • Run 'ledit' and use the provider setup options")
+		fmt.Println("  • Or start the webui with 'ledit agent -d' and configure via Settings")
+		fmt.Println("  • Or set LEDIT_PROVIDER environment variable")
+		fmt.Println()
+		return
+	}
+
 	fmt.Println("Next steps:")
 	fmt.Println("  • Run 'ledit' to start the interactive mode")
 	fmt.Println("  • Run 'ledit agent \"your task here\"' for direct commands")

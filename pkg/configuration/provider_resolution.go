@@ -40,6 +40,8 @@ func MapProviderStringToClientType(cfg *Config, raw string) (api.ClientType, err
 		return api.MinimaxClientType, nil
 	case "test":
 		return api.TestClientType, nil
+	case "editor":
+		return api.EditorClientType, nil
 	}
 
 	if cfg != nil && cfg.CustomProviders != nil {

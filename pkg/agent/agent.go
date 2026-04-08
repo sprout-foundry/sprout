@@ -328,6 +328,12 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		if resolveErr != nil {
 			return nil, fmt.Errorf("no provider configured. Running in non-interactive mode. "+noninteractive.HelpHint+": %w", resolveErr)
 		}
+		// Check if editor mode is active
+		if resolvedType == api.EditorClientType {
+			return nil, fmt.Errorf("editor mode is active — no AI provider configured. "+
+				"Set up a provider with: ledit agent --provider <provider> "+
+				"or configure via Settings in the webui (ledit agent -d)")
+		}
 		// Provider resolved — ensure API key exists without prompting.
 		if keyErr := configManager.EnsureAPIKey(resolvedType); keyErr != nil {
 			return nil, fmt.Errorf("no provider configured. Running in non-interactive mode. "+noninteractive.HelpHint+": %w", keyErr)
@@ -355,6 +361,13 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		if model != "" && !looksLikeProviderModelSpecifier(configManager, model) {
 			finalModel = model
 		}
+	}
+
+	// Check if editor mode is active — no AI provider configured
+	if clientType == api.EditorClientType {
+		return nil, fmt.Errorf("editor mode is active — no AI provider configured. "+
+			"Set up a provider with: ledit agent --provider <provider> "+
+			"or configure via Settings in the webui (ledit agent -d)")
 	}
 
 	// Ensure provider can be initialized; allow recovery in interactive mode.

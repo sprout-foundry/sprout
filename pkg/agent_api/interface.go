@@ -48,6 +48,7 @@ const (
 	OpenAIClientType      ClientType = "openai"
 	ZAIClientType         ClientType = "zai"  // Z.AI Coding Plan (OpenAI-compatible)
 	TestClientType        ClientType = "test" // Mock provider for CI/testing
+	EditorClientType      ClientType = "editor" // Editor-only mode, no AI provider
 )
 
 // NewUnifiedClient creates a client with default model for the provider
@@ -156,6 +157,8 @@ func ParseProviderName(name string) (ClientType, error) {
 		return MinimaxClientType, nil
 	case "test":
 		return TestClientType, nil
+	case "editor":
+		return EditorClientType, nil
 	default:
 		if normalized != "" {
 			return ClientType(normalized), nil
@@ -219,6 +222,8 @@ func GetProviderName(clientType ClientType) string {
 		return "Mistral"
 	case MinimaxClientType:
 		return "MiniMax"
+	case EditorClientType:
+		return "Editor"
 	default:
 		return string(clientType)
 	}

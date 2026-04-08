@@ -22,7 +22,7 @@ func GetProviderAuthMetadata(provider string) (ProviderAuthMetadata, error) {
 	}
 
 	switch name {
-	case "ollama", "ollama-local", "lmstudio", "test":
+	case "ollama", "ollama-local", "lmstudio", "test", "editor":
 		return ProviderAuthMetadata{
 			Provider:       name,
 			DisplayName:    getProviderDisplayName(name),

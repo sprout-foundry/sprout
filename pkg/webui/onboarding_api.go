@@ -422,11 +422,10 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 	}
 
 	if req.APIKey != "" {
-		keys := cm.GetAPIKeys()
-		keys.SetAPIKey(req.Provider, req.APIKey)
-		if err := cm.SaveAPIKeys(); err != nil {
-			log.Printf("[WARN] failed to save API key: %v", err)
-			writeJSONError(w, http.StatusInternalServerError, "Failed to save API key")
+		// Validate the new key BEFORE storing it
+		// This ensures we never replace a working key with a broken one
+		if _, err := ws.validateAndSetCredential(cm, req.Provider, req.APIKey); err != nil {
+			writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("API key validation failed: %s", sanitizeTestError(err)))
 			return
 		}
 	}

@@ -19,6 +19,7 @@ export interface UseMessageSendingOptions {
   activeRequestsRef: MutableRefObject<number>;
   /** Called when a query fails because no AI provider is configured. */
   onRequestProviderSetup?: () => void;
+  isConnectedRef: MutableRefObject<boolean>;
 }
 
 export interface UseMessageSendingReturn {
@@ -32,6 +33,7 @@ export function useMessageSending({
   activeChatIdRef,
   activeRequestsRef,
   onRequestProviderSetup,
+  isConnectedRef,
 }: UseMessageSendingOptions): UseMessageSendingReturn {
   const log = useLog();
   const apiService = ApiService.getInstance();
@@ -41,6 +43,9 @@ export function useMessageSending({
       if (!message.trim()) return;
       const trimmedMessage = message.trim();
       const allowConcurrent = options?.allowConcurrent === true;
+      if (!isConnectedRef.current && !allowConcurrent) {
+        return;
+      }
       if (!allowConcurrent && activeRequestsRef.current > 0) {
         setState((prev) => ({
           ...prev,

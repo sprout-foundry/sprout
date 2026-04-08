@@ -25,6 +25,7 @@ interface CommandInputProps {
   onQueue?: (command: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  isConnected?: boolean;
   multiline?: boolean;
   autoFocus?: boolean;
   isProcessing?: boolean;
@@ -45,6 +46,7 @@ function CommandInput({
   onQueue,
   placeholder = 'Ask me anything about your code...',
   disabled = false,
+  isConnected = true,
   multiline = true,
   autoFocus = false,
   isProcessing = false,
@@ -850,9 +852,9 @@ function CommandInput({
         </button>
         <button
           type="submit"
-          disabled={disabled || !canSend}
+          disabled={disabled || !canSend || !isConnected}
           className="send-button"
-          data-tooltip={isProcessing ? 'Steer running request' : 'Send message'}
+          data-tooltip={!isConnected ? 'Reconnecting...' : isProcessing ? 'Steer running request' : 'Send message'}
           aria-label="Send message"
         >
           <Send size={16} />

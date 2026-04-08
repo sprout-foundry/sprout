@@ -38,11 +38,11 @@ export function useChatSessionSync({
   setBufferPinned,
   setBufferClosable,
 }: UseChatSessionSyncOptions): void {
-  // Keep a stable ref to the current buffers map to avoid infinite loops in effects
+  // Keep a stable ref to the current buffers map to avoid infinite loops in effects.
+  // Assignment is synchronous (not in useEffect) to avoid one-render lag that
+  // could cause duplicate buffer creation.
   const buffersRef = useRef(buffers);
-  useEffect(() => {
-    buffersRef.current = buffers;
-  }, [buffers]);
+  buffersRef.current = buffers;
 
   // Sync chat sessions → editor buffers: update the initial chat buffer with the active
   // session's ID, and open additional buffers for other sessions.

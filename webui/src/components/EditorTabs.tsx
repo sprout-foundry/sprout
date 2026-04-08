@@ -309,9 +309,7 @@ function EditorTabs({
   const bufferList = useMemo(() => {
     const values = Array.from(buffers.values());
     if (!paneId) return values;
-    return values.filter(
-      (buffer) => buffer.paneId === paneId || (buffer.isPinned && buffer.kind === 'chat'),
-    );
+    return values.filter((buffer) => buffer.paneId === paneId);
   }, [buffers, paneId]);
 
   useEffect(() => {

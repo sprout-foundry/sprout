@@ -797,6 +797,16 @@ export default function useWebSocketEvents({
               return tool;
             }),
           }));
+        } else if (backendProcessing) {
+          debugLog(
+            '[reconnect] Backend still processing but frontend is idle — restoring processing state',
+          );
+          activeRequestsRef.current = 1;
+          setState((prev) => ({
+            ...prev,
+            isProcessing: true,
+            lastError: null,
+          }));
         } else {
           debugLog('[reconnect] Processing state is consistent — no recovery needed');
         }

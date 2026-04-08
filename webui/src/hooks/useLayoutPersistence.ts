@@ -1,14 +1,18 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react';
 import type { EditorBuffer, EditorPane } from '../types/editor';
+import { persistTabWorkspacePath } from '../services/clientSession';
+import { ApiService } from '../services/api';
+import { getAppStateStorageKey } from '../services/appStatePersistence';
 import {
   saveLayoutSnapshot,
   loadLayoutSnapshot,
+  clearLayoutSnapshot,
   initBeforeUnloadFlush,
   dispose as disposeLayoutPersistence,
   writeStorageItem,
-  PANE_LAYOUT_STORAGE_KEY,
-  PANE_SIZES_STORAGE_KEY,
+  getPaneLayoutStorageKey,
+  getPaneSizesStorageKey,
   type BufferLayoutEntry,
   type LayoutSnapshot,
 } from '../services/layoutPersistence';
@@ -45,7 +49,7 @@ export function useLayoutPersistence({
 }: UseLayoutPersistenceParams) {
   // Persist pane layout type to localStorage
   useEffect(() => {
-    writeStorageItem(PANE_LAYOUT_STORAGE_KEY, paneLayout);
+    writeStorageItem(getPaneLayoutStorageKey(), paneLayout);
   }, [paneLayout]);
 
   // Persist pane sizes to localStorage (debounced)
@@ -53,12 +57,12 @@ export function useLayoutPersistence({
   useEffect(() => {
     if (paneSizesTimeoutRef.current) clearTimeout(paneSizesTimeoutRef.current);
     paneSizesTimeoutRef.current = setTimeout(() => {
-      writeStorageItem(PANE_SIZES_STORAGE_KEY, JSON.stringify(paneSizes));
+      writeStorageItem(getPaneSizesStorageKey(), JSON.stringify(paneSizes));
     }, 300);
     return () => {
       if (paneSizesTimeoutRef.current) {
         clearTimeout(paneSizesTimeoutRef.current);
-        writeStorageItem(PANE_SIZES_STORAGE_KEY, JSON.stringify(paneSizes));
+        writeStorageItem(getPaneSizesStorageKey(), JSON.stringify(paneSizes));
       }
     };
   }, [paneSizes]);
@@ -138,9 +142,26 @@ export function useLayoutPersistence({
     }
   }, [buffersRef, panesRef, setBuffers, setPanes, setActivePaneId, setActiveBufferId]);
 
-  // Auto-restore layout on first mount
+  // Auto-restore layout on first mount — wait for workspace path to be set first
+  // so that restoreLayout loads the correct workspace-scoped snapshot.
   useEffect(() => {
-    restoreLayout();
+    let cancelled = false;
+    ApiService.getInstance()
+      .getWorkspace()
+      .then((ws) => {
+        if (!cancelled && ws.workspace_root) {
+          persistTabWorkspacePath(ws.workspace_root);
+        }
+      })
+      .catch(() => {
+        // Non-critical: workspace scoping will use _default
+      })
+      .finally(() => {
+        if (!cancelled) {
+          restoreLayout();
+        }
+      });
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -202,6 +223,51 @@ export function useLayoutPersistence({
       disposeLayoutPersistence();
     };
   }, []);
+
+  // Clear stale file buffers when the workspace root changes (e.g. worktree switch).
+  // Chat/welcome/diff buffers are preserved (non-default chat sessions are cleaned up
+  // to avoid stale workspace-specific chats). Pinned buffers are also preserved.
+  useEffect(() => {
+    const handleWorkspaceChanged = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (detail?.workspaceRoot) {
+        persistTabWorkspacePath(detail.workspaceRoot);
+      }
+      // Clear chat persistence so stale messages from old workspace don't load
+      window.localStorage.removeItem(getAppStateStorageKey());
+      setBuffers((prev) => {
+        const next = new Map(prev);
+        let changed = false;
+        next.forEach((buf, id) => {
+          if ((buf.kind === 'file' && buf.isClosable !== false && !buf.isPinned) ||
+              (buf.kind === 'chat' && buf.isClosable === true)) {
+            next.delete(id);
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
+      // Reset panes to show the chat buffer (or whatever is remaining) instead
+      // of a stale file buffer that was just removed.
+      setPanes((prev) =>
+        prev.map((pane) => {
+          if (pane.bufferId && !buffersRef.current.has(pane.bufferId)) {
+            // Find the first chat buffer to show, or null for empty
+            const chatBuf = Array.from(buffersRef.current.values()).find(
+              (b) => b.kind === 'chat',
+            );
+            return { ...pane, bufferId: chatBuf?.id || null };
+          }
+          return pane;
+        }),
+      );
+      // Also clear the layout snapshot since the workspace changed
+      clearLayoutSnapshot();
+    };
+
+    window.addEventListener('ledit:workspace-changed', handleWorkspaceChanged);
+    return () => window.removeEventListener('ledit:workspace-changed', handleWorkspaceChanged);
+  }, [buffersRef, setBuffers, setPanes]);
 
   return { restoreLayout };
 }

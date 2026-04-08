@@ -168,28 +168,22 @@ func SaveAPIKeys(keys *APIKeys) error {
 			return nil
 		}
 
-		fileStore, err := credentials.Load()
-		if err != nil {
-			// Can't clean file store; not fatal since keys are in keyring
-			log.Printf("[config] Warning: could not load file store for cleanup: %v", err)
-			return nil
-		}
-
 		keyringSet := make(map[string]bool, len(keyringProviders))
 		for _, p := range keyringProviders {
 			keyringSet[p] = true
 		}
 
-		cleaned := make(credentials.Store)
-		for provider, value := range fileStore {
-			if !keyringSet[provider] {
-				cleaned[provider] = value
+		// Use AtomicModify to atomically read the file store, remove keys
+		// that are now in the keyring, and save — preventing TOCTOU races.
+		if err := credentials.AtomicModify(func(store credentials.Store) error {
+			for provider := range store {
+				if keyringSet[provider] {
+					delete(store, provider)
+				}
 			}
-		}
-		if len(cleaned) != len(fileStore) {
-			if err := credentials.Save(cleaned); err != nil {
-				log.Printf("[config] Warning: failed to clean migrated keys from file store: %v", err)
-			}
+			return nil
+		}); err != nil {
+			log.Printf("[config] Warning: failed to clean migrated keys from file store: %v", err)
 		}
 
 		return nil

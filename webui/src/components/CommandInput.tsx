@@ -869,26 +869,29 @@ function CommandInput({
             <Square size={15} />
           </button>
         )}
-        {(isProcessing || queuedCount > 0 || showQueuePanel) && (
+        {isProcessing && onQueue && (
+          <button
+            type="button"
+            onClick={handleQueue}
+            disabled={disabled || !canSend}
+            className="queue-add-button"
+            data-tooltip="Queue for after current run"
+            aria-label="Queue message"
+          >
+            <ListPlus size={16} />
+          </button>
+        )}
+        {(queuedCount > 0 || showQueuePanel) && (
           <div className="queue-button-wrapper" ref={queuePanelRef}>
             <button
               type="button"
               onClick={() => {
-                if (isProcessing && canSend && !disabled) {
-                  handleQueue();
-                }
-                if (queuedCount > 0) {
-                  setShowQueuePanel((prev) => !prev);
-                }
+                setShowQueuePanel((prev) => !prev);
               }}
-              disabled={isProcessing ? disabled || !canSend : queuedCount === 0}
+              disabled={queuedCount === 0}
               className="queue-button"
-              data-tooltip={
-                queuedCount > 0
-                  ? `${queuedCount} queued message${queuedCount !== 1 ? 's' : ''} — click to manage`
-                  : 'Queue for after current run'
-              }
-              aria-label={queuedCount > 0 ? `View ${queuedCount} queued messages` : 'Queue message'}
+              data-tooltip={`${queuedCount} queued message${queuedCount !== 1 ? 's' : ''} — click to manage`}
+              aria-label={`View ${queuedCount} queued message${queuedCount !== 1 ? 's' : ''}`}
             >
               <ListPlus size={16} />
               {queuedCount > 0 && <span className="queue-count">{queuedCount}</span>}

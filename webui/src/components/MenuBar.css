@@ -1,5 +1,16 @@
 /* ── Menu Bar Container ───────────────────────────────────────────────── */
 
+/* When .menu-bar lives inside .header-bar it merges into the shared row */
+.header-bar .menu-bar {
+  height: auto;
+  min-height: 0;
+  padding: 0 8px;
+  background: transparent;
+  border-bottom: none;
+  flex-shrink: 0;
+}
+
+/* Standalone .menu-bar (when not inside .header-bar – fallback safety) */
 .menu-bar {
   display: flex;
   align-items: center;

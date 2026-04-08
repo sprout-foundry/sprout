@@ -337,6 +337,14 @@ func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, msg ma
 			}
 
 			// Persist the provider to config and clear cached agent.
+			// Skip the mock test provider — it should never be saved as last_used.
+			if providerType == api.TestClientType {
+				_ = safeConn.WriteJSON(map[string]interface{}{
+					"type": "error",
+					"data": map[string]string{"message": "test provider cannot be used as the active provider"},
+				})
+				return
+			}
 			if setErr := cm.SetProvider(providerType); setErr != nil {
 				_ = safeConn.WriteJSON(map[string]interface{}{
 					"type": "error",
@@ -421,7 +429,10 @@ func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, msg ma
 	// Attempt to persist the provider/model to config as the last used.
 	// This fails gracefully — we log the error but don't fail the operation
 	// since the session-scoped provider/model is already set in the chat session.
-	if err := persistProviderModelToConfig(clientAgent, providerType); err != nil {
+	// Skip the test provider — it's not a real API provider.
+	if providerType == api.TestClientType {
+		log.Printf("webui: skipping persistence for test provider")
+	} else if err := persistProviderModelToConfig(clientAgent, providerType); err != nil {
 		log.Printf("webui: failed to persist provider/model to config: %v", err)
 	}
 
@@ -526,7 +537,12 @@ func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, msg map[s
 	// Attempt to persist the provider/model to config as the last used.
 	// This fails gracefully — we log the error but don't fail the operation
 	// since the session-scoped provider/model is already set in the chat session.
-	if err := persistProviderModelToConfig(clientAgent, clientAgent.GetProviderType()); err != nil {
+	//
+	// Skip persistence for the test/mock provider — it's not a real API endpoint
+	// and should never survive an app restart.
+	if clientAgent.GetProviderType() == api.TestClientType {
+		log.Printf("webui: skipping persistence for test provider")
+	} else if err := persistProviderModelToConfig(clientAgent, clientAgent.GetProviderType()); err != nil {
 		log.Printf("webui: failed to persist provider/model to config: %v", err)
 	}
 

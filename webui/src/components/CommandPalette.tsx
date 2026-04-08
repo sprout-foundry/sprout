@@ -70,7 +70,7 @@ const COMMAND_DEFINITIONS: CommandDef[] = [
 const MAX_FILE_RESULTS = 100;
 const MAX_INDEXED_FILES = 12000;
 const MAX_INDEXED_DIRECTORIES = 3000;
-const SKIP_DIRECTORIES = new Set(['.git', 'node_modules', '.ledit', '.next', 'dist', 'build']);
+const SKIP_DIRECTORIES = new Set(['.git']);
 
 // ── Unified result types ───────────────────────────────────────────────────
 
@@ -163,7 +163,7 @@ function CommandPalette({
           visited.add(dir);
           visitedDirs += 1;
 
-          const response = await clientFetch(`/api/browse?path=${encodeURIComponent(dir)}`);
+          const response = await clientFetch(`/api/browse?path=${encodeURIComponent(dir)}&ignore=true`);
           if (!response.ok) continue;
 
           const data = await response.json();

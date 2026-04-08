@@ -1956,33 +1956,3 @@
   color: var(--accent-primary);
 }
 
-/* Worktrees panel trigger (when collapsed) */
-.worktree-panel-trigger {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  background: var(--item-bg);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-  color: var(--text-primary);
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.worktree-panel-trigger:hover {
-  background: var(--item-hover-bg);
-  border-color: var(--border-color-hover);
-}
-
-.worktree-panel-trigger svg {
-  color: var(--accent-color);
-}
-
-/* Worktrees panel wrapper (when expanded) */
-.worktree-panel-wrapper {
-  height: 100%;
-  overflow: hidden;
-}

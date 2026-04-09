@@ -68,6 +68,11 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     const eventHandlerRef = useRef<((event: WsEvent) => void) | null>(null);
     const resizeTimerRef = useRef<number | null>(null);
 
+    // Track whether the pane is currently mounted/active so the cleanup function
+    // can distinguish between a temporary freeze and a permanent unmount.
+    const isActiveRef = useRef(isActive);
+    isActiveRef.current = isActive;
+
     const getTerminalTheme = useCallback(() => {
       return {
         // Keep terminal palette independent from app light/dark theme
@@ -356,26 +361,28 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         service.setPreferredShell(preferredShellRef.current);
       }
 
-      // Only call connect() if we don't already have a connection
-      // During freeze/resume, the service will call connect() itself via resume()
-      if (!service.isConnectedToServer() || !service.getSessionId()) {
+      // Only call connect() if we don't already have a connection.
+      // During freeze/resume, the service will call connect() itself via resume(),
+      // so we must not call connect() here while it is still reconnecting.
+      if (!service.isConnectedToServer() && !service.isReconnecting()) {
         service.connect();
       }
 
       return () => {
-        service.removeEvent(handler);
-        // If the service is frozen or actively reconnecting, do NOT call
-        // disconnect() or closeSession(). Calling disconnect() clears the
-        // persisted sessionId and unregisters the instance, which prevents
-        // resume() from reattaching after the component remounts.
-        if (service.isCurrentlyFrozen() || service.isReconnecting()) {
-          // Keep the service alive so resume() can still reconnect.
-          // Only null out our local ref so the effect body creates a new
-          // ref on remount — the service instance itself stays registered.
-          terminalWSRef.current = null;
-          eventHandlerRef.current = null;
+        // If the service is frozen or actively reconnecting AND the pane is still
+        // mounted, preserve the service without calling disconnect(). Remove the
+        // handler so the next effect run can register a fresh one without dupes.
+        if (terminalWSRef.current &&
+            (service.isCurrentlyFrozen() || service.isReconnecting()) &&
+            isActiveRef.current) {
+          // Remove the old handler so it doesn't duplicate when the next
+          // effect run registers a fresh one. Keep the service + refs intact.
+          service.removeEvent(handler);
           return;
         }
+
+        // Normal teardown path
+        service.removeEvent(handler);
         if (typeof service.closeSession === 'function') {
           service.closeSession();
         }

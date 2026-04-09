@@ -32,6 +32,14 @@ jest.mock('../contexts/ThemeContext', () => ({
   useTheme: jest.fn(),
 }));
 
+// EditorPane uses useLog() which requires NotificationContext.
+jest.mock('../contexts/NotificationContext', () => {
+  const noop = () => {};
+  return Object.assign(function NotificationProviderMock({ children }) { return children; }, {
+    useNotifications: () => ({ addNotification: noop }),
+  });
+});
+
 jest.mock('../services/api', () => ({
   ApiService: {
     getInstance: jest.fn(),
@@ -681,9 +689,9 @@ describe('EditorPane', () => {
       });
       await flushPromises();
 
-      // Should show empty state
-      const noFileEl = container.querySelector('.no-file-selected');
-      expect(noFileEl).toBeTruthy();
+      // Should show welcome tab (no buffer selected)
+      const welcomeEl = container.querySelector('.welcome-tab');
+      expect(welcomeEl).toBeTruthy();
       // No pane-content should exist for empty state
       const paneContent = container.querySelector('.pane-content');
       expect(paneContent).toBeFalsy();
@@ -721,14 +729,17 @@ describe('EditorPane', () => {
   // ── Language override tests ──
 
   describe('language override', () => {
-    it('renders the LanguageSwitcher in the toolbar zone', async () => {
+    it('renders the LanguageSwitcher in the pane footer', async () => {
       // eslint-disable-next-line testing-library/no-unnecessary-act
       await act(async () => {
         root.render(<EditorPane paneId="pane-1" />);
       });
       await flushPromises();
 
-      const languageSwitcher = container.querySelector('[data-testid="language-switcher"]');
+      // LanguageSwitcher is now rendered inside .pane-footer
+      const footer = container.querySelector('.pane-footer');
+      expect(footer).toBeTruthy();
+      const languageSwitcher = footer?.querySelector('[data-testid="language-switcher"]');
       expect(languageSwitcher).toBeTruthy();
     });
 

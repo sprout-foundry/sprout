@@ -3,23 +3,26 @@
 get_test_name() {
     echo "Testing non-interactive mode"
 }
-set -e
 
-echo "Testing non-interactive mode (piped output)..."
+run_test_logic() {
+    local model_name=$1
 
-# Guard for networked agent
-if [[ -z "${OPENROUTER_API_KEY:-}" ]]; then
-  echo "SKIP: OPENROUTER_API_KEY not set; skipping non-interactive agent tests"
-  exit 0
-fi
+    echo "Testing non-interactive mode (piped output)..."
 
-# Test with piped output (non-interactive but not CI)
-echo "What is 2 + 2?" | ./ledit agent || true
+    # Guard for networked agent
+    if [[ -z "${OPENROUTER_API_KEY:-}" ]]; then
+        echo "SKIP: OPENROUTER_API_KEY not set; skipping non-interactive agent tests"
+        return 0
+    fi
 
-echo -e "\n\nTesting CI mode..."
-export CI=1
+    # Test with piped output (non-interactive but not CI)
+    echo "What is 2 + 2?" | ledit agent || true
 
-# Test with CI mode
-./ledit agent "List the files in this directory" || true
+    echo -e "\n\nTesting CI mode..."
+    export CI=1
 
-echo -e "\n\nTest completed!"
+    # Test with CI mode
+    ledit agent "List the files in this directory" || true
+
+    echo -e "\n\nTest completed!"
+}

@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react';
-import '@testing-library/jest-dom';
+import { createRoot } from 'react-dom/client';
+import { act } from 'react';
 import StatusBar from './StatusBar';
 
 // ---------------------------------------------------------------------------
@@ -53,254 +53,306 @@ function makeBuffer(overrides: Record<string, any> = {}) {
   };
 }
 
+let container: HTMLDivElement;
+let root: ReturnType<typeof createRoot>;
+
+beforeAll(() => {
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+});
+
+beforeEach(() => {
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  root = createRoot(container);
+});
+
+afterEach(() => {
+  act(() => { root.unmount(); });
+  container.remove();
+});
+
+/** helper: find first element whose textContent exactly matches `text`. */
+function getByText(parent: HTMLElement, text: string) {
+  const els = Array.from(parent.querySelectorAll('*'));
+  const match = els.find((el) => el.textContent === text && el.children.length === 0);
+  if (!match) throw new Error(`Unable to find an element with text: "${text}"`);
+  return match;
+}
+
+/** helper: find element by text, return null if not found. */
+function queryByText(parent: HTMLElement, text: string) {
+  const els = Array.from(parent.querySelectorAll('*'));
+  return els.find((el) => el.textContent === text && el.children.length === 0) ?? null;
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 describe('StatusBar', () => {
   // ---- 1. Renders with no props ----
-  test('renders with no props — shows "No Git" on left side, no right section', () => {
-    const { container } = render(<StatusBar />);
+  test('renders with no props — shows "No Git" on left side, no right section', async () => {
+    await act(async () => { root.render(<StatusBar />); });
 
-    expect(screen.getByTestId('git-branch-icon')).toBeInTheDocument();
-    expect(screen.getByText('No Git')).toBeInTheDocument();
+    expect(container.querySelector('[data-testid="git-branch-icon"]')).toBeTruthy();
+    expect(getByText(container, 'No Git')).toBeTruthy();
 
     // Right section should not be present
-    expect(container.querySelector('.statusbar-right')).not.toBeInTheDocument();
+    expect(container.querySelector('.statusbar-right')).toBeNull();
   });
 
   // ---- 2. Shows git branch name ----
-  test('shows git branch name when branch prop is provided', () => {
-    render(<StatusBar branch="feature/my-branch" />);
+  test('shows git branch name when branch prop is provided', async () => {
+    await act(async () => { root.render(<StatusBar branch="feature/my-branch" />); });
 
-    expect(screen.getByText('feature/my-branch')).toBeInTheDocument();
-    expect(screen.queryByText('No Git')).not.toBeInTheDocument();
+    expect(getByText(container, 'feature/my-branch')).toBeTruthy();
+    expect(queryByText(container, 'No Git')).toBeNull();
   });
 
   // ---- 3. Semantic HTML ----
-  test('renders as a <footer> with aria-label for landmark navigation', () => {
-    const { container } = render(<StatusBar />);
+  test('renders as a <footer> with aria-label for landmark navigation', async () => {
+    await act(async () => { root.render(<StatusBar />); });
 
     const footer = container.querySelector('footer.statusbar');
-    expect(footer).toBeInTheDocument();
-    expect(footer).toHaveAttribute('aria-label', 'Editor status bar');
+    expect(footer).toBeTruthy();
+    expect(footer?.getAttribute('aria-label')).toBe('Editor status bar');
     // Must NOT have role="status" (implicit aria-live="polite") — would spam
     // screen readers on every cursor-position change while typing.
-    expect(footer).not.toHaveAttribute('role');
-    expect(footer).not.toHaveAttribute('aria-live');
+    expect(footer?.hasAttribute('role')).toBe(false);
+    expect(footer?.hasAttribute('aria-live')).toBe(false);
   });
 
   // ---- 4. Shows right section when buffer is provided ----
-  test('shows right section with cursor, language, encoding, line endings, indentation when buffer is provided', () => {
-    const { container } = render(
-      <StatusBar branch="main" buffer={makeBuffer()} />,
-    );
+  test('shows right section with cursor, language, encoding, line endings, indentation when buffer is provided', async () => {
+    await act(async () => { root.render(<StatusBar branch="main" buffer={makeBuffer()} />); });
 
     const right = container.querySelector('.statusbar-right');
-    expect(right).toBeInTheDocument();
+    expect(right).toBeTruthy();
 
     // Cursor
-    expect(screen.getByText('Ln 1, Col 1')).toBeInTheDocument();
+    expect(getByText(container, 'Ln 1, Col 1')).toBeTruthy();
     // Language
-    expect(screen.getByText('TypeScript (JSX)')).toBeInTheDocument();
+    expect(getByText(container, 'TypeScript (JSX)')).toBeTruthy();
     // Encoding
-    expect(screen.getByText('UTF-8')).toBeInTheDocument();
+    expect(getByText(container, 'UTF-8')).toBeTruthy();
     // Line endings
-    expect(screen.getByText('LF')).toBeInTheDocument();
+    expect(getByText(container, 'LF')).toBeTruthy();
     // Indentation (hardcoded default)
-    expect(screen.getByText('Spaces: 2')).toBeInTheDocument();
+    expect(getByText(container, 'Spaces: 2')).toBeTruthy();
   });
 
   // ---- 5. Cursor position display (1-based from 0-based) ----
-  test('displays cursor position as 1-based values', () => {
-    render(
-      <StatusBar
-        buffer={makeBuffer({
-          cursorPosition: { line: 4, column: 9 },
-        })}
-      />,
-    );
+  test('displays cursor position as 1-based values', async () => {
+    await act(async () => {
+      root.render(
+        <StatusBar
+          buffer={makeBuffer({
+            cursorPosition: { line: 4, column: 9 },
+          })}
+        />,
+      );
+    });
 
-    expect(screen.getByText('Ln 5, Col 10')).toBeInTheDocument();
+    expect(getByText(container, 'Ln 5, Col 10')).toBeTruthy();
   });
 
   // ---- 6. Language detection from file extension ----
-  test('detects language from file extension', () => {
-    render(
-      <StatusBar
-        buffer={makeBuffer({
-          file: { name: 'app.ts', ext: '.ts' },
-        })}
-      />,
-    );
+  test('detects language from file extension', async () => {
+    await act(async () => {
+      root.render(
+        <StatusBar
+          buffer={makeBuffer({
+            file: { name: 'app.ts', ext: '.ts' },
+          })}
+        />,
+      );
+    });
 
-    expect(screen.getByText('TypeScript')).toBeInTheDocument();
+    expect(getByText(container, 'TypeScript')).toBeTruthy();
   });
 
   // ---- 7. Language detection with override ----
-  test('uses language override when provided, ignoring file extension', () => {
-    render(
-      <StatusBar
-        buffer={makeBuffer({
-          file: { name: 'app.ts', ext: '.ts' },
-          languageOverride: 'go',
-        })}
-      />,
-    );
+  test('uses language override when provided, ignoring file extension', async () => {
+    await act(async () => {
+      root.render(
+        <StatusBar
+          buffer={makeBuffer({
+            file: { name: 'app.ts', ext: '.ts' },
+            languageOverride: 'go',
+          })}
+        />,
+      );
+    });
 
-    expect(screen.getByText('Go')).toBeInTheDocument();
-    expect(screen.queryByText('TypeScript')).not.toBeInTheDocument();
+    expect(getByText(container, 'Go')).toBeTruthy();
+    expect(queryByText(container, 'TypeScript')).toBeNull();
   });
 
   // ---- 8b. Non-file buffer kind ----
-  test('shows capitalized kind name for non-file buffers', () => {
-    render(
-      <StatusBar
-        buffer={{
-          kind: 'chat',
-          content: '',
-        }}
-      />,
-    );
+  test('shows capitalized kind name for non-file buffers', async () => {
+    await act(async () => {
+      root.render(
+        <StatusBar
+          buffer={{
+            kind: 'chat',
+            content: '',
+          }}
+        />,
+      );
+    });
 
-    expect(screen.getByText('Chat')).toBeInTheDocument();
+    expect(getByText(container, 'Chat')).toBeTruthy();
   });
 
-  test('shows capitalized kind name for diff kind', () => {
-    render(
-      <StatusBar
-        buffer={{
-          kind: 'diff',
-          content: '',
-        }}
-      />,
-    );
+  test('shows capitalized kind name for diff kind', async () => {
+    await act(async () => {
+      root.render(
+        <StatusBar
+          buffer={{
+            kind: 'diff',
+            content: '',
+          }}
+        />,
+      );
+    });
 
-    expect(screen.getByText('Diff')).toBeInTheDocument();
+    expect(getByText(container, 'Diff')).toBeTruthy();
   });
 
   // ---- 9. Line endings detection ----
-  test('shows "LF" when content contains no CRLF', () => {
-    render(
-      <StatusBar
-        buffer={makeBuffer({ content: 'line1\nline2\nline3' })}
-      />,
-    );
+  test('shows "LF" when content contains no CRLF', async () => {
+    await act(async () => {
+      root.render(
+        <StatusBar
+          buffer={makeBuffer({ content: 'line1\nline2\nline3' })}
+        />,
+      );
+    });
 
-    expect(screen.getByText('LF')).toBeInTheDocument();
+    expect(getByText(container, 'LF')).toBeTruthy();
   });
 
-  test('shows "CRLF" when content contains only \\r\\n', () => {
-    render(
-      <StatusBar
-        buffer={makeBuffer({ content: 'line1\r\nline2\r\nline3' })}
-      />,
-    );
+  test('shows "CRLF" when content contains only \\r\\n', async () => {
+    await act(async () => {
+      root.render(
+        <StatusBar
+          buffer={makeBuffer({ content: 'line1\r\nline2\r\nline3' })}
+        />,
+      );
+    });
 
     // After removing all \r\n sequences, no bare \n remains → hasBareLF=false → "CRLF".
-    expect(screen.getByText('CRLF')).toBeInTheDocument();
+    expect(getByText(container, 'CRLF')).toBeTruthy();
   });
 
-  test('shows "Mixed" when content has both CRLF and bare LF', () => {
-    render(
-      <StatusBar
-        buffer={makeBuffer({ content: 'line1\nline2\r\nline3' })}
-      />,
-    );
+  test('shows "Mixed" when content has both CRLF and bare LF', async () => {
+    await act(async () => {
+      root.render(
+        <StatusBar
+          buffer={makeBuffer({ content: 'line1\nline2\r\nline3' })}
+        />,
+      );
+    });
 
     // After removing \r\n, bare \n remains → hasBareLF=true + hasCRLF=true → "Mixed".
-    expect(screen.getByText('Mixed')).toBeInTheDocument();
+    expect(getByText(container, 'Mixed')).toBeTruthy();
   });
 
   // ---- 10. No buffer ----
-  test('does not render right section when buffer is null', () => {
-    const { container } = render(<StatusBar branch="main" buffer={null} />);
+  test('does not render right section when buffer is null', async () => {
+    await act(async () => { root.render(<StatusBar branch="main" buffer={null} />); });
 
-    expect(container.querySelector('.statusbar-right')).not.toBeInTheDocument();
+    expect(container.querySelector('.statusbar-right')).toBeNull();
   });
 
   // ---- 11. Buffer without cursorPosition ----
-  test('does not show cursor position when buffer has no cursorPosition', () => {
-    const { container } = render(
-      <StatusBar
-        buffer={makeBuffer({
-          cursorPosition: undefined,
-        })}
-      />,
-    );
+  test('does not show cursor position when buffer has no cursorPosition', async () => {
+    await act(async () => {
+      root.render(
+        <StatusBar
+          buffer={makeBuffer({
+            cursorPosition: undefined,
+          })}
+        />,
+      );
+    });
 
-    expect(container.querySelector('.statusbar-right')).toBeInTheDocument();
+    expect(container.querySelector('.statusbar-right')).toBeTruthy();
     expect(
       container.querySelector('.statusbar-item-cursor'),
-    ).not.toBeInTheDocument();
+    ).toBeNull();
   });
 
-  test('does not show cursor position when cursorPosition has non-numeric values', () => {
-    const { container } = render(
-      <StatusBar
-        buffer={makeBuffer({
-          cursorPosition: { line: undefined as any, column: undefined as any },
-        })}
-      />,
-    );
+  test('does not show cursor position when cursorPosition has non-numeric values', async () => {
+    await act(async () => {
+      root.render(
+        <StatusBar
+          buffer={makeBuffer({
+            cursorPosition: { line: undefined as any, column: undefined as any },
+          })}
+        />,
+      );
+    });
 
     expect(
       container.querySelector('.statusbar-item-cursor'),
-    ).not.toBeInTheDocument();
+    ).toBeNull();
   });
 
   // ---- 12. Plain text for unknown extensions ----
-  test('shows "Plain Text" for unknown file extensions', () => {
-    render(
-      <StatusBar
-        buffer={makeBuffer({
-          file: { name: 'data.xyz', ext: '.xyz' },
-        })}
-      />,
-    );
+  test('shows "Plain Text" for unknown file extensions', async () => {
+    await act(async () => {
+      root.render(
+        <StatusBar
+          buffer={makeBuffer({
+            file: { name: 'data.xyz', ext: '.xyz' },
+          })}
+        />,
+      );
+    });
 
-    expect(screen.getByText('Plain Text')).toBeInTheDocument();
+    expect(getByText(container, 'Plain Text')).toBeTruthy();
   });
 
   // ---- 13. Title attributes for accessibility ----
-  test('items have title attributes for accessibility', () => {
-    render(<StatusBar branch="main" buffer={makeBuffer()} />);
+  test('items have title attributes for accessibility', async () => {
+    await act(async () => { root.render(<StatusBar branch="main" buffer={makeBuffer()} />); });
 
-    expect(screen.getByTitle('Branch: main')).toBeInTheDocument();
-    expect(screen.getByTitle('Cursor position')).toBeInTheDocument();
-    expect(screen.getByTitle('Language: TypeScript (JSX)')).toBeInTheDocument();
-    expect(screen.getByTitle('File encoding')).toBeInTheDocument();
-    expect(screen.getByTitle('Line ending format')).toBeInTheDocument();
-    expect(screen.getByTitle('Indentation')).toBeInTheDocument();
+    expect(container.querySelector('[title="Branch: main"]')).toBeTruthy();
+    expect(container.querySelector('[title="Cursor position"]')).toBeTruthy();
+    expect(container.querySelector('[title="Language: TypeScript (JSX)"]')).toBeTruthy();
+    expect(container.querySelector('[title="File encoding"]')).toBeTruthy();
+    expect(container.querySelector('[title="Line ending format"]')).toBeTruthy();
+    expect(container.querySelector('[title="Indentation"]')).toBeTruthy();
   });
 
   // ---- 14. Cursor position is aria-hidden ----
-  test('cursor position span has aria-hidden to avoid screen reader spam', () => {
-    render(<StatusBar buffer={makeBuffer()} />);
+  test('cursor position span has aria-hidden to avoid screen reader spam', async () => {
+    await act(async () => { root.render(<StatusBar buffer={makeBuffer()} />); });
 
     const cursorEl = document.querySelector('.statusbar-item-cursor');
-    expect(cursorEl).toBeInTheDocument();
-    expect(cursorEl).toHaveAttribute('aria-hidden', 'true');
+    expect(cursorEl).toBeTruthy();
+    expect(cursorEl?.getAttribute('aria-hidden')).toBe('true');
   });
 
   // ---- 15. Empty branch string shows "No Git" ----
-  test('empty string branch shows "No Git"', () => {
-    render(<StatusBar branch="" />);
+  test('empty string branch shows "No Git"', async () => {
+    await act(async () => { root.render(<StatusBar branch="" />); });
 
-    expect(screen.getByText('No Git')).toBeInTheDocument();
+    expect(getByText(container, 'No Git')).toBeTruthy();
   });
 
   // ---- 16. Custom encoding when provided ----
-  test('shows custom encoding when encoding prop is provided', () => {
-    render(<StatusBar buffer={makeBuffer()} encoding="ISO-8859-1" />);
+  test('shows custom encoding when encoding prop is provided', async () => {
+    await act(async () => { root.render(<StatusBar buffer={makeBuffer()} encoding="ISO-8859-1" />); });
 
-    expect(screen.getByText('ISO-8859-1')).toBeInTheDocument();
+    expect(getByText(container, 'ISO-8859-1')).toBeTruthy();
   });
 
   // ---- 17. Custom indentation when provided ----
-  test('shows custom indentation when indentation prop is provided', () => {
-    render(<StatusBar buffer={makeBuffer()} indentation="Tabs: 4" />);
+  test('shows custom indentation when indentation prop is provided', async () => {
+    await act(async () => { root.render(<StatusBar buffer={makeBuffer()} indentation="Tabs: 4" />); });
 
-    expect(screen.getByText('Tabs: 4')).toBeInTheDocument();
+    expect(getByText(container, 'Tabs: 4')).toBeTruthy();
   });
 });

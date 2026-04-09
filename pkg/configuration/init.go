@@ -662,15 +662,15 @@ func DebugPrintConfig(config *Config, apiKeys *APIKeys) {
 func ShowWelcomeMessage() {
 	fmt.Println("[>>] Welcome to ledit - AI-powered code assistance!")
 	fmt.Println()
-	fmt.Println("   ledit helps you write code faster using AI language models.")
-	fmt.Println("   Requires models with tool-calling support for code editing.")
-	fmt.Println("   Get started with low-cost AI models - no lock-in, maximum flexibility.")
-	fmt.Println()
-	fmt.Println("[i] Start with the web-based code editor:")
+	fmt.Println("[i] Get started with the web-based code editor:")
 	fmt.Println("   • Run 'ledit agent -d' to launch at http://localhost:54000")
 	fmt.Println("   • Full code editor with AI integration built in")
 	fmt.Println("   • Friendly setup experience for providers and models")
-	fmt.Println("   • Use it side-by-side with the CLI for the best experience")
+	fmt.Println("   • The recommended way to explore ledit's capabilities")
+	fmt.Println()
+	fmt.Println("   ledit helps you write code faster using AI language models.")
+	fmt.Println("   Requires models with tool-calling support for code editing.")
+	fmt.Println("   Get started with low-cost AI models - no lock-in, maximum flexibility.")
 	fmt.Println()
 	fmt.Println("[i] Recommended for beginners:")
 	fmt.Println("   • OpenRouter - Access to 100+ AI models through one API")
@@ -695,7 +695,7 @@ func ShowNextSteps(provider, configDir string) {
 	}
 
 	fmt.Println("Next steps:")
-	fmt.Println("  • Run 'ledit agent -d' to start the web-based code editor")
+	fmt.Println("  • Run 'ledit agent -d' to start the web-based code editor (recommended)")
 	fmt.Println("  • Run 'ledit' to start the interactive CLI mode")
 	fmt.Println("  • Run 'ledit agent \"your task here\"' for direct commands")
 

@@ -16,6 +16,7 @@ import {
   clearLayoutSnapshot,
   dispose,
   initBeforeUnloadFlush,
+  getLayoutStorageKey,
   type CursorPosition,
   type ScrollPosition,
   type BufferLayoutEntry,
@@ -25,8 +26,6 @@ import {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-const STORAGE_KEY = 'ledit.editor.layoutState';
 
 function makeSnapshot(overrides: Partial<LayoutSnapshot> = {}): LayoutSnapshot {
   return {
@@ -274,20 +273,20 @@ describe('loadLayoutSnapshot', () => {
       buffers: [makeEntry('/a.ts')],
       bufferOrder: ['/a.ts'],
     };
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+    window.localStorage.setItem(getLayoutStorageKey(), JSON.stringify(snapshot));
 
     const loaded = loadLayoutSnapshot();
     expect(loaded).toEqual(snapshot);
   });
 
   it('returns null for malformed JSON', () => {
-    window.localStorage.setItem(STORAGE_KEY, 'not json at all {{');
+    window.localStorage.setItem(getLayoutStorageKey(), 'not json at all {{');
     expect(loadLayoutSnapshot()).toBeNull();
   });
 
   it('returns null when JSON is valid but version is not 1', () => {
     window.localStorage.setItem(
-      STORAGE_KEY,
+      getLayoutStorageKey(),
       JSON.stringify({
         version: 999,
         activePaneId: null,
@@ -300,17 +299,17 @@ describe('loadLayoutSnapshot', () => {
   });
 
   it('returns null when JSON is a primitive string (not an object)', () => {
-    window.localStorage.setItem(STORAGE_KEY, '"just a string"');
+    window.localStorage.setItem(getLayoutStorageKey(), '"just a string"');
     expect(loadLayoutSnapshot()).toBeNull();
   });
 
   it('returns null when JSON is null', () => {
-    window.localStorage.setItem(STORAGE_KEY, 'null');
+    window.localStorage.setItem(getLayoutStorageKey(), 'null');
     expect(loadLayoutSnapshot()).toBeNull();
   });
 
   it('returns null when JSON is an array', () => {
-    window.localStorage.setItem(STORAGE_KEY, '[1,2,3]');
+    window.localStorage.setItem(getLayoutStorageKey(), '[1,2,3]');
     expect(loadLayoutSnapshot()).toBeNull();
   });
 
@@ -328,7 +327,7 @@ describe('loadLayoutSnapshot', () => {
 
 describe('clearLayoutSnapshot', () => {
   it('removes the stored snapshot', () => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(makeSnapshot()));
+    window.localStorage.setItem(getLayoutStorageKey(), JSON.stringify(makeSnapshot()));
     expect(loadLayoutSnapshot()).not.toBeNull();
 
     clearLayoutSnapshot();

@@ -111,6 +111,20 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       terminalWSRef.current.sendResize(xtermRef.current.cols, xtermRef.current.rows);
     }, [paneConnected]);
 
+    // ── Wheel event handler for native scrolling ──
+    const handleWheel = useCallback((e: WheelEvent) => {
+      const term = xtermRef.current;
+      if (!term) return;
+
+      // Prevent default browser behavior
+      e.preventDefault();
+
+      // Use xterm's scroll API to scroll by the wheel delta
+      // deltaY is positive for scrolling down, negative for scrolling up
+      // xterm.scrollLines(negative) scrolls up, positive scrolls down
+      term.scrollLines(-e.deltaY);
+    }, []);
+
     // ── Context menu handlers ──
     const closeContextMenu = useCallback(() => {
       setContextMenu(null);
@@ -216,7 +230,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       const term = new XTerm({
         convertEol: false,
         cursorBlink: true,
-        allowProposedApi: false,
+        allowProposedApi: true,
         fontFamily: getTerminalFontFamily(),
         fontSize: fontSize ?? FONT_SIZE_DEFAULT,
         lineHeight: 1.2,
@@ -228,6 +242,12 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       const fitAddon = new FitAddon();
       term.loadAddon(fitAddon);
       term.open(xtermContainerRef.current);
+
+      // Add wheel event handler for native scrolling
+      const container = xtermContainerRef.current;
+      if (container) {
+        container.addEventListener('wheel', handleWheel, { passive: false });
+      }
 
       xtermRef.current = term;
       fitAddonRef.current = fitAddon;
@@ -242,6 +262,10 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       });
 
       return () => {
+        // Remove wheel event listener
+        if (container) {
+          container.removeEventListener('wheel', handleWheel);
+        }
         try {
           term.dispose();
         } catch (err) {
@@ -250,7 +274,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         xtermRef.current = null;
         fitAddonRef.current = null;
       };
-    }, [isActive, getTerminalTheme, getTerminalFontFamily, fontSize]);
+    }, [isActive, getTerminalTheme, getTerminalFontFamily, fontSize, handleWheel]);
 
     // Keep theme and font size in sync
     useEffect(() => {

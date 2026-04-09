@@ -287,7 +287,26 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
 
     // Manage WebSocket connection lifecycle
     useEffect(() => {
-      if (!isActive || !isConnected) {
+      if (!isActive) {
+        if (eventHandlerRef.current && terminalWSRef.current) {
+          terminalWSRef.current.removeEvent(eventHandlerRef.current);
+          terminalWSRef.current.disconnect();
+        }
+        eventHandlerRef.current = null;
+        terminalWSRef.current = null;
+        setPaneConnected(false);
+        onConnectionChangeRef.current?.(false);
+        return;
+      }
+
+      // Don't tear down during freeze or reconnect - wait for resume to reconnect
+      // Check if the current WebSocket is frozen or actively reconnecting
+      if (isConnected === false && terminalWSRef.current && (terminalWSRef.current.isCurrentlyFrozen() || terminalWSRef.current.isReconnecting())) {
+        // Still frozen or reconnecting, keep the existing connection around
+        return;
+      }
+
+      if (!isConnected) {
         if (eventHandlerRef.current && terminalWSRef.current) {
           terminalWSRef.current.removeEvent(eventHandlerRef.current);
           terminalWSRef.current.disconnect();
@@ -300,8 +319,11 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       }
 
       // Each pane gets its own independent WebSocket connection / PTY session
-      const service = TerminalWebSocketService.createInstance();
-      terminalWSRef.current = service;
+      // Check if we already have a terminalWS instance to avoid recreating during freeze/resume cycles
+      const service = terminalWSRef.current ?? TerminalWebSocketService.createInstance();
+      if (!terminalWSRef.current) {
+        terminalWSRef.current = service;
+      }
 
       const handler = (event: WsEvent) => {
         const data = event.data as Record<string, unknown> | undefined;
@@ -330,14 +352,30 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
 
       // Set the preferred shell before the initial connection so the backend
       // creates a PTY with the requested shell.
-      if (preferredShellRef.current) {
+      if (preferredShellRef.current && !service.getSessionId()) {
         service.setPreferredShell(preferredShellRef.current);
       }
 
-      service.connect();
+      // Only call connect() if we don't already have a connection
+      // During freeze/resume, the service will call connect() itself via resume()
+      if (!service.isConnectedToServer() || !service.getSessionId()) {
+        service.connect();
+      }
 
       return () => {
         service.removeEvent(handler);
+        // If the service is frozen or actively reconnecting, do NOT call
+        // disconnect() or closeSession(). Calling disconnect() clears the
+        // persisted sessionId and unregisters the instance, which prevents
+        // resume() from reattaching after the component remounts.
+        if (service.isCurrentlyFrozen() || service.isReconnecting()) {
+          // Keep the service alive so resume() can still reconnect.
+          // Only null out our local ref so the effect body creates a new
+          // ref on remount — the service instance itself stays registered.
+          terminalWSRef.current = null;
+          eventHandlerRef.current = null;
+          return;
+        }
         if (typeof service.closeSession === 'function') {
           service.closeSession();
         }

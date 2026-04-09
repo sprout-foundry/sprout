@@ -14,6 +14,13 @@ jest.mock('../services/fileAccess', () => ({
     json: () => Promise.resolve({ message: 'File saved successfully' }),
   }),
 }));
+// EditorManagerProvider's hooks use useLog() which requires NotificationContext.
+jest.mock('./NotificationContext', () => {
+  const noop = () => {};
+  return Object.assign(function NotificationProviderMock({ children }) { return children; }, {
+    useNotifications: () => ({ addNotification: noop }),
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -36,6 +43,9 @@ beforeEach(() => {
   // Ensure the welcome buffer is NOT created in tests so they run
   // against the same initial state (only buffer-chat) as before.
   localStorage.setItem('ledit-welcome-dismissed', 'true');
+  // Clear any persisted layout snapshot from previous tests so that
+  // restoreLayout() doesn't inject stale file buffers on mount.
+  localStorage.removeItem('ledit.editor.layoutState');
 });
 
 afterEach(() => {

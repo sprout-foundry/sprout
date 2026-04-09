@@ -21,6 +21,14 @@ func isNonInteractive() bool {
 	return !term.IsTerminal(int(os.Stdin.Fd()))
 }
 
+// isSSHDaemon returns true if running as an SSH daemon.
+// SSH daemons set BROWSER=none to indicate they're running
+// in headless mode and should allow startup even without a provider
+// configured, so that the web UI can handle provider setup.
+func isSSHDaemon() bool {
+	return strings.TrimSpace(os.Getenv("BROWSER")) == "none"
+}
+
 // SelectProvider allows interactive provider selection
 func (a *Agent) SelectProvider() error {
 	newProvider, err := a.configManager.SelectNewProvider()

@@ -172,6 +172,7 @@ class TerminalWebSocketService {
 
     this.ws.onopen = () => {
       debugLog('Terminal WebSocket connected');
+      this._isReconnecting = false;
       this.reconnectAttempts = 0;
       this.isConnected = true;
       this.lastPongTime = Date.now();
@@ -204,6 +205,8 @@ class TerminalWebSocketService {
           this.reconnectTimeout = null;
           this.connect();
         }, this.reconnectDelay * this.reconnectAttempts);
+      } else {
+        this._isReconnecting = false;
       }
     };
 
@@ -267,6 +270,7 @@ class TerminalWebSocketService {
       this.ws = null;
     }
     this.isConnected = false;
+    this._isReconnecting = false;
     this.clearPersistedSessionId();
     this.sessionId = null;
     // Permanent teardown — remove from the freeze/resume registry.
@@ -450,9 +454,26 @@ class TerminalWebSocketService {
   /** Proactively disconnect before tab freeze. Sends a clean close frame to
    *  the server so it can properly detach from the backend session (tmux).
    *  Unlike disconnect(), this does NOT clear the persisted sessionId --
-   *  resume() will restore it for reattachment. */
+   *  resume() will restore it for reattachment.
+   *  
+   *  IMPORTANT: This method sets ws.onclose = null to prevent the async
+   *  close event from firing and triggering unwanted side effects. The
+   *  TerminalPane component's useEffect watches isConnected, so we must
+   *  ensure that when resume() is called, the pane can reconnect without
+   *  tearing down and recreating its xterm instance.
+   *  
+   *  We use a separate flag to track freeze state so the TerminalPane can
+   *  distinguish between a freeze (temporary) and a disconnect (permanent).
+   */
+  private isFrozen = false;
+  /** True while a reconnect is in progress (resetAndReconnect has been called
+   *  but the WebSocket has not yet opened or permanently failed). This lets
+   *  React components avoid tearing down state during the async gap. */
+  private _isReconnecting = false;
+
   freeze() {
     this.intentionalClose = true;
+    this.isFrozen = true;
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
@@ -473,9 +494,32 @@ class TerminalWebSocketService {
     // that resume() → resetAndReconnect() can reattach to the tmux session.
   }
 
-  /** Resume after tab unfreeze. Triggers immediate reconnection with session restore. */
+  /** Resume after tab unfreeze. Triggers immediate reconnection with session restore.
+   *  
+   *  IMPORTANT: This method is called when the page becomes visible again.
+   *  At this point, the TerminalPane component may still be mounted with
+   *  isActive=true. We need to ensure the reconnection doesn't cause the
+   *  pane to tear down and recreate its xterm instance.
+   */
   resume() {
+    this.isFrozen = false;
     this.resetAndReconnect();
+  }
+
+  /** Check if the service is currently frozen (waiting to resume). */
+  isCurrentlyFrozen(): boolean {
+    return this.isFrozen;
+  }
+
+  /** Check if the service is currently re-connecting (resetAndReconnect called
+   *  but the WebSocket has not yet confirmed open or permanently failed). */
+  isReconnecting(): boolean {
+    return this._isReconnecting;
+  }
+
+  /** Check if the service is currently connected. */
+  isConnectedToServer(): boolean {
+    return this.isConnected;
   }
 
   /** Reset all reconnection state and trigger an immediate reconnect attempt.
@@ -483,6 +527,7 @@ class TerminalWebSocketService {
    *  intentional, so auto-reconnect continues to work if the first attempt fails.
    *  Also restores any previously persisted sessionId for reattachment. */
   resetAndReconnect() {
+    this._isReconnecting = true;
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;

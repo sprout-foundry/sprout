@@ -399,6 +399,8 @@ func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherU
 		`  while [ $START_WAIT -lt $MAX_WAIT ]; do`,
 		`    if ! kill -0 "$REMOTE_PID" 2>/dev/null; then`,
 		`      echo "ERROR: ledit daemon exited prematurely on port $DAEMON_PORT" >&2`,
+		`      echo "Last 50 lines from daemon log:" >&2`,
+		`      tail -n 50 "$LOG_FILE" 2>&1 | while IFS= read -r line; do echo "  $line" >&2; done`,
 		`      exit 1`,
 		`    fi`,
 		`    HEALTH=""`,

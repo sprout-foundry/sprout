@@ -1128,11 +1128,8 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     return (
       <div className="editor-pane">
         <EditorToolbar
-          paneId={paneId}
-          onGoToLine={handleGoToLine}
           onSave={handleSave}
           saving={false}
-          showGoToLine={false}
           showSave={false}
         />
         <SvgPreview
@@ -1146,21 +1143,10 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
 
   return (
     <div className="editor-pane">
-      <div style={{ position: 'relative' }}>
-        {/* Language switcher floats over the toolbar's left area */}
-        <div className="editor-language-switcher-zone">
-          <LanguageSwitcher
-            currentLanguageId={languageInfo.languageId}
-            isAutoDetected={languageInfo.isAutoDetected}
-            onLanguageChange={handleLanguageChange}
-          />
-        </div>
         <EditorToolbar
-          paneId={paneId}
-          onGoToLine={handleGoToLine}
           onSave={handleSave}
           saving={saving}
-          actions={[
+          rightActions={[
             ...(isSvgFile
               ? [
                   {
@@ -1193,7 +1179,6 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
             viewRef.current?.focus();
           }}
         />
-      </div>
 
       <EditorBreadcrumb
         filePath={buffer.file.path}
@@ -1237,6 +1222,11 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
             Ln {buffer.cursorPosition.line + 1}, Col {buffer.cursorPosition.column + 1}
           </span>
         </div>
+        <LanguageSwitcher
+          currentLanguageId={languageInfo.languageId}
+          isAutoDetected={languageInfo.isAutoDetected}
+          onLanguageChange={handleLanguageChange}
+        />
       </div>
 
       <ContextMenu

@@ -108,6 +108,12 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 
 		if enableWebUI {
 			webServer = webui.NewReactWebServer(chatAgent, eventBus, port)
+
+			// Wire up the WebUI client check so security prompts route
+			// correctly: use the event bus only when a browser tab is open,
+			// otherwise fall back to CLI prompting (avoids 5-min timeouts).
+			chatAgent.SetHasActiveWebUIClients(webServer.HasActiveWebUIClients)
+
 			startInstanceTracker(ctx, port, chatAgent)
 
 			// Daemon mode without explicit port → single-port supervisor.

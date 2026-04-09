@@ -402,6 +402,17 @@ Examples:
         current_test_workspace.mkdir(parents=True, exist_ok=True)
         logging.debug(f"Created test workspace: {current_test_workspace}")
 
+        # Symlink the ledit binary into the test workspace so tests using ./ledit can find it
+        ledit_symlink = current_test_workspace / 'ledit'
+        try:
+            os.unlink(ledit_symlink)
+        except FileNotFoundError:
+            pass
+        try:
+            os.symlink(project_root / 'ledit', ledit_symlink)
+        except OSError as e:
+            logging.warning(f"Could not symlink ledit binary for {test_name}: {e}")
+
         # Construct the command to run the test logic within the shell script
         # The 'run_test_logic' function is expected to be defined in each test_*.sh script.
         # We don't pass the ledit path explicitly to the script, but modify PATH for the subprocess.

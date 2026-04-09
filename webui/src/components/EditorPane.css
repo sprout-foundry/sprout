@@ -14,16 +14,6 @@
   background: var(--editor-pane-footer-bg);
 }
 
-/* ── Language Switcher Zone ────────────────────────────────────────── */
-/* Floats in the toolbar left area via absolute positioning. */
-.editor-language-switcher-zone {
-  position: absolute;
-  top: 4px;
-  left: 8px;
-  z-index: 10;
-  pointer-events: auto;
-}
-
 .pane-header {
   display: none; /* Hidden since we now have toolbar */
 }
@@ -62,6 +52,10 @@
 .editor-stats {
   display: flex;
   gap: 12px;
+}
+
+.pane-footer .language-switcher-button {
+  flex-shrink: 0;
 }
 
 .no-file-selected {

@@ -132,7 +132,8 @@ func (ws *ReactWebServer) getConfigManager(r *http.Request, w http.ResponseWrite
 	}
 	// If getClientAgent failed because no provider is configured, create a
 	// config manager directly so we can still list providers during onboarding.
-	if errors.Is(err, ErrNoProviderConfigured) {
+	// Check for ErrNoProviderConfigured or any error indicating no provider is configured.
+	if errors.Is(err, ErrNoProviderConfigured) || (err != nil && isProviderConfigError(err)) {
 		cm, createErr := configuration.NewManagerSilent()
 		if createErr != nil {
 			writeJSONErr(w, http.StatusServiceUnavailable, "config_unavailable", "Configuration manager is not available")

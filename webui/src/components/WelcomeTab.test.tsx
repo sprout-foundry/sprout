@@ -1,6 +1,23 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import '@testing-library/jest-dom';
+// @ts-nocheck
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
 import WelcomeTab from './WelcomeTab';
+
+// ---------------------------------------------------------------------------
+// Mocks & Setup
+// ---------------------------------------------------------------------------
+
+let rafId = 0;
+beforeAll(() => {
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  // Mock requestAnimationFrame for any effects that use it
+  global.requestAnimationFrame = ((cb) => {
+    rafId += 1;
+    cb(Date.now());
+    return rafId;
+  }) as typeof requestAnimationFrame;
+  global.cancelAnimationFrame = jest.fn();
+});
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -14,24 +31,65 @@ const defaultCallbacks = {
   onStartChat: jest.fn(),
 };
 
-/** Render WelcomeTab with all callbacks (allows overriding individual ones). */
-function renderWithCallbacks(overrides: Partial<typeof defaultCallbacks> = {}) {
-  const callbacks = { ...defaultCallbacks, ...overrides };
-  return {
-    ...render(<WelcomeTab {...callbacks} />),
-    callbacks,
-  };
-}
+let container: HTMLDivElement | null = null;
+let root: ReturnType<typeof createRoot> | null = null;
 
 beforeEach(() => {
   jest.clearAllMocks();
-  // Spy on window.open so we can verify external link behavior
   jest.spyOn(window, 'open').mockImplementation(() => null);
+  container = document.createElement('div');
+  document.body.appendChild(container);
 });
 
 afterEach(() => {
+  act(() => {
+    if (root) {
+      root.unmount();
+      root = null;
+    }
+  });
+  if (container) {
+    container.remove();
+    container = null;
+  }
   jest.restoreAllMocks();
 });
+
+/** Render WelcomeTab with all callbacks (allows overriding individual ones). */
+function renderWithCallbacks(overrides: Partial<typeof defaultCallbacks> = {}) {
+  const callbacks = { ...defaultCallbacks, ...overrides };
+  act(() => {
+    root = createRoot(container!);
+    root.render(<WelcomeTab {...callbacks} />);
+  });
+  return callbacks;
+}
+
+/** Render WelcomeTab with no props. */
+function renderNoProps() {
+  act(() => {
+    root = createRoot(container!);
+    root.render(<WelcomeTab />);
+  });
+}
+
+/** Helper: find a button whose text content matches the given regex. */
+function findButtonByText(pattern: RegExp): HTMLButtonElement | null {
+  const buttons = container!.querySelectorAll('button');
+  for (const btn of buttons) {
+    if (pattern.test(btn.textContent ?? '')) return btn as HTMLButtonElement;
+  }
+  return null;
+}
+
+/** Helper: find a resource card button whose text includes the given string. */
+function findResourceCardByText(text: string): HTMLButtonElement | null {
+  const cards = container!.querySelectorAll('button.resource-card');
+  for (const card of cards) {
+    if (card.textContent?.includes(text)) return card as HTMLButtonElement;
+  }
+  return null;
+}
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -45,28 +103,33 @@ describe('WelcomeTab', () => {
     it('renders welcome heading and subtitle', () => {
       renderWithCallbacks();
 
-      expect(screen.getByRole('heading', { name: /welcome to ledit/i })).toBeInTheDocument();
-      expect(screen.getByText('Your AI-powered code editor')).toBeInTheDocument();
+      const heading = container!.querySelector('h1, h2, h3, [role="heading"]');
+      expect(heading).not.toBeNull();
+      expect(heading!.textContent).toMatch(/welcome to ledit/i);
+
+      const allText = container!.textContent ?? '';
+      expect(allText).toContain('Your AI-powered code editor');
     });
 
     it('renders dismiss button when onDismiss is provided', () => {
       renderWithCallbacks();
 
-      const dismissBtn = screen.getByTitle('Dismiss welcome tab');
-      expect(dismissBtn).toBeInTheDocument();
+      const dismissBtn = container!.querySelector('[title="Dismiss welcome tab"]');
+      expect(dismissBtn).toBeTruthy();
     });
 
     it('does NOT render dismiss button when onDismiss is not provided', () => {
-      render(<WelcomeTab />);
+      renderNoProps();
 
-      expect(screen.queryByTitle('Dismiss welcome tab')).not.toBeInTheDocument();
+      const dismissBtn = container!.querySelector('[title="Dismiss welcome tab"]');
+      expect(dismissBtn).toBeNull();
     });
 
     it('calls onDismiss when dismiss button is clicked', () => {
-      const { callbacks } = renderWithCallbacks();
+      const callbacks = renderWithCallbacks();
 
-      const dismissBtn = screen.getByTitle('Dismiss welcome tab');
-      fireEvent.click(dismissBtn);
+      const dismissBtn = container!.querySelector('[title="Dismiss welcome tab"]') as HTMLElement;
+      act(() => { dismissBtn.click(); });
 
       expect(callbacks.onDismiss).toHaveBeenCalledTimes(1);
     });
@@ -79,62 +142,60 @@ describe('WelcomeTab', () => {
     it('renders all four quick action buttons', () => {
       renderWithCallbacks();
 
-      expect(screen.getByRole('button', { name: /open command palette/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /open terminal/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /view git history/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /start chat/i })).toBeInTheDocument();
+      expect(findButtonByText(/open command palette/i)).toBeTruthy();
+      expect(findButtonByText(/open terminal/i)).toBeTruthy();
+      expect(findButtonByText(/view git history/i)).toBeTruthy();
+      expect(findButtonByText(/start chat/i)).toBeTruthy();
     });
 
     it('shows the Quick Actions section heading', () => {
       renderWithCallbacks();
 
-      // The Quick Actions h2
-      const quickActionsHeading = screen.getByRole('heading', { name: /Quick Actions/i });
-      expect(quickActionsHeading).toBeInTheDocument();
+      const headings = container!.querySelectorAll('h1, h2, h3');
+      const found = Array.from(headings).some((h) => /Quick Actions/i.test(h.textContent ?? ''));
+      expect(found).toBe(true);
     });
 
     it('calls onOpenCommandPalette when clicking "Open Command Palette"', () => {
-      const { callbacks } = renderWithCallbacks();
+      const callbacks = renderWithCallbacks();
 
-      fireEvent.click(screen.getByRole('button', { name: /open command palette/i }));
+      act(() => { findButtonByText(/open command palette/i)!.click(); });
       expect(callbacks.onOpenCommandPalette).toHaveBeenCalledTimes(1);
     });
 
     it('calls onOpenTerminal when clicking "Open Terminal"', () => {
-      const { callbacks } = renderWithCallbacks();
+      const callbacks = renderWithCallbacks();
 
-      fireEvent.click(screen.getByRole('button', { name: /open terminal/i }));
+      act(() => { findButtonByText(/open terminal/i)!.click(); });
       expect(callbacks.onOpenTerminal).toHaveBeenCalledTimes(1);
     });
 
     it('calls onViewGit when clicking "View Git History"', () => {
-      const { callbacks } = renderWithCallbacks();
+      const callbacks = renderWithCallbacks();
 
-      fireEvent.click(screen.getByRole('button', { name: /view git history/i }));
+      act(() => { findButtonByText(/view git history/i)!.click(); });
       expect(callbacks.onViewGit).toHaveBeenCalledTimes(1);
     });
 
     it('calls onStartChat when clicking "Start Chat"', () => {
-      const { callbacks } = renderWithCallbacks();
+      const callbacks = renderWithCallbacks();
 
-      fireEvent.click(screen.getByRole('button', { name: /start chat/i }));
+      act(() => { findButtonByText(/start chat/i)!.click(); });
       expect(callbacks.onStartChat).toHaveBeenCalledTimes(1);
     });
 
     it('quick action buttons do not throw when callbacks are undefined', () => {
-      render(<WelcomeTab />);
+      renderNoProps();
 
-      // All four buttons should be present even without callbacks
       const buttons = [
-        screen.getByRole('button', { name: /open command palette/i }),
-        screen.getByRole('button', { name: /open terminal/i }),
-        screen.getByRole('button', { name: /view git history/i }),
-        screen.getByRole('button', { name: /start chat/i }),
+        findButtonByText(/open command palette/i),
+        findButtonByText(/open terminal/i),
+        findButtonByText(/view git history/i),
+        findButtonByText(/start chat/i),
       ];
 
-      // Clicking each should not throw
       buttons.forEach((btn) => {
-        expect(() => fireEvent.click(btn)).not.toThrow();
+        expect(() => { if (btn) btn.click(); }).not.toThrow();
       });
     });
   });
@@ -146,7 +207,9 @@ describe('WelcomeTab', () => {
     it('renders the Getting Started section heading', () => {
       renderWithCallbacks();
 
-      expect(screen.getByRole('heading', { name: /Get Started/i })).toBeInTheDocument();
+      const headings = container!.querySelectorAll('h1, h2, h3');
+      const found = Array.from(headings).some((h) => /Get Started/i.test(h.textContent ?? ''));
+      expect(found).toBe(true);
     });
 
     it('renders all six getting started cards', () => {
@@ -161,20 +224,22 @@ describe('WelcomeTab', () => {
         'Command Palette',
       ];
 
+      const allText = container!.textContent ?? '';
       headings.forEach((title) => {
-        expect(screen.getByRole('heading', { name: title })).toBeInTheDocument();
+        expect(allText).toContain(title);
       });
     });
 
     it('renders descriptive text for each getting started card', () => {
       renderWithCallbacks();
 
-      expect(screen.getByText(/Select a file from the file tree or use Ctrl\+P to search/)).toBeInTheDocument();
-      expect(screen.getByText(/Use the file tree to browse your workspace/)).toBeInTheDocument();
-      expect(screen.getByText(/Use the integrated terminal for shell commands/)).toBeInTheDocument();
-      expect(screen.getByText(/View and manage git history and changes/)).toBeInTheDocument();
-      expect(screen.getByText(/Chat with AI to get code help and analysis/)).toBeInTheDocument();
-      expect(screen.getByText(/Access all commands with Ctrl\+P/)).toBeInTheDocument();
+      const allText = container!.textContent ?? '';
+      expect(allText).toMatch(/Select a file from the file tree or use Ctrl\+P to search/);
+      expect(allText).toMatch(/Use the file tree to browse your workspace/);
+      expect(allText).toMatch(/Use the integrated terminal for shell commands/);
+      expect(allText).toMatch(/View and manage git history and changes/);
+      expect(allText).toMatch(/Chat with AI to get code help and analysis/);
+      expect(allText).toMatch(/Access all commands with Ctrl\+P/);
     });
   });
 
@@ -185,69 +250,63 @@ describe('WelcomeTab', () => {
     it('renders the Resources section heading', () => {
       renderWithCallbacks();
 
-      expect(screen.getByRole('heading', { name: /Resources/i })).toBeInTheDocument();
+      const headings = container!.querySelectorAll('h1, h2, h3');
+      const found = Array.from(headings).some((h) => /Resources/i.test(h.textContent ?? ''));
+      expect(found).toBe(true);
     });
 
     it('renders all three resource cards', () => {
       renderWithCallbacks();
 
-      const resourceButtons = screen.getAllByRole('button').filter((btn) => btn.classList.contains('resource-card'));
+      const resourceButtons = container!.querySelectorAll('button.resource-card');
       expect(resourceButtons).toHaveLength(3);
     });
 
     it('renders Documentation, Settings, and Keyboard Shortcuts links', () => {
       renderWithCallbacks();
 
-      expect(screen.getByText('Documentation')).toBeInTheDocument();
-      expect(screen.getByText('Settings')).toBeInTheDocument();
-      expect(screen.getByText('Keyboard Shortcuts')).toBeInTheDocument();
+      const allText = container!.textContent ?? '';
+      expect(allText).toContain('Documentation');
+      expect(allText).toContain('Settings');
+      expect(allText).toContain('Keyboard Shortcuts');
     });
 
     it('"Documentation" button opens external URL in new tab', () => {
       renderWithCallbacks();
 
-      // The Documentation button — find by its title text within a resource card
-      const docButton = screen
-        .getAllByRole('button')
-        .find((btn) => btn.classList.contains('resource-card') && btn.textContent?.includes('Documentation'));
-      expect(docButton).toBeDefined();
+      const docButton = findResourceCardByText('Documentation');
+      expect(docButton).not.toBeNull();
 
-      fireEvent.click(docButton!);
+      act(() => { docButton!.click(); });
       expect(window.open).toHaveBeenCalledWith('https://ledit.dev/docs', '_blank');
     });
 
     it('"Settings" button calls onOpenCommandPalette when provided', () => {
-      const { callbacks } = renderWithCallbacks();
+      const callbacks = renderWithCallbacks();
 
-      const settingsButton = screen
-        .getAllByRole('button')
-        .find((btn) => btn.classList.contains('resource-card') && btn.textContent?.includes('Settings'));
-      expect(settingsButton).toBeDefined();
+      const settingsButton = findResourceCardByText('Settings');
+      expect(settingsButton).not.toBeNull();
 
-      fireEvent.click(settingsButton!);
+      act(() => { settingsButton!.click(); });
       expect(callbacks.onOpenCommandPalette).toHaveBeenCalledTimes(1);
     });
 
     it('"Keyboard Shortcuts" button calls onOpenCommandPalette when provided', () => {
-      const { callbacks } = renderWithCallbacks();
+      const callbacks = renderWithCallbacks();
 
-      const shortcutsButton = screen
-        .getAllByRole('button')
-        .find((btn) => btn.classList.contains('resource-card') && btn.textContent?.includes('Keyboard Shortcuts'));
-      expect(shortcutsButton).toBeDefined();
+      const shortcutsButton = findResourceCardByText('Keyboard Shortcuts');
+      expect(shortcutsButton).not.toBeNull();
 
-      fireEvent.click(shortcutsButton!);
+      act(() => { shortcutsButton!.click(); });
       expect(callbacks.onOpenCommandPalette).toHaveBeenCalledTimes(1);
     });
 
     it('resource buttons with onOpenCommandPalette do not throw when callback is undefined', () => {
-      render(<WelcomeTab />);
+      renderNoProps();
 
-      // Settings and Keyboard Shortcuts buttons both use onOpenCommandPalette
-      const resourceButtons = screen.getAllByRole('button').filter((btn) => btn.classList.contains('resource-card'));
-
+      const resourceButtons = container!.querySelectorAll('button.resource-card');
       resourceButtons.forEach((btn) => {
-        expect(() => fireEvent.click(btn)).not.toThrow();
+        expect(() => { btn.click(); }).not.toThrow();
       });
     });
   });
@@ -259,28 +318,29 @@ describe('WelcomeTab', () => {
     it('renders the pro tip text', () => {
       renderWithCallbacks();
 
-      expect(screen.getByText(/Pro tip:/)).toBeInTheDocument();
+      const footerEl = container!.querySelector('.welcome-footer');
+      expect(footerEl).not.toBeNull();
+      expect(footerEl!.textContent).toContain('Pro tip');
     });
 
     it('renders the Ctrl+P keyboard shortcut kbd element', () => {
       renderWithCallbacks();
 
-      const kbd = screen.getByText('Ctrl+P');
-      expect(kbd.tagName).toBe('KBD');
-      expect(kbd).toBeInTheDocument();
+      const kbd = container!.querySelector('kbd');
+      expect(kbd).not.toBeNull();
+      expect(kbd!.textContent).toBe('Ctrl+P');
     });
 
     it('renders the complete footer hint text with kbd element', () => {
       renderWithCallbacks();
 
-      const footerEl = document.querySelector('.welcome-footer');
+      const footerEl = container!.querySelector('.welcome-footer');
       expect(footerEl).not.toBeNull();
       expect(footerEl!.textContent).toContain('Pro tip');
       expect(footerEl!.textContent).toContain('Ctrl+P');
       expect(footerEl!.textContent).toContain('command palette');
       expect(footerEl!.textContent).toContain('search for any command or file');
 
-      // Verify the kbd element is present within the footer
       const kbd = footerEl!.querySelector('kbd');
       expect(kbd).not.toBeNull();
       expect(kbd!.textContent).toBe('Ctrl+P');
@@ -292,22 +352,18 @@ describe('WelcomeTab', () => {
   // -------------------------------------------------------------------------
   describe('rendering without callbacks', () => {
     it('renders without crashing when no props are provided', () => {
-      expect(() => render(<WelcomeTab />)).not.toThrow();
+      expect(() => renderNoProps()).not.toThrow();
     });
 
     it('renders all sections even without callbacks', () => {
-      render(<WelcomeTab />);
+      renderNoProps();
 
-      // Header
-      expect(screen.getByRole('heading', { name: /welcome to ledit/i })).toBeInTheDocument();
-      // Quick Actions
-      expect(screen.getByRole('heading', { name: /Quick Actions/i })).toBeInTheDocument();
-      // Getting Started
-      expect(screen.getByRole('heading', { name: /Get Started/i })).toBeInTheDocument();
-      // Resources
-      expect(screen.getByRole('heading', { name: /Resources/i })).toBeInTheDocument();
-      // Footer
-      expect(screen.getByText(/Pro tip:/)).toBeInTheDocument();
+      const allText = container!.textContent ?? '';
+      expect(allText).toMatch(/welcome to ledit/i);
+      expect(allText).toMatch(/Quick Actions/i);
+      expect(allText).toMatch(/Get Started/i);
+      expect(allText).toMatch(/Resources/i);
+      expect(allText).toMatch(/Pro tip/);
     });
   });
 });

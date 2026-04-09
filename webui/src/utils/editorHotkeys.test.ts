@@ -382,6 +382,8 @@ describe('getEditorKeymap', () => {
         'Alt-ArrowLeft',
         'Alt-ArrowRight',
         'Mod-k',
+        'Mod-/',
+        'Mod-Shift-/',
       ];
       expect(keymap.every((b) => b.key != null && knownKeys.includes(b.key))).toBe(true);
     });

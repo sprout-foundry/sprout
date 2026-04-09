@@ -39,18 +39,32 @@ export function useTabManagement({
         const next = new Map(prev);
         const buffer = next.get(bufferId);
         if (buffer) {
-          if (currentActivePane) {
-            Array.from(next.entries()).forEach(([id, buf]) => {
-              if (buf.paneId === currentActivePane && id !== bufferId) next.set(id, { ...buf, isActive: false });
+          // Pinned buffers keep their assigned pane — activating them switches to that pane
+          // instead of reassigning them to the currently active pane.
+          if (buffer.isPinned && buffer.paneId) {
+            const pinnedPaneId = buffer.paneId;
+            next.forEach((buf, id) => {
+              if (buf.paneId === pinnedPaneId && id !== bufferId) {
+                next.set(id, { ...buf, isActive: false });
+              }
             });
+            next.set(bufferId, { ...buffer, isActive: true });
+            setActivePaneId(pinnedPaneId);
+            setPanes((p) => p.map((pane) => (pane.id === pinnedPaneId ? { ...pane, bufferId } : pane)));
+          } else {
+            if (currentActivePane) {
+              Array.from(next.entries()).forEach(([id, buf]) => {
+                if (buf.paneId === currentActivePane && id !== bufferId) next.set(id, { ...buf, isActive: false });
+              });
+            }
+            next.set(bufferId, { ...buffer, isActive: true, paneId: currentActivePane });
+            setPanes((p) => p.map((pane) => (pane.id === currentActivePane ? { ...pane, bufferId } : pane)));
           }
-          next.set(bufferId, { ...buffer, isActive: true, paneId: currentActivePane });
         }
         return next;
       });
-      setPanes((prev) => prev.map((pane) => (pane.id === currentActivePane ? { ...pane, bufferId } : pane)));
     },
-    [activePaneIdRef, setActiveBufferId, setBuffers, setPanes],
+    [activePaneIdRef, setActiveBufferId, setBuffers, setPanes, setActivePaneId],
   );
 
   const switchToBuffer = useCallback(

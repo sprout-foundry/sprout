@@ -1,7 +1,7 @@
 // @ts-nocheck
 
 import { createRoot } from 'react-dom/client';
-import { act } from 'react';
+import { act, createElement } from 'react';
 import Sidebar from './Sidebar';
 import { ApiService } from '../services/api';
 
@@ -35,6 +35,17 @@ jest.mock('../services/api', () => {
       getInstance: jest.fn(),
     },
   };
+});
+
+// Sidebar uses useLog() which requires NotificationContext.
+// We provide a minimal mock with plain arrow functions (no jest.fn()) so Jest
+// doesn't need to transform NotificationContext.tsx, avoiding a heavy module
+// resolution cascade that causes OOM under Node 22 + Jest 27.
+jest.mock('../contexts/NotificationContext', () => {
+  const noop = () => {};
+  return Object.assign(function NotificationProviderMock({ children }) { return children; }, {
+    useNotifications: () => ({ addNotification: noop }),
+  });
 });
 
 const flushPromises = async () => {

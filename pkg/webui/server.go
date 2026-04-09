@@ -423,6 +423,22 @@ func (ws *ReactWebServer) getActiveQueryCount() int {
 	return ws.activeQueries
 }
 
+// HasActiveWebUIClients returns true if one or more WebSocket connections
+// of type "webui" are currently connected.  The security prompt routing
+// logic uses this to decide whether to route prompts through the WebUI
+// event bus or fall back to CLI-based prompting.
+func (ws *ReactWebServer) HasActiveWebUIClients() bool {
+	hasWebUI := false
+	ws.connections.Range(func(_, value interface{}) bool {
+		if info, ok := value.(*ConnectionInfo); ok && info.Type == "webui" {
+			hasWebUI = true
+			return false // stop iterating
+		}
+		return true
+	})
+	return hasWebUI
+}
+
 // SetWorkspaceRoot updates the active workspace root, changes the process cwd,
 // and resets terminal state.
 func (ws *ReactWebServer) SetWorkspaceRoot(path string) (string, error) {

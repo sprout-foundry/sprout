@@ -329,7 +329,12 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	// because isRunningUnderTest() returns true for all test binaries
 	// (which inject -test.* flags into os.Args). End-to-end validation is
 	// covered by webui integration tests and manual daemon testing.
-	if isNonInteractive() && !isRunningUnderTest() {
+	//
+	// EXCEPTION: SSH daemons set BROWSER=none and allow startup even
+	// without a provider so that the web UI can handle provider setup.
+	// This supports SSH workspace setup where the daemon starts on a fresh
+	// remote machine before provider is configured.
+	if isNonInteractive() && !isRunningUnderTest() && !isSSHDaemon() {
 		resolvedType, _, resolveErr := configManager.ResolveProviderModel("", model)
 		if resolveErr != nil {
 			return nil, fmt.Errorf("no provider configured. Running in non-interactive mode. "+noninteractive.HelpHint+": %w", resolveErr)
@@ -354,9 +359,11 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	clientType, finalModel, err = configManager.ResolveProviderModel("", model)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[WARN] Failed to resolve configured provider/model: %v\n", err)
-		// Non-interactive: don't call SelectNewProvider (it prompts on stdin)
-		if isNonInteractive() {
-			return nil, fmt.Errorf("no provider configured. Running in non-interactive mode. " + noninteractive.HelpHint)
+			// Non-interactive: don't call SelectNewProvider (it prompts on stdin)
+	// SSH daemon exception: allow startup even without provider
+	if isSSHDaemon() {
+		// Continue with whatever clientType was resolved (may be EditorClientType)
+	} else if isNonInteractive() {return nil, fmt.Errorf("no provider configured. Running in non-interactive mode. " + noninteractive.HelpHint)
 		}
 		fmt.Fprintf(os.Stderr, "[tool] Selecting an available provider...\n")
 		clientType, err = configManager.SelectNewProvider()

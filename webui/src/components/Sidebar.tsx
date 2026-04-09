@@ -929,7 +929,7 @@ function Sidebar({
       case 'git': {
         return (
           <>
-            {/* Sub-tab bar: Current Changes / Commit History */}
+            {/* Sub-tab bar: Changes / History / Worktrees */}
             {gitPanel && (
               <div
                 className="git-sidebar-tab-bar"
@@ -947,7 +947,7 @@ function Sidebar({
                   onClick={() => setGitSubTab('changes')}
                 >
                   <GitBranch size={14} />
-                  <span>Current Changes</span>
+                  <span>Changes</span>
                 </button>
                 <button
                   type="button"
@@ -959,7 +959,7 @@ function Sidebar({
                   onClick={() => setGitSubTab('history')}
                 >
                   <History size={14} />
-                  <span>Commit History</span>
+                  <span>History</span>
                 </button>
                 <button
                   type="button"
@@ -976,14 +976,14 @@ function Sidebar({
               </div>
             )}
 
-            {/* Current Changes sub-tab: working tree panel */}
+            {/* Changes sub-tab: working tree panel */}
             {gitSubTab === 'changes' && (
               <div id="git-panel-current-changes" role="tabpanel" aria-labelledby="git-tab-current-changes">
                 {gitPanel ? <GitSidebarPanel {...gitPanel} /> : <div className="empty">Git unavailable</div>}
               </div>
             )}
 
-            {/* Commit History sub-tab: GitHistoryPanel */}
+            {/* History sub-tab: GitHistoryPanel */}
             {gitSubTab === 'history' && (
               <div
                 id="git-panel-commit-history"

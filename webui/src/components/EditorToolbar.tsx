@@ -1,17 +1,21 @@
-import { useState } from 'react';
-import type { FormEvent, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
-import { Save, X, ArrowDownToLine, Sun, Moon, Loader2 } from 'lucide-react';
+import { Save, Sun, Moon, Loader2 } from 'lucide-react';
 import './EditorToolbar.css';
 
 interface EditorToolbarProps {
-  paneId: string;
-  onGoToLine: (line: number) => void;
   onSave: () => void;
   saving?: boolean;
-  showGoToLine?: boolean;
   showSave?: boolean;
   actions?: Array<{
+    id: string;
+    title: string;
+    icon: ReactNode;
+    onClick: () => void;
+    active?: boolean;
+    disabled?: boolean;
+  }>;
+  rightActions?: Array<{
     id: string;
     title: string;
     icon: ReactNode;
@@ -22,64 +26,17 @@ interface EditorToolbarProps {
 }
 
 function EditorToolbar({
-  paneId: _paneId,
-  onGoToLine,
   onSave,
   saving = false,
-  showGoToLine = true,
   showSave = true,
   actions = [],
+  rightActions = [],
 }: EditorToolbarProps): JSX.Element {
   const { theme, themePack, toggleTheme } = useTheme();
-  const [showGoToLineInput, setShowGoToLineInput] = useState(false);
-  const [lineInput, setLineInput] = useState('');
-
-  const handleGoToLineSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    const lineNum = parseInt(lineInput, 10);
-    if (!isNaN(lineNum) && lineNum > 0) {
-      onGoToLine(lineNum);
-      setShowGoToLineInput(false);
-      setLineInput('');
-    }
-  };
 
   return (
     <div className="editor-toolbar">
       <div className="toolbar-group">
-        {/* Go to Line */}
-        {showGoToLine ? (
-          showGoToLineInput ? (
-            <form className="go-to-line-form" onSubmit={handleGoToLineSubmit}>
-              <input
-                type="number"
-                className="go-to-line-input"
-                placeholder="Line #"
-                value={lineInput}
-                onChange={(e) => setLineInput(e.target.value)}
-                autoFocus
-                min="1"
-              />
-              <button
-                type="button"
-                className="go-to-line-cancel"
-                onClick={() => {
-                  setShowGoToLineInput(false);
-                  setLineInput('');
-                }}
-              >
-                <X size={12} />
-              </button>
-            </form>
-          ) : (
-            <button className="toolbar-button" onClick={() => setShowGoToLineInput(true)} title="Go to line (Ctrl+G)">
-              <span className="toolbar-icon">
-                <ArrowDownToLine size={16} />
-              </span>
-            </button>
-          )
-        ) : null}
-
         {actions.map((action) => (
           <button
             key={action.id}
@@ -94,6 +51,18 @@ function EditorToolbar({
       </div>
 
       <div className="toolbar-group">
+        {rightActions.map((action) => (
+          <button
+            key={action.id}
+            className={`toolbar-button ${action.active ? 'active' : ''}`}
+            onClick={action.onClick}
+            title={action.title}
+            disabled={action.disabled}
+          >
+            <span className="toolbar-icon">{action.icon}</span>
+          </button>
+        ))}
+
         {/* Save */}
         {showSave ? (
           <button className="toolbar-button" onClick={onSave} title="Save file (Ctrl+S)" disabled={saving}>

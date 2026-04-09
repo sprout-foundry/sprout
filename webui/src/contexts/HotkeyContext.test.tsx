@@ -30,6 +30,16 @@ jest.mock('../services/api', () => {
   };
 });
 
+// HotkeyProvider uses useLog() which requires NotificationContext.
+// We provide a minimal mock with plain arrow functions to avoid heavy module
+// resolution cascade that causes OOM under Node 22 + Jest 27.
+jest.mock('../contexts/NotificationContext', () => {
+  const noop = () => {};
+  return Object.assign(function NotificationProviderMock({ children }) { return children; }, {
+    useNotifications: () => ({ addNotification: noop }),
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------

@@ -86,7 +86,7 @@ var onboardingProviderPresentations = map[string]onboardingProviderPresentation{
 		APIKeyLabel:         "OpenRouter API Key",
 		APIKeyHelp:          "Create an API key in OpenRouter, then choose a coding-focused model from the list below.",
 		Recommended:         true,
-		RecommendedPrefixes: []string{"qwen/qwen3-coder", "deepseek/deepseek-chat", "z-ai/glm", "google/gemini-2.5-pro"},
+		RecommendedPrefixes: []string{"qwen/qwen3.5", "qwen/qwen3-coder", "deepseek/deepseek-chat", "z-ai/glm", "google/gemini-2.5-pro"},
 		RecommendedModelWhy: "Prefer a coding-focused or reasoning-heavy model instead of a generic default.",
 	},
 	"deepinfra": {

@@ -3,18 +3,20 @@
 get_test_name() {
     echo "Testing CI quick command"
 }
-set -e
 
-echo "Testing CI mode with simple query..."
-export CI=1
+run_test_logic() {
+    local model_name=$1
+    echo "Testing CI mode with simple query..."
+    export CI=1
 
-# Guard for networked agent
-if [[ -z "${OPENROUTER_API_KEY:-}" ]]; then
-  echo "SKIP: OPENROUTER_API_KEY not set; skipping quick CI agent test"
-  exit 0
-fi
+    # Guard for networked agent
+    if [[ -z "${OPENROUTER_API_KEY:-}" ]]; then
+        echo "SKIP: OPENROUTER_API_KEY not set; skipping quick CI agent test"
+        return 0
+    fi
 
-# Test with a simple query that should complete quickly
-./ledit agent "What is 2 + 2?" || true
+    # Test with a simple query that should complete quickly
+    ledit agent "What is 2 + 2?" || true
 
-echo -e "\n\nTest completed successfully!"
+    echo -e "\n\nTest completed successfully!"
+}

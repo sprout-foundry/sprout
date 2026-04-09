@@ -35,7 +35,9 @@ func isProviderConfigError(err error) bool {
 	return strings.Contains(s, "provider recovery failed") ||
 		strings.Contains(s, "failed to initialize provider") ||
 		strings.Contains(s, "failed to select provider") ||
-		strings.Contains(s, "provider_not_configured")
+		strings.Contains(s, "provider_not_configured") ||
+		strings.Contains(s, "no provider configured") ||
+		strings.Contains(s, "editor mode is active")
 }
 
 func (ws *ReactWebServer) incrementActiveQueries(clientID string) {

@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
 import { type EditorBuffer, type EditorPane, type PaneLayout, type PaneSize } from '../types/editor';
-import { readStorageItem, PANE_LAYOUT_STORAGE_KEY, PANE_SIZES_STORAGE_KEY } from '../services/layoutPersistence';
+import { readStorageItem, getPaneLayoutStorageKey, getPaneSizesStorageKey } from '../services/layoutPersistence';
 import { useBufferMutations } from '../hooks/useBufferMutations';
 import { useBufferPersistence } from '../hooks/useBufferPersistence';
 import { useTabManagement } from '../hooks/useTabManagement';
@@ -153,7 +153,7 @@ export function EditorManagerProvider({ children }: EditorManagerProviderProps):
       cursorPosition: { line: 0, column: 0 },
       scrollPosition: { top: 0, left: 0 },
       isModified: false,
-      isActive: !hasDismissedWelcome, // Chat is active if welcome was shown
+      isActive: hasDismissedWelcome, // Chat is active when welcome was dismissed; otherwise welcome tab is active
       paneId: 'pane-1',
       isPinned: true,
       isClosable: false,
@@ -165,7 +165,7 @@ export function EditorManagerProvider({ children }: EditorManagerProviderProps):
   });
 
   const initialLayout: PaneLayout = (() => {
-    const stored = readStorageItem(PANE_LAYOUT_STORAGE_KEY);
+    const stored = readStorageItem(getPaneLayoutStorageKey());
     if (stored === 'split-vertical' || stored === 'split-horizontal' || stored === 'split-grid') return stored;
     return 'single';
   })();
@@ -213,7 +213,7 @@ export function EditorManagerProvider({ children }: EditorManagerProviderProps):
         ? { 'pane-1': 50, 'pane-2': 50 }
         : { 'pane-1': 100 };
 
-    const stored = readStorageItem(PANE_SIZES_STORAGE_KEY);
+    const stored = readStorageItem(getPaneSizesStorageKey());
     if (!stored) return defaults;
     try {
       const parsed: PaneSize = JSON.parse(stored);

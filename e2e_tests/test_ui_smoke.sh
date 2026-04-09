@@ -39,12 +39,12 @@ run_test_logic() {
   git config user.name "Smoke Test"
 
   # Ignore local artifacts so status is clean
-  echo -e "ledit\n.ledit/\n*.tmp" > .gitignore
+  echo -e "ledit\n.ledit/\n*.tmp\n*.stderr\n*.stdout" > .gitignore
   git add .gitignore >/dev/null 2>&1 || true
   git commit -m "chore: add .gitignore for smoke" >/dev/null 2>&1 || true
 
-  out=$(./ledit commit --dry-run 2>&1 || true)
-  echo "$out" | grep -E "No staged changes|No changes to commit|No staged changes to commit" >/dev/null || {
+  out=$(LEDIT_SKIP_CONNECTION_CHECK=1 ./ledit commit --dry-run 2>&1 || true)
+  echo "$out" | grep -E "No staged (changes|files)|No changes to commit" >/dev/null || {
     echo "Commit dry-run did not exit cleanly without network"; echo "$out"; exit 1;
   }
 

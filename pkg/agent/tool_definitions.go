@@ -454,7 +454,7 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 				if !logger.AskForConfirmation(prompt, false, false) {
 					return nil, "", fmt.Errorf("security rejected: user rejected %s — %s", toolName, secResult.Reasoning)
 				}
-			} else if mgr := agent.GetSecurityApprovalMgr(); mgr != nil && agent.GetEventBus() != nil && !isSubagent {
+			} else if mgr := agent.GetSecurityApprovalMgr(); mgr != nil && agent.GetEventBus() != nil && !isSubagent && agent.HasActiveWebUIClients() {
 				// NON-INTERACTIVE or WEBUI: request approval via webui event bus
 				// This path is used when running in webui mode, when interactive prompt is not available,
 				// or when eventBus is available (e.g., in webui where stdin is /dev/null)
@@ -618,8 +618,8 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 				// User rejected
 				agent.debugLog("User rejected file access outside working directory: %s\n", filePath)
 			}
-		} else if mgr := agent.GetSecurityApprovalMgr(); mgr != nil && agent.GetEventBus() != nil && !isSubagent {
-			// WEBUI/Event path: request approval via event bus
+		} else if mgr := agent.GetSecurityApprovalMgr(); mgr != nil && agent.GetEventBus() != nil && !isSubagent && agent.HasActiveWebUIClients() {
+			// WEBUI/Event path: request approval via event bus (only when WebUI clients are connected)
 			prompt := fmt.Sprintf("The tool '%s' is attempting to access a file outside the working directory: %s", toolName, filePath)
 			extras := map[string]string{
 				"risk_type": "Filesystem Security",

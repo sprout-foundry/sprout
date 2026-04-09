@@ -10,6 +10,7 @@
  */
 
 import { debugLog } from '../utils/log';
+import { getTabWorkspacePath } from './clientSession';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -50,16 +51,52 @@ export interface LayoutSnapshot {
 // Constants
 // ---------------------------------------------------------------------------
 
-const STORAGE_KEY = 'ledit.editor.layoutState';
+/** The base (unscoped) storage keys — kept for backward-compat reads. */
+export const LAYOUT_STATE_BASE_KEY = 'ledit.editor.layoutState';
+export const PANE_LAYOUT_BASE_KEY = 'ledit.editor.paneLayout';
+export const PANE_SIZES_BASE_KEY = 'ledit.editor.paneSizes';
+
+/** @deprecated Use getLayoutStorageKey() instead */
+export const STORAGE_KEY = LAYOUT_STATE_BASE_KEY;
+/** @deprecated Use getPaneLayoutStorageKey() instead */
+export const PANE_LAYOUT_STORAGE_KEY = PANE_LAYOUT_BASE_KEY;
+/** @deprecated Use getPaneSizesStorageKey() instead */
+export const PANE_SIZES_STORAGE_KEY = PANE_SIZES_BASE_KEY;
+
 const MAX_BUFFERS = 50;
 const DEBOUNCE_MS = 1_000;
 
 /** File-path prefix used for virtual / workspace-internal buffers. */
 const VIRTUAL_PATH_PREFIX = '__workspace/';
 
-/** Storage keys for pane layout type and pane sizes (shared with EditorManagerContext). */
-export const PANE_LAYOUT_STORAGE_KEY = 'ledit.editor.paneLayout';
-export const PANE_SIZES_STORAGE_KEY = 'ledit.editor.paneSizes';
+// ---------------------------------------------------------------------------
+// Workspace-scoped storage keys
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns a short, filesystem-safe suffix derived from the workspace path.
+ * Empty/unknown workspace → '_default'.  Otherwise the path with / replaced by :.
+ */
+function getWorkspaceSuffix(): string {
+  const ws = getTabWorkspacePath();
+  if (!ws || ws === '/') return '_default';
+  return ws.replace(/\//g, ':');
+}
+
+/** Returns the workspace-scoped key for the main layout state snapshot. */
+export function getLayoutStorageKey(): string {
+  return `${LAYOUT_STATE_BASE_KEY}:${getWorkspaceSuffix()}`;
+}
+
+/** Returns the workspace-scoped key for the pane layout type (single / split-*). */
+export function getPaneLayoutStorageKey(): string {
+  return `${PANE_LAYOUT_BASE_KEY}:${getWorkspaceSuffix()}`;
+}
+
+/** Returns the workspace-scoped key for pane sizes (percentages). */
+export function getPaneSizesStorageKey(): string {
+  return `${PANE_SIZES_BASE_KEY}:${getWorkspaceSuffix()}`;
+}
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -238,7 +275,7 @@ function flushSnapshot(state: LayoutSnapshot): void {
       bufferOrder: orderArr,
     };
 
-    writeStorageItem(STORAGE_KEY, JSON.stringify(snapshot));
+    writeStorageItem(getLayoutStorageKey(), JSON.stringify(snapshot));
   } catch (err) {
     debugLog('[flushSnapshot] failed to serialize/write layout:', err);
   }
@@ -252,7 +289,7 @@ function flushSnapshot(state: LayoutSnapshot): void {
  */
 export function loadLayoutSnapshot(): LayoutSnapshot | null {
   try {
-    const raw = readStorageItem(STORAGE_KEY);
+    const raw = readStorageItem(getLayoutStorageKey());
     if (!raw) return null;
 
     const parsed = JSON.parse(raw) as LayoutSnapshot;
@@ -274,7 +311,7 @@ export function loadLayoutSnapshot(): LayoutSnapshot | null {
 export function clearLayoutSnapshot(): void {
   try {
     if (typeof window === 'undefined' || !window.localStorage) return;
-    window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem(getLayoutStorageKey());
   } catch (err) {
     debugLog('[clearLayoutSnapshot] failed to clear layout storage:', err);
   }

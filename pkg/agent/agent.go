@@ -153,6 +153,12 @@ type Agent struct {
 	ignoredSecurityConcerns map[string]map[string]bool // filePath -> set of concern types that have been ignored
 	ignoredSecurityMu       sync.RWMutex
 
+	// WebUI client status callback. When non-nil, the security routing
+	// logic calls this to determine whether to send prompts through the
+	// WebUI event-bus path or fall back to the CLI. This avoids 5-minute
+	// timeouts when the WebUI is enabled but no browser tabs are open.
+	hasActiveWebUIClients func() bool
+
 	// Subagent output batching - buffer events to reduce event bus traffic
 	subagentBatchBuffer     []string            // Buffered subagent output lines
 	subagentBatchCount      int                 // Number of lines in buffer
@@ -606,8 +612,11 @@ func (a *Agent) CheckFileContentSecurity(filePath string, content string) {
 
 		var userResponse bool
 
-		// Try event-based prompting first (for WebUI)
-		if eventBus != nil && promptManager != nil {
+		// Use event-based prompting (WebUI) only when there are active WebUI
+		// clients connected. Without connected clients the event will never be
+		// answered and RequestPrompt will block for up to 5 minutes before
+		// timing out.
+		if eventBus != nil && promptManager != nil && a.HasActiveWebUIClients() {
 			extras := map[string]string{
 				"file_path": filePath,
 				"concern":   concern,
@@ -741,6 +750,22 @@ func (a *Agent) PrintTerminalOnly(text string) {
 // GetSecurityApprovalMgr returns the security approval manager
 func (a *Agent) GetSecurityApprovalMgr() *SecurityApprovalManager {
 	return a.securityApprovalMgr
+}
+
+// SetHasActiveWebUIClients sets a callback that returns whether any WebUI
+// clients are currently connected. The security prompting logic uses this
+// to decide between WebUI event-bus routing and CLI-based prompting.
+func (a *Agent) SetHasActiveWebUIClients(fn func() bool) {
+	a.hasActiveWebUIClients = fn
+}
+
+// HasActiveWebUIClients calls the registered callback (or returns false if
+// none is set) to check whether WebUI clients are connected.
+func (a *Agent) HasActiveWebUIClients() bool {
+	if a.hasActiveWebUIClients == nil {
+		return false
+	}
+	return a.hasActiveWebUIClients()
 }
 
 // SetSystemPrompt sets the system prompt for the agent

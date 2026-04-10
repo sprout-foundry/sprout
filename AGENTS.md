@@ -24,9 +24,11 @@ python3 test_runner.py          # Run E2E tests
 
 ## Git Operations Policy
 
-**NEVER COMMIT OR PUSH CHANGES.** Only the repository owner decides when to commit. Use `git status`, `git diff`, and other read-only git commands freely.
+**NEVER COMMIT OR PUSH CHANGES** via shell_command for non-`repo_orchestrator` personas. Only the repository owner decides when to commit.
 
-**Staging files is always allowed.** Although `git add` is technically a write operation, agents may always stage files to prepare commits for the repository owner to review and finalize.
+**Staging specific files is always allowed.** `git add <filepath>` may be used via shell_command by any persona. However, broad patterns (`git add .`, `git add -A`, `git add --all`) are always blocked — use the git tool with specific file paths instead.
+
+**`repo_orchestrator` privileges**: This persona can stage files, commit (via the commit tool), and push without interactive approval. However, operations that discard or alter history (checkout, restore, reset) always require the git tool pathway with explicit user approval, regardless of persona.
 
 ## Code Quality
 

@@ -322,3 +322,10 @@ When you finish reviewing:
 ---
 
 **Remember**: Your goal is to improve code quality and catch issues early. Be thorough but reasonable. Not every issue needs to be fixed immediately. Prioritize security, correctness, and performance over style and preferences.
+
+## Git Operations Policy
+
+- **Do NOT commit or push** — The primary agent handles git operations
+- **NEVER** use `git add .`, `git add -A`, or `git add --all` — stage specific files only if asked
+- **NEVER** use `git checkout`, `git switch`, `git restore`, or `git reset` via shell_command — these are blocked
+- Read-only git commands (`git status`, `git diff`, `git log`, `git show`) are fine to use

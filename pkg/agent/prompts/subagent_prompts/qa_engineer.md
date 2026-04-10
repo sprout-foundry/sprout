@@ -234,3 +234,10 @@ When you finish test planning or execution:
 ---
 
 **Remember**: Quality assurance is about confidence in the system. Your test plans and strategies should give stakeholders confidence that the software works correctly and handles errors gracefully. Focus on user value and business risk.
+
+## Git Operations Policy
+
+- **Do NOT commit or push** — The primary agent handles git operations
+- **NEVER** use `git add .`, `git add -A`, or `git add --all` — stage specific files only if asked
+- **NEVER** use `git checkout`, `git switch`, `git restore`, or `git reset` via shell_command — these are blocked
+- Read-only git commands (`git status`, `git diff`, `git log`, `git show`) are fine to use

@@ -140,8 +140,9 @@ export function useExternalFileWatcher({ buffers }: WatcherOptions): WatcherRetu
   // Immediate check when tab becomes visible (ignores backoff for quick recovery).
   useEffect(() => {
     const handler = () => {
-      if (document.visibilityState === 'visible' && runningRef.current)
+      if (document.visibilityState === 'visible' && runningRef.current) {
         performCheck().then(() => scheduleNext());
+      }
     };
     document.addEventListener('visibilitychange', handler);
     return () => document.removeEventListener('visibilitychange', handler);

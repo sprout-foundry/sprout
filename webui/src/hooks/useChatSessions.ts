@@ -257,7 +257,7 @@ export function useChatSessions({
 
   const updateChatSessionWorktree = useCallback(async (chatId: string, worktreePath: string) => {
     try {
-      const response = await setChatSessionWorktree(chatId, worktreePath);
+      await setChatSessionWorktree(chatId, worktreePath);
       // Refresh session list to reflect updated worktree
       const sessionsResp = await listChatSessions();
       setState((prev) => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
@@ -267,6 +267,7 @@ export function useChatSessions({
       setState((prev) => ({ ...prev, lastError: message }));
       throw error;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const switchChatSessionWorktreeLocal = useCallback(async (chatId: string, worktreePath: string) => {
@@ -299,6 +300,7 @@ export function useChatSessions({
       setState((prev) => ({ ...prev, lastError: message }));
       throw error;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchWorktrees = useCallback(async (): Promise<Array<{ path: string; branch: string; is_main: boolean; is_current: boolean }>> => {
@@ -322,6 +324,7 @@ export function useChatSessions({
       setState((prev) => ({ ...prev, lastError: message }));
       throw error;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchWorktrees]);
 
   const createChatInWorktree = useCallback(async (branch: string, baseRef?: string, name?: string, autoSwitch?: boolean): Promise<string | null> => {
@@ -343,6 +346,7 @@ export function useChatSessions({
       setState((prev) => ({ ...prev, lastError: message }));
       throw error;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handleActiveChatChange]);
 
   return {

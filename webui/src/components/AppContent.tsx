@@ -330,7 +330,7 @@ function AppContent({
   const assignedWorktreePaths = (chatSessions ?? [])
     .filter((s) => s.worktree_path)
     .filter((s) => s.id !== worktreePickerSessionId)
-    .map((s) => s.worktree_path!);
+    .map((s) => s.worktree_path ?? '');
 
   useHotkeysConfig({
     isConnected,

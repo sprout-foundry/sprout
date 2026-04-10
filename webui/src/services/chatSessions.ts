@@ -69,12 +69,12 @@ export async function createChatSession(name?: string): Promise<{ message: strin
 
 export async function deleteChatSession(
   id: string,
-  removeWorktree = false,
+  shouldRemoveWorktree = false,
 ): Promise<{ message: string; worktree_removed?: boolean; worktree_error?: string }> {
   const res = await clientFetch('/api/chat-sessions/delete', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id, remove_worktree: removeWorktree }),
+    body: JSON.stringify({ id, remove_worktree: shouldRemoveWorktree }),
   });
   if (!res.ok) throw new Error('Failed to delete chat session');
   return res.json();

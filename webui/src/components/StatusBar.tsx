@@ -46,7 +46,7 @@ function StatusBar({ branch, buffer, encoding, indentation }: StatusBarProps): J
       }
     }
     return name;
-  }, [buffer?.kind, buffer?.file, buffer?.languageOverride]);
+  }, [buffer]);
 
   // Line endings detection — sample first 1024 chars to avoid scanning large files on every keystroke.
   // Strip out all \r\n sequences first, then check for any remaining \n.

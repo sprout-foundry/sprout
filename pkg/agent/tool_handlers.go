@@ -99,7 +99,7 @@ func isGitWriteCommand(command string) bool {
 	}
 
 	// Check if it's a write operation
-	writeCommands := []string{
+	writerCommands := []string{
 		"commit", "push", "rm", "mv", "reset",
 		"rebase", "merge", "checkout", "clean",
 		"am", "apply", "cherry-pick", "revert",
@@ -107,12 +107,36 @@ func isGitWriteCommand(command string) bool {
 		"init", "worktree",
 	}
 
-	for _, writeCmd := range writeCommands {
+	for _, writeCmd := range writerCommands {
 		if subcommand == writeCmd {
 			return true
 		}
 	}
 
+	return false
+}
+
+// isGitCommitSubcommand checks if a git command is specifically a commit operation
+// (as opposed to other write operations like push, merge, etc.)
+func isGitCommitSubcommand(command string) bool {
+	parts := shellSplit(strings.TrimSpace(command))
+	if len(parts) < 2 || parts[0] != "git" {
+		return false
+	}
+	// Skip leading flags and -c key=value config options to find the actual subcommand
+	for i := 1; i < len(parts); i++ {
+		part := parts[i]
+		if part == "-c" {
+			// -c takes the next argument as key=value, skip it too
+			i++
+			continue
+		}
+		if strings.HasPrefix(part, "-") {
+			continue
+		}
+		subcommand := strings.TrimPrefix(strings.TrimPrefix(part, "--"), "-")
+		return subcommand == "commit"
+	}
 	return false
 }
 
@@ -139,4 +163,71 @@ func convertToString(param interface{}, paramName string) (string, error) {
 	default:
 		return "", fmt.Errorf("parameter '%s' has invalid type %T, expected string", paramName, param)
 	}
+}
+
+// extractGitCommitArgs parses a `git commit ...` command line and extracts
+// the message from -m or --message flags. The command comes from an LLM tool
+// argument, which may include shell-style quoting (single or double quotes).
+// We support basic shell quoting so that `git commit -m "fix: typo"` correctly
+// extracts `fix: typo`.
+//
+// Returns the extracted message (may be empty if no -m/--message flag found).
+func extractGitCommitArgs(command string) string {
+	tokens := shellSplit(command)
+	message := ""
+
+	for i := 0; i < len(tokens)-1; i++ {
+		switch tokens[i] {
+		case "-m", "--message":
+			// Git supports multiple -m flags to build multi-paragraph messages.
+			// Each -m becomes a separate paragraph in the commit message.
+			if message != "" {
+				message += "\n\n"
+			}
+			message += tokens[i+1]
+			i++ // skip the next token (it's the message value)
+		}
+	}
+
+	return message
+}
+
+// shellSplit performs basic shell-style word splitting that respects
+// single and double quotes. This is intentionally minimal — it handles
+// the common patterns LLMs use when constructing git commit commands.
+// It does NOT handle escape sequences, backticks, or variable expansion.
+func shellSplit(s string) []string {
+	var tokens []string
+	var current strings.Builder
+	var inQuote rune // 0 = not in quote, '"' or '\'' == in quote
+	justClosedQuote := false
+
+	for _, r := range s {
+		switch {
+		case inQuote != 0:
+			if r == inQuote {
+				inQuote = 0
+				justClosedQuote = true
+			} else {
+				current.WriteRune(r)
+			}
+		case r == '"' || r == '\'':
+			inQuote = r
+		case r == ' ' || r == '\t' || r == '\n' || r == '\r':
+			if current.Len() > 0 || justClosedQuote {
+				tokens = append(tokens, current.String())
+				current.Reset()
+			}
+			justClosedQuote = false
+		default:
+			current.WriteRune(r)
+			justClosedQuote = false
+		}
+	}
+
+	if current.Len() > 0 || justClosedQuote {
+		tokens = append(tokens, current.String())
+	}
+
+	return tokens
 }

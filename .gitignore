@@ -127,4 +127,5 @@ e2e_tests/test_results_analysis.txt
 
 # Temporary/example files
 hello.py
+hello_world.py
 go_modules_best_practices.md

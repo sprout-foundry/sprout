@@ -10,6 +10,7 @@ import (
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
+	"github.com/alantheprice/ledit/pkg/security"
 )
 
 // executeSequential executes tools one by one
@@ -232,8 +233,32 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 		modelResult = constrainToolResultForModel(normalizedToolName, args, fullResult)
 	}
 
+	// Apply secret redaction to tool output before sending to LLM.
+	if err == nil && modelResult != "" && te.agent.outputRedactor != nil &&
+		isSecretSensitiveTool(normalizedToolName) {
+		redactResult := te.agent.outputRedactor.RedactToolOutput(modelResult, normalizedToolName, args)
+		if len(redactResult.Secrets) > 0 {
+			modelResult = te.applySecretElevation(modelResult, redactResult, normalizedToolName, args, toolCallID)
+		}
+	}
+
+	// Also redact fullResult for trace recording to avoid storing secrets.
+	traceResult := fullResult
+	if te.agent.outputRedactor != nil {
+		traceRedactResult := te.agent.outputRedactor.RedactToolOutput(fullResult, normalizedToolName, args)
+		traceResult = traceRedactResult.Content
+	}
+
+	if strings.HasPrefix(modelResult, "BLOCKED:") {
+		return api.Message{
+			Role:       "tool",
+			Content:    modelResult,
+			ToolCallId: toolCallID,
+		}
+	}
+
 	// Record tool execution to trace session
-	te.recordToolExecutionWithIndex(normalizedToolName, toolCall.Function.Arguments, args, fullResult, modelResult, recordErr, toolIndex)
+	te.recordToolExecutionWithIndex(normalizedToolName, toolCall.Function.Arguments, args, traceResult, modelResult, recordErr, toolIndex)
 
 	// Update circuit breaker
 	te.updateCircuitBreaker(normalizedToolName, args)
@@ -256,5 +281,41 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 		Content:    modelResult,
 		ToolCallId: toolCallID,
 		Images:     images,
+	}
+}
+
+// applySecretElevation evaluates detected secrets through the elevation gate
+// and returns the appropriate content to send to the LLM (redacted, allowed, or blocked).
+func (te *ToolExecutor) applySecretElevation(originalResult string, redactResult security.RedactionResult, toolName string, args map[string]interface{}, toolCallID string) string {
+	if te.agent.elevationGate == nil {
+		return redactResult.Content // no gate — default to redaction
+	}
+
+	source := toolName
+	if path, ok := args["path"].(string); ok && path != "" {
+		source = toolName + ": " + path
+	}
+	if cmd, ok := args["command"].(string); ok && cmd != "" {
+		if len(cmd) > 80 {
+			cmd = cmd[:77] + "..."
+		}
+		source = toolName + ": " + cmd
+	}
+
+	action, evalErr := te.agent.elevationGate.Evaluate(redactResult.Secrets, source)
+	if evalErr != nil {
+		te.agent.debugLog("[security] elevation gate error: %v\n", evalErr)
+	}
+
+	switch action {
+	case security.SecretAllow:
+		te.agent.debugLog("[security] user allowed %d secret(s) in %s\n", len(redactResult.Secrets), toolName)
+		return originalResult
+	case security.SecretBlock:
+		te.agent.PrintLine(fmt.Sprintf("[security] Blocked %s: %d secret(s) detected, user chose to block", source, len(redactResult.Secrets)))
+		return fmt.Sprintf("BLOCKED: detected secrets in output. Operation blocked. Found %d secret(s) — user chose to block.", len(redactResult.Secrets))
+	default:
+		te.agent.debugLog("[security] redacted %d secret(s) from %s\n", len(redactResult.Secrets), toolName)
+		return redactResult.Content
 	}
 }

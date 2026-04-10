@@ -19,6 +19,9 @@ type UI interface {
 // SetUI sets the UI provider for the agent
 func (a *Agent) SetUI(ui UI) {
 	a.ui = ui
+
+	// Wire the elevation gate with the interactive prompter now that UI is available.
+	a.SetElevationGatePrompter()
 }
 
 // ShowDropdown shows a dropdown if UI is available

@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -401,12 +400,11 @@ func TestCheckStagedFilesForSecurityCredentials_BinaryFile(t *testing.T) {
 	gitRun(t, dir, "add", "binary.bin")
 
 	logger := utils.GetLogger(true)
-	cfg := &configuration.Config{}
 
 	// Binary files may produce empty diff output or error — function should handle gracefully
-	result := CheckStagedFilesForSecurityCredentials(logger, cfg)
+	result := CheckStagedFilesForSecurityCredentials(logger)
 	// Binary files typically have no text diff, so no security concerns
-	assert.False(t, result)
+	assert.False(t, result.HasConcerns)
 }
 
 func TestCheckStagedFilesForSecurityCredentials_MultipleFilesSomeClean(t *testing.T) {
@@ -425,10 +423,9 @@ func TestCheckStagedFilesForSecurityCredentials_MultipleFilesSomeClean(t *testin
 	gitRun(t, dir, "add", "clean2.go")
 
 	logger := utils.GetLogger(true)
-	cfg := &configuration.Config{}
 
-	result := CheckStagedFilesForSecurityCredentials(logger, cfg)
-	assert.False(t, result)
+	result := CheckStagedFilesForSecurityCredentials(logger)
+	assert.False(t, result.HasConcerns)
 }
 
 func TestCheckStagedFilesForSecurityCredentials_PasswordPattern(t *testing.T) {
@@ -447,10 +444,9 @@ func connect() string { return dbPassword }
 	gitRun(t, dir, "add", "config.go")
 
 	logger := utils.GetLogger(true)
-	cfg := &configuration.Config{}
 
-	result := CheckStagedFilesForSecurityCredentials(logger, cfg)
-	assert.True(t, result, "password pattern should trigger security concern")
+	result := CheckStagedFilesForSecurityCredentials(logger)
+	assert.True(t, result.HasConcerns, "password pattern should trigger security concern")
 }
 
 func TestCheckStagedFilesForSecurityCredentials_ModifiedFileWithSecret(t *testing.T) {
@@ -470,10 +466,9 @@ func TestCheckStagedFilesForSecurityCredentials_ModifiedFileWithSecret(t *testin
 	gitRun(t, dir, "add", "env.go")
 
 	logger := utils.GetLogger(true)
-	cfg := &configuration.Config{}
 
-	result := CheckStagedFilesForSecurityCredentials(logger, cfg)
-	assert.True(t, result, "adding an AWS key to a modified file should be detected")
+	result := CheckStagedFilesForSecurityCredentials(logger)
+	assert.True(t, result.HasConcerns, "adding an AWS key to a modified file should be detected")
 }
 
 // =============================================================================
@@ -1003,9 +998,8 @@ func TestFullCommitLifecycle_AddStageCommitVerify(t *testing.T) {
 
 	// 5. Check security
 	logger := utils.GetLogger(true)
-	cfg := &configuration.Config{}
-	secure := CheckStagedFilesForSecurityCredentials(logger, cfg)
-	assert.False(t, secure)
+	secure := CheckStagedFilesForSecurityCredentials(logger)
+	assert.False(t, secure.HasConcerns)
 
 	// 6. Commit
 	err = AddAllAndCommit("lifecycle test", 5)
@@ -1057,12 +1051,11 @@ func TestCheckStagedFilesForSecurityCredentials_OutsideRepo(t *testing.T) {
 	require.NoError(t, os.Chdir(tmpDir))
 
 	logger := utils.GetLogger(true)
-	cfg := &configuration.Config{}
 
 	// Outside git repo → git diff --cached --name-only fails
-	result := CheckStagedFilesForSecurityCredentials(logger, cfg)
+	result := CheckStagedFilesForSecurityCredentials(logger)
 	// Returns false on error
-	assert.False(t, result)
+	assert.False(t, result.HasConcerns)
 }
 
 // --- WrapText words==0 path (paragraph with only whitespace that Fields ignores) ---

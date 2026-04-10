@@ -187,6 +187,32 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 
 	if err != nil {
 		safeErr := sanitizeToolFailureMessage(err.Error())
+		
+		// Check if this is a "security caution" error that requires LLM verification
+		// Instead of treating it as a tool failure, we need to signal the LLM to re-verify
+		//
+		// SECURITY BOUNDARY NOTE: The underlying classification in
+		// pkg/agent_tools/security.go is purely string-based heuristics with known
+		// limitations (no filesystem access, no symlink resolution, no env variable
+		// expansion). This caution flow is a defense-in-depth layer, not a security
+		// boundary. Actual enforcement relies on the user's filesystem permissions,
+		// interactive confirmation, and operating system controls.
+		if strings.Contains(err.Error(), "security caution:") {
+			// This is a caution-level operation that requires LLM verification
+			// Send it back to the LLM as a special message that indicates "verify before proceeding"
+			te.agent.PrintLine("")
+			te.agent.PrintLine(fmt.Sprintf("[⚠️  SECURITY CAUTION - LLM VERIFICATION REQUIRED] %s", safeErr))
+			te.agent.PrintLine("")
+			
+			// Return a special tool result that signals the LLM to re-verify
+			// The LLM will see this and can decide to re-assert safety and retry, or abort
+			return api.Message{
+				Role:       "tool",
+				Content:    fmt.Sprintf("SECURITY_CAUTION_REQUIRED: %s", safeErr),
+				ToolCallId: toolCallID,
+			}
+		}
+		
 		// Ensure the error is visible to the user immediately
 		te.agent.PrintLine("")
 		te.agent.PrintLine(fmt.Sprintf("[FAIL] Tool '%s' failed: %s", normalizedToolName, safeErr))

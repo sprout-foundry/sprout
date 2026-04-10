@@ -325,3 +325,10 @@ When you finish debugging:
 ---
 
 **Remember**: Debugging is systematic investigation. Don't guess - form hypotheses and test them. Understand the problem before changing code. Make minimal changes and verify they work. Always consider: "What could go wrong with this fix?"
+
+## Git Operations Policy
+
+- **Do NOT commit or push** — The primary agent handles git operations
+- **NEVER** use `git add .`, `git add -A`, or `git add --all` — stage specific files only if asked
+- **NEVER** use `git checkout`, `git switch`, `git restore`, or `git reset` via shell_command — these are blocked
+- Read-only git commands (`git status`, `git diff`, `git log`, `git show`) are fine to use

@@ -52,13 +52,17 @@ func isGitWriteCommand(command string) bool {
 
 	// Find the actual subcommand (skip "git" and any leading flags like -c, -C, etc.)
 	subcommand := ""
+	subcommandIdx := 2
 	for i := 1; i < len(parts); i++ {
 		part := parts[i]
-		// Skip common git options that appear before subcommand
 		if strings.HasPrefix(part, "-") {
+			if part == "-c" || part == "-C" || part == "--exec-path" || part == "--git-dir" || part == "--work-tree" {
+				i++ // skip the flag value
+			}
 			continue
 		}
 		subcommand = part
+		subcommandIdx = i
 		break
 	}
 
@@ -71,7 +75,7 @@ func isGitWriteCommand(command string) bool {
 	subcommand = strings.TrimPrefix(subcommand, "-")
 
 	// Handle special subcommands that can be read or write depending on flags/args.
-	rest := parts[2:]
+	rest := parts[subcommandIdx+1:]
 	switch subcommand {
 	case "branch":
 		// Read-only examples: git branch, git branch -a, git branch --list
@@ -142,6 +146,108 @@ func isGitWriteCommand(command string) bool {
 	}
 
 	return false
+}
+
+// isBroadGitAdd checks if a git add command uses broad patterns (all files)
+// instead of targeting specific files. Repo_orchestrator must use specific
+// file paths to stage changes — this prevents accidental mass-staging.
+func isBroadGitAdd(command string) bool {
+	trimmed := strings.TrimSpace(command)
+	if !strings.HasPrefix(trimmed, "git ") {
+		return false
+	}
+	parts := strings.Fields(trimmed)
+	if len(parts) < 2 {
+		return false
+	}
+	// Find the "add" subcommand (skip leading flags)
+	addIdx := -1
+	for i := 1; i < len(parts); i++ {
+		if strings.HasPrefix(parts[i], "-") {
+			if parts[i] == "-c" || parts[i] == "-C" || parts[i] == "--exec-path" || parts[i] == "--git-dir" || parts[i] == "--work-tree" {
+				i++ // skip the flag value
+			}
+			continue
+		}
+		if parts[i] == "add" {
+			addIdx = i
+			break
+		}
+		return false // subcommand is not "add"
+	}
+	if addIdx == -1 {
+		return false
+	}
+	// Check remaining args for broad patterns
+	for _, arg := range parts[addIdx+1:] {
+		switch arg {
+		case ".", "-A", "--all", "-a":
+			return true
+		}
+	}
+	return false
+}
+
+// isGitDiscardCommand checks if a git command could discard changes
+// (restore, reset --hard, checkout -- <file>). These are always blocked
+// from shell_command regardless of orchestrator permissions.
+func isGitDiscardCommand(command string) bool {
+	trimmed := strings.TrimSpace(command)
+	if !strings.HasPrefix(trimmed, "git ") {
+		return false
+	}
+	parts := strings.Fields(trimmed)
+	if len(parts) < 2 {
+		return false
+	}
+	// Find the subcommand (skip leading flags like -c, -C)
+	subcommand := ""
+	for i := 1; i < len(parts); i++ {
+		part := parts[i]
+		if strings.HasPrefix(part, "-") {
+			// Skip flags that take arguments
+			if part == "-c" || part == "-C" || part == "--exec-path" || part == "--git-dir" || part == "--work-tree" {
+				i++
+			}
+			continue
+		}
+		subcommand = part
+		break
+	}
+	if subcommand == "" {
+		return false
+	}
+
+	// git restore always discards (working tree or staged changes)
+	if subcommand == "restore" {
+		return true
+	}
+
+	// git reset can discard staged changes (even without --hard)
+	if subcommand == "reset" {
+		return true
+	}
+
+	return false
+}
+
+// extractGitSubcommand extracts the subcommand from a git command string for display purposes.
+func extractGitSubcommand(command string) string {
+	parts := strings.Fields(strings.TrimSpace(command))
+	if len(parts) < 2 || parts[0] != "git" {
+		return "unknown"
+	}
+	for i := 1; i < len(parts); i++ {
+		part := parts[i]
+		if strings.HasPrefix(part, "-") {
+			if part == "-c" || part == "-C" || part == "--exec-path" || part == "--git-dir" || part == "--work-tree" {
+				i++ // skip the flag value
+			}
+			continue
+		}
+		return part
+	}
+	return "unknown"
 }
 
 // isGitCommitSubcommand checks if a git command is specifically a commit operation

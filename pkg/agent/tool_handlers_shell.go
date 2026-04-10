@@ -31,13 +31,26 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 	// This prevents repo_orchestrator and other autonomous personas from
 	// switching branches without user consent.
 	if isGitCheckoutSubcommand(command) {
-		return "", fmt.Errorf("git checkout/switch operations are not allowed via shell_command. Use the git tool with operation='checkout' to require explicit user approval (command: '%s')", command)
+		return "", fmt.Errorf("git checkout/switch/restore operations are not allowed via shell_command. Use the git tool to require explicit user approval (command: '%s')", command)
+	}
+
+	// Block git commands that discard changes (restore, reset) from shell_command
+	// for ALL personas. These must go through the git tool which requires
+	// explicit user approval. This prevents accidental data loss even for the
+	// repo_orchestrator persona.
+	if isGitDiscardCommand(command) {
+		return "", fmt.Errorf("git %s operations are not allowed via shell_command. Use the git tool with operation='restore' or operation='reset' to require explicit user approval (command: '%s')", extractGitSubcommand(command), command)
 	}
 
 	// Block git write operations unless the orchestrator persona has permission.
 	// Staging operations (git add) are always allowed per policy.
 	// Read-only operations (status, log, diff, etc.) are always allowed through shell_command.
 	if isGitWriteCommand(command) {
+		if isBroadGitAdd(command) {
+			// Always block broad git add patterns regardless of persona.
+			// Use the git tool with specific file paths for staging.
+			return "", fmt.Errorf("broad git add patterns (., -A, --all) are not allowed via shell_command. Use the git tool with operation='add' and specific file paths, or use 'git add <filepath>' via shell_command (command: '%s')", command)
+		}
 		if !a.isOrchestratorGitWriteAllowed() {
 			if a.GetActivePersona() == "orchestrator" {
 				return "", fmt.Errorf("git write operations are disabled for the orchestrator. Enable 'Allow orchestrator git write' in settings, or use the commit tool instead (operation: '%s')", command)
@@ -100,8 +113,16 @@ func handleGitOperation(ctx context.Context, a *Agent, args map[string]interface
 		return handleGitCommitOperation(a)
 	}
 
-	// Create an approval prompter
-	approvalPrompter := &gitApprovalPrompterAdapter{agent: a}
+	// repo_orchestrator can stage files and push without approval.
+	// Other operations (reset, checkout, clean, rm, merge, etc.) always require
+	// user approval regardless of persona.
+	isRepoOrchestrator := a.GetActivePersona() == "repo_orchestrator"
+	allowWithoutApproval := isRepoOrchestrator && (operation == tools.GitOpAdd || operation == tools.GitOpPush)
+
+	var approvalPrompter tools.GitApprovalPrompter
+	if !allowWithoutApproval {
+		approvalPrompter = &gitApprovalPrompterAdapter{agent: a}
+	}
 
 	// Execute the git operation
 	result, err := tools.ExecuteGitOperation(ctx, tools.GitOperation{

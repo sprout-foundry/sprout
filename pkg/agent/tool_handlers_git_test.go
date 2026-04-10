@@ -71,6 +71,38 @@ func TestIsGitCommitSubcommand(t *testing.T) {
 	}
 }
 
+func TestIsGitCheckoutSubcommand(t *testing.T) {
+	tests := []struct {
+		command     string
+		isCheckout bool
+	}{
+		{"git checkout main", true},
+		{"git checkout -b feature", true},
+		{"git checkout -- file.txt", true},
+		{"git switch main", true},
+		{"git switch -c new-branch", true},
+		{"git --no-pager checkout main", true},
+		{"git -C /path/to/repo checkout main", true},
+		{"git status", false},
+		{"git log --oneline", false},
+		{"git diff", false},
+		{"git commit -m 'fix'", false},
+		{"git add .", false},
+		{"git push origin main", false},
+		{"git merge feature", false},
+		{"not a git command", false},
+		{"git", false},
+		{"", false},
+		{"   git checkout main", true},
+	}
+
+	for _, tc := range tests {
+		if got := isGitCheckoutSubcommand(tc.command); got != tc.isCheckout {
+			t.Fatalf("isGitCheckoutSubcommand(%q) = %v, want %v", tc.command, got, tc.isCheckout)
+		}
+	}
+}
+
 func TestExtractGitCommitArgs(t *testing.T) {
 	tests := []struct {
 		command     string

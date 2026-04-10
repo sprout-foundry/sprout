@@ -32,9 +32,27 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 	if isGitWriteCommand(command) {
 		if !a.isOrchestratorGitWriteAllowed() {
 			if a.GetActivePersona() == "orchestrator" {
-				return "", fmt.Errorf("git write operations are disabled for the orchestrator. Enable 'Allow orchestrator git write' in settings, or use the git tool instead (operation: '%s')", command)
+				return "", fmt.Errorf("git write operations are disabled for the orchestrator. Enable 'Allow orchestrator git write' in settings, or use the commit tool instead (operation: '%s')", command)
 			}
-			return "", fmt.Errorf("git write operations require the git tool for approval. Please use the git tool instead (operation: '%s')", command)
+			// For commit operations, redirect to the commit tool — this ensures
+			// commits go through the proper message generation code path regardless
+			// of whether the agent used shell_command or the commit tool.
+			if isGitCommitSubcommand(command) {
+				a.PrintLine("")
+				a.PrintLine("[redirect] Redirecting git commit to 'commit' tool for proper message generation")
+				a.PrintLine(fmt.Sprintf("  Original command: %s", command))
+				if strings.Contains(command, "--amend") {
+					a.PrintLine("  [warning] --amend flag detected but commit tool does not support amending; creating a new commit")
+				}
+				a.PrintLine("")
+				message := extractGitCommitArgs(command)
+				commitArgs := map[string]interface{}{}
+				if message != "" {
+					commitArgs["message"] = message
+				}
+				return handleCommitTool(ctx, a, commitArgs)
+			}
+			return "", fmt.Errorf("git write operations use shell_command for read-only operations (status, log, diff, branch, show). Use the git tool with operation='add' for staging, and the commit tool for commits (operation: '%s')", command)
 		}
 	}
 
@@ -202,9 +220,15 @@ func handleCommitTool(_ context.Context, a *Agent, args map[string]interface{}) 
 		configManager = cm
 	}
 
-	// Auto-approve commits when running as a subagent (no interactive UI available)
+	// Auto-approve commits for repo_orchestrator — this persona is explicitly
+	// opted into by the user and is designed for autonomous commit workflows.
+	// Also auto-approve subagents (no interactive UI available).
+	// All other personas still require interactive approval.
+	persona := a.GetActivePersona()
+	isRepoOrchestrator := persona == "repo_orchestrator"
 	isSubagent := os.Getenv("LEDIT_FROM_AGENT") == "1" || os.Getenv("LEDIT_SUBAGENT") == "1"
-	if !isSubagent {
+
+	if !isRepoOrchestrator && !isSubagent {
 		// Prompt user for approval before committing (only in interactive mode)
 		choices := []ChoiceOption{
 			{Label: "Approve", Value: "approve"},

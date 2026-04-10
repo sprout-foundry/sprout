@@ -153,6 +153,10 @@ type Agent struct {
 	ignoredSecurityConcerns map[string]map[string]bool // filePath -> set of concern types that have been ignored
 	ignoredSecurityMu       sync.RWMutex
 
+	// Secret detection and elevation
+	outputRedactor *security.OutputRedactor // Scans tool output for secrets
+	elevationGate  *security.ElevationGate  // Manages user elevation decisions
+
 	// WebUI client status callback. When non-nil, the security routing
 	// logic calls this to determine whether to send prompts through the
 	// WebUI event-bus path or fall back to the CLI. This avoids 5-minute
@@ -287,6 +291,8 @@ func NewAgentWithModel(model string) (*Agent, error) {
 			securityApprovalMgr:       NewSecurityApprovalManager(),
 			outputRouter:              NewOutputRouter(nil, nil),
 			ignoredSecurityConcerns:   make(map[string]map[string]bool),
+			outputRedactor:            security.NewOutputRedactor(),
+			elevationGate:             security.NewElevationGate(nil),
 		}
 
 		agent.optimizer.SetLLMClient(agent.client, agent.GetProvider(), func(line string) {
@@ -299,7 +305,8 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		}
 
 		// Load command history from configuration
-		agent.loadHistoryFromConfig() // Initialize debug log file if debug enabled
+		agent.loadHistoryFromConfig()
+		// Initialize debug log file if debug enabled
 		if agent.debug {
 			if err := agent.initDebugLogger(); err != nil {
 				fmt.Fprintf(os.Stderr, "WARNING: Failed to initialize debug logger: %v\n", err)
@@ -493,6 +500,8 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		securityApprovalMgr:       NewSecurityApprovalManager(),
 		outputRouter:              NewOutputRouter(nil, nil),
 		ignoredSecurityConcerns:   make(map[string]map[string]bool),
+		outputRedactor:            security.NewOutputRedactor(),
+		elevationGate:             security.NewElevationGate(nil),
 	}
 
 	agent.optimizer.SetLLMClient(agent.client, agent.GetProvider(), func(line string) {

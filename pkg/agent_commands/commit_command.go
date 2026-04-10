@@ -11,6 +11,8 @@ import (
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/factory"
 	gitops "github.com/alantheprice/ledit/pkg/git"
+	"github.com/alantheprice/ledit/pkg/security"
+	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 // --- Output helpers ---
@@ -581,6 +583,26 @@ retryLoop:
 		c.println("[i] The commit was not created due to --dry-run flag")
 		c.println("[edit] To create the commit, run the command again without --dry-run")
 		return nil
+	}
+
+	// Security check for staged files (unless --allow-secrets is set)
+	if !c.allowSecrets && chatAgent != nil && chatAgent.GetElevationGate() != nil {
+		gate := chatAgent.GetElevationGate()
+		logger := utils.GetLogger(false)
+		securityResult := gitops.CheckStagedFilesForSecurityCredentials(logger)
+		if securityResult.HasConcerns && len(securityResult.Concerns) > 0 {
+			action, err := gate.Evaluate(securityResult.Concerns, "commit")
+			if err != nil {
+				c.printf("[security] commit elevation error: %v\n", err)
+			}
+			if err != nil || action == security.SecretBlock {
+				c.println("[security] Commit aborted: detected secrets in staged files. Use --allow-secrets to override.")
+				return nil
+			}
+			if action == security.SecretRedact {
+				c.println("[security] Warning: commit proceeding but secrets were detected in staged files.")
+			}
+		}
 	}
 
 	// Create the commit

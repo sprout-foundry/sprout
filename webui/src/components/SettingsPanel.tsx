@@ -459,14 +459,14 @@ function SettingsPanel({ settings, onSettingsChanged }: SettingsPanelProps): JSX
     setNewCredentialValue('');
   };
 
-  const handleLoadCredentials = async (serverName: string) => {
-    setCredentialServer(serverName);
+  const handleLoadCredentials = async (credentialServerName: string) => {
+    setCredentialServer(credentialServerName);
     setCredentialLoading(true);
     setCredentialEntries([]);
     setNewCredentialKey('');
     setNewCredentialValue('');
     try {
-      const resp = await api.getMCPServerCredentials(serverName);
+      const resp = await api.getMCPServerCredentials(credentialServerName);
       const entries = Object.entries(resp.credentials || {}).map(([key, info]) => ({
         key,
         value: '',

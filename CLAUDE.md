@@ -12,8 +12,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Do NOT use `git commit` under any circumstances
 - Do NOT use `git push` under any circumstances
 - Only the repository owner decides when to commit
-- You may use `git add` to stage changes when explicitly asked
-- You may use `git status`, `git diff`, and other read-only git commands
+- You may use `git add <specific-file>` to stage changes when explicitly asked
+- You may use `git status`, `git diff`, `git log`, `git show`, and other read-only git commands
+- NEVER use `git add .`, `git add -A`, or `git add --all` — only stage specific file paths
+- NEVER use `git checkout`, `git switch`, `git restore`, or `git reset` via shell_command
 - If you're about to type `git commit`, STOP immediately
 
 ## Build and Development Commands

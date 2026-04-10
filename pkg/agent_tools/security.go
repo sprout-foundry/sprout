@@ -1,3 +1,32 @@
+// Shell command and file path security classifier.
+//
+// This module provides string-based heuristics for classifying tool calls by risk
+// level (SAFE, CAUTION, DANGEROUS). It is designed as a lightweight defense-in-depth
+// layer that operates on raw command strings and path arguments WITHOUT accessing the
+// filesystem.
+//
+// # Important Limitations
+//
+// This classifier intentionally performs NO filesystem operations (no stat, no
+// resolve, no symlink following). This keeps it fast and concurrency-safe, but means:
+//   - Symlink attacks are not detected. For example, "rm -rf build/" is classified as safe
+//     even if "build" is a symlink to "/etc" or "$HOME".
+//   - Relative path traversal is not resolved. "rm -rf ../important-project" bypasses
+//     all safe-directory checks because the classifier only matches the first path
+//     component literally (".." has no special meaning here).
+//   - Path normalization is not performed. Multiple slashes ("//"), "." segments,
+//     and case variations on case-insensitive filesystems are not normalized.
+//   - Environment variable expansion, glob expansion, and shell aliases are not
+//     considered. "rm -rf $BUILD_DIR" is classified as CAUTION (command substitution),
+//     not DANGEROUS, because the classifier cannot resolve the variable.
+//   - The classifier is prefix-based, not semantic. "rm -rf node_modules-new" is
+//     safe because it matches "rm -rf node_modules " prefix, even though the actual
+//     target is a different directory.
+//
+// These limitations are acceptable because the classifier's purpose is gate-keeping
+// for LLM-initiated operations in a workspace context — NOT a security boundary.
+// Actual enforcement (filesystem permissions, user approval, interactive confirmation)
+// should be handled by separate layers.
 package tools
 
 import "strings"
@@ -46,7 +75,12 @@ var readonlyTools = map[string]bool{
 	"list_processes": true, "self_review": true,
 }
 
-// ClassifyToolCall classifies a tool call for security purposes
+// ClassifyToolCall classifies a tool call for security purposes based on the
+// tool name and its arguments. It returns a SecurityResult indicating the risk
+// level, reasoning, and whether the operation should be blocked or prompt the user.
+//
+// Classification is purely string-based (no filesystem access). See the
+// package-level documentation for known limitations of this approach.
 func ClassifyToolCall(toolName string, args map[string]interface{}) SecurityResult {
 	if readonlyTools[toolName] {
 		return SecurityResult{Risk: SecuritySafe, Reasoning: "Read-only operation"}
@@ -629,7 +663,7 @@ func isBenignRedirection(cmd string) bool {
 // Only true deletion operations remain as CAUTION (never DANGEROUS).
 func isCautionPattern(cmd string) bool {
 	cautionPatterns := []string{
-		"rm ",       // file deletion (covers rm -rf variants too)
+		"rm ",       // single file deletion (rm without -rf flag; rm -rf commands use safeRmRfPrefixes whitelist)
 		"docker rm", // container deletion
 	}
 
@@ -641,8 +675,106 @@ func isCautionPattern(cmd string) bool {
 	return false
 }
 
+// safeRmRfPrefixes is a set of safe "rm -rf " (and "rm -fr ") command prefixes
+// for common development cleanup tasks (e.g., node_modules, build artifacts).
+// Only commands matching these exact prefixes bypass DANGEROUS classification.
+//
+// Uses map[string]bool for O(1) lookup instead of linear slice scan.
+// Each entry must explicitly include both "rm -rf dir/" and "rm -rf dir "
+// variants because "rm -rf dir" (no trailing char) is intentionally left
+// unmatched and classified as DANGEROUS for safety.
+//
+// See package-level documentation for limitations of this prefix-based approach
+// (no symlink following, no path normalization, no env variable expansion, etc.).
+var safeRmRfPrefixes = map[string]bool{
+	// Build artifacts and caches
+	"rm -rf node_modules/": true, "rm -rf node_modules ": true,
+	"rm -rf vendor/": true,       "rm -rf vendor ": true,
+	"rm -rf dist/": true,         "rm -rf dist ": true,
+	"rm -rf build/": true,        "rm -rf build ": true,
+	"rm -rf target/": true,       "rm -rf target ": true,
+	"rm -rf bin/": true,          "rm -rf bin ": true,
+	// Python caches
+	"rm -rf __pycache__/": true,  "rm -rf __pycache__ ": true,
+	// Dotfile caches and tool dirs
+	"rm -rf .cache/": true,       "rm -rf .cache ": true,
+	"rm -rf .gradle/": true,       "rm -rf .gradle ": true,
+	"rm -rf .next/": true,         "rm -rf .next ": true,
+	"rm -rf .npm/": true,          "rm -rf .npm ": true,
+	"rm -rf .yarn/": true,         "rm -rf .yarn ": true,
+	"rm -rf .pnpm/": true,         "rm -rf .pnpm ": true,
+	"rm -rf .m2/": true,           "rm -rf .m2 ": true,
+	"rm -rf .ivy/": true,          "rm -rf .ivy ": true,
+	"rm -rf .sbt/": true,          "rm -rf .sbt ": true,
+	"rm -rf .parcel-cache/": true, "rm -rf .parcel-cache ": true,
+	"rm -rf .turbo/": true,        "rm -rf .turbo ": true,
+	"rm -rf .nuxt/": true,         "rm -rf .nuxt ": true,
+	"rm -rf .output/": true,       "rm -rf .output ": true,
+	"rm -rf .astro/": true,        "rm -rf .astro ": true,
+	"rm -rf .svelte-kit/": true,   "rm -rf .svelte-kit ": true,
+	"rm -rf .sass-cache/": true,   "rm -rf .sass-cache ": true,
+	"rm -rf .stylelintcache/": true, "rm -rf .stylelintcache ": true,
+	"rm -rf .eslintcache/": true,  "rm -rf .eslintcache ": true,
+	"rm -rf .swc/": true,          "rm -rf .swc ": true,
+	"rm -rf .vercel/": true,       "rm -rf .vercel ": true,
+	"rm -rf .netlify/": true,      "rm -rf .netlify ": true,
+	"rm -rf .firebase/": true,     "rm -rf .firebase ": true,
+	"rm -rf .serverless/": true,   "rm -rf .serverless ": true,
+	// Infrastructure/DevOps dots
+	"rm -rf .terraform/": true,    "rm -rf .terraform ": true,
+	"rm -rf .aws/": true,          "rm -rf .aws ": true,
+	"rm -rf .kube/": true,         "rm -rf .kube ": true,
+	"rm -rf .docker/": true,       "rm -rf .docker ": true,
+	"rm -rf .docker-compose/": true, "rm -rf .docker-compose ": true,
+	// IDE/editor config dirs
+	"rm -rf .idea/": true,         "rm -rf .idea ": true,
+	"rm -rf .vscode/": true,       "rm -rf .vscode ": true,
+	"rm -rf .project/": true,      "rm -rf .project ": true,
+	"rm -rf .settings/": true,     "rm -rf .settings ": true,
+	"rm -rf .metadata/": true,     "rm -rf .metadata ": true,
+	// Virtual environments
+	"rm -rf venv/": true,          "rm -rf venv ": true,
+	"rm -rf .venv/": true,         "rm -rf .venv ": true,
+}
+
+// isSafeRmRfPrefix checks if a lowercased command matches one of the safe
+// rm -rf prefixes in O(1). It checks both "rm -rf " and "rm -fr " variants.
+func isSafeRmRfPrefix(cmdLower string) bool {
+	// Only check if it's an rm -rf command at all
+	if !strings.HasPrefix(cmdLower, "rm -rf ") && !strings.HasPrefix(cmdLower, "rm -fr ") {
+		return false
+	}
+
+	// Normalize to "rm -rf " for map lookup
+	normalized := cmdLower
+	if strings.HasPrefix(cmdLower, "rm -fr ") {
+		normalized = "rm -rf " + cmdLower[len("rm -fr "):]
+	}
+
+	// Try direct map lookup — covers exact matches like "rm -rf node_modules/"
+	if safeRmRfPrefixes[normalized] {
+		return true
+	}
+
+	// For commands like "rm -rf node_modules/sub/path", check each possible
+	// prefix by scanning for "/" or " " in the target. Since map lookups are O(1),
+	// this is still bounded by path depth (typically <10 characters to scan).
+	for i := len("rm -rf "); i < len(normalized); i++ {
+		c := normalized[i]
+		if c == '/' || c == ' ' {
+			prefix := normalized[:i+1] // include the separator for exact map match
+			if safeRmRfPrefixes[prefix] {
+				return true
+			}
+			break // only check the first path component
+		}
+	}
+	return false
+}
+
 // isDangerousPattern checks for dangerous patterns
 func isDangerousPattern(cmd string) bool {
+	cmdLower := strings.ToLower(cmd)
 	if strings.HasPrefix(cmd, "eval ") || cmd == "eval" {
 		return true
 	}
@@ -681,19 +813,14 @@ func isDangerousPattern(cmd string) bool {
 		}
 	}
 
-	// Permanent deletion targets
-	deletionPatterns := []string{
-		"rm -rf src/", "rm -rf src ", "rm -rf lib/", "rm -rf lib ",
-		"rm -rf app/", "rm -rf app ", "rm -rf pkg/", "rm -rf pkg ",
-		"rm -rf tests/", "rm -rf tests ", "rm -rf spec/", "rm -rf spec ",
-		"rm -rf include/", "rm -rf include ", "rm -rf pages/", "rm -rf pages ",
-		"rm -rf components/", "rm -rf components ", "rm -rf .git", "rm -rf .git ",
-		"rm -rf ~/", "rm -rf ~/*",
+	// Check for rm -rf or rm -fr (case-insensitive) - default to dangerous
+	// Check if an rm -rf target is safe (O(1) map lookup)
+	if isSafeRmRfPrefix(cmdLower) {
+		return false
 	}
-	for _, pattern := range deletionPatterns {
-		if strings.HasPrefix(cmd, pattern) {
-			return true
-		}
+	// All other rm -rf commands not in the safe allowlist are dangerous
+	if strings.HasPrefix(cmdLower, "rm -rf ") || strings.HasPrefix(cmdLower, "rm -fr ") {
+		return true
 	}
 
 	// Dangerous system operations
@@ -728,11 +855,6 @@ func isPrivilegedPackageInstall(cmd string) bool {
 }
 
 func containsPrivilegedPackageInstall(cmd string) bool {
-	for _, risk := range classifyChainedCommand(cmd) {
-		if risk == SecurityCaution {
-			// Continue to exact command scan below.
-		}
-	}
 	parts := strings.FieldsFunc(cmd, func(r rune) bool {
 		return r == ';' || r == '|'
 	})
@@ -778,9 +900,14 @@ func getShellCommandRiskType(cmd string, risk SecurityRisk, isCritical bool) str
 
 	cmdLower := strings.ToLower(cmd)
 
-	// Check specific dangerous patterns for risk type (order matters — more specific first)
+	// rm -rf . or ~ or / or * or .git — mass deletion (check this first for specificity)
+	for _, pattern := range []string{"rm -rf .", "rm -rf ~", "rm -rf /", "rm -rf *", "rm -rf .git"} {
+		if strings.HasPrefix(cmdLower, pattern) {
+			return "mass_deletion"
+		}
+	}
 
-	// rm -rf of source/project directories
+	// rm -rf of source/project directories (more specific than general dir deletion)
 	for _, pattern := range []string{
 		"rm -rf src/", "rm -rf src ", "rm -rf lib/", "rm -rf lib ",
 		"rm -rf app/", "rm -rf app ", "rm -rf pkg/", "rm -rf pkg ",
@@ -792,11 +919,11 @@ func getShellCommandRiskType(cmd string, risk SecurityRisk, isCritical bool) str
 			return "source_code_destruction"
 		}
 	}
-	// rm -rf . or ~ or / or * or .git — mass deletion (but only if critical doesn't override)
-	for _, pattern := range []string{"rm -rf .", "rm -rf ~", "rm -rf /", "rm -rf *", "rm -rf .git"} {
-		if strings.HasPrefix(cmdLower, pattern) {
-			return "mass_deletion"
-		}
+
+	// rm -rf of arbitrary directories (general directory deletion)
+	// Check this last, after more specific patterns above
+	if (strings.HasPrefix(cmdLower, "rm -rf ") || strings.HasPrefix(cmdLower, "rm -fr ")) && !isSafeRmRfPrefix(cmdLower) {
+		return "directory_deletion"
 	}
 
 	if strings.HasPrefix(cmdLower, "sudo ") {
@@ -906,9 +1033,13 @@ func classifyGitOperation(args map[string]interface{}) SecurityResult {
 		}
 	}
 
-	dangerousOps := []string{"branch_delete", "clean", "push --force", "push -f"}
+	// Note: "clean" is intentionally only CAUTION-level here. Dangerous variants
+	// like "git clean -ff" and "git clean -fd" are caught by the shell-level
+	// security classifier (isDangerousPattern), which processes the full git
+	// command string including flags.
+	dangerousOps := []string{"branch_delete", "push --force", "push -f"}
 	for _, danger := range dangerousOps {
-		if op == danger || strings.HasPrefix(op, "push") && strings.Contains(opRaw, "--force") {
+		if op == danger || (strings.HasPrefix(op, "push") && strings.Contains(opRaw, "--force")) {
 			return SecurityResult{Risk: SecurityDangerous, Reasoning: "Dangerous git operation that may force-push or delete: " + op, ShouldBlock: true, ShouldPrompt: true}
 		}
 	}

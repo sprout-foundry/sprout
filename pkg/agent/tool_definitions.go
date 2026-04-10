@@ -484,10 +484,14 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 					return nil, "", fmt.Errorf("security rejected: user rejected %s — %s", toolName, secResult.Reasoning)
 				}
 			} else if secResult.ShouldBlock {
-				// NON-INTERACTIVE + DANGEROUS, no approval mechanism: always block (subagents or no terminal/webui)
+				// NON-INTERACTIVE + DANGEROUS, no approval mechanism: always block
 				return nil, "", fmt.Errorf("security block: %s — %s", toolName, secResult.Reasoning)
+			} else if secResult.ShouldPrompt && !isSubagent {
+				// NON-INTERACTIVE + CAUTION, needs prompt but no approval mechanism:
+				// Return a special error that tells the LLM to re-assert safety before proceeding
+				return nil, "", fmt.Errorf("security caution: %s — %s (requires LLM verification: confirm this action is safe, expected, and aligned with user goals before proceeding)", toolName, secResult.Reasoning)
 			}
-			// NON-INTERACTIVE + CAUTION, no approval mechanism: auto-allow
+			// NON-INTERACTIVE + CAUTION, no approval mechanism, not a subagent: auto-allow (safe operations)
 		}
 	}
 

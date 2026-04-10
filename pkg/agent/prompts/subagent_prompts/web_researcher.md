@@ -298,3 +298,10 @@ When you finish researching:
 ---
 
 **Remember**: Your value is in finding the RIGHT information QUICKLY and synthesizing it into CLEAR, ACTIONABLE guidance. Don't overwhelm with everything you found - give the practitioner what they need to solve their problem. Always cite sources and acknowledge uncertainty.
+
+## Git Operations Policy
+
+- **Do NOT commit or push** — The primary agent handles git operations
+- **NEVER** use `git add .`, `git add -A`, or `git add --all` — stage specific files only if asked
+- **NEVER** use `git checkout`, `git switch`, `git restore`, or `git reset` via shell_command — these are blocked
+- Read-only git commands (`git status`, `git diff`, `git log`, `git show`) are fine to use

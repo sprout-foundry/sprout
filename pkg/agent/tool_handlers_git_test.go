@@ -30,6 +30,14 @@ func TestIsGitWriteCommand(t *testing.T) {
 		{"git stash", true},
 		{"git stash pop", true},
 		{"git fetch origin", true},
+		{"git --no-pager push origin main", true},                                               // --no-pager skipped
+		// Duplicate entries with descriptive names would require adding a name field to the struct.
+		// Existing entries already cover git branch --list, git branch -a, and git tag -l as read-only.
+		{"git branch -vv", false},                                                               // verbose, read-only
+		{"git -c key=val add . ", false},                                                        // -c flag value skipped, add found as subcommand (broad add checked separately)
+		{"git -c safe.directory=/tmp commit -m \"x\"", true},                                    // -c flag with key=value properly skipped
+		{"git -c key=val push origin main", true},                                               // -c flag properly skipped
+		{"git -C /path/to/repo reset --soft HEAD~1", true},                                      // -C path flag properly skipped
 	}
 
 	for _, tc := range tests {
@@ -171,5 +179,115 @@ func TestShellSplit(t *testing.T) {
 				t.Fatalf("shellSplit(%q)[%d] = %q, want %q", tc.input, i, got[i], tc.want[i])
 			}
 		}
+	}
+}
+
+func TestIsBroadGitAdd(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		command string
+		broad  bool
+	}{
+		// Should return true: broad patterns
+		{"dot is broad", "git add .", true},
+		{"dash_A is broad", "git add -A", true},
+		{"double_dash_all is broad", "git add --all", true},
+		{"dash_a is broad", "git add -a", true},
+		{"broad flag with additional path", "git add -A src/", true},
+		{"git global flag --no-pager", "git --no-pager add .", true},
+		{"git config flag -c", "git -c core.autocrlf=input add -A", true},
+		{"leading and trailing whitespace", "  git add .  ", true},
+		{"broad pattern with trailing flags", "git add . --verbose", true},
+		{"dot with --no-all (dot is still broad)", "git add --no-all .", true},
+
+		// Should return false: specific files or non-add commands
+		{"single file", "git add file.txt", false},
+		{"nested path", "git add path/to/file.go", false},
+		{"multiple specific files", "git add src/main.go src/utils.go", false},
+		{"interactive patch mode", "git add -p", false},
+		{"git status", "git status", false},
+		{"git commit", "git commit -m \"message\"", false},
+		{"git log", "git log", false},
+		{"git add no args", "git add", false},
+		{"edit mode", "git add -e", false},
+		{"empty string", "", false},
+		{"not a git command", "not a git command", false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isBroadGitAdd(tc.command); got != tc.broad {
+				t.Errorf("isBroadGitAdd(%q) = %v, want %v", tc.command, got, tc.broad)
+			}
+		})
+	}
+}
+
+func TestIsGitDiscardCommand(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		command string
+		discard bool
+	}{
+		// Should return true: commands that discard changes
+		{"restore file", "git restore file.txt", true},
+		{"restore --staged", "git restore --staged file.txt", true},
+		{"restore --worktree", "git restore --worktree file.txt", true},
+		{"restore --source", "git restore --source=HEAD -- file.txt", true},
+		{"reset HEAD", "git reset HEAD", true},
+		{"reset HEAD with file", "git reset HEAD -- file.txt", true},
+		{"reset --hard", "git reset --hard", true},
+		{"reset --soft", "git reset --soft HEAD~1", true},
+		{"reset --mixed", "git reset --mixed", true},
+		{"git global flag --no-pager restore", "git --no-pager restore file.txt", true},
+		{"whitespace around restore", "  git restore file.txt  ", true},
+
+		// Should return false: commands that don't discard changes
+		{"git status", "git status", false},
+		{"git log", "git log", false},
+		{"git diff", "git diff", false},
+		{"git add", "git add file.txt", false},
+		{"git commit", "git commit -m \"message\"", false},
+		{"empty string", "", false},
+		{"not a git command", "not a git command", false},
+		{"git branch", "git branch", false},
+		{"git push", "git push", false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isGitDiscardCommand(tc.command); got != tc.discard {
+				t.Errorf("isGitDiscardCommand(%q) = %v, want %v", tc.command, got, tc.discard)
+			}
+		})
+	}
+}
+
+func TestExtractGitSubcommand(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"status", "git status", "status"},
+		{"log with flags", "git log --oneline", "log"},
+		{"commit with flags", "git commit -m \"msg\"", "commit"},
+		{"diff with --no-pager", "git --no-pager diff", "diff"},
+		{"push with -c config", "git -c key=val push", "push"},
+		{"branch with whitespace", "  git branch  ", "branch"},
+		{"bare git", "git", "unknown"},
+		{"empty string", "", "unknown"},
+		{"not git", "abc", "unknown"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := extractGitSubcommand(tc.input); got != tc.want {
+				t.Errorf("extractGitSubcommand(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
 	}
 }

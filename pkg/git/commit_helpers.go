@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 // CommitExecutor provides methods for executing git commits with message generation.
@@ -16,8 +17,14 @@ type CommitExecutor struct {
 	UserMessage     string
 	UserInstructions string
 	// Dir is the working directory for git commands. If empty, the current directory is used.
-	Dir string
+	Dir         string
+	secretCheck SecretCheckHandler // Optional callback for security checking before commit
 }
+
+// SecretCheckHandler is a callback for handling detected secrets in commit flow.
+// It receives the security result and returns whether to proceed with the commit.
+// Return true to proceed, false to abort.
+type SecretCheckHandler func(securityResult CommitSecurityResult) bool
 
 // NewCommitExecutor creates a new commit executor with the given configuration.
 func NewCommitExecutor(client api.ClientInterface, userMessage, userInstructions string) *CommitExecutor {
@@ -36,6 +43,13 @@ func NewCommitExecutorInDir(client api.ClientInterface, userMessage, userInstruc
 		UserInstructions: userInstructions,
 		Dir:             dir,
 	}
+}
+
+// NewCommitExecutorWithSecurityCheck creates a CommitExecutor with a security check callback.
+func NewCommitExecutorWithSecurityCheck(client api.ClientInterface, userMessage, userInstructions string, secretCheck SecretCheckHandler) *CommitExecutor {
+	executor := NewCommitExecutor(client, userMessage, userInstructions)
+	executor.secretCheck = secretCheck
+	return executor
 }
 
 // gitCmd creates an exec.Cmd for a git command in the executor's working directory (if set).
@@ -95,6 +109,15 @@ func (e *CommitExecutor) ExecuteCommit() (string, error) {
 	diffOutput, err := e.gitCmd("diff", "--staged").CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("failed to get diff: %w", err)
+	}
+
+	// Run secret detection if a handler is registered
+	if e.secretCheck != nil {
+		logger := utils.GetLogger(false)
+		securityResult := CheckStagedFilesForSecurityCredentials(logger)
+		if securityResult.HasConcerns && !e.secretCheck(securityResult) {
+			return "", fmt.Errorf("commit aborted: security concerns detected in staged files")
+		}
 	}
 
 	// Generate commit message

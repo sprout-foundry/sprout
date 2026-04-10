@@ -11,7 +11,6 @@ import (
 	"time"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -44,12 +43,11 @@ func TestCheckStagedFilesForSecurityCredentials_NoStagedFiles(t *testing.T) {
 	require.NoError(t, os.Chdir(dir))
 
 	logger := utils.GetLogger(true)
-	cfg := &configuration.Config{}
 
 	// No staged changes — cmd.Output() should succeed but produce empty output,
 	// so the loop iterates over [""], skips it, and returns false.
-	result := CheckStagedFilesForSecurityCredentials(logger, cfg)
-	assert.False(t, result)
+	result := CheckStagedFilesForSecurityCredentials(logger)
+	assert.False(t, result.HasConcerns)
 }
 
 func TestCheckStagedFilesForSecurityCredentials_CleanStagedFile(t *testing.T) {
@@ -64,10 +62,9 @@ func TestCheckStagedFilesForSecurityCredentials_CleanStagedFile(t *testing.T) {
 	gitRun(t, dir, "add", "clean.go")
 
 	logger := utils.GetLogger(true)
-	cfg := &configuration.Config{}
 
-	result := CheckStagedFilesForSecurityCredentials(logger, cfg)
-	assert.False(t, result)
+	result := CheckStagedFilesForSecurityCredentials(logger)
+	assert.False(t, result.HasConcerns)
 }
 
 func TestCheckStagedFilesForSecurityCredentials_WithSecretPatterns(t *testing.T) {
@@ -85,10 +82,9 @@ const awsSecretKey = "AKIAIOSFODNN7EXAMPLE"
 	gitRun(t, dir, "add", "secrets.go")
 
 	logger := utils.GetLogger(true)
-	cfg := &configuration.Config{}
 
-	result := CheckStagedFilesForSecurityCredentials(logger, cfg)
-	assert.True(t, result, "expected security issues found")
+	result := CheckStagedFilesForSecurityCredentials(logger)
+	assert.True(t, result.HasConcerns, "expected security issues found")
 }
 
 func TestCheckStagedFilesForSecurityCredentials_MixedFiles(t *testing.T) {
@@ -108,10 +104,9 @@ func TestCheckStagedFilesForSecurityCredentials_MixedFiles(t *testing.T) {
 	gitRun(t, dir, "add", "key.pem")
 
 	logger := utils.GetLogger(true)
-	cfg := &configuration.Config{}
 
-	result := CheckStagedFilesForSecurityCredentials(logger, cfg)
-	assert.True(t, result, "expected security issues when staging a private key")
+	result := CheckStagedFilesForSecurityCredentials(logger)
+	assert.True(t, result.HasConcerns, "expected security issues when staging a private key")
 }
 
 // =============================================================================

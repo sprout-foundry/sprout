@@ -7,7 +7,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/security"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
@@ -42,18 +41,26 @@ func GetStagedDiff() (string, error) {
 	return string(output), nil
 }
 
+// CommitSecurityResult holds the result of security checking staged files.
+type CommitSecurityResult struct {
+	HasConcerns bool
+	Concerns    []security.DetectedSecret
+}
+
 // CheckStagedFilesForSecurityCredentials checks staged files for security credentials
-func CheckStagedFilesForSecurityCredentials(logger *utils.Logger, cfg *configuration.Config) bool {
+// and returns a detailed result with the specific concerns found.
+func CheckStagedFilesForSecurityCredentials(logger *utils.Logger) CommitSecurityResult {
+	result := CommitSecurityResult{}
+
 	// Get list of staged files
 	cmd := exec.Command("git", "diff", "--cached", "--name-only")
 	output, err := cmd.Output()
 	if err != nil {
 		logger.LogError(fmt.Errorf("failed to get staged files: %w", err))
-		return false
+		return result
 	}
 
 	stagedFiles := strings.Split(strings.TrimSpace(string(output)), "\n")
-	securityIssuesFound := false
 
 	for _, filePath := range stagedFiles {
 		if filePath == "" {
@@ -75,18 +82,33 @@ func CheckStagedFilesForSecurityCredentials(logger *utils.Logger, cfg *configura
 			}
 		}
 
-		concerns, _ := security.DetectSecurityConcerns(content)
+		concerns, snippets := security.DetectSecurityConcerns(content)
 
 		if len(concerns) > 0 {
-			securityIssuesFound = true
 			logger.LogUserInteraction(fmt.Sprintf("Security concerns detected in staged file %s:", filePath))
 			for _, concern := range concerns {
 				logger.LogUserInteraction(fmt.Sprintf("  - %s", concern))
+
+				// Derive a short type name by stripping " Exposure" suffix.
+				secretType := strings.TrimSuffix(concern, " Exposure")
+
+				// Use the matched snippet if available, truncating to 40 chars with ellipsis.
+				snippet := snippets[concern]
+				if len(snippet) > 40 {
+					snippet = snippet[:37] + "..."
+				}
+
+				result.Concerns = append(result.Concerns, security.DetectedSecret{
+					Type:    secretType,
+					Snippet: snippet,
+					Line:    0,
+				})
 			}
 		}
 	}
 
-	return securityIssuesFound
+	result.HasConcerns = len(result.Concerns) > 0
+	return result
 }
 
 // PerformGitCommit executes the git commit command safely using stdin

@@ -9,9 +9,10 @@ import (
 	"strings"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 	"github.com/alantheprice/ledit/pkg/factory"
 	"github.com/alantheprice/ledit/pkg/git"
-	tools "github.com/alantheprice/ledit/pkg/agent_tools"
+	"github.com/alantheprice/ledit/pkg/security"
 )
 
 // configManagerInterface defines the interface for accessing config
@@ -278,7 +279,7 @@ func handleCommitTool(_ context.Context, a *Agent, args map[string]interface{}) 
 	}
 
 	// Execute the commit using the shared helper function
-	commitHash, err := executeCommit(message, notes, configManager)
+	commitHash, err := executeCommit(message, notes, configManager, a)
 	if err != nil {
 		return "", fmt.Errorf("failed to execute commit: %w", err)
 	}
@@ -286,8 +287,10 @@ func handleCommitTool(_ context.Context, a *Agent, args map[string]interface{}) 
 	return fmt.Sprintf("Committed successfully: %s", commitHash), nil
 }
 
-// executeCommit performs the actual commit operation using the shared git.CommitExecutor
-func executeCommit(userMessage, notes string, configManager configManagerInterface) (string, error) {
+// executeCommit performs the actual commit operation using the shared git.CommitExecutor.
+// The agent is optional; when non-nil its elevation gate is consulted for secret
+// detection before the commit is created.
+func executeCommit(userMessage, notes string, configManager configManagerInterface, chatAgent *Agent) (string, error) {
 	// Create LLM client if config manager is available
 	var client api.ClientInterface
 	if configManager != nil {
@@ -301,8 +304,26 @@ func executeCommit(userMessage, notes string, configManager configManagerInterfa
 		}
 	}
 
-	// Use the shared commit executor — notes are passed as userInstructions to
-	// provide context for generating a better commit message (ignored if userMessage is set)
-	executor := git.NewCommitExecutor(client, userMessage, notes)
+	var executor *git.CommitExecutor
+
+	// Wire the elevation gate into the commit executor if available.
+	if chatAgent != nil && chatAgent.GetElevationGate() != nil {
+		gate := chatAgent.GetElevationGate()
+		secretHandler := func(securityResult git.CommitSecurityResult) bool {
+			if !securityResult.HasConcerns {
+				return true
+			}
+			action, err := gate.Evaluate(securityResult.Concerns, "commit")
+			if err != nil {
+				chatAgent.debugLog("[security] commit elevation error: %v\n", err)
+				return false // default to blocking on error
+			}
+			return action != security.SecretBlock
+		}
+		executor = git.NewCommitExecutorWithSecurityCheck(client, userMessage, notes, secretHandler)
+	} else {
+		executor = git.NewCommitExecutor(client, userMessage, notes)
+	}
+
 	return executor.ExecuteCommit()
 }

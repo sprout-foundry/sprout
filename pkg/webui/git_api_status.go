@@ -56,6 +56,22 @@ func (ws *ReactWebServer) handleAPIGitDiff(w http.ResponseWriter, r *http.Reques
 	// Convert absolute paths to workspace-relative for git operations.
 	reqPath = makeGitRelativePath(reqPath, workspaceRoot)
 
+	// Return empty diffs gracefully when not in a git repository.
+	checkCmd := ws.gitCommandForWorkspace(workspaceRoot, "rev-parse", "--git-dir")
+	if err := checkCmd.Run(); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message":       "success",
+			"path":          reqPath,
+			"has_staged":    false,
+			"has_unstaged":  false,
+			"staged_diff":   "",
+			"unstaged_diff": "",
+			"diff":          "No diff available for this file.",
+		})
+		return
+	}
+
 	stagedDiff, err := ws.gitDiffAllowExitOneForWorkspace(workspaceRoot, "diff", "--cached", "--", reqPath)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to get staged diff: %v", err), http.StatusInternalServerError)
@@ -135,6 +151,16 @@ func (ws *ReactWebServer) handleAPIGitStage(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// Reject requests when not in a git repository.
+	if checkCmd := ws.gitCommandForWorkspace(workspaceRoot, "rev-parse", "--git-dir"); checkCmd.Run() != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "not_git_repo",
+		})
+		return
+	}
+
 	var req struct {
 		Path string `json:"path"`
 	}
@@ -188,6 +214,16 @@ func (ws *ReactWebServer) handleAPIGitUnstage(w http.ResponseWriter, r *http.Req
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Reject requests when not in a git repository.
+	if checkCmd := ws.gitCommandForWorkspace(workspaceRoot, "rev-parse", "--git-dir"); checkCmd.Run() != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "not_git_repo",
+		})
 		return
 	}
 
@@ -247,6 +283,16 @@ func (ws *ReactWebServer) handleAPIGitDiscard(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// Reject requests when not in a git repository.
+	if checkCmd := ws.gitCommandForWorkspace(workspaceRoot, "rev-parse", "--git-dir"); checkCmd.Run() != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "not_git_repo",
+		})
+		return
+	}
+
 	var req struct {
 		Path string `json:"path"`
 	}
@@ -303,8 +349,20 @@ func (ws *ReactWebServer) handleAPIGitStageAll(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+
+	// Reject requests when not in a git repository.
+	if checkCmd := ws.gitCommandForWorkspace(workspaceRoot, "rev-parse", "--git-dir"); checkCmd.Run() != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "not_git_repo",
+		})
+		return
+	}
+
 	// Stage all changes
-	cmd := ws.gitCommandForWorkspace(ws.getWorkspaceRootForRequest(r), "add", "-A")
+	cmd := ws.gitCommandForWorkspace(workspaceRoot, "add", "-A")
 	if err := cmd.Run(); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to stage all: %v", err), http.StatusInternalServerError)
 		return
@@ -325,8 +383,20 @@ func (ws *ReactWebServer) handleAPIGitUnstageAll(w http.ResponseWriter, r *http.
 		return
 	}
 
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+
+	// Reject requests when not in a git repository.
+	if checkCmd := ws.gitCommandForWorkspace(workspaceRoot, "rev-parse", "--git-dir"); checkCmd.Run() != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "not_git_repo",
+		})
+		return
+	}
+
 	// Unstage all changes
-	cmd := ws.gitCommandForWorkspace(ws.getWorkspaceRootForRequest(r), "reset", "HEAD")
+	cmd := ws.gitCommandForWorkspace(workspaceRoot, "reset", "HEAD")
 	if err := cmd.Run(); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to unstage all: %v", err), http.StatusInternalServerError)
 		return

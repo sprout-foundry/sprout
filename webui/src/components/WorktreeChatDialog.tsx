@@ -85,6 +85,10 @@ export const WorktreeChatDialog: React.FC<WorktreeChatDialogProps> = ({
     };
   }, [isOpen, onClose, isCreating]);
 
+  // Check if the typed branch already has a worktree
+  const branchHasWorktree =
+    branch.trim() && existingWorktrees.some((wt) => wt.branch === branch.trim());
+
   // Handle form submission
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,10 +114,6 @@ export const WorktreeChatDialog: React.FC<WorktreeChatDialogProps> = ({
   const handleCancel = () => {
     onClose();
   };
-
-  // Check if the typed branch already has a worktree
-  const branchHasWorktree =
-    branch.trim() && existingWorktrees.some((wt) => wt.branch === branch.trim());
 
   // Handle clicking an existing worktree row to pre-fill the branch
   const handleWorktreeClick = (wt: WorktreeInfo) => {

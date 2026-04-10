@@ -210,7 +210,7 @@ function AppWithProviders({
   handleProviderChange,
   handleViewChange,
   handlePersonaChange,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+/* eslint-disable @typescript-eslint/no-explicit-any */
 }: {
   state: any;
   setState: any;
@@ -249,6 +249,7 @@ function AppWithProviders({
   handleProviderChange: any;
   handleViewChange: any;
   handlePersonaChange: any;
+/* eslint-enable @typescript-eslint/no-explicit-any */
 }) {
   // ── WebSocket event processing (needs NotificationProvider) ────
   const { handleEvent, activeChatIdRef, activeRequestsRef, connectionTimeoutRef, handleReconnect } = useWebSocketEvents(

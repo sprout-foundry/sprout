@@ -1595,7 +1595,7 @@ class ApiService {
   }> {
     const response = await clientFetch('/api/settings/credentials');
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    return await response.json();
+    return response.json();
   }
 
   async setProviderCredential(provider: string, value: string): Promise<{ success: boolean; provider: string }> {
@@ -1605,7 +1605,7 @@ class ApiService {
       body: JSON.stringify({ value }),
     });
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    return await response.json();
+    return response.json();
   }
 
   async deleteProviderCredential(provider: string): Promise<{ success: boolean; provider: string }> {
@@ -1613,7 +1613,7 @@ class ApiService {
       method: 'DELETE',
     });
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    return await response.json();
+    return response.json();
   }
 
   async testProviderConnection(provider: string): Promise<{
@@ -1630,13 +1630,13 @@ class ApiService {
       const data = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
       throw new Error(data.error || `HTTP error! status: ${response.status}`);
     }
-    return await response.json();
+    return response.json();
   }
 
   async getKeyPool(provider: string): Promise<{ provider: string; key_count: number; masked_keys: string[] }> {
     const response = await clientFetch(`/api/settings/credentials/${encodeURIComponent(provider)}/pool`);
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    return await response.json();
+    return response.json();
   }
 
   async addKeyToPool(provider: string, value: string): Promise<{ success: boolean; provider: string; key_count: number }> {
@@ -1646,7 +1646,7 @@ class ApiService {
       body: JSON.stringify({ value }),
     });
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    return await response.json();
+    return response.json();
   }
 
   async removeKeyFromPool(provider: string, index: number): Promise<{ success: boolean; provider: string; key_count: number }> {
@@ -1656,7 +1656,7 @@ class ApiService {
       body: JSON.stringify({ index }),
     });
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    return await response.json();
+    return response.json();
   }
 
   async getCustomProviders(): Promise<Record<string, unknown>> {

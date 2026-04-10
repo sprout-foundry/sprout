@@ -269,7 +269,7 @@ function EditorTabs({
     buffers,
     panes,
     activeBufferId,
-    activePaneId,
+    activePaneId: _activePaneId,
     switchPane,
     switchToBuffer,
     closeBuffer,

@@ -26,6 +26,14 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 		return "", fmt.Errorf("failed to convert command parameter: %w", err)
 	}
 
+	// Block git checkout/switch commands from shell_command for ALL personas.
+	// These must go through the git tool which requires explicit user approval.
+	// This prevents repo_orchestrator and other autonomous personas from
+	// switching branches without user consent.
+	if isGitCheckoutSubcommand(command) {
+		return "", fmt.Errorf("git checkout/switch operations are not allowed via shell_command. Use the git tool with operation='checkout' to require explicit user approval (command: '%s')", command)
+	}
+
 	// Block git write operations unless the orchestrator persona has permission.
 	// Staging operations (git add) are always allowed per policy.
 	// Read-only operations (status, log, diff, etc.) are always allowed through shell_command.

@@ -8,6 +8,34 @@ import (
 
 // Shared utility functions for tool handlers
 
+// isGitCheckoutSubcommand checks if a git command is a checkout or switch operation.
+// These are always blocked from shell_command to force use of the git tool
+// which requires explicit user approval.
+func isGitCheckoutSubcommand(command string) bool {
+	trimmed := strings.TrimSpace(command)
+	if !strings.HasPrefix(trimmed, "git ") {
+		return false
+	}
+	parts := strings.Fields(trimmed)
+	if len(parts) < 2 {
+		return false
+	}
+	// Skip leading flags (e.g., -c key=val, -C path, --no-pager)
+	for i := 1; i < len(parts); i++ {
+		part := parts[i]
+		if strings.HasPrefix(part, "-") {
+			// Skip flags that take an argument: -c, -C, --exec-path, etc.
+			if part == "-c" || part == "-C" || part == "--exec-path" || part == "--git-dir" || part == "--work-tree" {
+				i++ // skip the next argument (the value)
+			}
+			continue
+		}
+		sub := strings.TrimPrefix(strings.TrimPrefix(part, "--"), "-")
+		return sub == "checkout" || sub == "switch"
+	}
+	return false
+}
+
 // isGitWriteCommand checks if a command is a git write operation (which should use git tool for approval)
 func isGitWriteCommand(command string) bool {
 	trimmed := strings.TrimSpace(command)

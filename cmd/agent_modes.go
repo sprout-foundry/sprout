@@ -21,6 +21,14 @@ import (
 	"golang.org/x/term"
 )
 
+// isServiceMode returns true when ledit is running as a managed system
+// service (systemd, launchd). In service mode, terminal prompts and
+// "Press Ctrl+C" messages are suppressed since there is no interactive
+// terminal.
+func isServiceMode() bool {
+	return os.Getenv("LEDIT_SERVICE") == "1"
+}
+
 var queryInProgress atomic.Bool
 
 func setQueryInProgress(active bool) {
@@ -283,7 +291,9 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 			if daemonMode && webServer != nil && webServer.IsRunning() {
 				// Daemon mode: keep web UI running
 				fmt.Printf("\n[web] Web UI running at http://localhost:%d\n", webServer.GetPort())
-				fmt.Println("Press Ctrl+C to stop the server.")
+				if !isServiceMode() {
+					fmt.Println("Press Ctrl+C to stop the server.")
+				}
 
 				// Wait for interrupt signal
 				<-ctx.Done()

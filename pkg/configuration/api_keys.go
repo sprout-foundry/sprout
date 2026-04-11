@@ -200,6 +200,7 @@ func SaveAPIKeys(keys *APIKeys) error {
 // PopulateFromEnvironment populates API keys from environment variables
 // This is called on startup only to detect whether environment credentials are available.
 func (keys *APIKeys) PopulateFromEnvironment() bool {
+	populated := false
 	for _, name := range knownProviderNames {
 		metadata, err := GetProviderAuthMetadata(name)
 		if err != nil {
@@ -207,11 +208,13 @@ func (keys *APIKeys) PopulateFromEnvironment() bool {
 		}
 		if metadata.RequiresAPIKey && metadata.EnvVar != "" {
 			if envKey := strings.TrimSpace(os.Getenv(metadata.EnvVar)); envKey != "" {
-				return true
+				// Actually populate the key into the map
+				keys.SetAPIKey(name, envKey)
+				populated = true
 			}
 		}
 	}
-	return false
+	return populated
 }
 
 // GetAPIKey returns the API key for a provider

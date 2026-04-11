@@ -3,6 +3,8 @@
 
 param(
     [switch]$Uninstall,
+    [switch]$Service,
+    [switch]$NoService,
     [switch]$Version
 )
 
@@ -294,6 +296,11 @@ function Print-Success {
     Write-Host ""
     Write-Host "  Run 'ledit version' to verify the installation"
     Write-Host ""
+
+    if (-not $NoService.IsPresent) {
+        Write-Host "  Run 'ledit service install' to set up auto-start"
+        Write-Host ""
+    }
 }
 
 # Show version info
@@ -320,20 +327,33 @@ function Main {
         Show-Version
         exit 0
     }
-    
+
+    # Validate mutual exclusion of service flags
+    if ($Service.IsPresent -and $NoService.IsPresent) {
+        Write-LogError "--Service and --NoService are mutually exclusive"
+        exit 1
+    }
+
     # Handle uninstall
     if ($Uninstall.IsPresent) {
         Write-LogInfo "Uninstalling ledit..."
-        
+
         $installDir = Get-InstallDir
         $binaryPath = Join-Path $installDir "ledit.exe"
-        
+
         if (Test-Path $binaryPath) {
             try {
                 $version = & $binaryPath version 2>&1 | Select-Object -First 1
                 Write-LogInfo "Removing: $version"
             } catch {
                 $version = "unknown"
+            }
+
+            # Try to uninstall service first
+            try {
+                & $binaryPath service uninstall 2>$null
+            } catch {
+                # Service uninstall not available, ignore
             }
         }
         
@@ -387,7 +407,22 @@ function Main {
     
     # Verify installation
     Verify-Installation -InstallDir $installDir
-    
+
+    # Offer to install as system service
+    if (-not $NoService.IsPresent) {
+        if ($Service.IsPresent) {
+            Write-LogInfo "Automatic service management is not yet available on Windows."
+            Write-LogInfo "You can manually run: ledit agent -d to start the daemon."
+        } else {
+            # Interactive prompt
+            $answer = Read-Host "[INFO] Install ledit as a background service? (auto-start on login) [Y/n]"
+            if (-not $answer -or $answer -match '^[Yy]') {
+                Write-LogInfo "Automatic service management is not yet available on Windows."
+                Write-LogInfo "You can manually run: ledit agent -d to start the daemon."
+            }
+        }
+    }
+
     # Add to PATH if needed
     Add-To-Path -InstallDir $installDir
     

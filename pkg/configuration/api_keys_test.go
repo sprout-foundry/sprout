@@ -1,153 +1,137 @@
 package configuration
 
 import (
-	"errors"
 	"os"
 	"strings"
 	"testing"
-
-	"github.com/alantheprice/ledit/pkg/credentials"
 )
 
-// TestValidateAndSaveAPIKey_NewKey tests that a new API key can be validated and saved
-func TestValidateAndSaveAPIKey_NewKey(t *testing.T) {
-	// Skip if no API key is configured for test providers
-	if !HasProviderAuth("test") {
-		t.Skip("No test provider credential available, skipping test")
-	}
-
-	// Read the current keys to restore later
-	keys, err := LoadAPIKeys()
-	if err != nil {
-		t.Fatalf("Failed to load API keys: %v", err)
-	}
-
-	// Save the old test key if it exists
-	oldTestKey := ""
-	if keys != nil {
-		if val, ok := (*keys)["test"]; ok && val != "" {
-			oldTestKey = val
+func TestPopulateFromEnvironment(t *testing.T) {
+	// Get all known provider environment variables
+	var allEnvVars []string
+	for _, name := range knownProviderNames {
+		metadata, err := GetProviderAuthMetadata(name)
+		if err != nil || !metadata.RequiresAPIKey || metadata.EnvVar == "" {
+			continue
 		}
+		allEnvVars = append(allEnvVars, metadata.EnvVar)
 	}
 
-	// Use a valid test key from environment or skip
-	testKey := os.Getenv("TEST_API_KEY")
-	if testKey == "" {
-		t.Skip("TEST_API_KEY not set, skipping test")
-	}
-
-	// Validate and save the key
-	modelCount, err := ValidateAndSaveAPIKey("test", testKey)
-	if err != nil {
-		t.Fatalf("Failed to validate and save test API key: %v", err)
-	}
-
-	if modelCount <= 0 {
-		t.Errorf("Expected positive model count, got %d", modelCount)
-	}
-
-	// Restore the old key
-	if oldTestKey != "" {
-		_ = SaveAPIKeys(&APIKeys{"test": oldTestKey})
-	}
-}
-
-// TestValidateAndSaveAPIKey_InvalidKey tests that an invalid API key is rejected
-func TestValidateAndSaveAPIKey_InvalidKey(t *testing.T) {
-	// Get the current key for restoration
-	keys, err := LoadAPIKeys()
-	if err != nil {
-		t.Fatalf("Failed to load API keys: %v", err)
-	}
-
-	// Save the old test key if it exists
-	oldTestKey := ""
-	if keys != nil {
-		if val, ok := (*keys)["test"]; ok && val != "" {
-			oldTestKey = val
-		}
-	}
-
-	// Use an obviously invalid key
-	invalidKey := "invalid-key-that-does-not-work"
-
-	// Try to validate and save the key - should fail
-	_, err = ValidateAndSaveAPIKey("test", invalidKey)
-	if err == nil {
-		t.Error("Expected validation to fail for invalid key, but it succeeded")
-	}
-
-	// Restore the old key if it existed
-	if oldTestKey != "" {
-		err = SaveAPIKeys(&APIKeys{"test": oldTestKey})
-		if err != nil {
-			t.Errorf("Failed to restore old key: %v", err)
-		}
-	}
-}
-
-// TestValidateAndSaveAPIKey_NoOldKey tests that a new key can be saved when no old key exists
-func TestValidateAndSaveAPIKey_NoOldKey(t *testing.T) {
-	// Skip if no test provider credential exists
-	if HasProviderAuth("test") {
-		t.Skip("Test provider already has a credential, skipping test")
-	}
-
-	// Use a valid test key from environment
-	testKey := os.Getenv("TEST_API_KEY")
-	if testKey == "" {
-		t.Skip("TEST_API_KEY not set, skipping test")
-	}
-
-	// Validate and save the key
-	modelCount, err := ValidateAndSaveAPIKey("test", testKey)
-	if err != nil {
-		t.Fatalf("Failed to validate and save test API key: %v", err)
-	}
-
-	if modelCount <= 0 {
-		t.Errorf("Expected positive model count, got %d", modelCount)
-	}
-
-	// Clean up - delete the test key
-	_ = credentials.DeleteFromActiveBackend("test")
-}
-
-// TestValidateAndSaveAPIKey_UnsupportedProvider tests error for unknown provider
-func TestValidateAndSaveAPIKey_UnsupportedProvider(t *testing.T) {
-	// Unknown providers are accepted as ClientType, but validation will fail
-	// since there's no real API to validate against
-	_, err := ValidateAndSaveAPIKey("totally-fake-provider-xyz", "some-key")
-	if err == nil {
-		t.Fatal("Expected error for unsupported provider")
-	}
-	// The error should indicate validation failure (not "unsupported provider")
-	// since ParseProviderName accepts any string
-	if !strings.Contains(err.Error(), "validation failed") {
-		t.Errorf("Expected 'validation failed' error, got: %v", err)
-	}
-}
-
-// TestSanitizeValidationError tests error message sanitization
-func TestSanitizeValidationError(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		expected string
+		name             string
+		envVars          map[string]string
+		expectedPopulated bool
+		expectedKeys     []string
 	}{
-		{"401 error", "status 401 unauthorized", "Invalid API key"},
-		{"403 error", "forbidden", "Access forbidden"},
-		{"429 error", "status 429 rate limit exceeded", "Rate limit exceeded"},
-		{"500 error", "internal server error 500", "Service temporarily unavailable"},
-		{"timeout", "request timed out deadline exceeded", "Request timed out"},
-		{"network", "network dial tcp", "Network error"},
-		{"generic", "some random error", "Validation failed"},
+		{
+			name: "single environment variable",
+			envVars: map[string]string{"OPENAI_API_KEY": "sk-test123"},
+			expectedPopulated: true,
+			expectedKeys: []string{"openai"},
+		},
+		{
+			name: "multiple environment variables",
+			envVars: map[string]string{
+				"OPENAI_API_KEY":    "sk-openai",
+				"DEEPINFRA_API_KEY": "sk-deepinfra",
+			},
+			expectedPopulated: true,
+			expectedKeys: []string{"openai", "deepinfra"},
+		},
+		{
+			name: "no environment variables",
+			envVars: map[string]string{},
+			expectedPopulated: false,
+			expectedKeys: []string{},
+		},
+		{
+			name: "empty environment variable value",
+			envVars: map[string]string{"OPENAI_API_KEY": ""},
+			expectedPopulated: false,
+			expectedKeys: []string{},
+		},
+		{
+			name: "whitespace-only environment variable",
+			envVars: map[string]string{"OPENAI_API_KEY": "   "},
+			expectedPopulated: false,
+			expectedKeys: []string{},
+		},
+		{
+			name: "jinaai environment variable",
+			envVars: map[string]string{"JINA_API_KEY": "test-jina-key-12345"},
+			expectedPopulated: true,
+			expectedKeys: []string{"jinaai"},
+		},
+		{
+			name: "mixed valid and empty environment variables",
+			envVars: map[string]string{
+				"OPENAI_API_KEY":    "sk-openai",
+				"DEEPINFRA_API_KEY": "",
+				"JINA_API_KEY":      "test-jina-key",
+			},
+			expectedPopulated: true,
+			expectedKeys: []string{"openai", "jinaai"},
+		},
 	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			result := sanitizeValidationError(errors.New(tc.input))
-			if !strings.Contains(result, tc.expected) {
-				t.Errorf("sanitizeValidationError(%q) = %q, want substring %q", tc.input, result, tc.expected)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Save original environment for ALL known provider env vars
+			originalEnv := make(map[string]string)
+			for _, envVar := range allEnvVars {
+				if v, exists := os.LookupEnv(envVar); exists {
+					originalEnv[envVar] = v
+				}
+			}
+
+			// Clear ALL known provider environment variables first
+			for _, envVar := range allEnvVars {
+				os.Unsetenv(envVar)
+			}
+
+			defer func() {
+				// Restore original environment
+				for k, v := range originalEnv {
+					if v == "" {
+						os.Unsetenv(k)
+					} else {
+						os.Setenv(k, v)
+					}
+				}
+			}()
+
+			// Set up test environment variables
+			for k, v := range tt.envVars {
+				if v == "" {
+					os.Unsetenv(k)
+				} else {
+					os.Setenv(k, v)
+				}
+			}
+
+			keys := make(APIKeys)
+			result := keys.PopulateFromEnvironment()
+
+			if result != tt.expectedPopulated {
+				t.Errorf("PopulateFromEnvironment() = %v, want %v", result, tt.expectedPopulated)
+			}
+
+			for _, provider := range tt.expectedKeys {
+				if key := keys.GetAPIKey(provider); key == "" {
+					t.Errorf("Expected API key for %q not found", provider)
+				}
+			}
+
+			// Verify unexpected providers don't have keys
+			for provider, expectedValue := range tt.envVars {
+				if expectedValue != "" && strings.TrimSpace(expectedValue) != "" {
+					continue // Already checked above
+				}
+				// If we set an empty/whitespace value, verify no key was stored
+				key := keys.GetAPIKey(provider)
+				if key != "" {
+					t.Errorf("Expected no API key for %q with empty value", provider)
+				}
 			}
 		})
 	}

@@ -48,7 +48,7 @@ test-unit:
 		tail -n 200 /tmp/ledit-test-unit.log || true; \
 		echo ""; \
 		echo "Failing packages:"; \
-		grep "^FAIL[[:space:]]" /tmp/ledit-test-unit.log || true; \
+		grep -nE "^(FAIL|--- FAIL:|panic:)" /tmp/ledit-test-unit.log || true; \
 		exit $$status; \
 	fi'
 

@@ -70,6 +70,8 @@ jobs:
       run: make verify-ui-embedded
 
     - name: Run unit tests
+      env:
+        CI: "true"
       run: make test-unit
 
     - name: Run integration tests

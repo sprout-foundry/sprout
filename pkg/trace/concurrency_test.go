@@ -364,8 +364,8 @@ func TestJsonlWriterConcurrentWriteAndClose(t *testing.T) {
 				}
 
 				if err := writer.Write(record); err != nil {
-					// Errors are expected after close
-					t.Logf("Goroutine %d, write %d: write error (expected after close): %v", goroutineID, j, err)
+					// Errors are expected after close — silently discard.
+					// The test's purpose is to verify no panic occurs.
 				}
 			}
 		}(i)
@@ -389,9 +389,7 @@ func TestJsonlWriterConcurrentWriteAndClose(t *testing.T) {
 
 	// Verify no panic occurred (if we got here, no panic)
 	// Additional close should be idempotent
-	if err := writer.Close(); err != nil {
-		t.Logf("Second close error: %v", err)
-	}
+	writer.Close()
 
 	// Verify file exists and is readable
 	data, err := os.ReadFile(tmpFile)

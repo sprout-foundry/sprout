@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1147,10 +1148,14 @@ type mockAPIClient struct {
 	// stopCh receives on this channel to unblock delayed SendChatRequest calls.
 	// Use newMockClient() for safe initialization, or set manually.
 	stopCh  <-chan struct{}
+	mu      sync.Mutex
 	callIdx int
 }
 
 func (m *mockAPIClient) SendChatRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.callIdx++
 
 	if m.delay > 0 {

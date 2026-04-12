@@ -20,7 +20,10 @@ export function useBufferPersistence({ buffersRef, setBuffers }: UseBufferPersis
 
   // Save a buffer to the server
   const saveBuffer = useCallback(
-    async (bufferId: string, options?: { silent?: boolean }) => {
+    async (
+      bufferId: string,
+      options?: { silent?: boolean },
+    ): Promise<{ mod_time?: number } | void> => {
       const buffer = buffersRef.current.get(bufferId);
       if (!buffer || buffer.kind !== 'file') return;
 
@@ -50,6 +53,10 @@ export function useBufferPersistence({ buffersRef, setBuffers }: UseBufferPersis
           throw new Error(errorText || `Failed to save file: ${response.statusText}`);
         }
 
+        // Parse response to get actual filesystem mtime
+        const saveData = await response.json().catch(() => ({}));
+        const serverMtime = typeof saveData.mod_time === 'number' ? saveData.mod_time : null;
+
         // Update the buffer path to the real file path
         const ext = trimmedPath.includes('.') ? trimmedPath.split('.').pop() : '';
         const name = trimmedPath.split('/').pop() || trimmedPath;
@@ -65,6 +72,7 @@ export function useBufferPersistence({ buffersRef, setBuffers }: UseBufferPersis
                 name,
                 path: trimmedPath,
                 ext: ext || undefined,
+                modified: serverMtime ?? buf.file.modified,
               },
               originalContent: buf.content,
               isModified: false,
@@ -75,7 +83,7 @@ export function useBufferPersistence({ buffersRef, setBuffers }: UseBufferPersis
         if (!silent) {
           log.success(`${trimmedPath} saved successfully`, { title: 'File Saved', duration: 3000 });
         }
-        return;
+        return saveData;
       }
 
       // Normal save for existing files
@@ -90,17 +98,26 @@ export function useBufferPersistence({ buffersRef, setBuffers }: UseBufferPersis
           }
           // Check for success message
           if (data.message === 'File saved successfully' || data.success === true) {
+            const serverMtime = typeof data.mod_time === 'number' ? data.mod_time : null;
             setBuffers((prev) => {
               const next = new Map(prev);
               const buf = next.get(bufferId);
               if (buf) {
-                next.set(bufferId, { ...buf, originalContent: buf.content, isModified: false });
+                next.set(bufferId, {
+                  ...buf,
+                  originalContent: buf.content,
+                  isModified: false,
+                  file: serverMtime != null
+                    ? { ...buf.file, modified: serverMtime }
+                    : buf.file,
+                });
               }
               return next;
             });
             if (!silent) {
               log.success(`${buffer.file.path} saved successfully`, { title: 'File Saved', duration: 3000 });
             }
+            return data;
           }
         } else {
           // Server returned a non-2xx status (e.g., 400 validation error).

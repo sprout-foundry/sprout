@@ -13,7 +13,7 @@ interface UseTabManagementParams {
   activePaneId: string | null;
   activeBufferId: string | null;
   isAutoSaveEnabled: boolean;
-  saveBuffer: (bufferId: string) => Promise<void>;
+  saveBuffer: (bufferId: string, options?: { silent?: boolean }) => Promise<{ mod_time?: number } | void>;
 }
 
 /** Core tab management: activate, switch, close, reorder, move. */

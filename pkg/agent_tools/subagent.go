@@ -12,8 +12,6 @@ import (
 	"strconv"
 	"sync"
 	"time"
-
-	"github.com/alantheprice/ledit/pkg/filesystem"
 )
 
 // StreamCallback is a function that receives streamed output from subagents
@@ -123,7 +121,7 @@ func GetSubagentMaxTokens() int {
 //   - exit_code: Process exit code (0 for success)
 //   - completed: true if process ran to completion (always true for blocking mode)
 //   - timed_out: true if the subprocess was terminated due to timeout (always false with no timeout)
-func RunSubagent(prompt, model, provider string, streamCallback StreamCallback, systemPromptPath, systemPromptText, persona string) (map[string]string, error) {
+func RunSubagent(workspaceRoot string, prompt, model, provider string, streamCallback StreamCallback, systemPromptPath, systemPromptText, persona string) (map[string]string, error) {
 	// Build command: ledit agent with the given prompt
 	args := []string{"agent"}
 
@@ -210,13 +208,11 @@ func RunSubagent(prompt, model, provider string, streamCallback StreamCallback, 
 
 	// Explicitly set working directory to the caller workspace so subagents do not
 	// depend on the process-global cwd.
-	if wd := filesystem.WorkspaceRootFromContext(ctx); wd != "" {
-		cmd.Dir = wd
+	if workspaceRoot != "" {
+		cmd.Dir = workspaceRoot
 	} else if wd, err := os.Getwd(); err == nil {
 		cmd.Dir = wd
 	}
-
-	// Propagate important environment variables to subagent processes
 	cmd.Env = append(os.Environ(), "LEDIT_FROM_AGENT=1", "LEDIT_SUBAGENT=1")
 	if persona != "" {
 		cmd.Env = append(cmd.Env, "LEDIT_PERSONA="+persona)
@@ -398,7 +394,7 @@ type ParallelSubagentResult struct {
 //   - streamCallback: Optional callback for real-time output streaming
 //
 // Returns map where key is task ID and value contains that task's result
-func RunParallelSubagents(tasks []ParallelSubagentTask, noTimeout bool, streamCallback StreamCallback) (map[string]map[string]string, error) {
+func RunParallelSubagents(workspaceRoot string, tasks []ParallelSubagentTask, noTimeout bool, streamCallback StreamCallback) (map[string]map[string]string, error) {
 	if len(tasks) == 0 {
 		return nil, fmt.Errorf("no tasks provided")
 	}
@@ -416,7 +412,7 @@ func RunParallelSubagents(tasks []ParallelSubagentTask, noTimeout bool, streamCa
 			defer wg.Done()
 
 			// Use spawnSubagent helper with the provided noTimeout flag and stream callback
-			result := spawnSubagent(t, noTimeout, callerMethod, streamCallback)
+			result := spawnSubagent(workspaceRoot, t, noTimeout, callerMethod, streamCallback)
 			results <- result
 		}(task)
 	}
@@ -462,7 +458,7 @@ func RunParallelSubagents(tasks []ParallelSubagentTask, noTimeout bool, streamCa
 //   - streamCallback: Optional callback for real-time output streaming
 //
 // Returns the result of the subagent execution.
-func spawnSubagent(task ParallelSubagentTask, noTimeout bool, callerMethod string, streamCallback StreamCallback) *ParallelSubagentResult {
+func spawnSubagent(workspaceRoot string, task ParallelSubagentTask, noTimeout bool, callerMethod string, streamCallback StreamCallback) *ParallelSubagentResult {
 	// Generate a unique task ID for tracking
 	taskID := task.ID
 	if taskID == "" {
@@ -557,8 +553,8 @@ func spawnSubagent(task ParallelSubagentTask, noTimeout bool, callerMethod strin
 
 	// Explicitly set working directory to the caller workspace so subagents do not
 	// depend on the process-global cwd.
-	if wd := filesystem.WorkspaceRootFromContext(ctx); wd != "" {
-		cmd.Dir = wd
+	if workspaceRoot != "" {
+		cmd.Dir = workspaceRoot
 	} else if wd, err := os.Getwd(); err == nil {
 		cmd.Dir = wd
 	}

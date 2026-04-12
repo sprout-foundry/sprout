@@ -125,7 +125,12 @@ func (cs *chatSession) getWorktreePath() string {
 //
 // The agent's workspace root is set to the chat's worktree path if set,
 // otherwise it falls back to the provided workspaceRoot parameter.
-func (cs *chatSession) getOrCreateAgent(workspaceRoot string, eventBus *events.EventBus, clientID string) (*agent.Agent, error) {
+//
+// The optional workspaceChdir function, when non-nil, wraps the
+// agent.NewAgentWithModel call so that initialization-time os.Getwd() and
+// relative-path resolution observe the correct workspace directory (critical
+// in daemon mode where the process CWD may differ from the client workspace).
+func (cs *chatSession) getOrCreateAgent(workspaceRoot string, eventBus *events.EventBus, clientID string, workspaceChdir func(string, func() error) error) (*agent.Agent, error) {
 	cs.mu.Lock()
 	if cs.Agent != nil {
 		// Use chat's worktree path if set, otherwise use provided workspaceRoot
@@ -163,9 +168,20 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, eventBus *events.E
 
 	// Create agent outside the lock.
 	snapshot := append([]byte(nil), cs.AgentState...)
-	created, err := agent.NewAgentWithModel("")
-	if err != nil {
-		return nil, fmt.Errorf("create chat agent: %w", err)
+	var created *agent.Agent
+	var createErr error
+	if workspaceChdir != nil {
+		if err := workspaceChdir(agentWorkspace, func() error {
+			created, createErr = agent.NewAgentWithModel("")
+			return createErr
+		}); err != nil {
+			return nil, fmt.Errorf("create chat agent in workspace: %w", err)
+		}
+	} else {
+		created, createErr = agent.NewAgentWithModel("")
+	}
+	if createErr != nil {
+		return nil, fmt.Errorf("create chat agent: %w", createErr)
 	}
 
 	if eventBus != nil {

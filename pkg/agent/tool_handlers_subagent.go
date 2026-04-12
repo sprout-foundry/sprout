@@ -678,7 +678,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	})
 	fmt.Fprintf(os.Stderr, "[~] Spawning subagent [%s]: provider=%s, model=%s\n", persona, displayProvider, displayModel)
 
-	resultMap, err := tools.RunSubagent(enhancedPrompt.String(), model, provider, streamCallback, systemPromptPath, systemPromptText, persona)
+	resultMap, err := tools.RunSubagent(a.currentWorkspaceRoot(), enhancedPrompt.String(), model, provider, streamCallback, systemPromptPath, systemPromptText, persona)
 	if err != nil {
 		a.debugLog("Subagent spawn error: %v\n", err)
 		return "", fmt.Errorf("failed to spawn subagent: %w", err)
@@ -1020,7 +1020,7 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 	})
 	fmt.Fprintf(os.Stderr, "[~] Spawning %d parallel subagents: provider=%s, model=%s\n", len(parallelTasks), displayProvider, displayModel)
 
-	resultMap, err := tools.RunParallelSubagents(parallelTasks, false, streamCallback)
+	resultMap, err := tools.RunParallelSubagents(a.currentWorkspaceRoot(), parallelTasks, false, streamCallback)
 	if err != nil {
 		a.debugLog("Parallel subagents spawn error: %v\n", err)
 		return "", fmt.Errorf("failed to spawn parallel subagents: %w", err)

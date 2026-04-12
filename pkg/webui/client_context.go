@@ -519,7 +519,7 @@ func (ws *ReactWebServer) getChatAgent(clientID, chatID string) (*agent.Agent, e
 	eventBus := ws.eventBus
 	ws.mutex.RUnlock()
 
-	agentInst, err := cs.getOrCreateAgent(workspaceRoot, eventBus, clientID)
+	agentInst, err := cs.getOrCreateAgent(workspaceRoot, eventBus, clientID, ws.withAgentWorkspace)
 	if err != nil {
 		return nil, fmt.Errorf("get or create chat agent: %w", err)
 	}

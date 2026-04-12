@@ -84,6 +84,10 @@ function ChatMessageContextMenu({ containerRef, onInsertAtCursor }: ChatMessageC
       const data = resolveMenuData(e.target as HTMLElement);
       if (!data) return;
 
+      // If user has text selected, let native browser context menu handle it
+      const selection = window.getSelection()?.toString()?.trim();
+      if (selection && selection.length > 0) return;
+
       e.preventDefault();
 
       setMenu({

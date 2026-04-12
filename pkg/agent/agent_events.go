@@ -55,8 +55,8 @@ func (a *Agent) PublishToolExecution(toolName, action string, details map[string
 }
 
 // PublishToolStart publishes a rich tool start event
-func (a *Agent) PublishToolStart(toolName, toolCallID, arguments, displayName, persona string, isSubagent bool, subagentType string) {
-	a.publishEvent(events.EventTypeToolStart, events.ToolStartEvent(toolName, toolCallID, arguments, displayName, persona, isSubagent, subagentType))
+func (a *Agent) PublishToolStart(toolName, toolCallID, arguments, displayName, persona string, isSubagent bool, subagentType string, toolIndex int) {
+	a.publishEvent(events.EventTypeToolStart, events.ToolStartEvent(toolName, toolCallID, arguments, displayName, persona, isSubagent, subagentType, toolIndex))
 }
 
 // PublishToolEnd publishes a rich tool end event

@@ -29,6 +29,8 @@ export interface ToolExecution {
   result?: string;
   persona?: string;
   subagentType?: 'single' | 'parallel';
+  queryId?: number;
+  toolIndex?: number;
 }
 
 export interface Message {
@@ -37,7 +39,7 @@ export interface Message {
   content: string;
   timestamp: Date;
   reasoning?: string; // Chain-of-thought content from content_type: "reasoning"
-  toolRefs?: Array<{ toolId: string; toolName: string; label: string; parallel?: boolean }>;
+  toolRefs?: Array<{ toolId: string; toolName: string; label: string; parallel?: boolean; toolIndex?: number }>;
 }
 
 export interface LogEntry {

@@ -223,7 +223,7 @@ func ValidationEvent(filePath string, diagnostics []map[string]interface{}) map[
 }
 
 // ToolStartEvent creates a tool start event with rich metadata
-func ToolStartEvent(toolName, toolCallID, arguments, displayName, persona string, isSubagent bool, subagentType string) map[string]interface{} {
+func ToolStartEvent(toolName, toolCallID, arguments, displayName, persona string, isSubagent bool, subagentType string, toolIndex int) map[string]interface{} {
 	data := map[string]interface{}{
 		"tool_name":    toolName,
 		"tool_call_id": toolCallID,
@@ -239,6 +239,7 @@ func ToolStartEvent(toolName, toolCallID, arguments, displayName, persona string
 			data["subagent_type"] = subagentType
 		}
 	}
+	data["tool_index"] = toolIndex
 	return data
 }
 

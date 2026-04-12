@@ -27,9 +27,10 @@ import MessageContent from './MessageContent';
 
 interface MessageSegmentsProps {
   content: string;
-  toolRefs?: Array<{ toolId: string; toolName: string; label: string; parallel?: boolean }>;
+  toolRefs?: Array<{ toolId: string; toolName: string; label: string; parallel?: boolean; toolIndex?: number }>;
   onToolClick?: (toolName: string) => void;
   onToolRefClick?: (toolId: string) => void;
+  getToolStatus?: (toolId: string) => 'started' | 'running' | 'completed' | 'error' | undefined;
 }
 
 const getToolIcon = (toolName: string): ReactNode => {
@@ -75,7 +76,7 @@ const SHORT_TOOL_NAMES: { [key: string]: string } = {
 
 const getShortToolName = (toolName: string): string => SHORT_TOOL_NAMES[toolName] ?? toolName;
 
-function MessageSegments({ content, toolRefs = [], onToolClick, onToolRefClick }: MessageSegmentsProps): JSX.Element {
+function MessageSegments({ content, toolRefs = [], onToolClick, onToolRefClick, getToolStatus }: MessageSegmentsProps): JSX.Element {
   let segments: MessageSegment[];
   try {
     segments = parseMessageSegments(stripAnsiCodes(content));
@@ -109,6 +110,27 @@ function MessageSegments({ content, toolRefs = [], onToolClick, onToolRefClick }
 
           case 'tool_call': {
             const matchingRef = claimMatchingToolRef(segment.toolName);
+            const toolStatus = matchingRef ? getToolStatus?.(matchingRef.toolId) : undefined;
+            const isCompleted = toolStatus === 'completed' || toolStatus === 'error';
+
+            // For completed/error tools, render a compact footnote link instead of the full pill
+            if (matchingRef && isCompleted) {
+              return (
+                <span
+                  key={`seg-${idx}`}
+                  className="segment-tool-footnote"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => { onToolRefClick?.(matchingRef.toolId); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToolRefClick?.(matchingRef.toolId); } }}
+                  title={matchingRef.label}
+                >
+                  [{(matchingRef.toolIndex ?? idx) + 1}]
+                </span>
+              );
+            }
+
+            // For running/started tools or unmatched refs, render the full pill
             const baseName = segment.toolName.split('(')[0];
             return (
               <div

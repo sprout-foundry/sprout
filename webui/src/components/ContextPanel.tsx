@@ -43,6 +43,7 @@ import {
   FileEdit,
 } from 'lucide-react';
 import './ContextPanel.css';
+import LiveLog from './LiveLog';
 import { showThemedConfirm } from './ThemedDialog';
 import TodoPanel from './TodoPanel';
 import { ApiService } from '../services/api';
@@ -62,6 +63,7 @@ interface ToolExecution {
   result?: string;
   persona?: string;
   subagentType?: 'single' | 'parallel';
+  queryId?: number;
 }
 
 interface LogEntry {
@@ -262,6 +264,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   type ChatTabId = 'subagents' | 'tools' | 'changes' | 'tasks' | 'status' | 'sessions';
   const [chatTab, setChatTab] = useState<ChatTabId>('subagents');
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
+  const [expandedQueries, setExpandedQueries] = useState<Set<number>>(new Set());
   const [expandedSubagents, setExpandedSubagents] = useState<Set<string>>(new Set());
   const [activeToolId, setActiveToolId] = useState<string | null>(null);
   const toolRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -347,17 +350,32 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
         setPanelCollapsed(false);
         setChatTab('tools');
         setActiveToolId(toolId);
+        // Ensure the query group containing this tool is expanded
+        const chatPropsForHighlight = props as ChatContextPanelProps;
+        if (chatPropsForHighlight.toolExecutions) {
+          const tool = chatPropsForHighlight.toolExecutions.find((t) => t.id === toolId);
+          if (tool) {
+            const qid = tool.queryId ?? 0;
+            setExpandedQueries((prev) => {
+              if (prev.has(qid)) return prev;
+              const next = new Set(prev);
+              next.add(qid);
+              return next;
+            });
+          }
+        }
         setTimeout(() => {
           const el = toolRefs.current[toolId];
           if (el != null) {
             el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
           }
-        }, 100);
+        }, 150);
       },
       closePanel: () => {
         setPanelCollapsed(true);
       },
     }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- props is stable per-render; adding it causes unnecessary re-creation
     [context, revisions.length, sessionsCount, loadRevisionHistory, loadSessions],
   );
 
@@ -584,6 +602,18 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     });
   };
 
+  const toggleQueryGroup = (queryId: number) => {
+    setExpandedQueries((prev) => {
+      const next = new Set(prev);
+      if (next.has(queryId)) {
+        next.delete(queryId);
+      } else {
+        next.add(queryId);
+      }
+      return next;
+    });
+  };
+
   const toggleSubagentExpansion = (toolId: string) => {
     setExpandedSubagents((prev) => {
       const next = new Set(prev);
@@ -790,6 +820,36 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
   const chatProps = context === 'chat' ? (props as ChatContextPanelProps) : null;
   const toolExecutions = useMemo(() => chatProps?.toolExecutions ?? [], [chatProps]);
+
+  // Group tool executions by queryId for rolling history display
+  const groupedByQuery = useMemo(() => {
+    const groups = new Map<number, ToolExecution[]>();
+    for (const tool of toolExecutions) {
+      const qid = tool.queryId ?? 0;
+      if (!groups.has(qid)) groups.set(qid, []);
+      const bucket = groups.get(qid);
+      if (bucket) bucket.push(tool);
+    }
+    return groups;
+  }, [toolExecutions]);
+
+  const maxQueryId = useMemo(() => {
+    if (groupedByQuery.size === 0) return 0;
+    return Math.max(...Array.from(groupedByQuery.keys()));
+  }, [groupedByQuery]);
+
+  // Auto-expand the latest query group when new queries arrive
+  useEffect(() => {
+    if (maxQueryId > 0) {
+      setExpandedQueries((prev) => {
+        if (prev.has(maxQueryId)) return prev;
+        const next = new Set(prev);
+        next.add(maxQueryId);
+        return next;
+      });
+    }
+  }, [maxQueryId]);
+
   const currentTodos = chatProps?.currentTodos ?? [];
   const chatMessages = useMemo(() => chatProps?.messages ?? [], [chatProps]);
   const chatFileEdits = useMemo(() => chatProps?.fileEdits ?? [], [chatProps]);
@@ -904,6 +964,13 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
   const historyCounts = revisions.length;
 
+  // Only count tools from the current turn for status metrics
+  // (file edits are already per-turn since they're cleared on query_started)
+  const currentTurnTools = useMemo(
+    () => toolExecutions.filter((t) => (t.queryId ?? 0) === maxQueryId),
+    [toolExecutions, maxQueryId],
+  );
+
   const statusMetrics: StatusMetrics = useMemo(() => {
     if (context !== 'chat') {
       return {
@@ -926,15 +993,15 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     const msgs = chatMessages;
     const userMsgs = msgs.filter((m) => m.type === 'user').length;
     const assistantMsgs = msgs.filter((m) => m.type === 'assistant').length;
-    const completedTools = toolExecutions.filter((t) => t.status === 'completed').length;
-    const failedTools = toolExecutions.filter((t) => t.status === 'error').length;
-    const activeTools = toolExecutions.filter((t) => t.status === 'running' || t.status === 'started').length;
+    const completedTools = currentTurnTools.filter((t) => t.status === 'completed').length;
+    const failedTools = currentTurnTools.filter((t) => t.status === 'error').length;
+    const activeTools = currentTurnTools.filter((t) => t.status === 'running' || t.status === 'started').length;
 
     const totalAdditions = chatFileEdits.reduce((sum, edit) => sum + (edit.linesAdded || 0), 0);
     const totalDeletions = chatFileEdits.reduce((sum, edit) => sum + (edit.linesDeleted || 0), 0);
 
     const touchedFiles = new Set<string>();
-    toolExecutions.forEach((t) => {
+    currentTurnTools.forEach((t) => {
       if (t.tool === 'write_file' || t.tool === 'edit_file') {
         try {
           const args = t.arguments ? JSON.parse(t.arguments) : {};
@@ -951,7 +1018,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     });
 
     const toolCounts: Record<string, number> = {};
-    toolExecutions.forEach((t) => {
+    currentTurnTools.forEach((t) => {
       const name = isSubagentTool(t) ? 'subagent' : t.tool;
       toolCounts[name] = (toolCounts[name] || 0) + 1;
     });
@@ -972,7 +1039,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       completedTools,
       failedTools,
       activeTools,
-      totalTools: toolExecutions.length,
+      totalTools: currentTurnTools.length,
       totalAdditions,
       totalDeletions,
       filesTouched: touchedFiles.size,
@@ -980,7 +1047,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       maxToolCount,
       duration,
     };
-  }, [chatFileEdits, chatMessages, context, toolExecutions]);
+  }, [chatFileEdits, chatMessages, context, currentTurnTools]);
 
   // ── Tab definitions ──────────────────────────────────────────────
 
@@ -1027,103 +1094,125 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
   // ── Render: Tools Tab (Chat) ─────────────────────────────────────
 
+  // ── Render: individual tool card (extracted for reuse in query groups) ──
+
+  const renderToolCard = (tool: ToolExecution) => {
+    const isSub = isSubagentTool(tool);
+    const subagentPrompt = isSub ? getSubagentPrompt(tool) : undefined;
+
+    return (
+      <div
+        key={tool.id}
+        ref={(el) => {
+          toolRefs.current[tool.id] = el;
+        }}
+        className={`tool-execution tool-${tool.status} ${isSub ? 'tool-subagent' : ''} ${activeToolId === tool.id ? 'tool-highlighted' : ''}`}
+        onClick={() => toggleToolExpansion(tool.id)}
+      >
+        <>
+          <div className="tool-summary">
+            <span className="tool-icon">
+              {isSub ? (
+                <span className="subagent-icon" style={{ color: getPersonaColor(tool.persona) }}>
+                  <Bot size={14} />
+                </span>
+              ) : (
+                getToolIcon(tool.tool)
+              )}
+            </span>
+            <span className={`tool-name ${isSub ? 'tool-name-subagent' : ''}`}>
+              {isSub
+                ? tool.persona
+                  ? `${tool.persona}`
+                  : tool.subagentType === 'parallel'
+                    ? 'parallel subagents'
+                    : 'subagent'
+                : tool.tool}
+              {isSub && tool.subagentType === 'parallel' && ' (parallel)'}
+            </span>
+            <span className="tool-status">{getStatusIcon(tool.status)}</span>
+            <span className="tool-duration">{formatDuration(tool.startTime, tool.endTime)}</span>
+            <span className="tool-expand">
+              {expandedTools.has(tool.id) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+            </span>
+          </div>
+
+          {isSub && subagentPrompt && !expandedTools.has(tool.id) && (
+            <div className="tool-message tool-subagent-prompt">{stripAnsiCodes(subagentPrompt)}</div>
+          )}
+
+          {tool.message && !(isSub && subagentPrompt) && (
+            <div className="tool-message">{stripAnsiCodes(tool.message)}</div>
+          )}
+
+          {expandedTools.has(tool.id) && (tool.arguments || tool.result || tool.details) && (
+            <div className="tool-details">
+              {isSub && subagentPrompt && (
+                <div className="tool-detail-section">
+                  <div className="tool-detail-label">
+                    <FileEdit size={12} className="inline-icon" /> Task
+                  </div>
+                  <pre className="subagent-prompt-detail">{stripAnsiCodes(subagentPrompt)}</pre>
+                </div>
+              )}
+              {tool.arguments && !isSub && (
+                <div className="tool-detail-section">
+                  <div className="tool-detail-label">
+                    <ClipboardList size={12} className="inline-icon" /> Call
+                  </div>
+                  <pre>{formatToolDetail(tool.arguments)}</pre>
+                </div>
+              )}
+              {tool.result && (
+                <div className="tool-detail-section">
+                  <div className="tool-detail-label">
+                    {isSub ? (
+                      <>
+                        <BarChart3 size={12} className="inline-icon" /> Summary
+                      </>
+                    ) : (
+                      <>
+                        <FileText size={12} className="inline-icon" /> Response
+                      </>
+                    )}
+                  </div>
+                  <pre>{formatToolDetail(tool.result)}</pre>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      </div>
+    );
+  };
+
+  // ── Render: Tools Tab (Chat) ─────────────────────────────────────
+
   const renderToolsTab = () => (
     <div className="context-panel-tools-list">
-      <>
-        {toolExecutions.length === 0 ? (
-          <div className="context-panel-empty">Tool calls will appear here.</div>
-        ) : (
-          toolExecutions.map((tool) => {
-            const isSub = isSubagentTool(tool);
-            const subagentPrompt = isSub ? getSubagentPrompt(tool) : undefined;
-
-            return (
-              <div
-                key={tool.id}
-                ref={(el) => {
-                  toolRefs.current[tool.id] = el;
-                }}
-                className={`tool-execution tool-${tool.status} ${isSub ? 'tool-subagent' : ''} ${activeToolId === tool.id ? 'tool-highlighted' : ''}`}
-                onClick={() => toggleToolExpansion(tool.id)}
-              >
-                <>
-                  <div className="tool-summary">
-                    <span className="tool-icon">
-                      {isSub ? (
-                        <span className="subagent-icon" style={{ color: getPersonaColor(tool.persona) }}>
-                          <Bot size={14} />
-                        </span>
-                      ) : (
-                        getToolIcon(tool.tool)
-                      )}
-                    </span>
-                    <span className={`tool-name ${isSub ? 'tool-name-subagent' : ''}`}>
-                      {isSub
-                        ? tool.persona
-                          ? `${tool.persona}`
-                          : tool.subagentType === 'parallel'
-                            ? 'parallel subagents'
-                            : 'subagent'
-                        : tool.tool}
-                      {isSub && tool.subagentType === 'parallel' && ' (parallel)'}
-                    </span>
-                    <span className="tool-status">{getStatusIcon(tool.status)}</span>
-                    <span className="tool-duration">{formatDuration(tool.startTime, tool.endTime)}</span>
-                    <span className="tool-expand">
-                      {expandedTools.has(tool.id) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                    </span>
-                  </div>
-
-                  {isSub && subagentPrompt && !expandedTools.has(tool.id) && (
-                    <div className="tool-message tool-subagent-prompt">{stripAnsiCodes(subagentPrompt)}</div>
-                  )}
-
-                  {tool.message && !(isSub && subagentPrompt) && (
-                    <div className="tool-message">{stripAnsiCodes(tool.message)}</div>
-                  )}
-
-                  {expandedTools.has(tool.id) && (tool.arguments || tool.result || tool.details) && (
-                    <div className="tool-details">
-                      {isSub && subagentPrompt && (
-                        <div className="tool-detail-section">
-                          <div className="tool-detail-label">
-                            <FileEdit size={12} className="inline-icon" /> Task
-                          </div>
-                          <pre className="subagent-prompt-detail">{stripAnsiCodes(subagentPrompt)}</pre>
-                        </div>
-                      )}
-                      {tool.arguments && !isSub && (
-                        <div className="tool-detail-section">
-                          <div className="tool-detail-label">
-                            <ClipboardList size={12} className="inline-icon" /> Call
-                          </div>
-                          <pre>{formatToolDetail(tool.arguments)}</pre>
-                        </div>
-                      )}
-                      {tool.result && (
-                        <div className="tool-detail-section">
-                          <div className="tool-detail-label">
-                            {isSub ? (
-                              <>
-                                <BarChart3 size={12} className="inline-icon" /> Summary
-                              </>
-                            ) : (
-                              <>
-                                <FileText size={12} className="inline-icon" /> Response
-                              </>
-                            )}
-                          </div>
-                          <pre>{formatToolDetail(tool.result)}</pre>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </>
+      {toolExecutions.length === 0 ? (
+        <div className="context-panel-empty">Tool calls will appear here.</div>
+      ) : (
+        Array.from(groupedByQuery.entries()).reverse().map(([queryId, tools]) => {
+          const isCurrentTurn = queryId === maxQueryId;
+          const isExpanded = isCurrentTurn || expandedQueries.has(queryId);
+          const groupLabel = isCurrentTurn
+            ? 'Current turn'
+            : queryId === 0
+              ? 'Earlier'
+              : `Turn ${queryId}`;
+          return (
+            <div key={queryId} className="tool-query-group">
+              <div className="tool-query-header" onClick={() => toggleQueryGroup(queryId)}>
+                <span className="tool-query-label">{groupLabel}</span>
+                <span className="tool-query-count">{tools.length} {tools.length === 1 ? 'tool' : 'tools'}</span>
+                {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
               </div>
-            );
-          })
-        )}
-      </>
+              {isExpanded && <div className="tool-query-tools">{tools.map(renderToolCard)}</div>}
+            </div>
+          );
+        })
+      )}
     </div>
   );
 
@@ -1146,6 +1235,17 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
           const hiddenActivityCount = Math.max(0, activities.length - visibleActivities.length);
           const resultPreview = getSubagentResultPreview(tool.result);
           const lastUpdatedAt = latestActivity?.timestamp || tool.endTime || tool.startTime;
+
+          // Build LiveLog lines from non-spawn activities
+          const outputLines: Array<{ id: string; text: string; timestamp: Date; taskId?: string }> = activities
+            .filter((a) => !a.isSpawn)
+            .map((a) => ({
+              id: a.id,
+              text: a.label,
+              timestamp:
+                a.timestamp instanceof Date ? a.timestamp : new Date(a.timestamp),
+              taskId: a.taskId,
+            }));
 
           return (
             <section key={tool.id} className={`subagent-card tool-${tool.status}`}>
@@ -1206,6 +1306,10 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
                 </div>
               )}
 
+              {isActive && outputLines.length > 0 && (
+                <LiveLog lines={outputLines} maxLines={50} className="subagent-sidebar-log" />
+              )}
+
               {visibleActivities.length > 0 && (
                 <div
                   ref={isActive ? liveActivityListRef : undefined}
@@ -1262,12 +1366,20 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
                     setChatTab('tools');
                     setActiveToolId(tool.id);
                     setExpandedTools((prev) => new Set(prev).add(tool.id));
+                    // Ensure the query group containing this tool is expanded
+                    const qid = tool.queryId ?? 0;
+                    setExpandedQueries((prev) => {
+                      if (prev.has(qid)) return prev;
+                      const next = new Set(prev);
+                      next.add(qid);
+                      return next;
+                    });
                     setTimeout(() => {
                       const el = toolRefs.current[tool.id];
                       if (el != null) {
                         el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                       }
-                    }, 100);
+                    }, 150);
                   }}
                 >
                   View raw tool details

@@ -83,8 +83,11 @@ func AddAndCommitFile(newFilename, message string) error {
 func AddAllAndCommit(message string, timeoutSeconds int) error {
 	cmd := exec.Command("git", "commit", "-m", message)
 	if timeoutSeconds > 0 {
+		if err := cmd.Start(); err != nil {
+			return fmt.Errorf("error starting git commit: %w", err)
+		}
 		done := make(chan error, 1)
-		go func() { done <- cmd.Run() }()
+		go func() { done <- cmd.Wait() }()
 		select {
 		case err := <-done:
 			if err != nil {

@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/credentials"
@@ -77,6 +78,10 @@ func DefaultMCPConfig() MCPConfig {
 
 // getConfigDir returns the user's config directory
 func getConfigDir() (string, error) {
+	configDir := strings.TrimSpace(os.Getenv("LEDIT_CONFIG"))
+	if configDir != "" {
+		return configDir, nil
+	}
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("failed to get user home directory: %w", err)

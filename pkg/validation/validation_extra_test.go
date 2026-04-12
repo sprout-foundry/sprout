@@ -11,22 +11,12 @@ import (
 	"github.com/alantheprice/ledit/pkg/events"
 )
 
-// gofmtAcceptsStdin checks whether the local gofmt accepts stdin input.
-// Go 1.25+ always errors on stdin, making the success path unreachable.
-func gofmtAcceptsStdin(t testing.TB) bool {
-	t.Helper()
-	v := NewValidator(nil)
-	err := v.ValidateSyntax(context.Background(), "probe.go", validGoCodeWithImport())
-	return err == nil
-}
-
 // --- 1. RunValidation success path (event publishing) ---
 
 func TestRunValidation_SuccessPath_PublishesEvent(t *testing.T) {
 	// Tests the full success path of RunValidation: valid syntax →
 	// optional import check → diagnostics assembly → event publishing.
-	// On Go 1.25+, gofmt errors on stdin, making this unreachable.
-	// We handle both cases: verify event on older Go, verify early return on newer.
+	// With temp-file validation, this path works across all Go versions.
 
 	bus := events.NewEventBus()
 	defer bus.Unsubscribe("succ-evt-test")
@@ -37,25 +27,6 @@ func TestRunValidation_SuccessPath_PublishesEvent(t *testing.T) {
 
 	result := v.RunValidation(context.Background(), "success_test.go", validGoCodeWithImport())
 
-	if !gofmtAcceptsStdin(t) {
-		// Go 1.25+ — syntax check fails, early return, no event
-		if result.Valid {
-			t.Fatal("expected Valid=false when gofmt errors on stdin")
-		}
-		if len(result.Errors) == 0 {
-			t.Fatal("expected at least one syntax error")
-		}
-
-		select {
-		case evt := <-ch:
-			t.Fatalf("expected no event on early return, got: %+v", evt)
-		case <-time.After(300 * time.Millisecond):
-			// Expected: no event published on error path
-		}
-		return
-	}
-
-	// Older Go — success path was exercised
 	if !result.Valid {
 		t.Fatal("expected Valid=true for well-formed code")
 	}
@@ -78,11 +49,10 @@ func TestRunValidation_SuccessPath_PublishesEvent(t *testing.T) {
 			t.Errorf("metadata 'test' = %v, want success-path", data["test"])
 		}
 		// Diagnostics should be present (may be empty slice for clean code)
-		diags, ok := data["diagnostics"]
+		_, ok = data["diagnostics"]
 		if !ok {
 			t.Fatal("missing 'diagnostics' key in event data")
 		}
-		_ = diags // could be empty []map[string]interface{}
 	case <-time.After(2 * time.Second):
 		t.Fatal("expected event on success path, got none")
 	}
@@ -90,9 +60,6 @@ func TestRunValidation_SuccessPath_PublishesEvent(t *testing.T) {
 
 func TestRunValidation_SuccessPath_DiagnosticsPopulated(t *testing.T) {
 	// When syntax check succeeds, Diagnostics should contain Errors + Warnings.
-	if !gofmtAcceptsStdin(t) {
-		t.Skip("gofmt errors on stdin (Go 1.25+), success path unreachable")
-	}
 
 	bus := events.NewEventBus()
 	defer bus.Unsubscribe("succ-diag-test")
@@ -110,8 +77,7 @@ func main() { fmt.Println("hi") }
 		t.Fatalf("expected Valid=true, got errors: %v", result.Errors)
 	}
 
-	// Diagnostics should be populated (even if empty slice for perfectly clean code)
-	// The field itself must be set on the success path
+	// Diagnostics should be populated (non-nil) on the success path
 	if result.Diagnostics == nil {
 		t.Fatal("Diagnostics should be non-nil on success path")
 	}
@@ -181,7 +147,6 @@ func main() { println("builtin only") }
 
 func TestValidateImports_ErrorPath_ReturnsNil(t *testing.T) {
 	// When goimports errors (e.g., syntax-invalid code), it should return nil.
-	// This exercises the `if err != nil { return nil }` path.
 	v := NewValidator(nil)
 
 	tests := []struct {
@@ -214,7 +179,6 @@ func TestValidateImports_ErrorPath_ReturnsNil(t *testing.T) {
 }
 
 func TestValidateImports_CancelledContext_ReturnsNil(t *testing.T) {
-	// Exercises the "goimports fails" return path via context cancellation.
 	v := NewValidator(nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -233,7 +197,7 @@ func TestRunValidation_EmptyContent_NoPanic(t *testing.T) {
 	// Must not panic on empty content
 	result := v.RunValidation(context.Background(), "empty.go", "")
 
-	// Either gofmt errors (modern Go) or succeeds — neither should panic
+	// Either gofmt errors or succeeds — neither should panic
 	_ = result // Just verify completion
 }
 
@@ -248,13 +212,12 @@ func TestRunValidation_EmptyContent_WithEventBus(t *testing.T) {
 	// Should not panic regardless of gofmt behavior
 	_ = result
 
-	// On modern Go, syntax check fails → early return → no event
-	// Verify we don't deadlock waiting for events
+	// Empty content is not valid Go syntax, so no event should be published.
 	select {
 	case evt := <-ch:
-		t.Logf("unexpected event on empty content (may happen on older Go): %+v", evt)
+		t.Logf("unexpected event on empty content: %+v", evt)
 	case <-time.After(300 * time.Millisecond):
-		// Expected on Go 1.25+: no event published
+		// Expected: no event published
 	}
 }
 
@@ -312,7 +275,6 @@ func TestRunValidation_ConcurrentWithRunAsyncValidation(t *testing.T) {
 	const goroutines = 10
 	var panicCount atomic.Int32
 
-	// Run both RunValidation (sync) and RunAsyncValidation from multiple goroutines
 	for i := 0; i < goroutines; i++ {
 		wg.Add(2)
 
@@ -343,7 +305,6 @@ func TestRunValidation_ConcurrentWithRunAsyncValidation(t *testing.T) {
 		}(i)
 	}
 
-	// Wait for all sync calls; async calls are fire-and-forget
 	done := make(chan struct{})
 	go func() {
 		wg.Wait()
@@ -352,12 +313,10 @@ func TestRunValidation_ConcurrentWithRunAsyncValidation(t *testing.T) {
 
 	select {
 	case <-done:
-		// All sync calls completed
 	case <-time.After(10 * time.Second):
 		t.Fatal("concurrent test timed out — possible deadlock")
 	}
 
-	// Give async goroutines time to complete
 	time.Sleep(500 * time.Millisecond)
 
 	if panicCount.Load() > 0 {
@@ -366,7 +325,6 @@ func TestRunValidation_ConcurrentWithRunAsyncValidation(t *testing.T) {
 }
 
 func TestRunValidation_ConcurrentReadMetadata(t *testing.T) {
-	// Stress-test SetEventMetadata + RunValidation concurrently.
 	bus := events.NewEventBus()
 	defer bus.Unsubscribe("conc-meta-test")
 	_ = bus.Subscribe("conc-meta-test")
@@ -377,7 +335,6 @@ func TestRunValidation_ConcurrentReadMetadata(t *testing.T) {
 	const iterations = 50
 	var panicCount atomic.Int32
 
-	// Writer goroutines: update metadata
 	for i := 0; i < 5; i++ {
 		wg.Add(1)
 		go func(idx int) {
@@ -396,7 +353,6 @@ func TestRunValidation_ConcurrentReadMetadata(t *testing.T) {
 		}(i)
 	}
 
-	// Reader goroutines: run validation (reads metadata)
 	for i := 0; i < 5; i++ {
 		wg.Add(1)
 		go func(idx int) {
@@ -430,7 +386,6 @@ func TestRunValidation_ConcurrentReadMetadata(t *testing.T) {
 }
 
 func TestRunAsyncValidation_MultipleConcurrentCalls(t *testing.T) {
-	// Fire off many async validations simultaneously — should not deadlock or panic.
 	bus := events.NewEventBus()
 	defer bus.Unsubscribe("multi-async-test")
 	_ = bus.Subscribe("multi-async-test")
@@ -455,7 +410,6 @@ func TestRunAsyncValidation_MultipleConcurrentCalls(t *testing.T) {
 		}(i)
 	}
 
-	// RunAsyncValidation returns immediately; wait a bit for spawned goroutines
 	done := make(chan struct{})
 	go func() {
 		wg.Wait()
@@ -468,7 +422,6 @@ func TestRunAsyncValidation_MultipleConcurrentCalls(t *testing.T) {
 		t.Fatal("timed out waiting for async calls to return")
 	}
 
-	// Let async goroutines finish their work
 	time.Sleep(1 * time.Second)
 
 	if n := panicCount.Load(); n > 0 {

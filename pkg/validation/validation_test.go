@@ -47,16 +47,13 @@ func TestValidateSyntax_CancelledContext(t *testing.T) {
 	}
 }
 
-func TestValidateSyntax_ReturnsNonNilOnStdinStatError(t *testing.T) {
-	// gofmt -l - may stat "-" as a file and fail depending on Go version.
-	// ValidateSyntax should handle this by returning an error (not panicking).
+func TestValidateSyntax_ValidCode(t *testing.T) {
+	// ValidateSyntax checks syntax via gofmt on a temp file, which works
+	// consistently across Go versions (no stdin issues).
 	v := NewValidator(nil)
-	err := v.ValidateSyntax(context.Background(), "test.go", "package main\n")
-	// In Go 1.25+, gofmt always errors on stdin. Accept both outcomes.
-	if err == nil {
-		t.Logf("gofmt accepted stdin (Go < 1.25)")
-	} else {
-		t.Logf("gofmt returned error (Go 1.25+ behavior): %v", err)
+	err := v.ValidateSyntax(context.Background(), "test.go", validGoCodeWithImport())
+	if err != nil {
+		t.Fatalf("expected no error for valid code, got: %v", err)
 	}
 }
 
@@ -147,7 +144,6 @@ func TestRunValidation_CancelledContext(t *testing.T) {
 func TestRunValidation_DiagnosticsIncludesErrorsAndWarnings(t *testing.T) {
 	// When syntax check fails, RunValidation returns early with Errors set
 	// but Diagnostics is empty (populated only on success path).
-	// This test documents the current behavior.
 	bus := events.NewEventBus()
 	defer bus.Unsubscribe("diag-test")
 
@@ -195,9 +191,8 @@ func TestRunValidation_NoImportKeywordSkipsImportCheck(t *testing.T) {
 	// Code without "import" keyword should skip ValidateImports
 	code := "package main\nfunc main(){ println(1) }\n"
 	result := v.RunValidation(context.Background(), "test.go", code)
-	// With the current gofmt behavior, syntax check may fail on stdin
-	// The important assertion is: if Valid is false, it should be a syntax error not import issue
-	if !result.Valid {
+	// With temp-file validation, syntax check should succeed (valid code).
+	if result.Valid {
 		if len(result.Warnings) > 0 {
 			t.Fatalf("expected no import warnings when 'import' not in code, got %d", len(result.Warnings))
 		}
@@ -462,27 +457,15 @@ func TestRunAsyncValidation_CompletesEventually(t *testing.T) {
 
 	v := NewValidator(bus)
 
-	// Use a channel to wait for the goroutine to complete.
-	// We can't easily observe completion through the event bus since
-	// RunValidation may return early on syntax errors without publishing.
-	// Instead, use a flag that the goroutine sets after running.
 	completed := make(chan struct{})
-	done := make(chan struct{})
 
 	go func() {
-		// Wait for RunAsyncValidation's goroutine to finish
-		// The goroutine calls RunValidation and discards the result.
-		// We'll just wait a bit and then signal.
-		// Since RunAsyncValidation is fire-and-forget, we use a timeout.
-	}()
-
-	v.RunAsyncValidation(context.Background(), "test.go", invalidGoCode())
-
-	// Wait briefly — the async goroutine should at least start
-	go func() {
+		// Wait a bit — the async goroutine should complete within this time
 		time.Sleep(2 * time.Second)
 		close(completed)
 	}()
+
+	v.RunAsyncValidation(context.Background(), "test.go", invalidGoCode())
 
 	select {
 	case <-completed:
@@ -490,15 +473,9 @@ func TestRunAsyncValidation_CompletesEventually(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("async validation may have blocked")
 	}
-
-	// Cleanup
-	close(done)
 }
 
 func TestRunAsyncValidation_WithAtomicFlag(t *testing.T) {
-	// NOTE: This is a weak test. Same limitation as TestRunAsyncValidation_CompletesEventually:
-	// no direct way to observe the async goroutine's result. We only verify
-	// no deadlock/panic occurs within a timeout.
 	v := NewValidator(nil)
 	bus := events.NewEventBus()
 	subCh := bus.Subscribe("atomic-test")
@@ -508,18 +485,15 @@ func TestRunAsyncValidation_WithAtomicFlag(t *testing.T) {
 
 	_ = subCh // just subscribing is enough to ensure bus is active
 
-	// Override the pattern — use a channel to wait for the goroutine
 	done := make(chan struct{})
 	go func() {
 		time.Sleep(2 * time.Second)
-		// Sanity check: if we get here, RunAsyncValidation didn't deadlock
 		completed.Store(true)
 		close(done)
 	}()
 
 	v.RunAsyncValidation(context.Background(), "test.go", invalidGoCode())
 
-	// RunAsyncValidation should return immediately
 	select {
 	case <-done:
 		// Good — 2 seconds passed without deadlock
@@ -557,8 +531,9 @@ func TestValidateSyntax_EmptyContent(t *testing.T) {
 	v := NewValidator(nil)
 	// Empty content should trigger gofmt error
 	err := v.ValidateSyntax(context.Background(), "test.go", "")
-	// With gofmt -l -, empty content may error or succeed depending on version
-	_ = err // Just verify no panic
+	if err == nil {
+		t.Log("gofmt accepted empty content (some versions)")
+	}
 }
 
 func TestValidateImports_EmptyContent(t *testing.T) {
@@ -575,7 +550,6 @@ func TestRunValidation_EventBusPublishesCorrectEventType(t *testing.T) {
 
 	v := NewValidator(bus)
 	// On syntax error path, RunValidation returns early without publishing.
-	// This test verifies that behavior.
 	v.RunValidation(context.Background(), "test.go", invalidGoCode())
 
 	select {
@@ -604,7 +578,6 @@ func TestRunValidation_EventContainsFilePath(t *testing.T) {
 
 func TestDecorateEventPayload_WithNilMetadataAndNilPayload(t *testing.T) {
 	v := NewValidator(nil)
-	// No metadata set, nil payload
 	result := v.decorateEventPayload(nil)
 	if result == nil {
 		t.Fatal("expected non-nil result")
@@ -658,15 +631,8 @@ func TestToDiagnosticsMap_FieldsAreCorrectTypes(t *testing.T) {
 // --- Additional coverage tests ---
 
 func TestValidateSyntax_StdoutHasContent(t *testing.T) {
-	// gofmt -l - reads stdin and writes to stdout if there's a formatting issue.
-	// When the code is syntactically invalid, gofmt may write the filename to stdout
-	// (the -l flag lists files that would be reformatted, and stdin is represented as
-	// "<standard input>"). If gofmt exits with an error and stderr is empty, the code
-	// falls back to stdout.
-	// With Go 1.25+, gofmt errors on stdin regardless, so stderr should have content.
-	// This test verifies the behavior doesn't cause a panic or nil message.
+	// gofmt -e -l on a temp file writes error info to stderr for invalid code.
 	v := NewValidator(nil)
-	// Syntactically invalid code that gofmt will reject
 	err := v.ValidateSyntax(context.Background(), "test.go", "package x\nfunc(")
 	if err == nil {
 		t.Fatal("expected error for invalid code")
@@ -680,10 +646,7 @@ func TestValidateSyntax_StdoutHasContent(t *testing.T) {
 
 func TestRunValidation_WithImportKeyword(t *testing.T) {
 	// Code with "import" keyword should trigger the import check path
-	// after syntax validation passes (or fails).
-	// With Go 1.25+, gofmt errors on stdin, so syntax check fails and
-	// RunValidation returns early without reaching the import check.
-	// This test verifies that scenario works correctly.
+	// after syntax validation passes (uses temp files, works across Go versions).
 	v := NewValidator(nil)
 	code := `package main
 
@@ -692,24 +655,14 @@ import "fmt"
 func main() { fmt.Println(1) }
 `
 	result := v.RunValidation(context.Background(), "test.go", code)
-	// Modern gofmt errors on stdin, so Valid will be false
-	if result.Valid {
-		t.Log("RunValidation passed (gofmt accepted stdin — older Go version)")
-	} else {
-		// Expected: syntax error, no import warnings (early return)
-		if len(result.Warnings) > 0 {
-			t.Fatalf("expected no import warnings on syntax error path, got %d", len(result.Warnings))
-		}
-		if len(result.Errors) == 0 {
-			t.Fatal("expected at least one error for syntax validation failure")
-		}
+	// With temp-file validation, syntax check should succeed.
+	if !result.Valid {
+		t.Fatalf("expected Valid=true for valid code, got errors: %v", result.Errors)
 	}
 }
 
 func TestRunValidation_ValidSyntax_PublishesEvent(t *testing.T) {
-	// This test documents the current behavior: with Go 1.25+, gofmt errors on stdin,
-	// making the success path (event publishing) unreachable through normal means.
-	// We test the error path and verify event is NOT published (early return).
+	// With temp-file validation, the success path is always reachable.
 	bus := events.NewEventBus()
 	defer bus.Unsubscribe("valid-succ-test")
 	ch := bus.Subscribe("valid-succ-test")
@@ -717,30 +670,24 @@ func TestRunValidation_ValidSyntax_PublishesEvent(t *testing.T) {
 	v := NewValidator(bus)
 	v.SetEventMetadata(map[string]interface{}{"test": "coverage"})
 
-	// Use code that has 'import' followed by invalid syntax
 	code := `package main
+
 import "fmt"
-func(`
+
+func main() { fmt.Println(1) }
+`
 	result := v.RunValidation(context.Background(), "test.go", code)
 
-	if result.Valid {
-		t.Log("gofmt accepted stdin (older Go version)")
-		// If we reach here, the success path was exercised — verify event was published
-		select {
-		case evt := <-ch:
-			t.Logf("Event published: %+v", evt)
-		case <-time.After(200 * time.Millisecond):
-			t.Fatal("expected event to be published on success path")
-		}
-		return
+	if !result.Valid {
+		t.Fatalf("expected Valid=true, got errors: %v", result.Errors)
 	}
 
-	// Expected for Go 1.25+: early return, no event published
+	// Event should be published on success path
 	select {
-	case <-ch:
-		t.Fatal("expected no event on syntax error (early return)")
+	case evt := <-ch:
+		t.Logf("Event published: %+v", evt)
 	case <-time.After(200 * time.Millisecond):
-		// Expected
+		t.Fatal("expected event to be published on success path")
 	}
 }
 
@@ -761,13 +708,9 @@ func TestValidateImports_GoimportsNotAvailable(t *testing.T) {
 }
 
 func TestValidateImports_GoimportsBinaryNotFound(t *testing.T) {
-	// Test with a binary name that definitely doesn't exist.
-	// Since ValidateImports hardcodes "goimports", we can't directly test
-	// file-not-found. But we can test the error-return-nil path via
-	// invalid content that makes goimports error.
+	// Test with invalid content that makes goimports error (exit non-zero), which returns nil
 	v := NewValidator(nil)
 
-	// Invalid code will cause goimports to error (exit non-zero), which returns nil
 	diags := v.ValidateImports(context.Background(), "test.go", "package x\nfunc(")
 	if diags != nil {
 		t.Fatalf("expected nil diagnostics when goimports errors, got %d: %v", len(diags), diags)
@@ -775,11 +718,8 @@ func TestValidateImports_GoimportsBinaryNotFound(t *testing.T) {
 }
 
 func TestValidateImports_NonEmptyGoimportsOutput(t *testing.T) {
-	// goimports -l - outputs file paths (one per line) that have import issues.
-	// When reading from stdin, it outputs "<standard input>" if imports need fixing.
-	// We test that the function correctly parses non-empty stdout output.
-	// This requires goimports to actually find an issue, which is hard to force
-	// in a test. Instead, we verify the function works with valid code (returns nil).
+	// goimports -l on a temp file outputs file paths with import issues.
+	// Well-formatted code should produce no diagnostics.
 	v := NewValidator(nil)
 	code := `package main
 
@@ -806,20 +746,17 @@ func TestRunValidation_CodeWithoutImportKeyword_SkipsImportCheck(t *testing.T) {
 
 	result := v.RunValidation(context.Background(), "test.go", code)
 
-	if result.Valid {
-		// If gofmt accepted it, verify no warnings since no "import" keyword
-		if len(result.Warnings) > 0 {
-			t.Fatalf("expected no warnings without import keyword, got %d", len(result.Warnings))
-		}
+	// With temp-file validation, this should succeed (valid code, no imports)
+	if !result.Valid {
+		t.Fatalf("expected Valid=true for valid code, got errors: %v", result.Errors)
 	}
-	// If not valid, that's fine (gofmt stdin behavior)
+	// No warnings since no "import" keyword
+	if len(result.Warnings) > 0 {
+		t.Fatalf("expected no warnings without import keyword, got %d", len(result.Warnings))
+	}
 }
 
 func TestRunValidation_EventBusPublishesWithMetadata(t *testing.T) {
-	// Test that when validation succeeds (if gofmt allows), the event
-	// includes both the direct payload keys and the metadata.
-	// With Go 1.25+ this path is unreachable, so we test the metadata
-	// decoration independently through the public API.
 	bus := events.NewEventBus()
 	defer bus.Unsubscribe("meta-pub-test")
 	ch := bus.Subscribe("meta-pub-test")
@@ -830,14 +767,23 @@ func TestRunValidation_EventBusPublishesWithMetadata(t *testing.T) {
 		"display": true,
 	})
 
-	// With Go 1.25+ syntax check fails, no event is published
-	v.RunValidation(context.Background(), "test.go", invalidGoCode())
+	// Valid code → success path → event published with metadata
+	result := v.RunValidation(context.Background(), "test.go", validGoCodeWithImport())
+
+	if !result.Valid {
+		t.Fatalf("expected Valid=true, got: %v", result.Errors)
+	}
 
 	select {
-	case <-ch:
-		// If we got here (older Go), verify metadata is present in event
-		t.Log("event published")
+	case evt := <-ch:
+		data, ok := evt.Data.(map[string]interface{})
+		if !ok {
+			t.Fatalf("event Data type = %T, want map[string]interface{}", evt.Data)
+		}
+		if data["editor"] != "test-editor" {
+			t.Errorf("metadata 'editor' = %v, want test-editor", data["editor"])
+		}
 	case <-time.After(200 * time.Millisecond):
-		t.Log("no event published (expected with Go 1.25+)")
+		t.Fatal("expected event to be published on success path")
 	}
 }

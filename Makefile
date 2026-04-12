@@ -41,8 +41,11 @@ test-unit:
 	@echo "Running unit tests..."
 	@bash -lc 'set -o pipefail; \
 	go test -tags ollama_test ./pkg/... ./cmd/... -v -timeout=60s -short 2>&1 | tee /tmp/ledit-test-unit.log; \
-	status=$$?; \
+	status=$${PIPESTATUS[0]}; \
 	if [ $$status -ne 0 ]; then \
+		echo ""; \
+		echo "Unit tests failed. Last 200 lines:"; \
+		tail -n 200 /tmp/ledit-test-unit.log || true; \
 		echo ""; \
 		echo "Failing packages:"; \
 		grep "^FAIL[[:space:]]" /tmp/ledit-test-unit.log || true; \

@@ -887,7 +887,7 @@ body,
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-elevated);
   padding: 20px;
   display: flex;
   flex-direction: column;
@@ -989,6 +989,29 @@ body,
 .onboarding-provider-card.selected {
   border-color: var(--accent-primary);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-primary) 55%, transparent);
+}
+
+.onboarding-provider-card.configured {
+  border-color: color-mix(in srgb, var(--accent-success) 65%, var(--border-default));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-success) 25%, transparent);
+}
+
+.onboarding-provider-card.configured:hover {
+  border-color: color-mix(in srgb, var(--accent-success) 85%, var(--border-default));
+}
+
+.onboarding-configured-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 22px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-success) 18%, transparent);
+  color: var(--accent-success);
+  font-size: 11px;
+  font-weight: 600;
+  margin-top: 6px;
 }
 
 .onboarding-provider-card-topline {

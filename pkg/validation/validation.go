@@ -5,7 +5,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -83,17 +85,43 @@ func (v *Validator) decorateEventPayload(payload map[string]interface{}) map[str
 	return cloned
 }
 
-// ValidateSyntax checks if Go code has valid syntax using gofmt
+// writeContentToTempFile writes content to a temporary .go file and returns the
+// file path. The caller is responsible for removing the file when done.
+func writeContentToTempFile(path string, content string) (string, func(), error) {
+	tmpDir, err := os.MkdirTemp("", "ledit-validate-*")
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to create temp dir: %w", err)
+	}
+	cleanup := func() { os.RemoveAll(tmpDir) }
+
+	tmpFile := filepath.Join(tmpDir, filepath.Base(path))
+	if tmpFile == "" || !strings.HasSuffix(tmpFile, ".go") {
+		tmpFile = filepath.Join(tmpDir, "validate.go")
+	}
+	if err := os.WriteFile(tmpFile, []byte(content), 0o600); err != nil {
+		cleanup()
+		return "", nil, fmt.Errorf("failed to write temp file: %w", err)
+	}
+	return tmpFile, cleanup, nil
+}
+
+// ValidateSyntax checks if Go code has valid syntax using gofmt on a temp file.
+// Using a temp file instead of stdin avoids Go 1.25+ behavior where gofmt errors
+// when reading from stdin.
 func (v *Validator) ValidateSyntax(ctx context.Context, path, content string) error {
-	cmd := exec.CommandContext(ctx, "gofmt", "-e", "-l")
-	cmd.Dir = "."
+	tmpFile, cleanup, err := writeContentToTempFile(path, content)
+	if err != nil {
+		return fmt.Errorf("syntax validation setup: %w", err)
+	}
+	defer cleanup()
+
+	cmd := exec.CommandContext(ctx, "gofmt", "-e", "-l", tmpFile)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	cmd.Stdin = strings.NewReader(content)
 
-	err := cmd.Run()
+	err = cmd.Run()
 	if err == nil {
 		return nil // No syntax errors
 	}
@@ -127,6 +155,9 @@ func (v *Validator) RunValidation(ctx context.Context, path, content string) Val
 
 	result.Valid = true
 
+	// Initialize Diagnostics as non-nil so it's always populated on the success path.
+	result.Diagnostics = []Diagnostic{}
+
 	// Check imports if present
 	if strings.Contains(content, "import") {
 		importResult := v.ValidateImports(ctx, path, content)
@@ -150,17 +181,23 @@ func (v *Validator) RunValidation(ctx context.Context, path, content string) Val
 	return result
 }
 
-// ValidateImports checks for import issues using goimports
+// ValidateImports checks for import issues using goimports on a temp file.
+// Using a temp file instead of stdin avoids Go 1.25+ behavior where gofmt/goimports
+// may error when reading from stdin.
 func (v *Validator) ValidateImports(ctx context.Context, path, content string) []Diagnostic {
-	cmd := exec.CommandContext(ctx, "goimports", "-l")
-	cmd.Dir = "."
+	tmpFile, cleanup, err := writeContentToTempFile(path, content)
+	if err != nil {
+		return nil // Can't validate imports without a temp file
+	}
+	defer cleanup()
+
+	cmd := exec.CommandContext(ctx, "goimports", "-l", tmpFile)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	cmd.Stdin = strings.NewReader(content)
 
-	err := cmd.Run()
+	err = cmd.Run()
 	if err != nil {
 		return nil // Skip import validation if goimports fails
 	}

@@ -37,6 +37,8 @@ func testResponse(content string, totalTokens int) *api.ChatResponse {
 // =============================================================================
 
 func TestCheckStagedFilesForSecurityCredentials_NoStagedFiles(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -52,6 +54,8 @@ func TestCheckStagedFilesForSecurityCredentials_NoStagedFiles(t *testing.T) {
 }
 
 func TestCheckStagedFilesForSecurityCredentials_CleanStagedFile(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -69,6 +73,8 @@ func TestCheckStagedFilesForSecurityCredentials_CleanStagedFile(t *testing.T) {
 }
 
 func TestCheckStagedFilesForSecurityCredentials_WithSecretPatterns(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -89,6 +95,8 @@ const awsSecretKey = "AKIAIOSFODNN7EXAMPLE"
 }
 
 func TestCheckStagedFilesForSecurityCredentials_MixedFiles(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -371,6 +379,8 @@ func TestGenerateCommitMessageFromStagedDiff_EmptyContentReturn(t *testing.T) {
 // =============================================================================
 
 func TestAddAllAndCommit_NoStagedChanges(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -384,6 +394,8 @@ func TestAddAllAndCommit_NoStagedChanges(t *testing.T) {
 }
 
 func TestAddAllAndCommit_WithTimeout(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -403,6 +415,8 @@ func TestAddAllAndCommit_WithTimeout(t *testing.T) {
 }
 
 func TestAddAllAndCommit_ZeroTimeout(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -419,6 +433,8 @@ func TestAddAllAndCommit_ZeroTimeout(t *testing.T) {
 }
 
 func TestAddAllAndCommit_NegativeTimeout(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -435,6 +451,8 @@ func TestAddAllAndCommit_NegativeTimeout(t *testing.T) {
 }
 
 func TestAddAllAndCommit_TimeoutTriggers(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -458,6 +476,8 @@ func TestAddAllAndCommit_TimeoutTriggers(t *testing.T) {
 // =============================================================================
 
 func TestGetFileGitPath_AbsolutePath(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -475,6 +495,8 @@ func TestGetFileGitPath_AbsolutePath(t *testing.T) {
 }
 
 func TestGetFileGitPath_NestedAbsolutePath(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -493,6 +515,8 @@ func TestGetFileGitPath_NestedAbsolutePath(t *testing.T) {
 }
 
 func TestGetFileGitPath_RelativePath(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -506,6 +530,8 @@ func TestGetFileGitPath_RelativePath(t *testing.T) {
 }
 
 func TestGetFileGitPath_NotAGitRepo(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	// Create a temp dir that is NOT a git repo
 	tmpDir, err := os.MkdirTemp("", "non-git-*")
 	require.NoError(t, err)
@@ -604,6 +630,8 @@ func TestExecuteCommit_MultipleFiles(t *testing.T) {
 }
 
 func TestExecuteCommit_NoDir_OperatesOnCWD(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -840,6 +868,8 @@ func TestNewCommitExecutorInDir(t *testing.T) {
 // =============================================================================
 
 func TestGetGitStatus_OutsideGitRepo(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	tmpDir, err := os.MkdirTemp("", "no-git-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
@@ -863,6 +893,8 @@ func TestGetGitStatus_OutsideGitRepo(t *testing.T) {
 // =============================================================================
 
 func TestPerformGitCommit_NoStagedChanges(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -914,6 +946,8 @@ func TestParseCommitMessage_ThreeLines(t *testing.T) {
 // =============================================================================
 
 func TestCheckStagedChanges_MultipleStagedFiles(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -934,6 +968,8 @@ func TestCheckStagedChanges_MultipleStagedFiles(t *testing.T) {
 // =============================================================================
 
 func TestGetStagedDiff_MultipleFiles(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -956,6 +992,8 @@ func TestGetStagedDiff_MultipleFiles(t *testing.T) {
 // =============================================================================
 
 func TestGetUncommittedChanges_OutsideGitRepo(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	tmpDir, err := os.MkdirTemp("", "uncommitted-no-git-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
@@ -974,6 +1012,8 @@ func TestGetUncommittedChanges_OutsideGitRepo(t *testing.T) {
 // =============================================================================
 
 func TestGetStagedChanges_OutsideGitRepo(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	tmpDir, err := os.MkdirTemp("", "staged-no-git-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
@@ -1044,6 +1084,8 @@ func TestCleanCommitMessage_JSONSingleKeyEmptyTitle(t *testing.T) {
 // =============================================================================
 
 func TestAddAndCommitFile_NonExistentFile(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -1060,6 +1102,8 @@ func TestAddAndCommitFile_NonExistentFile(t *testing.T) {
 // =============================================================================
 
 func TestGetRecentTouchedFiles_OutsideGitRepo(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	tmpDir, err := os.MkdirTemp("", "recent-no-git-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
@@ -1078,6 +1122,8 @@ func TestGetRecentTouchedFiles_OutsideGitRepo(t *testing.T) {
 // =============================================================================
 
 func TestGetRecentFileLog_OutsideGitRepo(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	tmpDir, err := os.MkdirTemp("", "log-no-git-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
@@ -1096,6 +1142,8 @@ func TestGetRecentFileLog_OutsideGitRepo(t *testing.T) {
 // =============================================================================
 
 func TestGetGitRemoteURL_OutsideGitRepo(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	tmpDir, err := os.MkdirTemp("", "remote-no-git-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
@@ -1114,6 +1162,8 @@ func TestGetGitRemoteURL_OutsideGitRepo(t *testing.T) {
 // =============================================================================
 
 func TestGetGitRootDir_OutsideGitRepo(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	tmpDir, err := os.MkdirTemp("", "root-no-git-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)

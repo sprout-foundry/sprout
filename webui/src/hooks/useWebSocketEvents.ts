@@ -14,6 +14,8 @@ import {
   normalizeTodoList,
 } from '../utils/agentMessages';
 
+const MAX_TOOL_EXECUTIONS = 200;
+
 export interface UseWebSocketEventsOptions {
   state: AppState;
   setState: Dispatch<SetStateAction<AppState>>;
@@ -154,7 +156,6 @@ export default function useWebSocketEvents({
               timestamp: new Date(),
             },
           ],
-          toolExecutions: [], // Clear previous tool executions
           fileEdits: [], // Clear previous file edits for current-run status metrics
           subagentActivities: [],
           queryProgress: null, // Clear previous progress
@@ -304,6 +305,7 @@ export default function useWebSocketEvents({
           const isSubagent = !!eventData?.is_subagent;
           const subagentType: ToolExecution['subagentType'] =
             eventData?.subagent_type === 'parallel' ? 'parallel' : isSubagent ? 'single' : undefined;
+          const toolIndex = typeof eventData?.tool_index === 'number' ? (eventData.tool_index as number) : undefined;
 
           // Check if we already have this tool from a legacy tool_execution event
           const existingIdx = prev.toolExecutions.findIndex((t) => {
@@ -325,6 +327,8 @@ export default function useWebSocketEvents({
               details: eventData,
               persona: updated[existingIdx].persona || persona,
               subagentType: updated[existingIdx].subagentType || subagentType,
+              queryId: updated[existingIdx].queryId ?? prev.queryCount,
+              toolIndex: updated[existingIdx].toolIndex ?? toolIndex,
             };
             const messages = [...prev.messages];
             for (let i = messages.length - 1; i >= 0; i -= 1) {
@@ -337,12 +341,18 @@ export default function useWebSocketEvents({
                   toolName,
                   label: displayName,
                   parallel: subagentType === 'parallel' || undefined,
+                  toolIndex,
                 });
                 messages[i] = { ...msg, toolRefs };
               }
               break;
             }
-            return { ...prev, messages, toolExecutions: updated, logs: [...prev.logs, logEntry] };
+            // Cap total tool executions to prevent unbounded growth
+            let finalTools = updated;
+            if (finalTools.length > MAX_TOOL_EXECUTIONS) {
+              finalTools = finalTools.slice(finalTools.length - MAX_TOOL_EXECUTIONS);
+            }
+            return { ...prev, messages, toolExecutions: finalTools, logs: [...prev.logs, logEntry] };
           }
 
           // Add new tool execution from rich start event
@@ -356,6 +366,8 @@ export default function useWebSocketEvents({
             arguments: rawArgs,
             persona,
             subagentType,
+            queryId: prev.queryCount,
+            toolIndex,
           };
           const messages = [...prev.messages];
           for (let i = messages.length - 1; i >= 0; i -= 1) {
@@ -368,16 +380,23 @@ export default function useWebSocketEvents({
                 toolName,
                 label: displayName,
                 parallel: subagentType === 'parallel' || undefined,
+                toolIndex,
               });
               messages[i] = { ...msg, toolRefs };
             }
             break;
           }
 
+          // Cap total tool executions to prevent unbounded growth
+          let newToolsList = [...prev.toolExecutions, newTool];
+          if (newToolsList.length > MAX_TOOL_EXECUTIONS) {
+            newToolsList = newToolsList.slice(newToolsList.length - MAX_TOOL_EXECUTIONS);
+          }
+
           return {
             ...prev,
             messages,
-            toolExecutions: [...prev.toolExecutions, newTool],
+            toolExecutions: newToolsList,
             logs: [...prev.logs, logEntry],
           };
         });
@@ -426,10 +445,16 @@ export default function useWebSocketEvents({
               details: eventData,
               arguments: eventData?.arguments != null ? String(eventData.arguments) : undefined,
               result: result || error,
+              queryId: prev.queryCount,
             };
+            // Cap total tool executions to prevent unbounded growth
+            let newToolsList = [...prev.toolExecutions, fallbackExecution];
+            if (newToolsList.length > MAX_TOOL_EXECUTIONS) {
+              newToolsList = newToolsList.slice(newToolsList.length - MAX_TOOL_EXECUTIONS);
+            }
             return {
               ...prev,
-              toolExecutions: [...prev.toolExecutions, fallbackExecution],
+              toolExecutions: newToolsList,
               logs: [...prev.logs, logEntry],
             };
           }

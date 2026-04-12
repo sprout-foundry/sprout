@@ -41,7 +41,7 @@ func (te *ToolExecutor) ExecuteTools(toolCalls []api.ToolCall) []api.Message {
 	// Log tool calls at the beginning of the process
 	if te.agent != nil {
 		te.agent.debugLog("[tool] Executing %d tool calls\n", len(toolCalls))
-		for _, tc := range toolCalls {
+		for i, tc := range toolCalls {
 			te.agent.LogToolCall(tc, "executing")
 
 			// Extract persona and subagent info from subagent arguments
@@ -60,7 +60,7 @@ func (te *ToolExecutor) ExecuteTools(toolCalls []api.ToolCall) []api.Message {
 			displayName := formatToolCall(tc)
 			te.agent.PublishToolStart(
 				tc.Function.Name, tc.ID, tc.Function.Arguments,
-				displayName, persona, isSubagent, subagentType,
+				displayName, persona, isSubagent, subagentType, i,
 			)
 		}
 	}

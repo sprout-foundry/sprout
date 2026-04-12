@@ -18,6 +18,7 @@ import MessageSegments from './MessageSegments';
 import MessageContent from './MessageContent';
 import MessageBubble from './MessageBubble';
 import ChatMessageContextMenu from './ChatMessageContextMenu';
+import LiveLog from './LiveLog';
 import Status from './Status';
 import './Chat.css';
 
@@ -27,7 +28,7 @@ interface Message {
   content: string;
   timestamp: Date;
   reasoning?: string; // Chain-of-thought content from content_type: "reasoning"
-  toolRefs?: Array<{ toolId: string; toolName: string; label: string; parallel?: boolean }>;
+  toolRefs?: Array<{ toolId: string; toolName: string; label: string; parallel?: boolean; toolIndex?: number }>;
 }
 
 interface ToolExecution {
@@ -191,55 +192,6 @@ const formatDuration = (start: Date, end?: Date): string => {
   if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
   return `${(ms / 60000).toFixed(1)}m`;
 };
-
-// ── Live Log Scroller Component ────────────────────────────────────
-
-interface LiveLogProps {
-  lines: Array<{ id: string; text: string; timestamp: Date; taskId?: string }>;
-  maxLines: number;
-}
-
-function LiveLog({ lines, maxLines }: LiveLogProps): JSX.Element | null {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const userScrolledRef = useRef(false);
-
-  // Combined auto-scroll and user-scroll-reset effect
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    // Reset lock if near bottom, otherwise keep user lock
-    if (distanceFromBottom <= 48) {
-      userScrolledRef.current = false;
-    }
-    // Auto-scroll only if not user-locked
-    if (!userScrolledRef.current) {
-      el.scrollTop = el.scrollHeight;
-    }
-  }, [lines.length]);
-
-  const handleScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    userScrolledRef.current = distanceFromBottom > 48;
-  }, []);
-
-  const visibleLines = lines.slice(-maxLines);
-
-  if (visibleLines.length === 0) return null;
-
-  return (
-    <div className="subagent-feed-log" ref={scrollRef} onScroll={handleScroll}>
-      {visibleLines.map((line) => (
-        <div key={line.id} className="subagent-feed-log-line">
-          {line.taskId && <span className="subagent-feed-log-task">{line.taskId}</span>}
-          <span className="subagent-feed-log-text">{line.text}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 // ── Active Subagent Card ───────────────────────────────────────────
 
@@ -508,7 +460,11 @@ function Chat({
   const showExpiredSessionRecovery =
     !!lastError && lastError.toLowerCase().includes('ssh session not found or expired');
 
-  const handleInsertAtCursor = useCallback(
+  const toolStatusMap = useMemo(() => {
+  const m = new Map<string, ToolExecution['status']>();
+  for (const t of toolExecutions) m.set(t.id, t.status);
+  return m;
+}, [toolExecutions]);const handleInsertAtCursor = useCallback(
     (text: string) => {
       const separator = inputValueRef.current ? '\n' : '';
       onInputChange(inputValueRef.current + separator + text);
@@ -602,6 +558,7 @@ function Chat({
                             onToolPillClick?.(matchingTool.id);
                           }
                         }}
+                        getToolStatus={(toolId) => toolStatusMap.get(toolId)}
                       />
                     </>
                   ) : (

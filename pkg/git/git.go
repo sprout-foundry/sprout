@@ -127,7 +127,7 @@ func GetGitStatus() (currentBranch string, uncommittedChanges int, stagedChanges
 		return currentBranch, 0, 0, fmt.Errorf("failed to get git status: %w: %s", err, string(statusOut))
 	}
 
-	lines := strings.Split(strings.TrimSpace(string(statusOut)), "\n")
+	lines := strings.Split(strings.TrimRight(string(statusOut), "\n"), "\n")
 	for _, line := range lines {
 		if line == "" {
 			continue

@@ -10,7 +10,7 @@ import {
   rectangularSelection,
   crosshairCursor,
 } from '@codemirror/view';
-import { EditorState, Compartment } from '@codemirror/state';
+import { EditorState, Compartment, Transaction } from '@codemirror/state';
 import { defaultKeymap, indentWithTab, history } from '@codemirror/commands';
 import { search, searchKeymap, openSearchPanel, replaceAll } from '@codemirror/search';
 import { autocompletion, closeBrackets } from '@codemirror/autocomplete';
@@ -63,6 +63,13 @@ interface EditorPaneProps {
   paneId: string;
   onOpenCommandPalette?: () => void;
 }
+
+// Transaction annotations for external content replacements (file reloads,
+// initial loads, buffer switches). `Transaction.addToHistory.of(false)`
+// prevents CodeMirror from recording these in the undo/redo stack.
+const suppressHistoryAnnotations = [
+  Transaction.addToHistory.of(false),
+];
 
 function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Element {
   const editorRef = useRef<HTMLDivElement>(null);
@@ -176,6 +183,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
               to: viewRef.current.state.doc.length,
               insert: content,
             },
+            annotations: suppressHistoryAnnotations,
           });
         }
 
@@ -191,6 +199,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
           const pos = lineInfo.from + Math.min(column, lineInfo.length);
           viewRef.current.dispatch({
             selection: { anchor: pos },
+            annotations: suppressHistoryAnnotations,
           });
         }
 
@@ -316,14 +325,19 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     setError(null);
 
     try {
-      await saveBuffer(buffer.id);
+      const saveResult = await saveBuffer(buffer.id);
+      const serverMtime =
+        saveResult && typeof saveResult.mod_time === 'number' ? saveResult.mod_time : null;
 
       // Notify the external file watcher that this file was saved from the
       // editor, so it updates its known mtime and doesn't re-fire a false
       // "changed externally" notification on the next poll.
       document.dispatchEvent(
         new CustomEvent('file:editor-saved', {
-          detail: { path: buffer.file.path, mtime: Math.floor(Date.now() / 1000) },
+          detail: {
+            path: buffer.file.path,
+            mtime: serverMtime ?? Math.floor(Date.now() / 1000),
+          },
         }),
       );
 
@@ -387,6 +401,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
             to: viewRef.current.state.doc.length,
             insert: '',
           },
+          annotations: suppressHistoryAnnotations,
         });
       }
       setError(null);
@@ -411,6 +426,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
             to: viewRef.current.state.doc.length,
             insert: nextContent,
           },
+          annotations: suppressHistoryAnnotations,
         });
         clearDiffGutter(viewRef.current);
         clearDiagnostics(viewRef.current);
@@ -995,6 +1011,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
               to: viewRef.current.state.doc.length,
               insert: detail.content,
             },
+            annotations: suppressHistoryAnnotations,
           });
         }
         setLocalContent(detail.content);

@@ -889,12 +889,19 @@ func (ws *ReactWebServer) handleFileWrite(w http.ResponseWriter, r *http.Request
 	// Publish file change event
 	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent(canonicalPath, "write", string(content)))
 
+	// Stat the file to get actual filesystem mtime for the client
+	modTime := int64(0)
+	if info, err := os.Stat(canonicalPath); err == nil {
+		modTime = info.ModTime().Unix()
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"message": "File saved successfully",
-		"path":    canonicalPath,
-		"size":    len(content),
+		"success":  true,
+		"message":  "File saved successfully",
+		"path":     canonicalPath,
+		"size":     len(content),
+		"mod_time": modTime,
 	})
 }
 

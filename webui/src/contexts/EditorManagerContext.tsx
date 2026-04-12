@@ -62,7 +62,7 @@ interface EditorManagerContextValue {
   updateBufferScroll: (bufferId: string, position: { top: number; left: number }) => void;
   updateBufferMetadata: (bufferId: string, updates: Record<string, unknown>) => void;
   updateBufferTitle: (bufferId: string, title: string) => void;
-  saveBuffer: (bufferId: string, options?: { silent?: boolean }) => Promise<void>;
+  saveBuffer: (bufferId: string, options?: { silent?: boolean }) => Promise<{ mod_time?: number } | void>;
   setBufferModified: (bufferId: string, isModified: boolean) => void;
   setBufferPinned: (bufferId: string, isPinned: boolean) => void;
   setBufferClosable: (bufferId: string, isClosable: boolean) => void;

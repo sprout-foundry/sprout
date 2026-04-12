@@ -97,11 +97,16 @@ function OnboardingDialog({
             <button
               key={providerOption.id}
               type="button"
-              className={`onboarding-provider-card ${onboarding.provider === providerOption.id ? 'selected' : ''}`}
+              className={`onboarding-provider-card ${onboarding.provider === providerOption.id ? 'selected' : ''} ${providerOption.has_credential ? 'configured' : ''}`}
               onClick={() => onProviderChange(providerOption.id)}
               disabled={onboarding.submitting || onboarding.checking}
             >
               <span className="onboarding-provider-name">{providerOption.name}</span>
+              {providerOption.has_credential && (
+                <span className="onboarding-configured-badge" title="Credentials already configured" aria-label="Credentials already configured">
+                  ✓ Configured
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -129,7 +134,8 @@ function OnboardingDialog({
                   {onboarding.providers.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name}
-                      {p.requires_api_key && !p.has_credential ? ' (API key required)' : ''}
+                      {p.has_credential ? ' (configured)' : ''}
+                      {!p.has_credential && p.requires_api_key ? ' (API key required)' : ''}
                     </option>
                   ))}
                 </select>

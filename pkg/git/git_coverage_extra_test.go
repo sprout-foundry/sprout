@@ -19,6 +19,8 @@ import (
 // =============================================================================
 
 func TestAddAllAndCommit_TimeoutKillPath(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -45,6 +47,8 @@ func TestAddAllAndCommit_TimeoutKillPath(t *testing.T) {
 }
 
 func TestAddAllAndCommit_TimeoutErrorInCommit(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -63,6 +67,8 @@ func TestAddAllAndCommit_TimeoutErrorInCommit(t *testing.T) {
 // =============================================================================
 
 func TestGetFileGitPath_CurrentDirectoryFile(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -76,6 +82,8 @@ func TestGetFileGitPath_CurrentDirectoryFile(t *testing.T) {
 }
 
 func TestGetFileGitPath_SubdirectoryAbsolute(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -96,6 +104,8 @@ func TestGetFileGitPath_SubdirectoryAbsolute(t *testing.T) {
 }
 
 func TestGetFileGitPath_DeeplyNestedFile(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -115,6 +125,8 @@ func TestGetFileGitPath_DeeplyNestedFile(t *testing.T) {
 }
 
 func TestGetFileGitPath_FromSubdirectory(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -141,6 +153,8 @@ func TestGetFileGitPath_FromSubdirectory(t *testing.T) {
 // =============================================================================
 
 func TestGetStagedDiff_StagedDeletion(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -162,6 +176,8 @@ func TestGetStagedDiff_StagedDeletion(t *testing.T) {
 }
 
 func TestGetStagedDiff_StagedModification(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -184,6 +200,8 @@ func TestGetStagedDiff_StagedModification(t *testing.T) {
 }
 
 func TestGetStagedDiff_RenamedFile(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -350,6 +368,8 @@ func TestExecuteCommit_MixedFileTypesFallback(t *testing.T) {
 // =============================================================================
 
 func TestCheckStagedChanges_SpaceInFilename(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -365,6 +385,8 @@ func TestCheckStagedChanges_SpaceInFilename(t *testing.T) {
 }
 
 func TestCheckStagedChanges_StagedDeletion(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -388,6 +410,8 @@ func TestCheckStagedChanges_StagedDeletion(t *testing.T) {
 // =============================================================================
 
 func TestCheckStagedFilesForSecurityCredentials_BinaryFile(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -408,6 +432,8 @@ func TestCheckStagedFilesForSecurityCredentials_BinaryFile(t *testing.T) {
 }
 
 func TestCheckStagedFilesForSecurityCredentials_MultipleFilesSomeClean(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -429,6 +455,8 @@ func TestCheckStagedFilesForSecurityCredentials_MultipleFilesSomeClean(t *testin
 }
 
 func TestCheckStagedFilesForSecurityCredentials_PasswordPattern(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -450,6 +478,8 @@ func connect() string { return dbPassword }
 }
 
 func TestCheckStagedFilesForSecurityCredentials_ModifiedFileWithSecret(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -476,6 +506,8 @@ func TestCheckStagedFilesForSecurityCredentials_ModifiedFileWithSecret(t *testin
 // =============================================================================
 
 func TestGetGitStatus_UncommittedModifiedFile(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -493,6 +525,8 @@ func TestGetGitStatus_UncommittedModifiedFile(t *testing.T) {
 }
 
 func TestGetGitStatus_BothStagedAndUncommitted(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -514,6 +548,8 @@ func TestGetGitStatus_BothStagedAndUncommitted(t *testing.T) {
 }
 
 func TestGetGitStatus_StagedDeletion(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -535,6 +571,8 @@ func TestGetGitStatus_StagedDeletion(t *testing.T) {
 }
 
 func TestGetGitStatus_CleanRepo(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -550,6 +588,8 @@ func TestGetGitStatus_CleanRepo(t *testing.T) {
 }
 
 func TestGetGitStatus_MultipleUntracked(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -570,6 +610,8 @@ func TestGetGitStatus_MultipleUntracked(t *testing.T) {
 }
 
 func TestGetGitStatus_StagedNewFileAndModifiedTracked(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -776,6 +818,8 @@ func TestGenerateCommitMessageFromStagedDiff_WarningsPropagated(t *testing.T) {
 // =============================================================================
 
 func TestAddAndCommitFile_NewFileSuccess(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -798,6 +842,8 @@ func TestAddAndCommitFile_NewFileSuccess(t *testing.T) {
 // =============================================================================
 
 func TestPerformGitCommit_SpecialCharsInMessage(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -817,6 +863,8 @@ func TestPerformGitCommit_SpecialCharsInMessage(t *testing.T) {
 }
 
 func TestPerformGitCommit_MultilineMessage(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -843,6 +891,8 @@ func TestPerformGitCommit_MultilineMessage(t *testing.T) {
 // =============================================================================
 
 func TestGetStagedChanges_StagedRename(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -866,6 +916,8 @@ func TestGetStagedChanges_StagedRename(t *testing.T) {
 // =============================================================================
 
 func TestGetUncommittedChanges_ModifiedTrackedFile(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -888,6 +940,8 @@ func TestGetUncommittedChanges_ModifiedTrackedFile(t *testing.T) {
 }
 
 func TestGetUncommittedChanges_DeletedUnstagedFile(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -911,6 +965,8 @@ func TestGetUncommittedChanges_DeletedUnstagedFile(t *testing.T) {
 // =============================================================================
 
 func TestGetRecentTouchedFiles_LargeNumCommits(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -927,6 +983,8 @@ func TestGetRecentTouchedFiles_LargeNumCommits(t *testing.T) {
 // =============================================================================
 
 func TestGetRecentFileLog_WithMultipleCommits(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -955,6 +1013,8 @@ func TestGetRecentFileLog_WithMultipleCommits(t *testing.T) {
 // =============================================================================
 
 func TestGetGitRemoteURL_OutsideRepo(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	tmpDir, err := os.MkdirTemp("", "remote-error-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
@@ -973,6 +1033,8 @@ func TestGetGitRemoteURL_OutsideRepo(t *testing.T) {
 // =============================================================================
 
 func TestFullCommitLifecycle_AddStageCommitVerify(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -1024,6 +1086,8 @@ func TestFullCommitLifecycle_AddStageCommitVerify(t *testing.T) {
 // --- GetStagedDiff error path (outside git repo) ---
 
 func TestGetStagedDiff_OutsideRepo(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	tmpDir, err := os.MkdirTemp("", "staged-diff-no-git-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
@@ -1041,6 +1105,8 @@ func TestGetStagedDiff_OutsideRepo(t *testing.T) {
 // --- CheckStagedFilesForSecurityCredentials get-staged-files error ---
 
 func TestCheckStagedFilesForSecurityCredentials_OutsideRepo(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	tmpDir, err := os.MkdirTemp("", "cred-no-git-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
@@ -1081,6 +1147,8 @@ func TestWrapText_TabParagraphBetweenText(t *testing.T) {
 // --- GetRecentFileLog line truncation (lines > limit) ---
 
 func TestGetRecentFileLog_LineTruncation(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -1162,6 +1230,8 @@ func TestExecuteCommit_NilClientFallbackEmptyChanges(t *testing.T) {
 // --- GetGitStatus branch error (non-git-repo) ---
 
 func TestGetGitStatus_BranchErrorNonGitRepo(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	tmpDir, err := os.MkdirTemp("", "status-branch-err-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)

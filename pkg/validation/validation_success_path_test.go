@@ -15,10 +15,6 @@ import (
 // --- RunValidation success path ---
 
 func TestRunValidation_Success_PublishesEventWithMetadata(t *testing.T) {
-	if !gofmtAcceptsStdin(t) {
-		t.Skip("gofmt does not accept stdin (Go 1.25+ with old arg style)")
-	}
-
 	bus := events.NewEventBus()
 	defer bus.Unsubscribe("succ-meta-pub")
 	ch := bus.Subscribe("succ-meta-pub")
@@ -60,10 +56,6 @@ func TestRunValidation_Success_PublishesEventWithMetadata(t *testing.T) {
 }
 
 func TestRunValidation_Success_DiagnosticsFieldPopulated(t *testing.T) {
-	if !gofmtAcceptsStdin(t) {
-		t.Skip("gofmt does not accept stdin")
-	}
-
 	v := NewValidator(nil)
 	code := `package main
 func main() { println("hi") }
@@ -75,18 +67,16 @@ func main() { println("hi") }
 	}
 
 	// Diagnostics must be populated on the success path.
-	// When both Errors and Warnings are empty, append(nil, nil...) stays nil.
-	// This is expected Go behavior — the field is conceptually set even if nil.
+	// With the non-nil initialization in RunValidation, this is always non-nil.
+	if result.Diagnostics == nil {
+		t.Fatal("Diagnostics should be non-nil on success path")
+	}
 	if len(result.Diagnostics) != 0 {
 		t.Fatalf("expected no diagnostics for clean code, got %d", len(result.Diagnostics))
 	}
 }
 
 func TestRunValidation_Success_NoImportKeyword_SkipsImportCheck(t *testing.T) {
-	if !gofmtAcceptsStdin(t) {
-		t.Skip("gofmt does not accept stdin")
-	}
-
 	bus := events.NewEventBus()
 	defer bus.Unsubscribe("no-import-success")
 	ch := bus.Subscribe("no-import-success")
@@ -115,10 +105,6 @@ func TestRunValidation_Success_NoImportKeyword_SkipsImportCheck(t *testing.T) {
 }
 
 func TestRunValidation_Success_WithValidImportCheck(t *testing.T) {
-	if !gofmtAcceptsStdin(t) {
-		t.Skip("gofmt does not accept stdin")
-	}
-
 	bus := events.NewEventBus()
 	defer bus.Unsubscribe("valid-import-succ")
 	_ = bus.Subscribe("valid-import-succ")
@@ -150,10 +136,6 @@ func main() { fmt.Println(os.Args) }
 // --- RunValidation with import issues (valid syntax + unsorted imports) ---
 
 func TestRunValidation_ImportWarning_PopulatesWarningsAndDiagnostics(t *testing.T) {
-	if !gofmtAcceptsStdin(t) {
-		t.Skip("gofmt does not accept stdin")
-	}
-
 	bus := events.NewEventBus()
 	defer bus.Unsubscribe("import-warn-test")
 	ch := bus.Subscribe("import-warn-test")
@@ -217,8 +199,6 @@ func main() { fmt.Println(strings.Join(nil, "")) }
 
 func TestValidateSyntax_StderrFallback_InvalidCode(t *testing.T) {
 	// For invalid code, gofmt writes errors to stderr.
-	// The `if output == ""` fallback to stdout should not be triggered
-	// (stderr has content), but we verify the error message is present.
 	v := NewValidator(nil)
 	err := v.ValidateSyntax(context.Background(), "stderr_test.go", "package x\nfunc(")
 	if err == nil {
@@ -231,13 +211,8 @@ func TestValidateSyntax_StderrFallback_InvalidCode(t *testing.T) {
 }
 
 func TestValidateSyntax_StderrFallback_ValidButUnformatted(t *testing.T) {
-	if !gofmtAcceptsStdin(t) {
-		t.Skip("gofmt does not accept stdin")
-	}
-
 	// Valid syntax but not gofmt-formatted.
 	// gofmt -l returns the filename on stdout but exits 0 → no error.
-	// This tests that the `if err == nil` path (early return nil) is exercised.
 	v := NewValidator(nil)
 	code := `package main
 func main(){println("hi")}
@@ -249,14 +224,7 @@ func main(){println("hi")}
 }
 
 func TestValidateSyntax_StderrFallback_ValidButUnformatted_StdoutHasContent(t *testing.T) {
-	if !gofmtAcceptsStdin(t) {
-		t.Skip("gofmt does not accept stdin")
-	}
-
-	// Same as above but also verify gofmt -l would list the file on stdout.
-	// The key insight: with -l flag, gofmt outputs filenames that need reformatting.
-	// When code is valid but not formatted, stdout is non-empty but exit code is 0.
-	// The function returns nil because it checks `if err == nil` first.
+	// Same as above but verify gofmt -l would list the file on stdout.
 	v := NewValidator(nil)
 	code := `package main
 func main(){println("hi")}
@@ -271,10 +239,6 @@ func main(){println("hi")}
 // --- ValidateImports: import formatting issues ---
 
 func TestValidateImports_UnsortedImportBlock(t *testing.T) {
-	if !gofmtAcceptsStdin(t) {
-		t.Skip("gofmt does not accept stdin")
-	}
-
 	v := NewValidator(nil)
 	// Intentionally unsorted import block — goimports should flag this
 	code := `package main
@@ -304,9 +268,6 @@ func main() { fmt.Println(strings.Join(nil, "")) }
 func TestValidateImports_MultipleFilesOutput(t *testing.T) {
 	// When goimports -l outputs multiple lines (e.g., for a multi-file diff),
 	// each non-empty line should produce a separate Diagnostic.
-	// With stdin input, goimports outputs "<standard input>" at most once,
-	// so this test verifies the parsing logic works correctly if output
-	// somehow contained multiple lines (future-proofing).
 	input := "line1\nline2\n\nline3\n"
 	var diagnostics []Diagnostic
 	for _, line := range strings.Split(input, "\n") {
@@ -325,10 +286,6 @@ func TestValidateImports_MultipleFilesOutput(t *testing.T) {
 }
 
 func TestValidateImports_SortedImportBlock(t *testing.T) {
-	if !gofmtAcceptsStdin(t) {
-		t.Skip("gofmt does not accept stdin")
-	}
-
 	v := NewValidator(nil)
 	code := `package main
 
@@ -350,10 +307,6 @@ func main() {
 }
 
 func TestValidateImports_SingleImportNoBlock(t *testing.T) {
-	if !gofmtAcceptsStdin(t) {
-		t.Skip("gofmt does not accept stdin")
-	}
-
 	v := NewValidator(nil)
 	code := `package main
 

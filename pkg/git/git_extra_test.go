@@ -6,12 +6,15 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+var testDirMtx sync.Mutex
 
 // =============================================================================
 // CleanCommitMessage — edge cases for uncovered paths
@@ -116,6 +119,8 @@ func TestCleanCommitMessage_JSONBracesButNotJSON(t *testing.T) {
 // =============================================================================
 
 func TestAddAndCommitFile_AlreadyCommittedUnchanged(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -129,6 +134,8 @@ func TestAddAndCommitFile_AlreadyCommittedUnchanged(t *testing.T) {
 }
 
 func TestAddAndCommitFile_CommitSuccess(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -150,6 +157,8 @@ func TestAddAndCommitFile_CommitSuccess(t *testing.T) {
 // =============================================================================
 
 func TestAddAllAndCommit_ShortTimeoutSuccess(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	// Verifies that AddAllAndCommit succeeds normally when git completes
 	// well within the timeout. A true timeout/kill test would require
 	// injecting a slow operation (e.g., a git hook that sleeps).
@@ -171,6 +180,8 @@ func TestAddAllAndCommit_ShortTimeoutSuccess(t *testing.T) {
 // =============================================================================
 
 func TestGetGitRemoteURL_RemoteWithURL(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -185,6 +196,8 @@ func TestGetGitRemoteURL_RemoteWithURL(t *testing.T) {
 }
 
 func TestGetGitRemoteURL_MultipleRemotes(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -205,6 +218,8 @@ func TestGetGitRemoteURL_MultipleRemotes(t *testing.T) {
 // =============================================================================
 
 func TestGetGitStatus_UntrackedFiles(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -222,6 +237,8 @@ func TestGetGitStatus_UntrackedFiles(t *testing.T) {
 }
 
 func TestGetGitStatus_OnlyStagedChanges(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -244,6 +261,8 @@ func TestGetGitStatus_OnlyStagedChanges(t *testing.T) {
 // =============================================================================
 
 func TestGetStagedChanges_Truncation(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -275,6 +294,8 @@ func TestGetStagedChanges_Truncation(t *testing.T) {
 }
 
 func TestGetStagedChanges_EmptyStaged(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -291,6 +312,8 @@ func TestGetStagedChanges_EmptyStaged(t *testing.T) {
 // =============================================================================
 
 func TestGetUncommittedChanges_VeryLargeDiff(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -324,6 +347,8 @@ func TestGetUncommittedChanges_VeryLargeDiff(t *testing.T) {
 // =============================================================================
 
 func TestGetRecentFileLog_EmptyLog(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -337,6 +362,8 @@ func TestGetRecentFileLog_EmptyLog(t *testing.T) {
 }
 
 func TestGetRecentFileLog_NegativeLimit(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -354,6 +381,8 @@ func TestGetRecentFileLog_NegativeLimit(t *testing.T) {
 // =============================================================================
 
 func TestGetRecentTouchedFiles_NegativeCount(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -367,6 +396,8 @@ func TestGetRecentTouchedFiles_NegativeCount(t *testing.T) {
 }
 
 func TestGetRecentTouchedFiles_DeDuplication(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -394,6 +425,8 @@ func TestGetRecentTouchedFiles_DeDuplication(t *testing.T) {
 }
 
 func TestGetRecentTouchedFiles_EmptyRepo(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -690,6 +723,8 @@ func TestNewCommitExecutorInDir_Fields(t *testing.T) {
 // =============================================================================
 
 func TestPerformGitCommit_Success(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -711,6 +746,8 @@ func TestPerformGitCommit_Success(t *testing.T) {
 // =============================================================================
 
 func TestGetStagedDiff_Success(t *testing.T) {
+	testDirMtx.Lock()
+	defer testDirMtx.Unlock()
 	dir := newTestGitRepo(t)
 	origDir, err := os.Getwd()
 	require.NoError(t, err)

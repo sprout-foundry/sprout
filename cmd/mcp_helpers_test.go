@@ -21,18 +21,30 @@ func setupMCPTestEnv(t *testing.T) (string, func()) {
 	t.Helper()
 	origConfig := os.Getenv("LEDIT_CONFIG")
 	origGithub := os.Getenv("GITHUB_PERSONAL_ACCESS_TOKEN")
+	origAutoDiscover := os.Getenv("LEDIT_MCP_AUTO_DISCOVER")
 	tmpDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", tmpDir)
 	// Clear github token to prevent auto-discovery adding servers
 	if origGithub != "" {
 		t.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "")
 	}
+	// Disable auto-discovery to ensure empty server list in tests
+	t.Setenv("LEDIT_MCP_AUTO_DISCOVER", "false")
 	cleanup := func() {
 		if origGithub != "" {
 			t.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", origGithub)
+		} else {
+			os.Unsetenv("GITHUB_PERSONAL_ACCESS_TOKEN")
 		}
 		if origConfig != "" {
 			os.Setenv("LEDIT_CONFIG", origConfig)
+		} else {
+			os.Unsetenv("LEDIT_CONFIG")
+		}
+		if origAutoDiscover != "" {
+			t.Setenv("LEDIT_MCP_AUTO_DISCOVER", origAutoDiscover)
+		} else {
+			os.Unsetenv("LEDIT_MCP_AUTO_DISCOVER")
 		}
 	}
 	return tmpDir, cleanup

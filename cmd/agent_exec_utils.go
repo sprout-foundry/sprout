@@ -17,6 +17,18 @@ import (
 	"golang.org/x/term"
 )
 
+// lockingWriter wraps a bytes.Buffer with a mutex for safe concurrent writes.
+type lockingWriter struct {
+	buf *bytes.Buffer
+	mu  *sync.Mutex
+}
+
+func (w lockingWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.buf.Write(p)
+}
+
 // ExecuteCommand runs a shell command and streams its output in real-time.
 // Returns the combined output (for error messages) and any error that occurred.
 func ExecuteCommand(cmd string) (string, error) {
@@ -51,6 +63,7 @@ func ExecuteCommand(cmd string) (string, error) {
 
 	// Buffer to capture output for error messages
 	var outputBuf bytes.Buffer
+	var outputMu sync.Mutex
 
 	// Start the command
 	if err := command.Start(); err != nil {
@@ -65,13 +78,13 @@ func ExecuteCommand(cmd string) (string, error) {
 	// Copy stdout to both terminal and buffer
 	go func() {
 		defer wg.Done()
-		io.Copy(io.MultiWriter(os.Stdout, &outputBuf), stdout)
+		io.Copy(io.MultiWriter(os.Stdout, lockingWriter{&outputBuf, &outputMu}), stdout)
 	}()
 
 	// Copy stderr to both terminal and buffer
 	go func() {
 		defer wg.Done()
-		io.Copy(io.MultiWriter(os.Stderr, &outputBuf), stderr)
+		io.Copy(io.MultiWriter(os.Stderr, lockingWriter{&outputBuf, &outputMu}), stderr)
 	}()
 
 	// Wait for both streams to finish

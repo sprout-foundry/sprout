@@ -13,16 +13,17 @@ import (
 
 // setupConfigTestEnv creates a temp config dir, sets environment variables,
 // and forces the file-based credential backend so tests do not depend on an OS
-// keyring being present. Returns the temp directory path.
+// keyring being present. Returns the temp directory path (the .ledit subdirectory).
 //
-// NOTE: getConfigDir() in config.go uses os.UserHomeDir(), so we also set HOME
-// to the temp dir so that mcp_config.json is written there. The credentials
-// package uses LEDIT_CONFIG, which also points to the same temp dir.
+// NOTE: getConfigDir() in config.go now respects LEDIT_CONFIG, so we set both
+// HOME (for os.UserHomeDir fallback) and LEDIT_CONFIG to ensure MCP config is
+// written to the correct location. The credentials package also uses LEDIT_CONFIG.
 func setupConfigTestEnv(t *testing.T) string {
 	t.Helper()
-	dir := t.TempDir()
-	t.Setenv("HOME", dir)
-	t.Setenv("LEDIT_CONFIG", dir)
+	homeDir := t.TempDir()
+	configDir := filepath.Join(homeDir, ".ledit")
+	t.Setenv("HOME", homeDir)
+	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
 	// Prevent env var overrides from interfering with LoadMCPConfig
 	t.Setenv("LEDIT_MCP_ENABLED", "")
@@ -30,7 +31,7 @@ func setupConfigTestEnv(t *testing.T) string {
 	t.Setenv("LEDIT_MCP_AUTO_DISCOVER", "")
 	t.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "")
 	credentials.ResetStorageBackend()
-	return dir
+	return configDir
 }
 
 // rawMCPConfigFile mirrors just the on-disk JSON structure for reading back
@@ -111,7 +112,7 @@ func TestSaveMCPConfig_MigratesSecretsBeforePersisting(t *testing.T) {
 		"PATH should be unchanged in memory")
 
 	// Assert: the on-disk file contains the ref in credentials, not env
-	raw := readRawConfigFile(t, filepath.Join(dir, ".ledit"))
+	raw := readRawConfigFile(t, dir)
 	require.NotNil(t, raw.Servers["testserver"].Credentials,
 		"credentials map should exist on disk")
 	assert.True(t, IsSecretRef(raw.Servers["testserver"].Credentials["OPENAI_API_KEY"]),
@@ -136,7 +137,7 @@ func TestLoadMCPConfig_AutoMigratesSecrets(t *testing.T) {
 	dir := setupConfigTestEnv(t)
 
 	// Arrange: write a config file with plaintext secrets to disk
-	configDir := filepath.Join(dir, ".ledit")
+	configDir := dir
 	require.NoError(t, os.MkdirAll(configDir, 0755))
 	configPath := filepath.Join(configDir, "mcp_config.json")
 
@@ -200,7 +201,7 @@ func TestMigrateSecretsOnLoad_Idempotent(t *testing.T) {
 	dir := setupConfigTestEnv(t)
 
 	// Arrange: write a config file with plaintext secrets
-	configDir := filepath.Join(dir, ".ledit")
+	configDir := dir
 	require.NoError(t, os.MkdirAll(configDir, 0755))
 	configPath := filepath.Join(configDir, "mcp_config.json")
 
@@ -306,7 +307,7 @@ func TestSaveMCPConfig_AlreadyMigratedRefsPreserved(t *testing.T) {
 		"non-secret PATH should remain in Env")
 
 	// Assert: on-disk ref is in credentials, not env
-	raw := readRawConfigFile(t, filepath.Join(dir, ".ledit"))
+	raw := readRawConfigFile(t, dir)
 	require.NotNil(t, raw.Servers["refserver"].Credentials,
 		"credentials map should exist on disk")
 	assert.Equal(t, expectedRef, raw.Servers["refserver"].Credentials["OPENAI_API_KEY"],
@@ -389,7 +390,7 @@ func TestSaveMCPConfig_MultipleServersMigrateIndependently(t *testing.T) {
 	assert.Equal(t, "bearer-server-b", valB)
 
 	// Check on-disk
-	raw := readRawConfigFile(t, filepath.Join(dir, ".ledit"))
+	raw := readRawConfigFile(t, dir)
 	require.NotNil(t, raw.Servers["server-a"].Credentials,
 		"server-a credentials map should exist on disk")
 	assert.True(t, IsSecretRef(raw.Servers["server-a"].Credentials["OPENAI_API_KEY"]),
@@ -423,7 +424,7 @@ func TestSaveMCPConfig_NoServers_NoError(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify the file was written and is valid JSON
-	raw := readRawConfigFile(t, filepath.Join(dir, ".ledit"))
+	raw := readRawConfigFile(t, dir)
 	assert.True(t, raw.Enabled)
 	assert.Empty(t, raw.Servers)
 }

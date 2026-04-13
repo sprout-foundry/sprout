@@ -656,7 +656,7 @@ func (a *Agent) GenerateSessionSummary() string {
 func (a *Agent) ApplyState(state *ConversationState) {
 	// Apply saved state
 	a.messages = state.Messages
-	a.replaceTurnCheckpoints(state.TurnCheckpoints)
+	a.ReplaceTurnCheckpoints(state.TurnCheckpoints)
 	a.taskActions = state.TaskActions
 	a.totalCost = state.TotalCost
 	a.totalTokens = state.TotalTokens

@@ -118,9 +118,10 @@ func Initialize() (*Config, *APIKeys, error) {
 			config.LastUsedProvider = "openai"
 			fmt.Printf("[OK] Using OpenAI provider from environment\n")
 		} else {
-			// Default to test provider which is designed for CI/testing
-			config.LastUsedProvider = "test"
-			fmt.Printf("[OK] Using test provider (designed for CI environments)\n")
+			// Don't save test provider as default - it's for testing only
+			// Leave LastUsedProvider empty and let callers handle the test provider
+			fmt.Printf("[OK] No real provider available; using test provider for CI\n")
+			fmt.Printf("[WARN] Please configure a real provider (OPENROUTER_API_KEY or OPENAI_API_KEY)\n")
 		}
 
 		if err := config.Save(); err != nil {

@@ -45,9 +45,33 @@ type launchdPlist struct {
 
 // ── plist generation ────────────────────────────────────────────────
 
+// generateLaunchdPlist generates a launchd plist with environment variables from service.env.
 func generateLaunchdPlist(binaryPath, homeDir string) ([]byte, error) {
 	stdoutPath := filepath.Join(homeDir, ".ledit/logs/daemon.stdout.log")
 	stderrPath := filepath.Join(homeDir, ".ledit/logs/daemon.stderr.log")
+
+	// Load API keys and other environment variables from service.env
+	envVars, err := loadServiceEnvFile(homeDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load service.env: %w", err)
+	}
+
+	// Build the EnvironmentVariables dict entries
+	// Always include LEDIT_SERVICE and HOME
+	envEntries := []plistValue{
+		{XMLName: xml.Name{Local: "key"}, Key: "LEDIT_SERVICE"},
+		{XMLName: xml.Name{Local: "string"}, Key: "1"},
+		{XMLName: xml.Name{Local: "key"}, Key: "HOME"},
+		{XMLName: xml.Name{Local: "string"}, Key: homeDir},
+	}
+
+	// Add all variables from service.env
+	for key, value := range envVars {
+		envEntries = append(envEntries,
+			plistValue{XMLName: xml.Name{Local: "key"}, Key: key},
+			plistValue{XMLName: xml.Name{Local: "string"}, Key: value},
+		)
+	}
 
 	p := launchdPlist{
 		Version: "1.0",
@@ -71,12 +95,7 @@ func generateLaunchdPlist(binaryPath, homeDir string) ([]byte, error) {
 			{XMLName: xml.Name{Local: "key"}, Key: "EnvironmentVariables"},
 			{
 				XMLName: xml.Name{Local: "dict"},
-				Dict: &plistDict{Entries: []plistValue{
-					{XMLName: xml.Name{Local: "key"}, Key: "LEDIT_SERVICE"},
-					{XMLName: xml.Name{Local: "string"}, Key: "1"},
-					{XMLName: xml.Name{Local: "key"}, Key: "HOME"},
-					{XMLName: xml.Name{Local: "string"}, Key: homeDir},
-				}},
+				Dict:    &plistDict{Entries: envEntries},
 			},
 		}},
 	}
@@ -125,6 +144,13 @@ func (m *launchdManager) Install() error {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("failed to determine home directory: %w", err)
+	}
+
+	// Capture API keys from the current environment and write to service.env
+	// This is done before generating the plist so the environment variables can be inlined
+	if err := generateServiceEnvFile(homeDir); err != nil {
+		fmt.Printf("Warning: failed to generate service.env: %v\n", err)
+		fmt.Println("The service will be installed but may not have access to API keys.")
 	}
 
 	agentsDir := filepath.Join(homeDir, launchdPlistDir)
@@ -177,6 +203,16 @@ func (m *launchdManager) Uninstall() error {
 	}
 	if err := os.Remove(pPath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove plist: %w", err)
+	}
+
+	// Remove the service.env file if it exists
+	homeDir, err := os.UserHomeDir()
+	if err == nil {
+		envFile := serviceEnvPath(homeDir)
+		if err := os.Remove(envFile); err != nil && !os.IsNotExist(err) {
+			// Don't fail the whole uninstall if we can't remove service.env
+			fmt.Printf("Warning: failed to remove %s: %v\n", envFile, err)
+		}
 	}
 
 	fmt.Printf("Uninstalled launchd agent: %s\n", pPath)

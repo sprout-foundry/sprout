@@ -33,6 +33,9 @@ func generateSystemdUnit(binaryPath, homeDir string) ([]byte, error) {
 		return nil, fmt.Errorf("home directory must not be empty")
 	}
 
+	// Build absolute path to service.env file for EnvironmentFile directive
+	envFile := serviceEnvPath(homeDir)
+
 	unit := fmt.Sprintf(`[Unit]
 Description=ledit daemon - AI coding assistant web UI
 After=default.target
@@ -45,12 +48,13 @@ Restart=on-failure
 RestartSec=5
 Environment=LEDIT_SERVICE=1
 Environment=HOME=%s
+EnvironmentFile=-%s
 StandardOutput=journal
 StandardError=journal
 
 [Install]
 WantedBy=default.target
-`, systemdExecArg(binaryPath), systemdExecArg(homeDir), systemdExecArg(homeDir))
+`, systemdExecArg(binaryPath), systemdExecArg(homeDir), systemdExecArg(homeDir), systemdExecArg(envFile))
 
 	return []byte(unit), nil
 }
@@ -67,6 +71,13 @@ func (m *systemdManager) Install() error {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	// Capture API keys from the current environment and write to service.env
+	// This is done before writing the unit file so the EnvironmentFile can reference it
+	if err := generateServiceEnvFile(homeDir); err != nil {
+		fmt.Printf("Warning: failed to generate service.env: %v\n", err)
+		fmt.Println("The service will be installed but may not have access to API keys.")
 	}
 
 	unitDir := filepath.Join(homeDir, ".config", "systemd", "user")
@@ -118,6 +129,13 @@ func (m *systemdManager) Uninstall() error {
 	unitFile := filepath.Join(homeDir, ".config", "systemd", "user", "ledit.service")
 	if err := os.Remove(unitFile); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove unit file: %w", err)
+	}
+
+	// Remove the service.env file if it exists
+	envFile := serviceEnvPath(homeDir)
+	if err := os.Remove(envFile); err != nil && !os.IsNotExist(err) {
+		// Don't fail the whole uninstall if we can't remove service.env
+		fmt.Printf("Warning: failed to remove %s: %v\n", envFile, err)
 	}
 
 	if _, err := runSystemctl("daemon-reload"); err != nil {

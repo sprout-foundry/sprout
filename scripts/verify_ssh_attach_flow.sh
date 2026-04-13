@@ -181,7 +181,7 @@ mkdir -p \"\$HOME/.cache/ledit-webui/logs\"
 cd ${workspace_expr}
 REMOTE_PORT=\"\$(choose_port)\"
 LOG_FILE=\"\$HOME/.cache/ledit-webui/logs/${HOST_ALIAS}.log\"
-nohup env BROWSER=none LEDIT_SSH_HOST_ALIAS=${host_alias_q} LEDIT_SSH_SESSION_KEY=${session_key_q} LEDIT_SSH_LAUNCHER_URL=${launcher_url_q} LEDIT_SSH_HOME=\"\$HOME\" ${remote_binary_q} --isolated-config agent --daemon --web-port \"\$REMOTE_PORT\" >\"\$LOG_FILE\" 2>&1 < /dev/null &
+nohup BROWSER=none LEDIT_SSH_HOST_ALIAS=${host_alias_q} LEDIT_SSH_SESSION_KEY=${session_key_q} LEDIT_SSH_LAUNCHER_URL=${launcher_url_q} LEDIT_SSH_HOME=\"\$HOME\" ${remote_binary_q} --isolated-config agent --daemon --web-port \"\$REMOTE_PORT\" >\"\$LOG_FILE\" 2>&1 < /dev/null &
 REMOTE_PID=\$!
 printf \"%s %s\\n\" \"\$REMOTE_PORT\" \"\$REMOTE_PID\"'" )"
 

@@ -120,6 +120,7 @@ func (s *webUISupervisor) reconcile(ctx context.Context) {
 	// Either we already own leadership or there is no healthy host.
 	if !s.webServer.IsRunning() {
 		if err := s.webServer.Start(ctx); err != nil {
+			log.Printf("[webui-supervisor] failed to start web server on port %d: %v", s.port, err)
 			return
 		}
 		s.mu.Lock()

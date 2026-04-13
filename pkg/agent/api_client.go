@@ -85,14 +85,15 @@ func logChatResponseDetailed(resp *api.ChatResponse, provider string, streaming 
 
 // APIClient handles all LLM API communication with retry logic
 type APIClient struct {
-	agent             *Agent
-	rateLimiter       *utils.RateLimitBackoff
-	maxRetries        int
-	baseRetryDelay    time.Duration
-	connectionTimeout time.Duration // Time to establish connection
-	firstChunkTimeout time.Duration // Time to receive first response chunk
-	chunkTimeout      time.Duration // Max time between chunks in streaming
-	overallTimeout    time.Duration // Total request timeout
+	agent                       *Agent
+	rateLimiter                 *utils.RateLimitBackoff
+	maxRetries                  int
+	baseRetryDelay              time.Duration
+	connectionTimeout          time.Duration // Time to establish connection
+	firstChunkTimeout          time.Duration // Time to receive first response chunk
+	chunkTimeout              time.Duration // Max time between chunks in streaming
+	overallTimeout            time.Duration // Total request timeout
+	prepareMessagesCallback func(tools []api.Tool) []api.Message // Callback to re-prepare messages after compaction
 }
 
 // RateLimitExceededError indicates repeated rate limit failures even after retries
@@ -255,6 +256,20 @@ func (ac *APIClient) SendWithRetry(messages []api.Message, tools []api.Tool, rea
 
 		if ac.agent.debug {
 			ac.agent.debugLog("DEBUG: APIClient error on attempt %d: %v\n", retry, err)
+		}
+
+		// Check for context limit error - trigger compaction and re-prepare messages
+		if ac.isContextLimitError(err) {
+			if ac.agent.debug {
+				ac.agent.debugLog("DEBUG: context limit error detected, triggering compaction\n")
+			}
+			ac.agent.TriggerCompaction()
+			// Re-prepare messages after compaction
+			if ac.prepareMessagesCallback != nil {
+				messages = ac.prepareMessagesCallback(tools)
+			}
+			// Continue to retry with new compacted messages
+			continue
 		}
 
 		// Handle error with retry logic
@@ -645,6 +660,21 @@ func (ac *APIClient) isRetryableError(errStr string) bool {
 		strings.Contains(errStr, "connection reset") ||
 		strings.Contains(errStr, "EOF") ||
 		strings.Contains(errStr, "timeout")
+}
+
+// isContextLimitError checks if an error indicates the context window limit was exceeded
+func (ac *APIClient) isContextLimitError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	// Check for common context limit error patterns from various providers
+	return strings.Contains(errStr, "context window exceeds") ||
+		strings.Contains(errStr, "context window over") ||
+		strings.Contains(errStr, "context_limit") ||
+		strings.Contains(errStr, "context exceeds") ||
+		strings.Contains(errStr, "max context") ||
+		(strings.Contains(errStr, "token limit") && strings.Contains(errStr, "exceeded"))
 }
 
 // calculateBackoff calculates the backoff delay

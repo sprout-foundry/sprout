@@ -37,7 +37,7 @@ type ConversationHandler struct {
 // NewConversationHandler creates a new conversation handler
 func NewConversationHandler(agent *Agent) *ConversationHandler {
 	now := time.Now()
-	return &ConversationHandler{
+	ch := &ConversationHandler{
 		agent:                 agent,
 		apiClient:             NewAPIClient(agent),
 		toolExecutor:          NewToolExecutor(agent),
@@ -48,6 +48,13 @@ func NewConversationHandler(agent *Agent) *ConversationHandler {
 		lastActivityTime:      now,
 		traceSession:          agent.traceSession, // Pass trace session from agent
 	}
+
+	// Set up callback to re-prepare messages after compaction
+	ch.apiClient.prepareMessagesCallback = func(tools []api.Tool) []api.Message {
+		return ch.prepareMessages(tools)
+	}
+
+	return ch
 }
 
 // ProcessQuery handles a user query through the complete conversation flow

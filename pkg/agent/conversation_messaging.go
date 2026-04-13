@@ -151,6 +151,14 @@ func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 
 	// Final safety net: remove any orphaned tool results before sending to API
 	allMessages = ch.removeOrphanedToolResults(allMessages)
+
+	// Strip any leading assistant prefill messages that would be incompatible
+	// with thinking-mode providers (e.g., enable_thinking). Context compaction
+	// can produce an assistant-role summary as the first non-system message,
+	// which some providers reject as "Assistant response prefill is
+	// incompatible with enable_thinking".
+	allMessages = ch.stripLeadingAssistantPrefill(allMessages)
+
 	ch.transientMessagesMu.Lock()
 	ch.transientMessages = nil
 	ch.transientMessagesMu.Unlock()
@@ -177,6 +185,49 @@ func (ch *ConversationHandler) stripImagesForNonVisionModels(messages []api.Mess
 		ch.agent.debugLog("[img] Stripped %d historical image payload(s) for non-vision model\n", removed)
 	}
 	return out
+}
+
+// stripLeadingAssistantPrefill removes leading assistant messages (compaction
+// summaries) that appear immediately after the system prompt. Some providers
+// with thinking/reasoning mode enabled reject messages where the first
+// non-system message has role "assistant" (assistant response prefill).
+//
+// Assistant messages that carry tool_calls are preserved since they are
+// part of an active tool-use flow, not prefill material.
+func (ch *ConversationHandler) stripLeadingAssistantPrefill(messages []api.Message) []api.Message {
+	if len(messages) == 0 {
+		return messages
+	}
+
+	// Find the first non-system message index
+	start := 0
+	for start < len(messages) && messages[start].Role == "system" {
+		start++
+	}
+	if start >= len(messages) {
+		return messages
+	}
+
+	// Count leading assistant prefill messages (no tool_calls)
+	stripped := 0
+	for start < len(messages) && messages[start].Role == "assistant" && len(messages[start].ToolCalls) == 0 {
+		stripped++
+		start++
+	}
+
+	if stripped == 0 {
+		return messages
+	}
+
+	if ch.agent != nil && ch.agent.debug {
+		ch.agent.debugLog("[prefill] Stripped %d leading assistant prefill message(s) to avoid incompatibility with thinking-mode providers\n", stripped)
+	}
+
+	// Keep: system messages + everything after the leading assistant prefills
+	result := make([]api.Message, 0, len(messages)-stripped)
+	result = append(result, messages[:start-stripped]...)
+	result = append(result, messages[start:]...)
+	return result
 }
 
 func collapseSystemMessagesToFront(messages []api.Message) []api.Message {

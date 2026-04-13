@@ -473,10 +473,10 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 		return
 	}
 	if req.Model != "" {
-		cm.SetModelForProvider(providerType, req.Model)
-	}
-	if err := cm.SaveConfig(); err != nil {
-		log.Printf("webui: failed to save onboarding config: %v", err)
+		if err := cm.SetModelForProvider(providerType, req.Model); err != nil {
+			writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to persist model: %v", err))
+			return
+		}
 	}
 
 	// Clear any cached agent so it is re-created with the updated config.
@@ -486,7 +486,16 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 	// real provider instead of "editor".
 	clientAgent, err := ws.getClientAgent(clientID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to create agent after provider setup: %v", err))
+		// Config is already persisted, so the provider/model choice survives restarts.
+		// Return success with a warning so the webui can proceed.
+		log.Printf("webui: onboarding agent creation failed after config persist: %v", err)
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"message": "Onboarding completed (agent will be created on next use)",
+			"provider": req.Provider,
+			"model":    req.Model,
+			"warning":  fmt.Sprintf("Agent creation failed: %v", err),
+		})
 		return
 	}
 
@@ -498,6 +507,12 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 		if err := clientAgent.SetModel(req.Model); err != nil {
 			writeJSONError(w, http.StatusBadRequest, err.Error())
 			return
+		}
+		// Re-persist the actual model (may differ from requested due to resolution)
+		if actualModel := clientAgent.GetModel(); actualModel != "" {
+			if persistErr := cm.SetModelForProvider(providerType, actualModel); persistErr != nil {
+				log.Printf("webui: failed to re-persist resolved model %q: %v", actualModel, persistErr)
+			}
 		}
 	}
 

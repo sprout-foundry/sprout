@@ -40,7 +40,7 @@ func (a *Agent) ImportState(data []byte) error {
 		return fmt.Errorf("failed to import state: %w", err)
 	}
 	a.messages = state.Messages
-	a.replaceTurnCheckpoints(state.TurnCheckpoints)
+	a.ReplaceTurnCheckpoints(state.TurnCheckpoints)
 	// Prefer compact summary for continuity, fallback to legacy summary
 	if state.CompactSummary != "" {
 		a.previousSummary = state.CompactSummary

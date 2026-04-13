@@ -119,7 +119,7 @@ func (a *Agent) copyTurnCheckpoints() []TurnCheckpoint {
 	return append([]TurnCheckpoint(nil), a.turnCheckpoints...)
 }
 
-func (a *Agent) replaceTurnCheckpoints(checkpoints []TurnCheckpoint) {
+func (a *Agent) ReplaceTurnCheckpoints(checkpoints []TurnCheckpoint) {
 	if a == nil {
 		return
 	}

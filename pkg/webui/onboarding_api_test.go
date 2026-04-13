@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/alantheprice/ledit/pkg/configuration"
@@ -345,4 +346,223 @@ func TestOnboardingStatus_MissingClientID_Header(t *testing.T) {
 	decodeJSON(t, rec, &resp)
 	assert.Contains(t, resp, "setup_required")
 	assert.Contains(t, resp, "current_provider")
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/onboarding/complete — handleAPIOnboardingComplete
+// ---------------------------------------------------------------------------
+
+func TestOnboardingComplete_MethodNotAllowed(t *testing.T) {
+	ws, _ := setupOnboardingTestServer(t)
+
+	req := makeCredRequest(t, http.MethodGet, "/api/onboarding/complete", nil)
+	rec := httptest.NewRecorder()
+	ws.handleAPIOnboardingComplete(rec, req)
+
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+func TestOnboardingComplete_InvalidJSON(t *testing.T) {
+	ws, _ := setupOnboardingTestServer(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/onboarding/complete", strings.NewReader("not json"))
+	req.Header.Set(webClientIDHeader, "test-client")
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	ws.handleAPIOnboardingComplete(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	var resp map[string]interface{}
+	decodeJSON(t, rec, &resp)
+	assert.Contains(t, resp["error"], "Invalid JSON")
+}
+
+func TestOnboardingComplete_MissingProvider(t *testing.T) {
+	ws, _ := setupOnboardingTestServer(t)
+
+	req := makeCredRequest(t, http.MethodPost, "/api/onboarding/complete", map[string]string{"model": "gpt-4"})
+	rec := httptest.NewRecorder()
+	ws.handleAPIOnboardingComplete(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	var resp map[string]interface{}
+	decodeJSON(t, rec, &resp)
+	assert.Contains(t, resp["error"], "provider is required")
+}
+
+func TestOnboardingComplete_UnknownProvider(t *testing.T) {
+	ws, _ := setupOnboardingTestServer(t)
+
+	req := makeCredRequest(t, http.MethodPost, "/api/onboarding/complete", map[string]string{
+		"provider": "nonexistent_provider_xyz",
+		"model":    "m1",
+	})
+	rec := httptest.NewRecorder()
+	ws.handleAPIOnboardingComplete(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	var resp map[string]interface{}
+	decodeJSON(t, rec, &resp)
+	assert.Contains(t, resp["error"], "unsupported provider")
+}
+
+func TestOnboardingComplete_MissingAPIKey(t *testing.T) {
+	ws, _ := setupOnboardingTestServer(t)
+
+	req := makeCredRequest(t, http.MethodPost, "/api/onboarding/complete", map[string]string{
+		"provider": "openrouter",
+		"model":    "openai/gpt-4",
+	})
+	rec := httptest.NewRecorder()
+	ws.handleAPIOnboardingComplete(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	var resp map[string]interface{}
+	decodeJSON(t, rec, &resp)
+	assert.Contains(t, resp["error"], "api_key is required")
+}
+
+func TestOnboardingComplete_TestProviderRejected(t *testing.T) {
+	ws, _ := setupOnboardingTestServer(t)
+
+	storeProviderCredential(t, "test", "test-key")
+
+	req := makeCredRequest(t, http.MethodPost, "/api/onboarding/complete", map[string]string{
+		"provider": "test",
+		"model":    "test-model",
+	})
+	rec := httptest.NewRecorder()
+	ws.handleAPIOnboardingComplete(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	var resp map[string]interface{}
+	decodeJSON(t, rec, &resp)
+	assert.Contains(t, resp["error"], "test provider cannot be used")
+}
+
+func TestOnboardingComplete_InvalidAPIKey(t *testing.T) {
+	ws, _ := setupOnboardingTestServer(t)
+
+	req := makeCredRequest(t, http.MethodPost, "/api/onboarding/complete", map[string]string{
+		"provider": "openrouter",
+		"model":    "openai/gpt-4",
+		"api_key":  "bad",
+	})
+	rec := httptest.NewRecorder()
+	ws.handleAPIOnboardingComplete(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	var resp map[string]interface{}
+	decodeJSON(t, rec, &resp)
+	// Should fail with an error related to the key being invalid.
+	assert.Contains(t, resp, "error", "response should have an error field")
+}
+
+func TestOnboardingComplete_InvalidAPIKey_ErrorResponseBody(t *testing.T) {
+	ws, _ := setupOnboardingTestServer(t)
+
+	req := makeCredRequest(t, http.MethodPost, "/api/onboarding/complete", map[string]string{
+		"provider": "openrouter",
+		"model":    "openai/gpt-4",
+		"api_key":  "bad-key",
+	})
+	rec := httptest.NewRecorder()
+	ws.handleAPIOnboardingComplete(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	var resp map[string]interface{}
+	decodeJSON(t, rec, &resp)
+	assert.Contains(t, resp, "error", "error response should have an error field")
+}
+
+func TestOnboardingComplete_LocalProviderPersistsConfig(t *testing.T) {
+	ws, _ := setupOnboardingTestServer(t)
+
+	// Find a provider that doesn't require an API key.
+	statusReq := makeCredRequest(t, http.MethodGet, "/api/onboarding/status", nil)
+	statusRec := httptest.NewRecorder()
+	ws.handleAPIOnboardingStatus(statusRec, statusReq)
+	require.Equal(t, http.StatusOK, statusRec.Code)
+
+	var statusResp map[string]interface{}
+	decodeJSON(t, statusRec, &statusResp)
+	providers := statusResp["providers"].([]interface{})
+
+	var localProvider string
+	for _, p := range providers {
+		pm := p.(map[string]interface{})
+		if requires, ok := pm["requires_api_key"].(bool); ok && !requires {
+			localProvider = pm["id"].(string)
+			break
+		}
+	}
+	if localProvider == "" {
+		t.Skip("No local/no-key provider available in test environment")
+	}
+
+	// Note: agent creation calls getClientAgent() which may block for up to 30s
+	// on its internal connection check. httptest.NewRecorder does not propagate
+	// context cancellation into the handler, so a request-context timeout is
+	// ineffective here. The test is tolerant of any response code.
+	req := makeCredRequest(t, http.MethodPost, "/api/onboarding/complete", map[string]string{
+		"provider": localProvider,
+		"model":    "test-model",
+	})
+	rec := httptest.NewRecorder()
+	ws.handleAPIOnboardingComplete(rec, req)
+
+	// Verify the config was updated with the new provider, even if the overall
+	// request returned an error (e.g., agent connection check failed).
+	cm := getConfigManager(t, ws)
+	cfg := cm.GetConfig()
+	assert.Equal(t, localProvider, cfg.LastUsedProvider,
+		"provider should be persisted to config even if handler returns error")
+}
+
+func TestOnboardingComplete_TrimsInputFields(t *testing.T) {
+	ws, _ := setupOnboardingTestServer(t)
+
+	req := makeCredRequest(t, http.MethodPost, "/api/onboarding/complete", map[string]string{
+		"provider": "  openrouter  ",
+		"model":    "  test-model  ",
+		"api_key":  "  bad  ",
+	})
+	rec := httptest.NewRecorder()
+	ws.handleAPIOnboardingComplete(rec, req)
+
+	// Should NOT fail with "provider is required" — provider is trimmed.
+	// It should fail at the validation or agent creation step.
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	var resp map[string]interface{}
+	decodeJSON(t, rec, &resp)
+	assert.NotContains(t, resp["error"], "provider is required")
+}
+
+func TestOnboardingComplete_EmptyProvider(t *testing.T) {
+	ws, _ := setupOnboardingTestServer(t)
+
+	req := makeCredRequest(t, http.MethodPost, "/api/onboarding/complete", map[string]string{
+		"provider": "  ",
+		"model":    "m1",
+	})
+	rec := httptest.NewRecorder()
+	ws.handleAPIOnboardingComplete(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	var resp map[string]interface{}
+	decodeJSON(t, rec, &resp)
+	assert.Contains(t, resp["error"], "provider is required")
+}
+
+func TestOnboardingComplete_EmptyBody(t *testing.T) {
+	ws, _ := setupOnboardingTestServer(t)
+
+	req := makeCredRequest(t, http.MethodPost, "/api/onboarding/complete", map[string]string{})
+	rec := httptest.NewRecorder()
+	ws.handleAPIOnboardingComplete(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	var resp map[string]interface{}
+	decodeJSON(t, rec, &resp)
+	assert.Contains(t, resp["error"], "provider is required")
 }

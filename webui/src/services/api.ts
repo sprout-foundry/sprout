@@ -349,7 +349,13 @@ class ApiService {
     provider: string;
     model?: string;
     api_key?: string;
-  }): Promise<{ success: boolean; message: string; provider: string; model: string }> {
+  }): Promise<{
+    success: boolean;
+    message: string;
+    provider: string;
+    model: string;
+    validation?: { tested: boolean; model_count: number } | null;
+  }> {
     const response = await clientFetch('/api/onboarding/complete', {
       method: 'POST',
       headers: {
@@ -358,8 +364,20 @@ class ApiService {
       body: JSON.stringify(payload),
     });
     if (!response.ok) {
+      // Parse structured error to detect API key validation failures.
+      let message = 'Failed to complete onboarding';
+      let code: string | undefined;
       const text = await response.text();
-      throw new Error(text || 'Failed to complete onboarding');
+      try {
+        const body = JSON.parse(text);
+        message = body.error || message;
+        code = body.code;
+      } catch {
+        if (text) message = text;
+      }
+      const error = new Error(message) as Error & { code?: string };
+      error.code = code;
+      throw error;
     }
     return response.json();
   }

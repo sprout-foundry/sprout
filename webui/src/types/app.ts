@@ -148,4 +148,7 @@ export interface OnboardingState {
   submitting: boolean;
   platformActionMessage: string | null;
   error: string | null;
+  initialModelSet: boolean;
+  /** True when the current error is specifically an API key validation failure. */
+  keyError: boolean;
 }

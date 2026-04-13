@@ -1192,6 +1192,11 @@ body,
   padding: 8px 10px;
 }
 
+.onboarding-key-error {
+  border-color: var(--accent-error) !important;
+  outline-color: var(--accent-error) !important;
+}
+
 /* Onboarding model combobox */
 .onboarding-model-combobox {
   position: relative;

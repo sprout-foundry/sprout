@@ -183,15 +183,15 @@ type setCredentialRequest struct {
 
 // validateAndSetCredential validates a new API key before storing it.
 // If validation fails, the old key is preserved and an error is returned.
-// Returns true if validation succeeded and key was stored, false otherwise.
-func (ws *ReactWebServer) validateAndSetCredential(cm *configuration.Manager, provider, newValue string) (bool, error) {
+// Returns the number of models available if validation succeeded, or 0 and an error.
+func (ws *ReactWebServer) validateAndSetCredential(cm *configuration.Manager, provider, newValue string) (int, error) {
 	// Use the shared ValidateAndSaveAPIKey function which handles:
 	// - Mutex-protected read-modify-write (prevents race conditions)
 	// - Validation via ListModels API call
 	// - Restoration of old key on failure
-	_, err := configuration.ValidateAndSaveAPIKey(provider, newValue)
+	modelCount, err := configuration.ValidateAndSaveAPIKey(provider, newValue)
 	if err != nil {
-		return false, fmt.Errorf("validation failed: %w", err)
+		return 0, fmt.Errorf("validation failed: %w", err)
 	}
 
 	// Sync the Manager's in-memory cache with the backend
@@ -200,9 +200,7 @@ func (ws *ReactWebServer) validateAndSetCredential(cm *configuration.Manager, pr
 		// Continue anyway - the key is saved in backend, just cache is stale
 	}
 
-	// Validation succeeded - key is already stored in backend via ValidateAndSaveAPIKey
-	// (ValidateAndSaveAPIKey logs success with model count, so no duplicate log here)
-	return true, nil
+	return modelCount, nil
 }
 
 func (ws *ReactWebServer) handleAPISettingsCredentialsPut(w http.ResponseWriter, r *http.Request) {

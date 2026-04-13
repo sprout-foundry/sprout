@@ -1,6 +1,7 @@
 package webui
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -11,6 +12,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"time"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/configuration"
@@ -423,12 +425,37 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 		return
 	}
 
+	var validationTested bool
+	var validationModelCount int
+
 	if req.APIKey != "" {
 		// Validate the new key BEFORE storing it
 		// This ensures we never replace a working key with a broken one
-		if _, err := ws.validateAndSetCredential(cm, req.Provider, req.APIKey); err != nil {
-			writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("API key validation failed: %s", sanitizeTestError(err)))
+		modelCount, err := ws.validateAndSetCredential(cm, req.Provider, req.APIKey)
+		if err != nil {
+			writeJSONErr(w, http.StatusBadRequest, "api_key_invalid", fmt.Sprintf("API key validation failed: %s", sanitizeTestError(err)))
 			return
+		}
+		validationTested = true
+		validationModelCount = modelCount
+	} else if meta.RequiresAPIKey && hasCredential && providerType != api.TestClientType {
+		// No new key provided but provider requires one and has an existing
+		// credential (e.g. from an environment variable). Validate it so a
+		// stale / bad key is caught before setup completes.
+		clientType, parseErr := api.ParseProviderName(req.Provider)
+		if parseErr != nil {
+			log.Printf("webui: skipping existing credential validation for %q: ParseProviderName failed: %v", req.Provider, parseErr)
+		} else {
+			ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+			models, listErr := api.GetModelsForProviderCtx(ctx, clientType)
+			cancel()
+			if listErr != nil {
+				writeJSONErr(w, http.StatusBadRequest, "api_key_invalid",
+					fmt.Sprintf("Existing credential validation failed: %s. Please update your API key and try again.", sanitizeTestError(listErr)))
+				return
+			}
+			validationTested = true
+			validationModelCount = len(models)
 		}
 	}
 
@@ -490,12 +517,20 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 	_ = ws.syncAgentStateForClient(clientID)
 	ws.publishProviderState(clientID)
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	// Build response with optional validation feedback.
+	resp := map[string]interface{}{
 		"success":  true,
 		"message":  "Onboarding completed",
 		"provider": clientAgent.GetProvider(),
 		"model":    clientAgent.GetModel(),
-	})
+	}
+	if validationTested {
+		resp["validation"] = map[string]interface{}{
+			"tested":      true,
+			"model_count": validationModelCount,
+		}
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (ws *ReactWebServer) handleAPIOnboardingSkip(w http.ResponseWriter, r *http.Request) {

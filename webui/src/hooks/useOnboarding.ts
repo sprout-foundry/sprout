@@ -61,6 +61,8 @@ function useOnboarding(): UseOnboardingReturn {
     submitting: false,
     platformActionMessage: null,
     error: null,
+    initialModelSet: false,
+    keyError: false,
   });
 
   const apiService = ApiService.getInstance();
@@ -95,6 +97,8 @@ function useOnboarding(): UseOnboardingReturn {
         submitting: false,
         platformActionMessage: null,
         error: null,
+        initialModelSet: true,
+        keyError: false,
       });
     } catch (error) {
       debugLog('[useOnboarding] Failed to refresh setup status:', error);
@@ -105,6 +109,7 @@ function useOnboarding(): UseOnboardingReturn {
         showAllProviders: false,
         platformActionMessage: null,
         error: error instanceof Error ? error.message : 'Failed to check setup status',
+        initialModelSet: false,
       }));
     }
   }, [apiService]);
@@ -188,6 +193,8 @@ function useOnboarding(): UseOnboardingReturn {
         model: provider?.recommended_model || provider?.models?.[0] || '',
         apiKey: '',
         error: null,
+        keyError: false,
+        initialModelSet: true,
       };
     });
   }, []);
@@ -195,15 +202,15 @@ function useOnboarding(): UseOnboardingReturn {
   const onComplete = useCallback(
     async (applyAppState: (values: { provider: string; model: string }) => void) => {
       if (!onboarding.provider) {
-        setOnboarding((prev) => ({ ...prev, error: 'Select a provider first.' }));
+        setOnboarding((prev) => ({ ...prev, error: 'Select a provider first.', keyError: false }));
         return;
       }
       if (selectedProvider?.requires_api_key && !selectedProvider.has_credential && !onboarding.apiKey.trim()) {
-        setOnboarding((prev) => ({ ...prev, error: 'API key is required for this provider.' }));
+        setOnboarding((prev) => ({ ...prev, error: 'API key is required for this provider.', keyError: false }));
         return;
       }
 
-      setOnboarding((prev) => ({ ...prev, submitting: true, error: null }));
+      setOnboarding((prev) => ({ ...prev, submitting: true, error: null, keyError: false }));
       try {
         const response = await apiService.completeOnboarding({
           provider: onboarding.provider,
@@ -220,13 +227,18 @@ function useOnboarding(): UseOnboardingReturn {
           open: false,
           submitting: false,
           apiKey: '',
+          keyError: false,
         }));
       } catch (error) {
         debugLog('[useOnboarding] Failed to complete setup:', error);
+        // Detect API key validation failures from structured error codes.
+        const isKeyError = (error as Error & { code?: string })?.code === 'api_key_invalid'
+          || (error instanceof Error && /api key.*(?:invalid|failed|validation)/i.test(error.message));
         setOnboarding((prev) => ({
           ...prev,
           submitting: false,
           error: error instanceof Error ? error.message : 'Failed to complete setup',
+          keyError: !!isKeyError,
         }));
       }
     },
@@ -275,6 +287,8 @@ function useOnboarding(): UseOnboardingReturn {
         submitting: false,
         platformActionMessage: null,
         error: null,
+        initialModelSet: true,
+        keyError: false,
       });
     } catch (error) {
       debugLog('[useOnboarding] Failed to open provider setup:', error);
@@ -285,6 +299,7 @@ function useOnboarding(): UseOnboardingReturn {
         showAllProviders: false,
         platformActionMessage: null,
         error: error instanceof Error ? error.message : 'Failed to load provider setup',
+        keyError: false,
       }));
     }
   }, [apiService]);

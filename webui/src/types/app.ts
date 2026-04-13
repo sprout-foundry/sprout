@@ -155,4 +155,6 @@ export interface OnboardingState {
   validationModelCount: number;
   /** True when the current error is specifically an API key validation failure. */
   keyError: boolean;
+  /** True when the dialog was opened for re-onboarding (from settings), not first-run. */
+  isReonboarding: boolean;
 }

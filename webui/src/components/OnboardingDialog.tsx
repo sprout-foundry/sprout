@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, type ReactElement } from 'react';
+import { X } from 'lucide-react';
 import type { OnboardingState } from '../types/app';
 import type { OnboardingProviderOption } from '../services/api';
 import type { WindowsOnboardingGuidance } from '../hooks/useOnboarding';
@@ -144,13 +145,26 @@ function OnboardingDialog({
     : null;
 
   return (
-    <div className="onboarding-overlay" role="dialog" aria-modal="true" aria-label="Set up ledit">
+    <div className="onboarding-overlay" role="dialog" aria-modal="true" aria-label={onboarding.isReonboarding ? 'Change provider' : 'Set up ledit'}>
       <div className="onboarding-card">
-        <h2>Set Up Ledit</h2>
+        {onboarding.isReonboarding && (
+          <button
+            type="button"
+            className="onboarding-card-close"
+            onClick={() => updateOnboarding((prev) => ({ ...prev, open: false }))}
+            disabled={onboarding.submitting || onboarding.checking || onboarding.validationSuccess}
+            aria-label="Close"
+          >
+            <X size={18} />
+          </button>
+        )}
+        <h2>{onboarding.isReonboarding ? 'Change Provider' : 'Set Up Ledit'}</h2>
         <p>
-          {onboarding.reason === 'missing_provider_credential'
-            ? 'The selected provider is missing credentials.'
-            : 'Choose a provider and model to get started.'}
+          {onboarding.isReonboarding
+            ? 'Choose a new provider and model, or update your API key.'
+            : (onboarding.reason === 'missing_provider_credential'
+              ? 'The selected provider is missing credentials.'
+              : 'Choose a provider and model to get started.')}
         </p>
 
         {windowsGuidance && (
@@ -367,12 +381,16 @@ function OnboardingDialog({
 
         {onboarding.platformActionMessage && <div className="onboarding-help">{onboarding.platformActionMessage}</div>}
 
-        <div className="onboarding-editor-only-note">Want to explore first? You can set up AI later from Settings.</div>
+        {!onboarding.isReonboarding && (
+          <div className="onboarding-editor-only-note">Want to explore first? You can set up AI later from Settings.</div>
+        )}
 
         <div className="onboarding-actions">
-          <button type="button" className="onboarding-skip-btn" onClick={onSkip} disabled={onboarding.submitting || onboarding.checking || onboarding.validationSuccess}>
-            Skip — use as editor
-          </button>
+          {!onboarding.isReonboarding && (
+            <button type="button" className="onboarding-skip-btn" onClick={onSkip} disabled={onboarding.submitting || onboarding.checking || onboarding.validationSuccess}>
+              Skip — use as editor
+            </button>
+          )}
           <button type="button" onClick={onRefresh} disabled={onboarding.submitting || onboarding.validationSuccess}>
             Refresh
           </button>
@@ -386,7 +404,7 @@ function OnboardingDialog({
               ? 'Done ✓'
               : onboarding.submitting
                 ? 'Validating…'
-                : 'Complete Setup'}
+                : (onboarding.isReonboarding ? 'Save Changes' : 'Complete Setup')}
           </button>
         </div>
       </div>

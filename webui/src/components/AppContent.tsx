@@ -477,6 +477,7 @@ function AppContent({
         onSidebarToggle={onSidebarToggle}
         onProviderChange={onProviderChange}
         onPersonaChange={onPersonaChange}
+        onRequestProviderSetup={onRequestProviderSetup}
         gitPanel={{
           gitStatus,
           gitBranches,

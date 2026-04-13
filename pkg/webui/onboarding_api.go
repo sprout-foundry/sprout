@@ -15,6 +15,7 @@ import (
 	"time"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/agent_providers"
 	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/providercatalog"
 )
@@ -270,6 +271,52 @@ func hasGitBashShell() bool {
 	return false
 }
 
+// persistDefaultModelForProvider resolves a provider's default model from its
+// embedded config and persists it to `config.ProviderModels`. This is used as a
+// fallback when `req.Model` is empty but we still need a model saved so it
+// survives restarts.
+//
+// It returns a warning string if the model could not be persisted, or empty on
+// success.
+func persistDefaultModelForProvider(cm *configuration.Manager, providerName, reqModel string, providerType api.ClientType, logCtx string) string {
+	if reqModel != "" {
+		return "" // explicit model was already persisted before this point
+	}
+
+	factory := providers.NewProviderFactory()
+	if loadErr := factory.LoadEmbeddedConfigs(); loadErr != nil {
+		warning := fmt.Sprintf("Could not load embedded provider configs to resolve default model: %v", loadErr)
+		log.Printf("webui: %s (%s)", warning, logCtx)
+		return warning
+	}
+
+	providerConfig, cfgErr := factory.GetProviderConfig(providerName)
+	if cfgErr != nil {
+		warning := fmt.Sprintf("Could not find provider config for %q to resolve default model: %v", providerName, cfgErr)
+		log.Printf("webui: %s (%s)", warning, logCtx)
+		return warning
+	}
+
+	// Prefer Models.DefaultModel, fall back to Defaults.Model
+	defaultModel := providerConfig.Models.DefaultModel
+	if defaultModel == "" {
+		defaultModel = providerConfig.Defaults.Model
+	}
+	if defaultModel == "" {
+		log.Printf("webui: no default model found in provider config for %s (%s)", providerName, logCtx)
+		return ""
+	}
+
+	if persistErr := cm.SetModelForProvider(providerType, defaultModel); persistErr != nil {
+		warning := fmt.Sprintf("Default model %q could not be saved to config: %v", defaultModel, persistErr)
+		log.Printf("webui: default model persist failed (%s): %v", logCtx, persistErr)
+		return warning
+	}
+
+	log.Printf("webui: persisted default model %q for provider %s (%s)", defaultModel, providerName, logCtx)
+	return ""
+}
+
 func (ws *ReactWebServer) handleAPIOnboardingStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -486,20 +533,35 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 	// real provider instead of "editor".
 	clientAgent, err := ws.getClientAgent(clientID)
 	if err != nil {
+		// Config is already persisted with provider, but we may still need to
+		// persist the model if req.Model was empty. Look up the provider's
+		// default model from embedded configs and persist it.
+		persistWarning := persistDefaultModelForProvider(cm, req.Provider, req.Model, providerType, "getClientAgent error path")
+
 		// Config is already persisted, so the provider/model choice survives restarts.
 		// Return success with a warning so the webui can proceed.
 		log.Printf("webui: onboarding agent creation failed after config persist: %v", err)
-		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"success": true,
-			"message": "Onboarding completed (agent will be created on next use)",
+		resp := map[string]interface{}{
+			"success":  true,
+			"message":  "Onboarding completed (agent will be created on next use)",
 			"provider": req.Provider,
 			"model":    req.Model,
 			"warning":  fmt.Sprintf("Agent creation failed: %v", err),
-		})
+		}
+		if persistWarning != "" {
+			resp["warning"] = fmt.Sprintf("%s. %s", resp["warning"], persistWarning)
+		}
+		writeJSON(w, http.StatusOK, resp)
 		return
 	}
 
 	if err := clientAgent.SetProvider(providerType); err != nil {
+		// SetProvider failed — but config is already persisted.
+		// If req.Model was empty, attempt to persist a default model so it
+		// survives restarts even though onboarding itself failed.
+		if pw := persistDefaultModelForProvider(cm, req.Provider, req.Model, providerType, "SetProvider error path"); pw != "" {
+			log.Printf("webui: %s", pw)
+		}
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -514,11 +576,27 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 	// may be empty and the provider supplied a default. Either way, saving the
 	// actual model ensures the choice survives restarts.
 	var persistWarning string
+	var persistError string
 	if actualModel := clientAgent.GetModel(); actualModel != "" {
 		if persistErr := cm.SetModelForProvider(providerType, actualModel); persistErr != nil {
-			persistWarning = fmt.Sprintf("Model %q was set for this session but could not be saved to config: %v", actualModel, persistErr)
-			log.Printf("webui: onboarding model persist failed: %v", persistErr)
+			// If req.Model was non-empty, we already persisted the model before
+			// agent creation, so this is just a sync operation. Treat as warning.
+			// If req.Model was empty, this is the ONLY persist of the model -
+			// treat it as an error that should be surfaced prominently.
+			if req.Model != "" {
+				persistWarning = fmt.Sprintf("Model %q was set for this session but could not be re-synced to config: %v", actualModel, persistErr)
+				log.Printf("webui: onboarding model re-sync failed: %v", persistErr)
+			} else {
+				persistError = fmt.Sprintf("Model %q was set by the provider but could not be saved to config: %v", actualModel, persistErr)
+				log.Printf("webui: onboarding model persist (required) failed: %v", persistErr)
+			}
 		}
+	}
+
+	// If we have a critical persist error and req.Model was empty, return error response
+	if persistError != "" {
+		writeJSONError(w, http.StatusInternalServerError, persistError)
+		return
 	}
 
 	// Store provider/model on the chat session for per-session tracking.

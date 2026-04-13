@@ -128,7 +128,12 @@ func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 		// tests can cause this; in production the model's context window handles it).
 		// Emergency truncation is a last resort for subagents with oversized
 		// single prompts where no compaction strategy can help.
-		if currentTokens > compactionThreshold && !compactionApplied {
+		//
+		// Safety net: also apply truncation if compaction was applied but we're still
+		// dangerously close to the actual context limit (within 500 tokens). This catches
+		// edge cases where token estimation was off and we actually exceeded the limit.
+		tooCloseToLimit := currentTokens > ch.agent.maxContextTokens-500
+		if (currentTokens > compactionThreshold && !compactionApplied) || (compactionApplied && tooCloseToLimit) {
 			allMessages, currentTokens = ch.emergencyTruncateContext(
 				allMessages, tools, currentTokens, ch.agent.maxContextTokens, compactionThreshold)
 		}

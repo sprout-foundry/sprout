@@ -387,7 +387,7 @@ function AppWithProviders({
         onProviderChange={onboardingHook.onProviderChange}
         onComplete={onboarding.onComplete}
         onSkip={onboarding.onSkip}
-        onRefresh={onboardingHook.refreshStatus}
+        onRefresh={onboardingHook.refreshProviderList}
         onInstallWsl={onboardingHook.onInstallWsl}
         onInstallGitBash={onboardingHook.onInstallGitBash}
         updateOnboarding={onboardingHook.updateOnboarding}

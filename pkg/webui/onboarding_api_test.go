@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	agentprovs "github.com/alantheprice/ledit/pkg/agent_providers"
 	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/credentials"
 	"github.com/alantheprice/ledit/pkg/events"
@@ -683,6 +684,102 @@ func TestOnboardingComplete_ModelPersistedEvenWithoutModelRequest(t *testing.T) 
 	} else if _, hasError := resp["error"]; hasError {
 		// Request failed with an error (e.g., connection timeout), but provider should still be persisted
 		t.Logf("Request failed with error: %v. Provider persistence is still verified.", resp["error"])
+	}
+}
+
+func TestOnboardingComplete_EmptyModel_PersistsDefaultOnAgentFailure(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test that requires network connection check")
+	}
+	ws, tmpDir := setupOnboardingTestServer(t)
+
+	// Find a provider that doesn't require an API key and has a DefaultModel.
+	statusReq := makeCredRequest(t, http.MethodGet, "/api/onboarding/status", nil)
+	statusRec := httptest.NewRecorder()
+	ws.handleAPIOnboardingStatus(statusRec, statusReq)
+	require.Equal(t, http.StatusOK, statusRec.Code)
+
+	var statusResp map[string]interface{}
+	decodeJSON(t, statusRec, &statusResp)
+	providers := statusResp["providers"].([]interface{})
+
+	var localProvider string
+	for _, p := range providers {
+		pm := p.(map[string]interface{})
+		if requires, ok := pm["requires_api_key"].(bool); ok && !requires {
+			localProvider = pm["id"].(string)
+			break
+		}
+	}
+	if localProvider == "" {
+		t.Skip("No local/no-key provider available in test environment")
+	}
+
+	// Look up the default model from the provider's embedded config
+	// to verify it was persisted correctly.
+	factory := agentprovs.NewProviderFactory()
+	err := factory.LoadEmbeddedConfigs()
+	require.NoError(t, err, "failed to load embedded provider configs")
+
+	providerConfig, err := factory.GetProviderConfig(localProvider)
+	require.NoError(t, err, "failed to get provider config")
+
+	expectedDefaultModel := providerConfig.Models.DefaultModel
+	if expectedDefaultModel == "" {
+		// Check fallback to Defaults.Model
+		expectedDefaultModel = providerConfig.Defaults.Model
+	}
+	if expectedDefaultModel == "" {
+		t.Skipf("Provider %q has no default model configured", localProvider)
+	}
+
+	// Complete onboarding with an empty model field.
+	// The connection check will likely time out (no local server), but the
+	// default model should still be persisted to config.ProviderModels.
+	req := makeCredRequest(t, http.MethodPost, "/api/onboarding/complete", map[string]string{
+		"provider": localProvider,
+		"model":    "", // Explicitly empty
+	})
+	rec := httptest.NewRecorder()
+	ws.handleAPIOnboardingComplete(rec, req)
+
+	var resp map[string]interface{}
+	decodeJSON(t, rec, &resp)
+
+	t.Logf("Response status: %d", rec.Code)
+	t.Logf("Response body: %+v", resp)
+
+	// Create a fresh config manager reading from disk to verify persistence.
+	freshCM, err := configuration.NewManagerWithDir(tmpDir)
+	require.NoError(t, err, "failed to create fresh config manager")
+	cfg := freshCM.GetConfig()
+
+	// The provider should be persisted to config.
+	assert.Equal(t, localProvider, cfg.LastUsedProvider,
+		"provider should be persisted to config")
+
+	// The default model should be persisted to config.ProviderModels regardless
+	// of whether onboarding returned success (200) or error (400).
+	persistedModel := cfg.GetModelForProvider(localProvider)
+	assert.NotEmpty(t, persistedModel,
+		"a model should be persisted to config even when req.Model is empty")
+
+	// The default model should be persisted whenever a connection check fails or
+	// the agent cannot be created — regardless of the HTTP response code.
+	t.Logf("Provider: %s, Expected default: %s, Persisted model: %s",
+		localProvider, expectedDefaultModel, persistedModel)
+
+	// When SetProvider connection check fails (400), the default model should
+	// still be persisted from the SetProvider error path.
+	if rec.Code == http.StatusBadRequest {
+		t.Logf("Onboarding returned 400 (connection check failed), model was persisted: %s", persistedModel)
+		assert.Equal(t, expectedDefaultModel, persistedModel,
+			"when SetProvider connection check fails, the provider's default model should be persisted")
+	} else if rec.Code == http.StatusOK {
+		// Agent creation and SetProvider both succeeded.
+		t.Logf("Onboarding succeeded, persisted model: %s", persistedModel)
+	} else {
+		t.Logf("Onboarding returned unexpected status code %d", rec.Code)
 	}
 }
 

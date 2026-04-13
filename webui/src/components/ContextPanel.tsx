@@ -214,6 +214,10 @@ const PANEL_TAB_KEY = 'ledit.contextPanel.tab';
 const PANEL_MIN = 280;
 const PANEL_MAX = 760;
 const MOBILE_LAYOUT_MAX_WIDTH = 768;
+// When the viewport is at or below this width and the panel is collapsed,
+// hide the icon rail entirely.  Above this width the collapsed rail stays
+// visible so the user can re-expand it without a dedicated toolbar button.
+const HIDE_COLLAPSED_RAIL_BELOW = 1024;
 
 const normalizeRevision = (raw: unknown): Revision => {
   const r = raw as Record<string, unknown> | null | undefined;
@@ -259,6 +263,20 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   });
   const panelWidth = typeof requestedPanelWidth === 'number' ? requestedPanelWidth : 360;
   const panelContainerRef = useRef<HTMLDivElement>(null);
+
+  // Track viewport width to hide the collapsed rail on narrow desktops.
+  const [isNarrowLayout, setIsNarrowLayout] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth <= HIDE_COLLAPSED_RAIL_BELOW,
+  );
+
+  useEffect(() => {
+    const onResize = () => {
+      setIsNarrowLayout(window.innerWidth <= HIDE_COLLAPSED_RAIL_BELOW);
+    };
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   // ── Chat-specific state ──────────────────────────────────────────
   type ChatTabId = 'subagents' | 'tools' | 'changes' | 'tasks' | 'status' | 'sessions';
@@ -1720,7 +1738,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
           aria-label="Resize context panel"
         />
       )}
-      {isMobileLayout && panelCollapsed ? null : (
+      {isNarrowLayout && panelCollapsed ? null : (
         <aside
           className={`context-panel ${panelCollapsed ? 'collapsed' : ''}${isMobileLayout ? ' context-panel-mobile' : ''}`}
           aria-label="Context panel"

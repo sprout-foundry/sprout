@@ -3,7 +3,7 @@ import './SettingsPanel.css';
 import { ApiService, type LeditSettings, type ProviderOption } from '../services/api';
 import { useNotifications } from '../contexts/NotificationContext';
 import { debugLog } from '../utils/log';
-import { Pencil, Plus, Trash2, Lock } from 'lucide-react';
+import { Pencil, Plus, Trash2, Lock, Cog, RefreshCw } from 'lucide-react';
 import CredentialsSettingsTab from './CredentialsSettingsTab';
 
 /* ─── Types ──────────────────────────────────────────────────── */
@@ -26,6 +26,8 @@ type SettingsSubTab = 'general' | 'security' | 'credentials' | 'performance' | '
 interface SettingsPanelProps {
   settings: LeditSettings | null;
   onSettingsChanged: (settings: LeditSettings) => void;
+  /** Callback to open the provider setup/onboarding dialog */
+  onRequestProviderSetup?: () => void;
 }
 
 /* ─── Sub-tab definitions ────────────────────────────────────── */
@@ -74,7 +76,7 @@ function setNestedValue(obj: Record<string, unknown>, key: string, value: unknow
 
 /* ─── Component ──────────────────────────────────────────────── */
 
-function SettingsPanel({ settings, onSettingsChanged }: SettingsPanelProps): JSX.Element {
+function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup }: SettingsPanelProps): JSX.Element {
   const [activeSubTab, setActiveSubTab] = useState<SettingsSubTab>('general');
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [textDrafts, setTextDrafts] = useState<Record<string, string>>({});
@@ -119,7 +121,18 @@ function SettingsPanel({ settings, onSettingsChanged }: SettingsPanelProps): JSX
   const [subagentTypes, setSubagentTypes] = useState<Record<string, SubagentTypeEntry>>({});
   const [subagentSavingPersona, setSubagentSavingPersona] = useState<string | null>(null);
 
+  // Current provider info for the Providers tab
+  const [currentProviderInfo, setCurrentProviderInfo] = useState<{
+    provider: string;
+    model: string;
+    hasCredential: boolean;
+  } | null>(null);
+  const [loadingProviderInfo, setLoadingProviderInfo] = useState(false);
+
+  // API service instance
   const api = ApiService.getInstance();
+
+  // Fetch current provider info on mount
   const textSaveTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   // Keep a ref to settings for async mutation callbacks.
@@ -161,6 +174,34 @@ function SettingsPanel({ settings, onSettingsChanged }: SettingsPanelProps): JSX
       } catch (err) {
         debugLog('[SettingsPanel] failed to load subagent types:', err);
         // Silently fail — dropdowns will just be empty
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSubTab, api]);
+
+  // Fetch current provider info when providers tab is activated
+  useEffect(() => {
+    if (activeSubTab !== 'providers') return;
+    let cancelled = false;
+    setLoadingProviderInfo(true);
+    (async () => {
+      try {
+        const status = await api.getOnboardingStatus();
+        if (cancelled) return;
+        // Find provider entry to check if credential exists
+        const providerEntry = (status.providers || []).find((p) => p.id === status.current_provider);
+        setCurrentProviderInfo({
+          provider: status.current_provider,
+          model: status.current_model,
+          hasCredential: providerEntry?.has_credential || false,
+        });
+      } catch (err) {
+        debugLog('[SettingsPanel] failed to load provider info:', err);
+        // Keep null on error
+      } finally {
+        if (!cancelled) setLoadingProviderInfo(false);
       }
     })();
     return () => {
@@ -1331,7 +1372,54 @@ function SettingsPanel({ settings, onSettingsChanged }: SettingsPanelProps): JSX
 
         return (
           <div className="section">
-            <h4>Custom Providers ({providerEntries.length})</h4>
+            {/* Current Provider section - shows active provider and allows re-onboarding */}
+            <div className="current-provider-section">
+              <h4>Current Provider</h4>
+              {loadingProviderInfo ? (
+                <div className="settings-loading">Loading...</div>
+              ) : currentProviderInfo ? (
+                <div className="current-provider-info">
+                  <div className="current-provider-detail">
+                    <span className="label">Provider:</span>
+                    <span className="value">{currentProviderInfo.provider || 'Not configured'}</span>
+                  </div>
+                  <div className="current-provider-detail">
+                    <span className="label">Model:</span>
+                    <span className="value">{currentProviderInfo.model || '—'}</span>
+                  </div>
+                  <div className="current-provider-detail">
+                    <span className="label">Credential:</span>
+                    <span className={`value ${currentProviderInfo.hasCredential ? 'configured' : 'missing'}`}>
+                      {currentProviderInfo.hasCredential ? '✓ Configured' : 'Missing'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="onboarding-reopen-btn"
+                    onClick={() => onRequestProviderSetup?.()}
+                    title="Change provider, model, or API key"
+                  >
+                    <Cog size={14} />
+                    Provider Setup
+                  </button>
+                </div>
+              ) : (
+                <div className="settings-empty">
+                  No provider configured
+                  <button
+                    type="button"
+                    className="onboarding-reopen-btn"
+                    onClick={() => onRequestProviderSetup?.()}
+                  >
+                    <Cog size={14} />
+                    Set up provider
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Custom Providers section */}
+            <h4 style={{ marginTop: '24px' }}>Custom Providers ({providerEntries.length})</h4>
 
             {providerEntries.length === 0 && !editingProvider && (
               <div className="settings-empty">No custom providers configured</div>

@@ -43,6 +43,8 @@ interface SidebarProps {
   onModelChange?: (model: string) => void;
   selectedPersona?: string;
   onPersonaChange?: (persona: string) => void;
+  /** Callback to open provider setup / onboarding dialog */
+  onRequestProviderSetup?: () => void;
   availableModels?: string[];
   currentView?: 'chat' | 'editor' | 'git';
   onViewChange?: (view: 'chat' | 'editor' | 'git') => void;
@@ -136,6 +138,7 @@ function Sidebar({
   onClose,
   isMobile = false,
   gitPanel,
+  onRequestProviderSetup,
 }: SidebarProps): JSX.Element {
   const log = useLog();
   const { themePack, availableThemePacks, setThemePack, importTheme, removeTheme } = useTheme();
@@ -898,7 +901,11 @@ function Sidebar({
           </div>
         </div>
 
-        <SettingsPanel settings={settings} onSettingsChanged={(s) => setSettings(s)} />
+        <SettingsPanel
+          settings={settings}
+          onSettingsChanged={(s) => setSettings(s)}
+          onRequestProviderSetup={onRequestProviderSetup}
+        />
       </>
     );
   };

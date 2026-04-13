@@ -101,6 +101,13 @@ func ResolveProviderModel(cfg *Config, explicitProvider, explicitModel string) (
 		providerName = strings.TrimSpace(cfg.LastUsedProvider)
 	}
 
+	// Never use the test provider from persisted config — it's only for
+	// process-scoped testing (isRunningUnderTest) and must not leak into
+	// real sessions.
+	if providerName == "test" {
+		providerName = ""
+	}
+
 	var clientType api.ClientType
 	var err error
 	if providerName != "" {

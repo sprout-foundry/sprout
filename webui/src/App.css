@@ -1192,6 +1192,84 @@ body,
   padding: 8px 10px;
 }
 
+/* Onboarding model combobox */
+.onboarding-model-combobox {
+  position: relative;
+}
+
+.onboarding-model-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-elevated);
+  z-index: 100;
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+}
+
+.onboarding-model-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--text-primary);
+  font-size: 14px;
+  transition: background 0.1s var(--ease-out);
+}
+
+.onboarding-model-list-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.onboarding-model-list-item.highlighted {
+  background: var(--bg-elevated);
+  outline: 1px solid var(--border-focus);
+}
+
+.onboarding-model-list-item.recommended {
+  background: color-mix(in srgb, var(--accent-success) 8%, transparent);
+  border-left: 2px solid var(--accent-success);
+}
+
+.onboarding-model-list-item.recommended .model-name {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.onboarding-model-list-item.recommended:hover,
+.onboarding-model-list-item.recommended.highlighted {
+  background: color-mix(in srgb, var(--accent-success) 14%, transparent);
+}
+
+.onboarding-model-list-item .recommended-badge {
+  color: var(--accent-success);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.onboarding-model-list-item.no-results {
+  color: var(--text-tertiary);
+  font-size: 13px;
+  font-style: italic;
+  cursor: default;
+  padding: 10px;
+}
+
+.onboarding-model-list-item.no-results:hover {
+  background: transparent;
+}
+
 .onboarding-actions {
   display: flex;
   justify-content: flex-end;

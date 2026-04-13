@@ -223,3 +223,76 @@ func TestMergeLegacyStructuredToolsIntoPersonaAllowlists(t *testing.T) {
 	webScraper := cfg.SubagentTypes["web_scraper"]
 	assert.Contains(t, webScraper.AllowedTools, "shell_command")
 }
+
+func TestGetSubagentMaxParallel(t *testing.T) {
+	tests := []struct {
+		name       string
+		config    *Config
+		expected  int
+	}{
+		{
+			name: "returns configured value when greater than 0",
+			config: &Config{
+				SubagentMaxParallel: 5,
+			},
+			expected: 5,
+		},
+		{
+			name: "returns default 2 when set to 0",
+			config: &Config{
+				SubagentMaxParallel: 0,
+			},
+			expected: 2,
+		},
+		{
+			name: "returns default 2 when set to negative value",
+			config: &Config{
+				SubagentMaxParallel: -1,
+			},
+			expected: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.config.GetSubagentMaxParallel()
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestGetSubagentParallelEnabled(t *testing.T) {
+	trueVal := true
+	falseVal := false
+
+	tests := []struct {
+		name      string
+		config   *Config
+		expected bool
+	}{
+		{
+			name: "returns true when field is explicitly set to true",
+			config: &Config{
+				SubagentParallelEnabled: &trueVal,
+			},
+			expected: true,
+		},
+		{
+			name:      "returns false when field is explicitly set to false",
+			config:   &Config{SubagentParallelEnabled: &falseVal},
+			expected: false,
+		},
+		{
+			name:      "returns true when field not set (default config)",
+			config:   &Config{},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.config.GetSubagentParallelEnabled()
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}

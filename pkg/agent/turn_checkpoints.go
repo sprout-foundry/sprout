@@ -201,3 +201,60 @@ func (a *Agent) BuildCheckpointCompactedMessages(messages []api.Message) ([]api.
 	compacted = append(compacted, messages[nextIndex:]...)
 	return compacted, remaining
 }
+
+// TriggerCompaction forces a compaction of the conversation history.
+// This is called when an API error indicates the context window limit was exceeded.
+// Returns true if compaction was applied, false if nothing could be compacted.
+func (a *Agent) TriggerCompaction() bool {
+	if a == nil {
+		return false
+	}
+
+	// Try checkpoint compaction first (lighter weight)
+	if a.HasTurnCheckpoints() {
+		checkpointed, remaining := a.BuildCheckpointCompactedMessages(a.messages)
+		if len(checkpointed) < len(a.messages) {
+			a.messages = checkpointed
+			a.ReplaceTurnCheckpoints(remaining)
+			if a.debug {
+				a.debugLog("[~] Context limit exceeded - applied checkpoint compaction\n")
+			}
+			return true
+		}
+	}
+
+	// Try structural compaction (LLM-based)
+	if a.optimizer != nil && a.optimizer.IsEnabled() {
+		llmCompacted := a.optimizer.CompactConversation(a.messages)
+		if len(llmCompacted) < len(a.messages) {
+			a.messages = llmCompacted
+			a.clearTurnCheckpoints()
+			if a.debug {
+				a.debugLog("[~] Context limit exceeded - applied LLM structural compaction\n")
+			}
+			return true
+		}
+	}
+
+	// Last resort: emergency truncation
+	// Keep at least 2 non-system messages to preserve the last conversation turn
+	if len(a.messages) > 2 {
+		// Determine where to start (skip system prompt if present)
+		keepStart := 0
+		if len(a.messages) > 0 && a.messages[0].Role == "system" {
+			keepStart = 1
+		}
+		// Only truncate if we'd still have at least 2 messages after truncation
+		if len(a.messages)-keepStart > 2 {
+			keepEnd := len(a.messages)
+			a.messages = append(a.messages[:keepStart], a.messages[keepEnd-2:]...)
+			a.clearTurnCheckpoints()
+			if a.debug {
+				a.debugLog("[~] Context limit exceeded - applied emergency truncation\n")
+			}
+			return true
+		}
+	}
+
+	return false
+}

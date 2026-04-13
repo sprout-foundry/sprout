@@ -616,3 +616,74 @@ func TestOnboardingComplete_ModelPersistedBeforeAgentCreation(t *testing.T) {
 	assert.Equal(t, testModel, persistedModel,
 		"model should be persisted to config ProviderModels even if agent creation fails")
 }
+
+func TestOnboardingComplete_ModelPersistedEvenWithoutModelRequest(t *testing.T) {
+	ws, _ := setupOnboardingTestServer(t)
+
+	// Find a provider that doesn't require an API key.
+	statusReq := makeCredRequest(t, http.MethodGet, "/api/onboarding/status", nil)
+	statusRec := httptest.NewRecorder()
+	ws.handleAPIOnboardingStatus(statusRec, statusReq)
+	require.Equal(t, http.StatusOK, statusRec.Code)
+
+	var statusResp map[string]interface{}
+	decodeJSON(t, statusRec, &statusResp)
+	providers := statusResp["providers"].([]interface{})
+
+	var localProvider string
+	for _, p := range providers {
+		pm := p.(map[string]interface{})
+		if requires, ok := pm["requires_api_key"].(bool); ok && !requires {
+			localProvider = pm["id"].(string)
+			break
+		}
+	}
+	if localProvider == "" {
+		t.Skip("No local/no-key provider available in test environment")
+	}
+
+	// Complete onboarding WITHOUT specifying a model field.
+	// The agent should use its default model, which should be persisted.
+	req := makeCredRequest(t, http.MethodPost, "/api/onboarding/complete", map[string]string{
+		"provider": localProvider,
+	})
+	rec := httptest.NewRecorder()
+	ws.handleAPIOnboardingComplete(rec, req)
+
+	// The request might fail with 400 if agent creation/connection fails,
+	// but the provider should still be persisted. Check both success and error paths.
+	var resp map[string]interface{}
+	decodeJSON(t, rec, &resp)
+
+	// Regardless of success or failure, verify the provider was persisted to config
+	cm := getConfigManager(t, ws)
+	cfg := cm.GetConfig()
+
+	assert.Equal(t, localProvider, cfg.LastUsedProvider,
+		"provider should be persisted to config even if the overall request fails")
+
+	// If the request succeeded (has "success" field), verify model was persisted
+	if _, hasSuccess := resp["success"]; hasSuccess {
+		// The response should include a model field (may be empty if agent creation failed)
+		_, ok := resp["model"]
+		require.True(t, ok, "success response should include model field")
+
+		// If agent creation succeeded (no warning), verify the model was persisted
+		if _, hasWarning := resp["warning"]; !hasWarning {
+			agentModel, _ := resp["model"].(string)
+			require.NotEmpty(t, agentModel, "agent should have resolved to a default model when created successfully")
+
+			persistedModel := cfg.GetModelForProvider(localProvider)
+			assert.Equal(t, agentModel, persistedModel,
+				"agent's default model should be persisted to config even when model field was not specified")
+		} else {
+			// Agent creation failed (expected in test environment), but provider should still be persisted
+			t.Logf("Agent creation failed with warning: %v. Provider persistence is still verified.", resp["warning"])
+		}
+	} else if _, hasError := resp["error"]; hasError {
+		// Request failed with an error (e.g., connection timeout), but provider should still be persisted
+		t.Logf("Request failed with error: %v. Provider persistence is still verified.", resp["error"])
+	}
+}
+
+

@@ -344,7 +344,8 @@ function OnboardingDialog({
               id="onboarding-api-key"
               type="password"
               value={onboarding.apiKey}
-              onChange={(e) => updateOnboarding((prev) => ({ ...prev, apiKey: e.target.value }))}
+              className={onboarding.keyError ? 'onboarding-key-error' : ''}
+              onChange={(e) => updateOnboarding((prev) => ({ ...prev, apiKey: e.target.value, error: null, keyError: false }))}
               placeholder="Paste API key"
               disabled={onboarding.submitting || onboarding.checking}
             />

@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react';
+import { useState, useRef, useEffect, useCallback, type ReactElement } from 'react';
 import type { OnboardingState } from '../types/app';
 import type { OnboardingProviderOption } from '../services/api';
 import type { WindowsOnboardingGuidance } from '../hooks/useOnboarding';
@@ -35,9 +35,113 @@ function OnboardingDialog({
   onInstallGitBash,
   updateOnboarding,
 }: OnboardingDialogProps): ReactElement | null {
+  // Model combobox state
+  const [modelListOpen, setModelListOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const comboboxRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (comboboxRef.current && !comboboxRef.current.contains(event.target as Node)) {
+        setModelListOpen(false);
+        setHighlightedIndex(-1);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Close dropdown on Escape key
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    const models = selectedProvider?.models || [];
+    const recommendedModel = selectedProvider?.recommended_model;
+
+    // Sort models so recommended model comes first
+    const sortedModels = [...models].sort((a, b) => {
+      if (a === recommendedModel) return -1;
+      if (b === recommendedModel) return 1;
+      return a.localeCompare(b);
+    });
+
+    // Filter models based on input value
+    const filterText = e.currentTarget.value.toLowerCase();
+    const filteredModels = sortedModels.filter((model) =>
+      model.toLowerCase().includes(filterText)
+    );
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setModelListOpen(true);
+        setHighlightedIndex((prev) =>
+          prev < filteredModels.length - 1 ? prev + 1 : prev
+        );
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setModelListOpen(true);
+        setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : -1));
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (highlightedIndex >= 0 && filteredModels[highlightedIndex]) {
+          updateOnboarding((prev) => ({
+            ...prev,
+            model: filteredModels[highlightedIndex],
+            error: null,
+          }));
+          setModelListOpen(false);
+          setHighlightedIndex(-1);
+        }
+        break;
+      case 'Escape':
+        setModelListOpen(false);
+        setHighlightedIndex(-1);
+        break;
+    }
+  }, [selectedProvider, highlightedIndex, updateOnboarding]);
+
+  // Select a model from the dropdown
+  const selectModel = useCallback(
+    (modelName: string) => {
+      updateOnboarding((prev) => ({ ...prev, model: modelName, error: null }));
+      setModelListOpen(false);
+      setHighlightedIndex(-1);
+      inputRef.current?.blur();
+    },
+    [updateOnboarding]
+  );
+
+  // Get filtered and sorted models for display
+  const getDisplayModels = useCallback(() => {
+    const models = selectedProvider?.models || [];
+    const recommendedModel = selectedProvider?.recommended_model;
+
+    // Sort models so recommended model comes first
+    const sortedModels = [...models].sort((a, b) => {
+      if (a === recommendedModel) return -1;
+      if (b === recommendedModel) return 1;
+      return a.localeCompare(b);
+    });
+
+    // Filter based on current input value
+    const filterText = onboarding.model.toLowerCase();
+    return sortedModels.filter((model) =>
+      model.toLowerCase().includes(filterText)
+    );
+  }, [selectedProvider, onboarding.model]);
+
   if (!onboarding.open) {
     return null;
   }
+
+  // Compute display models for the combobox
+  const displayModels = (selectedProvider?.models || []).length > 0
+    ? getDisplayModels()
+    : null;
 
   return (
     <div className="onboarding-overlay" role="dialog" aria-modal="true" aria-label="Set up ledit">
@@ -165,47 +269,72 @@ function OnboardingDialog({
           </div>
         )}
 
-        <div className="onboarding-step-title">2. Choose a model</div>
-        <label htmlFor="onboarding-model">Model</label>
-        <input
-          id="onboarding-model"
-          value={onboarding.model}
-          onChange={(e) => updateOnboarding((prev) => ({ ...prev, model: e.target.value }))}
-          placeholder="Enter model name"
-          list="onboarding-models"
-          disabled={onboarding.submitting || onboarding.checking}
-        />
-        <datalist id="onboarding-models">
-          {(selectedProvider?.models || []).map((modelName) => (
-            <option key={modelName} value={modelName} />
-          ))}
-        </datalist>
-
-        {selectedProvider?.recommended_model && (
+        {onboarding.initialModelSet && selectedProvider?.recommended_model && onboarding.model !== selectedProvider.recommended_model && (
           <div className="onboarding-note">
             Recommended model: <strong>{selectedProvider.recommended_model}</strong>
             {selectedProvider.recommended_model_why ? ` — ${selectedProvider.recommended_model_why}` : ''}
-            {onboarding.model !== selectedProvider.recommended_model && (
-              <>
-                {' '}
-                <button
-                  type="button"
-                  className="onboarding-inline-action"
-                  onClick={() =>
-                    updateOnboarding((prev) => ({
-                      ...prev,
-                      model: selectedProvider.recommended_model,
-                      error: null,
-                    }))
-                  }
-                  disabled={onboarding.submitting || onboarding.checking}
-                >
-                  Use recommended model
-                </button>
-              </>
-            )}
+            {' '}
+            <button
+              type="button"
+              className="onboarding-inline-action"
+              onClick={() =>
+                updateOnboarding((prev) => ({
+                  ...prev,
+                  model: selectedProvider.recommended_model,
+                  error: null,
+                }))
+              }
+              disabled={onboarding.submitting || onboarding.checking}
+            >
+              Use recommended model
+            </button>
           </div>
         )}
+
+        <div className="onboarding-step-title">2. Choose a model</div>
+        <label htmlFor="onboarding-model">Model</label>
+        <div className="onboarding-model-combobox" ref={comboboxRef}>
+          <input
+            ref={inputRef}
+            id="onboarding-model"
+            value={onboarding.model}
+            onChange={(e) => {
+              updateOnboarding((prev) => ({ ...prev, model: e.target.value }));
+              setHighlightedIndex(-1);
+            }}
+            onFocus={() => setModelListOpen(true)}
+            onKeyDown={handleKeyDown}
+            placeholder="Enter model name"
+            disabled={onboarding.submitting || onboarding.checking}
+            autoComplete="off"
+          />
+          {modelListOpen && displayModels && (
+            <ul className="onboarding-model-list">
+              {displayModels.map((modelName, index) => {
+                const isRecommended = selectedProvider?.recommended_model === modelName;
+                return (
+                  <li
+                    key={modelName}
+                    className={`onboarding-model-list-item ${
+                      isRecommended ? 'recommended' : ''
+                    } ${index === highlightedIndex ? 'highlighted' : ''}`}
+                    onClick={() => selectModel(modelName)}
+                  >
+                    <span className="model-name">{modelName}</span>
+                    {isRecommended && (
+                      <span className="recommended-badge">★ Recommended</span>
+                    )}
+                  </li>
+                );
+              })}
+              {displayModels.length === 0 && (
+                <li className="onboarding-model-list-item no-results">
+                  No matching models
+                </li>
+              )}
+            </ul>
+          )}
+        </div>
 
         {selectedProvider?.requires_api_key && !selectedProvider?.has_credential && (
           <>

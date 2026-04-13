@@ -444,7 +444,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	if err := configManager.SetProvider(clientType); err != nil {
 		fmt.Printf("Warning: Failed to save provider selection: %v\n", err)
 	}
-	if finalModel != "" && finalModel != configManager.GetModelForProvider(clientType) {
+	if finalModel != "" && finalModel != configManager.GetModelForProvider(clientType) && clientType != api.TestClientType {
 		if err := configManager.SetModelForProvider(clientType, finalModel); err != nil {
 			fmt.Printf("\n[WARN] Warning: Failed to save model selection: %v\n", err)
 		}

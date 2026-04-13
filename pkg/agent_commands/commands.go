@@ -86,6 +86,9 @@ func NewCommandRegistry() *CommandRegistry {
 	registry.Register(&SelfReviewCommand{})
 	registry.Register(&SelfReviewGateCommand{})
 
+	// Register compaction command
+	registry.Register(&CompactCommand{})
+
 	return registry
 }
 

@@ -44,8 +44,7 @@ func TestGenerateSystemdUnit(t *testing.T) {
 			// Key fields in [Unit]
 			for _, field := range []string{
 				"Description=ledit daemon - AI coding assistant web UI",
-				"After=network-online.target",
-				"Wants=network-online.target",
+				"After=default.target",
 			} {
 				if !strings.Contains(s, field) {
 					t.Errorf("missing Unit field %q", field)

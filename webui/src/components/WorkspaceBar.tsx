@@ -88,9 +88,9 @@ function WorkspaceBar({
     <div className={`workspace-bar${bar.isRemote ? ' workspace-bar--remote' : ''}`}>
       <span className="workspace-bar-host">
         {bar.isRemote ? (
-          <Server size={11} className="workspace-bar-icon workspace-bar-icon--remote" />
+          <Server size={14} className="workspace-bar-icon workspace-bar-icon--remote" />
         ) : (
-          <Monitor size={11} className="workspace-bar-icon" />
+          <Monitor size={14} className="workspace-bar-icon" />
         )}
         <span className="workspace-bar-host-name">{bar.hostAlias ?? 'Local'}</span>
       </span>

@@ -113,9 +113,10 @@ type Config struct {
 // APITimeoutConfig represents timeout settings for API calls
 type APITimeoutConfig struct {
 	ConnectionTimeoutSec int `json:"connection_timeout_sec,omitempty"`  // Time to establish connection (default: 300)
-	FirstChunkTimeoutSec int `json:"first_chunk_timeout_sec,omitempty"` // Time to receive first response (default: 300)
-	ChunkTimeoutSec      int `json:"chunk_timeout_sec,omitempty"`       // Max time between streaming chunks (default: 300)
-	OverallTimeoutSec    int `json:"overall_timeout_sec,omitempty"`     // Total request timeout (default: 600)
+	FirstChunkTimeoutSec int `json:"first_chunk_timeout_sec,omitempty"` // Time to receive first response (default: 600)
+	ChunkTimeoutSec      int `json:"chunk_timeout_sec,omitempty"`       // Max time between streaming chunks (default: 600)
+	OverallTimeoutSec    int `json:"overall_timeout_sec,omitempty"`     // Total request timeout (default: 1800)
+	CommitMessageTimeoutSec int `json:"commit_message_timeout_sec,omitempty"` // Timeout for commit message generation (default: 300)
 }
 
 // MCPConfig moved to pkg/mcp package for consolidation
@@ -212,10 +213,11 @@ func NewConfig() *Config {
 		MCP:                  mcp.DefaultMCPConfig(),
 		Preferences:          make(map[string]interface{}),
 		APITimeouts: &APITimeoutConfig{
-			ConnectionTimeoutSec: 30,
-			FirstChunkTimeoutSec: 60,
-			ChunkTimeoutSec:      320, // Increased from 90 to 320 seconds (5 minutes) for complex tasks
-			OverallTimeoutSec:    600, // 10 minutes
+			ConnectionTimeoutSec: 300,
+			FirstChunkTimeoutSec: 600,
+			ChunkTimeoutSec:      600,
+			OverallTimeoutSec:    1800,
+			CommitMessageTimeoutSec: 300, // 5 minutes for commit message generation
 		},
 		HistoryScope:                "project", // Default to project-scoped history
 		SelfReviewGateMode:          SelfReviewGateModeOff,
@@ -353,6 +355,7 @@ func Load() (*Config, error) {
 			FirstChunkTimeoutSec: def.FirstChunkTimeoutSec,
 			ChunkTimeoutSec:      def.ChunkTimeoutSec,
 			OverallTimeoutSec:    def.OverallTimeoutSec,
+			CommitMessageTimeoutSec: def.CommitMessageTimeoutSec,
 		}
 	} else {
 		def := NewConfig().APITimeouts
@@ -367,6 +370,9 @@ func Load() (*Config, error) {
 		}
 		if config.APITimeouts.OverallTimeoutSec == 0 {
 			config.APITimeouts.OverallTimeoutSec = def.OverallTimeoutSec
+		}
+		if config.APITimeouts.CommitMessageTimeoutSec == 0 {
+			config.APITimeouts.CommitMessageTimeoutSec = def.CommitMessageTimeoutSec
 		}
 	}
 

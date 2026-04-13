@@ -277,6 +277,11 @@ func (m *Manager) GetProvider() (api.ClientType, error) {
 
 // SetProvider sets the current provider
 func (m *Manager) SetProvider(clientType api.ClientType) error {
+	// Prevent test provider from being persisted - it's for testing only
+	if clientType == api.TestClientType {
+		return fmt.Errorf("test provider cannot be persisted as the active provider")
+	}
+	
 	provider := mapClientTypeToString(clientType)
 	m.mu.Lock()
 	m.config.LastUsedProvider = provider

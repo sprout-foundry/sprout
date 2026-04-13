@@ -73,7 +73,7 @@ func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 				// Persist checkpointed messages so future iterations see the compacted history.
 				ch.agent.messages = checkpointedMessages
 				// Persist adjusted remaining checkpoints so indices stay valid against the compacted array.
-				ch.agent.replaceTurnCheckpoints(remainingCheckpoints)
+				ch.agent.ReplaceTurnCheckpoints(remainingCheckpoints)
 
 				checkpointHistory := []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
 				checkpointHistory = append(checkpointHistory, checkpointedMessages...)

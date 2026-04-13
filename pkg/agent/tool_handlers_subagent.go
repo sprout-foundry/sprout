@@ -18,7 +18,6 @@ import (
 const (
 	MAX_SUBAGENT_OUTPUT_SIZE  = 10 * 1024 * 1024 // 10MB
 	MAX_SUBAGENT_CONTEXT_SIZE = 1024 * 1024      // 1MB
-	MAX_PARALLEL_SUBAGENTS    = 5
 	BATCH_SIZE                = 50 // Number of lines to batch before publishing
 )
 
@@ -967,9 +966,17 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 		}
 	}
 
-	// Validate number of parallel tasks
-	if len(parallelTasks) > MAX_PARALLEL_SUBAGENTS {
-		return "", fmt.Errorf("too many parallel tasks: %d exceeds max of %d", len(parallelTasks), MAX_PARALLEL_SUBAGENTS)
+	// Check if parallel subagents are enabled
+	if a.configManager != nil && !a.configManager.GetConfig().GetSubagentParallelEnabled() {
+		return "", fmt.Errorf("parallel subagents are disabled in configuration. Use run_subagent for sequential execution instead.")
+	}
+
+	// Validate number of parallel tasks against configured max
+	if a.configManager != nil {
+		maxParallel := a.configManager.GetConfig().GetSubagentMaxParallel()
+		if len(parallelTasks) > maxParallel {
+			return "", fmt.Errorf("too many parallel tasks: %d exceeds configured max of %d", len(parallelTasks), maxParallel)
+		}
 	}
 
 	a.debugLog("Spawning %d parallel subagents\n", len(parallelTasks))

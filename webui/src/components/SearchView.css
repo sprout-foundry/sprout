@@ -286,7 +286,7 @@
 .search-file-group {
   border: 1px solid var(--border-default);
   background: var(--bg-elevated);
-  border-radius: var(--radius-md);
+  border-radius: 2px;
   margin-bottom: var(--space-3);
   overflow: hidden;
 }

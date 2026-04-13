@@ -25,8 +25,10 @@ export interface UseOnboardingReturn {
   advancedProviders: OnboardingProviderOption[];
   /** Windows-specific guidance panel, or null when not applicable */
   windowsGuidance: WindowsOnboardingGuidance | null;
-  /** Re-fetch onboarding status from the backend */
+  /** Re-fetch onboarding status from the backend (used on mount). */
   refreshStatus: () => Promise<void>;
+  /** Refresh the provider list without changing dialog open state (used by dialog Refresh button). */
+  refreshProviderList: () => Promise<void>;
   /** Callback: change the selected provider id */
   onProviderChange: (providerID: string) => void;
   /**
@@ -65,6 +67,7 @@ function useOnboarding(): UseOnboardingReturn {
     keyError: false,
     validationSuccess: false,
     validationModelCount: 0,
+    isReonboarding: false,
   });
 
   const apiService = ApiService.getInstance();
@@ -103,6 +106,7 @@ function useOnboarding(): UseOnboardingReturn {
         keyError: false,
         validationSuccess: false,
         validationModelCount: 0,
+        isReonboarding: false,
       });
     } catch (error) {
       debugLog('[useOnboarding] Failed to refresh setup status:', error);
@@ -116,6 +120,38 @@ function useOnboarding(): UseOnboardingReturn {
         initialModelSet: false,
         validationSuccess: false,
         validationModelCount: 0,
+        isReonboarding: false,
+      }));
+    }
+  }, [apiService]);
+
+  /**
+   * Refresh the provider list without changing dialog visibility or
+   * isReonboarding. Used by the dialog's "Refresh" button in both
+   * first-run and re-onboarding modes.
+   */
+  const refreshProviderList = useCallback(async () => {
+    setOnboarding((prev) => ({ ...prev, checking: true, error: null }));
+    try {
+      const status = await apiService.getOnboardingStatus();
+      const providers = Array.isArray(status.providers) ? status.providers : [];
+      const preferredProvider =
+        status.current_provider || providers.find((p) => p.recommended)?.id || providers[0]?.id || '';
+      const providerInfo = providers.find((p) => p.id === preferredProvider) || providers[0];
+      const preferredModel = status.current_model || providerInfo?.recommended_model || providerInfo?.models?.[0] || '';
+      setOnboarding((prev) => ({
+        ...prev,
+        checking: false,
+        providers,
+        provider: prev.provider || preferredProvider,
+        model: prev.model || preferredModel,
+      }));
+    } catch (error) {
+      debugLog('[useOnboarding] Failed to refresh provider list:', error);
+      setOnboarding((prev) => ({
+        ...prev,
+        checking: false,
+        error: error instanceof Error ? error.message : 'Failed to refresh provider list',
       }));
     }
   }, [apiService]);
@@ -320,6 +356,7 @@ function useOnboarding(): UseOnboardingReturn {
         keyError: false,
         validationSuccess: false,
         validationModelCount: 0,
+        isReonboarding: true,
       });
     } catch (error) {
       debugLog('[useOnboarding] Failed to open provider setup:', error);
@@ -333,6 +370,7 @@ function useOnboarding(): UseOnboardingReturn {
         keyError: false,
         validationSuccess: false,
         validationModelCount: 0,
+        isReonboarding: true,
       }));
     }
   }, [apiService]);
@@ -379,6 +417,7 @@ function useOnboarding(): UseOnboardingReturn {
     advancedProviders,
     windowsGuidance,
     refreshStatus,
+    refreshProviderList,
     onProviderChange,
     onComplete,
     onSkip,

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -153,16 +154,22 @@ func TestGenerateCommitMessageFromStagedDiff_Timeout(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh) // unblock any leaked goroutines after test returns
 
-	delayedClient := &mockAPIClient{
-		delay:  120 * time.Second, // Will definitely exceed the 60s internal timeout
-		stopCh: stopCh,
+	// Use a client wrapper that provides config with short timeout
+	delayedClient := &timeoutTestClient{
+		mockAPIClient: &mockAPIClient{
+			delay:  10 * time.Second,
+			stopCh:  stopCh,
+		},
+		timeoutSec: 1, // 1 second timeout - much shorter than 10s mock delay
 	}
 
+	// Override timeout to 1 second to make test fast while still testing timeout logic
 	result, err := GenerateCommitMessageFromStagedDiff(delayedClient, CommitMessageOptions{
 		Diff:        "some diff content here\n+added line\n-removed line",
 		Branch:      "main",
 		FileChanges: []CommitFileChange{{Status: "M", Path: "main.go"}},
 	})
+	// With 1s timeout and 10s mock delay, this should timeout
 	assert.Error(t, err)
 	assert.Nil(t, result)
 	assert.Contains(t, err.Error(), "timed out")
@@ -1200,6 +1207,20 @@ type mockAPIClient struct {
 	stopCh  <-chan struct{}
 	mu      sync.Mutex
 	callIdx int
+}
+
+// timeoutTestClient wraps mockAPIClient to provide config with custom timeout.
+type timeoutTestClient struct {
+	*mockAPIClient
+	timeoutSec int
+}
+
+func (c *timeoutTestClient) GetConfig() *configuration.Config {
+	return &configuration.Config{
+		APITimeouts: &configuration.APITimeoutConfig{
+			CommitMessageTimeoutSec: c.timeoutSec,
+		},
+	}
 }
 
 func (m *mockAPIClient) SendChatRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {

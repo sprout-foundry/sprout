@@ -89,9 +89,11 @@ type Config struct {
 	SelfReviewGateMode string `json:"self_review_gate_mode,omitempty"` // "off", "code", or "always"
 
 	// Subagent Configuration
-	SubagentProvider string                  `json:"subagent_provider,omitempty"` // Provider for subagents (defaults to LastUsedProvider)
-	SubagentModel    string                  `json:"subagent_model,omitempty"`    // Model for subagents (defaults to provider's default model)
-	SubagentTypes    map[string]SubagentType `json:"subagent_types,omitempty"`    // Named subagent personas (coder, tester, etc.)
+	SubagentProvider       string                  `json:"subagent_provider,omitempty"` // Provider for subagents (defaults to LastUsedProvider)
+	SubagentModel          string                  `json:"subagent_model,omitempty"`    // Model for subagents (defaults to provider's default model)
+	SubagentTypes          map[string]SubagentType `json:"subagent_types,omitempty"`    // Named subagent personas (coder, tester, etc.)
+	SubagentMaxParallel    int                     `json:"subagent_max_parallel,omitempty"`     // Maximum number of parallel subagents (default: 2)
+	SubagentParallelEnabled bool                    `json:"subagent_parallel_enabled,omitempty"` // Enable/disable parallel subagent execution (default: true)
 
 	// PDF OCR Configuration
 	PDFOCREnabled    bool   `json:"pdf_ocr_enabled,omitempty"`    // Enable PDF OCR processing
@@ -228,6 +230,8 @@ func NewConfig() *Config {
 		PDFOCREnabled:               true,
 		PDFOCRProvider:              "ollama",
 		PDFOCRModel:                 "glm-ocr",
+		SubagentMaxParallel:         2,    // Default max parallel subagents
+		SubagentParallelEnabled:     true, // Default to enabling parallel subagents
 	}
 }
 
@@ -999,4 +1003,19 @@ func (c *Config) Validate() error {
 	}
 
 	return nil
+}
+
+// GetSubagentMaxParallel returns the maximum number of parallel subagents
+// Defaults to 2 if not configured or set to 0
+func (c *Config) GetSubagentMaxParallel() int {
+	if c.SubagentMaxParallel > 0 {
+		return c.SubagentMaxParallel
+	}
+	return 2 // Default
+}
+
+// GetSubagentParallelEnabled returns whether parallel subagent execution is enabled
+// Defaults to true if not explicitly set
+func (c *Config) GetSubagentParallelEnabled() bool {
+	return c.SubagentParallelEnabled
 }

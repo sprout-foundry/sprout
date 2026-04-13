@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
@@ -41,6 +42,14 @@ func GenerateCommitMessageFromStagedDiff(client api.ClientInterface, opts Commit
 	diffText := strings.TrimSpace(opts.Diff)
 	if diffText == "" {
 		return nil, fmt.Errorf("staged diff is empty")
+	}
+
+	// Get timeout from agent config, default to 5 minutes
+	timeoutSec := 300 // Default 5 minutes
+	if agent, ok := client.(interface{ GetConfig() *configuration.Config }); ok {
+		if cfg := agent.GetConfig(); cfg != nil && cfg.APITimeouts != nil && cfg.APITimeouts.CommitMessageTimeoutSec > 0 {
+			timeoutSec = cfg.APITimeouts.CommitMessageTimeoutSec
+		}
 	}
 
 	primaryAction := "Updates"
@@ -155,7 +164,7 @@ Generate a Git commit message summary. The message should follow these rules:
 		err  error
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSec)*time.Second)
 	defer cancel()
 
 	titleChan := make(chan callResult, 1)
@@ -175,14 +184,14 @@ Generate a Git commit message summary. The message should follow these rules:
 	case result := <-titleChan:
 		titleResp, titleErr = result.resp, result.err
 	case <-ctx.Done():
-		return nil, fmt.Errorf("LLM request timed out after 60s")
+		return nil, fmt.Errorf("LLM request timed out after %ds", timeoutSec)
 	}
 
 	select {
 	case result := <-descChan:
 		descResp, descErr = result.resp, result.err
 	case <-ctx.Done():
-		return nil, fmt.Errorf("LLM request timed out after 60s")
+		return nil, fmt.Errorf("LLM request timed out after %ds", timeoutSec)
 	}
 
 	if titleErr != nil {

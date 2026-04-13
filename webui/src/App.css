@@ -285,6 +285,12 @@ body {
 .workspace-bar-icon {
   color: var(--text-tertiary);
   flex-shrink: 0;
+  padding: 4px;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .workspace-bar-host-name {

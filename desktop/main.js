@@ -584,6 +584,18 @@ function startSSHBackendForHost(options = {}) {
       'bash', '-lc',
       [
         'set -e',
+        // Source the user's shell startup files so that API-key environment
+        // variables (typically exported in ~/.zshrc, ~/.bashrc, etc.) are
+        // available to the daemon.  SSH non-interactive sessions skip these
+        // files, but daemon startup depends on the keys they define.
+        '_src_rc() { [ -f "$1" ] && . "$1" 2>/dev/null; }',
+        'case "$(basename "${SHELL:-sh}")" in',
+        '  zsh) _src_rc "$HOME/.zshenv"; _src_rc "$HOME/.zprofile"; _src_rc "$HOME/.zshrc" ;;',
+        '  bash) _src_rc "$HOME/.bash_profile"; _src_rc "$HOME/.bashrc" ;;',
+        '  fish) ;;',
+        '  *)   _src_rc "$HOME/.profile" ;;',
+        'esac',
+        'unset -f _src_rc',
         'choose_port() {',
         '  if command -v python3 >/dev/null 2>&1; then',
         '    python3 - <<\'PY\'',
@@ -612,7 +624,7 @@ function startSSHBackendForHost(options = {}) {
         `cd ${remoteWorkspacePath === '$HOME' ? '"$HOME"' : shellEscape(remoteWorkspacePath)}`,
         'REMOTE_PORT="$(choose_port)"',
         `LOG_FILE="$HOME/.cache/ledit-desktop/logs/${hostAlias.replace(/[^a-zA-Z0-9_.-]/g, '_')}.log"`,
-        `nohup env BROWSER=none LEDIT_DESKTOP=1 LEDIT_DESKTOP_BACKEND_MODE=ssh ${shellEscape(remoteBinary)} --isolated-config agent --daemon --web-port "$REMOTE_PORT" >"$LOG_FILE" 2>&1 < /dev/null &`,
+        `nohup BROWSER=none LEDIT_DESKTOP=1 LEDIT_DESKTOP_BACKEND_MODE=ssh ${shellEscape(remoteBinary)} --isolated-config agent --daemon --web-port "$REMOTE_PORT" >"$LOG_FILE" 2>&1 < /dev/null &`,
         'REMOTE_PID=$!',
         'printf "%s\\n%s\\n" "$REMOTE_PORT" "$REMOTE_PID"',
       ].join('; '),

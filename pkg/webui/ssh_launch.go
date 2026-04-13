@@ -323,6 +323,19 @@ func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherU
 
 	script := strings.Join([]string{
 		"set -e",
+		"",
+		// Source the user's shell startup files so that API-key environment
+		// variables (typically exported in ~/.zshrc, ~/.bashrc, etc.) are
+		// available to the daemon.  SSH non-interactive sessions skip these
+		// files, but daemon startup depends on the keys they define.
+		`_src_rc() { [ -f "$1" ] && . "$1" 2>/dev/null; }`,
+		`case "$(basename "${SHELL:-sh}")" in`,
+		`  zsh) _src_rc "$HOME/.zshenv"; _src_rc "$HOME/.zprofile"; _src_rc "$HOME/.zshrc" ;;`,
+		`  bash) _src_rc "$HOME/.bash_profile"; _src_rc "$HOME/.bashrc" ;;`,
+		`  fish) ;;`,
+		`  *)   _src_rc "$HOME/.profile" ;;`,
+		`esac`,
+		`unset -f _src_rc`,
 		`DAEMON_PORT=` + fmt.Sprintf("%d", DaemonPort),
 		"",
 		"# check_existing_daemon: health-probe port DAEMON_PORT and return PID if healthy.",
@@ -385,7 +398,7 @@ func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherU
 		// regardless of what the SSH login shell's profile does.
 		fmt.Sprintf(
 			`cd "$HOME" 2>/dev/null || cd /tmp; `+
-				`nohup env BROWSER=none LEDIT_SSH_HOST_ALIAS=%s LEDIT_SSH_SESSION_KEY=%s LEDIT_SSH_LAUNCHER_URL=%s LEDIT_SSH_HOME="$HOME" %s agent --daemon --web-port "$DAEMON_PORT" >"$LOG_FILE" 2>&1 < /dev/null &`,
+				`nohup BROWSER=none LEDIT_SSH_HOST_ALIAS=%s LEDIT_SSH_SESSION_KEY=%s LEDIT_SSH_LAUNCHER_URL=%s LEDIT_SSH_HOME="$HOME" %s agent --daemon --web-port "$DAEMON_PORT" >"$LOG_FILE" 2>&1 < /dev/null &`,
 			shellEscapeSSH(hostAlias),
 			shellEscapeSSH(sessionKey),
 			shellEscapeSSH(launcherURL),

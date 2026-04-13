@@ -70,11 +70,18 @@ func loadConfigSilently() (*Config, *APIKeys, error) {
 			}
 		}
 
-		// Default to test provider if nothing found
+		// If still no provider found, leave LastUsedProvider empty.
+		// Do NOT default to "test" — that's only for testing and should never
+		// be persisted to the user's real config file. Callers (agent startup,
+		// provider resolution) will handle the empty case by falling through to
+		// auto-detection or provider selection.
 		if config.LastUsedProvider == "" {
-			config.LastUsedProvider = "test"
+			// Only save if we resolved a provider above (env vars or saved keys).
+			// No need to save when nothing changed.
+			return config, apiKeys, nil
 		}
 
+		// A default was picked from env vars or saved keys — persist it.
 		if err := config.Save(); err != nil {
 			return nil, nil, fmt.Errorf("failed to save config: %w", err)
 		}
@@ -297,6 +304,10 @@ func (m *Manager) GetModelForProvider(clientType api.ClientType) string {
 
 // SetModelForProvider sets the model for a provider
 func (m *Manager) SetModelForProvider(clientType api.ClientType, model string) error {
+	// Prevent test provider models from being persisted
+	if clientType == api.TestClientType {
+		return fmt.Errorf("test provider cannot be persisted as the active provider")
+	}
 	provider := mapClientTypeToString(clientType)
 	m.mu.Lock()
 	m.config.SetModelForProvider(provider, model)
@@ -336,6 +347,12 @@ func (m *Manager) SelectNewProvider() (api.ClientType, error) {
 	selected, err := SelectProvider(currentProvider, apiKeys)
 	if err != nil {
 		return "", fmt.Errorf("failed to select provider: %w", err)
+	}
+
+	// Prevent test provider from being persisted — it should never
+	// appear as the active default in config.
+	if selected == "test" {
+		return "", fmt.Errorf("test provider cannot be persisted as the active provider")
 	}
 
 	m.mu.Lock()

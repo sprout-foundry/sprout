@@ -506,8 +506,15 @@ func (c *Config) SetSelfReviewGateMode(mode string) error {
 	return nil
 }
 
-// SetModelForProvider sets the model for a specific provider
+// SetModelForProvider sets the model for a specific provider.
+// The test provider is silently rejected to prevent it from leaking
+// into the persisted config via direct Config access.
 func (c *Config) SetModelForProvider(provider, model string) {
+	// Defense-in-depth: reject test provider at the Config level so that
+	// even code that bypasses the Manager guard cannot persist it.
+	if provider == "test" {
+		return
+	}
 	if c.ProviderModels == nil {
 		c.ProviderModels = make(map[string]string)
 	}

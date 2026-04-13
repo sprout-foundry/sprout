@@ -816,6 +816,23 @@ function SettingsPanel({ settings, onSettingsChanged }: SettingsPanelProps): JSX
               </select>
             </div>
 
+            {/* Parallel subagent settings */}
+            <div style={{ marginTop: 'var(--space-5)', paddingTop: 'var(--space-4)', borderTop: '1px solid var(--border)' }}>
+              <h4>Parallel Subagents</h4>
+              <>
+                {renderToggle('subagent_parallel_enabled', 'Enable parallel subagent execution')}
+                
+                {getNestedValue(settings as unknown as Record<string, unknown>, 'subagent_parallel_enabled') && (
+                  <div style={{ marginTop: 'var(--space-3)' }}>
+                    {renderNumberInput('subagent_max_parallel', 'Maximum parallel subagents', 1, 10)}
+                    <div className="config-help" style={{ marginTop: 'var(--space-2)' }}>
+                      Controls how many subagents can run simultaneously. Set to 0 or disable above to run all subagents serially.
+                    </div>
+                  </div>
+                )}
+              </>
+            </div>
+
             {/* Default persona dropdown */}
             {renderSelect('default_subagent_persona', 'Default Persona', [
               'general',

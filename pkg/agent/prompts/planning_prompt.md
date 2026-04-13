@@ -122,6 +122,13 @@ Use `run_parallel_subagents` when you have **independent tasks** that can execut
 - Parallel documentation and implementation work
 - Any tasks where one task doesn't depend on the output of another
 
+**Configuration limits:**
+Parallel execution is governed by your configuration settings (WebUI → Settings → Subagents):
+- **Enable parallel subagent execution**: Toggle to enable/disable entirely. When disabled, use `run_subagent` for sequential execution.
+- **Maximum parallel subagents**: Number of concurrent tasks allowed (default: 2). If you need more tasks, they will run sequentially or you can increase this limit in settings.
+
+If parallel execution is disabled or the number of tasks exceeds your configured maximum, the system will return an error. Use `run_subagent` for sequential execution in those cases.
+
 **How to structure tasks:**
 
 When using parallel execution, each task in the array must have:

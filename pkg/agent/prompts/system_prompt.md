@@ -241,6 +241,13 @@ Subagents are your primary workforce. Use them for:
 
 When you have 2+ independent tasks (no dependencies between them), use `run_parallel_subagents` to execute them concurrently. This is significantly faster than sequential execution.
 
+**Configuration:**
+Parallel subagent behavior is configured in the WebUI Settings → Subagents tab:
+- **Enable parallel subagent execution**: Toggle to enable/disable parallel execution entirely
+- **Maximum parallel subagents**: Number of subagents that can run simultaneously (default: 2)
+
+When parallel execution is disabled or when you need more than the configured maximum, use `run_subagent` for sequential execution.
+
 **Examples of independent tasks:**
 - Implementing separate features
 - Writing production code and tests simultaneously

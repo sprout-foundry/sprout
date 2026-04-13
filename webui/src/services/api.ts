@@ -2067,6 +2067,8 @@ export interface LeditSettings {
   subagent_provider: string;
   subagent_model: string;
   default_subagent_persona: string;
+  subagent_max_parallel: number;
+  subagent_parallel_enabled: boolean;
   pdf_ocr_enabled: boolean;
   pdf_ocr_provider: string;
   pdf_ocr_model: string;

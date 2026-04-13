@@ -508,11 +508,16 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 			writeJSONError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		// Re-persist the actual model (may differ from requested due to resolution)
-		if actualModel := clientAgent.GetModel(); actualModel != "" {
-			if persistErr := cm.SetModelForProvider(providerType, actualModel); persistErr != nil {
-				log.Printf("webui: failed to re-persist resolved model %q: %v", actualModel, persistErr)
-			}
+	}
+	// Always persist the agent's actual model to config. The model name may
+	// differ from the request (e.g. case correction, resolution), or req.Model
+	// may be empty and the provider supplied a default. Either way, saving the
+	// actual model ensures the choice survives restarts.
+	var persistWarning string
+	if actualModel := clientAgent.GetModel(); actualModel != "" {
+		if persistErr := cm.SetModelForProvider(providerType, actualModel); persistErr != nil {
+			persistWarning = fmt.Sprintf("Model %q was set for this session but could not be saved to config: %v", actualModel, persistErr)
+			log.Printf("webui: onboarding model persist failed: %v", persistErr)
 		}
 	}
 
@@ -544,6 +549,9 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 			"tested":      true,
 			"model_count": validationModelCount,
 		}
+	}
+	if persistWarning != "" {
+		resp["warning"] = persistWarning
 	}
 	writeJSON(w, http.StatusOK, resp)
 }

@@ -63,6 +63,8 @@ function useOnboarding(): UseOnboardingReturn {
     error: null,
     initialModelSet: false,
     keyError: false,
+    validationSuccess: false,
+    validationModelCount: 0,
   });
 
   const apiService = ApiService.getInstance();
@@ -99,6 +101,8 @@ function useOnboarding(): UseOnboardingReturn {
         error: null,
         initialModelSet: true,
         keyError: false,
+        validationSuccess: false,
+        validationModelCount: 0,
       });
     } catch (error) {
       debugLog('[useOnboarding] Failed to refresh setup status:', error);
@@ -110,6 +114,8 @@ function useOnboarding(): UseOnboardingReturn {
         platformActionMessage: null,
         error: error instanceof Error ? error.message : 'Failed to check setup status',
         initialModelSet: false,
+        validationSuccess: false,
+        validationModelCount: 0,
       }));
     }
   }, [apiService]);
@@ -195,6 +201,8 @@ function useOnboarding(): UseOnboardingReturn {
         error: null,
         keyError: false,
         initialModelSet: true,
+        validationSuccess: false,
+        validationModelCount: 0,
       };
     });
   }, []);
@@ -222,13 +230,32 @@ function useOnboarding(): UseOnboardingReturn {
           provider: response.provider || onboarding.provider,
           model: response.model || onboarding.model,
         });
-        setOnboarding((prev) => ({
-          ...prev,
-          open: false,
-          submitting: false,
-          apiKey: '',
-          keyError: false,
-        }));
+        if (response.validation?.tested) {
+          // Show brief success feedback before closing the dialog.
+          setOnboarding((prev) => ({
+            ...prev,
+            submitting: false,
+            validationSuccess: true,
+            validationModelCount: response.validation?.model_count || 0,
+          }));
+          setTimeout(() => {
+            setOnboarding((prev) => ({
+              ...prev,
+              open: false,
+              validationSuccess: false,
+              validationModelCount: 0,
+              apiKey: '',
+            }));
+          }, 1500);
+        } else {
+          setOnboarding((prev) => ({
+            ...prev,
+            open: false,
+            submitting: false,
+            apiKey: '',
+            keyError: false,
+          }));
+        }
       } catch (error) {
         debugLog('[useOnboarding] Failed to complete setup:', error);
         // Detect API key validation failures from structured error codes.
@@ -239,6 +266,8 @@ function useOnboarding(): UseOnboardingReturn {
           submitting: false,
           error: error instanceof Error ? error.message : 'Failed to complete setup',
           keyError: !!isKeyError,
+          validationSuccess: false,
+          validationModelCount: 0,
         }));
       }
     },
@@ -289,6 +318,8 @@ function useOnboarding(): UseOnboardingReturn {
         error: null,
         initialModelSet: true,
         keyError: false,
+        validationSuccess: false,
+        validationModelCount: 0,
       });
     } catch (error) {
       debugLog('[useOnboarding] Failed to open provider setup:', error);
@@ -300,6 +331,8 @@ function useOnboarding(): UseOnboardingReturn {
         platformActionMessage: null,
         error: error instanceof Error ? error.message : 'Failed to load provider setup',
         keyError: false,
+        validationSuccess: false,
+        validationModelCount: 0,
       }));
     }
   }, [apiService]);

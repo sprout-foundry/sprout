@@ -149,6 +149,10 @@ export interface OnboardingState {
   platformActionMessage: string | null;
   error: string | null;
   initialModelSet: boolean;
+  /** True when API key validation succeeded (set briefly before dialog closes). */
+  validationSuccess: boolean;
+  /** Number of models reported by the provider on successful validation. */
+  validationModelCount: number;
   /** True when the current error is specifically an API key validation failure. */
   keyError: boolean;
 }

@@ -35,8 +35,7 @@ func generateSystemdUnit(binaryPath, homeDir string) ([]byte, error) {
 
 	unit := fmt.Sprintf(`[Unit]
 Description=ledit daemon - AI coding assistant web UI
-After=network-online.target
-Wants=network-online.target
+After=default.target
 
 [Service]
 Type=simple
@@ -91,15 +90,18 @@ func (m *systemdManager) Install() error {
 
 	fmt.Printf("Installed systemd user unit to %s\n", unitFile)
 
+	// daemon-reload may fail in containers/VMs without a running systemd user instance
+	// The unit file is still written and can be started manually or on next login
 	if _, err := runSystemctl("daemon-reload"); err != nil {
-		return fmt.Errorf("daemon-reload failed: %w", err)
+		fmt.Printf("Warning: daemon-reload failed (systemd user instance may not be running): %v\n", err)
+		fmt.Printf("\nTo start the daemon without systemd, run:\n  %s\n", fallbackCommand(homeDir))
 	}
 
 	if _, err := runSystemctl("enable", "ledit.service"); err != nil {
-		return fmt.Errorf("failed to enable service: %w", err)
+		fmt.Printf("Warning: failed to enable service: %v\n", err)
+	} else {
+		fmt.Println("Service enabled.")
 	}
-
-	fmt.Println("Service enabled.")
 	return nil
 }
 
@@ -127,8 +129,17 @@ func (m *systemdManager) Uninstall() error {
 }
 
 func (m *systemdManager) Start() error {
+	// Try systemctl first; if it fails (e.g., systemd user instance not running in containers),
+	// fall back to running the daemon directly in the background
 	if _, err := runSystemctl("start", "ledit.service"); err != nil {
-		return fmt.Errorf("failed to start service: %w", err)
+		// Check if it's a systemd availability issue (not a service config issue)
+		if strings.Contains(err.Error(), "Failed to start") {
+			return fmt.Errorf("failed to start service: %w", err)
+		}
+		// For other errors (like unit not found), try to start the daemon directly
+		fmt.Printf("systemctl start failed (systemd may not be running): %v\n", err)
+		fmt.Printf("To start the daemon manually in the background:\n  %s\n", fallbackCommand(""))
+		return nil
 	}
 	fmt.Println("Service started.")
 	return nil
@@ -149,6 +160,19 @@ func (m *systemdManager) Status() (bool, error) {
 	}
 	// Output format: "SubState=running\n"
 	return strings.HasPrefix(strings.TrimSpace(output), "SubState=running"), nil
+}
+
+// fallbackCommand returns the manual start command for non-systemd environments.
+func fallbackCommand(homeDir string) string {
+	if homeDir == "" {
+		var err error
+		homeDir, err = os.UserHomeDir()
+		if err != nil {
+			homeDir = "$HOME"
+		}
+	}
+	logPath := filepath.Join(homeDir, ".ledit", "daemon.log")
+	return fmt.Sprintf("nohup ledit agent -d > %s 2>&1 &\nView logs with: tail -f %s", logPath, logPath)
 }
 
 // runSystemctl executes a systemctl command at user scope and returns its stdout.

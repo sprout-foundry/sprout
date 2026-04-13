@@ -881,6 +881,7 @@ body,
 }
 
 .onboarding-card {
+  position: relative;
   width: min(480px, 100%);
   max-height: calc(100vh - 48px);
   overflow-y: auto;
@@ -1352,4 +1353,31 @@ button.primary.success {
   color: var(--text-secondary);
   margin-bottom: 12px;
   opacity: 0.8;
+}
+
+/* Close button for re-onboarding (change provider) dialog */
+.onboarding-card-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: none;
+  border: none;
+  color: var(--text-muted, #888);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.onboarding-card-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary, #e0e0e0);
+}
+
+.onboarding-card-close:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }

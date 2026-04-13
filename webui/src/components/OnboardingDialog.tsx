@@ -358,24 +358,35 @@ function OnboardingDialog({
         )}
 
         {onboarding.error && <div className="onboarding-error">{onboarding.error}</div>}
+
+        {onboarding.validationSuccess && (
+          <div className="onboarding-success">
+            ✓ API key validated — {onboarding.validationModelCount > 0 ? `${onboarding.validationModelCount} models available` : 'connection successful'}
+          </div>
+        )}
+
         {onboarding.platformActionMessage && <div className="onboarding-help">{onboarding.platformActionMessage}</div>}
 
         <div className="onboarding-editor-only-note">Want to explore first? You can set up AI later from Settings.</div>
 
         <div className="onboarding-actions">
-          <button type="button" className="onboarding-skip-btn" onClick={onSkip} disabled={onboarding.submitting || onboarding.checking}>
+          <button type="button" className="onboarding-skip-btn" onClick={onSkip} disabled={onboarding.submitting || onboarding.checking || onboarding.validationSuccess}>
             Skip — use as editor
           </button>
-          <button type="button" onClick={onRefresh} disabled={onboarding.submitting}>
+          <button type="button" onClick={onRefresh} disabled={onboarding.submitting || onboarding.validationSuccess}>
             Refresh
           </button>
           <button
             type="button"
-            className="primary"
+            className={onboarding.validationSuccess ? 'primary success' : 'primary'}
             onClick={onComplete}
-            disabled={onboarding.submitting || onboarding.checking}
+            disabled={onboarding.submitting || onboarding.checking || onboarding.validationSuccess}
           >
-            {onboarding.submitting ? 'Saving...' : 'Complete Setup'}
+            {onboarding.validationSuccess
+              ? 'Done ✓'
+              : onboarding.submitting
+                ? 'Validating…'
+                : 'Complete Setup'}
           </button>
         </div>
       </div>

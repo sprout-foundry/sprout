@@ -1192,6 +1192,21 @@ body,
   padding: 8px 10px;
 }
 
+.onboarding-success {
+  color: #34d399;
+  font-size: 13px;
+  background: #0d3320;
+  border: 1px solid #166534;
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  animation: fadeIn 0.3s ease-in;
+}
+
+button.primary.success {
+  opacity: 0.8;
+  cursor: default;
+}
+
 .onboarding-key-error {
   border-color: var(--accent-error) !important;
   outline-color: var(--accent-error) !important;

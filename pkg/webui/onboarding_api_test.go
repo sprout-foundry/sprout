@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/credentials"
@@ -565,4 +566,53 @@ func TestOnboardingComplete_EmptyBody(t *testing.T) {
 	var resp map[string]interface{}
 	decodeJSON(t, rec, &resp)
 	assert.Contains(t, resp["error"], "provider is required")
+}
+
+func TestOnboardingComplete_ModelPersistedBeforeAgentCreation(t *testing.T) {
+	ws, _ := setupOnboardingTestServer(t)
+
+	// Find a provider that doesn't require an API key.
+	statusReq := makeCredRequest(t, http.MethodGet, "/api/onboarding/status", nil)
+	statusRec := httptest.NewRecorder()
+	ws.handleAPIOnboardingStatus(statusRec, statusReq)
+	require.Equal(t, http.StatusOK, statusRec.Code)
+
+	var statusResp map[string]interface{}
+	decodeJSON(t, statusRec, &statusResp)
+	providers := statusResp["providers"].([]interface{})
+
+	var localProvider string
+	for _, p := range providers {
+		pm := p.(map[string]interface{})
+		if requires, ok := pm["requires_api_key"].(bool); ok && !requires {
+			localProvider = pm["id"].(string)
+			break
+		}
+	}
+	if localProvider == "" {
+		t.Skip("No local/no-key provider available in test environment")
+	}
+
+	testModel := "onboarding-persist-test-model-" + time.Now().Format("150405")
+
+	req := makeCredRequest(t, http.MethodPost, "/api/onboarding/complete", map[string]string{
+		"provider": localProvider,
+		"model":    testModel,
+	})
+	rec := httptest.NewRecorder()
+	ws.handleAPIOnboardingComplete(rec, req)
+
+	// Regardless of whether the overall request succeeded or failed (e.g. agent
+	// connection check timed out), the model should be persisted to config.
+	cm := getConfigManager(t, ws)
+	cfg := cm.GetConfig()
+
+	// The provider should be persisted
+	assert.Equal(t, localProvider, cfg.LastUsedProvider,
+		"provider should be persisted to config")
+
+	// The model should be persisted in ProviderModels, even if agent creation failed
+	persistedModel := cfg.GetModelForProvider(localProvider)
+	assert.Equal(t, testModel, persistedModel,
+		"model should be persisted to config ProviderModels even if agent creation fails")
 }

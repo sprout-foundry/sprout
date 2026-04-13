@@ -3,7 +3,7 @@
   flex-direction: column;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 14px;
+  border-radius: 8px;
   overflow: visible;
   box-shadow: var(--shadow-subtle);
   transition:

@@ -650,8 +650,8 @@
   gap: var(--space-3);
   padding: var(--space-4);
   background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  border: none;
+  border-radius: 0;
   font-size: var(--text-xs);
   line-height: 1.5;
 }
@@ -753,7 +753,7 @@
   min-height: 30px;
   padding: 0 var(--space-3);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
+  border-radius: 0;
   background: var(--bg-elevated);
   color: inherit;
   font: inherit;
@@ -973,7 +973,7 @@
 .sidebar .search-file-group {
   border: 1px solid var(--border-default);
   background: var(--bg-elevated);
-  border-radius: var(--radius-md);
+  border-radius: 0;
   margin-bottom: var(--space-3);
   overflow: hidden;
 }

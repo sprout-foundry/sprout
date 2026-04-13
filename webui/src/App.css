@@ -1099,7 +1099,7 @@ body,
 }
 
 .onboarding-platform-panel {
-  border-radius: var(--radius-lg);
+  border-radius: 4px;
   border: 1px solid var(--border-default);
   padding: 12px 14px;
   background: color-mix(in srgb, var(--bg-elevated) 90%, transparent);

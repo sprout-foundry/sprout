@@ -856,12 +856,13 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     return Math.max(...Array.from(groupedByQuery.keys()));
   }, [groupedByQuery]);
 
-  // Auto-expand the latest query group when new queries arrive
+  // Auto-expand only the latest query group when new queries arrive;
+  // collapse all previous turns so only the active turn is open.
   useEffect(() => {
     if (maxQueryId > 0) {
       setExpandedQueries((prev) => {
-        if (prev.has(maxQueryId)) return prev;
-        const next = new Set(prev);
+        if (prev.size === 1 && prev.has(maxQueryId)) return prev;
+        const next = new Set<number>();
         next.add(maxQueryId);
         return next;
       });
@@ -1211,7 +1212,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       {toolExecutions.length === 0 ? (
         <div className="context-panel-empty">Tool calls will appear here.</div>
       ) : (
-        Array.from(groupedByQuery.entries()).reverse().map(([queryId, tools]) => {
+        Array.from(groupedByQuery.entries()).map(([queryId, tools]) => {
           const isCurrentTurn = queryId === maxQueryId;
           const isExpanded = isCurrentTurn || expandedQueries.has(queryId);
           const groupLabel = isCurrentTurn

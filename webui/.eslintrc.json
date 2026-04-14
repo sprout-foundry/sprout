@@ -103,6 +103,7 @@
     "no-shadow": "off",
     "no-template-curly-in-string": "off",
     "no-var": "warn",
+    "no-case-declarations": "off",
     "prefer-const": "warn",
     "react/display-name": "warn",
     "react/no-deprecated": "warn",

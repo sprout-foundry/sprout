@@ -278,14 +278,13 @@ func (ws *ReactWebServer) handleAPIOnboardingStatus(w http.ResponseWriter, r *ht
 	}
 
 	cfg := cm.GetConfig()
-	apiKeys := cm.GetAPIKeys()
 	descriptors := ws.listProviders(ws.resolveClientID(r))
 	providers := make([]onboardingProvider, 0, len(descriptors))
 	indexByID := make(map[string]onboardingProvider, len(descriptors))
 
 	for _, desc := range descriptors {
 		meta, _ := configuration.GetProviderAuthMetadata(desc.ID)
-		hasCredential := configuration.HasProviderCredential(desc.ID, apiKeys)
+		hasCredential := configuration.HasProviderAuth(desc.ID)
 		entry := onboardingProvider{
 			ID:             desc.ID,
 			Name:           desc.Name,
@@ -413,7 +412,7 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 	}
 
 	meta, _ := configuration.GetProviderAuthMetadata(req.Provider)
-	hasCredential := configuration.HasProviderCredential(req.Provider, cm.GetAPIKeys())
+	hasCredential := configuration.HasProviderAuth(req.Provider)
 
 	if meta.RequiresAPIKey && !hasCredential && req.APIKey == "" {
 		writeJSONError(w, http.StatusBadRequest, "api_key is required for this provider")
@@ -448,5 +447,38 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 		"message":  "Onboarding completed",
 		"provider": clientAgent.GetProvider(),
 		"model":    clientAgent.GetModel(),
+	})
+}
+
+func (ws *ReactWebServer) handleAPIOnboardingSkip(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	clientID := ws.resolveClientID(r)
+	cm := ws.getConfigManager(r, w)
+	if cm == nil {
+		return
+	}
+
+	// Set last used provider to "editor" to indicate editor-only mode
+	if err := cm.UpdateConfig(func(cfg *configuration.Config) error {
+		cfg.LastUsedProvider = "editor"
+		return nil
+	}); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to skip onboarding: %v", err))
+		return
+	}
+
+	// Sync state and notify the client so the frontend picks up the
+	// provider change without requiring a full status poll.
+	_ = ws.syncAgentStateForClient(clientID)
+	ws.publishProviderState(clientID)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success":  true,
+		"provider": "editor",
+		"model":    "",
 	})
 }

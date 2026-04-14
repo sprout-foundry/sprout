@@ -12,6 +12,19 @@ import {
   Loader2,
   GitBranch,
   Settings,
+  Terminal,
+  BookOpen,
+  Pencil,
+  FileEdit,
+  Search,
+  Eye,
+  FlaskConical,
+  Globe,
+  ArrowDown,
+  ClipboardList,
+  ScrollText,
+  RotateCcw,
+  Wrench,
 } from 'lucide-react';
 import CommandInput from './CommandInput';
 import MessageSegments from './MessageSegments';
@@ -43,6 +56,8 @@ interface ToolExecution {
   result?: string;
   persona?: string;
   subagentType?: 'single' | 'parallel';
+  queryId?: number;
+  toolIndex?: number;
 }
 
 interface SubagentActivity {
@@ -331,6 +346,162 @@ function SubagentActivityFeed({ activities }: SubagentActivityFeedProps): JSX.El
   );
 }
 
+// ── Tool Icon Helper (reused from MessageSegments) ────────────────
+
+const getToolIcon = (toolName: string): ReactNode => {
+  const iconMap: { [key: string]: ReactNode } = {
+    shell_command: <Terminal size={12} />,
+    read_file: <BookOpen size={12} />,
+    write_file: <Pencil size={12} />,
+    edit_file: <FileEdit size={12} />,
+    search_files: <Search size={12} />,
+    analyze_ui_screenshot: <Eye size={12} />,
+    analyze_image_content: <FlaskConical size={12} />,
+    web_search: <Globe size={12} />,
+    fetch_url: <ArrowDown size={12} />,
+    TodoWrite: <ClipboardList size={12} />,
+    TodoRead: <ClipboardList size={12} />,
+    view_history: <ScrollText size={12} />,
+    rollback_changes: <RotateCcw size={12} />,
+    mcp_tools: <Wrench size={12} />,
+    run_subagent: <Bot size={12} />,
+    run_parallel_subagents: <Bot size={12} />,
+  };
+  return iconMap[toolName] || <Wrench size={12} />;
+};
+
+const SHORT_TOOL_NAMES: { [key: string]: string } = {
+  read_file: 'read',
+  write_file: 'write',
+  edit_file: 'edit',
+  shell_command: 'shell',
+  search_files: 'search',
+  analyze_ui_screenshot: 'screenshot',
+  analyze_image_content: 'image',
+  web_search: 'web',
+  fetch_url: 'fetch',
+  TodoWrite: 'todo',
+  TodoRead: 'todo',
+  view_history: 'history',
+  rollback_changes: 'rollback',
+  mcp_tools: 'mcp',
+  run_subagent: 'subagent',
+  run_parallel_subagents: 'subagents',
+};
+
+const getShortToolName = (toolName: string): string => SHORT_TOOL_NAMES[toolName] ?? toolName;
+
+// ── Tool Activity Feed ─────────────────────────────────────────────
+
+interface ToolActivityFeedProps {
+  toolExecutions: ToolExecution[];
+}
+
+function ToolActivityFeed({ toolExecutions }: ToolActivityFeedProps): JSX.Element | null {
+  const [visible, setVisible] = useState(true);
+  const now = useMemo(() => new Date(), []);
+
+  // Separate active and completed tools
+  const activeTools = useMemo(() => {
+    return toolExecutions.filter((t) => t.status === 'started' || t.status === 'running');
+  }, [toolExecutions]);
+
+  // Show completed tools from the last 60 seconds (or most recent 5)
+  const recentCompletedTools = useMemo(() => {
+    const completed = toolExecutions.filter((t) => t.status === 'completed' || t.status === 'error');
+    const recent = completed.filter((t) => {
+      if (!t.endTime) return false;
+      return now.getTime() - t.endTime.getTime() < 60000;
+    });
+    // Return most recent 5
+    return recent.sort((a, b) => (b.endTime?.getTime() || 0) - (a.endTime?.getTime() || 0)).slice(0, 5);
+  }, [toolExecutions, now]);
+
+  // Show feed only when there are any tools to display
+  const hasContent = activeTools.length > 0 || recentCompletedTools.length > 0;
+  if (!hasContent) return null;
+
+  return (
+    <div className={`subagent-feed tool-feed ${visible ? '' : 'subagent-feed--collapsed'}`}>
+      <button
+        className="subagent-feed-toggle-bar"
+        onClick={() => setVisible((prev) => !prev)}
+        type="button"
+        aria-expanded={visible}
+      >
+        <span className="subagent-feed-toggle-left">
+          <Terminal size={14} />
+          <span className="subagent-feed-toggle-label">Tool Activity</span>
+          {activeTools.length > 0 && (
+            <span className="subagent-feed-active-badge">
+              {activeTools.length === 1 ? '1 active' : `${activeTools.length} active`}
+            </span>
+          )}
+        </span>
+        <span className="subagent-feed-toggle-right">
+          {visible ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </span>
+      </button>
+
+      {visible && (
+        <div className="subagent-feed-body">
+          {activeTools.map((tool) => {
+            const baseName = tool.tool.split('(')[0];
+            const displayName = getShortToolName(baseName);
+            const argsPreview = tool.arguments ? tool.arguments.slice(0, 80) + (tool.arguments.length > 80 ? '...' : '') : '';
+
+            return (
+              <div key={tool.id} className="subagent-feed-card subagent-feed-card--active">
+                <span className="subagent-feed-status-dot subagent-feed-status-dot--active">
+                  <Loader2 size={8} />
+                </span>
+                <span className="subagent-feed-card-icon">{getToolIcon(baseName)}</span>
+                <span className="subagent-feed-persona">{displayName}</span>
+                {argsPreview && <span className="subagent-feed-result">{argsPreview}</span>}
+                {tool.startTime && <span className="subagent-feed-duration">{formatDuration(tool.startTime)}</span>}
+              </div>
+            );
+          })}
+          {recentCompletedTools.map((tool) => {
+            const baseName = tool.tool.split('(')[0];
+            const displayName = getShortToolName(baseName);
+            const hasError = tool.status === 'error';
+            const argsPreview = tool.arguments ? tool.arguments.slice(0, 60) + (tool.arguments.length > 60 ? '...' : '') : '';
+
+            return (
+              <div key={tool.id} className="subagent-feed-card subagent-feed-card--completed">
+                <span className="subagent-feed-status-dot subagent-feed-status-dot--completed">
+                  {hasError ? <XCircle size={9} /> : <CheckCircle2 size={9} />}
+                </span>
+                <span className="subagent-feed-card-icon" style={{ color: hasError ? '#f85149' : '#7ee787' }}>
+                  {getToolIcon(baseName)}
+                </span>
+                <span className="subagent-feed-persona">{displayName}</span>
+                <span className="subagent-feed-sep">·</span>
+                <span className={`subagent-feed-result ${hasError ? 'subagent-feed-result--fail' : ''}`}>
+                  {hasError ? (tool.message || 'Error') : 'Completed'}
+                </span>
+                {argsPreview && (
+                  <>
+                    <span className="subagent-feed-sep">·</span>
+                    <span className="subagent-feed-result" style={{ color: '#8b949e' }}>{argsPreview}</span>
+                  </>
+                )}
+                {tool.startTime && tool.endTime && (
+                  <>
+                    <span className="subagent-feed-sep">·</span>
+                    <span className="subagent-feed-duration">{formatDuration(tool.startTime, tool.endTime)}</span>
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Chat Component ───────────────────────────────────────────
 
 function Chat({
@@ -380,6 +551,24 @@ function Chat({
 
   const hasSubagentActivity = subagentActivities.length > 0;
 
+  // Filter tool executions to show only those for the current chat session
+  // Tools with queryId matching the current stats.queryCount are from the current query
+  // Tools without queryId are legacy data (show them for backward compatibility)
+  const currentQueryCount = stats?.queryCount as number | undefined;
+  const filteredToolExecutions = useMemo(() => {
+    if (!currentQueryCount) {
+      // If no queryCount is available, return all toolExecutions (backward compatibility)
+      return toolExecutions;
+    }
+    // Filter to show only tools from the current query (matching queryId)
+    // or tools without queryId (legacy)
+    return toolExecutions.filter(
+      (tool: ToolExecution) => tool.queryId === undefined || tool.queryId === currentQueryCount,
+    );
+  }, [toolExecutions, currentQueryCount]);
+
+  const hasToolActivity = filteredToolExecutions.length > 0;
+
   const isNearBottom = useCallback(
     (node: HTMLDivElement) => {
       const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight;
@@ -421,7 +610,7 @@ function Chat({
     }
 
     node.scrollTop = node.scrollHeight;
-  }, [messages, toolExecutions, queryProgress, isProcessing, subagentActivities.length]);
+  }, [messages, filteredToolExecutions, queryProgress, isProcessing, subagentActivities.length]);
 
   const handleChatScroll = useCallback(() => {
     const node = chatContainerRef.current;
@@ -434,14 +623,14 @@ function Chat({
   const findMatchingToolExecution = useCallback(
     (toolName: string) => {
       const normalized = toolName.split('(')[0];
-      for (let i = toolExecutions.length - 1; i >= 0; i -= 1) {
-        if (toolExecutions[i].tool === normalized) {
-          return toolExecutions[i];
+      for (let i = filteredToolExecutions.length - 1; i >= 0; i -= 1) {
+        if (filteredToolExecutions[i].tool === normalized) {
+          return filteredToolExecutions[i];
         }
       }
       return undefined;
     },
-    [toolExecutions],
+    [filteredToolExecutions],
   );
 
   const formatTime = (date: Date) => {
@@ -462,9 +651,9 @@ function Chat({
 
   const toolStatusMap = useMemo(() => {
   const m = new Map<string, ToolExecution['status']>();
-  for (const t of toolExecutions) m.set(t.id, t.status);
+  for (const t of filteredToolExecutions) m.set(t.id, t.status);
   return m;
-}, [toolExecutions]);const handleInsertAtCursor = useCallback(
+}, [filteredToolExecutions]);const handleInsertAtCursor = useCallback(
     (text: string) => {
       const separator = inputValueRef.current ? '\n' : '';
       onInputChange(inputValueRef.current + separator + text);
@@ -571,6 +760,9 @@ function Chat({
             {/* Inline subagent activity feed – shows between messages and processing indicators */}
             {hasSubagentActivity && <SubagentActivityFeed activities={subagentActivities} />}
 
+            {/* Inline tool activity feed – shows active/recent tool executions */}
+            {hasToolActivity && <ToolActivityFeed toolExecutions={filteredToolExecutions} />}
+
             {queryProgress && (
               <div className="query-progress">
                 <>
@@ -591,7 +783,7 @@ function Chat({
               </div>
             )}
 
-            {isProcessing && toolExecutions.length === 0 && !queryProgress && !hasSubagentActivity && (
+            {isProcessing && filteredToolExecutions.length === 0 && !queryProgress && !hasSubagentActivity && (
               <div className="processing-indicator">
                 <div className="processing-content">
                   <div className="processing-spinner">

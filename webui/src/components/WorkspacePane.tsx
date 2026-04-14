@@ -21,6 +21,8 @@ interface ToolExecution {
   result?: string;
   persona?: string;
   subagentType?: 'single' | 'parallel';
+  queryId?: number;
+  toolIndex?: number;
 }
 
 interface Message {

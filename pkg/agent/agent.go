@@ -366,12 +366,14 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	clientType, finalModel, err = configManager.ResolveProviderModel("", model)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[WARN] Failed to resolve configured provider/model: %v\n", err)
-			// Non-interactive: don't call SelectNewProvider (it prompts on stdin)
+	}
 	// SSH daemon exception: allow startup even without provider
 	if isSSHDaemon() {
 		// Continue with whatever clientType was resolved (may be EditorClientType)
-	} else if isNonInteractive() {return nil, fmt.Errorf("no provider configured. Running in non-interactive mode. " + noninteractive.HelpHint)
-		}
+	} else if isNonInteractive() {
+		return nil, fmt.Errorf("no provider configured. Running in non-interactive mode. " + noninteractive.HelpHint)
+	} else {
+		// Interactive mode: offer to select a provider
 		fmt.Fprintf(os.Stderr, "[tool] Selecting an available provider...\n")
 		clientType, err = configManager.SelectNewProvider()
 		if err != nil {
@@ -385,9 +387,22 @@ func NewAgentWithModel(model string) (*Agent, error) {
 
 	// Check if editor mode is active — no AI provider configured
 	if clientType == api.EditorClientType {
-		return nil, fmt.Errorf("editor mode is active — no AI provider configured. "+
-			"Set up a provider with: ledit agent --provider <provider> "+
-			"or configure via Settings in the webui (ledit agent -d)")
+		// SSH daemon exception: try to find a provider with API key automatically
+		if isSSHDaemon() {
+			if autoProvider, autoModel := findProviderWithAPIKey(configManager); autoProvider != "" {
+				fmt.Fprintf(os.Stderr, "[SSH] Auto-selected provider %s (has API key)\n", autoProvider)
+				clientType = autoProvider
+				finalModel = autoModel
+			} else {
+				return nil, fmt.Errorf("editor mode is active — no AI provider configured. "+
+					"Set up a provider with: ledit agent --provider <provider> "+
+					"or configure via Settings in the webui (ledit agent -d)")
+			}
+		} else {
+			return nil, fmt.Errorf("editor mode is active — no AI provider configured. "+
+				"Set up a provider with: ledit agent --provider <provider> "+
+				"or configure via Settings in the webui (ledit agent -d)")
+		}
 	}
 
 	// Ensure provider can be initialized; allow recovery in interactive mode.

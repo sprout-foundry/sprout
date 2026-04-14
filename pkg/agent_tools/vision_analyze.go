@@ -124,7 +124,7 @@ func (vp *VisionProcessor) AnalyzeImage(imagePath string) (VisionAnalysis, error
 	}
 
 	// Get vision analysis using the vision-enabled method
-	response, err := vp.visionClient.SendVisionRequest(messages, nil, "")
+	response, err := vp.visionClient.SendVisionRequest(messages, nil, "", false)
 	if err != nil {
 		return VisionAnalysis{}, fmt.Errorf("vision request failed: %w", err)
 	}
@@ -185,7 +185,7 @@ func (vp *VisionProcessor) AnalyzeImageWithPrompt(imagePath string, customPrompt
 	}
 
 	// Get vision analysis using the vision-enabled method
-	response, err := vp.visionClient.SendVisionRequest(messages, nil, "")
+	response, err := vp.visionClient.SendVisionRequest(messages, nil, "", false)
 	if err != nil {
 		return VisionAnalysis{}, fmt.Errorf("vision request failed: %w", err)
 	}

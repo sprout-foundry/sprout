@@ -171,3 +171,41 @@ func normalizeReasoningEffort(v string) string {
 func isGptOSSModelName(model string) bool {
 	return strings.Contains(strings.ToLower(model), "gpt-oss")
 }
+
+// shouldDisableThinking checks if thinking/reasoning mode should be disabled for the current model
+// Returns true if:
+// - DisableThinking config is enabled AND
+// - The model is a thinking-capable model (qwen3, qwen3.5, glm, minimax) that supports disabling thinking
+// GPT-OSS models are excluded as they don't support disabling thinking (only reasoning_effort)
+func (a *Agent) shouldDisableThinking() bool {
+	cfg := a.GetConfig()
+	if cfg == nil || !cfg.DisableThinking {
+		return false
+	}
+
+	model := strings.ToLower(a.GetModel())
+	provider := strings.ToLower(a.GetProvider())
+
+	// GPT-OSS models don't support disabling thinking - they use reasoning_effort instead
+	if isGptOSSModelName(a.GetModel()) {
+		return false
+	}
+
+	// Check for thinking-capable models that support disabling thinking
+	// Qwen3 and Qwen3.5 models
+	if strings.Contains(model, "qwen3") {
+		return true
+	}
+
+	// GLM models (zai provider)
+	if strings.Contains(provider, "zai") || strings.Contains(model, "glm") {
+		return true
+	}
+
+	// Minimax models
+	if strings.Contains(provider, "minimax") || strings.Contains(model, "minimax") {
+		return true
+	}
+
+	return false
+}

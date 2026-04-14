@@ -26,6 +26,10 @@ import (
 func setupOnboardingTestServer(t *testing.T) (*ReactWebServer, string) {
 	t.Helper()
 
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, ".config"))

@@ -309,7 +309,7 @@ func getOllamaMaxPredictCap(contextLimit int) int {
 }
 
 // SendChatRequest sends a chat request to local Ollama
-func (c *OllamaLocalClient) SendChatRequest(messages []Message, tools []Tool, reasoning string) (*ChatResponse, error) {
+func (c *OllamaLocalClient) SendChatRequest(messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error) {
 	client, err := c.newClient()
 	if err != nil {
 		return nil, fmt.Errorf("could not create ollama client: %w", err)
@@ -531,12 +531,12 @@ func (c *OllamaLocalClient) GetVisionModel() string {
 
 // SendVisionRequest handles vision/OCR requests for Ollama
 // Delegates to SendChatRequest since the image handling is done in buildChatRequest
-func (c *OllamaLocalClient) SendVisionRequest(messages []Message, tools []Tool, reasoning string) (*ChatResponse, error) {
-	return c.SendChatRequest(messages, tools, reasoning)
+func (c *OllamaLocalClient) SendVisionRequest(messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error) {
+	return c.SendChatRequest(messages, tools, reasoning, disableThinking)
 }
 
 // SendChatRequestStream streams responses from local Ollama as they arrive
-func (c *OllamaLocalClient) SendChatRequestStream(messages []Message, tools []Tool, reasoning string, callback StreamCallback) (*ChatResponse, error) {
+func (c *OllamaLocalClient) SendChatRequestStream(messages []Message, tools []Tool, reasoning string, disableThinking bool, callback StreamCallback) (*ChatResponse, error) {
 	client, err := c.newClient()
 	if err != nil {
 		return nil, fmt.Errorf("could not create ollama client: %w", err)

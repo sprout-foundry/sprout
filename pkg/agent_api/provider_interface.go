@@ -54,6 +54,7 @@ type RequestOptions struct {
 	StopSequences    []string
 	Stream           bool
 	ReasoningEffort  string // For reasoning models
+	DisableThinking  *bool  // Disable thinking/reasoning mode for thinking-capable models
 }
 
 // ModelDetails represents detailed information about a model from a provider

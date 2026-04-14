@@ -195,13 +195,16 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         if (buffer && viewRef.current && (buffer.cursorPosition.line > 0 || buffer.cursorPosition.column > 0)) {
           const { line, column } = buffer.cursorPosition;
           const doc = viewRef.current.state.doc;
-          const targetLine = Math.max(0, Math.min(line, doc.lines - 1));
-          const lineInfo = doc.line(targetLine + 1);
-          const pos = lineInfo.from + Math.min(column, lineInfo.length);
-          viewRef.current.dispatch({
-            selection: { anchor: pos },
-            annotations: suppressHistoryAnnotations,
-          });
+          // Skip restoration if document is empty
+          if (doc.lines > 0) {
+            const targetLine = Math.max(0, Math.min(line, doc.lines - 1));
+            const lineInfo = doc.line(targetLine + 1);
+            const pos = lineInfo.from + Math.max(0, Math.min(column, lineInfo.length));
+            viewRef.current.dispatch({
+              selection: { anchor: pos },
+              annotations: suppressHistoryAnnotations,
+            });
+          }
         }
 
         // Restore scroll position from buffer state (layout persistence).
@@ -260,6 +263,9 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     const dispatch = viewRef.current;
     const state = dispatch.state;
     const doc = state.doc;
+
+    // Cannot navigate in an empty document
+    if (doc.lines === 0) return;
 
     // Convert line number (1-based) to position
     const line = Math.min(Math.max(lineNum - 1, 0), doc.lines - 1);
@@ -325,14 +331,28 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     setSaving(true);
     setError(null);
 
+    // Notify the external file watcher and auto-reload cooldown *before*
+    // the HTTP roundtrip.  The server-side fsnotify fires as soon as it
+    // writes the file, and the WebSocket "file_content_changed" event can
+    // reach the browser *before* the HTTP save response.  Setting the
+    // cooldown early prevents the echo from popping the "changed on disk"
+    // dialog.
+    document.dispatchEvent(
+      new CustomEvent('file:editor-saved', {
+        detail: {
+          path: buffer.file.path,
+          mtime: Math.floor(Date.now() / 1000),
+        },
+      }),
+    );
+
     try {
       const saveResult = await saveBuffer(buffer.id);
       const serverMtime =
         saveResult && typeof saveResult.mod_time === 'number' ? saveResult.mod_time : null;
 
-      // Notify the external file watcher that this file was saved from the
-      // editor, so it updates its known mtime and doesn't re-fire a false
-      // "changed externally" notification on the next poll.
+      // Re-dispatch with the authoritative server mtime so the watcher
+      // tracks the correct timestamp going forward.
       document.dispatchEvent(
         new CustomEvent('file:editor-saved', {
           detail: {

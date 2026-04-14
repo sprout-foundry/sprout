@@ -210,6 +210,12 @@ func (ac *APIClient) setTimeoutsFromConfig() {
 
 // SendWithRetry sends a request to the LLM with retry logic
 func (ac *APIClient) SendWithRetry(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
+	// Determine if thinking should be disabled
+	disableThinking := false
+	if ac.agent != nil {
+		disableThinking = ac.agent.shouldDisableThinking()
+	}
+
 	var resp *api.ChatResponse
 	var err error
 	retryDelay := ac.baseRetryDelay
@@ -227,7 +233,7 @@ func (ac *APIClient) SendWithRetry(messages []api.Message, tools []api.Tool, rea
 		if ac.agent.debug {
 			ac.agent.debugLog("DEBUG: APIClient starting sendRequest at %s\n", time.Now().Format("15:04:05.000"))
 		}
-		resp, err = ac.sendRequest(messages, tools, reasoning)
+		resp, err = ac.sendRequest(messages, tools, reasoning, disableThinking)
 		if ac.agent.debug {
 			if err == nil {
 				ac.agent.debugLog("DEBUG: APIClient completed sendRequest successfully at %s\n", time.Now().Format("15:04:05.000"))
@@ -307,7 +313,7 @@ func (ac *APIClient) SendWithRetry(messages []api.Message, tools []api.Tool, rea
 }
 
 // sendRequest sends a single request to the LLM
-func (ac *APIClient) sendRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
+func (ac *APIClient) sendRequest(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	// Estimate and store the current request's token count before sending
 	ac.agent.currentContextTokens = ac.estimateRequestTokens(messages, tools)
 
@@ -317,9 +323,9 @@ func (ac *APIClient) sendRequest(messages []api.Message, tools []api.Tool, reaso
 	}
 
 	if ac.agent.streamingEnabled {
-		return ac.sendStreamingRequest(messages, tools, reasoning)
+		return ac.sendStreamingRequest(messages, tools, reasoning, disableThinking)
 	}
-	return ac.sendRegularRequest(messages, tools, reasoning)
+	return ac.sendRegularRequest(messages, tools, reasoning, disableThinking)
 }
 
 // printContextBreakdown logs a per-message breakdown to help diagnose large first-turn context
@@ -371,7 +377,7 @@ func (ac *APIClient) printContextBreakdown(messages []api.Message, tools []api.T
 }
 
 // sendStreamingRequest handles streaming API requests with timeouts
-func (ac *APIClient) sendStreamingRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
+func (ac *APIClient) sendStreamingRequest(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	// Create context with overall timeout
 	ctx, cancel := context.WithTimeout(context.Background(), ac.overallTimeout)
 	defer cancel()
@@ -422,7 +428,7 @@ func (ac *APIClient) sendStreamingRequest(messages []api.Message, tools []api.To
 		if ac.agent.debug {
 			ac.agent.debugLog("DEBUG: APIClient calling client.SendChatRequestStream at %s\n", time.Now().Format("15:04:05.000"))
 		}
-		resp, err := ac.agent.client.SendChatRequestStream(messages, tools, reasoning, streamCallback)
+		resp, err := ac.agent.client.SendChatRequestStream(messages, tools, reasoning, disableThinking, streamCallback)
 		if ac.agent.debug {
 			if err == nil {
 				ac.agent.debugLog("DEBUG: APIClient client.SendChatRequestStream completed at %s\n", time.Now().Format("15:04:05.000"))
@@ -506,7 +512,7 @@ func (ac *APIClient) sendStreamingRequest(messages []api.Message, tools []api.To
 }
 
 // sendRegularRequest handles non-streaming API requests with timeout
-func (ac *APIClient) sendRegularRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
+func (ac *APIClient) sendRegularRequest(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	// Special case for OpenAI token tracking
 	if ac.agent.GetProvider() == "openai" && ac.agent.currentIteration == 0 {
 		ac.showTokenTrackingMessage()
@@ -527,7 +533,7 @@ func (ac *APIClient) sendRegularRequest(messages []api.Message, tools []api.Tool
 		if ac.agent.debug {
 			ac.agent.debugLog("DEBUG: APIClient calling client.SendChatRequest at %s\n", time.Now().Format("15:04:05.000"))
 		}
-		resp, err := ac.agent.client.SendChatRequest(messages, tools, reasoning)
+		resp, err := ac.agent.client.SendChatRequest(messages, tools, reasoning, disableThinking)
 		if ac.agent.debug {
 			if err == nil {
 				ac.agent.debugLog("DEBUG: APIClient client.SendChatRequest completed at %s\n", time.Now().Format("15:04:05.000"))

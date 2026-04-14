@@ -33,6 +33,7 @@ interface EditorManagerContextValue {
   isLinkedScrollEnabled: boolean;
   paneSizes: PaneSize;
   hasWelcomeBuffer: boolean;
+  setAutoSaveEnabled: (enabled: boolean) => void;
 
   openFile: (file: Record<string, unknown>) => string;
   openWorkspaceBuffer: (options: {
@@ -199,7 +200,12 @@ export function EditorManagerProvider({ children }: EditorManagerProviderProps):
     const showWelcome = !isWelcomeDismissed();
     return showWelcome ? WELCOME_BUFFER_ID : 'buffer-chat';
   });
-  const [isAutoSaveEnabled] = useState(true);
+  const [isAutoSaveEnabled, setIsAutoSaveEnabled] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('editor:auto-save-enabled');
+      return stored === 'true'; // default false
+    } catch { return false; }
+  });
   const [autoSaveInterval] = useState(30000);
   const [isLinkedScrollEnabled, setIsLinkedScrollEnabled] = useState(false);
 
@@ -250,6 +256,15 @@ export function EditorManagerProvider({ children }: EditorManagerProviderProps):
   });
 
   // ---------------------------------------------------------------------------
+  // Auto-save persisting setter
+  // ---------------------------------------------------------------------------
+
+  const setAutoSaveEnabled = useCallback((enabled: boolean) => {
+    setIsAutoSaveEnabled(enabled);
+    try { localStorage.setItem('editor:auto-save-enabled', String(enabled)); } catch { /* ignore */ }
+  }, []);
+
+  // ---------------------------------------------------------------------------
   // Refs (avoid stale closures in callbacks)
   // ---------------------------------------------------------------------------
 
@@ -295,8 +310,6 @@ export function EditorManagerProvider({ children }: EditorManagerProviderProps):
     setActivePaneId,
     activePaneId,
     activeBufferId,
-    isAutoSaveEnabled,
-    saveBuffer,
   });
 
   // 4. Tab open (openFile, openWorkspaceBuffer — depends on activateBuffer & switchToBuffer)
@@ -429,6 +442,7 @@ export function EditorManagerProvider({ children }: EditorManagerProviderProps):
     activeBufferId,
     isAutoSaveEnabled,
     autoSaveInterval,
+    setAutoSaveEnabled,
     isLinkedScrollEnabled,
     paneSizes,
     hasWelcomeBuffer,

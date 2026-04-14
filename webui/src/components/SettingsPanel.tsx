@@ -3,7 +3,7 @@ import './SettingsPanel.css';
 import { ApiService, type LeditSettings, type ProviderOption } from '../services/api';
 import { useNotifications } from '../contexts/NotificationContext';
 import { debugLog } from '../utils/log';
-import { Pencil, Plus, Trash2, Lock, Cog, RefreshCw } from 'lucide-react';
+import { Pencil, Plus, Trash2, Lock, Cog } from 'lucide-react';
 import CredentialsSettingsTab from './CredentialsSettingsTab';
 
 /* ─── Types ──────────────────────────────────────────────────── */

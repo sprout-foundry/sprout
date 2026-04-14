@@ -627,6 +627,87 @@ func (ws *ReactWebServer) handleAPIChatSessionsCompact(w http.ResponseWriter, r 
 	})
 }
 
+// handleAPIChatSessionsDeleteAll handles POST /api/chat-sessions/delete-all
+// Deletes all chat sessions except the default one, then sets the default session as active.
+func (ws *ReactWebServer) handleAPIChatSessionsDeleteAll(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	clientID := ws.resolveClientID(r)
+
+	ws.mutex.Lock()
+	ctx := ws.getOrCreateClientContextLocked(clientID)
+	ctx.ensureDefaultChatSession()
+
+	// Collect chat IDs to delete (non-default, non-active, non-active-query sessions)
+	chatIDsToDelete := make([]string, 0, len(ctx.ChatSessions))
+	for chatID, cs := range ctx.ChatSessions {
+		if chatID == defaultChatID {
+			continue // Never delete the default session
+		}
+		cs.mu.Lock()
+		isActive := cs.ActiveQuery
+		cs.mu.Unlock()
+		if isActive {
+			continue // Skip sessions with active queries
+		}
+		chatIDsToDelete = append(chatIDsToDelete, chatID)
+	}
+
+	// Delete all collected sessions
+	deletedCount := 0
+	for _, chatID := range chatIDsToDelete {
+		delete(ctx.ChatSessions, chatID)
+		deletedCount++
+	}
+
+	// Set the default session as active
+	ctx.DefaultChatID = defaultChatID
+
+	// Update client-level agent reference to point to the default session's agent
+	defaultCS := ctx.ChatSessions[defaultChatID]
+	if defaultCS != nil {
+		defaultCS.mu.Lock()
+		if defaultCS.Agent != nil {
+			ctx.Agent = defaultCS.Agent
+		} else {
+			ctx.Agent = nil
+		}
+		// Sync the top-level agent state
+		snapshot := defaultCS.AgentState
+		if len(snapshot) == 0 {
+			snapshot = emptyAgentStateSnapshot()
+		}
+		currentSessionID := defaultCS.CurrentSessionID
+		wtPath := defaultCS.WorktreePath
+		defaultCS.mu.Unlock()
+
+		ctx.AgentState = append([]byte(nil), snapshot...)
+		ctx.CurrentSessionID = currentSessionID
+
+		// Switch workspace root to the default chat's worktree if it has one
+		if wtPath != "" {
+			ctx.WorkspaceRoot = wtPath
+			if clientID == defaultWebClientID {
+				ws.workspaceRoot = wtPath
+			}
+		}
+	}
+
+	ws.mutex.Unlock()
+
+	log.Printf("handleAPIChatSessionsDeleteAll: deleted %d chat sessions for client %s, switched to default %s", deletedCount, clientID, defaultChatID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":          "Chat sessions deleted",
+		"deleted_count":    deletedCount,
+		"active_chat_id":   defaultChatID,
+	})
+}
+
 // syncAgentStateForClientWithChat is like syncAgentStateForClient but targets
 // a specific chat session's state instead of the client's top-level state.
 func (ws *ReactWebServer) syncAgentStateForClientWithChat(clientID, chatID string) error {

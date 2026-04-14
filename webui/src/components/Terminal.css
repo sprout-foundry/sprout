@@ -29,8 +29,6 @@
 
 .terminal-container.expanded {
   z-index: 1000;
-  display: flex;
-  flex-direction: column;
 }
 
 /* Resize handle — appears at the top of the expanded terminal */
@@ -54,9 +52,7 @@
   height: 3px;
   border-radius: 3px;
   background: rgba(148, 163, 184, 0.35);
-  transition:
-    background 0.15s,
-    width 0.15s;
+  transition: background 0.15s, width 0.15s;
 }
 
 .terminal-resize-handle:hover::after,
@@ -67,21 +63,14 @@
 
 .terminal-header {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  background: rgba(15, 23, 42, 0.76);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
-  padding: 0 12px;
-  flex-shrink: 0;
-  user-select: none;
-}
-
-.terminal-title-row {
-  display: flex;
   justify-content: space-between;
   align-items: center;
   height: 42px;
+  background: rgba(15, 23, 42, 0.76);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  padding: 0 12px;
   cursor: pointer;
+  user-select: none;
 }
 
 .terminal-title {
@@ -124,18 +113,14 @@
   font-size: 12px;
   display: flex;
   align-items: center;
-  transition:
-    background 0.15s,
-    border-color 0.15s,
-    color 0.15s;
 }
 
 .terminal-btn:hover {
   color: #f8fafc;
 }
 
-.terminal-btn.font-btn:hover {
-  border-color: rgba(34, 211, 238, 0.35);
+.split-btn:hover {
+  border-color: rgba(34, 211, 238, 0.4);
   background: rgba(8, 51, 68, 0.5);
 }
 
@@ -147,8 +132,7 @@
 .terminal-body {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-height: 0;
+  height: calc(100% - 42px);
   overflow: hidden;
 }
 
@@ -172,6 +156,25 @@
   flex: 1;
   min-width: 0;
   overflow: hidden;
+}
+
+.terminal-panes-container.split .terminal-pane-wrapper {
+  flex: none;
+}
+
+/* Draggable vertical divider between split panes */
+.terminal-split-divider {
+  width: 5px;
+  flex-shrink: 0;
+  background: rgba(148, 163, 184, 0.16);
+  cursor: col-resize;
+  position: relative;
+  transition: background 0.15s;
+}
+
+.terminal-split-divider:hover,
+.terminal-split-divider:active {
+  background: rgba(34, 211, 238, 0.45);
 }
 
 /* ── Individual pane ─────────────────────────────────────── */
@@ -262,13 +265,13 @@
     height: 34px;
   }
 
-  .terminal-title-row {
+  .terminal-header {
     height: 34px;
+    padding: 0 8px;
   }
 
   .terminal-body {
-    flex: 1;
-    min-height: 0;
+    height: calc(100% - 34px);
   }
 
   .terminal-title {
@@ -295,12 +298,8 @@
 }
 
 @keyframes slideUp {
-  from {
-    transform: translateY(100%);
-  }
-  to {
-    transform: translateY(0);
-  }
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
 }
 
 .terminal-status-inline {
@@ -327,7 +326,6 @@
   }
 
   .terminal-header,
-  .terminal-title-row,
   .terminal-output {
     padding-left: 8px;
     padding-right: 8px;
@@ -349,179 +347,11 @@
   letter-spacing: normal !important;
 }
 
-/* xterm.js manages its own viewport scrolling internally.
-   Do NOT override overflow properties on .xterm-viewport or .xterm-screen
-   as it breaks scrollback navigation and can cause scroll events to be
-   misinterpreted as arrow key sequences (e.g. scrolling → history up). */
+.terminal-xterm .xterm-viewport {
+  overflow-y: auto !important;
+}
 
 .terminal-xterm .xterm-rows,
 .terminal-xterm .xterm-rows span {
   letter-spacing: normal !important;
-}
-
-/* ── Terminal Split Layout ──────────────────────────────── */
-
-.terminal-panes-container.terminal-split-vertical {
-  flex-direction: row;
-}
-
-.terminal-panes-container.terminal-split-horizontal {
-  flex-direction: column;
-}
-
-.terminal-split-divider {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(148, 163, 184, 0.16);
-  transition: background 0.15s ease;
-  z-index: 5;
-}
-
-.terminal-split-divider:hover,
-.terminal-split-divider:active {
-  background: rgba(34, 211, 238, 0.35);
-}
-
-.terminal-split-divider-vertical {
-  width: 4px;
-  cursor: col-resize;
-}
-
-.terminal-split-divider-horizontal {
-  height: 4px;
-  cursor: row-resize;
-}
-
-/* Split container overrides — override default flex: 1 with explicit sizes */
-.terminal-panes-container.terminal-split-vertical .terminal-pane-wrapper,
-.terminal-panes-container.terminal-split-horizontal .terminal-pane-wrapper {
-  flex: none;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-
-/* Split button states */
-.split-btn:hover {
-  border-color: rgba(34, 211, 238, 0.35);
-  background: rgba(8, 51, 68, 0.5);
-}
-
-.split-btn-active {
-  background: rgba(34, 211, 238, 0.18) !important;
-  border-color: rgba(34, 211, 238, 0.45) !important;
-  color: #22d3ee !important;
-}
-
-/* ── Terminal Context Menu is handled by shared ContextMenu.css ── */
-
-/* ── Shell Picker Dropdown ── */
-.shell-picker-dropdown {
-  position: relative;
-  display: inline-flex;
-}
-
-.shell-picker-btn {
-  background: rgba(30, 41, 59, 0.72);
-  border: 1px solid rgba(148, 163, 184, 0.24);
-  color: #cbd5e1;
-  cursor: pointer;
-  padding: 3px 8px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-}
-
-.shell-picker-btn:hover {
-  color: #f8fafc;
-  border-color: rgba(34, 211, 238, 0.35);
-  background: rgba(8, 51, 68, 0.5);
-}
-
-.shell-picker-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-  min-width: 160px;
-  max-height: 300px;
-  overflow-y: auto;
-  background: rgba(15, 23, 42, 0.98);
-  border: 1px solid rgba(148, 163, 184, 0.24);
-  border-radius: 8px;
-  padding: 4px;
-  z-index: 200;
-  box-shadow: 0 8px 24px rgba(2, 6, 23, 0.5);
-  animation: shellPickerFadeIn 0.1s ease-out;
-}
-
-@keyframes shellPickerFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.shell-picker-header {
-  padding: 6px 8px 4px;
-  font-size: 11px;
-  color: #94a3b8;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  user-select: none;
-  font-weight: 600;
-}
-
-.shell-picker-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 6px 8px;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: #cbd5e1;
-  font-size: 12px;
-  font-family: var(--font-mono);
-  cursor: pointer;
-  text-align: left;
-  transition: background 0.12s;
-}
-
-.shell-picker-item:hover {
-  background: rgba(30, 41, 59, 0.72);
-  color: #f8fafc;
-}
-
-.shell-picker-item .shell-default-indicator {
-  color: #22d3ee;
-  font-size: 10px;
-  flex-shrink: 0;
-}
-
-.shell-picker-item .shell-name {
-  flex: 1;
-}
-
-.shell-picker-item .shell-path {
-  font-size: 10px;
-  color: #64748b;
-  margin-left: auto;
-  opacity: 0.7;
-}
-
-.shell-picker-item .shell-path:hover {
-  color: #94a3b8;
-}
-
-.shell-picker-separator {
-  height: 1px;
-  background: rgba(148, 163, 184, 0.16);
-  margin: 4px 8px;
 }

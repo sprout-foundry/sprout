@@ -961,7 +961,6 @@ const AppContent: React.FC<AppContentProps> = ({
         sidebarCollapsed={sidebarCollapsed}
         onSidebarToggle={onSidebarToggle}
         onProviderChange={onProviderChange}
-        onOpenRevisionDiff={handleOpenRevisionDiff}
         gitPanel={{
           gitStatus,
           gitBranches,
@@ -1063,7 +1062,7 @@ const AppContent: React.FC<AppContentProps> = ({
             />
           )}
         </div>
-        <Status isConnected={state.isConnected} position="bottom" stats={state.stats} />
+        <Status isConnected={state.isConnected} stats={state.stats} />
       </div>
 
       <Terminal
@@ -1088,7 +1087,6 @@ const AppContent: React.FC<AppContentProps> = ({
             ext: fileExt,
           });
         }}
-        onViewChange={onViewChange}
         onToggleSidebar={onSidebarToggle}
         onToggleTerminal={() => onTerminalExpandedChange(!isTerminalExpanded)}
         onOpenHotkeysConfig={handleOpenHotkeysConfig}

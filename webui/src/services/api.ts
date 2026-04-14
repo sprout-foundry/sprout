@@ -38,6 +38,9 @@ interface StatsResponse {
   // Configuration
   streaming_enabled: boolean;
   debug_mode: boolean;
+
+  // Processing state
+  is_processing?: boolean;
 }
 
 interface QueryRequest {
@@ -317,6 +320,80 @@ class ApiService {
     return response.json();
   }
 
+  async getProviderCredentials(): Promise<{ storage_backend: string; providers: Array<{ provider: string; display_name: string; env_var: string; requires_api_key: boolean; has_stored_credential: boolean; has_env_credential: boolean; credential_source: string; masked_value: string; key_pool_size: number }> }> {
+    const response = await clientFetch('/api/settings/credentials');
+    if (!response.ok) {
+      throw new Error(`Failed to fetch provider credentials: HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
+  async setProviderCredential(provider: string, value: string): Promise<void> {
+    const response = await clientFetch(`/api/settings/credentials/${encodeURIComponent(provider)}/`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value }),
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || `Failed to set credential: HTTP ${response.status}`);
+    }
+  }
+
+  async deleteProviderCredential(provider: string): Promise<void> {
+    const response = await clientFetch(`/api/settings/credentials/${encodeURIComponent(provider)}/`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || `Failed to delete credential: HTTP ${response.status}`);
+    }
+  }
+
+  async testProviderConnection(provider: string): Promise<{ success: boolean; error?: string; model_count?: number }> {
+    const response = await clientFetch(`/api/settings/credentials/${encodeURIComponent(provider)}/test`, {
+      method: 'POST',
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || `Failed to test provider: HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
+  async getKeyPool(provider: string): Promise<{ provider: string; key_count: number; masked_keys: string[] }> {
+    const response = await clientFetch(`/api/settings/credentials/${encodeURIComponent(provider)}/pool`);
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || `Failed to get key pool: HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
+  async addKeyToPool(provider: string, value: string): Promise<void> {
+    const response = await clientFetch(`/api/settings/credentials/${encodeURIComponent(provider)}/pool`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value }),
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || `Failed to add key to pool: HTTP ${response.status}`);
+    }
+  }
+
+  async removeKeyFromPool(provider: string, index: number): Promise<void> {
+    const response = await clientFetch(`/api/settings/credentials/${encodeURIComponent(provider)}/pool`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ index }),
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || `Failed to remove key from pool: HTTP ${response.status}`);
+    }
+  }
+
   async getOnboardingStatus(): Promise<OnboardingStatusResponse> {
     const response = await clientFetch('/api/onboarding/status', { cache: 'no-store' });
     if (!response.ok) {
@@ -330,7 +407,7 @@ class ApiService {
     provider: string;
     model?: string;
     api_key?: string;
-  }): Promise<{ success: boolean; message: string; provider: string; model: string }> {
+  }): Promise<{ success: boolean; message: string; provider: string; model: string; validation?: { tested: boolean; model_count?: number } }> {
     const response = await clientFetch('/api/onboarding/complete', {
       method: 'POST',
       headers: {
@@ -684,6 +761,7 @@ class ApiService {
       untracked: Array<{ path: string; status: string; staged: boolean }>;
       deleted: Array<{ path: string; status: string; staged: boolean }>;
       renamed: Array<{ path: string; status: string; staged: boolean }>;
+      truncated?: boolean;
     };
     files: Array<{ path: string; status: string; staged?: boolean }>;
   }> {
@@ -922,6 +1000,79 @@ class ApiService {
     return response.json();
   }
 
+  async getGitCommitFileDiff(hash: string, path: string): Promise<{ message: string; hash: string; path: string; diff: string }> {
+    const params = new URLSearchParams({ hash, path });
+    const response = await clientFetch(`/api/git/commit/show/file?${params.toString()}`);
+    if (!response.ok) {
+      throw new Error(`Failed to get commit file diff: HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
+  async checkoutGitCommit(commitHash: string): Promise<{ message: string }> {
+    const response = await clientFetch('/api/git/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ branch: commitHash }),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to checkout: HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
+  async revertGitCommit(commitHash: string): Promise<{ message: string }> {
+    const response = await clientFetch('/api/git/revert', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ commit: commitHash }),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to revert commit: HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
+  async skipOnboarding(): Promise<void> {
+    const response = await clientFetch('/api/onboarding/skip', {
+      method: 'POST',
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to skip onboarding: HTTP ${response.status}`);
+    }
+  }
+
+  async getMCPServerCredentials(serverName: string): Promise<{ server: string; credentials: Record<string, { status: string; has_value: boolean }> }> {
+    const response = await clientFetch(`/api/settings/mcp/servers/${encodeURIComponent(serverName)}/credentials`);
+    if (!response.ok) {
+      throw new Error(`Failed to get MCP server credentials: HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
+  async updateMCPServerCredentials(serverName: string, credentials: Record<string, string>): Promise<{ success: boolean; server: string }> {
+    const response = await clientFetch(`/api/settings/mcp/servers/${encodeURIComponent(serverName)}/credentials`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credentials }),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to update MCP server credentials: HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
+  async deleteMCPServerCredential(serverName: string, credentialName: string): Promise<void> {
+    const response = await clientFetch(`/api/settings/mcp/servers/${encodeURIComponent(serverName)}/credentials`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credential_name: credentialName }),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to delete MCP server credential: HTTP ${response.status}`);
+    }
+  }
+
   async generateDeepReview(): Promise<{
     message: string;
     status: string;
@@ -1034,6 +1185,23 @@ class ApiService {
       console.error('Failed to get git diff:', error);
       throw error;
     }
+  }
+
+  async getDiagnostics(path: string, content: string): Promise<{
+    message: string;
+    path: string;
+    diagnostics: Array<{ from: number; to: number; severity: 'error' | 'warning' | 'info'; message: string; source: string }>;
+    version: string;
+  }> {
+    const response = await clientFetch('/api/diagnostics', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, content }),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to get diagnostics: HTTP ${response.status}`);
+    }
+    return response.json();
   }
 
   // History and Rollback API methods

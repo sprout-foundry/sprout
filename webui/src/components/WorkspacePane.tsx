@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { ComponentProps } from 'react';
 import { File } from 'lucide-react';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import Chat from './Chat';
@@ -44,21 +44,13 @@ interface DeepReviewResult {
 
 interface WorkspacePaneProps {
   paneId: string;
-  chatProps: {
-    messages: Message[];
-    onSendMessage: (message: string) => void;
-    onQueueMessage: (message: string) => void;
-    queuedMessagesCount: number;
-    inputValue: string;
-    onInputChange: (value: string) => void;
-    isProcessing?: boolean;
-    lastError?: string | null;
-    toolExecutions?: ToolExecution[];
-    queryProgress?: any;
-    currentTodos?: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }>;
-    onToolPillClick?: (toolId: string) => void;
-    onStopProcessing?: () => void;
-  };
+  perChatCache?: Record<string, any>;
+  activeChatId?: string | null;
+  onOpenCommandPalette?: () => void;
+  onOpenTerminal?: () => void;
+  onViewGit?: () => void;
+  onStartChat?: () => void;
+  chatProps: ComponentProps<typeof Chat>;
   reviewProps: {
     review: DeepReviewResult | null;
     reviewError: string | null;
@@ -100,18 +92,18 @@ const WorkspacePane: React.FC<WorkspacePaneProps> = ({ paneId, chatProps, review
       return <Chat {...chatProps} />;
     }
     case 'diff': {
-      const diffPath = buffer.metadata?.sourcePath;
+      const diffPath = buffer.metadata?.sourcePath as string | undefined;
       const isActiveDiff = diffState.activeDiffPath === diffPath;
       return (
         <DiffWorkspaceTab
           path={diffPath || diffState.activeDiffPath || buffer.file.name}
           diff={isActiveDiff ? diffState.activeDiff : (buffer.metadata?.diff || null)}
-          diffMode={isActiveDiff ? diffState.diffMode : (buffer.metadata?.diffMode || 'combined')}
+          diffMode={isActiveDiff ? diffState.diffMode : ((buffer.metadata?.diffMode as 'combined' | 'staged' | 'unstaged' | undefined) || 'combined')}
           isLoading={diffState.isDiffLoading && isActiveDiff}
           error={isActiveDiff ? diffState.diffError : null}
           onDiffModeChange={diffState.onDiffModeChange}
-          title={buffer.metadata?.title}
-          modeOptions={buffer.metadata?.modeOptions}
+          title={buffer.metadata?.title as string | undefined}
+          modeOptions={buffer.metadata?.modeOptions as any}
         />
       );
     }

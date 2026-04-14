@@ -186,14 +186,17 @@ func (a *Agent) shouldDisableThinking() bool {
 	}
 
 	model := strings.ToLower(a.GetModel())
-	provider := strings.ToLower(a.GetProvider())
+
+	modelLower := model // Use consistent naming with applyDisableThinking
 
 	// Pure reasoning models that cannot disable thinking
 	// These are reasoning-only models - they always produce thinking/reasoning
-	if strings.Contains(model, "deepseek-r1") ||
-		strings.Contains(model, "deepseek-reasoner") ||
-		strings.Contains(model, "qwq") ||
-		strings.Contains(model, "qwenvl") {
+	if strings.HasPrefix(modelLower, "deepseek-r1") ||
+		strings.HasPrefix(modelLower, "deepseek-reasoner") ||
+		strings.HasPrefix(modelLower, "qwq") ||
+		strings.HasPrefix(modelLower, "qwenvl") ||
+		strings.HasPrefix(modelLower, "kimi-k2-thinking") ||
+		strings.HasPrefix(modelLower, "kimi-thinking") {
 		return false
 	}
 
@@ -204,44 +207,50 @@ func (a *Agent) shouldDisableThinking() bool {
 
 	// OpenAI o-series and reasoning models use reasoning_effort (handled separately)
 	// These support disabling via reasoning_effort: "none"
-	if strings.HasPrefix(model, "o1") || strings.HasPrefix(model, "o2") ||
-		strings.HasPrefix(model, "o3") || strings.HasPrefix(model, "o4") {
+	if strings.HasPrefix(modelLower, "o1") || strings.HasPrefix(modelLower, "o2") ||
+		strings.HasPrefix(modelLower, "o3") || strings.HasPrefix(modelLower, "o4") {
 		return false // Use reasoning_effort instead
 	}
 
-	// Qwen3 and Qwen3.5 models - support enable_thinking=false
-	if strings.Contains(model, "qwen3") {
+	// DeepSeek chat, coder, and V3 models - support thinking.type = "disabled"
+	if strings.Contains(modelLower, "deepseek-chat") ||
+		strings.Contains(modelLower, "deepseek-coder") ||
+		strings.Contains(modelLower, "deepseek-v3") {
 		return true
 	}
 
-	// Qwen2.5 models - some variants support thinking
-	if strings.Contains(model, "qwen2.5") || strings.Contains(model, "qwen2") {
+	// Anthropic Claude models with extended thinking support
+	if strings.Contains(modelLower, "claude-4") ||
+		strings.Contains(modelLower, "claude-opus-4.6") ||
+		strings.Contains(modelLower, "claude-sonnet-4.6") ||
+		strings.Contains(modelLower, "claude-haiku-4.6") {
+		return true
+	}
+
+	// Qwen models - Qwen3, Qwen3.5, Qwen2.5 support enable_thinking=false
+	if strings.Contains(modelLower, "qwen3") || strings.Contains(modelLower, "qwen2.5") || strings.Contains(modelLower, "qwen2") {
 		return true
 	}
 
 	// GLM models (zai provider) - support thinking.type = "disabled"
-	if strings.Contains(provider, "zai") || strings.Contains(model, "glm") {
+	if strings.Contains(modelLower, "glm") {
 		return true
 	}
 
-	// Minimax models - support enable_thinking=false
-	if strings.Contains(provider, "minimax") || strings.Contains(model, "minimax") {
+	// Minimax models - support reasoning_split = false
+	if strings.Contains(modelLower, "minimax") {
 		return true
 	}
 
-	// Google Gemini 2.5+ models - support thinkingBudget = 0
-	if strings.Contains(model, "gemini-2") || strings.Contains(model, "gemini-3") ||
-		strings.Contains(model, "gemma-3") {
+	// Google Gemini 2.5+ models - support thinking_config: {thinking_budget: 0}
+	// Gemini 3 series support thinking_config: {thinking_level: "minimal"}
+	if strings.Contains(modelLower, "gemini-2") || strings.Contains(modelLower, "gemini-3") ||
+		strings.Contains(modelLower, "gemma-3") {
 		return true
 	}
 
-	// MoonShot (Kimi) models
-	if strings.Contains(model, "kimi") {
-		return true
-	}
-
-	// NVIDIA Nemotron
-	if strings.Contains(model, "nemotron") {
+	// MoonShot (Kimi) models - support enable_thinking=false (non-thinking-only models)
+	if strings.Contains(modelLower, "kimi") {
 		return true
 	}
 

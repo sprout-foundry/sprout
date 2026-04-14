@@ -29,6 +29,35 @@ func isSSHDaemon() bool {
 	return strings.TrimSpace(os.Getenv("BROWSER")) == "none"
 }
 
+// findProviderWithAPIKey searches through available providers and returns the first one
+// that has an API key configured (either via environment variable or stored credentials).
+// This is used by SSH daemons to automatically select a working provider without requiring
+// interactive configuration.
+func findProviderWithAPIKey(configManager *configuration.Manager) (api.ClientType, string) {
+	if configManager == nil {
+		return "", ""
+	}
+
+	// Get available providers
+	availableProviders := configManager.GetAvailableProviders()
+
+	// Try each provider in order of priority
+	for _, provider := range availableProviders {
+		// Skip local providers that don't need API keys (handled elsewhere)
+		if provider == api.OllamaLocalClientType || provider == api.LMStudioClientType || provider == api.TestClientType {
+			continue
+		}
+
+		// Check if this provider has an API key
+		if configManager.HasAPIKey(provider) {
+			model := configManager.GetModelForProvider(provider)
+			return provider, model
+		}
+	}
+
+	return "", ""
+}
+
 // SelectProvider allows interactive provider selection
 func (a *Agent) SelectProvider() error {
 	newProvider, err := a.configManager.SelectNewProvider()

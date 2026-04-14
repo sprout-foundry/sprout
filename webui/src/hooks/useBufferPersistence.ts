@@ -43,6 +43,12 @@ export function useBufferPersistence({ buffersRef, setBuffers }: UseBufferPersis
 
         const trimmedPath = filePath.trim();
 
+        // Set the save cooldown *before* the HTTP write so that the
+        // server-side fsnotify echo (arriving via WebSocket) is suppressed.
+        document.dispatchEvent(new CustomEvent('file:editor-saved', {
+          detail: { path: trimmedPath, mtime: Math.floor(Date.now() / 1000) },
+        }));
+
         // Write the file to disk
         const response = await writeFileWithConsent(trimmedPath, buffer.content);
         if (!response.ok) {
@@ -92,6 +98,13 @@ export function useBufferPersistence({ buffersRef, setBuffers }: UseBufferPersis
 
       // Normal save for existing files
       try {
+        // Set the save cooldown *before* the HTTP write so that the
+        // server-side fsnotify echo (arriving via WebSocket) is suppressed.
+        // The echo can reach the client before this HTTP response does.
+        document.dispatchEvent(new CustomEvent('file:editor-saved', {
+          detail: { path: buffer.file.path, mtime: Math.floor(Date.now() / 1000) },
+        }));
+
         const response = await writeFileWithConsent(buffer.file.path, buffer.content);
 
         if (response.ok) {

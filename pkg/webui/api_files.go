@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/agent"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/events"
 	"github.com/alantheprice/ledit/pkg/filediscovery"
 	ignore "github.com/sabhiram/go-gitignore"
@@ -121,6 +122,17 @@ func (ws *ReactWebServer) gatherStatsForClientIDLocked(clientID string) map[stri
 		}
 		stats["streaming_enabled"] = agentInst.IsStreamingEnabled()
 		stats["debug_mode"] = agentInst.IsDebugMode()
+	} else {
+		// Agent hasn't been lazily created yet. Fall back to the configured
+		// provider/model from user settings so the frontend doesn't flash
+		// "no provider" even though one is configured.
+		cfg, cfgErr := configuration.Load()
+		if cfgErr == nil && cfg != nil {
+			if p := strings.TrimSpace(cfg.LastUsedProvider); p != "" && p != "editor" {
+				stats["provider"] = p
+				stats["model"] = cfg.GetModelForProvider(p)
+			}
+		}
 	}
 	if clientCtx != nil && len(clientCtx.AgentState) > 0 {
 		var clientState agent.AgentState

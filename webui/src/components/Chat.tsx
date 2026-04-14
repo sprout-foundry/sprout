@@ -32,7 +32,6 @@ import MessageContent from './MessageContent';
 import MessageBubble from './MessageBubble';
 import ChatMessageContextMenu from './ChatMessageContextMenu';
 import LiveLog from './LiveLog';
-import Status from './Status';
 import './Chat.css';
 
 interface Message {
@@ -836,7 +835,6 @@ function Chat({
         />
       </div>
 
-      <Status isConnected={!!isConnected} stats={stats} />
       <ChatMessageContextMenu containerRef={chatContainerRef} onInsertAtCursor={handleInsertAtCursor} />
     </div>
   );

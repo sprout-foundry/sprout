@@ -16,7 +16,7 @@ func TestTestClient_SendChatRequest(t *testing.T) {
 	}
 	tools := []api.Tool{}
 
-	resp, err := client.SendChatRequest(messages, tools, "")
+	resp, err := client.SendChatRequest(messages, tools, "", false)
 	if err != nil {
 		t.Fatalf("SendChatRequest failed: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestTestClient_SendChatRequestStream(t *testing.T) {
 		{Role: "user", Content: "Hello"},
 	}
 
-	resp, err := client.SendChatRequestStream(messages, nil, "", callback)
+	resp, err := client.SendChatRequestStream(messages, nil, "", false, callback)
 	if err != nil {
 		t.Fatalf("SendChatRequestStream failed: %v", err)
 	}
@@ -198,7 +198,7 @@ func TestTestClient_GetVisionModel(t *testing.T) {
 func TestTestClient_SendVisionRequest(t *testing.T) {
 	client := &TestClient{}
 
-	_, err := client.SendVisionRequest(nil, nil, "")
+	_, err := client.SendVisionRequest(nil, nil, "", false)
 	if err == nil {
 		t.Error("SendVisionRequest should return an error for test client")
 	}
@@ -289,8 +289,8 @@ func TestCreateProviderClient_TestClientType_FullInterface(t *testing.T) {
 	_, _ = client.ListModels(context.Background())
 	_ = client.SupportsVision()
 	_ = client.GetVisionModel()
-	_, _ = client.SendChatRequest(nil, nil, "")
-	_, _ = client.SendVisionRequest(nil, nil, "")
+	_, _ = client.SendChatRequest(nil, nil, "", false)
+	_, _ = client.SendVisionRequest(nil, nil, "", false)
 	_ = client.GetLastTPS()
 	_ = client.GetAverageTPS()
 	_ = client.GetTPSStats()
@@ -304,7 +304,7 @@ func TestTestClient_NilMessages(t *testing.T) {
 	client := &TestClient{}
 
 	// Should not panic with nil inputs
-	resp, err := client.SendChatRequest(nil, nil, "")
+	resp, err := client.SendChatRequest(nil, nil, "", false)
 	if err != nil {
 		t.Fatalf("SendChatRequest failed with nil inputs: %v", err)
 	}

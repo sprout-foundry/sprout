@@ -203,26 +203,9 @@ func (ws *ReactWebServer) handleAPIInstanceSelect(w http.ResponseWriter, r *http
 	})
 }
 
-// rejectIfSSHProxy rejects the request with 403 Forbidden if this server
-// instance was reached via an SSH proxy tunnel.  This prevents nested SSH
-// sessions (SSH-hopping), which would be confusing and error-prone.
-func (ws *ReactWebServer) rejectIfSSHProxy(w http.ResponseWriter) bool {
-	if ws.sshHostAlias != "" {
-		writeSSHJSONError(w, http.StatusForbidden, sshLaunchErrorDTO{
-			Error: "Cannot open SSH sessions from within an SSH proxy session",
-		})
-		return true
-	}
-	return false
-}
-
 func (ws *ReactWebServer) handleAPISSHHosts(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	if ws.rejectIfSSHProxy(w) {
 		return
 	}
 
@@ -255,10 +238,6 @@ func (ws *ReactWebServer) handleAPISSHHosts(w http.ResponseWriter, r *http.Reque
 func (ws *ReactWebServer) handleAPISSHOpen(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeSSHJSONError(w, http.StatusMethodNotAllowed, sshLaunchErrorDTO{Error: "Method not allowed"})
-		return
-	}
-
-	if ws.rejectIfSSHProxy(w) {
 		return
 	}
 
@@ -335,10 +314,6 @@ func (ws *ReactWebServer) handleAPISSHBrowse(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if ws.rejectIfSSHProxy(w) {
-		return
-	}
-
 	var req sshBrowseRequestDTO
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeSSHJSONError(w, http.StatusBadRequest, sshLaunchErrorDTO{Error: "Invalid JSON"})
@@ -372,10 +347,6 @@ func (ws *ReactWebServer) handleAPISSHSessions(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if ws.rejectIfSSHProxy(w) {
-		return
-	}
-
 	sessions, err := ws.listSSHSessions()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -391,10 +362,6 @@ func (ws *ReactWebServer) handleAPISSHSessions(w http.ResponseWriter, r *http.Re
 func (ws *ReactWebServer) handleAPISSHSessionDelete(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	if ws.rejectIfSSHProxy(w) {
 		return
 	}
 

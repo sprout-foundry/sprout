@@ -1,10 +1,8 @@
 package webui
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -12,10 +10,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
-	"time"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/agent_providers"
 	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/providercatalog"
 )
@@ -89,7 +84,7 @@ var onboardingProviderPresentations = map[string]onboardingProviderPresentation{
 		APIKeyLabel:         "OpenRouter API Key",
 		APIKeyHelp:          "Create an API key in OpenRouter, then choose a coding-focused model from the list below.",
 		Recommended:         true,
-		RecommendedPrefixes: []string{"qwen/qwen3.5", "qwen/qwen3-coder", "deepseek/deepseek-chat", "z-ai/glm", "google/gemini-2.5-pro"},
+		RecommendedPrefixes: []string{"qwen/qwen3-coder", "deepseek/deepseek-chat", "z-ai/glm", "google/gemini-2.5-pro"},
 		RecommendedModelWhy: "Prefer a coding-focused or reasoning-heavy model instead of a generic default.",
 	},
 	"deepinfra": {
@@ -271,52 +266,6 @@ func hasGitBashShell() bool {
 	return false
 }
 
-// persistDefaultModelForProvider resolves a provider's default model from its
-// embedded config and persists it to `config.ProviderModels`. This is used as a
-// fallback when `req.Model` is empty but we still need a model saved so it
-// survives restarts.
-//
-// It returns a warning string if the model could not be persisted, or empty on
-// success.
-func persistDefaultModelForProvider(cm *configuration.Manager, providerName, reqModel string, providerType api.ClientType, logCtx string) string {
-	if reqModel != "" {
-		return "" // explicit model was already persisted before this point
-	}
-
-	factory := providers.NewProviderFactory()
-	if loadErr := factory.LoadEmbeddedConfigs(); loadErr != nil {
-		warning := fmt.Sprintf("Could not load embedded provider configs to resolve default model: %v", loadErr)
-		log.Printf("webui: %s (%s)", warning, logCtx)
-		return warning
-	}
-
-	providerConfig, cfgErr := factory.GetProviderConfig(providerName)
-	if cfgErr != nil {
-		warning := fmt.Sprintf("Could not find provider config for %q to resolve default model: %v", providerName, cfgErr)
-		log.Printf("webui: %s (%s)", warning, logCtx)
-		return warning
-	}
-
-	// Prefer Models.DefaultModel, fall back to Defaults.Model
-	defaultModel := providerConfig.Models.DefaultModel
-	if defaultModel == "" {
-		defaultModel = providerConfig.Defaults.Model
-	}
-	if defaultModel == "" {
-		log.Printf("webui: no default model found in provider config for %s (%s)", providerName, logCtx)
-		return ""
-	}
-
-	if persistErr := cm.SetModelForProvider(providerType, defaultModel); persistErr != nil {
-		warning := fmt.Sprintf("Default model %q could not be saved to config: %v", defaultModel, persistErr)
-		log.Printf("webui: default model persist failed (%s): %v", logCtx, persistErr)
-		return warning
-	}
-
-	log.Printf("webui: persisted default model %q for provider %s (%s)", defaultModel, providerName, logCtx)
-	return ""
-}
-
 func (ws *ReactWebServer) handleAPIOnboardingStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -329,13 +278,14 @@ func (ws *ReactWebServer) handleAPIOnboardingStatus(w http.ResponseWriter, r *ht
 	}
 
 	cfg := cm.GetConfig()
+	apiKeys := cm.GetAPIKeys()
 	descriptors := ws.listProviders(ws.resolveClientID(r))
 	providers := make([]onboardingProvider, 0, len(descriptors))
 	indexByID := make(map[string]onboardingProvider, len(descriptors))
 
 	for _, desc := range descriptors {
 		meta, _ := configuration.GetProviderAuthMetadata(desc.ID)
-		hasCredential := configuration.HasProviderAuth(desc.ID)
+		hasCredential := configuration.HasProviderCredential(desc.ID, apiKeys)
 		entry := onboardingProvider{
 			ID:             desc.ID,
 			Name:           desc.Name,
@@ -402,11 +352,7 @@ func (ws *ReactWebServer) handleAPIOnboardingStatus(w http.ResponseWriter, r *ht
 
 	setupRequired := false
 	reason := ""
-	// If user has explicitly chosen editor-only mode, don't require setup
-	if currentProvider == "editor" {
-		setupRequired = false
-		reason = ""
-	} else if currentProvider == "" || currentProvider == "test" {
+	if currentProvider == "" || currentProvider == "test" {
 		setupRequired = true
 		reason = "provider_not_configured"
 	} else if p, ok := indexByID[currentProvider]; ok && p.RequiresAPIKey && !p.HasCredential {
@@ -431,10 +377,12 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 	}
 
 	clientID := ws.resolveClientID(r)
+	clientAgent, err := ws.getClientAgent(clientID)
+	if err != nil || clientAgent == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "Agent is not available")
+		return
+	}
 
-	// Use getConfigManager as the source of truth — it works even in
-	// editor-only mode by creating a fresh config manager when no agent
-	// has been initialised yet.
 	cm := ws.getConfigManager(r, w)
 	if cm == nil {
 		return
@@ -465,103 +413,23 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 	}
 
 	meta, _ := configuration.GetProviderAuthMetadata(req.Provider)
-	hasCredential := configuration.HasProviderAuth(req.Provider)
+	hasCredential := configuration.HasProviderCredential(req.Provider, cm.GetAPIKeys())
 
 	if meta.RequiresAPIKey && !hasCredential && req.APIKey == "" {
 		writeJSONError(w, http.StatusBadRequest, "api_key is required for this provider")
 		return
 	}
 
-	var validationTested bool
-	var validationModelCount int
-
 	if req.APIKey != "" {
-		// Validate the new key BEFORE storing it
-		// This ensures we never replace a working key with a broken one
-		modelCount, err := ws.validateAndSetCredential(cm, req.Provider, req.APIKey)
-		if err != nil {
-			writeJSONErr(w, http.StatusBadRequest, "api_key_invalid", fmt.Sprintf("API key validation failed: %s", sanitizeTestError(err)))
+		keys := cm.GetAPIKeys()
+		keys.SetAPIKey(req.Provider, req.APIKey)
+		if err := cm.SaveAPIKeys(); err != nil {
+			writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to save API key: %v", err))
 			return
 		}
-		validationTested = true
-		validationModelCount = modelCount
-	} else if meta.RequiresAPIKey && hasCredential && providerType != api.TestClientType {
-		// No new key provided but provider requires one and has an existing
-		// credential (e.g. from an environment variable). Validate it so a
-		// stale / bad key is caught before setup completes.
-		clientType, parseErr := api.ParseProviderName(req.Provider)
-		if parseErr != nil {
-			log.Printf("webui: skipping existing credential validation for %q: ParseProviderName failed: %v", req.Provider, parseErr)
-		} else {
-			ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
-			models, listErr := api.GetModelsForProviderCtx(ctx, clientType)
-			cancel()
-			if listErr != nil {
-				writeJSONErr(w, http.StatusBadRequest, "api_key_invalid",
-					fmt.Sprintf("Existing credential validation failed: %s. Please update your API key and try again.", sanitizeTestError(listErr)))
-				return
-			}
-			validationTested = true
-			validationModelCount = len(models)
-		}
-	}
-
-	// Persist the provider into config BEFORE creating the agent.
-	// This is critical for recovery from "editor" mode: updating
-	// LastUsedProvider in config clears the editor-only sentinel so that
-	// getClientAgent will succeed on the next call.
-	// Skip the test/mock provider — it's not a real API endpoint.
-	if providerType == api.TestClientType {
-		writeJSONError(w, http.StatusBadRequest, "test provider cannot be used as a persistent provider")
-		return
-	}
-	if err := cm.SetProvider(providerType); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to persist provider: %v", err))
-		return
-	}
-	if req.Model != "" {
-		if err := cm.SetModelForProvider(providerType, req.Model); err != nil {
-			writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to persist model: %v", err))
-			return
-		}
-	}
-
-	// Clear any cached agent so it is re-created with the updated config.
-	ws.clearCachedAgent(clientID)
-
-	// Create (or get) the agent — this now succeeds because config has a
-	// real provider instead of "editor".
-	clientAgent, err := ws.getClientAgent(clientID)
-	if err != nil {
-		// Config is already persisted with provider, but we may still need to
-		// persist the model if req.Model was empty. Look up the provider's
-		// default model from embedded configs and persist it.
-		persistWarning := persistDefaultModelForProvider(cm, req.Provider, req.Model, providerType, "getClientAgent error path")
-
-		// Config is already persisted, so the provider/model choice survives restarts.
-		// Return success with a warning so the webui can proceed.
-		log.Printf("webui: onboarding agent creation failed after config persist: %v", err)
-		resp := map[string]interface{}{
-			"success":  true,
-			"message":  "Onboarding completed (agent will be created on next use)",
-			"provider": req.Provider,
-			"model":    req.Model,
-			"warning":  fmt.Sprintf("Agent creation failed: %v", err),
-		}
-		if persistWarning != "" {
-			resp["warning"] = fmt.Sprintf("%s. %s", resp["warning"], persistWarning)
-		}
-		writeJSON(w, http.StatusOK, resp)
-		return
 	}
 
 	if err := clientAgent.SetProvider(providerType); err != nil {
-		// SetProvider failed — but config is already persisted.
-		// If req.Model was empty, attempt to persist a default model so it
-		// survives restarts even though onboarding itself failed.
-		if pw := persistDefaultModelForProvider(cm, req.Provider, req.Model, providerType, "SetProvider error path"); pw != "" {
-			log.Printf("webui: %s", pw)
-		}
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -571,98 +439,14 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 			return
 		}
 	}
-	// Always persist the agent's actual model to config. The model name may
-	// differ from the request (e.g. case correction, resolution), or req.Model
-	// may be empty and the provider supplied a default. Either way, saving the
-	// actual model ensures the choice survives restarts.
-	var persistWarning string
-	var persistError string
-	if actualModel := clientAgent.GetModel(); actualModel != "" {
-		if persistErr := cm.SetModelForProvider(providerType, actualModel); persistErr != nil {
-			// If req.Model was non-empty, we already persisted the model before
-			// agent creation, so this is just a sync operation. Treat as warning.
-			// If req.Model was empty, this is the ONLY persist of the model -
-			// treat it as an error that should be surfaced prominently.
-			if req.Model != "" {
-				persistWarning = fmt.Sprintf("Model %q was set for this session but could not be re-synced to config: %v", actualModel, persistErr)
-				log.Printf("webui: onboarding model re-sync failed: %v", persistErr)
-			} else {
-				persistError = fmt.Sprintf("Model %q was set by the provider but could not be saved to config: %v", actualModel, persistErr)
-				log.Printf("webui: onboarding model persist (required) failed: %v", persistErr)
-			}
-		}
-	}
 
-	// If we have a critical persist error and req.Model was empty, return error response
-	if persistError != "" {
-		writeJSONError(w, http.StatusInternalServerError, persistError)
-		return
-	}
-
-	// Store provider/model on the chat session for per-session tracking.
-	ws.mutex.RLock()
-	if ctx := ws.clientContexts[clientID]; ctx != nil && ctx.getActiveChatID() != "" {
-		activeChatID := ctx.getActiveChatID()
-		if cs := ctx.getChatSession(activeChatID); cs != nil {
-			cs.mu.Lock()
-			cs.Provider = api.GetProviderName(clientAgent.GetProviderType())
-			cs.Model = clientAgent.GetModel()
-			cs.mu.Unlock()
-		}
-	}
-	ws.mutex.RUnlock()
-
-	_ = ws.syncAgentStateForClient(clientID)
-	ws.publishProviderState(clientID)
-
-	// Build response with optional validation feedback.
-	resp := map[string]interface{}{
-		"success":  true,
-		"message":  "Onboarding completed",
-		"provider": clientAgent.GetProvider(),
-		"model":    clientAgent.GetModel(),
-	}
-	if validationTested {
-		resp["validation"] = map[string]interface{}{
-			"tested":      true,
-			"model_count": validationModelCount,
-		}
-	}
-	if persistWarning != "" {
-		resp["warning"] = persistWarning
-	}
-	writeJSON(w, http.StatusOK, resp)
-}
-
-func (ws *ReactWebServer) handleAPIOnboardingSkip(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	clientID := ws.resolveClientID(r)
-	cm := ws.getConfigManager(r, w)
-	if cm == nil {
-		return
-	}
-
-	// Set last used provider to "editor" to indicate editor-only mode
-	if err := cm.UpdateConfig(func(cfg *configuration.Config) error {
-		cfg.LastUsedProvider = "editor"
-		return nil
-	}); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to skip onboarding: %v", err))
-		return
-	}
-
-	// Sync state and notify the client so the frontend picks up the
-	// provider change without requiring a full status poll.
 	_ = ws.syncAgentStateForClient(clientID)
 	ws.publishProviderState(clientID)
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success":  true,
-		"provider": "editor",
-		"model":    "",
+		"message":  "Onboarding completed",
+		"provider": clientAgent.GetProvider(),
+		"model":    clientAgent.GetModel(),
 	})
 }

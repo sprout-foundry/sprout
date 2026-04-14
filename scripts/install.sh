@@ -1,11 +1,5 @@
 #!/bin/sh
 # ledit one-line install script
-#
-# Usage: curl -fsSL https://raw.githubusercontent.com/alantheprice/ledit/main/scripts/install.sh | sh
-#        ./install.sh              # Interactive install with service prompt
-#        ./install.sh --service    # Install with service auto-start
-#        ./install.sh --no-service # Install binary only
-#        ./install.sh --uninstall  # Remove ledit
 set -eu
 
 # Colors with fallback for non-tty
@@ -288,25 +282,6 @@ print_uninstall_instructions() {
     echo ""
 }
 
-# Install ledit as a system service
-install_service() {
-    local install_dir="$1"
-    local binary_path="${install_dir}/ledit"
-
-    log_info "Installing ledit as a system service..."
-
-    if "$binary_path" service install 2>&1; then
-        if "$binary_path" service start 2>&1; then
-            log_success "Service started successfully"
-            log_success "Web UI available at http://localhost:54000"
-        else
-            log_warn "Service installed but failed to start. Run: ledit service start"
-        fi
-    else
-        log_warn "Service installation failed. You can still run: ledit agent -d"
-    fi
-}
-
 # Print success message
 print_success() {
     local install_dir="$1"
@@ -319,56 +294,23 @@ print_success() {
     echo ""
     echo "  Run 'ledit version' to verify the installation"
     echo ""
-
-    if [ "${SERVICE_INSTALL:-}" != "no" ]; then
-        echo "  Run 'ledit service install' to set up auto-start"
-        echo ""
-    fi
 }
 
 # Main function
 main() {
-    # Parse service flags early
-    HAS_SERVICE=false
-    HAS_NO_SERVICE=false
-    for arg in "$@"; do
-        case "$arg" in
-            --service) HAS_SERVICE=true ;;
-            --no-service) HAS_NO_SERVICE=true ;;
-        esac
-    done
-
-    if [ "$HAS_SERVICE" = true ] && [ "$HAS_NO_SERVICE" = true ]; then
-        log_error "--service and --no-service are mutually exclusive"
-        exit 1
-    fi
-
-    # Determine service install mode
-    SERVICE_INSTALL=""
-    if [ "$HAS_SERVICE" = true ]; then
-        SERVICE_INSTALL="yes"
-    elif [ "$HAS_NO_SERVICE" = true ]; then
-        SERVICE_INSTALL="no"
-    fi
-
     # Check for uninstall flag
     if [ "${1:-}" = "--uninstall" ] || [ "${1:-}" = "-u" ]; then
         log_info "Uninstalling ledit..."
-
+        
         local install_dir
         if [ -n "${LEDIT_INSTALL_DIR:-}" ]; then
             install_dir="$LEDIT_INSTALL_DIR"
         else
             install_dir=$(get_install_dir)
         fi
-
+        
         local binary_path="${install_dir}/ledit"
-
-        # Try to uninstall service first
-        if [ -f "$binary_path" ]; then
-            "$binary_path" service uninstall 2>/dev/null || true
-        fi
-
+        
         if [ -f "$binary_path" ]; then
             local version
             version=$("$binary_path" version 2>/dev/null | head -1 || echo "unknown")
@@ -437,22 +379,7 @@ main() {
     
     # Verify installation
     verify_installation "$install_dir"
-
-    # Offer to install as system service
-    if [ "$SERVICE_INSTALL" != "no" ]; then
-        if [ "$SERVICE_INSTALL" = "yes" ]; then
-            install_service "$install_dir"
-        else
-            # Interactive prompt
-            printf "${BLUE}[INFO]%s Install ledit as a background service? (auto-start on login) [Y/n] ${NC}"
-            read -r answer < /dev/tty 2>/dev/null || answer="Y"
-            case "$answer" in
-                [nN]*) ;;
-                *) install_service "$install_dir" ;;
-            esac
-        fi
-    fi
-
+    
     # Print success message
     print_success "$install_dir" "$version"
     

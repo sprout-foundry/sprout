@@ -20,6 +20,8 @@ interface WatcherReturn {
 function getWatchablePaths(buffers: Map<string, EditorBuffer>): { path: string; mtime: number }[] {
   const result: { path: string; mtime: number }[] = [];
   for (const buf of Array.from(buffers.values())) {
+    // Skip virtual workspace buffers (untitled files created via Ctrl+N)
+    // They don't exist on disk and shouldn't be polled
     if (buf.kind === 'file' && buf.file.path && !buf.file.path.startsWith('__workspace/')) {
       result.push({ path: buf.file.path, mtime: buf.file.modified });
     }
@@ -90,8 +92,11 @@ export function useExternalFileWatcher({ buffers }: WatcherOptions): WatcherRetu
         mtimes.set(result.path, result.mod_time);
 
         if (!seenOnce.has(result.path)) { seenOnce.add(result.path); continue; }
+        
+        // Skip notification if this file was just saved from editor (within cooldown)
         const lastFired = cooldowns.get(result.path) || 0;
         if (now - lastFired < COOLDOWN_MS) continue;
+        
         cooldowns.set(result.path, now);
 
         document.dispatchEvent(new CustomEvent('file_externally_modified', {
@@ -124,7 +129,16 @@ export function useExternalFileWatcher({ buffers }: WatcherOptions): WatcherRetu
   useEffect(() => {
     const handleSave = (e: Event) => {
       const { path, mtime } = (e as CustomEvent).detail as { path?: string; mtime?: number };
-      if (path) mtimeRef.current.set(path, mtime ?? Math.floor(Date.now() / 1000));
+      if (path && mtime) {
+        mtimeRef.current.set(path, mtime);
+        // Reset cooldown for this path when saved from editor
+        // This prevents false "externally modified" dialogs immediately after saving
+        cooldownRef.current.set(path, Date.now());
+      } else if (path) {
+        // If no mtime provided, use current timestamp
+        mtimeRef.current.set(path, Math.floor(Date.now() / 1000));
+        cooldownRef.current.set(path, Date.now());
+      }
     };
     document.addEventListener('file:editor-saved', handleSave);
     return () => document.removeEventListener('file:editor-saved', handleSave);

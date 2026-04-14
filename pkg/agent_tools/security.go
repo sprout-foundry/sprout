@@ -137,10 +137,13 @@ func classifyChainedCommand(cmd string) []SecurityRisk {
 		return []SecurityRisk{risk}
 	}
 
-	// Check for pipe-to-shell patterns (case-insensitive to prevent bypass)
+	// Check for pipe-to-shell patterns (case-insensitive to prevent bypass).
+	// Strip quoted sections first to avoid false positives from | characters
+	// inside grep patterns, regex alternation, etc. (e.g., grep "a|b|c" | head).
 	cmdLower := strings.ToLower(cmd)
+	stripped := stripQuotedSections(cmdLower)
 	for _, pipe := range []string{"| bash", "| sh", "| /bin/bash", "| /bin/sh", "|bash", "|sh", "|/bin/bash", "|/bin/sh"} {
-		if strings.Contains(cmdLower, pipe) {
+		if strings.Contains(stripped, pipe) {
 			return []SecurityRisk{SecurityDangerous}
 		}
 	}
@@ -785,19 +788,10 @@ func isDangerousPattern(cmd string) bool {
 		return true
 	}
 
-	// Pipe to shell (with space)
-	for _, pipe := range []string{"| bash", "| sh", "| /bin/bash", "| /bin/sh", ">| bash", ">| sh"} {
-		if strings.Contains(cmd, pipe) {
-			return true
-		}
-	}
-
-	// Pipe to shell (no space)
-	for _, pipe := range []string{"|bash", "|sh", "|/bin/bash", "|/bin/sh"} {
-		if strings.Contains(cmd, pipe) {
-			return true
-		}
-	}
+	// Pipe-to-shell patterns are checked in classifyChainedCommand on the
+	// full command string (with quoted sections stripped). No need to check
+	// again here on individual command parts — any | remaining in a part
+	// after chain splitting is inside quotes (e.g., grep regex alternation).
 
 	// curl/wget piped to shell
 	if (strings.Contains(cmd, "curl") || strings.Contains(cmd, "wget")) &&
@@ -1111,6 +1105,31 @@ func isCriticalSystemOperation(toolName string, args map[string]interface{}) boo
 	}
 
 	return false
+}
+
+// stripQuotedSections replaces the content of quoted strings (single and double
+// quotes) with spaces, preserving string length. This is used before pattern
+// matching to avoid false positives from | or other shell metacharacters that
+// appear inside quoted argument values (e.g., grep regex alternation like
+// "rgba|gradient|shadow|image").
+func stripQuotedSections(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	inQuote := false
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == '\'' || c == '"' {
+			inQuote = !inQuote
+			b.WriteByte(c)
+			continue
+		}
+		if inQuote {
+			b.WriteByte(' ')
+		} else {
+			b.WriteByte(c)
+		}
+	}
+	return b.String()
 }
 
 // maxRisk returns the maximum risk level from a slice

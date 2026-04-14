@@ -23,11 +23,17 @@ interface SubagentTypeEntry {
 
 type SettingsSubTab = 'general' | 'security' | 'credentials' | 'performance' | 'subagents' | 'pdf-ocr' | 'mcp' | 'providers' | 'skills';
 
+interface EditorPreferences {
+  autoSaveEnabled: boolean;
+}
+
 interface SettingsPanelProps {
   settings: LeditSettings | null;
   onSettingsChanged: (settings: LeditSettings) => void;
   /** Callback to open the provider setup/onboarding dialog */
   onRequestProviderSetup?: () => void;
+  editorPreferences?: EditorPreferences | null;
+  onEditorPreferenceChanged?: (key: string, value: unknown) => void;
 }
 
 /* ─── Sub-tab definitions ────────────────────────────────────── */
@@ -76,7 +82,7 @@ function setNestedValue(obj: Record<string, unknown>, key: string, value: unknow
 
 /* ─── Component ──────────────────────────────────────────────── */
 
-function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup }: SettingsPanelProps): JSX.Element {
+function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, editorPreferences, onEditorPreferenceChanged }: SettingsPanelProps): JSX.Element {
   const [activeSubTab, setActiveSubTab] = useState<SettingsSubTab>('general');
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [textDrafts, setTextDrafts] = useState<Record<string, string>>({});
@@ -753,21 +759,38 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup }: 
       /* ── General ─────────────────────────────────────────── */
       case 'general':
         return (
-          <div className="section">
-            <h4>Behavior</h4>
-            {renderSelect('reasoning_effort', 'Reasoning effort', ['low', 'medium', 'high'])}
-            {renderToggle('disable_thinking', 'Disable thinking for thinking models')}
-            {renderToggle('skip_prompt', 'Skip confirmation prompt')}
-            {renderToggle('enable_pre_write_validation', 'Pre-write validation')}
-            {renderSelect('history_scope', 'History scope', ['session', 'project', 'global'])}
-            {renderTextareaInput(
-              'system_prompt_text',
-              'System prompt',
-              'Leave blank to use the embedded default system prompt.',
-              12,
-              'Applies to the main agent. Leave blank to use the built-in default prompt.',
+          <>
+            {/* Editor preferences (frontend-only) */}
+            {editorPreferences && onEditorPreferenceChanged && (
+              <div className="section">
+                <h4>Editor</h4>
+                <label className="styled-toggle">
+                  <input
+                    type="checkbox"
+                    checked={!!editorPreferences.autoSaveEnabled}
+                    onChange={() => onEditorPreferenceChanged('autoSaveEnabled', !editorPreferences.autoSaveEnabled)}
+                  />
+                  <span className="toggle-track" />
+                  <span className="toggle-label">Auto-save files (every 30s)</span>
+                </label>
+              </div>
             )}
-          </div>
+            <div className="section">
+              <h4>Behavior</h4>
+              {renderSelect('reasoning_effort', 'Reasoning effort', ['low', 'medium', 'high'])}
+              {renderToggle('disable_thinking', 'Disable thinking for thinking models')}
+              {renderToggle('skip_prompt', 'Skip confirmation prompt')}
+              {renderToggle('enable_pre_write_validation', 'Pre-write validation')}
+              {renderSelect('history_scope', 'History scope', ['session', 'project', 'global'])}
+              {renderTextareaInput(
+                'system_prompt_text',
+                'System prompt',
+                'Leave blank to use the embedded default system prompt.',
+                12,
+                'Applies to the main agent. Leave blank to use the built-in default prompt.',
+              )}
+            </div>
+          </>
         );
 
       /* ── Security ────────────────────────────────────────── */

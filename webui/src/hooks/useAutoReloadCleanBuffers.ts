@@ -13,8 +13,8 @@ const NOTIFY_COOLDOWN_MS = 4000;
 // the editor's own save operation.  fsnotify fires immediately after any
 // write (including the editor's own save), so we must debounce ourselves
 // rather than relying solely on server-side mtime filtering.
-const JUST_SAVED_THRESHOLD_MS = 1500;
-const justSavedRef = new Map<string, number>();
+export const JUST_SAVED_THRESHOLD_MS = 3500;
+export const justSavedRef = new Map<string, number>();
 
 // ---------------------------------------------------------------------------
 // useAutoReloadCleanBuffers

@@ -398,10 +398,11 @@ func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherU
 		// regardless of what the SSH login shell's profile does.
 		fmt.Sprintf(
 			`cd "$HOME" 2>/dev/null || cd /tmp; `+
-				`nohup BROWSER=none LEDIT_SSH_HOST_ALIAS=%s LEDIT_SSH_SESSION_KEY=%s LEDIT_SSH_LAUNCHER_URL=%s LEDIT_SSH_HOME="$HOME" %s agent --daemon --web-port "$DAEMON_PORT" >"$LOG_FILE" 2>&1 < /dev/null &`,
+				`nohup BROWSER=none LEDIT_SSH_HOST_ALIAS=%s LEDIT_SSH_SESSION_KEY=%s LEDIT_SSH_LAUNCHER_URL=%s LEDIT_SSH_HOME="%s" LEDIT_SKIP_CONNECTION_CHECK=1 %s agent --daemon --web-port "$DAEMON_PORT" >"$LOG_FILE" 2>&1 < /dev/null &`,
 			shellEscapeSSH(hostAlias),
 			shellEscapeSSH(sessionKey),
 			shellEscapeSSH(launcherURL),
+			shellEscapeSSH(remoteWorkspacePath),
 			shellEscapeSSH(remoteBinary),
 		),
 		"REMOTE_PID=$!",

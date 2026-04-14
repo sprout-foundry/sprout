@@ -175,8 +175,10 @@ func isGptOSSModelName(model string) bool {
 // shouldDisableThinking checks if thinking/reasoning mode should be disabled for the current model
 // Returns true if:
 // - DisableThinking config is enabled AND
-// - The model is a thinking-capable model (qwen3, qwen3.5, glm, minimax) that supports disabling thinking
-// GPT-OSS models are excluded as they don't support disabling thinking (only reasoning_effort)
+// - The model is a thinking-capable model that supports disabling thinking
+//
+// Note: Some models are pure reasoning models and cannot disable thinking (e.g., DeepSeek-R1, QwQ).
+// For these models, this returns false and the thinking will continue regardless of config.
 func (a *Agent) shouldDisableThinking() bool {
 	cfg := a.GetConfig()
 	if cfg == nil || !cfg.DisableThinking {
@@ -186,26 +188,64 @@ func (a *Agent) shouldDisableThinking() bool {
 	model := strings.ToLower(a.GetModel())
 	provider := strings.ToLower(a.GetProvider())
 
+	// Pure reasoning models that cannot disable thinking
+	// These are reasoning-only models - they always produce thinking/reasoning
+	if strings.Contains(model, "deepseek-r1") ||
+		strings.Contains(model, "deepseek-reasoner") ||
+		strings.Contains(model, "qwq") ||
+		strings.Contains(model, "qwenvl") {
+		return false
+	}
+
 	// GPT-OSS models don't support disabling thinking - they use reasoning_effort instead
 	if isGptOSSModelName(a.GetModel()) {
 		return false
 	}
 
-	// Check for thinking-capable models that support disabling thinking
-	// Qwen3 and Qwen3.5 models
+	// OpenAI o-series and reasoning models use reasoning_effort (handled separately)
+	// These support disabling via reasoning_effort: "none"
+	if strings.HasPrefix(model, "o1") || strings.HasPrefix(model, "o2") ||
+		strings.HasPrefix(model, "o3") || strings.HasPrefix(model, "o4") {
+		return false // Use reasoning_effort instead
+	}
+
+	// Qwen3 and Qwen3.5 models - support enable_thinking=false
 	if strings.Contains(model, "qwen3") {
 		return true
 	}
 
-	// GLM models (zai provider)
+	// Qwen2.5 models - some variants support thinking
+	if strings.Contains(model, "qwen2.5") || strings.Contains(model, "qwen2") {
+		return true
+	}
+
+	// GLM models (zai provider) - support thinking.type = "disabled"
 	if strings.Contains(provider, "zai") || strings.Contains(model, "glm") {
 		return true
 	}
 
-	// Minimax models
+	// Minimax models - support enable_thinking=false
 	if strings.Contains(provider, "minimax") || strings.Contains(model, "minimax") {
 		return true
 	}
 
+	// Google Gemini 2.5+ models - support thinkingBudget = 0
+	if strings.Contains(model, "gemini-2") || strings.Contains(model, "gemini-3") ||
+		strings.Contains(model, "gemma-3") {
+		return true
+	}
+
+	// MoonShot (Kimi) models
+	if strings.Contains(model, "kimi") {
+		return true
+	}
+
+	// NVIDIA Nemotron
+	if strings.Contains(model, "nemotron") {
+		return true
+	}
+
+	// For models we don't have specific handling for, return false
+	// They will use their default thinking behavior
 	return false
 }

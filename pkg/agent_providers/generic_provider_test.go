@@ -411,7 +411,7 @@ func TestGenericProviderAllowsEmptyDefaultModelAndDiscoversModelOnDemand(t *test
 		t.Fatalf("failed to create provider: %v", err)
 	}
 
-	_, err = provider.SendChatRequest([]api.Message{{Role: "user", Content: "hello"}}, nil, "")
+	_, err = provider.SendChatRequest([]api.Message{{Role: "user", Content: "hello"}}, nil, "", false)
 	if err != nil {
 		t.Fatalf("expected provider to discover model and send request, got error: %v", err)
 	}
@@ -447,7 +447,7 @@ func TestGenericProviderErrorsWhenNoModelConfiguredOrDiscoverable(t *testing.T) 
 		t.Fatalf("failed to create provider: %v", err)
 	}
 
-	_, err = provider.SendChatRequest([]api.Message{{Role: "user", Content: "hello"}}, nil, "")
+	_, err = provider.SendChatRequest([]api.Message{{Role: "user", Content: "hello"}}, nil, "", false)
 	if err == nil {
 		t.Fatal("expected error when no model can be discovered")
 	}

@@ -236,7 +236,7 @@ func (v *visionSupportingClient) GetVisionModel() string {
 	}
 	return "test-vision-model"
 }
-func (v *visionSupportingClient) SendVisionRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
+func (v *visionSupportingClient) SendVisionRequest(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	return nil, nil
 }
 func (v *visionSupportingClient) ListModels(ctx context.Context) ([]api.ModelInfo, error) {

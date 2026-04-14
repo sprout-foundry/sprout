@@ -12,8 +12,8 @@ import (
 
 // ClientInterface defines the common interface for all API clients
 type ClientInterface interface {
-	SendChatRequest(messages []Message, tools []Tool, reasoning string) (*ChatResponse, error)
-	SendChatRequestStream(messages []Message, tools []Tool, reasoning string, callback StreamCallback) (*ChatResponse, error)
+	SendChatRequest(messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error)
+	SendChatRequestStream(messages []Message, tools []Tool, reasoning string, disableThinking bool, callback StreamCallback) (*ChatResponse, error)
 	CheckConnection() error
 	SetDebug(debug bool)
 	SetModel(model string) error
@@ -23,7 +23,7 @@ type ClientInterface interface {
 	ListModels(ctx context.Context) ([]ModelInfo, error)
 	SupportsVision() bool
 	GetVisionModel() string
-	SendVisionRequest(messages []Message, tools []Tool, reasoning string) (*ChatResponse, error)
+	SendVisionRequest(messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error)
 	// TPS (Tokens Per Second) tracking methods
 	GetLastTPS() float64
 	GetAverageTPS() float64

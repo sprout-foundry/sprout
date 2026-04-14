@@ -507,7 +507,7 @@ func (c *ScriptedClient) buildChatResponse(
 }
 
 // SendChatRequest sends a chat request and returns a scripted response
-func (c *ScriptedClient) SendChatRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
+func (c *ScriptedClient) SendChatRequest(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	c.mu.Lock()
 
 	// Record sent request
@@ -598,7 +598,7 @@ func (c *ScriptedClient) SendChatRequest(messages []api.Message, tools []api.Too
 }
 
 // SendChatRequestStream sends a streaming chat request with full simulation support
-func (c *ScriptedClient) SendChatRequestStream(messages []api.Message, tools []api.Tool, reasoning string, callback api.StreamCallback) (*api.ChatResponse, error) {
+func (c *ScriptedClient) SendChatRequestStream(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback) (*api.ChatResponse, error) {
 	c.mu.Lock()
 
 	// Record sent request
@@ -778,7 +778,7 @@ func (c *ScriptedClient) SendChatRequestStream(messages []api.Message, tools []a
 }
 
 // SendVisionRequest sends a vision-enabled chat request
-func (c *ScriptedClient) SendVisionRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
+func (c *ScriptedClient) SendVisionRequest(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	if !c.supportsVision {
 		return nil, errors.New("vision requests not supported in ScriptedClient")
 	}

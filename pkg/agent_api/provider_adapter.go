@@ -28,12 +28,18 @@ func (a *ProviderAdapter) SendChatRequest(ctx context.Context, req *ProviderChat
 
 	// Determine reasoning parameter based on options
 	reasoning := ""
-	if req.Options != nil && req.Options.ReasoningEffort != "" {
-		reasoning = req.Options.ReasoningEffort
+	disableThinking := false
+	if req.Options != nil {
+		if req.Options.ReasoningEffort != "" {
+			reasoning = req.Options.ReasoningEffort
+		}
+		if req.Options.DisableThinking != nil {
+			disableThinking = *req.Options.DisableThinking
+		}
 	}
 
 	// Call the old interface
-	return a.client.SendChatRequest(messages, tools, reasoning)
+	return a.client.SendChatRequest(messages, tools, reasoning, disableThinking)
 }
 
 // CheckConnection verifies connectivity

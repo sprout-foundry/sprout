@@ -1,17 +1,16 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import './LocationSwitcher.css';
 import { FolderOpen, Monitor, RefreshCw, Loader2, Server } from 'lucide-react';
 import {
   ApiService,
-  type SSHBrowseEntry,
-  type LeditInstance,
-  type SSHHostEntry,
-  type SSHSessionEntry,
+  SSHBrowseEntry,
+  LeditInstance,
+  SSHHostEntry,
+  SSHSessionEntry,
   SSHWorkspaceOpenError,
 } from '../services/api';
 import { clientFetch, getSSHProxyContext } from '../services/clientSession';
-import { useLog, debugLog } from '../utils/log';
 
 interface LocationSwitcherProps {
   isConnected: boolean;
@@ -44,8 +43,6 @@ interface RemoteWorkspaceContext {
   sessionKey?: string;
   launcherUrl?: string;
   homePath?: string;
-  /** True when this daemon was reached via an SSH proxy (nested SSH not allowed). */
-  isProxy?: boolean;
 }
 
 interface SSHBrowseQuery {
@@ -112,7 +109,8 @@ const getSSHBrowseQuery = (rawPath: string): SSHBrowseQuery => {
   }
 
   const endsWithSlash = normalized.endsWith('/');
-  const withoutTrailingSlash = normalized.length > 1 && endsWithSlash ? normalized.replace(/\/+$/, '') : normalized;
+  const withoutTrailingSlash =
+    normalized.length > 1 && endsWithSlash ? normalized.replace(/\/+$/, '') : normalized;
 
   if (withoutTrailingSlash.startsWith('$HOME/')) {
     const lastSlash = withoutTrailingSlash.lastIndexOf('/');
@@ -156,8 +154,7 @@ const readRecentWorkspaces = (): string[] => {
       .map((value) => (typeof value === 'string' ? normalizePath(value) : ''))
       .filter(Boolean)
       .slice(0, MAX_RECENT_WORKSPACES);
-  } catch (err) {
-    debugLog('[readRecentWorkspaces] localStorage parse failed:', err);
+  } catch {
     return [];
   }
 };
@@ -166,7 +163,10 @@ const writeRecentWorkspaces = (paths: string[]) => {
   if (typeof window === 'undefined') {
     return;
   }
-  window.localStorage.setItem(RECENT_WORKSPACES_KEY, JSON.stringify(paths.slice(0, MAX_RECENT_WORKSPACES)));
+  window.localStorage.setItem(
+    RECENT_WORKSPACES_KEY,
+    JSON.stringify(paths.slice(0, MAX_RECENT_WORKSPACES))
+  );
 };
 
 const readRemoteRecentWorkspaces = (): Record<string, string[]> => {
@@ -191,10 +191,9 @@ const readRemoteRecentWorkspaces = (): Record<string, string[]> => {
               .filter(Boolean)
               .slice(0, MAX_RECENT_WORKSPACES)
           : [],
-      ]),
+      ])
     );
-  } catch (err) {
-    debugLog('[readRemoteRecentWorkspaces] localStorage parse failed:', err);
+  } catch {
     return {};
   }
 };
@@ -228,10 +227,9 @@ const readSSHFavoriteWorkspaces = (): Record<string, string[]> => {
               .filter(Boolean)
               .slice(0, MAX_RECENT_WORKSPACES)
           : [],
-      ]),
+      ])
     );
-  } catch (err) {
-    debugLog('[readSSHFavoriteWorkspaces] localStorage parse failed:', err);
+  } catch {
     return {};
   }
 };
@@ -242,20 +240,20 @@ const writeSSHFavoriteWorkspaces = (value: Record<string, string[]>) => {
   }
   try {
     window.localStorage.setItem(SSH_FAVORITE_WORKSPACES_KEY, JSON.stringify(value));
-  } catch (err) {
-    debugLog('[writeSSHFavoriteWorkspaces] localStorage write failed:', err);
+  } catch {
+    // QuotaExceededError: storage is full; the favorites won't persist this session
+    // but shouldn't crash the UI.
   }
 };
 
-function LocationSwitcher({
+const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
   isConnected,
   instances = [],
   selectedInstancePID = 0,
   isSwitchingInstance = false,
   onInstanceChange,
   sidebarCollapsed = false,
-}: LocationSwitcherProps): JSX.Element {
-  const log = useLog();
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const [workspaceRoot, setWorkspaceRoot] = useState('');
   const [daemonRoot, setDaemonRoot] = useState('');
@@ -271,11 +269,11 @@ function LocationSwitcher({
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
   const [recentWorkspaces, setRecentWorkspaces] = useState<string[]>(() => readRecentWorkspaces());
-  const [remoteRecentWorkspaces, setRemoteRecentWorkspaces] = useState<Record<string, string[]>>(() =>
-    readRemoteRecentWorkspaces(),
+  const [remoteRecentWorkspaces, setRemoteRecentWorkspaces] = useState<Record<string, string[]>>(
+    () => readRemoteRecentWorkspaces()
   );
-  const [sshFavoriteWorkspaces, setSshFavoriteWorkspaces] = useState<Record<string, string[]>>(() =>
-    readSSHFavoriteWorkspaces(),
+  const [sshFavoriteWorkspaces, setSshFavoriteWorkspaces] = useState<Record<string, string[]>>(
+    () => readSSHFavoriteWorkspaces()
   );
   const [sshHosts, setSshHosts] = useState<SSHHostEntry[]>([]);
   const [sshSessions, setSshSessions] = useState<SSHSessionEntry[]>([]);
@@ -316,16 +314,16 @@ function LocationSwitcher({
     });
   }, []);
 
-  const addRecentWorkspace = useCallback(
-    (path: string) => {
-      const normalized = normalizePath(path);
-      if (!normalized) {
-        return;
-      }
-      persistRecentWorkspaces((current) => [normalized, ...current.filter((entry) => entry !== normalized)]);
-    },
-    [persistRecentWorkspaces],
-  );
+  const addRecentWorkspace = useCallback((path: string) => {
+    const normalized = normalizePath(path);
+    if (!normalized) {
+      return;
+    }
+    persistRecentWorkspaces((current) => [
+      normalized,
+      ...current.filter((entry) => entry !== normalized),
+    ]);
+  }, [persistRecentWorkspaces]);
 
   const addRemoteRecentWorkspace = useCallback((hostAlias: string, path: string) => {
     const normalized = normalizePath(path);
@@ -335,10 +333,10 @@ function LocationSwitcher({
     setRemoteRecentWorkspaces((current) => {
       const next = {
         ...current,
-        [hostAlias]: [normalized, ...(current[hostAlias] || []).filter((entry) => entry !== normalized)].slice(
-          0,
-          MAX_RECENT_WORKSPACES,
-        ),
+        [hostAlias]: [
+          normalized,
+          ...(current[hostAlias] || []).filter((entry) => entry !== normalized),
+        ].slice(0, MAX_RECENT_WORKSPACES),
       };
       writeRemoteRecentWorkspaces(next);
       return next;
@@ -353,10 +351,10 @@ function LocationSwitcher({
     setSshFavoriteWorkspaces((current) => {
       const next = {
         ...current,
-        [hostAlias]: [normalized, ...(current[hostAlias] || []).filter((entry) => entry !== normalized)].slice(
-          0,
-          MAX_RECENT_WORKSPACES,
-        ),
+        [hostAlias]: [
+          normalized,
+          ...(current[hostAlias] || []).filter((entry) => entry !== normalized),
+        ].slice(0, MAX_RECENT_WORKSPACES),
       };
       writeSSHFavoriteWorkspaces(next);
       return next;
@@ -406,23 +404,20 @@ function LocationSwitcher({
         setWorkspaceRoot(nextWorkspaceRoot);
         setDaemonRoot(nextDaemonRoot);
         setInputValue(nextWorkspaceRoot);
-                if (workspace.ssh_context?.is_remote && workspace.ssh_context.host_alias) {
+        if (workspace.ssh_context?.is_remote && workspace.ssh_context.host_alias) {
           const nextRemoteContext = {
             hostAlias: workspace.ssh_context.host_alias,
             sessionKey: workspace.ssh_context.session_key,
             launcherUrl: workspace.ssh_context.launcher_url,
             homePath: workspace.ssh_context.home_path,
-            isProxy: true,
           };
           setRemoteContext(nextRemoteContext);
           if (nextRemoteContext.homePath) {
-            setSshHomePaths((current) => ({
-              ...current,
-              [nextRemoteContext.hostAlias]: nextRemoteContext.homePath as string,
-            }));
+            setSshHomePaths((current) => ({ ...current, [nextRemoteContext.hostAlias]: nextRemoteContext.homePath as string }));
           }
           addRemoteRecentWorkspace(nextRemoteContext.hostAlias, nextWorkspaceRoot);
-        } else {// ssh_context absent — fall back to the proxy base injected when
+        } else {
+          // ssh_context absent — fall back to the proxy base injected when
           // serving the SSH proxy page (covers older remote binaries).
           const proxyCtx = getSSHProxyContext();
           if (proxyCtx) {
@@ -443,9 +438,7 @@ function LocationSwitcher({
           setRemoteContext({ hostAlias: proxyCtx.hostAlias });
           addRemoteRecentWorkspace(proxyCtx.hostAlias, '');
         }
-        log.error(`Failed to load workspace data: ${error instanceof Error ? error.message : String(error)}`, {
-          title: 'Workspace Load Error',
-        });
+        console.error('Failed to load workspace data:', error);
       }
     };
 
@@ -454,7 +447,7 @@ function LocationSwitcher({
     return () => {
       cancelled = true;
     };
-  }, [addRecentWorkspace, addRemoteRecentWorkspace, isConnected, log]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [addRecentWorkspace, addRemoteRecentWorkspace, isConnected]);
 
   // Show workspace picker when we just navigated from SSH connect.
   useEffect(() => {
@@ -485,26 +478,12 @@ function LocationSwitcher({
     if (!isOpen && !isSshPanelOpen) {
       return;
     }
-    const desktopBridge = (
-      window as unknown as {
-        leditDesktop?: {
-          listSshHosts?: () => Promise<unknown>;
-          openSshWorkspace?: (opts: {
-            hostAlias: string;
-            remoteWorkspacePath?: string;
-            forceNewWindow: boolean;
-          }) => Promise<unknown>;
-        };
-      }
-    ).leditDesktop;
+    const desktopBridge = (window as any).leditDesktop;
 
     let cancelled = false;
     Promise.all([
-      desktopBridge?.listSshHosts ? desktopBridge.listSshHosts() : apiService.current.getSSHHosts(),
-      apiService.current.getSSHSessions().catch((err) => {
-        debugLog('Failed to fetch SSH sessions:', err);
-        return [];
-      }),
+      (desktopBridge?.listSshHosts ? desktopBridge.listSshHosts() : apiService.current.getSSHHosts()),
+      apiService.current.getSSHSessions().catch(() => []),
     ])
       .then(([hosts, sessions]) => {
         if (!cancelled) {
@@ -513,7 +492,7 @@ function LocationSwitcher({
           setSshSessions(Array.isArray(sessions) ? sessions : []);
           if (nextHosts.length > 0) {
             setSelectedSshBrowseHost((current) =>
-              current && nextHosts.some((host) => host.alias === current) ? current : nextHosts[0].alias,
+              current && nextHosts.some((host) => host.alias === current) ? current : nextHosts[0].alias
             );
           } else {
             setSelectedSshBrowseHost('');
@@ -522,9 +501,7 @@ function LocationSwitcher({
       })
       .catch((error: unknown) => {
         if (!cancelled) {
-          log.error(`Failed to load SSH hosts: ${error instanceof Error ? error.message : String(error)}`, {
-            title: 'SSH Load Error',
-          });
+          console.error('Failed to load SSH hosts:', error);
           setSshHosts([]);
           setSshSessions([]);
         }
@@ -533,7 +510,7 @@ function LocationSwitcher({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, isSshPanelOpen, log]);
+  }, [isOpen, isSshPanelOpen]);
 
   useEffect(() => {
     if ((!isOpen && !isSshPanelOpen) || remoteContext || !focusedSshSessionKey) {
@@ -558,10 +535,7 @@ function LocationSwitcher({
           return;
         }
         if (data.home_path) {
-          setSshHomePaths((current) => ({
-            ...current,
-            [session.host_alias]: data.home_path as string,
-          }));
+          setSshHomePaths((current) => ({ ...current, [session.host_alias]: data.home_path as string }));
         }
         const nextSuggestions = (data.files || [])
           .filter((file: SSHBrowseEntry) => file.type === 'directory')
@@ -570,7 +544,7 @@ function LocationSwitcher({
             path: String(file.path),
           }))
           .filter((entry: WorkspaceDirectory) =>
-            prefix ? entry.name.toLowerCase().startsWith(prefix.toLowerCase()) : true,
+            prefix ? entry.name.toLowerCase().startsWith(prefix.toLowerCase()) : true
           )
           .slice(0, MAX_SUGGESTIONS);
         setSshSessionSuggestions((current) => ({ ...current, [session.key]: nextSuggestions }));
@@ -578,11 +552,11 @@ function LocationSwitcher({
         if (cancelled) {
           return;
         }
-        debugLog('[loadSessionSuggestions] Failed to fetch remote folders:', error);
         setSshSessionSuggestions((current) => ({ ...current, [session.key]: [] }));
         setSshSessionSuggestionsError((current) => ({
           ...current,
-          [session.key]: error instanceof Error ? error.message : 'Failed to fetch remote folders',
+          [session.key]:
+            error instanceof Error ? error.message : 'Failed to fetch remote folders',
         }));
       } finally {
         if (!cancelled) {
@@ -653,9 +627,7 @@ function LocationSwitcher({
     }
 
     const endsWithSlash = inputValue.trim().endsWith('/');
-    const parentPath = endsWithSlash
-      ? normalizedInput
-      : normalizePath(normalizedInput.split('/').slice(0, -1).join('/')) || '/';
+    const parentPath = endsWithSlash ? normalizedInput : normalizePath(normalizedInput.split('/').slice(0, -1).join('/')) || '/';
     const prefix = endsWithSlash ? '' : normalizedInput.split('/').filter(Boolean).pop() || '';
 
     let cancelled = false;
@@ -684,10 +656,8 @@ function LocationSwitcher({
         }
 
         const nextSuggestions = (data.files || [])
-          .filter(
-            (file: Record<string, unknown>) => file.type === 'directory' && !String(file.name || '').startsWith('.'),
-          )
-          .map((file: Record<string, unknown>) => ({
+          .filter((file: any) => file.type === 'directory' && !String(file.name || '').startsWith('.'))
+          .map((file: any) => ({
             name: String(file.name),
             path: normalizePath(String(file.path)),
           }))
@@ -706,7 +676,6 @@ function LocationSwitcher({
         if (cancelled) {
           return;
         }
-        debugLog('[loadSuggestions] Failed to fetch matching folders:', error);
         setSuggestions([]);
         setSuggestionsLoading(false);
         setSuggestionsError(error instanceof Error ? error.message : 'Failed to fetch matching folders');
@@ -747,8 +716,12 @@ function LocationSwitcher({
   const showText = !sidebarCollapsed;
 
   const recentWorkspaceItems = useMemo(() => {
-    const source = remoteContext?.hostAlias ? remoteRecentWorkspaces[remoteContext.hostAlias] || [] : recentWorkspaces;
-    return source.filter((path) => path !== workspaceRoot).slice(0, MAX_RECENT_WORKSPACES);
+    const source = remoteContext?.hostAlias
+      ? (remoteRecentWorkspaces[remoteContext.hostAlias] || [])
+      : recentWorkspaces;
+    return source
+      .filter((path) => path !== workspaceRoot)
+      .slice(0, MAX_RECENT_WORKSPACES);
   }, [recentWorkspaces, remoteContext?.hostAlias, remoteRecentWorkspaces, workspaceRoot]);
 
   const remoteHostFavorites = useMemo(() => {
@@ -758,92 +731,90 @@ function LocationSwitcher({
     return (sshFavoriteWorkspaces[remoteContext.hostAlias] || []).filter((path) => path !== workspaceRoot);
   }, [remoteContext?.hostAlias, sshFavoriteWorkspaces, workspaceRoot]);
 
-  const submitWorkspaceChange = useCallback(
-    async (targetPath: string) => {
-      const normalizedTarget = normalizePath(targetPath);
-      if (!normalizedTarget || normalizedTarget === workspaceRoot) {
-        setInputValue(workspaceRoot);
-        return;
-      }
+  const submitWorkspaceChange = useCallback(async (targetPath: string) => {
+    const normalizedTarget = normalizePath(targetPath);
+    if (!normalizedTarget || normalizedTarget === workspaceRoot) {
+      setInputValue(workspaceRoot);
+      return;
+    }
 
-      setSwitchingState({ isSwitching: true, error: null, status: 'Switching workspace…' });
+    setSwitchingState({ isSwitching: true, error: null, status: 'Switching workspace…' });
 
+    try {
       try {
-        try {
-          const sessionCount = await apiService.current.getTerminalSessionCount();
-          if (sessionCount > 0) {
-            const confirmed = window.confirm(
-              `${sessionCount} terminal session${sessionCount === 1 ? ' is' : 's are'} active. Switching workspace will close ${sessionCount === 1 ? 'it' : 'them'}. Continue?`,
-            );
-            if (!confirmed) {
-              setSwitchingState({ isSwitching: false, error: null, status: null });
-              return;
-            }
+        const sessionCount = await apiService.current.getTerminalSessionCount();
+        if (sessionCount > 0) {
+          const confirmed = window.confirm(
+            `${sessionCount} terminal session${sessionCount === 1 ? ' is' : 's are'} active. Switching workspace will close ${sessionCount === 1 ? 'it' : 'them'}. Continue?`
+          );
+          if (!confirmed) {
+            setSwitchingState({ isSwitching: false, error: null, status: null });
+            return;
           }
-        } catch (err) {
-          debugLog('[setWorkspace] terminal session count check failed:', err);
         }
+      } catch {
+        // Continue if session count cannot be checked.
+      }
 
-        const response = await apiService.current.setWorkspace(normalizedTarget);
-        const nextWorkspaceRoot = normalizePath(response.workspace_root || normalizedTarget);
-        setWorkspaceRoot(nextWorkspaceRoot);
-        setInputValue(nextWorkspaceRoot);
-        if (response.ssh_context?.is_remote && response.ssh_context.host_alias) {
-          const nextRemoteContext = {
-            hostAlias: response.ssh_context.host_alias,
-            sessionKey: response.ssh_context.session_key,
-            launcherUrl: response.ssh_context.launcher_url,
-            homePath: response.ssh_context.home_path,
-            isProxy: true,
-          };
-          setRemoteContext(nextRemoteContext);
-          if (nextRemoteContext.homePath) {
-            setSshHomePaths((current) => ({
-              ...current,
-              [nextRemoteContext.hostAlias]: nextRemoteContext.homePath as string,
-            }));
-          }
-          addRemoteRecentWorkspace(nextRemoteContext.hostAlias, nextWorkspaceRoot);
-        } else if (remoteContext?.hostAlias) {
-          addRemoteRecentWorkspace(remoteContext.hostAlias, nextWorkspaceRoot);
-        } else {
-          addRecentWorkspace(nextWorkspaceRoot);
+      const response = await apiService.current.setWorkspace(normalizedTarget);
+      const nextWorkspaceRoot = normalizePath(response.workspace_root || normalizedTarget);
+      setWorkspaceRoot(nextWorkspaceRoot);
+      setInputValue(nextWorkspaceRoot);
+      if (response.ssh_context?.is_remote && response.ssh_context.host_alias) {
+        const nextRemoteContext = {
+          hostAlias: response.ssh_context.host_alias,
+          sessionKey: response.ssh_context.session_key,
+          launcherUrl: response.ssh_context.launcher_url,
+          homePath: response.ssh_context.home_path,
+        };
+        setRemoteContext(nextRemoteContext);
+        if (nextRemoteContext.homePath) {
+          setSshHomePaths((current) => ({ ...current, [nextRemoteContext.hostAlias]: nextRemoteContext.homePath as string }));
         }
+        addRemoteRecentWorkspace(nextRemoteContext.hostAlias, nextWorkspaceRoot);
+      } else if (remoteContext?.hostAlias) {
+        addRemoteRecentWorkspace(remoteContext.hostAlias, nextWorkspaceRoot);
+      } else {
+        addRecentWorkspace(nextWorkspaceRoot);
+      }
 
-        window.setTimeout(() => {
-          window.location.reload();
-        }, 300);
-      } catch (error) {
-        debugLog('[setWorkspace] Failed to switch folder:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Failed to switch to this folder';
+      window.setTimeout(() => {
+        window.location.reload();
+      }, 300);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'Failed to switch to this folder';
 
-        if (errorMessage.includes('HTML response')) {
-          setSwitchingState({
-            isSwitching: false,
-            error: 'Remote workspace API is unavailable on this backend. Update the remote ledit binary.',
-            status: null,
-          });
-          return;
-        }
-
-        if (errorMessage.toLowerCase().includes('query') && errorMessage.toLowerCase().includes('progress')) {
-          setSwitchingState({
-            isSwitching: false,
-            error: 'Cannot switch while a query is running',
-            status: null,
-          });
-        } else {
-          setSwitchingState({ isSwitching: false, error: errorMessage, status: null });
-        }
+      if (errorMessage.includes('HTML response')) {
+        setSwitchingState({
+          isSwitching: false,
+          error: 'Remote workspace API is unavailable on this backend. Update the remote ledit binary.',
+          status: null,
+        });
         return;
       }
 
-      setSwitchingState({ isSwitching: false, error: null, status: null });
-      setIsOpen(false);
-      setSelectedIndex(-1);
-    },
-    [addRecentWorkspace, addRemoteRecentWorkspace, remoteContext?.hostAlias, workspaceRoot],
-  );
+      if (
+        errorMessage.toLowerCase().includes('query') &&
+        errorMessage.toLowerCase().includes('progress')
+      ) {
+        setSwitchingState({
+          isSwitching: false,
+          error: 'Cannot switch while a query is running',
+          status: null,
+        });
+      } else {
+        setSwitchingState({ isSwitching: false, error: errorMessage, status: null });
+      }
+      return;
+    }
+
+    setSwitchingState({ isSwitching: false, error: null, status: null });
+    setIsOpen(false);
+    setSelectedIndex(-1);
+  }, [addRecentWorkspace, addRemoteRecentWorkspace, remoteContext?.hostAlias, workspaceRoot]);
 
   const handleInputSubmit = useCallback(async () => {
     if (selectedIndex >= 0 && selectedIndex < suggestions.length) {
@@ -879,14 +850,10 @@ function LocationSwitcher({
           sessionKey: workspace.ssh_context.session_key,
           launcherUrl: workspace.ssh_context.launcher_url,
           homePath: workspace.ssh_context.home_path,
-          isProxy: true,
         };
         setRemoteContext(nextRemoteContext);
         if (nextRemoteContext.homePath) {
-          setSshHomePaths((current) => ({
-            ...current,
-            [nextRemoteContext.hostAlias]: nextRemoteContext.homePath as string,
-          }));
+          setSshHomePaths((current) => ({ ...current, [nextRemoteContext.hostAlias]: nextRemoteContext.homePath as string }));
         }
         addRemoteRecentWorkspace(nextRemoteContext.hostAlias, nextWorkspaceRoot);
       } else {
@@ -902,9 +869,7 @@ function LocationSwitcher({
       setSuggestionsError(null);
       setSshFailure(null);
     } catch (error) {
-      log.error(`Failed to refresh workspace data: ${error instanceof Error ? error.message : String(error)}`, {
-        title: 'Workspace Refresh Error',
-      });
+      console.error('Failed to refresh workspace data:', error);
       setSwitchingState({
         isSwitching: false,
         error: 'Failed to refresh workspace data',
@@ -913,7 +878,7 @@ function LocationSwitcher({
     } finally {
       setIsLoading(false);
     }
-  }, [addRecentWorkspace, addRemoteRecentWorkspace, isConnected, log]);
+  }, [addRecentWorkspace, addRemoteRecentWorkspace, isConnected]);
 
   const togglePopover = useCallback(() => {
     setIsOpen((prev) => !prev);
@@ -950,18 +915,7 @@ function LocationSwitcher({
   }, [switchingState.error]);
 
   const handleOpenSshHost = useCallback(async (hostAlias: string, explicitRemotePath?: string) => {
-    const desktopBridge = (
-      window as unknown as {
-        leditDesktop?: {
-          listSshHosts?: () => Promise<unknown>;
-          openSshWorkspace?: (opts: {
-            hostAlias: string;
-            remoteWorkspacePath?: string;
-            forceNewWindow: boolean;
-          }) => Promise<unknown>;
-        };
-      }
-    ).leditDesktop;
+    const desktopBridge = (window as any).leditDesktop;
     if (!hostAlias) {
       return;
     }
@@ -978,8 +932,8 @@ function LocationSwitcher({
         if (!statusPollCancelled && launchStatus?.status) {
           setSwitchingState((prev) => ({ ...prev, status: launchStatus.status }));
         }
-      } catch (err) {
-        debugLog('[pollLaunchStatus] transient poll failed:', err);
+      } catch {
+        // Ignore transient status polling failures while launch is in-flight.
       }
     };
     const statusPollTimer = window.setInterval(() => {
@@ -995,7 +949,10 @@ function LocationSwitcher({
           forceNewWindow: true,
         });
       } else {
-        const response = await apiService.current.openSSHWorkspace(hostAlias, targetRemotePath);
+        const response = await apiService.current.openSSHWorkspace(
+          hostAlias,
+          targetRemotePath
+        );
         // Prefer the same-origin proxy URL so the browser stays on the same
         // port/origin, preserving PWA installation and service-worker scope.
         const targetUrl = response.proxy_url || response.url;
@@ -1014,8 +971,8 @@ function LocationSwitcher({
             if (healthResp.ok) {
               break;
             }
-          } catch (err) {
-            debugLog('[openSSHWorkspace] proxy health check failed:', err);
+          } catch {
+            // Proxy not ready yet — keep polling.
           }
           await new Promise<void>((resolve) => window.setTimeout(resolve, 400));
         }
@@ -1025,19 +982,9 @@ function LocationSwitcher({
         window.location.assign(targetUrl);
       }
       setIsOpen(false);
-      setSshSessions(
-        await apiService.current.getSSHSessions().catch((err) => {
-          debugLog('Failed to fetch SSH sessions after connect:', err);
-          return [];
-        }),
-      );
-      setSwitchingState({
-        isSwitching: false,
-        error: null,
-        status: `SSH workspace ready: ${hostAlias}`,
-      });
+      setSshSessions(await apiService.current.getSSHSessions().catch(() => []));
+      setSwitchingState({ isSwitching: false, error: null, status: `SSH workspace ready: ${hostAlias}` });
     } catch (error) {
-      debugLog('[openSSHWorkspace] Failed to open SSH host:', error);
       const message = error instanceof Error ? error.message : 'Failed to open SSH host';
       if (error instanceof SSHWorkspaceOpenError) {
         setSshFailure({
@@ -1063,15 +1010,9 @@ function LocationSwitcher({
     setIsClosingSshSession(sessionKey);
     try {
       await apiService.current.closeSSHSession(sessionKey);
-      setSshSessions(
-        await apiService.current.getSSHSessions().catch((err) => {
-          debugLog('Failed to fetch SSH sessions after close:', err);
-          return [];
-        }),
-      );
+      setSshSessions(await apiService.current.getSSHSessions().catch(() => []));
       setSwitchingState({ isSwitching: false, error: null, status: 'SSH session closed' });
     } catch (error) {
-      debugLog('[closeSshSession] Failed to close SSH session:', error);
       const message = error instanceof Error ? error.message : 'Failed to close SSH session';
       setSwitchingState({ isSwitching: false, error: message, status: null });
     } finally {
@@ -1086,18 +1027,15 @@ function LocationSwitcher({
     }));
   }, []);
 
-  const getSshSessionTargetPath = useCallback(
-    (session: SSHSessionEntry): string | undefined => {
-      const draftValue = sshSessionPathDrafts[session.key];
-      const trimmedDraft = typeof draftValue === 'string' ? draftValue.trim() : '';
-      if (trimmedDraft) {
-        return trimmedDraft;
-      }
-      const savedPath = (session.remote_workspace_path || '').trim();
-      return savedPath || undefined;
-    },
-    [sshSessionPathDrafts],
-  );
+  const getSshSessionTargetPath = useCallback((session: SSHSessionEntry): string | undefined => {
+    const draftValue = sshSessionPathDrafts[session.key];
+    const trimmedDraft = typeof draftValue === 'string' ? draftValue.trim() : '';
+    if (trimmedDraft) {
+      return trimmedDraft;
+    }
+    const savedPath = (session.remote_workspace_path || '').trim();
+    return savedPath || undefined;
+  }, [sshSessionPathDrafts]);
 
   const totalWorkspaceRows = suggestions.length + recentWorkspaceItems.length;
 
@@ -1153,34 +1091,22 @@ function LocationSwitcher({
       }`}
     >
       {/* ── Host / connection indicator button (icon only) ── */}
-      {remoteContext?.isProxy ? (
-        <button
-          type="button"
-          className="location-host-btn ssh-active"
-          title={`SSH: ${remoteContext.hostAlias} (remote session)`}
-          tabIndex={-1}
-          aria-label={`Connected via SSH to ${remoteContext.hostAlias}`}
-        >
+      <button
+        ref={sshBtnRef}
+        type="button"
+        className={`location-host-btn ${remoteContext ? 'ssh-active' : ''}`}
+        onClick={toggleSshPanel}
+        aria-expanded={isSshPanelOpen}
+        aria-haspopup="listbox"
+        disabled={!isConnected}
+        title={remoteContext ? `SSH: ${remoteContext.hostAlias} — click to manage` : 'Local — click to connect via SSH'}
+      >
+        {remoteContext ? (
           <Server size={13} className="location-host-btn-icon" />
-        </button>
-      ) : (
-        <button
-          ref={sshBtnRef}
-          type="button"
-          className={`location-host-btn ${remoteContext ? 'ssh-active' : ''}`}
-          onClick={toggleSshPanel}
-          aria-expanded={isSshPanelOpen}
-          aria-haspopup="listbox"
-          disabled={!isConnected}
-          title={remoteContext ? `SSH: ${remoteContext.hostAlias} — click to manage` : 'Local — click to connect via SSH'}
-        >
-          {remoteContext ? (
-            <Server size={13} className="location-host-btn-icon" />
-          ) : (
-            <Monitor size={13} className="location-host-btn-icon" />
-          )}
-        </button>
-      )}
+        ) : (
+          <Monitor size={13} className="location-host-btn-icon" />
+        )}
+      </button>
 
       {/* ── Workspace picker button ── */}
       <button
@@ -1194,7 +1120,9 @@ function LocationSwitcher({
         title={workspaceRoot || 'No workspace'}
       >
         <FolderOpen size={14} className="location-switcher-trigger-icon" />
-        {showText && <span className="location-switcher-trigger-text">{triggerWorkspaceName}</span>}
+        {showText && (
+          <span className="location-switcher-trigger-text">{triggerWorkspaceName}</span>
+        )}
         {switchingState.isSwitching ? (
           <Loader2 size={12} className="spin" />
         ) : (
@@ -1202,8 +1130,8 @@ function LocationSwitcher({
         )}
       </button>
 
-      {/* ── SSH panel popover (hidden in SSH proxy mode — no SSH-hopping) ── */}
-      {isSshPanelOpen && !remoteContext?.isProxy ? (
+      {/* ── SSH panel popover ── */}
+      {isSshPanelOpen ? (
         <div
           ref={sshPanelRef}
           className="location-switcher-popover location-ssh-panel"
@@ -1216,7 +1144,11 @@ function LocationSwitcher({
               <div>{switchingState.error}</div>
               {showExpiredSessionRecovery ? (
                 <div className="location-switcher-error-actions">
-                  <button type="button" className="location-switcher-session-btn" onClick={handleReloadWithoutSSHPath}>
+                  <button
+                    type="button"
+                    className="location-switcher-session-btn"
+                    onClick={handleReloadWithoutSSHPath}
+                  >
                     Reload Without SSH Path
                   </button>
                 </div>
@@ -1267,7 +1199,7 @@ function LocationSwitcher({
                     type="button"
                     className="location-switcher-session-btn danger"
                     onClick={() => {
-                      window.location.assign(remoteContext.launcherUrl || `${window.location.origin}/`);
+                      window.location.assign(remoteContext.launcherUrl || window.location.origin + '/');
                     }}
                     disabled={Boolean(isClosingSshSession)}
                   >
@@ -1282,9 +1214,7 @@ function LocationSwitcher({
               <>
                 <div className="location-switcher-section-header" role="presentation">
                   {sshHosts.length === 1 ? (
-                    <>
-                      SSH — <strong>{sshHosts[0].alias}</strong>
-                    </>
+                    <>SSH — <strong>{sshHosts[0].alias}</strong></>
                   ) : (
                     'SSH Hosts'
                   )}
@@ -1317,11 +1247,13 @@ function LocationSwitcher({
                   </button>
                 </div>
               </>
-            ) : !remoteContext ? (
-              <div className="location-switcher-item location-switcher-item-empty" role="option" aria-selected={false}>
-                <span className="location-switcher-item-text">No SSH hosts found in ~/.ssh/config</span>
-              </div>
-            ) : null}
+            ) : (
+              !remoteContext ? (
+                <div className="location-switcher-item location-switcher-item-empty" role="option" aria-selected={false}>
+                  <span className="location-switcher-item-text">No SSH hosts found in ~/.ssh/config</span>
+                </div>
+              ) : null
+            )}
 
             {/* Active SSH sessions */}
             {sshSessions.length > 0 ? (
@@ -1338,7 +1270,10 @@ function LocationSwitcher({
                   >
                     <span className="location-switcher-item-text">{session.host_alias}</span>
                     <span className="location-switcher-item-meta">
-                      {collapseHomePath(session.remote_workspace_path || '$HOME', sshHomePaths[session.host_alias])}
+                      {collapseHomePath(
+                        session.remote_workspace_path || '$HOME',
+                        sshHomePaths[session.host_alias]
+                      )}
                     </span>
                     <div className="location-switcher-session-retarget">
                       <input
@@ -1359,7 +1294,9 @@ function LocationSwitcher({
                         </div>
                       ) : null}
                       {focusedSshSessionKey === session.key && sshSessionSuggestionsError[session.key] ? (
-                        <div className="location-switcher-session-error">{sshSessionSuggestionsError[session.key]}</div>
+                        <div className="location-switcher-session-error">
+                          {sshSessionSuggestionsError[session.key]}
+                        </div>
                       ) : null}
                       {focusedSshSessionKey === session.key && (sshSessionSuggestions[session.key] || []).length > 0 ? (
                         <div className="location-switcher-directory-list location-switcher-session-suggestions">
@@ -1393,7 +1330,9 @@ function LocationSwitcher({
                         className="location-switcher-session-btn"
                         onClick={() => handleOpenSshHost(session.host_alias, getSshSessionTargetPath(session))}
                         disabled={
-                          Boolean(isOpeningSshHost) || Boolean(isClosingSshSession) || !getSshSessionTargetPath(session)
+                          Boolean(isOpeningSshHost) ||
+                          Boolean(isClosingSshSession) ||
+                          !getSshSessionTargetPath(session)
                         }
                       >
                         Open Path
@@ -1408,7 +1347,9 @@ function LocationSwitcher({
                           }
                         }}
                         disabled={
-                          Boolean(isOpeningSshHost) || Boolean(isClosingSshSession) || !getSshSessionTargetPath(session)
+                          Boolean(isOpeningSshHost) ||
+                          Boolean(isClosingSshSession) ||
+                          !getSshSessionTargetPath(session)
                         }
                       >
                         Save
@@ -1449,7 +1390,7 @@ function LocationSwitcher({
           ref={popoverRef}
           className="location-switcher-popover"
           style={{
-            ['--trigger-width' as string]: triggerWidth,
+            ['--trigger-width' as any]: triggerWidth,
           }}
           role="listbox"
           aria-label="Location switcher"
@@ -1460,7 +1401,11 @@ function LocationSwitcher({
               <div>{switchingState.error}</div>
               {showExpiredSessionRecovery ? (
                 <div className="location-switcher-error-actions">
-                  <button type="button" className="location-switcher-session-btn" onClick={handleReloadWithoutSSHPath}>
+                  <button
+                    type="button"
+                    className="location-switcher-session-btn"
+                    onClick={handleReloadWithoutSSHPath}
+                  >
                     Reload Without SSH Path
                   </button>
                 </div>
@@ -1541,7 +1486,11 @@ function LocationSwitcher({
                 disabled={!isConnected || switchingState.isSwitching || !normalizePath(inputValue)}
                 title="Switch workspace"
               >
-                {switchingState.isSwitching ? <Loader2 size={12} className="spin" /> : <FolderOpen size={12} />}
+                {switchingState.isSwitching ? (
+                  <Loader2 size={12} className="spin" />
+                ) : (
+                  <FolderOpen size={12} />
+                )}
               </button>
             </div>
 
@@ -1581,9 +1530,13 @@ function LocationSwitcher({
                       role="option"
                       aria-selected={dir.path === workspaceRoot}
                     >
-                      <span className="location-switcher-item-text">{dir.name}</span>
+                      <span className="location-switcher-item-text">
+                        {dir.name}
+                      </span>
                       <span className="location-switcher-item-meta">
-                        {remoteContext ? collapseHomePath(dir.path, remoteContext.homePath) : dir.path}
+                        {remoteContext
+                          ? collapseHomePath(dir.path, remoteContext.homePath)
+                          : dir.path}
                       </span>
                     </button>
                   ))}
@@ -1613,7 +1566,9 @@ function LocationSwitcher({
                       role="option"
                       aria-selected={false}
                     >
-                      <span className="location-switcher-item-text">No saved paths on this host yet</span>
+                      <span className="location-switcher-item-text">
+                        No saved paths on this host yet
+                      </span>
                     </div>
                   ) : (
                     remoteHostFavorites.map((path) => (
@@ -1621,7 +1576,9 @@ function LocationSwitcher({
                         key={`remote-favorite-${remoteContext.hostAlias}-${path}`}
                         className="location-switcher-item location-switcher-item-session"
                       >
-                        <span className="location-switcher-item-text">{getPathDisplayName(path)}</span>
+                        <span className="location-switcher-item-text">
+                          {getPathDisplayName(path)}
+                        </span>
                         <span className="location-switcher-item-meta">
                           {collapseHomePath(path, remoteContext.homePath)}
                         </span>
@@ -1669,7 +1626,9 @@ function LocationSwitcher({
                   role="option"
                   aria-selected={false}
                 >
-                  <span className="location-switcher-item-text">No recent workspaces yet</span>
+                  <span className="location-switcher-item-text">
+                    No recent workspaces yet
+                  </span>
                 </div>
               ) : (
                 recentWorkspaceItems.map((path, index) => {
@@ -1678,15 +1637,21 @@ function LocationSwitcher({
                     <button
                       key={path}
                       type="button"
-                      className={`location-switcher-item ${rowIndex === selectedIndex ? 'selected' : ''}`}
+                      className={`location-switcher-item ${
+                        rowIndex === selectedIndex ? 'selected' : ''
+                      }`}
                       onClick={() => submitWorkspaceChange(path)}
                       role="option"
                       aria-selected={false}
                     >
-                      <span className="location-switcher-item-text">{getPathDisplayName(path)}</span>
-                      <span className="location-switcher-item-meta">
-                        {remoteContext ? collapseHomePath(path, remoteContext.homePath) : path}
-                      </span>
+                        <span className="location-switcher-item-text">
+                          {getPathDisplayName(path)}
+                        </span>
+                        <span className="location-switcher-item-meta">
+                          {remoteContext
+                            ? collapseHomePath(path, remoteContext.homePath)
+                            : path}
+                        </span>
                     </button>
                   );
                 })
@@ -1712,14 +1677,20 @@ function LocationSwitcher({
                   </div>
                 ) : (
                   instances.map((instance) => {
-                    const name = instance.working_dir.split('/').filter(Boolean).slice(-2).join('/');
+                    const name = instance.working_dir
+                      .split('/')
+                      .filter(Boolean)
+                      .slice(-2)
+                      .join('/');
                     const label = `${name} · pid:${instance.pid}`;
 
                     return (
                       <button
                         key={`instance-${instance.id}`}
                         type="button"
-                        className={`location-switcher-item ${instance.pid === selectedInstancePID ? 'active' : ''}`}
+                        className={`location-switcher-item ${
+                          instance.pid === selectedInstancePID ? 'active' : ''
+                        }`}
                         onClick={() => {
                           if (onInstanceChange && instance.pid) {
                             onInstanceChange(instance.pid);
@@ -1729,7 +1700,10 @@ function LocationSwitcher({
                         aria-selected={instance.pid === selectedInstancePID}
                         aria-label={`Switch to instance ${label}`}
                         disabled={
-                          switchingState.isSwitching || isSwitchingInstance || !onInstanceChange || instance.is_host
+                          switchingState.isSwitching ||
+                          isSwitchingInstance ||
+                          !onInstanceChange ||
+                          instance.is_host
                         }
                       >
                         <span className="location-switcher-item-text">{label}</span>
@@ -1761,118 +1735,109 @@ function LocationSwitcher({
       ) : null}
       {/* Post-SSH-connect workspace picker dialog — rendered via portal so it
           escapes any parent overflow/transform that would confine fixed positioning. */}
-      {showSSHWorkspacePicker
-        ? createPortal(
-            <div
-              className="ssh-workspace-picker-overlay"
-              role="dialog"
-              aria-modal="true"
-              aria-label="Select SSH workspace"
-            >
-              <div className="ssh-workspace-picker-dialog">
-                <div className="ssh-workspace-picker-header">
-                  <Server size={14} />
-                  <span>
-                    Select workspace on <strong>{sshPickerHostAlias}</strong>
-                  </span>
-                </div>
-                <div className="ssh-workspace-picker-body">
-                  {/* Recent workspaces for this host */}
-                  {(remoteRecentWorkspaces[sshPickerHostAlias] || []).length > 0 ? (
-                    <div className="ssh-workspace-picker-section">
-                      <div className="ssh-workspace-picker-section-label">Recent</div>
-                      {(remoteRecentWorkspaces[sshPickerHostAlias] || []).map((path) => (
-                        <button
-                          key={`picker-recent-${path}`}
-                          type="button"
-                          className="ssh-workspace-picker-item"
-                          onClick={() => {
-                            setShowSSHWorkspacePicker(false);
-                            void submitWorkspaceChange(path);
-                          }}
-                        >
-                          <span className="ssh-workspace-picker-item-name">{getPathDisplayName(path)}</span>
-                          <span className="ssh-workspace-picker-item-path">
-                            {collapseHomePath(path, sshHomePaths[sshPickerHostAlias])}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                  {/* Saved favorites for this host */}
-                  {(sshFavoriteWorkspaces[sshPickerHostAlias] || []).length > 0 ? (
-                    <div className="ssh-workspace-picker-section">
-                      <div className="ssh-workspace-picker-section-label">Favorites</div>
-                      {(sshFavoriteWorkspaces[sshPickerHostAlias] || []).map((path) => (
-                        <button
-                          key={`picker-fav-${path}`}
-                          type="button"
-                          className="ssh-workspace-picker-item"
-                          onClick={() => {
-                            setShowSSHWorkspacePicker(false);
-                            void submitWorkspaceChange(path);
-                          }}
-                        >
-                          <span className="ssh-workspace-picker-item-name">{getPathDisplayName(path)}</span>
-                          <span className="ssh-workspace-picker-item-path">
-                            {collapseHomePath(path, sshHomePaths[sshPickerHostAlias])}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                  {/* Manual path input */}
-                  <div className="ssh-workspace-picker-input-row">
-                    <input
-                      type="text"
-                      className="ssh-workspace-picker-input"
-                      value={sshPickerPath}
-                      onChange={(event) => setSshPickerPath(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' && sshPickerPath.trim()) {
-                          setShowSSHWorkspacePicker(false);
-                          void submitWorkspaceChange(sshPickerPath);
-                        }
-                      }}
-                      placeholder="Enter remote path…"
-                      autoComplete="off"
-                      spellCheck={false}
-                      autoFocus={
-                        (remoteRecentWorkspaces[sshPickerHostAlias] || []).length === 0 &&
-                        (sshFavoriteWorkspaces[sshPickerHostAlias] || []).length === 0
-                      }
-                    />
+      {showSSHWorkspacePicker ? createPortal(
+        <div className="ssh-workspace-picker-overlay" role="dialog" aria-modal="true" aria-label="Select SSH workspace">
+          <div className="ssh-workspace-picker-dialog">
+            <div className="ssh-workspace-picker-header">
+              <Server size={14} />
+              <span>Select workspace on <strong>{sshPickerHostAlias}</strong></span>
+            </div>
+            <div className="ssh-workspace-picker-body">
+              {/* Recent workspaces for this host */}
+              {(remoteRecentWorkspaces[sshPickerHostAlias] || []).length > 0 ? (
+                <div className="ssh-workspace-picker-section">
+                  <div className="ssh-workspace-picker-section-label">Recent</div>
+                  {(remoteRecentWorkspaces[sshPickerHostAlias] || []).map((path) => (
                     <button
+                      key={`picker-recent-${path}`}
                       type="button"
-                      className="location-switcher-session-btn primary"
+                      className="ssh-workspace-picker-item"
                       onClick={() => {
-                        if (sshPickerPath.trim()) {
-                          setShowSSHWorkspacePicker(false);
-                          void submitWorkspaceChange(sshPickerPath);
-                        }
+                        setShowSSHWorkspacePicker(false);
+                        void submitWorkspaceChange(path);
                       }}
-                      disabled={!sshPickerPath.trim()}
                     >
-                      Go
+                      <span className="ssh-workspace-picker-item-name">{getPathDisplayName(path)}</span>
+                      <span className="ssh-workspace-picker-item-path">
+                        {collapseHomePath(path, sshHomePaths[sshPickerHostAlias])}
+                      </span>
                     </button>
-                  </div>
+                  ))}
                 </div>
-                <div className="ssh-workspace-picker-footer">
-                  <button
-                    type="button"
-                    className="ssh-workspace-picker-dismiss"
-                    onClick={() => setShowSSHWorkspacePicker(false)}
-                  >
-                    Work in home directory
-                  </button>
+              ) : null}
+              {/* Saved favorites for this host */}
+              {(sshFavoriteWorkspaces[sshPickerHostAlias] || []).length > 0 ? (
+                <div className="ssh-workspace-picker-section">
+                  <div className="ssh-workspace-picker-section-label">Favorites</div>
+                  {(sshFavoriteWorkspaces[sshPickerHostAlias] || []).map((path) => (
+                    <button
+                      key={`picker-fav-${path}`}
+                      type="button"
+                      className="ssh-workspace-picker-item"
+                      onClick={() => {
+                        setShowSSHWorkspacePicker(false);
+                        void submitWorkspaceChange(path);
+                      }}
+                    >
+                      <span className="ssh-workspace-picker-item-name">{getPathDisplayName(path)}</span>
+                      <span className="ssh-workspace-picker-item-path">
+                        {collapseHomePath(path, sshHomePaths[sshPickerHostAlias])}
+                      </span>
+                    </button>
+                  ))}
                 </div>
+              ) : null}
+              {/* Manual path input */}
+              <div className="ssh-workspace-picker-input-row">
+                <input
+                  type="text"
+                  className="ssh-workspace-picker-input"
+                  value={sshPickerPath}
+                  onChange={(event) => setSshPickerPath(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && sshPickerPath.trim()) {
+                      setShowSSHWorkspacePicker(false);
+                      void submitWorkspaceChange(sshPickerPath);
+                    }
+                  }}
+                  placeholder="Enter remote path…"
+                  autoComplete="off"
+                  spellCheck={false}
+                  autoFocus={
+                    (remoteRecentWorkspaces[sshPickerHostAlias] || []).length === 0 &&
+                    (sshFavoriteWorkspaces[sshPickerHostAlias] || []).length === 0
+                  }
+                />
+                <button
+                  type="button"
+                  className="location-switcher-session-btn primary"
+                  onClick={() => {
+                    if (sshPickerPath.trim()) {
+                      setShowSSHWorkspacePicker(false);
+                      void submitWorkspaceChange(sshPickerPath);
+                    }
+                  }}
+                  disabled={!sshPickerPath.trim()}
+                >
+                  Go
+                </button>
               </div>
-            </div>,
-            document.body,
-          )
-        : null}
+            </div>
+            <div className="ssh-workspace-picker-footer">
+              <button
+                type="button"
+                className="ssh-workspace-picker-dismiss"
+                onClick={() => setShowSSHWorkspacePicker(false)}
+              >
+                Work in home directory
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      ) : null}
     </div>
   );
-}
+};
 
 export default LocationSwitcher;

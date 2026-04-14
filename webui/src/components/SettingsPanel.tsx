@@ -756,6 +756,7 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup }: 
           <div className="section">
             <h4>Behavior</h4>
             {renderSelect('reasoning_effort', 'Reasoning effort', ['low', 'medium', 'high'])}
+            {renderToggle('disable_thinking', 'Disable thinking for thinking models')}
             {renderToggle('skip_prompt', 'Skip confirmation prompt')}
             {renderToggle('enable_pre_write_validation', 'Pre-write validation')}
             {renderSelect('history_scope', 'History scope', ['session', 'project', 'global'])}

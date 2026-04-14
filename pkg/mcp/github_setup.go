@@ -169,7 +169,7 @@ func RunGitHubMCPSetup(_ context.Context, repo *GitHubRepoInfo, reader *bufio.Re
 		// Docker + PAT configuration
 		token, err := promptForGitHubPAT(reader)
 		if err != nil {
-			return nil, fmt.Errorf("get PAT from user: %w", err)
+			return nil, err
 		}
 		if token == "" {
 			fmt.Println("   Cancelled.")
@@ -192,7 +192,7 @@ func RunGitHubMCPSetup(_ context.Context, repo *GitHubRepoInfo, reader *bufio.Re
 		// npx + PAT configuration
 		token, err := promptForGitHubPAT(reader)
 		if err != nil {
-			return nil, fmt.Errorf("read PAT from pipe: %w", err)
+			return nil, err
 		}
 		if token == "" {
 			fmt.Println("   Cancelled.")

@@ -429,7 +429,7 @@ func (co *ConversationOptimizer) buildLLMCompactionSummary(messages []api.Messag
 		Content: compactText,
 	}
 
-	resp, err := co.client.SendChatRequest([]api.Message{systemMsg, userMsg}, nil, "")
+	resp, err := co.client.SendChatRequest([]api.Message{systemMsg, userMsg}, nil, "", false)
 	if err != nil {
 		if co.debug {
 			fmt.Printf("\n[WARN] LLM compaction summary failed: %v, falling back to Go summary\n", err)

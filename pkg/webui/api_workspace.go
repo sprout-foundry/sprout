@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -102,6 +103,22 @@ func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.R
 	}
 
 	clientID := ws.resolveClientID(r)
+
+	// When running behind the SSH proxy, the frontend sends the locally-resolved
+	// absolute path. We need to store the remote path format instead so that
+	// relative path resolution (like for pasted images) works correctly on the
+	// remote backend.
+	// 
+	// The SSH session already has the remote workspace path (e.g., "$HOME/project").
+	// We use that directly instead of the locally-resolved absolute path.
+	if req.Path != "" && ws.isSSHProxyRequest(r) {
+		session := ws.getSSHSessionForProxyRequest(r)
+		if session != nil && session.RemoteWorkspacePath != "" {
+			// Use the remote workspace path directly - it's what the remote
+			// backend needs for correct relative path resolution
+			req.Path = session.RemoteWorkspacePath
+		}
+	}
 
 	// Reject workspace changes only for the window that currently owns an active run.
 	if ws.hasActiveQueryForClient(clientID) {
@@ -211,5 +228,45 @@ func (ws *ReactWebServer) handleAPIWorkspaceBrowse(w http.ResponseWriter, r *htt
 		"workspace_root": ws.getWorkspaceRootForRequest(r),
 		"files":          files,
 	})
+}
+
+// isSSHProxyRequest checks if the request came through the SSH proxy tunnel.
+// It does this by checking if the request path starts with "/ssh/" or if the
+// remote client is connected via SSH.
+func (ws *ReactWebServer) isSSHProxyRequest(r *http.Request) bool {
+	// Check if the path indicates an SSH proxy request
+	if strings.HasPrefix(r.URL.Path, "/ssh/") {
+		return true
+	}
+	// Also check the client context for SSH session
+	clientID := ws.resolveClientID(r)
+	if clientID != "" {
+		ctx := ws.getOrCreateClientContext(clientID)
+		if ctx != nil && ctx.SSHSessionKey != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// getSSHSessionForProxyRequest looks up the SSH session for a proxied request.
+// Returns nil if not an SSH proxy request.
+func (ws *ReactWebServer) getSSHSessionForProxyRequest(r *http.Request) *sshWorkspaceSession {
+	// Extract session key from /ssh/{sessionKey}/ path
+	if !strings.HasPrefix(r.URL.Path, "/ssh/") {
+		return nil
+	}
+	trimmed := strings.TrimPrefix(r.URL.Path, "/ssh/")
+	var sessionKey string
+	if idx := strings.Index(trimmed, "/"); idx >= 0 {
+		sessionKey = trimmed[:idx]
+	} else {
+		sessionKey = trimmed
+	}
+	sessionKey, _ = url.PathUnescape(sessionKey)
+
+	ws.sshSessionsMu.Lock()
+	defer ws.sshSessionsMu.Unlock()
+	return ws.sshSessions[sessionKey]
 }
 

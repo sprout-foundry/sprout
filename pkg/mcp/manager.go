@@ -114,8 +114,11 @@ func (m *DefaultMCPManager) StartAll(ctx context.Context) error {
 	}
 	m.mutex.RUnlock()
 
-	var errs []error
-	var wg sync.WaitGroup
+	var (
+		errs  []error
+		errMu sync.Mutex
+		wg    sync.WaitGroup
+	)
 
 	for _, server := range servers {
 		if !server.IsRunning() && server.GetConfig().AutoStart {
@@ -123,7 +126,9 @@ func (m *DefaultMCPManager) StartAll(ctx context.Context) error {
 			go func(s MCPServer) {
 				defer wg.Done()
 				if err := s.Start(ctx); err != nil {
+					errMu.Lock()
 					errs = append(errs, fmt.Errorf("failed to start %s: %w", s.GetName(), err))
+					errMu.Unlock()
 				}
 			}(server)
 		}
@@ -159,15 +164,20 @@ func (m *DefaultMCPManager) StopAll(ctx context.Context) error {
 	}
 	m.mutex.RUnlock()
 
-	var errs []error
-	var wg sync.WaitGroup
+	var (
+		errs  []error
+		errMu sync.Mutex
+		wg    sync.WaitGroup
+	)
 
 	for _, server := range servers {
 		wg.Add(1)
 		go func(s MCPServer) {
 			defer wg.Done()
 			if err := s.Stop(ctx); err != nil {
+				errMu.Lock()
 				errs = append(errs, fmt.Errorf("failed to stop %s: %w", s.GetName(), err))
+				errMu.Unlock()
 			}
 		}(server)
 	}

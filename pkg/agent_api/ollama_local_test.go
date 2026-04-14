@@ -136,7 +136,7 @@ func TestOllamaLocalClientIncludesStructuredTools(t *testing.T) {
 		},
 	}}
 
-	_, err = client.SendChatRequest([]Message{{Role: "user", Content: "hi"}}, tools, "")
+	_, err = client.SendChatRequest([]Message{{Role: "user", Content: "hi"}}, tools, "", false)
 	require.NoError(t, err)
 	require.NotNil(t, stub.chatRequest)
 	require.Len(t, stub.chatRequest.Tools, 1)
@@ -194,7 +194,7 @@ func TestOllamaLocalClientStreamingEmitsChunks(t *testing.T) {
 	require.NoError(t, err)
 
 	var chunks []string
-	resp, err := client.SendChatRequestStream([]Message{{Role: "user", Content: "hi"}}, nil, "", func(content string, contentType string) {
+	resp, err := client.SendChatRequestStream([]Message{{Role: "user", Content: "hi"}}, nil, "", false, func(content string, contentType string) {
 		chunks = append(chunks, content)
 	})
 	require.NoError(t, err)
@@ -239,7 +239,7 @@ func TestOllamaLocalClientCapturesToolCalls(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	resp, err := client.SendChatRequest([]Message{{Role: "user", Content: "hi"}}, nil, "")
+	resp, err := client.SendChatRequest([]Message{{Role: "user", Content: "hi"}}, nil, "", false)
 	require.NoError(t, err)
 	require.Len(t, resp.Choices, 1)
 	require.Equal(t, "tool_calls", resp.Choices[0].FinishReason)
@@ -281,7 +281,7 @@ func TestOllamaLocalClientStreamingToolCalls(t *testing.T) {
 	require.NoError(t, err)
 
 	var chunks []string
-	resp, err := client.SendChatRequestStream([]Message{{Role: "user", Content: "hi"}}, nil, "", func(content string, contentType string) {
+	resp, err := client.SendChatRequestStream([]Message{{Role: "user", Content: "hi"}}, nil, "", false, func(content string, contentType string) {
 		chunks = append(chunks, content)
 	})
 	require.NoError(t, err)

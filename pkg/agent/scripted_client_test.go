@@ -437,7 +437,7 @@ func TestScriptedClientWithVision(t *testing.T) {
 		},
 	)
 
-	resp, err := client.SendVisionRequest(nil, nil, "")
+	resp, err := client.SendVisionRequest(nil, nil, "", false)
 	if err != nil {
 		t.Fatalf("SendVisionRequest failed: %v", err)
 	}
@@ -460,7 +460,7 @@ func TestScriptedClient_VisionFallback(t *testing.T) {
 	)
 
 	// First call should use vision response
-	resp1, err := client.SendVisionRequest(nil, nil, "")
+	resp1, err := client.SendVisionRequest(nil, nil, "", false)
 	if err != nil {
 		t.Fatalf("First SendVisionRequest failed: %v", err)
 	}

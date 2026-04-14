@@ -1223,7 +1223,7 @@ func (c *timeoutTestClient) GetConfig() *configuration.Config {
 	}
 }
 
-func (m *mockAPIClient) SendChatRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
+func (m *mockAPIClient) SendChatRequest(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -1277,7 +1277,7 @@ func (m *mockAPIClient) SendChatRequest(messages []api.Message, tools []api.Tool
 	return &api.ChatResponse{Choices: []api.Choice{}}, nil
 }
 
-func (m *mockAPIClient) SendChatRequestStream(messages []api.Message, tools []api.Tool, reasoning string, callback api.StreamCallback) (*api.ChatResponse, error) {
+func (m *mockAPIClient) SendChatRequestStream(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback) (*api.ChatResponse, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
@@ -1290,7 +1290,7 @@ func (m *mockAPIClient) GetModelContextLimit() (int, error) { return 4096, nil }
 func (m *mockAPIClient) ListModels(ctx context.Context) ([]api.ModelInfo, error) { return nil, nil }
 func (m *mockAPIClient) SupportsVision() bool        { return false }
 func (m *mockAPIClient) GetVisionModel() string      { return "" }
-func (m *mockAPIClient) SendVisionRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
+func (m *mockAPIClient) SendVisionRequest(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 func (m *mockAPIClient) GetLastTPS() float64          { return 0 }

@@ -608,13 +608,14 @@ func applyDisableThinking(model string, disableThinking bool, request map[string
 	modelLower := strings.ToLower(model)
 
 	// Check for known reasoning-only models that cannot disable thinking
-	// DeepSeek-R1 and similar models are pure reasoning models - they always think
-	if strings.Contains(modelLower, "deepseek-r1") ||
-		strings.Contains(modelLower, "deepseek-reasoner") ||
-		strings.Contains(modelLower, "qwq") ||
-		strings.Contains(modelLower, "qwenvl") {
+	// DeepSeek-R1, DeepSeek-Reasoner, QwQ, QwenVL are pure reasoning models - they always think
+	if strings.HasPrefix(modelLower, "deepseek-r1") ||
+		strings.HasPrefix(modelLower, "deepseek-reasoner") ||
+		strings.HasPrefix(modelLower, "qwq") ||
+		strings.HasPrefix(modelLower, "qwenvl") ||
+		strings.HasPrefix(modelLower, "kimi-k2-thinking") ||
+		strings.HasPrefix(modelLower, "kimi-thinking") {
 		// These are reasoning-only models - cannot disable thinking
-		// We'll need to handle this at a higher level (e.g., show a warning)
 		return
 	}
 
@@ -627,16 +628,42 @@ func applyDisableThinking(model string, disableThinking bool, request map[string
 	// OpenAI o-series and reasoning models use reasoning_effort parameter
 	// (Handled by applyReasoningEffort - this function is for models that use thinking enable/disable)
 	// Skip OpenAI reasoning models here as they use different mechanism
+	if strings.HasPrefix(modelLower, "o1") || strings.HasPrefix(modelLower, "o2") ||
+		strings.HasPrefix(modelLower, "o3") || strings.HasPrefix(modelLower, "o4") {
+		return // Use reasoning_effort instead
+	}
 
-	// Qwen3 and Qwen3.5 models - use enable_thinking parameter (not show_thinking)
-	// This is for vLLM/LMDeploy style APIs
-	if strings.Contains(modelLower, "qwen3") {
+	// DeepSeek - chat, coder, and V3 models support disabling thinking
+	if strings.Contains(modelLower, "deepseek-chat") ||
+		strings.Contains(modelLower, "deepseek-coder") ||
+		strings.Contains(modelLower, "deepseek-v3") {
+		request["thinking"] = map[string]interface{}{
+			"type": "disabled",
+		}
+		return
+	}
+
+	// Anthropic Claude - models with extended thinking support
+	if strings.Contains(modelLower, "claude-4") ||
+		strings.Contains(modelLower, "claude-opus-4.6") ||
+		strings.Contains(modelLower, "claude-sonnet-4.6") ||
+		strings.Contains(modelLower, "claude-haiku-4.6") {
+		// For Claude 4/Opus 4.6, use adaptive with low effort to minimize thinking
+		// Note: Older deprecated syntax was type: "disabled"
+		request["thinking"] = map[string]interface{}{
+			"type":   "adaptive",
+			"effort": "low",
+		}
+		return
+	}
+
+	// Qwen models (Alibaba) - Qwen3, Qwen3.5, Qwen2.5 use enable_thinking
+	if strings.Contains(modelLower, "qwen3") || strings.Contains(modelLower, "qwen2.5") || strings.Contains(modelLower, "qwen2") {
 		request["enable_thinking"] = false
 		return
 	}
 
 	// GLM models (zai provider) - use thinking.type = "disabled"
-	// Format: "thinking": {"type": "disabled"}
 	if strings.Contains(modelLower, "glm") {
 		request["thinking"] = map[string]interface{}{
 			"type": "disabled",
@@ -644,39 +671,38 @@ func applyDisableThinking(model string, disableThinking bool, request map[string
 		return
 	}
 
-	// Minimax models - use enable_thinking parameter
-	// Note: Some reports suggest minimax doesn't support disabling thinking well,
-	// but we try the standard approach
+	// MiniMax models - use reasoning_split parameter
 	if strings.Contains(modelLower, "minimax") {
-		request["enable_thinking"] = false
+		request["reasoning_split"] = false
 		return
 	}
 
-	// Google Gemini 2.5+ models - use thinkingBudget = 0 or thinking level
-	if strings.Contains(modelLower, "gemini-2") ||
-		strings.Contains(modelLower, "gemini-3") ||
-		strings.Contains(modelLower, "gemma") {
-		// For Gemini, we set thinking budget to 0 to disable thinking
-		request["thinkingBudget"] = 0
+	// Google Gemini 2.5+ models - use thinking_config with thinking_budget
+	// Gemini 3 series uses thinking_level instead (cannot fully disable)
+	if strings.Contains(modelLower, "gemini-2") || strings.Contains(modelLower, "gemma-3") {
+		// For Gemini 2.5 series, set thinking_budget to 0 to disable thinking
+		request["thinking_config"] = map[string]interface{}{
+			"thinking_budget": 0,
+		}
 		return
 	}
 
-	// MoonShot (Kimi) models - try enable_thinking
+	// Google Gemini 3 series - use thinking_level (cannot fully disable, only minimize)
+	if strings.Contains(modelLower, "gemini-3") {
+		// For Gemini 3 series, set thinking_level to "minimal" to reduce thinking
+		// Note: Cannot fully disable thinking on Gemini 3
+		request["thinking_config"] = map[string]interface{}{
+			"thinking_level": "minimal",
+		}
+		return
+	}
+
+	// MoonShot (Kimi) models - standard kimi models (not thinking-only)
 	if strings.Contains(modelLower, "kimi") {
+		// kimi-k2.5 and similar non-thinking models support enable_thinking
 		request["enable_thinking"] = false
 		return
 	}
-
-	// NVIDIA Nemotron - use reasoning_effort if available, or similar
-	if strings.Contains(modelLower, "nemotron") {
-		request["reasoning_effort"] = "low"
-		return
-	}
-
-	// Anthropic Claude - uses reasoning.max_tokens parameter to control thinking
-	// To disable, we could set a very low max_tokens but this isn't a true disable
-	// Anthropic doesn't have a direct "disable thinking" for models that support it
-	// Skip for now - this is handled differently
 
 	// If we reach here, the model might not support disabling thinking
 	// We simply don't add any parameter (models will use their default behavior)

@@ -33,7 +33,7 @@ func (s *CodeReviewService) performAgentBasedCodeReview(ctx *ReviewContext, stru
 	}
 
 	// Make agent API call
-	response, err := ctx.AgentClient.SendChatRequest(messages, nil, "")
+	response, err := ctx.AgentClient.SendChatRequest(messages, nil, "", false)
 	if err != nil {
 		return nil, fmt.Errorf("agent API call failed: %w", err)
 	}
@@ -60,7 +60,7 @@ func (s *CodeReviewService) performDeepAgentBasedCodeReview(ctx *ReviewContext) 
 		},
 	}
 
-	response, err := ctx.AgentClient.SendChatRequest(messages, nil, "")
+	response, err := ctx.AgentClient.SendChatRequest(messages, nil, "", false)
 	if err != nil {
 		return nil, fmt.Errorf("agent API call failed: %w", err)
 	}

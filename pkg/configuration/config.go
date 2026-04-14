@@ -62,6 +62,12 @@ type Config struct {
 	// Valid values: "low", "medium", "high". Empty means automatic selection.
 	ReasoningEffort string `json:"reasoning_effort,omitempty"`
 
+	// DisableThinking disables thinking/reasoning mode for thinking-capable models.
+	// When true, models like Qwen3, Qwen3.5, GLM models, and Minimax models will
+	// not use their thinking/reasoning mode. Note: GPT-OSS models do not support
+	// disabling thinking (they use reasoning_effort instead).
+	DisableThinking bool `json:"disable_thinking,omitempty"`
+
 	// SystemPromptText overrides the main agent system prompt inline.
 	// Empty means use the embedded default prompt.
 	SystemPromptText string `json:"system_prompt_text,omitempty"`

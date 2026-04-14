@@ -61,7 +61,7 @@ func (e *SpecExtractor) ExtractSpec(conversation []Message, userIntent string) (
 		{Role: "user", Content: fullPrompt},
 	}
 
-	chatResponse, err := e.agentClient.SendChatRequest(messages, nil, "")
+	chatResponse, err := e.agentClient.SendChatRequest(messages, nil, "", false)
 	if err != nil {
 		// Check for rate limiting or timeout errors
 		errStr := err.Error()

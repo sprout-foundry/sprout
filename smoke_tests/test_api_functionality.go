@@ -172,7 +172,7 @@ func main() {
 			// Test non-streaming (should have token data)
 			nonStreamResp, err := client.SendChatRequest([]api.Message{
 				{Role: "user", Content: "Say hello"},
-			}, nil, "")
+			}, nil, "", false)
 
 			// Check if it's an auth error - if so, skip the entire test section early
 			if err != nil && (strings.Contains(err.Error(), "401") || strings.Contains(err.Error(), "invalid_api_key") || strings.Contains(err.Error(), "Incorrect API key")) {
@@ -189,7 +189,7 @@ func main() {
 				var streamContent string
 				streamResp, err := client.SendChatRequestStream([]api.Message{
 					{Role: "user", Content: "Say hello"},
-				}, nil, "", func(content string, contentType string) {
+				}, nil, "", false, func(content string, contentType string) {
 					streamContent += content
 				})
 

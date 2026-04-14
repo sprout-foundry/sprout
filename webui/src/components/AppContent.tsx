@@ -74,6 +74,7 @@ interface AppContentProps {
   onActiveChatChange?: (id: string) => void;
   onCreateChat?: () => Promise<string | null>;
   onDeleteChat?: (id: string, options?: { removeWorktree?: boolean }) => void;
+  onDeleteAllChats?: () => void;
   onRenameChat?: (id: string, name: string) => void;
   perChatCache?: Record<string, PerChatState>;
   onCreateChatInWorktree?: (branch: string, baseRef?: string, name?: string, autoSwitch?: boolean) => Promise<string | null>;
@@ -121,6 +122,7 @@ function AppContent({
   onActiveChatChange,
   onCreateChat,
   onDeleteChat: _onDeleteChat,
+  onDeleteAllChats: _onDeleteAllChats,
   onRenameChat: _onRenameChat,
   perChatCache,
   onCreateChatInWorktree,
@@ -630,6 +632,7 @@ function AppContent({
                   onActiveChatChange={onActiveChatChange}
                   onRenameChat={_onRenameChat}
                   onDeleteChatWithWorktree={handleDeleteChatWithWorktree}
+                  onDeleteAllChats={_onDeleteAllChats}
                   nestedSplit={nestedSplit}
                   onNestedSplitChange={onNestedSplitChange}
                   containerRef={containerRef}

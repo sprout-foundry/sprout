@@ -95,6 +95,7 @@ export interface PerChatState {
   provider: string;
   model: string;
   worktreePath?: string;
+  queryCount: number;
 }
 
 export interface AppState {

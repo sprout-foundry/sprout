@@ -263,7 +263,7 @@ function AppWithProviders({
   );
 
   // ── Chat session management (depends on WS refs) ──────────────
-  const { loadChatSessions, handleActiveChatChange, handleCreateChat, handleDeleteChat, handleRenameChat, createChatInWorktree } =
+  const { loadChatSessions, handleActiveChatChange, handleCreateChat, handleDeleteChat, handleDeleteAllChats, handleRenameChat, createChatInWorktree } =
     useChatSessions({ setState, activeChatIdRef, activeRequestsRef });
 
   // ── Keep a ref in sync so sendMessage can check connection ────
@@ -351,6 +351,7 @@ function AppWithProviders({
         onActiveChatChange={handleActiveChatChange}
         onCreateChat={handleCreateChat}
         onDeleteChat={handleDeleteChat}
+        onDeleteAllChats={handleDeleteAllChats}
         onRenameChat={handleRenameChat}
         perChatCache={state.perChatCache}
         onCreateChatInWorktree={createChatInWorktree}

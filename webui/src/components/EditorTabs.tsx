@@ -50,6 +50,7 @@ interface EditorTabsProps {
   onCreateChatInWorktree?: () => void;
   onDeleteChatWithWorktree?: (id: string) => void;
   onRenameChat?: (id: string, name: string) => void;
+  onDeleteAllChats?: () => void;
   chatSessions?: Array<{ id: string; name?: string; is_pinned?: boolean; is_default?: boolean }>;
 }
 
@@ -263,6 +264,7 @@ function EditorTabs({
   onCreateChatInWorktree,
   onDeleteChatWithWorktree,
   onRenameChat,
+  onDeleteAllChats,
   chatSessions,
 }: EditorTabsProps): JSX.Element {
   const {
@@ -940,6 +942,20 @@ function EditorTabs({
               <X size={14} />
               <span>Close All Tabs</span>
             </button>
+            {onDeleteAllChats && (
+              <button
+                className="context-menu-item danger"
+                onClick={() => {
+                  setEmptyAreaContextMenu(null);
+                  if (window.confirm('Close all chat sessions except the active one?')) {
+                    onDeleteAllChats();
+                  }
+                }}
+              >
+                <Trash2 size={14} />
+                <span>Close All Chats</span>
+              </button>
+            )}
           </>
         )}
       </ContextMenu>

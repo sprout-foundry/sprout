@@ -21,7 +21,7 @@ func NewUnifiedProviderWrapper(provider ProviderInterface) *UnifiedProviderWrapp
 }
 
 // SendChatRequest converts types and forwards to provider
-func (w *UnifiedProviderWrapper) SendChatRequest(messages []Message, tools []Tool, reasoning string) (*ChatResponse, error) {
+func (w *UnifiedProviderWrapper) SendChatRequest(messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error) {
 	// Track request timing
 	startTime := time.Now()
 
@@ -63,7 +63,7 @@ func (w *UnifiedProviderWrapper) SendChatRequest(messages []Message, tools []Too
 	}
 
 	// Call provider
-	response, err := w.provider.SendChatRequest(typeMessages, typeTools, reasoning)
+	response, err := w.provider.SendChatRequest(typeMessages, typeTools, reasoning, disableThinking)
 
 	// Calculate request duration AFTER the provider completes
 	// This ensures we measure the full token generation time
@@ -201,7 +201,7 @@ func (w *UnifiedProviderWrapper) GetVisionModel() string {
 	return ""
 }
 
-func (w *UnifiedProviderWrapper) SendVisionRequest(messages []Message, tools []Tool, reasoning string) (*ChatResponse, error) {
+func (w *UnifiedProviderWrapper) SendVisionRequest(messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error) {
 	// Convert API types to shared types
 	typeMessages := make([]Message, len(messages))
 	for i, msg := range messages {
@@ -240,7 +240,7 @@ func (w *UnifiedProviderWrapper) SendVisionRequest(messages []Message, tools []T
 	}
 
 	// Call provider vision method
-	response, err := w.provider.SendVisionRequest(typeMessages, typeTools, reasoning)
+	response, err := w.provider.SendVisionRequest(typeMessages, typeTools, reasoning, disableThinking)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send vision request: %w", err)
 	}
@@ -328,7 +328,7 @@ func (w *UnifiedProviderWrapper) SendVisionRequest(messages []Message, tools []T
 }
 
 // SendChatRequestStream sends a streaming chat request (not yet implemented for unified providers)
-func (w *UnifiedProviderWrapper) SendChatRequestStream(messages []Message, tools []Tool, reasoning string, callback StreamCallback) (*ChatResponse, error) {
+func (w *UnifiedProviderWrapper) SendChatRequestStream(messages []Message, tools []Tool, reasoning string, disableThinking bool, callback StreamCallback) (*ChatResponse, error) {
 	// Convert API types to provider types
 	providerMessages := make([]Message, len(messages))
 	for i, msg := range messages {
@@ -374,7 +374,7 @@ func (w *UnifiedProviderWrapper) SendChatRequestStream(messages []Message, tools
 	}
 
 	// Call provider's streaming method
-	response, err := w.provider.SendChatRequestStream(providerMessages, providerTools, reasoning, providerCallback)
+	response, err := w.provider.SendChatRequestStream(providerMessages, providerTools, reasoning, disableThinking, providerCallback)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send streaming request: %w", err)
 	}

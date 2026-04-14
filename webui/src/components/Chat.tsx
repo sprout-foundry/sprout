@@ -747,7 +747,6 @@ function Chat({
                             onToolPillClick?.(matchingTool.id);
                           }
                         }}
-                        getToolStatus={(toolId) => toolStatusMap.get(toolId)}
                       />
                     </>
                   ) : (

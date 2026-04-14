@@ -2470,3 +2470,155 @@
     max-height: 160px;
   }
 }
+
+/* ── Tool Status Bar (Inline) ───────────────────────────────────── */
+.tool-status-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  position: relative;
+}
+
+.tool-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tool-status-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease;
+  flex-wrap: wrap;
+}
+
+.tool-status-item.completed {
+  border-color: rgba(var(--accent-success-rgb, 34, 197, 94), 0.4);
+  background: color-mix(in srgb, var(--accent-success) 6%, var(--bg-secondary));
+  animation: tool-completed-fade 0.3s ease-out;
+}
+
+.tool-status-item.error {
+  border-color: rgba(var(--accent-error-rgb, 239, 68, 68), 0.4);
+  background: color-mix(in srgb, var(--accent-error) 6%, var(--bg-secondary));
+}
+
+@keyframes tool-completed-fade {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tool-status-item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: var(--bg-elevated);
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.tool-status-item-name {
+  font-weight: 500;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 80px;
+}
+
+.tool-status-item-spinner {
+  color: var(--accent-primary);
+  animation: tool-status-spin 1s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes tool-status-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.tool-status-item-spinner.completed-icon {
+  color: var(--accent-success);
+  animation: none;
+}
+
+.tool-status-item-spinner.error-icon {
+  color: var(--accent-error);
+  animation: none;
+}
+
+.tool-status-args {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+  flex: 1;
+}
+
+.tool-status-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.tool-status-expand,
+.tool-status-collapse {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.12s ease, color 0.12s ease;
+  flex-shrink: 0;
+}
+
+.tool-status-expand:hover,
+.tool-status-collapse:hover {
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+}
+
+.tool-status-collapse {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}

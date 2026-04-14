@@ -20,11 +20,11 @@ func newFailingClient(err error) *failingClient {
 	return &failingClient{TestClient: &factory.TestClient{}, err: err}
 }
 
-func (c *failingClient) SendChatRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
+func (c *failingClient) SendChatRequest(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	return nil, c.err
 }
 
-func (c *failingClient) SendChatRequestStream(messages []api.Message, tools []api.Tool, reasoning string, callback api.StreamCallback) (*api.ChatResponse, error) {
+func (c *failingClient) SendChatRequestStream(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback) (*api.ChatResponse, error) {
 	return nil, c.err
 }
 

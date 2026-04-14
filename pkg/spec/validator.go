@@ -64,7 +64,7 @@ func (v *ScopeValidator) ValidateScope(diff string, spec *CanonicalSpec) (*Scope
 	promptSize := len(fullPrompt)
 	v.logger.LogProcessStep(fmt.Sprintf("Scope validation prompt size: %d bytes", promptSize))
 
-	chatResponse, err := v.agentClient.SendChatRequest(messages, nil, "")
+	chatResponse, err := v.agentClient.SendChatRequest(messages, nil, "", false)
 	if err != nil {
 		// Check for rate limiting or timeout errors
 		errStr := err.Error()

@@ -19,7 +19,7 @@ type TestClient struct {
 }
 
 // Create test client methods
-func (t *TestClient) SendChatRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
+func (t *TestClient) SendChatRequest(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	return &api.ChatResponse{
 		ID:      "test-response-id",
 		Object:  "chat.completion",
@@ -59,10 +59,10 @@ func (t *TestClient) SendChatRequest(messages []api.Message, tools []api.Tool, r
 	}, nil
 }
 
-func (t *TestClient) SendChatRequestStream(messages []api.Message, tools []api.Tool, reasoning string, callback api.StreamCallback) (*api.ChatResponse, error) {
+func (t *TestClient) SendChatRequestStream(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback) (*api.ChatResponse, error) {
 	// Simple streaming simulation
 	callback("Test response from mock provider", "assistant_text")
-	return t.SendChatRequest(messages, tools, reasoning)
+	return t.SendChatRequest(messages, tools, reasoning, disableThinking)
 }
 
 func (t *TestClient) CheckConnection() error {
@@ -107,7 +107,7 @@ func (t *TestClient) GetVisionModel() string {
 	return ""
 }
 
-func (t *TestClient) SendVisionRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
+func (t *TestClient) SendVisionRequest(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	return nil, fmt.Errorf("vision not supported in test provider")
 }
 

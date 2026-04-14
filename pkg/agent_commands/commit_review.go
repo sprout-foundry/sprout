@@ -86,7 +86,7 @@ IMPORTANT RULES:
 		},
 	}
 
-	resp, err := client.SendChatRequest(messages, nil, "")
+	resp, err := client.SendChatRequest(messages, nil, "", false)
 	if err != nil {
 		// Fall back to heuristic review ifLLM fails
 		return doHeuristicReview(diff, stagedFiles), nil

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import ContextMenu from './ContextMenu';
-import { X, TriangleAlert, Copy, ClipboardPaste, Trash2, TextSelect, Link2 } from 'lucide-react';
+import { X, TriangleAlert, Copy, ClipboardPaste, Trash2, TextSelect, Link2, Terminal } from 'lucide-react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
@@ -10,6 +10,11 @@ import type { WsEvent } from '../services/websocket';
 import { useTheme } from '../contexts/ThemeContext';
 import { debugLog } from '../utils/log';
 import { copyToClipboard } from '../utils/clipboard';
+import {
+  initWasmShell,
+  type WasmShell,
+  type WasmShellResult,
+} from '../services/wasmShell';
 
 // Font size constants (must match Terminal.tsx)
 const FONT_SIZE_DEFAULT = 13;
@@ -73,6 +78,18 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     const isActiveRef = useRef(isActive);
     isActiveRef.current = isActive;
 
+    // ── WASM shell state ──────────────────────────────────────────────────
+    const wasmShellRef = useRef<WasmShell | null>(null);
+    const [wasmActive, setWasmActive] = useState(false);
+    const [wasmLoading, setWasmLoading] = useState(false);
+    const [wasmError, setWasmError] = useState<string | null>(null);
+    const wasmLineRef = useRef('');
+    const wasmCursorRef = useRef(0);
+    const wasmHistoryRef = useRef<string[]>([]);
+    const wasmHistoryIdxRef = useRef(-1);
+    const wasmPromptRef = useRef('\x1b[1;36muser@ledit-wasm\x1b[0m:\x1b[1;34m~\x1b[0m$ ');
+    const wasmInitializedRef = useRef(false);
+
     const getTerminalTheme = useCallback(() => {
       return {
         // Keep terminal palette independent from app light/dark theme
@@ -109,6 +126,361 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       }
       return raw;
     }, []);
+
+    // ── WASM shell helpers ──────────────────────────────────────────────
+
+    /** Build the shell prompt string using the current WASM cwd. */
+    const buildWasmPrompt = useCallback((cwd: string): string => {
+      // Shorten /home/user to ~
+      const display = cwd.startsWith('/home/user') ? ('~' + cwd.slice(10)) : cwd;
+      return `\x1b[1;36muser@ledit-wasm\x1b[0m:\x1b[1;34m${display}\x1b[0m$ `;
+    }, []);
+
+    /** Write the prompt to xterm without adding a newline. */
+    const writeWasmPrompt = useCallback(() => {
+      const term = xtermRef.current;
+      if (!term || !wasmShellRef.current) return;
+      const cwd = wasmShellRef.current.getCwd();
+      const prompt = buildWasmPrompt(cwd);
+      wasmPromptRef.current = prompt;
+      term.write(prompt);
+    }, [buildWasmPrompt]);
+
+    /** Clear the current input line (prompt + typed text) and rewrite it. */
+    const rewriteWasmLine = useCallback(() => {
+      const term = xtermRef.current;
+      if (!term) return;
+      // Move to beginning of line, clear to end of screen
+      term.write('\r\x1b[2K');
+      // Rewrite prompt + current buffer
+      const prompt = wasmPromptRef.current;
+      const line = wasmLineRef.current;
+      term.write(prompt + line);
+      // Position cursor correctly
+      const cursorPos = wasmCursorRef.current;
+      if (cursorPos < line.length) {
+        term.write(`\x1b[${line.length - cursorPos}D`);
+      }
+    }, []);
+
+    /** Handle a single character/data event from xterm when in WASM mode. */
+    const handleWasmInput = useCallback((data: string) => {
+      const term = xtermRef.current;
+      const shell = wasmShellRef.current;
+      if (!term || !shell) return;
+
+      // Handle multi-character paste (length > 1) — just insert directly
+      if (data.length > 1) {
+        if (data === '\r' || data === '\n') {
+          // Enter from paste — treat as enter
+          handleWasmInput('\r');
+          return;
+        }
+        const before = wasmLineRef.current.slice(0, wasmCursorRef.current);
+        const after = wasmLineRef.current.slice(wasmCursorRef.current);
+        wasmLineRef.current = before + data + after;
+        wasmCursorRef.current += data.length;
+        rewriteWasmLine();
+        return;
+      }
+
+      const ch = data;
+
+      if (ch === '\r' || ch === '\n') {
+        // Enter — execute command
+        term.write('\r\n');
+        const cmd = wasmLineRef.current.trim();
+
+        if (cmd) {
+          wasmHistoryRef.current.push(cmd);
+          wasmHistoryIdxRef.current = wasmHistoryRef.current.length;
+
+          try {
+            const result: WasmShellResult = shell.executeCommand(cmd);
+            if (result.stdout) {
+              term.write(result.stdout);
+            }
+            if (result.stderr) {
+              term.write('\x1b[31m' + result.stderr + '\x1b[0m');
+            }
+          } catch (err) {
+            term.write(`\x1b[31mError: ${err instanceof Error ? err.message : String(err)}\x1b[0m\r\n`);
+          }
+        }
+
+        wasmLineRef.current = '';
+        wasmCursorRef.current = 0;
+        writeWasmPrompt();
+        return;
+      }
+
+      if (ch === '\x7f' || ch === '\b') {
+        // Backspace — delete character before cursor
+        if (wasmCursorRef.current > 0) {
+          const before = wasmLineRef.current.slice(0, wasmCursorRef.current - 1);
+          const after = wasmLineRef.current.slice(wasmCursorRef.current);
+          wasmLineRef.current = before + after;
+          wasmCursorRef.current -= 1;
+          rewriteWasmLine();
+        }
+        return;
+      }
+
+      if (ch === '\t') {
+        // Tab completion
+        const line = wasmLineRef.current;
+        try {
+          const compResult = shell.autoComplete(line);
+          if (compResult.completions.length === 1) {
+            // Single completion — apply it
+            const completion = compResult.completions[0];
+            wasmLineRef.current = completion;
+            wasmCursorRef.current = completion.length;
+            rewriteWasmLine();
+            // If the completed path is a directory, append /
+            if (compResult.completions.length === 1) {
+              try {
+                const listResult = shell.listDir(completion);
+                if (listResult.entries && listResult.entries.length > 0) {
+                  wasmLineRef.current += '/';
+                  wasmCursorRef.current += 1;
+                  rewriteWasmLine();
+                }
+              } catch {
+                // Not a directory — fine
+              }
+            }
+          } else if (compResult.completions.length > 1) {
+            // Multiple completions — show them
+            term.write('\r\n');
+            for (const c of compResult.completions) {
+              term.write('  ' + c + '\r\n');
+            }
+            rewriteWasmLine();
+          }
+        } catch {
+          // Completion failed — ignore
+        }
+        return;
+      }
+
+      if (ch === '\x1b') {
+        // Escape sequence start — the next onData calls will deliver [A, [B, etc.
+        // xterm.js bundles these, so we handle arrow codes here directly.
+        // Arrow keys arrive as \x1b[A, \x1b[B, \x1b[C, \x1b[D, \x1b[H, \x1b[F
+        // But onData already delivers the full sequence, so we handle below.
+        return;
+      }
+
+      if (ch === '\x1b[A') {
+        // Up arrow — history previous
+        const hist = wasmHistoryRef.current;
+        if (hist.length === 0) return;
+        if (wasmHistoryIdxRef.current > 0) {
+          wasmHistoryIdxRef.current -= 1;
+          wasmLineRef.current = hist[wasmHistoryIdxRef.current];
+          wasmCursorRef.current = wasmLineRef.current.length;
+          rewriteWasmLine();
+        }
+        return;
+      }
+
+      if (ch === '\x1b[B') {
+        // Down arrow — history next
+        const hist = wasmHistoryRef.current;
+        wasmHistoryIdxRef.current += 1;
+        if (wasmHistoryIdxRef.current >= hist.length) {
+          wasmHistoryIdxRef.current = hist.length;
+          wasmLineRef.current = '';
+          wasmCursorRef.current = 0;
+        } else {
+          wasmLineRef.current = hist[wasmHistoryIdxRef.current];
+          wasmCursorRef.current = wasmLineRef.current.length;
+        }
+        rewriteWasmLine();
+        return;
+      }
+
+      if (ch === '\x1b[D') {
+        // Left arrow — move cursor left
+        if (wasmCursorRef.current > 0) {
+          wasmCursorRef.current -= 1;
+          term.write('\x1b[D');
+        }
+        return;
+      }
+
+      if (ch === '\x1b[C') {
+        // Right arrow — move cursor right
+        if (wasmCursorRef.current < wasmLineRef.current.length) {
+          wasmCursorRef.current += 1;
+          term.write('\x1b[C');
+        }
+        return;
+      }
+
+      if (ch === '\x1b[H' || ch === '\x01') {
+        // Home or Ctrl+A — move cursor to start of line
+        if (wasmCursorRef.current > 0) {
+          term.write(`\x1b[${wasmCursorRef.current}D`);
+          wasmCursorRef.current = 0;
+        }
+        return;
+      }
+
+      if (ch === '\x1b[F' || ch === '\x05') {
+        // End or Ctrl+E — move cursor to end of line
+        const diff = wasmLineRef.current.length - wasmCursorRef.current;
+        if (diff > 0) {
+          term.write(`\x1b[${diff}C`);
+          wasmCursorRef.current = wasmLineRef.current.length;
+        }
+        return;
+      }
+
+      if (ch === '\x03') {
+        // Ctrl+C — cancel current line
+        term.write('^C\r\n');
+        wasmLineRef.current = '';
+        wasmCursorRef.current = 0;
+        writeWasmPrompt();
+        return;
+      }
+
+      if (ch === '\x0c') {
+        // Ctrl+L — clear screen
+        term.clear();
+        term.write('\x1b[H'); // cursor home
+        rewriteWasmLine();
+        return;
+      }
+
+      if (ch === '\x15') {
+        // Ctrl+U — kill line from cursor back
+        const after = wasmLineRef.current.slice(wasmCursorRef.current);
+        const killed = wasmCursorRef.current;
+        wasmLineRef.current = after;
+        wasmCursorRef.current = 0;
+        if (killed > 0) {
+          rewriteWasmLine();
+        }
+        return;
+      }
+
+      if (ch === '\x17') {
+        // Ctrl+W — kill word before cursor
+        const before = wasmLineRef.current.slice(0, wasmCursorRef.current);
+        const trimmed = before.replace(/\S+\s*$/, '');
+        const killed = before.length - trimmed.length;
+        if (killed > 0) {
+          wasmLineRef.current = trimmed + wasmLineRef.current.slice(wasmCursorRef.current);
+          wasmCursorRef.current -= killed;
+          rewriteWasmLine();
+        }
+        return;
+      }
+
+      // Regular printable character (check if control char)
+      if (ch >= ' ' || ch === '\t') {
+        const before = wasmLineRef.current.slice(0, wasmCursorRef.current);
+        const after = wasmLineRef.current.slice(wasmCursorRef.current);
+        wasmLineRef.current = before + ch + after;
+        wasmCursorRef.current += 1;
+        // Echo the character
+        term.write(ch);
+        // If there are characters after cursor, rewrite to maintain display
+        if (after.length > 0) {
+          rewriteWasmLine();
+        }
+      }
+    }, [rewriteWasmLine, writeWasmPrompt]);
+
+    // ── WASM shell lifecycle ─────────────────────────────────────────────
+
+    // When backend disconnects, activate WASM shell; when it reconnects, deactivate.
+    useEffect(() => {
+      if (!isActive) {
+        return;
+      }
+
+      if (isConnected) {
+        // Backend connected — tear down WASM shell if active
+        const term = xtermRef.current;
+        if (wasmActive && term) {
+          debugLog('[TerminalPane] Backend reconnected — deactivating WASM shell');
+          term.writeln('\r\n\x1b[32m→ Connected to backend\x1b[0m');
+          term.writeln('  WASM browser shell deactivated. Using remote PTY.\r\n');
+          wasmLineRef.current = '';
+          wasmCursorRef.current = 0;
+        }
+        setWasmActive(false);
+        return;
+      }
+
+      // Backend not connected — activate WASM shell
+      if (wasmActive || wasmLoading || wasmInitializedRef.current) {
+        return; // already active or loading
+      }
+
+      let cancelled = false;
+
+      const activateWasm = async () => {
+        const term = xtermRef.current;
+        if (!term) return;
+
+        if (!wasmShellRef.current && !wasmInitializedRef.current) {
+          setWasmLoading(true);
+          setWasmError(null);
+
+          try {
+            const shell = await initWasmShell();
+            wasmShellRef.current = shell;
+            wasmInitializedRef.current = true;
+            debugLog('[TerminalPane] WASM shell initialized');
+          } catch (err) {
+            if (cancelled) return;
+            const msg = err instanceof Error ? err.message : String(err);
+            setWasmError(msg);
+            debugLog('[TerminalPane] WASM shell init failed:', msg);
+            setWasmLoading(false);
+            return;
+          }
+        }
+
+        if (cancelled) return;
+
+        setWasmLoading(false);
+        setWasmActive(true);
+
+        const shell = wasmShellRef.current;
+        if (!shell || !term) return;
+
+        term.writeln('');
+        term.writeln('\x1b[33m╔══════════════════════════════════════════╗\x1b[0m');
+        term.writeln('\x1b[33m║  \x1b[1mLedit WASM Browser Shell\x1b[0m\x1b[33m               ║\x1b[0m');
+        term.writeln('\x1b[33m║  \x1b[2mGo compiled to WebAssembly\x1b[0m\x1b[33m             ║\x1b[0m');
+        term.writeln('\x1b[33m║  \x1b[2mFiles persist in IndexedDB\x1b[0m\x1b[33m            ║\x1b[0m');
+        term.writeln('\x1b[33m╚══════════════════════════════════════════╝\x1b[0m');
+        term.writeln('');
+        term.writeln('Type \x1b[1mhelp\x1b[0m for available commands.');
+        term.writeln('This shell runs \x1b[1mentirely in your browser\x1b[0m — no backend needed.');
+        term.writeln('');
+
+        // Reset state
+        wasmLineRef.current = '';
+        wasmCursorRef.current = 0;
+        wasmHistoryRef.current = [];
+        wasmHistoryIdxRef.current = -1;
+
+        writeWasmPrompt();
+      };
+
+      activateWasm();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [isActive, isConnected, wasmActive, wasmLoading, writeWasmPrompt]);
 
     const sendResize = useCallback(() => {
       if (!paneConnected || !terminalWSRef.current || !xtermRef.current || !fitAddonRef.current) return;
@@ -258,7 +630,11 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       fitAddonRef.current = fitAddon;
 
       term.onData((data) => {
-        terminalWSRef.current?.sendRawInput(data);
+        if (wasmActive) {
+          handleWasmInput(data);
+        } else {
+          terminalWSRef.current?.sendRawInput(data);
+        }
       });
 
       requestAnimationFrame(() => {
@@ -431,7 +807,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       <div className="terminal-pane" ref={paneWrapperRef}>
         {showCloseButton && (
           <div className="terminal-pane-header">
-            <span className={`terminal-pane-dot ${paneConnected ? 'connected' : 'disconnected'}`} />
+            <span className={`terminal-pane-dot ${paneConnected || wasmActive ? 'connected' : 'disconnected'}`} />
             <button className="terminal-pane-close" onClick={onClose} title="Close pane">
               <X size={12} />
             </button>
@@ -444,10 +820,28 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         >
           <div ref={xtermContainerRef} className="terminal-xterm" />
         </div>
-        {!paneConnected && (
+        {!paneConnected && !wasmActive && !wasmLoading && (
           <div className="terminal-status-inline">
             <TriangleAlert size={14} className="inline-block mr-1 align-text-bottom" />
             Backend not connected. Start with: <code>./ledit agent --web-port 54421</code>
+          </div>
+        )}
+        {wasmLoading && (
+          <div className="terminal-status-inline">
+            <Terminal size={14} className="inline-block mr-1 align-text-bottom" style={{ animation: 'spin 1s linear infinite' }} />
+            Initializing browser shell (loading WebAssembly)...
+          </div>
+        )}
+        {wasmError && !wasmActive && (
+          <div className="terminal-status-inline" style={{ color: '#ef6b73' }}>
+            <TriangleAlert size={14} className="inline-block mr-1 align-text-bottom" />
+            WASM shell failed: {wasmError}
+          </div>
+        )}
+        {wasmActive && (
+          <div className="terminal-status-inline" style={{ color: '#7ddf97' }}>
+            <Terminal size={14} className="inline-block mr-1 align-text-bottom" />
+            Browser shell active · Go→WASM · IndexedDB persistence
           </div>
         )}
         <ContextMenu

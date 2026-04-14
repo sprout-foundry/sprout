@@ -14,6 +14,7 @@ interface EditorManagerContextValue {
   activePaneId: string | null;
   activeBufferId: string | null;
   isAutoSaveEnabled: boolean;
+  setAutoSaveEnabled: (enabled: boolean) => void;
   autoSaveInterval: number; // milliseconds
   paneSizes: PaneSize; // Track pane sizes for resizable split panes
 
@@ -43,10 +44,20 @@ interface EditorManagerContextValue {
   updateBufferScroll: (bufferId: string, position: { top: number; left: number }) => void;
   updateBufferMetadata: (bufferId: string, updates: Record<string, any>) => void;
   updateBufferTitle: (bufferId: string, title: string) => void;
-  saveBuffer: (bufferId: string) => Promise<void>;
+  saveBuffer: (bufferId: string) => Promise<{ mod_time?: number } | void>;
   setBufferModified: (bufferId: string, isModified: boolean) => void;
+  setBufferOriginalContent: (bufferId: string, originalContent: string) => void;
+  setBufferExternallyModified: (bufferId: string, diskContent: string, mtime?: number) => void;
+  clearBufferExternallyModified: (bufferId: string) => void;
+  setBufferLanguageOverride: (bufferId: string, languageId: string | null) => void;
   saveAllBuffers: () => Promise<void>;
   updatePaneSize: (paneId: string, size: number) => void; // Update pane size
+  isLinkedScrollEnabled: boolean;
+  toggleLinkedScroll: () => void;
+  toggleBufferPin: (bufferId: string) => void;
+  setBufferPinned: (bufferId: string, isPinned: boolean) => void;
+  setBufferClosable: (bufferId: string, isClosable: boolean) => void;
+  reloadBufferFromDisk: (bufferId: string, diskContent: string, mtime?: number) => void;
 }
 
 const EditorManagerContext = createContext<EditorManagerContextValue | null>(null);
@@ -96,9 +107,11 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   const [paneLayout, setPaneLayoutState] = useState<PaneLayout>('single');
   const [activePaneId, setActivePaneId] = useState<string | null>('pane-1');
   const [activeBufferId, setActiveBufferId] = useState<string | null>('buffer-chat');
-  const [isAutoSaveEnabled] = useState(true);
+  const [isAutoSaveEnabled, setIsAutoSaveEnabledState] = useState(true);
+  const setAutoSaveEnabled = useCallback((enabled: boolean) => setIsAutoSaveEnabledState(enabled), []);
   const [autoSaveInterval] = useState(30000); // 30 seconds
   const [paneSizes, setPaneSizes] = useState<PaneSize>({ 'pane-1': 100 }); // Initial sizes in percentage
+  const [isLinkedScrollEnabled, setIsLinkedScrollEnabled] = useState(false);
 
   // Keep a ref to the latest buffers Map so async closures don't read stale data
   const buffersRef = useRef(buffers);
@@ -425,6 +438,119 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     });
   }, []);
 
+  const setBufferOriginalContent = useCallback((bufferId: string, originalContent: string) => {
+    setBuffers(prev => {
+      const next = new Map(prev);
+      const buffer = next.get(bufferId);
+      if (buffer) {
+        next.set(bufferId, {
+          ...buffer,
+          originalContent,
+          isModified: buffer.content !== originalContent ? buffer.isModified : false,
+        });
+      }
+      return next;
+    });
+  }, []);
+
+  const setBufferExternallyModified = useCallback((bufferId: string, diskContent: string, mtime?: number) => {
+    setBuffers(prev => {
+      const next = new Map(prev);
+      const buffer = next.get(bufferId);
+      if (buffer) {
+        next.set(bufferId, {
+          ...buffer,
+          externallyModified: true,
+          diskContent,
+          file: { ...buffer.file, modified: mtime ?? Math.floor(Date.now() / 1000) },
+        });
+      }
+      return next;
+    });
+  }, []);
+
+  const clearBufferExternallyModified = useCallback((bufferId: string) => {
+    setBuffers(prev => {
+      const next = new Map(prev);
+      const buffer = next.get(bufferId);
+      if (buffer) {
+        next.set(bufferId, {
+          ...buffer,
+          externallyModified: false,
+          diskContent: null,
+        });
+      }
+      return next;
+    });
+  }, []);
+
+  const setBufferLanguageOverride = useCallback((bufferId: string, languageId: string | null) => {
+    setBuffers(prev => {
+      const next = new Map(prev);
+      const buffer = next.get(bufferId);
+      if (buffer) {
+        next.set(bufferId, { ...buffer, languageOverride: languageId });
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleLinkedScroll = useCallback(() => {
+    setIsLinkedScrollEnabled(prev => !prev);
+  }, []);
+
+  const toggleBufferPin = useCallback((bufferId: string) => {
+    setBuffers(prev => {
+      const next = new Map(prev);
+      const buffer = next.get(bufferId);
+      if (buffer) {
+        next.set(bufferId, { ...buffer, isPinned: !buffer.isPinned });
+      }
+      return next;
+    });
+  }, []);
+
+  const setBufferPinned = useCallback((bufferId: string, isPinned: boolean) => {
+    setBuffers(prev => {
+      const next = new Map(prev);
+      const buffer = next.get(bufferId);
+      if (buffer) {
+        next.set(bufferId, { ...buffer, isPinned });
+      }
+      return next;
+    });
+  }, []);
+
+  const setBufferClosable = useCallback((bufferId: string, isClosable: boolean) => {
+    setBuffers(prev => {
+      const next = new Map(prev);
+      const buffer = next.get(bufferId);
+      if (buffer) {
+        next.set(bufferId, { ...buffer, isClosable });
+      }
+      return next;
+    });
+  }, []);
+
+  const reloadBufferFromDisk = useCallback((bufferId: string, diskContent: string, mtime?: number) => {
+    setBuffers(prev => {
+      const next = new Map(prev);
+      const buffer = next.get(bufferId);
+      if (buffer) {
+        next.set(bufferId, {
+          ...buffer,
+          content: diskContent,
+          originalContent: diskContent,
+          isModified: false,
+          externallyModified: false,
+          diskContent: null,
+          file: { ...buffer.file, modified: mtime ?? Math.floor(Date.now() / 1000) },
+        });
+      }
+      return next;
+    });
+  }, []);
+
   // Save a buffer to the server
   const saveBuffer = useCallback(async (bufferId: string) => {
     const buffer = buffersRef.current.get(bufferId);
@@ -505,6 +631,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
             }
             return newBuffers;
           });
+          return { mod_time: typeof data.mod_time === 'number' ? data.mod_time : undefined };
         }
       }
     } catch (error) {
@@ -785,6 +912,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     activePaneId,
     activeBufferId,
     isAutoSaveEnabled,
+    setAutoSaveEnabled,
     autoSaveInterval,
     paneSizes,
     openFile,
@@ -805,8 +933,18 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     updateBufferTitle,
     saveBuffer,
     setBufferModified,
+    setBufferOriginalContent,
+    setBufferExternallyModified,
+    clearBufferExternallyModified,
+    setBufferLanguageOverride,
     saveAllBuffers,
-    updatePaneSize
+    updatePaneSize,
+    isLinkedScrollEnabled,
+    toggleLinkedScroll,
+    toggleBufferPin,
+    setBufferPinned,
+    setBufferClosable,
+    reloadBufferFromDisk,
   };
 
   return (

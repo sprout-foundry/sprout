@@ -12,7 +12,7 @@ type captureToolsClient struct {
 	tools []api.Tool
 }
 
-func (c *captureToolsClient) SendChatRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
+func (c *captureToolsClient) SendChatRequest(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	c.tools = append([]api.Tool(nil), tools...)
 	return &api.ChatResponse{
 		Choices: []api.Choice{
@@ -33,8 +33,8 @@ func (c *captureToolsClient) SendChatRequest(messages []api.Message, tools []api
 	}, nil
 }
 
-func (c *captureToolsClient) SendChatRequestStream(messages []api.Message, tools []api.Tool, reasoning string, callback api.StreamCallback) (*api.ChatResponse, error) {
-	return c.SendChatRequest(messages, tools, reasoning)
+func (c *captureToolsClient) SendChatRequestStream(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback) (*api.ChatResponse, error) {
+	return c.SendChatRequest(messages, tools, reasoning, disableThinking)
 }
 
 func (c *captureToolsClient) CheckConnection() error { return nil }

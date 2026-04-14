@@ -171,12 +171,12 @@ Generate a Git commit message summary. The message should follow these rules:
 	descChan := make(chan callResult, 1)
 
 	go func() {
-		r, e := client.SendChatRequest(titleMessages, nil, "")
+		r, e := client.SendChatRequest(titleMessages, nil, "", false)
 		titleChan <- callResult{r, e}
 	}()
 
 	go func() {
-		r, e := client.SendChatRequest(descMessages, nil, "")
+		r, e := client.SendChatRequest(descMessages, nil, "", false)
 		descChan <- callResult{r, e}
 	}()
 

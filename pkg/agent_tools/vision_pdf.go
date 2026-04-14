@@ -289,7 +289,7 @@ func processOCRImages(images [][]byte, client api.ClientInterface, sectionLabel 
 		}
 
 		// Send request
-		response, err := client.SendVisionRequest(messages, nil, "")
+		response, err := client.SendVisionRequest(messages, nil, "", false)
 		if err != nil {
 			failures++
 			if failures >= 2 {
@@ -444,7 +444,7 @@ func processPDFWithVisionModel(pdfPath string, client api.ClientInterface) (stri
 	}
 
 	// Send request to Ollama
-	response, err := client.SendVisionRequest(messages, nil, "")
+	response, err := client.SendVisionRequest(messages, nil, "", false)
 	if err != nil {
 		return "", fmt.Errorf("OCR request failed: %w", err)
 	}

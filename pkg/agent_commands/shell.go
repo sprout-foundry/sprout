@@ -90,7 +90,7 @@ Generate the command/script now:`, description, envContext)
 		{Role: "user", Content: userPrompt},
 	}
 
-	response, err := clientWrapper.SendChatRequest(messages, nil, "") // nil tools = no tool usage
+	response, err := clientWrapper.SendChatRequest(messages, nil, "", false) // nil tools = no tool usage
 	if err != nil {
 		return fmt.Errorf("failed to generate shell script: %w", err)
 	}
@@ -122,7 +122,7 @@ Generate the command/script now:`, description, envContext)
 Example format: find . -name "*.go" | wc -l`, description)},
 		}
 
-		response, err = clientWrapper.SendChatRequest(retryMessages, nil, "")
+		response, err = clientWrapper.SendChatRequest(retryMessages, nil, "", false)
 		if err != nil {
 			return fmt.Errorf("failed to regenerate shell script: %w", err)
 		}

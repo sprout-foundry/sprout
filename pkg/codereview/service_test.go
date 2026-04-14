@@ -98,8 +98,8 @@ func (c *fixedLimitClient) GetModelContextLimit() (int, error) {
 	return c.limit, nil
 }
 
-func (c *fixedLimitClient) SendChatRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
-	return c.TestClient.SendChatRequest(messages, tools, reasoning)
+func (c *fixedLimitClient) SendChatRequest(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
+	return c.TestClient.SendChatRequest(messages, tools, reasoning, disableThinking)
 }
 
 func TestConvergenceDetection(t *testing.T) {

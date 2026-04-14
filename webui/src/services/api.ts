@@ -1,7 +1,4 @@
 import { clientFetch } from './clientSession';
-import { notificationBus } from './notificationBus';
-import { debugLog } from '../utils/log';
-import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
 
 interface StatsResponse {
   // Basic info
@@ -41,9 +38,6 @@ interface StatsResponse {
   // Configuration
   streaming_enabled: boolean;
   debug_mode: boolean;
-
-  // Processing state (set on each stats response)
-  is_processing?: boolean;
 }
 
 interface QueryRequest {
@@ -179,12 +173,6 @@ export interface SSHLaunchStatus {
   updated_at: string;
 }
 
-export interface ShellInfo {
-  name: string;
-  path: string;
-  default: boolean;
-}
-
 export class SSHWorkspaceOpenError extends Error {
   step?: string;
   details?: string;
@@ -227,15 +215,14 @@ class ApiService {
     return ApiService.instance;
   }
 
-  private parseWorkspacePayload(text: string): Record<string, unknown> {
+  private parseWorkspacePayload(text: string): any {
     const trimmed = text.trim();
     if (!trimmed) {
       return {};
     }
     try {
       return JSON.parse(trimmed);
-    } catch (err) {
-      debugLog('[parseWorkspacePayload] failed to parse workspace payload:', err);
+    } catch {
       return { message: trimmed };
     }
   }
@@ -264,7 +251,7 @@ class ApiService {
     const data = this.parseWorkspacePayload(text);
 
     if (!response.ok) {
-      throw new Error(String(data.error || data.message || 'Failed to fetch workspace'));
+      throw new Error(data.error || data.message || 'Failed to fetch workspace');
     }
 
     if (this.isHTMLResponseBody(text)) {
@@ -272,7 +259,7 @@ class ApiService {
     }
 
     if (data && typeof data === 'object' && 'workspace_root' in data && 'daemon_root' in data) {
-      return data as unknown as WorkspaceResponse;
+      return data as WorkspaceResponse;
     }
 
     throw new Error('Workspace API returned malformed response');
@@ -291,7 +278,7 @@ class ApiService {
     const data = this.parseWorkspacePayload(text);
 
     if (!response.ok) {
-      throw new Error(String(data.error || data.message || 'Failed to update workspace'));
+      throw new Error(data.error || data.message || 'Failed to update workspace');
     }
 
     if (this.isHTMLResponseBody(text)) {
@@ -299,7 +286,7 @@ class ApiService {
     }
 
     if (data && typeof data === 'object' && 'workspace_root' in data && 'daemon_root' in data) {
-      return data as unknown as WorkspaceResponse & { message: string };
+      return data as WorkspaceResponse & { message: string };
     }
 
     // Some remote/proxy setups respond to workspace set with a non-JSON success body.
@@ -307,7 +294,7 @@ class ApiService {
     const workspace = await this.getWorkspace();
     return {
       ...workspace,
-      message: String(data.message || 'Workspace updated'),
+      message: data.message || 'Workspace updated',
     };
   }
 
@@ -316,12 +303,6 @@ class ApiService {
     if (!response.ok) throw new Error('Failed to fetch terminal sessions');
     const data = await response.json();
     return data.active_count ?? data.count ?? 0;
-  }
-
-  async getAvailableShells(): Promise<{ shells: ShellInfo[] }> {
-    const response = await clientFetch('/api/terminal/shells');
-    if (!response.ok) throw new Error('Failed to fetch available shells');
-    return response.json();
   }
 
   async getProviders(): Promise<{
@@ -349,13 +330,7 @@ class ApiService {
     provider: string;
     model?: string;
     api_key?: string;
-  }): Promise<{
-    success: boolean;
-    message: string;
-    provider: string;
-    model: string;
-    validation?: { tested: boolean; model_count: number } | null;
-  }> {
+  }): Promise<{ success: boolean; message: string; provider: string; model: string }> {
     const response = await clientFetch('/api/onboarding/complete', {
       method: 'POST',
       headers: {
@@ -364,31 +339,8 @@ class ApiService {
       body: JSON.stringify(payload),
     });
     if (!response.ok) {
-      // Parse structured error to detect API key validation failures.
-      let message = 'Failed to complete onboarding';
-      let code: string | undefined;
       const text = await response.text();
-      try {
-        const body = JSON.parse(text);
-        message = body.error || message;
-        code = body.code;
-      } catch {
-        if (text) message = text;
-      }
-      const error = new Error(message) as Error & { code?: string };
-      error.code = code;
-      throw error;
-    }
-    return response.json();
-  }
-
-  async skipOnboarding(): Promise<{ success: boolean; provider: string; model: string }> {
-    const response = await clientFetch('/api/onboarding/skip', {
-      method: 'POST',
-    });
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || 'Failed to skip onboarding');
+      throw new Error(text || 'Failed to complete onboarding');
     }
     return response.json();
   }
@@ -487,7 +439,6 @@ class ApiService {
         signal: controller.signal,
       });
     } catch (error) {
-      debugLog('[openSSHWorkspace] catch block reached:', error);
       if (error instanceof DOMException && error.name === 'AbortError') {
         throw new SSHWorkspaceOpenError({
           error: 'SSH workspace launch timed out. Check SSH connectivity and ~/.ledit/workspace.log for details.',
@@ -501,26 +452,25 @@ class ApiService {
     }
 
     const text = await response.text();
-    let data: Record<string, unknown> = {};
+    let data: any = {};
     if (text) {
       try {
         data = JSON.parse(text);
-      } catch (err) {
-        debugLog('[openSSHWorkspace] failed to parse response:', err);
+      } catch {
         data = { message: text };
       }
     }
 
     if (!response.ok) {
       throw new SSHWorkspaceOpenError({
-        error: String(data.error || data.message || 'Failed to open SSH workspace'),
-        step: data.step as string | undefined,
-        details: data.details as string | undefined,
-        log_path: data.log_path as string | undefined,
+        error: data.error || data.message || 'Failed to open SSH workspace',
+        step: data.step,
+        details: data.details,
+        log_path: data.log_path,
       });
     }
 
-    return data as unknown as SSHOpenResponse;
+    return data;
   }
 
   async getSSHLaunchStatus(hostAlias: string, remoteWorkspacePath?: string): Promise<SSHLaunchStatus> {
@@ -531,10 +481,7 @@ class ApiService {
     }
 
     const response = await clientFetch(`/api/instances/ssh-launch-status?${params.toString()}`);
-    const data = await response.json().catch((err) => {
-      debugLog('[getSSHLaunchStatus] failed to parse response JSON:', err);
-      return {};
-    });
+    const data = await response.json().catch(() => ({}));
     if (!response.ok) {
       throw new Error(data.error || data.message || 'Failed to fetch SSH launch status');
     }
@@ -552,7 +499,7 @@ class ApiService {
 
   async browseSSHDirectory(
     hostAlias: string,
-    path?: string,
+    path?: string
   ): Promise<{ path: string; home_path?: string; files: SSHBrowseEntry[] }> {
     const response = await clientFetch('/api/instances/ssh-browse', {
       method: 'POST',
@@ -566,18 +513,17 @@ class ApiService {
     });
 
     const text = await response.text();
-    let data: Record<string, unknown> = {};
+    let data: any = {};
     if (text) {
       try {
         data = JSON.parse(text);
-      } catch (err) {
-        debugLog('[browseSSHDirectory] failed to parse response:', err);
+      } catch {
         data = { message: text };
       }
     }
 
     if (!response.ok) {
-      throw new Error(String(data.error || data.message || 'Failed to browse SSH directory'));
+      throw new Error(data.error || data.message || 'Failed to browse SSH directory');
     }
 
     return {
@@ -596,19 +542,18 @@ class ApiService {
       body: JSON.stringify({ key }),
     });
     const text = await response.text();
-    let data: Record<string, unknown> = {};
+    let data: any = {};
     if (text) {
       try {
         data = JSON.parse(text);
-      } catch (err) {
-        debugLog('[closeSSHSession] failed to parse response:', err);
+      } catch {
         data = { message: text };
       }
     }
     if (!response.ok) {
-      throw new Error(String(data.error || data.message || 'Failed to close SSH session'));
+      throw new Error(data.error || data.message || 'Failed to close SSH session');
     }
-    return data as unknown as { message: string; key: string };
+    return data;
   }
 
   async selectInstance(pid: number): Promise<{ message: string; pid: number }> {
@@ -637,20 +582,6 @@ class ApiService {
     });
 
     if (!response.ok) {
-      // Try to extract structured error details from the response body.
-      let serverError: Error | null = null;
-      try {
-        const body = await response.json();
-        if (body.code === 'no_provider') {
-          serverError = new Error(body.error || 'No provider configured');
-          (serverError as unknown as Record<string, unknown>).code = 'no_provider';
-        }
-      } catch {
-        // Not JSON or parsing failed — fall through to generic error
-      }
-      if (serverError) {
-        throw serverError;
-      }
       throw new Error('Failed to send query');
     }
   }
@@ -701,8 +632,7 @@ class ApiService {
     try {
       const response = await clientFetch('/');
       return response.ok;
-    } catch (err) {
-      debugLog('[checkHealth] health check failed:', err);
+    } catch {
       return false;
     }
   }
@@ -710,21 +640,14 @@ class ApiService {
   // Get terminal history
   async getTerminalHistory(sessionId?: string): Promise<{ history: string[]; count: number }> {
     try {
-      const url = sessionId
-        ? `/api/terminal/history?session_id=${encodeURIComponent(sessionId)}`
-        : '/api/terminal/history';
+      const url = sessionId ? `/api/terminal/history?session_id=${encodeURIComponent(sessionId)}` : '/api/terminal/history';
       const response = await clientFetch(url);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to get terminal history:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to get terminal history: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to get terminal history:', error);
       throw error;
     }
   }
@@ -744,12 +667,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to add terminal history:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to add terminal history: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to add terminal history:', error);
       throw error;
     }
   }
@@ -766,7 +684,6 @@ class ApiService {
       untracked: Array<{ path: string; status: string; staged: boolean }>;
       deleted: Array<{ path: string; status: string; staged: boolean }>;
       renamed: Array<{ path: string; status: string; staged: boolean }>;
-      truncated: boolean;
     };
     files: Array<{ path: string; status: string; staged?: boolean }>;
   }> {
@@ -777,12 +694,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to get git status:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to get git status: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to get git status:', error);
       throw error;
     }
   }
@@ -800,32 +712,6 @@ class ApiService {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ branch }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error || data.message || `HTTP error! status: ${response.status}`);
-    }
-    return data;
-  }
-
-  async checkoutGitCommit(commitHash: string): Promise<{ message: string; commit: string }> {
-    const response = await clientFetch('/api/git/checkout', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ branch: commitHash }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error || data.message || `HTTP error! status: ${response.status}`);
-    }
-    return data;
-  }
-
-  async revertGitCommit(commitHash: string): Promise<{ message: string; commit: string }> {
-    const response = await clientFetch('/api/git/revert', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ commit: commitHash }),
     });
     const data = await response.json();
     if (!response.ok) {
@@ -883,12 +769,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to stage file:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to stage file: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to stage file:', error);
       throw error;
     }
   }
@@ -905,12 +786,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to unstage file:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to unstage file: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to unstage file:', error);
       throw error;
     }
   }
@@ -927,12 +803,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to discard changes:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to discard changes: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to discard changes:', error);
       throw error;
     }
   }
@@ -948,12 +819,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to stage all:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to stage all: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to stage all:', error);
       throw error;
     }
   }
@@ -969,12 +835,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to unstage all:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to unstage all: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to unstage all:', error);
       throw error;
     }
   }
@@ -991,12 +852,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to create commit:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to create commit: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to create commit:', error);
       throw error;
     }
   }
@@ -1019,59 +875,49 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to generate commit message:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to generate commit message: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to generate commit message:', error);
       throw error;
     }
   }
 
-  async getGitLog(
-    limit: number,
-    offset: number,
-    opts?: { signal?: AbortSignal },
-  ): Promise<{
+  async getGitLog(limit: number, offset: number, opts?: { signal?: AbortSignal }): Promise<{
     message: string;
-    commits: GitCommitSummary[];
+    commits: Array<{
+      hash: string;
+      short_hash: string;
+      author: string;
+      date: string;
+      message: string;
+      ref_names?: string;
+    }>;
     offset: number;
     limit: number;
     total: number;
   }> {
     const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
-    const response = await clientFetch(`/api/git/log?${params.toString()}`, {
-      signal: opts?.signal,
-    });
+    const response = await clientFetch(`/api/git/log?${params.toString()}`, { signal: opts?.signal });
     if (!response.ok) {
       throw new Error(`Failed to get git log: HTTP ${response.status}`);
     }
     return response.json();
   }
 
-  async getGitCommitDetail(hash: string): Promise<GitCommitDetail> {
+  async getGitCommitDetail(hash: string): Promise<{
+    message: string;
+    hash: string;
+    short_hash: string;
+    author: string;
+    date: string;
+    ref_names?: string;
+    subject: string;
+    files: Array<{ path: string; status: string }>;
+    diff: string;
+    stats: string;
+  }> {
     const params = new URLSearchParams({ hash });
     const response = await clientFetch(`/api/git/commit/show?${params.toString()}`);
     if (!response.ok) {
       throw new Error(`Failed to get commit detail: HTTP ${response.status}`);
-    }
-    return response.json();
-  }
-
-  async getGitCommitFileDiff(
-    hash: string,
-    path: string,
-  ): Promise<{
-    message: string;
-    hash: string;
-    path: string;
-    diff: string;
-  }> {
-    const params = new URLSearchParams({ hash, path });
-    const response = await clientFetch(`/api/git/commit/show/file?${params.toString()}`);
-    if (!response.ok) {
-      throw new Error(`Failed to get commit file diff: HTTP ${response.status}`);
     }
     return response.json();
   }
@@ -1098,12 +944,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to generate deep review:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to generate deep review: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to generate deep review:', error);
       throw error;
     }
   }
@@ -1124,20 +965,12 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to run deep review fix:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to run deep review fix: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to run deep review fix:', error);
       throw error;
     }
   }
 
-  async startFixFromDeepReview(
-    reviewOutput: string,
-    _options?: { fixPrompt?: string; selectedItems?: string[] },
-  ): Promise<{
+  async startFixFromDeepReview(reviewOutput: string, options?: { fixPrompt?: string; selectedItems?: string[] }): Promise<{
     message: string;
     job_id: string;
     session_id: string;
@@ -1154,20 +987,12 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to start deep review fix:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to start deep review fix: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to start deep review fix:', error);
       throw error;
     }
   }
 
-  async getFixFromDeepReviewStatus(
-    jobId: string,
-    since = 0,
-  ): Promise<{
+  async getFixFromDeepReviewStatus(jobId: string, since = 0): Promise<{
     message: string;
     job_id: string;
     session_id: string;
@@ -1178,21 +1003,14 @@ class ApiService {
     error: string;
   }> {
     try {
-      const response = await clientFetch(
-        `/api/git/deep-review/fix/status?job_id=${encodeURIComponent(jobId)}&since=${since}`,
-      );
+      const response = await clientFetch(`/api/git/deep-review/fix/status?job_id=${encodeURIComponent(jobId)}&since=${since}`);
       if (!response.ok) {
         const text = await response.text();
         throw new Error(text || `HTTP error! status: ${response.status}`);
       }
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to fetch deep review fix status:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to fetch deep review fix status: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to fetch deep review fix status:', error);
       throw error;
     }
   }
@@ -1213,12 +1031,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to get git diff:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to get git diff: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to get git diff:', error);
       throw error;
     }
   }
@@ -1248,12 +1061,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to get changelog:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to get changelog: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to get changelog:', error);
       throw error;
     }
   }
@@ -1282,12 +1090,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to get changes:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to get changes: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to get changes:', error);
       throw error;
     }
   }
@@ -1321,12 +1124,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to get revision details:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to get revision details: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to get revision details:', error);
       throw error;
     }
   }
@@ -1343,12 +1141,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to rollback:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to rollback: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to rollback:', error);
       throw error;
     }
   }
@@ -1370,17 +1163,12 @@ class ApiService {
     try {
       const params = new URLSearchParams();
       if (scope) params.set('scope', scope);
-      const url = `/api/sessions${params.toString() ? `?${params.toString()}` : ''}`;
+      const url = `/api/sessions${params.toString() ? '?' + params.toString() : ''}`;
       const response = await clientFetch(url);
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to get sessions:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to get sessions: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to get sessions:', error);
       throw error;
     }
   }
@@ -1403,12 +1191,7 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to restore session:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to restore session: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to restore session:', error);
       throw error;
     }
   }
@@ -1421,17 +1204,12 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to get settings:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to get settings: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to get settings:', error);
       throw error;
     }
   }
 
-  async updateSettings(settings: Record<string, unknown>): Promise<{ message: string }> {
+  async updateSettings(settings: Record<string, any>): Promise<{ message: string }> {
     try {
       const response = await clientFetch('/api/settings', {
         method: 'PUT',
@@ -1441,33 +1219,23 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to update settings:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to update settings: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to update settings:', error);
       throw error;
     }
   }
 
-  async getMCPSettings(): Promise<Record<string, unknown>> {
+  async getMCPSettings(): Promise<any> {
     try {
       const response = await clientFetch('/api/settings/mcp');
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to get MCP settings:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to get MCP settings: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to get MCP settings:', error);
       throw error;
     }
   }
 
-  async updateMCPSettings(settings: Record<string, unknown>): Promise<{ message: string }> {
+  async updateMCPSettings(settings: any): Promise<{ message: string }> {
     try {
       const response = await clientFetch('/api/settings/mcp', {
         method: 'PUT',
@@ -1477,17 +1245,12 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to update MCP settings:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to update MCP settings: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to update MCP settings:', error);
       throw error;
     }
   }
 
-  async addMCPServer(server: Record<string, unknown>): Promise<{ message: string }> {
+  async addMCPServer(server: any): Promise<{ message: string }> {
     try {
       const response = await clientFetch('/api/settings/mcp/servers/', {
         method: 'POST',
@@ -1497,17 +1260,12 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to add MCP server:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to add MCP server: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to add MCP server:', error);
       throw error;
     }
   }
 
-  async updateMCPServer(name: string, server: Record<string, unknown>): Promise<{ message: string }> {
+  async updateMCPServer(name: string, server: any): Promise<{ message: string }> {
     try {
       const response = await clientFetch(`/api/settings/mcp/servers/${encodeURIComponent(name)}`, {
         method: 'PUT',
@@ -1517,12 +1275,7 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to update MCP server:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to update MCP server: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to update MCP server:', error);
       throw error;
     }
   }
@@ -1535,165 +1288,23 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to delete MCP server:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to delete MCP server: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to delete MCP server:', error);
       throw error;
     }
   }
 
-  async getMCPServerCredentials(serverName: string): Promise<{
-    server: string;
-    credentials: Record<string, {
-      status: 'set' | 'missing';
-      has_value: boolean;
-    }>;
-  }> {
-    try {
-      const response = await clientFetch(`/api/settings/mcp/servers/${encodeURIComponent(serverName)}/credentials`);
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      return await response.json();
-    } catch (error) {
-      debugLog('[api] Failed to get MCP server credentials:', error);
-      notificationBus.notify('error', 'API Error', `Failed to get MCP server credentials: ${error instanceof Error ? error.message : String(error)}`);
-      throw error;
-    }
-  }
-
-  async updateMCPServerCredentials(serverName: string, credentials: Record<string, string>): Promise<{ success: boolean; server: string }> {
-    try {
-      const response = await clientFetch(`/api/settings/mcp/servers/${encodeURIComponent(serverName)}/credentials`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ credentials }),
-      });
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      return await response.json();
-    } catch (error) {
-      debugLog('[api] Failed to update MCP server credentials:', error);
-      notificationBus.notify('error', 'API Error', `Failed to update MCP server credentials: ${error instanceof Error ? error.message : String(error)}`);
-      throw error;
-    }
-  }
-
-  async deleteMCPServerCredential(serverName: string, credentialName: string): Promise<{ success: boolean; server: string; deleted_credential: string }> {
-    try {
-      const response = await clientFetch(`/api/settings/mcp/servers/${encodeURIComponent(serverName)}/credentials`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ credential_name: credentialName }),
-      });
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      return await response.json();
-    } catch (error) {
-      debugLog('[api] Failed to delete MCP server credential:', error);
-      notificationBus.notify('error', 'API Error', `Failed to delete MCP server credential: ${error instanceof Error ? error.message : String(error)}`);
-      throw error;
-    }
-  }
-
-  /* ── Provider credential management ─────────────────────── */
-
-  async getProviderCredentials(): Promise<{
-    storage_backend: string;
-    providers: Array<{
-      provider: string;
-      display_name: string;
-      env_var: string;
-      requires_api_key: boolean;
-      has_stored_credential: boolean;
-      has_env_credential: boolean;
-      credential_source: string;
-      masked_value: string;
-      key_pool_size: number;
-    }>;
-  }> {
-    const response = await clientFetch('/api/settings/credentials');
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    return response.json();
-  }
-
-  async setProviderCredential(provider: string, value: string): Promise<{ success: boolean; provider: string }> {
-    const response = await clientFetch(`/api/settings/credentials/${encodeURIComponent(provider)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ value }),
-    });
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    return response.json();
-  }
-
-  async deleteProviderCredential(provider: string): Promise<{ success: boolean; provider: string }> {
-    const response = await clientFetch(`/api/settings/credentials/${encodeURIComponent(provider)}`, {
-      method: 'DELETE',
-    });
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    return response.json();
-  }
-
-  async testProviderConnection(provider: string): Promise<{
-    success: boolean;
-    provider: string;
-    model_count?: number;
-    sample_models?: string[];
-    error?: string;
-  }> {
-    const response = await clientFetch(`/api/settings/credentials/${encodeURIComponent(provider)}/test`, {
-      method: 'POST',
-    });
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
-      throw new Error(data.error || `HTTP error! status: ${response.status}`);
-    }
-    return response.json();
-  }
-
-  async getKeyPool(provider: string): Promise<{ provider: string; key_count: number; masked_keys: string[] }> {
-    const response = await clientFetch(`/api/settings/credentials/${encodeURIComponent(provider)}/pool`);
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    return response.json();
-  }
-
-  async addKeyToPool(provider: string, value: string): Promise<{ success: boolean; provider: string; key_count: number }> {
-    const response = await clientFetch(`/api/settings/credentials/${encodeURIComponent(provider)}/pool`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ value }),
-    });
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    return response.json();
-  }
-
-  async removeKeyFromPool(provider: string, index: number): Promise<{ success: boolean; provider: string; key_count: number }> {
-    const response = await clientFetch(`/api/settings/credentials/${encodeURIComponent(provider)}/pool`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ index }),
-    });
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    return response.json();
-  }
-
-  async getCustomProviders(): Promise<Record<string, unknown>> {
+  async getCustomProviders(): Promise<any> {
     try {
       const response = await clientFetch('/api/settings/providers');
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to get custom providers:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to get custom providers: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to get custom providers:', error);
       throw error;
     }
   }
 
-  async addCustomProvider(provider: Record<string, unknown>): Promise<{ message: string }> {
+  async addCustomProvider(provider: any): Promise<{ message: string }> {
     try {
       const response = await clientFetch('/api/settings/providers', {
         method: 'POST',
@@ -1703,17 +1314,12 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to add custom provider:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to add custom provider: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to add custom provider:', error);
       throw error;
     }
   }
 
-  async updateCustomProvider(name: string, provider: Record<string, unknown>): Promise<{ message: string }> {
+  async updateCustomProvider(name: string, provider: any): Promise<{ message: string }> {
     try {
       const response = await clientFetch(`/api/settings/providers/${encodeURIComponent(name)}`, {
         method: 'PUT',
@@ -1723,12 +1329,7 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to update custom provider:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to update custom provider: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to update custom provider:', error);
       throw error;
     }
   }
@@ -1741,33 +1342,23 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to delete custom provider:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to delete custom provider: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to delete custom provider:', error);
       throw error;
     }
   }
 
-  async getSkills(): Promise<Record<string, unknown>> {
+  async getSkills(): Promise<any> {
     try {
       const response = await clientFetch('/api/settings/skills');
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to get skills:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to get skills: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to get skills:', error);
       throw error;
     }
   }
 
-  async updateSkills(skills: Record<string, unknown>): Promise<{ message: string }> {
+  async updateSkills(skills: any): Promise<{ message: string }> {
     try {
       const response = await clientFetch('/api/settings/skills', {
         method: 'PUT',
@@ -1777,12 +1368,7 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to update skills:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to update skills: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to update skills:', error);
       throw error;
     }
   }
@@ -1790,21 +1376,18 @@ class ApiService {
   // ── Subagent Types API ──────────────────────────────────────────
 
   async getSubagentTypes(): Promise<{
-    subagent_types: Record<
-      string,
-      {
-        id: string;
-        name: string;
-        description: string;
-        provider: string;
-        model: string;
-        system_prompt: string;
-        system_prompt_text?: string;
-        allowed_tools: string[];
-        aliases: string[];
-        enabled: boolean;
-      }
-    >;
+    subagent_types: Record<string, {
+      id: string;
+      name: string;
+      description: string;
+      provider: string;
+      model: string;
+      system_prompt: string;
+      system_prompt_text?: string;
+      allowed_tools: string[];
+      aliases: string[];
+      enabled: boolean;
+    }>;
     available_providers: Array<{ id: string; name: string; models: string[] }>;
     current_provider: string;
     current_model: string;
@@ -1814,12 +1397,7 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to get subagent types:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to get subagent types: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to get subagent types:', error);
       throw error;
     }
   }
@@ -1827,7 +1405,7 @@ class ApiService {
   async updateSubagentType(
     name: string,
     updates: { provider?: string; model?: string },
-  ): Promise<{ success: boolean; type: Record<string, unknown> }> {
+  ): Promise<{ success: boolean; type: any }> {
     try {
       const response = await clientFetch(`/api/settings/subagent-types/${encodeURIComponent(name)}/`, {
         method: 'PUT',
@@ -1840,12 +1418,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to update subagent type:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to update subagent type: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to update subagent type:', error);
       throw error;
     }
   }
@@ -1858,12 +1431,7 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to get hotkeys:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to get hotkeys: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to get hotkeys:', error);
       throw error;
     }
   }
@@ -1878,12 +1446,7 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to update hotkeys:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to update hotkeys: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to update hotkeys:', error);
       throw error;
     }
   }
@@ -1898,12 +1461,7 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to validate hotkeys:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to validate hotkeys: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to validate hotkeys:', error);
       throw error;
     }
   }
@@ -1921,30 +1479,22 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to apply hotkey preset:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to apply hotkey preset: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to apply hotkey preset:', error);
       throw error;
     }
   }
 
   // ── Search API ───────────────────────────────────────────────────
 
-  async search(
-    query: string,
-    options?: {
-      case_sensitive?: boolean;
-      whole_word?: boolean;
-      regex?: boolean;
-      include?: string;
-      exclude?: string;
-      max_results?: number;
-      context_lines?: number;
-    },
-  ): Promise<{
+  async search(query: string, options?: {
+    case_sensitive?: boolean;
+    whole_word?: boolean;
+    regex?: boolean;
+    include?: string;
+    exclude?: string;
+    max_results?: number;
+    context_lines?: number;
+  }): Promise<{
     results: Array<{
       file: string;
       matches: Array<{
@@ -1978,12 +1528,7 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to search:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to search: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to search:', error);
       throw error;
     }
   }
@@ -2022,44 +1567,12 @@ class ApiService {
       }
       return await response.json();
     } catch (error) {
-      debugLog('[api] Failed to replace:', error);
-      notificationBus.notify(
-        'error',
-        'API Error',
-        `Failed to replace: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error('Failed to replace:', error);
       throw error;
     }
   }
-
-  async getDiagnostics(
-    path: string,
-    content: string,
-  ): Promise<{
-    message: string;
-    path: string;
-    diagnostics: Array<{
-      from: number;
-      to: number;
-      severity: 'error' | 'warning' | 'info' | 'hint';
-      message: string;
-      source: string;
-    }>;
-    version: string;
-  }> {
-    // No notification — diagnostics are best-effort and called on every keystroke.
-    // A notification here would spam toasts if the diagnostics endpoint is down.
-    const response = await clientFetch('/api/diagnostics', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path, content }),
-    });
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return response.json();
-  }
 }
+
 export { ApiService };
 export type { StatsResponse, QueryRequest, FilesResponse, SearchMatch, SearchResult };
 export interface ProvidersResponse {
@@ -2074,11 +1587,9 @@ export interface ProvidersResponse {
 
 export interface LeditSettings {
   reasoning_effort: string;
-  disable_thinking: boolean;
   system_prompt_text: string;
   skip_prompt: boolean;
   enable_pre_write_validation: boolean;
-  allow_orchestrator_git_write: boolean;
   enable_zsh_command_detection: boolean;
   auto_execute_detected_commands: boolean;
   history_scope: string;
@@ -2086,8 +1597,6 @@ export interface LeditSettings {
   subagent_provider: string;
   subagent_model: string;
   default_subagent_persona: string;
-  subagent_max_parallel: number;
-  subagent_parallel_enabled: boolean;
   pdf_ocr_enabled: boolean;
   pdf_ocr_provider: string;
   pdf_ocr_model: string;
@@ -2102,10 +1611,10 @@ export interface LeditSettings {
     auto_start: boolean;
     auto_discover: boolean;
     timeout: string;
-    servers: Record<string, Record<string, unknown>>;
+    servers: Record<string, any>;
   };
-  custom_providers: Record<string, Record<string, unknown>>;
-  skills: Record<string, Record<string, unknown>>;
+  custom_providers: Record<string, any>;
+  skills: Record<string, any>;
 }
 
 // ── Hotkeys interfaces ─────────────────────────────────────────────
@@ -2120,5 +1629,5 @@ export interface HotkeyEntry {
 export interface HotkeyConfig {
   version: string;
   hotkeys: HotkeyEntry[];
-  path?: string; // Filesystem path to the hotkeys config file
+  path?: string;  // Filesystem path to the hotkeys config file
 }

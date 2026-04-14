@@ -64,8 +64,12 @@ export function useAppInitialization({
           const statsRecord = stats as unknown as Record<string, unknown>;
           setState((prev) => ({
             ...prev,
-            provider: stats.provider,
-            model: stats.model,
+            // Only update provider/model from stats when the backend
+            // has a real value.  An empty string means the agent hasn't
+            // been lazily created yet — we should keep whatever the
+            // frontend already knows (persisted state, WS event…).
+            provider: stats.provider || prev.provider,
+            model: stats.model || prev.model,
             stats: JSON.stringify(prev.stats) === JSON.stringify(stats) ? prev.stats : statsRecord,
           }));
         })

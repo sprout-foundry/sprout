@@ -156,6 +156,9 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 	if v, ok := patch["auto_execute_detected_commands"]; ok {
 		cfg.AutoExecuteDetectedCommands, _ = v.(bool)
 	}
+	if v, ok := patch["disable_thinking"]; ok {
+		cfg.DisableThinking, _ = v.(bool)
+	}
 
 	// APITimeouts
 	if at, ok := patch["api_timeouts"]; ok {

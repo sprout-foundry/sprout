@@ -48,8 +48,8 @@ func (c *captureToolsClient) GetModelContextLimit() (int, error)   { return 1280
 func (c *captureToolsClient) ListModels(ctx context.Context) ([]api.ModelInfo, error) { return nil, nil }
 func (c *captureToolsClient) SupportsVision() bool                 { return true }
 func (c *captureToolsClient) GetVisionModel() string               { return "google/gemma-3-27b-it" }
-func (c *captureToolsClient) SendVisionRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
-	return c.SendChatRequest(messages, tools, reasoning)
+func (c *captureToolsClient) SendVisionRequest(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
+	return c.SendChatRequest(messages, tools, reasoning, disableThinking)
 }
 func (c *captureToolsClient) GetLastTPS() float64             { return 0 }
 func (c *captureToolsClient) GetAverageTPS() float64          { return 0 }

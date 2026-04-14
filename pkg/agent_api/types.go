@@ -79,8 +79,8 @@ type ChatRequest struct {
 
 // ProviderInterface defines the interface that all providers must implement
 type ProviderInterface interface {
-	SendChatRequest(messages []Message, tools []Tool, reasoning string) (*ChatResponse, error)
-	SendChatRequestStream(messages []Message, tools []Tool, reasoning string, callback StreamCallback) (*ChatResponse, error)
+	SendChatRequest(messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error)
+	SendChatRequestStream(messages []Message, tools []Tool, reasoning string, disableThinking bool, callback StreamCallback) (*ChatResponse, error)
 	CheckConnection() error
 	SetDebug(debug bool)
 	SetModel(model string) error
@@ -89,5 +89,5 @@ type ProviderInterface interface {
 	GetModelContextLimit() (int, error)
 	ListModels(ctx context.Context) ([]ModelInfo, error)
 	SupportsVision() bool
-	SendVisionRequest(messages []Message, tools []Tool, reasoning string) (*ChatResponse, error)
+	SendVisionRequest(messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error)
 }

@@ -63,8 +63,8 @@ func NewGenericProvider(config *ProviderConfig) (*GenericProvider, error) {
 }
 
 // SendChatRequest sends a non-streaming chat request
-func (p *GenericProvider) SendChatRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
-	requestBody, err := p.buildChatRequest(messages, tools, reasoning, false)
+func (p *GenericProvider) SendChatRequest(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
+	requestBody, err := p.buildChatRequest(messages, tools, reasoning, disableThinking, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build chat request: %w", err)
 	}
@@ -132,8 +132,8 @@ func (p *GenericProvider) SendChatRequest(messages []api.Message, tools []api.To
 }
 
 // SendChatRequestStream sends a streaming chat request
-func (p *GenericProvider) SendChatRequestStream(messages []api.Message, tools []api.Tool, reasoning string, callback api.StreamCallback) (*api.ChatResponse, error) {
-	requestBody, err := p.buildChatRequest(messages, tools, reasoning, true)
+func (p *GenericProvider) SendChatRequestStream(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback) (*api.ChatResponse, error) {
+	requestBody, err := p.buildChatRequest(messages, tools, reasoning, disableThinking, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build chat request: %w", err)
 	}
@@ -212,7 +212,7 @@ func (p *GenericProvider) CheckConnection() error {
 		},
 	}
 
-	_, err := p.SendChatRequest(testMessages, nil, "")
+	_, err := p.SendChatRequest(testMessages, nil, "", false)
 	if err != nil {
 		return fmt.Errorf("check connection: test request failed: %w", err)
 	}
@@ -501,7 +501,7 @@ func (p *GenericProvider) GetVisionModel() string {
 }
 
 // SendVisionRequest sends a vision request (for providers that support it)
-func (p *GenericProvider) SendVisionRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
+func (p *GenericProvider) SendVisionRequest(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	if !p.SupportsVision() {
 		return nil, fmt.Errorf("provider %s does not support vision", p.config.Name)
 	}
@@ -514,7 +514,7 @@ func (p *GenericProvider) SendVisionRequest(messages []api.Message, tools []api.
 		defer func() { p.model = originalModel }()
 	}
 
-	return p.SendChatRequest(messages, tools, reasoning)
+	return p.SendChatRequest(messages, tools, reasoning, disableThinking)
 }
 
 // TPS tracking methods - simplified for now
@@ -535,7 +535,7 @@ func (p *GenericProvider) ResetTPSStats() {
 }
 
 // buildChatRequest builds the request body for chat completion
-func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.Tool, reasoning string, stream bool) ([]byte, error) {
+func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, stream bool) ([]byte, error) {
 	if err := p.ensureModel(); err != nil {
 		return nil, fmt.Errorf("ensure model: %w", err)
 	}
@@ -574,6 +574,7 @@ func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.T
 	// Apply model-specific defaults and suppress unsupported fields.
 	applyModelSpecificSettings(p.model, request)
 	applyReasoningEffort(p.model, reasoning, request)
+	applyDisableThinking(p.model, disableThinking, request)
 
 	// Add tools if provided
 	if len(tools) > 0 {
@@ -595,6 +596,39 @@ func applyReasoningEffort(model, reasoning string, request map[string]interface{
 		return
 	}
 	request["reasoning_effort"] = effort
+}
+
+// applyDisableThinking applies the disable_thinking setting to the request for models that support it
+// This disables thinking/reasoning mode for Qwen3, Qwen3.5, GLM, and Minimax models
+func applyDisableThinking(model string, disableThinking bool, request map[string]interface{}) {
+	if !disableThinking {
+		return
+	}
+
+	modelLower := strings.ToLower(model)
+
+	// GPT-OSS models don't support disabling thinking - they use reasoning_effort instead
+	if strings.Contains(modelLower, "gpt-oss") {
+		return
+	}
+
+	// Qwen3 and Qwen3.5 models - use show_thinking parameter
+	if strings.Contains(modelLower, "qwen3") {
+		request["show_thinking"] = false
+		return
+	}
+
+	// GLM models (zai provider) - typically use show_thinking or similar
+	if strings.Contains(modelLower, "glm") {
+		request["show_thinking"] = false
+		return
+	}
+
+	// Minimax models - use show_thinking parameter
+	if strings.Contains(modelLower, "minimax") {
+		request["show_thinking"] = false
+		return
+	}
 }
 
 func (p *GenericProvider) ensureModel() error {

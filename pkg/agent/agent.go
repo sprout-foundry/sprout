@@ -700,7 +700,7 @@ func (a *Agent) IsInteractiveMode() bool {
 
 // GenerateResponse generates a simple response using the current model without tool calls
 func (a *Agent) GenerateResponse(messages []api.Message) (string, error) {
-	resp, err := a.client.SendChatRequest(messages, nil, "") // No tools, no reasoning
+	resp, err := a.client.SendChatRequest(messages, nil, "", false) // No tools, no reasoning, no disableThinking
 	if err != nil {
 		return "", fmt.Errorf("failed to generate response: %w", err)
 	}

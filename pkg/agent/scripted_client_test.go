@@ -263,7 +263,7 @@ func TestScriptedClient_SendChatRequestStream(t *testing.T) {
 		chunks = append(chunks, chunk)
 	}
 
-	_, err := client.SendChatRequestStream(nil, nil, "", callback)
+	_, err := client.SendChatRequestStream(nil, nil, "", false, callback)
 	if err != nil {
 		t.Fatalf("SendChatRequestStream returned error: %v", err)
 	}
@@ -291,7 +291,7 @@ func TestScriptedClient_SendChatRequestStream_WithError(t *testing.T) {
 		chunks = append(chunks, chunk)
 	}
 
-	_, err := client.SendChatRequestStream(nil, nil, "", callback)
+	_, err := client.SendChatRequestStream(nil, nil, "", false, callback)
 	if err == nil {
 		t.Error("expected error from StreamConfig.StreamError")
 	}
@@ -314,7 +314,7 @@ func TestScriptedClient_SendChatRequestStream_ErrorAfterChunks(t *testing.T) {
 		chunks = append(chunks, chunk)
 	}
 
-	_, err := client.SendChatRequestStream(nil, nil, "", callback)
+	_, err := client.SendChatRequestStream(nil, nil, "", false, callback)
 	if err == nil {
 		t.Error("expected error after ErrorAfterChunks")
 	}
@@ -341,7 +341,7 @@ func TestScriptedClient_SendChatRequestStream_TPSCalculation(t *testing.T) {
 		chunks = append(chunks, chunk)
 	}
 
-	_, err := client.SendChatRequestStream(nil, nil, "", callback)
+	_, err := client.SendChatRequestStream(nil, nil, "", false, callback)
 	if err != nil {
 		t.Fatalf("SendChatRequestStream returned error: %v", err)
 	}
@@ -371,7 +371,7 @@ func TestScriptedClient_RateLimitAfter(t *testing.T) {
 	)
 
 	// First request should succeed
-	resp1, err := client.SendChatRequest(nil, nil, "")
+	resp1, err := client.SendChatRequest(nil, nil, "", false)
 	if err != nil {
 		t.Fatalf("First request failed: %v", err)
 	}
@@ -380,7 +380,7 @@ func TestScriptedClient_RateLimitAfter(t *testing.T) {
 	}
 
 	// Second request should trigger rate limit
-	_, err = client.SendChatRequest(nil, nil, "")
+	_, err = client.SendChatRequest(nil, nil, "", false)
 	if err == nil {
 		t.Error("expected rate limit error on second request")
 	}
@@ -408,13 +408,13 @@ func TestScriptedClient_RateLimitAfterStreaming(t *testing.T) {
 	}
 
 	// First request should succeed
-	_, err := client.SendChatRequestStream(nil, nil, "", callback)
+	_, err := client.SendChatRequestStream(nil, nil, "", false, callback)
 	if err != nil {
 		t.Fatalf("First request failed: %v", err)
 	}
 
 	// Second request should trigger rate limit
-	_, err = client.SendChatRequestStream(nil, nil, "", callback)
+	_, err = client.SendChatRequestStream(nil, nil, "", false, callback)
 	if err == nil {
 		t.Error("expected rate limit error on second streaming request")
 	}
@@ -469,7 +469,7 @@ func TestScriptedClient_VisionFallback(t *testing.T) {
 	}
 
 	// Second call should fall back to regular response
-	resp2, err := client.SendChatRequest(nil, nil, "")
+	resp2, err := client.SendChatRequest(nil, nil, "", false)
 	if err != nil {
 		t.Fatalf("SendChatRequest failed: %v", err)
 	}
@@ -492,7 +492,7 @@ func TestScriptedClient_LastResponse(t *testing.T) {
 	)
 
 	// Consume first response
-	client.SendChatRequest(nil, nil, "")
+	client.SendChatRequest(nil, nil, "", false)
 
 	last := client.LastResponse()
 	if last == nil {
@@ -513,8 +513,8 @@ func TestScriptedClient_ResponseHistory(t *testing.T) {
 	)
 
 	// Consume two responses
-	client.SendChatRequest(nil, nil, "")
-	client.SendChatRequest(nil, nil, "")
+	client.SendChatRequest(nil, nil, "", false)
+	client.SendChatRequest(nil, nil, "", false)
 
 	history := client.ResponseHistory()
 	if len(history) != 2 {
@@ -537,7 +537,7 @@ func TestScriptedClient_ClearHistory(t *testing.T) {
 	)
 
 	// Consume one response
-	client.SendChatRequest(nil, nil, "")
+	client.SendChatRequest(nil, nil, "", false)
 
 	history := client.ResponseHistory()
 	if len(history) != 1 {
@@ -599,7 +599,7 @@ func TestScriptedClient_Reset(t *testing.T) {
 	)
 
 	// Consume one response
-	client.SendChatRequest(nil, nil, "")
+	client.SendChatRequest(nil, nil, "", false)
 
 	client.Reset()
 
@@ -649,7 +649,7 @@ func TestScriptedClient_ErrorInjection(t *testing.T) {
 		},
 	)
 
-	_, err := client.SendChatRequest(nil, nil, "")
+	_, err := client.SendChatRequest(nil, nil, "", false)
 	if err == nil {
 		t.Error("expected injected error")
 	}
@@ -667,17 +667,17 @@ func TestScriptedClient_SequentialErrors(t *testing.T) {
 		&ScriptedResponse{Content: "success"},
 	)
 
-	_, err1 := client.SendChatRequest(nil, nil, "")
+	_, err1 := client.SendChatRequest(nil, nil, "", false)
 	if err1 == nil {
 		t.Error("expected error 1")
 	}
 
-	_, err2 := client.SendChatRequest(nil, nil, "")
+	_, err2 := client.SendChatRequest(nil, nil, "", false)
 	if err2 == nil {
 		t.Error("expected error 2")
 	}
 
-	resp, err := client.SendChatRequest(nil, nil, "")
+	resp, err := client.SendChatRequest(nil, nil, "", false)
 	if err != nil {
 		t.Fatalf("expected success on third request, got error: %v", err)
 	}
@@ -703,7 +703,7 @@ func TestScriptedClient_StreamingErrorInjection(t *testing.T) {
 		chunks = append(chunks, chunk)
 	}
 
-	_, err := client.SendChatRequestStream(nil, nil, "", callback)
+	_, err := client.SendChatRequestStream(nil, nil, "", false, callback)
 	if err == nil {
 		t.Error("expected error from ScriptedResponse.Error")
 	}
@@ -718,7 +718,7 @@ func TestScriptedClient_EmptyResponses(t *testing.T) {
 
 	client := NewScriptedClient()
 
-	resp, err := client.SendChatRequest(nil, nil, "")
+	resp, err := client.SendChatRequest(nil, nil, "", false)
 	if err != nil {
 		t.Fatalf("SendChatRequest with empty responses failed: %v", err)
 	}
@@ -732,7 +732,7 @@ func TestScriptedClient_NilResponse(t *testing.T) {
 
 	client := NewScriptedClient(nil)
 
-	resp, err := client.SendChatRequest(nil, nil, "")
+	resp, err := client.SendChatRequest(nil, nil, "", false)
 	if err != nil {
 		t.Fatalf("SendChatRequest with nil response failed: %v", err)
 	}
@@ -749,10 +749,10 @@ func TestScriptedClient_OutOfBounds(t *testing.T) {
 	)
 
 	// Consume the only response
-	client.SendChatRequest(nil, nil, "")
+	client.SendChatRequest(nil, nil, "", false)
 
 	// Request beyond available responses
-	resp, err := client.SendChatRequest(nil, nil, "")
+	resp, err := client.SendChatRequest(nil, nil, "", false)
 	if err != nil {
 		t.Fatalf("SendChatRequest beyond responses failed: %v", err)
 	}
@@ -777,7 +777,7 @@ func TestScriptedClient_ContextCancellation(t *testing.T) {
 		client.Close()
 	}()
 
-	_, err := client.SendChatRequest(nil, nil, "")
+	_, err := client.SendChatRequest(nil, nil, "", false)
 	if err == nil {
 		t.Error("expected error from context cancellation")
 	}
@@ -826,7 +826,7 @@ func TestScriptedClient_SendChatRequestStream_StreamErrorAdvancesIndex(t *testin
 	}
 
 	// First call should fail
-	_, err := client.SendChatRequestStream(nil, nil, "", callback)
+	_, err := client.SendChatRequestStream(nil, nil, "", false, callback)
 	if err == nil {
 		t.Error("expected error from first call")
 	}
@@ -835,7 +835,7 @@ func TestScriptedClient_SendChatRequestStream_StreamErrorAdvancesIndex(t *testin
 	}
 
 	// Second call should succeed (index was advanced past the error)
-	resp, err := client.SendChatRequestStream(nil, nil, "", callback)
+	resp, err := client.SendChatRequestStream(nil, nil, "", false, callback)
 	if err != nil {
 		t.Fatalf("second call failed: %v", err)
 	}
@@ -876,7 +876,7 @@ func TestScriptedClient_SendChatRequestStream_IncludesToolCalls(t *testing.T) {
 		chunks = append(chunks, chunk)
 	}
 
-	resp, err := client.SendChatRequestStream(nil, nil, "", callback)
+	resp, err := client.SendChatRequestStream(nil, nil, "", false, callback)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -902,7 +902,7 @@ func TestScriptedClient_SendChatRequestStream_IncludesReasoningContent(t *testin
 		},
 	)
 
-	resp, err := client.SendChatRequestStream(nil, nil, "", func(chunk, role string) {})
+	resp, err := client.SendChatRequestStream(nil, nil, "", false, func(chunk, role string) {})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -935,7 +935,7 @@ func TestScriptedClient_PromptTokensDetails(t *testing.T) {
 		},
 	)
 
-	resp, err := client.SendChatRequest(nil, nil, "")
+	resp, err := client.SendChatRequest(nil, nil, "", false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -973,7 +973,7 @@ func TestScriptedClient_SendChatRequestStream_PromptTokensDetails(t *testing.T) 
 		},
 	)
 
-	resp, err := client.SendChatRequestStream(nil, nil, "", func(chunk, role string) {})
+	resp, err := client.SendChatRequestStream(nil, nil, "", false, func(chunk, role string) {})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

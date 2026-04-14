@@ -5,6 +5,7 @@ import UIManager from './components/UIManager';
 import { EditorManagerProvider } from './contexts/EditorManagerContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { HotkeyProvider } from './contexts/HotkeyContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import './App.css';
 import { WebSocketService } from './services/websocket';
 import { ApiService, OnboardingEnvironment, OnboardingProviderOption } from './services/api';
@@ -1747,6 +1748,7 @@ function App() {
       }}
     >
       <ThemeProvider>
+        <NotificationProvider>
         <HotkeyProvider>
           <EditorManagerProvider>
             <UIManager>
@@ -1981,6 +1983,7 @@ function App() {
             </UIManager>
           </EditorManagerProvider>
         </HotkeyProvider>
+        </NotificationProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

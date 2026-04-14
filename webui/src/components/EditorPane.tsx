@@ -58,6 +58,7 @@ import { generateUnifiedDiff } from '../utils/simpleDiff';
 import { useLog, debugLog, warn } from '../utils/log';
 import ContextMenu from './ContextMenu';
 import WelcomeTab from './WelcomeTab';
+import { JUST_SAVED_THRESHOLD_MS, justSavedRef } from '../hooks/useAutoReloadCleanBuffers';
 
 interface EditorPaneProps {
   paneId: string;
@@ -910,6 +911,10 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         deleted: boolean;
       };
       if (detail.path !== filePath) return;
+
+      // Suppress the dialog when the change was caused by the editor's own save.
+      const justSavedAt = justSavedRef.get(detail.path) ?? 0;
+      if (Date.now() - justSavedAt < JUST_SAVED_THRESHOLD_MS) return;
 
       // Read current buffer state via ref to avoid stale closure.
       const currentBuffer = bufferRef.current;

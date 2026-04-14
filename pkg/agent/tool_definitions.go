@@ -443,21 +443,15 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 			// Check if we're running as a subagent — subagents cannot prompt
 			isSubagent := os.Getenv("LEDIT_FROM_AGENT") == "1" || os.Getenv("LEDIT_SUBAGENT") == "1"
 
-			// Determine if we can prompt the user interactively
-			agentConfig := agent.GetConfig()
-			logger := utils.GetLogger(agentConfig != nil && agentConfig.SkipPrompt)
-			canPrompt := logger != nil && logger.IsInteractive() && !isSubagent
-
-			if canPrompt {
-				// INTERACTIVE: prompt user with detailed risk information (CLI mode only)
-				prompt := buildSecurityPrompt(toolName, args, secResult)
-				if !logger.AskForConfirmation(prompt, false, false) {
-					return nil, "", fmt.Errorf("security rejected: user rejected %s — %s", toolName, secResult.Reasoning)
-				}
-			} else if mgr := agent.GetSecurityApprovalMgr(); mgr != nil && agent.GetEventBus() != nil && !isSubagent && agent.HasActiveWebUIClients() {
-				// NON-INTERACTIVE or WEBUI: request approval via webui event bus
-				// This path is used when running in webui mode, when interactive prompt is not available,
-				// or when eventBus is available (e.g., in webui where stdin is /dev/null)
+			// Prefer webui approval path when a browser tab is connected.
+			// When the process has an active webui client, the query likely
+			// originated from the browser. Sending the approval request through
+			// the event bus ensures the dialog appears in the webui. The CLI
+			// interactive prompt is unreliable in this case because stdin may
+			// belong to the terminal that launched the server — the user is
+			// interacting via the browser, not the terminal.
+			if mgr := agent.GetSecurityApprovalMgr(); mgr != nil && agent.GetEventBus() != nil && !isSubagent && agent.HasActiveWebUIClients() {
+				// WEBUI: request approval via event bus for the browser dialog
 				if agent.debug {
 					agent.debugLog("[APPROVAL] Requesting security approval via webui for %s (risk: %s)\n", toolName, secResult.Risk)
 				}
@@ -483,15 +477,27 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 				if !mgr.RequestApproval(agent.GetEventBus(), agent.GetEventClientID(), toolName, secResult.Risk.String(), secResult.Reasoning, extras) {
 					return nil, "", fmt.Errorf("security rejected: user rejected %s — %s", toolName, secResult.Reasoning)
 				}
-			} else if secResult.ShouldBlock {
-				// NON-INTERACTIVE + DANGEROUS, no approval mechanism: always block
-				return nil, "", fmt.Errorf("security block: %s — %s", toolName, secResult.Reasoning)
-			} else if secResult.ShouldPrompt && !isSubagent {
-				// NON-INTERACTIVE + CAUTION, needs prompt but no approval mechanism:
-				// Return a special error that tells the LLM to re-assert safety before proceeding
-				return nil, "", fmt.Errorf("security caution: %s — %s (requires LLM verification: confirm this action is safe, expected, and aligned with user goals before proceeding)", toolName, secResult.Reasoning)
+			} else {
+				// CLI: prompt user interactively via terminal stdin
+				agentConfig := agent.GetConfig()
+				logger := utils.GetLogger(agentConfig != nil && agentConfig.SkipPrompt)
+				canPrompt := logger != nil && logger.IsInteractive() && !isSubagent
+
+				if canPrompt {
+					prompt := buildSecurityPrompt(toolName, args, secResult)
+					if !logger.AskForConfirmation(prompt, false, false) {
+						return nil, "", fmt.Errorf("security rejected: user rejected %s — %s", toolName, secResult.Reasoning)
+					}
+				} else if secResult.ShouldBlock {
+					// NON-INTERACTIVE + DANGEROUS, no approval mechanism: always block
+					return nil, "", fmt.Errorf("security block: %s — %s", toolName, secResult.Reasoning)
+				} else if secResult.ShouldPrompt && !isSubagent {
+					// NON-INTERACTIVE + CAUTION, needs prompt but no approval mechanism:
+					// Return a special error that tells the LLM to re-assert safety before proceeding
+					return nil, "", fmt.Errorf("security caution: %s — %s (requires LLM verification: confirm this action is safe, expected, and aligned with user goals before proceeding)", toolName, secResult.Reasoning)
+				}
+				// NON-INTERACTIVE + CAUTION, no approval mechanism, not a subagent: auto-allow (safe operations)
 			}
-			// NON-INTERACTIVE + CAUTION, no approval mechanism, not a subagent: auto-allow (safe operations)
 		}
 	}
 
@@ -605,25 +611,10 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 		// check LEDIT_SUBAGENT here for completeness.
 		isSubagent := os.Getenv("LEDIT_FROM_AGENT") == "1" || os.Getenv("LEDIT_SUBAGENT") == "1"
 
-		// Determine if we can prompt the user interactively
-		agentConfig := agent.GetConfig()
-		logger := utils.GetLogger(agentConfig != nil && agentConfig.SkipPrompt)
-		canPrompt := logger != nil && logger.IsInteractive() && !isSubagent
-
-		if canPrompt {
-			// INTERACTIVE: prompt user with CLI prompt
-			prompt := fmt.Sprintf("[WARN] Filesystem Security Warning\n\nThe tool '%s' is attempting to access a file outside the working directory:\n  %s\n\nDo you want to allow this? (yes/no): ", toolName, filePath)
-			if logger.AskForConfirmation(prompt, false, false) {
-				// User approved - enable security bypass for this operation and remember for the session
-				agent.debugLog("User approved file access outside working directory: %s\n", filePath)
-				agent.SetSecurityBypassApproved()
-				return filesystem.WithSecurityBypass(ctx)
-			} else {
-				// User rejected
-				agent.debugLog("User rejected file access outside working directory: %s\n", filePath)
-			}
-		} else if mgr := agent.GetSecurityApprovalMgr(); mgr != nil && agent.GetEventBus() != nil && !isSubagent && agent.HasActiveWebUIClients() {
-			// WEBUI/Event path: request approval via event bus (only when WebUI clients are connected)
+		// Prefer webui approval path when a browser tab is connected.
+		// See the comment in the security validation section above for rationale.
+		if mgr := agent.GetSecurityApprovalMgr(); mgr != nil && agent.GetEventBus() != nil && !isSubagent && agent.HasActiveWebUIClients() {
+			// WEBUI: request approval via event bus for the browser dialog
 			prompt := fmt.Sprintf("The tool '%s' is attempting to access a file outside the working directory: %s", toolName, filePath)
 			extras := map[string]string{
 				"risk_type": "Filesystem Security",
@@ -637,9 +628,25 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 				agent.debugLog("User rejected file access outside working directory: %s\n", filePath)
 			}
 		} else {
-			// No prompting available (subagent or no mechanism), return original context (error will propagate)
-			if agent.debug {
-				agent.debugLog("Cannot prompt for filesystem security approval (subagent or no mechanism): %s\n", filePath)
+			// CLI: prompt user interactively via terminal stdin
+			agentConfig := agent.GetConfig()
+			logger := utils.GetLogger(agentConfig != nil && agentConfig.SkipPrompt)
+			canPrompt := logger != nil && logger.IsInteractive() && !isSubagent
+
+			if canPrompt {
+				prompt := fmt.Sprintf("[WARN] Filesystem Security Warning\n\nThe tool '%s' is attempting to access a file outside the working directory:\n  %s\n\nDo you want to allow this? (yes/no): ", toolName, filePath)
+				if logger.AskForConfirmation(prompt, false, false) {
+					agent.debugLog("User approved file access outside working directory: %s\n", filePath)
+					agent.SetSecurityBypassApproved()
+					return filesystem.WithSecurityBypass(ctx)
+				} else {
+					agent.debugLog("User rejected file access outside working directory: %s\n", filePath)
+				}
+			} else {
+				// No prompting available (subagent or no mechanism), return original context (error will propagate)
+				if agent.debug {
+					agent.debugLog("Cannot prompt for filesystem security approval (subagent or no mechanism): %s\n", filePath)
+				}
 			}
 		}
 	}

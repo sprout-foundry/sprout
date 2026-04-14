@@ -202,6 +202,12 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 			if !ws.shouldForwardEventToConnection(event, clientID) {
 				continue
 			}
+			if event.Type == events.EventTypeSecurityApprovalRequest {
+				if data, ok := event.Data.(map[string]interface{}); ok {
+					log.Printf("[SECURITY] Forwarding security_approval_request to client %s: request_id=%v tool=%s risk=%s",
+						clientID, data["request_id"], data["tool_name"], data["risk_level"])
+				}
+			}
 			if err := safeConn.WriteJSON(event); err != nil {
 				log.Printf("WebSocket %s write error: %v", sessionID, err)
 				return
@@ -217,7 +223,15 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 func (ws *ReactWebServer) shouldForwardEventToConnection(event events.UIEvent, clientID string) bool {
 	data, _ := event.Data.(map[string]interface{})
 	if targetClientID, _ := data["client_id"].(string); strings.TrimSpace(targetClientID) != "" {
-		return targetClientID == clientID
+		if strings.TrimSpace(targetClientID) == clientID {
+			return true
+		}
+		// Log mismatched security events so we can diagnose delivery failures
+		if event.Type == events.EventTypeSecurityApprovalRequest || event.Type == events.EventTypeSecurityPromptRequest {
+			log.Printf("[SECURITY] Dropping %s event: payload client_id=%q does not match connection client_id=%q (request_id=%v)",
+				event.Type, strings.TrimSpace(targetClientID), clientID, data["request_id"])
+		}
+		return false
 	}
 
 	// Untargeted events should not leak across client windows.

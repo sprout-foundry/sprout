@@ -366,22 +366,22 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	clientType, finalModel, err = configManager.ResolveProviderModel("", model)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[WARN] Failed to resolve configured provider/model: %v\n", err)
-	}
-	// SSH daemon exception: allow startup even without provider
-	if isSSHDaemon() {
-		// Continue with whatever clientType was resolved (may be EditorClientType)
-	} else if isNonInteractive() {
-		return nil, fmt.Errorf("no provider configured. Running in non-interactive mode. " + noninteractive.HelpHint)
-	} else {
-		// Interactive mode: offer to select a provider
-		fmt.Fprintf(os.Stderr, "[tool] Selecting an available provider...\n")
-		clientType, err = configManager.SelectNewProvider()
-		if err != nil {
-			return nil, fmt.Errorf("failed to select provider: %w", err)
-		}
-		finalModel = configManager.GetModelForProvider(clientType)
-		if model != "" && !looksLikeProviderModelSpecifier(configManager, model) {
-			finalModel = model
+		// SSH daemon exception: allow startup even without provider
+		if isSSHDaemon() {
+			// Continue with whatever clientType was resolved (may be EditorClientType)
+		} else if isNonInteractive() {
+			return nil, fmt.Errorf("no provider configured. Running in non-interactive mode. " + noninteractive.HelpHint)
+		} else {
+			// Interactive mode: offer to select a provider
+			fmt.Fprintf(os.Stderr, "[tool] Selecting an available provider...\n")
+			clientType, err = configManager.SelectNewProvider()
+			if err != nil {
+				return nil, fmt.Errorf("failed to select provider: %w", err)
+			}
+			finalModel = configManager.GetModelForProvider(clientType)
+			if model != "" && !looksLikeProviderModelSpecifier(configManager, model) {
+				finalModel = model
+			}
 		}
 	}
 

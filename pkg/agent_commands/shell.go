@@ -3,7 +3,6 @@ package commands
 import (
 	"bufio"
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -38,7 +37,7 @@ func (c *ShellCommand) Description() string {
 
 func (c *ShellCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	if len(args) == 0 {
-		return errors.New("usage: /shell <description-of-shell-script-to-generate>")
+		return fmt.Errorf("usage: /shell <description-of-shell-script-to-generate>")
 	}
 
 	description := strings.Join(args, " ")
@@ -46,23 +45,23 @@ func (c *ShellCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	// Gather environmental context
 	envContext, err := c.gatherEnvironmentalContext()
 	if err != nil {
-		return fmt.Errorf("failed to gather environmental context: %w", err)
+		return fmt.Errorf("failed to gather environmental context: %v", err)
 	}
 
 	// Get a unified client wrapper using the current configuration
 	configManager, err := configuration.NewManager()
 	if err != nil {
-		return fmt.Errorf("failed to initialize configuration: %w", err)
+		return fmt.Errorf("failed to initialize configuration: %v", err)
 	}
 
 	clientType, model, err := configManager.ResolveProviderModel(c.Provider, c.Model)
 	if err != nil {
-		return fmt.Errorf("failed to resolve provider/model: %w", err)
+		return fmt.Errorf("failed to resolve provider/model: %v", err)
 	}
 
 	clientWrapper, err := factory.CreateProviderClient(clientType, model)
 	if err != nil {
-		return fmt.Errorf("failed to create client: %w", err)
+		return fmt.Errorf("failed to create client: %v", err)
 	}
 
 	// Create a comprehensive prompt with environmental context
@@ -92,7 +91,7 @@ Generate the command/script now:`, description, envContext)
 
 	response, err := clientWrapper.SendChatRequest(messages, nil, "", false) // nil tools = no tool usage
 	if err != nil {
-		return fmt.Errorf("failed to generate shell script: %w", err)
+		return fmt.Errorf("failed to generate shell script: %v", err)
 	}
 
 	// Clean up the result
@@ -102,7 +101,7 @@ Generate the command/script now:`, description, envContext)
 	}
 
 	if generatedScript == "" {
-		return errors.New("model did not generate a valid shell script")
+		return fmt.Errorf("model did not generate a valid shell script")
 	}
 
 	// Clean up markdown code blocks if present
@@ -124,7 +123,7 @@ Example format: find . -name "*.go" | wc -l`, description)},
 
 		response, err = clientWrapper.SendChatRequest(retryMessages, nil, "", false)
 		if err != nil {
-			return fmt.Errorf("failed to regenerate shell script: %w", err)
+			return fmt.Errorf("failed to regenerate shell script: %v", err)
 		}
 
 		if len(response.Choices) > 0 {
@@ -133,7 +132,7 @@ Example format: find . -name "*.go" | wc -l`, description)},
 		}
 
 		if !c.isValidShellCode(generatedScript) {
-			return errors.New("failed to generate valid executable shell code")
+			return fmt.Errorf("failed to generate valid executable shell code")
 		}
 	}
 
@@ -158,7 +157,7 @@ Example format: find . -name "*.go" | wc -l`, description)},
 	reader := bufio.NewReader(os.Stdin)
 	userResponse, err := reader.ReadString('\n')
 	if err != nil {
-		return fmt.Errorf("failed to read user response: %w", err)
+		return fmt.Errorf("failed to read user response: %v", err)
 	}
 
 	userResponse = strings.ToLower(strings.TrimSpace(userResponse))
@@ -179,21 +178,21 @@ Example format: find . -name "*.go" | wc -l`, description)},
 		// For scripts, save to temporary file and execute
 		tmpFile, err := os.CreateTemp("", "ledit-script-*.sh")
 		if err != nil {
-			return fmt.Errorf("failed to create temporary script file: %w", err)
+			return fmt.Errorf("failed to create temporary script file: %v", err)
 		}
 		defer os.Remove(tmpFile.Name())
 
 		if _, err := tmpFile.WriteString(generatedScript); err != nil {
-			return fmt.Errorf("failed to write script to temporary file: %w", err)
+			return fmt.Errorf("failed to write script to temporary file: %v", err)
 		}
 
 		if err := tmpFile.Close(); err != nil {
-			return fmt.Errorf("failed to close temporary file: %w", err)
+			return fmt.Errorf("failed to close temporary file: %v", err)
 		}
 
 		// Make script executable
 		if err := os.Chmod(tmpFile.Name(), 0755); err != nil {
-			return fmt.Errorf("failed to make script executable: %w", err)
+			return fmt.Errorf("failed to make script executable: %v", err)
 		}
 
 		// Execute the script (output streams in real-time)

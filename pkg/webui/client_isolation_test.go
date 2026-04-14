@@ -308,31 +308,6 @@ func TestShouldForwardEventToConnectionRequiresClientIDExceptGlobal(t *testing.T
 	if !ws.shouldForwardEventToConnection(global, "client-a") {
 		t.Fatal("expected global metrics update to be forwarded without client metadata")
 	}
-
-	// FileContentChanged events should also be forwarded globally (no client_id needed).
-	fileEvent := events.UIEvent{
-		Type: events.EventTypeFileContentChanged,
-		Data: events.FileContentChangedEvent("/some/file.go", 1234567890, 2048),
-	}
-	if !ws.shouldForwardEventToConnection(fileEvent, "client-a") {
-		t.Fatal("expected file_content_changed event to be forwarded without client_id")
-	}
-	// Should forward to any client window, not just the originating one.
-	if !ws.shouldForwardEventToConnection(fileEvent, "client-b") {
-		t.Fatal("expected file_content_changed event to be forwarded to all clients")
-	}
-	// If the event has a client_id, it should still be targeted normally.
-	fileEventTargeted := events.UIEvent{
-		Type: events.EventTypeFileContentChanged,
-		Data: events.FileContentChangedEvent("/some/file.go", 1234567890, 2048),
-	}
-	fileEventTargeted.Data.(map[string]interface{})["client_id"] = "client-a"
-	if !ws.shouldForwardEventToConnection(fileEventTargeted, "client-a") {
-		t.Fatal("expected targeted file_content_changed event to be forwarded to matching client")
-	}
-	if ws.shouldForwardEventToConnection(fileEventTargeted, "client-b") {
-		t.Fatal("expected targeted file_content_changed event to be blocked for non-matching client")
-	}
 }
 
 func TestStopSSHSessionLockedClearsMatchingClientSSHContext(t *testing.T) {

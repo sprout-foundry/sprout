@@ -80,6 +80,12 @@ export async function deleteChatSession(
   return res.json();
 }
 
+export async function deleteAllChatSessions(): Promise<{ message: string; deleted_count: number; active_chat_id: string }> {
+  const res = await clientFetch('/api/chat-sessions/delete-all', { method: 'POST' });
+  if (!res.ok) throw new Error('Failed to delete all chat sessions');
+  return res.json();
+}
+
 export async function renameChatSession(
   id: string,
   name: string,

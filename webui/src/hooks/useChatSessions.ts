@@ -13,6 +13,7 @@ import {
   listChatSessions,
   createChatSession,
   deleteChatSession,
+  deleteAllChatSessions,
   renameChatSession,
   switchChatSession,
   getChatSessionWorktree,
@@ -35,6 +36,7 @@ export interface UseChatSessionsReturn {
   handleActiveChatChange: (id: string) => Promise<void>;
   handleCreateChat: () => Promise<string | null>;
   handleDeleteChat: (id: string, options?: { removeWorktree?: boolean }) => Promise<void>;
+  handleDeleteAllChats: () => Promise<void>;
   handleRenameChat: (id: string, name: string) => Promise<void>;
   // Worktree operations
   getChatSessionWorktree: (chatId: string) => Promise<string>;
@@ -118,6 +120,7 @@ export function useChatSessions({
               provider: prev.provider,
               model: prev.model,
               worktreePath: session?.worktree_path,
+              queryCount: prev.queryCount,
             },
           }
         : prev.perChatCache;
@@ -140,6 +143,7 @@ export function useChatSessions({
         lastError: cached?.lastError ?? null,
         provider: cached?.provider ?? prev.provider,
         model: cached?.model ?? prev.model,
+        queryCount: cached?.queryCount ?? prev.queryCount,
         perChatCache: newCache,
       };
     });
@@ -243,6 +247,22 @@ export function useChatSessions({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleDeleteAllChats = useCallback(async () => {
+    try {
+      const response = await deleteAllChatSessions();
+      // Reload chat sessions after deletion
+      const sessionsResp = await listChatSessions();
+      setState((prev) => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
+      // Switch to the active/default session returned by the API
+      await handleActiveChatChange(response.active_chat_id);
+    } catch (error) {
+      debugLog('[chat] Failed to delete all chat sessions:', error);
+      const message = error instanceof Error ? error.message : 'Failed to delete all chat sessions';
+      setState((prev) => ({ ...prev, lastError: message }));
+      throw error;
+    }
+  }, [setState, handleActiveChatChange]);
 
   // Worktree operations
   const fetchChatSessionWorktree = useCallback(async (chatId: string): Promise<string> => {
@@ -354,6 +374,7 @@ export function useChatSessions({
     handleActiveChatChange,
     handleCreateChat,
     handleDeleteChat,
+    handleDeleteAllChats,
     handleRenameChat,
     // Worktree operations
     getChatSessionWorktree: fetchChatSessionWorktree,

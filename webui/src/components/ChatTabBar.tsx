@@ -17,6 +17,7 @@ interface ChatTabBarProps {
   onSetWorktree?: (sessionId: string) => void;
   onClearWorktree?: (sessionId: string) => void;
   onDeleteWithWorktree?: (id: string) => void;
+  onDeleteAll?: () => void;
 }
 
 interface ContextMenuState {
@@ -39,6 +40,7 @@ function ChatTabBar({
   onSetWorktree,
   onClearWorktree,
   onDeleteWithWorktree,
+  onDeleteAll,
 }: ChatTabBarProps): JSX.Element | null {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -150,6 +152,13 @@ function ChatTabBar({
     onDeleteWithWorktree(id);
     closeContextMenu();
   }, [contextMenu.sessionId, contextMenu.canDelete, onDeleteWithWorktree, closeContextMenu]);
+
+  const handleMenuDeleteAll = useCallback(() => {
+    if (!onDeleteAll) return;
+    if (!window.confirm('Close all chat sessions except the active one?')) return;
+    onDeleteAll();
+    closeContextMenu();
+  }, [onDeleteAll, closeContextMenu]);
 
   const contextSessionWtPath = contextSessionId
     ? sessions.find((s) => s.id === contextSessionId)?.worktree_path
@@ -297,6 +306,16 @@ function ChatTabBar({
             <span className="menu-item-label">Delete Chat and Worktree</span>
           </button>
         )}
+        <div className="context-menu-divider" />
+        <button
+          className="context-menu-item"
+          onClick={handleMenuDeleteAll}
+          type="button"
+          disabled={!onDeleteAll}
+        >
+          <Trash2 size={13} />
+          <span className="menu-item-label">Close All Chats</span>
+        </button>
         {!isDefaultSession && (onSetWorktree || onClearWorktree) && (
           <>
             <div className="context-menu-divider" />

@@ -95,6 +95,7 @@ export interface PaneLayoutManagerProps {
   onActiveChatChange?: (id: string) => void;
   onRenameChat?: (id: string, name: string) => void;
   onDeleteChatWithWorktree?: (id: string) => void;
+  onDeleteAllChats?: () => void;
 
   // Provider availability (for graceful degradation)
   providerAvailable?: boolean;
@@ -263,6 +264,7 @@ function PaneLayoutManager({
   onActiveChatChange,
   onRenameChat,
   onDeleteChatWithWorktree,
+  onDeleteAllChats,
   containerRef,
   updatePaneSize,
   nestedSplit,
@@ -461,6 +463,7 @@ function PaneLayoutManager({
             onCreateChatInWorktree={onCreateChatInWorktree}
             onDeleteChatWithWorktree={onDeleteChatWithWorktree}
             onRenameChat={onRenameChat}
+            onDeleteAllChats={onDeleteAllChats}
             chatSessions={chatSessions}
           />
           <EditorPaneWrapper isActive={pane.id === activePaneId} onClick={() => switchPane(pane.id)}>

@@ -254,6 +254,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/chat-sessions/create", ws.handleAPIChatSessionsCreate)
 	mux.HandleFunc("/api/chat-sessions/create-in-worktree", ws.handleAPIChatSessionCreateInWorktree)
 	mux.HandleFunc("/api/chat-sessions/delete", ws.handleAPIChatSessionsDelete)
+	mux.HandleFunc("/api/chat-sessions/delete-all", ws.handleAPIChatSessionsDeleteAll)
 	mux.HandleFunc("/api/chat-sessions/rename", ws.handleAPIChatSessionsRename)
 	mux.HandleFunc("/api/chat-sessions/pin", ws.handleAPIChatSessionsPin)
 	mux.HandleFunc("/api/chat-sessions/unpin", ws.handleAPIChatSessionsUnpin)

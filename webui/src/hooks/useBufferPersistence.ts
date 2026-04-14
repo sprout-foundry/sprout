@@ -83,6 +83,10 @@ export function useBufferPersistence({ buffersRef, setBuffers }: UseBufferPersis
         if (!silent) {
           log.success(`${trimmedPath} saved successfully`, { title: 'File Saved', duration: 3000 });
         }
+        // Notify external file watchers so they suppress the fsnotify echo.
+        document.dispatchEvent(new CustomEvent('file:editor-saved', {
+          detail: { path: trimmedPath, mtime: serverMtime ?? Math.floor(Date.now() / 1000) },
+        }));
         return saveData;
       }
 
@@ -117,6 +121,10 @@ export function useBufferPersistence({ buffersRef, setBuffers }: UseBufferPersis
             if (!silent) {
               log.success(`${buffer.file.path} saved successfully`, { title: 'File Saved', duration: 3000 });
             }
+            // Notify external file watchers so they suppress the fsnotify echo.
+            document.dispatchEvent(new CustomEvent('file:editor-saved', {
+              detail: { path: buffer.file.path, mtime: serverMtime ?? Math.floor(Date.now() / 1000) },
+            }));
             return data;
           }
         } else {

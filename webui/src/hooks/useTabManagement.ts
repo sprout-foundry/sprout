@@ -1,5 +1,4 @@
 import { useCallback } from 'react';
-import { useLog } from '../utils/log';
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react';
 import type { EditorBuffer, EditorPane } from '../types/editor';
 
@@ -12,8 +11,6 @@ interface UseTabManagementParams {
   setActivePaneId: Dispatch<SetStateAction<string | null>>;
   activePaneId: string | null;
   activeBufferId: string | null;
-  isAutoSaveEnabled: boolean;
-  saveBuffer: (bufferId: string, options?: { silent?: boolean }) => Promise<{ mod_time?: number } | void>;
 }
 
 /** Core tab management: activate, switch, close, reorder, move. */
@@ -26,11 +23,7 @@ export function useTabManagement({
   setActivePaneId,
   activePaneId,
   activeBufferId,
-  isAutoSaveEnabled,
-  saveBuffer,
 }: UseTabManagementParams) {
-  const log = useLog();
-
   const activateBuffer = useCallback(
     (bufferId: string) => {
       const currentActivePane = activePaneIdRef.current;
@@ -104,13 +97,6 @@ export function useTabManagement({
     (bufferId: string) => {
       const buffer = buffersRef.current.get(bufferId);
       if (!buffer || buffer.isClosable === false || buffer.isPinned) return;
-      if (buffer.isModified && isAutoSaveEnabled) {
-        saveBuffer(bufferId).catch((err) =>
-          log.error(`Failed to save buffer before closing: ${err instanceof Error ? err.message : String(err)}`, {
-            title: 'Save Error',
-          }),
-        );
-      }
       const remain = Array.from(buffersRef.current.values()).filter((c) => c.id !== bufferId);
       const nextPaneBuffer = buffer.paneId
         ? remain.find((c) => c.paneId === buffer.paneId) || remain.find((c) => !c.paneId) || null
@@ -142,12 +128,9 @@ export function useTabManagement({
       activeBufferId,
       activePaneIdRef,
       buffersRef,
-      isAutoSaveEnabled,
-      saveBuffer,
       setBuffers,
       setPanes,
       setActiveBufferId,
-      log,
     ],
   );
 
@@ -157,15 +140,6 @@ export function useTabManagement({
       .filter(([_, b]) => b.isClosable !== false && !b.isPinned)
       .map(([id]) => id);
     for (const bid of closableIds) {
-      const b = cb.get(bid);
-      if (!b) continue;
-      if (b.isModified && isAutoSaveEnabled) {
-        saveBuffer(bid).catch((err) =>
-          log.error(`Failed to save buffer: ${err instanceof Error ? err.message : String(err)}`, {
-            title: 'Save Error',
-          }),
-        );
-      }
       setBuffers((prev) => {
         const n = new Map(prev);
         n.delete(bid);
@@ -181,7 +155,7 @@ export function useTabManagement({
         bufferId: closableIds.includes(p.bufferId || '') ? nextBuffer?.id || null : p.bufferId,
       })),
     );
-  }, [buffersRef, isAutoSaveEnabled, saveBuffer, setBuffers, setPanes, setActiveBufferId, log]);
+  }, [buffersRef, setBuffers, setPanes, setActiveBufferId]);
 
   const closeOtherBuffers = useCallback(
     (keepBufferId: string) => {
@@ -190,15 +164,6 @@ export function useTabManagement({
         .filter(([id, b]) => id !== keepBufferId && b.isClosable !== false && !b.isPinned)
         .map(([id]) => id);
       for (const bid of ids) {
-        const b = cb.get(bid);
-        if (!b) continue;
-        if (b.isModified && isAutoSaveEnabled) {
-          saveBuffer(bid).catch((err) =>
-            log.error(`Failed to save buffer: ${err instanceof Error ? err.message : String(err)}`, {
-              title: 'Save Error',
-            }),
-          );
-        }
         setBuffers((prev) => {
           const n = new Map(prev);
           n.delete(bid);
@@ -216,7 +181,7 @@ export function useTabManagement({
       });
       setPanes((prev) => prev.map((p) => (p.id === pid ? { ...p, bufferId: keepBufferId } : p)));
     },
-    [activePaneIdRef, buffersRef, isAutoSaveEnabled, saveBuffer, setBuffers, setPanes, setActiveBufferId, log],
+    [activePaneIdRef, buffersRef, setBuffers, setPanes, setActiveBufferId],
   );
 
   const reorderBuffers = useCallback(

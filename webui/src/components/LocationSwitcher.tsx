@@ -450,14 +450,49 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
   }, [addRecentWorkspace, addRemoteRecentWorkspace, isConnected]);
 
   // Show workspace picker when we just navigated from SSH connect.
+  // If the proxy injected LEDIT_INITIAL_WORKSPACE with a specific path, apply
+  // it directly and skip the picker entirely. Fall back to picker on error or
+  // when the path is unresolved ($HOME / empty).
   useEffect(() => {
     const hostAlias = window.sessionStorage.getItem('ledit:ssh-just-connected');
-    if (hostAlias) {
-      window.sessionStorage.removeItem('ledit:ssh-just-connected');
-      setSshPickerHostAlias(hostAlias);
+    if (!hostAlias) return;
+    window.sessionStorage.removeItem('ledit:ssh-just-connected');
+    setSshPickerHostAlias(hostAlias);
+
+    const initialWorkspace = (window as unknown as Record<string, string>).LEDIT_INITIAL_WORKSPACE;
+    const isSpecificPath =
+      initialWorkspace &&
+      initialWorkspace !== '$HOME' &&
+      !initialWorkspace.startsWith('$HOME/') &&
+      !initialWorkspace.startsWith('${HOME}');
+
+    if (isSpecificPath) {
+      // Directly apply the requested workspace; open picker only on failure.
+      submitWorkspaceChange(initialWorkspace).catch(() => {
+        setShowSSHWorkspacePicker(true);
+      });
+    } else {
       setShowSSHWorkspacePicker(true);
     }
+  // submitWorkspaceChange is stable (useCallback); safe to list here.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const openWorkspaceSwitcher = () => {
+      setIsSshPanelOpen(false);
+      setIsOpen(true);
+      setSelectedIndex(-1);
+      setSwitchingState({ isSwitching: false, error: null, status: null });
+      setSuggestionsError(null);
+      setSshFailure(null);
+      if (workspaceRoot) {
+        setInputValue(workspaceRoot);
+      }
+    };
+    window.addEventListener('ledit:open-workspace-switcher', openWorkspaceSwitcher);
+    return () => window.removeEventListener('ledit:open-workspace-switcher', openWorkspaceSwitcher);
+  }, [workspaceRoot]);
 
   useEffect(() => {
     if (!switchingState.error && !switchingState.status) {

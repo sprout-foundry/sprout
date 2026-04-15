@@ -67,6 +67,14 @@ func prepareLocalSSHBinary(remotePlatform, remoteArch string, logger *sshLaunchL
 	}
 	repoRoot := filepath.Dir(executablePath)
 	if _, err := os.Stat(filepath.Join(repoRoot, "go.mod")); err != nil {
+		// Source tree not adjacent to the executable (e.g. running from GOPATH/bin).
+		// Before falling back to downloading a release artifact, check if a
+		// previous run already cross-compiled the binary from source and cached it.
+		cachedBuildPath := filepath.Join(localSSHCacheRoot(), "builds", fmt.Sprintf("ledit-%s-%s", remotePlatform, remoteArch))
+		if info, statErr := os.Stat(cachedBuildPath); statErr == nil && !info.IsDir() {
+			logger.Logf("source tree unavailable at %s; reusing locally-built cross-platform binary at %s", repoRoot, cachedBuildPath)
+			return cachedBuildPath, nil
+		}
 		logger.Logf("source tree unavailable; attempting latest artifact as cross-arch fallback for %s/%s", remotePlatform, remoteArch)
 		if latestPath, latestErr := ensureLocalSSHBinaryArtifactForTag("latest", remotePlatform, remoteArch, logger); latestErr == nil && latestPath != "" {
 			return latestPath, nil
@@ -285,20 +293,24 @@ func extractTarGzSingleFile(archivePath, destPath string) error {
 	return fmt.Errorf("artifact archive %s did not contain a binary", archivePath)
 }
 
-func ensureRemoteSSHBinary(ctx context.Context, hostAlias, localBinary string, remoteInfo *remoteSSHInfo, logger *sshLaunchLogger) (string, error) {
+// ensureRemoteSSHBinary ensures the remote host has a ledit binary matching
+// localBinary's fingerprint. Returns the remote path, a boolean indicating
+// whether the binary was freshly uploaded (true) or already present (false),
+// and an error.
+func ensureRemoteSSHBinary(ctx context.Context, hostAlias, localBinary string, remoteInfo *remoteSSHInfo, logger *sshLaunchLogger) (string, bool, error) {
 	localFingerprint, err := fingerprintFile(localBinary)
 	if err != nil {
-		return "", fmt.Errorf("failed to fingerprint local executable: %w", err)
+		return "", false, fmt.Errorf("failed to fingerprint local executable: %w", err)
 	}
 
 	homeCmd := newSSHCommandContext(ctx, hostAlias, `printf "%s" "$HOME"`)
 	homeOut, err := runSSHLoggedCommand(logger, "resolve-remote-home", fmt.Sprintf("ssh %s print $HOME", hostAlias), homeCmd)
 	if err != nil {
-		return "", fmt.Errorf("resolve remote home: %w", err)
+		return "", false, fmt.Errorf("resolve remote home: %w", err)
 	}
 	remoteHome := strings.TrimSpace(string(homeOut))
 	if remoteHome == "" {
-		return "", newSSHLaunchFailure("resolve-remote-home", "failed to resolve remote home directory", "remote $HOME was empty", logger)
+		return "", false, newSSHLaunchFailure("resolve-remote-home", "failed to resolve remote home directory", "remote $HOME was empty", logger)
 	}
 
 	remoteDirSSH := fmt.Sprintf("%s/.cache/ledit-webui/backend/%s/%s-%s", remoteHome, localFingerprint, remoteInfo.Platform, remoteInfo.Arch)
@@ -306,14 +318,14 @@ func ensureRemoteSSHBinary(ctx context.Context, hostAlias, localBinary string, r
 	remoteUploadSCP := fmt.Sprintf(".ledit-ssh-upload-%s.tmp", localFingerprint)
 
 	// Fast path: if the fingerprinted backend already exists and executes,
-	// skip upload/install and reuse it directly.
+	// skip upload/install and reuse it directly (wasUploaded = false).
 	checkExisting := newSSHCommandContext(ctx, hostAlias, fmt.Sprintf("[ -x %s ] && %s version", shellEscapeSSH(remoteBinarySSH), shellEscapeSSH(remoteBinarySSH)))
 	if out, err := checkExisting.CombinedOutput(); err == nil {
 		if output := trimSSHOutput(out); output != "" {
 			logger.Logf("reuse-backend output:\n%s", output)
 		}
 		logger.Logf("reuse-backend found executable at %s", remoteBinarySSH)
-		return remoteBinarySSH, nil
+		return remoteBinarySSH, false, nil
 	} else {
 		if output := trimSSHOutput(out); output != "" {
 			logger.Logf("reuse-backend miss for %s:\n%s", remoteBinarySSH, output)
@@ -323,7 +335,7 @@ func ensureRemoteSSHBinary(ctx context.Context, hostAlias, localBinary string, r
 
 	mkdir := newSSHCommandContext(ctx, hostAlias, fmt.Sprintf("mkdir -p %s", shellEscapeSSH(remoteDirSSH)))
 	if _, err := runSSHLoggedCommand(logger, "prepare-remote-dir", fmt.Sprintf("ssh %s mkdir -p %s", hostAlias, remoteDirSSH), mkdir); err != nil {
-		return "", fmt.Errorf("prepare remote directory: %w", err)
+		return "", false, fmt.Errorf("prepare remote directory: %w", err)
 	}
 
 	copyCmd := exec.CommandContext(ctx, "scp",
@@ -336,7 +348,7 @@ func ensureRemoteSSHBinary(ctx context.Context, hostAlias, localBinary string, r
 		fmt.Sprintf("%s:%s", hostAlias, remoteUploadSCP),
 	)
 	if _, err := runSSHLoggedCommand(logger, "upload-backend", fmt.Sprintf("scp %s %s:%s", localBinary, hostAlias, remoteUploadSCP), copyCmd); err != nil {
-		return "", fmt.Errorf("upload backend via SCP: %w", err)
+		return "", false, fmt.Errorf("upload backend via SCP: %w", err)
 	}
 
 	install := newSSHCommandContext(ctx, hostAlias, fmt.Sprintf(
@@ -346,13 +358,13 @@ func ensureRemoteSSHBinary(ctx context.Context, hostAlias, localBinary string, r
 		shellEscapeSSH(remoteBinarySSH),
 	))
 	if _, err := runSSHLoggedCommand(logger, "install-backend", fmt.Sprintf("ssh %s install backend into %s", hostAlias, remoteBinarySSH), install); err != nil {
-		return "", fmt.Errorf("install remote backend: %w", err)
+		return "", false, fmt.Errorf("install remote backend: %w", err)
 	}
 
 	// Verify the uploaded backend can execute on the remote host.
 	verify := newSSHCommandContext(ctx, hostAlias, fmt.Sprintf("%s version", shellEscapeSSH(remoteBinarySSH)))
 	if _, err := runSSHLoggedCommand(logger, "verify-backend", fmt.Sprintf("ssh %s verify backend executable %s", hostAlias, remoteBinarySSH), verify); err != nil {
-		return "", newSSHLaunchFailure(
+		return "", false, newSSHLaunchFailure(
 			"verify-backend",
 			"uploaded SSH backend is not executable on remote host",
 			err.Error(),
@@ -360,7 +372,8 @@ func ensureRemoteSSHBinary(ctx context.Context, hostAlias, localBinary string, r
 		)
 	}
 
-	return remoteBinarySSH, nil
+	// Binary was freshly uploaded.
+	return remoteBinarySSH, true, nil
 }
 
 func fingerprintFile(path string) (string, error) {

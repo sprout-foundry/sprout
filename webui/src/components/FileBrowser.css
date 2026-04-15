@@ -67,8 +67,8 @@
 }
 
 .filebrowser-nav-button {
-  background: #444;
-  border: 1px solid #555;
+  background: transparent;
+  border: 1px solid transparent;
   color: #fff;
   padding: 6px 12px;
   border-radius: 4px;
@@ -78,7 +78,8 @@
 }
 
 .filebrowser-nav-button:hover:not(:disabled) {
-  background: #555;
+  background: #444;
+  border-color: #555;
 }
 
 .filebrowser-nav-button:disabled {

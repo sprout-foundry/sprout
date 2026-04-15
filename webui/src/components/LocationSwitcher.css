@@ -20,8 +20,8 @@
   height: 30px;
   padding: 0;
   border-radius: 8px;
-  border: 1px solid var(--border-default);
-  background: color-mix(in srgb, var(--bg-elevated) 90%, transparent);
+  border: 1px solid transparent;
+  background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
   flex-shrink: 0;
@@ -33,7 +33,7 @@
 
 .location-host-btn:hover:not(:disabled) {
   border-color: var(--border-strong);
-  background: color-mix(in srgb, var(--bg-elevated) 100%, transparent);
+  background: var(--bg-elevated);
 }
 
 .location-host-btn:disabled {
@@ -43,7 +43,7 @@
 
 .location-host-btn.ssh-active {
   border-color: #4ade80;
-  background: color-mix(in srgb, #4ade80 14%, var(--bg-elevated));
+  background: rgba(74, 222, 128, 0.15);
   color: #4ade80;
 }
 
@@ -65,12 +65,8 @@
   min-height: 40px;
   padding: 0 14px 0 12px;
   border-radius: 10px;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--bg-surface) 34%, transparent),
-    color-mix(in srgb, var(--sidebar-select-bg) 96%, transparent)
-  );
-  border: 1px solid color-mix(in srgb, var(--border-default) 88%, transparent);
+  background: transparent;
+  border: 1px solid transparent;
   color: var(--text-primary);
   font-size: 12px;
   font-weight: 560;
@@ -86,12 +82,8 @@
 }
 
 .location-switcher-trigger:hover:not(:disabled) {
-  border-color: var(--border-strong);
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--bg-surface) 42%, transparent),
-    color-mix(in srgb, var(--sidebar-select-bg) 98%, transparent)
-  );
+  border-color: var(--border-subtle);
+  background: var(--bg-elevated);
 }
 
 .location-switcher-trigger:focus-visible {
@@ -437,19 +429,21 @@
   height: 28px;
   padding: 0;
   background: transparent;
-  border: none;
+  border: 1px solid transparent;
   border-radius: 6px;
   color: var(--text-tertiary);
   cursor: pointer;
   transition:
     color 0.12s var(--ease-out),
-    background-color 0.12s var(--ease-out);
+    background-color 0.12s var(--ease-out),
+    border-color 0.12s var(--ease-out);
   flex-shrink: 0;
 }
 
 .location-switcher-path-input-refresh:hover:not(:disabled) {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-elevated);
+  border-color: var(--border-subtle);
 }
 
 .location-switcher-path-input-refresh:disabled {
@@ -688,8 +682,8 @@
 .location-switcher-session-btn {
   padding: 4px 8px;
   border-radius: 6px;
-  border: 1px solid var(--border-subtle);
-  background: var(--bg-elevated);
+  border: 1px solid transparent;
+  background: transparent;
   color: var(--text-secondary);
   font-size: 11px;
   cursor: pointer;
@@ -700,14 +694,15 @@
 }
 
 .location-switcher-session-btn:hover:not(:disabled) {
-  background: var(--bg-surface);
+  background: var(--bg-elevated);
   color: var(--text-primary);
-  border-color: var(--border-strong);
+  border-color: var(--border-subtle);
 }
 
 .location-switcher-session-btn.danger:hover:not(:disabled) {
   color: var(--accent-error);
-  border-color: color-mix(in srgb, var(--accent-error) 50%, var(--border-default));
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
 }
 
 .location-switcher-session-btn.primary {
@@ -718,8 +713,9 @@
 }
 
 .location-switcher-session-btn.primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent-primary) 85%, #000);
-  border-color: color-mix(in srgb, var(--accent-primary) 85%, #000);
+  background: var(--accent-primary);
+  filter: brightness(0.9);
+  border-color: var(--accent-primary);
   color: #fff;
 }
 
@@ -768,16 +764,18 @@
   gap: 6px;
   padding: 4px 8px;
   background: transparent;
-  border: none;
+  border: 1px solid transparent;
   border-radius: 6px;
   color: var(--text-secondary);
   font-size: 11px;
   cursor: pointer;
-  transition: color 0.12s var(--ease-out);
+  transition: color 0.12s var(--ease-out), background-color 0.12s var(--ease-out), border-color 0.12s var(--ease-out);
 }
 
 .location-switcher-footer-refresh:hover {
   color: var(--text-primary);
+  background: var(--bg-elevated);
+  border-color: var(--border-subtle);
 }
 
 .location-switcher-footer-refresh:disabled {

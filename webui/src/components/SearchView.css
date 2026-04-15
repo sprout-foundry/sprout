@@ -83,8 +83,8 @@
 .search-option-btn {
   width: 32px;
   height: 32px;
-  border: 1px solid var(--border-default);
-  background: var(--bg-elevated);
+  border: 1px solid transparent;
+  background: transparent;
   border-radius: var(--radius-md);
   color: var(--text-secondary);
   cursor: pointer;
@@ -98,8 +98,8 @@
 }
 
 .search-option-btn:hover {
-  border-color: var(--border-strong);
-  background: var(--bg-surface);
+  border-color: var(--border-subtle);
+  background: var(--bg-elevated);
 }
 
 .search-option-btn.active {

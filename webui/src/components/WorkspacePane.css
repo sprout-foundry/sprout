@@ -54,14 +54,20 @@
 }
 
 .workspace-diff-mode-tab {
-  border: 1px solid var(--border-default);
-  background: var(--bg-elevated);
+  border: 1px solid transparent;
+  background: transparent;
   color: var(--text-secondary);
   border-radius: var(--radius-sm);
   padding: 6px 10px;
   font-size: 12px;
   cursor: pointer;
   text-transform: capitalize;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.workspace-diff-mode-tab:hover {
+  background: var(--bg-elevated);
+  border-color: var(--border-subtle);
 }
 
 .workspace-diff-mode-tab.active {

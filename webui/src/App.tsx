@@ -9,7 +9,7 @@ import { NotificationProvider } from './contexts/NotificationContext';
 import './App.css';
 import { WebSocketService } from './services/websocket';
 import { ApiService, OnboardingEnvironment, OnboardingProviderOption } from './services/api';
-import { clientFetch, getWebUIClientId } from './services/clientSession';
+import { clientFetch, getTabWorkspacePath, getWebUIClientId } from './services/clientSession';
 import { ensureCompletedAssistantMessage } from './utils/chatCompletion';
 import {
   type ChatSession,
@@ -765,6 +765,9 @@ function App() {
 
         // Debounce connection status updates to prevent rapid re-renders
         const newConnectionState = event.data.connected;
+        const phase = newConnectionState
+          ? (event.data?.reconnected ? 'reconnected' : 'connected')
+          : (event.data?.reconnecting ? 'reconnecting' : 'disconnected');
 
         // Only update if state actually changed
         if (newConnectionState !== lastConnectionStateRef.current) {
@@ -780,9 +783,14 @@ function App() {
               ...prev,
               // NOTE:
               // WebSocket `session_id` is a transport connection id (ws_<timestamp>),
-              // not a chat session id. It changes on reconnect and must never clear chat state.
-              sessionId: prev.sessionId || incomingSessionId,
+              // not a chat session id. Track the latest value so reconnects are visible.
+              sessionId: incomingSessionId || prev.sessionId,
               isConnected: newConnectionState,
+              stats: {
+                ...prev.stats,
+                connection_phase: phase,
+                transport_session_id: incomingSessionId || prev.stats?.transport_session_id || prev.sessionId || '',
+              },
               logs: [...prev.logs, logEntry]
             }));
           }, 300); // Wait 300ms to confirm the connection state is stable
@@ -1314,6 +1322,45 @@ function App() {
     }
   }, []);
 
+  const handleReconnect = useCallback(() => {
+    debugLog('[reconnect] syncing state after websocket reconnect');
+    apiService.getStats()
+      .then((stats: any) => {
+        const backendProcessing = stats?.is_processing === true;
+        activeRequestsRef.current = backendProcessing ? 1 : 0;
+        setState((prev) => {
+          const nextToolExecutions = backendProcessing
+            ? prev.toolExecutions
+            : prev.toolExecutions.map((tool) => {
+                if (tool.status === 'started' || tool.status === 'running') {
+                  return {
+                    ...tool,
+                    status: 'error' as const,
+                    endTime: tool.endTime || new Date(),
+                    result: 'Interrupted while connection was paused/reconnecting',
+                  };
+                }
+                return tool;
+              });
+          return {
+            ...prev,
+            isProcessing: backendProcessing,
+            queryProgress: backendProcessing ? prev.queryProgress : null,
+            lastError: null,
+            toolExecutions: nextToolExecutions,
+            stats: {
+              ...prev.stats,
+              ...stats,
+              connection_phase: 'reconnected',
+            },
+          };
+        });
+      })
+      .catch((error) => {
+        debugLog('[reconnect] failed to sync backend state:', error);
+      });
+  }, [apiService]);
+
   useEffect(() => {
     refreshOnboardingStatus().catch(() => {});
   }, [refreshOnboardingStatus]);
@@ -1325,6 +1372,7 @@ function App() {
     // Initialize WebSocket connection
     wsService.connect();
     wsService.onEvent(handleEvent);
+    wsService.onReconnect(handleReconnect);
 
     // Load initial stats
     const loadStats = () => {
@@ -1352,14 +1400,64 @@ function App() {
       }).catch(console.error);
     };
 
-    // Load initial stats
+    const restoreStartupState = async () => {
+      try {
+        const workspace = await apiService.getWorkspace();
+        const workspaceRoot = String(workspace?.workspace_root || '').trim();
+        const daemonRoot = String(workspace?.daemon_root || '').trim();
+        if (workspaceRoot && daemonRoot && workspaceRoot === daemonRoot) {
+          const savedWorkspace = getTabWorkspacePath().trim();
+          if (savedWorkspace && savedWorkspace !== workspaceRoot) {
+            // A previous workspace was explicitly chosen — restore it silently.
+            try {
+              await apiService.setWorkspace(savedWorkspace);
+              return;
+            } catch (restoreError) {
+              debugLog('[startup] failed to auto-restore saved workspace:', restoreError);
+            }
+          }
+          // Only prompt when there is genuinely no prior choice. If savedWorkspace
+          // equals workspaceRoot the user intentionally set their workspace to the
+          // daemon root (e.g. home dir) — don't interrupt them with the picker.
+          if (!savedWorkspace) {
+            window.dispatchEvent(new CustomEvent('ledit:open-workspace-switcher'));
+          }
+        }
+      } catch (error) {
+        debugLog('[startup] workspace check failed:', error);
+      }
+
+      try {
+        const sessionsResponse = await apiService.getSessions('current');
+        const sessions = Array.isArray(sessionsResponse?.sessions) ? sessionsResponse.sessions : [];
+        const currentSessionId = String(sessionsResponse?.current_session_id || '');
+        const currentSession = sessions.find((item: any) => String(item?.session_id || '') === currentSessionId);
+        const currentHasMessages = Number(currentSession?.message_count || 0) > 0;
+        if (!currentHasMessages) {
+          const restorable = sessions.find((item: any) =>
+            String(item?.session_id || '') !== currentSessionId && Number(item?.message_count || 0) > 0,
+          );
+          if (restorable?.session_id) {
+            const restored = await apiService.restoreSession(String(restorable.session_id));
+            if (Array.isArray(restored?.messages) && restored.messages.length > 0) {
+              window.dispatchEvent(
+                new CustomEvent('ledit:session-restored', {
+                  detail: { messages: restored.messages },
+                }),
+              );
+            }
+          }
+        }
+      } catch (error) {
+        debugLog('[startup] session restore check failed:', error);
+      }
+    };
+
+    // Load initial stats/files/sessions and then reconcile workspace/session startup.
     loadStats();
-
-    // Load initial files
     loadFiles();
-
-    // Load initial chat sessions
     loadChatSessions();
+    restoreStartupState().catch(() => {});
 
     // Set up periodic stats updates
     const statsInterval = setInterval(loadStats, 5000); // Update every 5 seconds
@@ -1379,11 +1477,12 @@ function App() {
         clearTimeout(connectionTimeoutRef.current);
       }
       wsService.removeEvent(handleEvent);
+      wsService.onReconnect(null);
       wsService.disconnect();
       window.removeEventListener('resize', checkMobile);
       clearInterval(statsInterval);
     };
-  }, [handleEvent, wsService, apiService, loadChatSessions]);
+  }, [handleEvent, handleReconnect, wsService, apiService, loadChatSessions]);
 
   // Listen for session-restored events from Chat.tsx to populate messages
   useEffect(() => {

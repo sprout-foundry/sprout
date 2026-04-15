@@ -217,6 +217,11 @@ func ListMemories() ([]MemoryInfo, error) {
 	return memories, nil
 }
 
+// maxMemoryPromptBytes is the maximum number of bytes of memories included in the system prompt.
+// ~50 KB keeps memory useful while preventing individual oversized files from consuming the
+// entire context window before any conversation messages are added (~12 500 tokens at 4 chars/tok).
+const maxMemoryPromptBytes = 50_000
+
 // LoadMemoriesForPrompt loads all memories and formats them for inclusion in the system prompt
 // Returns empty string if no memories exist
 func LoadMemoriesForPrompt() string {
@@ -231,14 +236,14 @@ func LoadMemoriesForPrompt() string {
 	sb.WriteString("## Memories\n\n")
 	sb.WriteString("The following memories capture user preferences and learned patterns from previous sessions. Use them to guide your behavior.\n\n")
 
-	for _, memory := range memories {
-		sb.WriteString(fmt.Sprintf("### %s\n", memory.Name))
+	bytesWritten := 0
+	for i, memory := range memories {
+		header := fmt.Sprintf("### %s\n", memory.Name)
 
 		// Process content: skip leading H1 title if present
 		content := memory.Content
 		lines := strings.Split(content, "\n")
 
-		// Check if first line is an H1 heading (starts with # followed by space)
 		startIdx := 0
 		if len(lines) > 0 {
 			firstLine := strings.TrimSpace(lines[0])
@@ -247,12 +252,19 @@ func LoadMemoriesForPrompt() string {
 			}
 		}
 
-		// Join remaining lines
+		body := ""
 		if startIdx < len(lines) {
-			sb.WriteString(strings.Join(lines[startIdx:], "\n"))
+			body = strings.Join(lines[startIdx:], "\n")
 		}
 
-		sb.WriteString("\n\n")
+		entry := header + body + "\n\n"
+		if bytesWritten+len(entry) > maxMemoryPromptBytes {
+			sb.WriteString(fmt.Sprintf("*[%d additional memory file(s) omitted — total size exceeded %d bytes]*\n\n",
+				len(memories)-i, maxMemoryPromptBytes))
+			break
+		}
+		sb.WriteString(entry)
+		bytesWritten += len(entry)
 	}
 
 	return sb.String()

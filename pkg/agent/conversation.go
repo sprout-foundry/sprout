@@ -45,20 +45,14 @@ func (a *Agent) ProcessQueryWithContinuity(userQuery string) (string, error) {
 
 	// Load previous state if available
 	if a.previousSummary != "" {
-		continuityPrompt := fmt.Sprintf(`
-CONTEXT FROM PREVIOUS SESSION:
-%s
-
-CURRENT TASK:
-%s
-
-Note: The user cannot see the previous session's responses, so please provide a complete answer without referencing "previous responses" or "as mentioned before". If this task relates to the previous session, build upon that work but present your response as if it's the first time addressing this topic.`,
-			a.previousSummary, userQuery)
-
-		return a.ProcessQuery(continuityPrompt)
+		// Inject the summary as a one-shot system supplement so it is attributed to
+		// the system (not the user) and does not consume the user input budget.
+		a.setPendingSystemSupplement(fmt.Sprintf(
+			"## Context From Previous Session\n\n%s\n\nNote: The user cannot see the previous session's responses. Build upon that work but present your response as if it's the first time addressing this topic.",
+			a.previousSummary))
 	}
 
-	// No previous state, process normally
+	// Process the user's actual query, with or without previous context.
 	return a.ProcessQuery(userQuery)
 }
 

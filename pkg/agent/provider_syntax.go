@@ -294,6 +294,22 @@ func (a *Agent) ConsumePendingStrictSwitchNotice() string {
 	return msg
 }
 
+func (a *Agent) setPendingSystemSupplement(supplement string) {
+	if a == nil {
+		return
+	}
+	a.pendingSystemSupplement = strings.TrimSpace(supplement)
+}
+
+func (a *Agent) consumePendingSystemSupplement() string {
+	if a == nil {
+		return ""
+	}
+	msg := strings.TrimSpace(a.pendingSystemSupplement)
+	a.pendingSystemSupplement = ""
+	return msg
+}
+
 func (a *Agent) normalizeConversationForCurrentModelSyntax(fromProvider, fromModel string) {
 	if a == nil || len(a.messages) == 0 || !a.isStrictToolCallSyntaxModel() {
 		return

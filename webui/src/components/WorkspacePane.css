@@ -57,7 +57,7 @@
   border: 1px solid var(--border-default);
   background: var(--bg-elevated);
   color: var(--text-secondary);
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   padding: 6px 10px;
   font-size: 12px;
   cursor: pointer;

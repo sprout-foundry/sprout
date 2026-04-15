@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/configuration"
 )
 
@@ -180,12 +179,14 @@ func handleActivateSkill(ctx context.Context, a *Agent, args map[string]interfac
 	// Add to active skills
 	a.activeSkills = append(a.activeSkills, skillID)
 
-	// Add skill content to conversation context
+	// Fold skill instructions into the active system prompt so they persist across
+	// all subsequent turns without relying on history system-message injection.
 	skillMessage := fmt.Sprintf("[Skill Activated: %s]\n\n%s", skillInfo.Name, skillInfo.Content)
-	a.messages = append(a.messages, api.Message{
-		Role:    "system",
-		Content: skillMessage,
-	})
+	if strings.TrimSpace(a.systemPrompt) != "" {
+		a.systemPrompt = a.systemPrompt + "\n\n---\n\n" + skillMessage
+	} else {
+		a.systemPrompt = skillMessage
+	}
 
 	return fmt.Sprintf("Activated skill '%s' (%s).\n\nDescription: %s\n\nInstructions loaded into context.", skillInfo.Name, skillID, skillInfo.Description), nil
 }

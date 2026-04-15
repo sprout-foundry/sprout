@@ -40,12 +40,13 @@ func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 		})
 	}
 
-	// Belt-and-suspenders: ensure we don't carry a duplicate system prompt in history.
-	// If any system message matches the current systemPrompt verbatim, drop it from history here
-	// because we always prepend the active systemPrompt below.
+	// Strip all system messages from conversation history — we always prepend the current
+	// system prompt below, so any system message in history is either a stale duplicate
+	// (same session), an old prompt from a previous persona, or an imported prompt from
+	// a prior session with a different date/context file. All of these should be excluded.
 	filtered := make([]api.Message, 0, len(optimizedMessages))
 	for _, m := range optimizedMessages {
-		if m.Role == "system" && strings.TrimSpace(m.Content) == strings.TrimSpace(ch.agent.systemPrompt) {
+		if m.Role == "system" {
 			continue
 		}
 		filtered = append(filtered, m)
@@ -53,8 +54,14 @@ func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 	optimizedMessages = filtered
 	optimizedMessages = ch.stripImagesForNonVisionModels(optimizedMessages)
 
+	// Build the system message, consuming any one-shot supplement (e.g. continuity context).
+	systemContent := ch.agent.systemPrompt
+	if supplement := ch.agent.consumePendingSystemSupplement(); supplement != "" {
+		systemContent = systemContent + "\n\n---\n\n" + supplement
+	}
+
 	// Always include system prompt at the beginning
-	allMessages := []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
+	allMessages := []api.Message{{Role: "system", Content: systemContent}}
 	allMessages = append(allMessages, optimizedMessages...)
 	allMessages = appendPendingTransient(allMessages)
 	allMessages = collapseSystemMessagesToFront(allMessages)

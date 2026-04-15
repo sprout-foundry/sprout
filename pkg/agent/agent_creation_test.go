@@ -15,6 +15,22 @@ func newTestAgent(t *testing.T) *Agent {
 	return newIsolatedTestAgent(t)
 }
 
+// newTestConversationHandler creates a ConversationHandler wrapping the given agent,
+// suitable for low-level messaging tests.
+func newTestConversationHandler(t *testing.T, agent *Agent) *testConversationHandler {
+	t.Helper()
+	return &testConversationHandler{ch: NewConversationHandler(agent)}
+}
+
+// testConversationHandler is a thin wrapper for invoking prepareMessages in tests.
+type testConversationHandler struct {
+	ch *ConversationHandler
+}
+
+func (h *testConversationHandler) prepareMessagesForTest() ([]api.Message, error) {
+	return h.ch.prepareMessages(nil), nil
+}
+
 // newIsolatedTestAgent creates a minimal agent backed by a temp config
 // directory so that tests never read or modify the caller's real ~/.ledit
 // config.

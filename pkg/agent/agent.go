@@ -140,6 +140,8 @@ type Agent struct {
 	pendingSwitchContextRefresh string
 	// One-shot user-facing status notice for slash commands after strict-syntax switch normalization.
 	pendingStrictSwitchNotice string
+	// One-shot system-level supplement appended to the system prompt for a single API call (e.g. continuity context).
+	pendingSystemSupplement string
 
 	// Unsafe mode - bypass most security checks
 	unsafeMode bool // Allow operations without security prompting
@@ -348,8 +350,8 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		}
 		// Check if editor mode is active
 		if resolvedType == api.EditorClientType {
-			return nil, fmt.Errorf("editor mode is active — no AI provider configured. "+
-				"Set up a provider with: ledit agent --provider <provider> "+
+			return nil, fmt.Errorf("editor mode is active — no AI provider configured. " +
+				"Set up a provider with: ledit agent --provider <provider> " +
 				"or configure via Settings in the webui (ledit agent -d)")
 		}
 		// Provider resolved — ensure API key exists without prompting.
@@ -394,13 +396,13 @@ func NewAgentWithModel(model string) (*Agent, error) {
 				clientType = autoProvider
 				finalModel = autoModel
 			} else {
-				return nil, fmt.Errorf("editor mode is active — no AI provider configured. "+
-					"Set up a provider with: ledit agent --provider <provider> "+
+				return nil, fmt.Errorf("editor mode is active — no AI provider configured. " +
+					"Set up a provider with: ledit agent --provider <provider> " +
 					"or configure via Settings in the webui (ledit agent -d)")
 			}
 		} else {
-			return nil, fmt.Errorf("editor mode is active — no AI provider configured. "+
-				"Set up a provider with: ledit agent --provider <provider> "+
+			return nil, fmt.Errorf("editor mode is active — no AI provider configured. " +
+				"Set up a provider with: ledit agent --provider <provider> " +
 				"or configure via Settings in the webui (ledit agent -d)")
 		}
 	}

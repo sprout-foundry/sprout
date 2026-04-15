@@ -2,7 +2,6 @@ package webui
 
 import (
 	"encoding/json"
-	"errors"
 	"log"
 	"net/http"
 	"sort"
@@ -59,17 +58,16 @@ func (ws *ReactWebServer) listProviders(clientID string) []providerDescriptor {
 	agentInst, err := ws.getClientAgent(clientID)
 	if err == nil && agentInst != nil && agentInst.GetConfigManager() != nil {
 		configManager = agentInst.GetConfigManager()
-	} else if errors.Is(err, ErrNoProviderConfigured) {
-		// If no provider is configured, create a config manager directly
-		// so we can still list available providers during onboarding.
+	} else {
+		// Fall back to a standalone config manager for any error or missing
+		// config manager — covers no-provider, provider-config errors, agent
+		// creation failures, and the nil-configManager case (err == nil).
 		cm, createErr := configuration.NewManagerSilent()
 		if createErr != nil {
 			return []providerDescriptor{}
 		}
 		configManager = cm
 		agentInst = nil
-	} else {
-		return []providerDescriptor{}
 	}
 
 	if configManager == nil {

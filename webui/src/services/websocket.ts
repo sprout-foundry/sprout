@@ -126,7 +126,7 @@ class WebSocketService {
       this.lastPongTime = Date.now();
       this.startPingInterval();
       this.startPongWatchdog();
-      this.notifyCallbacks({ type: 'connection_status', data: { connected: true } });
+      this.notifyCallbacks({ type: 'connection_status', data: { connected: true, reconnected: isReconnect } });
 
       // Fire the reconnect callback so the application can sync state
       // (e.g., request fresh stats, check for stuck processing state).
@@ -139,7 +139,8 @@ class WebSocketService {
       debugLog('WebSocket disconnected:', event);
       this.stopPingInterval();
       this.stopPongWatchdog();
-      this.notifyCallbacks({ type: 'connection_status', data: { connected: false } });
+      const willReconnect = !this.intentionalClose && this.reconnectAttempts < this.maxReconnectAttempts;
+      this.notifyCallbacks({ type: 'connection_status', data: { connected: false, reconnecting: willReconnect } });
 
       // Only reconnect if not intentionally closed and not already reconnecting
       if (!this.intentionalClose && this.reconnectAttempts < this.maxReconnectAttempts) {

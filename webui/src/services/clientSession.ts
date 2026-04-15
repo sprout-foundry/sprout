@@ -16,6 +16,19 @@ export function getProxyBase(): string {
 }
 
 /**
+ * Returns the localStorage key to use for persisting the workspace path.
+ * For SSH proxy pages the key is scoped to the proxy base so that different
+ * SSH host/path sessions do not bleed into each other or into the local UI.
+ */
+function workspacePathStorageKey(): string {
+  const proxyBase = getProxyBase();
+  if (proxyBase) {
+    return `${WEBUI_WORKSPACE_PATH_STORAGE_KEY}:${proxyBase}`;
+  }
+  return WEBUI_WORKSPACE_PATH_STORAGE_KEY;
+}
+
+/**
  * Returns the per-tab client ID used to isolate server-side state (workspace,
  * agent session, terminal sessions, WebSocket events) between browser tabs.
  *
@@ -64,7 +77,7 @@ export function persistTabWorkspacePath(workspacePath: string): void {
     return;
   }
   try {
-    window.localStorage.setItem(WEBUI_WORKSPACE_PATH_STORAGE_KEY, workspacePath);
+    window.localStorage.setItem(workspacePathStorageKey(), workspacePath);
   } catch (err) {
     debugLog('[persistTabWorkspacePath] failed to persist workspace path:', err);
   }
@@ -80,7 +93,7 @@ export function getTabWorkspacePath(): string {
     return '';
   }
   try {
-    return window.localStorage.getItem(WEBUI_WORKSPACE_PATH_STORAGE_KEY) || '';
+    return window.localStorage.getItem(workspacePathStorageKey()) || '';
   } catch (err) {
     debugLog('[getTabWorkspacePath] failed to read workspace path:', err);
     return '';

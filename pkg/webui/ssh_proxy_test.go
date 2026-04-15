@@ -110,6 +110,30 @@ func startEchoBackend(t *testing.T) (*httptest.Server, int) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// normalizeRemoteWorkspacePath
+// ─────────────────────────────────────────────────────────────────────────────
+
+func TestNormalizeRemoteWorkspacePath(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"~", "$HOME"},
+		{"~/project", "$HOME/project"},
+		{"~/a/b/c", "$HOME/a/b/c"},
+		{"${HOME}/project", "$HOME/project"},
+		{"${HOME}", "$HOME"},
+		{"$HOME", "$HOME"},
+		{"$HOME/project", "$HOME/project"},
+		{"/absolute/path", "/absolute/path"},
+		{"relative/path", "relative/path"},
+	}
+	for _, tc := range cases {
+		got := normalizeRemoteWorkspacePath(tc.in)
+		if got != tc.want {
+			t.Errorf("normalizeRemoteWorkspacePath(%q) = %q; want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 404 for unknown session
 // ─────────────────────────────────────────────────────────────────────────────
 

@@ -17,6 +17,22 @@ import (
 // SSH command helpers
 // ---------------------------------------------------------------------------
 
+// normalizeRemoteWorkspacePath converts tilde-prefixed paths to their $HOME
+// equivalent so that "~/project", "$HOME/project", and "${HOME}/project" all
+// collapse to the same canonical form used as the session key.
+func normalizeRemoteWorkspacePath(path string) string {
+	switch {
+	case path == "~":
+		return "$HOME"
+	case strings.HasPrefix(path, "~/"):
+		return "$HOME/" + strings.TrimPrefix(path, "~/")
+	case strings.HasPrefix(path, "${HOME}"):
+		return "$HOME" + strings.TrimPrefix(path, "${HOME}")
+	default:
+		return path
+	}
+}
+
 func runSSHLoggedCommand(logger *sshLaunchLogger, step, summary string, cmd *exec.Cmd) ([]byte, error) {
 	logger.Logf("%s: running %s", step, summary)
 	out, err := cmd.CombinedOutput()
@@ -110,6 +126,9 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (result *s
 	if remoteWorkspacePath == "" {
 		remoteWorkspacePath = "$HOME"
 	}
+	// Normalize tilde shortcuts so ~/project and $HOME/project resolve to the
+	// same session key and don't fork separate in-flight state.
+	remoteWorkspacePath = normalizeRemoteWorkspacePath(remoteWorkspacePath)
 
 	logger, loggerErr := newSSHLaunchLogger(hostAlias, remoteWorkspacePath)
 	if loggerErr != nil {

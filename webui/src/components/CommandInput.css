@@ -60,16 +60,19 @@
 .history-exit-btn {
   width: 20px;
   height: 20px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-default);
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: 999px;
   cursor: pointer;
   color: var(--text-secondary);
   font-size: 10px;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
 }
 
 .history-exit-btn:hover {
   color: var(--text-primary);
+  background: var(--bg-elevated);
+  border-color: var(--border-subtle);
 }
 
 .input-field {

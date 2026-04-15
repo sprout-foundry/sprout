@@ -1563,6 +1563,26 @@ async function openInitialWindow() {
   createLauncherWindow();
 }
 
+async function openMostRecentWorkspace() {
+  const recent = getRecentWorktrees();
+  if (recent.length === 0) {
+    return false;
+  }
+
+  for (const entry of recent) {
+    try {
+      const result = await createWorkspaceWindow({ ...entry, forceNewWindow: true });
+      if (result) {
+        return true;
+      }
+    } catch (error) {
+      console.error(`Failed to open recent workspace ${entry.workspacePath}:`, error);
+    }
+  }
+
+  return false;
+}
+
 async function restorePreviousSession() {
   const restorable = getRestorableWorktrees();
   if (restorable.length === 0) {
@@ -1722,6 +1742,10 @@ app.whenReady().then(async () => {
   } else {
     const restored = await restorePreviousSession();
     if (!restored) {
+      const openedRecent = await openMostRecentWorkspace();
+      if (openedRecent) {
+        return;
+      }
       await openInitialWindow();
     }
   }

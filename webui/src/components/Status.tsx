@@ -8,6 +8,8 @@ interface StatusProps {
     persona?: string;
     total_tokens?: number;
     context_usage_percent?: number;
+    connection_phase?: string;
+    transport_session_id?: string;
     [key: string]: unknown;
   };
 }
@@ -63,6 +65,8 @@ function Status({ isConnected, stats }: StatusProps): JSX.Element {
   const provider = stats.provider as string | undefined;
   const model = stats.model as string | undefined;
   const persona = stats.persona as string | undefined;
+  const connectionPhase = (stats.connection_phase as string | undefined) || (isConnected ? 'connected' : 'disconnected');
+  const transportSessionId = stats.transport_session_id as string | undefined;
   const contextStatus = getContextStatus();
 
   return (
@@ -101,6 +105,10 @@ function Status({ isConnected, stats }: StatusProps): JSX.Element {
             {provider} : {model}
           </button>
         )}
+        <span className="status-item" title="Connection state">
+          Link: {connectionPhase}
+          {transportSessionId ? ` (${transportSessionId.slice(0, 12)})` : ''}
+        </span>
       </div>
     </div>
   );

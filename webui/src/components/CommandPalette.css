@@ -191,7 +191,7 @@
   color: var(--text-secondary);
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition:
     background-color 0.1s ease,

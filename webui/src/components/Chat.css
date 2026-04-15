@@ -1454,7 +1454,7 @@
   align-items: center;
   gap: 4px;
   padding: 1px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border-subtle);
   background: color-mix(in srgb, var(--bg-tertiary) 78%, transparent);
   color: var(--text-tertiary);
@@ -1515,7 +1515,7 @@
   align-items: center;
   gap: 6px;
   padding: 3px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
   cursor: pointer;

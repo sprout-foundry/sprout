@@ -2,7 +2,6 @@ package webui
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -130,19 +129,20 @@ func (ws *ReactWebServer) getConfigManager(r *http.Request, w http.ResponseWrite
 	if err == nil && agentInst != nil && agentInst.GetConfigManager() != nil {
 		return agentInst.GetConfigManager()
 	}
-	// If getClientAgent failed because no provider is configured, create a
-	// config manager directly so we can still list providers during onboarding.
-	// Check for ErrNoProviderConfigured or any error indicating no provider is configured.
-	if errors.Is(err, ErrNoProviderConfigured) || (err != nil && isProviderConfigError(err)) {
-		cm, createErr := configuration.NewManagerSilent()
-		if createErr != nil {
-			writeJSONErr(w, http.StatusServiceUnavailable, "config_unavailable", "Configuration manager is not available")
-			return nil
-		}
-		return cm
+	// Fall back to a standalone config manager for any error or missing
+	// config manager — this covers:
+	//   • ErrNoProviderConfigured (no provider set up yet)
+	//   • Provider config errors (key missing, editor mode, etc.)
+	//   • Agent creation failures that don't match the provider-error patterns
+	//     (e.g. "create agent in workspace: ...", "failed to initialize configuration: ...")
+	//   • Agent exists but GetConfigManager() is nil (err is nil in that case)
+	// The only hard failure is when NewManagerSilent itself cannot read config.
+	cm, createErr := configuration.NewManagerSilent()
+	if createErr != nil {
+		writeJSONErr(w, http.StatusServiceUnavailable, "config_unavailable", "Configuration manager is not available")
+		return nil
 	}
-	writeJSONErr(w, http.StatusServiceUnavailable, "config_unavailable", "Configuration manager is not available")
-	return nil
+	return cm
 }
 
 // ---------------------------------------------------------------------------

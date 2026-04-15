@@ -21,18 +21,18 @@ type Validator struct {
 
 // Diagnostic represents a validation issue
 type Diagnostic struct {
-	Path      string `json:"path"`
-	Line      int    `json:"line"`
-	Column    int    `json:"column"`
-	Severity  string `json:"severity"`
-	Message   string `json:"message"`
-	Source    string `json:"source"`
+	Path     string `json:"path"`
+	Line     int    `json:"line"`
+	Column   int    `json:"column"`
+	Severity string `json:"severity"`
+	Message  string `json:"message"`
+	Source   string `json:"source"`
 }
 
 // ValidationResult holds validation results
 type ValidationResult struct {
-	Path        string      `json:"path"`
-	Valid       bool        `json:"valid"`
+	Path        string       `json:"path"`
+	Valid       bool         `json:"valid"`
 	Errors      []Diagnostic `json:"errors,omitempty"`
 	Warnings    []Diagnostic `json:"warnings,omitempty"`
 	Diagnostics []Diagnostic `json:"diagnostics,omitempty"`
@@ -85,7 +85,7 @@ func (v *Validator) decorateEventPayload(payload map[string]interface{}) map[str
 
 // ValidateSyntax checks if Go code has valid syntax using gofmt
 func (v *Validator) ValidateSyntax(ctx context.Context, path, content string) error {
-	cmd := exec.CommandContext(ctx, "gofmt", "-e", "-l", "-")
+	cmd := exec.CommandContext(ctx, "gofmt", "-e", "-l")
 	cmd.Dir = "."
 
 	var stdout, stderr bytes.Buffer
@@ -115,17 +115,18 @@ func (v *Validator) RunValidation(ctx context.Context, path, content string) Val
 	// Always check syntax first
 	if err := v.ValidateSyntax(ctx, path, content); err != nil {
 		result.Errors = append(result.Errors, Diagnostic{
-			Path:      path,
-			Line:      1,
-			Column:    1,
-			Severity:  "error",
-			Message:   err.Error(),
-			Source:    "gofmt",
+			Path:     path,
+			Line:     1,
+			Column:   1,
+			Severity: "error",
+			Message:  err.Error(),
+			Source:   "gofmt",
 		})
 		return result
 	}
 
 	result.Valid = true
+	result.Diagnostics = []Diagnostic{}
 
 	// Check imports if present
 	if strings.Contains(content, "import") {
@@ -152,7 +153,7 @@ func (v *Validator) RunValidation(ctx context.Context, path, content string) Val
 
 // ValidateImports checks for import issues using goimports
 func (v *Validator) ValidateImports(ctx context.Context, path, content string) []Diagnostic {
-	cmd := exec.CommandContext(ctx, "goimports", "-l", "-")
+	cmd := exec.CommandContext(ctx, "goimports", "-l")
 	cmd.Dir = "."
 
 	var stdout, stderr bytes.Buffer
@@ -175,12 +176,12 @@ func (v *Validator) ValidateImports(ctx context.Context, path, content string) [
 	for _, line := range strings.Split(output, "\n") {
 		if line != "" {
 			diagnostics = append(diagnostics, Diagnostic{
-				Path:      path,
-				Line:      1,
-				Column:    1,
-				Severity:  "warning",
-				Message:   "import issue detected",
-				Source:    "goimports",
+				Path:     path,
+				Line:     1,
+				Column:   1,
+				Severity: "warning",
+				Message:  "import issue detected",
+				Source:   "goimports",
 			})
 		}
 	}

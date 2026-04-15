@@ -223,11 +223,38 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (result *s
 	logger.Logf("local SSH backend binary ready: %s", localBinary)
 
 	ws.setSSHLaunchStatus(sessionKey, "installing-remote-backend", fmt.Sprintf("Installing backend on %s...", hostAlias), true, "")
-	remoteBinary, err := ensureRemoteSSHBinary(launchCtx, hostAlias, localBinary, remoteInfo, logger)
+	remoteBinary, binaryWasUploaded, err := ensureRemoteSSHBinary(launchCtx, hostAlias, localBinary, remoteInfo, logger)
 	if err != nil {
 		return nil, fmt.Errorf("install remote SSH binary: %w", err)
 	}
-	logger.Logf("remote SSH backend installed at %s", remoteBinary)
+	logger.Logf("remote SSH backend installed at %s (uploaded=%v)", remoteBinary, binaryWasUploaded)
+
+	// When a new binary was freshly uploaded (different fingerprint from any
+	// previously-cached remote binary), kill any existing daemon so it restarts
+	// with the updated binary.  This avoids the common case where a stale daemon
+	// is reused indefinitely after a local ledit upgrade.
+	if binaryWasUploaded {
+		logger.Logf("new backend binary uploaded; stopping any existing remote daemon to force restart")
+		killOld := newSSHCommandContext(launchCtx, hostAlias,
+			fmt.Sprintf(
+				`DAEMON_PORT=%d; `+
+					`pid=""; `+
+					`if command -v lsof >/dev/null 2>&1; then pid=$(lsof -ti tcp:"$DAEMON_PORT" -sTCP:LISTEN 2>/dev/null | head -1); `+
+					`elif command -v ss >/dev/null 2>&1; then pid=$(ss -tlnpH "sport = :$DAEMON_PORT" 2>/dev/null | sed -n 's/.*pid=\([0-9]*\).*/\1/p' | head -1); `+
+					`fi; `+
+					`[ -n "$pid" ] && [ "$pid" -gt 0 ] 2>/dev/null && kill "$pid" 2>/dev/null || true`,
+				DaemonPort,
+			),
+		)
+		if out, killErr := killOld.CombinedOutput(); killErr == nil {
+			if output := trimSSHOutput(out); output != "" {
+				logger.Logf("kill-old-daemon output:\n%s", output)
+			}
+			logger.Logf("kill-old-daemon: sent kill signal to any existing daemon on port %d", DaemonPort)
+		} else {
+			logger.Logf("kill-old-daemon: no existing daemon to kill (or kill failed): %v", killErr)
+		}
+	}
 
 	ws.setSSHLaunchStatus(sessionKey, "allocating-local-port", "Allocating local tunnel port...", true, "")
 	localPort, err := findFreeLocalPort()
@@ -347,7 +374,7 @@ func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherU
 		// variables (typically exported in ~/.zshrc, ~/.bashrc, etc.) are
 		// available to the daemon.  SSH non-interactive sessions skip these
 		// files, but daemon startup depends on the keys they define.
-		`_src_rc() { [ -f "$1" ] && . "$1" 2>/dev/null; }`,
+		`_src_rc() { if [ -f "$1" ]; then set +e; . "$1" 2>/dev/null; set -e; fi; }`,
 		`case "$(basename "${SHELL:-sh}")" in`,
 		`  zsh) _src_rc "$HOME/.zshenv"; _src_rc "$HOME/.zprofile"; _src_rc "$HOME/.zshrc" ;;`,
 		`  bash) _src_rc "$HOME/.bash_profile"; _src_rc "$HOME/.bashrc" ;;`,

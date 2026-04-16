@@ -1,11 +1,13 @@
 package webui
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	agentpkg "github.com/alantheprice/ledit/pkg/agent"
 	api "github.com/alantheprice/ledit/pkg/agent_api"
@@ -106,7 +108,9 @@ func (ws *ReactWebServer) listProviders(clientID string) []providerDescriptor {
 // modelsForProviderFromAPI looks up models from the provider API and the
 // embedded provider catalog. Returns nil when no models are found.
 func modelsForProviderFromAPI(providerType api.ClientType) []string {
-	models, err := api.GetModelsForProvider(providerType)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	models, err := api.GetModelsForProviderCtx(ctx, providerType)
 	if err == nil && len(models) > 0 {
 		modelIDs := make([]string, 0, len(models))
 		for _, model := range models {

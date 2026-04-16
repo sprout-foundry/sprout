@@ -51,6 +51,45 @@ import { stripAnsiCodes } from '../utils/ansi';
 import { getSubagentResultPreview, formatToolDetail } from '../utils/resultSummary';
 import RevisionListPanel from './RevisionListPanel';
 
+// FILE_PATH_RE matches paths like src/foo/bar.ts, ./pkg/server.go, /abs/path/file.js
+const FILE_PATH_RE = /((?:\.\.?\/|\/(?!\/))?(?:[\w.-]+\/)+[\w.-]+\.\w{1,10})/g;
+
+/** Renders preformatted tool text with file paths as clickable links that open in the editor. */
+function FilePathPre({ text }: { text: string }): JSX.Element {
+  const parts: Array<string | JSX.Element> = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  FILE_PATH_RE.lastIndex = 0;
+  while ((match = FILE_PATH_RE.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+    const filePath = match[1];
+    parts.push(
+      <span
+        key={match.index}
+        className="tool-output-file-link"
+        role="button"
+        tabIndex={0}
+        onClick={() => window.dispatchEvent(new CustomEvent('ledit:open-in-editor', { detail: { path: filePath } }))}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            window.dispatchEvent(new CustomEvent('ledit:open-in-editor', { detail: { path: filePath } }));
+          }
+        }}
+      >
+        {filePath}
+      </span>,
+    );
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+  return <pre>{parts}</pre>;
+}
+
 interface ToolExecution {
   id: string;
   tool: string;
@@ -1179,7 +1218,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
                   <div className="tool-detail-label">
                     <ClipboardList size={12} className="inline-icon" /> Call
                   </div>
-                  <pre>{formatToolDetail(tool.arguments)}</pre>
+                  <FilePathPre text={formatToolDetail(tool.arguments)} />
                 </div>
               )}
               {tool.result && (
@@ -1195,7 +1234,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
                       </>
                     )}
                   </div>
-                  <pre>{formatToolDetail(tool.result)}</pre>
+                  <FilePathPre text={formatToolDetail(tool.result)} />
                 </div>
               )}
             </div>

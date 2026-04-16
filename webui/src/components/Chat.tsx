@@ -12,19 +12,6 @@ import {
   Loader2,
   GitBranch,
   Settings,
-  Terminal,
-  BookOpen,
-  Pencil,
-  FileEdit,
-  Search,
-  Eye,
-  FlaskConical,
-  Globe,
-  ArrowDown,
-  ClipboardList,
-  ScrollText,
-  RotateCcw,
-  Wrench,
 } from 'lucide-react';
 import CommandInput from './CommandInput';
 import MessageSegments from './MessageSegments';
@@ -345,111 +332,6 @@ function SubagentActivityFeed({ activities }: SubagentActivityFeedProps): JSX.El
   );
 }
 
-// ── Tool Icon Helper (reused from MessageSegments) ────────────────
-
-const getToolIcon = (toolName: string): ReactNode => {
-  const iconMap: { [key: string]: ReactNode } = {
-    shell_command: <Terminal size={12} />,
-    read_file: <BookOpen size={12} />,
-    write_file: <Pencil size={12} />,
-    edit_file: <FileEdit size={12} />,
-    search_files: <Search size={12} />,
-    analyze_ui_screenshot: <Eye size={12} />,
-    analyze_image_content: <FlaskConical size={12} />,
-    web_search: <Globe size={12} />,
-    fetch_url: <ArrowDown size={12} />,
-    TodoWrite: <ClipboardList size={12} />,
-    TodoRead: <ClipboardList size={12} />,
-    view_history: <ScrollText size={12} />,
-    rollback_changes: <RotateCcw size={12} />,
-    mcp_tools: <Wrench size={12} />,
-    run_subagent: <Bot size={12} />,
-    run_parallel_subagents: <Bot size={12} />,
-  };
-  return iconMap[toolName] || <Wrench size={12} />;
-};
-
-const SHORT_TOOL_NAMES: { [key: string]: string } = {
-  read_file: 'read',
-  write_file: 'write',
-  edit_file: 'edit',
-  shell_command: 'shell',
-  search_files: 'search',
-  analyze_ui_screenshot: 'screenshot',
-  analyze_image_content: 'image',
-  web_search: 'web',
-  fetch_url: 'fetch',
-  TodoWrite: 'todo',
-  TodoRead: 'todo',
-  view_history: 'history',
-  rollback_changes: 'rollback',
-  mcp_tools: 'mcp',
-  run_subagent: 'subagent',
-  run_parallel_subagents: 'subagents',
-};
-
-const getShortToolName = (toolName: string): string => SHORT_TOOL_NAMES[toolName] ?? toolName;
-
-// Returns a short human-readable summary of a tool's JSON arguments string.
-// Extracts the single most meaningful field rather than dumping raw JSON.
-const TOOL_PRIMARY_ARGS: Record<string, string[]> = {
-  shell_command:    ['command'],
-  read_file:        ['path'],
-  write_file:       ['path'],
-  edit_file:        ['path'],
-  search_files:     ['search_pattern', 'pattern', 'file_glob'],
-  fetch_url:        ['url'],
-  web_search:       ['query'],
-  run_subagent:     ['context', 'persona'],
-  run_parallel_subagents: ['context'],
-  TodoWrite:        [], // summarized separately
-  TodoRead:         [],
-  analyze_ui_screenshot: ['path', 'image_path'],
-  analyze_image_content: ['path', 'image_path'],
-  mcp_tools:        ['tool_name'],
-};
-
-function getToolArgsPreview(toolName: string, argumentsJson: string | undefined, maxLen = 60): string {
-  if (!argumentsJson) return '';
-  let parsed: Record<string, unknown>;
-  try {
-    parsed = JSON.parse(argumentsJson);
-  } catch {
-    // Not valid JSON — just clean it up and truncate
-    const raw = argumentsJson.replace(/^\{/, '').replace(/\}$/, '').trim();
-    return raw.length > maxLen ? raw.slice(0, maxLen) + '…' : raw;
-  }
-
-  // For TodoWrite, summarize the todo count / first item
-  if (toolName === 'TodoWrite') {
-    const todos = Array.isArray(parsed['todos']) ? parsed['todos'] : [];
-    if (todos.length === 0) return '';
-    const first = (todos[0] as Record<string, unknown>)?.content;
-    const rest = todos.length > 1 ? ` +${todos.length - 1}` : '';
-    const label = typeof first === 'string' ? first : '';
-    const trimmed = label.length > maxLen ? label.slice(0, maxLen) + '…' : label;
-    return trimmed + rest;
-  }
-
-  const candidates = TOOL_PRIMARY_ARGS[toolName] ?? [];
-  for (const key of candidates) {
-    const val = parsed[key];
-    if (typeof val === 'string' && val.trim()) {
-      const v = val.trim();
-      return v.length > maxLen ? v.slice(0, maxLen) + '…' : v;
-    }
-  }
-
-  // Fallback: find any short string value in the object
-  for (const val of Object.values(parsed)) {
-    if (typeof val === 'string' && val.trim()) {
-      const v = val.trim();
-      return v.length > maxLen ? v.slice(0, maxLen) + '…' : v;
-    }
-  }
-  return '';
-}
-
 // ── Main Chat Component ───────────────────────────────────────────
 
 function Chat({
@@ -595,11 +477,7 @@ function Chat({
   const showExpiredSessionRecovery =
     !!lastError && lastError.toLowerCase().includes('ssh session not found or expired');
 
-  const toolStatusMap = useMemo(() => {
-  const m = new Map<string, ToolExecution['status']>();
-  for (const t of filteredToolExecutions) m.set(t.id, t.status);
-  return m;
-}, [filteredToolExecutions]);const handleInsertAtCursor = useCallback(
+  const handleInsertAtCursor = useCallback(
     (text: string) => {
       const separator = inputValueRef.current ? '\n' : '';
       onInputChange(inputValueRef.current + separator + text);

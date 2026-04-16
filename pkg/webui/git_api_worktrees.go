@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"path/filepath"
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/events"
@@ -112,10 +111,6 @@ func (ws *ReactWebServer) parseWorktreeListOutput(output, currentBranch, workspa
 			if strings.HasPrefix(value, "refs/heads/") {
 				currentWorktree.Branch = strings.TrimPrefix(value, "refs/heads/")
 			}
-		case "root":
-			// root <path-to-git-dir>
-			// This is the .git directory of the main worktree
-			currentWorktree.ParentPath = filepath.Dir(value)
 		}
 	}
 
@@ -124,26 +119,27 @@ func (ws *ReactWebServer) parseWorktreeListOutput(output, currentBranch, workspa
 		worktrees = append(worktrees, currentWorktree)
 	}
 
-	// Mark the current worktree and determine main worktree
+	// git always lists the main (primary) worktree first — mark it regardless
+	// of which workspace the server is currently rooted in.
 	var mainWorktree *WorktreeInfo
-	for i := range worktrees {
-		wt := &worktrees[i]
-		if wt.Path == workspaceRoot {
-			wt.IsCurrent = true
-			mainWorktree = wt
-		}
-	}
-
-	// Mark the main worktree
-	if mainWorktree != nil {
+	if len(worktrees) > 0 {
+		mainWorktree = &worktrees[0]
 		mainWorktree.IsMain = true
 	}
 
-	// Set parent info for all worktrees
+	// Mark whichever worktree matches the active workspace as current.
+	for i := range worktrees {
+		if worktrees[i].Path == workspaceRoot {
+			worktrees[i].IsCurrent = true
+			break
+		}
+	}
+
+	// Set parent info for all non-main worktrees
 	if mainWorktree != nil {
 		for i := range worktrees {
 			wt := &worktrees[i]
-			if wt.Path != workspaceRoot {
+			if wt.Path != mainWorktree.Path {
 				wt.ParentPath = mainWorktree.Path
 				wt.ParentBranch = mainWorktree.Branch
 			}

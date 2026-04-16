@@ -6,9 +6,11 @@ import MessageContent from './MessageContent';
 
 interface MessageSegmentsProps {
   content: string;
-  toolRefs?: Array<{ toolId: string; toolName: string; label: string; parallel?: boolean }>;
+  toolRefs?: Array<{ toolId: string; toolName: string; label: string; parallel?: boolean; toolIndex?: number }>;
   onToolClick?: (toolName: string) => void;
   onToolRefClick?: (toolId: string) => void;
+  /** Returns the status of a tool execution by ID, used to show footnote vs pill. */
+  getToolStatus?: (toolId: string) => string | undefined;
 }
 
 const getToolIcon = (toolName: string): ReactNode => {
@@ -55,7 +57,7 @@ const SHORT_TOOL_NAMES: { [key: string]: string } = {
 const getShortToolName = (toolName: string): string =>
   SHORT_TOOL_NAMES[toolName] ?? toolName;
 
-const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, toolRefs = [], onToolClick, onToolRefClick }) => {
+const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, toolRefs = [], onToolClick, onToolRefClick, getToolStatus }) => {
   let segments: MessageSegment[];
   try {
     segments = parseMessageSegments(stripAnsiCodes(content));
@@ -83,12 +85,38 @@ const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, toolRefs = [
             return (
               <div key={`seg-${idx}`} className="segment-text">
                 <MessageContent content={segment.content} />
-              </div>
+              </div >
             );
-
-          case 'tool_call':
+          case 'tool_call': {
             const matchingRef = claimMatchingToolRef(segment.toolName);
             const baseName = segment.toolName.split('(')[0];
+            const toolStatus = matchingRef && getToolStatus ? getToolStatus(matchingRef.toolId) : undefined;
+            const isDone = toolStatus === 'completed' || toolStatus === 'error';
+
+            if (isDone && matchingRef) {
+              // Completed tool: render a compact footnote superscript link [n]
+              const footIndex = typeof matchingRef.toolIndex === 'number' ? matchingRef.toolIndex + 1 : null;
+              return (
+                <span
+                  key={`seg-${idx}`}
+                  className={`segment-tool-footnote${toolStatus === 'error' ? ' segment-tool-footnote--error' : ''}`}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onToolRefClick?.(matchingRef.toolId)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onToolRefClick?.(matchingRef.toolId);
+                    }
+                  }}
+                  title={matchingRef.label}
+                  aria-label={`View tool: ${matchingRef.label}`}
+                >
+                  [{footIndex !== null ? footIndex : getShortToolName(baseName)}]
+                </span >
+              );
+            }
+
             return (
               <div
                 key={`seg-${idx}`}
@@ -114,11 +142,12 @@ const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, toolRefs = [
                 }}
                 title={matchingRef ? matchingRef.label : segment.summary || segment.toolName}
               >
-                <span className="tool-pill-icon">{getToolIcon(baseName)}</span>
-                <span className="tool-pill-name">{getShortToolName(baseName)}</span>
+                <span className="tool-pill-icon">{getToolIcon(baseName)}</span >
+                <span className="tool-pill-name">{getShortToolName(baseName)}</span >
                 <ExternalLink size={10} className="tool-pill-link-icon" />
-              </div>
+              </div >
             );
+          }
 
           case 'todo_update':
             return (
@@ -130,11 +159,11 @@ const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, toolRefs = [
                        todo.status === 'in_progress' ? <Loader2 size={10} /> :
                        todo.status === 'cancelled' ? <Minus size={10} /> :
                        <Circle size={10} />}
-                    </span>
+                    </span >
                     {todo.content}
-                  </span>
+                  </span >
                 ))}
-              </div>
+              </div >
             );
 
           case 'progress':
@@ -145,7 +174,7 @@ const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, toolRefs = [
             return null;
         }
       })}
-    </div>
+    </div >
   );
 };
 

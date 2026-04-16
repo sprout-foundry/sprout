@@ -58,7 +58,11 @@ func newSSHCommand(hostAlias, script string, extraArgs ...string) *exec.Cmd {
 		"-o", "ServerAliveCountMax=2",
 	}
 	baseArgs = append(baseArgs, extraArgs...)
-	baseArgs = append(baseArgs, hostAlias, fmt.Sprintf("sh -lc %s", shellEscapeSSH(script)))
+	remoteShell := "bash"
+	if !shellExists("bash") {
+		remoteShell = "sh"
+	}
+	baseArgs = append(baseArgs, hostAlias, fmt.Sprintf("%s -lc %s", remoteShell, shellEscapeSSH(script)))
 	return exec.Command("ssh", baseArgs...)
 }
 
@@ -72,7 +76,11 @@ func newSSHCommandContext(ctx context.Context, hostAlias, script string, extraAr
 		"-o", "ServerAliveCountMax=2",
 	}
 	baseArgs = append(baseArgs, extraArgs...)
-	baseArgs = append(baseArgs, hostAlias, fmt.Sprintf("sh -lc %s", shellEscapeSSH(script)))
+	remoteShell := "bash"
+	if !shellExists("bash") {
+		remoteShell = "sh"
+	}
+	baseArgs = append(baseArgs, hostAlias, fmt.Sprintf("%s -lc %s", remoteShell, shellEscapeSSH(script)))
 	return exec.CommandContext(ctx, "ssh", baseArgs...)
 }
 

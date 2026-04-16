@@ -181,6 +181,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/create", ws.handleAPICreateFile)
 	mux.HandleFunc("/api/delete", ws.handleAPIDeleteItem)
 	mux.HandleFunc("/api/rename", ws.handleAPIRenameItem)
+	mux.HandleFunc("/api/open-in-file-browser", ws.handleAPIOpenInFileBrowser)
 	mux.HandleFunc("/api/browse", ws.handleAPIBrowse)
 	mux.HandleFunc("/api/file", ws.handleAPIFile)
 	mux.HandleFunc("/api/file/consent", ws.handleAPIFileConsent)

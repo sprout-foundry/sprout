@@ -622,6 +622,16 @@ const AppContent: React.FC<AppContentProps> = ({
     }
   }, [onViewChange, openFile]);
 
+  // Listen for file-path link clicks from markdown / tool output
+  useEffect(() => {
+    const handleOpenInEditor = (e: Event) => {
+      const { path, lineNumber } = (e as CustomEvent<{ path: string; lineNumber?: number }>).detail;
+      if (path) handleFileClick(path, lineNumber);
+    };
+    window.addEventListener('ledit:open-in-editor', handleOpenInEditor);
+    return () => window.removeEventListener('ledit:open-in-editor', handleOpenInEditor);
+  }, [handleFileClick]);
+
   const handleOpenRevisionDiff = useCallback((options: { path: string; diff: string; title: string }) => {
     onViewChange('editor');
     openWorkspaceBuffer({
@@ -995,6 +1005,7 @@ const AppContent: React.FC<AppContentProps> = ({
           onUnstageFile: handleUnstageFile,
           onDiscardFile: handleDiscardFile,
           onSectionAction: handleSectionAction,
+          onOpenFile: handleFileClick,
         }}
       />
       <div className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''} ${isTerminalExpanded ? 'terminal-expanded' : ''}`}>

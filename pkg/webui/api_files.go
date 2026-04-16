@@ -1054,4 +1054,3 @@ func (ws *ReactWebServer) handleAPIOpenInFileBrowser(w http.ResponseWriter, r *h
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"message": "opened"})
 }
-

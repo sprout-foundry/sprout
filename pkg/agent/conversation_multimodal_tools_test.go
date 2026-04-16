@@ -8,13 +8,16 @@ import (
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
 
-func TestGetOptimizedToolDefinitions_DropsPathBasedVisionToolsForDirectMultimodalImages(t *testing.T) {
+func TestGetOptimizedToolDefinitions_KeepsVisionToolsForDirectMultimodalImages(t *testing.T) {
+	// Vision models keep access to analyze_image_content and analyze_ui_screenshot tools
+	// even when direct multimodal images are present. This allows the agent to use tools
+	// for additional context such as URLs, file paths, or specialized analysis modes.
 	agent := &Agent{
 		client: &visionSupportingClient{supportsVision: true},
 		messages: []api.Message{
 			{
 				Role:    "user",
-				Content: "[image: pasted.png]\nWhat is in this menu?",
+				Content: "[image: pasted.png]\nWhat is in this menu? Also check the screenshot at /tmp/screenshot.png",
 				Images: []api.ImageData{
 					{Base64: "ZmFrZQ==", Type: "image/png"},
 				},
@@ -23,10 +26,24 @@ func TestGetOptimizedToolDefinitions_DropsPathBasedVisionToolsForDirectMultimoda
 	}
 
 	tools := agent.getOptimizedToolDefinitions(agent.messages)
+
+	// Verify that vision tools are still available even with direct multimodal images
+	foundAnalyzeImageContent := false
+	foundAnalyzeUIScreenshot := false
 	for _, tool := range tools {
-		if tool.Function.Name == "analyze_image_content" || tool.Function.Name == "analyze_ui_screenshot" {
-			t.Fatalf("expected direct multimodal flow to exclude %s", tool.Function.Name)
+		if tool.Function.Name == "analyze_image_content" {
+			foundAnalyzeImageContent = true
 		}
+		if tool.Function.Name == "analyze_ui_screenshot" {
+			foundAnalyzeUIScreenshot = true
+		}
+	}
+
+	if !foundAnalyzeImageContent {
+		t.Fatal("expected analyze_image_content to remain available even with direct multimodal images")
+	}
+	if !foundAnalyzeUIScreenshot {
+		t.Fatal("expected analyze_ui_screenshot to remain available even with direct multimodal images")
 	}
 }
 

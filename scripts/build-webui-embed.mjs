@@ -13,13 +13,13 @@ const buildStaticDir = join(buildDir, 'static');
 const embeddedLogoPath = join(repoRoot, 'pkg', 'webui', 'logo-mark.svg');
 const targetLogoPath = join(targetDir, 'logo-mark.svg');
 
-function run(command, args, cwd) {
+function run(command, args, cwd, extraEnv = {}) {
   const executable = process.platform === 'win32' && command === 'npm' ? 'npm.cmd' : command;
   console.log(`↪ ${executable} ${args.join(' ')} (cwd: ${cwd})`);
   const result = spawnSync(executable, args, {
     cwd,
     stdio: 'inherit',
-    env: process.env,
+    env: { ...process.env, ...extraEnv },
     shell: process.platform === 'win32',
   });
   if (result.error) {
@@ -80,7 +80,10 @@ if (!existsSync(join(webuiDir, 'node_modules'))) {
 }
 
 console.log('🔨 Building React app...');
-run('npm', ['run', 'build'], webuiDir);
+// Pass DISABLE_ESLINT_PLUGIN=true so react-scripts build skips the bundled
+// ESLint pass. Lint is run separately via `npm run lint:ci` in CI, and the
+// react-scripts ESLint pass treats all warnings as errors when CI=true.
+run('npm', ['run', 'build'], webuiDir, { DISABLE_ESLINT_PLUGIN: 'true' });
 
 console.log('📁 Copying build assets to Go package...');
 copyBuildOutput();

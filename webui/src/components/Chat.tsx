@@ -626,8 +626,6 @@ function Chat({
     );
   }, [toolExecutions, currentQueryCount]);
 
-  const hasToolActivity = filteredToolExecutions.length > 0;
-
   const isNearBottom = useCallback(
     (node: HTMLDivElement) => {
       const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight;
@@ -821,9 +819,6 @@ function Chat({
 
             {/* Inline subagent activity feed – shows between messages and processing indicators */}
             {hasSubagentActivity && <SubagentActivityFeed activities={subagentActivities} />}
-
-            {/* Inline tool activity feed – shows active/recent tool executions */}
-            {hasToolActivity && <ToolActivityFeed toolExecutions={filteredToolExecutions} />}
 
             {queryProgress && (
               <div className="query-progress">

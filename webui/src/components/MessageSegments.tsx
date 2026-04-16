@@ -94,8 +94,7 @@ const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, toolRefs = [
             const isDone = toolStatus === 'completed' || toolStatus === 'error';
 
             if (isDone && matchingRef) {
-              // Completed tool: render a compact footnote superscript link [n]
-              const footIndex = typeof matchingRef.toolIndex === 'number' ? matchingRef.toolIndex + 1 : null;
+              // Completed tool: render a compact footnote superscript link [shortname]
               return (
                 <span
                   key={`seg-${idx}`}
@@ -112,7 +111,7 @@ const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, toolRefs = [
                   title={matchingRef.label}
                   aria-label={`View tool: ${matchingRef.label}`}
                 >
-                  [{footIndex !== null ? footIndex : getShortToolName(baseName)}]
+                  [{getShortToolName(baseName)}]
                 </span >
               );
             }

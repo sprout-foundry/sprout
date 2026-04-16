@@ -1573,6 +1573,36 @@
   opacity: 1;
 }
 
+/* ── Completed tool footnote link ────────────────────────────── */
+.segment-tool-footnote {
+  display: inline;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--accent-primary);
+  cursor: pointer;
+  user-select: none;
+  vertical-align: super;
+  line-height: 1;
+  padding: 0 1px;
+  border-radius: 2px;
+  transition: color 0.12s ease, background 0.12s ease;
+  white-space: nowrap;
+}
+
+.segment-tool-footnote:hover {
+  color: var(--accent-hover, var(--accent-primary));
+  background: var(--bg-tertiary);
+}
+
+.segment-tool-footnote:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.segment-tool-footnote--error {
+  color: var(--status-error, #e5534b);
+}
+
 /* ── Inline Todo Summary ──────────────────────────────────────── */
 .segment-todo-summary {
   display: flex;

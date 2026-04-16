@@ -125,9 +125,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    background:
-      linear-gradient(180deg, color-mix(in srgb, var(--bg-secondary) 96%, transparent), var(--bg-secondary)),
-      var(--gradient-subtle);
+    background: var(--bg-secondary);
     border-radius: 0;
     border: none;
     transition: none;
@@ -215,11 +213,7 @@
     top: 0;
     z-index: 2;
     padding: 12px;
-    background: linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--bg-secondary) 98%, transparent),
-      color-mix(in srgb, var(--bg-secondary) 92%, transparent)
-    );
+    background: var(--bg-secondary);
     backdrop-filter: blur(10px);
   }
 

@@ -74,13 +74,11 @@
   --shadow-elevated: 0 10px 22px rgba(2, 6, 23, 0.42);
   --shadow-float: 0 20px 38px rgba(2, 6, 23, 0.52);
 
-  --gradient-subtle:
-    radial-gradient(1200px 420px at -5% -10%, rgba(56, 189, 248, 0.1), transparent 55%),
-    radial-gradient(1100px 420px at 105% -10%, rgba(45, 212, 191, 0.08), transparent 58%);
-  --gradient-elevated: linear-gradient(145deg, rgba(56, 189, 248, 0.16), rgba(45, 212, 191, 0.12));
+  --gradient-subtle: none;
+  --gradient-elevated: none;
 
   /* Editor-specific theme tokens */
-  --editor-pane-bg: linear-gradient(135deg, #1e293b 0%, #1f2d46 100%);
+  --editor-pane-bg: #1e293b;
   --editor-pane-bg-secondary: rgba(255, 255, 255, 0.04);
   --editor-pane-bg-secondary-hover: rgba(255, 255, 255, 0.08);
   --editor-pane-footer-bg: rgba(255, 255, 255, 0.03);
@@ -104,13 +102,13 @@
   --scrollbar-thumb: rgba(255, 255, 255, 0.15);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.25);
 
-  --app-shell-bg: linear-gradient(180deg, #262b33, #282c34);
+  --app-shell-bg: #282c34;
   --app-main-bg: #282c34;
-  --sidebar-bg: linear-gradient(180deg, #21252b, #1f2329);
+  --sidebar-bg: #21252b;
   --sidebar-header-bg: rgba(33, 37, 43, 0.95);
   --sidebar-nav-btn-bg: #2c313a;
   --sidebar-nav-btn-hover-bg: #353b45;
-  --sidebar-nav-btn-active-bg: linear-gradient(180deg, #3a404b, #343a45);
+  --sidebar-nav-btn-active-bg: #3a404b;
   --sidebar-select-bg: #242932;
   --sidebar-rail-bg: rgba(0, 0, 0, 0.15);
 
@@ -146,7 +144,7 @@
   --accent-cyan: #0891b2;
   --accent-primary-alpha: rgba(29, 78, 216, 0.16);
 
-  --editor-pane-bg: linear-gradient(135deg, #f8fbff 0%, #eef4fb 100%);
+  --editor-pane-bg: #f8fbff;
   --editor-pane-bg-secondary: rgba(0, 0, 0, 0.03);
   --editor-pane-bg-secondary-hover: rgba(0, 0, 0, 0.06);
   --editor-pane-footer-bg: rgba(15, 23, 42, 0.04);
@@ -170,13 +168,13 @@
   --scrollbar-thumb-hover: rgba(0, 0, 0, 0.25);
   --input-fg: #0f172a;
 
-  --app-shell-bg: linear-gradient(180deg, #f8fbff, #eef4fb);
+  --app-shell-bg: #f8fbff;
   --app-main-bg: rgba(244, 247, 251, 0.96);
-  --sidebar-bg: linear-gradient(180deg, #eaf1fa, #dde8f6);
+  --sidebar-bg: #eaf1fa;
   --sidebar-header-bg: rgba(226, 236, 248, 0.92);
   --sidebar-nav-btn-bg: rgba(212, 225, 242, 0.92);
   --sidebar-nav-btn-hover-bg: rgba(196, 214, 236, 0.94);
-  --sidebar-nav-btn-active-bg: linear-gradient(180deg, #1d4ed8, #1e40af);
+  --sidebar-nav-btn-active-bg: #1d4ed8;
   --sidebar-select-bg: rgba(255, 255, 255, 0.96);
   --sidebar-rail-bg: rgba(0, 0, 0, 0.06);
 }
@@ -187,7 +185,6 @@ body {
   line-height: 1.5;
   color: var(--text-primary);
   background: var(--bg-primary);
-  background-image: var(--gradient-subtle);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -200,18 +197,6 @@ body {
   overflow: hidden;
   position: relative;
   transition: padding-bottom 0.2s ease;
-}
-
-.app::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: var(--gradient-subtle);
-  pointer-events: none;
-  z-index: 0;
 }
 
 .main-content {
@@ -324,7 +309,7 @@ body {
   gap: var(--space-4);
   padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--border-subtle);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-secondary) 88%, transparent), var(--bg-secondary));
+  background: var(--bg-secondary);
 }
 
 .top-toolbar-left {
@@ -982,11 +967,7 @@ body,
   text-align: left;
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-default);
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--bg-elevated) 88%, transparent),
-    color-mix(in srgb, var(--bg-surface) 92%, transparent)
-  );
+  background: var(--bg-elevated);
   color: var(--text-primary);
   padding: 10px 12px;
   cursor: pointer;

@@ -96,18 +96,12 @@ func (a *Agent) getOptimizedToolDefinitions(messages []api.Message) []api.Tool {
 		tools = filterToolsByName(tools, makeAllowedToolSet(personaAllowlist))
 	}
 
-	if a.shouldUseDirectMultimodalImageReasoning(messages) {
-		filtered := make([]api.Tool, 0, len(tools))
-		for _, tool := range tools {
-			switch tool.Function.Name {
-			case "analyze_image_content", "analyze_ui_screenshot":
-				continue
-			default:
-				filtered = append(filtered, tool)
-			}
-		}
-		tools = filtered
-	}
+	// Vision models retain access to analyze_image_content and analyze_ui_screenshot tools
+	// even when direct multimodal images are present. This allows the agent to:
+	// - Analyze images from URLs or file paths mentioned in the conversation
+	// - Use specialized analysis modes (OCR, frontend analysis, etc.)
+	// - Get viewport-adjusted analysis for HTML files
+	// Direct multimodal images and tool-based analysis are complementary, not mutually exclusive.
 
 	// Future: Could optimize by analyzing conversation context
 	// and only returning relevant tools

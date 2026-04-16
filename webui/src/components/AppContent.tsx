@@ -8,6 +8,8 @@ import WorkspacePane from './WorkspacePane';
 import ContextPanel, { type ContextPanelHandle } from './ContextPanel';
 import ResizeHandle from './ResizeHandle';
 import Status from './Status';
+import MenuBar from './MenuBar';
+import StatusBar from './StatusBar';
 import CommandPalette from './CommandPalette';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { ApiService, LeditInstance } from '../services/api';
@@ -996,11 +998,22 @@ const AppContent: React.FC<AppContentProps> = ({
         }}
       />
       <div className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''} ${isTerminalExpanded ? 'terminal-expanded' : ''}`}>
-        <WorkspaceBar
-          isConnected={state.isConnected}
-          isMobile={isMobile}
-          isMobileMenuOpen={isSidebarOpen}
-        />
+        {!isMobile ? (
+          <div className="header-bar">
+            <MenuBar />
+            <WorkspaceBar
+              isConnected={state.isConnected}
+              isMobile={isMobile}
+              isMobileMenuOpen={isSidebarOpen}
+            />
+          </div>
+        ) : (
+          <WorkspaceBar
+            isConnected={state.isConnected}
+            isMobile={isMobile}
+            isMobileMenuOpen={isSidebarOpen}
+          />
+        )}
         <div className="main-view-content">
           <div className="editor-view">
             {isMobile && (
@@ -1063,10 +1076,19 @@ const AppContent: React.FC<AppContentProps> = ({
           )}
         </div>
         <Status isConnected={state.isConnected} stats={state.stats} />
+        <StatusBar
+          branch={gitBranches.current || gitStatus?.branch}
+          buffer={currentBuffer ? {
+            kind: currentBuffer.kind,
+            file: currentBuffer.file,
+            content: currentBuffer.content,
+            cursorPosition: currentBuffer.cursorPosition,
+            languageOverride: currentBuffer.languageOverride,
+          } : null}
+        />
       </div>
 
       <Terminal
-        onOutput={onTerminalOutput}
         isExpanded={isTerminalExpanded}
         onToggleExpand={onTerminalExpandedChange}
       />

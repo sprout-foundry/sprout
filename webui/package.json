@@ -86,7 +86,7 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\"",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
-    "lint:ci": "eslint \"src/**/*.{ts,tsx}\" --max-warnings=-1",
+    "lint:ci": "eslint \"src/**/*.{ts,tsx}\"",
     "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix",
     "start": "react-scripts start",
     "test": "react-scripts test",

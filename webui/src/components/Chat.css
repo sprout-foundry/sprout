@@ -1011,6 +1011,17 @@
   overflow-y: auto;
 }
 
+.tool-output-file-link {
+  color: var(--accent-primary);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.tool-output-file-link:hover {
+  opacity: 0.8;
+}
+
 /* Subagent-specific styles */
 .tool-execution.tool-subagent {
   border-left: 3px solid var(--accent-primary);

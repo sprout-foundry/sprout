@@ -978,3 +978,80 @@ func (ws *ReactWebServer) writeExternalPathConsentRequired(w http.ResponseWriter
 	})
 }
 
+// handleAPIOpenInFileBrowser opens a path (or its parent directory for files)
+// in the system file browser using the platform-appropriate command.
+func (ws *ReactWebServer) handleAPIOpenInFileBrowser(w http.ResponseWriter, r *http.Request) {
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	if r.Method != http.MethodPost {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": "Method not allowed"})
+		return
+	}
+
+	var req struct {
+		Path string `json:"path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Path == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": "path is required"})
+		return
+	}
+
+	canonicalPath, err := canonicalizePath(req.Path, workspaceRoot, false)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": fmt.Sprintf("invalid path: %v", err)})
+		return
+	}
+
+	var cmd *exec.Cmd
+	info, statErr := os.Stat(canonicalPath)
+	isDir := statErr == nil && info.IsDir()
+
+	switch {
+	case shellExists("open"):
+		// macOS: "open -R <file>" reveals in Finder; "open <dir>" opens the dir
+		if isDir {
+			cmd = exec.Command("open", canonicalPath)
+		} else {
+			cmd = exec.Command("open", "-R", canonicalPath)
+		}
+	case shellExists("explorer.exe"):
+		// Windows / WSL
+		if isDir {
+			cmd = exec.Command("explorer.exe", canonicalPath)
+		} else {
+			cmd = exec.Command("explorer.exe", "/select,"+canonicalPath)
+		}
+	case shellExists("xdg-open"):
+		// Linux: open the containing directory (xdg-open can't select a file)
+		target := canonicalPath
+		if !isDir {
+			target = filepath.Dir(canonicalPath)
+		}
+		cmd = exec.Command("xdg-open", target)
+	case shellExists("nautilus"):
+		cmd = exec.Command("nautilus", "--select", canonicalPath)
+	default:
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotImplemented)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": "no file browser command available"})
+		return
+	}
+
+	if err := cmd.Start(); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": fmt.Sprintf("failed to open file browser: %v", err)})
+		return
+	}
+	// Reap the child process to avoid zombies; file browsers detach on their own.
+	go func() { _ = cmd.Wait() }()
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"message": "opened"})
+}
+

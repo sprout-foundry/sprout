@@ -1471,7 +1471,19 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
               Rename
             </button>
           )}
-          {contextMenu && !contextMenu.file.isDir && (
+          {contextMenu && (
+            <button
+              className="context-menu-item"
+              onClick={() => {
+                const file = contextMenu.file;
+                setContextMenu(null);
+                apiService.openInFileBrowser(file.path).catch(() => {});
+              }}
+            >
+              Open in file browser
+            </button>
+          )}
+          {contextMenu && (
             <>
               <div className="context-menu-divider" />
               <button
@@ -1494,15 +1506,17 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
                   Copy absolute path
                 </button>
               )}
-              <button
-                className="context-menu-item"
-                onClick={() => {
-                  setContextMenu(null);
-                  onFileSelect(contextMenu.file);
-                }}
-              >
-                Open in editor
-              </button>
+              {!contextMenu.file.isDir && (
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    setContextMenu(null);
+                    onFileSelect(contextMenu.file);
+                  }}
+                >
+                  Open in editor
+                </button>
+              )}
               <div className="context-menu-divider" />
             </>
           )}

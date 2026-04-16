@@ -487,6 +487,18 @@ class ApiService {
     return data;
   }
 
+  async openInFileBrowser(path: string): Promise<void> {
+    const response = await clientFetch('/api/open-in-file-browser', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error((data as any).error || 'Failed to open in file browser');
+    }
+  }
+
   async getInstances(): Promise<{
     instances: LeditInstance[];
     current_pid: number;

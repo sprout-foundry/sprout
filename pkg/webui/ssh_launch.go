@@ -3,6 +3,7 @@ package webui
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -148,10 +149,49 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (result *s
 	ws.setSSHLaunchStatus(sessionKey, "connecting", fmt.Sprintf("Connecting to %s...", hostAlias), true, "")
 	defer func() {
 		if err != nil {
-			ws.setSSHLaunchStatus(sessionKey, "failed", "SSH workspace launch failed", false, err.Error())
+			details := ""
+			logPath := ""
+			step := "failed"
+			var launchErr *sshLaunchError
+			if errors.As(err, &launchErr) {
+				details = launchErr.Details
+				logPath = launchErr.LogPath
+				step = launchErr.Step
+			}
+			ws.sshLaunchStatusMu.Lock()
+			ws.sshLaunchStatuses[sessionKey] = &sshLaunchStatus{
+				Key:        sessionKey,
+				Step:       step,
+				Status:     "SSH workspace launch failed",
+				InProgress: false,
+				LastError:  err.Error(),
+				Details:    details,
+				LogPath:    logPath,
+				UpdatedAt:  time.Now(),
+			}
+			ws.sshLaunchStatusMu.Unlock()
 			return
 		}
-		ws.setSSHLaunchStatus(sessionKey, "ready", fmt.Sprintf("SSH workspace ready: %s", hostAlias), false, "")
+		proxyBase := ""
+		proxyURL := ""
+		localPort := 0
+		if result != nil {
+			proxyBase = result.ProxyBase
+			proxyURL = result.ProxyBase + "/"
+			localPort = result.LocalPort
+		}
+		ws.sshLaunchStatusMu.Lock()
+		ws.sshLaunchStatuses[sessionKey] = &sshLaunchStatus{
+			Key:        sessionKey,
+			Step:       "ready",
+			Status:     fmt.Sprintf("SSH workspace ready: %s", hostAlias),
+			InProgress: false,
+			UpdatedAt:  time.Now(),
+			ProxyBase:  proxyBase,
+			ProxyURL:   proxyURL,
+			LocalPort:  localPort,
+		}
+		ws.sshLaunchStatusMu.Unlock()
 	}()
 
 	// Deduplicate: if a launch for this key is already in progress, wait for it.

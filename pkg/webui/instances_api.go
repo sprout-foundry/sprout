@@ -3,7 +3,6 @@ package webui
 import (
 	"bufio"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -88,7 +87,14 @@ type sshLaunchStatusDTO struct {
 	Status     string    `json:"status"`
 	InProgress bool      `json:"in_progress"`
 	LastError  string    `json:"last_error,omitempty"`
+	Details    string    `json:"details,omitempty"`
+	LogPath    string    `json:"log_path,omitempty"`
 	UpdatedAt  time.Time `json:"updated_at"`
+	// ProxyBase, ProxyURL, and LocalPort are non-empty/non-zero when the launch
+	// has completed successfully (in_progress=false, last_error="").
+	ProxyBase  string    `json:"proxy_base,omitempty"`
+	ProxyURL   string    `json:"proxy_url,omitempty"`
+	LocalPort  int       `json:"local_port,omitempty"`
 }
 
 func (ws *ReactWebServer) handleAPIInstances(w http.ResponseWriter, r *http.Request) {
@@ -247,30 +253,32 @@ func (ws *ReactWebServer) handleAPISSHOpen(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	result, err := ws.launchSSHWorkspace(req)
-	if err != nil {
-		payload := sshLaunchErrorDTO{Error: err.Error()}
-		var launchErr *sshLaunchError
-		if errors.As(err, &launchErr) {
-			payload.Error = launchErr.Message
-			payload.Step = launchErr.Step
-			payload.Details = launchErr.Details
-			payload.LogPath = launchErr.LogPath
-		}
-		writeSSHJSONError(w, http.StatusBadRequest, payload)
+	hostAlias := strings.TrimSpace(req.HostAlias)
+	if hostAlias == "" {
+		writeSSHJSONError(w, http.StatusBadRequest, sshLaunchErrorDTO{Error: "host_alias is required"})
 		return
 	}
 
+	// Normalise the path here (mirrors launchSSHWorkspace) so we can return
+	// the canonical session_key to the caller before launch starts.
+	remoteWorkspacePath := strings.TrimSpace(req.RemoteWorkspacePath)
+	if remoteWorkspacePath == "" {
+		remoteWorkspacePath = "$HOME"
+	}
+	remoteWorkspacePath = normalizeRemoteWorkspacePath(remoteWorkspacePath)
+	sessionKey := hostAlias + "::" + remoteWorkspacePath
+
+	// Fire-and-forget: the launch runs in the background.  The caller polls
+	// /api/instances/ssh-launch-status for progress and the final proxy URL.
+	go func() {
+		_, _ = ws.launchSSHWorkspace(req)
+	}()
+
 	w.Header().Set("Content-Type", "application/json")
-	proxyPath := result.ProxyBase + "/"
+	w.WriteHeader(http.StatusAccepted)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"message":    "ssh workspace ready",
-		"url":        result.URL,
-		"port":       result.LocalPort,
-		// Keep SSH navigation same-origin so PWA/service-worker/session storage
-		// continue to work consistently on mobile browsers.
-		"proxy_url":  proxyPath,
-		"proxy_base": result.ProxyBase,
+		"message":     "ssh workspace launch started",
+		"session_key": sessionKey,
 	})
 }
 
@@ -290,6 +298,7 @@ func (ws *ReactWebServer) handleAPISSHLaunchStatus(w http.ResponseWriter, r *htt
 	if remoteWorkspacePath == "" {
 		remoteWorkspacePath = "$HOME"
 	}
+	remoteWorkspacePath = normalizeRemoteWorkspacePath(remoteWorkspacePath)
 
 	status := ws.getSSHLaunchStatus(hostAlias + "::" + remoteWorkspacePath)
 	if status == nil {
@@ -304,7 +313,12 @@ func (ws *ReactWebServer) handleAPISSHLaunchStatus(w http.ResponseWriter, r *htt
 		Status:     status.Status,
 		InProgress: status.InProgress,
 		LastError:  status.LastError,
+		Details:    status.Details,
+		LogPath:    status.LogPath,
 		UpdatedAt:  status.UpdatedAt,
+		ProxyBase:  status.ProxyBase,
+		ProxyURL:   status.ProxyURL,
+		LocalPort:  status.LocalPort,
 	})
 }
 

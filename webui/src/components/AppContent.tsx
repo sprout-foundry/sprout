@@ -1009,22 +1009,14 @@ const AppContent: React.FC<AppContentProps> = ({
         }}
       />
       <div className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''} ${isTerminalExpanded ? 'terminal-expanded' : ''}`}>
-        {!isMobile ? (
-          <div className="header-bar">
-            <MenuBar />
-            <WorkspaceBar
-              isConnected={state.isConnected}
-              isMobile={isMobile}
-              isMobileMenuOpen={isSidebarOpen}
-            />
-          </div>
-        ) : (
+        <div className="header-bar">
+          <MenuBar />
           <WorkspaceBar
             isConnected={state.isConnected}
             isMobile={isMobile}
             isMobileMenuOpen={isSidebarOpen}
           />
-        )}
+        </div>
         <div className="main-view-content">
           <div className="editor-view">
             {isMobile && (

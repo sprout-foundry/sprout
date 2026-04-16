@@ -132,7 +132,17 @@ type sshLaunchStatus struct {
 	Status     string
 	InProgress bool
 	LastError  string
-	UpdatedAt  time.Time
+	// Details and LogPath carry structured diagnostic info from sshLaunchError
+	// when the launch fails, giving async pollers the same context as the
+	// former synchronous response.
+	Details   string
+	LogPath   string
+	UpdatedAt time.Time
+	// ProxyBase, ProxyURL, and LocalPort are populated when InProgress is false
+	// and LastError is empty — i.e. the launch completed successfully.
+	ProxyBase string
+	ProxyURL  string
+	LocalPort int
 }
 
 // ---------------------------------------------------------------------------

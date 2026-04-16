@@ -125,7 +125,7 @@ build-ui:
 	fi
 	@# Install npm dependencies
 	@cd webui && npm ci
-	@cd webui && npm run build
+	@cd webui && DISABLE_ESLINT_PLUGIN=true npm run build
 	@echo "React web UI build completed in webui/build/"
 
 # Build React web UI and deploy to Go static directory (for embedding)

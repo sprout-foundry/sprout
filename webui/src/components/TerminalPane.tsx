@@ -10,9 +10,7 @@ import type { WsEvent } from '../services/websocket';
 import { useTheme } from '../contexts/ThemeContext';
 import { debugLog } from '../utils/log';
 import { copyToClipboard } from '../utils/clipboard';
-
-// Font size constants (must match Terminal.tsx)
-const FONT_SIZE_DEFAULT = 13;
+import { FONT_SIZE_DEFAULT } from './terminalConstants';
 
 export interface TerminalPaneHandle {
   clear: () => void;
@@ -44,6 +42,8 @@ interface TerminalContextMenuState {
   linkUrl: string;
 }
 
+const EXPAND_RESIZE_DELAY_MS = 100; // Delay to allow terminal expand animation to progress before triggering resize
+
 const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
   ({ isActive, isConnected = true, showCloseButton, onClose, onConnectionChange, preferredShell, fontSize }, ref) => {
     const { themePack } = useTheme();
@@ -67,11 +67,15 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     const terminalWSRef = useRef<TerminalWebSocketService | null>(null);
     const eventHandlerRef = useRef<((event: WsEvent) => void) | null>(null);
     const resizeTimerRef = useRef<number | null>(null);
+    const expandTimeoutRef = useRef<number | null>(null);
 
     // Track whether the pane is currently mounted/active so the cleanup function
     // can distinguish between a temporary freeze and a permanent unmount.
     const isActiveRef = useRef(isActive);
     isActiveRef.current = isActive;
+
+    // Track whether component is mounted to prevent callbacks after unmount
+    const isMountedRef = useRef(true);
 
     const getTerminalTheme = useCallback(() => {
       return {
@@ -419,6 +423,39 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         }
       };
     }, [isActive, paneConnected, sendResize]);
+
+    // Listen for terminal expand event to force a resize
+    // This fixes the issue where terminal doesn't fill space after reopening
+    useEffect(() => {
+      if (!isActive || !paneConnected) return;
+
+      const handleExpand = () => {
+        // 100ms delay allows the terminal expand animation to progress before triggering resize.
+        // This prevents the terminal from being sized incorrectly during the early phase of expansion.
+        // Note: CSS transition is 280ms, but xterm.fit() works reliably after this shorter delay.
+        expandTimeoutRef.current = window.setTimeout(() => {
+          if (isMountedRef.current) {
+            sendResize();
+          }
+        }, EXPAND_RESIZE_DELAY_MS);
+      };
+
+      window.addEventListener('ledit-terminal-expand', handleExpand);
+      return () => {
+        window.removeEventListener('ledit-terminal-expand', handleExpand);
+        if (expandTimeoutRef.current !== null) {
+          window.clearTimeout(expandTimeoutRef.current);
+          expandTimeoutRef.current = null;
+        }
+      };
+    }, [isActive, paneConnected, sendResize]);
+
+    // Global cleanup: set isMountedRef to false on unmount
+    useEffect(() => {
+      return () => {
+        isMountedRef.current = false;
+      };
+    }, []);
 
     // Reset context menu when pane becomes inactive or unmounts
     useEffect(() => {

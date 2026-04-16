@@ -7,6 +7,7 @@ import TerminalTabBar, { type TerminalSession } from './TerminalTabBar';
 import { ApiService, type ShellInfo } from '../services/api';
 import { notificationBus } from '../services/notificationBus';
 import { debugLog } from '../utils/log';
+import { FONT_SIZE_DEFAULT } from './terminalConstants';
 
 type SplitDirection = 'none' | 'horizontal' | 'vertical';
 
@@ -18,7 +19,6 @@ const TERMINAL_HEIGHT_STORAGE_KEY = 'ledit-terminal-height';
 // Font size constants and storage
 const FONT_SIZE_MIN = 8;
 const FONT_SIZE_MAX = 32;
-const FONT_SIZE_DEFAULT = 13;
 const FONT_SIZE_STORAGE_KEY = 'ledit-terminal-font-size';
 
 const clampTerminalHeight = (value: number): number => {
@@ -124,6 +124,9 @@ function Terminal({
     setIsExpanded(externalIsExpanded);
     if (externalIsExpanded) {
       setHasActivated(true);
+      // Dispatch a custom event to trigger terminal resize in all panes
+      // This fixes the issue where terminal doesn't fill space after reopening
+      window.dispatchEvent(new CustomEvent('ledit-terminal-expand'));
     }
   }, [externalIsExpanded]);
 

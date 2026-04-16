@@ -806,6 +806,10 @@ function Chat({
                             onToolPillClick?.(matchingTool.id);
                           }
                         }}
+                        getToolStatus={(toolId) => {
+                          const te = filteredToolExecutions.find((t) => t.id === toolId);
+                          return te?.status;
+                        }}
                       />
                     </>
                   ) : (

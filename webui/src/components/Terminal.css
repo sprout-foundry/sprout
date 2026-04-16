@@ -60,14 +60,21 @@
 
 .terminal-header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  height: 42px;
+  flex-direction: column;
+  align-items: stretch;
   background: var(--bg-tertiary);
   border-bottom: 1px solid var(--border-subtle);
   padding: 0 12px;
-  cursor: pointer;
+  flex-shrink: 0;
   user-select: none;
+}
+
+.terminal-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 42px;
+  cursor: pointer;
 }
 
 .terminal-title {
@@ -97,7 +104,7 @@
 
 .terminal-controls {
   display: flex;
-  gap: 4px;
+  gap: 8px;
 }
 
 .terminal-btn {
@@ -123,6 +130,15 @@
   color: var(--accent-secondary);
 }
 
+.split-btn-active {
+  color: var(--accent-secondary) !important;
+  opacity: 1 !important;
+}
+
+.terminal-btn.font-btn:hover {
+  color: var(--accent-secondary);
+}
+
 .clear-btn:hover {
   color: var(--accent-error);
 }
@@ -130,7 +146,8 @@
 .terminal-body {
   display: flex;
   flex-direction: column;
-  height: calc(100% - 42px);
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -160,19 +177,48 @@
   flex: none;
 }
 
-/* Draggable vertical divider between split panes */
+/* ── Terminal Split Layout ──────────────────────────────── */
+
+.terminal-panes-container.terminal-split-vertical {
+  flex-direction: row;
+}
+
+.terminal-panes-container.terminal-split-horizontal {
+  flex-direction: column;
+}
+
 .terminal-split-divider {
-  width: 5px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: var(--border-subtle);
-  cursor: col-resize;
-  position: relative;
-  transition: background 0.15s;
+  transition: background 0.15s ease;
+  z-index: 5;
 }
 
 .terminal-split-divider:hover,
 .terminal-split-divider:active {
   background: var(--accent-secondary);
+}
+
+.terminal-split-divider-vertical {
+  width: 4px;
+  cursor: col-resize;
+}
+
+.terminal-split-divider-horizontal {
+  height: 4px;
+  cursor: row-resize;
+}
+
+/* Split container overrides — override default flex: 1 with explicit sizes */
+.terminal-panes-container.terminal-split-vertical .terminal-pane-wrapper,
+.terminal-panes-container.terminal-split-horizontal .terminal-pane-wrapper {
+  flex: none;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* ── Individual pane ─────────────────────────────────────── */
@@ -263,13 +309,17 @@
     height: 34px;
   }
 
-  .terminal-header {
+  .terminal-title-row {
     height: 34px;
+  }
+
+  .terminal-header {
     padding: 0 8px;
   }
 
   .terminal-body {
-    height: calc(100% - 34px);
+    flex: 1;
+    min-height: 0;
   }
 
   .terminal-title {
@@ -347,6 +397,116 @@
 
 .terminal-xterm .xterm-viewport {
   overflow-y: auto !important;
+}
+
+/* ── Shell Picker Dropdown ── */
+.shell-picker-dropdown {
+  position: relative;
+  display: inline-flex;
+}
+
+.shell-picker-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s;
+}
+
+.shell-picker-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+}
+
+.shell-picker-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 160px;
+  max-height: 300px;
+  overflow-y: auto;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 4px;
+  z-index: 200;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  animation: shellPickerFadeIn 0.1s ease-out;
+}
+
+@keyframes shellPickerFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.shell-picker-header {
+  padding: 6px 8px 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  user-select: none;
+  font-weight: 600;
+}
+
+.shell-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+}
+
+.shell-picker-item:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.shell-picker-item .shell-default-indicator {
+  color: var(--accent-secondary);
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.shell-picker-item .shell-name {
+  flex: 1;
+}
+
+.shell-picker-item .shell-path {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-left: auto;
+  opacity: 0.7;
+}
+
+.shell-picker-item .shell-path:hover {
+  color: var(--text-secondary);
+}
+
+.shell-picker-separator {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 4px 8px;
 }
 
 .terminal-xterm .xterm-rows,

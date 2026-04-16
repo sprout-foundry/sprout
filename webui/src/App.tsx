@@ -959,6 +959,15 @@ function App() {
             ? 'parallel'
             : isSubagent ? 'single' : undefined;
 
+          // Ensure the last assistant message ends with a newline so the tool
+          // pill and any subsequent streamed text start on their own line.
+          const messagesWithNewline = prev.messages.map((msg, idx) => {
+            if (idx === prev.messages.length - 1 && msg.type === 'assistant' && msg.content && !msg.content.endsWith('\n')) {
+              return { ...msg, content: msg.content + '\n' };
+            }
+            return msg;
+          });
+
           // Check if we already have this tool from a legacy tool_execution event
           const existingIdx = prev.toolExecutions.findIndex(t => {
             const existingID = t.details?.tool_call_id || t.details?.id || t.id;
@@ -979,7 +988,7 @@ function App() {
               persona: updated[existingIdx].persona || persona,
               subagentType: updated[existingIdx].subagentType || subagentType,
             };
-            const messages = [...prev.messages];
+            const messages = [...messagesWithNewline];
             for (let i = messages.length - 1; i >= 0; i -= 1) {
               const msg = messages[i];
               if (msg.type !== 'assistant') continue;
@@ -1010,7 +1019,7 @@ function App() {
             persona,
             subagentType,
           };
-          const messages = [...prev.messages];
+          const messages = [...messagesWithNewline];
           for (let i = messages.length - 1; i >= 0; i -= 1) {
             const msg = messages[i];
             if (msg.type !== 'assistant') continue;
@@ -1086,7 +1095,16 @@ function App() {
             };
           }
 
-          return { ...prev, toolExecutions: updatedExecutions, logs: [...prev.logs, logEntry] };
+          // Ensure the last assistant message ends with a newline so any
+          // subsequent streamed text starts on its own line after the tool.
+          const messagesAfterTool = prev.messages.map((msg, idx) => {
+            if (idx === prev.messages.length - 1 && msg.type === 'assistant' && msg.content && !msg.content.endsWith('\n')) {
+              return { ...msg, content: msg.content + '\n' };
+            }
+            return msg;
+          });
+
+          return { ...prev, messages: messagesAfterTool, toolExecutions: updatedExecutions, logs: [...prev.logs, logEntry] };
         });
         debugLog('[tool] Tool end:', event.data?.tool_name, event.data?.status);
         break;

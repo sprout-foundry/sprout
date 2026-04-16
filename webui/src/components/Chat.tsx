@@ -390,6 +390,66 @@ const SHORT_TOOL_NAMES: { [key: string]: string } = {
 
 const getShortToolName = (toolName: string): string => SHORT_TOOL_NAMES[toolName] ?? toolName;
 
+// Returns a short human-readable summary of a tool's JSON arguments string.
+// Extracts the single most meaningful field rather than dumping raw JSON.
+const TOOL_PRIMARY_ARGS: Record<string, string[]> = {
+  shell_command:    ['command'],
+  read_file:        ['path'],
+  write_file:       ['path'],
+  edit_file:        ['path'],
+  search_files:     ['search_pattern', 'pattern', 'file_glob'],
+  fetch_url:        ['url'],
+  web_search:       ['query'],
+  run_subagent:     ['context', 'persona'],
+  run_parallel_subagents: ['context'],
+  TodoWrite:        [], // summarized separately
+  TodoRead:         [],
+  analyze_ui_screenshot: ['path', 'image_path'],
+  analyze_image_content: ['path', 'image_path'],
+  mcp_tools:        ['tool_name'],
+};
+
+function getToolArgsPreview(toolName: string, argumentsJson: string | undefined, maxLen = 60): string {
+  if (!argumentsJson) return '';
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(argumentsJson);
+  } catch {
+    // Not valid JSON — just clean it up and truncate
+    const raw = argumentsJson.replace(/^\{/, '').replace(/\}$/, '').trim();
+    return raw.length > maxLen ? raw.slice(0, maxLen) + '…' : raw;
+  }
+
+  // For TodoWrite, summarize the todo count / first item
+  if (toolName === 'TodoWrite') {
+    const todos = Array.isArray(parsed['todos']) ? parsed['todos'] : [];
+    if (todos.length === 0) return '';
+    const first = (todos[0] as Record<string, unknown>)?.content;
+    const rest = todos.length > 1 ? ` +${todos.length - 1}` : '';
+    const label = typeof first === 'string' ? first : '';
+    const trimmed = label.length > maxLen ? label.slice(0, maxLen) + '…' : label;
+    return trimmed + rest;
+  }
+
+  const candidates = TOOL_PRIMARY_ARGS[toolName] ?? [];
+  for (const key of candidates) {
+    const val = parsed[key];
+    if (typeof val === 'string' && val.trim()) {
+      const v = val.trim();
+      return v.length > maxLen ? v.slice(0, maxLen) + '…' : v;
+    }
+  }
+
+  // Fallback: find any short string value in the object
+  for (const val of Object.values(parsed)) {
+    if (typeof val === 'string' && val.trim()) {
+      const v = val.trim();
+      return v.length > maxLen ? v.slice(0, maxLen) + '…' : v;
+    }
+  }
+  return '';
+}
+
 // ── Tool Activity Feed ─────────────────────────────────────────────
 
 interface ToolActivityFeedProps {
@@ -447,7 +507,7 @@ function ToolActivityFeed({ toolExecutions }: ToolActivityFeedProps): JSX.Elemen
           {activeTools.map((tool) => {
             const baseName = tool.tool.split('(')[0];
             const displayName = getShortToolName(baseName);
-            const argsPreview = tool.arguments ? tool.arguments.slice(0, 80) + (tool.arguments.length > 80 ? '...' : '') : '';
+            const argsPreview = getToolArgsPreview(baseName, tool.arguments, 70);
 
             return (
               <div key={tool.id} className="subagent-feed-card subagent-feed-card--active">
@@ -465,7 +525,7 @@ function ToolActivityFeed({ toolExecutions }: ToolActivityFeedProps): JSX.Elemen
             const baseName = tool.tool.split('(')[0];
             const displayName = getShortToolName(baseName);
             const hasError = tool.status === 'error';
-            const argsPreview = tool.arguments ? tool.arguments.slice(0, 60) + (tool.arguments.length > 60 ? '...' : '') : '';
+            const argsPreview = getToolArgsPreview(baseName, tool.arguments, 56);
 
             return (
               <div key={tool.id} className="subagent-feed-card subagent-feed-card--completed">

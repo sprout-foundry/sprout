@@ -147,7 +147,7 @@ export interface SSHSessionEntry {
 export interface SSHOpenResponse {
   message: string;
   url: string;
-  port: number;
+  port?: number;
   /** Same-origin proxy URL served by the local ledit server (e.g. http://127.0.0.1:54421/ssh/{key}/).
    *  Prefer this over `url` to keep the browser on the same origin for PWA compatibility. */
   proxy_url?: string;
@@ -173,7 +173,13 @@ export interface SSHLaunchStatus {
   status: string;
   in_progress: boolean;
   last_error?: string;
+  details?: string;
+  log_path?: string;
   updated_at: string;
+  /** Non-empty when in_progress=false and last_error is absent. */
+  proxy_base?: string;
+  proxy_url?: string;
+  local_port?: number;
 }
 
 export class SSHWorkspaceOpenError extends Error {
@@ -211,7 +217,9 @@ export interface WorkspaceResponse {
 }
 
 class ApiService {
-  private static readonly SSH_OPEN_TIMEOUT_MS = 90_000;
+  /** Maximum time (ms) to wait for a ssh-launch-status poll to show completion. */
+  private static readonly SSH_POLL_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+  private static readonly SSH_POLL_INTERVAL_MS = 1_500;
 
   private static instance: ApiService;
 
@@ -523,55 +531,77 @@ class ApiService {
   }
 
   async openSSHWorkspace(hostAlias: string, remoteWorkspacePath?: string): Promise<SSHOpenResponse> {
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), ApiService.SSH_OPEN_TIMEOUT_MS);
+    // Kick off the launch asynchronously — the server returns 202 immediately
+    // so the browser never hits a long HTTP timeout.
+    const startResponse = await clientFetch('/api/instances/ssh-open', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        host_alias: hostAlias,
+        remote_workspace_path: remoteWorkspacePath,
+      }),
+    });
 
-    let response: Response;
-    try {
-      response = await clientFetch('/api/instances/ssh-open', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          host_alias: hostAlias,
-          remote_workspace_path: remoteWorkspacePath,
-        }),
-        signal: controller.signal,
+    if (!startResponse.ok) {
+      const errData = await startResponse.json().catch(() => ({})) as any;
+      throw new SSHWorkspaceOpenError({
+        error: errData.error || errData.message || 'Failed to start SSH workspace launch',
+        step: errData.step,
+        details: errData.details,
+        log_path: errData.log_path,
       });
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
+    }
+
+    // Poll ssh-launch-status until the launch completes or times out.
+    const deadline = Date.now() + ApiService.SSH_POLL_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      await new Promise<void>((resolve) =>
+        window.setTimeout(resolve, ApiService.SSH_POLL_INTERVAL_MS)
+      );
+
+      let status: SSHLaunchStatus;
+      try {
+        status = await this.getSSHLaunchStatus(hostAlias, remoteWorkspacePath);
+      } catch {
+        // Transient network error — keep polling.
+        continue;
+      }
+
+      if (status.in_progress) {
+        continue;
+      }
+
+      if (status.last_error) {
         throw new SSHWorkspaceOpenError({
-          error: 'SSH workspace launch timed out. Check SSH connectivity and ~/.ledit/workspace.log for details.',
-          step: 'launch-timeout',
-          details: `No response from /api/instances/ssh-open after ${Math.round(ApiService.SSH_OPEN_TIMEOUT_MS / 1000)} seconds.`,
+          error: status.last_error,
+          step: status.step,
+          details: status.details || `SSH launch failed at step: ${status.step}`,
+          log_path: status.log_path,
         });
       }
-      throw error;
-    } finally {
-      window.clearTimeout(timeoutId);
-    }
 
-    const text = await response.text();
-    let data: any = {};
-    if (text) {
-      try {
-        data = JSON.parse(text);
-      } catch {
-        data = { message: text };
+      // Success — proxy_url and proxy_base are populated by the server.
+      if (!status.proxy_url) {
+        throw new SSHWorkspaceOpenError({
+          error: 'SSH workspace launch completed but no proxy URL was returned.',
+          step: status.step,
+        });
       }
+
+      return {
+        message: status.status,
+        url: status.proxy_url,
+        port: status.local_port,
+        proxy_url: status.proxy_url,
+        proxy_base: status.proxy_base,
+      };
     }
 
-    if (!response.ok) {
-      throw new SSHWorkspaceOpenError({
-        error: data.error || data.message || 'Failed to open SSH workspace',
-        step: data.step,
-        details: data.details,
-        log_path: data.log_path,
-      });
-    }
-
-    return data;
+    throw new SSHWorkspaceOpenError({
+      error: 'SSH workspace launch timed out. Check SSH connectivity and ~/.ledit/workspace.log for details.',
+      step: 'launch-timeout',
+      details: `Launch did not complete within ${Math.round(ApiService.SSH_POLL_TIMEOUT_MS / 60_000)} minutes.`,
+    });
   }
 
   async getSSHLaunchStatus(hostAlias: string, remoteWorkspacePath?: string): Promise<SSHLaunchStatus> {

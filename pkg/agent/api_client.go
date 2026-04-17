@@ -278,6 +278,20 @@ func (ac *APIClient) SendWithRetry(messages []api.Message, tools []api.Tool, rea
 			continue
 		}
 
+		// Check for prefill incompatibility with thinking mode - strip leading assistant and retry
+		if ac.isPrefillIncompatibilityError(err) {
+			stripped := stripLeadingAssistantPrefillFromMessages(messages)
+			if len(stripped) != len(messages) {
+				if ac.agent.debug {
+					ac.agent.debugLog("DEBUG: prefill/thinking incompatibility detected, stripped %d leading assistant message(s)\n", len(messages)-len(stripped))
+				}
+				ac.agent.PrintLineAsync("[~] Retrying without assistant prefill (incompatible with thinking mode)")
+				messages = stripped
+				continue
+			}
+			// Nothing to strip, this error can't be recovered - fall through to fail
+		}
+
 		// Check for image-not-supported error - strip images and retry once
 		if ac.isImageNotSupportedError(err) {
 			stripped, hadImages := stripImagesFromMessages(messages)
@@ -721,6 +735,48 @@ func (ac *APIClient) isContextLimitError(err error) bool {
 		strings.Contains(errStr, "context exceeds") ||
 		strings.Contains(errStr, "max context") ||
 		(strings.Contains(errStr, "token limit") && strings.Contains(errStr, "exceeded"))
+}
+
+// isPrefillIncompatibilityError checks if an error indicates prefill is incompatible with thinking mode
+func (ac *APIClient) isPrefillIncompatibilityError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "prefill") ||
+		strings.Contains(errStr, "enable_thinking")
+}
+
+// stripLeadingAssistantPrefillFromMessages removes leading assistant messages
+// (compaction summaries) without tool_calls that appear after system messages.
+// Returns the stripped message slice.
+func stripLeadingAssistantPrefillFromMessages(messages []api.Message) []api.Message {
+	if len(messages) == 0 {
+		return messages
+	}
+
+	start := 0
+	for start < len(messages) && messages[start].Role == "system" {
+		start++
+	}
+	if start >= len(messages) {
+		return messages
+	}
+
+	stripped := 0
+	for start < len(messages) && messages[start].Role == "assistant" && len(messages[start].ToolCalls) == 0 {
+		stripped++
+		start++
+	}
+
+	if stripped == 0 {
+		return messages
+	}
+
+	result := make([]api.Message, 0, len(messages)-stripped)
+	result = append(result, messages[:start-stripped]...)
+	result = append(result, messages[start:]...)
+	return result
 }
 
 // calculateBackoff calculates the backoff delay

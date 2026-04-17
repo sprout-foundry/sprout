@@ -3,6 +3,7 @@ package configuration
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -12,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 	providers "github.com/alantheprice/ledit/pkg/agent_providers"
 	"github.com/alantheprice/ledit/pkg/credentials"
 )
@@ -208,7 +210,8 @@ func DiscoverCustomProviderModels(cfg CustomProviderConfig) ([]ProviderDiscovery
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("models endpoint returned HTTP %d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return nil, api.FormatHTTPResponseError(resp.StatusCode, resp.Header, body)
 	}
 
 	var payload struct {

@@ -906,8 +906,16 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 
 				case output, ok := <-session.OutputCh:
 					if !ok {
-						// Output channel closed
-						log.Printf("Terminal %s output channel closed", sessionID)
+						// Output channel closed — PTY process exited.
+						// Notify the client so it can display an appropriate message.
+						log.Printf("Terminal %s output channel closed (PTY exited)", sessionID)
+						safeConn.WriteJSON(map[string]interface{}{
+							"type": "pty_exit",
+							"data": map[string]string{
+								"session_id": sessionID,
+								"message":    "Process exited",
+							},
+						})
 						return
 					}
 

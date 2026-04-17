@@ -2,6 +2,13 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.15.3] - 2026-04-17
+
+- Updates package.json - Updates dependencies in package.json (88c18019)
+- Merge remote-tracking branch 'origin/main' (77427007)
+- Updates 3 files - Updates systemd quoting logic for unit generation (06ed4b11)
+- docs: Update changelog for v0.15.2 (78daee72)
+
 ## [v0.15.2] - 2026-04-17
 
 - Updates 8 files - Updates taskActions thread safety with RWMutex (7b0cedc5)

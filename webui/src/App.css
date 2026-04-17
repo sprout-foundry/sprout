@@ -239,6 +239,41 @@ body {
   font-size: 12px;
 }
 
+.header-bar-actions {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.header-context-toggle-btn {
+  width: 28px;
+  height: 28px;
+  margin-right: 4px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    color 0.15s var(--ease-out),
+    background 0.15s var(--ease-out),
+    border-color 0.15s var(--ease-out);
+}
+
+.header-context-toggle-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  border-color: var(--border-subtle);
+}
+
+.header-context-toggle-btn:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
 /* Standalone workspace bar (mobile) */
 .workspace-bar {
   display: flex;

@@ -2,11 +2,13 @@ package providers
 
 import (
 	"encoding/json"
-	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
+
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
 
 func TestProviderFactory(t *testing.T) {
@@ -525,6 +527,124 @@ func TestConvertMessagesPreservesReasoningContentForCompatibleProviders(t *testi
 	}
 	if value != "preserve me" {
 		t.Fatalf("unexpected reasoning_content value: %v", value)
+	}
+}
+
+func TestGenericProviderSummarizesCloudflareHTMLTimeouts(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(524)
+		_, _ = w.Write([]byte(`<!DOCTYPE html>
+<html lang="en-US">
+<head><title>local-aprice.dev | 524: A timeout occurred</title></head>
+<body>
+<div>Cloudflare</div>
+<div>Error code 524</div>
+</body>
+</html>`))
+	}))
+	defer server.Close()
+
+	provider, err := NewGenericProvider(&ProviderConfig{
+		Name:     "ai-worker",
+		Endpoint: server.URL,
+		Auth:     AuthConfig{Type: "none"},
+		Defaults: RequestDefaults{Model: "test-model"},
+		Models: ModelConfig{
+			DefaultContextLimit: 4096,
+			DefaultModel:        "test-model",
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	_, err = provider.SendChatRequest([]api.Message{{Role: "user", Content: "hello"}}, nil, "", false)
+	if err == nil {
+		t.Fatal("expected timeout error")
+	}
+
+	got := err.Error()
+	if !strings.Contains(got, "HTTP 524: upstream timeout (Cloudflare 524 HTML error page)") {
+		t.Fatalf("unexpected error: %s", got)
+	}
+	if strings.Contains(strings.ToLower(got), "<!doctype html") || strings.Contains(got, "<html") {
+		t.Fatalf("expected HTML body to be suppressed, got: %s", got)
+	}
+}
+
+func TestGenericProviderExtractsJSONErrorMessage(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"message":"model not available for this account"}}`))
+	}))
+	defer server.Close()
+
+	provider, err := NewGenericProvider(&ProviderConfig{
+		Name:     "json-error-test",
+		Endpoint: server.URL,
+		Auth:     AuthConfig{Type: "none"},
+		Defaults: RequestDefaults{Model: "test-model"},
+		Models: ModelConfig{
+			DefaultContextLimit: 4096,
+			DefaultModel:        "test-model",
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	_, err = provider.SendChatRequest([]api.Message{{Role: "user", Content: "hello"}}, nil, "", false)
+	if err == nil {
+		t.Fatal("expected JSON error")
+	}
+
+	got := err.Error()
+	if !strings.Contains(got, "HTTP 400: model not available for this account") {
+		t.Fatalf("unexpected error: %s", got)
+	}
+	if strings.Contains(got, "{\"error\"") {
+		t.Fatalf("expected JSON body to be summarized, got: %s", got)
+	}
+}
+
+func TestGenericProviderTruncatesLargePlainTextErrors(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte(strings.Repeat("backend overload ", 40)))
+	}))
+	defer server.Close()
+
+	provider, err := NewGenericProvider(&ProviderConfig{
+		Name:     "plain-error-test",
+		Endpoint: server.URL,
+		Auth:     AuthConfig{Type: "none"},
+		Defaults: RequestDefaults{Model: "test-model"},
+		Models: ModelConfig{
+			DefaultContextLimit: 4096,
+			DefaultModel:        "test-model",
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	_, err = provider.SendChatRequest([]api.Message{{Role: "user", Content: "hello"}}, nil, "", false)
+	if err == nil {
+		t.Fatal("expected plain text error")
+	}
+
+	got := err.Error()
+	if !strings.HasPrefix(got, "HTTP "+strconv.Itoa(http.StatusBadGateway)+": ") {
+		t.Fatalf("unexpected error prefix: %s", got)
+	}
+	if len(got) > len("HTTP 502: ")+maxProviderErrorBodyPreview+10 {
+		t.Fatalf("expected truncated error, got len=%d: %s", len(got), got)
+	}
+	if !strings.HasSuffix(got, "...") {
+		t.Fatalf("expected truncated error to end with ellipsis, got: %s", got)
 	}
 }
 

@@ -131,6 +131,7 @@ jobs:
 
     - name: Build desktop installers
       env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         npm_config_arch: ${{ matrix.arch }}
         CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
         SKIP_BACKEND_BUILD: '1'

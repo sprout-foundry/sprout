@@ -278,7 +278,7 @@ func (tm *TerminalManager) monitorSession(session *TerminalSession) {
 	readDone := make(chan struct{})
 	go func() {
 		defer close(readDone)
-		buf := make([]byte, 1024)
+		buf := make([]byte, 16384)
 		for {
 			session.mutex.RLock()
 			if !session.Active {
@@ -305,18 +305,18 @@ func (tm *TerminalManager) monitorSession(session *TerminalSession) {
 				session.LastUsed = time.Now()
 				output := make([]byte, n)
 				copy(output, buf[:n])
-				fmt.Printf("Terminal %s: Read %d bytes from PTY: %q\n", session.ID, n, string(output))
+				fmt.Printf("Terminal %s: Read %d bytes from PTY\n", session.ID, n)
 
-				// Send to output channel (non-blocking)
+				// Send to output channel with backpressure.
+				// Block until the channel has room or the monitor is asked to stop.
+				// This prevents data loss that corrupts terminal state when
+				// partial escape sequences are dropped.
 				select {
 				case outputCh <- output:
 					// Output sent successfully
 				case <-doneCh:
 					// Monitor was asked to stop
 					return
-				default:
-					// Channel is full, skip this output
-					fmt.Printf("Terminal %s output channel full, dropping data\n", session.ID)
 				}
 			}
 		}

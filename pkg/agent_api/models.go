@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"os"
@@ -14,6 +15,125 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/credentials"
 )
+
+const maxHTTPErrorBodyPreview = 240
+
+// FormatHTTPResponseError converts an HTTP error response into a concise,
+// user-facing error that avoids dumping full HTML or JSON payloads.
+func FormatHTTPResponseError(statusCode int, headers http.Header, body []byte) error {
+	message := summarizeHTTPResponseError(statusCode, headers, body)
+	if message == "" {
+		return fmt.Errorf("HTTP %d", statusCode)
+	}
+	return fmt.Errorf("HTTP %d: %s", statusCode, message)
+}
+
+func summarizeHTTPResponseError(statusCode int, headers http.Header, body []byte) string {
+	trimmed := strings.TrimSpace(string(body))
+	if trimmed == "" {
+		return ""
+	}
+
+	if jsonMsg := extractHTTPJSONErrorMessage(body); jsonMsg != "" {
+		return limitHTTPErrorText(jsonMsg)
+	}
+
+	if looksLikeHTMLErrorPage(headers, trimmed) {
+		return summarizeHTMLErrorPage(statusCode, trimmed)
+	}
+
+	return limitHTTPErrorText(trimmed)
+}
+
+func extractHTTPJSONErrorMessage(body []byte) string {
+	var payload map[string]interface{}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(extractHTTPJSONErrorField(payload))
+}
+
+func extractHTTPJSONErrorField(value interface{}) string {
+	switch typed := value.(type) {
+	case string:
+		return typed
+	case map[string]interface{}:
+		for _, key := range []string{"error", "message", "detail", "details", "title", "reason"} {
+			if msg := extractHTTPJSONErrorField(typed[key]); msg != "" {
+				return msg
+			}
+		}
+	case []interface{}:
+		for _, item := range typed {
+			if msg := extractHTTPJSONErrorField(item); msg != "" {
+				return msg
+			}
+		}
+	}
+	return ""
+}
+
+func looksLikeHTMLErrorPage(headers http.Header, body string) bool {
+	contentType := strings.ToLower(headers.Get("Content-Type"))
+	if strings.Contains(contentType, "text/html") || strings.Contains(contentType, "application/xhtml") {
+		return true
+	}
+
+	lowerBody := strings.ToLower(strings.TrimSpace(body))
+	return strings.HasPrefix(lowerBody, "<!doctype html") ||
+		strings.HasPrefix(lowerBody, "<html") ||
+		strings.Contains(lowerBody, "<title>")
+}
+
+func summarizeHTMLErrorPage(statusCode int, body string) string {
+	lowerBody := strings.ToLower(body)
+	if strings.Contains(lowerBody, "cloudflare") {
+		switch {
+		case statusCode == 524 || strings.Contains(lowerBody, "error code 524"):
+			return "upstream timeout (Cloudflare 524 HTML error page)"
+		case statusCode >= 520 && statusCode <= 527:
+			return fmt.Sprintf("gateway error (Cloudflare %d HTML error page)", statusCode)
+		default:
+			return "gateway error (Cloudflare HTML error page)"
+		}
+	}
+
+	if title := extractHTMLTitle(body); title != "" {
+		return fmt.Sprintf("%s (HTML error page)", limitHTTPErrorText(title))
+	}
+
+	if statusCode == http.StatusGatewayTimeout {
+		return "upstream timeout (HTML error page)"
+	}
+
+	return "received HTML error page"
+}
+
+func extractHTMLTitle(body string) string {
+	lowerBody := strings.ToLower(body)
+	start := strings.Index(lowerBody, "<title>")
+	if start == -1 {
+		return ""
+	}
+	start += len("<title>")
+	end := strings.Index(lowerBody[start:], "</title>")
+	if end == -1 {
+		return ""
+	}
+	title := html.UnescapeString(body[start : start+end])
+	return strings.TrimSpace(strings.Join(strings.Fields(title), " "))
+}
+
+func limitHTTPErrorText(text string) string {
+	text = strings.TrimSpace(strings.Join(strings.Fields(text), " "))
+	if text == "" {
+		return ""
+	}
+	if len(text) <= maxHTTPErrorBodyPreview {
+		return text
+	}
+	return text[:maxHTTPErrorBodyPreview-3] + "..."
+}
 
 // ModelInfo represents information about an available model
 type ModelInfo struct {
@@ -73,7 +193,9 @@ func GetModelsForProviderCtx(ctx context.Context, clientType ClientType) ([]Mode
 }
 
 // createProviderForType creates a provider instance for the given client type
-func createProviderForType(clientType ClientType) (interface{ ListModels(context.Context) ([]ModelInfo, error) }, error) {
+func createProviderForType(clientType ClientType) (interface {
+	ListModels(context.Context) ([]ModelInfo, error)
+}, error) {
 	switch clientType {
 	case OllamaClientType, OllamaLocalClientType:
 		client, err := NewOllamaLocalClient("llama3.1:8b") // Use an available model
@@ -134,7 +256,7 @@ func (w *openAIListModelsWrapper) ListModels(ctx context.Context) ([]ModelInfo, 
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to fetch OpenAI models (status %d): %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("failed to fetch OpenAI models: %w", FormatHTTPResponseError(resp.StatusCode, resp.Header, body))
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -242,7 +364,7 @@ func (w *openRouterListModelsWrapper) ListModels(ctx context.Context) ([]ModelIn
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to fetch OpenRouter models (status %d): %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("failed to fetch OpenRouter models: %w", FormatHTTPResponseError(resp.StatusCode, resp.Header, body))
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -326,7 +448,7 @@ func (w *deepInfraListModelsWrapper) ListModels(ctx context.Context) ([]ModelInf
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to fetch DeepInfra models (status %d): %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("failed to fetch DeepInfra models: %w", FormatHTTPResponseError(resp.StatusCode, resp.Header, body))
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -413,7 +535,7 @@ func (w *lmStudioListModelsWrapper) ListModels(ctx context.Context) ([]ModelInfo
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to fetch LM Studio models (status %d): %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("failed to fetch LM Studio models: %w", FormatHTTPResponseError(resp.StatusCode, resp.Header, body))
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -475,7 +597,7 @@ func (w *mistralListModelsWrapper) ListModels(ctx context.Context) ([]ModelInfo,
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to fetch Mistral models (status %d): %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("failed to fetch Mistral models: %w", FormatHTTPResponseError(resp.StatusCode, resp.Header, body))
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -674,7 +796,7 @@ func fetchOpenAICompatibleModels(ctx context.Context, providerName, endpoint str
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("models endpoint returned HTTP %d: %s", resp.StatusCode, string(body))
+		return nil, FormatHTTPResponseError(resp.StatusCode, resp.Header, body)
 	}
 
 	var payload struct {

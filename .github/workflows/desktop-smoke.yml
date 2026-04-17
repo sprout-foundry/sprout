@@ -100,18 +100,26 @@ jobs:
 
       - name: Run Electron smoke tests (with virtual display)
         env:
-          DISPLAY: ':99'
           ELECTRON_DISABLE_SECURITY_WARNINGS: 'true'
           CI: 'true'
         run: |
-          Xvfb :99 -screen 0 1280x720x24 &
-          XVFB_PID=$!
-          trap 'kill "$XVFB_PID"' EXIT
-          sleep 2
-          xdpyinfo >/tmp/desktop-smoke-xdpyinfo.txt
-          head -n 5 /tmp/desktop-smoke-xdpyinfo.txt
-          npm run test:desktop-smoke -- --reporter=list
+          xvfb-run -a -s "-screen 0 1280x720x24" bash -lc '
+            xdpyinfo >/tmp/desktop-smoke-xdpyinfo.txt
+            head -n 5 /tmp/desktop-smoke-xdpyinfo.txt
+            npm run test:desktop-smoke -- --reporter=list | tee /tmp/desktop-smoke-run.log
+          '
         timeout-minutes: 5
+
+      - name: Upload desktop smoke diagnostics (failure only)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-smoke-diagnostics
+          path: |
+            /tmp/desktop-smoke-xdpyinfo.txt
+            /tmp/desktop-smoke-run.log
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Upload test results
         if: always()

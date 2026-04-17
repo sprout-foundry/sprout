@@ -20,13 +20,16 @@ interface UseHotkeyIntegrationOptions {
   activePaneId: string | null;
   activeBufferId: string | null;
   buffers: Map<string, EditorBuffer>;
+  panes: Array<{ id: string }>;
   handleSplitRequest: (direction: 'vertical' | 'horizontal' | 'grid') => void;
+  splitPane: (paneId: string, direction: 'vertical' | 'horizontal') => string | null;
+  switchPane: (paneId: string) => void;
+  updatePaneSize: (sizeKey: string, size: number) => void;
   closeBuffer: (bufferId: string) => void;
   closeAllBuffers: () => void;
   closeOtherBuffers: (bufferId: string) => void;
   saveAllBuffers: () => Promise<void>;
   switchToBuffer: (bufferId: string) => void;
-  switchPane: (paneId: string) => void;
   toggleBufferPin: (bufferId: string) => void;
   onToggleCommandPalette: () => void;
   onOpenCommandPalette: () => void;
@@ -41,13 +44,16 @@ export function useHotkeyIntegration({
   activePaneId,
   activeBufferId,
   buffers,
+  panes,
   handleSplitRequest,
+  splitPane,
+  switchPane,
+  updatePaneSize,
   closeBuffer,
   closeAllBuffers,
   closeOtherBuffers,
   saveAllBuffers,
   switchToBuffer,
-  switchPane,
   toggleBufferPin,
   onToggleCommandPalette,
   onOpenCommandPalette,
@@ -80,6 +86,32 @@ export function useHotkeyIntegration({
       }
     },
     [activePaneId, buffers, switchPane, switchToBuffer],
+  );
+
+  const handleFocusPaneIndex = useCallback(
+    (index: number) => {
+      if (index < panes.length) {
+        // Focus existing pane
+        switchPane(panes[index].id);
+        return;
+      }
+      // index >= panes.length — need to split to create more panes
+      if (panes.length < 3) {
+        // Split from the active pane (or last pane)
+        const sourcePaneId = activePaneId || panes[panes.length - 1]?.id;
+        if (!sourcePaneId) return;
+        const direction = panes.length === 1 ? 'vertical' : 'horizontal';
+        const newPaneId = splitPane(sourcePaneId, direction);
+        if (newPaneId) {
+          // Update pane sizes to 50/50
+          updatePaneSize(`group:${sourcePaneId}`, 50);
+          updatePaneSize(`nested:${sourcePaneId}`, 50);
+          // Focus the new pane
+          switchPane(newPaneId);
+        }
+      }
+    },
+    [panes, activePaneId, splitPane, switchPane, updatePaneSize],
   );
 
   const handleNewFile = useCallback(() => {
@@ -122,6 +154,7 @@ export function useHotkeyIntegration({
     ),
     onPrimaryViewChange: handlePrimaryViewChange,
     onFocusTabIndex: focusTabIndex,
+    onFocusPaneIndex: handleFocusPaneIndex,
     onSplitRequest: handleSplitRequest,
     onCloseBuffer: handleCloseBuffer,
     onCloseAllBuffers: closeAllBuffers,

@@ -2,7 +2,9 @@ package agent
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
+	"sync"
 	"testing"
 )
 
@@ -75,8 +77,9 @@ func TestExportImportState(t *testing.T) {
 	}
 
 	// Verify imported data
-	if len(agent2.taskActions) != 1 {
-		t.Errorf("Expected 1 task action after import, got %d", len(agent2.taskActions))
+	actions := agent2.GetTaskActions()
+	if len(actions) != 1 {
+		t.Errorf("Expected 1 task action after import, got %d", len(actions))
 	}
 
 	if agent2.GetSessionID() != "test-session-123" {
@@ -134,8 +137,9 @@ func TestSaveLoadStateToFile(t *testing.T) {
 	}
 
 	// Verify loaded data
-	if len(agent2.taskActions) != 1 {
-		t.Errorf("Expected 1 task action after loading, got %d", len(agent2.taskActions))
+	actions := agent2.GetTaskActions()
+	if len(actions) != 1 {
+		t.Errorf("Expected 1 task action after loading, got %d", len(actions))
 	}
 
 	if agent2.GetSessionID() != "file-test-session" {
@@ -162,17 +166,19 @@ func TestAddTaskAction(t *testing.T) {
 	}
 
 	// Initially should have no actions
-	if len(agent.taskActions) != 0 {
-		t.Errorf("Expected 0 initial task actions, got %d", len(agent.taskActions))
+	actions := agent.GetTaskActions()
+	if len(actions) != 0 {
+		t.Errorf("Expected 0 initial task actions, got %d", len(actions))
 	}
 
 	// Add first action
 	agent.AddTaskAction("file_created", "Created new file", "example.go")
-	if len(agent.taskActions) != 1 {
-		t.Errorf("Expected 1 task action after adding, got %d", len(agent.taskActions))
+	actions = agent.GetTaskActions()
+	if len(actions) != 1 {
+		t.Errorf("Expected 1 task action after adding, got %d", len(actions))
 	}
 
-	action := agent.taskActions[0]
+	action := actions[0]
 	if action.Type != "file_created" {
 		t.Errorf("Expected action type 'file_created', got %q", action.Type)
 	}
@@ -185,8 +191,57 @@ func TestAddTaskAction(t *testing.T) {
 
 	// Add second action
 	agent.AddTaskAction("file_modified", "Modified existing file", "example.go")
-	if len(agent.taskActions) != 2 {
-		t.Errorf("Expected 2 task actions after adding second, got %d", len(agent.taskActions))
+	actions = agent.GetTaskActions()
+	if len(actions) != 2 {
+		t.Errorf("Expected 2 task actions after adding second, got %d", len(actions))
+	}
+}
+
+func TestAddTaskActionConcurrent(t *testing.T) {
+	// Set test API key
+	originalKey := os.Getenv("OPENROUTER_API_KEY")
+	os.Setenv("OPENROUTER_API_KEY", "test-key")
+	defer func() {
+		if originalKey != "" {
+			os.Setenv("OPENROUTER_API_KEY", originalKey)
+		} else {
+			os.Unsetenv("OPENROUTER_API_KEY")
+		}
+	}()
+
+	agent, err := NewAgent()
+	if err != nil {
+		t.Skipf("Skipping test due to connection error: %v", err)
+	}
+
+	const workers = 32
+	var wg sync.WaitGroup
+	wg.Add(workers)
+
+	for i := 0; i < workers; i++ {
+		go func(index int) {
+			defer wg.Done()
+			agent.AddTaskAction("file_read", fmt.Sprintf("Read file %d", index), fmt.Sprintf("file-%d.txt", index))
+		}(i)
+	}
+
+	wg.Wait()
+
+	actions := agent.GetTaskActions()
+	if len(actions) != workers {
+		t.Fatalf("Expected %d task actions after concurrent adds, got %d", workers, len(actions))
+	}
+
+	seen := make(map[string]bool, workers)
+	for _, action := range actions {
+		seen[action.Details] = true
+	}
+
+	for i := 0; i < workers; i++ {
+		key := fmt.Sprintf("file-%d.txt", i)
+		if !seen[key] {
+			t.Fatalf("Missing task action for %s", key)
+		}
 	}
 }
 

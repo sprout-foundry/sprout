@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/agent_api"
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
 
 const (
@@ -216,7 +216,7 @@ func (a *Agent) SaveStateScoped(sessionID, workingDir string) error {
 	state := ConversationState{
 		Messages:                a.messages,
 		TurnCheckpoints:         a.copyTurnCheckpoints(),
-		TaskActions:             a.taskActions,
+		TaskActions:             a.GetTaskActions(),
 		TotalCost:               a.totalCost,
 		TotalTokens:             a.totalTokens,
 		PromptTokens:            a.promptTokens,
@@ -603,7 +603,8 @@ func DeleteSessionScoped(sessionID, workingDir string) error {
 
 // GenerateSessionSummary creates a summary of previous actions for continuity
 func (a *Agent) GenerateSessionSummary() string {
-	if len(a.taskActions) == 0 {
+	taskActions := a.GetTaskActions()
+	if len(taskActions) == 0 {
 		return "No previous actions recorded."
 	}
 
@@ -617,7 +618,7 @@ func (a *Agent) GenerateSessionSummary() string {
 	commandsExecuted := 0
 	filesRead := 0
 
-	for _, action := range a.taskActions {
+	for _, action := range taskActions {
 		switch action.Type {
 		case "file_created":
 			fileCreations++
@@ -638,11 +639,11 @@ func (a *Agent) GenerateSessionSummary() string {
 	summary.WriteString(fmt.Sprintf("• Total tokens: %s\n", a.formatTokenCount(a.totalTokens)))
 
 	// Add recent notable actions
-	if len(a.taskActions) > 0 {
+	if len(taskActions) > 0 {
 		summary.WriteString("\nRecent actions:\n")
-		recentCount := min(5, len(a.taskActions))
-		for i := len(a.taskActions) - recentCount; i < len(a.taskActions); i++ {
-			action := a.taskActions[i]
+		recentCount := min(5, len(taskActions))
+		for i := len(taskActions) - recentCount; i < len(taskActions); i++ {
+			action := taskActions[i]
 			summary.WriteString(fmt.Sprintf("• %s: %s\n", action.Type, action.Description))
 		}
 	}
@@ -657,7 +658,7 @@ func (a *Agent) ApplyState(state *ConversationState) {
 	// Apply saved state
 	a.messages = state.Messages
 	a.ReplaceTurnCheckpoints(state.TurnCheckpoints)
-	a.taskActions = state.TaskActions
+	a.replaceTaskActions(state.TaskActions)
 	a.totalCost = state.TotalCost
 	a.totalTokens = state.TotalTokens
 	a.promptTokens = state.PromptTokens

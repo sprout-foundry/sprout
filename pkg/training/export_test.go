@@ -775,21 +775,67 @@ func TestExportSessions_InvalidOptions(t *testing.T) {
 func TestExportSessions_WithAllAndMinFilters(t *testing.T) {
 	dir := t.TempDir()
 	outPath := filepath.Join(dir, "all_out.jsonl")
+	stateDir := filepath.Join(dir, "sessions")
+	restore := agent.SetStateDirFuncForTesting(func() (string, error) {
+		return stateDir, nil
+	})
+	defer restore()
+
+	workingDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workingDir, 0o755); err != nil {
+		t.Fatalf("mkdir workspace: %v", err)
+	}
+
+	qualifying := sampleConversationState("qualifying")
+	qualifying.WorkingDirectory = workingDir
+	for i := 0; i < 8; i++ {
+		qualifying.TaskActions = append(qualifying.TaskActions, agent.TaskAction{Type: "file_modified", Description: "extra action"})
+	}
+	for i := 0; i < 4; i++ {
+		qualifying.Messages = append(qualifying.Messages,
+			api.Message{Role: "user", Content: "follow-up request"},
+			api.Message{Role: "assistant", Content: "follow-up response"},
+		)
+	}
+
+	filteredByActions := sampleConversationState("filtered-actions")
+	filteredByActions.WorkingDirectory = filepath.Join(dir, "workspace-actions")
+
+	filteredByTurns := sampleConversationState("filtered-turns")
+	filteredByTurns.WorkingDirectory = filepath.Join(dir, "workspace-turns")
+	for i := 0; i < 8; i++ {
+		filteredByTurns.TaskActions = append(filteredByTurns.TaskActions, agent.TaskAction{Type: "file_modified", Description: "extra action"})
+	}
+	filteredByTurns.Messages = filteredByTurns.Messages[:4]
+
+	for _, state := range []agent.ConversationState{qualifying, filteredByActions, filteredByTurns} {
+		if err := os.MkdirAll(state.WorkingDirectory, 0o755); err != nil {
+			t.Fatalf("mkdir state workspace: %v", err)
+		}
+		if err := agent.WriteTestSessionFile(stateDir, state.SessionID, state.WorkingDirectory, &state); err != nil {
+			t.Fatalf("WriteTestSessionFile(%s): %v", state.SessionID, err)
+		}
+	}
 
 	result, err := ExportSessions(ExportOptions{
-		Format:       "openai",
-		Output:       outPath,
-		All:          true,
-		MinTurns:     5,
-		MinActions:   10,
+		Format:        "openai",
+		Output:        outPath,
+		All:           true,
+		MinTurns:      5,
+		MinActions:    10,
 		NoToolResults: true,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// The result should be consistent regardless of host state.
-	if result.SessionsExported+result.SessionsFiltered > result.SessionsScanned {
-		t.Error("exported + filtered should not exceed scanned")
+	if result.SessionsScanned != 3 {
+		t.Fatalf("expected 3 scanned sessions, got %d", result.SessionsScanned)
+	}
+	if result.SessionsExported != 1 {
+		t.Fatalf("expected 1 exported session, got %d", result.SessionsExported)
+	}
+	if result.SessionsFiltered != 2 {
+		t.Fatalf("expected 2 filtered sessions, got %d", result.SessionsFiltered)
 	}
 	if result.OutputPath != outPath {
 		t.Errorf("output path mismatch")

@@ -276,19 +276,29 @@ func TestMCPManager_StartAll_NoServers(t *testing.T) {
 func TestMCPManager_StartAll_AllServersStartSuccessfully(t *testing.T) {
 	manager := NewMCPManager(nil)
 
-	// Add servers
-	err := manager.AddServer(MCPServerConfig{Name: "server1", Command: "npx", AutoStart: true})
-	require.NoError(t, err)
-	err = manager.AddServer(MCPServerConfig{Name: "server2", Command: "uvx", AutoStart: true})
-	require.NoError(t, err)
-	err = manager.AddServer(MCPServerConfig{Name: "server3", Command: "node", AutoStart: false})
-	require.NoError(t, err)
+	// Use mock servers so the test doesn't depend on real executables being
+	// available in CI (npx/uvx/node may not be on PATH).
+	mock1 := newMockMCPServer("server1") // AutoStart: true by default in newMockMCPServer
+	mock2 := newMockMCPServer("server2")
+	mock3 := newMockMCPServer("server3")
+	mock3.config.AutoStart = false // should NOT be started by StartAll
 
-	// Note: This test will succeed in the sense that StartAll won't error,
-	// even though the actual server processes won't start without real commands
-	err = manager.StartAll(context.Background())
-	// We expect no error even if real servers fail - that's handled by server implementation
+	require.NoError(t, addMockServerToManager(manager, mock1))
+	require.NoError(t, addMockServerToManager(manager, mock2))
+	require.NoError(t, addMockServerToManager(manager, mock3))
+
+	err := manager.StartAll(context.Background())
 	assert.NoError(t, err)
+
+	// AutoStart servers should have been started
+	assert.True(t, mock1.startCalled)
+	assert.True(t, mock1.IsRunning())
+	assert.True(t, mock2.startCalled)
+	assert.True(t, mock2.IsRunning())
+
+	// AutoStart=false server should be untouched
+	assert.False(t, mock3.startCalled)
+	assert.False(t, mock3.IsRunning())
 }
 
 func TestMCPManager_StopAll_NoServers(t *testing.T) {

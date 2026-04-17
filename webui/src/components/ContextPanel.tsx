@@ -56,13 +56,16 @@ const FILE_PATH_RE = /((?:\.\.?\/|\/(?!\/))?(?:[\w.-]+\/)+[\w.-]+\.\w{1,10})/g;
 
 /** Renders preformatted tool text with file paths as clickable links that open in the editor. */
 function FilePathPre({ text }: { text: string }): JSX.Element {
+  // Strip ANSI codes before processing to ensure clean rendering
+  const cleanedText = stripAnsiCodes(text);
+  
   const parts: Array<string | JSX.Element> = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
   FILE_PATH_RE.lastIndex = 0;
-  while ((match = FILE_PATH_RE.exec(text)) !== null) {
+  while ((match = FILE_PATH_RE.exec(cleanedText)) !== null) {
     if (match.index > lastIndex) {
-      parts.push(text.slice(lastIndex, match.index));
+      parts.push(cleanedText.slice(lastIndex, match.index));
     }
     const filePath = match[1];
     parts.push(
@@ -84,8 +87,8 @@ function FilePathPre({ text }: { text: string }): JSX.Element {
     );
     lastIndex = match.index + match[0].length;
   }
-  if (lastIndex < text.length) {
-    parts.push(text.slice(lastIndex));
+  if (lastIndex < cleanedText.length) {
+    parts.push(cleanedText.slice(lastIndex));
   }
   return <pre>{parts}</pre>;
 }

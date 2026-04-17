@@ -174,31 +174,6 @@ download_release() {
     echo "$download_url"
 }
 
-# Prefer source install in Termux to avoid binary compatibility issues.
-install_from_source_termux() {
-    local version="$1"
-    local install_dir="$2"
-
-    if ! command -v go >/dev/null 2>&1; then
-        return 1
-    fi
-
-    local module_ref
-    module_ref="github.com/alantheprice/ledit@${version}"
-    if [ -z "$version" ]; then
-        module_ref="github.com/alantheprice/ledit@latest"
-    fi
-
-    log_info "Termux detected; installing from source via go install (${module_ref})"
-    if GOBIN="$install_dir" go install "$module_ref"; then
-        log_success "Installed via go install to $install_dir/ledit"
-        return 0
-    fi
-
-    log_warn "go install failed in Termux; falling back to release tarball"
-    return 1
-}
-
 # Install the binary
 install_binary() {
     local tarball="$1"
@@ -358,12 +333,6 @@ main() {
 
     if is_termux; then
         mkdir -p "$install_dir"
-        if install_from_source_termux "$version" "$install_dir"; then
-            verify_installation "$install_dir"
-            print_success "$install_dir" "$version"
-            print_uninstall_instructions "$install_dir"
-            exit 0
-        fi
     fi
     
     # Remove old versions if they exist

@@ -488,8 +488,7 @@ func (p *GenericProvider) SupportsVision() bool {
 		return true
 	}
 
-	modelLower := strings.ToLower(currentModel)
-	return strings.Contains(modelLower, "vision") || strings.Contains(modelLower, "vl")
+	return false
 }
 
 // GetVisionModel returns the vision model

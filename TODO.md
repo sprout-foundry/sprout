@@ -371,3 +371,15 @@ Three Python test runner scripts at the project root with overlapping purposes:
 
 **Cleanup command:** `rm -f test-results/.last-run.json`
 **Update_and_test.sh:** Consider deleting or moving to a `scripts/dev/` directory.
+
+---
+
+## Core Architecture & Engineering Improvements
+
+These are high-impact structural improvements identified through code evaluation. They address fundamental architectural concerns that will improve maintainability, testability, and reliability as the project scales.
+
+[] - ARCHITECTURE: Refactor `pkg/agent/agent.go` to decompose the "God Object" Agent struct — The current `Agent` struct holds ~100 fields spanning LLM client logic, security, MCP management, WebUI event routing, terminal output, and tool execution. This creates tight coupling and makes unit testing difficult. Break into specialized sub-managers: `OutputManager` (interface for CLI/WebUI output), `SecurityManager` (approvals, redaction, elevation), `MCPManager` (server lifecycle), and `StateManager` (conversation history, checkpoints). The core `Agent` should only coordinate these via interfaces, not hold direct implementation references. Target: reduce `Agent` struct to < 30 fields and isolate presentation logic from core orchestration.
+
+[] - CONCURRENCY: Improve synchronization patterns in `pkg/agent/agent.go` and related packages — The code uses ~15 different mutexes (`sync.Mutex`, `sync.RWMutex`, `sync.Once`) protecting individual fields. This creates risk of race conditions and deadlocks as complexity grows. Implement: (1) Encapsulated state objects that update atomically (e.g., `ConversationState` with its own mutex, `SecurityState` with its own mutex), (2) Use channels for cross-component communication instead of direct method calls from goroutines, (3) Audit all field accesses in `CheckFileContentSecurity`, `ProcessQuery`, and tool handlers to ensure consistent locking. Target: reduce mutex count by 40% through state encapsulation and add race detector tests (`go test -race`) to CI.
+
+[] - OBSERVABILITY: Implement structured error taxonomy and diagnostic logging — Currently errors use ad-hoc `fmt.Errorf` wrapping without classification, making it hard for the Agent to implement intelligent retry/recovery logic. Create: (1) Error types package (`pkg/errors/types.go`) with categorized errors (`ErrTransientProvider`, `ErrSecurityViolation`, `ErrInvalidInput`, `ErrRateLimited`), (2) Structured logging interface that automatically attaches context (`sessionID`, `iteration`, `provider`, `model`) to all log entries, (3) Replace `fmt.Printf` debug statements with the structured logger. Target: 100% of errors in `pkg/agent/` use typed errors; debug logs include session context; Agent implements retry logic based on error type (transient = retry with backoff, security = stop and prompt).

@@ -101,6 +101,14 @@ type Config struct {
 	SubagentMaxParallel    int                     `json:"subagent_max_parallel,omitempty"`     // Maximum number of parallel subagents (default: 2)
 	SubagentParallelEnabled *bool                   `json:"subagent_parallel_enabled,omitempty"` // Enable/disable parallel subagent execution (default: true)
 
+	// Commit Configuration
+	CommitProvider string `json:"commit_provider,omitempty"` // Provider for commit message generation (defaults to LastUsedProvider)
+	CommitModel    string `json:"commit_model,omitempty"`    // Model for commit message generation (defaults to provider's default model)
+
+	// Review Configuration
+	ReviewProvider string `json:"review_provider,omitempty"` // Provider for review commands (defaults to LastUsedProvider)
+	ReviewModel    string `json:"review_model,omitempty"`    // Model for review commands (defaults to provider's default model)
+
 	// PDF OCR Configuration
 	PDFOCREnabled    bool   `json:"pdf_ocr_enabled,omitempty"`    // Enable PDF OCR processing
 	PDFOCRProvider   string `json:"pdf_ocr_provider,omitempty"`   // Provider for PDF OCR (e.g., "ollama", "openai", "deepinfra")
@@ -572,6 +580,82 @@ func (c *Config) SetSubagentProvider(provider string) {
 // SetSubagentModel sets the model for subagents
 func (c *Config) SetSubagentModel(model string) {
 	c.SubagentModel = model
+}
+
+// GetCommitProvider returns the configured provider for commit message generation
+// If not explicitly set, falls back to the last used provider
+func (c *Config) GetCommitProvider() string {
+	if c.CommitProvider != "" {
+		return c.CommitProvider
+	}
+	// Fall back to last used provider
+	if c.LastUsedProvider != "" {
+		return c.LastUsedProvider
+	}
+	// Fall back to first priority provider
+	if len(c.ProviderPriority) > 0 {
+		return c.ProviderPriority[0]
+	}
+	return "ollama-local" // Ultimate fallback
+}
+
+// GetCommitModel returns the configured model for commit message generation
+// If not explicitly set, falls back to the provider's default model
+func (c *Config) GetCommitModel() string {
+	if c.CommitModel != "" {
+		return c.CommitModel
+	}
+	// Use the provider for commits
+	provider := c.GetCommitProvider()
+	return c.GetModelForProvider(provider)
+}
+
+// SetCommitProvider sets the provider for commit message generation
+func (c *Config) SetCommitProvider(provider string) {
+	c.CommitProvider = provider
+}
+
+// SetCommitModel sets the model for commit message generation
+func (c *Config) SetCommitModel(model string) {
+	c.CommitModel = model
+}
+
+// GetReviewProvider returns the configured provider for review commands
+// If not explicitly set, falls back to the last used provider
+func (c *Config) GetReviewProvider() string {
+	if c.ReviewProvider != "" {
+		return c.ReviewProvider
+	}
+	// Fall back to last used provider
+	if c.LastUsedProvider != "" {
+		return c.LastUsedProvider
+	}
+	// Fall back to first priority provider
+	if len(c.ProviderPriority) > 0 {
+		return c.ProviderPriority[0]
+	}
+	return "ollama-local" // Ultimate fallback
+}
+
+// GetReviewModel returns the configured model for review commands
+// If not explicitly set, falls back to the provider's default model
+func (c *Config) GetReviewModel() string {
+	if c.ReviewModel != "" {
+		return c.ReviewModel
+	}
+	// Use the provider for reviews
+	provider := c.GetReviewProvider()
+	return c.GetModelForProvider(provider)
+}
+
+// SetReviewProvider sets the provider for review commands
+func (c *Config) SetReviewProvider(provider string) {
+	c.ReviewProvider = provider
+}
+
+// SetReviewModel sets the model for review commands
+func (c *Config) SetReviewModel(model string) {
+	c.ReviewModel = model
 }
 
 // GetSubagentType retrieves a subagent type configuration by ID

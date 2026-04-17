@@ -73,6 +73,11 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 		return fmt.Errorf("configuration error: %w", err)
 	}
 
+	// Display the provider/model being used for review
+	reviewProvider := cfg.GetReviewProvider()
+	reviewModel := cfg.GetReviewModel()
+	logger.LogProcessStep(fmt.Sprintf("Using provider: %s, model: %s for review", reviewProvider, reviewModel))
+
 	logger.LogProcessStep("Configuration loaded successfully")
 
 	// Check for staged changes
@@ -128,7 +133,19 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 	// Create the review context with optimized diff and metadata.
 	// IMPORTANT: Must include AgentClient for the review to work.
 	agentClient := service.GetDefaultAgentClient()
-	if chatAgent != nil {
+
+	// Try to use configured review provider/model first
+	if reviewProvider != "" {
+		if sessionClient, err := factory.CreateProviderClient(api.ClientType(reviewProvider), reviewModel); err == nil {
+			agentClient = sessionClient
+			logger.LogProcessStep(fmt.Sprintf("Using configured review provider/model: %s | %s", reviewProvider, reviewModel))
+		} else {
+			logger.LogProcessStep(fmt.Sprintf("Warning: failed to use configured review provider/model (%s | %s): %v", reviewProvider, reviewModel, err))
+		}
+	}
+
+	// Fall back to active session provider/model if configured one fails
+	if agentClient == service.GetDefaultAgentClient() && chatAgent != nil {
 		activeProvider := strings.TrimSpace(chatAgent.GetProvider())
 		activeModel := strings.TrimSpace(chatAgent.GetModel())
 		if activeProvider != "" {
@@ -140,6 +157,8 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 			}
 		}
 	}
+
+	// Validate we have an agent client
 	if agentClient == nil {
 		logger.LogError(errors.New("failed to get default agent client"))
 		return errors.New("agent client initialization failed")

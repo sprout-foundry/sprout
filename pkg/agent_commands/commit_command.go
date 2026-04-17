@@ -9,6 +9,7 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/factory"
 	gitops "github.com/alantheprice/ledit/pkg/git"
 	"github.com/alantheprice/ledit/pkg/security"
@@ -324,32 +325,21 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 
 	// Generate commit message
 	c.println("")
-	if chatAgent != nil {
-		// Try to get model and provider info, but handle gracefully if it fails
-		if func() bool {
-			defer func() {
-				if r := recover(); r != nil {
-					// Handle any panic during provider/model access
-					c.println("Using manual commit mode (agent access failed)")
-					chatAgent = nil
-				}
-			}()
-
-			model := chatAgent.GetModel()
-			provider := chatAgent.GetProvider()
-			c.printf("Using model: %s\n From Provider: %s\n", model, provider)
-			return true
-		}() {
-			// Success
-		} else {
-			// Failed, already handled above
+	// Load configuration to get commit provider/model settings
+	cfg, err := configuration.LoadOrInitConfig(true)
+	if err != nil {
+		c.printf("[WARN] Failed to load configuration: %v\n", err)
+		if chatAgent == nil {
+			if c.agentError != nil {
+				c.printf("[WARN] Using manual commit mode (AI agent unavailable: %v)", c.agentError)
+			} else {
+				c.println("Using manual commit mode (no AI agent available)")
+			}
 		}
 	} else {
-		if c.agentError != nil {
-			c.printf("[WARN] Using manual commit mode (AI agent unavailable: %v)", c.agentError)
-		} else {
-			c.println("Using manual commit mode (no AI agent available)")
-		}
+		commitProvider := cfg.GetCommitProvider()
+		commitModel := cfg.GetCommitModel()
+		c.printf("Using provider: %s, model: %s for commit message generation\n", commitProvider, commitModel)
 	}
 
 	// Get staged diff
@@ -363,11 +353,22 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 		return nil
 	}
 
-	// Prepare LLM client if agent is available; otherwise fall back to manual prompt
+	// Prepare LLM client using configured commit provider/model
 	var client api.ClientInterface
 	var clientType api.ClientType
 	var model string
-	if chatAgent != nil {
+
+	// Use configured commit provider/model from config if available
+	if cfg != nil && cfg.GetCommitProvider() != "" {
+		clientType = api.ClientType(cfg.GetCommitProvider())
+		model = cfg.GetCommitModel()
+		if cl, ce := factory.CreateProviderClient(clientType, model); ce == nil {
+			client = cl
+		}
+	}
+
+	// Fall back to chatAgent's config if client not created
+	if client == nil && chatAgent != nil {
 		configManager := chatAgent.GetConfigManager()
 		if configManager != nil {
 			if ct, e := configManager.GetProvider(); e == nil {

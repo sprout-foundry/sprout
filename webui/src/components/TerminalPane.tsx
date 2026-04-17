@@ -125,13 +125,29 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       const term = xtermRef.current;
       if (!term) return;
 
-      // Prevent default browser behavior
+      // Prevent the page from scrolling while over the terminal.
       e.preventDefault();
+      // Stop propagation so xterm's own internal handler doesn't fire and
+      // double-scroll on top of our normalized scroll below.
+      e.stopPropagation();
 
-      // Use xterm's scroll API to scroll by the wheel delta
-      // deltaY is positive for scrolling down, negative for scrolling up
-      // xterm.scrollLines(negative) scrolls up, positive scrolls down
-      term.scrollLines(-e.deltaY);
+      let lines: number;
+      if (e.deltaMode === WheelEvent.DOM_DELTA_LINE) {
+        // Already in line units (e.g. Linux/Firefox standard mouse wheel).
+        lines = e.deltaY;
+      } else if (e.deltaMode === WheelEvent.DOM_DELTA_PAGE) {
+        // Page unit — treat one page as the visible row count.
+        lines = e.deltaY > 0 ? term.rows : -term.rows;
+      } else {
+        // DOM_DELTA_PIXEL — common on macOS trackpads and Windows precision
+        // touchpads. Divide by approximate line height to get line count.
+        const approxLineHeight = (term.options.fontSize ?? FONT_SIZE_DEFAULT) * (term.options.lineHeight ?? 1.2);
+        lines = e.deltaY / approxLineHeight;
+      }
+
+      // scrollLines: positive = scroll UP (older content), negative = scroll DOWN.
+      // deltaY positive = user scrolled down → show newer content → negative lines.
+      term.scrollLines(-Math.round(lines));
     }, []);
 
     // ── Context menu handlers ──
@@ -252,10 +268,11 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       term.loadAddon(fitAddon);
       term.open(xtermContainerRef.current);
 
-      // Add wheel event handler for native scrolling
+      // Add wheel event handler in capture phase so we intercept the event
+      // before xterm's own viewport handler, preventing double-scrolling.
       const container = xtermContainerRef.current;
       if (container) {
-        container.addEventListener('wheel', handleWheel, { passive: false });
+        container.addEventListener('wheel', handleWheel, { capture: true, passive: false });
       }
 
       xtermRef.current = term;
@@ -271,9 +288,9 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       });
 
       return () => {
-        // Remove wheel event listener
+        // Remove wheel event listener (only capture flag is used for matching per DOM spec)
         if (container) {
-          container.removeEventListener('wheel', handleWheel);
+          container.removeEventListener('wheel', handleWheel, { capture: true });
         }
         try {
           term.dispose();

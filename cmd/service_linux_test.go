@@ -4,7 +4,6 @@ package cmd
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 	"testing"
 )
@@ -65,14 +64,14 @@ func TestGenerateSystemdUnit(t *testing.T) {
 				}
 			}
 
-			// ExecStart uses quoted binary path
-			wantExec := fmt.Sprintf("ExecStart=%s agent -d --no-connection-check", strconv.Quote(tt.binaryPath))
+			// ExecStart uses unquoted binary path (no special chars)
+			wantExec := fmt.Sprintf("ExecStart=%s agent -d --no-connection-check", tt.binaryPath)
 			if !strings.Contains(s, wantExec) {
 				t.Errorf("ExecStart mismatch\ngot:  %s\nwant: %s", extractLine(s, "ExecStart="), wantExec)
 			}
 
-			// WorkingDirectory uses quoted home dir
-			wantWD := "WorkingDirectory=" + strconv.Quote(tt.homeDir)
+			// WorkingDirectory uses unquoted path (systemd requires literal paths)
+			wantWD := "WorkingDirectory=" + tt.homeDir
 			if !strings.Contains(s, wantWD) {
 				t.Errorf("WorkingDirectory mismatch\ngot:  %s\nwant: %s", extractLine(s, "WorkingDirectory="), wantWD)
 			}
@@ -81,7 +80,7 @@ func TestGenerateSystemdUnit(t *testing.T) {
 			if !strings.Contains(s, "Environment=LEDIT_SERVICE=1") {
 				t.Error("missing Environment=LEDIT_SERVICE=1")
 			}
-			wantHome := "Environment=HOME=" + strconv.Quote(tt.homeDir)
+			wantHome := "Environment=HOME=" + tt.homeDir
 			if !strings.Contains(s, wantHome) {
 				t.Errorf("Environment HOME mismatch\ngot:  %s\nwant: %s", extractLine(s, "Environment=HOME="), wantHome)
 			}
@@ -109,21 +108,21 @@ func TestSystemdUnitPaths(t *testing.T) {
 
 		s := string(out)
 
-		// Paths containing no special chars are still quoted for safety
-		expectedExec := fmt.Sprintf("ExecStart=%s agent", strconv.Quote(binary))
+		// Paths without special chars are unquoted
+		expectedExec := fmt.Sprintf("ExecStart=%s agent", binary)
 		if !strings.Contains(s, expectedExec) {
-			t.Errorf("ExecStart should contain quoted binary\ngot:  %s", extractLine(s, "ExecStart="))
+			t.Errorf("ExecStart should contain unquoted binary\ngot:  %s", extractLine(s, "ExecStart="))
 		}
 
-		// Home dir appears in WorkingDirectory and Environment HOME
-		wdCount := strings.Count(s, "WorkingDirectory="+strconv.Quote(home))
+		// WorkingDirectory and Environment HOME use unquoted literal paths
+		wdCount := strings.Count(s, "WorkingDirectory="+home)
 		if wdCount != 1 {
-			t.Errorf("expected 1 WorkingDirectory=%s, got %d", strconv.Quote(home), wdCount)
+			t.Errorf("expected 1 WorkingDirectory=%s, got %d", home, wdCount)
 		}
 
-		homeEnvCount := strings.Count(s, "Environment=HOME="+strconv.Quote(home))
+		homeEnvCount := strings.Count(s, "Environment=HOME="+home)
 		if homeEnvCount != 1 {
-			t.Errorf("expected 1 Environment=HOME=%s, got %d", strconv.Quote(home), homeEnvCount)
+			t.Errorf("expected 1 Environment=HOME=%s, got %d", home, homeEnvCount)
 		}
 	})
 
@@ -136,15 +135,18 @@ func TestSystemdUnitPaths(t *testing.T) {
 		}
 		s := string(out)
 
-		// Paths with spaces should be quoted
-		quotedHome := strconv.Quote(home)
-		if !strings.Contains(s, quotedHome) {
-			t.Errorf("home directory with spaces should be quoted in unit file\ngot:\n%s", s)
+		// WorkingDirectory and HOME use unquoted literal paths even with spaces
+		// (systemd treats quotes as part of the path value)
+		if !strings.Contains(s, "WorkingDirectory="+home) {
+			t.Errorf("WorkingDirectory should use unquoted path\ngot:\n%s", s)
+		}
+		if !strings.Contains(s, "Environment=HOME="+home) {
+			t.Errorf("Environment HOME should use unquoted path\ngot:\n%s", s)
 		}
 
-		// ExecStart should have the binary quoted
-		if !strings.Contains(s, strconv.Quote(binary)+" agent") {
-			t.Errorf("ExecStart should have quoted binary path\ngot:\n%s", s)
+		// ExecStart should have the binary unquoted (no special chars)
+		if !strings.Contains(s, binary+" agent") {
+			t.Errorf("ExecStart should have unquoted binary path\ngot:\n%s", s)
 		}
 	})
 }

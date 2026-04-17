@@ -85,14 +85,14 @@ func logChatResponseDetailed(resp *api.ChatResponse, provider string, streaming 
 
 // APIClient handles all LLM API communication with retry logic
 type APIClient struct {
-	agent                       *Agent
-	rateLimiter                 *utils.RateLimitBackoff
-	maxRetries                  int
-	baseRetryDelay              time.Duration
-	connectionTimeout          time.Duration // Time to establish connection
-	firstChunkTimeout          time.Duration // Time to receive first response chunk
-	chunkTimeout              time.Duration // Max time between chunks in streaming
-	overallTimeout            time.Duration // Total request timeout
+	agent                   *Agent
+	rateLimiter             *utils.RateLimitBackoff
+	maxRetries              int
+	baseRetryDelay          time.Duration
+	connectionTimeout       time.Duration                        // Time to establish connection
+	firstChunkTimeout       time.Duration                        // Time to receive first response chunk
+	chunkTimeout            time.Duration                        // Max time between chunks in streaming
+	overallTimeout          time.Duration                        // Total request timeout
 	prepareMessagesCallback func(tools []api.Tool) []api.Message // Callback to re-prepare messages after compaction
 }
 
@@ -278,6 +278,19 @@ func (ac *APIClient) SendWithRetry(messages []api.Message, tools []api.Tool, rea
 			continue
 		}
 
+		// Check for image-not-supported error - strip images and retry once
+		if ac.isImageNotSupportedError(err) {
+			stripped, hadImages := stripImagesFromMessages(messages)
+			if hadImages {
+				if ac.agent.debug {
+					ac.agent.debugLog("DEBUG: image-not-supported error, retrying without images\n")
+				}
+				ac.agent.PrintLineAsync("[img] Model does not support image input; retrying without images")
+				messages = stripped
+				continue
+			}
+		}
+
 		// Handle error with retry logic
 		if !ac.shouldRetry(err, retry) {
 			if ac.agent.debug {
@@ -453,8 +466,8 @@ func (ac *APIClient) sendStreamingRequest(messages []api.Message, tools []api.To
 
 	for {
 		select {
-			case <-ac.agent.interruptCtx.Done():
-		return nil, errors.New("request interrupted by user")
+		case <-ac.agent.interruptCtx.Done():
+			return nil, errors.New("request interrupted by user")
 
 		case <-ctx.Done():
 			ac.displayTimeoutError("Request timed out", ac.overallTimeout)
@@ -666,6 +679,33 @@ func (ac *APIClient) isRetryableError(errStr string) bool {
 		strings.Contains(errStr, "connection reset") ||
 		strings.Contains(errStr, "EOF") ||
 		strings.Contains(errStr, "timeout")
+}
+
+// isImageNotSupportedError checks if an error indicates the model doesn't support image input
+func (ac *APIClient) isImageNotSupportedError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := strings.ToLower(err.Error())
+	return strings.Contains(errStr, "image input is not supported") ||
+		strings.Contains(errStr, "does not support image") ||
+		strings.Contains(errStr, "vision is not supported") ||
+		strings.Contains(errStr, "multimodal is not supported")
+}
+
+// stripImagesFromMessages returns a copy of messages with all Images fields cleared.
+// Returns the stripped messages and whether any images were actually present.
+func stripImagesFromMessages(messages []api.Message) ([]api.Message, bool) {
+	hasImages := false
+	out := make([]api.Message, len(messages))
+	copy(out, messages)
+	for i := range out {
+		if len(out[i].Images) > 0 {
+			hasImages = true
+			out[i].Images = nil
+		}
+	}
+	return out, hasImages
 }
 
 // isContextLimitError checks if an error indicates the context window limit was exceeded

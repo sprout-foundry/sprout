@@ -664,6 +664,7 @@
   border: 1px solid var(--border-default);
   cursor: pointer;
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.2s;
   font-size: 11px;
   padding: 3px 5px;
@@ -673,6 +674,7 @@
 
 .message-bubble:hover .copy-button {
   opacity: 0.85;
+  pointer-events: auto;
 }
 
 .copy-button:hover {

@@ -434,7 +434,7 @@ function Sidebar({
       const filePath = detail?.path;
       if (!filePath) return;
 
-      // Switch to files tab
+      // Switch to files tab — uncollapse if needed
       if (effectiveSidebarCollapsed) {
         setSelectedSection('files');
         onSidebarToggle?.();
@@ -442,10 +442,13 @@ function Sidebar({
         setSelectedSection('files');
       }
 
-      // Give the section switch time to render, then reveal
-      setTimeout(() => {
-        fileTreeRef.current?.revealFile(filePath);
-      }, 100);
+      // If we have a file path, reveal it in the tree
+      if (filePath) {
+        // Give the section switch time to render, then reveal
+        setTimeout(() => {
+          fileTreeRef.current?.revealFile(filePath);
+        }, 100);
+      }
     };
 
     window.addEventListener('ledit:reveal-in-explorer', handleReveal);

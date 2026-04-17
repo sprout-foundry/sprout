@@ -19,6 +19,8 @@ export interface UseHotkeyCommandHandlerOptions {
   onPrimaryViewChange: (view: ViewMode) => void;
   /** Focus a specific tab index in the active pane */
   onFocusTabIndex: (index: number) => void;
+  /** Focus a specific pane by index (0-based) in the panes array */
+  onFocusPaneIndex: (index: number) => void;
   /** Split editor panes */
   onSplitRequest: (direction: 'vertical' | 'horizontal' | 'grid') => void;
   /** Close the active buffer */
@@ -56,6 +58,7 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
     onToggleTerminal,
     onPrimaryViewChange,
     onFocusTabIndex,
+    onFocusPaneIndex,
     onSplitRequest,
     onCloseBuffer,
     onCloseAllBuffers,
@@ -115,14 +118,14 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
         case 'switch_to_git':
           onPrimaryViewChange('git');
           break;
-        case 'focus_tab_1':
-          onFocusTabIndex(0);
+        case 'focus_split_1':
+          onFocusPaneIndex(0);
           break;
-        case 'focus_tab_2':
-          onFocusTabIndex(1);
+        case 'focus_split_2':
+          onFocusPaneIndex(1);
           break;
-        case 'focus_tab_3':
-          onFocusTabIndex(2);
+        case 'focus_split_3':
+          onFocusPaneIndex(2);
           break;
         case 'focus_tab_4':
           onFocusTabIndex(3);
@@ -281,6 +284,7 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
     onToggleTerminal,
     onPrimaryViewChange,
     onFocusTabIndex,
+    onFocusPaneIndex,
     onSplitRequest,
     onCloseBuffer,
     onCloseAllBuffers,

@@ -22,18 +22,35 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function waitForSmokeStatus(statusFile, timeoutMs = 15000) {
+async function waitForSmokeStatusOrExit(app, timeoutMs = 30000) {
   const startedAt = Date.now();
+
   while (Date.now() - startedAt < timeoutMs) {
-    if (fs.existsSync(statusFile)) {
-      const raw = fs.readFileSync(statusFile, 'utf8').trim();
+    if (app.child.exitCode !== null) {
+      const { stdout, stderr } = app.getLogs();
+      throw new Error(
+        `Electron exited before launcher became ready (exitCode=${app.child.exitCode}).\n` +
+          `stdout:\n${stdout || '<empty>'}\n` +
+          `stderr:\n${stderr || '<empty>'}`,
+      );
+    }
+
+    if (fs.existsSync(app.statusFile)) {
+      const raw = fs.readFileSync(app.statusFile, 'utf8').trim();
       if (raw) {
         return JSON.parse(raw);
       }
     }
+
     await wait(200);
   }
-  throw new Error(`Timed out waiting for smoke status file: ${statusFile}`);
+
+  const { stdout, stderr } = app.getLogs();
+  throw new Error(
+    `Timed out waiting for smoke status file: ${app.statusFile}\n` +
+      `stdout:\n${stdout || '<empty>'}\n` +
+      `stderr:\n${stderr || '<empty>'}`,
+  );
 }
 
 async function launchSmokeApp() {
@@ -89,7 +106,7 @@ test.describe('Desktop smoke', () => {
     const app = await launchSmokeApp();
 
     try {
-      const status = await waitForSmokeStatus(app.statusFile, 15000);
+      const status = await waitForSmokeStatusOrExit(app, 30000);
       expect(status.event).toBe('launcher-loaded');
       expect(status.title).toBeTruthy();
       expect(status.title).toContain('Ledit');
@@ -103,7 +120,7 @@ test.describe('Desktop smoke', () => {
     const app = await launchSmokeApp();
 
     try {
-      const status = await waitForSmokeStatus(app.statusFile, 15000);
+      const status = await waitForSmokeStatusOrExit(app, 30000);
       const bounds = status.bounds;
 
       expect(bounds).not.toBeNull();

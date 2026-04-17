@@ -34,8 +34,10 @@ func sharedUniversalHotkeys() []HotkeyEntry {
 		{Key: "Cmd+Shift+P", CommandID: "command_palette", Description: "Toggle command palette (Mac)"},
 		{Key: "Ctrl+P", CommandID: "quick_open", Description: "Quick open file"},
 		{Key: "Cmd+P", CommandID: "quick_open", Description: "Quick open file (Mac)"},
-		{Key: "Ctrl+Shift+E", CommandID: "toggle_explorer", Description: "Toggle file explorer"},
-		{Key: "Cmd+Shift+E", CommandID: "toggle_explorer", Description: "Toggle file explorer (Mac)"},
+		{Key: "Ctrl+E", CommandID: "quick_open", Description: "Quick open file"},
+		{Key: "Cmd+E", CommandID: "quick_open", Description: "Quick open file (Mac)"},
+		{Key: "Ctrl+Shift+E", CommandID: "toggle_explorer", Description: "Toggle file explorer", Global: true},
+		{Key: "Cmd+Shift+E", CommandID: "toggle_explorer", Description: "Toggle file explorer (Mac)", Global: true},
 		{Key: "Ctrl+B", CommandID: "toggle_sidebar", Description: "Toggle sidebar"},
 		{Key: "Cmd+B", CommandID: "toggle_sidebar", Description: "Toggle sidebar (Mac)"},
 		{Key: "Ctrl+`", CommandID: "toggle_terminal", Description: "Toggle terminal"},
@@ -59,12 +61,12 @@ func sharedUniversalHotkeys() []HotkeyEntry {
 		{Key: "Ctrl+\\", CommandID: "split_editor_vertical", Description: "Split editor vertical"},
 		{Key: "Ctrl+K", CommandID: "split_editor_horizontal", Description: "Split editor horizontal"},
 		{Key: "Cmd+K", CommandID: "split_editor_horizontal", Description: "Split editor horizontal (Mac)"},
-		{Key: "Ctrl+1", CommandID: "focus_tab_1", Description: "Focus first tab in active split"},
-		{Key: "Cmd+1", CommandID: "focus_tab_1", Description: "Focus first tab in active split (Mac)"},
-		{Key: "Ctrl+2", CommandID: "focus_tab_2", Description: "Focus second tab in active split"},
-		{Key: "Cmd+2", CommandID: "focus_tab_2", Description: "Focus second tab in active split (Mac)"},
-		{Key: "Ctrl+3", CommandID: "focus_tab_3", Description: "Focus third tab in active split"},
-		{Key: "Cmd+3", CommandID: "focus_tab_3", Description: "Focus third tab in active split (Mac)"},
+		{Key: "Ctrl+1", CommandID: "focus_split_1", Description: "Focus first editor split"},
+		{Key: "Cmd+1", CommandID: "focus_split_1", Description: "Focus first editor split (Mac)"},
+		{Key: "Ctrl+2", CommandID: "focus_split_2", Description: "Focus second editor split"},
+		{Key: "Cmd+2", CommandID: "focus_split_2", Description: "Focus second editor split (Mac)"},
+		{Key: "Ctrl+3", CommandID: "focus_split_3", Description: "Focus third editor split"},
+		{Key: "Cmd+3", CommandID: "focus_split_3", Description: "Focus third editor split (Mac)"},
 		{Key: "Ctrl+4", CommandID: "focus_tab_4", Description: "Focus fourth tab in active split"},
 		{Key: "Cmd+4", CommandID: "focus_tab_4", Description: "Focus fourth tab in active split (Mac)"},
 		{Key: "Ctrl+5", CommandID: "focus_tab_5", Description: "Focus fifth tab in active split"},
@@ -289,14 +291,11 @@ func ValidateHotkeyConfig(config *HotkeyConfig) error {
 		return errors.New("hotkeys config must have a hotkeys array")
 	}
 
-	// Validate each hotkey entry and check for duplicates.
-	// Allow the same command_id with Ctrl+X and Cmd+X (platform variants).
-	seenCommandIDs := make(map[string]bool)
-	// Track which command_ids have been seen per platform prefix.
-	// A command_id is a true duplicate only when the same platform-specific
-	// prefix (Ctrl or Cmd) is used more than once for that command_id.
-	seenWithCtrl := make(map[string]bool)
-	seenWithCmd := make(map[string]bool)
+	// Track seen key strings per (modifier_prefix, command_id) pair.
+	// A true duplicate is when the exact same key string is registered twice.
+	// Different keys for the same command_id (e.g., Ctrl+P and Ctrl+E both
+	// mapping to quick_open) are explicitly allowed.
+	seenKeys := make(map[string]bool)
 	keyPattern := regexp.MustCompile("^(?:(?:Ctrl|Cmd|Shift|Alt|Meta)\\+)*(?:[a-zA-Z0-9]|F[0-9]{1,2}|Backspace|Tab|Enter|Escape|Space|ArrowUp|ArrowDown|ArrowLeft|ArrowRight|Delete|Home|End|PageUp|PageDown|Insert|Backquote|[`/\\\\])$")
 
 	for i, entry := range config.Hotkeys {
@@ -317,31 +316,11 @@ func ValidateHotkeyConfig(config *HotkeyConfig) error {
 			return fmt.Errorf("hotkey entry at index %d has invalid command_id %q (must be alphanumeric with underscores and hyphens only)", i, entry.CommandID)
 		}
 
-		// Check for true duplicate command_ids (same platform prefix + same command).
-		// Ctrl+X and Cmd+X for the same command_id are allowed (platform variants).
-		isCmdKey := strings.HasPrefix(entry.Key, "Cmd+")
-		isCtrlKey := strings.HasPrefix(entry.Key, "Ctrl+") && !isCmdKey
-
-		if isCmdKey && seenWithCmd[entry.CommandID] {
-			return fmt.Errorf("duplicate command_id %q with Cmd modifier at index %d", entry.CommandID, i)
+		// Check for duplicate key strings. Each key can only be bound once.
+		if seenKeys[entry.Key] {
+			return fmt.Errorf("duplicate key %q at index %d", entry.Key, i)
 		}
-		if isCtrlKey && seenWithCtrl[entry.CommandID] {
-			return fmt.Errorf("duplicate command_id %q with Ctrl modifier at index %d", entry.CommandID, i)
-		}
-		if !isCmdKey && !isCtrlKey {
-			// Bare key (no modifier) — only allow one per command_id
-			if seenCommandIDs[entry.CommandID] {
-				return fmt.Errorf("duplicate command_id %q found at index %d (each command can only be bound once)", entry.CommandID, i)
-			}
-			seenCommandIDs[entry.CommandID] = true
-		}
-
-		if isCmdKey {
-			seenWithCmd[entry.CommandID] = true
-		}
-		if isCtrlKey {
-			seenWithCtrl[entry.CommandID] = true
-		}
+		seenKeys[entry.Key] = true
 	}
 
 	return nil

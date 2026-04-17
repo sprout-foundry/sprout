@@ -88,3 +88,48 @@
 .error-reset-button:active {
   transform: scale(0.98);
 }
+
+.error-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.error-reload-button {
+  background-color: var(--secondary, #6c757d);
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.error-reload-button:hover {
+  background-color: var(--secondary-hover, #545b62);
+}
+
+.error-reload-button:focus {
+  outline: 2px solid var(--secondary, #6c757d);
+  outline-offset: 2px;
+}
+
+.error-reload-button:active {
+  transform: scale(0.98);
+}
+
+.error-log-hint {
+  margin-top: 1.25rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary, #666);
+}
+
+.error-log-hint code {
+  font-family: 'Courier New', monospace;
+  background-color: var(--code-bg, #f5f5f5);
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  font-size: 0.8rem;
+}

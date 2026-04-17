@@ -18,7 +18,7 @@ import (
 const (
 	MAX_SUBAGENT_OUTPUT_SIZE  = 10 * 1024 * 1024 // 10MB
 	MAX_SUBAGENT_CONTEXT_SIZE = 1024 * 1024      // 1MB
-	BATCH_SIZE                = 50 // Number of lines to batch before publishing
+	BATCH_SIZE                = 50               // Number of lines to batch before publishing
 )
 
 // MILESTONE_PHASES defines phases that trigger immediate publish without batching
@@ -530,11 +530,12 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	}
 
 	// Add recent session work summary if available
-	if len(a.taskActions) > 0 {
+	taskActions := a.GetTaskActions()
+	if len(taskActions) > 0 {
 		enhancedPrompt.WriteString("# Recent Work in This Session\n\n")
-		for i, action := range a.taskActions {
+		for i, action := range taskActions {
 			// Show last 10 actions to avoid overwhelming the subagent
-			if i >= len(a.taskActions)-10 {
+			if i >= len(taskActions)-10 {
 				enhancedPrompt.WriteString(fmt.Sprintf("- %s: %s\n", action.Type, action.Description))
 			}
 		}

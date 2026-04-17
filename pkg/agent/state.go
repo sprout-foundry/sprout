@@ -14,13 +14,14 @@ import (
 func (a *Agent) ExportState() ([]byte, error) {
 	// Generate compact summary for next session continuity
 	compactSummary := a.GenerateCompactSummary()
+	taskActions := a.GetTaskActions()
 
 	state := AgentState{
 		Messages:                a.messages,
 		TurnCheckpoints:         a.copyTurnCheckpoints(),
 		PreviousSummary:         a.previousSummary,
 		CompactSummary:          compactSummary, // Store 5K-limited summary for continuity
-		TaskActions:             a.taskActions,
+		TaskActions:             taskActions,
 		SessionID:               a.sessionID,
 		TotalTokens:             a.totalTokens,
 		TotalCost:               a.totalCost,
@@ -47,7 +48,7 @@ func (a *Agent) ImportState(data []byte) error {
 	} else {
 		a.previousSummary = state.PreviousSummary
 	}
-	a.taskActions = state.TaskActions
+	a.replaceTaskActions(state.TaskActions)
 	a.sessionID = state.SessionID
 	// Restore metrics
 	a.totalTokens = state.TotalTokens
@@ -58,6 +59,15 @@ func (a *Agent) ImportState(data []byte) error {
 	a.cachedTokens = state.CachedTokens
 	a.cachedCostSavings = state.CachedCostSavings
 	return nil
+}
+
+func (a *Agent) replaceTaskActions(actions []TaskAction) {
+	cloned := make([]TaskAction, len(actions))
+	copy(cloned, actions)
+
+	a.taskActionsMu.Lock()
+	a.taskActions = cloned
+	a.taskActionsMu.Unlock()
 }
 
 // SaveStateToFile saves agent state to a file
@@ -129,23 +139,26 @@ func (a *Agent) SaveConversationSummary() error {
 
 // AddTaskAction records a completed task action for continuity
 func (a *Agent) AddTaskAction(actionType, description, details string) {
+	a.taskActionsMu.Lock()
 	a.taskActions = append(a.taskActions, TaskAction{
 		Type:        actionType,
 		Description: description,
 		Details:     details,
 	})
+	a.taskActionsMu.Unlock()
 }
 
 // GenerateActionSummary creates a summary of completed actions for continuity
 func (a *Agent) GenerateActionSummary() string {
-	if len(a.taskActions) == 0 {
+	taskActions := a.GetTaskActions()
+	if len(taskActions) == 0 {
 		return "No actions completed yet."
 	}
 
 	var summary strings.Builder
 	summary.WriteString("Previous actions completed:\n")
 
-	for i, action := range a.taskActions {
+	for i, action := range taskActions {
 		summary.WriteString(fmt.Sprintf("%d. %s: %s", i+1, action.Type, action.Description))
 		if action.Details != "" {
 			summary.WriteString(fmt.Sprintf(" (%s)", action.Details))

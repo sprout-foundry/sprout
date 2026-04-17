@@ -3,6 +3,7 @@
  */
 
 const { app, BrowserWindow, dialog, Menu, shell } = require('electron');
+const fs = require('node:fs');
 const path = require('node:path');
 const ctx = require('./context');
 const { getWorkspaceKey } = require('./utils');
@@ -19,6 +20,30 @@ const { renderLoadingPage, renderErrorPage } = require('./error-pages');
 const { startBackendForWorkspace, registerExitHandler } = require('./backend');
 const { startSSHBackendForHost } = require('./ssh');
 const { resolveWorkspaceDirectory, promptForWorkspace } = require('./workspace');
+
+function isSmokeTestMode() {
+  return process.env.LEDIT_SMOKE_TEST === '1';
+}
+
+function writeSmokeStatus(payload) {
+  if (!isSmokeTestMode()) {
+    return;
+  }
+
+  const smokeStatusFile = process.env.LEDIT_SMOKE_STATUS_FILE;
+  if (!smokeStatusFile) {
+    return;
+  }
+
+  try {
+    fs.writeFileSync(smokeStatusFile, `${JSON.stringify({
+      timestamp: new Date().toISOString(),
+      ...payload,
+    }, null, 2)}\n`, 'utf8');
+  } catch (error) {
+    console.error('Failed to write smoke status file:', error);
+  }
+}
 
 function getLauncherPath() {
   if (app.isPackaged) {
@@ -39,7 +64,7 @@ function createLauncherWindow() {
     height: 720,
     minWidth: 900,
     minHeight: 620,
-    show: false,
+    show: isSmokeTestMode(),
     backgroundColor: '#171b22',
     title: 'Ledit Launcher',
     webPreferences: {
@@ -51,7 +76,32 @@ function createLauncherWindow() {
   });
 
   ctx.launcherWindow.loadFile(getLauncherPath());
-  ctx.launcherWindow.once('ready-to-show', () => ctx.launcherWindow.show());
+  if (!isSmokeTestMode()) {
+    ctx.launcherWindow.once('ready-to-show', () => ctx.launcherWindow.show());
+  }
+  ctx.launcherWindow.webContents.once('did-finish-load', () => {
+    if (ctx.launcherWindow && !ctx.launcherWindow.isDestroyed() && !ctx.launcherWindow.isVisible()) {
+      ctx.launcherWindow.show();
+    }
+    if (ctx.launcherWindow && !ctx.launcherWindow.isDestroyed()) {
+      writeSmokeStatus({
+        event: 'launcher-loaded',
+        title: ctx.launcherWindow.getTitle(),
+        bounds: ctx.launcherWindow.getBounds(),
+        visible: ctx.launcherWindow.isVisible(),
+      });
+    }
+  });
+  ctx.launcherWindow.once('ready-to-show', () => {
+    if (ctx.launcherWindow && !ctx.launcherWindow.isDestroyed()) {
+      writeSmokeStatus({
+        event: 'launcher-ready-to-show',
+        title: ctx.launcherWindow.getTitle(),
+        bounds: ctx.launcherWindow.getBounds(),
+        visible: ctx.launcherWindow.isVisible(),
+      });
+    }
+  });
   ctx.launcherWindow.on('closed', () => {
     ctx.launcherWindow = null;
   });

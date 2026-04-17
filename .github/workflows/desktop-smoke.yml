@@ -55,6 +55,7 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y \
             xvfb \
+            x11-utils \
             libgtk-3-0 \
             libnotify-dev \
             libnss3 \
@@ -97,14 +98,21 @@ jobs:
             if (failed) process.exit(1);
           "
 
+      - name: Verify virtual display
+        env:
+          DISPLAY: ':99'
+        run: |
+          Xvfb :99 -screen 0 1280x720x24 &
+          sleep 2
+          xdpyinfo >/tmp/desktop-smoke-xdpyinfo.txt
+          head -n 5 /tmp/desktop-smoke-xdpyinfo.txt
+
       - name: Run Electron smoke tests (with virtual display)
         env:
           DISPLAY: ':99'
           ELECTRON_DISABLE_SECURITY_WARNINGS: 'true'
           CI: 'true'
         run: |
-          Xvfb :99 -screen 0 1280x720x24 &
-          sleep 2
           npm run test:desktop-smoke -- --reporter=list
         timeout-minutes: 5
 

@@ -18,19 +18,19 @@ else
 fi
 
 log_info() {
-    printf "${BLUE}[INFO]%s %s\n" "$NC" "$1"
+    printf '%b[INFO]%b %s\n' "$BLUE" "$NC" "$1"
 }
 
 log_success() {
-    printf "${GREEN}[SUCCESS]%s %s\n" "$NC" "$1"
+    printf '%b[SUCCESS]%b %s\n' "$GREEN" "$NC" "$1"
 }
 
 log_warn() {
-    printf "${YELLOW}[WARN]%s %s\n" "$NC" "$1"
+    printf '%b[WARN]%b %s\n' "$YELLOW" "$NC" "$1"
 }
 
 log_error() {
-    printf "${RED}[ERROR]%s %s\n" "$NC" "$1" >&2
+    printf '%b[ERROR]%b %s\n' "$RED" "$NC" "$1" >&2
 }
 
 # Cleanup function

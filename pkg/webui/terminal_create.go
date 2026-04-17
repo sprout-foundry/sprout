@@ -66,13 +66,24 @@ func (tm *TerminalManager) createTmuxSession(sessionID string, shellOverride ...
 		Cols: 80,
 	}
 
-	// Create the detached tmux session with the user's shell
+	// Create the detached tmux session with the user's shell.
+	// Use -e to explicitly pass COLUMNS/LINES into the shell environment.
+	// tmux's update-environment filter does not forward COLUMNS/LINES by default,
+	// so setting them on the outer Env alone is insufficient; the shell inside
+	// tmux would start without them, causing process.stdout.columns to be
+	// undefined in Node.js child processes.
 	createArgs := []string{
 		"new-session",
 		"-d",
 		"-s", tmuxName,
 		"-x", fmt.Sprintf("%d", defaultSize.Cols),
 		"-y", fmt.Sprintf("%d", defaultSize.Rows),
+		"-e", fmt.Sprintf("COLUMNS=%d", defaultSize.Cols),
+		"-e", fmt.Sprintf("LINES=%d", defaultSize.Rows),
+		"-e", "LEDIT_WEB_TERMINAL=1",
+		"-e", "TERM=xterm-256color",
+		"-e", "COLORTERM=truecolor",
+		"-e", "FORCE_COLOR=1",
 	}
 	// Set the session's starting directory explicitly via -c so the shell
 	// process inside tmux starts in the workspace root. Without this, tmux

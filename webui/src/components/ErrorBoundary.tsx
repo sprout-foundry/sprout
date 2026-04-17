@@ -69,6 +69,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     });
   };
 
+  handleReload = () => {
+    window.location.reload();
+  };
+
   render() {
     if (this.state.hasError) {
       // Use custom fallback if provided
@@ -88,9 +92,17 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               <summary>Error Details</summary>
               <pre className="error-stack">{this.state.errorInfo && this.state.errorInfo.componentStack}</pre>
             </details>
-            <button className="error-reset-button" onClick={this.handleReset}>
-              Try Again
-            </button>
+            <div className="error-actions">
+              <button className="error-reset-button" onClick={this.handleReset}>
+                Try Again
+              </button>
+              <button className="error-reload-button" onClick={this.handleReload}>
+                Reload Page
+              </button>
+            </div>
+            <p className="error-log-hint">
+              Logs are written to <code>~/.ledit/logs/</code> (desktop: <code>userData/logs/</code> in the app data folder).
+            </p>
           </div>
         </div>
       );

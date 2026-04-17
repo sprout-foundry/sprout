@@ -21,7 +21,7 @@
     "build:desktop": "npm run build:webui:embed && npm run build:desktop:backend",
     "desktop:dev": "npm run build:webui:embed && npm run build:desktop:backend && electron .",
     "desktop:dir": "electron-builder --dir",
-    "desktop:dist": "electron-builder",
+    "desktop:dist": "electron-builder --publish never",
     "desktop:verify": "node scripts/verify-electron-package.mjs",
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:webui-e2e": "node test/ui_e2e_workflow.js",

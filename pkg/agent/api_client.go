@@ -669,9 +669,9 @@ func (ac *APIClient) printRateLimitMessage(msg string) {
 
 // isRetryableError checks if an error should be retried
 func (ac *APIClient) isRetryableError(errStr string) bool {
-	// Never retry 502 errors - these are server-side issues
+	// Retry gateway errors (502, upstream errors) - these are often transient infrastructure issues
 	if strings.Contains(errStr, "502") || strings.Contains(errStr, "upstream error") {
-		return false
+		return true
 	}
 
 	return strings.Contains(errStr, "stream error") ||

@@ -3,6 +3,8 @@
   bottom: 0;
   left: 0;
   right: 0;
+  display: flex;
+  flex-direction: column;
   background: var(--bg-secondary);
   border-top: 1px solid var(--border-default);
   font-family: var(--font-mono);
@@ -149,8 +151,8 @@
   flex-direction: column;
   flex: 1;
   overflow: hidden;
-  /* Subtract 60px for terminal header (42px title row + 1px border + ~17px for tab bar/padding) */
-  min-height: calc(100% - 60px);
+  /* min-height: 0 lets flex shrink correctly; the parent flex column provides the real height */
+  min-height: 0;
 }
 
 .terminal-container.collapsed .terminal-body {
@@ -407,6 +409,8 @@
 
 .terminal-xterm .xterm-viewport {
   overflow-y: auto !important;
+  /* Prevent scroll chaining: don't scroll the page when xterm scrollback is exhausted */
+  overscroll-behavior: contain;
 }
 
 /* ── Shell Picker Dropdown ── */

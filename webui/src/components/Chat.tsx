@@ -1,5 +1,6 @@
 import { useRef, useEffect, useCallback, useState, useMemo, useLayoutEffect } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
+import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import {
   Zap,
   Bot,
@@ -369,11 +370,11 @@ function Chat({
   stats,
   isConnected,
 }: ChatProps): JSX.Element {
-  const AUTO_SCROLL_THRESHOLD_PX = 96;
   const chatShellRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
   const inputContainerRef = useRef<HTMLDivElement>(null);
-  const shouldAutoScrollRef = useRef(true);
+  const [isAtBottom, setIsAtBottom] = useState(true);
   const [inputContainerHeight, setInputContainerHeight] = useState(0);
 
   const inputValueRef = useRef(inputValue);
@@ -397,14 +398,6 @@ function Chat({
     );
   }, [toolExecutions, currentQueryCount]);
 
-  const isNearBottom = useCallback(
-    (node: HTMLDivElement) => {
-      const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight;
-      return distanceFromBottom <= AUTO_SCROLL_THRESHOLD_PX;
-    },
-    [AUTO_SCROLL_THRESHOLD_PX],
-  );
-
   useLayoutEffect(() => {
     const node = inputContainerRef.current;
     if (!node) {
@@ -424,29 +417,10 @@ function Chat({
 
     const observer = new ResizeObserver(updateHeight);
     observer.observe(node);
-    window.addEventListener('resize', updateHeight);
     return () => {
       observer.disconnect();
-      window.removeEventListener('resize', updateHeight);
     };
   }, []);
-
-  useEffect(() => {
-    const node = chatContainerRef.current;
-    if (!node || !shouldAutoScrollRef.current) {
-      return;
-    }
-
-    node.scrollTop = node.scrollHeight;
-  }, [messages, filteredToolExecutions, queryProgress, isProcessing, subagentActivities.length]);
-
-  const handleChatScroll = useCallback(() => {
-    const node = chatContainerRef.current;
-    if (!node) {
-      return;
-    }
-    shouldAutoScrollRef.current = isNearBottom(node);
-  }, [isNearBottom]);
 
   const findMatchingToolExecution = useCallback(
     (toolName: string) => {
@@ -485,6 +459,96 @@ function Chat({
     [onInputChange],
   );
 
+  // Footer component for Virtuoso - renders trailing content
+  const ChatFooter = useCallback((): JSX.Element => {
+    const elements: JSX.Element[] = [];
+
+    if (hasSubagentActivity) {
+      elements.push(<SubagentActivityFeed key="subagent" activities={subagentActivities} />);
+    }
+
+    if (queryProgress) {
+      elements.push(
+        <div key="progress" className="query-progress">
+          <div className="progress-header">
+            <span className="progress-icon">
+              <Zap size={14} />
+            </span>
+            <span className="progress-text">
+              {((queryProgress as Record<string, unknown>).message as string) || 'Processing...'}
+            </span>
+          </div>
+          {(queryProgress as Record<string, unknown>).details != null && (
+            <div className="progress-details">
+              {(queryProgress as Record<string, unknown>).details as ReactNode}
+            </div>
+          )}
+        </div>,
+      );
+    }
+
+    if (isProcessing && filteredToolExecutions.length === 0 && !queryProgress && !hasSubagentActivity) {
+      elements.push(
+        <div key="processing" className="processing-indicator">
+          <div className="processing-content">
+            <div className="processing-spinner">
+              <Zap size={14} />
+            </div>
+            <div className="processing-text">Processing your request...</div>
+          </div>
+        </div>,
+      );
+    }
+
+    if (lastError) {
+      elements.push(
+        <div key="error" className="error-indicator">
+          <div className="error-content">
+            <div className="error-icon">
+              <AlertTriangle size={14} />
+            </div>
+            <div className="error-text">{lastError}</div>
+            {showExpiredSessionRecovery ? (
+              <div className="error-actions">
+                <button type="button" className="error-recovery-btn" onClick={handleReloadWithoutSSHPath}>
+                  Reload Without SSH Path
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>,
+      );
+    }
+
+    return elements.length === 1 ? elements[0] : <>{elements}</>;
+  }, [
+    hasSubagentActivity,
+    subagentActivities,
+    queryProgress,
+    isProcessing,
+    filteredToolExecutions,
+    lastError,
+    showExpiredSessionRecovery,
+    handleReloadWithoutSSHPath,
+  ]);
+
+  // Header component for Virtuoso - renders worktree indicator
+  const ChatHeader = useCallback((): JSX.Element | null => {
+    if (!worktreePath) return null;
+    return (
+      <div className="worktree-indicator">
+        <div className="worktree-indicator-content">
+          <div className="worktree-indicator-icon">
+            <GitBranch size={14} />
+          </div>
+          <span className="worktree-indicator-text" title={worktreePath}>
+            Worktree: {worktreePath.split('/').pop()}
+          </span>
+        </div>
+      </div>
+    );
+  }, [worktreePath]);
+
   return (
     <div
       className="chat-shell"
@@ -492,22 +556,10 @@ function Chat({
       style={{ '--chat-input-height': `${inputContainerHeight}px` } as CSSProperties}
     >
       <div className="chat-main">
-        <div className="chat-container" ref={chatContainerRef} onScroll={handleChatScroll}>
-          <>
-            {worktreePath && (
-              <div className="worktree-indicator">
-                <div className="worktree-indicator-content">
-                  <div className="worktree-indicator-icon">
-                    <GitBranch size={14} />
-                  </div>
-                  <span className="worktree-indicator-text" title={worktreePath}>
-                    Worktree: {worktreePath.split('/').pop()}
-                  </span>
-                </div>
-              </div>
-            )}
-            {messages.length === 0 ? (
-              providerAvailable === false ? (
+        {messages.length === 0 ? (
+          <div className="chat-container chat-container--empty" ref={chatContainerRef}>
+            <>
+              {providerAvailable === false ? (
                 <div className="welcome-message no-provider-state">
                   <div className="welcome-icon">
                     <Bot size={32} />
@@ -537,11 +589,20 @@ function Chat({
                     Try asking: &quot;Show me the project structure&quot; or &quot;Find the main function&quot;
                   </div>
                 </div>
-              )
-            ) : (
-              messages.map((message) => (
+              )}
+            </>
+          </div>
+        ) : (
+          <div ref={chatContainerRef} style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+            <Virtuoso
+              ref={virtuosoRef}
+              data={messages}
+              followOutput={(isAtBottom) => (isAtBottom ? 'smooth' : false)}
+              initialTopMostItemIndex={messages.length - 1}
+              increaseViewportBy={{ top: 400, bottom: 400 }}
+              atBottomStateChange={(atBottom) => setIsAtBottom(atBottom)}
+              itemContent={(index, message) => (
                 <MessageBubble
-                  key={message.id}
                   type={message.type}
                   ariaLabel={`${message.type} message`}
                   copyText={message.content}
@@ -581,62 +642,26 @@ function Chat({
                     <MessageContent content={message.content} />
                   )}
                 </MessageBubble>
-              ))
+              )}
+              components={{
+                Header: ChatHeader,
+                Footer: ChatFooter,
+              }}
+              className="chat-virtuoso"
+              style={{ height: '100%' }}
+            />
+            {!isAtBottom && (
+              <button
+                className="scroll-to-bottom-btn"
+                onClick={() => virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'smooth', align: 'end' })}
+                type="button"
+                aria-label="Scroll to bottom"
+              >
+                <ChevronDown size={18} />
+              </button>
             )}
-
-            {/* Inline subagent activity feed – shows between messages and processing indicators */}
-            {hasSubagentActivity && <SubagentActivityFeed activities={subagentActivities} />}
-
-            {queryProgress && (
-              <div className="query-progress">
-                <>
-                  <div className="progress-header">
-                    <span className="progress-icon">
-                      <Zap size={14} />
-                    </span>
-                    <span className="progress-text">
-                      {((queryProgress as Record<string, unknown>).message as string) || 'Processing...'}
-                    </span>
-                  </div>
-                  {(queryProgress as Record<string, unknown>).details && (
-                    <div className="progress-details">
-                      {(queryProgress as Record<string, unknown>).details as ReactNode}
-                    </div>
-                  )}
-                </>
-              </div>
-            )}
-
-            {isProcessing && filteredToolExecutions.length === 0 && !queryProgress && !hasSubagentActivity && (
-              <div className="processing-indicator">
-                <div className="processing-content">
-                  <div className="processing-spinner">
-                    <Zap size={14} />
-                  </div>
-                  <div className="processing-text">Processing your request...</div>
-                </div>
-              </div>
-            )}
-
-            {lastError && (
-              <div className="error-indicator">
-                <div className="error-content">
-                  <div className="error-icon">
-                    <AlertTriangle size={14} />
-                  </div>
-                  <div className="error-text">{lastError}</div>
-                  {showExpiredSessionRecovery ? (
-                    <div className="error-actions">
-                      <button type="button" className="error-recovery-btn" onClick={handleReloadWithoutSSHPath}>
-                        Reload Without SSH Path
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            )}
-          </>
-        </div>
+          </div>
+        )}
       </div>
 
       <div className="input-container" ref={inputContainerRef}>

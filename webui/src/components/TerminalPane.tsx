@@ -120,34 +120,31 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       terminalWSRef.current.sendResize(xtermRef.current.cols, xtermRef.current.rows);
     }, [paneConnected]);
 
-    // ── Wheel event handler for native scrolling ──
+    // ── Wheel event handler ──
+    // xterm.js v6 handles scroll natively via its .xterm-viewport element.
+    // We only need to prevent scroll-chaining to the outer page when the
+    // user scrolls inside the terminal.
     const handleWheel = useCallback((e: WheelEvent) => {
       const term = xtermRef.current;
       if (!term) return;
 
-      // Prevent the page from scrolling while over the terminal.
-      e.preventDefault();
-      // Stop propagation so xterm's own internal handler doesn't fire and
-      // double-scroll on top of our normalized scroll below.
-      e.stopPropagation();
+      // Determine whether xterm has scrollback content above or below the
+      // current viewport. If the user is scrolling in a direction that has
+      // no further content, let the event propagate so the page can scroll.
+      const buffer = term.buffer.active;
+      const atTop = buffer.viewportY === 0;
+      const atBottom = buffer.viewportY === buffer.baseY;
 
-      let lines: number;
-      if (e.deltaMode === WheelEvent.DOM_DELTA_LINE) {
-        // Already in line units (e.g. Linux/Firefox standard mouse wheel).
-        lines = e.deltaY;
-      } else if (e.deltaMode === WheelEvent.DOM_DELTA_PAGE) {
-        // Page unit — treat one page as the visible row count.
-        lines = e.deltaY > 0 ? term.rows : -term.rows;
-      } else {
-        // DOM_DELTA_PIXEL — common on macOS trackpads and Windows precision
-        // touchpads. Divide by approximate line height to get line count.
-        const approxLineHeight = (term.options.fontSize ?? FONT_SIZE_DEFAULT) * (term.options.lineHeight ?? 1.2);
-        lines = e.deltaY / approxLineHeight;
+      const scrollingUp = e.deltaY < 0;
+      const scrollingDown = e.deltaY > 0;
+
+      // If there is room to scroll in the requested direction, contain the
+      // event so it doesn't bubble to the page.
+      if ((scrollingUp && !atTop) || (scrollingDown && !atBottom)) {
+        e.preventDefault();
       }
-
-      // scrollLines: positive = scroll UP (older content), negative = scroll DOWN.
-      // deltaY positive = user scrolled down → show newer content → negative lines.
-      term.scrollLines(-Math.round(lines));
+      // Do NOT call e.stopPropagation() — let xterm's own viewport handler
+      // process the wheel event for smooth, native scrolling.
     }, []);
 
     // ── Context menu handlers ──
@@ -268,11 +265,11 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       term.loadAddon(fitAddon);
       term.open(xtermContainerRef.current);
 
-      // Add wheel event handler in capture phase so we intercept the event
-      // before xterm's own viewport handler, preventing double-scrolling.
+      // Add wheel event handler to prevent page scroll-chaining when the
+      // terminal has scrollback content. xterm handles actual scrolling natively.
       const container = xtermContainerRef.current;
       if (container) {
-        container.addEventListener('wheel', handleWheel, { capture: true, passive: false });
+        container.addEventListener('wheel', handleWheel, { passive: false });
       }
 
       xtermRef.current = term;
@@ -288,9 +285,9 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       });
 
       return () => {
-        // Remove wheel event listener (only capture flag is used for matching per DOM spec)
+        // Remove wheel event listener
         if (container) {
-          container.removeEventListener('wheel', handleWheel, { capture: true });
+          container.removeEventListener('wheel', handleWheel);
         }
         try {
           term.dispose();
@@ -368,6 +365,8 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
           });
         } else if (event.type === 'output' || event.type === 'error_output') {
           xtermRef.current?.write((data?.output as string) || '');
+        } else if (event.type === 'pty_exit') {
+          xtermRef.current?.writeln('\r\n\x1b[90m[Process exited]\x1b[0m');
         } else if (event.type === 'error') {
           xtermRef.current?.write(`\r\n${data?.message as string}\r\n`);
         }

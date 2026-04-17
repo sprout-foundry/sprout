@@ -1761,3 +1761,67 @@
   overflow-x: auto;
   font-size: 12px;
 }
+
+/* ── Virtual Scrolling (Virtuoso) ─────────────────────────────── */
+
+/* Virtual scrolling container - used when messages exist */
+.chat-virtuoso {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+/* Apply padding and spacing to the virtuoso scroller */
+.chat-virtuoso [data-virtuoso-scroller] {
+  padding: 16px;
+}
+
+/* Spacing between virtualized items (replaces flex gap) */
+.chat-virtuoso .virtuoso-item-list-item {
+  padding-bottom: 10px;
+}
+
+/* Virtuoso scroller scrollbar */
+.chat-virtuoso [data-virtuoso-scroller]::-webkit-scrollbar {
+  width: 8px;
+}
+
+.chat-virtuoso [data-virtuoso-scroller]::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 999px;
+}
+
+/* Scroll-to-bottom floating button */
+.scroll-to-bottom-btn {
+  position: absolute;
+  bottom: 12px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  box-shadow: var(--shadow-elevated);
+  transition: background 0.15s var(--ease-out), color 0.15s var(--ease-out), opacity 0.15s ease;
+}
+
+.scroll-to-bottom-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-color: var(--border-focus);
+}
+
+/* Empty state container - used when messages.length === 0 */
+.chat-container--empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  overflow-y: auto;
+  padding: 16px;
+}

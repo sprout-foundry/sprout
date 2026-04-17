@@ -246,6 +246,19 @@ class TerminalWebSocketService {
           this.notifyCallbacks({ type: 'session_ready', data: { session_id: this.sessionId } });
         }
 
+        // Handle session restored (reattach to existing tmux session)
+        if (data.type === 'session_restored') {
+          this.sessionId = data.data.session_id;
+          debugLog('Terminal session restored:', this.sessionId);
+          this.persistSessionId();
+          // Send scrollback content as output so the terminal displays it
+          if (data.data.scrollback) {
+            this.notifyCallbacks({ type: 'output', data: { output: data.data.scrollback } });
+          }
+          // Notify that we're now ready to send commands
+          this.notifyCallbacks({ type: 'session_ready', data: { session_id: this.sessionId } });
+        }
+
         this.notifyCallbacks(data);
       } catch (error) {
         debugLog('[TerminalWebSocket] Failed to parse message:', error);

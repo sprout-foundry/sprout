@@ -258,17 +258,19 @@ function Sidebar({
   }, [apiService, isConnected, model, provider, selectedModel, log]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!provider || provider === 'unknown') {
-      return;
+    // Always sync with the provider prop from App, even if it's empty or 'unknown'
+    // This ensures the Sidebar reflects the actual backend state after errors/rollbacks
+    if (provider !== undefined) {
+      setSelectedProvider(provider);
     }
-    setSelectedProvider(provider);
   }, [provider]);
 
-  useEffect(() => {
-    if (!model || model === 'unknown') {
-      return;
+ useEffect(() => {
+    // Always sync with the model prop from App, even if it's empty or 'unknown'
+    // This ensures the Sidebar reflects the actual backend state after errors/rollbacks
+    if (model !== undefined) {
+      setSelectedModelState(model);
     }
-    setSelectedModelState(model);
   }, [model]);
 
   useEffect(() => {

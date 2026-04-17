@@ -11,9 +11,24 @@ The goal is not to rewrite working subsystems. The goal is to close the gap betw
 - `P2`: important polish and scale work
 - `P3`: opportunistic improvements
 
+---
+
 ## P0: Release-Critical
 
-### 1. Desktop Validation Matrix
+### 1. Fix desktop CI build matrix (all 6 platforms)
+
+Status: `done`
+
+Completed changes:
+- Generated `icon.png` (512x512) and `icon.iconset` (10 standard sizes) from existing source
+- Created `desktop/resources/icons/png/` with Linux-required icon sizes (was missing entirely)
+- Added `generateMacIcon()` in `electron-before-pack.cjs` to produce `icon.icns` via `iconutil` on macOS
+- Made `verify-electron-package.mjs` platform-aware (accepts `--platform` flag, `PLATFORM`/`DESKTOP_PLATFORM` env, or auto-detects from dir name)
+- Split CI into `build-backends` job (runs once, all cross-compiles) + `build-desktop` matrix job (downloads prebuilt backends)
+- Added `SKIP_BACKEND_BUILD` support to `electron-before-pack.cjs` for CI matrix jobs
+- Added Windows targets (`windows-amd64`, `windows-arm64`) to the backend build step
+
+### 2. Desktop Validation Matrix
 
 Status: `not started`
 
@@ -29,15 +44,22 @@ Acceptance criteria:
 - Restored windows reopen successfully after relaunch
 - Failures are surfaced with actionable errors instead of silent startup failure
 
-### 2. Windows + WSL End-to-End Validation
+### 3. Windows + WSL End-to-End Validation
 
 Status: `partially implemented`
 
-Scope:
-- Validate the new WSL launcher mode on a real Windows host
-- Verify distro discovery, backend staging, backend launch, health check, and workspace load
-- Verify Linux path handling in recent items and restored windows
-- Verify WSL terminal behavior and Git behavior
+**Current state:** The Electron main process has substantial WSL support:
+- Distro discovery (`listWslDistros`)
+- WSL backend binary resolution (`ensureWslBackendBinary`)
+- Path conversion (`toWslPath`)
+- WSL launch command with env vars (`LEDIT_DESKTOP_BACKEND_MODE=wsl`)
+- Git resolution via `git.exe` on Windows (`getGitResolutionPath`)
+
+**Open validation gaps:**
+- WSL distro discovery and backend staging not tested on a real Windows host
+- Linux path handling in `recentWorkspaces` and `restorableWorkspaces` during restore
+- WSL terminal behavior (xterm.js connecting to WSL-backed backend)
+- Git behavior across the Windows/Linux boundary
 
 Acceptance criteria:
 - WSL-backed workspace launches successfully from a packaged Windows app
@@ -45,15 +67,22 @@ Acceptance criteria:
 - WSL-backed window restore works after relaunch
 - Known limitations are documented if any remain
 
-### 3. Signing, Notarization, and Installer Readiness
+### 4. Signing, Notarization, and Installer Readiness
 
 Status: `partially implemented`
 
-Scope:
-- Complete Windows code signing
-- Complete macOS signing and notarization validation
-- Add proper macOS `.icns`
-- Confirm Linux installer output quality
+**Current state:**
+- macOS signing certificate setup exists in CI (base64-encoded P12 from `CSC_LINK` secret)
+- `entitlements.mac.plist` and `entitlements.mac.inherit.plist` exist
+- `electron-after-sign.cjs` hook exists for post-signing
+- Windows has `icon.ico` and NSIS config
+- Linux has PNG icon set and desktop entry
+- `icon.icns` for macOS auto-generated from iconset on macOS CI
+
+**Open gaps:**
+- Windows code signing: no certificate/secrets configured in CI
+- macOS notarization: `APPLE_ID`/`APPLE_APP_SPECIFIC_PASSWORD` secrets referenced but not validated
+- Linux installer quality (AppImage, deb, rpm) not verified
 
 Acceptance criteria:
 - Release CI produces signed Windows installers
@@ -61,23 +90,31 @@ Acceptance criteria:
 - Installer metadata and icons are correct on each platform
 - Desktop release documentation matches the real release flow
 
-### 4. Crash and Diagnostics Baseline
+### 5. Crash and Diagnostics Baseline
 
-Status: `not started`
+Status: `partially implemented`
 
-Scope:
-- Capture renderer crash, backend startup failure, and unexpected process exit
-- Add a diagnostic bundle flow for logs and environment details
-- Make desktop startup failures visible in-app
+**Current state:**
+- `renderErrorPage()` shows basic exit code/signal info when backend dies
+- Exit handler (`registerExitHandler`) detects backend crashes and offers reload
+- Retry logic in `createWorkspaceWindow` with `maxRetries`
+- Backend stdout/stderr now piped to log files in `userData/logs/`
+
+**Open gaps:**
+- No diagnostic bundle export
+- No renderer crash capture
+- No frontend-level error boundary
 
 Acceptance criteria:
 - Desktop app shows a clear failure screen when backend launch fails
 - Users can export a diagnostics snapshot
 - Crash/failure logs are written to a stable app data location
 
+---
+
 ## P1: Product-Quality UX
 
-### 5. First-Run Onboarding
+### 6. First-Run Onboarding
 
 Status: `not started`
 
@@ -87,203 +124,104 @@ Scope:
 - Initial workspace selection
 - Optional WSL selection on Windows
 
-Acceptance criteria:
-- First-run path can get a new user from launch to usable chat/editor flow
-- Missing credentials or setup are explained in-product
-- Onboarding state is resumable
+Note: The Go backend has `LEDIT_DESKTOP_BACKEND_MODE` handling in `pkg/webui/onboarding_api.go` and `DesktopOnboardingHandler` — verify what's already wired up before scoping.
 
-### 6. Workspace Model UX Cleanup
+### 7. Workspace Model UX Cleanup
 
 Status: `partially implemented`
 
-Scope:
-- Make daemon root, active workspace, and instance meaning visible in the UI
-- Show the current workspace more consistently across sidebar, files, git, and terminal
-- Clarify when actions operate on daemon root vs workspace root
-
-Acceptance criteria:
-- Users can tell where commands and file operations will run
-- Workspace switching is easy to discover
-- Folder selection works consistently in desktop and non-desktop flows
-
-### 7. Error Handling and Recovery UX
+### 8. Error Handling and Recovery UX
 
 Status: `not started`
 
-Scope:
-- Replace raw fetch or process errors with structured user-facing errors
-- Add retry affordances where appropriate
-- Add non-destructive recovery flows for common failures
-
-Acceptance criteria:
-- Common failures have clear titles, causes, and next actions
-- Failed operations do not leave the UI in confusing intermediate state
-- Backend disconnection is recoverable without app restart where feasible
-
-### 8. Session Management as a Product Feature
+### 9. Session Management as a Product Feature
 
 Status: `partially implemented`
-
-Scope:
-- Better session naming
-- Session search/filter
-- Session export/import
-- Clearer restore flows
-
-Acceptance criteria:
-- Session history is usable beyond raw restore
-- Users can find and reopen previous work intentionally
-- Exported sessions are readable and portable
 
 ## P1: Test and Quality Gates
 
-### 9. Desktop E2E Coverage
+### 10. Desktop E2E Coverage
 
 Status: `not started`
 
-Scope:
-- Add automated desktop test coverage for:
-  - launcher open flow
-  - workspace restore
-  - file open/edit/save
-  - git refresh and simple git actions
-  - logs and diagnostics surfaces
-
-Acceptance criteria:
-- A desktop regression suite exists and runs in CI where feasible
-- Critical desktop paths are covered before release
-
-### 10. Workspace Switching Coverage
+### 11. Workspace Switching Coverage
 
 Status: `partially implemented`
 
-Scope:
-- Extend backend tests around daemon root and workspace root behavior
-- Add frontend coverage for non-Electron workspace switching UI
-- Verify terminal reset semantics after workspace switch
-
-Acceptance criteria:
-- Workspace switch API behavior is covered for valid and invalid paths
-- UI behavior after switching is tested
-- No stale terminal/file state remains after switch
+---
 
 ## P2: Performance and Scale
 
-### 11. Large Repository Performance
+### 12. Large Repository Performance
 
 Status: `not started`
 
-Scope:
-- File tree performance
-- Search performance
-- Git refresh and diff loading
-- Log rendering performance
-
-Acceptance criteria:
-- Large repo behavior is benchmarked
-- Expensive sidebar refreshes are reduced
-- Main user interactions stay responsive on large workspaces
-
-### 12. State Persistence and Migration
+### 13. State Persistence and Migration
 
 Status: `not started`
 
-Scope:
-- Version desktop state schema
-- Add migration handling for persisted settings and state
-- Harden restore behavior when old data is malformed
-
-Acceptance criteria:
-- Persisted state can evolve without breaking launch
-- Corrupt or partial state does not brick the desktop app
-
-## P2: Native Product Features
-
-### 13. Native OS Integration
+### 14. Native OS Integration
 
 Status: `partially implemented`
 
-Scope:
-- Reveal in Finder/Explorer
-- Open from file manager
-- Better recent items integration
-- Better protocol/deep-link handling
-
-Acceptance criteria:
-- OS-level open flows work predictably
-- Reveal/open external path flows are supported where appropriate
-
-### 14. Auto-Update
+### 15. Auto-Update
 
 Status: `not started`
 
-Scope:
-- Wire update publishing and channel strategy
-- Add in-app update notification and restart flow
-
-Acceptance criteria:
-- Product can deliver updates without requiring manual reinstall
+---
 
 ## P3: Commercial/Product Operations
 
-### 15. Release Operations
+### 16. Release Operations
 
 Status: `partially implemented`
 
-Scope:
-- Release checklist
-- Versioning discipline
-- Artifact verification and publication checklist
-- Human-readable release notes workflow
-
-Acceptance criteria:
-- Release process is documented and repeatable
-- Every release artifact can be traced to a validated build
-
-### 16. Product Analytics and Feedback Loop
+### 17. Product Analytics and Feedback Loop
 
 Status: `not started`
 
-Scope:
-- Define whether to collect product telemetry
-- If yes, add privacy-conscious event collection for key product flows
-- Add opt-in and documentation
+---
 
-Acceptance criteria:
-- Product decisions can be informed by real usage data
-- Telemetry is explicit and documented
+## Technical Debt: Desktop Architecture
 
-## Suggested Execution Order
+| Item | Location | Description |
+|------|----------|-------------|
+| `main.js` is ~1780 lines | `desktop/main.js` | Single file contains protocol handler, state management, WSL logic, SSH logic, window management, backend spawning, error pages, worktree support. Should be split into modules. |
+| No desktop package.json | `desktop/` | Desktop metadata lives in root `package.json`. Consider extracting `desktop/package.json`. |
+| `preload.js` is minimal (24 lines) | `desktop/preload.js` | Will need expansion as more native capabilities are exposed to renderer. |
+| `child.unref()` on backend processes | `desktop/main.js` | Backend processes are unref'd from the event loop — intentional but means orphans on crash. |
 
-### Phase 1
-- Desktop validation matrix
-- Windows + WSL end-to-end validation
-- Signing/notarization/installer readiness
-- Crash and diagnostics baseline
+---
 
-### Phase 2
-- First-run onboarding
-- Workspace model UX cleanup
-- Error handling and recovery UX
-- Workspace switching coverage
+## Execution Order
 
-### Phase 3
-- Desktop E2E coverage
-- Session management improvements
-- Native OS integration
-- Large repository performance
+### Phase 0: CI Green (DONE)
+1. ~~Fix desktop CI build matrix~~
+2. ~~Generate icon assets and fix icon paths~~
+3. ~~Fix verify script to be platform-aware~~
+4. ~~Optimize backend cross-compilation~~
+5. ~~Add backend logging~~
 
-### Phase 4
-- Auto-update
-- State migration hardening
-- Release operations
-- Product analytics and feedback loop
+### Phase 1: Smoke Test on Real Hardware
+6. Desktop validation matrix
+7. Windows + WSL end-to-end validation
+8. Signing/notarization/installer readiness
+9. Crash and diagnostics baseline (log export, error boundary)
 
-## Immediate Next Sprint
+### Phase 2: Product-Quality UX
+10. First-run onboarding
+11. Workspace model UX cleanup
+12. Error handling and recovery UX
+13. Workspace switching coverage
 
-If work resumes immediately, the highest-value next sprint is:
+### Phase 3: Test and Scale
+14. Desktop E2E coverage
+15. Session management improvements
+16. Native OS integration
+17. Large repository performance
 
-1. Validate packaged Windows + WSL mode on a real Windows machine.
-2. Add desktop startup failure UI and diagnostics export.
-3. Finish signing/notarization assets and CI validation.
-4. Add a first-run onboarding flow for provider credentials and workspace selection.
+### Phase 4: Release Hardening
+18. Auto-update
+19. State migration hardening
+20. Release operations
+21. Product analytics

@@ -1,6 +1,7 @@
 const { app, BrowserWindow, dialog, Menu, shell, ipcMain } = require('electron');
 const { spawn, spawnSync } = require('node:child_process');
 const fs = require('node:fs');
+const { createWriteStream } = require('node:fs');
 const http = require('node:http');
 const net = require('node:net');
 const path = require('node:path');
@@ -75,6 +76,22 @@ function registerDesktopProtocol() {
 
 function getUserStatePath() {
   return path.join(app.getPath('userData'), 'desktop-state.json');
+}
+
+function getLogDirectory() {
+  const dir = path.join(app.getPath('userData'), 'logs');
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+function openBackendLogStream(label) {
+  const dir = getLogDirectory();
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const logPath = path.join(dir, `backend-${label}-${timestamp}.log`);
+  const stream = createWriteStream(logPath, { flags: 'a' });
+  stream.on('error', () => {});
+  console.log(`[desktop] backend log: ${logPath}`);
+  return stream;
 }
 
 function readDesktopState() {
@@ -1146,9 +1163,13 @@ async function startBackendForWorkspace(workspaceEntry) {
       env: {
         ...process.env,
       },
-      stdio: 'ignore',
+      stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     });
+
+    const logStream = openBackendLogStream(`wsl-${distro}`);
+    if (child.stdout) child.stdout.pipe(logStream);
+    if (child.stderr) child.stderr.pipe(logStream);
 
     child.unref();
 
@@ -1177,9 +1198,13 @@ async function startBackendForWorkspace(workspaceEntry) {
         LEDIT_DESKTOP_BACKEND_MODE: 'native',
         BROWSER: 'none',
       },
-    stdio: 'ignore',
+    stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   });
+
+  const logStream = openBackendLogStream('native');
+  if (child.stdout) child.stdout.pipe(logStream);
+  if (child.stderr) child.stderr.pipe(logStream);
 
   child.unref();
 

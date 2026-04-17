@@ -1612,7 +1612,59 @@ function App() {
   const handleSendMessage = useCallback(async (message: string, options?: { allowConcurrent?: boolean }) => {
     if (!message.trim()) return;
     const trimmedMessage = message.trim();
+    const isClearCommand = trimmedMessage.toLowerCase() === '/clear';
     const allowConcurrent = options?.allowConcurrent === true;
+
+    // Recovery path: /clear should always unblock the UI, even if a previous
+    // request got stuck and stop/clear could not complete via normal flow.
+    if (isClearCommand && !allowConcurrent && activeRequestsRef.current > 0) {
+      try {
+        await apiService.stopQuery();
+      } catch (error) {
+        debugLog('[chat] stopQuery failed during /clear recovery:', error);
+      }
+
+      activeRequestsRef.current = 0;
+      queuedMessagesRef.current = [];
+      setQueuedMessagesCount(0);
+
+      setState((prev) => ({
+        ...prev,
+        isProcessing: false,
+        lastError: null,
+        queryProgress: null,
+        messages: [],
+        toolExecutions: [],
+        fileEdits: [],
+        subagentActivities: [],
+        currentTodos: [],
+      }));
+
+      try {
+        await apiService.sendQuery('/clear', activeChatIdRef.current ?? undefined);
+      } catch (error) {
+        // Local recovery already succeeded; surface backend failure without
+        // re-locking the UI.
+        const errorMsg = error instanceof Error ? error.message : 'Failed to send clear command';
+        setState((prev) => ({
+          ...prev,
+          lastError: errorMsg,
+          messages: [
+            ...prev.messages,
+            {
+              id: generateMessageId(),
+              type: 'assistant',
+              content: `[FAIL] Error: ${errorMsg}`,
+              timestamp: new Date(),
+            },
+          ],
+        }));
+      }
+
+      setInputValue('');
+      return;
+    }
+
     if (!allowConcurrent && activeRequestsRef.current > 0) {
       setState(prev => ({
         ...prev,
@@ -1672,14 +1724,25 @@ function App() {
   const handleStopProcessing = useCallback(async () => {
     try {
       await apiService.stopQuery();
+      activeRequestsRef.current = 0;
+      queuedMessagesRef.current = [];
+      setQueuedMessagesCount(0);
       setState(prev => ({
         ...prev,
+        isProcessing: false,
+        queryProgress: null,
         lastError: null,
       }));
     } catch (error) {
+      // Force-local recovery so the UI never remains permanently stuck.
+      activeRequestsRef.current = 0;
+      queuedMessagesRef.current = [];
+      setQueuedMessagesCount(0);
       const errorMsg = error instanceof Error ? error.message : 'Failed to stop query';
       setState(prev => ({
         ...prev,
+        isProcessing: false,
+        queryProgress: null,
         lastError: errorMsg,
         messages: [...prev.messages, {
           id: generateMessageId(),

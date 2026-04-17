@@ -65,9 +65,14 @@ func TestValidateHotkeyConfig(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "duplicate command_id with same modifier",
-			config:  `{"version": "1.0", "hotkeys": [{"key": "Ctrl+S", "command_id": "save"}, {"key": "Ctrl+Shift+S", "command_id": "save"}]}`,
+			name:    "same key string registered twice is rejected",
+			config:  `{"version": "1.0", "hotkeys": [{"key": "Ctrl+S", "command_id": "save"}, {"key": "Ctrl+S", "command_id": "save"}]}`,
 			wantErr: true,
+		},
+		{
+			name:    "different keys same command_id allowed",
+			config:  `{"version": "1.0", "hotkeys": [{"key": "Ctrl+S", "command_id": "save"}, {"key": "Ctrl+Shift+S", "command_id": "save"}]}`,
+			wantErr: false,
 		},
 		{
 			name:    "same command_id different platform variants allowed",

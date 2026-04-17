@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { ChangeEvent, KeyboardEvent, MouseEvent } from 'react';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { clientFetch } from '../services/clientSession';
+import { ApiService } from '../services/api';
 import { clearLayoutSnapshot } from '../services/layoutPersistence';
 import { fuzzyFilter, highlightMatches } from '../utils/fuzzyMatch';
 import type { FuzzyResult } from '../utils/fuzzyMatch';
@@ -49,6 +50,9 @@ const COMMAND_DEFINITIONS: CommandDef[] = [
   { id: 'split_editor_vertical', label: 'Split Editor Vertical', category: 'View' },
   { id: 'split_editor_horizontal', label: 'Split Editor Horizontal', category: 'View' },
   { id: 'split_editor_grid', label: 'Split Editor Grid', category: 'View' },
+  { id: 'focus_split_1', label: 'Focus Editor Split 1', category: 'View' },
+  { id: 'focus_split_2', label: 'Focus Editor Split 2', category: 'View' },
+  { id: 'focus_split_3', label: 'Focus Editor Split 3', category: 'View' },
   { id: 'split_terminal_vertical', label: 'Split Terminal Vertical', category: 'View' },
   { id: 'split_terminal_horizontal', label: 'Split Terminal Horizontal', category: 'View' },
   { id: 'editor_toggle_word_wrap', label: 'Toggle Word Wrap', category: 'View' },
@@ -86,10 +90,47 @@ interface PaletteResult {
   filePath?: string;
   /** For file results — file name. */
   fileName?: string;
+  /** For file results — the directory relative to the workspace root. */
+  fileDirectory?: string;
+  /** Highlighted HTML for the secondary path label. */
+  secondaryHighlightedLabel?: string;
   /** Highlighted HTML for the primary label. */
   highlightedLabel: string;
   /** Score from fuzzy matcher (lower = worse). */
   score: number;
+}
+
+function normalizePathSeparators(value: string): string {
+  return value.replace(/\\/g, '/');
+}
+
+export function toWorkspaceRelativePath(filePath: string, workspaceRoot: string): string {
+  const normalizedPath = normalizePathSeparators(filePath).replace(/^\.\//, '');
+  const normalizedRoot = normalizePathSeparators(workspaceRoot).replace(/\/+$/, '');
+
+  if (!normalizedRoot) {
+    return normalizedPath;
+  }
+
+  if (normalizedPath === normalizedRoot) {
+    return '';
+  }
+
+  const prefix = `${normalizedRoot}/`;
+  if (normalizedPath.startsWith(prefix)) {
+    return normalizedPath.slice(prefix.length);
+  }
+
+  return normalizedPath;
+}
+
+export function getDirectoryName(relativePath: string): string {
+  const normalizedPath = normalizePathSeparators(relativePath);
+  const lastSlash = normalizedPath.lastIndexOf('/');
+  if (lastSlash <= 0) {
+    return '';
+  }
+  return normalizedPath.slice(0, lastSlash);
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
@@ -104,12 +145,14 @@ function CommandPalette({
 }: CommandPaletteProps): JSX.Element | null {
   const { hotkeyForCommand } = useHotkeys();
   const log = useLog();
+  const apiService = ApiService.getInstance();
 
   // State
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
   const [allFiles, setAllFiles] = useState<FileResult[]>([]);
+  const [workspaceRoot, setWorkspaceRoot] = useState('');
   const [prefersCommandsOnly, setPrefersCommandsOnly] = useState(false);
   const [prefersFilesOnly, setPrefersFilesOnly] = useState(false);
 
@@ -148,6 +191,18 @@ function CommandPalette({
   useEffect(() => {
     if (!isOpen) return;
     let cancelled = false;
+
+    apiService.getWorkspace()
+      .then((workspace) => {
+        if (!cancelled) {
+          setWorkspaceRoot(String(workspace.workspace_root || '').trim());
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setWorkspaceRoot('');
+        }
+      });
 
     const doFetch = async () => {
       setIsLoadingFiles(true);
@@ -202,7 +257,7 @@ function CommandPalette({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, log]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [apiService, isOpen, log]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Build unified results: commands first, then files ─────────────────
 
@@ -252,16 +307,25 @@ function CommandPalette({
 
     // ── Fuzzy-match files ────────────────────────────────────────────────
     if (!prefersCommandsOnly && allFiles.length > 0) {
-      const fileResults: FuzzyResult<FileResult>[] = fuzzyFilter(trimmed, allFiles, (f) => f.path, MAX_FILE_RESULTS);
+      const fileResults: FuzzyResult<FileResult>[] = fuzzyFilter(
+        trimmed,
+        allFiles,
+        (file) => toWorkspaceRelativePath(file.path, workspaceRoot),
+        MAX_FILE_RESULTS,
+      );
 
       if (fileResults.length > 0) {
         items.push({ kind: 'files-header', highlightedLabel: 'Files', score: -1 });
         for (const r of fileResults) {
+          const relativePath = toWorkspaceRelativePath(r.item.path, workspaceRoot);
+          const directoryPath = getDirectoryName(relativePath);
           items.push({
             kind: 'file',
             filePath: r.item.path,
             fileName: r.item.name,
-            highlightedLabel: highlightMatches(r.item.path, r.matches),
+            fileDirectory: directoryPath,
+            highlightedLabel: highlightMatches(r.item.name, []),
+            secondaryHighlightedLabel: directoryPath ? highlightMatches(directoryPath, []) : '',
             score: r.score,
           });
         }
@@ -269,7 +333,7 @@ function CommandPalette({
     }
 
     return items;
-  }, [query, allFiles, prefersCommandsOnly, prefersFilesOnly]);
+  }, [query, allFiles, prefersCommandsOnly, prefersFilesOnly, workspaceRoot]);
 
   // ── Navigable items (skip headers for arrow-key selection) ────────────
 
@@ -329,6 +393,15 @@ function CommandPalette({
           break;
         case 'split_editor_grid':
           window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'split_editor_grid' } }));
+          break;
+        case 'focus_split_1':
+          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'focus_split_1' } }));
+          break;
+        case 'focus_split_2':
+          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'focus_split_2' } }));
+          break;
+        case 'focus_split_3':
+          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'focus_split_3' } }));
           break;
         case 'split_terminal_vertical':
           window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'split_terminal_vertical' } }));
@@ -639,10 +712,19 @@ function CommandPalette({
                 onMouseEnter={() => setSelectedIndex(toNavigableIndex(index))}
               >
                 <span className="command-palette-file-icon">📄</span>
-                <span
-                  className="command-palette-file-path"
-                  dangerouslySetInnerHTML={{ __html: item.highlightedLabel }}
-                />
+                <span className="command-palette-file-meta">
+                  <span
+                    className="command-palette-file-name"
+                    dangerouslySetInnerHTML={{ __html: item.highlightedLabel }}
+                  />
+                  {item.fileDirectory && (
+                    <span
+                      className="command-palette-file-path"
+                      title={item.fileDirectory}
+                      dangerouslySetInnerHTML={{ __html: item.secondaryHighlightedLabel || item.fileDirectory }}
+                    />
+                  )}
+                </span>
               </div>
             );
           })}

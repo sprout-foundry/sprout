@@ -171,6 +171,16 @@ function OnboardingDialog({
           <div className={`onboarding-platform-panel ${windowsGuidance.tone}`}>
             <div className="onboarding-platform-title">{windowsGuidance.title}</div>
             <div className="onboarding-platform-body">{windowsGuidance.body}</div>
+            {onboarding.environment?.backend_mode === 'wsl' && onboarding.environment.active_distro && (
+              <div className="onboarding-wsl-distro">
+                Running in WSL distro: <strong>{onboarding.environment.active_distro}</strong>
+                {onboarding.environment.wsl_distros?.length > 1 && (
+                  <span className="onboarding-wsl-distro-hint">
+                    {' '}(other available: {onboarding.environment.wsl_distros.filter((d) => d !== onboarding.environment!.active_distro).join(', ')})
+                  </span>
+                )}
+              </div>
+            )}
             <ul className="onboarding-platform-list">
               {windowsGuidance.checklist.map((item) => (
                 <li key={item}>{item}</li>

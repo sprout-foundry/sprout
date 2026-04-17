@@ -33,12 +33,14 @@ type onboardingProvider struct {
 }
 
 type onboardingEnvironment struct {
-	RuntimePlatform     string `json:"runtime_platform"`
-	HostPlatform        string `json:"host_platform"`
-	BackendMode         string `json:"backend_mode"`
-	HasWSL              bool   `json:"has_wsl"`
-	HasGitBash          bool   `json:"has_git_bash"`
-	RecommendedTerminal string `json:"recommended_terminal"`
+	RuntimePlatform     string   `json:"runtime_platform"`
+	HostPlatform        string   `json:"host_platform"`
+	BackendMode         string   `json:"backend_mode"`
+	HasWSL              bool     `json:"has_wsl"`
+	HasGitBash          bool     `json:"has_git_bash"`
+	RecommendedTerminal string   `json:"recommended_terminal"`
+	ActiveDistro        string   `json:"active_distro"`
+	WslDistros          []string `json:"wsl_distros"`
 }
 
 type onboardingProviderPresentation struct {
@@ -227,6 +229,12 @@ func detectOnboardingEnvironment() onboardingEnvironment {
 		}
 	}
 
+	// Detect active WSL distro (set by the WSL runtime environment).
+	activeDistro := strings.TrimSpace(os.Getenv("WSL_DISTRO_NAME"))
+
+	// Enumerate available WSL distros when on Windows native or when wsl.exe is reachable.
+	wslDistros := detectWslDistros(hasWSL, backendMode, hostPlatform)
+
 	return onboardingEnvironment{
 		RuntimePlatform:     runtime.GOOS,
 		HostPlatform:        hostPlatform,
@@ -234,7 +242,43 @@ func detectOnboardingEnvironment() onboardingEnvironment {
 		HasWSL:              hasWSL,
 		HasGitBash:          hasGitBash,
 		RecommendedTerminal: recommendedTerminal,
+		ActiveDistro:        activeDistro,
+		WslDistros:          wslDistros,
 	}
+}
+
+func detectWslDistros(hasWSL bool, backendMode, hostPlatform string) []string {
+	// Only attempt on Windows native (not from inside WSL) or when wsl.exe is known to be present.
+	if !hasWSL {
+		return nil
+	}
+	if hostPlatform != "windows" && backendMode != "wsl" {
+		return nil
+	}
+	cmd := exec.Command("wsl.exe", "-l", "-q")
+	out, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+	var distros []string
+	for _, line := range strings.Split(string(out), "\n") {
+		// wsl.exe -l -q uses UTF-16LE on Windows; when running inside WSL it emits UTF-8.
+		// Strip BOM and null bytes that appear in the UTF-16 output.
+		clean := strings.Map(func(r rune) rune {
+			if r == 0 || r == '\r' || r == '\ufeff' {
+				return -1
+			}
+			return r
+		}, line)
+		clean = strings.TrimSpace(clean)
+		// Strip the leading '*' that wsl.exe uses to mark the default distro.
+		clean = strings.TrimLeft(clean, "* ")
+		clean = strings.TrimSpace(clean)
+		if clean != "" {
+			distros = append(distros, clean)
+		}
+	}
+	return distros
 }
 
 func hasGitBashShell() bool {

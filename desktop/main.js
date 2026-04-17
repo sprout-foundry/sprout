@@ -5,6 +5,8 @@
  */
 
 const { app, BrowserWindow, dialog, ipcMain } = require('electron');
+const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 const ctx = require('./context');
@@ -32,10 +34,46 @@ const {
 } = require('./windows');
 const { initAutoUpdater } = require('./updater');
 
+function isSmokeTestMode() {
+  return process.env.LEDIT_SMOKE_TEST === '1';
+}
+
+function shouldSkipRestore() {
+  return process.env.LEDIT_SKIP_RESTORE === '1';
+}
+
+function isAppEntryArgument(candidate) {
+  if (!candidate || candidate.startsWith('-')) {
+    return false;
+  }
+
+  try {
+    return path.resolve(candidate) === path.resolve(app.getAppPath());
+  } catch {
+    return false;
+  }
+}
+
+function configureSmokeTestPaths() {
+  if (!isSmokeTestMode()) {
+    return;
+  }
+
+  const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ledit-smoke-'));
+  app.setPath('userData', path.join(baseDir, 'user-data'));
+  app.setPath('sessionData', path.join(baseDir, 'session-data'));
+  app.setPath('cache', path.join(baseDir, 'cache'));
+  app.setPath('logs', path.join(baseDir, 'logs'));
+}
+
+configureSmokeTestPaths();
+
 // ── Single-instance lock ──────────────────────────────────────────────────────
-const gotSingleInstanceLock = app.requestSingleInstanceLock();
-if (!gotSingleInstanceLock) {
-  app.quit();
+if (!isSmokeTestMode()) {
+  const gotSingleInstanceLock = app.requestSingleInstanceLock();
+  if (!gotSingleInstanceLock) {
+    app.quit();
+  }
 }
 
 // ── Protocol registration ─────────────────────────────────────────────────────
@@ -127,6 +165,9 @@ async function restorePreviousSession() {
 function resolveWorkspaceArg(argv) {
   for (const arg of argv) {
     if (!arg || arg.startsWith('-')) {
+      continue;
+    }
+    if (isAppEntryArgument(arg)) {
       continue;
     }
     const candidate = extractWorkspacePathFromOpenTarget(arg);
@@ -274,16 +315,27 @@ app.whenReady().then(async () => {
     await handleOpenTarget(pending.candidate, { forceNewWindow: pending.forceNewWindow });
   }
 
+  if (isSmokeTestMode()) {
+    await openInitialWindow();
+    return;
+  }
+
   const launchWorkspace = resolveWorkspaceArg(process.argv.slice(1));
   if (launchWorkspace) {
     await createWorkspaceWindow({ workspacePath: launchWorkspace });
   } else {
-    const restored = await restorePreviousSession();
-    if (!restored) {
-      const openedRecent = await openMostRecentWorkspace();
-      if (!openedRecent) {
-        await openInitialWindow();
+    let restored = false;
+    let openedRecent = false;
+
+    if (!shouldSkipRestore()) {
+      restored = await restorePreviousSession();
+      if (!restored) {
+        openedRecent = await openMostRecentWorkspace();
       }
+    }
+
+    if (!restored && !openedRecent) {
+      await openInitialWindow();
     }
   }
 

@@ -21,7 +21,7 @@ interface SubagentTypeEntry {
   enabled: boolean;
 }
 
-type SettingsSubTab = 'general' | 'security' | 'credentials' | 'performance' | 'subagents' | 'pdf-ocr' | 'mcp' | 'providers' | 'skills';
+type SettingsSubTab = 'general' | 'security' | 'credentials' | 'performance' | 'subagents' | 'commit-review' | 'pdf-ocr' | 'mcp' | 'providers' | 'skills';
 
 interface EditorPreferences {
   autoSaveEnabled: boolean;
@@ -44,6 +44,7 @@ const SUB_TABS: { id: SettingsSubTab; label: string }[] = [
   { id: 'credentials', label: 'Credentials' },
   { id: 'performance', label: 'Perf' },
   { id: 'subagents', label: 'Subagents' },
+  { id: 'commit-review', label: 'Commit & Review' },
   { id: 'pdf-ocr', label: 'OCR' },
   { id: 'mcp', label: 'MCP' },
   { id: 'providers', label: 'Providers' },
@@ -135,6 +136,9 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
   } | null>(null);
   const [loadingProviderInfo, setLoadingProviderInfo] = useState(false);
 
+  // Commit & Review providers state
+  const [commitReviewProviders, setCommitReviewProviders] = useState<ProviderOption[]>([]);
+
   // API service instance
   const api = ApiService.getInstance();
 
@@ -179,6 +183,25 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
         setSubagentTypes((data.subagent_types || {}) as Record<string, SubagentTypeEntry>);
       } catch (err) {
         debugLog('[SettingsPanel] failed to load subagent types:', err);
+        // Silently fail — dropdowns will just be empty
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSubTab, api]);
+
+  // Fetch providers for commit & review when tab is activated
+  useEffect(() => {
+    if (activeSubTab !== 'commit-review') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await api.getSubagentTypes();
+        if (cancelled) return;
+        setCommitReviewProviders((data.available_providers || []) as ProviderOption[]);
+      } catch (err) {
+        debugLog('[SettingsPanel] failed to load commit-review providers:', err);
         // Silently fail — dropdowns will just be empty
       }
     })();
@@ -1002,6 +1025,114 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
                     </div>
                   );
                 })}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      /* ── Commit & Review ───────────────────────────────── */
+      case 'commit-review': {
+        const currentCommitProvider = String(
+          getNestedValue(settings as unknown as Record<string, unknown>, 'commit_provider') || '',
+        );
+        const currentCommitModel = String(
+          getNestedValue(settings as unknown as Record<string, unknown>, 'commit_model') || '',
+        );
+        const currentReviewProvider = String(
+          getNestedValue(settings as unknown as Record<string, unknown>, 'review_provider') || '',
+        );
+        const currentReviewModel = String(
+          getNestedValue(settings as unknown as Record<string, unknown>, 'review_model') || '',
+        );
+
+        // Get models for the currently selected commit provider
+        const selectedCommitProvider = commitReviewProviders.find((p) => p.id === currentCommitProvider);
+        const commitAvailableModels = selectedCommitProvider?.models || [];
+
+        // Get models for the currently selected review provider
+        const selectedReviewProvider = commitReviewProviders.find((p) => p.id === currentReviewProvider);
+        const reviewAvailableModels = selectedReviewProvider?.models || [];
+
+        return (
+          <div className="section">
+            <h4>Commit Message Generation</h4>
+            <div className="config-help" style={{ marginBottom: 'var(--space-4)' }}>
+              Configure which provider and model to use for generating commit messages. Leave empty to use the default (LastUsedProvider).
+            </div>
+
+            <div className="config-item">
+              <label htmlFor="commit-provider-select">Provider</label>
+              <select
+                id="commit-provider-select"
+                className="styled-select"
+                value={currentCommitProvider}
+                onChange={(e) => updateSetting('commit_provider', e.target.value)}
+              >
+                <option value="">Default (inherit from main agent)</option>
+                {commitReviewProviders.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="config-item">
+              <label htmlFor="commit-model-select">Model</label>
+              <select
+                id="commit-model-select"
+                className="styled-select"
+                value={currentCommitModel}
+                onChange={(e) => updateSetting('commit_model', e.target.value)}
+              >
+                <option value="">Default (use provider&apos;s default model)</option>
+                {commitAvailableModels.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ marginTop: 'var(--space-5)', paddingTop: 'var(--space-4)', borderTop: '1px solid var(--border)' }}>
+              <h4>Code Review</h4>
+              <div className="config-help" style={{ marginBottom: 'var(--space-4)' }}>
+                Configure which provider and model to use for code review commands (/review, /review-deep). Leave empty to use the default (LastUsedProvider).
+              </div>
+
+              <div className="config-item">
+                <label htmlFor="review-provider-select">Provider</label>
+                <select
+                  id="review-provider-select"
+                  className="styled-select"
+                  value={currentReviewProvider}
+                  onChange={(e) => updateSetting('review_provider', e.target.value)}
+                >
+                  <option value="">Default (inherit from main agent)</option>
+                  {commitReviewProviders.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="config-item">
+                <label htmlFor="review-model-select">Model</label>
+                <select
+                  id="review-model-select"
+                  className="styled-select"
+                  value={currentReviewModel}
+                  onChange={(e) => updateSetting('review_model', e.target.value)}
+                >
+                  <option value="">Default (use provider&apos;s default model)</option>
+                  {reviewAvailableModels.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           </div>

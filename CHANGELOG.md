@@ -2,6 +2,21 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.15.2] - 2026-04-17
+
+- Updates 8 files - Updates taskActions thread safety with RWMutex (7b0cedc5)
+- Updates 6 files - Updates service diagnostics, retry handling, and installer (b75b7a23)
+- Merge remote-tracking branch 'origin/main' (264a4967)
+- Updates 22 files - Updates desktop modularization and productization features (b25be077)
+- Updates desktop/main.js - Updates error page with logs and diagnostics (fdeb5b6c)
+- Updates 6 files - Updates diagnostics export functionality (3a989b00)
+- Updates 11 files - Updates commit and review workflow configuration, WebUI and tests (605971fc)
+- Updates 2 files - Updates error boundary with reload button and log hint (a82115ee)
+- cleanup: remove obsolete build script (b69a7ae5)
+- feat: add desktop icons and new filediscovery test (de3166ff)
+- chore: improve CI workflows, desktop logging and documentation (ebfdd948)
+- docs: Update changelog for v0.15.1 (f9f712ee)
+
 ## [v0.15.1] - 2026-04-17
 
 - Updates pkg/webui/handlers.go - Updates the index handler to use Fprint instead of Fprintf (d584317d)

@@ -73,26 +73,32 @@ func (tm *TerminalManager) createTmuxSession(sessionID string, shellOverride ...
 		"-s", tmuxName,
 		"-x", fmt.Sprintf("%d", defaultSize.Cols),
 		"-y", fmt.Sprintf("%d", defaultSize.Rows),
-		shell,
 	}
+	// Set the session's starting directory explicitly via -c so the shell
+	// process inside tmux starts in the workspace root. Without this, tmux
+	// ignores createCmd.Dir and starts the shell in $HOME.
+	if strings.TrimSpace(tm.workspaceRoot) != "" {
+		createArgs = append(createArgs, "-c", tm.workspaceRoot)
+	}
+	createArgs = append(createArgs, shell)
 	createArgs = append(createArgs, shellArgs...)
 	createCmd := exec.Command("tmux", createArgs...)
 	if strings.TrimSpace(tm.workspaceRoot) != "" {
 		createCmd.Dir = tm.workspaceRoot
 	}
 	// Inherit useful env vars for the shell inside tmux.
-	// COLUMNS and LINES are critical: many Node.js packages (e.g. regex,
-	// webpack) read process.stdout.columns or $COLUMNS to determine
-	// terminal width.  When running inside a PTY-backed web terminal the
-	// process may not report a valid TTY width, causing NaN errors.
+	// COLUMNS and LINES are set to the default PTY size so tools that read them
+	// at startup (e.g. Node.js packages, webpack) get a reasonable value.
+	// Shells (bash/zsh) update $COLUMNS dynamically in response to SIGWINCH
+	// when the frontend sends a resize, so the value stays accurate.
 	createCmd.Env = append(os.Environ(),
 		"TERM=xterm-256color",
 		"COLORTERM=truecolor",
 		"FORCE_COLOR=1",
 		"SHELL="+shell,
 		"LEDIT_WEB_TERMINAL=1",
-		"COLUMNS=80",
-		"LINES=24",
+		fmt.Sprintf("COLUMNS=%d", defaultSize.Cols),
+		fmt.Sprintf("LINES=%d", defaultSize.Rows),
 	)
 
 	if output, err := createCmd.CombinedOutput(); err != nil {
@@ -171,26 +177,26 @@ func (tm *TerminalManager) createUnixSession(sessionID string, shellOverride ...
 		cmd.Dir = tm.workspaceRoot
 	}
 
+	// Set default terminal size
+	defaultSize := &pty.Winsize{
+		Rows: 24,
+		Cols: 80,
+	}
+
 	// Set environment variables for better terminal experience.
-	// COLUMNS and LINES are critical: many Node.js packages (e.g. regex,
-	// webpack) read process.stdout.columns or $COLUMNS to determine
-	// terminal width.  When running inside a PTY-backed web terminal the
-	// process may not report a valid TTY width, causing NaN errors.
+	// COLUMNS and LINES are set to the default PTY size so tools that read them
+	// at startup (e.g. Node.js packages, webpack) get a reasonable value.
+	// Shells (bash/zsh) update $COLUMNS dynamically in response to SIGWINCH
+	// when the frontend sends a resize, so the value stays accurate.
 	cmd.Env = append(os.Environ(),
 		"TERM=xterm-256color",
 		"COLORTERM=truecolor",
 		"FORCE_COLOR=1",
 		"SHELL="+shell,
 		"LEDIT_WEB_TERMINAL=1",
-		"COLUMNS=80",
-		"LINES=24",
+		fmt.Sprintf("COLUMNS=%d", defaultSize.Cols),
+		fmt.Sprintf("LINES=%d", defaultSize.Rows),
 	)
-
-	// Set default terminal size
-	defaultSize := &pty.Winsize{
-		Rows: 24,
-		Cols: 80,
-	}
 
 	// Start the command with PTY
 	ptyFile, err := pty.StartWithSize(cmd, defaultSize)

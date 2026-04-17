@@ -462,6 +462,29 @@ const AppContent: React.FC<AppContentProps> = ({
     }
   }, [activePaneId, buffers, switchPane, switchToBuffer]);
 
+  const handleFocusPaneIndex = useCallback((index: number) => {
+    if (index < panes.length) {
+      // Focus existing pane
+      switchPane(panes[index].id);
+      return;
+    }
+    // index >= panes.length — need to split to create more panes
+    if (panes.length < 3) {
+      // Split from the active pane (or last pane)
+      const sourcePaneId = activePaneId || panes[panes.length - 1]?.id;
+      if (!sourcePaneId) return;
+      const direction = panes.length === 1 ? 'vertical' : 'horizontal';
+      const newPaneId = splitPane(sourcePaneId, direction);
+      if (newPaneId) {
+        // Update pane sizes to 50/50
+        updatePaneSize(`group:${sourcePaneId}`, 50);
+        updatePaneSize(`nested:${sourcePaneId}`, 50);
+        // Focus the new pane
+        switchPane(newPaneId);
+      }
+    }
+  }, [panes, activePaneId, splitPane, switchPane, updatePaneSize]);
+
   // Listen for hotkey custom events
   useEffect(() => {
     const handleHotkey = (e: Event) => {
@@ -489,18 +512,17 @@ const AppContent: React.FC<AppContentProps> = ({
           onTerminalExpandedChange(!isTerminalExpanded);
           break;
         case 'toggle_explorer': {
-          // Reveal the active file's path in the file tree explorer
+          // Reveal the active file's path in the file tree explorer.
+          // Always dispatch the reveal-in-explorer event — the Sidebar handler
+          // ensures the sidebar is open and switched to the files tab.
+          // If no active file, dispatch with no path so the sidebar just
+          // opens to files without highlighting anything.
           const activeBuffer = activeBufferId ? buffers.get(activeBufferId) : null;
           const filePath = activeBuffer?.file?.path && !activeBuffer.file.isDir && activeBuffer.kind === 'file'
             ? activeBuffer.file.path
             : null;
-          
-          if (filePath) {
-            window.dispatchEvent(new CustomEvent('ledit:reveal-in-explorer', { detail: { path: filePath } }));
-          } else {
-            // No active file — just toggle sidebar to files
-            onSidebarToggle();
-          }
+
+          window.dispatchEvent(new CustomEvent('ledit:reveal-in-explorer', { detail: { path: filePath ?? '' } }));
           break;
         }
         case 'quick_open':
@@ -515,14 +537,14 @@ const AppContent: React.FC<AppContentProps> = ({
         case 'switch_to_git':
           handlePrimaryViewChange('git');
           break;
-        case 'focus_tab_1':
-          focusTabIndex(0);
+        case 'focus_split_1':
+          handleFocusPaneIndex(0);
           break;
-        case 'focus_tab_2':
-          focusTabIndex(1);
+        case 'focus_split_2':
+          handleFocusPaneIndex(1);
           break;
-        case 'focus_tab_3':
-          focusTabIndex(2);
+        case 'focus_split_3':
+          handleFocusPaneIndex(2);
           break;
         case 'close_editor':
           if (activeBufferId) {
@@ -534,7 +556,7 @@ const AppContent: React.FC<AppContentProps> = ({
     
     window.addEventListener('ledit:hotkey', handleHotkey);
     return () => window.removeEventListener('ledit:hotkey', handleHotkey);
-  }, [activeBufferId, buffers, closeBuffer, focusTabIndex, handlePrimaryViewChange, onSidebarToggle, onTerminalExpandedChange, isTerminalExpanded, openWorkspaceBuffer, onViewChange]);
+  }, [activeBufferId, buffers, closeBuffer, focusTabIndex, handleFocusPaneIndex, handlePrimaryViewChange, onSidebarToggle, onTerminalExpandedChange, isTerminalExpanded, openWorkspaceBuffer, onViewChange]);
 
   // Handler to open hotkeys config in editor
   const handleOpenHotkeysConfig = useCallback(() => {

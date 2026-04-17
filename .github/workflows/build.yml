@@ -77,6 +77,11 @@ jobs:
         CI: "true"
       run: make test-unit
 
+    - name: Run unit tests with race detection
+      env:
+        CI: "true"
+      run: go test -race -tags ollama_test ./pkg/... ./cmd/... -timeout=120s -short
+
     - name: Run integration tests
       run: make test-integration
 

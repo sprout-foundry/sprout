@@ -46,6 +46,29 @@ function validateMacIcon() {
   }
 }
 
+function generateMacIcon() {
+  const iconsetPath = path.join(repoRoot, 'desktop', 'resources', 'icon.iconset');
+  const icnsPath = path.join(repoRoot, 'desktop', 'resources', 'icon.icns');
+
+  if (!fs.existsSync(iconsetPath)) {
+    console.log('[beforePack] icon.iconset not found, skipping icon generation');
+    return;
+  }
+
+  console.log('[beforePack] generating icon.icns from icon.iconset');
+  const result = spawnSync('iconutil', ['-c', 'icns', iconsetPath, '-o', icnsPath], {
+    cwd: repoRoot,
+    stdio: 'inherit',
+  });
+
+  if (result.status !== 0) {
+    console.warn(`[beforePack] iconutil failed with exit code ${result.status ?? 1}, continuing anyway`);
+    return;
+  }
+
+  console.log('[beforePack] icon.icns generated successfully');
+}
+
 module.exports = async function beforePack(context) {
   const platform = context.electronPlatformName;
   const arch = mapElectronArch(context.arch);
@@ -56,13 +79,23 @@ module.exports = async function beforePack(context) {
     'darwin-arm64',
   ].filter((target) => target !== `${platform}-${arch}`);
 
+  // Generate icon.icns from iconset on macOS (must run before validateMacIcon)
+  if (platform === 'darwin') {
+    generateMacIcon();
+  }
+
   validateMacIcon();
   run('node', ['scripts/build-webui-embed.mjs']);
-  run('node', ['scripts/build-electron-backend.mjs'], {
-    env: {
-      LEDIT_GOOS: platform,
-      LEDIT_GOARCH: arch,
-      LEDIT_EXTRA_TARGETS: extraTargets.join(','),
-    },
-  });
+
+  if (!process.env.SKIP_BACKEND_BUILD) {
+    run('node', ['scripts/build-electron-backend.mjs'], {
+      env: {
+        LEDIT_GOOS: platform,
+        LEDIT_GOARCH: arch,
+        LEDIT_EXTRA_TARGETS: extraTargets.join(','),
+      },
+    });
+  } else {
+    console.log('[beforePack] SKIP_BACKEND_BUILD is set; skipping backend compilation');
+  }
 };

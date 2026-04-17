@@ -110,6 +110,9 @@ run-prompt.md
 *.svg
 !webui/public/icon-192.png
 !webui/public/icon-512.png
+!desktop/resources/icon.png
+!desktop/resources/icon.iconset/*.png
+!desktop/resources/icons/png/*.png
 !pkg/webui/static/placeholder
 !pkg/webui/logo-mark.svg
 

@@ -270,19 +270,20 @@ func (a *Agent) calculateCachedCost(cachedTokens int) float64 {
 // GenerateConversationSummary creates a comprehensive summary of the conversation including todos
 func (a *Agent) GenerateConversationSummary() string {
 	var summary strings.Builder
+	taskActions := a.GetTaskActions()
 
 	// Add conversation metrics
 	summary.WriteString("[chart] CONVERSATION SUMMARY\n")
 	summary.WriteString("══════════════════════════════\n\n")
 
 	// Add task actions summary
-	if len(a.taskActions) > 0 {
+	if len(taskActions) > 0 {
 		summary.WriteString("[*] COMPLETED ACTIONS:\n")
 		summary.WriteString("──────────────────────────────\n")
 
 		// Group actions by type
 		actionCounts := make(map[string]int)
-		for _, action := range a.taskActions {
+		for _, action := range taskActions {
 			actionCounts[action.Type]++
 		}
 
@@ -340,6 +341,7 @@ func (a *Agent) GenerateConversationSummary() string {
 // GenerateCompactSummary creates a compact summary for session continuity (max 5K context)
 func (a *Agent) GenerateCompactSummary() string {
 	var summary strings.Builder
+	taskActions := a.GetTaskActions()
 
 	// Start with a session continuity header
 	summary.WriteString("[~] PREVIOUS SESSION CONTEXT\n")
@@ -364,13 +366,13 @@ func (a *Agent) GenerateCompactSummary() string {
 	}
 
 	// Add key technical changes (limited and focused)
-	if len(a.taskActions) > 0 {
+	if len(taskActions) > 0 {
 		summary.WriteString("[tool] KEY TECHNICAL CHANGES:\n")
 		summary.WriteString("─────────────────────────────\n")
 
 		// Focus on the most important actions, limit to save space
 		importantActions := []string{}
-		for _, action := range a.taskActions {
+		for _, action := range taskActions {
 			if action.Type == "file_modified" || action.Type == "file_created" {
 				importantActions = append(importantActions,
 					fmt.Sprintf("• %s: %s", action.Type, action.Description))

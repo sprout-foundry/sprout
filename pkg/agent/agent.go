@@ -46,6 +46,7 @@ type Agent struct {
 	totalCost               float64
 	clientType              api.ClientType
 	taskActions             []TaskAction                   // Track what was accomplished
+	taskActionsMu           sync.RWMutex                   // Protects taskActions during parallel tool execution
 	debug                   bool                           // Enable debug logging
 	totalTokens             int                            // Track total tokens used across all requests
 	promptTokens            int                            // Track total prompt tokens
@@ -706,7 +707,16 @@ func (a *Agent) GetTotalCost() float64 {
 
 // GetTaskActions returns completed task actions
 func (a *Agent) GetTaskActions() []TaskAction {
-	return a.taskActions
+	a.taskActionsMu.RLock()
+	defer a.taskActionsMu.RUnlock()
+
+	if len(a.taskActions) == 0 {
+		return nil
+	}
+
+	actions := make([]TaskAction, len(a.taskActions))
+	copy(actions, a.taskActions)
+	return actions
 }
 
 // IsInteractiveMode returns true if running in interactive mode

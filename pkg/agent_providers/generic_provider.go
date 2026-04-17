@@ -664,6 +664,36 @@ func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.T
 	// Convert messages according to provider configuration
 	convertedMessages := p.convertMessages(messages, reasoning)
 
+	// Defense in depth: strip any leading assistant messages that might conflict
+	// with thinking mode. This catches edge cases where the message preparation
+	// didn't fully strip prefill messages before reaching the provider layer.
+	// We only need to do this when thinking is NOT disabled (i.e., thinking is enabled).
+	if !disableThinking && len(convertedMessages) > 1 {
+		// Find first non-system message index
+		nonSystemStart := 0
+		for nonSystemStart < len(convertedMessages) && convertedMessages[nonSystemStart]["role"] == "system" {
+			nonSystemStart++
+		}
+		if nonSystemStart < len(convertedMessages) && convertedMessages[nonSystemStart]["role"] == "assistant" {
+			// Count leading assistant messages to strip (without tool_calls)
+			stripEnd := nonSystemStart
+			for stripEnd < len(convertedMessages) && convertedMessages[stripEnd]["role"] == "assistant" {
+				if tc, hasToolCalls := convertedMessages[stripEnd]["tool_calls"]; hasToolCalls && tc != nil {					break // Preserve assistant messages with tool_calls
+				}
+				stripEnd++
+			}
+			if stripEnd > nonSystemStart {
+				// Keep system messages + everything after the stripped assistant prefills
+				system := convertedMessages[:nonSystemStart]
+				rest := convertedMessages[stripEnd:]
+				newMessages := make([]map[string]interface{}, 0, len(system)+len(rest))
+				newMessages = append(newMessages, system...)
+				newMessages = append(newMessages, rest...)
+				convertedMessages = newMessages
+			}
+		}
+	}
+
 	request := map[string]interface{}{
 		"model":    p.model,
 		"messages": convertedMessages,

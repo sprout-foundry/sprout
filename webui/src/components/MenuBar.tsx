@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useHotkeys } from '../contexts/HotkeyContext';
+import { ApiService } from '../services/api';
 import './MenuBar.css';
 
 const APP_VERSION = '1.0.0';
@@ -96,6 +97,7 @@ const MENUS: MenuDef[] = [
     items: [
       { label: 'Keyboard Shortcuts', commandId: 'open_hotkeys_config' },
       { divider: true, label: '' },
+      { label: 'Export Diagnostics', commandId: 'export_diagnostics' },
       { label: 'Report Issue', commandId: 'open_report_issue' },
       { divider: true, label: '' },
       { label: 'About ledit', commandId: 'about' },
@@ -258,6 +260,11 @@ function MenuBar(): JSX.Element | null {
       case 'about':
         // Use window.alert for now (a proper dialog component is a separate task)
         window.alert(`ledit WebUI\nVersion ${APP_VERSION}\n\nA modern, keyboard-accessible code editor.`);
+        break;
+      case 'export_diagnostics':
+        ApiService.getInstance()
+          .exportSupportBundle()
+          .catch((err) => console.error('Export diagnostics failed:', err));
         break;
       case 'open_report_issue':
         window.open('https://github.com/alantheprice/ledit/issues/new', '_blank', 'noopener,noreferrer');

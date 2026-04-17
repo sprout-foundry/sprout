@@ -210,14 +210,15 @@ func (a *Agent) buildSwitchContextRefreshMessage(report strictSyntaxNormalizatio
 		report.removedToolMessages, report.strippedAssistantToolCallBlocks, report.droppedEmptyAssistantMessages))
 	b.WriteString(fmt.Sprintf("- Context footprint: ~%d -> ~%d tokens\n", report.beforeTokens, report.afterTokens))
 
-	if len(a.taskActions) > 0 {
+	taskActions := a.GetTaskActions()
+	if len(taskActions) > 0 {
 		b.WriteString("- Recent completed actions:\n")
 		start := 0
-		if len(a.taskActions) > 6 {
-			start = len(a.taskActions) - 6
+		if len(taskActions) > 6 {
+			start = len(taskActions) - 6
 		}
-		for i := start; i < len(a.taskActions); i++ {
-			action := a.taskActions[i]
+		for i := start; i < len(taskActions); i++ {
+			action := taskActions[i]
 			b.WriteString(fmt.Sprintf("  - %s: %s\n", action.Type, action.Description))
 		}
 	}

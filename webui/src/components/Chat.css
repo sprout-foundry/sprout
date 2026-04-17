@@ -836,6 +836,9 @@
   max-width: 100%;
   overflow-x: auto;
   position: relative;
+  /* Ensure code blocks are displayed as a single block */
+  display: block;
+  list-style: none;
 }
 
 .code-block code {
@@ -843,6 +846,13 @@
   font-size: 12px;
   color: var(--text-primary);
   white-space: pre;
+  word-wrap: normal;
+  word-break: normal;
+  display: block;
+  /* Remove any list-like formatting */
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
 .code-language {

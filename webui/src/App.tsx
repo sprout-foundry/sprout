@@ -21,6 +21,23 @@ import {
 } from './services/chatSessions';
 import { debugLog } from './utils/log';
 
+/**
+ * Generate a unique message ID with browser compatibility fallback.
+ * Uses crypto.randomUUID() if available (modern browsers), otherwise falls back
+ * to a timestamp-based random string for older browser support.
+ */
+const generateMessageId = (): string => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    try {
+      return crypto.randomUUID();
+    } catch {
+      // Fall through to fallback if crypto.randomUUID fails
+    }
+  }
+  // Fallback for older browsers: timestamp + random suffix
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+};
+
 // Service Worker Registration
 const registerServiceWorker = async () => {
   if (!('serviceWorker' in navigator)) {
@@ -546,6 +563,8 @@ function App() {
   }, [apiService]);
 
   const pendingProviderRef = useRef<string>(state.provider);
+  const pendingProviderChangeRef = useRef<boolean>(false);
+  const pendingProviderChangeValueRef = useRef<string | null>(null);
 
   useEffect(() => {
     pendingProviderRef.current = state.provider;
@@ -808,7 +827,7 @@ function App() {
           lastError: null,
           queryCount: prev.queryCount + 1,
           messages: [...prev.messages, {
-            id: Date.now().toString(),
+            id: generateMessageId(),
             type: 'user',
             content: startedQuery,
             timestamp: new Date()
@@ -858,7 +877,7 @@ function App() {
           } else {
             // Create new assistant message
             const newMsg: Message = {
-              id: Date.now().toString(),
+              id: generateMessageId(),
               type: 'assistant',
               content: chunkType === 'reasoning' ? '' : chunkContent,
               timestamp: new Date(),
@@ -892,7 +911,7 @@ function App() {
           let nextMessages = wasClearCommand
             ? []
             : ensureCompletedAssistantMessage(prev.messages, completedResponse, (responseText) => ({
-                id: Date.now().toString(),
+                id: generateMessageId(),
                 type: 'assistant',
                 content: responseText,
                 timestamp: new Date()
@@ -1289,25 +1308,72 @@ function App() {
           activeRequestsRef.current -= 1;
         }
         const errorMessage = event.data?.message || 'Unknown error';
-        setState(prev => ({
-          ...prev,
-          isProcessing: activeRequestsRef.current > 0,
-          queryProgress: null,
-          lastError: errorMessage,
-          messages: [...prev.messages, {
-            id: Date.now().toString(),
-            type: 'assistant',
-            content: `[FAIL] Error: ${errorMessage}`,
-            timestamp: new Date()
-          }],
-          logs: [...prev.logs, logEntry]
-        }));
+
+        // Rollback provider state if this was a failed provider_change request
+        if (pendingProviderChangeRef.current) {
+          pendingProviderChangeRef.current = false;
+          pendingProviderChangeValueRef.current = null;
+          setState(prev => ({
+            ...prev,
+            isProcessing: activeRequestsRef.current > 0,
+            queryProgress: null,
+            lastError: errorMessage,
+            messages: [...prev.messages, {
+              id: generateMessageId(),
+              type: 'assistant',
+              content: `[FAIL] Error: ${errorMessage}`,
+              timestamp: new Date()
+            }],
+            logs: [...prev.logs, logEntry]
+          }));
+          // Fetch fresh provider state from backend to ensure sync
+          apiService.getStats().then((stats: any) => {
+            if (stats) {
+              setState(prev => ({
+                ...prev,
+                provider: stats.provider || prev.provider,
+                model: stats.model || prev.model,
+              }));
+            }
+          }).catch((err) => {
+            debugLog('[App] Failed to sync provider state after error:', {
+              error: err instanceof Error ? err.message : String(err),
+              stack: err instanceof Error ? err.stack : undefined,
+              currentProvider: state.provider,
+              pendingProvider: pendingProviderRef.current,
+              isProviderChangePending: pendingProviderChangeRef.current
+            });
+          });
+        } else {
+          setState(prev => ({
+            ...prev,
+            isProcessing: activeRequestsRef.current > 0,
+            queryProgress: null,
+            lastError: errorMessage,
+            messages: [...prev.messages, {
+              id: generateMessageId(),
+              type: 'assistant',
+              content: `[FAIL] Error: ${errorMessage}`,
+              timestamp: new Date()
+            }],
+            logs: [...prev.logs, logEntry]
+          }));
+        }
         console.error('[FAIL] Error event:', event.data);
         break;
 
       case 'metrics_update':
         logEntry.category = 'system';
         logEntry.level = 'info';
+
+        // Clear pending provider change flag if we receive a metrics update that
+        // corresponds to the change we're waiting for. This prevents race conditions
+        // where a metrics update from an unrelated source clears our pending flag.
+        if (pendingProviderChangeRef.current && event.data?.provider === pendingProviderChangeValueRef.current) {
+          pendingProviderChangeRef.current = false;
+          pendingProviderChangeValueRef.current = null;
+        }
+
         setState(prev => ({
           ...prev,
           provider: event.data?.provider || prev.provider,
@@ -1494,6 +1560,10 @@ function App() {
       if (connectionTimeoutRef.current) {
         clearTimeout(connectionTimeoutRef.current);
       }
+      // Reset refs to their default values
+      connectionTimeoutRef.current = null;
+      pendingProviderChangeRef.current = false;
+      pendingProviderChangeValueRef.current = null;
       wsService.removeEvent(handleEvent);
       wsService.onReconnect(null);
       wsService.disconnect();
@@ -1548,7 +1618,7 @@ function App() {
         ...prev,
         lastError: null,
         messages: [...prev.messages, {
-          id: Date.now().toString(),
+          id: generateMessageId(),
           type: 'user',
           content: trimmedMessage,
           timestamp: new Date()
@@ -1583,7 +1653,7 @@ function App() {
         isProcessing: activeRequestsRef.current > 0,
         lastError: `Failed to send message: ${errorMsg}`,
         messages: [...prev.messages, {
-          id: Date.now().toString(),
+          id: generateMessageId(),
           type: 'assistant',
           content: `[FAIL] Error: ${errorMsg}`,
           timestamp: new Date()
@@ -1612,7 +1682,7 @@ function App() {
         ...prev,
         lastError: errorMsg,
         messages: [...prev.messages, {
-          id: Date.now().toString(),
+          id: generateMessageId(),
           type: 'assistant',
           content: `[FAIL] Error: ${errorMsg}`,
           timestamp: new Date()
@@ -1639,7 +1709,7 @@ function App() {
         ...prev,
         lastError: `Failed to send queued message: ${errorMsg}`,
         messages: [...prev.messages, {
-          id: Date.now().toString(),
+          id: generateMessageId(),
           type: 'assistant',
           content: `[FAIL] Error: ${errorMsg}`,
           timestamp: new Date()
@@ -1735,6 +1805,8 @@ function App() {
   const handleProviderChange = useCallback((provider: string) => {
     debugLog('Provider changed to:', provider);
     pendingProviderRef.current = provider;
+    pendingProviderChangeRef.current = true;
+    pendingProviderChangeValueRef.current = provider;
     setState(prev => ({
       ...prev,
       provider

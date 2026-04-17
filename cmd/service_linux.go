@@ -18,10 +18,13 @@ func init() {
 type systemdManager struct{}
 
 // systemdExecArg quotes a path for use in a systemd ExecStart line.
-// Paths containing spaces or special characters must be quoted. systemd
-// accepts double-quoted syntax which matches Go's strconv.Quote output.
+// Only the executable in ExecStart= supports quoting; other directives
+// like WorkingDirectory= and EnvironmentFile= take literal paths.
 func systemdExecArg(s string) string {
-	return strconv.Quote(s)
+	if strings.ContainsAny(s, " \t\"\\") {
+		return strconv.Quote(s)
+	}
+	return s
 }
 
 // generateSystemdUnit produces a systemd user unit file for the ledit daemon.
@@ -36,6 +39,9 @@ func generateSystemdUnit(binaryPath, homeDir string) ([]byte, error) {
 	// Build absolute path to service.env file for EnvironmentFile directive
 	envFile := serviceEnvPath(homeDir)
 
+	// ExecStart executable can be quoted for paths with spaces.
+	// WorkingDirectory, Environment HOME, and EnvironmentFile take literal
+	// unquoted paths — systemd treats quotes as part of the value.
 	unit := fmt.Sprintf(`[Unit]
 Description=ledit daemon - AI coding assistant web UI
 After=default.target
@@ -54,7 +60,7 @@ StandardError=journal
 
 [Install]
 WantedBy=default.target
-`, systemdExecArg(binaryPath), systemdExecArg(homeDir), systemdExecArg(homeDir), systemdExecArg(envFile))
+`, systemdExecArg(binaryPath), homeDir, homeDir, envFile)
 
 	return []byte(unit), nil
 }

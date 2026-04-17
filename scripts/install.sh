@@ -104,7 +104,7 @@ detect_arch() {
     esac
 }
 
-# Determine install directory
+# Determine install directory, preferring the location of any existing ledit binary
 get_install_dir() {
     if [ -n "${LEDIT_INSTALL_DIR:-}" ]; then
         echo "$LEDIT_INSTALL_DIR"
@@ -121,6 +121,20 @@ get_install_dir() {
             echo "/data/data/com.termux/files/usr/bin"
             return
         fi
+    fi
+
+    # If ledit is already installed somewhere on PATH, upgrade in place.
+    local existing
+    existing=$(command -v ledit 2>/dev/null || true)
+    if [ -n "$existing" ]; then
+        local existing_dir
+        existing_dir=$(dirname "$existing")
+        # Resolve symlinks so we write to the real location
+        if command -v realpath >/dev/null 2>&1; then
+            existing_dir=$(dirname "$(realpath "$existing")")
+        fi
+        echo "$existing_dir"
+        return
     fi
 
     # Prefer /usr/local/bin (with sudo) if it's in PATH, since it's the standard location
@@ -331,6 +345,32 @@ main() {
     install_dir=$(get_install_dir)
     log_info "Installing to: $install_dir"
 
+    # Detect whether this is an upgrade (existing binary on PATH)
+    # Also check now (before removing the old binary) whether the service daemon
+    # is registered — we'll re-install it automatically after the upgrade.
+    local service_was_installed="false"
+    local existing_binary
+    existing_binary=$(command -v ledit 2>/dev/null || true)
+    if [ -n "$existing_binary" ]; then
+        local old_version
+        old_version=$("$existing_binary" version 2>/dev/null | head -1 || echo "unknown")
+        log_info "Upgrading from: $old_version"
+    fi
+
+    # Detect installed service files before removing the old binary.
+    case "$(uname -s)" in
+        Darwin)
+            if [ -f "${HOME}/Library/LaunchAgents/com.ledit.daemon.plist" ]; then
+                service_was_installed="true"
+            fi
+            ;;
+        Linux)
+            if [ -f "${HOME}/.config/systemd/user/ledit.service" ]; then
+                service_was_installed="true"
+            fi
+            ;;
+    esac
+
     if is_termux; then
         mkdir -p "$install_dir"
     fi
@@ -348,7 +388,18 @@ main() {
     
     # Verify installation
     verify_installation "$install_dir"
-    
+
+    # If the service was previously installed, reinstall it now so the service
+    # unit/plist points at the newly installed binary.
+    if [ "$service_was_installed" = "true" ]; then
+        log_info "Reinstalling ledit service to point at the updated binary..."
+        if "${install_dir}/ledit" service install; then
+            log_success "Service reinstalled successfully."
+        else
+            log_warn "Service reinstall failed. Run 'ledit service install' manually."
+        fi
+    fi
+
     # Print success message
     print_success "$install_dir" "$version"
     

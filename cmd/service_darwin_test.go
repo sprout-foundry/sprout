@@ -13,13 +13,14 @@ func TestGenerateLaunchdPlist(t *testing.T) {
 		t.Fatalf("generateLaunchdPlist() error: %v", err)
 	}
 
-	xml := string(data)
+	plistXML := string(data)
 
 	tests := []struct {
 		name     string
 		contains string
 	}{
 		{"has xml declaration", "<?xml version="},
+		{"has doctype declaration", "<!DOCTYPE plist"},
 		{"has plist root", "<plist version="},
 		{"has label key", "<key>Label</key>"},
 		{"has label value", "com.ledit.daemon"},
@@ -29,7 +30,7 @@ func TestGenerateLaunchdPlist(t *testing.T) {
 		{"has daemon flag", ">-d<"},
 		{"has no-connection-check", ">--no-connection-check<"},
 		{"has working directory key", "<key>WorkingDirectory</key>"},
-		{"has run at load", "<true/>"},
+		{"has run at load true", "<true/>"},
 		{"has keep alive", "<key>KeepAlive</key>"},
 		{"has throttle interval", "<key>ThrottleInterval</key>"},
 		{"has stdout path key", "<key>StandardOutPath</key>"},
@@ -41,10 +42,26 @@ func TestGenerateLaunchdPlist(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if !strings.Contains(xml, tt.contains) {
-				t.Errorf("plist missing %q\n%s", tt.contains, xml)
+			if !strings.Contains(plistXML, tt.contains) {
+				t.Errorf("plist missing %q\n%s", tt.contains, plistXML)
 			}
 		})
+	}
+
+	// Verify EnvironmentVariables dict is not double-nested.
+	// The bug was: <dict><dict>...</dict></dict> instead of <dict>...</dict>.
+	envVarIdx := strings.Index(plistXML, "<key>EnvironmentVariables</key>")
+	if envVarIdx < 0 {
+		t.Fatal("plist missing EnvironmentVariables key")
+	}
+	afterEnvVar := plistXML[envVarIdx:]
+	firstDict := strings.Index(afterEnvVar, "<dict>")
+	if firstDict < 0 {
+		t.Fatal("plist missing EnvironmentVariables dict")
+	}
+	afterFirstDict := strings.TrimSpace(afterEnvVar[firstDict+len("<dict>"):])
+	if strings.HasPrefix(afterFirstDict, "<dict>") {
+		t.Errorf("EnvironmentVariables dict is double-nested:\n%s", afterEnvVar[:200])
 	}
 }
 
@@ -54,7 +71,7 @@ func TestPlistEnvironmentVariables(t *testing.T) {
 		t.Fatalf("generateLaunchdPlist() error: %v", err)
 	}
 
-	xml := string(data)
+	plistXML := string(data)
 
 	tests := []struct {
 		name     string
@@ -63,13 +80,13 @@ func TestPlistEnvironmentVariables(t *testing.T) {
 		{"has LEDIT_SERVICE key", "<key>LEDIT_SERVICE</key>"},
 		{"has LEDIT_SERVICE value 1", ">1<"},
 		{"has HOME key in env", "<key>HOME</key>"},
-		{"has HOME value", ">home/alice<"},
+		{"has HOME value", ">/home/alice<"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if !strings.Contains(xml, tt.contains) {
-				t.Errorf("plist missing env var entry %q\n%s", tt.contains, xml)
+			if !strings.Contains(plistXML, tt.contains) {
+				t.Errorf("plist missing env var entry %q\n%s", tt.contains, plistXML)
 			}
 		})
 	}
@@ -81,7 +98,7 @@ func TestPlistLogPaths(t *testing.T) {
 		t.Fatalf("generateLaunchdPlist() error: %v", err)
 	}
 
-	xml := string(data)
+	plistXML := string(data)
 
 	expectedPaths := []string{
 		"/Users/bob/.ledit/logs/daemon.stdout.log",
@@ -89,13 +106,13 @@ func TestPlistLogPaths(t *testing.T) {
 	}
 
 	for _, path := range expectedPaths {
-		if !strings.Contains(xml, path) {
-			t.Errorf("plist missing log path %q\n%s", path, xml)
+		if !strings.Contains(plistXML, path) {
+			t.Errorf("plist missing log path %q\n%s", path, plistXML)
 		}
 	}
 
 	// Verify log directory reference.
-	if !strings.Contains(xml, ".ledit/logs/") {
+	if !strings.Contains(plistXML, ".ledit/logs/") {
 		t.Error("plist missing .ledit/logs/ directory reference")
 	}
 }

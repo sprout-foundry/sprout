@@ -7,7 +7,8 @@
 // Retry behaviour under test:
 //   - APIClient.SendWithRetry retries transient errors (containing
 //     "stream error", "INTERNAL_ERROR", "connection reset", "EOF",
-//     "timeout") up to maxRetries (default 3) with exponential backoff.
+//     "timeout", "502", "upstream error") up to maxRetries (default 3) 
+//     with exponential backoff.
 //   - Each SendChatRequest call consumes one ScriptedResponse from the queue.
 //   - SendWithRetry is internal to each conversation iteration; retries do NOT
 //     advance the iteration counter — only a fully successful request/response
@@ -316,4 +317,62 @@ func TestE2E_RetryRecovery_BackoffDelaysObserved(t *testing.T) {
 	// Upper bound catches accidental delay increases (e.g. baseRetryDelay change).
 	assert.Less(t, elapsed, 10*time.Second,
 		"backoff took suspiciously long, got %v", elapsed)
+}
+
+// ---------------------------------------------------------------------------
+// Test 9 – 502 Bad Gateway errors are retryable
+// ---------------------------------------------------------------------------
+
+// TestE2E_RetryRecovery_502ErrorIsRetryable verifies that 502 Bad Gateway errors
+// (transient infrastructure/gateway failures) are now treated as retryable errors.
+// This is critical for handling Zai API 502 errors like:
+// "502 Bad Gateway ZS ... connect() failed"
+// Queue: [error("HTTP 502: Bad Gateway"), stopResponse()]
+// Expected: 1 conversation iteration, 2 responses consumed (1 initial + 1 retry).
+func TestE2E_RetryRecovery_502ErrorIsRetryable(t *testing.T) {
+	t.Parallel()
+
+	responses := []*ScriptedResponse{
+		NewErrorResponse(errors.New("HTTP 502: <html><head><title>502 Bad Gateway ZS</title></head>")),
+		stopResponse(),
+	}
+
+	agent, _, client := buildE2EAgentWithClient(t, 10, responses...)
+	result, err := agent.ProcessQuery("Test 502 retry")
+
+	require.NoError(t, err, "ProcessQuery should succeed after retry recovers from 502 error")
+	assert.Equal(t, "Done.", result)
+	assert.Equal(t, RunTerminationCompleted, agent.GetLastRunTerminationReason())
+	assert.Equal(t, 1, agent.GetCurrentIteration()+1,
+		"expected 1 iteration (retry is internal to SendWithRetry)")
+	assert.Equal(t, 2, client.GetIndex(),
+		"expected exactly 2 scripted responses consumed (1 initial attempt + 1 retry)")
+}
+
+// ---------------------------------------------------------------------------
+// Test 10 – Upstream error is retryable
+// ---------------------------------------------------------------------------
+
+// TestE2E_RetryRecovery_UpstreamErrorIsRetryable verifies that "upstream error"
+// (another form of gateway/transient failure) is treated as retryable.
+// Queue: [error("upstream error: connection failed"), stopResponse()]
+// Expected: 1 conversation iteration, 2 responses consumed (1 initial + 1 retry).
+func TestE2E_RetryRecovery_UpstreamErrorIsRetryable(t *testing.T) {
+	t.Parallel()
+
+	responses := []*ScriptedResponse{
+		NewErrorResponse(errors.New("upstream error: connection to backend failed")),
+		stopResponse(),
+	}
+
+	agent, _, client := buildE2EAgentWithClient(t, 10, responses...)
+	result, err := agent.ProcessQuery("Test upstream error retry")
+
+	require.NoError(t, err, "ProcessQuery should succeed after retry recovers from upstream error")
+	assert.Equal(t, "Done.", result)
+	assert.Equal(t, RunTerminationCompleted, agent.GetLastRunTerminationReason())
+	assert.Equal(t, 1, agent.GetCurrentIteration()+1,
+		"expected 1 iteration (retry is internal to SendWithRetry)")
+	assert.Equal(t, 2, client.GetIndex(),
+		"expected exactly 2 scripted responses consumed (1 initial attempt + 1 retry)")
 }

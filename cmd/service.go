@@ -16,6 +16,11 @@ type serviceManager interface {
 	Status() (running bool, err error)
 }
 
+// serviceDiagnostics defines the interface for diagnostic capabilities.
+type serviceDiagnostics interface {
+	Diagnose() error
+}
+
 // newServiceManager is set by platform-specific init() functions.
 var newServiceManager func() serviceManager
 
@@ -47,8 +52,9 @@ var serviceInstallCmd = &cobra.Command{
 			return fmt.Errorf("failed to install service: %w", err)
 		}
 		fmt.Printf("Service '%s' installed successfully.\n", serviceName)
+		fmt.Printf("The daemon will start automatically (RunAtLoad=true).\n")
 		fmt.Printf("Access the web UI at: %s\n", serviceURL)
-		fmt.Println("Run 'ledit service start' to begin.")
+		fmt.Println("Run 'ledit service status' to confirm it is running.")
 		return nil
 	},
 }
@@ -124,12 +130,28 @@ var serviceStatusCmd = &cobra.Command{
 	},
 }
 
+var serviceDiagnoseCmd = &cobra.Command{
+	Use:   "diagnose",
+	Short: "Diagnose service installation issues",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sm, err := getOrCreateServiceManager()
+		if err != nil {
+			return err
+		}
+		if diagnostics, ok := sm.(serviceDiagnostics); ok {
+			return diagnostics.Diagnose()
+		}
+		return fmt.Errorf("diagnostics not supported on this platform")
+	},
+}
+
 func init() {
 	serviceCmd.AddCommand(serviceInstallCmd)
 	serviceCmd.AddCommand(serviceUninstallCmd)
 	serviceCmd.AddCommand(serviceStartCmd)
 	serviceCmd.AddCommand(serviceStopCmd)
 	serviceCmd.AddCommand(serviceStatusCmd)
+	serviceCmd.AddCommand(serviceDiagnoseCmd)
 	rootCmd.AddCommand(serviceCmd)
 }
 

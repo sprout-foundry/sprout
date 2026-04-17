@@ -5,6 +5,7 @@
     "@codemirror/fold": "^0.19.4",
     "@codemirror/language": "^6.12.1",
     "@playwright/test": "^1.57.0",
+    "electron-updater": "^6.8.3",
     "ws": "^8.18.3"
   },
   "devDependencies": {
@@ -23,7 +24,9 @@
     "desktop:dist": "electron-builder",
     "desktop:verify": "node scripts/verify-electron-package.mjs",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "test:webui-e2e": "node test/ui_e2e_workflow.js"
+    "test:webui-e2e": "node test/ui_e2e_workflow.js",
+    "test:desktop-smoke": "playwright test --config=playwright.config.js",
+    "test:desktop-smoke:modules": "node -e \"const {spawnSync}=require('child_process'),path=require('path'),fs=require('fs'),d='desktop';for(const m of fs.readdirSync(d).filter(f=>f.endsWith('.js')&&!f.includes('.bak'))){const r=spawnSync(process.execPath,['--check',path.join(d,m)],{encoding:'utf8'});if(r.status!==0){console.error(m,r.stderr);process.exit(1);}console.log('OK',m);}\""
   },
   "repository": {
     "type": "git",
@@ -91,6 +94,12 @@
       "allowToChangeInstallationDirectory": true,
       "perMachine": false,
       "shortcutName": "Ledit"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "alantheprice",
+      "repo": "ledit",
+      "releaseType": "release"
     },
     "linux": {
       "icon": "desktop/resources/icons/png",

@@ -219,6 +219,34 @@
 
 ---
 
+## Desktop Productization
+
+### Crash & Diagnostics
+
+[x] - DESKTOP: Add a frontend error boundary in the React renderer — currently there is no `ErrorBoundary` component wrapping the app tree, so an unhandled render error produces a blank white screen with no user guidance. Show a fallback UI with a "Reload" button and a link to the diagnostics log location.
+
+[x] - DESKTOP: Add a diagnostic bundle export — users hitting persistent failures need a single action to gather logs. Implement a "Export Diagnostics" option (in the Help menu or failure screen) that zips `userData/logs/`, a redacted config snapshot, and the last N lines of backend stdout/stderr into a timestamped archive the user can share.
+
+[x] - DESKTOP: Improve the backend-launch failure screen — `renderErrorPage()` currently shows a raw exit code. Replace it with a structured page that shows: the likely cause, the relevant log lines from `userData/logs/`, and a "Copy diagnostics" button.
+
+### First-Run Onboarding
+
+[x] - DESKTOP: Verify and wire first-run onboarding for the desktop app — `pkg/webui/onboarding_api.go` and `DesktopOnboardingHandler` exist on the backend but it is unclear whether the desktop launcher triggers the onboarding flow when no config is present. Audit the startup path in `desktop/main.js` and ensure a new install navigates to the onboarding UI before opening a workspace.
+
+[x] - DESKTOP: Add WSL distro selection to the onboarding flow on Windows — when `LEDIT_DESKTOP_BACKEND_MODE=wsl` is detected, the onboarding UI should enumerate available distros (via `listWslDistros`) and let the user pick one before proceeding.
+
+### Architecture
+
+[ ] - DESKTOP: Split `desktop/main.js` into focused modules — at ~1780 lines the file mixes protocol handling, state management, WSL logic, SSH logic, window management, backend spawning, and error rendering. Extract into at least: `windows.js`, `backend.js`, `wsl.js`, `protocol.js`, `errorPages.js`. Build must pass after each extraction step.
+
+### Auto-Update
+
+[ ] - DESKTOP: Implement auto-update — there is currently no mechanism to notify users of or apply new releases. Integrate `electron-updater` (already a peer dep in the electron ecosystem) pointing at the GitHub Releases feed. Show a non-intrusive "Update available" notification and allow deferred install-on-quit.
+
+### Testing
+
+[ ] - DESKTOP: Add desktop E2E smoke tests to CI — write a minimal Playwright or Spectron test suite that launches the packaged app in headless mode, opens a temp workspace, and asserts the UI loads and the backend health endpoint responds. Run on Linux in CI at minimum.
+
 ## Onboarding Flow Improvements
 
 ### Editor-Only Mode (No Provider Required)

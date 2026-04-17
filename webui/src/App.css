@@ -1145,6 +1145,22 @@ body,
   margin-top: 10px;
 }
 
+.onboarding-wsl-distro {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.onboarding-wsl-distro strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.onboarding-wsl-distro-hint {
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
 .onboarding-note {
   color: var(--accent-success);
   font-size: 13px;

@@ -102,6 +102,8 @@ export interface OnboardingEnvironment {
   has_wsl: boolean;
   has_git_bash: boolean;
   recommended_terminal: string;
+  active_distro: string;
+  wsl_distros: string[];
 }
 
 export interface OnboardingStatusResponse {

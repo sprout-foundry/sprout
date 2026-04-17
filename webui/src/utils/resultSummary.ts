@@ -22,15 +22,18 @@ export function truncateText(value: string, maxLength: number): string {
 /**
  * Format tool detail content - attempts to pretty-print JSON, returns as-is on failure
  * @param content - The content to format
- * @returns Formatted JSON or original content
+ * @returns Formatted JSON or original content (with ANSI codes stripped)
  */
 export function formatToolDetail(content: string): string {
+  // Strip ANSI codes first
+  const cleaned = stripAnsiCodes(content);
+  
   try {
-    const parsed = JSON.parse(content);
+    const parsed = JSON.parse(cleaned);
     return JSON.stringify(parsed, null, 2);
   } catch (err) {
     debugLog('[resultSummary] formatToolDetail JSON parse failed:', err);
-    return content;
+    return cleaned;
   }
 }
 

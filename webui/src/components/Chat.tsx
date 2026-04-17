@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, useState, useMemo, useLayoutEffect } from 'react';
+import { useRef, useEffect, useCallback, useState, useMemo, useLayoutEffect, memo } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import {
@@ -333,6 +333,69 @@ function SubagentActivityFeed({ activities }: SubagentActivityFeedProps): JSX.El
   );
 }
 
+// ── Memoized Message Item ─────────────────────────────────────────
+// Extracted from the Virtuoso itemContent callback so that unchanged
+// messages keep their DOM nodes across renders, preserving text selection.
+
+interface MessageItemProps {
+  message: Message;
+  onToolPillClick?: (toolId: string) => void;
+  findMatchingToolExecution: (toolName: string) => ToolExecution | undefined;
+  filteredToolExecutions: ToolExecution[];
+  formatTime: (date: Date) => string;
+}
+
+const MessageItem = memo(function MessageItem({
+  message,
+  onToolPillClick,
+  findMatchingToolExecution,
+  filteredToolExecutions,
+  formatTime,
+}: MessageItemProps) {
+  return (
+    <MessageBubble
+      type={message.type}
+      ariaLabel={`${message.type} message`}
+      copyText={message.content}
+      timestamp={formatTime(message.timestamp)}
+    >
+      {message.type === 'assistant' ? (
+        <>
+          {message.reasoning && message.reasoning.trim() && (
+            <details className="reasoning-block" open={false}>
+              <summary className="reasoning-summary">
+                <BrainCircuit size={13} className="reasoning-icon" />
+                <span>Reasoning</span>
+                <span className="reasoning-toggle">▶</span>
+              </summary>
+              <div className="reasoning-content">
+                <MessageContent content={message.reasoning} />
+              </div>
+            </details>
+          )}
+          <MessageSegments
+            content={message.content}
+            toolRefs={message.toolRefs}
+            onToolRefClick={onToolPillClick}
+            onToolClick={(toolName) => {
+              const matchingTool = findMatchingToolExecution(toolName);
+              if (matchingTool) {
+                onToolPillClick?.(matchingTool.id);
+              }
+            }}
+            getToolStatus={(toolId) => {
+              const te = filteredToolExecutions.find((t) => t.id === toolId);
+              return te?.status;
+            }}
+          />
+        </>
+      ) : (
+        <MessageContent content={message.content} />
+      )}
+    </MessageBubble>
+  );
+});
+
 // ── Main Chat Component ───────────────────────────────────────────
 
 function Chat({
@@ -602,46 +665,13 @@ function Chat({
               increaseViewportBy={{ top: 400, bottom: 400 }}
               atBottomStateChange={(atBottom) => setIsAtBottom(atBottom)}
               itemContent={(index, message) => (
-                <MessageBubble
-                  type={message.type}
-                  ariaLabel={`${message.type} message`}
-                  copyText={message.content}
-                  timestamp={formatTime(message.timestamp)}
-                >
-                  {message.type === 'assistant' ? (
-                    <>
-                      {message.reasoning && message.reasoning.trim() && (
-                        <details className="reasoning-block" open={false}>
-                          <summary className="reasoning-summary">
-                            <BrainCircuit size={13} className="reasoning-icon" />
-                            <span>Reasoning</span>
-                            <span className="reasoning-toggle">▶</span>
-                          </summary>
-                          <div className="reasoning-content">
-                            <MessageContent content={message.reasoning} />
-                          </div>
-                        </details>
-                      )}
-                      <MessageSegments
-                        content={message.content}
-                        toolRefs={message.toolRefs}
-                        onToolRefClick={(toolId) => onToolPillClick?.(toolId)}
-                        onToolClick={(toolName) => {
-                          const matchingTool = findMatchingToolExecution(toolName);
-                          if (matchingTool) {
-                            onToolPillClick?.(matchingTool.id);
-                          }
-                        }}
-                        getToolStatus={(toolId) => {
-                          const te = filteredToolExecutions.find((t) => t.id === toolId);
-                          return te?.status;
-                        }}
-                      />
-                    </>
-                  ) : (
-                    <MessageContent content={message.content} />
-                  )}
-                </MessageBubble>
+                <MessageItem
+                  message={message}
+                  onToolPillClick={onToolPillClick}
+                  findMatchingToolExecution={findMatchingToolExecution}
+                  filteredToolExecutions={filteredToolExecutions}
+                  formatTime={formatTime}
+                />
               )}
               components={{
                 Header: ChatHeader,

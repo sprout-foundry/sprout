@@ -7,8 +7,36 @@ on:
       - 'v*'
 
 jobs:
+  build-backends:
+    name: Build Go Backends
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25'
+
+    - name: Install Go dependencies
+      run: go mod download
+
+    - name: Build all platform backends
+      run: node scripts/build-electron-backend.mjs
+      env:
+        LEDIT_EXTRA_TARGETS: linux-amd64,linux-arm64,darwin-amd64,darwin-arm64,windows-amd64,windows-arm64
+
+    - name: Upload backend artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: desktop-backends
+        path: desktop/dist/backend/
+        if-no-files-found: error
+
   build-desktop:
     name: Build Desktop (${{ matrix.label }})
+    needs: build-backends
     runs-on: ${{ matrix.runs_on }}
     permissions:
       contents: write
@@ -53,6 +81,9 @@ jobs:
       uses: actions/setup-go@v5
       with:
         go-version: '1.25'
+      # Go is not needed for the desktop build (SKIP_BACKEND_BUILD=1 skips
+      # backend compilation; prebuilt binaries are downloaded from artifacts).
+      # Kept here so electron-builder hooks don't fail if they probe for go.
 
     - name: Set up Node.js
       uses: actions/setup-node@v4
@@ -74,6 +105,12 @@ jobs:
       run: |
         cd webui && npm run type-check
 
+    - name: Download prebuilt backends
+      uses: actions/download-artifact@v4
+      with:
+        name: desktop-backends
+        path: desktop/dist/backend/
+
     - name: Prepare macOS signing certificate
       if: matrix.os == 'macos'
       shell: bash
@@ -89,13 +126,20 @@ jobs:
         echo "CSC_LINK=$CERT_PATH" >> "$GITHUB_ENV"
         echo "Prepared signing certificate at $CERT_PATH"
 
+    - name: Build embedded web UI
+      run: npm run build:webui:embed
+
     - name: Build desktop installers
       env:
         npm_config_arch: ${{ matrix.arch }}
         CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        SKIP_BACKEND_BUILD: '1'
       run: npm run desktop:dist
 
     - name: Verify packaged desktop bundle
+      env:
+        DESKTOP_PLATFORM: ${{ matrix.os }}
+        DESKTOP_ARCH: ${{ matrix.arch }}
       run: npm run desktop:verify
 
     - name: Upload desktop artifacts

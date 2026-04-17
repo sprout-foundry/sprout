@@ -18,6 +18,7 @@ import type { ChatSession } from '../services/chatSessions';
 
 const INSTANCE_PID_STORAGE_KEY = 'ledit:webui:instancePid';
 const INSTANCE_SWITCH_RESET_KEY = 'ledit:webui:instanceSwitchReset';
+const CONTEXT_PANEL_COLLAPSED_KEY = 'ledit.contextPanel.collapsed';
 
 const toPaneFlex = (weight: number): React.CSSProperties => ({
   flexGrow: weight,
@@ -568,6 +569,12 @@ const AppContent: React.FC<AppContentProps> = ({
   const currentBuffer = activeBufferId ? buffers.get(activeBufferId) : null;
   const contextPanelRef = useRef<ContextPanelHandle>(null);
   const showContextSidebar = currentBuffer?.kind === 'chat';
+  const [isContextPanelCollapsed, setIsContextPanelCollapsed] = useState(() => {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+    return window.localStorage.getItem(CONTEXT_PANEL_COLLAPSED_KEY) === '1';
+  });
   const canSplit = panes.length < 3;
   const canCloseSplit = panes.length > 1;
 
@@ -1011,11 +1018,29 @@ const AppContent: React.FC<AppContentProps> = ({
       <div className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''} ${isTerminalExpanded ? 'terminal-expanded' : ''}`}>
         <div className="header-bar">
           <MenuBar />
-          <WorkspaceBar
-            isConnected={state.isConnected}
-            isMobile={isMobile}
-            isMobileMenuOpen={isSidebarOpen}
-          />
+          <div className="header-bar-actions">
+            {!isMobile && showContextSidebar && (
+              <button
+                className="header-context-toggle-btn"
+                onClick={() => {
+                  if (isContextPanelCollapsed) {
+                    contextPanelRef.current?.openTab('subagents');
+                    return;
+                  }
+                  contextPanelRef.current?.closePanel();
+                }}
+                aria-label={isContextPanelCollapsed ? 'Open context panel' : 'Close context panel'}
+                title={isContextPanelCollapsed ? 'Open context panel' : 'Close context panel'}
+              >
+                {isContextPanelCollapsed ? <PanelRightOpen size={14} /> : <PanelRightClose size={14} />}
+              </button>
+            )}
+            <WorkspaceBar
+              isConnected={state.isConnected}
+              isMobile={isMobile}
+              isMobileMenuOpen={isSidebarOpen}
+            />
+          </div>
         </div>
         <div className="main-view-content">
           <div className="editor-view">
@@ -1072,6 +1097,7 @@ const AppContent: React.FC<AppContentProps> = ({
               queryProgress={state.queryProgress}
               isMobileLayout={isMobile}
               onMobileOpenChange={setIsContextPanelMobileOpen}
+              onCollapsedChange={setIsContextPanelCollapsed}
               panelWidth={panelWidth}
               onPanelWidthChange={setPanelWidth}
               onOpenRevisionDiff={handleOpenRevisionDiff}

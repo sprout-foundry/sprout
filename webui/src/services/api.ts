@@ -1793,6 +1793,24 @@ class ApiService {
       throw error;
     }
   }
+  async exportSupportBundle(): Promise<void> {
+    const response = await clientFetch('/api/support-bundle', { method: 'GET' });
+    if (!response.ok) {
+      throw new Error(`Support bundle failed: HTTP ${response.status}`);
+    }
+    const disposition = response.headers.get('Content-Disposition') ?? '';
+    const match = disposition.match(/filename="([^"]+)"/);
+    const filename = match ? match[1] : 'ledit-diagnostics.zip';
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+  }
 }
 
 export { ApiService };

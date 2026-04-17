@@ -137,6 +137,28 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 					},
 				)
 				go webUISup.Run(ctx)
+
+				// Wait for web server to start running before proceeding
+				startupDeadline := time.NewTimer(5 * time.Second)
+				defer startupDeadline.Stop()
+				startupPoll := time.NewTicker(50 * time.Millisecond)
+				defer startupPoll.Stop()
+
+			daemonStartupLoop:
+				for {
+					if webServer.IsRunning() {
+						break
+					}
+
+					select {
+					case <-startupDeadline.C:
+						if !webServer.IsRunning() {
+							return fmt.Errorf("web UI failed to start on port %d (daemon mode)", port)
+						}
+						break daemonStartupLoop
+					case <-startupPoll.C:
+					}
+				}
 			} else {
 				// Explicit port OR non-daemon dynamic port: start directly.
 				startErrCh := make(chan error, 1)

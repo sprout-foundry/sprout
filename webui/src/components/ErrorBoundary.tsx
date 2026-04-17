@@ -99,6 +99,16 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               <button className="error-reload-button" onClick={this.handleReload}>
                 Reload Page
               </button>
+              <button
+                className="error-reload-button"
+                onClick={() =>
+                  import('../services/api')
+                    .then(({ ApiService }) => ApiService.getInstance().exportSupportBundle())
+                    .catch(() => {})
+                }
+              >
+                Export Diagnostics
+              </button>
             </div>
             <p className="error-log-hint">
               Logs are written to <code>~/.ledit/logs/</code> (desktop: <code>userData/logs/</code> in the app data folder).

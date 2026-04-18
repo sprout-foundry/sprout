@@ -81,13 +81,14 @@ async function renderPanel(props: Record<string, unknown>, ref?: React.RefObject
 }
 
 describe('ContextPanel desktop collapse behavior', () => {
-  it('unmounts the desktop panel when collapsed and reports the new state', async () => {
+  it('collapses the desktop panel (showing rail) and reports the new state', async () => {
     const onCollapsedChange = jest.fn();
     const panelRef = createRef<any>();
 
     await renderPanel(makeChatProps({ onCollapsedChange }), panelRef);
 
     expect(container.querySelector('.context-panel')).not.toBeNull();
+    expect(container.querySelector('.context-panel')?.classList.contains('collapsed')).toBe(false);
     expect(onCollapsedChange).toHaveBeenLastCalledWith(false);
 
     act(() => {
@@ -95,7 +96,9 @@ describe('ContextPanel desktop collapse behavior', () => {
     });
     await flushPromises();
 
-    expect(container.querySelector('.context-panel')).toBeNull();
+    // Collapsed panel should still be mounted with the rail visible
+    expect(container.querySelector('.context-panel')).not.toBeNull();
+    expect(container.querySelector('.context-panel')?.classList.contains('collapsed')).toBe(true);
     expect(container.querySelector('.context-panel-resizer')).toBeNull();
     expect(onCollapsedChange).toHaveBeenLastCalledWith(true);
   });

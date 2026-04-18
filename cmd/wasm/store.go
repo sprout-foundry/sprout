@@ -9,12 +9,15 @@ import (
 	"strings"
 	"sync"
 	"syscall/js"
+
+	"github.com/alantheprice/ledit/pkg/wasmshell"
 )
 
 // Store manages IndexedDB persistence for the virtual filesystem.
 // Files written/deleted in MEMFS are synced to IndexedDB via JS callbacks.
+// It implements wasmshell.StoreWriter so it can be plugged into the shell.
 type Store struct {
-	mu     sync.Mutex
+	mu      sync.Mutex
 	jsStore js.Value
 }
 
@@ -105,51 +108,30 @@ func (s *Store) deleteFileSync(path string) {
 	deleteFn.Invoke(path)
 }
 
-// SaveFile is the public thread-safe save method.
+// SaveFile is the public thread-safe save method (implements wasmshell.StoreWriter).
 func (s *Store) SaveFile(path, content string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.saveFileSync(path, content)
 }
 
-// DeleteFile is the public thread-safe delete method.
+// DeleteFile is the public thread-safe delete method (implements wasmshell.StoreWriter).
 func (s *Store) DeleteFile(path string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.deleteFileSync(path)
 }
 
-// SyncWriteFile writes to MEMFS and syncs to IndexedDB.
-func SyncWriteFile(path, content string) error {
-	dir := filepath.Dir(path)
-	if dir != "" && dir != "." && dir != "/" {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return err
-		}
-	}
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-		return err
-	}
-	store.SaveFile(path, content)
-	return nil
-}
-
-// SyncDeleteFile deletes from MEMFS and syncs to IndexedDB.
-func SyncDeleteFile(path string) error {
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	store.DeleteFile(path)
-	return nil
-}
+// Ensure Store implements wasmshell.StoreWriter at compile time.
+var _ wasmshell.StoreWriter = (*Store)(nil)
 
 // RecursiveSync removes deleted files from IndexedDB by walking MEMFS.
 // This is a best-effort reconciliation after rm -rf etc.
-func RecursiveSync(dir string) {
-	store.mu.Lock()
-	defer store.mu.Unlock()
+func (s *Store) recursiveSync(dir string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	if store.jsStore.IsUndefined() || !store.jsStore.Truthy() {
+	if s.jsStore.IsUndefined() || !s.jsStore.Truthy() {
 		return
 	}
 
@@ -162,7 +144,7 @@ func RecursiveSync(dir string) {
 			if err == nil {
 				relPath := strings.TrimPrefix(path, "/")
 				relPath = strings.TrimPrefix(relPath, "./")
-				store.saveFileSync(relPath, string(data))
+				s.saveFileSync(relPath, string(data))
 			}
 		}
 		return nil

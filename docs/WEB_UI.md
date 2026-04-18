@@ -94,3 +94,5 @@ Then: `ssh -fN ledit-remote`
 ## Development
 
 See [webui/DEVELOPMENT.md](../webui/DEVELOPMENT.md) for the Web UI development setup and architecture details.
+
+For the reusable multi-language language-server integration design, see [LSP Architecture Plan](./LSP_ARCHITECTURE.md).

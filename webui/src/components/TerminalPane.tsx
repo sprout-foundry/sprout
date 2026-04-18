@@ -66,6 +66,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     const fitAddonRef = useRef<FitAddon | null>(null);
     const terminalWSRef = useRef<TerminalWebSocketService | null>(null);
     const eventHandlerRef = useRef<((event: WsEvent) => void) | null>(null);
+    const hasAutoFocusedReadyRef = useRef(false);
     const resizeTimerRef = useRef<number | null>(null);
     const expandTimeoutRef = useRef<number | null>(null);
 
@@ -345,6 +346,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         }
         eventHandlerRef.current = null;
         terminalWSRef.current = null;
+        hasAutoFocusedReadyRef.current = false;
         setPaneConnected(false);
         onConnectionChangeRef.current?.(false);
         return;
@@ -387,9 +389,15 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         } else if (event.type === 'session_ready') {
           setPaneConnected(true);
           onConnectionChangeRef.current?.(true);
+          const shouldAutoFocus = !hasAutoFocusedReadyRef.current;
+          if (shouldAutoFocus) {
+            hasAutoFocusedReadyRef.current = true;
+          }
           requestAnimationFrame(() => {
             sendResize();
-            xtermRef.current?.focus();
+            if (shouldAutoFocus) {
+              xtermRef.current?.focus();
+            }
           });
         } else if (event.type === 'output' || event.type === 'error_output') {
           xtermRef.current?.write((data?.output as string) || '');

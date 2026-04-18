@@ -1,9 +1,6 @@
-//go:build js && wasm
-
-package main
+package wasmshell
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -14,6 +11,11 @@ import (
 var commandHistory []string
 
 const maxHistorySize = 1000
+
+// ResetHistory clears the command history (useful for testing).
+func ResetHistory() {
+	commandHistory = nil
+}
 
 // addToHistory adds a command to history if it's not a duplicate of the last entry.
 func addToHistory(cmd string) {
@@ -30,15 +32,14 @@ func addToHistory(cmd string) {
 	}
 }
 
-// parseAndExecute is the main entry point for executing a command string.
+// ParseAndExecute is the main entry point for executing a command string.
 // It handles pipes, redirects, and dispatches to the appropriate command.
-func parseAndExecute(input string) CmdResult {
+func ParseAndExecute(input string) CmdResult {
 	input = strings.TrimSpace(input)
 	if input == "" {
 		return CmdResult{"", "", 0}
 	}
 
-	// Handle export as a special case (it's an assignment, not a command)
 	// Handle comments
 	if strings.HasPrefix(input, "#") {
 		return CmdResult{"", "", 0}
@@ -51,25 +52,25 @@ func parseAndExecute(input string) CmdResult {
 
 	// Handle tilde expansion in the input.
 	if strings.HasPrefix(input, "~/") {
-		input = shellEnv.Get("HOME") + input[1:]
+		input = ShellEnv.Get("HOME") + input[1:]
 	} else if input == "~" {
-		return CmdResult{shellEnv.Get("HOME") + "\n", "", 0}
+		return CmdResult{ShellEnv.Get("HOME") + "\n", "", 0}
 	}
 
 	// Split by pipes, respecting quotes.
-	pipeline := splitPipeline(input)
+	pipeline := SplitPipeline(input)
 
 	if len(pipeline) == 1 {
 		// No pipes — check for redirects only.
-		return executeWithRedirects(pipeline[0])
+		return executeWithRedirects(pipeline[0], "")
 	}
 
 	// Execute pipeline.
 	return executePipeline(pipeline)
 }
 
-// splitPipeline splits a command line by unquoted pipe characters.
-func splitPipeline(input string) []string {
+// SplitPipeline splits a command line by unquoted pipe characters.
+func SplitPipeline(input string) []string {
 	var segments []string
 	var current strings.Builder
 	inSingle := false
@@ -122,11 +123,11 @@ func executePipeline(segments []string) CmdResult {
 	var stdin string
 
 	for _, seg := range pipeSegments {
-		name, args, _, _, _, _ := parseRedirects(seg)
+		name, args, _, _, _, _, _ := ParseRedirects(seg)
 		name = strings.TrimSpace(name)
-		args = expandGlobs(args)
+		args = ExpandGlobs(args)
 
-		if fn, ok := cmdRegistry[name]; ok {
+		if fn, ok := CmdRegistry[name]; ok {
 			result := fn(args, stdin)
 			if result.ExitCode != 0 {
 				return result
@@ -137,18 +138,21 @@ func executePipeline(segments []string) CmdResult {
 		}
 	}
 
-	// Last segment gets redirect handling.
-	return executeWithRedirects(lastSegment)
+	// Last segment gets redirect handling, passing piped stdin.
+	return executeWithRedirects(lastSegment, stdin)
 }
 
 // executeWithRedirects parses and executes a single command with redirects.
-func executeWithRedirects(input string) CmdResult {
-	name, args, stdinFile, stdoutFile, stderrFile, appendStdout := parseRedirects(input)
+// If pipedStdin is non-empty, it takes precedence over any < redirect file.
+func executeWithRedirects(input string, pipedStdin string) CmdResult {
+	name, args, stdinFile, stdoutFile, stderrFile, appendStdout, appendStderr := ParseRedirects(input)
 
-	// Handle stdin redirect.
+	// Handle stdin: prefer piped stdin, fall back to < redirect file.
 	var stdin string
-	if stdinFile != "" {
-		data, err := os.ReadFile(resolvePath(stdinFile))
+	if pipedStdin != "" {
+		stdin = pipedStdin
+	} else if stdinFile != "" {
+		data, err := os.ReadFile(ResolvePath(stdinFile))
 		if err != nil {
 			return CmdResult{"", fmt.Sprintf("%s: %s: %s\n", name, stdinFile, err.Error()), 1}
 		}
@@ -157,7 +161,7 @@ func executeWithRedirects(input string) CmdResult {
 
 	// Expand globs in args.
 	name = strings.TrimSpace(name)
-	args = expandGlobs(args)
+	args = ExpandGlobs(args)
 
 	// Handle "export" specially — it's handled as a command.
 	if name == "export" {
@@ -170,7 +174,7 @@ func executeWithRedirects(input string) CmdResult {
 		if len(parts) == 2 {
 			// This is a variable assignment before a command
 			// e.g., FOO=bar echo $FOO
-			shellEnv.Set(parts[0], os.ExpandEnv(parts[1]))
+			ShellEnv.Set(parts[0], os.ExpandEnv(parts[1]))
 			if len(args) > 0 {
 				name = args[0]
 				args = args[1:]
@@ -180,7 +184,7 @@ func executeWithRedirects(input string) CmdResult {
 		}
 	}
 
-	fn, ok := cmdRegistry[name]
+	fn, ok := CmdRegistry[name]
 	if !ok {
 		return CmdResult{"", fmt.Sprintf("command not found: %s\n", name), 127}
 	}
@@ -189,7 +193,7 @@ func executeWithRedirects(input string) CmdResult {
 
 	// Handle stdout redirect.
 	if stdoutFile != "" {
-		redirectPath := resolvePath(stdoutFile)
+		redirectPath := ResolvePath(stdoutFile)
 		if appendStdout {
 			existing := ""
 			if data, err := os.ReadFile(redirectPath); err == nil {
@@ -204,26 +208,36 @@ func executeWithRedirects(input string) CmdResult {
 
 	// Handle stderr redirect.
 	if stderrFile != "" {
-		redirectPath := resolvePath(stderrFile)
-		SyncWriteFile(redirectPath, result.Stderr)
+		redirectPath := ResolvePath(stderrFile)
+		if appendStderr {
+			existing := ""
+			if data, err := os.ReadFile(redirectPath); err == nil {
+				existing = string(data)
+			}
+			SyncWriteFile(redirectPath, existing+result.Stderr)
+		} else {
+			SyncWriteFile(redirectPath, result.Stderr)
+		}
 		result.Stderr = ""
 	}
 
 	return result
 }
 
-// parseRedirects extracts command name, args, and redirect operators from a line.
-// Returns: name, args, stdinFile, stdoutFile, stderrFile, appendStdout
-func parseRedirects(line string) (string, []string, string, string, string, bool) {
-	tokens := tokenize(line, false)
+// ParseRedirects extracts command name, args, and redirect operators from a line.
+// Returns: name, args, stdinFile, stdoutFile, stderrFile, appendStdout, appendStderr
+func ParseRedirects(line string) (string, []string, string, string, string, bool, bool) {
+	tokens := Tokenize(line, false)
 
 	name := ""
 	var args []string
 	var stdinFile, stdoutFile, stderrFile string
 	appendStdout := false
+	appendStderr := false
 	expectStdin := false
 	expectStdout := false
 	expectStderr := false
+	bothRedirect := false // &> means same file for stdout and stderr
 
 	for i, tok := range tokens {
 		switch tok {
@@ -240,15 +254,18 @@ func parseRedirects(line string) (string, []string, string, string, string, bool
 			continue
 		case "2>":
 			expectStderr = true
+			appendStderr = false
 			continue
 		case "2>>":
 			expectStderr = true
-			appendStdout = true // reused flag for append
+			appendStderr = true
 			continue
 		case "&>":
-			// Redirect both stdout and stderr
 			expectStdout = true
-			expectStderr = false
+			expectStderr = true
+			bothRedirect = true
+			appendStdout = false
+			appendStderr = false
 			continue
 		}
 
@@ -260,6 +277,11 @@ func parseRedirects(line string) (string, []string, string, string, string, bool
 		if expectStdout && stdoutFile == "" {
 			stdoutFile = tok
 			expectStdout = false
+			if bothRedirect {
+				stderrFile = tok
+				expectStderr = false
+				bothRedirect = false
+			}
 			continue
 		}
 		if expectStderr && stderrFile == "" {
@@ -275,11 +297,11 @@ func parseRedirects(line string) (string, []string, string, string, string, bool
 		}
 	}
 
-	return name, args, stdinFile, stdoutFile, stderrFile, appendStdout
+	return name, args, stdinFile, stdoutFile, stderrFile, appendStdout, appendStderr
 }
 
-// tokenize splits a command line into tokens, respecting quotes and escapes.
-func tokenize(line string, keepQuotes bool) []string {
+// Tokenize splits a command line into tokens, respecting quotes and escapes.
+func Tokenize(line string, keepQuotes bool) []string {
 	var tokens []string
 	var current strings.Builder
 	inSingle := false
@@ -300,28 +322,20 @@ func tokenize(line string, keepQuotes bool) []string {
 			continue
 		}
 		if ch == '\'' && !inDouble {
-			if !inSingle && !keepQuotes {
-				inSingle = true
-			} else if inSingle && !keepQuotes {
-				inSingle = false
-			} else {
-				current.WriteRune(ch)
-			}
 			if keepQuotes {
 				current.WriteRune(ch)
+				inSingle = !inSingle
+			} else {
+				inSingle = !inSingle
 			}
 			continue
 		}
 		if ch == '"' && !inSingle {
-			if !inDouble && !keepQuotes {
-				inDouble = true
-			} else if inDouble && !keepQuotes {
-				inDouble = false
-			} else {
-				current.WriteRune(ch)
-			}
 			if keepQuotes {
 				current.WriteRune(ch)
+				inDouble = !inDouble
+			} else {
+				inDouble = !inDouble
 			}
 			continue
 		}
@@ -342,8 +356,8 @@ func tokenize(line string, keepQuotes bool) []string {
 	return tokens
 }
 
-// historySearch searches command history for a prefix.
-func historySearch(prefix string) []string {
+// HistorySearch searches command history for a prefix.
+func HistorySearch(prefix string) []string {
 	var results []string
 	for i := len(commandHistory) - 1; i >= 0; i-- {
 		if strings.HasPrefix(commandHistory[i], prefix) {
@@ -353,11 +367,8 @@ func historySearch(prefix string) []string {
 	return results
 }
 
-// scanLines is a utility alias kept for pipeline compatibility.
-var _ = bufio.ScanLines
-
-// jsonResult marshals a CmdResult to JSON string.
-func jsonResult(r CmdResult) string {
+// JSONResult marshals a CmdResult to JSON string.
+func JSONResult(r CmdResult) string {
 	data, _ := json.Marshal(r)
 	return string(data)
 }

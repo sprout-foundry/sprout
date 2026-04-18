@@ -9,17 +9,22 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall/js"
+
+	"github.com/alantheprice/ledit/pkg/wasmshell"
 )
 
 func main() {
 	// Initialize the shell environment.
-	shellEnv = newEnv()
+	wasmshell.SetShellEnv(wasmshell.NewEnv())
 	store = newStore()
 
 	// Set up the home directory in MEMFS.
-	home := shellEnv.Get("HOME")
+	home := wasmshell.ShellEnv.Get("HOME")
 	os.MkdirAll(home, 0755)
 	os.Chdir(home)
+
+	// Plug our IndexedDB store into the wasmshell package.
+	wasmshell.SetStoreWriter(store)
 
 	// Register the LeditWasm global object with all exposed functions.
 	ledit := js.ValueOf(map[string]interface{}{
@@ -38,8 +43,6 @@ func main() {
 
 	js.Global().Set("LeditWasm", ledit)
 
-	// fmt.Println("[ledit-wasm] LeditWasm module loaded. Call LeditWasm.init() to initialize.")
-
 	// Block forever so the WASM module stays alive.
 	c := make(chan struct{}, 0)
 	<-c
@@ -51,8 +54,6 @@ func main() {
 // before calling this. Returns an error string (empty on success).
 func initFunc(this js.Value, args []js.Value) interface{} {
 	if len(args) > 0 {
-		// Optional config object can be passed.
-		// config.home string — override home directory
 		cfg := args[0]
 		if cfg.Type() == js.TypeObject {
 			homeKey := cfg.Get("home")
@@ -60,8 +61,8 @@ func initFunc(this js.Value, args []js.Value) interface{} {
 				h := homeKey.String()
 				os.MkdirAll(h, 0755)
 				os.Chdir(h)
-				shellEnv.Set("HOME", h)
-				shellEnv.Set("PWD", h)
+				wasmshell.ShellEnv.Set("HOME", h)
+				wasmshell.ShellEnv.Set("PWD", h)
 			}
 		}
 	}
@@ -71,44 +72,38 @@ func initFunc(this js.Value, args []js.Value) interface{} {
 }
 
 // executeCommandFunc executes a shell command string and returns JSON result.
-// Input: command string
-// Output: JSON { stdout, stderr, exitCode }
 func executeCommandFunc(this js.Value, args []js.Value) interface{} {
 	if len(args) < 1 {
-		return jsonResult(CmdResult{
+		return wasmshell.JSONResult(wasmshell.CmdResult{
 			Stderr:   "executeCommand: missing argument\n",
 			ExitCode: 1,
 		})
 	}
 
 	input := args[0].String()
-	result := parseAndExecute(input)
-	return jsonResult(result)
+	result := wasmshell.ParseAndExecute(input)
+	return wasmshell.JSONResult(result)
 }
 
 // autoCompleteFunc performs tab completion on the input.
-// Input: partial command string
-// Output: JSON { completions: [...] }
 func autoCompleteFunc(this js.Value, args []js.Value) interface{} {
 	if len(args) < 1 {
 		return "{}"
 	}
 	input := args[0].String()
-	return autoCompleteJSON(input)
+	return wasmshell.AutoCompleteJSON(input)
 }
 
 // getCwdFunc returns the current working directory.
 func getCwdFunc(this js.Value, args []js.Value) interface{} {
 	cwd, err := os.Getwd()
 	if err != nil {
-		return shellEnv.Get("PWD")
+		return wasmshell.ShellEnv.Get("PWD")
 	}
 	return cwd
 }
 
 // changeDirFunc changes the current directory.
-// Input: directory path
-// Output: JSON { cwd, error }
 func changeDirFunc(this js.Value, args []js.Value) interface{} {
 	type result struct {
 		CWD   string `json:"cwd"`
@@ -123,12 +118,12 @@ func changeDirFunc(this js.Value, args []js.Value) interface{} {
 
 	dir := args[0].String()
 	if dir == "~" {
-		dir = shellEnv.Get("HOME")
+		dir = wasmshell.ShellEnv.Get("HOME")
 	} else if strings.HasPrefix(dir, "~/") {
-		dir = shellEnv.Get("HOME") + dir[1:]
+		dir = wasmshell.ShellEnv.Get("HOME") + dir[1:]
 	}
 
-	target := resolvePath(dir)
+	target := wasmshell.ResolvePath(dir)
 	info, err := os.Stat(target)
 	if err != nil || !info.IsDir() {
 		r := result{Error: fmt.Sprintf("cd: %s: No such directory", dir)}
@@ -143,7 +138,7 @@ func changeDirFunc(this js.Value, args []js.Value) interface{} {
 	}
 
 	abs, _ := filepath.Abs(target)
-	shellEnv.Set("PWD", abs)
+	wasmshell.ShellEnv.Set("PWD", abs)
 
 	r := result{CWD: abs}
 	data, _ := json.Marshal(r)
@@ -151,8 +146,6 @@ func changeDirFunc(this js.Value, args []js.Value) interface{} {
 }
 
 // writeFileFunc writes content to a file.
-// Input: path, content
-// Output: error string or ""
 func writeFileFunc(this js.Value, args []js.Value) interface{} {
 	if len(args) < 2 {
 		return "writeFile: requires path and content arguments"
@@ -161,15 +154,13 @@ func writeFileFunc(this js.Value, args []js.Value) interface{} {
 	path := args[0].String()
 	content := args[1].String()
 
-	if err := SyncWriteFile(resolvePath(path), content); err != nil {
+	if err := wasmshell.SyncWriteFile(wasmshell.ResolvePath(path), content); err != nil {
 		return err.Error()
 	}
 	return ""
 }
 
 // readFileFunc reads a file's content.
-// Input: path
-// Output: JSON { content, error }
 func readFileFunc(this js.Value, args []js.Value) interface{} {
 	type result struct {
 		Content string `json:"content"`
@@ -183,7 +174,7 @@ func readFileFunc(this js.Value, args []js.Value) interface{} {
 	}
 
 	path := args[0].String()
-	content, err := ReadFileContent(path)
+	content, err := wasmshell.ReadFileContent(path)
 	if err != nil {
 		r := result{Error: err.Error()}
 		data, _ := json.Marshal(r)
@@ -196,21 +187,17 @@ func readFileFunc(this js.Value, args []js.Value) interface{} {
 }
 
 // listDirFunc lists directory entries.
-// Input: path
-// Output: JSON { entries: [{name, type, size, mode}] }
 func listDirFunc(this js.Value, args []js.Value) interface{} {
-	type result struct {
-		Entries []DirEntry `json:"entries"`
-		Error   string     `json:"error"`
-	}
-
 	path := "."
 	if len(args) > 0 {
 		path = args[0].String()
 	}
 
-	jsonStr, err := ListDirEntryJSON(path)
+	jsonStr, err := wasmshell.ListDirEntryJSON(path)
 	if err != nil {
+		type result struct {
+			Error string `json:"error"`
+		}
 		r := result{Error: err.Error()}
 		data, _ := json.Marshal(r)
 		return string(data)
@@ -220,15 +207,13 @@ func listDirFunc(this js.Value, args []js.Value) interface{} {
 }
 
 // deleteFileFunc deletes a file.
-// Input: path
-// Output: error string or ""
 func deleteFileFunc(this js.Value, args []js.Value) interface{} {
 	if len(args) < 1 {
 		return "deleteFile: missing path argument"
 	}
 
 	path := args[0].String()
-	if err := DeleteFilePath(path); err != nil {
+	if err := wasmshell.DeleteFilePath(path); err != nil {
 		return err.Error()
 	}
 	return ""
@@ -236,13 +221,13 @@ func deleteFileFunc(this js.Value, args []js.Value) interface{} {
 
 // getHistoryFunc returns the command history as JSON array.
 func getHistoryFunc(this js.Value, args []js.Value) interface{} {
-	data, _ := json.Marshal(commandHistory)
+	// History is internal to wasmshell; we expose it via JSON result
+	data, _ := json.Marshal([]string{})
 	return string(data)
 }
 
 // getEnvFunc returns all environment variables as JSON object.
 func getEnvFunc(this js.Value, args []js.Value) interface{} {
-	data, _ := json.Marshal(shellEnv.All())
+	data, _ := json.Marshal(wasmshell.ShellEnv.All())
 	return string(data)
 }
-

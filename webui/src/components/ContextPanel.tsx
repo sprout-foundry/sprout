@@ -1768,7 +1768,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
           aria-label="Resize context panel"
         />
       )}
-      {panelCollapsed && !isMobileLayout ? null : (
+      {isMobileLayout && panelCollapsed ? null : (
         <aside
           className={`context-panel ${panelCollapsed ? 'collapsed' : ''}${isMobileLayout ? ' context-panel-mobile' : ''}`}
           aria-label="Context panel"

@@ -3,6 +3,7 @@ package webui
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -11,6 +12,8 @@ import (
 	"sort"
 	"strings"
 
+	agentprovs "github.com/alantheprice/ledit/pkg/agent_providers"
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/providercatalog"
 )
@@ -472,6 +475,61 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 		}
 	}
 
+	// Reject test provider - it cannot be used as the active provider
+	if providerType == api.TestClientType {
+		writeJSONError(w, http.StatusBadRequest, "test provider cannot be used as the active provider")
+		return
+	}
+
+	// Determine the model to persist. If req.Model is empty, use the provider's
+	// default model. First check the provider catalog, then fall back to the
+	// provider factory for custom/local providers.
+	modelToPersist := req.Model
+	if modelToPersist == "" {
+		// Try the provider catalog first
+		if provider, ok := providercatalog.FindProvider(req.Provider); ok {
+			if provider.DefaultModel != "" {
+				modelToPersist = provider.DefaultModel
+			} else if len(provider.Models) > 0 {
+				modelToPersist = provider.Models[0].ID
+			}
+		}
+
+		// If still empty, try the provider factory for custom providers
+		if modelToPersist == "" {
+			factory := agentprovs.NewProviderFactory()
+			if err := factory.LoadEmbeddedConfigs(); err == nil {
+				if providerConfig, err := factory.GetProviderConfig(req.Provider); err == nil {
+					if providerConfig.Models.DefaultModel != "" {
+						modelToPersist = providerConfig.Models.DefaultModel
+					} else if providerConfig.Defaults.Model != "" {
+						modelToPersist = providerConfig.Defaults.Model
+					}
+				}
+			}
+		}
+	}
+
+	// Persist provider and model to config BEFORE agent creation so the
+	// choice survives even if agent setup fails or times out.
+	if setErr := cm.SetProvider(providerType); setErr != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to persist provider: %v", setErr))
+		return
+	}
+	if modelToPersist != "" {
+		if err := cm.SetModelForProvider(providerType, modelToPersist); err != nil {
+			writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to persist model: %v", err))
+			return
+		}
+	}
+	if saveErr := cm.SaveConfig(); saveErr != nil {
+		log.Printf("webui: failed to save onboarding config: %v", saveErr)
+	}
+
+	// Clear any cached agent so it is re-created with the updated config
+	// (real provider instead of "editor").
+	ws.clearCachedAgent(clientID)
+
 	if err := clientAgent.SetProvider(providerType); err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -480,6 +538,13 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 		if err := clientAgent.SetModel(req.Model); err != nil {
 			writeJSONError(w, http.StatusBadRequest, err.Error())
 			return
+		}
+		// Re-persist the actual model (may differ from requested due to resolution)
+		if actualModel := clientAgent.GetModel(); actualModel != "" {
+			if persistErr := cm.SetModelForProvider(providerType, actualModel); persistErr != nil {
+				log.Printf("webui: failed to re-persist resolved model %q: %v", actualModel, persistErr)
+			}
+			_ = cm.SaveConfig()
 		}
 	}
 

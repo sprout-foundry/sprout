@@ -187,6 +187,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/file/consent", ws.handleAPIFileConsent)
 	mux.HandleFunc("/api/file/check-modified", ws.handleAPIFileCheckModified)
 	mux.HandleFunc("/api/diagnostics", ws.handleAPIDiagnostics)
+	mux.HandleFunc("/api/semantic", ws.handleAPISemantic)
 	mux.HandleFunc("/api/support-bundle", ws.handleAPISupportBundle)
 	mux.HandleFunc("/api/config", ws.handleAPIConfig)
 	mux.HandleFunc("/api/workspace", ws.handleAPIWorkspace)
@@ -331,6 +332,9 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 
 	// Start terminal session cleanup worker (every 5 minutes, timeout 30 minutes)
 	ws.terminalManager.StartCleanupWorker(ctx, 5*time.Minute, 30*time.Minute)
+
+	// Evict idle language server sessions (gopls, TypeScript worker) every 5 minutes.
+	startSemanticEviction(ctx)
 
 	// Start file watcher for detecting external changes to open files.
 	ws.fileWatcher.start(ctx)

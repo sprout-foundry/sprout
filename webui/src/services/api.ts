@@ -1260,6 +1260,56 @@ class ApiService {
     return response.json();
   }
 
+  async getSemanticDiagnostics(path: string, content: string, languageId: string, trigger: 'edit' | 'save' = 'edit'): Promise<{
+    message: string;
+    path: string;
+    language_id: string;
+    method: string;
+    capabilities: { diagnostics: boolean; definition: boolean };
+    diagnostics: Array<{ from: number; to: number; severity: 'error' | 'warning' | 'info'; message: string; source: string }>;
+    duration_ms?: number;
+    error?: string;
+    version: string;
+  }> {
+    const response = await clientFetch('/api/semantic', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, content, language_id: languageId, method: 'diagnostics', trigger }),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to get semantic diagnostics: HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
+  async getSemanticDefinition(path: string, content: string, languageId: string, line: number, column: number): Promise<{
+    message: string;
+    path: string;
+    language_id: string;
+    method: string;
+    capabilities: { diagnostics: boolean; definition: boolean };
+    definition?: { path: string; line: number; column: number } | null;
+    duration_ms?: number;
+    error?: string;
+    version: string;
+  }> {
+    const response = await clientFetch('/api/semantic', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        path,
+        content,
+        language_id: languageId,
+        method: 'definition',
+        position: { line, column },
+      }),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to get semantic definition: HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
   // History and Rollback API methods
   async getChangelog(): Promise<{
     message: string;

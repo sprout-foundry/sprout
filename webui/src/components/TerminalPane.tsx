@@ -273,6 +273,34 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       }
 
       xtermRef.current = term;
+
+      // Intercept Ctrl+Shift+C (copy) and Ctrl+Shift+V (paste) before xterm
+      // processes them, so the user can copy selections and paste from the
+      // clipboard — a standard expectation in terminal emulators.
+      term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
+        if (event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey) {
+          if (event.key.toLowerCase() === 'c') {
+            event.preventDefault();
+            if (term.hasSelection()) {
+              copyToClipboard(term.getSelection()).catch((err) => {
+                debugLog('[TerminalPane] clipboard copy failed:', err);
+              });
+            }
+            return false;
+          }
+          if (event.key.toLowerCase() === 'v') {
+            event.preventDefault();
+            navigator.clipboard.readText().then((text) => {
+              terminalWSRef.current?.sendRawInput(text);
+            }).catch((err) => {
+              debugLog('[TerminalPane] clipboard paste failed:', err);
+            });
+            return false;
+          }
+        }
+        return true;
+      });
+
       fitAddonRef.current = fitAddon;
 
       term.onData((data) => {

@@ -1,6 +1,4 @@
-//go:build js && wasm
-
-package main
+package wasmshell
 
 import (
 	"bufio"
@@ -20,14 +18,16 @@ import (
 
 // Env holds the shell environment variables.
 type Env struct {
-	vars map[string]string
+	Vars map[string]string
 }
 
-var shellEnv *Env
+// ShellEnv holds the global shell environment.
+var ShellEnv *Env
 
-func newEnv() *Env {
+// NewEnv creates a new Env with default shell variables.
+func NewEnv() *Env {
 	home := "/home/user"
-	e := &Env{vars: map[string]string{
+	e := &Env{Vars: map[string]string{
 		"HOME":     home,
 		"PWD":      home,
 		"PATH":     "/usr/local/bin:/usr/bin:/bin",
@@ -41,21 +41,33 @@ func newEnv() *Env {
 	return e
 }
 
+// SetShellEnv replaces the global shell environment (useful for testing).
+func SetShellEnv(e *Env) {
+	ShellEnv = e
+	// Sync all env vars to os so that os.ExpandEnv works.
+	for k, v := range e.Vars {
+		os.Setenv(k, v)
+	}
+}
+
+// Get returns the value of an environment variable, falling back to the OS environment.
 func (e *Env) Get(key string) string {
-	if v, ok := e.vars[key]; ok {
+	if v, ok := e.Vars[key]; ok {
 		return v
 	}
 	return os.Getenv(key)
 }
 
+// Set sets an environment variable in both the Env map and the OS environment.
 func (e *Env) Set(key, value string) {
-	e.vars[key] = value
+	e.Vars[key] = value
 	os.Setenv(key, value)
 }
 
+// All returns a copy of all environment variables.
 func (e *Env) All() map[string]string {
 	result := make(map[string]string)
-	for k, v := range e.vars {
+	for k, v := range e.Vars {
 		result[k] = v
 	}
 	return result
@@ -76,14 +88,14 @@ type DirEntry struct {
 	Mode uint32 `json:"mode"`
 }
 
-// commandFunc is the type for all command implementations.
-type commandFunc func(args []string, stdin string) CmdResult
+// CommandFunc is the type for all command implementations.
+type CommandFunc func(args []string, stdin string) CmdResult
 
-// cmdRegistry maps command names to their implementations.
-var cmdRegistry = map[string]commandFunc{}
+// CmdRegistry maps command names to their implementations.
+var CmdRegistry = map[string]CommandFunc{}
 
-// builtinNames lists all built-in command names (avoids init cycle).
-var builtinNames = map[string]bool{
+// BuiltinNames lists all built-in command names.
+var BuiltinNames = map[string]bool{
 	"ls": true, "cd": true, "pwd": true, "cat": true, "mkdir": true,
 	"rm": true, "rmdir": true, "cp": true, "mv": true, "touch": true,
 	"echo": true, "head": true, "tail": true, "wc": true, "grep": true,
@@ -95,41 +107,41 @@ var builtinNames = map[string]bool{
 }
 
 func init() {
-	cmdRegistry["ls"] = cmdLs
-	cmdRegistry["cd"] = cmdCd
-	cmdRegistry["pwd"] = cmdPwd
-	cmdRegistry["cat"] = cmdCat
-	cmdRegistry["mkdir"] = cmdMkdir
-	cmdRegistry["rm"] = cmdRm
-	cmdRegistry["rmdir"] = cmdRmdir
-	cmdRegistry["cp"] = cmdCp
-	cmdRegistry["mv"] = cmdMv
-	cmdRegistry["touch"] = cmdTouch
-	cmdRegistry["echo"] = cmdEcho
-	cmdRegistry["head"] = cmdHead
-	cmdRegistry["tail"] = cmdTail
-	cmdRegistry["wc"] = cmdWc
-	cmdRegistry["grep"] = cmdGrep
-	cmdRegistry["sort"] = cmdSort
-	cmdRegistry["find"] = cmdFind
-	cmdRegistry["tree"] = cmdTree
-	cmdRegistry["clear"] = cmdClear
-	cmdRegistry["help"] = cmdHelp
-	cmdRegistry["date"] = cmdDate
-	cmdRegistry["whoami"] = cmdWhoami
-	cmdRegistry["env"] = cmdEnv
-	cmdRegistry["export"] = cmdExport
-	cmdRegistry["which"] = cmdWhich
-	cmdRegistry["type"] = cmdType
-	cmdRegistry["history"] = cmdHistory
-	cmdRegistry["println"] = cmdPrintln
-	cmdRegistry["basename"] = cmdBasename
-	cmdRegistry["dirname"] = cmdDirname
-	cmdRegistry["realpath"] = cmdRealpath
-	cmdRegistry["tr"] = cmdTr
-	cmdRegistry["uniq"] = cmdUniq
-	cmdRegistry["cut"] = cmdCut
-	cmdRegistry["tee"] = cmdTee
+	CmdRegistry["ls"] = cmdLs
+	CmdRegistry["cd"] = cmdCd
+	CmdRegistry["pwd"] = cmdPwd
+	CmdRegistry["cat"] = cmdCat
+	CmdRegistry["mkdir"] = cmdMkdir
+	CmdRegistry["rm"] = cmdRm
+	CmdRegistry["rmdir"] = cmdRmdir
+	CmdRegistry["cp"] = cmdCp
+	CmdRegistry["mv"] = cmdMv
+	CmdRegistry["touch"] = cmdTouch
+	CmdRegistry["echo"] = cmdEcho
+	CmdRegistry["head"] = cmdHead
+	CmdRegistry["tail"] = cmdTail
+	CmdRegistry["wc"] = cmdWc
+	CmdRegistry["grep"] = cmdGrep
+	CmdRegistry["sort"] = cmdSort
+	CmdRegistry["find"] = cmdFind
+	CmdRegistry["tree"] = cmdTree
+	CmdRegistry["clear"] = cmdClear
+	CmdRegistry["help"] = cmdHelp
+	CmdRegistry["date"] = cmdDate
+	CmdRegistry["whoami"] = cmdWhoami
+	CmdRegistry["env"] = cmdEnv
+	CmdRegistry["export"] = cmdExport
+	CmdRegistry["which"] = cmdWhich
+	CmdRegistry["type"] = cmdType
+	CmdRegistry["history"] = cmdHistory
+	CmdRegistry["println"] = cmdPrintln
+	CmdRegistry["basename"] = cmdBasename
+	CmdRegistry["dirname"] = cmdDirname
+	CmdRegistry["realpath"] = cmdRealpath
+	CmdRegistry["tr"] = cmdTr
+	CmdRegistry["uniq"] = cmdUniq
+	CmdRegistry["cut"] = cmdCut
+	CmdRegistry["tee"] = cmdTee
 }
 
 // ─── Command Implementations ───────────────────────────────────────────
@@ -140,9 +152,8 @@ func cmdLs(args []string, stdin string) CmdResult {
 	humanSize := false
 
 	// Parse flags
-	i := 0
-	for i < len(args) {
-		switch args[i] {
+	for _, a := range args {
+		switch a {
 		case "-a", "--all":
 			showAll = true
 		case "-l", "--long":
@@ -153,9 +164,7 @@ func cmdLs(args []string, stdin string) CmdResult {
 			showAll = true
 			showLong = true
 		default:
-			break
 		}
-		i++
 	}
 
 	// Find non-flag arguments
@@ -174,7 +183,7 @@ func cmdLs(args []string, stdin string) CmdResult {
 	var out strings.Builder
 
 	for _, p := range paths {
-		target := resolvePath(p)
+		target := ResolvePath(p)
 		entries, err := os.ReadDir(target)
 		if err != nil {
 			if len(paths) == 1 {
@@ -226,7 +235,6 @@ func cmdLs(args []string, stdin string) CmdResult {
 		}
 
 		sort.Slice(items, func(i, j int) bool {
-			// Dirs first, then files
 			if items[i].isDir != items[j].isDir {
 				return items[i].isDir
 			}
@@ -283,16 +291,16 @@ func cmdCd(args []string, stdin string) CmdResult {
 	if len(args) > 0 {
 		target = args[0]
 	} else {
-		target = shellEnv.Get("HOME")
+		target = ShellEnv.Get("HOME")
 	}
 
 	if target == "~" {
-		target = shellEnv.Get("HOME")
+		target = ShellEnv.Get("HOME")
 	} else if strings.HasPrefix(target, "~/") {
-		target = filepath.Join(shellEnv.Get("HOME"), target[2:])
+		target = filepath.Join(ShellEnv.Get("HOME"), target[2:])
 	}
 
-	target = resolvePath(target)
+	target = ResolvePath(target)
 
 	info, err := os.Stat(target)
 	if err != nil || !info.IsDir() {
@@ -304,7 +312,7 @@ func cmdCd(args []string, stdin string) CmdResult {
 	}
 
 	abs, _ := filepath.Abs(target)
-	shellEnv.Set("PWD", abs)
+	ShellEnv.Set("PWD", abs)
 	return CmdResult{"", "", 0}
 }
 
@@ -323,7 +331,7 @@ func cmdCat(args []string, stdin string) CmdResult {
 
 	var out strings.Builder
 	for _, arg := range args {
-		path := resolvePath(arg)
+		path := ResolvePath(arg)
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return CmdResult{"", fmt.Sprintf("cat: %s: %s\n", arg, err.Error()), 1}
@@ -342,17 +350,17 @@ func cmdMkdir(args []string, stdin string) CmdResult {
 	}
 
 	parents := false
-	envArgs := []string{}
+	mkdirArgs := []string{}
 	for _, a := range args {
 		if a == "-p" || a == "--parents" {
 			parents = true
 		} else {
-			envArgs = append(envArgs, a)
+			mkdirArgs = append(mkdirArgs, a)
 		}
 	}
 
-	for _, arg := range envArgs {
-		path := resolvePath(arg)
+	for _, arg := range mkdirArgs {
+		path := ResolvePath(arg)
 		if parents {
 			if err := os.MkdirAll(path, 0755); err != nil {
 				return CmdResult{"", fmt.Sprintf("mkdir: %s: %s\n", arg, err.Error()), 1}
@@ -397,7 +405,7 @@ func cmdRm(args []string, stdin string) CmdResult {
 	}
 
 	for _, arg := range targets {
-		path := resolvePath(arg)
+		path := ResolvePath(arg)
 		info, err := os.Stat(path)
 		if err != nil {
 			if !force {
@@ -414,7 +422,6 @@ func cmdRm(args []string, stdin string) CmdResult {
 		if info.IsDir() {
 			rmErr = os.RemoveAll(path)
 			if rmErr == nil {
-				// Sync remaining files after recursive delete
 				if dir := filepath.Dir(path); dir != "" && dir != "." {
 					RecursiveSync(dir)
 				}
@@ -435,7 +442,7 @@ func cmdRmdir(args []string, stdin string) CmdResult {
 		return CmdResult{"", "rmdir: missing operand\n", 1}
 	}
 	for _, arg := range args {
-		path := resolvePath(arg)
+		path := ResolvePath(arg)
 		if err := os.Remove(path); err != nil {
 			return CmdResult{"", fmt.Sprintf("rmdir: %s: %s\n", arg, err.Error()), 1}
 		}
@@ -462,8 +469,8 @@ func cmdCp(args []string, stdin string) CmdResult {
 		return CmdResult{"", "cp: missing destination\n", 1}
 	}
 
-	src := resolvePath(targets[0])
-	dst := resolvePath(targets[1])
+	src := ResolvePath(targets[0])
+	dst := ResolvePath(targets[1])
 
 	srcInfo, err := os.Stat(src)
 	if err != nil {
@@ -517,9 +524,27 @@ func cmdMv(args []string, stdin string) CmdResult {
 		return CmdResult{"", "mv: missing operand\n", 1}
 	}
 
-	src := resolvePath(args[0])
-	dst := resolvePath(args[1])
+	src := ResolvePath(args[0])
+	dst := ResolvePath(args[1])
 
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		return CmdResult{"", fmt.Sprintf("mv: %s: %s\n", args[0], err.Error()), 1}
+	}
+
+	// If source is a directory, copy recursively then remove source
+	if srcInfo.IsDir() {
+		if err := copyPath(src, dst, true); err != nil {
+			return CmdResult{"", fmt.Sprintf("mv: %s\n", err.Error()), 1}
+		}
+		if rmErr := os.RemoveAll(src); rmErr != nil {
+			return CmdResult{"", fmt.Sprintf("mv: cannot remove '%s': %s\n", args[0], rmErr.Error()), 1}
+		}
+		storeWriter.DeleteFile(src)
+		return CmdResult{"", "", 0}
+	}
+
+	// Single file move
 	data, err := os.ReadFile(src)
 	if err != nil {
 		return CmdResult{"", fmt.Sprintf("mv: %s: %s\n", args[0], err.Error()), 1}
@@ -533,7 +558,7 @@ func cmdMv(args []string, stdin string) CmdResult {
 		return CmdResult{"", fmt.Sprintf("mv: cannot remove '%s': %s\n", args[0], err.Error()), 1}
 	}
 
-	store.DeleteFile(src)
+	storeWriter.DeleteFile(src)
 	return CmdResult{"", "", 0}
 }
 
@@ -543,12 +568,11 @@ func cmdTouch(args []string, stdin string) CmdResult {
 	}
 
 	for _, arg := range args {
-		path := resolvePath(arg)
+		path := ResolvePath(arg)
 		dir := filepath.Dir(path)
 		if dir != "" && dir != "." {
 			os.MkdirAll(dir, 0755)
 		}
-		// If file exists, update mtime; if not, create empty file.
 		if _, err := os.Stat(path); err != nil {
 			if err := SyncWriteFile(path, ""); err != nil {
 				return CmdResult{"", fmt.Sprintf("touch: %s: %s\n", arg, err.Error()), 1}
@@ -567,9 +591,6 @@ func cmdEcho(args []string, stdin string) CmdResult {
 	for _, a := range args {
 		if a == "-n" {
 			noNewline = true
-		} else if a == "-e" {
-			// Support escape sequences
-			writeArgs = append(writeArgs, a)
 		} else {
 			writeArgs = append(writeArgs, a)
 		}
@@ -589,19 +610,20 @@ func cmdHead(args []string, stdin string) CmdResult {
 	n := int64(10)
 	targets := []string{}
 
-	for i, a := range args {
-		if strings.HasPrefix(a, "-n") || strings.HasPrefix(a, "-") {
-			if strings.HasPrefix(a, "-n") {
-				val := strings.TrimPrefix(a, "-n")
-				if val == "" && i+1 < len(args) {
-					val = args[i+1]
-					args = append(args[:i], args[i+2:]...)
-				}
-				if parsed, err := strconv.ParseInt(val, 10, 64); err == nil {
-					n = parsed
-					continue
-				}
-			} else if parsed, err := strconv.ParseInt(a[1:], 10, 64); err == nil {
+	for idx := 0; idx < len(args); idx++ {
+		a := args[idx]
+		if strings.HasPrefix(a, "-n") {
+			val := strings.TrimPrefix(a, "-n")
+			if val == "" && idx+1 < len(args) {
+				val = args[idx+1]
+				idx++
+			}
+			if parsed, err := strconv.ParseInt(val, 10, 64); err == nil {
+				n = parsed
+				continue
+			}
+		} else if strings.HasPrefix(a, "-") && len(a) > 1 && a != "-n" {
+			if parsed, err := strconv.ParseInt(a[1:], 10, 64); err == nil {
 				n = parsed
 				continue
 			}
@@ -611,7 +633,7 @@ func cmdHead(args []string, stdin string) CmdResult {
 
 	var input string
 	if len(targets) > 0 {
-		data, err := os.ReadFile(resolvePath(targets[0]))
+		data, err := os.ReadFile(ResolvePath(targets[0]))
 		if err != nil {
 			return CmdResult{"", fmt.Sprintf("head: %s: %s\n", targets[0], err.Error()), 1}
 		}
@@ -631,18 +653,19 @@ func cmdTail(args []string, stdin string) CmdResult {
 	n := int64(10)
 	targets := []string{}
 
-	for i, a := range args {
+	for idx := 0; idx < len(args); idx++ {
+		a := args[idx]
 		if strings.HasPrefix(a, "-n") {
 			val := strings.TrimPrefix(a, "-n")
-			if val == "" && i+1 < len(args) {
-				val = args[i+1]
-				args = append(args[:i], args[i+2:]...)
+			if val == "" && idx+1 < len(args) {
+				val = args[idx+1]
+				idx++
 			}
 			if parsed, err := strconv.ParseInt(val, 10, 64); err == nil {
 				n = parsed
 				continue
 			}
-		} else if strings.HasPrefix(a, "-") {
+		} else if strings.HasPrefix(a, "-") && len(a) > 1 && a != "-n" {
 			if parsed, err := strconv.ParseInt(a[1:], 10, 64); err == nil {
 				n = parsed
 				continue
@@ -653,7 +676,7 @@ func cmdTail(args []string, stdin string) CmdResult {
 
 	var input string
 	if len(targets) > 0 {
-		data, err := os.ReadFile(resolvePath(targets[0]))
+		data, err := os.ReadFile(ResolvePath(targets[0]))
 		if err != nil {
 			return CmdResult{"", fmt.Sprintf("tail: %s: %s\n", targets[0], err.Error()), 1}
 		}
@@ -690,7 +713,7 @@ func cmdWc(args []string, stdin string) CmdResult {
 
 	var input string
 	if len(targets) > 0 {
-		data, err := os.ReadFile(resolvePath(targets[0]))
+		data, err := os.ReadFile(ResolvePath(targets[0]))
 		if err != nil {
 			return CmdResult{"", fmt.Sprintf("wc: %s: %s\n", targets[0], err.Error()), 1}
 		}
@@ -728,7 +751,8 @@ func cmdGrep(args []string, stdin string) CmdResult {
 	pattern := ""
 
 	targets := []string{}
-	for i, a := range args {
+	for idx := 0; idx < len(args); idx++ {
+		a := args[idx]
 		if a == "-i" {
 			caseInsensitive = true
 		} else if a == "-v" {
@@ -737,9 +761,9 @@ func cmdGrep(args []string, stdin string) CmdResult {
 			lineNum = true
 		} else if a == "-c" {
 			count = true
-		} else if a == "-e" && i+1 < len(args) {
-			pattern = args[i+1]
-			i++
+		} else if a == "-e" && idx+1 < len(args) {
+			pattern = args[idx+1]
+			idx++
 		} else if pattern == "" && !strings.HasPrefix(a, "-") {
 			pattern = a
 		} else if !strings.HasPrefix(a, "-") {
@@ -753,7 +777,7 @@ func cmdGrep(args []string, stdin string) CmdResult {
 
 	var input string
 	if len(targets) > 0 {
-		data, err := os.ReadFile(resolvePath(targets[0]))
+		data, err := os.ReadFile(ResolvePath(targets[0]))
 		if err != nil {
 			return CmdResult{"", fmt.Sprintf("grep: %s: %s\n", targets[0], err.Error()), 1}
 		}
@@ -821,7 +845,7 @@ func cmdSort(args []string, stdin string) CmdResult {
 
 	var input string
 	if len(paths) > 0 {
-		data, err := os.ReadFile(resolvePath(paths[0]))
+		data, err := os.ReadFile(ResolvePath(paths[0]))
 		if err != nil {
 			return CmdResult{"", fmt.Sprintf("sort: %s: %s\n", paths[0], err.Error()), 1}
 		}
@@ -873,7 +897,7 @@ func cmdFind(args []string, stdin string) CmdResult {
 		args = []string{"."}
 	}
 
-	startDir := resolvePath(args[0])
+	startDir := ResolvePath(args[0])
 	namePattern := ""
 	filterType := ""
 
@@ -947,7 +971,7 @@ func cmdTree(args []string, stdin string) CmdResult {
 		path = targets[0]
 	}
 
-	root := resolvePath(path)
+	root := ResolvePath(path)
 	var out strings.Builder
 	fmt.Fprintf(&out, "%s\n", root)
 
@@ -1072,9 +1096,7 @@ func cmdDate(args []string, stdin string) CmdResult {
 		case "+%Y%m%d%H%M%S":
 			format = "20060102150405"
 		default:
-			// Try to parse as format
 			if strings.HasPrefix(args[0], "+") {
-				// Convert unix date format to Go format
 				goFmt := strings.ReplaceAll(args[0][1:], "%Y", "2006")
 				goFmt = strings.ReplaceAll(goFmt, "%m", "01")
 				goFmt = strings.ReplaceAll(goFmt, "%d", "02")
@@ -1095,15 +1117,20 @@ func cmdDate(args []string, stdin string) CmdResult {
 }
 
 func cmdWhoami(args []string, stdin string) CmdResult {
-	return CmdResult{shellEnv.Get("USER") + "\n", "", 0}
+	return CmdResult{ShellEnv.Get("USER") + "\n", "", 0}
 }
 
-func cmdEnv(args []string, stdin string) CmdResult {
+func cmdEnvCmd(args []string, stdin string) CmdResult {
 	var out strings.Builder
-	for _, k := range sortedKeys(shellEnv.All()) {
-		fmt.Fprintf(&out, "%s=%s\n", k, shellEnv.Get(k))
+	for _, k := range sortedKeys(ShellEnv.All()) {
+		fmt.Fprintf(&out, "%s=%s\n", k, ShellEnv.Get(k))
 	}
 	return CmdResult{out.String(), "", 0}
+}
+
+// cmdEnv is exported as the "env" command.
+func cmdEnv(args []string, stdin string) CmdResult {
+	return cmdEnvCmd(args, stdin)
 }
 
 func sortedKeys(m map[string]string) []string {
@@ -1117,21 +1144,20 @@ func sortedKeys(m map[string]string) []string {
 
 func cmdExport(args []string, stdin string) CmdResult {
 	if len(args) == 0 {
-		return cmdEnv(args, stdin)
+		return cmdEnvCmd(args, stdin)
 	}
 
 	for _, arg := range args {
 		eqIdx := strings.Index(arg, "=")
 		if eqIdx < 0 {
-			// export VAR (just mark for export, set from env)
-			if val, ok := shellEnv.vars[arg]; ok {
+			if val, ok := ShellEnv.Vars[arg]; ok {
 				os.Setenv(arg, val)
 			}
 			continue
 		}
 		key := arg[:eqIdx]
 		value := arg[eqIdx+1:]
-		shellEnv.Set(key, value)
+		ShellEnv.Set(key, value)
 	}
 
 	return CmdResult{"", "", 0}
@@ -1151,7 +1177,7 @@ func cmdWhich(args []string, stdin string) CmdResult {
 }
 
 func isBuiltin(name string) bool {
-	return builtinNames[name]
+	return BuiltinNames[name]
 }
 
 func cmdType(args []string, stdin string) CmdResult {
@@ -1160,7 +1186,7 @@ func cmdType(args []string, stdin string) CmdResult {
 	}
 
 	name := args[0]
-	if _, ok := cmdRegistry[name]; ok {
+	if _, ok := CmdRegistry[name]; ok {
 		return CmdResult{fmt.Sprintf("%s is a shell built-in\n", name), "", 0}
 	}
 
@@ -1197,7 +1223,7 @@ func cmdRealpath(args []string, stdin string) CmdResult {
 	if len(args) == 0 {
 		return CmdResult{"", "realpath: missing operand\n", 1}
 	}
-	abs, err := filepath.Abs(resolvePath(args[0]))
+	abs, err := filepath.Abs(ResolvePath(args[0]))
 	if err != nil {
 		return CmdResult{"", fmt.Sprintf("realpath: %s\n", err.Error()), 1}
 	}
@@ -1209,8 +1235,8 @@ func cmdTr(args []string, stdin string) CmdResult {
 		return CmdResult{"", "tr: missing operand\n", 1}
 	}
 
-	from := args[0]
-	to := args[1]
+	from := []rune(args[0])
+	to := []rune(args[1])
 	deleteSet := false
 	squeeze := false
 
@@ -1230,21 +1256,26 @@ func cmdTr(args []string, stdin string) CmdResult {
 		}
 	} else {
 		runes := []rune(result)
+		translate := make(map[rune]rune, len(from))
+		for j, f := range from {
+			if j < len(to) {
+				translate[f] = to[j]
+			}
+		}
 		for i, r := range runes {
-			for j, f := range from {
-				if r == f && j < len([]rune(to)) {
-					runes[i] = []rune(to)[j]
-					break
-				}
+			if replacement, ok := translate[r]; ok {
+				runes[i] = replacement
 			}
 		}
 		result = string(runes)
 	}
 
-	if squeeze && len(from) > 0 {
-		r := []rune(from)[0]
-		for strings.Contains(result, string(r)+string(r)) {
-			result = strings.ReplaceAll(result, string(r)+string(r), string(r))
+	if squeeze {
+		for _, c := range from {
+			double := string(c) + string(c)
+			for strings.Contains(result, double) {
+				result = strings.ReplaceAll(result, double, string(c))
+			}
 		}
 	}
 
@@ -1359,7 +1390,7 @@ func cmdTee(args []string, stdin string) CmdResult {
 	}
 
 	for _, t := range targets {
-		path := resolvePath(t)
+		path := ResolvePath(t)
 		if appendMode {
 			existing := ""
 			if data, err := os.ReadFile(path); err == nil {
@@ -1376,13 +1407,13 @@ func cmdTee(args []string, stdin string) CmdResult {
 
 // ─── Utility functions ──────────────────────────────────────────────────
 
-// resolvePath expands ~ and makes relative paths absolute against cwd.
-func resolvePath(p string) string {
+// ResolvePath expands ~ and makes relative paths absolute against cwd.
+func ResolvePath(p string) string {
 	if p == "~" {
-		return shellEnv.Get("HOME")
+		return ShellEnv.Get("HOME")
 	}
 	if strings.HasPrefix(p, "~/") {
-		p = filepath.Join(shellEnv.Get("HOME"), p[2:])
+		p = filepath.Join(ShellEnv.Get("HOME"), p[2:])
 	}
 
 	if !filepath.IsAbs(p) {
@@ -1395,8 +1426,8 @@ func resolvePath(p string) string {
 	return filepath.Clean(p)
 }
 
-// expandGlobs expands glob patterns in arguments.
-func expandGlobs(args []string) []string {
+// ExpandGlobs expands glob patterns in arguments.
+func ExpandGlobs(args []string) []string {
 	var result []string
 	for _, arg := range args {
 		// Expand variables first
@@ -1404,11 +1435,11 @@ func expandGlobs(args []string) []string {
 
 		// Handle tilde
 		if strings.HasPrefix(expanded, "~") {
-			expanded = shellEnv.Get("HOME") + expanded[1:]
+			expanded = ShellEnv.Get("HOME") + expanded[1:]
 		}
 
 		if strings.ContainsAny(expanded, "*?[") {
-			matches, err := filepath.Glob(resolvePath(expanded))
+			matches, err := filepath.Glob(ResolvePath(expanded))
 			if err != nil || len(matches) == 0 {
 				result = append(result, arg)
 			} else {
@@ -1429,7 +1460,7 @@ func GlobCompletion(prefix string) []string {
 	if dir == "" {
 		dir = "."
 	}
-	dir = resolvePath(dir)
+	dir = ResolvePath(dir)
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -1454,7 +1485,7 @@ func GlobCompletion(prefix string) []string {
 
 // ListDirEntryJSON returns the JSON representation of directory entries.
 func ListDirEntryJSON(path string) (string, error) {
-	target := resolvePath(path)
+	target := ResolvePath(path)
 	entries, err := os.ReadDir(target)
 	if err != nil {
 		return "", err
@@ -1494,7 +1525,7 @@ func ListDirEntryJSON(path string) (string, error) {
 
 // ReadFileContent reads a file and returns its content as a string.
 func ReadFileContent(path string) (string, error) {
-	data, err := os.ReadFile(resolvePath(path))
+	data, err := os.ReadFile(ResolvePath(path))
 	if err != nil {
 		return "", err
 	}
@@ -1503,12 +1534,12 @@ func ReadFileContent(path string) (string, error) {
 
 // WriteFileContent writes content to a file.
 func WriteFileContent(path, content string) error {
-	return SyncWriteFile(resolvePath(path), content)
+	return SyncWriteFile(ResolvePath(path), content)
 }
 
 // DeleteFilePath deletes a file.
 func DeleteFilePath(path string) error {
-	return SyncDeleteFile(resolvePath(path))
+	return SyncDeleteFile(ResolvePath(path))
 }
 
 // pipeStdin reads from a reader and returns string.
@@ -1517,7 +1548,7 @@ func pipeStdin(r io.Reader) string {
 	return string(data)
 }
 
-// byteReader converts a string to a reader for piping.
+// stringReader converts a string to a reader for piping.
 func stringReader(s string) io.Reader {
 	return strings.NewReader(s)
 }
@@ -1533,11 +1564,10 @@ func pipeCommands(commands [][]string) CmdResult {
 		args := cmdArgs[1:]
 
 		// Expand globs in args
-		args = expandGlobs(args)
+		args = ExpandGlobs(args)
 
 		if i > 0 {
-			// Redirect previous stdout to this stdin
-			if fn, ok := cmdRegistry[name]; ok {
+			if fn, ok := CmdRegistry[name]; ok {
 				result := fn(args, stdin)
 				if result.ExitCode != 0 && len(commands) > 1 {
 					return result
@@ -1547,7 +1577,7 @@ func pipeCommands(commands [][]string) CmdResult {
 				return CmdResult{stdin, fmt.Sprintf("command not found: %s\n", name), 127}
 			}
 		} else {
-			if fn, ok := cmdRegistry[name]; ok {
+			if fn, ok := CmdRegistry[name]; ok {
 				result := fn(args, stdin)
 				if result.ExitCode != 0 {
 					return result
@@ -1562,12 +1592,11 @@ func pipeCommands(commands [][]string) CmdResult {
 	return CmdResult{stdin, "", 0}
 }
 
-// WriteBuf is a convenience type — we already use bytes.Buffer via strings.Builder.
-// This is for the case where we need to pass stdin through a pipe with redirects.
-func runCommandWithRedirects(name string, args []string, stdin string, stdoutRedirect *string, stderrRedirect *string, appendStdout bool) CmdResult {
-	args = expandGlobs(args)
+// RunCommandWithRedirects runs a command with optional redirect support.
+func RunCommandWithRedirects(name string, args []string, stdin string, stdoutRedirect *string, stderrRedirect *string, appendStdout bool) CmdResult {
+	args = ExpandGlobs(args)
 
-	fn, ok := cmdRegistry[name]
+	fn, ok := CmdRegistry[name]
 	if !ok {
 		return CmdResult{"", fmt.Sprintf("command not found: %s\n", name), 127}
 	}
@@ -1576,7 +1605,7 @@ func runCommandWithRedirects(name string, args []string, stdin string, stdoutRed
 
 	// Handle stdout redirect
 	if stdoutRedirect != nil && *stdoutRedirect != "" {
-		redirectPath := resolvePath(*stdoutRedirect)
+		redirectPath := ResolvePath(*stdoutRedirect)
 		if appendStdout {
 			existing := ""
 			if data, err := os.ReadFile(redirectPath); err == nil {
@@ -1591,7 +1620,7 @@ func runCommandWithRedirects(name string, args []string, stdin string, stdoutRed
 
 	// Handle stderr redirect
 	if stderrRedirect != nil && *stderrRedirect != "" {
-		redirectPath := resolvePath(*stderrRedirect)
+		redirectPath := ResolvePath(*stderrRedirect)
 		SyncWriteFile(redirectPath, result.Stderr)
 		result.Stderr = ""
 	}

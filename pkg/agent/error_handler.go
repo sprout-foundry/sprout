@@ -164,6 +164,20 @@ func (eh *ErrorHandler) classifyError(apiErr error) string {
 			"- Your account has sufficient credits/quota\n\n"
 	}
 
+	lower := strings.ToLower(errorMsg)
+	if strings.Contains(lower, "context window") ||
+		strings.Contains(lower, "available context size") ||
+		strings.Contains(lower, "exceed_context_size_error") ||
+		strings.Contains(lower, "maximum context length") ||
+		strings.Contains(lower, "max context") {
+		return "The request exceeded the model context window.\n" +
+			"I compact conversation history automatically and retry, but this request still did not fit.\n\n" +
+			"Try one of these:\n" +
+			"- Ask me to continue with a narrower scope\n" +
+			"- Ask me to summarize earlier progress first, then continue\n" +
+			"- Switch to a model/provider with a larger context window\n\n"
+	}
+
 	return fmt.Sprintf("API error: %s\n\n", errorMsg)
 }
 

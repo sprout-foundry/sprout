@@ -81,6 +81,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     // ── WASM shell state ──────────────────────────────────────────────────
     const wasmShellRef = useRef<WasmShell | null>(null);
     const [wasmActive, setWasmActive] = useState(false);
+    const wasmActiveRef = useRef(false);
     const [wasmLoading, setWasmLoading] = useState(false);
     const [wasmError, setWasmError] = useState<string | null>(null);
     const wasmLineRef = useRef('');
@@ -198,10 +199,11 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
           try {
             const result: WasmShellResult = shell.executeCommand(cmd);
             if (result.stdout) {
-              term.write(result.stdout);
+              // Convert \n to \r\n for xterm (convertEol is false).
+              term.write(result.stdout.replace(/\r?\n/g, '\r\n'));
             }
             if (result.stderr) {
-              term.write('\x1b[31m' + result.stderr + '\x1b[0m');
+              term.write('\x1b[31m' + result.stderr.replace(/\r?\n/g, '\r\n') + '\x1b[0m');
             }
           } catch (err) {
             term.write(`\x1b[31mError: ${err instanceof Error ? err.message : String(err)}\x1b[0m\r\n`);
@@ -406,19 +408,20 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       if (isConnected) {
         // Backend connected — tear down WASM shell if active
         const term = xtermRef.current;
-        if (wasmActive && term) {
+        if (wasmActiveRef.current && term) {
           debugLog('[TerminalPane] Backend reconnected — deactivating WASM shell');
           term.writeln('\r\n\x1b[32m→ Connected to backend\x1b[0m');
           term.writeln('  WASM browser shell deactivated. Using remote PTY.\r\n');
           wasmLineRef.current = '';
           wasmCursorRef.current = 0;
         }
+        wasmActiveRef.current = false;
         setWasmActive(false);
         return;
       }
 
       // Backend not connected — activate WASM shell
-      if (wasmActive || wasmLoading || wasmInitializedRef.current) {
+      if (wasmActiveRef.current || wasmLoading || wasmInitializedRef.current) {
         return; // already active or loading
       }
 
@@ -450,6 +453,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         if (cancelled) return;
 
         setWasmLoading(false);
+        wasmActiveRef.current = true;
         setWasmActive(true);
 
         const shell = wasmShellRef.current;
@@ -520,13 +524,17 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     const handlePaste = useCallback(async () => {
       try {
         const text = await navigator.clipboard.readText();
-        terminalWSRef.current?.sendRawInput(text);
+        if (wasmActiveRef.current) {
+          handleWasmInput(text);
+        } else {
+          terminalWSRef.current?.sendRawInput(text);
+        }
       } catch (err) {
         debugLog('[TerminalPane] clipboard readText failed:', err);
         // Clipboard access denied
       }
       closeContextMenu();
-    }, [closeContextMenu]);
+    }, [closeContextMenu, handleWasmInput]);
 
     const handleClear = useCallback(() => {
       xtermRef.current?.clear();
@@ -630,7 +638,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       fitAddonRef.current = fitAddon;
 
       term.onData((data) => {
-        if (wasmActive) {
+        if (wasmActiveRef.current) {
           handleWasmInput(data);
         } else {
           terminalWSRef.current?.sendRawInput(data);

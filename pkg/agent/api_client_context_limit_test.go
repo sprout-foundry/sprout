@@ -43,6 +43,21 @@ func TestIsContextLimitError(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "available context size exceeded",
+			errMsg:   "HTTP 400: request (131306 tokens) exceeds the available context size (131072 tokens)",
+			expected: true,
+		},
+		{
+			name:     "provider exceed context error code",
+			errMsg:   "{\"error\":{\"type\":\"exceed_context_size_error\"}}",
+			expected: true,
+		},
+		{
+			name:     "maximum context length",
+			errMsg:   "This model's maximum context length is 131072 tokens",
+			expected: true,
+		},
+		{
 			name:     "generic error",
 			errMsg:   "something went wrong",
 			expected: false,
@@ -101,13 +116,13 @@ func TestTriggerCompactionWithCheckpoints(t *testing.T) {
 	checkpoints := []TurnCheckpoint{{
 		StartIndex: 0,
 		EndIndex:   1,
-		Summary:   "Compacted summary",
+		Summary:    "Compacted summary",
 	}}
 
 	a := &Agent{
-		messages:      messages,
+		messages:        messages,
 		turnCheckpoints: checkpoints,
-		debug:        false,
+		debug:           false,
 	}
 
 	result := a.TriggerCompaction()
@@ -135,7 +150,7 @@ func TestTriggerCompactionEmergencyTruncation(t *testing.T) {
 
 	a := &Agent{
 		messages: messages,
-		debug:   false,
+		debug:    false,
 		// No checkpoints, no optimizer - should trigger emergency truncation
 	}
 
@@ -147,5 +162,18 @@ func TestTriggerCompactionEmergencyTruncation(t *testing.T) {
 	// Verify messages were truncated (should keep system + last 2)
 	if len(a.messages) > 3 {
 		t.Errorf("messages not truncated: got %d, want <=3", len(a.messages))
+	}
+}
+
+func TestExtractContextLimitTokenPair(t *testing.T) {
+	ac := &APIClient{agent: &Agent{}}
+
+	err := &testError{message: "HTTP 400: {\"error\":{\"message\":\"request (131306 tokens) exceeds the available context size (131072 tokens), try increasing it\",\"type\":\"exceed_context_size_error\",\"n_prompt_tokens\":131306,\"n_ctx\":131072}}"}
+	pair := ac.extractContextLimitTokenPair(err)
+	if pair.prompt != 131306 {
+		t.Fatalf("prompt tokens = %d, want 131306", pair.prompt)
+	}
+	if pair.limit != 131072 {
+		t.Fatalf("context limit = %d, want 131072", pair.limit)
 	}
 }

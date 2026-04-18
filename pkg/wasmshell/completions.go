@@ -1,6 +1,4 @@
-//go:build js && wasm
-
-package main
+package wasmshell
 
 import (
 	"encoding/json"
@@ -13,18 +11,18 @@ type AutoCompleteResult struct {
 	Completions []string `json:"completions"`
 }
 
-// autoComplete performs tab completion for the given input.
+// AutoComplete performs tab completion for the given input.
 // It handles:
 // - Command name completion (first token)
 // - File/directory path completion (subsequent tokens)
 // - History search (for empty input or ! commands)
-func autoComplete(input string) AutoCompleteResult {
+func AutoComplete(input string) AutoCompleteResult {
 	trimmed := strings.TrimSpace(input)
 	if trimmed == "" {
 		return AutoCompleteResult{Completions: []string{}}
 	}
 
-	tokens := tokenize(trimmed, true)
+	tokens := Tokenize(trimmed, true)
 	if len(tokens) == 0 {
 		return AutoCompleteResult{Completions: []string{}}
 	}
@@ -38,10 +36,9 @@ func autoComplete(input string) AutoCompleteResult {
 
 	if isFirstToken && !strings.Contains(lastToken, "/") && !strings.Contains(lastToken, ".") {
 		// Complete command names.
-		for name := range cmdRegistry {
+		for name := range CmdRegistry {
 			if strings.HasPrefix(name, lastToken) {
-				// Check if there's a space after the suggestion (command needs args).
-				// For commands that don't take arguments (pwd, clear), no trailing space.
+				// For commands that don't take arguments (pwd, clear, history), no trailing space.
 				switch name {
 				case "pwd", "clear", "history":
 					completions = append(completions, name)
@@ -65,7 +62,7 @@ func autoComplete(input string) AutoCompleteResult {
 		// If no path completions and input starts with !, do history search.
 		if len(pathCompletions) == 0 && strings.HasPrefix(trimmed, "!") {
 			prefix := strings.TrimPrefix(trimmed, "!")
-			historyMatches := historySearch(prefix)
+			historyMatches := HistorySearch(prefix)
 			for _, h := range historyMatches {
 				completions = append(completions, h)
 			}
@@ -76,9 +73,9 @@ func autoComplete(input string) AutoCompleteResult {
 	return AutoCompleteResult{Completions: completions}
 }
 
-// autoCompleteJSON returns completions as a JSON string.
-func autoCompleteJSON(input string) string {
-	result := autoComplete(input)
+// AutoCompleteJSON returns completions as a JSON string.
+func AutoCompleteJSON(input string) string {
+	result := AutoComplete(input)
 	data, _ := json.Marshal(result)
 	return string(data)
 }

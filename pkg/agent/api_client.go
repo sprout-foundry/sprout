@@ -266,10 +266,20 @@ func (ac *APIClient) SendWithRetry(messages []api.Message, tools []api.Tool, rea
 
 		// Check for context limit error - trigger compaction and re-prepare messages
 		if ac.isContextLimitError(err) {
+			current := ac.extractContextLimitTokenPair(err)
+			if current.prompt > 0 && current.limit > 0 {
+				ac.agent.PrintLineAsync(fmt.Sprintf("[~] Request exceeds model context window (%d/%d tokens). Compacting conversation and retrying...", current.prompt, current.limit))
+			} else {
+				ac.agent.PrintLineAsync("[~] Request exceeds model context window. Compacting conversation and retrying...")
+			}
+
 			if ac.agent.debug {
 				ac.agent.debugLog("DEBUG: context limit error detected, triggering compaction\n")
 			}
-			ac.agent.TriggerCompaction()
+			compacted := ac.agent.TriggerCompaction()
+			if !compacted && ac.prepareMessagesCallback == nil {
+				return nil, fmt.Errorf("context window exceeded and no compaction strategy was available: %w", err)
+			}
 			// Re-prepare messages after compaction
 			if ac.prepareMessagesCallback != nil {
 				messages = ac.prepareMessagesCallback(tools)
@@ -524,7 +534,7 @@ func (ac *APIClient) sendStreamingRequest(messages []api.Message, tools []api.To
 			}
 
 			if result.err != nil {
-				if !ac.isRateLimit(result.err) {
+				if !ac.isRateLimit(result.err) && !ac.isContextLimitError(result.err) {
 					ac.displayAPIError(result.err)
 				}
 				return result.resp, fmt.Errorf("failed to execute streaming API request: %w", result.err)
@@ -587,7 +597,7 @@ func (ac *APIClient) sendRegularRequest(messages []api.Message, tools []api.Tool
 	case result := <-resultChan:
 		logChatResponseDetailed(result.resp, ac.agent.client.GetProvider(), false, ac.agent.currentIteration)
 		if result.err != nil {
-			if !ac.isRateLimit(result.err) {
+			if !ac.isRateLimit(result.err) && !ac.isContextLimitError(result.err) {
 				ac.displayAPIError(result.err)
 			}
 			return result.resp, fmt.Errorf("failed to execute regular API request: %w", result.err)
@@ -727,14 +737,43 @@ func (ac *APIClient) isContextLimitError(err error) bool {
 	if err == nil {
 		return false
 	}
-	errStr := err.Error()
+	errStr := strings.ToLower(err.Error())
 	// Check for common context limit error patterns from various providers
 	return strings.Contains(errStr, "context window exceeds") ||
 		strings.Contains(errStr, "context window over") ||
 		strings.Contains(errStr, "context_limit") ||
 		strings.Contains(errStr, "context exceeds") ||
 		strings.Contains(errStr, "max context") ||
-		(strings.Contains(errStr, "token limit") && strings.Contains(errStr, "exceeded"))
+		strings.Contains(errStr, "available context size") ||
+		strings.Contains(errStr, "exceed_context_size_error") ||
+		strings.Contains(errStr, "maximum context length") ||
+		(strings.Contains(errStr, "token limit") && strings.Contains(errStr, "exceeded")) ||
+		(strings.Contains(errStr, "request") && strings.Contains(errStr, "exceeds") && strings.Contains(errStr, "context"))
+}
+
+type contextLimitTokenPair struct {
+	prompt int
+	limit  int
+}
+
+func (ac *APIClient) extractContextLimitTokenPair(err error) contextLimitTokenPair {
+	if err == nil {
+		return contextLimitTokenPair{}
+	}
+
+	errStr := err.Error()
+	rePrompt := regexp.MustCompile(`"n_prompt_tokens"\s*:\s*(\d+)`)
+	reCtx := regexp.MustCompile(`"n_ctx"\s*:\s*(\d+)`)
+
+	result := contextLimitTokenPair{}
+	if matches := rePrompt.FindStringSubmatch(errStr); len(matches) == 2 {
+		_, _ = fmt.Sscanf(matches[1], "%d", &result.prompt)
+	}
+	if matches := reCtx.FindStringSubmatch(errStr); len(matches) == 2 {
+		_, _ = fmt.Sscanf(matches[1], "%d", &result.limit)
+	}
+
+	return result
 }
 
 // isPrefillIncompatibilityError checks if an error indicates prefill is incompatible with thinking mode

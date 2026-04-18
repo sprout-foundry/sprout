@@ -52,7 +52,7 @@ import { minimapExtension } from '../extensions/minimap';
 import { tabExpandSnippets, setSnippetLanguage } from '../extensions/snippets';
 import { ApiService } from '../services/api';
 import { notificationBus } from '../services/notificationBus';
-import { Loader2, AlertTriangle, Eye, Columns2 } from 'lucide-react';
+import { Loader2, AlertTriangle, Eye, Columns2, Copy, Navigation, FolderOpen, ClipboardCopy } from 'lucide-react';
 import { copyToClipboard } from '../utils/clipboard';
 import { generateUnifiedDiff } from '../utils/simpleDiff';
 import { useLog, debugLog, warn } from '../utils/log';
@@ -63,6 +63,16 @@ import { JUST_SAVED_THRESHOLD_MS, justSavedRef } from '../hooks/useAutoReloadCle
 interface EditorPaneProps {
   paneId: string;
   onOpenCommandPalette?: () => void;
+}
+
+function isSemanticLanguage(languageId: string): boolean {
+  return (
+    languageId === 'typescript' ||
+    languageId === 'typescript-jsx' ||
+    languageId === 'javascript' ||
+    languageId === 'javascript-jsx' ||
+    languageId === 'go'
+  );
 }
 
 // Transaction annotations for external content replacements (file reloads,
@@ -96,7 +106,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   });
 
   // Context menu state
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; hasSelection: boolean; languageId: string } | null>(null);
   const [workspaceRoot, setWorkspaceRoot] = useState<string>('');
 
   const log = useLog();
@@ -146,7 +156,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
 
   const isExternalUpdateRef = useRef<boolean>(false);
   const loadFileRef = useRef<((filePath: string) => Promise<void>) | null>(null);
-  const fetchDiagnosticsRef = useRef<(filePath: string, content: string) => void>(() => {
+  const fetchDiagnosticsRef = useRef<(filePath: string, content: string, trigger?: 'edit' | 'save') => void>(() => {
     /* noop */
   });
 
@@ -291,10 +301,29 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       e.stopPropagation();
       if (!buffer || !buffer.file || buffer.file.isDir) return;
       if (buffer.kind !== 'file') return;
-      setContextMenu({ x: e.clientX, y: e.clientY });
+      const hasSelection =
+        !!viewRef.current &&
+        !viewRef.current.state.selection.main.empty;
+      const langId =
+        resolveLanguageId(
+          buffer.languageOverride,
+          buffer.file.ext?.replace(/^\./, ''),
+          buffer.file.name,
+        ).languageId ?? '';
+      setContextMenu({ x: e.clientX, y: e.clientY, hasSelection, languageId: langId });
     },
     [buffer],
   );
+
+  const handleCopySelection = useCallback(() => {
+    if (!viewRef.current) return;
+    const state = viewRef.current.state;
+    const text = state.sliceDoc(state.selection.main.from, state.selection.main.to);
+    copyToClipboard(text).catch((err) => {
+      debugLog('Clipboard write failed for selection:', err);
+    });
+    hideContextMenu();
+  }, [hideContextMenu]);
 
   const handleRevealInExplorer = useCallback(() => {
     if (!buffer || !buffer.file) return;
@@ -362,6 +391,12 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         }),
       );
 
+      // Re-run diagnostics on save so save-only checks (for example go vet)
+      // can run without paying that cost on each keystroke.
+      if (buffer.file.path && viewRef.current) {
+        await fetchDiagnosticsRef.current(buffer.file.path, viewRef.current.state.doc.toString(), 'save');
+      }
+
       // Re-fetch diff after save
       if (buffer.file.path && viewRef.current) {
         try {
@@ -385,10 +420,97 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     }
   }, [buffer, saveBuffer, apiService]); // eslint-disable-line react-hooks/exhaustive-deps -- updateDiffGutter/clearDiffGutter are module-level functions
 
+  const handleGoToDefinition = useCallback(async () => {
+    if (!viewRef.current || !buffer || buffer.kind !== 'file' || !buffer.file || buffer.file.path.startsWith('__workspace/')) {
+      return;
+    }
+
+    const languageId = resolveLanguageId(
+      buffer.languageOverride,
+      buffer.file.ext?.replace(/^\./, ''),
+      buffer.file.name,
+    ).languageId ?? '';
+    if (!isSemanticLanguage(languageId)) {
+      notificationBus.notify('info', 'Go to Definition', 'Semantic definition is currently available for TypeScript/JavaScript and Go files.');
+      return;
+    }
+
+    const selection = viewRef.current.state.selection.main;
+    const lineInfo = viewRef.current.state.doc.lineAt(selection.head);
+    const line = lineInfo.number;
+    const column = selection.head - lineInfo.from + 1;
+
+    try {
+      const result = await apiService.getSemanticDefinition(buffer.file.path, localContent, languageId, line, column);
+      if (!result.capabilities?.definition) {
+        notificationBus.notify('warning', 'Go to Definition', 'Semantic engine is not available for this language in this environment.');
+        return;
+      }
+
+      const def = result.definition;
+      if (!def || !def.path) {
+        notificationBus.notify('info', 'Go to Definition', 'No definition found at cursor.');
+        return;
+      }
+
+      if (def.path === buffer.file.path) {
+        handleGoToLine(def.line);
+        return;
+      }
+
+      const fileName = def.path.split('/').pop() || def.path;
+      const dotIndex = fileName.lastIndexOf('.');
+      const ext = dotIndex >= 0 ? fileName.slice(dotIndex) : undefined;
+
+      openWorkspaceBuffer({
+        kind: 'file',
+        path: def.path,
+        title: fileName,
+        ext,
+      });
+
+      requestAnimationFrame(() => {
+        document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line: def.line } }));
+      });
+    } catch (err) {
+      debugLog('[EditorPane] Go to definition failed:', err);
+      notificationBus.notify('warning', 'Go to Definition', 'Failed to resolve definition.');
+    }
+  }, [apiService, buffer, localContent, openWorkspaceBuffer, handleGoToLine]);
+
+  const handleGoToDefinitionFromMenu = useCallback(() => {
+    hideContextMenu();
+    void handleGoToDefinition();
+  }, [hideContextMenu, handleGoToDefinition]);
+
   // Fetch diagnostics for the current file and push them into the editor
   const fetchDiagnostics = useCallback(
-    async (filePath: string, content: string) => {
+    async (filePath: string, content: string, trigger: 'edit' | 'save' = 'edit') => {
       if (!viewRef.current) return;
+
+      const languageId = resolveLanguageId(
+        buffer?.languageOverride,
+        buffer?.file?.ext?.replace(/^\./, ''),
+        buffer?.file?.name,
+      ).languageId ?? '';
+
+      try {
+        if (isSemanticLanguage(languageId)) {
+          const semantic = await apiService.getSemanticDiagnostics(filePath, content, languageId, trigger);
+          if (semantic.capabilities?.diagnostics) {
+            debugLog(`[fetchDiagnostics] semantic latency ${semantic.duration_ms ?? -1}ms (${languageId}, trigger=${trigger})`);
+            if (semantic.diagnostics && semantic.diagnostics.length > 0) {
+              debouncedDiag.current.update(viewRef.current, semantic.diagnostics);
+            } else {
+              clearDiagnostics(viewRef.current);
+            }
+            return;
+          }
+        }
+      } catch (err) {
+        debugLog('[fetchDiagnostics] semantic diagnostics unavailable, falling back:', err);
+      }
+
       try {
         const result = await apiService.getDiagnostics(filePath, content);
         if (result.diagnostics && result.diagnostics.length > 0) {
@@ -401,8 +523,8 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         clearDiagnostics(viewRef.current);
       }
     },
-    [apiService],
-  ); // eslint-disable-line react-hooks/exhaustive-deps
+    [apiService, buffer?.languageOverride, buffer?.file?.ext, buffer?.file?.name],
+  );
 
   // Keep ref in sync so loadFile can call fetchDiagnostics without a forward reference
   fetchDiagnosticsRef.current = fetchDiagnostics;
@@ -611,6 +733,17 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       },
     ];
 
+    const semanticKeymap: KeyBinding[] = [
+      {
+        key: 'F12',
+        preventDefault: true,
+        run: () => {
+          void handleGoToDefinition();
+          return true;
+        },
+      },
+    ];
+
     const extensions = [
       updateListener,
       EditorState.allowMultipleSelections.of(true),
@@ -622,6 +755,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       keymap.of(searchKeymap),
       keymap.of(customKeymap),
       keymap.of(replacePanelKeymap),
+      keymap.of(semanticKeymap),
       search(),
       autocompletion(),
       closeBrackets(),
@@ -751,6 +885,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     setBufferModified,
     updateBufferCursor,
     updateBufferScroll,
+    handleGoToDefinition,
   ]);
 
   // Reconfigure the language compartment when the language override changes,
@@ -1277,15 +1412,33 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         y={contextMenu?.y ?? 0}
         onClose={hideContextMenu}
       >
-        <button className="context-menu-item" onClick={handleRevealInExplorer}>
-          Reveal in File Explorer
+        {contextMenu?.hasSelection && (
+          <button className="context-menu-item" onClick={handleCopySelection} type="button">
+            <Copy size={13} />
+            <span className="menu-item-label">Copy</span>
+          </button>
+        )}
+        {contextMenu?.languageId && isSemanticLanguage(contextMenu.languageId) && (
+          <button className="context-menu-item" onClick={handleGoToDefinitionFromMenu} type="button">
+            <Navigation size={13} />
+            <span className="menu-item-label">Go to Definition</span>
+          </button>
+        )}
+        {(contextMenu?.hasSelection || (contextMenu?.languageId && isSemanticLanguage(contextMenu.languageId))) && (
+          <div className="context-menu-divider" />
+        )}
+        <button className="context-menu-item" onClick={handleRevealInExplorer} type="button">
+          <FolderOpen size={13} />
+          <span className="menu-item-label">Reveal in Explorer</span>
         </button>
-        <button className="context-menu-item" onClick={handleCopyRelativePath}>
-          Copy relative path
+        <button className="context-menu-item" onClick={handleCopyRelativePath} type="button">
+          <ClipboardCopy size={13} />
+          <span className="menu-item-label">Copy relative path</span>
         </button>
         {workspaceRoot && (
-          <button className="context-menu-item" onClick={handleCopyAbsolutePath}>
-            Copy absolute path
+          <button className="context-menu-item" onClick={handleCopyAbsolutePath} type="button">
+            <ClipboardCopy size={13} />
+            <span className="menu-item-label">Copy absolute path</span>
           </button>
         )}
       </ContextMenu>

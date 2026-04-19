@@ -3,12 +3,13 @@ package configuration
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"strings"
-	"syscall"
 	"sync"
+	"syscall"
 	"time"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
@@ -212,6 +213,33 @@ func (keys *APIKeys) PopulateFromEnvironment() bool {
 				keys.SetAPIKey(name, envKey)
 				populated = true
 			}
+		}
+	}
+	return populated
+}
+
+// PopulateFromJSONEnv populates API keys from the LEDIT_API_KEYS_JSON environment
+// variable. The value must be a JSON object mapping provider names to API key strings,
+// e.g. {"openrouter":"sk-...","deepinfra":"di-..."}.
+// This is designed for containerized/SaaS environments (e.g. Sprout Foundry) where
+// keys are injected at runtime rather than stored in config files.
+func (keys *APIKeys) PopulateFromJSONEnv() bool {
+	raw := strings.TrimSpace(os.Getenv("LEDIT_API_KEYS_JSON"))
+	if raw == "" {
+		return false
+	}
+	var parsed map[string]string
+	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+		log.Printf("[WARN] LEDIT_API_KEYS_JSON: invalid JSON: %v", err)
+		return false
+	}
+	populated := false
+	for provider, key := range parsed {
+		provider = strings.TrimSpace(provider)
+		key = strings.TrimSpace(key)
+		if provider != "" && key != "" {
+			keys.SetAPIKey(provider, key)
+			populated = true
 		}
 	}
 	return populated

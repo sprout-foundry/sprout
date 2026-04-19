@@ -276,6 +276,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 
 		err = runInteractiveMode(ctx, chatAgent, eventBus)
 	} else {
+		directModeStart := time.Now()
 		if err := chatAgent.GetConfigManager().UpdateConfigNoSave(func(cfg *configuration.Config) error {
 			cfg.SkipPrompt = true
 			return nil
@@ -398,7 +399,13 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		// At this point: workflowErr is nil, workflowYielded is false
 		// err could be nil or from runDirectMode
 		if err != nil {
+			if outputFormatJSON {
+				emitJSONResult(query, directModeStart, err)
+			}
 			return fmt.Errorf("failed to run direct mode: %w", err)
+		}
+		if outputFormatJSON {
+			emitJSONResult(query, directModeStart, nil)
 		}
 		return nil // No error, workflow completed successfully
 	}

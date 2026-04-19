@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/agent_providers"
+	providers "github.com/alantheprice/ledit/pkg/agent_providers"
 	"github.com/alantheprice/ledit/pkg/credentials"
 	"github.com/alantheprice/ledit/pkg/noninteractive"
 	"golang.org/x/term"
@@ -83,7 +83,10 @@ func Initialize() (*Config, *APIKeys, error) {
 		return nil, nil, fmt.Errorf("failed to load API keys: %w", err)
 	}
 
-	// Populate from environment variables FIRST - prioritize env vars over stored keys
+	// Populate from LEDIT_API_KEYS_JSON env var (bulk injection for SaaS/container environments)
+	apiKeys.PopulateFromJSONEnv()
+
+	// Populate from individual environment variables — these take priority over JSON blob
 	if !apiKeys.PopulateFromEnvironment() {
 		log.Printf("[debug] no API keys found in environment variables")
 	}
@@ -176,7 +179,7 @@ func Initialize() (*Config, *APIKeys, error) {
 func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 	// Non-interactive environments cannot prompt for provider selection.
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
-		return "", fmt.Errorf("no provider configured. Running in non-interactive mode. "+noninteractive.HelpHint)
+		return "", fmt.Errorf("no provider configured. Running in non-interactive mode. " + noninteractive.HelpHint)
 	}
 
 	// Show skip option first
@@ -469,7 +472,7 @@ func GetAvailableProviders() []string {
 func SelectProvider(currentProvider string, apiKeys *APIKeys) (string, error) {
 	// Non-interactive environments cannot prompt for provider selection.
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
-		return "", fmt.Errorf("no provider configured. Running in non-interactive mode. "+noninteractive.HelpHint)
+		return "", fmt.Errorf("no provider configured. Running in non-interactive mode. " + noninteractive.HelpHint)
 	}
 
 	available := GetAvailableProviders()

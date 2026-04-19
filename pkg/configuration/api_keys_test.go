@@ -18,16 +18,16 @@ func TestPopulateFromEnvironment(t *testing.T) {
 	}
 
 	tests := []struct {
-		name             string
-		envVars          map[string]string
+		name              string
+		envVars           map[string]string
 		expectedPopulated bool
-		expectedKeys     []string
+		expectedKeys      []string
 	}{
 		{
-			name: "single environment variable",
-			envVars: map[string]string{"OPENAI_API_KEY": "sk-test123"},
+			name:              "single environment variable",
+			envVars:           map[string]string{"OPENAI_API_KEY": "sk-test123"},
 			expectedPopulated: true,
-			expectedKeys: []string{"openai"},
+			expectedKeys:      []string{"openai"},
 		},
 		{
 			name: "multiple environment variables",
@@ -36,31 +36,31 @@ func TestPopulateFromEnvironment(t *testing.T) {
 				"DEEPINFRA_API_KEY": "sk-deepinfra",
 			},
 			expectedPopulated: true,
-			expectedKeys: []string{"openai", "deepinfra"},
+			expectedKeys:      []string{"openai", "deepinfra"},
 		},
 		{
-			name: "no environment variables",
-			envVars: map[string]string{},
+			name:              "no environment variables",
+			envVars:           map[string]string{},
 			expectedPopulated: false,
-			expectedKeys: []string{},
+			expectedKeys:      []string{},
 		},
 		{
-			name: "empty environment variable value",
-			envVars: map[string]string{"OPENAI_API_KEY": ""},
+			name:              "empty environment variable value",
+			envVars:           map[string]string{"OPENAI_API_KEY": ""},
 			expectedPopulated: false,
-			expectedKeys: []string{},
+			expectedKeys:      []string{},
 		},
 		{
-			name: "whitespace-only environment variable",
-			envVars: map[string]string{"OPENAI_API_KEY": "   "},
+			name:              "whitespace-only environment variable",
+			envVars:           map[string]string{"OPENAI_API_KEY": "   "},
 			expectedPopulated: false,
-			expectedKeys: []string{},
+			expectedKeys:      []string{},
 		},
 		{
-			name: "jinaai environment variable",
-			envVars: map[string]string{"JINA_API_KEY": "test-jina-key-12345"},
+			name:              "jinaai environment variable",
+			envVars:           map[string]string{"JINA_API_KEY": "test-jina-key-12345"},
 			expectedPopulated: true,
-			expectedKeys: []string{"jinaai"},
+			expectedKeys:      []string{"jinaai"},
 		},
 		{
 			name: "mixed valid and empty environment variables",
@@ -70,7 +70,7 @@ func TestPopulateFromEnvironment(t *testing.T) {
 				"JINA_API_KEY":      "test-jina-key",
 			},
 			expectedPopulated: true,
-			expectedKeys: []string{"openai", "jinaai"},
+			expectedKeys:      []string{"openai", "jinaai"},
 		},
 	}
 
@@ -131,6 +131,90 @@ func TestPopulateFromEnvironment(t *testing.T) {
 				key := keys.GetAPIKey(provider)
 				if key != "" {
 					t.Errorf("Expected no API key for %q with empty value", provider)
+				}
+			}
+		})
+	}
+}
+
+func TestPopulateFromJSONEnv(t *testing.T) {
+	tests := []struct {
+		name              string
+		envValue          string
+		expectedPopulated bool
+		expectedKeys      map[string]string
+	}{
+		{
+			name:              "valid JSON with multiple providers",
+			envValue:          `{"openrouter":"sk-or-test","deepinfra":"di-test"}`,
+			expectedPopulated: true,
+			expectedKeys:      map[string]string{"openrouter": "sk-or-test", "deepinfra": "di-test"},
+		},
+		{
+			name:              "valid JSON single provider",
+			envValue:          `{"openai":"sk-abc123"}`,
+			expectedPopulated: true,
+			expectedKeys:      map[string]string{"openai": "sk-abc123"},
+		},
+		{
+			name:              "empty env var",
+			envValue:          "",
+			expectedPopulated: false,
+			expectedKeys:      map[string]string{},
+		},
+		{
+			name:              "invalid JSON",
+			envValue:          `{bad json`,
+			expectedPopulated: false,
+			expectedKeys:      map[string]string{},
+		},
+		{
+			name:              "empty JSON object",
+			envValue:          `{}`,
+			expectedPopulated: false,
+			expectedKeys:      map[string]string{},
+		},
+		{
+			name:              "whitespace keys and values ignored",
+			envValue:          `{"":"sk-test"," ":"val","openai":"  "}`,
+			expectedPopulated: false,
+			expectedKeys:      map[string]string{},
+		},
+		{
+			name:              "custom provider name",
+			envValue:          `{"my-custom-provider":"key-123"}`,
+			expectedPopulated: true,
+			expectedKeys:      map[string]string{"my-custom-provider": "key-123"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			origVal, origSet := os.LookupEnv("LEDIT_API_KEYS_JSON")
+			defer func() {
+				if origSet {
+					os.Setenv("LEDIT_API_KEYS_JSON", origVal)
+				} else {
+					os.Unsetenv("LEDIT_API_KEYS_JSON")
+				}
+			}()
+
+			if tt.envValue == "" {
+				os.Unsetenv("LEDIT_API_KEYS_JSON")
+			} else {
+				os.Setenv("LEDIT_API_KEYS_JSON", tt.envValue)
+			}
+
+			keys := make(APIKeys)
+			result := keys.PopulateFromJSONEnv()
+
+			if result != tt.expectedPopulated {
+				t.Errorf("PopulateFromJSONEnv() = %v, want %v", result, tt.expectedPopulated)
+			}
+
+			for provider, expectedKey := range tt.expectedKeys {
+				if got := keys.GetAPIKey(provider); got != expectedKey {
+					t.Errorf("GetAPIKey(%q) = %q, want %q", provider, got, expectedKey)
 				}
 			}
 		})

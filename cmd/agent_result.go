@@ -1,0 +1,76 @@
+package cmd
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"os/exec"
+	"strings"
+	"time"
+)
+
+// AgentResult is the structured output produced when --output-format=json is used.
+// It captures everything a SaaS wrapper (e.g. Sprout Foundry) needs from a
+// non-interactive ledit run.
+type AgentResult struct {
+	Status        string             `json:"status"`                   // "success" or "error"
+	Error         string             `json:"error,omitempty"`          // error message if status=="error"
+	Query         string             `json:"query"`                    // the original prompt
+	FilesModified []string           `json:"files_modified,omitempty"` // files changed during execution
+	GitDiff       string             `json:"git_diff,omitempty"`       // unified diff of all changes
+	Metrics       AgentResultMetrics `json:"metrics"`
+}
+
+// AgentResultMetrics holds execution metrics for structured output.
+type AgentResultMetrics struct {
+	ElapsedSeconds float64 `json:"elapsed_seconds"`
+}
+
+// outputFormatJSON is the flag value for JSON output mode.
+var outputFormatJSON bool
+
+func init() {
+	agentCmd.Flags().BoolVar(&outputFormatJSON, "output-json", false, "Output structured JSON result to stdout after execution (for CI/SaaS integration)")
+}
+
+// emitJSONResult writes the AgentResult to stdout as a single JSON line.
+// It collects git diff and modified files from the workspace.
+func emitJSONResult(query string, startTime time.Time, runErr error) {
+	result := AgentResult{
+		Query: query,
+		Metrics: AgentResultMetrics{
+			ElapsedSeconds: time.Since(startTime).Seconds(),
+		},
+	}
+
+	if runErr != nil {
+		result.Status = "error"
+		result.Error = runErr.Error()
+	} else {
+		result.Status = "success"
+	}
+
+	// Collect git diff (best-effort)
+	if diff, err := exec.Command("git", "diff", "HEAD").Output(); err == nil {
+		trimmed := strings.TrimSpace(string(diff))
+		if trimmed != "" {
+			result.GitDiff = trimmed
+		}
+	}
+
+	// Collect modified files (best-effort)
+	if out, err := exec.Command("git", "diff", "--name-only", "HEAD").Output(); err == nil {
+		lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+		for _, l := range lines {
+			if l = strings.TrimSpace(l); l != "" {
+				result.FilesModified = append(result.FilesModified, l)
+			}
+		}
+	}
+
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(result); err != nil {
+		fmt.Fprintf(os.Stderr, "[WARN] Failed to encode JSON result: %v\n", err)
+	}
+}

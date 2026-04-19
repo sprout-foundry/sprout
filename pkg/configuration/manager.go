@@ -39,7 +39,10 @@ func loadConfigSilently() (*Config, *APIKeys, error) {
 		return nil, nil, fmt.Errorf("failed to load API keys: %w", err)
 	}
 
-	// Populate from environment variables FIRST - prioritize env vars over stored keys
+	// Populate from LEDIT_API_KEYS_JSON env var (bulk injection for SaaS/container environments)
+	apiKeys.PopulateFromJSONEnv()
+
+	// Populate from individual environment variables — these take priority over JSON blob
 	if !apiKeys.PopulateFromEnvironment() {
 		log.Printf("[debug] no API keys found in environment variables")
 	}
@@ -288,7 +291,7 @@ func (m *Manager) SetProvider(clientType api.ClientType) error {
 	if clientType == api.TestClientType {
 		return fmt.Errorf("test provider cannot be persisted as the active provider")
 	}
-	
+
 	provider := mapClientTypeToString(clientType)
 	m.mu.Lock()
 	m.config.LastUsedProvider = provider

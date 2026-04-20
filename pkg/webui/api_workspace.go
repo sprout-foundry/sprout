@@ -43,6 +43,15 @@ func (ws *ReactWebServer) handleAPIStats(w http.ResponseWriter, r *http.Request)
 	}
 	ws.mutex.Unlock()
 
+	// If the locked function didn't find an agent (clientCtx.Agent was nil),
+	// try to get or create one outside the lock to avoid deadlock —
+	// getClientAgent acquires ws.mutex itself.
+	if stats["provider"] == "" && clientID != "" {
+		if agentInst, err := ws.getClientAgent(clientID); err == nil && agentInst != nil {
+			populateAgentStats(stats, agentInst)
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stats)
 }

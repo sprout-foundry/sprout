@@ -845,6 +845,7 @@ const AppContent: React.FC<AppContentProps> = ({
                 currentTodos,
                 onStopProcessing,
                 onToolPillClick: (toolId: string) => contextPanelRef.current?.highlightTool(toolId),
+                stats: state.stats,
               }}
               reviewProps={{
                 review: deepReview,

@@ -21,6 +21,7 @@ type ScriptedTokenUsage struct {
 	CompletionTokens    int                 `json:"completion_tokens"`
 	TotalTokens         int                 `json:"total_tokens"`
 	EstimatedCost       float64             `json:"estimated_cost"`
+	Cost                float64             `json:"cost,omitempty"`
 	PromptTokensDetails PromptTokensDetails `json:"prompt_tokens_details,omitempty"`
 }
 
@@ -492,6 +493,7 @@ func (c *ScriptedClient) buildChatResponse(
 			CompletionTokens    int     `json:"completion_tokens"`
 			TotalTokens         int     `json:"total_tokens"`
 			EstimatedCost       float64 `json:"estimated_cost"`
+			Cost                float64 `json:"cost,omitempty"`
 			PromptTokensDetails struct {
 				CachedTokens     int  `json:"cached_tokens"`
 				CacheWriteTokens *int `json:"cache_write_tokens"`
@@ -501,6 +503,7 @@ func (c *ScriptedClient) buildChatResponse(
 			CompletionTokens:    usage.CompletionTokens,
 			TotalTokens:         usage.TotalTokens,
 			EstimatedCost:       usage.EstimatedCost,
+			Cost:                usage.Cost,
 			PromptTokensDetails: promptTokenDetails,
 		},
 	}

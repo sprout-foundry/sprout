@@ -862,13 +862,24 @@ func (ac *APIClient) deriveUsageMetrics(resp *api.ChatResponse, messages []api.M
 	promptTokens = resp.Usage.PromptTokens
 	completionTokens = resp.Usage.CompletionTokens
 	totalTokens = resp.Usage.TotalTokens
-	estimatedCost = resp.Usage.EstimatedCost
 	cachedTokens = resp.Usage.PromptTokensDetails.CachedTokens
+
+	// OpenRouter returns cost directly in the "cost" field
+	// Other providers may return "estimated_cost" or nothing
+	if resp.Usage.Cost > 0 {
+		estimatedCost = resp.Usage.Cost
+	} else {
+		estimatedCost = resp.Usage.EstimatedCost
+	}
 
 	hasProviderUsage := promptTokens > 0 || completionTokens > 0 || totalTokens > 0
 	if hasProviderUsage {
 		if totalTokens == 0 {
 			totalTokens = promptTokens + completionTokens
+		}
+		// If provider returned token counts but no EstimatedCost, calculate fallback cost
+		if estimatedCost == 0 && (promptTokens > 0 || completionTokens > 0) {
+			estimatedCost = ac.calculateFallbackCost(promptTokens, completionTokens)
 		}
 		return promptTokens, completionTokens, totalTokens, estimatedCost, cachedTokens, false
 	}
@@ -878,6 +889,130 @@ func (ac *APIClient) deriveUsageMetrics(resp *api.ChatResponse, messages []api.M
 	completionTokens = estimateCompletionTokensFromResponse(resp)
 	totalTokens = promptTokens + completionTokens
 	return promptTokens, completionTokens, totalTokens, estimatedCost, cachedTokens, true
+}
+
+// calculateFallbackCost calculates cost when provider doesn't return EstimatedCost
+func (ac *APIClient) calculateFallbackCost(promptTokens, completionTokens int) float64 {
+	model := ac.agent.GetModel()
+	provider := ac.agent.GetProvider()
+
+	// Get input and output cost per million tokens based on model/provider
+	inputCostPerM, outputCostPerM := getModelPricing(model, provider)
+
+	inputCost := float64(promptTokens) * inputCostPerM / 1000000
+	outputCost := float64(completionTokens) * outputCostPerM / 1000000
+
+	return inputCost + outputCost
+}
+
+// getModelPricing returns estimated input and output cost per million tokens for a given model/provider.
+// Prices are approximate as of April 2025 and may not reflect current provider rates.
+// This is only used as a fallback when providers don't return cost data; prefer provider-reported costs.
+func getModelPricing(model, provider string) (inputCostPerM float64, outputCostPerM float64) {
+	// Default pricing (conservative estimate)
+	inputCostPerM = 1.0  // $1 per million input tokens
+	outputCostPerM = 2.0 // $2 per million output tokens
+
+	modelLower := strings.ToLower(model)
+	providerLower := strings.ToLower(provider)
+
+	// DeepInfra-specific pricing
+	if providerLower == "deepinfra" {
+		if strings.Contains(modelLower, "deepseek-v3") || strings.Contains(modelLower, "deepseek-v2") {
+			inputCostPerM = 0.27   // $0.27 per million input
+			outputCostPerM = 1.10   // $1.10 per million output
+		} else if strings.Contains(modelLower, "deepseek-r1") {
+			inputCostPerM = 0.55    // $0.55 per million input
+			outputCostPerM = 2.19   // $2.19 per million output
+		} else if strings.Contains(modelLower, "llama-3.3") || strings.Contains(modelLower, "llama-3.1-70b") {
+			inputCostPerM = 0.88    // $0.88 per million input
+			outputCostPerM = 0.88  // $0.88 per million output
+		} else if strings.Contains(modelLower, "llama-3.1-405b") {
+			inputCostPerM = 5.00   // $5.00 per million input
+			outputCostPerM = 5.00  // $5.00 per million output
+		} else if strings.Contains(modelLower, "qwen-2.5") {
+			inputCostPerM = 0.30   // $0.30 per million input
+			outputCostPerM = 0.60  // $0.60 per million output
+		} else if strings.Contains(modelLower, "qwen3-coder") {
+			inputCostPerM = 0.30   // $0.30 per million input
+			outputCostPerM = 0.60  // $0.60 per million output
+		} else if strings.Contains(modelLower, "mistral") {
+			inputCostPerM = 0.24   // $0.24 per million input
+			outputCostPerM = 0.24  // $0.24 per million output
+		}
+		return
+	}
+
+	// OpenRouter-specific pricing
+	if providerLower == "openrouter" {
+		if strings.Contains(modelLower, "deepseek-chat") || strings.Contains(modelLower, "deepseek-r1") {
+			inputCostPerM = 0.55   // $0.55 per million input
+			outputCostPerM = 2.19   // $2.19 per million output
+		} else if strings.Contains(modelLower, "gpt-4o") {
+			inputCostPerM = 2.50    // $2.50 per million input
+			outputCostPerM = 10.00  // $10.00 per million output
+		} else if strings.Contains(modelLower, "gpt-4-turbo") {
+			inputCostPerM = 10.00   // $10.00 per million input
+			outputCostPerM = 30.00  // $30.00 per million output
+		} else if strings.Contains(modelLower, "gpt-4") && !strings.Contains(modelLower, "gpt-4o") && !strings.Contains(modelLower, "gpt-4-turbo") {
+			inputCostPerM = 30.00   // $30 per million input
+			outputCostPerM = 60.00  // $60 per million output
+		} else if strings.Contains(modelLower, "claude-3.5-sonnet") || strings.Contains(modelLower, "claude-3-sonnet") {
+			inputCostPerM = 3.00    // $3.00 per million input
+			outputCostPerM = 15.00  // $15.00 per million output
+		} else if strings.Contains(modelLower, "claude-3-opus") {
+			inputCostPerM = 15.00   // $15.00 per million input
+			outputCostPerM = 75.00  // $75.00 per million output
+		} else if strings.Contains(modelLower, "claude-3-haiku") {
+			inputCostPerM = 0.25    // $0.25 per million input
+			outputCostPerM = 1.25   // $1.25 per million output
+		} else if strings.Contains(modelLower, "llama-3.1-405b") {
+			inputCostPerM = 5.00    // $5.00 per million input
+			outputCostPerM = 5.00   // $5.00 per million output
+		} else if strings.Contains(modelLower, "llama-3.1-70b") {
+			inputCostPerM = 0.88    // $0.88 per million input
+			outputCostPerM = 0.88   // $0.88 per million output
+		} else if strings.Contains(modelLower, "llama-3.1-8b") {
+			inputCostPerM = 0.18    // $0.18 per million input
+			outputCostPerM = 0.18   // $0.18 per million output
+		}
+		return
+	}
+
+	// OpenAI-specific pricing
+	if providerLower == "openai" {
+		if strings.Contains(modelLower, "gpt-4o") {
+			inputCostPerM = 2.50    // $2.50 per million input
+			outputCostPerM = 10.00   // $10.00 per million output
+		} else if strings.Contains(modelLower, "gpt-4-turbo") {
+			inputCostPerM = 10.00   // $10.00 per million input
+			outputCostPerM = 30.00   // $30.00 per million output
+		} else if strings.Contains(modelLower, "gpt-4") && !strings.Contains(modelLower, "gpt-4o") && !strings.Contains(modelLower, "gpt-4-turbo") {
+			inputCostPerM = 30.00    // $30 per million input
+			outputCostPerM = 60.00   // $60 per million output
+		} else if strings.Contains(modelLower, "gpt-3.5-turbo") {
+			inputCostPerM = 0.50     // $0.50 per million input
+			outputCostPerM = 1.50    // $1.50 per million output
+		}
+		return
+	}
+
+	// Generic model-based pricing
+	if strings.Contains(modelLower, "gpt-oss") {
+		inputCostPerM = 0.30    // $0.30 per million input
+		outputCostPerM = 0.60   // $0.60 per million output
+	} else if strings.Contains(modelLower, "qwen3-coder") || strings.Contains(modelLower, "qwen-coder") {
+		inputCostPerM = 0.30    // $0.30 per million input
+		outputCostPerM = 0.60   // $0.60 per million output
+	} else if strings.Contains(modelLower, "llama") {
+		inputCostPerM = 0.36    // $0.36 per million input
+		outputCostPerM = 0.36  // $0.36 per million output
+	} else if strings.Contains(modelLower, "deepseek") {
+		inputCostPerM = 0.55    // $0.55 per million input
+		outputCostPerM = 2.19  // $2.19 per million output
+	}
+
+	return
 }
 
 // displayTimeoutError shows a user-friendly timeout error

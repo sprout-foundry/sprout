@@ -7,13 +7,13 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/agent"
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/configuration"
-	"github.com/alantheprice/ledit/pkg/factory"
-	gitops "github.com/alantheprice/ledit/pkg/git"
-	"github.com/alantheprice/ledit/pkg/security"
-	"github.com/alantheprice/ledit/pkg/utils"
+	"github.com/sprout-foundry/sprout/pkg/agent"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/factory"
+	gitops "github.com/sprout-foundry/sprout/pkg/git"
+	"github.com/sprout-foundry/sprout/pkg/security"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // --- Output helpers ---

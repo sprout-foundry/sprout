@@ -9,10 +9,10 @@ import (
 	"strings"
 	"sync"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	tools "github.com/alantheprice/ledit/pkg/agent_tools"
-	"github.com/alantheprice/ledit/pkg/filesystem"
-	"github.com/alantheprice/ledit/pkg/utils"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // ParameterConfig defines parameter validation rules for a tool

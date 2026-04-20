@@ -1,7 +1,7 @@
 package configuration
 
 import (
-	"github.com/alantheprice/ledit/pkg/mcp"
+	"github.com/sprout-foundry/sprout/pkg/mcp"
 )
 
 // RedactConfig returns a copy of the configuration with all credential values redacted.

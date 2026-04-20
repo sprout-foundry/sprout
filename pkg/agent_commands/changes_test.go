@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/alantheprice/ledit/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/agent"
 )
 
 func TestGetChangeTrackingStatus(t *testing.T) {

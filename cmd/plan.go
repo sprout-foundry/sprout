@@ -9,8 +9,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/agent"
-	"github.com/alantheprice/ledit/pkg/filesystem"
+	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )

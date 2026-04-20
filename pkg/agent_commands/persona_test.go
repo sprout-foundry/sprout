@@ -3,7 +3,7 @@ package commands
 import (
 	"testing"
 
-	"github.com/alantheprice/ledit/pkg/personas"
+	"github.com/sprout-foundry/sprout/pkg/personas"
 )
 
 func TestParseCommaList(t *testing.T) {

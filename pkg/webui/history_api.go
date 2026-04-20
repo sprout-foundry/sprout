@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/history"
+	"github.com/sprout-foundry/sprout/pkg/history"
 )
 
 // ChangelogEntry represents a changelog entry

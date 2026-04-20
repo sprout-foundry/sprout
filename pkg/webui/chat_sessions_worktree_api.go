@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 var unsafePathCharRe = regexp.MustCompile(`[^a-zA-Z0-9._-]`)

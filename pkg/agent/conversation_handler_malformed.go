@@ -1,8 +1,8 @@
 package agent
 
 import (
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/trace"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/trace"
 )
 
 // handleMalformedToolCalls attempts to parse and execute tool calls from malformed content

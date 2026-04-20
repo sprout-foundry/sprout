@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/credentials"
-	"github.com/alantheprice/ledit/pkg/logging"
-	"github.com/alantheprice/ledit/pkg/utils"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/credentials"
+	"github.com/sprout-foundry/sprout/pkg/logging"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // LogAPIResponse saves the accumulated streaming response to .ledit/lastResponse.json

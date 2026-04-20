@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/utils"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // GetGitRootDir returns the absolute path to the root directory of the current Git repository.

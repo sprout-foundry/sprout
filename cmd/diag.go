@@ -6,11 +6,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	tools "github.com/alantheprice/ledit/pkg/agent_tools"
-	"github.com/alantheprice/ledit/pkg/configuration"
-	"github.com/alantheprice/ledit/pkg/credentials"
-	"github.com/alantheprice/ledit/pkg/mcp"
-	"github.com/alantheprice/ledit/pkg/pythonruntime"
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/credentials"
+	"github.com/sprout-foundry/sprout/pkg/mcp"
+	"github.com/sprout-foundry/sprout/pkg/pythonruntime"
 	"github.com/spf13/cobra"
 )
 

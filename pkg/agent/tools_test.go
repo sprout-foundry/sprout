@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/configuration"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // TestGetOptimizedToolDefinitions verifies that the agent gets both standard and MCP tools

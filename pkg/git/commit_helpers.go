@@ -7,8 +7,8 @@ import (
 	"os/exec"
 	"strings"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/utils"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // CommitExecutor provides methods for executing git commits with message generation.

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
 func TestLoadStateWithoutAgentScoped_ResolvesByWorkingDirectory(t *testing.T) {

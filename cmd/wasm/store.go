@@ -10,7 +10,7 @@ import (
 	"sync"
 	"syscall/js"
 
-	"github.com/alantheprice/ledit/pkg/wasmshell"
+	"github.com/sprout-foundry/sprout/pkg/wasmshell"
 )
 
 // Store manages IndexedDB persistence for the virtual filesystem.

@@ -9,17 +9,17 @@ import (
 	"sync"
 	"time"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	tools "github.com/alantheprice/ledit/pkg/agent_tools"
-	"github.com/alantheprice/ledit/pkg/configuration"
-	"github.com/alantheprice/ledit/pkg/events"
-	"github.com/alantheprice/ledit/pkg/factory"
-	"github.com/alantheprice/ledit/pkg/mcp"
-	"github.com/alantheprice/ledit/pkg/noninteractive"
-	"github.com/alantheprice/ledit/pkg/prompts"
-	"github.com/alantheprice/ledit/pkg/security"
-	"github.com/alantheprice/ledit/pkg/utils"
-	"github.com/alantheprice/ledit/pkg/validation"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/factory"
+	"github.com/sprout-foundry/sprout/pkg/mcp"
+	"github.com/sprout-foundry/sprout/pkg/noninteractive"
+	"github.com/sprout-foundry/sprout/pkg/prompts"
+	"github.com/sprout-foundry/sprout/pkg/security"
+	"github.com/sprout-foundry/sprout/pkg/utils"
+	"github.com/sprout-foundry/sprout/pkg/validation"
 )
 
 const (

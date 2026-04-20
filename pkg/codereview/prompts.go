@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/prompts"
-	"github.com/alantheprice/ledit/pkg/types"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/prompts"
+	"github.com/sprout-foundry/sprout/pkg/types"
 )
 
 // performStagedReview handles reviews of Git staged changes

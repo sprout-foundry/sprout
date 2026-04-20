@@ -160,6 +160,11 @@ var logRedactionPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)api[_-]?key["']?\s*[:=]\s*["']?[a-zA-Z0-9_-]{20,}`),
 }
 
+// dataURLRedactPattern matches data URLs (e.g., data:image/png;base64,iVBOR...).
+// These are inline embedded resources, not secrets. Stripping them prevents
+// base64 payloads from triggering credential redaction patterns.
+var dataURLRedactPattern = regexp.MustCompile(`data:[^;,\s]+;base64,[A-Za-z0-9+/=]+`)
+
 // RedactLogLine scans a single log line for potential credential values and
 // replaces them with [REDACTED]. It catches:
 //   - "Authorization: Bearer sk-..." or "Authorization: Basic ..."
@@ -168,6 +173,9 @@ var logRedactionPatterns = []*regexp.Regexp{
 // Returns the redacted line.
 func RedactLogLine(line string) string {
 	redacted := line
+	// Strip data URL payloads first to prevent base64 data from matching
+	// credential patterns (e.g., "sk-" prefixes in image data).
+	redacted = dataURLRedactPattern.ReplaceAllString(redacted, "data:[stripped]")
 	for _, pattern := range logRedactionPatterns {
 		redacted = pattern.ReplaceAllString(redacted, "[REDACTED]")
 	}

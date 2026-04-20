@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/filesystem"
-	"github.com/alantheprice/ledit/pkg/history"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
+	"github.com/sprout-foundry/sprout/pkg/history"
 )
 
 // ViewHistoryResult captures the output and metadata for history views.

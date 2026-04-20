@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 // handleAPIConfig handles API requests for configuration

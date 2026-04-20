@@ -4,11 +4,11 @@ import (
 	"strings"
 	"testing"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/configuration"
-	"github.com/alantheprice/ledit/pkg/factory"
-	"github.com/alantheprice/ledit/pkg/types"
-	"github.com/alantheprice/ledit/pkg/utils"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/factory"
+	"github.com/sprout-foundry/sprout/pkg/types"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 func TestIterationLimitExceeded(t *testing.T) {

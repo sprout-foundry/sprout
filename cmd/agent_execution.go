@@ -3,12 +3,12 @@
 package cmd
 
 import (
-	commands "github.com/alantheprice/ledit/pkg/agent_commands"
-	"github.com/alantheprice/ledit/pkg/console"
-	"github.com/alantheprice/ledit/pkg/events"
-	"github.com/alantheprice/ledit/pkg/utils"
-	"github.com/alantheprice/ledit/pkg/webui"
-	"github.com/alantheprice/ledit/pkg/zsh"
+	commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
+	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/utils"
+	"github.com/sprout-foundry/sprout/pkg/webui"
+	"github.com/sprout-foundry/sprout/pkg/zsh"
 )
 
 var (

@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
 // --- NewTraceSession: tools.jsonl writer fails (later writer error, tests defer cleanup) ---

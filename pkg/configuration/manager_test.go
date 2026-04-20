@@ -3,8 +3,8 @@ package configuration
 import (
 	"testing"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/credentials"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/credentials"
 )
 
 func TestSaveConfig_AppliesDeletionAndScalarUpdates(t *testing.T) {

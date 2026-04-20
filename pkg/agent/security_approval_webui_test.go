@@ -3,7 +3,7 @@ package agent
 import (
 	"testing"
 
-	"github.com/alantheprice/ledit/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // TestSecurityApprovalWebuiFlow verifies that security approvals are correctly routed through the eventBus

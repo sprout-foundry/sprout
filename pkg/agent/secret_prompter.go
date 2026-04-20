@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/security"
+	"github.com/sprout-foundry/sprout/pkg/security"
 )
 
 // secretPrompterAdapter implements security.SecretPrompter using the Agent's interactive UI.

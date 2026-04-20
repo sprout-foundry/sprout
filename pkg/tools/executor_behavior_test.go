@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/configuration"
-	"github.com/alantheprice/ledit/pkg/utils"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // ---------- Inline mock types (self-contained, no dependency on executor_test.go) ----------

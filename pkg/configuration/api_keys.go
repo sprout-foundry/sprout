@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/credentials"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"golang.org/x/term"
 )
 

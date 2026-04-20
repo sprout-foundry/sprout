@@ -10,7 +10,7 @@ import (
 	"strings"
 	"syscall/js"
 
-	"github.com/alantheprice/ledit/pkg/wasmshell"
+	"github.com/sprout-foundry/sprout/pkg/wasmshell"
 )
 
 func main() {

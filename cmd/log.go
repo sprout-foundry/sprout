@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/credentials"
-	"github.com/alantheprice/ledit/pkg/history"
+	"github.com/sprout-foundry/sprout/pkg/credentials"
+	"github.com/sprout-foundry/sprout/pkg/history"
 	"github.com/spf13/cobra"
 )
 

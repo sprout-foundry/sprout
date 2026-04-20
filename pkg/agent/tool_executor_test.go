@@ -9,10 +9,10 @@ import (
 	"sync"
 	"testing"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	tools "github.com/alantheprice/ledit/pkg/agent_tools"
-	"github.com/alantheprice/ledit/pkg/factory"
-	"github.com/alantheprice/ledit/pkg/mcp"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/factory"
+	"github.com/sprout-foundry/sprout/pkg/mcp"
 )
 
 type fakeMCPManager struct {

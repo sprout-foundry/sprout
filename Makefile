@@ -15,7 +15,7 @@ help:
 	@echo "  make test-smoke       - Run smoke tests (basic functionality)"
 	@echo "  make test-all         - Run unit + integration + smoke tests"
 	@echo "  make clean            - Clean test artifacts"
-	@echo "  make build            - Build ledit binary"
+	@echo "  make build            - Build sprout binary"
 	@echo "  make build-version    - Build with version information"
 	@echo "  make build-ui         - Build React web UI"
 	@echo "  make deploy-ui        - Build and deploy React UI to Go static"
@@ -92,15 +92,15 @@ test: test-unit
 test-ci: test-unit test-integration
 	@echo "CI tests completed"
 
-# Build ledit binary
+# Build sprout binary
 build:
 	@echo "Building ledit..."
-	go build -tags ollama_test -o ledit .
+	go build -tags ollama_test -o sprout .
 	@echo "Build completed"
 
 # Build with version information
 build-version:
-	@echo "Building ledit with version information..."
+	@echo "Building sprout with version information..."
 	./scripts/version-manager.sh build
 	@echo "Versioned build completed"
 

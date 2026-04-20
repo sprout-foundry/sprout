@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/pythonruntime"
+	"github.com/sprout-foundry/sprout/pkg/pythonruntime"
 )
 
 // ShowColoredDiff displays a colored diff between old and new content, focusing on actual changes

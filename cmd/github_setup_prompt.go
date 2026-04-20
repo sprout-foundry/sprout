@@ -8,9 +8,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/agent"
-	"github.com/alantheprice/ledit/pkg/configuration"
-	"github.com/alantheprice/ledit/pkg/mcp"
+	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/mcp"
 )
 
 // GitHubSetupAgentInterface defines the interface needed from an agent for GitHub MCP setup

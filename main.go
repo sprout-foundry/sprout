@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/alantheprice/ledit/cmd"
+	"github.com/sprout-foundry/sprout/cmd"
 )
 
 func main() {

@@ -209,6 +209,20 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 		log.Printf("handleAPIQuery: calling ProcessQueryWithContinuity")
 		clientAgent.SetWorkspaceRoot(workspaceRoot)
 		_, err := clientAgent.ProcessQueryWithContinuity(query.Query)
+
+		// Record cost after query completes
+		if cost := clientAgent.GetTotalCost(); cost > 0 {
+			GetCostStore().RecordCost(
+				clientAgent.GetProvider(),
+				clientAgent.GetModel(),
+				clientAgent.GetSessionID(),
+				chatID,
+				clientAgent.GetPromptTokens(),
+				clientAgent.GetCompletionTokens(),
+				cost,
+			)
+		}
+
 		_ = ws.syncAgentStateForClientWithChat(clientID, chatID)
 		if err != nil {
 			log.Printf("handleAPIQuery: ProcessQueryWithContinuity error: %v", err)

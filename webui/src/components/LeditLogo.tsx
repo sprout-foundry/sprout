@@ -14,39 +14,51 @@ function LeditLogo({ showWordmark = true, compact = false, className = '' }: Led
     <div className={`ledit-logo ${compact ? 'compact' : ''} ${className}`.trim()}>
       <div className="ledit-logo-mark" aria-hidden="true">
         <svg viewBox="0 0 32 32" role="img" aria-labelledby={logoTitleId}>
-          <title id={logoTitleId}>ledit logo</title>
-          <rect x="0.75" y="0.75" width="30.5" height="30.5" rx="3" fill="#10212D" />
+          <title id={logoTitleId}>sprout logo</title>
+          {/* Code lines (base) */}
           <path
-            d="M9 8V22.6H18"
+            d="M6 23H26"
+            fill="none"
+            stroke="#F4FEFF"
+            strokeWidth="1.25"
+            strokeLinecap="round"
+            opacity="0.7"
+          />
+          <path
+            d="M8 25.5H24"
+            fill="none"
+            stroke="#F4FEFF"
+            strokeWidth="1.25"
+            strokeLinecap="round"
+            opacity="0.5"
+          />
+          <path
+            d="M10 28H22"
+            fill="none"
+            stroke="#F4FEFF"
+            strokeWidth="1.25"
+            strokeLinecap="round"
+            opacity="0.3"
+          />
+          {/* Stem */}
+          <path
+            d="M16 21V7"
             fill="none"
             stroke="#68E3EE"
-            strokeWidth="2.2"
+            strokeWidth="2"
             strokeLinecap="round"
-            strokeLinejoin="round"
           />
+          {/* Left leaf */}
           <path
-            d="M14.3 8.5H21.7"
-            fill="none"
-            stroke="#F4FEFF"
-            strokeWidth="1.25"
-            strokeLinecap="round"
-            opacity="0.98"
+            d="M16 14C14 12 11 11 9 11.5C11 12.5 14 13.5 16 16Z"
+            fill="#68E3EE"
+            opacity="0.85"
           />
+          {/* Right leaf */}
           <path
-            d="M14.3 12.7H21"
-            fill="none"
-            stroke="#F4FEFF"
-            strokeWidth="1.25"
-            strokeLinecap="round"
-            opacity="0.94"
-          />
-          <path
-            d="M14.3 16.9H18.5"
-            fill="none"
-            stroke="#F4FEFF"
-            strokeWidth="1.25"
-            strokeLinecap="round"
-            opacity="0.9"
+            d="M16 10C18 8 21 7 23 7.5C21 8.5 18 9.5 16 12Z"
+            fill="#68E3EE"
+            opacity="0.65"
           />
         </svg>
       </div>

@@ -34,6 +34,36 @@
   height: 100%;
 }
 
+/* ── Theme-aware icon colors ──────────────────────────────────── */
+
+/* Dark mode — deep navy + teal frost */
+.ledit-logo-bg {
+  fill: #10212D;
+}
+.ledit-logo-line {
+  stroke: #F4FEFF;
+}
+.ledit-logo-accent {
+  stroke: #68E3EE;
+}
+.ledit-logo-accent-fill {
+  fill: #68E3EE;
+}
+
+/* Light mode — subtle tinted background + earth + robust green */
+:root[data-theme='light'] .ledit-logo-bg {
+  fill: #F0F4F8;
+}
+:root[data-theme='light'] .ledit-logo-line {
+  stroke: #6B4C2A;
+}
+:root[data-theme='light'] .ledit-logo-accent {
+  stroke: #1BA03D;
+}
+:root[data-theme='light'] .ledit-logo-accent-fill {
+  fill: #1BA03D;
+}
+
 .ledit-logo-wordmark {
   min-width: 0;
   display: flex;

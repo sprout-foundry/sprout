@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 const (

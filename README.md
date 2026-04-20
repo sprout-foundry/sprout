@@ -1,8 +1,8 @@
-# Ledit
+# Sprout
 
 AI-powered code editing and assistance tool. Leverages LLMs to understand your workspace, generate code, and orchestrate complex development tasks.
 
-> **Disclaimer:** Using `ledit` involves interactions with LLMs and external services which may incur costs. Currently there are limited safety checks — use at your own risk, ideally in a container.
+> **Disclaimer:** Using `sprout` involves interactions with LLMs and external services which may incur costs. Currently there are limited safety checks — use at your own risk, ideally in a container.
 
 ## Features
 
@@ -24,32 +24,32 @@ AI-powered code editing and assistance tool. Leverages LLMs to understand your w
 
 **Linux / macOS:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/alantheprice/ledit/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.sh | sh
 ```
 
 **Windows (PowerShell):**
 ```powershell
-irm https://raw.githubusercontent.com/alantheprice/ledit/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.ps1 | iex
 ```
 
 ### Install Options
 
 ```bash
 # Specific version
-LEDIT_VERSION=v0.14.0 curl -fsSL https://raw.githubusercontent.com/alantheprice/ledit/main/scripts/install.sh | sh
+SPROUT_VERSION=v0.14.0 curl -fsSL https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.sh | sh
 
 # Custom directory
-LEDIT_INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/alantheprice/ledit/main/scripts/install.sh | sh
+SPROUT_INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.sh | sh
 
 # Without piping (Linux / macOS)
-curl -fsSL -o install.sh https://raw.githubusercontent.com/alantheprice/ledit/main/scripts/install.sh
+curl -fsSL -o install.sh https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.sh
 sh install.sh
 ```
 
 ### Uninstall
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/alantheprice/ledit/main/scripts/install.sh | sh -s -- --uninstall
+curl -fsSL https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.sh | sh -s -- --uninstall
 ```
 
 ### From Source
@@ -57,13 +57,13 @@ curl -fsSL https://raw.githubusercontent.com/alantheprice/ledit/main/scripts/ins
 Requires Go 1.25.0+ and Node.js 22+:
 
 ```bash
-git clone https://github.com/alantheprice/ledit.git
+git clone https://github.com/sprout-foundry/sprout.git
 cd ledit
 make deploy-ui   # Build and embed the React web UI (requires Node.js)
 go install .
 ```
 
-> **Note:** `go install github.com/alantheprice/ledit@latest` does not currently work for installing via the Go module proxy, because the React web UI assets are built during CI release and committed to the release tag. Clone the repository and use `make deploy-ui` to build the UI assets locally.
+> **Note:** `go install github.com/sprout-foundry/sprout@latest` does not currently work for installing via the Go module proxy, because the React web UI assets are built during CI release and committed to the release tag. Clone the repository and use `make deploy-ui` to build the UI assets locally.
 
 ## Getting Started
 
@@ -72,18 +72,18 @@ go install .
 ledit
 
 # Run a specific task
-ledit agent "Create a python script that prints 'Hello, World!'"
-ledit agent --skip-prompt "Implement user authentication"
-ledit agent --persona coder "Add JWT auth to API"
+sprout agent "Create a python script that prints 'Hello, World!'"
+sprout agent --skip-prompt "Implement user authentication"
+sprout agent --persona coder "Add JWT auth to API"
 
 # Generate a commit message
-ledit commit
+sprout commit
 
 # Generate shell scripts
-ledit shell "backup all .go files to a timestamped archive"
+sprout shell "backup all .go files to a timestamped archive"
 
 # View change history
-ledit log
+sprout log
 ```
 
 ## Documentation
@@ -112,4 +112,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. Run `go test ./...` befor
 
 ## Support
 
-Report issues at [github.com/alantheprice/ledit/issues](https://github.com/alantheprice/ledit/issues).
+Report issues at [github.com/sprout-foundry/sprout/issues](https://github.com/sprout-foundry/sprout/issues).

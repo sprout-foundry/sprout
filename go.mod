@@ -1,4 +1,4 @@
-module github.com/alantheprice/ledit
+module github.com/sprout-foundry/sprout
 
 go 1.25.0
 

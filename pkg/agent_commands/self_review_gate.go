@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/agent"
-	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // SelfReviewGateCommand implements the /self-review-gate slash command.

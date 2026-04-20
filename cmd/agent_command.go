@@ -10,11 +10,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/agent"
-	"github.com/alantheprice/ledit/pkg/configuration"
-	"github.com/alantheprice/ledit/pkg/noninteractive"
-	"github.com/alantheprice/ledit/pkg/security"
-	"github.com/alantheprice/ledit/pkg/trace"
+	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/noninteractive"
+	"github.com/sprout-foundry/sprout/pkg/security"
+	"github.com/sprout-foundry/sprout/pkg/trace"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )

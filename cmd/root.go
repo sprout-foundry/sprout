@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"sync"
 
-	tools "github.com/alantheprice/ledit/pkg/agent_tools"
-	"github.com/alantheprice/ledit/pkg/configuration"
-	"github.com/alantheprice/ledit/pkg/pythonruntime"
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/pythonruntime"
 	"github.com/spf13/cobra"
 )
 

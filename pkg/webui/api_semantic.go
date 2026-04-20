@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	lspsemantic "github.com/alantheprice/ledit/pkg/lsp/semantic"
+	lspsemantic "github.com/sprout-foundry/sprout/pkg/lsp/semantic"
 )
 
 // semanticRequest is the JSON body for POST /api/semantic.

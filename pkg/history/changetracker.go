@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/filesystem"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 // RevisionGroup represents a group of changes that belong to the same revision

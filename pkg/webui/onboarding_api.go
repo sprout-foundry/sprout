@@ -12,10 +12,10 @@ import (
 	"sort"
 	"strings"
 
-	agentprovs "github.com/alantheprice/ledit/pkg/agent_providers"
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/configuration"
-	"github.com/alantheprice/ledit/pkg/providercatalog"
+	agentprovs "github.com/sprout-foundry/sprout/pkg/agent_providers"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/providercatalog"
 )
 
 type onboardingProvider struct {

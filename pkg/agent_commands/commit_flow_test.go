@@ -3,7 +3,7 @@ package commands
 import (
 	"testing"
 
-	"github.com/alantheprice/ledit/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/agent"
 )
 
 func TestCommitFlow_NewCommitFlow(t *testing.T) {

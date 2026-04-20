@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/agent"
-	"github.com/alantheprice/ledit/pkg/credentials"
-	"github.com/alantheprice/ledit/pkg/mcp"
+	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/credentials"
+	"github.com/sprout-foundry/sprout/pkg/mcp"
 )
 
 // MCPCommand implements the /mcp slash command

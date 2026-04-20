@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/credentials"
-	"github.com/alantheprice/ledit/pkg/utils"
+	"github.com/sprout-foundry/sprout/pkg/credentials"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // DetectedSecret describes a single secret found in tool output.

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/types"
+	"github.com/sprout-foundry/sprout/pkg/types"
 )
 
 // removeDuplicates removes duplicate entries from a string slice

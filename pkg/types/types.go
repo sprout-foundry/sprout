@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
 // ImageData represents an image in a message
@@ -23,7 +23,7 @@ type Message struct {
 }
 
 // Tool and ToolCall types moved to pkg/agent_api for consolidation
-// Import from there: github.com/alantheprice/ledit/pkg/agent_api
+// Import from there: github.com/sprout-foundry/sprout/pkg/agent_api
 
 // Choice represents a response choice
 type Choice struct {

@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/alantheprice/ledit/pkg/history"
+	"github.com/sprout-foundry/sprout/pkg/history"
 )
 
 // TestChangeTrackingE2E tests the end-to-end change tracking and rollback workflow

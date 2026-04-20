@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/agent"
 )
 
 // =============================================================================

@@ -805,7 +805,6 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
           fontFamily: 'inherit',
           overflow: 'auto',
           minHeight: '0',
-          height: '100%',
         },
         '.cm-cursor': {
           borderLeftColor: themePack.mode === 'dark' ? 'var(--cm-cursor, #f8f8f2)' : 'var(--cm-cursor, #526fff)',

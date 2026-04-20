@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/mcp"
+	"github.com/sprout-foundry/sprout/pkg/mcp"
 )
 
 func TestRedactConfig_NilConfig(t *testing.T) {

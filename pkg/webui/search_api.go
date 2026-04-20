@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/events"
-	"github.com/alantheprice/ledit/pkg/filediscovery"
+	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/filediscovery"
 	ignore "github.com/sabhiram/go-gitignore"
 )
 

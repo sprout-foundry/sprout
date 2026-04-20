@@ -3,7 +3,7 @@ package commands
 import (
 	"errors"
 
-	gitops "github.com/alantheprice/ledit/pkg/git"
+	gitops "github.com/sprout-foundry/sprout/pkg/git"
 )
 
 // Commit status constants

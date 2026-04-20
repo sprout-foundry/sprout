@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/webcontent"
+	"github.com/sprout-foundry/sprout/pkg/webcontent"
 )
 
 func handleBrowseURL(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {

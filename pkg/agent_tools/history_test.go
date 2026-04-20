@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/alantheprice/ledit/pkg/filesystem"
-	"github.com/alantheprice/ledit/pkg/history"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
+	"github.com/sprout-foundry/sprout/pkg/history"
 )
 
 func withTempWorkspace(t *testing.T) func() {

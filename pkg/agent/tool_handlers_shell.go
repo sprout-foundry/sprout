@@ -8,11 +8,11 @@ import (
 	"os/exec"
 	"strings"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	tools "github.com/alantheprice/ledit/pkg/agent_tools"
-	"github.com/alantheprice/ledit/pkg/factory"
-	"github.com/alantheprice/ledit/pkg/git"
-	"github.com/alantheprice/ledit/pkg/security"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/factory"
+	"github.com/sprout-foundry/sprout/pkg/git"
+	"github.com/sprout-foundry/sprout/pkg/security"
 )
 
 // configManagerInterface defines the interface for accessing config

@@ -3,8 +3,8 @@ package tools
 import (
 	"fmt"
 
-	"github.com/alantheprice/ledit/pkg/configuration"
-	"github.com/alantheprice/ledit/pkg/webcontent"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/webcontent"
 )
 
 // FetchURL fetches content from a specific URL using the webcontent fetcher.

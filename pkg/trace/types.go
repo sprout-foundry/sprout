@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
 // RunMetadata represents metadata for a single ledit invocation/run

@@ -5,9 +5,9 @@ import (
 	"log"
 	"os"
 
-	"github.com/alantheprice/ledit/pkg/configuration"
-	"github.com/alantheprice/ledit/pkg/trace"
-	"github.com/alantheprice/ledit/pkg/utils"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/trace"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 	"github.com/spf13/cobra"
 )
 

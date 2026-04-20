@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-`ledit` is an AI-powered code editing and assistance tool that leverages Large Language Models (LLMs) to understand workspaces, generate code, and manage development tasks. It functions as a development partner that can implement features, provide intelligent context, and integrate with development tools.
+`sprout` is an AI-powered code editing and assistance tool that leverages Large Language Models (LLMs) to understand workspaces, generate code, and manage development tasks. It functions as a development partner that can implement features, provide intelligent context, and integrate with development tools.
 
 ## CRITICAL: Git Operations Policy
 
@@ -114,24 +114,24 @@ Before making changes, evaluate code against these metrics:
 ### Command Architecture
 
 Main CLI commands:
-- **`ledit agent`**: Interactive AI-powered code editing and assistance
-- **`ledit code`**: Direct code generation and modification
-- **`ledit question`**: Q&A about the workspace and codebase
+- **`sprout agent`**: Interactive AI-powered code editing and assistance
+- **`sprout code`**: Direct code generation and modification
+- **`sprout question`**: Q&A about the workspace and codebase
 
 ### Change Tracking System
 
 The system provides comprehensive change tracking:
 - **Revision Tracking**: Every edit generates a revision ID
-- **Change Recording**: All file modifications tracked in `.ledit/changelog.json`
+- **Change Recording**: All file modifications tracked in `.sprout/changelog.json`
 - **Rollback Support**: Complete rollback capability for any changes
 
 ## Configuration
 
 The system uses layered configuration:
 
-- Global: `~/.ledit/config.json`
-- Project: `.ledit/config.json`
-- API Keys: `~/.ledit/api_keys.json`
+- Global: `~/.sprout/config.json`
+- Project: `.sprout/config.json`
+- API Keys: `~/.sprout/api_keys.json`
 
 Key configuration aspects:
 
@@ -141,9 +141,9 @@ Key configuration aspects:
 
 ## Key Workspace Files
 
-- `.ledit/workspace.json` - Workspace analysis and file summaries
-- `.ledit/changelog.json` - Change history for rollback functionality
-- `.ledit/runlogs/*.jsonl` - Per-run logs for debugging and telemetry
+- `.sprout/workspace.json` - Workspace analysis and file summaries
+- `.sprout/changelog.json` - Change history for rollback functionality
+- `.sprout/runlogs/*.jsonl` - Per-run logs for debugging and telemetry
 
 ## Development Notes
 
@@ -159,7 +159,7 @@ Key configuration aspects:
 
 ## Zsh Command Detection
 
-By default (when using zsh), ledit detects zsh commands before sending them to the AI. This can be disabled by setting `enable_zsh_command_detection: false` in the config. Commands are auto-executed by default, which can be changed with `auto_execute_detected_commands: false`.
+By default (when using zsh), sprout detects zsh commands before sending them to the AI. This can be disabled by setting `enable_zsh_command_detection: false` in the config. Commands are auto-executed by default, which can be changed with `auto_execute_detected_commands: false`.
 
 **Implementation:**
 - `pkg/zsh/command.go`: Core zsh command detection logic

@@ -414,9 +414,9 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         // Backend connected — tear down WASM shell if active
         const term = xtermRef.current;
         if (wasmActiveRef.current && term) {
-          debugLog('[TerminalPane] Backend reconnected — deactivating WASM shell');
-          term.writeln('\r\n\x1b[32m→ Connected to backend\x1b[0m');
-          term.writeln('  WASM browser shell deactivated. Using remote PTY.\r\n');
+          debugLog('[TerminalPane] Backend connected — switching to remote PTY');
+          term.writeln('\r\n\x1b[32m→ Connected to workspace\x1b[0m');
+          term.writeln('  Switching to remote terminal.\r\n');
           wasmLineRef.current = '';
           wasmCursorRef.current = 0;
         }
@@ -425,7 +425,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         return;
       }
 
-      // Backend not connected — activate WASM shell
+      // No backend connection — WASM shell is the default terminal
       if (wasmActiveRef.current || wasmLoading || wasmInitializedRef.current) {
         return; // already active or loading
       }
@@ -472,7 +472,6 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         term.writeln('\x1b[33m╚══════════════════════════════════════════╝\x1b[0m');
         term.writeln('');
         term.writeln('Type \x1b[1mhelp\x1b[0m for available commands.');
-        term.writeln('This shell runs \x1b[1mentirely in your browser\x1b[0m — no backend needed.');
         term.writeln('');
 
         // Reset state
@@ -920,7 +919,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         {!paneConnected && !wasmActive && !wasmLoading && (
           <div className="terminal-status-inline">
             <TriangleAlert size={14} className="inline-block mr-1 align-text-bottom" />
-            Backend not connected. Start with: <code>./sprout agent --web-port 54421</code>
+            Loading terminal...
           </div>
         )}
         {wasmLoading && (
@@ -938,7 +937,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         {wasmActive && (
           <div className="terminal-status-inline" style={{ color: '#7ddf97' }}>
             <Terminal size={14} className="inline-block mr-1 align-text-bottom" />
-            Browser shell active · Go→WASM · IndexedDB persistence
+            Browser shell · Files persist in IndexedDB
           </div>
         )}
         <ContextMenu

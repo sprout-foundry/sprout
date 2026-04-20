@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	tools "github.com/alantheprice/ledit/pkg/agent_tools"
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 )
 
 // Tool handler implementations for todo and build validation operations

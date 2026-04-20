@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/configuration"
-	"github.com/alantheprice/ledit/pkg/credentials"
-	"github.com/alantheprice/ledit/pkg/mcp"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/credentials"
+	"github.com/sprout-foundry/sprout/pkg/mcp"
 	"github.com/spf13/cobra"
 )
 

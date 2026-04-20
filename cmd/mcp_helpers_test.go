@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/alantheprice/ledit/pkg/mcp"
+	"github.com/sprout-foundry/sprout/pkg/mcp"
 	"github.com/spf13/cobra"
 )
 

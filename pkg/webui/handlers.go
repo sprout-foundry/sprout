@@ -69,12 +69,12 @@ const uiBuildRequiredHTML = `<!doctype html>
        <code>ledit</code> is installed with <code>go install</code> from a source
        tree where <code>pkg/webui/static/</code> is gitignored.</p>
     <p>Build and embed the UI, then rebuild the binary:</p>
-    <pre>git clone https://github.com/alantheprice/ledit
+    <pre>git clone https://github.com/sprout-foundry/sprout
 cd ledit
 make build-all    # builds React UI + Go binary
 go install .</pre>
     <p>Or download a pre-built release from
-       <a href="https://github.com/alantheprice/ledit/releases">GitHub Releases</a>.</p>
+       <a href="https://github.com/sprout-foundry/sprout/releases">GitHub Releases</a>.</p>
     <p>The <code>/health</code> and <code>/api/*</code> endpoints are available
        and working normally.</p>
   </div>

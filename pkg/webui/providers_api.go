@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	agentpkg "github.com/alantheprice/ledit/pkg/agent"
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/configuration"
-	"github.com/alantheprice/ledit/pkg/events"
-	"github.com/alantheprice/ledit/pkg/providercatalog"
+	agentpkg "github.com/sprout-foundry/sprout/pkg/agent"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/providercatalog"
 )
 
 type providerDescriptor struct {

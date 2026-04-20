@@ -3,7 +3,7 @@
 package configuration
 
 import (
-	"github.com/alantheprice/ledit/pkg/credentials"
+	"github.com/sprout-foundry/sprout/pkg/credentials"
 )
 
 func init() {

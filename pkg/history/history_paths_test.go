@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // Reset globals to defaults before any test runs (helps with parallel test safety)

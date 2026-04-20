@@ -1,4 +1,7 @@
 # Binaries
+sprout
+sprout-*
+sprout-main
 ledit
 ledit-*
 ledit-main
@@ -45,6 +48,7 @@ htmlcov/
 Thumbs.db
 
 # Project-specific directories
+.sprout/
 .ledit/
 testing/
 test_home/

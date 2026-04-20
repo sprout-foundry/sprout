@@ -10,7 +10,7 @@ import (
 	"net/http/cookiejar"
 	"sync"
 
-	"github.com/alantheprice/ledit/pkg/utils"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // MCPHTTPClient represents an HTTP-based MCP client for remote servers

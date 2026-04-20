@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/configuration"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // redirectStdinToPipe replaces os.Stdin with the read end of a new pipe.

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/alantheprice/ledit/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 func TestRootAssetHandlersServeEmbeddedFiles(t *testing.T) {

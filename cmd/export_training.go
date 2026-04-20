@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/training"
+	"github.com/sprout-foundry/sprout/pkg/training"
 	"github.com/spf13/cobra"
 )
 

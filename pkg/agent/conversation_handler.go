@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/events"
-	"github.com/alantheprice/ledit/pkg/trace"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/trace"
 )
 
 // ConversationHandler manages the high-level conversation flow

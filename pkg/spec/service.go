@@ -3,8 +3,8 @@ package spec
 import (
 	"fmt"
 
-	"github.com/alantheprice/ledit/pkg/configuration"
-	"github.com/alantheprice/ledit/pkg/utils"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // SpecReviewService integrates spec extraction and validation

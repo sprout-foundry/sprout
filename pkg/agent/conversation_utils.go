@@ -3,7 +3,7 @@ package agent
 import (
 	"strings"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
 // containsFrontendKeywords checks if the query contains frontend-related keywords

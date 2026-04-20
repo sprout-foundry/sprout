@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/agent"
 )
 
 // handleAPISessions handles GET /api/sessions - lists all saved sessions with metadata

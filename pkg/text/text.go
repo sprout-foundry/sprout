@@ -3,7 +3,7 @@ package text
 import (
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // GetSummary returns a summary, exports, and references for the given content.

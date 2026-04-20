@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/fsnotify/fsnotify"
 )
 

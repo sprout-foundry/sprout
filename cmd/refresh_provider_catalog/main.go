@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/providercatalog"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/providercatalog"
 )
 
 func main() {

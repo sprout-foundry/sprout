@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/alantheprice/ledit/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // OutputMode determines how output is routed

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"unicode"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
 // isBlankIteration checks if an iteration is considered blank (no meaningful content or tool calls)

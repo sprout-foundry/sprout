@@ -5,8 +5,8 @@ import (
 	"os"
 	"strings"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	providers "github.com/alantheprice/ledit/pkg/agent_providers"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
 )
 
 // MapProviderStringToClientType converts a provider string to ClientType, including

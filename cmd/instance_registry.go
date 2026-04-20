@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/agent"
 )
 
 const (

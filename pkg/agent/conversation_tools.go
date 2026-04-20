@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
 // sendMessage handles the API communication with retry logic

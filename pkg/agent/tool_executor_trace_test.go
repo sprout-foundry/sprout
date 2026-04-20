@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/trace"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/trace"
 )
 
 // MockTraceSession is a mock implementation for testing

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/utils"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // ---------------------------------------------------------------------------

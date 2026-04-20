@@ -9,8 +9,8 @@ import (
 	"reflect"
 	"sync"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/mcp"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/mcp"
 )
 
 // Manager provides a unified interface for configuration management

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/alantheprice/ledit/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/agent"
 )
 
 // Command represents a slash command

@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/configuration"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // newTestAgent creates a minimal agent for unit tests using the test client path.

@@ -5,8 +5,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/agent"
-	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // SubagentPersonasCommand implements the /subagent-personas command (list all personas)

@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	tools "github.com/alantheprice/ledit/pkg/agent_tools"
-	"github.com/alantheprice/ledit/pkg/security"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/security"
 )
 
 // executeSequential executes tools one by one

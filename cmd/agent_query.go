@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/agent"
-	agent_commands "github.com/alantheprice/ledit/pkg/agent_commands"
-	"github.com/alantheprice/ledit/pkg/console"
-	"github.com/alantheprice/ledit/pkg/events"
-	"github.com/alantheprice/ledit/pkg/zsh"
+	"github.com/sprout-foundry/sprout/pkg/agent"
+	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
+	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/zsh"
 )
 
 // tryZshCommandExecution attempts to detect and execute zsh commands directly

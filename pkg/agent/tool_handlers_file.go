@@ -10,11 +10,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	tools "github.com/alantheprice/ledit/pkg/agent_tools"
-	"github.com/alantheprice/ledit/pkg/console"
-	"github.com/alantheprice/ledit/pkg/events"
-	"github.com/alantheprice/ledit/pkg/filesystem"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 // Tool handler implementations for file operations

@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	providers "github.com/alantheprice/ledit/pkg/agent_providers"
-	"github.com/alantheprice/ledit/pkg/credentials"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
+	"github.com/sprout-foundry/sprout/pkg/credentials"
 )
 
 const ProvidersDirName = "providers"

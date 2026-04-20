@@ -16,11 +16,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/agent"
-	"github.com/alantheprice/ledit/pkg/configuration"
-	"github.com/alantheprice/ledit/pkg/events"
-	"github.com/alantheprice/ledit/pkg/providercatalog"
-	"github.com/alantheprice/ledit/pkg/security"
+	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/providercatalog"
+	"github.com/sprout-foundry/sprout/pkg/security"
 	"github.com/gorilla/websocket"
 )
 

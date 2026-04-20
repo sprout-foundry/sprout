@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	tools "github.com/alantheprice/ledit/pkg/agent_tools"
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 )
 
 const resourceCaptureMaxSizeBytes = 50 * 1024 * 1024

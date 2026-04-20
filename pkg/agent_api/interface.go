@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/credentials"
+	"github.com/sprout-foundry/sprout/pkg/credentials"
 )
 
 // ClientInterface defines the common interface for all API clients

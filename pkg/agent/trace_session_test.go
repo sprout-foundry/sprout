@@ -3,7 +3,7 @@ package agent
 import (
 	"testing"
 
-	"github.com/alantheprice/ledit/pkg/trace"
+	"github.com/sprout-foundry/sprout/pkg/trace"
 )
 
 // TestSetTraceSession verifies that the trace session is properly set on the agent

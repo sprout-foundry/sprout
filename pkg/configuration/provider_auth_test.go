@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/alantheprice/ledit/pkg/credentials"
+	"github.com/sprout-foundry/sprout/pkg/credentials"
 )
 
 func TestCredentialsResolveProvider_CustomProviderUsesStoredKey(t *testing.T) {

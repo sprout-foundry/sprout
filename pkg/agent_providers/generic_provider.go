@@ -12,10 +12,10 @@ import (
 	"strconv"
 	"strings"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/credentials"
-	"github.com/alantheprice/ledit/pkg/logging"
-	modelsettings "github.com/alantheprice/ledit/pkg/model_settings"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/credentials"
+	"github.com/sprout-foundry/sprout/pkg/logging"
+	modelsettings "github.com/sprout-foundry/sprout/pkg/model_settings"
 )
 
 // GenericProvider implements ClientInterface using JSON configuration

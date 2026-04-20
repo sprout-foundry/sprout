@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/alantheprice/ledit/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/agent"
 )
 
 func captureExitCommandOutput(t *testing.T, fn func()) string {

@@ -6,6 +6,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // makeTree creates a temporary directory tree for testing and returns the root.
@@ -1428,5 +1431,712 @@ func TestDiscoverFilesRobust_NilOptionsWithRootPath(t *testing.T) {
 	// Should not crash and should return a valid result
 	if result.Method == "" {
 		t.Error("expected Method to be set")
+	}
+}
+
+// --- NewFileDiscovery tests ---
+
+func TestNewFileDiscovery(t *testing.T) {
+	// Test creating a new FileDiscovery instance with a test-specific logger
+	cfg := &configuration.Config{}
+	// Create a test logger instead of using singleton
+	logger := &utils.Logger{}
+
+	fd := NewFileDiscovery(cfg, logger)
+
+	if fd == nil {
+		t.Fatal("expected non-nil FileDiscovery")
+	}
+	if fd.config != cfg {
+		t.Error("expected config to be set")
+	}
+	if fd.logger != logger {
+		t.Error("expected logger to be set")
+	}
+}
+
+func TestNewFileDiscovery_NilLogger(t *testing.T) {
+	// Test creating with nil logger (should still work)
+	cfg := &configuration.Config{}
+
+	fd := NewFileDiscovery(cfg, nil)
+
+	if fd == nil {
+		t.Fatal("expected non-nil FileDiscovery")
+	}
+	if fd.config != cfg {
+		t.Error("expected config to be set")
+	}
+	if fd.logger != nil {
+		t.Error("expected logger to be nil")
+	}
+}
+
+// --- deduplicateAndFilter tests ---
+
+func TestDeduplicateAndFilter_RemovesDuplicates(t *testing.T) {
+	root := makeTree(t, map[string]string{
+		"main.go": "package main",
+		"util.go": "package util",
+	})
+
+	fd := newFD()
+	wsInfo := &WorkspaceInfo{RootDir: root}
+
+	files := []string{
+		filepath.Join(root, "main.go"),
+		filepath.Join(root, "main.go"), // Duplicate
+		filepath.Join(root, "util.go"),
+		filepath.Join(root, "util.go"), // Duplicate
+		filepath.Join(root, "main.go"), // Triple duplicate
+	}
+
+	result := fd.deduplicateAndFilter(files, wsInfo)
+
+	// Should have only 2 unique files
+	if len(result) != 2 {
+		t.Errorf("expected 2 unique files, got %d: %v", len(result), result)
+	}
+
+	// Verify no duplicates in result
+	seen := make(map[string]bool)
+	for _, f := range result {
+		if seen[f] {
+			t.Errorf("found duplicate in result: %s", f)
+		}
+		seen[f] = true
+	}
+}
+
+func TestDeduplicateAndFilter_ConvertsToAbsolutePath(t *testing.T) {
+	root := makeTree(t, map[string]string{
+		"main.go": "package main",
+	})
+
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(old); err != nil {
+			t.Logf("warning: failed to restore working directory: %v", err)
+		}
+	})
+
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+
+	fd := newFD()
+	wsInfo := &WorkspaceInfo{RootDir: root}
+
+	files := []string{
+		"main.go",     // Relative path
+		"./main.go",   // Relative with dot
+	}
+
+	result := fd.deduplicateAndFilter(files, wsInfo)
+
+	// Should have converted to absolute path
+	if len(result) != 1 {
+		t.Errorf("expected 1 file, got %d", len(result))
+	}
+
+	// Result should be absolute path
+	if !filepath.IsAbs(result[0]) {
+		t.Errorf("expected absolute path, got: %s", result[0])
+	}
+}
+
+func TestDeduplicateAndFilter_ExcludesFilesOutsideWorkspace(t *testing.T) {
+	root := makeTree(t, map[string]string{
+		"main.go": "package main",
+	})
+
+	fd := newFD()
+	wsInfo := &WorkspaceInfo{RootDir: root}
+
+	otherDir := t.TempDir()
+	files := []string{
+		filepath.Join(root, "main.go"),
+		filepath.Join(otherDir, "outside.go"), // Outside workspace
+	}
+
+	result := fd.deduplicateAndFilter(files, wsInfo)
+
+	// Should only include files inside workspace
+	if len(result) != 1 {
+		t.Errorf("expected 1 file (only inside workspace), got %d", len(result))
+	}
+
+	for _, f := range result {
+		if !strings.HasPrefix(f, root) {
+			t.Errorf("file outside workspace included: %s", f)
+		}
+	}
+}
+
+func TestDeduplicateAndFilter_SkipsNonExistentFiles(t *testing.T) {
+	root := makeTree(t, map[string]string{
+		"main.go": "package main",
+	})
+
+	fd := newFD()
+	wsInfo := &WorkspaceInfo{RootDir: root}
+
+	files := []string{
+		filepath.Join(root, "main.go"),
+		filepath.Join(root, "nonexistent.go"), // Doesn't exist
+		filepath.Join(root, "also_missing.go"), // Doesn't exist
+	}
+
+	result := fd.deduplicateAndFilter(files, wsInfo)
+
+	// Should only include existing files
+	if len(result) != 1 {
+		t.Errorf("expected 1 existing file, got %d", len(result))
+	}
+
+	if !strings.HasSuffix(result[0], "main.go") {
+		t.Errorf("expected main.go, got %s", result[0])
+	}
+}
+
+func TestDeduplicateAndFilter_SkipsDirectories(t *testing.T) {
+	root := makeTree(t, map[string]string{
+		"main.go":    "package main",
+		"src/util.go": "package src",
+	})
+
+	fd := newFD()
+	wsInfo := &WorkspaceInfo{RootDir: root}
+
+	absSrc := filepath.Join(root, "src")
+
+	files := []string{
+		filepath.Join(root, "main.go"),
+		absSrc, // Directory, not file
+	}
+
+	result := fd.deduplicateAndFilter(files, wsInfo)
+
+	// Should skip directories
+	if len(result) != 1 {
+		t.Errorf("expected 1 file (directory skipped), got %d", len(result))
+	}
+
+	for _, f := range result {
+		info, err := os.Stat(f)
+		if err != nil {
+			t.Fatalf("failed to stat %s: %v", f, err)
+		}
+		if info.IsDir() {
+			t.Errorf("directory included in result: %s", f)
+		}
+	}
+}
+
+func TestDeduplicateAndFilter_EmptyInput(t *testing.T) {
+	root := t.TempDir()
+	fd := newFD()
+	wsInfo := &WorkspaceInfo{RootDir: root}
+
+	files := []string{}
+	result := fd.deduplicateAndFilter(files, wsInfo)
+
+	if len(result) != 0 {
+		t.Errorf("expected empty result for empty input, got %d files", len(result))
+	}
+}
+
+// --- findWithDirectoryWalk tests ---
+
+func TestFindWithDirectoryWalk_BasicMatching(t *testing.T) {
+	root := makeTree(t, map[string]string{
+		"main_handler.go": "package main",
+		"util.go":         "package util",
+		"handler.go":      "package handler",
+		"README.md":       "hello",
+	})
+
+	fd := newFD()
+	wsInfo := &WorkspaceInfo{
+		RootDir:     root,
+		ProjectType: "go",
+	}
+
+	// Search for "handler" - should match files containing "handler"
+	result := fd.findWithDirectoryWalk("handler", wsInfo)
+
+	if len(result) == 0 {
+		t.Fatal("expected at least one file matching 'handler'")
+	}
+
+	// Verify matched files contain "handler"
+	for _, f := range result {
+		if !strings.Contains(strings.ToLower(filepath.Base(f)), "handler") {
+			t.Errorf("file should contain 'handler': %s", f)
+		}
+	}
+}
+
+func TestFindWithDirectoryWalk_CaseInsensitive(t *testing.T) {
+	root := makeTree(t, map[string]string{
+		"MainHandler.go": "package main",
+		"UTIL.go":        "package util",
+	})
+
+	fd := newFD()
+	wsInfo := &WorkspaceInfo{
+		RootDir:     root,
+		ProjectType: "go",
+	}
+
+	// Search lowercase, should match uppercase
+	result := fd.findWithDirectoryWalk("main", wsInfo)
+
+	if len(result) == 0 {
+		t.Fatal("expected to find MainHandler.go with lowercase 'main' query")
+	}
+
+	// Should match MainHandler.go
+	foundMain := false
+	for _, f := range result {
+		if strings.Contains(strings.ToLower(filepath.Base(f)), "main") {
+			foundMain = true
+			break
+		}
+	}
+	if !foundMain {
+		t.Error("expected to find a file containing 'main'")
+	}
+}
+
+func TestFindWithDirectoryWalk_SkipsHiddenFiles(t *testing.T) {
+	root := makeTree(t, map[string]string{
+		"main.go":     "package main",
+		".hidden.go":  "package hidden",
+		".git/config": "[core]",
+	})
+
+	fd := newFD()
+	wsInfo := &WorkspaceInfo{
+		RootDir:     root,
+		ProjectType: "go",
+	}
+
+	// Search for ".go" - should NOT match hidden files
+	result := fd.findWithDirectoryWalk(".go", wsInfo)
+
+	for _, f := range result {
+		base := filepath.Base(f)
+		if strings.HasPrefix(base, ".") {
+			t.Errorf("hidden file should be excluded: %s", f)
+		}
+	}
+}
+
+func TestFindWithDirectoryWalk_SkipsCommonExcludedDirs(t *testing.T) {
+	root := makeTree(t, map[string]string{
+		"main.go":             "package main",
+		"node_modules/lib.js": "exports = {}",
+		"vendor/utils.go":      "package vendor",
+		"target/class.class":   "compiled",
+		"build/app.js":        "bundle",
+		"dist/bundle.js":      "minified",
+		"src/handler.go":      "package src",
+	})
+
+	fd := newFD()
+	wsInfo := &WorkspaceInfo{
+		RootDir:     root,
+		ProjectType: "go",
+	}
+
+	// Search for something generic - should skip excluded dirs
+	result := fd.findWithDirectoryWalk("", wsInfo)
+
+	for _, f := range result {
+		if strings.Contains(f, "node_modules") ||
+			strings.Contains(f, "vendor") ||
+			strings.Contains(f, "target") ||
+			strings.Contains(f, "build") ||
+			strings.Contains(f, "dist") {
+			t.Errorf("excluded dir should be skipped: %s", f)
+		}
+	}
+}
+
+func TestFindWithDirectoryWalk_NoMatch(t *testing.T) {
+	root := makeTree(t, map[string]string{
+		"main.go": "package main",
+		"util.go": "package util",
+	})
+
+	fd := newFD()
+	wsInfo := &WorkspaceInfo{
+		RootDir:     root,
+		ProjectType: "go",
+	}
+
+	// Search for something that doesn't exist
+	result := fd.findWithDirectoryWalk("nonexistent_xyz", wsInfo)
+
+	if len(result) != 0 {
+		t.Errorf("expected no matches, got %d files", len(result))
+	}
+}
+
+func TestFindWithDirectoryWalk_EmptyQuery(t *testing.T) {
+	root := makeTree(t, map[string]string{
+		"main.go": "package main",
+		"util.go": "package util",
+	})
+
+	fd := newFD()
+	wsInfo := &WorkspaceInfo{
+		RootDir:     root,
+		ProjectType: "go",
+	}
+
+	// Empty query should return all files (except hidden/excluded)
+	result := fd.findWithDirectoryWalk("", wsInfo)
+
+	if len(result) == 0 {
+		t.Fatal("expected some files with empty query")
+	}
+}
+
+// --- findFilesUsingShellCommandsFallback tests ---
+
+func TestFindFilesUsingShellCommandsFallback_Basic(t *testing.T) {
+	root := makeTree(t, map[string]string{
+		"main.go":    "package main",
+		"util.go":    "package util",
+		"handler.go": "package handler",
+	})
+
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(old); err != nil {
+			t.Logf("warning: failed to restore working directory: %v", err)
+		}
+	})
+
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+
+	fd := newFD()
+	options := &DiscoveryOptions{
+		RootPath: root,
+	}
+
+	result := fd.findFilesUsingShellCommandsFallback("main", options)
+
+	if len(result) == 0 {
+		t.Fatal("expected at least one file")
+	}
+
+	// Should contain "main" in the filename
+	foundMain := false
+	for _, f := range result {
+		if strings.Contains(strings.ToLower(f), "main") {
+			foundMain = true
+			break
+		}
+	}
+	if !foundMain {
+		t.Error("expected to find a file containing 'main'")
+	}
+}
+
+func TestFindFilesUsingShellCommandsFallback_CaseInsensitive(t *testing.T) {
+	root := makeTree(t, map[string]string{
+		"MainHandler.go": "package main",
+		"UTIL.go":        "package util",
+	})
+
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(old); err != nil {
+			t.Logf("warning: failed to restore working directory: %v", err)
+		}
+	})
+
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+
+	fd := newFD()
+	options := &DiscoveryOptions{
+		RootPath: root,
+	}
+
+	// Lowercase query should match uppercase filename
+	result := fd.findFilesUsingShellCommandsFallback("mainhandler", options)
+
+	if len(result) == 0 {
+		t.Fatal("expected to find MainHandler.go")
+	}
+
+	found := false
+	for _, f := range result {
+		if strings.Contains(strings.ToLower(f), "mainhandler") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected case-insensitive matching")
+	}
+}
+
+func TestFindFilesUsingShellCommandsFallback_NoMatch(t *testing.T) {
+	root := makeTree(t, map[string]string{
+		"main.go": "package main",
+	})
+
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(old); err != nil {
+			t.Logf("warning: failed to restore working directory: %v", err)
+		}
+	})
+
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+
+	fd := newFD()
+	options := &DiscoveryOptions{
+		RootPath: root,
+	}
+
+	// Query that doesn't match
+	result := fd.findFilesUsingShellCommandsFallback("nonexistent_xyz_123", options)
+
+	if len(result) != 0 {
+		t.Errorf("expected no matches, got %d files", len(result))
+	}
+}
+
+func TestFindFilesUsingShellCommandsFallback_EmptyQuery(t *testing.T) {
+	root := makeTree(t, map[string]string{
+		"main.go": "package main",
+		"util.go": "package util",
+	})
+
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(old); err != nil {
+			t.Logf("warning: failed to restore working directory: %v", err)
+		}
+	})
+
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+
+	fd := newFD()
+	options := &DiscoveryOptions{
+		RootPath: root,
+	}
+
+	// Empty query should match all files
+	result := fd.findFilesUsingShellCommandsFallback("", options)
+
+	if len(result) == 0 {
+		t.Fatal("expected files with empty query")
+	}
+
+	// Should contain at least our 2 files
+	if len(result) < 2 {
+		t.Errorf("expected at least 2 files, got %d", len(result))
+	}
+}
+
+// --- rerankWithSymbols tests ---
+
+func TestRerankWithSymbols_NoSymbolIndex(t *testing.T) {
+	fd := newFD()
+
+	files := []string{
+		"util.go",
+		"main.go",
+		"handler.go",
+	}
+
+	// When there's no symbol index, files are sorted alphabetically (all scores are 0)
+	result := fd.rerankWithSymbols(files, "main function")
+
+	if len(result) != 3 {
+		t.Errorf("expected 3 files, got %d", len(result))
+	}
+
+	// Without symbol index, files should be sorted alphabetically
+	expected := []string{"handler.go", "main.go", "util.go"}
+	for i, exp := range expected {
+		if result[i] != exp {
+			t.Errorf("index %d: expected %q, got %q", i, exp, result[i])
+		}
+	}
+}
+
+func TestRerankWithSymbols_EmptyFiles(t *testing.T) {
+	fd := newFD()
+
+	files := []string{}
+	result := fd.rerankWithSymbols(files, "test")
+
+	if len(result) != 0 {
+		t.Errorf("expected empty result for empty input, got %d files", len(result))
+	}
+}
+
+func TestRerankWithSymbols_Sorting(t *testing.T) {
+	fd := newFD()
+
+	// Create files in non-alphabetical order to test sorting
+	files := []string{
+		"z_end.go",
+		"a_start.go",
+		"m_middle.go",
+	}
+
+	// Without symbol index, should sort alphabetically (all scores are 0)
+	result := fd.rerankWithSymbols(files, "test")
+
+	if len(result) != 3 {
+		t.Errorf("expected 3 files, got %d", len(result))
+	}
+
+	// Should be sorted alphabetically
+	expected := []string{"a_start.go", "m_middle.go", "z_end.go"}
+	for i, exp := range expected {
+		if result[i] != exp {
+			t.Errorf("index %d: expected %q, got %q", i, exp, result[i])
+		}
+	}
+}
+
+// --- WorkspaceInfo integration tests ---
+
+func TestWorkspaceInfo_BuildsCorrectly(t *testing.T) {
+	root := makeTree(t, map[string]string{
+		"main.go":         "package main",
+		"src/handler.go":  "package src",
+		"README.md":       "hello",
+		"cmd/server.go":   "package cmd",
+		"cmd/client.go":   "package cmd",
+	})
+
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(old); err != nil {
+			t.Logf("warning: failed to restore working directory: %v", err)
+		}
+	})
+
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+
+	fd := newFD()
+	wsInfo := fd.BuildWorkspaceStructure()
+
+	if wsInfo.Error != nil {
+		t.Fatalf("unexpected error: %v", wsInfo.Error)
+	}
+
+	// Check RootDir
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		t.Fatalf("failed to get abs root: %v", err)
+	}
+	if wsInfo.RootDir != absRoot {
+		t.Errorf("expected RootDir %q, got %q", absRoot, wsInfo.RootDir)
+	}
+
+	// Check AllFiles count
+	if len(wsInfo.AllFiles) != 5 {
+		t.Errorf("expected 5 files, got %d", len(wsInfo.AllFiles))
+	}
+
+	// Check FilesByDir
+	if len(wsInfo.FilesByDir) == 0 {
+		t.Error("expected FilesByDir to be populated")
+	}
+
+	// Check ProjectType detection
+	if wsInfo.ProjectType == "" {
+		t.Error("expected ProjectType to be detected")
+	}
+}
+
+// --- deduplicateAndFilter edge case tests ---
+
+func TestDeduplicateAndFilter_HandlesSymlinks(t *testing.T) {
+	root := makeTree(t, map[string]string{
+		"main.go": "package main",
+	})
+
+	// Create a symlink (if supported on the platform)
+	originalFile := filepath.Join(root, "main.go")
+	symlinkFile := filepath.Join(root, "main_link.go")
+	if err := os.Symlink(originalFile, symlinkFile); err != nil {
+		t.Skip("symlink creation not supported or failed")
+	}
+
+	fd := newFD()
+	wsInfo := &WorkspaceInfo{RootDir: root}
+
+	files := []string{
+		originalFile,
+		symlinkFile,
+	}
+
+	result := fd.deduplicateAndFilter(files, wsInfo)
+
+	// Symlinks pointing to same file should be deduplicated by path
+	// (different paths, so both might be included - this is expected behavior)
+	if len(result) == 0 {
+		t.Error("expected at least one file")
+	}
+}
+
+func TestDeduplicateAndFilter_ReadOnlyFiles(t *testing.T) {
+	root := t.TempDir()
+
+	// Create a read-only file
+	readOnlyFile := filepath.Join(root, "readonly.go")
+	if err := os.WriteFile(readOnlyFile, []byte("package main"), 0o444); err != nil {
+		t.Fatalf("failed to create read-only file: %v", err)
+	}
+
+	fd := newFD()
+	wsInfo := &WorkspaceInfo{RootDir: root}
+
+	files := []string{readOnlyFile}
+	result := fd.deduplicateAndFilter(files, wsInfo)
+
+	// Should include read-only files (they exist and are readable for stat)
+	if len(result) != 1 {
+		t.Errorf("expected read-only file to be included, got %d files", len(result))
 	}
 }

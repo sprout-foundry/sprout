@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
@@ -14,14 +15,38 @@ type DefaultMCPManager struct {
 	servers map[string]MCPServer
 	mutex   sync.RWMutex
 	logger  *utils.Logger
+	// serverFactory is used for testing to inject mock servers
+	serverFactory func(config MCPServerConfig, logger *utils.Logger) MCPServer
 }
 
 // NewMCPManager creates a new MCP manager
 func NewMCPManager(logger *utils.Logger) *DefaultMCPManager {
-	return &DefaultMCPManager{
+	m := &DefaultMCPManager{
 		servers: make(map[string]MCPServer),
 		logger:  logger,
 	}
+	// Set default server factory
+	m.serverFactory = m.defaultServerFactory
+			return m
+}
+
+// addServerUnlocked is a helper method that adds a server assuming the caller already holds the lock
+// This is used internally to avoid lock/unlock cycles
+func (m *DefaultMCPManager) addServerUnlocked(config MCPServerConfig) error {
+	if _, exists := m.servers[config.Name]; exists {
+		return fmt.Errorf("MCP server %s already exists", config.Name)
+	}
+	m.servers[config.Name] = m.serverFactory(config, m.logger)
+	return nil
+}
+
+// defaultServerFactory creates a server instance based on config type
+func (m *DefaultMCPManager) defaultServerFactory(config MCPServerConfig, logger *utils.Logger) MCPServer {
+	if config.Type == "http" {
+		return NewMCPHTTPClient(config, logger)
+	}
+	// Default to stdio client for backwards compatibility
+	return NewMCPClient(config, logger)
 }
 
 // AddServer adds a new MCP server
@@ -33,15 +58,8 @@ func (m *DefaultMCPManager) AddServer(config MCPServerConfig) error {
 		return fmt.Errorf("MCP server %s already exists", config.Name)
 	}
 
-	var client MCPServer
-	if config.Type == "http" {
-		client = NewMCPHTTPClient(config, m.logger)
-	} else {
-		// Default to stdio client for backwards compatibility
-		client = NewMCPClient(config, m.logger)
-	}
-
-	m.servers[config.Name] = client
+	// Use helper method that assumes caller holds lock
+	m.addServerUnlocked(config)
 
 	if m.logger != nil {
 		serverType := config.Type
@@ -273,14 +291,14 @@ func (m *DefaultMCPManager) AutoDiscoverGitHubServer(ctx context.Context) error 
 			Command:   "npx",
 			Args:      []string{"-y", "@modelcontextprotocol/server-github"},
 			AutoStart: true,
-			Timeout:   30,
+			Timeout:   30 * time.Second, // Fixed: was 30 (nanoseconds), now 30 seconds
 		},
 		{
 			Name:      "github",
 			Command:   "uvx",
 			Args:      []string{"mcp-server-github"},
 			AutoStart: true,
-			Timeout:   30,
+			Timeout:   30 * time.Second, // Fixed: was 30 (nanoseconds), now 30 seconds
 		},
 	}
 
@@ -289,8 +307,11 @@ func (m *DefaultMCPManager) AutoDiscoverGitHubServer(ctx context.Context) error 
 			continue // Try next config
 		}
 
+		// Get server reference atomically after AddServer returns
+		server, exists := m.GetServer(config.Name)
+
 		// Try to start the server
-		if server, exists := m.GetServer(config.Name); exists {
+		if exists {
 			if err := server.Start(ctx); err != nil {
 				// Remove failed server and try next config
 				m.RemoveServer(config.Name)

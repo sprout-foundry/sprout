@@ -1,6 +1,6 @@
 {
-  "name": "ledit - Agentic Code Editor",
-  "short_name": "ledit",
+  "name": "Sprout - Agentic Editor",
+  "short_name": "Sprout",
   "description": "Agentic code editing and light IDE tool",
   "start_url": ".",
   "display": "standalone",

@@ -28,17 +28,17 @@ func main() {
 
 	// Register the SproutWasm global object with all exposed functions.
 	sprout := js.ValueOf(map[string]interface{}{
-		"init":            js.FuncOf(initFunc),
-		"executeCommand":  js.FuncOf(executeCommandFunc),
-		"autoComplete":    js.FuncOf(autoCompleteFunc),
-		"getCwd":          js.FuncOf(getCwdFunc),
-		"changeDir":       js.FuncOf(changeDirFunc),
-		"writeFile":       js.FuncOf(writeFileFunc),
-		"readFile":        js.FuncOf(readFileFunc),
-		"listDir":         js.FuncOf(listDirFunc),
-		"deleteFile":      js.FuncOf(deleteFileFunc),
-		"getHistory":      js.FuncOf(getHistoryFunc),
-		"getEnv":          js.FuncOf(getEnvFunc),
+		"init":           js.FuncOf(initFunc),
+		"executeCommand": js.FuncOf(executeCommandFunc),
+		"autoComplete":   js.FuncOf(autoCompleteFunc),
+		"getCwd":         js.FuncOf(getCwdFunc),
+		"changeDir":      js.FuncOf(changeDirFunc),
+		"writeFile":      js.FuncOf(writeFileFunc),
+		"readFile":       js.FuncOf(readFileFunc),
+		"listDir":        js.FuncOf(listDirFunc),
+		"deleteFile":     js.FuncOf(deleteFileFunc),
+		"getHistory":     js.FuncOf(getHistoryFunc),
+		"getEnv":         js.FuncOf(getEnvFunc),
 	})
 
 	js.Global().Set("SproutWasm", sprout)

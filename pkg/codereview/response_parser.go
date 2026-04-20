@@ -6,9 +6,9 @@ import (
 	"encoding/json"
 	"strings"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/types"
-	"github.com/alantheprice/ledit/pkg/utils"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/types"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // parseStructuredReviewResponse parses a structured JSON review response from the agent

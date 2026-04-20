@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	providers "github.com/alantheprice/ledit/pkg/agent_providers"
+	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
 )
 
 type ProviderAuthMetadata struct {

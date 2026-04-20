@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // TestNewAgent tests agent creation

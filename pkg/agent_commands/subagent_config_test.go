@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/alantheprice/ledit/pkg/agent"
-	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // createTestAgentWithTempConfig creates an agent that uses an isolated temp

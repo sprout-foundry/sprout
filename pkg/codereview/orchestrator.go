@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/history"
-	"github.com/alantheprice/ledit/pkg/types"
+	"github.com/sprout-foundry/sprout/pkg/history"
+	"github.com/sprout-foundry/sprout/pkg/types"
 )
 
 // PerformReview performs a code review based on the provided context and options

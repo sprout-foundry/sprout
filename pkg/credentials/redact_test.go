@@ -728,3 +728,26 @@ func TestRedactJSONBytes(t *testing.T) {
 	})
 }
 
+func TestRedactLogLine_DataURLsNotRedacted(t *testing.T) {
+	t.Run("data_url_with_jwt_like_base64", func(t *testing.T) {
+		input := "data:image/svg+xml;base64,eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0.abc"
+		result := RedactLogLine(input)
+		assert.NotContains(t, result, "[REDACTED]", "data URL should not be redacted as credential")
+		assert.Contains(t, result, "data:[stripped]", "data URL payload should be stripped")
+	})
+
+	t.Run("real_credential_and_data_url_both_present", func(t *testing.T) {
+		input := "sk-abc123def456ghi789jkl012mno345pqr678 data:image/png;base64,iVBORw0KGgo"
+		result := RedactLogLine(input)
+		assert.Contains(t, result, "[REDACTED]", "real credential should be redacted")
+		assert.Contains(t, result, "data:[stripped]", "data URL payload should be stripped")
+		assert.NotContains(t, result, "sk-abc123def456ghi789jkl012mno345pqr678", "credential should be redacted")
+	})
+
+	t.Run("plain_line_unchanged", func(t *testing.T) {
+		input := "normal log line with nothing sensitive"
+		result := RedactLogLine(input)
+		assert.Equal(t, input, result, "plain line should be unchanged")
+	})
+}
+

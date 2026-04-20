@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/alantheprice/ledit/pkg/configuration"
-	"github.com/alantheprice/ledit/pkg/types"
-	"github.com/alantheprice/ledit/pkg/utils"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/types"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // TestCumulativeFileStateTracking tests that the system maintains file state across review iterations

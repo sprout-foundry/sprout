@@ -12,7 +12,7 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/alantheprice/ledit/pkg/filesystem"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 // ExecuteShellCommand executes a shell command with safety checks

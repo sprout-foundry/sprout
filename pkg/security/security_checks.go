@@ -5,11 +5,22 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/configuration"
-	"github.com/alantheprice/ledit/pkg/events"
-	"github.com/alantheprice/ledit/pkg/prompts"
-	"github.com/alantheprice/ledit/pkg/utils"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/prompts"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
+
+// dataURLPattern matches data URLs (e.g., data:image/png;base64,iVBOR...).
+// These are inline embedded resources and should never be treated as secrets.
+var dataURLPattern = regexp.MustCompile(`data:[^;,\s]+;base64,[A-Za-z0-9+/=]+`)
+
+// stripDataURLs removes the base64 payload from data URLs, replacing them with
+// a placeholder. This prevents the embedded data from triggering false positive
+// matches on credential patterns (e.g., JWT-like base64 strings).
+func stripDataURLs(content string) string {
+	return dataURLPattern.ReplaceAllString(content, "data:[stripped]")
+}
 
 // Define regex patterns for security concerns with reduced false positives
 var (
@@ -103,6 +114,9 @@ func DetectSecurityConcerns(content string) ([]string, map[string]string) {
 
 // DetectSecurityConcernsWithContext analyzes content with additional file context to reduce false positives
 func DetectSecurityConcernsWithContext(content, filePath string) ([]string, map[string]string) {
+	// Strip data URL payloads to prevent base64 image/font data from triggering
+	// credential patterns (e.g., JWT regex matching base64 content starting with "eyJ").
+	scannedContent := stripDataURLs(content)
 	var concerns []string
 	snippets := make(map[string]string) // Stores the first matched snippet for each concern type
 
@@ -111,7 +125,7 @@ func DetectSecurityConcernsWithContext(content, filePath string) ([]string, map[
 
 	// Helper function to add concern with context awareness
 	addConcern := func(concernType string, regex *regexp.Regexp) {
-		if match := regex.FindString(content); match != "" {
+		if match := regex.FindString(scannedContent); match != "" {
 			// For test files, only flag patterns that look like real credentials
 			if isTest {
 				matchLower := strings.ToLower(match)

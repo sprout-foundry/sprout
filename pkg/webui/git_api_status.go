@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/events"
-	"github.com/alantheprice/ledit/pkg/factory"
-	gitops "github.com/alantheprice/ledit/pkg/git"
+	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/factory"
+	gitops "github.com/sprout-foundry/sprout/pkg/git"
 )
 
 const maxDiffBytes = 200000

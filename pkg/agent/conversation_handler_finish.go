@@ -3,7 +3,7 @@ package agent
 import (
 	"strings"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
 // handleFinishReason processes the model's finish reason and returns whether to stop

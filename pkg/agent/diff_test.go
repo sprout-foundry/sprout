@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/alantheprice/ledit/pkg/pythonruntime"
+	"github.com/sprout-foundry/sprout/pkg/pythonruntime"
 )
 
 // TestShowColoredDiff tests the main diff functionality

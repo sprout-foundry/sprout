@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/credentials"
+	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/spf13/cobra"
 )
 

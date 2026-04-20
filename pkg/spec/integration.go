@@ -3,10 +3,10 @@ package spec
 import (
 	"fmt"
 
-	"github.com/alantheprice/ledit/pkg/codereview"
-	"github.com/alantheprice/ledit/pkg/configuration"
-	"github.com/alantheprice/ledit/pkg/types"
-	"github.com/alantheprice/ledit/pkg/utils"
+	"github.com/sprout-foundry/sprout/pkg/codereview"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/types"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // ReviewWithSpec performs standard code review AND scope validation

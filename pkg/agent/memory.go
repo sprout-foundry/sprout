@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 const memoryDirName = "memories"

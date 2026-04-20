@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/filesystem"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 // File size constants for read operations

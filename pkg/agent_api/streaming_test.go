@@ -205,6 +205,7 @@ func TestStreamingResponseBuilder(t *testing.T) {
 				CompletionTokens    int     `json:"completion_tokens"`
 				TotalTokens         int     `json:"total_tokens"`
 				EstimatedCost       float64 `json:"estimated_cost"`
+				Cost                float64 `json:"cost,omitempty"`
 				PromptTokensDetails struct {
 					CachedTokens     int  `json:"cached_tokens"`
 					CacheWriteTokens *int `json:"cache_write_tokens"`
@@ -214,6 +215,7 @@ func TestStreamingResponseBuilder(t *testing.T) {
 				CompletionTokens: 2,
 				TotalTokens:      12,
 				EstimatedCost:    0.001,
+				Cost:             0.0,
 			},
 		},
 	}

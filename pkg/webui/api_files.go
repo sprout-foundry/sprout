@@ -24,10 +24,54 @@ func (ws *ReactWebServer) gatherStats(r *http.Request) map[string]interface{} {
 	return ws.gatherStatsForClientID(ws.resolveClientID(r))
 }
 
+// populateAgentStats populates a stats map with fields from the given agent instance.
+func populateAgentStats(stats map[string]interface{}, agentInst *agent.Agent) {
+	stats["provider"] = agentInst.GetProvider()
+	stats["model"] = agentInst.GetModel()
+	stats["persona"] = agentInst.GetActivePersona()
+	stats["session_id"] = agentInst.GetSessionID()
+	stats["total_tokens"] = agentInst.GetTotalTokens()
+	stats["prompt_tokens"] = agentInst.GetPromptTokens()
+	stats["completion_tokens"] = agentInst.GetCompletionTokens()
+	stats["cached_tokens"] = agentInst.GetCachedTokens()
+	stats["cache_efficiency"] = float64(0)
+	if totalTokens := agentInst.GetTotalTokens(); totalTokens > 0 {
+		stats["cache_efficiency"] = float64(agentInst.GetCachedTokens()) / float64(totalTokens) * 100
+	}
+	stats["cached_cost_savings"] = agentInst.GetCachedCostSavings()
+	stats["current_context_tokens"] = agentInst.GetCurrentContextTokens()
+	stats["max_context_tokens"] = agentInst.GetMaxContextTokens()
+	stats["context_usage_percent"] = float64(0)
+	if maxTokens := agentInst.GetMaxContextTokens(); maxTokens > 0 {
+		stats["context_usage_percent"] = float64(agentInst.GetCurrentContextTokens()) / float64(maxTokens) * 100
+	}
+	stats["context_warning_issued"] = agentInst.GetContextWarningIssued()
+	stats["total_cost"] = agentInst.GetTotalCost()
+	stats["last_tps"] = agentInst.GetLastTPS()
+	stats["current_iteration"] = agentInst.GetCurrentIteration()
+	if agentInst.GetMaxIterations() == 0 {
+		stats["max_iterations"] = "unlimited"
+	} else {
+		stats["max_iterations"] = agentInst.GetMaxIterations()
+	}
+	stats["streaming_enabled"] = agentInst.IsStreamingEnabled()
+	stats["debug_mode"] = agentInst.IsDebugMode()
+}
+
 func (ws *ReactWebServer) gatherStatsForClientID(clientID string) map[string]interface{} {
 	ws.mutex.RLock()
 	stats := ws.gatherStatsForClientIDLocked(clientID)
 	ws.mutex.RUnlock()
+
+	// If the locked function didn't find an agent (clientCtx.Agent was nil),
+	// try to get or create one outside the lock to avoid deadlock —
+	// getClientAgent acquires ws.mutex itself.
+	if stats["provider"] == "" && clientID != "" {
+		if agentInst, err := ws.getClientAgent(clientID); err == nil && agentInst != nil {
+			populateAgentStats(stats, agentInst)
+		}
+	}
+
 	return stats
 }
 

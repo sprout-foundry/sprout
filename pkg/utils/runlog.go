@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/credentials"
+	"github.com/sprout-foundry/sprout/pkg/credentials"
 )
 
 // RunLogger writes structured JSONL events for a single agent run.

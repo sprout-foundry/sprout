@@ -9,7 +9,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/alantheprice/ledit/pkg/validation"
+	"github.com/sprout-foundry/sprout/pkg/validation"
 )
 
 // diagnosticsRequest is the JSON body for POST /api/diagnostics.

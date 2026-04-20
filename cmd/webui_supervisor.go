@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/webui"
+	"github.com/sprout-foundry/sprout/pkg/webui"
 )
 
 const (

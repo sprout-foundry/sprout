@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/credentials"
+	"github.com/sprout-foundry/sprout/pkg/credentials"
 )
 
 // commonSecretPrefixes are env var prefixes that are typically NOT secrets

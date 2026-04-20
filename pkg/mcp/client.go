@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/utils"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // MCPClient implements the MCPServer interface for subprocess-based MCP servers

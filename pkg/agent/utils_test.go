@@ -4,8 +4,8 @@ import (
 	"os"
 	"testing"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/mcp"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/mcp"
 )
 
 // TestDebugLog tests the debug logging functionality

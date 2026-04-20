@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	gitops "github.com/alantheprice/ledit/pkg/git"
+	gitops "github.com/sprout-foundry/sprout/pkg/git"
 	"github.com/stretchr/testify/assert"
 )
 

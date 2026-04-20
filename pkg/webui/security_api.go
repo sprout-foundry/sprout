@@ -5,8 +5,8 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/alantheprice/ledit/pkg/events"
-	"github.com/alantheprice/ledit/pkg/security"
+	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/security"
 )
 
 // handleAPIConfirm handles user responses to security prompts (both approval requests and file security prompts)

@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // HotkeyEntry represents a single hotkey binding

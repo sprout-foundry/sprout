@@ -7,8 +7,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/security"
-	"github.com/alantheprice/ledit/pkg/utils"
+	"github.com/sprout-foundry/sprout/pkg/security"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // CommitOptions contains options for commit operations

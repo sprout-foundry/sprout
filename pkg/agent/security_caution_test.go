@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tools "github.com/alantheprice/ledit/pkg/agent_tools"
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 )
 
 // TestSecurityCautionClassification verifies that CAUTION-level tool calls are

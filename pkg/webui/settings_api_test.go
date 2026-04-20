@@ -3,7 +3,7 @@ package webui
 import (
 	"testing"
 
-	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 func TestSanitizedConfigIncludesSystemPromptText(t *testing.T) {

@@ -3,8 +3,8 @@ package commands
 import (
 	"fmt"
 
-	"github.com/alantheprice/ledit/pkg/agent"
-	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // SubagentConfigCommand implements the /subagent-provider and /subagent-model commands

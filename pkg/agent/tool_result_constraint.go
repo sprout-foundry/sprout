@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	tools "github.com/alantheprice/ledit/pkg/agent_tools"
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 )
 
 func constrainToolResultForModel(toolName string, args map[string]interface{}, result string) string {

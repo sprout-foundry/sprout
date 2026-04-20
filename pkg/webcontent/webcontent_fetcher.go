@@ -13,8 +13,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/alantheprice/ledit/pkg/configuration" // Updated to new config
-	"github.com/alantheprice/ledit/pkg/utils"
+	"github.com/sprout-foundry/sprout/pkg/configuration" // Updated to new config
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 const (

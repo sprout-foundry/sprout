@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/agent_providers"
-	"github.com/alantheprice/ledit/pkg/mcp"
-	"github.com/alantheprice/ledit/pkg/personas"
+	"github.com/sprout-foundry/sprout/pkg/agent_providers"
+	"github.com/sprout-foundry/sprout/pkg/mcp"
+	"github.com/sprout-foundry/sprout/pkg/personas"
 )
 
 var personaDefaultsWarningOnce sync.Once
@@ -136,10 +136,10 @@ type APITimeoutConfig struct {
 }
 
 // MCPConfig moved to pkg/mcp package for consolidation
-// Import from there: github.com/alantheprice/ledit/pkg/mcp
+// Import from there: github.com/sprout-foundry/sprout/pkg/mcp
 
 // MCPServerConfig moved to pkg/mcp package for consolidation
-// Import from there: github.com/alantheprice/ledit/pkg/mcp
+// Import from there: github.com/sprout-foundry/sprout/pkg/mcp
 
 type APIKeys map[string]string
 

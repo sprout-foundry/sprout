@@ -3,7 +3,7 @@ package agent
 import (
 	"time"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
 // TokenUsage captures key token metrics for each turn

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/alantheprice/ledit/pkg/utils"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // DefaultMCPManager implements the MCPManager interface

@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/filesystem"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 func EditFile(ctx context.Context, filePath, oldString, newString string) (string, error) {

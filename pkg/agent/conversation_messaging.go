@@ -8,7 +8,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
 // prepareMessages prepares and optimizes the message list for API submission.

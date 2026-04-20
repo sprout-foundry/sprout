@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	tools "github.com/alantheprice/ledit/pkg/agent_tools"
-	"github.com/alantheprice/ledit/pkg/configuration"
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 func TestCaptureWebText_WritesFileAndLog(t *testing.T) {

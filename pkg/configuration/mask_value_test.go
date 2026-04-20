@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/alantheprice/ledit/pkg/credentials"
+	"github.com/sprout-foundry/sprout/pkg/credentials"
 )
 
 func TestResolvedString_FullCredential_MasksValue(t *testing.T) {

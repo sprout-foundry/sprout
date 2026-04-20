@@ -5,8 +5,8 @@ import (
 	"os"
 	"strings"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/factory"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/factory"
 )
 
 func main() {

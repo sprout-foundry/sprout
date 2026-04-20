@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 func TestSecurityApprovalManager_BasicApproval(t *testing.T) {

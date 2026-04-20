@@ -6,8 +6,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/alantheprice/ledit/pkg/mcp"
-	"github.com/alantheprice/ledit/pkg/webcontent"
+	"github.com/sprout-foundry/sprout/pkg/mcp"
+	"github.com/sprout-foundry/sprout/pkg/webcontent"
 )
 
 // githubRouterMCPManager is a test MCPManager that supports GetServer
@@ -180,7 +180,7 @@ func TestTryRouteGitHubToMCP_IssueURL(t *testing.T) {
 	})
 	a := testAgent(mgr)
 
-	content, handled, err := a.tryRouteGitHubToMCP(context.Background(), "https://github.com/alantheprice/ledit/issues/42")
+	content, handled, err := a.tryRouteGitHubToMCP(context.Background(), "https://github.com/sprout-foundry/sprout/issues/42")
 	if !handled {
 		t.Fatal("expected handled=true for issue URL")
 	}
@@ -216,7 +216,7 @@ func TestTryRouteGitHubToMCP_PullRequestURL(t *testing.T) {
 	})
 	a := testAgent(mgr)
 
-	content, handled, err := a.tryRouteGitHubToMCP(context.Background(), "https://github.com/alantheprice/ledit/pull/7")
+	content, handled, err := a.tryRouteGitHubToMCP(context.Background(), "https://github.com/sprout-foundry/sprout/pull/7")
 	if !handled {
 		t.Fatal("expected handled=true for pull request URL")
 	}
@@ -242,7 +242,7 @@ func TestTryRouteGitHubToMCP_RepoURL(t *testing.T) {
 	})
 	a := testAgent(mgr)
 
-	content, handled, err := a.tryRouteGitHubToMCP(context.Background(), "https://github.com/alantheprice/ledit")
+	content, handled, err := a.tryRouteGitHubToMCP(context.Background(), "https://github.com/sprout-foundry/sprout")
 	if !handled {
 		t.Fatal("expected handled=true for repo URL")
 	}
@@ -267,7 +267,7 @@ func TestTryRouteGitHubToMCP_FileURL_NotHandled(t *testing.T) {
 	mgr := newGitHubRouterMCPManager().withGitHubServer(true)
 	a := testAgent(mgr)
 
-	_, handled, _ := a.tryRouteGitHubToMCP(context.Background(), "https://github.com/alantheprice/ledit/blob/main/README.md")
+	_, handled, _ := a.tryRouteGitHubToMCP(context.Background(), "https://github.com/sprout-foundry/sprout/blob/main/README.md")
 	if handled {
 		t.Error("expected handled=false for file (blob) URL")
 	}
@@ -280,7 +280,7 @@ func TestTryRouteGitHubToMCP_DirectoryURL_NotHandled(t *testing.T) {
 	mgr := newGitHubRouterMCPManager().withGitHubServer(true)
 	a := testAgent(mgr)
 
-	_, handled, _ := a.tryRouteGitHubToMCP(context.Background(), "https://github.com/alantheprice/ledit/tree/main/pkg")
+	_, handled, _ := a.tryRouteGitHubToMCP(context.Background(), "https://github.com/sprout-foundry/sprout/tree/main/pkg")
 	if handled {
 		t.Error("expected handled=false for directory (tree) URL")
 	}

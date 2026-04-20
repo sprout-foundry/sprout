@@ -9,8 +9,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/alantheprice/ledit/pkg/configuration"
-	"github.com/alantheprice/ledit/pkg/pythonruntime"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/pythonruntime"
 )
 
 const (

@@ -3,6 +3,8 @@ package mcp
 import (
 	"bufio"
 	"context"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -213,25 +215,6 @@ func TestParseGitHubRemoteURL_InvalidURLs(t *testing.T) {
 // ---------------------------------------------------------------------------
 // Test: DetectGitHubRepo()
 // ---------------------------------------------------------------------------
-
-func TestDetectGitHubRepo_ValidGitHubRepo(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping git-dependent test in short mode")
-	}
-
-	// This test requires a valid git repo with a GitHub remote
-	// We'll use a temporary directory and initialize a repo
-	t.Skip("Requires actual git setup - skipping in automated tests")
-}
-
-func TestDetectGitHubRepo_NonGitDirectory(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping git-dependent test in short mode")
-	}
-
-	// Test with a non-git directory
-	t.Skip("Requires actual filesystem access - skipping in automated tests")
-}
 
 // ---------------------------------------------------------------------------
 // Test: IsGitHubMCPConfigured()
@@ -586,16 +569,6 @@ func TestGitHubConstants(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Test: SaveGitHubMCPServer() - Note: Requires actual config file handling
-// ---------------------------------------------------------------------------
-
-func TestSaveGitHubMCPServer_RequiresRealConfigFile(t *testing.T) {
-	// This test requires actual file system access and config management
-	// Skipping in automated tests
-	t.Skip("Requires actual config file management - skipping")
-}
-
-// ---------------------------------------------------------------------------
 // Test: isCommandAvailable() - Note: Requires actual system
 // ---------------------------------------------------------------------------
 
@@ -743,4 +716,537 @@ func TestGitHubSetup_FullWorkflow_NPXChoice(t *testing.T) {
 	assert.Equal(t, 3, config.MaxRestarts)
 	assert.NotNil(t, config.Env)
 	assert.Equal(t, "ghp_1234567890abcdefghijklmnopqrstuvwxyz", config.Env["GITHUB_PERSONAL_ACCESS_TOKEN"])
+}
+
+// ---------------------------------------------------------------------------
+// Test: DetectGitHubRepo()
+// ---------------------------------------------------------------------------
+
+func TestDetectGitHubRepo_SSHRemote(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git setup test in short mode")
+	}
+
+	tempDir := t.TempDir()
+
+	// Initialize a git repo with SSH remote
+	runGitCommand(t, tempDir, "init")
+	runGitCommand(t, tempDir, "remote", "add", "origin", "git@github.com:owner/repo.git")
+
+	// Add a commit so the repo is valid
+	runGitCommand(t, tempDir, "config", "user.email", "test@example.com")
+	runGitCommand(t, tempDir, "config", "user.name", "Test User")
+	createTestFile(t, tempDir, "test.txt", "content")
+	runGitCommand(t, tempDir, "add", "test.txt")
+	runGitCommand(t, tempDir, "commit", "-m", "initial commit")
+
+	result := DetectGitHubRepo(tempDir)
+
+	require.NotNil(t, result)
+	assert.Equal(t, "owner", result.Owner)
+	assert.Equal(t, "repo", result.Repo)
+	assert.Equal(t, "https://github.com/owner/repo", result.URL)
+}
+
+func TestDetectGitHubRepo_HTTPSRemote(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git setup test in short mode")
+	}
+
+	tempDir := t.TempDir()
+
+	// Initialize a git repo with HTTPS remote
+	runGitCommand(t, tempDir, "init")
+	runGitCommand(t, tempDir, "remote", "add", "origin", "https://github.com/test-owner/test-repo.git")
+
+	// Add a commit so the repo is valid
+	runGitCommand(t, tempDir, "config", "user.email", "test@example.com")
+	runGitCommand(t, tempDir, "config", "user.name", "Test User")
+	createTestFile(t, tempDir, "test.txt", "content")
+	runGitCommand(t, tempDir, "add", "test.txt")
+	runGitCommand(t, tempDir, "commit", "-m", "initial commit")
+
+	result := DetectGitHubRepo(tempDir)
+
+	require.NotNil(t, result)
+	assert.Equal(t, "test-owner", result.Owner)
+	assert.Equal(t, "test-repo", result.Repo)
+	assert.Equal(t, "https://github.com/test-owner/test-repo", result.URL)
+}
+
+func TestDetectGitHubRepo_HTTPRemote(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git setup test in short mode")
+	}
+
+	tempDir := t.TempDir()
+
+	// Initialize a git repo with HTTP (not HTTPS) remote
+	runGitCommand(t, tempDir, "init")
+	runGitCommand(t, tempDir, "remote", "add", "origin", "http://github.com/http-owner/http-repo.git")
+
+	// Add a commit so the repo is valid
+	runGitCommand(t, tempDir, "config", "user.email", "test@example.com")
+	runGitCommand(t, tempDir, "config", "user.name", "Test User")
+	createTestFile(t, tempDir, "test.txt", "content")
+	runGitCommand(t, tempDir, "add", "test.txt")
+	runGitCommand(t, tempDir, "commit", "-m", "initial commit")
+
+	result := DetectGitHubRepo(tempDir)
+
+	require.NotNil(t, result)
+	assert.Equal(t, "http-owner", result.Owner)
+	assert.Equal(t, "http-repo", result.Repo)
+	assert.Equal(t, "https://github.com/http-owner/http-repo", result.URL)
+}
+
+func TestDetectGitHubRepo_WithGitSuffix(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git setup test in short mode")
+	}
+
+	tempDir := t.TempDir()
+
+	// Initialize a git repo with .git suffix
+	runGitCommand(t, tempDir, "init")
+	runGitCommand(t, tempDir, "remote", "add", "origin", "git@github.com:suffix/suffix-repo.git")
+
+	// Add a commit so the repo is valid
+	runGitCommand(t, tempDir, "config", "user.email", "test@example.com")
+	runGitCommand(t, tempDir, "config", "user.name", "Test User")
+	createTestFile(t, tempDir, "test.txt", "content")
+	runGitCommand(t, tempDir, "add", "test.txt")
+	runGitCommand(t, tempDir, "commit", "-m", "initial commit")
+
+	result := DetectGitHubRepo(tempDir)
+
+	require.NotNil(t, result)
+	assert.Equal(t, "suffix", result.Owner)
+	assert.Equal(t, "suffix-repo", result.Repo)
+	assert.Equal(t, "https://github.com/suffix/suffix-repo", result.URL)
+}
+
+func TestDetectGitHubRepo_WithTrailingSlash(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git setup test in short mode")
+	}
+
+	tempDir := t.TempDir()
+
+	// Initialize a git repo with trailing slash
+	runGitCommand(t, tempDir, "init")
+	runGitCommand(t, tempDir, "remote", "add", "origin", "https://github.com/trailing/trailing-repo/")
+
+	// Add a commit so the repo is valid
+	runGitCommand(t, tempDir, "config", "user.email", "test@example.com")
+	runGitCommand(t, tempDir, "config", "user.name", "Test User")
+	createTestFile(t, tempDir, "test.txt", "content")
+	runGitCommand(t, tempDir, "add", "test.txt")
+	runGitCommand(t, tempDir, "commit", "-m", "initial commit")
+
+	result := DetectGitHubRepo(tempDir)
+
+	require.NotNil(t, result)
+	assert.Equal(t, "trailing", result.Owner)
+	assert.Equal(t, "trailing-repo", result.Repo)
+	assert.Equal(t, "https://github.com/trailing/trailing-repo", result.URL)
+}
+
+func TestDetectGitHubRepo_WithGitSuffixAndTrailingSlash(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git setup test in short mode")
+	}
+
+	tempDir := t.TempDir()
+
+	// Initialize a git repo with both .git and trailing slash
+	// Note: git will store the URL exactly as provided
+	runGitCommand(t, tempDir, "init")
+	runGitCommand(t, tempDir, "remote", "add", "origin", "git@github.com:both/both-repo.git/")
+
+	// Add a commit so the repo is valid
+	runGitCommand(t, tempDir, "config", "user.email", "test@example.com")
+	runGitCommand(t, tempDir, "config", "user.name", "Test User")
+	createTestFile(t, tempDir, "test.txt", "content")
+	runGitCommand(t, tempDir, "add", "test.txt")
+	runGitCommand(t, tempDir, "commit", "-m", "initial commit")
+
+	result := DetectGitHubRepo(tempDir)
+
+	require.NotNil(t, result)
+	assert.Equal(t, "both", result.Owner)
+	// Git stores URLs as-is, so .git may or may not be in the repo name
+	// depending on git version/configuration. We just verify it was parsed.
+	assert.NotEmpty(t, result.Repo)
+	assert.Equal(t, "https://github.com/both/"+result.Repo, result.URL)
+}
+
+func TestDetectGitHubRepo_NonGitHubRemote(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git setup test in short mode")
+	}
+
+	tempDir := t.TempDir()
+
+	// Initialize a git repo with a non-GitHub remote
+	runGitCommand(t, tempDir, "init")
+	runGitCommand(t, tempDir, "remote", "add", "origin", "git@gitlab.com:owner/repo.git")
+
+	// Add a commit so the repo is valid
+	runGitCommand(t, tempDir, "config", "user.email", "test@example.com")
+	runGitCommand(t, tempDir, "config", "user.name", "Test User")
+	createTestFile(t, tempDir, "test.txt", "content")
+	runGitCommand(t, tempDir, "add", "test.txt")
+	runGitCommand(t, tempDir, "commit", "-m", "initial commit")
+
+	result := DetectGitHubRepo(tempDir)
+
+	assert.Nil(t, result)
+}
+
+func TestDetectGitHubRepo_GitLabHTTPSRemote(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git setup test in short mode")
+	}
+
+	tempDir := t.TempDir()
+
+	// Initialize a git repo with GitLab HTTPS remote
+	runGitCommand(t, tempDir, "init")
+	runGitCommand(t, tempDir, "remote", "add", "origin", "https://gitlab.com/owner/repo.git")
+
+	// Add a commit so the repo is valid
+	runGitCommand(t, tempDir, "config", "user.email", "test@example.com")
+	runGitCommand(t, tempDir, "config", "user.name", "Test User")
+	createTestFile(t, tempDir, "test.txt", "content")
+	runGitCommand(t, tempDir, "add", "test.txt")
+	runGitCommand(t, tempDir, "commit", "-m", "initial commit")
+
+	result := DetectGitHubRepo(tempDir)
+
+	assert.Nil(t, result)
+}
+
+func TestDetectGitHubRepo_MalformedRemoteURL(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git setup test in short mode")
+	}
+
+	tempDir := t.TempDir()
+
+	// Initialize a git repo with a malformed remote URL
+	runGitCommand(t, tempDir, "init")
+	runGitCommand(t, tempDir, "remote", "add", "origin", "not-a-valid-url")
+
+	// Add a commit so the repo is valid
+	runGitCommand(t, tempDir, "config", "user.email", "test@example.com")
+	runGitCommand(t, tempDir, "config", "user.name", "Test User")
+	createTestFile(t, tempDir, "test.txt", "content")
+	runGitCommand(t, tempDir, "add", "test.txt")
+	runGitCommand(t, tempDir, "commit", "-m", "initial commit")
+
+	result := DetectGitHubRepo(tempDir)
+
+	assert.Nil(t, result)
+}
+
+func TestDetectGitHubRepo_NoRemote(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git setup test in short mode")
+	}
+
+	tempDir := t.TempDir()
+
+	// Initialize a git repo without any remote
+	runGitCommand(t, tempDir, "init")
+
+	// Add a commit so the repo is valid
+	runGitCommand(t, tempDir, "config", "user.email", "test@example.com")
+	runGitCommand(t, tempDir, "config", "user.name", "Test User")
+	createTestFile(t, tempDir, "test.txt", "content")
+	runGitCommand(t, tempDir, "add", "test.txt")
+	runGitCommand(t, tempDir, "commit", "-m", "initial commit")
+
+	result := DetectGitHubRepo(tempDir)
+
+	assert.Nil(t, result)
+}
+
+func TestDetectGitHubRepo_OrgWithHyphens(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git setup test in short mode")
+	}
+
+	tempDir := t.TempDir()
+
+	// Initialize a git repo with hyphenated org/repo names
+	runGitCommand(t, tempDir, "init")
+	runGitCommand(t, tempDir, "remote", "add", "origin", "git@github.com:my-org/my-repo.git")
+
+	// Add a commit so the repo is valid
+	runGitCommand(t, tempDir, "config", "user.email", "test@example.com")
+	runGitCommand(t, tempDir, "config", "user.name", "Test User")
+	createTestFile(t, tempDir, "test.txt", "content")
+	runGitCommand(t, tempDir, "add", "test.txt")
+	runGitCommand(t, tempDir, "commit", "-m", "initial commit")
+
+	result := DetectGitHubRepo(tempDir)
+
+	require.NotNil(t, result)
+	assert.Equal(t, "my-org", result.Owner)
+	assert.Equal(t, "my-repo", result.Repo)
+	assert.Equal(t, "https://github.com/my-org/my-repo", result.URL)
+}
+
+func TestDetectGitHubRepo_RepoWithUnderscores(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git setup test in short mode")
+	}
+
+	tempDir := t.TempDir()
+
+	// Initialize a git repo with underscored org/repo names
+	runGitCommand(t, tempDir, "init")
+	runGitCommand(t, tempDir, "remote", "add", "origin", "https://github.com/my_org/my_repo.git")
+
+	// Add a commit so the repo is valid
+	runGitCommand(t, tempDir, "config", "user.email", "test@example.com")
+	runGitCommand(t, tempDir, "config", "user.name", "Test User")
+	createTestFile(t, tempDir, "test.txt", "content")
+	runGitCommand(t, tempDir, "add", "test.txt")
+	runGitCommand(t, tempDir, "commit", "-m", "initial commit")
+
+	result := DetectGitHubRepo(tempDir)
+
+	require.NotNil(t, result)
+	assert.Equal(t, "my_org", result.Owner)
+	assert.Equal(t, "my_repo", result.Repo)
+	assert.Equal(t, "https://github.com/my_org/my_repo", result.URL)
+}
+
+// ---------------------------------------------------------------------------
+// Test: SaveGitHubMCPServer()
+// ---------------------------------------------------------------------------
+
+func TestSaveGitHubMCPServer_NewConfig(t *testing.T) {
+	// Use a temporary config directory to avoid affecting user's actual config
+	tempDir := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", tempDir)
+
+	config := &MCPServerConfig{
+		Name:      "github",
+		Type:      "http",
+		URL:       "https://api.githubcopilot.com/mcp/",
+		AutoStart: true,
+		Timeout:   30 * time.Second,
+	}
+
+	err := SaveGitHubMCPServer(config)
+	assert.NoError(t, err)
+
+	// Verify the config was saved by loading it back
+	loadedConfig, err := LoadMCPConfig()
+	require.NoError(t, err)
+
+	// Check that the github server was saved
+	server, exists := loadedConfig.Servers["github"]
+	require.True(t, exists, "GitHub server should exist in config")
+	assert.Equal(t, "github", server.Name)
+	assert.Equal(t, "http", server.Type)
+	assert.Equal(t, "https://api.githubcopilot.com/mcp/", server.URL)
+	assert.True(t, server.AutoStart)
+	assert.Equal(t, 30*time.Second, server.Timeout)
+
+	// Check that Enabled was set to true
+	assert.True(t, loadedConfig.Enabled)
+}
+
+func TestSaveGitHubMCPServer_ReplaceExistingConfig(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", tempDir)
+
+	// First, save an initial config
+	initialConfig := &MCPServerConfig{
+		Name:      "github",
+		Type:      "http",
+		URL:       "https://api.githubcopilot.com/mcp/",
+		AutoStart: true,
+		Timeout:   30 * time.Second,
+	}
+	err := SaveGitHubMCPServer(initialConfig)
+	require.NoError(t, err)
+
+	// Now replace it with a Docker-based config
+	newConfig := &MCPServerConfig{
+		Name:        "github",
+		Command:     "docker",
+		Args:        []string{"run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server"},
+		AutoStart:   true,
+		MaxRestarts: 3,
+		Timeout:     30 * time.Second,
+		Env: map[string]string{
+			"GITHUB_PERSONAL_ACCESS_TOKEN": "test-token",
+		},
+	}
+	err = SaveGitHubMCPServer(newConfig)
+	assert.NoError(t, err)
+
+	// Verify the config was replaced
+	loadedConfig, err := LoadMCPConfig()
+	require.NoError(t, err)
+
+	server, exists := loadedConfig.Servers["github"]
+	require.True(t, exists)
+	assert.Equal(t, "docker", server.Command)
+	assert.Contains(t, server.Args, "ghcr.io/github/github-mcp-server")
+	// After migration, secrets are in Credentials, not Env
+	assert.NotNil(t, server.Credentials)
+	// Check that the token was migrated to credentials (format: {{credential:mcp/github/GITHUB_PERSONAL_ACCESS_TOKEN}})
+	assert.Contains(t, server.Credentials["GITHUB_PERSONAL_ACCESS_TOKEN"], "credential:mcp/github/GITHUB_PERSONAL_ACCESS_TOKEN")
+}
+
+func TestSaveGitHubMCPServer_SetsEnabledToTrue(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", tempDir)
+
+	config := &MCPServerConfig{
+		Name:      "github",
+		Type:      "http",
+		URL:       "https://api.githubcopilot.com/mcp/",
+		AutoStart: true,
+	}
+
+	err := SaveGitHubMCPServer(config)
+	assert.NoError(t, err)
+
+	// Verify Enabled was set to true
+	loadedConfig, err := LoadMCPConfig()
+	require.NoError(t, err)
+	assert.True(t, loadedConfig.Enabled)
+}
+
+func TestSaveGitHubMCPServer_PreservesOtherServers(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", tempDir)
+
+	// First, create a config with an existing server
+	initialConfig := MCPConfig{
+		Servers: map[string]MCPServerConfig{
+			"other-server": {
+				Name:    "other-server",
+				Command: "npx",
+				Args:    []string{"-y", "@modelcontextprotocol/server-filesystem"},
+			},
+		},
+	}
+	err := SaveMCPConfig(&initialConfig)
+	require.NoError(t, err)
+
+	// Now add the GitHub server
+	githubConfig := &MCPServerConfig{
+		Name:      "github",
+		Type:      "http",
+		URL:       "https://api.githubcopilot.com/mcp/",
+		AutoStart: true,
+	}
+	err = SaveGitHubMCPServer(githubConfig)
+	assert.NoError(t, err)
+
+	// Verify both servers exist
+	loadedConfig, err := LoadMCPConfig()
+	require.NoError(t, err)
+
+	_, githubExists := loadedConfig.Servers["github"]
+	assert.True(t, githubExists)
+
+	otherServer, otherExists := loadedConfig.Servers["other-server"]
+	assert.True(t, otherExists)
+	assert.Equal(t, "other-server", otherServer.Name)
+	assert.Equal(t, "npx", otherServer.Command)
+}
+
+func TestSaveGitHubMCPServer_DockerConfigWithEnv(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", tempDir)
+
+	config := &MCPServerConfig{
+		Name:        "github",
+		Command:     "docker",
+		Args:        []string{"run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server"},
+		AutoStart:   true,
+		MaxRestarts: 3,
+		Timeout:     30 * time.Second,
+		Env: map[string]string{
+			"GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_test_token_12345",
+		},
+	}
+
+	err := SaveGitHubMCPServer(config)
+	assert.NoError(t, err)
+
+	// Verify the config was saved
+	loadedConfig, err := LoadMCPConfig()
+	require.NoError(t, err)
+
+	server := loadedConfig.Servers["github"]
+	assert.Equal(t, "docker", server.Command)
+	assert.Equal(t, 3, server.MaxRestarts)
+	// After migration, secrets are in Credentials, not Env
+	assert.NotNil(t, server.Credentials)
+	// Check that the token was migrated to credentials
+	assert.Contains(t, server.Credentials["GITHUB_PERSONAL_ACCESS_TOKEN"], "credential:mcp/github/GITHUB_PERSONAL_ACCESS_TOKEN")
+}
+
+func TestSaveGitHubMCPServer_NPXConfigWithEnv(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", tempDir)
+
+	config := &MCPServerConfig{
+		Name:        "github",
+		Command:     "npx",
+		Args:        []string{"-y", "@modelcontextprotocol/server-github"},
+		AutoStart:   true,
+		MaxRestarts: 3,
+		Timeout:     30 * time.Second,
+		Env: map[string]string{
+			"GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_npx_token_67890",
+		},
+	}
+
+	err := SaveGitHubMCPServer(config)
+	assert.NoError(t, err)
+
+	// Verify the config was saved
+	loadedConfig, err := LoadMCPConfig()
+	require.NoError(t, err)
+
+	server := loadedConfig.Servers["github"]
+	assert.Equal(t, "npx", server.Command)
+	assert.Len(t, server.Args, 2)
+	assert.Contains(t, server.Args, "@modelcontextprotocol/server-github")
+	// After migration, secrets are in Credentials, not Env
+	assert.NotNil(t, server.Credentials)
+	// Check that the token was migrated to credentials
+	assert.Contains(t, server.Credentials["GITHUB_PERSONAL_ACCESS_TOKEN"], "credential:mcp/github/GITHUB_PERSONAL_ACCESS_TOKEN")
+}
+
+// Helper functions for DetectGitHubRepo tests
+
+func runGitCommand(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git command failed: %v\nargs: %v\noutput: %s", err, args, string(output))
+	}
+}
+
+func createTestFile(t *testing.T, dir, name, content string) {
+	t.Helper()
+	path := dir + "/" + name
+	err := os.WriteFile(path, []byte(content), 0644)
+	if err != nil {
+		t.Fatalf("failed to create test file %s: %v", path, err)
+	}
 }

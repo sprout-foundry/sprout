@@ -591,7 +591,7 @@ func (fd *FileDiscovery) GetFileStats(files []string) map[string]interface{} {
 		"by_extension": make(map[string]int),
 		"by_directory": make(map[string]int),
 		"largest_file": "",
-		"max_size":     0,
+		"max_size":     int64(0),
 	}
 
 	for _, file := range files {
@@ -695,8 +695,11 @@ func (fd *FileDiscovery) matchesCriteria(file string, criteria *FileFilterCriter
 		}
 	}
 
-	// Check file size
-	if criteria.MinSize > 0 || criteria.MaxSize > 0 {
+	// Check file size and modification time in a single stat call
+	needStat := criteria.MinSize > 0 || criteria.MaxSize > 0 ||
+		!criteria.ModifiedAfter.IsZero() || !criteria.ModifiedBefore.IsZero()
+
+	if needStat {
 		if info, err := os.Stat(file); err == nil {
 			if criteria.MinSize > 0 && info.Size() < criteria.MinSize {
 				return false
@@ -704,12 +707,7 @@ func (fd *FileDiscovery) matchesCriteria(file string, criteria *FileFilterCriter
 			if criteria.MaxSize > 0 && info.Size() > criteria.MaxSize {
 				return false
 			}
-		}
-	}
 
-	// Check modification time
-	if !criteria.ModifiedAfter.IsZero() || !criteria.ModifiedBefore.IsZero() {
-		if info, err := os.Stat(file); err == nil {
 			modTime := info.ModTime()
 			if !criteria.ModifiedAfter.IsZero() && modTime.Before(criteria.ModifiedAfter) {
 				return false

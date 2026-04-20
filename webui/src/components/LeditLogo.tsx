@@ -15,49 +15,58 @@ function LeditLogo({ showWordmark = true, compact = false, className = '' }: Led
       <div className="ledit-logo-mark" aria-hidden="true">
         <svg viewBox="0 0 32 32" role="img" aria-labelledby={logoTitleId}>
           <title id={logoTitleId}>sprout logo</title>
+          {/* Background */}
+          <rect
+            className="ledit-logo-bg"
+            x="0.75"
+            y="0.75"
+            width="30.5"
+            height="30.5"
+            rx="3"
+          />
           {/* Code lines (base) */}
           <path
+            className="ledit-logo-line"
             d="M6 23H26"
             fill="none"
-            stroke="#F4FEFF"
             strokeWidth="1.25"
             strokeLinecap="round"
             opacity="0.7"
           />
           <path
+            className="ledit-logo-line"
             d="M8 25.5H24"
             fill="none"
-            stroke="#F4FEFF"
             strokeWidth="1.25"
             strokeLinecap="round"
             opacity="0.5"
           />
           <path
+            className="ledit-logo-line"
             d="M10 28H22"
             fill="none"
-            stroke="#F4FEFF"
             strokeWidth="1.25"
             strokeLinecap="round"
             opacity="0.3"
           />
           {/* Stem */}
           <path
-            d="M16 21V7"
+            className="ledit-logo-accent"
+            d="M16 19V7"
             fill="none"
-            stroke="#68E3EE"
             strokeWidth="2"
             strokeLinecap="round"
           />
           {/* Left leaf */}
           <path
-            d="M16 14C14 12 11 11 9 11.5C11 12.5 14 13.5 16 16Z"
-            fill="#68E3EE"
+            className="ledit-logo-accent-fill"
+            d="M16 15C14 13 11 12 9 12.5C9 13.5 12 14.5 16 17Z"
             opacity="0.85"
           />
           {/* Right leaf */}
           <path
-            d="M16 10C18 8 21 7 23 7.5C21 8.5 18 9.5 16 12Z"
-            fill="#68E3EE"
+            className="ledit-logo-accent-fill"
+            d="M16 11C18 9 21 8 23 8.5C21 9.5 18 10.5 16 13Z"
             opacity="0.65"
           />
         </svg>

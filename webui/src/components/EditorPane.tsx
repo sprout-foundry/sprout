@@ -420,15 +420,28 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     }
   }, [buffer, saveBuffer, apiService]); // eslint-disable-line react-hooks/exhaustive-deps -- updateDiffGutter/clearDiffGutter are module-level functions
 
+  // Ref to always read current buffer state without subscribing to identity changes.
+  // This prevents handleGoToDefinition from changing identity on every buffer
+  // update (e.g. scroll position changes), which would trigger a full
+  // CodeMirror editor destroy/recreate cycle via the init effect's deps.
+  const bufferStateRef = useRef<typeof buffer>(buffer);
+  bufferStateRef.current = buffer;
+
+  // Ref for localContent so handleGoToDefinition doesn't change identity
+  // when the user types (which would destroy/recreate the editor).
+  const localContentRef = useRef(localContent);
+  localContentRef.current = localContent;
+
   const handleGoToDefinition = useCallback(async () => {
-    if (!viewRef.current || !buffer || buffer.kind !== 'file' || !buffer.file || buffer.file.path.startsWith('__workspace/')) {
+    const buf = bufferStateRef.current;
+    if (!viewRef.current || !buf || buf.kind !== 'file' || !buf.file || buf.file.path.startsWith('__workspace/')) {
       return;
     }
 
     const languageId = resolveLanguageId(
-      buffer.languageOverride,
-      buffer.file.ext?.replace(/^\./, ''),
-      buffer.file.name,
+      buf.languageOverride,
+      buf.file.ext?.replace(/^\./, ''),
+      buf.file.name,
     ).languageId ?? '';
     if (!isSemanticLanguage(languageId)) {
       notificationBus.notify('info', 'Go to Definition', 'Semantic definition is currently available for TypeScript/JavaScript and Go files.');
@@ -441,7 +454,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     const column = selection.head - lineInfo.from + 1;
 
     try {
-      const result = await apiService.getSemanticDefinition(buffer.file.path, localContent, languageId, line, column);
+      const result = await apiService.getSemanticDefinition(buf.file.path, localContentRef.current, languageId, line, column);
       if (!result.capabilities?.definition) {
         notificationBus.notify('warning', 'Go to Definition', 'Semantic engine is not available for this language in this environment.');
         return;
@@ -453,7 +466,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         return;
       }
 
-      if (def.path === buffer.file.path) {
+      if (def.path === buf.file.path) {
         handleGoToLine(def.line);
         return;
       }
@@ -476,7 +489,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       debugLog('[EditorPane] Go to definition failed:', err);
       notificationBus.notify('warning', 'Go to Definition', 'Failed to resolve definition.');
     }
-  }, [apiService, buffer, localContent, openWorkspaceBuffer, handleGoToLine]);
+  }, [apiService, openWorkspaceBuffer, handleGoToLine]);
 
   const handleGoToDefinitionFromMenu = useCallback(() => {
     hideContextMenu();
@@ -805,6 +818,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
           fontFamily: 'inherit',
           overflow: 'auto',
           minHeight: '0',
+          height: '100%',
         },
         '.cm-cursor': {
           borderLeftColor: themePack.mode === 'dark' ? 'var(--cm-cursor, #f8f8f2)' : 'var(--cm-cursor, #526fff)',

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // --- 1. RunValidation success path (event publishing) ---

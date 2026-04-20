@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/agent"
 )
 
 // InitCommand implements the /init slash command

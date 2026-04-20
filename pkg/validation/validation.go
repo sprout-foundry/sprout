@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/alantheprice/ledit/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // Validator provides syntax and import validation

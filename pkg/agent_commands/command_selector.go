@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/agent"
 	"golang.org/x/term"
 )
 

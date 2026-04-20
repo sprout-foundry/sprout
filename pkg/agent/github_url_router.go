@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/alantheprice/ledit/pkg/webcontent"
+	"github.com/sprout-foundry/sprout/pkg/webcontent"
 )
 
 // githubMCPToolMapping maps GitHubURLInfo.Type to the corresponding GitHub MCP tool name.

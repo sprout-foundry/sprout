@@ -6,8 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/configuration"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 func TestSetProviderFallsBackWhenConfiguredCustomModelIsInvalid(t *testing.T) {

@@ -3,7 +3,7 @@ package agent
 import (
 	"sync"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
 // TaskAction represents a completed action during task execution

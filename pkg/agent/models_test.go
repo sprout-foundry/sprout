@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/configuration"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // TestGetModel tests the GetModel method

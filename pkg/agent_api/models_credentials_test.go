@@ -3,7 +3,7 @@ package api
 import (
 	"testing"
 
-	"github.com/alantheprice/ledit/pkg/credentials"
+	"github.com/sprout-foundry/sprout/pkg/credentials"
 )
 
 func TestResolveProviderReturnsStoredKey(t *testing.T) {

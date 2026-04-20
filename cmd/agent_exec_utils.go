@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/agent"
-	agent_commands "github.com/alantheprice/ledit/pkg/agent_commands"
+	"github.com/sprout-foundry/sprout/pkg/agent"
+	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
 	"golang.org/x/term"
 )
 

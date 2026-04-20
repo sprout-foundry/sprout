@@ -4,8 +4,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/events"
-	"github.com/alantheprice/ledit/pkg/validation"
+	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/validation"
 )
 
 // publishEvent publishes an event to the event bus if available

@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // WorktreeInfo contains information about a git worktree

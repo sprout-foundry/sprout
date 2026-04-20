@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/agent"
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/agent"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // readInput reads a line of input from stdin without conflicting with other input systems

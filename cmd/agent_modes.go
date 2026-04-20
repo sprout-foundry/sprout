@@ -12,12 +12,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/agent"
-	agent_commands "github.com/alantheprice/ledit/pkg/agent_commands"
-	"github.com/alantheprice/ledit/pkg/configuration"
-	"github.com/alantheprice/ledit/pkg/console"
-	"github.com/alantheprice/ledit/pkg/events"
-	"github.com/alantheprice/ledit/pkg/webui"
+	"github.com/sprout-foundry/sprout/pkg/agent"
+	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/webui"
 	"golang.org/x/term"
 )
 

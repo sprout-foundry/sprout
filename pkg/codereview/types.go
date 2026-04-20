@@ -3,8 +3,8 @@ package codereview
 import (
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/configuration"
-	"github.com/alantheprice/ledit/pkg/types"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/types"
 )
 
 // CodeReviewResult represents the result of a code review

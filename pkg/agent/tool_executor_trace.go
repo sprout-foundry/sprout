@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/trace"
+	"github.com/sprout-foundry/sprout/pkg/trace"
 )
 
 // recordToolExecutionWithIndex records tool execution data to the trace session

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // ErrNoProviderConfigured is returned by getClientAgent and getChatAgent

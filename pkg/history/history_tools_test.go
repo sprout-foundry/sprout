@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/filesystem"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 // TestBase64Encoding tests that file contents are properly encoded/decoded

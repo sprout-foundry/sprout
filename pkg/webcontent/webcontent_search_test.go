@@ -3,8 +3,8 @@ package webcontent
 import (
 	"testing"
 
-	"github.com/alantheprice/ledit/pkg/configuration"
-	"github.com/alantheprice/ledit/pkg/utils"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 	"github.com/stretchr/testify/assert"
 )
 

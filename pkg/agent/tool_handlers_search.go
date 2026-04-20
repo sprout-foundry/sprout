@@ -11,11 +11,11 @@ import (
 	"strconv"
 	"strings"
 
-	tools "github.com/alantheprice/ledit/pkg/agent_tools"
-	"github.com/alantheprice/ledit/pkg/filesystem"
-	"github.com/alantheprice/ledit/pkg/utils"
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
 const (

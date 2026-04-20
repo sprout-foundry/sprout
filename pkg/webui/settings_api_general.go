@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"strings"
 
-	agentpkg "github.com/alantheprice/ledit/pkg/agent"
-	"github.com/alantheprice/ledit/pkg/configuration"
+	agentpkg "github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // ---------------------------------------------------------------------------

@@ -3,7 +3,7 @@ package cmd
 import (
 	"testing"
 
-	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 func TestResolvePreferredCustomProviderModelAllowsNumericSelection(t *testing.T) {

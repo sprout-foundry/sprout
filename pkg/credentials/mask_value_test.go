@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/alantheprice/ledit/pkg/credentials"
+	"github.com/sprout-foundry/sprout/pkg/credentials"
 )
 
 // ---------------------------------------------------------------------------

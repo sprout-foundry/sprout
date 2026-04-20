@@ -3,7 +3,7 @@ package agent
 import (
 	"sync"
 
-	"github.com/alantheprice/ledit/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // SetStreamingEnabled enables or disables streaming responses

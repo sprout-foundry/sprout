@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -399,6 +399,47 @@ func TestDetectSecurityConcerns_JWT(t *testing.T) {
 		{
 			name:     "JWT - invalid format",
 			content:  `not.a.valid.jwt.token`,
+			expected: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			concerns, _ := DetectSecurityConcerns(tt.content)
+			assert.Equal(t, tt.expected, concerns)
+		})
+	}
+}
+
+func TestDetectSecurityConcerns_DataURLsNotFlagged(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		expected []string
+	}{
+		{
+			name:     "data URL with JWT-like base64 payload - SVG",
+			content:  "data:image/svg+xml;base64,eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
+			expected: nil,
+		},
+		{
+			name:     "data URL with PNG base64 payload",
+			content:  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk",
+			expected: nil,
+		},
+		{
+			name:     "Mixed: real Bearer token AND data URL with JWT-like payload",
+			content:  "Authorization: Bearer sk-abc123def456ghi789jkl012mno345\ndata:image/svg+xml;base64,eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0.abc",
+			expected: []string{"Generic Bearer Token Exposure"},
+		},
+		{
+			name:     "Real JWT NOT in data URL should still be detected",
+			content:  "token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abc123def",
+			expected: []string{"API Key Exposure", "JWT Token Exposure"},
+		},
+		{
+			name:     "data URL with minimal JWT-like payload",
+			content:  "data:application/json;base64,eyJhIjoiYiJ9.eyJjIjoiZCJ9.e30",
 			expected: nil,
 		},
 	}

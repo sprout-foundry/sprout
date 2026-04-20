@@ -2,7 +2,7 @@
 package cmd
 
 import (
-	"github.com/alantheprice/ledit/pkg/agent_commands"
+	"github.com/sprout-foundry/sprout/pkg/agent_commands"
 	"github.com/spf13/cobra"
 )
 

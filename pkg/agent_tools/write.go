@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/alantheprice/ledit/pkg/filesystem"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 func WriteFile(ctx context.Context, filePath, content string) (string, error) {

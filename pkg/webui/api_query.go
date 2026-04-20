@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	agent_commands "github.com/alantheprice/ledit/pkg/agent_commands"
-	"github.com/alantheprice/ledit/pkg/events"
+	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 const (

@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	providers "github.com/alantheprice/ledit/pkg/agent_providers"
-	"github.com/alantheprice/ledit/pkg/credentials"
-	"github.com/alantheprice/ledit/pkg/noninteractive"
+	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
+	"github.com/sprout-foundry/sprout/pkg/credentials"
+	"github.com/sprout-foundry/sprout/pkg/noninteractive"
 	"golang.org/x/term"
 )
 

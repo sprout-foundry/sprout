@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/events"
-	lspsemantic "github.com/alantheprice/ledit/pkg/lsp/semantic"
+	"github.com/sprout-foundry/sprout/pkg/events"
+	lspsemantic "github.com/sprout-foundry/sprout/pkg/lsp/semantic"
 )
 
 type captureSemanticAdapter struct {

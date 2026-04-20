@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/console"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 const binaryDownloadMaxSize = 60 * 1024 * 1024 // 60MB (must exceed pdfMaxSizeForProcessing)

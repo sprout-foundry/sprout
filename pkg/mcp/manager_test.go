@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -915,4 +916,248 @@ func TestServerNameValidation_VeryLongName(t *testing.T) {
 
 	// Currently accepted - might want to add length validation in future
 	assert.NoError(t, err)
+}
+
+// ---------------------------------------------------------------------------
+// AutoDiscoverGitHubServer Tests
+// ---------------------------------------------------------------------------
+
+// TestAutoDiscoverGitHubServer_NPXSuccess tests successful discovery using npx
+func TestAutoDiscoverGitHubServer_NPXSuccess(t *testing.T) {
+	manager := NewMCPManager(nil)
+
+	// Track which config was requested
+	var requestedConfigs []MCPServerConfig
+
+	// Set up mock server factory
+	manager.serverFactory = func(config MCPServerConfig, logger *utils.Logger) MCPServer {
+		requestedConfigs = append(requestedConfigs, config)
+
+		// Return a mock server that will succeed
+		mockServer := newMockMCPServer(config.Name)
+		mockServer.tools = []MCPTool{{Name: "github_issue", Description: "GitHub issue tool"}}
+		return mockServer
+	}
+
+	ctx := context.Background()
+
+	// Call the actual AutoDiscoverGitHubServer function
+	err := manager.AutoDiscoverGitHubServer(ctx)
+	assert.NoError(t, err)
+
+	// Verify server was discovered
+	server, exists := manager.GetServer("github")
+	assert.True(t, exists)
+	assert.NotNil(t, server)
+	assert.True(t, server.IsRunning())
+
+	// Verify it was the npx config that succeeded
+	assert.GreaterOrEqual(t, len(requestedConfigs), 1)
+	assert.Equal(t, "npx", requestedConfigs[0].Command)
+	assert.Equal(t, []string{"-y", "@modelcontextprotocol/server-github"}, requestedConfigs[0].Args)
+}
+
+// TestAutoDiscoverGitHubServer_UVXFallback tests fallback to uvx when npx fails
+func TestAutoDiscoverGitHubServer_UVXFallback(t *testing.T) {
+	manager := NewMCPManager(nil)
+
+	attempts := 0
+
+	// Set up mock server factory that simulates npx failing and uvx succeeding
+	manager.serverFactory = func(config MCPServerConfig, logger *utils.Logger) MCPServer {
+		attempts++
+
+		mockServer := newMockMCPServer(config.Name)
+
+		// Make npx fail, uvx succeed
+		if config.Command == "npx" {
+			mockServer.startError = errors.New("npx command not found")
+		} else if config.Command == "uvx" {
+			mockServer.tools = []MCPTool{{Name: "github_issue", Description: "GitHub issue tool"}}
+		}
+
+		return mockServer
+	}
+
+	ctx := context.Background()
+
+	// Call the actual AutoDiscoverGitHubServer function
+	err := manager.AutoDiscoverGitHubServer(ctx)
+	assert.NoError(t, err)
+
+	// Verify both configs were tried
+	assert.Equal(t, 2, attempts)
+
+	// Verify server was discovered using uvx
+	server, exists := manager.GetServer("github")
+	assert.True(t, exists)
+	assert.NotNil(t, server)
+	assert.True(t, server.IsRunning())
+}
+
+// TestAutoDiscoverGitHubServer_NoCommandAvailable tests error when both npx and uvx fail
+func TestAutoDiscoverGitHubServer_NoCommandAvailable(t *testing.T) {
+	manager := NewMCPManager(nil)
+
+	// Set up mock server factory that always fails
+	manager.serverFactory = func(config MCPServerConfig, logger *utils.Logger) MCPServer {
+		mockServer := newMockMCPServer(config.Name)
+		mockServer.startError = errors.New("command not found")
+		return mockServer
+	}
+
+	ctx := context.Background()
+
+	// Call the actual AutoDiscoverGitHubServer function
+	err := manager.AutoDiscoverGitHubServer(ctx)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to auto-discover GitHub MCP server")
+
+	// Verify no github server exists
+	_, exists := manager.GetServer("github")
+	assert.False(t, exists)
+}
+
+// TestAutoDiscoverGitHubServer_ServerStartsFails handles server that starts but fails tool listing
+func TestAutoDiscoverGitHubServer_ServerStartsFails(t *testing.T) {
+	manager := NewMCPManager(nil)
+
+	// Set up mock server factory that starts but fails on ListTools
+	manager.serverFactory = func(config MCPServerConfig, logger *utils.Logger) MCPServer {
+		mockServer := newMockMCPServer(config.Name)
+		mockServer.startError = nil // Start succeeds
+		mockServer.listToolsErr = errors.New("server not responding") // ListTools fails
+		return mockServer
+	}
+
+	ctx := context.Background()
+
+	// Call the actual AutoDiscoverGitHubServer function
+	err := manager.AutoDiscoverGitHubServer(ctx)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to auto-discover GitHub MCP server")
+
+	// Verify no github server exists (should have been cleaned up)
+	_, exists := manager.GetServer("github")
+	assert.False(t, exists)
+}
+
+// TestAutoDiscoverGitHubServer_LogsSuccess tests that success is logged when discovery works
+func TestAutoDiscoverGitHubServer_LogsSuccess(t *testing.T) {
+	// Use nil logger (logging is optional, tests verify behavior not log output)
+	manager := NewMCPManager(nil)
+
+	// Set up mock server factory
+	manager.serverFactory = func(config MCPServerConfig, logger *utils.Logger) MCPServer {
+		mockServer := newMockMCPServer(config.Name)
+		mockServer.tools = []MCPTool{{Name: "github_issue", Description: "GitHub issue tool"}}
+		return mockServer
+	}
+
+	ctx := context.Background()
+
+	// Call the actual AutoDiscoverGitHubServer function
+	err := manager.AutoDiscoverGitHubServer(ctx)
+	assert.NoError(t, err)
+
+	// Verify server is running and configured correctly
+	server, exists := manager.GetServer("github")
+	assert.True(t, exists)
+	assert.NotNil(t, server)
+	assert.True(t, server.IsRunning())
+}
+
+// TestAutoDiscoverGitHubServer_StartFails tests the scenario where server fails to start
+func TestAutoDiscoverGitHubServer_StartFails(t *testing.T) {
+	manager := NewMCPManager(nil)
+
+	// Set up mock server factory that fails to start
+	manager.serverFactory = func(config MCPServerConfig, logger *utils.Logger) MCPServer {
+		mockServer := newMockMCPServer(config.Name)
+		mockServer.startError = errors.New("npx: command not found")
+		return mockServer
+	}
+
+	ctx := context.Background()
+
+	// Call the actual AutoDiscoverGitHubServer function
+	err := manager.AutoDiscoverGitHubServer(ctx)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to auto-discover GitHub MCP server")
+
+	// Verify no github server exists
+	_, exists := manager.GetServer("github")
+	assert.False(t, exists)
+}
+
+// TestAutoDiscoverGitHubServer_ExistingServerNotOverridden tests that discovery doesn't override existing server
+func TestAutoDiscoverGitHubServer_ExistingServerNotOverridden(t *testing.T) {
+	manager := NewMCPManager(nil)
+
+	// Pre-add a github server with custom config
+	existingConfig := MCPServerConfig{
+		Name:      "github",
+		Command:   "custom-github-server",
+		Args:      []string{"--custom"},
+		AutoStart: true,
+		Timeout:   60,
+	}
+
+	err := manager.AddServer(existingConfig)
+	require.NoError(t, err)
+
+	// Verify the existing server is there
+	srv, exists := manager.GetServer("github")
+	assert.True(t, exists)
+	assert.NotNil(t, srv)
+
+	// Verify it has the custom config
+	config := srv.GetConfig()
+	assert.Equal(t, "custom-github-server", config.Command)
+	assert.Equal(t, []string{"--custom"}, config.Args)
+
+	// Call AutoDiscoverGitHubServer - should fail because server already exists
+	ctx := context.Background()
+	err = manager.AutoDiscoverGitHubServer(ctx)
+
+	// Should fail because the server already exists
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to auto-discover GitHub MCP server")
+
+	// Verify the original server is still there with its custom config
+	srv, exists = manager.GetServer("github")
+	assert.True(t, exists)
+	assert.NotNil(t, srv)
+	config = srv.GetConfig()
+	assert.Equal(t, "custom-github-server", config.Command)
+	assert.Equal(t, []string{"--custom"}, config.Args)
+}
+
+// TestAutoDiscoverGitHubServer_BothConfigurationsFail tests when both npx and uvx configurations fail completely
+func TestAutoDiscoverGitHubServer_BothConfigurationsFail(t *testing.T) {
+	manager := NewMCPManager(nil)
+
+	attempts := 0
+
+	// Set up mock server factory that always fails
+	manager.serverFactory = func(config MCPServerConfig, logger *utils.Logger) MCPServer {
+		attempts++
+		mockServer := newMockMCPServer(config.Name)
+		mockServer.startError = errors.New("command not found")
+		return mockServer
+	}
+
+	ctx := context.Background()
+
+	// Call the actual AutoDiscoverGitHubServer function
+	err := manager.AutoDiscoverGitHubServer(ctx)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to auto-discover GitHub MCP server")
+
+	// Verify both attempts were made
+	assert.Equal(t, 2, attempts)
+
+	// Verify no github server remains
+	_, exists := manager.GetServer("github")
+	assert.False(t, exists)
 }

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/alantheprice/ledit/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/agent"
 )
 
 // ClearCommand handles clearing of conversation history

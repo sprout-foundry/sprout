@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/utils"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // GitCommit is a single commit entry in the git log response.

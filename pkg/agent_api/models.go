@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/credentials"
+	"github.com/sprout-foundry/sprout/pkg/credentials"
 )
 
 const maxHTTPErrorBodyPreview = 240

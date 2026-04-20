@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
 // debugLog logs a message only if debug mode is enabled

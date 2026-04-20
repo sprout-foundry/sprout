@@ -6,10 +6,10 @@ import (
 	"log"
 	"strings"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/agent_providers"
-	"github.com/alantheprice/ledit/pkg/configuration"
-	"github.com/alantheprice/ledit/pkg/credentials"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/agent_providers"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/credentials"
 )
 
 // TestClient implements a mock client for CI/testing environments

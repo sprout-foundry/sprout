@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/configuration"
-	"github.com/alantheprice/ledit/pkg/utils"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // Tool represents a pluggable tool that can be executed

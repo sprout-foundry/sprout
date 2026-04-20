@@ -9,9 +9,9 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/alantheprice/ledit/pkg/agent"
-	"github.com/alantheprice/ledit/pkg/configuration"
-	"github.com/alantheprice/ledit/pkg/personas"
+	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/personas"
 )
 
 // PersonaCommand implements the /persona slash command.

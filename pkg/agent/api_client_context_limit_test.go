@@ -3,7 +3,7 @@ package agent
 import (
 	"testing"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
 func TestIsContextLimitError(t *testing.T) {

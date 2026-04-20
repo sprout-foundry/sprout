@@ -3,7 +3,7 @@ package commands
 import (
 	"fmt"
 
-	"github.com/alantheprice/ledit/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/agent"
 )
 
 // StatsCommand implements the /stats slash command

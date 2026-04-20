@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/agent"
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/agent"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 func TestMultiWindowClientIsolationForWorkspaceSessionAndModel(t *testing.T) {

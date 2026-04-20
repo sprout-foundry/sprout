@@ -5,8 +5,8 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/alantheprice/ledit/pkg/agent"
-	"github.com/alantheprice/ledit/pkg/ui"
+	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/ui"
 	"golang.org/x/term"
 )
 

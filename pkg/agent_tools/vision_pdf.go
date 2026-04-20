@@ -14,7 +14,7 @@ import (
 
 	"github.com/ledongthuc/pdf"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
 // ============================================================================

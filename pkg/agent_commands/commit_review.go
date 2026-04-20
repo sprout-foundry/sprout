@@ -5,9 +5,9 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/agent"
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/factory"
+	"github.com/sprout-foundry/sprout/pkg/agent"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/factory"
 )
 
 // generateCommitReview generates a review of staged files to flag critical concerns

@@ -1,9 +1,12 @@
 package mcp
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -423,4 +426,316 @@ func TestDefaultMCPConfig(t *testing.T) {
 	assert.True(t, config.AutoDiscover)
 	assert.Equal(t, 30*time.Second, config.Timeout)
 	assert.NotNil(t, config.Servers)
+}
+
+// ---------------------------------------------------------------------------
+// AddGitHubServer Tests
+// ---------------------------------------------------------------------------
+
+func TestAddGitHubServer_CreatesServerEntry(t *testing.T) {
+	t.Setenv("LEDIT_CONFIG", t.TempDir())
+	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Cleanup(func() { credentials.ResetStorageBackend() })
+	credentials.ResetStorageBackend()
+
+	config := MCPConfig{
+		Enabled: false,
+		Servers: map[string]MCPServerConfig{},
+	}
+
+	config.AddGitHubServer("ghp_test_token_12345")
+
+	// Verify server was added
+	assert.Contains(t, config.Servers, "github")
+	server := config.Servers["github"]
+	assert.Equal(t, "github", server.Name)
+	assert.Equal(t, "npx", server.Command)
+	assert.Equal(t, []string{"-y", "@modelcontextprotocol/server-github"}, server.Args)
+	assert.True(t, server.AutoStart)
+	assert.Equal(t, 3, server.MaxRestarts)
+	assert.Equal(t, 30*time.Second, server.Timeout)
+
+	// Verify the token was migrated to Credentials (not left in Env)
+	assert.NotNil(t, server.Credentials, "Credentials map should be populated after migration")
+	assert.Contains(t, server.Credentials, "GITHUB_PERSONAL_ACCESS_TOKEN",
+		"token should be in Credentials, not Env")
+	assert.True(t, IsSecretRef(server.Credentials["GITHUB_PERSONAL_ACCESS_TOKEN"]),
+		"token should be a secret ref placeholder")
+	_, inEnv := server.Env["GITHUB_PERSONAL_ACCESS_TOKEN"]
+	assert.False(t, inEnv, "token should NOT remain in Env after migration")
+
+	// Verify the actual credential was stored in the backend
+	val, _, err := credentials.GetFromActiveBackend("mcp/github/GITHUB_PERSONAL_ACCESS_TOKEN")
+	require.NoError(t, err)
+	assert.Equal(t, "ghp_test_token_12345", val)
+}
+
+func TestAddGitHubServer_SetsEnabled(t *testing.T) {
+	t.Setenv("LEDIT_CONFIG", t.TempDir())
+	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Cleanup(func() { credentials.ResetStorageBackend() })
+	credentials.ResetStorageBackend()
+
+	config := MCPConfig{
+		Enabled: false,
+		Servers: map[string]MCPServerConfig{},
+	}
+
+	config.AddGitHubServer("ghp_test_token_12345")
+
+	// Verify Enabled was set to true
+	assert.True(t, config.Enabled)
+}
+
+func TestAddGitHubServer_InitializesServersMap(t *testing.T) {
+	t.Setenv("LEDIT_CONFIG", t.TempDir())
+	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Cleanup(func() { credentials.ResetStorageBackend() })
+	credentials.ResetStorageBackend()
+
+	config := MCPConfig{
+		Enabled: false,
+		Servers: nil, // nil map
+	}
+
+	config.AddGitHubServer("ghp_test_token_12345")
+
+	// Verify Servers map was initialized
+	assert.NotNil(t, config.Servers)
+	assert.Contains(t, config.Servers, "github")
+}
+
+// ---------------------------------------------------------------------------
+// RemoveServer Tests
+// ---------------------------------------------------------------------------
+
+func TestRemoveServer_RemovesServerFromMap(t *testing.T) {
+	config := MCPConfig{
+		Enabled: true,
+		Servers: map[string]MCPServerConfig{
+			"github": {
+				Name:        "github",
+				Command:     "npx",
+				AutoStart:   true,
+				MaxRestarts: 3,
+			},
+		},
+	}
+
+	config.RemoveServer("github")
+
+	// Verify server was removed
+	assert.NotContains(t, config.Servers, "github")
+}
+
+func TestRemoveServer_SetsDisabledWhenEmpty(t *testing.T) {
+	config := MCPConfig{
+		Enabled: true,
+		Servers: map[string]MCPServerConfig{
+			"github": {
+				Name:        "github",
+				Command:     "npx",
+				AutoStart:   true,
+				MaxRestarts: 3,
+			},
+		},
+	}
+
+	config.RemoveServer("github")
+
+	// Verify Enabled was set to false since no servers remain
+	assert.False(t, config.Enabled)
+}
+
+func TestRemoveServer_NoOpWhenServerDoesNotExist(t *testing.T) {
+	config := MCPConfig{
+		Enabled: true,
+		Servers: map[string]MCPServerConfig{
+			"github": {
+				Name:        "github",
+				Command:     "npx",
+				AutoStart:   true,
+				MaxRestarts: 3,
+			},
+		},
+	}
+
+	// Should not panic or error
+	config.RemoveServer("nonexistent")
+
+	// Original server should still be there
+	assert.Contains(t, config.Servers, "github")
+	assert.True(t, config.Enabled)
+}
+
+func TestRemoveServer_RemovesOneServerKeepsEnabled(t *testing.T) {
+	config := MCPConfig{
+		Enabled: true,
+		Servers: map[string]MCPServerConfig{
+			"github": {
+				Name:        "github",
+				Command:     "npx",
+				AutoStart:   true,
+				MaxRestarts: 3,
+			},
+			"git": {
+				Name:        "git",
+				Command:     "uvx",
+				AutoStart:   true,
+				MaxRestarts: 3,
+			},
+		},
+	}
+
+	config.RemoveServer("github")
+
+	// Verify server was removed but config remains enabled
+	assert.NotContains(t, config.Servers, "github")
+	assert.Contains(t, config.Servers, "git")
+	assert.True(t, config.Enabled)
+}
+
+func TestRemoveServer_CleansUpCredentials(t *testing.T) {
+	t.Setenv("LEDIT_CONFIG", t.TempDir())
+	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	credentials.ResetStorageBackend()
+
+	config := MCPConfig{
+		Enabled: true,
+		Servers: map[string]MCPServerConfig{
+			"testserver": {
+				Name:        "testserver",
+				Command:     "npx",
+				AutoStart:   true,
+				MaxRestarts: 3,
+				Credentials: map[string]string{
+					"API_KEY":    "{{credential:mcp/testserver/API_KEY}}",
+					"AUTH_TOKEN": "{{credential:mcp/testserver/AUTH_TOKEN}}",
+				},
+			},
+		},
+	}
+
+	// Store credentials in the backend
+	require.NoError(t, credentials.SetToActiveBackend("mcp/testserver/API_KEY", "secret-key-123"))
+	require.NoError(t, credentials.SetToActiveBackend("mcp/testserver/AUTH_TOKEN", "secret-token-456"))
+
+	// Verify credentials exist
+	val1, _, err1 := credentials.GetFromActiveBackend("mcp/testserver/API_KEY")
+	require.NoError(t, err1)
+	assert.Equal(t, "secret-key-123", val1)
+
+	val2, _, err2 := credentials.GetFromActiveBackend("mcp/testserver/AUTH_TOKEN")
+	require.NoError(t, err2)
+	assert.Equal(t, "secret-token-456", val2)
+
+	// Remove server (should clean up credentials)
+	config.RemoveServer("testserver")
+
+	// Verify server was removed
+	assert.NotContains(t, config.Servers, "testserver")
+
+	// Verify credentials were deleted from the backend
+	// FileBackend returns empty string for missing keys
+	val1, _, _ = credentials.GetFromActiveBackend("mcp/testserver/API_KEY")
+	assert.Equal(t, "", val1, "API_KEY credential should be deleted")
+
+	val2, _, _ = credentials.GetFromActiveBackend("mcp/testserver/AUTH_TOKEN")
+	assert.Equal(t, "", val2, "AUTH_TOKEN credential should be deleted")
+}
+
+// ---------------------------------------------------------------------------
+// LoadMCPConfig Environment Variable Override Tests
+// ---------------------------------------------------------------------------
+
+func TestLoadMCPConfig_EnvOverrideEnabledFalse(t *testing.T) {
+	t.Setenv("LEDIT_CONFIG", t.TempDir())
+	t.Setenv("LEDIT_MCP_ENABLED", "false")
+	t.Setenv("LEDIT_MCP_AUTO_START", "false")
+	t.Setenv("LEDIT_MCP_AUTO_DISCOVER", "false")
+	t.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "")
+
+	config, err := LoadMCPConfig()
+	require.NoError(t, err)
+	assert.False(t, config.Enabled)
+}
+
+func TestLoadMCPConfig_EnvOverrideEnabledTrue(t *testing.T) {
+	t.Setenv("LEDIT_CONFIG", t.TempDir())
+	t.Setenv("LEDIT_MCP_ENABLED", "true")
+	t.Setenv("LEDIT_MCP_AUTO_START", "false")
+	t.Setenv("LEDIT_MCP_AUTO_DISCOVER", "false")
+	t.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "")
+
+	config, err := LoadMCPConfig()
+	require.NoError(t, err)
+	assert.True(t, config.Enabled)
+}
+
+func TestLoadMCPConfig_EnvOverrideEnabledOne(t *testing.T) {
+	t.Setenv("LEDIT_CONFIG", t.TempDir())
+	t.Setenv("LEDIT_MCP_ENABLED", "1")
+	t.Setenv("LEDIT_MCP_AUTO_START", "false")
+	t.Setenv("LEDIT_MCP_AUTO_DISCOVER", "false")
+	t.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "")
+
+	config, err := LoadMCPConfig()
+	require.NoError(t, err)
+	assert.True(t, config.Enabled)
+}
+
+func TestLoadMCPConfig_EnvOverrideAutoStartTrue(t *testing.T) {
+	t.Setenv("LEDIT_CONFIG", t.TempDir())
+	t.Setenv("LEDIT_MCP_ENABLED", "true")
+	t.Setenv("LEDIT_MCP_AUTO_START", "true")
+	t.Setenv("LEDIT_MCP_AUTO_DISCOVER", "false")
+	t.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "")
+
+	config, err := LoadMCPConfig()
+	require.NoError(t, err)
+	assert.True(t, config.AutoStart)
+}
+
+func TestLoadMCPConfig_EnvOverrideAutoDiscoverFalse(t *testing.T) {
+	t.Setenv("LEDIT_CONFIG", t.TempDir())
+	t.Setenv("LEDIT_MCP_ENABLED", "true")
+	t.Setenv("LEDIT_MCP_AUTO_START", "false")
+	t.Setenv("LEDIT_MCP_AUTO_DISCOVER", "false")
+	t.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "")
+
+	config, err := LoadMCPConfig()
+	require.NoError(t, err)
+	assert.False(t, config.AutoDiscover)
+}
+
+func TestLoadMCPConfig_LoadsFromCustomConfigDir(t *testing.T) {
+	customDir := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", customDir)
+	t.Setenv("LEDIT_MCP_ENABLED", "")
+	t.Setenv("LEDIT_MCP_AUTO_START", "")
+	t.Setenv("LEDIT_MCP_AUTO_DISCOVER", "")
+	t.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "")
+
+	// Create a custom config file
+	// Note: auto_discover must be false to prevent auto-discovery from setting enabled=true
+	configData := `{
+		"enabled": false,
+		"auto_discover": false,
+		"servers": {
+			"custom": {
+				"name": "custom",
+				"command": "custom-cmd",
+				"auto_start": false,
+				"max_restarts": 5
+			}
+		}
+	}`
+	err := os.WriteFile(filepath.Join(customDir, "mcp_config.json"), []byte(configData), 0600)
+	require.NoError(t, err)
+
+	config, err := LoadMCPConfig()
+	require.NoError(t, err)
+	assert.False(t, config.Enabled)
+	assert.Contains(t, config.Servers, "custom")
+	assert.Equal(t, "custom-cmd", config.Servers["custom"].Command)
 }

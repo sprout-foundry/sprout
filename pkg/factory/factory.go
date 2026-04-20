@@ -46,6 +46,7 @@ func (t *TestClient) SendChatRequest(messages []api.Message, tools []api.Tool, r
 			CompletionTokens    int     `json:"completion_tokens"`
 			TotalTokens         int     `json:"total_tokens"`
 			EstimatedCost       float64 `json:"estimated_cost"`
+			Cost                float64 `json:"cost,omitempty"`
 			PromptTokensDetails struct {
 				CachedTokens     int  `json:"cached_tokens"`
 				CacheWriteTokens *int `json:"cache_write_tokens"`
@@ -55,6 +56,7 @@ func (t *TestClient) SendChatRequest(messages []api.Message, tools []api.Tool, r
 			CompletionTokens: 5,
 			TotalTokens:      15,
 			EstimatedCost:    0.0,
+			Cost:             0.0,
 		},
 	}, nil
 }

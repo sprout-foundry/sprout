@@ -89,6 +89,7 @@ func (w *UnifiedProviderWrapper) SendChatRequest(messages []Message, tools []Too
 			CompletionTokens    int     `json:"completion_tokens"`
 			TotalTokens         int     `json:"total_tokens"`
 			EstimatedCost       float64 `json:"estimated_cost"`
+			Cost                float64 `json:"cost,omitempty"`
 			PromptTokensDetails struct {
 				CachedTokens     int  `json:"cached_tokens"`
 				CacheWriteTokens *int `json:"cache_write_tokens"`
@@ -98,6 +99,7 @@ func (w *UnifiedProviderWrapper) SendChatRequest(messages []Message, tools []Too
 			CompletionTokens: response.Usage.CompletionTokens,
 			TotalTokens:      response.Usage.TotalTokens,
 			EstimatedCost:    response.Usage.EstimatedCost,
+			Cost:             response.Usage.Cost,
 			PromptTokensDetails: struct {
 				CachedTokens     int  `json:"cached_tokens"`
 				CacheWriteTokens *int `json:"cache_write_tokens"`
@@ -256,6 +258,7 @@ func (w *UnifiedProviderWrapper) SendVisionRequest(messages []Message, tools []T
 			CompletionTokens    int     `json:"completion_tokens"`
 			TotalTokens         int     `json:"total_tokens"`
 			EstimatedCost       float64 `json:"estimated_cost"`
+			Cost                float64 `json:"cost,omitempty"`
 			PromptTokensDetails struct {
 				CachedTokens     int  `json:"cached_tokens"`
 				CacheWriteTokens *int `json:"cache_write_tokens"`
@@ -265,6 +268,7 @@ func (w *UnifiedProviderWrapper) SendVisionRequest(messages []Message, tools []T
 			CompletionTokens: response.Usage.CompletionTokens,
 			TotalTokens:      response.Usage.TotalTokens,
 			EstimatedCost:    response.Usage.EstimatedCost,
+			Cost:             response.Usage.Cost,
 			PromptTokensDetails: struct {
 				CachedTokens     int  `json:"cached_tokens"`
 				CacheWriteTokens *int `json:"cache_write_tokens"`
@@ -391,6 +395,7 @@ func (w *UnifiedProviderWrapper) SendChatRequestStream(messages []Message, tools
 			CompletionTokens    int     `json:"completion_tokens"`
 			TotalTokens         int     `json:"total_tokens"`
 			EstimatedCost       float64 `json:"estimated_cost"`
+			Cost                float64 `json:"cost,omitempty"`
 			PromptTokensDetails struct {
 				CachedTokens     int  `json:"cached_tokens"`
 				CacheWriteTokens *int `json:"cache_write_tokens"`
@@ -400,6 +405,7 @@ func (w *UnifiedProviderWrapper) SendChatRequestStream(messages []Message, tools
 			CompletionTokens: response.Usage.CompletionTokens,
 			TotalTokens:      response.Usage.TotalTokens,
 			EstimatedCost:    response.Usage.EstimatedCost,
+			Cost:             response.Usage.Cost,
 		},
 	}
 

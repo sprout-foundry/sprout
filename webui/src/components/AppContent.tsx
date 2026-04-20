@@ -1177,7 +1177,7 @@ const EditorPaneWrapper: React.FC<{children: React.ReactNode, isActive?: boolean
   return (
     <div
       className={`editor-pane-wrapper ${isActive ? 'active' : ''}`}
-      onClick={onClick}
+      onClick={!isActive ? onClick : undefined}
       tabIndex={isActive ? -1 : 0}
       onFocus={() => isActive && (onClick?.())}
     >

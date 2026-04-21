@@ -122,6 +122,7 @@ var onboardingProviderOrder = map[string]int{
 	"openrouter": 2,
 	"deepinfra":  3,
 	"chutes":     4,
+	"cerebras":   5,
 }
 
 func applyOnboardingPresentation(entry onboardingProvider) onboardingProvider {

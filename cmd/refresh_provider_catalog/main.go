@@ -98,7 +98,10 @@ func main() {
 	}
 }
 
-// providerRegistryFile is the JSON schema for a per-provider model file served by the registry.
+// providerRegistryFile is the JSON schema for a per-provider model file served
+// by the registry. Uses api.ModelInfo rather than modelregistry.ModelInfo to
+// avoid a dependency on the modelregistry package (which would create an import
+// cycle through agent_api). Both types have identical JSON representations.
 type providerRegistryFile struct {
 	UpdatedAt string                `json:"updated_at"`
 	Models    []api.ModelInfo       `json:"models"`

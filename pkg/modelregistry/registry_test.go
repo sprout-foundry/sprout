@@ -296,6 +296,61 @@ func TestFetchModels_ProviderIDNormalized(t *testing.T) {
 	}
 }
 
+func TestFetchModels_NegativeCache(t *testing.T) {
+	originalURL := baseURLCopy()
+	originalNegTTL := negativeTTLCopy()
+	defer func() {
+		SetBaseURL(originalURL)
+		SetNegativeTTL(originalNegTTL)
+	}()
+
+	var fetchCount atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fetchCount.Add(1)
+		http.Error(w, "not found", http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	SetBaseURL(srv.URL)
+	ClearCache()
+	SetNegativeTTL(200 * time.Millisecond)
+
+	// First request: 404 → stored in negative cache
+	models, err := FetchModels(context.Background(), "negcached")
+	if err != nil {
+		t.Fatalf("expected nil error for 404, got: %v", err)
+	}
+	if models != nil {
+		t.Fatalf("expected nil models for 404, got: %v", models)
+	}
+	if fetchCount.Load() != 1 {
+		t.Fatalf("expected 1 fetch, got %d", fetchCount.Load())
+	}
+
+	// Second request: should hit negative cache, NOT make a network call
+	models, err = FetchModels(context.Background(), "negcached")
+	if err != nil {
+		t.Fatalf("expected nil error from negative cache, got: %v", err)
+	}
+	if models != nil {
+		t.Fatalf("expected nil models from negative cache, got: %v", models)
+	}
+	if fetchCount.Load() != 1 {
+		t.Fatalf("expected negative cache hit (still 1 fetch), got %d", fetchCount.Load())
+	}
+
+	// Wait for negative cache to expire, then fetch again
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) && fetchCount.Load() < 2 {
+		time.Sleep(10 * time.Millisecond)
+		FetchModels(context.Background(), "negcached")
+	}
+
+	if fetchCount.Load() < 2 {
+		t.Fatalf("expected at least 2 fetches after negative cache expiry, got %d", fetchCount.Load())
+	}
+}
+
 func TestFetchModels_ContextCancelled(t *testing.T) {
 	originalURL := baseURLCopy()
 	defer func() { SetBaseURL(originalURL) }()
@@ -315,6 +370,40 @@ func TestFetchModels_ContextCancelled(t *testing.T) {
 	_, err := FetchModels(ctx, "slow")
 	if err == nil {
 		t.Fatal("expected error due to context cancellation")
+	}
+}
+
+func TestFetchModels_HTTPTimeout(t *testing.T) {
+	originalURL := baseURLCopy()
+	originalTimeout := httpTimeoutCopy()
+	defer func() {
+		SetBaseURL(originalURL)
+		SetHTTPTimeout(originalTimeout)
+	}()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(2 * time.Second)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(providerResponse{
+			UpdatedAt: "2024-01-01T00:00:00Z",
+			Models:    []ModelInfo{{ID: "slow-model"}},
+		})
+	}))
+	defer srv.Close()
+
+	SetBaseURL(srv.URL)
+	ClearCache()
+	SetHTTPTimeout(50 * time.Millisecond)
+
+	start := time.Now()
+	_, err := FetchModels(context.Background(), "slow-timeout")
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("expected error due to HTTP timeout")
+	}
+	if elapsed > time.Second {
+		t.Errorf("timeout should have fired within 50ms, but took %v", elapsed)
 	}
 }
 

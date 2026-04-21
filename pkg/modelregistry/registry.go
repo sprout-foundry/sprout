@@ -19,10 +19,12 @@ import (
 
 const (
 	defaultTTL         = 5 * time.Minute
+	defaultNegativeTTL = 30 * time.Second
 	defaultHTTPTimeout = 500 * time.Millisecond
 	maxResponseBytes   int64 = 1 << 20 // 1 MiB — matches pkg/providercatalog limit
 	envRegistryURL     = "LEDIT_MODEL_REGISTRY_URL"
 	envRegistryTTL     = "LEDIT_MODEL_REGISTRY_TTL"
+	envRegistryNegTTL  = "LEDIT_MODEL_REGISTRY_NEGATIVE_TTL"
 	envRegistryTimeout = "LEDIT_MODEL_REGISTRY_TIMEOUT"
 )
 
@@ -69,13 +71,15 @@ type cacheEntry struct {
 }
 
 var (
-	mu          sync.RWMutex
-	cache       = make(map[string]cacheEntry)
-	baseURL     string
-	ttl         = defaultTTL
-	httpTimeout = defaultHTTPTimeout
-	once        sync.Once
-	sf          singleflight.Group
+	mu            sync.RWMutex
+	cache         = make(map[string]cacheEntry)
+	negativeCache = make(map[string]time.Time)
+	baseURL       string
+	ttl           = defaultTTL
+	negativeTTL   = defaultNegativeTTL
+	httpTimeout   = defaultHTTPTimeout
+	once          sync.Once
+	sf            singleflight.Group
 )
 
 func init() {
@@ -89,6 +93,11 @@ func loadConfig() {
 	if v := strings.TrimSpace(os.Getenv(envRegistryTTL)); v != "" {
 		if d, err := time.ParseDuration(v); err == nil && d > 0 {
 			ttl = d
+		}
+	}
+	if v := strings.TrimSpace(os.Getenv(envRegistryNegTTL)); v != "" {
+		if d, err := time.ParseDuration(v); err == nil && d > 0 {
+			negativeTTL = d
 		}
 	}
 	if v := strings.TrimSpace(os.Getenv(envRegistryTimeout)); v != "" {
@@ -119,6 +128,13 @@ func SetHTTPTimeout(d time.Duration) {
 	httpTimeout = d
 }
 
+// SetNegativeTTL sets the negative cache TTL for 404 responses (useful for testing).
+func SetNegativeTTL(d time.Duration) {
+	mu.Lock()
+	defer mu.Unlock()
+	negativeTTL = d
+}
+
 // IsEnabled returns true if the registry URL is configured.
 func IsEnabled() bool {
 	mu.RLock()
@@ -147,6 +163,13 @@ func httpTimeoutCopy() time.Duration {
 	return httpTimeout
 }
 
+// negativeTTLCopy returns a copy of the negative cache TTL under read lock.
+func negativeTTLCopy() time.Duration {
+	mu.RLock()
+	defer mu.RUnlock()
+	return negativeTTL
+}
+
 // isValidProviderID checks that a provider ID contains only safe characters.
 func isValidProviderID(id string) bool {
 	if len(id) == 0 || len(id) > 128 {
@@ -161,10 +184,17 @@ func isValidProviderID(id string) bool {
 }
 
 // FetchModels returns raw model data for a provider from the registry.
-// Returns nil, nil if the registry is not enabled.
-// Returns cached models if available and not expired.
-// Falls through to a network fetch on cache miss or expiry.
-// Uses singleflight to deduplicate concurrent requests for the same provider.
+//
+// Return values:
+//   - (models, nil): models from registry or cache
+//   - (nil, nil): registry disabled, provider not found (404/negative cache), or temporary error triggers fallback
+//   - (nil, err): hard error (invalid provider ID, network failure other than 404)
+//
+// Caching behavior:
+//   - Successful responses are cached for the configured TTL (default 5 minutes)
+//   - 404 responses are cached in a negative cache for negativeTTL (default 30 seconds) to avoid repeated requests
+//   - Singleflight deduplicates concurrent requests for the same provider
+//   - Use ClearCache() to manually invalidate all cached entries
 func FetchModels(ctx context.Context, providerID string) ([]RawModel, error) {
 	if !IsEnabled() {
 		return nil, nil
@@ -181,6 +211,14 @@ func FetchModels(ctx context.Context, providerID string) ([]RawModel, error) {
 	mu.RUnlock()
 	if ok && time.Since(entry.fetchedAt) < ttlCopy() {
 		return convertToRaw(entry.models), nil
+	}
+
+	// Check negative cache (providers that returned 404)
+	mu.RLock()
+	negHit, negOk := negativeCache[providerID]
+	mu.RUnlock()
+	if negOk && time.Since(negHit) < negativeTTLCopy() {
+		return nil, nil
 	}
 
 	// Use singleflight to deduplicate concurrent requests for the same provider.
@@ -213,8 +251,11 @@ func FetchModels(ctx context.Context, providerID string) ([]RawModel, error) {
 		if resp.StatusCode == http.StatusNotFound {
 			// Log debug information if debug mode is enabled
 			if os.Getenv("LEDIT_DEBUG_REGISTRY") != "" {
-				log.Printf("[modelregistry] provider %q not found in registry (404), falling back to provider API", providerID)
+				log.Printf("[modelregistry] provider %q not found at %s/models/%s.json (404), falling back to provider API", providerID, baseURLCopy(), providerID)
 			}
+			mu.Lock()
+			negativeCache[providerID] = time.Now()
+			mu.Unlock()
 			return nil, nil
 		}
 
@@ -249,6 +290,7 @@ func ClearCache() {
 	mu.Lock()
 	defer mu.Unlock()
 	cache = make(map[string]cacheEntry)
+	negativeCache = make(map[string]time.Time)
 }
 
 func convertToRaw(models []ModelInfo) []RawModel {

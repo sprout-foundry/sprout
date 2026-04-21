@@ -344,6 +344,10 @@ export const useGitWorkspace = ({
     setSelectedFiles(new Set());
   }, []);
 
+  const handleSelectFiles = useCallback((keys: string[]) => {
+    setSelectedFiles(new Set(keys));
+  }, []);
+
   const handlePreviewGitFile = useCallback(
     (section: FileSection, filePath: string) => {
       setActiveDiffSelectionKey(selectionKey(section, filePath));
@@ -608,6 +612,7 @@ export const useGitWorkspace = ({
     handleToggleFileSelection,
     handleToggleSectionSelection,
     clearSelectedFiles,
+    handleSelectFiles,
     handlePreviewGitFile,
     handleStageSelected,
     handleUnstageSelected,

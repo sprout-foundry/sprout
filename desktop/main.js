@@ -33,6 +33,7 @@ const {
   createSSHWorkspaceWindow,
 } = require('./windows');
 const { initAutoUpdater } = require('./updater');
+const { registerDesktopProtocol, extractWorkspacePathFromOpenTarget } = require('./protocol');
 
 function isSmokeTestMode() {
   return process.env.LEDIT_SMOKE_TEST === '1';
@@ -74,43 +75,6 @@ if (!isSmokeTestMode()) {
   if (!gotSingleInstanceLock) {
     app.quit();
   }
-}
-
-// ── Protocol registration ─────────────────────────────────────────────────────
-function registerDesktopProtocol() {
-  if (app.isPackaged) {
-    app.setAsDefaultProtocolClient('ledit');
-    return;
-  }
-
-  if (process.defaultApp && process.argv.length >= 2) {
-    app.setAsDefaultProtocolClient('ledit', process.execPath, [path.resolve(process.argv[1])]);
-    return;
-  }
-
-  app.setAsDefaultProtocolClient('ledit');
-}
-
-// ── URL / path helpers ────────────────────────────────────────────────────────
-function extractWorkspacePathFromOpenTarget(candidate) {
-  if (!candidate) {
-    return null;
-  }
-
-  if (candidate.startsWith('ledit://')) {
-    try {
-      const parsed = new URL(candidate);
-      const requestedPath = parsed.searchParams.get('path') || parsed.searchParams.get('workspace');
-      if (!requestedPath) {
-        return null;
-      }
-      return path.resolve(requestedPath);
-    } catch {
-      return null;
-    }
-  }
-
-  return path.resolve(candidate);
 }
 
 // ── Startup helpers ───────────────────────────────────────────────────────────

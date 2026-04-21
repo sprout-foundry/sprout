@@ -1,0 +1,418 @@
+package modelregistry
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+)
+
+func TestIsEnabled_NotSet(t *testing.T) {
+	originalURL := baseURLCopy()
+	defer func() { SetBaseURL(originalURL) }()
+
+	SetBaseURL("")
+	if IsEnabled() {
+		t.Error("expected IsEnabled() = false when URL is empty")
+	}
+}
+
+func TestIsEnabled_Set(t *testing.T) {
+	originalURL := baseURLCopy()
+	defer func() { SetBaseURL(originalURL) }()
+
+	SetBaseURL("http://localhost:8080")
+	if !IsEnabled() {
+		t.Error("expected IsEnabled() = true when URL is set")
+	}
+}
+
+func TestFetchModels_Disabled(t *testing.T) {
+	originalURL := baseURLCopy()
+	defer func() { SetBaseURL(originalURL) }()
+
+	SetBaseURL("")
+	ClearCache()
+
+	models, err := FetchModels(context.Background(), "openrouter")
+	if err != nil {
+		t.Fatalf("expected nil error when disabled, got: %v", err)
+	}
+	if models != nil {
+		t.Fatalf("expected nil models when disabled, got: %v", models)
+	}
+}
+
+func TestFetchModels_Success(t *testing.T) {
+	originalURL := baseURLCopy()
+	defer func() { SetBaseURL(originalURL) }()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/models/openrouter.json" {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(providerResponse{
+			UpdatedAt: "2024-01-01T00:00:00Z",
+			Models: []ModelInfo{
+				{ID: "anthropic/claude-3", Name: "Claude 3", ContextLength: 200000},
+				{ID: "openai/gpt-4o", Name: "GPT-4o", ContextLength: 128000},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	SetBaseURL(srv.URL)
+	ClearCache()
+	SetTTL(5 * time.Minute)
+
+	models, err := FetchModels(context.Background(), "openrouter")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(models) != 2 {
+		t.Fatalf("expected 2 models, got %d", len(models))
+	}
+	if models[0].ID != "anthropic/claude-3" {
+		t.Errorf("expected first model ID 'anthropic/claude-3', got %q", models[0].ID)
+	}
+	if models[1].ContextLength != 128000 {
+		t.Errorf("expected context length 128000, got %d", models[1].ContextLength)
+	}
+}
+
+func TestFetchModels_CacheHit(t *testing.T) {
+	originalURL := baseURLCopy()
+	defer func() { SetBaseURL(originalURL) }()
+
+	var fetchCount atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fetchCount.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(providerResponse{
+			UpdatedAt: "2024-01-01T00:00:00Z",
+			Models:    []ModelInfo{{ID: "test-model"}},
+		})
+	}))
+	defer srv.Close()
+
+	SetBaseURL(srv.URL)
+	ClearCache()
+	SetTTL(1 * time.Hour)
+
+	models1, err := FetchModels(context.Background(), "test")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if fetchCount.Load() != 1 {
+		t.Fatalf("expected 1 fetch, got %d", fetchCount.Load())
+	}
+
+	models2, err := FetchModels(context.Background(), "test")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if fetchCount.Load() != 1 {
+		t.Fatalf("expected cache hit (still 1 fetch), got %d", fetchCount.Load())
+	}
+	if len(models2) != 1 || models2[0].ID != "test-model" {
+		t.Errorf("cache returned wrong data: %v", models2)
+	}
+	_ = models1
+}
+
+func TestFetchModels_CacheExpiry(t *testing.T) {
+	originalURL := baseURLCopy()
+	defer func() { SetBaseURL(originalURL) }()
+
+	var fetchCount atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fetchCount.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(providerResponse{
+			UpdatedAt: "2024-01-01T00:00:00Z",
+			Models:    []ModelInfo{{ID: "fresh-model"}},
+		})
+	}))
+	defer srv.Close()
+
+	SetBaseURL(srv.URL)
+	ClearCache()
+	SetTTL(50 * time.Millisecond)
+
+	FetchModels(context.Background(), "expiring")
+
+	time.Sleep(100 * time.Millisecond)
+
+	FetchModels(context.Background(), "expiring")
+
+	if fetchCount.Load() != 2 {
+		t.Fatalf("expected 2 fetches after cache expiry, got %d", fetchCount.Load())
+	}
+}
+
+func TestFetchModels_NotFound(t *testing.T) {
+	originalURL := baseURLCopy()
+	defer func() { SetBaseURL(originalURL) }()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "not found", http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	SetBaseURL(srv.URL)
+	ClearCache()
+
+	models, err := FetchModels(context.Background(), "nonexistent")
+	if err != nil {
+		t.Fatalf("expected nil error for 404, got: %v", err)
+	}
+	if models != nil {
+		t.Fatalf("expected nil models for 404, got: %v", models)
+	}
+}
+
+func TestFetchModels_ServerError(t *testing.T) {
+	originalURL := baseURLCopy()
+	defer func() { SetBaseURL(originalURL) }()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	SetBaseURL(srv.URL)
+	ClearCache()
+
+	models, err := FetchModels(context.Background(), "broken")
+	if err == nil {
+		t.Fatal("expected error for 500 response")
+	}
+	if models != nil {
+		t.Fatalf("expected nil models for 500, got: %v", models)
+	}
+}
+
+func TestFetchModels_InvalidJSON(t *testing.T) {
+	originalURL := baseURLCopy()
+	defer func() { SetBaseURL(originalURL) }()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte("not-json"))
+	}))
+	defer srv.Close()
+
+	SetBaseURL(srv.URL)
+	ClearCache()
+
+	models, err := FetchModels(context.Background(), "badjson")
+	if err == nil {
+		t.Fatal("expected error for invalid JSON response")
+	}
+	if models != nil {
+		t.Fatalf("expected nil models for invalid JSON, got: %v", models)
+	}
+}
+
+func TestSetTTL(t *testing.T) {
+	originalTTL := ttlCopy()
+	defer func() { SetTTL(originalTTL) }()
+
+	SetTTL(10 * time.Second)
+	if ttlCopy() != 10*time.Second {
+		t.Errorf("expected TTL 10s, got %v", ttlCopy())
+	}
+}
+
+func TestClearCache(t *testing.T) {
+	originalURL := baseURLCopy()
+	defer func() { SetBaseURL(originalURL) }()
+
+	var fetchCount atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fetchCount.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(providerResponse{
+			UpdatedAt: "2024-01-01T00:00:00Z",
+			Models:    []ModelInfo{{ID: "cached"}},
+		})
+	}))
+	defer srv.Close()
+
+	SetBaseURL(srv.URL)
+	ClearCache()
+	SetTTL(1 * time.Hour)
+
+	FetchModels(context.Background(), "cleared")
+	if fetchCount.Load() != 1 {
+		t.Fatalf("expected 1 fetch, got %d", fetchCount.Load())
+	}
+
+	ClearCache()
+
+	FetchModels(context.Background(), "cleared")
+	if fetchCount.Load() != 2 {
+		t.Fatalf("expected 2 fetches after clear, got %d", fetchCount.Load())
+	}
+}
+
+func TestFetchModels_ProviderIDNormalized(t *testing.T) {
+	originalURL := baseURLCopy()
+	defer func() { SetBaseURL(originalURL) }()
+
+	var lastPath atomic.Value
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		lastPath.Store(r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(providerResponse{
+			UpdatedAt: "2024-01-01T00:00:00Z",
+			Models:    []ModelInfo{{ID: "model"}},
+		})
+	}))
+	defer srv.Close()
+
+	SetBaseURL(srv.URL)
+	ClearCache()
+
+	FetchModels(context.Background(), "OpenRouter")
+
+	path := lastPath.Load().(string)
+	if path != "/models/openrouter.json" {
+		t.Errorf("expected normalized path /models/openrouter.json, got %s", path)
+	}
+}
+
+func TestFetchModels_ContextCancelled(t *testing.T) {
+	originalURL := baseURLCopy()
+	defer func() { SetBaseURL(originalURL) }()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(5 * time.Second)
+	}))
+	defer srv.Close()
+
+	SetBaseURL(srv.URL)
+	ClearCache()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+
+	_, err := FetchModels(ctx, "slow")
+	if err == nil {
+		t.Fatal("expected error due to context cancellation")
+	}
+}
+
+// --- NEW TESTS from code review ---
+
+func TestFetchModels_InvalidProviderID(t *testing.T) {
+	originalURL := baseURLCopy()
+	defer func() { SetBaseURL(originalURL) }()
+
+	SetBaseURL("http://localhost:8080")
+	ClearCache()
+
+	testCases := []struct {
+		name string
+		id   string
+	}{
+		{"empty", ""},
+		{"spaces only", "   "},
+		{"uppercase chars", "OpenRouter"},
+		{"with slash", "open/router"},
+		{"with dot", "open.router"},
+		{"with special chars", "openrouter!@#"},
+		{"too long", strings.Repeat("a", 129)},
+		{"with spaces", "open router"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			models, err := FetchModels(context.Background(), tc.id)
+			if err == nil {
+				t.Fatalf("expected error for invalid provider ID %q", tc.id)
+			}
+			if models != nil {
+				t.Fatalf("expected nil models for invalid ID, got: %v", models)
+			}
+		})
+	}
+}
+
+func TestFetchModels_ConcurrentRequests(t *testing.T) {
+	originalURL := baseURLCopy()
+	defer func() { SetBaseURL(originalURL) }()
+
+	var fetchCount atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fetchCount.Add(1)
+		// Small delay to make concurrent requests more likely
+		time.Sleep(20 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(providerResponse{
+			UpdatedAt: "2024-01-01T00:00:00Z",
+			Models:    []ModelInfo{{ID: "shared-model"}},
+		})
+	}))
+	defer srv.Close()
+
+	SetBaseURL(srv.URL)
+	ClearCache()
+	SetTTL(1 * time.Hour)
+
+	var wg sync.WaitGroup
+	concurrency := 10
+	errors := make([]error, concurrency)
+
+	for i := 0; i < concurrency; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			models, err := FetchModels(context.Background(), "shared")
+			if err != nil {
+				errors[idx] = err
+				return
+			}
+			if len(models) != 1 || models[0].ID != "shared-model" {
+				errors[idx] = fmt.Errorf("wrong model data")
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
+	for i, err := range errors {
+		if err != nil {
+			t.Errorf("goroutine %d failed: %v", i, err)
+		}
+	}
+
+	// singleflight should deduplicate: only 1 network call despite 10 goroutines
+	if fetchCount.Load() != 1 {
+		t.Errorf("expected 1 fetch (singleflight dedup), got %d", fetchCount.Load())
+	}
+}
+
+func TestIsValidProviderID(t *testing.T) {
+	valid := []string{"openrouter", "openai", "zai", "ollama-local", "deepinfra", "a1", "model-v2"}
+	invalid := []string{"", "OpenRouter", "open/router", "open.router", "open router", "has!special", strings.Repeat("a", 129)}
+
+	for _, id := range valid {
+		if !isValidProviderID(id) {
+			t.Errorf("expected %q to be valid", id)
+		}
+	}
+	for _, id := range invalid {
+		if isValidProviderID(id) {
+			t.Errorf("expected %q to be invalid", id)
+		}
+	}
+}

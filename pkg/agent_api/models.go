@@ -15,6 +15,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/sprout-foundry/sprout/pkg/modelregistry"
+	"github.com/sprout-foundry/sprout/pkg/providercatalog"
 )
 
 const maxHTTPErrorBodyPreview = 240
@@ -177,8 +178,12 @@ func GetModelsForProvider(clientType ClientType) ([]ModelInfo, error) {
 // It checks the model registry first (if enabled), falling back to direct per-provider API calls.
 func GetModelsForProviderCtx(ctx context.Context, clientType ClientType) ([]ModelInfo, error) {
 	// Try the model registry first — fast, cached, no API key required.
-	if registryModels, err := modelregistry.FetchModels(ctx, string(clientType)); err == nil && registryModels != nil {
-		return convertRegistryModels(registryModels), nil
+	// Only attempt registry fetch for known providers in the catalog to avoid unnecessary network requests.
+	providerID := string(clientType)
+	if _, exists := providercatalog.FindProvider(providerID); exists {
+		if registryModels, err := modelregistry.FetchModels(ctx, providerID); err == nil && registryModels != nil {
+			return convertRegistryModels(registryModels), nil
+		}
 	}
 
 	// Fall back to the provider's direct ListModels method.

@@ -32,7 +32,8 @@ const {
   createWorkspaceWindow,
   createSSHWorkspaceWindow,
 } = require('./windows');
-const { initAutoUpdater } = require('./updater');
+const { initAutoUpdater, isUpdatePending } = require('./updater');
+const { autoUpdater } = require('electron-updater');
 const { registerDesktopProtocol, extractWorkspacePathFromOpenTarget } = require('./protocol');
 
 function isSmokeTestMode() {
@@ -314,7 +315,18 @@ app.on('window-all-closed', () => {
   }
 });
 
-app.on('will-quit', () => {
+app.on('will-quit', (event) => {
+  // Install deferred update if one is pending
+  if (isUpdatePending()) {
+    console.log('[updater] Installing pending update before quit');
+    // Prevent the quit event from proceeding immediately
+    event.preventDefault();
+    // Let electron-updater handle the quit and install
+    autoUpdater.quitAndInstall();
+    return;
+  }
+
+  // Normal cleanup - kill all backend instances
   for (const [id, record] of ctx.instanceRegistry) {
     const child = record.child;
     child.kill();

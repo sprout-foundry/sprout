@@ -112,6 +112,96 @@
 [x] - EDITOR: Implement `'split-grid'` layout type — defined in `PaneLayout` type but not rendered in the layout logic in AppContent.
 [x] - UX: Add a proper notification/toast system — errors from saves, API failures, and background operations often only appear in `console.error`. Users need visible, dismissible notifications for important events.
 
+### Editor Quality-of-Life & Best-in-Class Feature Gaps
+
+These gaps were identified by cross-referencing the current editor implementation (CodeMirror 6 with 7 custom extensions) against the full CM6 ecosystem and the feature sets of best-in-class editors (VS Code, JetBrains). Items are ordered by implementation complexity (easiest first).
+
+#### Tier 1 — Single-Line Additions (CM6 already provides the extension)
+
+[x] - EDITOR: Add `highlightActiveLineGutter()` to the editor extensions array in `EditorPane.tsx` — the CSS class `.cm-activeLineGutter` already exists and is styled via `--cm-active-line-gutter`, but the extension `highlightActiveLineGutter` from `@codemirror/view` is not imported or configured. Without it, the gutter does not visually highlight the active line number. Import from `@codemirror/view` and add to the extensions array.
+
+[x] - EDITOR: Add `highlightSelectionMatches()` to the editor extensions array — currently when you select text, matching occurrences are not highlighted throughout the document. This is a standard feature in every modern editor (VS Code, Sublime, JetBrains). The extension `highlightSelectionMatches` is already available from `@codemirror/search` (which is installed). Import it and add to the extensions array.
+
+[x] - EDITOR: Add `scrollPastEnd()` to the editor extensions array — when viewing a file, the last line is pinned to the bottom of the viewport with no dead space below it. `scrollPastEnd` from `@codemirror/view` (already installed) allows the user to scroll the last line up to the middle of the viewport, which is standard in VS Code and most editors. Import from `@codemirror/view` and add to the extensions array.
+
+[x] - EDITOR: Add `dropCursor()` to the editor extensions array — when dragging text within the editor, there is no visual indicator of where the text will be dropped. The `.cm-dropCursor` CSS class exists and is themed, and the CodeMirror import `dropCursor` is available from `@codemirror/view` (not currently imported). Add it to the extensions array so a vertical line appears at the drop target during text drag operations.
+
+[x] - EDITOR: Add `drawSelection()` to the editor extensions array — explicitly enable CodeMirror's selection drawing extension from `@codemirror/view`. While CM6 does render selections by default, importing `drawSelection` explicitly ensures consistent cross-browser selection rendering (especially for single-cursor caret-style selections) and makes the dependency visible in the code.
+
+[] - EDITOR: Add editor font size zoom (Cmd/Ctrl+= to zoom in, Cmd/Ctrl+- to zoom out) — the editor font is hardcoded to `13px` in `EditorPane.tsx`. Add keybindings that adjust the `--editor-font-size` CSS variable (or the inline style) and persist the preference to `localStorage`. This is an accessibility and comfort feature that every IDE supports. Implementation: add a Compartment or reactive CSS variable, register `Mod-=` and `Mod--` keybindings, and read/write from localStorage.
+
+#### Tier 2 — Small Package Additions (npm install + a few lines of code)
+
+[] - EDITOR: Add relative line numbers via `@uiw/codemirror-extensions-line-numbers-relative` — currently line numbers are absolute-only. Relative line numbers (showing distance from current line) are expected by vim users and are useful for `j15`-style jump commands. Install the package, wrap in a Compartment for toggling, and add a settings entry or keybinding to enable/disable.
+
+[] - EDITOR: Add Emmet HTML/CSS abbreviation expansion via `@emmetio/codemirror6-plugin` — when editing HTML or CSS, Emmet allows typing abbreviations like `div.container>ul>li*3` and expanding them to full HTML. This is a massive productivity feature for web development and standard in VS Code. Install the package, configure it, and wire it into the editor extensions (only active for HTML/CSS/JSX language modes).
+
+[] - EDITOR: Add clickable URL support via `@uiw/codemirror-extensions-hyper-link` — URLs in comments and strings are not clickable. Install this package so Cmd/Ctrl+click on a URL opens it in a browser. Add to the editor extensions array.
+
+[] - EDITOR: Add color value widget via `@uiw/codemirror-extensions-color` — CSS color values like `#ff0000`, `rgb(255,0,0)`, `hsl()` are displayed as plain text with no preview. This package renders an inline color swatch and opens a color picker when clicked. Install the package and add to the editor extensions (relevant for CSS, HTML, JS, TS, and any language with color literals).
+
+[] - EDITOR: Add configurable tab size — currently the editor uses CodeMirror's default 4-space indent unit. Add a `EditorState.tabSize` Compartment in `EditorPane.tsx` that reads from a setting (stored in localStorage or the settings API) and allows the user to choose 2, 4, or 8 spaces. Also add a tab size indicator to the editor footer/status bar.
+
+[] - EDITOR: Add auto-detect indentation from opened files — when opening a file, scan the first ~100 lines to detect the most common indent style (tabs vs spaces) and indent width (2, 4, 8). Apply the detected settings to the editor's tabSize/indentUnit compartments. This ensures consistency when opening files from different projects without requiring manual configuration.
+
+#### Tier 3 — Small Custom Extensions (ViewPlugin/StateField, ~2-4 hours each)
+
+[] - EDITOR: Add trailing whitespace highlighting — create a `trailingWhitespacePlugin` ViewPlugin in `webui/src/extensions/` that decorates trailing spaces and tabs on each line with a subtle background color (configurable via CSS variable). Lines with no trailing whitespace are unaffected. This is a standard feature in VS Code and Atom and helps catch whitespace-only diffs. Use viewport-decoration filtering for performance on large files.
+
+[] - EDITOR: Add whitespace rendering mode (render tabs/spaces as visible characters) — create a `whitespaceRenderingPlugin` ViewPlugin that replaces tab characters with visible `→` symbols and trailing spaces with `·` dots. Add a setting entry to toggle between: "none" (default), "boundary" (only trailing whitespace), and "all" (all whitespace). VS Code exposes this as "Editor: Render Whitespace". Use decorations to overlay the special characters.
+
+[] - EDITOR: Add highlight for unsaved/modified lines — the diff gutter shows git changes, but there is no indicator for lines changed since the last save. Create a ViewPlugin that compares `EditorState.doc` against the buffer's `originalContent` (already tracked in `EditorManagerContext`) and adds a subtle background decoration to modified lines (similar to VS Code's minimap modified-region indicators, but inline). Use the existing `--diff-mod-color` CSS variable for visual consistency.
+
+[] - EDITOR: Add selection length/count to the editor footer — currently the footer shows `Ln X, Col Y` for cursor position but nothing when text is selected. Display `Ln X, Col Y (Z selected)` where Z is the character count of the selection. When multiple selections exist, show `(N selections)`. This is a trivial computation from `view.state.selection` in the existing editor update listener.
+
+[] - EDITOR: Add file encoding and line ending indicator to the editor footer — display `UTF-8 · LF` or `UTF-8 · CRLF` in the pane footer. The line ending can be detected by scanning the document for `\r\n`. The encoding is typically UTF-8 but could be detected from the file read response if the API provides it. This is informational and low-effort.
+
+[] - EDITOR: Enhance the search panel with match-case, match-whole-word, and regex toggle buttons — currently the search panel (opened via Cmd/Ctrl+F) provides basic find/replace inputs but no toggles for case sensitivity, whole-word matching, or regex mode. These are standard in every search panel. The `@codemirror/search` package does not ship visible toggle UI, so build a small panel extension that sets `SearchConfig` via the search extension's reconfiguration.
+
+[] - EDITOR: Fix Cmd/Ctrl+S priority when search panel is open — when the CodeMirror search panel is focused, pressing Cmd/Ctrl+S does not trigger save because the search panel's keybindings consume the event. Ensure the save key binding has higher priority (use `Prec.highest` or register the save keymap after the search keymap in the extensions array so it takes precedence). This was previously attempted (see `editor替换PanelKeymap`) but may still have edge cases.
+
+[] - EDITOR: Ensure multi-cursor operations work in all editor states — while `EditorState.allowMultipleSelections.of(true)` is set and `Cmd+D` / `Cmd+click` work, verify that: (1) multi-cursor undo works correctly (each cursor's edits undo together as a single transaction), (2) paste into multi-cursor inserts at all cursors, (3) find-and-replace works with multiple selections, (4) line manipulation commands (move, duplicate, delete) handle multiple cursors gracefully. Add test coverage for multi-cursor edge cases.
+
+#### Tier 4 — Medium Features (new files/panels, ~8-16 hours each)
+
+[] - EDITOR: Add hover tooltips for type/signature documentation — when hovering over a token (variable, function, type), show a tooltip with the type signature and documentation. For TypeScript/JavaScript/Go, this can use the existing `apiService.getSemanticDefinition` or a new hover-API endpoint. Implement using `hoverTooltip()` from `@codemirror/tooltip` (already a transitive dependency via `@codemirror/autocomplete`). For non-LSP languages, fall back to showing basic token info or nothing. This is a core IDE feature and one of the most impactful improvements.
+
+[] - EDITOR: Add markdown live preview — when editing `.md` files, add a toggle button in the toolbar that opens a side-by-side preview pane rendering the markdown as HTML. Use `react-markdown` or the existing `marked` library. The preview should update live as the user types. Consider adding a split-view toggle (side-by-side vs. inline-rendered). This is essential for README editing and documentation work.
+
+[] - EDITOR: Add document formatting (format-on-save) — integrate a formatting backend (Prettier via the Go server, or LSP `textDocument/formatting`) and add a "Format on Save" toggle in settings. When enabled, format the document before saving. Add a "Format Document" command to the command palette and a keybinding (Opt+Shift+F / Alt+Shift+F). This is one of the most commonly expected IDE features.
+
+[] - EDITOR: Add LSP-aware rename (F2) — the current rename workflow is manual (find and replace). Implement F2 rename that uses the backend's semantic capabilities (for TS/JS/Go) or falls back to a find-and-replace dialog with preview for other languages. Add an input dialog at cursor position, show a rename preview with highlighting, and apply the change atomically.
+
+[] - EDITOR: Add LSP-aware "Find All References" (Shift+F12) — for TypeScript/JavaScript/Go files, add a "Find All References" command that queries the backend semantic API and displays results in a panel or popover. Show file path and line number for each reference. Make it available via keybinding, command palette, and context menu.
+
+[] - EDITOR: Add quick actions / refactor menu (Ctrl/Cmd+.) — when the cursor is on a line that has available code actions (from LSP or static analysis), show a lightbulb icon in the gutter and a menu (triggered by Ctrl+.) with actions like "Add import", "Extract function", "Fix all", etc. This is a defining IDE feature. Start with static analysis actions (missing imports, unused variables) and expand to LSP code actions.
+
+[] - EDITOR: Add sticky scroll (pinned function/class headers) — when scrolling through a large file, the current function or class header should pin at the top of the viewport so the user always sees context. This is a feature in VS Code 2023+ and is very valuable for navigating large files. Implement as a ViewPlugin that: (1) uses the syntax tree to find the enclosing function/class at the viewport top, (2) renders a pinned/sticky decoration above the editor content, (3) updates on scroll and cursor movement.
+
+[] - EDITOR: Add drag-and-drop text movement — implement proper drag-and-drop for text within the editor. Currently `dropCursor()` shows a visual indicator but there is no actual drag handler for text movement. Use `EditorView.domEventHandlers({ dragstart, dragover, drop })` to: (1) on dragstart, store the selected text and cursor position, (2) on drop, delete the dragged text from the source position and insert at the drop position. Hold Alt during drop to copy instead of move.
+
+[] - EDITOR: Add workspace-wide symbol search — the current "Go to Symbol" (`Cmd+Shift+O`) only searches within the current file. Add a "Go to Symbol in Workspace" command that queries the backend for symbols across all files in the project (leverages the existing semantic API). Show results grouped by file in the overlay.
+
+[] - EDITOR: Improve the Go to Symbol overlay — add keyboard navigation (arrow keys to move between results), fuzzy matching for symbol names, display of symbol kind (function, class, variable, type) with icons, and show the enclosing scope path. Currently it does substring matching and basic rendering.
+
+[] - EDITOR: Add minimap click-to-scroll — the minimap (already implemented via `@replit/codemirror-minimap`) shows the viewport position but may not support clicking/dragging on the minimap to jump to that position in the document. If the package doesn't support it natively, add click and drag event handlers on the minimap container that map the click position to a document line and scroll the editor there.
+
+#### Tier 5 — Large Features (new architecture/significant integration, ~16-40 hours each)
+
+[] - EDITOR: Full LSP client integration via `@codemirror/lsp-client` — currently the editor has basic semantic features for TS/JS/Go only (go-to-definition and diagnostics, both via custom API calls to the Go backend). `@codemirror/lsp-client` provides real WebSocket-based LSP integration that would unlock: (1) real-time completions with type info and documentation, (2) hover tooltips with rich content, (3) signature help (inline parameter hints), (4) full rename with preview, (5) find references and go-to-implementation, (6) code actions and code lens, (7) workspace symbols. This is the single highest-impact improvement but requires a WebSocket LSP proxy in the Go backend and significant extension wiring. Consider incremental rollout: start with completions and hover, then add rename/references/code actions.
+
+[] - EDITOR: Add inline parameter hints (signature help) — when typing a function call, show the function signature with the current argument highlighted (like VS Code's parameter hints). Implement using `signatureHelp` from `@codemirror/autocomplete` or through LSP. Show the hint after `(` and `,` and dismiss after `)`. This is very useful for API calls with many parameters.
+
+[] - EDITOR: Add document outline panel — a collapsible sidebar panel showing all symbols in the current file (functions, classes, interfaces, variables) as a tree. Allow click-to-navigate, search/filter within the outline, and sync with the current cursor position (highlight the enclosing symbol). This is a more persistent and detailed version of the existing breadcrumbs and Go to Symbol overlay.
+
+[] - EDITOR: Unify the command palette — the current command palette handles commands but not files or symbols. Add modes so Cmd+P searches files, Cmd+Shift+O searches symbols, Cmd+Shift+P searches commands — all within the same palette UI (with mode tabs or auto-detection based on prefix like `>` for commands, `#` for symbols). This matches the VS Code paradigm where one palette is the entry point for all navigation.
+
+[] - EDITOR: Add inline diff/merge view using `@codemirror/merge` — the current diff gutter shows colored markers on individual lines but does not render a proper diff view with added/removed/changed content, hunk navigation (next/previous change), or accept/reject individual changes. Install `@codemirror/merge` and use it for: (1) viewing git diffs in the sidebar (instead of the current text-only diff), (2) the file-change dialog when external modifications are detected (show an inline merge view instead of just "Reload / Keep mine"), (3) a dedicated "Compare" tab for side-by-side file comparison.
+
+[] - EDITOR: Add code lens decorations — render inline text above lines (e.g., "12 references", "Run test" button) using LSP code lens data or custom rules. This requires a ViewPlugin that creates inline widgets at specific line positions. Start with basic static code lens (function reference counts) before adding interactive elements.
+
+[] - EDITOR: Add auto-close HTML/XML/JSX tags — the current `closeBrackets()` from `@codemirror/autocomplete` auto-closes `()`, `[]`, `{}`, `"`, `'` but does NOT auto-close HTML/JSX tags (`<div>` → `</div>`, `<span>` → `</span>`, etc.). Implement a custom extension that: (1) on typing `>`, checks if the current context is inside a tag (needs syntax tree consultation), (2) inserts the matching closing tag after auto-indent, (3) places the cursor between the opening and closing tags. Consider the Emmet plugin as an alternative if it covers this use case.
+
 ### Terminal & File Pane Gaps
 
 [x] - TERMINAL: Add terminal tabs to support 3+ terminal sessions — currently the model is binary (0 or 2 side-by-side panes). Need a tab bar with named sessions and add/remove cycle.

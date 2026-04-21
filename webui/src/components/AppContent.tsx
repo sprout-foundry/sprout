@@ -133,6 +133,7 @@ interface AppContentProps {
   isConnected: boolean;
   chatSessions?: ChatSession[];
   activeChatId?: string | null;
+  perChatCache?: Record<string, any>;
   onActiveChatChange?: (id: string) => void;
   onCreateChat?: () => Promise<string | null>;
   onDeleteChat?: (id: string) => void;
@@ -171,6 +172,7 @@ const AppContent: React.FC<AppContentProps> = ({
   isConnected,
   chatSessions,
   activeChatId,
+  perChatCache,
   onActiveChatChange,
   onCreateChat,
   onDeleteChat,
@@ -831,6 +833,8 @@ const AppContent: React.FC<AppContentProps> = ({
               paneId={pane.id}
               isActive={pane.id === activePaneId}
               onClick={() => switchPane(pane.id)}
+              perChatCache={perChatCache}
+              activeChatId={activeChatId}
               chatProps={{
                 messages: state.messages,
                 onSendMessage,
@@ -1190,14 +1194,18 @@ const EditorPaneComponent: React.FC<{
   paneId: string;
   isActive?: boolean;
   onClick?: () => void;
+  perChatCache?: Record<string, any>;
+  activeChatId?: string | null;
   chatProps: React.ComponentProps<typeof WorkspacePane>['chatProps'];
   reviewProps: React.ComponentProps<typeof WorkspacePane>['reviewProps'];
   diffState: React.ComponentProps<typeof WorkspacePane>['diffState'];
-}> = ({ paneId, onClick, chatProps, reviewProps, diffState }) => {
+}> = ({ paneId, onClick, perChatCache, activeChatId, chatProps, reviewProps, diffState }) => {
   return (
     <div className="editor-pane-host" onClick={onClick}>
       <WorkspacePane
         paneId={paneId}
+        perChatCache={perChatCache}
+        activeChatId={activeChatId}
         chatProps={chatProps}
         reviewProps={reviewProps}
         diffState={diffState}

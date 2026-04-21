@@ -1,7 +1,7 @@
 # Ledit Testing and Build Makefile
 # Provides clear commands for different types of tests and builds
 
-.PHONY: help test test-unit test-integration test-e2e test-smoke test-all test-ci \
+.PHONY: help test test-unit test-integration test-e2e test-smoke test-all test-ci test-coverage \
        clean build build-all build-version build-ui deploy-ui \
        verify-ui-embedded test-webui lint lint-fix dev
 
@@ -14,6 +14,7 @@ help:
 	@echo "  make test-e2e         - Run e2e tests (requires AI model)"
 	@echo "  make test-smoke       - Run smoke tests (basic functionality)"
 	@echo "  make test-all         - Run unit + integration + smoke tests"
+	@echo "  make test-coverage    - Run unit tests with coverage check (fails if < 40%)"
 	@echo "  make clean            - Clean test artifacts"
 	@echo "  make build            - Build sprout binary"
 	@echo "  make build-version    - Build with version information"
@@ -40,7 +41,7 @@ help:
 test-unit:
 	@echo "Running unit tests..."
 	@bash -lc 'set -o pipefail; \
-	go test -tags ollama_test ./pkg/... ./cmd/... -v -timeout=60s -short 2>&1 | tee /tmp/ledit-test-unit.log; \
+	go test -tags ollama_test ./pkg/... ./cmd/... -v -timeout=60s -short -coverprofile=/tmp/ledit-unit-coverage.out 2>&1 | tee /tmp/ledit-test-unit.log; \
 	status=$${PIPESTATUS[0]}; \
 	if [ $$status -ne 0 ]; then \
 		echo ""; \
@@ -82,6 +83,8 @@ clean:
 	@echo "Cleaning test artifacts..."
 	rm -rf testing/
 	rm -f e2e_results.csv
+	rm -f /tmp/ledit-coverage.out /tmp/ledit-unit-coverage.out /tmp/ledit-coverage-func.txt
+	rm -f /tmp/ledit-test-coverage.log /tmp/ledit-test-unit.log
 	find . -name "*.test" -delete
 	find . -name "test_failure_*.log" -delete
 
@@ -91,6 +94,44 @@ test: test-unit
 # CI-friendly test (unit + integration)
 test-ci: test-unit test-integration
 	@echo "CI tests completed"
+
+# Coverage Check - Run tests with coverage and enforce minimum threshold
+# Note: timeout is 120s (vs 60s for test-unit) because race detection slows tests significantly
+test-coverage:
+	@echo "Running unit tests with coverage check..."
+	@bash -lc 'set -o pipefail; \
+	go test -race -tags ollama_test ./pkg/... ./cmd/... -timeout=120s -short -coverprofile=/tmp/ledit-coverage.out 2>&1 | tee /tmp/ledit-test-coverage.log; \
+	status=$${PIPESTATUS[0]}; \
+	if [ $$status -ne 0 ]; then \
+		echo ""; \
+		echo "Tests failed with race detection enabled. Last 200 lines:"; \
+		tail -n 200 /tmp/ledit-test-coverage.log || true; \
+		exit $$status; \
+	fi; \
+	echo ""; \
+	echo "Generating coverage report..."; \
+	go tool cover -func=/tmp/ledit-coverage.out > /tmp/ledit-coverage-func.txt; \
+	total_coverage=$$(go tool cover -func=/tmp/ledit-coverage.out | grep "^total:" | awk "{print \$$3}" | sed "s/%//"); \
+	if [ -z "$${total_coverage}" ]; then \
+		echo "ERROR: Failed to extract coverage information"; \
+		exit 1; \
+	fi; \
+	if ! echo "$${total_coverage}" | grep -qE "^[0-9]+\.?[0-9]*$$"; then \
+		echo "ERROR: Invalid coverage value: $${total_coverage}"; \
+		exit 1; \
+	fi; \
+	echo ""; \
+	echo "Total coverage: $${total_coverage}%"; \
+	min_coverage=40; \
+	if ! awk "BEGIN {exit !($${total_coverage} < $${min_coverage})}"; then \
+		echo ""; \
+		echo "ERROR: Coverage ($${total_coverage}%) is below minimum threshold ($${min_coverage}%)"; \
+		echo "Packages with lowest coverage:"; \
+		go tool cover -func=/tmp/ledit-coverage.out | grep -v "^total:" | awk -F" " "{print \$$NF, \$$0}" | sort -n | head -10 | awk "{\$$1=\"\"; print substr(\$$0,2)}"; \
+		exit 1; \
+	fi; \
+	echo ""; \
+	echo "Coverage check passed: $${total_coverage}% >= $${min_coverage}%"'
 
 # Build sprout binary
 build:
@@ -140,10 +181,10 @@ deploy-ui: build-ui
 	@echo "Build artifacts in pkg/webui/static/ are now embedded at compile time."
 
 verify-ui-embedded:
-	@echo "Verifying webui/build/ assets are available..."
-	@test -d webui/build || ( echo "webui/build/ does not exist. Run 'make build-ui'."; exit 1 )
-	@test -f webui/build/index.html || ( echo "webui/build/index.html is missing. Run 'make build-ui'."; exit 1 )
-	@echo "WebUI build assets are available (served from webui/build/ at runtime)"
+	@echo "Verifying embedded UI assets are available..."
+	@test -d pkg/webui/static || ( echo "pkg/webui/static/ does not exist. Run 'make deploy-ui'."; exit 1 )
+	@test -f pkg/webui/static/index.html || ( echo "pkg/webui/static/index.html is missing. Run 'make deploy-ui'."; exit 1 )
+	@echo "Embedded UI assets are available (served from pkg/webui/static/ in production)"
 
 # Test React web UI server
 test-webui:

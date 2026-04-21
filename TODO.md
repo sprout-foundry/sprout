@@ -241,6 +241,7 @@
 
 ### Auto-Update
 
+[x] - DESKTOP: Implement auto-update — there is currently no mechanism to notify users of or apply new releases. Integrate `electron-updater` (already a peer dep in the electron ecosystem) pointing at the GitHub Releases feed. Show a non-intrusive "Update available" notification and allow deferred install-on-quit.
 [] - DESKTOP: Implement auto-update — there is currently no mechanism to notify users of or apply new releases. Integrate `electron-updater` (already a peer dep in the electron ecosystem) pointing at the GitHub Releases feed. Show a non-intrusive "Update available" notification and allow deferred install-on-quit.
 
 ### Testing
@@ -402,6 +403,70 @@ Three Python test runner scripts at the project root with overlapping purposes:
 
 **Cleanup command:** `rm -f test-results/.last-run.json`
 **Update_and_test.sh:** Consider deleting or moving to a `scripts/dev/` directory.
+
+---
+
+## Cloud Integration — Sprout Foundry
+
+### 1. Complete ledit → sprout Rename (partially done)
+
+[x] - CLOUD: Rename Go module to `github.com/sprout-foundry/sprout` and update import paths across all `.go` files (already done)
+[x] - CLOUD: Update WASM global to `SproutWasm` and IndexedDB to `sprout-wasm-fs` (already done)
+[x] - CLOUD: Update logos to sprout design (already done)
+[] - CLOUD: Create `GetEnv(sproutKey, legacyKey)` helper in `pkg/configuration/env.go` that checks `SPROUT_*` first with `LEDIT_*` fallback + deprecation warning
+[] - CLOUD: Replace all ~221 `os.Getenv("LEDIT_...")` call sites with `configuration.GetEnv("SPROUT_...", "LEDIT_...")` across non-test Go files
+[] - CLOUD: Update `cmd/service_darwin.go` and `cmd/service_linux.go` to use `SPROUT_SERVICE=1` in launchd/systemd config (keep `LEDIT_SERVICE` as backward-compat alias)
+[] - CLOUD: Rename WebUI types: `LeditInstance` → `SproutInstance`, `LeditSettings` → `SproutSettings`, `LeditConfigDir` → `SproutConfigDir`, `LeditLogo` → `SproutLogo`, `LeditLogoProps` → `SproutLogoProps` (in `webui/src/services/api.ts` and refs in Sidebar.tsx, AppContent.tsx, LocationSwitcher.tsx)
+[] - CLOUD: Update `webui/package.json` name from `ledit-webui` to `sprout-webui`
+[] - CLOUD: Update all CLI help strings and comments referencing `ledit agent`, `ledit custom add`, `ledit service install` etc. to use `sprout` prefix (in `cmd/*.go` and `pkg/`)
+[] - CLOUD: Update desktop/Electron branding: window title, app ID `dev.alantheprice.sprout`, `desktop/package.json` name/productName/build.appId
+[] - CLOUD: Update install scripts `scripts/install.sh` and `scripts/install.ps1` with sprout binary name and GitHub URL paths
+[] - CLOUD: Clean install script — Ensure no remaining `ledit`/`Ledit`/`LEDIT` references in source (excluding `.ledit` config dir paths and backward-compat test files)
+
+### 2. Add Token Metrics to Structured JSON Output
+
+[] - CLOUD: Extend `AgentResultMetrics` in `cmd/agent_result.go` with `TokensIn`, `TokensOut`, `LLMCalls`, `Provider`, `Model` fields
+[] - CLOUD: Create `pkg/agent/metrics.go` with thread-safe `ExecutionMetrics` accumulator (RecordCall with mutex-protected totals)
+[] - CLOUD: Hook token count accumulation into LLM completion/chat response handler (from API `usage` fields) — ensure subagent LLM calls are excluded from provider/model (record primary agent only)
+[] - CLOUD: Pass `ExecutionMetrics` to `emitJSONResult` and populate the new fields in the JSON output
+[] - CLOUD: Add tests for token metrics — verify accumulation across multiple LLM calls, subagent exclusion, backward-compatible output structure
+[] - CLOUD: Verify backward compatibility — existing tests pass, new fields are additive only
+
+### 3. Fix `--port` vs `--web-port` Flag Inconsistency
+
+[] - CLOUD: Add `--port` as a hidden alias for `--web-port` in `cmd/agent.go` so that `sprout agent -d --port 54000` works for the Docker entrypoint
+
+### 4. Service Mode: Bind Address, Origin Allowlist, and Auth Header Trust
+
+[] - CLOUD: Add `--bind` flag and `SPROUT_BIND_ADDR` env var to control web UI listen address (default: `127.0.0.1`) — update `pkg/webui/server.go` to use configurable bind address
+[] - CLOUD: Add `SPROUT_ALLOWED_ORIGINS` env var (comma-separated) to origin-check middleware — accept listed origins in addition to localhost
+[] - CLOUD: Add `SPROUT_TRUSTED_USER_HEADER` env var for auth header extraction in service mode — read user ID from a configurable header when `SPROUT_SERVICE=1`
+[] - CLOUD: Add `GET /health` endpoint that is always accessible regardless of origin (for ALB health checks)
+[] - CLOUD: Verify that in local mode (no `SPROUT_SERVICE`), the trusted user header is ignored (no spoofing)
+
+### 5. Git Diff Robustness — Handle Missing HEAD
+
+[] - CLOUD: Update `emitJSONResult` in `cmd/agent_result.go` to handle missing HEAD (fall back to `git diff` without HEAD ref)
+[] - CLOUD: Include untracked new files in `files_modified` via `git ls-files --others --exclude-standard`
+[] - CLOUD: Verify no duplicate entries in `files_modified` list
+
+### 6. WASM Shell — Merge and Rebrand
+
+[x] - CLOUD: Merge `browser-wasm-fileserver` branch into main and verify all files present, no `ledit`/`Ledit`/`LEDIT` references remain in Go/JS/WASM source (commit `f7efa5b2`)
+[x] - CLOUD: Verify `pkg/wasmshell/` tests pass, `SproutWasm` global and `sprout-wasm-fs` IndexedDB name are correct
+[x] - CLOUD: Add `build-wasm` target to `Makefile` and integrate into `build-all` so the WASM binary is rebuilt when `pkg/wasmshell/` or `cmd/wasm/` changes
+
+### 7. Make WebUI Servable by Sprout Foundry via Service Worker Shim
+
+[] - CLOUD: Add `--dist` flag to `scripts/build-wasm.sh` that produces a self-contained distributable directory (webui build + WASM binary + version.json)
+[] - CLOUD: Create `webui/src/config/mode.ts` feature flag module — read `REACT_APP_SPROUT_MODE` and export `isCloud`, `supportsSSH`, `supportsInstances`, `supportsLocalTerminal`, `supportsSettings` flags
+[] - CLOUD: Conditionally render SSH panels, instance management panels, local terminal PTY, and local settings in WebUI components based on cloud mode feature flags
+[] - CLOUD: Ensure the webui renders gracefully when no Go backend is reachable (shows a connection error message, but editor/file tree/terminal still load via WASM)
+[] - CLOUD: Make `wasmShell.ts` paths configurable — accept optional `wasmUrl` and `wasmExecUrl` in `initWasmShell()` config parameter
+[] - CLOUD: Add `build-webui-dist` and `build-webui-dist-local` makefile targets for cloud-mode and local-mode distributable bundles
+[] - CLOUD: Verify the dist bundle serves correctly from a plain static HTTP server (all assets load, no 404s, app renders without backend)
+
+<!-- Dependency order: [1] rename first → [2]–[5] can be done in parallel → [7] depends on [1] + [6]. Section [6] is already complete. -->
 
 ---
 

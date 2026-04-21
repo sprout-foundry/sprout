@@ -37,7 +37,7 @@
 .git-history-commit-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0;
   overflow-y: auto;
   max-height: calc(100vh - 400px);
   padding-right: 2px;
@@ -48,13 +48,12 @@
   flex-direction: column;
   gap: 2px;
   padding: 10px 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  background: var(--bg-elevated);
+  border: none;
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: 0;
+  background: transparent;
   cursor: pointer;
-  transition:
-    border-color 0.12s ease,
-    background 0.12s ease;
+  transition: background 0.1s ease;
   text-align: left;
   color: inherit;
   font: inherit;
@@ -62,8 +61,7 @@
 }
 
 .git-history-commit-row:hover:not(:disabled) {
-  border-color: var(--border-strong);
-  background: var(--bg-tertiary);
+  background: var(--bg-elevated);
 }
 
 .git-history-commit-row:disabled {
@@ -124,22 +122,20 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 8px;
-  border: 1px solid var(--border-default);
-  border-radius: 8px;
-  background: var(--bg-elevated);
+  padding: 10px;
+  border: none;
+  border-top: 1px solid var(--border-subtle);
+  border-radius: 0;
+  background: transparent;
   color: var(--text-secondary);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition:
-    background 0.12s ease,
-    border-color 0.12s ease;
+  transition: background 0.12s ease;
 }
 
 .git-history-load-more:hover:not(:disabled) {
-  background: var(--bg-tertiary);
-  border-color: var(--border-strong);
+  background: var(--bg-elevated);
 }
 
 .git-history-load-more:disabled {

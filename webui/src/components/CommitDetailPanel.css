@@ -34,37 +34,32 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .commit-detail-header.compact {
-  padding: 6px 10px;
+  padding: 6px 0;
 }
 
 .commit-detail-back-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid var(--border-default);
-  background: var(--bg-elevated);
-  color: var(--text-primary);
-  border-radius: 8px;
-  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 6px;
+  padding: 4px 6px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition:
-    background 0.12s ease,
-    border-color 0.12s ease;
+  transition: color 0.12s ease;
   font-family: var(--font-sans);
 }
 
 .commit-detail-back-btn:hover {
-  background: var(--bg-tertiary);
-  border-color: var(--border-strong);
+  color: var(--text-primary);
 }
 
 .commit-detail-commit-info {

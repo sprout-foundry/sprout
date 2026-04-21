@@ -77,6 +77,65 @@ jobs:
         CI: "true"
       run: make test-coverage
 
+    - name: Display coverage summary
+      if: always()
+      run: |
+        if [ -f /tmp/ledit-coverage.out ]; then
+          echo "## Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          go tool cover -func=/tmp/ledit-coverage.out | grep "^total:" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Packages with Lowest Coverage" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          go tool cover -func=/tmp/ledit-coverage.out | grep -v "^total:" | awk -F" " '{print $NF, $0}' | sort -n | head -15 | awk '{$1=""; print substr($0,2)}' >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+        else
+          echo "## Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ Coverage file not found at /tmp/ledit-coverage.out" >> $GITHUB_STEP_SUMMARY
+          echo "Test run may have failed before generating coverage data." >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Generate coverage function details
+      if: always()
+      run: |
+        if [ -f /tmp/ledit-coverage.out ]; then
+          go tool cover -func=/tmp/ledit-coverage.out > /tmp/ledit-coverage-func.txt
+          echo "Generated coverage function details"
+        else
+          echo "Coverage file not found, skipping coverage function details generation"
+        fi
+
+    - name: Upload coverage report
+      if: always()
+      continue-on-error: true
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: /tmp/ledit-coverage.out
+        retention-days: 30
+
+    - name: Upload coverage function details
+      if: always()
+      continue-on-error: true
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-function-details
+        path: /tmp/ledit-coverage-func.txt
+        retention-days: 30
+
+    - name: Upload test logs
+      if: always()
+      continue-on-error: true
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-logs
+        path: /tmp/ledit-test-coverage.log
+        retention-days: 30
+
     - name: Run integration tests
       run: make test-integration
 

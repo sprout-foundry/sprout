@@ -441,6 +441,49 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     }
   }, [buffer, saveBuffer, apiService]); // eslint-disable-line react-hooks/exhaustive-deps -- updateDiffGutter/clearDiffGutter are module-level functions
 
+  // Zoom in/out: adjust font size and persist to localStorage
+  const onZoomIn = useCallback(() => {
+    setEditorFontSize((prev) => {
+      const next = Math.min(prev + 1, 32); // max 32px
+      try {
+        localStorage.setItem('editor:font-size', String(next));
+      } catch (err) {
+        debugLog('[onZoomIn] localStorage persist failed:', err);
+      }
+      viewRef.current?.dispatch({
+        effects: fontSizeCompartment.current.reconfigure([
+          EditorView.theme({
+            '&': {
+              fontSize: `${next}px`,
+            },
+          }),
+        ]),
+      });
+      return next;
+    });
+  }, []);
+
+  const onZoomOut = useCallback(() => {
+    setEditorFontSize((prev) => {
+      const next = Math.max(prev - 1, 8); // min 8px
+      try {
+        localStorage.setItem('editor:font-size', String(next));
+      } catch (err) {
+        debugLog('[onZoomOut] localStorage persist failed:', err);
+      }
+      viewRef.current?.dispatch({
+        effects: fontSizeCompartment.current.reconfigure([
+          EditorView.theme({
+            '&': {
+              fontSize: `${next}px`,
+            },
+          }),
+        ]),
+      });
+      return next;
+    });
+  }, []);
+
   // Ref to always read current buffer state without subscribing to identity changes.
   // This prevents handleGoToDefinition from changing identity on every buffer
   // update (e.g. scroll position changes), which would trigger a full
@@ -1033,49 +1076,6 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     }
     viewRef.current?.dispatch({
       effects: minimapCompartment.current.reconfigure(next ? minimapExtension() : []),
-    });
-  }, []);
-
-  // Zoom in/out: adjust font size and persist to localStorage
-  const onZoomIn = useCallback(() => {
-    setEditorFontSize((prev) => {
-      const next = Math.min(prev + 1, 32); // max 32px
-      try {
-        localStorage.setItem('editor:font-size', String(next));
-      } catch (err) {
-        debugLog('[onZoomIn] localStorage persist failed:', err);
-      }
-      viewRef.current?.dispatch({
-        effects: fontSizeCompartment.current.reconfigure([
-          EditorView.theme({
-            '&': {
-              fontSize: `${next}px`,
-            },
-          }),
-        ]),
-      });
-      return next;
-    });
-  }, []);
-
-  const onZoomOut = useCallback(() => {
-    setEditorFontSize((prev) => {
-      const next = Math.max(prev - 1, 8); // min 8px
-      try {
-        localStorage.setItem('editor:font-size', String(next));
-      } catch (err) {
-        debugLog('[onZoomOut] localStorage persist failed:', err);
-      }
-      viewRef.current?.dispatch({
-        effects: fontSizeCompartment.current.reconfigure([
-          EditorView.theme({
-            '&': {
-              fontSize: `${next}px`,
-            },
-          }),
-        ]),
-      });
-      return next;
     });
   }, []);
 

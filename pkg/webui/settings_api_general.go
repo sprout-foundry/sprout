@@ -139,6 +139,34 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 		s, _ := v.(string)
 		cfg.SubagentModel = s
 	}
+	if v, ok := patch["subagent_max_parallel"]; ok {
+		n, ok2 := asInt(v)
+		if ok2 && n >= 0 {
+			cfg.SubagentMaxParallel = n
+		}
+	}
+	if v, ok := patch["subagent_parallel_enabled"]; ok {
+		b, ok2 := v.(bool)
+		if ok2 {
+			cfg.SubagentParallelEnabled = &b
+		}
+	}
+	if v, ok := patch["commit_provider"]; ok {
+		s, _ := v.(string)
+		cfg.CommitProvider = s
+	}
+	if v, ok := patch["commit_model"]; ok {
+		s, _ := v.(string)
+		cfg.CommitModel = s
+	}
+	if v, ok := patch["review_provider"]; ok {
+		s, _ := v.(string)
+		cfg.ReviewProvider = s
+	}
+	if v, ok := patch["review_model"]; ok {
+		s, _ := v.(string)
+		cfg.ReviewModel = s
+	}
 	if v, ok := patch["pdf_ocr_enabled"]; ok {
 		cfg.PDFOCREnabled, _ = v.(bool)
 	}

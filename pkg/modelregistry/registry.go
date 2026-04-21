@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -210,6 +211,10 @@ func FetchModels(ctx context.Context, providerID string) ([]RawModel, error) {
 		defer resp.Body.Close()
 
 		if resp.StatusCode == http.StatusNotFound {
+			// Log debug information if debug mode is enabled
+			if os.Getenv("LEDIT_DEBUG_REGISTRY") != "" {
+				log.Printf("[modelregistry] provider %q not found in registry (404), falling back to provider API", providerID)
+			}
 			return nil, nil
 		}
 

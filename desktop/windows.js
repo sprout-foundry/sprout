@@ -202,8 +202,22 @@ function buildMenu() {
       role: 'help',
       submenu: [
         {
+          label: 'Check for Updates...',
+          click: async () => {
+            const mainWindow = BrowserWindow.getFocusedWindow();
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('desktop:trigger-update-check');
+            }
+          },
+        },
+        {
           label: 'Open Project Homepage',
           click: () => shell.openExternal('https://github.com/alantheprice/ledit'),
+        },
+        { type: 'separator' },
+        {
+          label: `Version ${app.getVersion()}`,
+          enabled: false,
         },
       ],
     },

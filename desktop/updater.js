@@ -4,18 +4,69 @@
  * Only active in packaged builds — no-ops during development.
  */
 
-const { app, dialog, ipcMain } = require('electron');
+const { app, ipcMain, BrowserWindow } = require('electron');
 const { autoUpdater } = require('electron-updater');
+const fs = require('node:fs');
+const path = require('node:path');
 
 /**
- * Track if an update notification has been shown to avoid duplicate notifications.
+ * Path to persist update state across app restarts.
  */
-let updateNotificationShown = false;
+const UPDATE_STATE_FILE = path.join(app.getPath('userData'), 'update-state.json');
 
 /**
  * Track if user has deferred update installation (will install on quit).
  */
 let installOnQuit = false;
+
+/**
+ * Track if an update has been downloaded and ready to install.
+ */
+let updateDownloaded = false;
+
+/**
+ * Track the version of the downloaded update.
+ */
+let downloadedVersion = null;
+
+/**
+ * Load persisted update state from disk.
+ */
+function loadUpdateState() {
+  try {
+    if (fs.existsSync(UPDATE_STATE_FILE)) {
+      const data = fs.readFileSync(UPDATE_STATE_FILE, 'utf8');
+      const state = JSON.parse(data);
+      if (state.installOnQuit) {
+        installOnQuit = true;
+      }
+      if (state.updateDownloaded) {
+        updateDownloaded = true;
+        downloadedVersion = state.downloadedVersion || null;
+      }
+    }
+  } catch (error) {
+    console.error('[updater] Failed to load update state:', error);
+  }
+}
+
+/**
+ * Persist update state to disk.
+ * @param {Object} stateOverride - Optional override for the state object
+ */
+function persistUpdateState(stateOverride = null) {
+  try {
+    const state = stateOverride || {
+      installOnQuit,
+      updateDownloaded,
+      downloadedVersion,
+    };
+    const data = JSON.stringify(state);
+    fs.writeFileSync(UPDATE_STATE_FILE, data, 'utf8');
+  } catch (error) {
+    console.error('[updater] Failed to persist update state:', error);
+  }
+}
 
 /**
  * Initialize auto-updater with event handlers and IPC registration.
@@ -24,6 +75,17 @@ function initAutoUpdater() {
   if (!app.isPackaged) {
     console.log('[updater] Running in development mode — auto-update disabled');
     return;
+  }
+
+  // Load persisted state
+  loadUpdateState();
+
+  // Show notification if update was previously downloaded but not installed
+  if (updateDownloaded && downloadedVersion) {
+    // Delay notification slightly to allow UI to initialize
+    setTimeout(() => {
+      notifyUpdateAvailable({ version: downloadedVersion });
+    }, 1000);
   }
 
   // Configure updater settings
@@ -41,15 +103,35 @@ function initAutoUpdater() {
     notifyUpdateError(error);
   });
 
-  // Download progress handler — optional logging
+  // Download progress handler — send progress to webui
   autoUpdater.on('download-progress', (progress) => {
     console.log(`[updater] Download progress: ${progress.percent}%`);
+    const mainWindow = BrowserWindow.getAllWindows()[0];
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update:download-progress', {
+        percent: progress.percent,
+        transferred: progress.transferred,
+        total: progress.total,
+        bytesPerSecond: progress.bytesPerSecond,
+      });
+    }
   });
 
   // Update downloaded handler — show non-intrusive notification
   autoUpdater.on('update-downloaded', (info) => {
     console.log(`[updater] Update downloaded: ${info.version}`);
+    updateDownloaded = true;
+    downloadedVersion = info.version;
+    persistUpdateState();
     notifyUpdateAvailable(info);
+
+    // Also send direct IPC event for immediate response
+    const mainWindow = BrowserWindow.getAllWindows()[0];
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update:downloaded', {
+        version: info.version,
+      });
+    }
   });
 
   // Delay first check slightly to avoid blocking startup
@@ -74,14 +156,33 @@ function registerIpcHandlers() {
 
   // Install update immediately
   ipcMain.handle('desktop:installUpdate', async () => {
-    installOnQuit = false;
-    autoUpdater.quitAndInstall();
-    return { ok: true };
+    try {
+      // Clear the install-on-quit flag since we're installing now
+      installOnQuit = false;
+      persistUpdateState();
+
+      // Attempt to quit and install
+      // Note: This will quit the app immediately, so code below may not execute
+      autoUpdater.quitAndInstall();
+
+      // If we reach here, quitAndInstall failed to quit (shouldn't normally happen)
+      // Clear the downloaded state since we attempted to install
+      updateDownloaded = false;
+      downloadedVersion = null;
+      persistUpdateState();
+
+      return { ok: true };
+    } catch (error) {
+      console.error('[updater] quitAndInstall error:', error);
+      // Return error to renderer so it can show a notification
+      return { ok: false, error: error.message || 'Failed to install update' };
+    }
   });
 
   // Defer update to install on quit
   ipcMain.handle('desktop:deferUpdate', async () => {
     installOnQuit = true;
+    persistUpdateState();
     return { ok: true, willInstallOnQuit: true };
   });
 
@@ -93,6 +194,9 @@ function registerIpcHandlers() {
   // Cancel pending install on quit
   ipcMain.handle('desktop:cancelPendingInstall', async () => {
     installOnQuit = false;
+    updateDownloaded = false;
+    downloadedVersion = null;
+    persistUpdateState();
     return { ok: true };
   });
 }
@@ -112,34 +216,46 @@ async function checkForUpdates() {
 }
 
 /**
- * Send an error notification to the webui via notificationBus.
+ * Send an error notification to the webui via IPC.
  * @param {Error} error - The error that occurred
  */
 function notifyUpdateError(error) {
-  const { notificationBus } = require('../webui/src/services/notificationBus');
-  if (notificationBus) {
-    notificationBus.notify(
-      'warning',
-      'Update Check Failed',
-      'We were unable to check for updates. Please try again later.',
-      5000
-    );
+  // Determine appropriate error message based on error type
+  let errorMessage = 'We were unable to check for updates. Please try again later.';
+  const errorMsg = error?.message || '';
+  const errorCode = error?.code || '';
+
+  if (errorMsg.includes('net')) {
+    errorMessage = 'Network error while checking for updates. Please check your connection.';
+  } else if (errorCode === 'ERR_UPDATER_CHANNEL_INVALID') {
+    errorMessage = 'Update server configuration error. Please reinstall the app.';
+  }
+
+  // Send IPC message to renderer to show notification
+  const mainWindow = BrowserWindow.getAllWindows()[0];
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('update:error', {
+      title: 'Update Check Failed',
+      message: errorMessage,
+      duration: 8000,
+    });
   }
 }
 
 /**
- * Send a non-intrusive update available notification to the webui.
+ * Send a non-intrusive update available notification to the webui via IPC.
  * @param {Object} info - Update information from electron-updater
  */
 function notifyUpdateAvailable(info) {
-  const { notificationBus } = require('../webui/src/services/notificationBus');
-  if (notificationBus) {
-    notificationBus.notify(
-      'success',
-      'Update Available',
-      `Version ${info.version} is ready to install. You can install now or quit to install automatically.`,
-      10000 // Longer duration for update notifications
-    );
+  // Send IPC message to renderer to show notification
+  const mainWindow = BrowserWindow.getAllWindows()[0];
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('update:available', {
+      title: 'Update Available',
+      message: `Version ${info.version} is ready to install. You can install now or quit to install automatically.`,
+      version: info.version,
+      duration: 10000, // Longer duration for update notifications
+    });
   }
 }
 
@@ -151,17 +267,8 @@ function isUpdatePending() {
   return installOnQuit;
 }
 
-/**
- * Set the install-on-quit flag.
- * @param {boolean} value - Whether to install on quit
- */
-function setInstallOnQuit(value) {
-  installOnQuit = value;
-}
-
 module.exports = {
   initAutoUpdater,
   checkForUpdates,
   isUpdatePending,
-  setInstallOnQuit,
 };

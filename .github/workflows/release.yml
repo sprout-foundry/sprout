@@ -69,6 +69,43 @@ jobs:
     - name: Run smoke tests
       run: make test-smoke
 
+  desktop-release:
+    name: Build Desktop Release
+    needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+      fail-fast: false
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Build and publish desktop app
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        npm run desktop:release
+
+    - name: Upload desktop artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: desktop-${{ matrix.os }}
+        path: desktop/dist/*
+        retention-days: 30
+
   build:
     name: Build and Release
     needs: test
@@ -237,14 +274,19 @@ jobs:
         body: |
           ## Release ${{ steps.get_version.outputs.VERSION }}
 
-          This release includes multi-platform binaries built with proper version information.
+          This release includes multi-platform CLI binaries and desktop applications built with proper version information.
 
-          ### Binaries
+          ### CLI Binaries
           - `ledit-linux-amd64.tar.gz` - Linux AMD64
           - `ledit-linux-arm64.tar.gz` - Linux ARM64
           - `ledit-windows-amd64.zip` - Windows AMD64
           - `ledit-darwin-amd64.tar.gz` - macOS Intel
           - `ledit-darwin-arm64.tar.gz` - macOS Apple Silicon
+
+          ### Desktop Applications
+          - `ledit-*.dmg` - macOS Desktop App
+          - `ledit-*.exe` - Windows Desktop App
+          - `ledit-*.AppImage` - Linux Desktop App
 
           ### Version Information
           Each binary includes:

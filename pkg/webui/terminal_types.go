@@ -2,8 +2,6 @@ package webui
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,8 +12,63 @@ import (
 	"github.com/creack/pty"
 )
 
-// tmuxSessionPrefix is prepended to session IDs when creating tmux session names.
-const tmuxSessionPrefix = "ledit_"
+// ringCapacity is the number of bytes retained in the per-session scrollback ring.
+// 256 KB provides enough replay history for typical reconnect scenarios.
+const ringCapacity = 256 * 1024
+
+// sessRing is a thread-safe circular byte buffer that retains the last ringCapacity
+// bytes of terminal output. Older bytes are silently dropped when the buffer is full.
+type sessRing struct {
+	mu   sync.Mutex
+	data []byte
+	head int // index of oldest byte
+	n    int // number of bytes currently stored
+}
+
+func newSessRing() *sessRing {
+	return &sessRing{data: make([]byte, ringCapacity)}
+}
+
+// write appends p to the ring, dropping the oldest bytes when the capacity is exceeded.
+func (r *sessRing) write(p []byte) {
+	if len(p) == 0 {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cap := len(r.data)
+	for _, b := range p {
+		if r.n == cap {
+			// Buffer full: drop oldest byte by advancing head.
+			r.head = (r.head + 1) % cap
+		} else {
+			r.n++
+		}
+		r.data[(r.head+r.n-1)%cap] = b
+	}
+}
+
+// snapshot returns a copy of all buffered bytes in order (oldest first).
+func (r *sessRing) snapshot() []byte {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.n == 0 {
+		return nil
+	}
+	out := make([]byte, r.n)
+	cap := len(r.data)
+	for i := 0; i < r.n; i++ {
+		out[i] = r.data[(r.head+i)%cap]
+	}
+	return out
+}
+
+// termSub is a per-WebSocket subscriber for a terminal session's output stream.
+// The channel is closed when the PTY process exits or when the subscriber's
+// buffer overflows (so the WebSocket goroutine can reconnect and replay the ring).
+type termSub struct {
+	ch chan []byte
+}
 
 // ShellInfo describes an available shell on the system.
 type ShellInfo struct {
@@ -39,22 +92,83 @@ func shellResolvePath(name string) string {
 	return path
 }
 
-// TerminalSession represents a terminal session.
+// TerminalSession represents a persistent terminal session backed by a raw PTY.
+// The shell process keeps running even when no WebSocket is connected; output is
+// buffered in the ring for replay on reconnect.
 type TerminalSession struct {
-	ID           string
-	Command      *exec.Cmd
-	Pty          *os.File  // PTY file handle
-	Output       io.Reader // PTY handles both input and output
-	Cancel       context.CancelFunc
-	Active       bool
-	mutex        sync.RWMutex
-	LastUsed     time.Time
+	ID       string
+	Command  *exec.Cmd
+	Pty      *os.File
+	Cancel   context.CancelFunc
+	Active   bool
+	mutex    sync.RWMutex
+	LastUsed time.Time
+	Size     *pty.Winsize
+
+	// History for shell command navigation.
 	History      []string
 	HistoryIndex int
-	OutputCh     chan []byte
-	Size         *pty.Winsize  // Terminal size for resizing
-	TmuxBacked   bool          // Whether this session uses tmux for persistence
-	monitorDone  chan struct{} // Close to signal the monitor goroutine to stop
+
+	// ring holds the last ringCapacity bytes of PTY output for reconnect replay.
+	ring *sessRing
+
+	// subs is the list of active WebSocket subscribers.
+	subsMu sync.Mutex
+	subs   []*termSub
+}
+
+// subscribe adds a new WebSocket subscriber and returns its termSub.
+func (s *TerminalSession) subscribe() *termSub {
+	sub := &termSub{ch: make(chan []byte, 10000)}
+	s.subsMu.Lock()
+	s.subs = append(s.subs, sub)
+	s.subsMu.Unlock()
+	return sub
+}
+
+// unsubscribe removes a subscriber. Safe to call even if the sub was already removed.
+func (s *TerminalSession) unsubscribe(sub *termSub) {
+	s.subsMu.Lock()
+	defer s.subsMu.Unlock()
+	for i, existing := range s.subs {
+		if existing == sub {
+			s.subs = append(s.subs[:i], s.subs[i+1:]...)
+			return
+		}
+	}
+}
+
+// broadcast writes p to the ring buffer and forwards it to all active subscribers.
+// If a subscriber's channel is full it is evicted (its channel is closed) so the
+// WebSocket goroutine can reconnect and replay the ring.
+func (s *TerminalSession) broadcast(p []byte) {
+	s.ring.write(p)
+
+	s.subsMu.Lock()
+	defer s.subsMu.Unlock()
+
+	live := s.subs[:0]
+	for _, sub := range s.subs {
+		select {
+		case sub.ch <- p:
+			live = append(live, sub)
+		default:
+			// Subscriber channel full — evict and close so the goroutine stops.
+			close(sub.ch)
+		}
+	}
+	s.subs = live
+}
+
+// closeAllSubs closes every active subscriber channel (signals PTY exit) and
+// clears the subscriber list.
+func (s *TerminalSession) closeAllSubs() {
+	s.subsMu.Lock()
+	defer s.subsMu.Unlock()
+	for _, sub := range s.subs {
+		close(sub.ch)
+	}
+	s.subs = nil
 }
 
 // TerminalManager manages terminal sessions.
@@ -62,38 +176,14 @@ type TerminalManager struct {
 	sessions      map[string]*TerminalSession
 	mutex         sync.RWMutex
 	workspaceRoot string
-	tmuxAvailable bool
-	tmuxCheckOnce sync.Once
 }
 
 // NewTerminalManager creates a new terminal manager.
 func NewTerminalManager(workspaceRoot string) *TerminalManager {
-	tm := &TerminalManager{
+	return &TerminalManager{
 		sessions:      make(map[string]*TerminalSession),
 		workspaceRoot: workspaceRoot,
 	}
-	// Check tmux availability once (Unix only)
-	tm.tmuxCheckOnce.Do(func() {
-		if runtime.GOOS != "windows" {
-			tm.tmuxAvailable = shellExists("tmux")
-			if tm.tmuxAvailable {
-				fmt.Printf("TerminalManager: tmux detected, terminal persistence enabled\n")
-			} else {
-				fmt.Printf("TerminalManager: tmux not found, terminal persistence disabled (install tmux for persistence)\n")
-			}
-		}
-	})
-	return tm
-}
-
-// TmuxSessionName returns the tmux session name for a given session ID.
-func (tm *TerminalManager) TmuxSessionName(sessionID string) string {
-	return tmuxSessionPrefix + sessionID
-}
-
-// IsTmuxAvailable returns whether tmux was found at startup.
-func (tm *TerminalManager) IsTmuxAvailable() bool {
-	return tm.tmuxAvailable
 }
 
 // HasSession checks if a session exists (for reattach).

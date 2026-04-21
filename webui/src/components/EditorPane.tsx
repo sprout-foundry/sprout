@@ -69,6 +69,11 @@ interface EditorPaneProps {
   onOpenCommandPalette?: () => void;
 }
 
+// Font size constants
+const FONT_SIZE_MIN = 8;       // Minimum legible font size
+const FONT_SIZE_DEFAULT = 13;  // Default matches Monaco/Menlo editor defaults
+const FONT_SIZE_MAX = 72;      // Maximum for accessibility (WCAG supports 200% zoom)
+
 function isSemanticLanguage(languageId: string): boolean {
   return (
     languageId === 'typescript' ||
@@ -113,16 +118,16 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   const [editorFontSize, setEditorFontSize] = useState<number>(() => {
     try {
       const stored = localStorage.getItem('editor:font-size');
-      if (stored === null) return 13; // default 13px
+      if (stored === null) return FONT_SIZE_DEFAULT;
       const parsed = parseInt(stored, 10);
-      // Validate: must be a number and within acceptable range (8-32px)
-      if (!isNaN(parsed) && parsed >= 8 && parsed <= 32) {
+      // Validate: must be a number and within acceptable range
+      if (!isNaN(parsed) && parsed >= FONT_SIZE_MIN && parsed <= FONT_SIZE_MAX) {
         return parsed;
       }
-      return 13; // default 13px if invalid
+      return FONT_SIZE_DEFAULT; // default if invalid
     } catch (err) {
       debugLog('Failed to read font size from localStorage:', err);
-      return 13; // default 13px if localStorage unavailable
+      return FONT_SIZE_DEFAULT; // default if localStorage unavailable
     }
   });
 
@@ -444,7 +449,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   // Zoom in/out: adjust font size and persist to localStorage
   const onZoomIn = useCallback(() => {
     setEditorFontSize((prev) => {
-      const next = Math.min(prev + 1, 32); // max 32px
+      const next = Math.min(prev + 1, FONT_SIZE_MAX);
       try {
         localStorage.setItem('editor:font-size', String(next));
       } catch (err) {
@@ -465,7 +470,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
 
   const onZoomOut = useCallback(() => {
     setEditorFontSize((prev) => {
-      const next = Math.max(prev - 1, 8); // min 8px
+      const next = Math.max(prev - 1, FONT_SIZE_MIN);
       try {
         localStorage.setItem('editor:font-size', String(next));
       } catch (err) {
@@ -811,6 +816,9 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     ];
 
     // Zoom in/out keybindings: Mod+= to zoom in, Mod+- to zoom out
+    // NOTE: onZoomIn/onZoomOut use empty dependency arrays to prevent
+    // editor destruction/recreation when this keymap is captured during
+    // initialization. Do NOT add state dependencies to these callbacks.
     const zoomKeymap: KeyBinding[] = [
       {
         key: 'Mod-=',
@@ -1088,11 +1096,6 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   useEffect(() => {
     minimapEnabledRef.current = minimapEnabled;
   }, [minimapEnabled]);
-
-  const fontSizeRef = useRef(editorFontSize);
-  useEffect(() => {
-    fontSizeRef.current = editorFontSize;
-  }, [editorFontSize]);
 
   // Keep module-level linked scroll state in sync with context.
   useEffect(() => {

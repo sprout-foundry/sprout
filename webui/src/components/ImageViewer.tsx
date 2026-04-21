@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { MouseEvent, WheelEvent } from 'react';
-import { ZoomIn, ZoomOut, Maximize2, Image as ImageIcon, Loader2, AlertTriangle } from 'lucide-react';
+import { Image as ImageIcon, Loader2, AlertTriangle, ClipboardCopy, ExternalLink } from 'lucide-react';
 import { readFileWithConsent } from '../services/fileAccess';
 import { useLog } from '../utils/log';
+import ViewerToolbar from './ViewerToolbar';
 import './ImageViewer.css';
 
 interface ImageViewerProps {
@@ -21,6 +22,7 @@ function ImageViewer({ filePath, fileName, fileSize }: ImageViewerProps): JSX.El
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const [imageSrc, setImageSrc] = useState<string | null>(null);
+  const [imageBlob, setImageBlob] = useState<Blob | null>(null);
   const [dimensions, setDimensions] = useState<Dimensions | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -31,9 +33,6 @@ function ImageViewer({ filePath, fileName, fileSize }: ImageViewerProps): JSX.El
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [translateStart, setTranslateStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-
-  // Track mouse position for zoom center
-  // (wheel zoom uses event coordinates directly)
 
   // Fit to window calculation
   const fitToWindow = useCallback((imgWidth: number, imgHeight: number) => {
@@ -64,6 +63,7 @@ function ImageViewer({ filePath, fileName, fileSize }: ImageViewerProps): JSX.El
       setLoading(true);
       setError(null);
       setImageSrc(null);
+      setImageBlob(null);
       setDimensions(null);
 
       try {
@@ -75,6 +75,7 @@ function ImageViewer({ filePath, fileName, fileSize }: ImageViewerProps): JSX.El
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
         setImageSrc(url);
+        setImageBlob(blob);
 
         // Wait for image to load to get dimensions
         const img = new Image();
@@ -197,6 +198,35 @@ function ImageViewer({ filePath, fileName, fileSize }: ImageViewerProps): JSX.El
     setIsDragging(false);
   }, []);
 
+  // Copy image to clipboard
+  const handleCopyImage = useCallback(async () => {
+    if (!imageBlob) {
+      log.warn('[ImageViewer] No image blob available for copying', { title: 'Copy Image' });
+      return;
+    }
+
+    try {
+      // Create a ClipboardItem with the image blob
+      const clipboardItem = new ClipboardItem({ [imageBlob.type]: imageBlob });
+      await navigator.clipboard.write([clipboardItem]);
+      log.info('[ImageViewer] Image copied to clipboard', { title: 'Copy Successful' });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      log.error(`[ImageViewer] Failed to copy image: ${errorMessage}`, { title: 'Copy Failed' });
+      // Gracefully fail - no UI feedback needed as per requirements
+    }
+  }, [imageBlob, log]);
+
+  // Open image in browser
+  const handleOpenInBrowser = useCallback(() => {
+    if (!imageSrc) {
+      log.warn('[ImageViewer] No image source available for opening', { title: 'Open Image' });
+      return;
+    }
+
+    window.open(imageSrc, '_blank', 'noopener,noreferrer');
+  }, [imageSrc, log]);
+
   // Format file size
   const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return `${bytes} B`;
@@ -204,26 +234,33 @@ function ImageViewer({ filePath, fileName, fileSize }: ImageViewerProps): JSX.El
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  // Calculate zoom display text
-  const getZoomDisplay = (): string => {
-    if (zoom === 1 && dimensions) {
-      // Check if we're at 1:1 (actual size)
-      const container = containerRef.current;
-      if (container) {
-        const containerWidth = container.clientWidth;
-        const containerHeight = container.clientHeight;
-        const fits = dimensions.width <= containerWidth && dimensions.height <= containerHeight;
-        if (fits) return '100%';
-      }
-    }
-    if (zoom < 1) {
-      return `${Math.round(zoom * 100)}%`;
-    }
-    if (Math.abs(zoom - 1) < 0.01) {
-      return '100%';
-    }
-    return `${Math.round(zoom * 100)}%`;
-  };
+  // Build center actions
+  const centerActions = [
+    {
+      id: 'copy-image',
+      title: 'Copy image to clipboard',
+      icon: <ClipboardCopy size={16} />,
+      onClick: handleCopyImage,
+      disabled: !imageBlob,
+    },
+    {
+      id: 'open-browser',
+      title: 'Open in browser',
+      icon: <ExternalLink size={16} />,
+      onClick: handleOpenInBrowser,
+      disabled: !imageSrc,
+    },
+  ];
+
+  // Build stats
+  const stats = dimensions ? (
+    <>
+      <span className="viewer-stat">
+        {dimensions.width}×{dimensions.height} px
+      </span>
+      <span className="viewer-stat">{formatFileSize(fileSize)}</span>
+    </>
+  ) : null;
 
   if (!dimensions) {
     return (
@@ -284,38 +321,15 @@ function ImageViewer({ filePath, fileName, fileSize }: ImageViewerProps): JSX.El
         </div>
       </div>
 
-      <div className="image-viewer-footer">
-        <div className="image-viewer-toolbar">
-          <button className="image-viewer-btn" onClick={handleZoomOut} disabled={zoom <= 0.1} title="Zoom out">
-            <ZoomOut size={16} />
-          </button>
-
-          <span className="image-viewer-zoom-display">{getZoomDisplay()}</span>
-
-          <button className="image-viewer-btn" onClick={handleZoomIn} disabled={zoom >= 10} title="Zoom in">
-            <ZoomIn size={16} />
-          </button>
-
-          <button
-            className="image-viewer-btn"
-            onClick={() => dimensions && fitToWindow(dimensions.width, dimensions.height)}
-            title="Fit to window"
-          >
-            <Maximize2 size={16} />
-          </button>
-
-          <button className="image-viewer-btn" onClick={handleResetZoom} title="1:1 actual size">
-            1:1
-          </button>
-        </div>
-
-        <div className="image-viewer-stats">
-          <span className="image-viewer-stat">
-            {dimensions.width}×{dimensions.height} px
-          </span>
-          <span className="image-viewer-stat">{formatFileSize(fileSize)}</span>
-        </div>
-      </div>
+      <ViewerToolbar
+        zoom={zoom}
+        onZoomIn={handleZoomIn}
+        onZoomOut={handleZoomOut}
+        onFitToWindow={() => dimensions && fitToWindow(dimensions.width, dimensions.height)}
+        onResetZoom={handleResetZoom}
+        centerActions={centerActions}
+        stats={stats}
+      />
     </div>
   );
 }

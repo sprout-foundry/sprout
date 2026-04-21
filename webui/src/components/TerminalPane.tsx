@@ -490,11 +490,14 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       };
     }, [isActive, isConnected, wasmActive, wasmLoading, writeWasmPrompt]);
 
+    const paneConnectedRef = useRef(paneConnected);
+    paneConnectedRef.current = paneConnected;
+
     const sendResize = useCallback(() => {
-      if (!paneConnected || !terminalWSRef.current || !xtermRef.current || !fitAddonRef.current) return;
+      if (!paneConnectedRef.current || !terminalWSRef.current || !xtermRef.current || !fitAddonRef.current) return;
       fitAddonRef.current.fit();
       terminalWSRef.current.sendResize(xtermRef.current.cols, xtermRef.current.rows);
-    }, [paneConnected]);
+    }, []);
 
     // ── Wheel event handler ──
     // xterm.js v6 handles scroll natively via its .xterm-viewport element.

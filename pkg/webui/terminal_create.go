@@ -121,9 +121,18 @@ func (tm *TerminalManager) createTmuxSession(sessionID string, shellOverride ...
 	setEnvCmd := exec.Command("tmux", "set-environment", "-t", tmuxName, "LEDIT_WEB_TERMINAL", "1")
 	_ = setEnvCmd.Run() // Best effort
 
-	// Disable tmux mouse mode so xterm.js handles its own scroll and selection.
-	mouseOffCmd := exec.Command("tmux", "set-option", "-t", tmuxName, "mouse", "off")
-	_ = mouseOffCmd.Run() // Best effort
+	// Enable tmux mouse mode so scroll events are captured by tmux for
+	// copy-mode scrolling instead of being converted to arrow key sequences
+	// by xterm.js.  With mouse on, text selection requires Shift+drag (standard
+	// tmux behaviour).  This matches VS Code's integrated terminal approach.
+	mouseOnCmd := exec.Command("tmux", "set-option", "-t", tmuxName, "mouse", "on")
+	_ = mouseOnCmd.Run() // Best effort
+
+	// Disable tmux status bar — the web UI provides its own terminal chrome
+	// (tab bar, controls, status indicators) so the green tmux bar is redundant
+	// and wastes a row of terminal space.
+	statusOffCmd := exec.Command("tmux", "set-option", "-t", tmuxName, "status", "off")
+	_ = statusOffCmd.Run() // Best effort
 
 	// Now attach to the tmux session to get a PTY we can read/write
 	ctx, cancel := context.WithCancel(context.Background())

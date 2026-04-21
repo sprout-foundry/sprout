@@ -1,0 +1,114 @@
+.viewer-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--border-subtle);
+  gap: 16px;
+}
+
+.viewer-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.viewer-toolbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.viewer-toolbar-btn:hover:not(:disabled) {
+  background: var(--bg-elevated);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.viewer-toolbar-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.viewer-toolbar-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.viewer-toolbar-zoom-display {
+  min-width: 56px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  padding: 0 8px;
+}
+
+.viewer-toolbar-center {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  justify-content: center;
+}
+
+.viewer-toolbar-stats {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Disabled state styling */
+.viewer-toolbar-btn:disabled:hover {
+  background: var(--bg-secondary);
+  border-color: var(--border-default);
+  color: var(--text-muted);
+}
+
+/* Focus styles for accessibility */
+.viewer-toolbar-btn:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .viewer-toolbar {
+    padding: 6px 12px;
+  }
+
+  .viewer-toolbar-group,
+  .viewer-toolbar-center {
+    gap: 4px;
+  }
+
+  .viewer-toolbar-btn {
+    width: 28px;
+    height: 28px;
+  }
+
+  .viewer-toolbar-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .viewer-toolbar-zoom-display {
+    min-width: 48px;
+    font-size: 12px;
+  }
+
+  .viewer-toolbar-stats {
+    font-size: 11px;
+    gap: 12px;
+  }
+}

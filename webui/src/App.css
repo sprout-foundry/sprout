@@ -89,6 +89,10 @@
   --editor-error-bg: rgba(244, 63, 94, 0.16);
   --editor-error-fg: #fecdd3;
 
+  /* Viewer checkerboard pattern colors */
+  --viewer-checker-light: #e0e0e0;
+  --viewer-checker-dark: #3a3a3a;
+
   --toolbar-bg: #111b2f;
   --toolbar-fg: #b8c7dc;
   --toolbar-hover-bg: #1b2a45;
@@ -154,6 +158,10 @@
   --editor-loading-fg: #0c4a6e;
   --editor-error-bg: rgba(220, 38, 38, 0.12);
   --editor-error-fg: #7f1d1d;
+
+  /* Viewer checkerboard pattern colors */
+  --viewer-checker-light: #e0e0e0;
+  --viewer-checker-dark: #c0c0c0;
 
   --toolbar-bg: #e7eef8;
   --toolbar-fg: #334155;

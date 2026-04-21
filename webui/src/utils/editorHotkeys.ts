@@ -10,6 +10,7 @@ interface EditorHotkeyActions {
   onGoToLine?: () => void;
   onGoToSymbol?: () => void;
   onToggleWordWrap?: () => void;
+  onToggleRelativeLineNumbers?: () => void;
 }
 
 // ── Editor line-manipulation helpers ────────────────────────────────
@@ -446,6 +447,24 @@ export function getEditorKeymap(hotkeyEntries: HotkeyEntry[] | null, actions: Ed
     });
   } else {
     bindings.push(...toggleWordWrapBindings);
+  }
+
+  // Toggle relative line numbers — fallback to Ctrl-Alt-r (vim-friendly).
+  const toggleRelativeLineNumbersBindings = bindingsFor('editor_toggle_relative_line_numbers', () => {
+    actions.onToggleRelativeLineNumbers?.();
+    return true;
+  });
+  if (toggleRelativeLineNumbersBindings.length === 0) {
+    bindings.push({
+      key: 'Mod-Alt-r',
+      preventDefault: true,
+      run: () => {
+        actions.onToggleRelativeLineNumbers?.();
+        return true;
+      },
+    });
+  } else {
+    bindings.push(...toggleRelativeLineNumbersBindings);
   }
 
   // Navigate back — fallback to Alt-ArrowLeft (VS Code default).

@@ -149,9 +149,12 @@ func TestFetchModels_CacheExpiry(t *testing.T) {
 
 	FetchModels(context.Background(), "expiring")
 
-	time.Sleep(100 * time.Millisecond)
-
-	FetchModels(context.Background(), "expiring")
+	// Poll until cache expires and second fetch completes.
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) && fetchCount.Load() < 2 {
+		FetchModels(context.Background(), "expiring")
+		time.Sleep(5 * time.Millisecond)
+	}
 
 	if fetchCount.Load() != 2 {
 		t.Fatalf("expected 2 fetches after cache expiry, got %d", fetchCount.Load())
@@ -295,7 +298,8 @@ func TestFetchModels_ContextCancelled(t *testing.T) {
 	defer func() { SetBaseURL(originalURL) }()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(5 * time.Second)
+		// Block until the client disconnects (context cancellation).
+		<-r.Context().Done()
 	}))
 	defer srv.Close()
 
@@ -317,7 +321,15 @@ func TestFetchModels_InvalidProviderID(t *testing.T) {
 	originalURL := baseURLCopy()
 	defer func() { SetBaseURL(originalURL) }()
 
-	SetBaseURL("http://localhost:8080")
+	// Use a mock server that returns 404 for valid IDs, so validation errors
+	// are distinguishable from HTTP errors. A 404 for a valid provider ID should
+	// return (nil, nil), but validation should return an error BEFORE the request.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "not found", http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	SetBaseURL(srv.URL)
 	ClearCache()
 
 	testCases := []struct {
@@ -326,12 +338,12 @@ func TestFetchModels_InvalidProviderID(t *testing.T) {
 	}{
 		{"empty", ""},
 		{"spaces only", "   "},
-		{"uppercase chars", "OpenRouter"},
 		{"with slash", "open/router"},
 		{"with dot", "open.router"},
 		{"with special chars", "openrouter!@#"},
 		{"too long", strings.Repeat("a", 129)},
 		{"with spaces", "open router"},
+		{"with mixed invalid chars", "model-1!invalid"},
 	}
 
 	for _, tc := range testCases {
@@ -342,6 +354,67 @@ func TestFetchModels_InvalidProviderID(t *testing.T) {
 			}
 			if models != nil {
 				t.Fatalf("expected nil models for invalid ID, got: %v", models)
+			}
+			// Verify the error is a validation error, not an HTTP error
+			if !strings.Contains(err.Error(), "invalid provider ID") {
+				t.Errorf("expected validation error for %q, got: %v", tc.id, err)
+			}
+		})
+	}
+}
+
+// TestFetchModels_ValidIDAfterNormalization tests that IDs with uppercase chars
+// are normalized to lowercase and treated as valid (if they contain only valid chars).
+func TestFetchModels_ValidIDAfterNormalization(t *testing.T) {
+	originalURL := baseURLCopy()
+	defer func() { SetBaseURL(originalURL) }()
+
+	var lastPath atomic.Value
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		lastPath.Store(r.URL.Path)
+		// Return 404 for all valid IDs - normalization should work, then 404 returns nil, nil
+		http.Error(w, "not found", http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	SetBaseURL(srv.URL)
+	ClearCache()
+
+	testCases := []struct {
+		name           string
+		id             string
+		expectedPath   string
+		expectError    bool
+	}{
+		{"uppercase", "OpenRouter", "/models/openrouter.json", false},
+		{"mixed case", "MyProvider-V2", "/models/myprovider-v2.json", false},
+		{"all caps", "OPENAI", "/models/openai.json", false},
+		{"camelCase", "deepInfra", "/models/deepinfra.json", false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			models, err := FetchModels(context.Background(), tc.id)
+			if tc.expectError {
+				if err == nil {
+					t.Fatalf("expected error for provider ID %q", tc.id)
+				}
+				if models != nil {
+					t.Fatalf("expected nil models for error case, got: %v", models)
+				}
+			} else {
+				// Valid ID after normalization: should succeed but return nil (404)
+				if err != nil {
+					t.Fatalf("unexpected error for valid ID %q: %v", tc.id, err)
+				}
+				if models != nil {
+					t.Fatalf("expected nil models for 404 response, got: %v", models)
+				}
+				// Verify normalization worked
+				path := lastPath.Load().(string)
+				if path != tc.expectedPath {
+					t.Errorf("expected path %s, got %s", tc.expectedPath, path)
+				}
 			}
 		})
 	}

@@ -1,7 +1,7 @@
 {
   "providers": [
     {
-      "api_key_help": "Z.AI Coding Plan users may need to use the dedicated coding API base instead of the general API.",
+      "api_key_help": "Z.AI Coding Plan users may need to use dedicated coding API base instead of general API.",
       "api_key_label": "Z.AI API Key",
       "default_model": "glm-5",
       "description": "Coding-focused provider with dedicated coding-plan support and strong GLM model coverage.",
@@ -71,6 +71,32 @@
       "signup_url": "https://platform.minimax.io/"
     },
     {
+      "api_key_help": "Cerebras offers high-performance inference with fast token generation.",
+      "api_key_label": "Cerebras API Key",
+      "default_model": "zai-glm-4.7",
+      "description": "High-performance provider with fast inference and GLM model support.",
+      "docs_url": "https://inference-docs.cerebras.ai/",
+      "id": "cerebras",
+      "models": [
+        {
+          "context_length": 65536,
+          "description": "High-performance GLM model",
+          "id": "zai-glm-4.7",
+          "name": "Zai GLM 4.7",
+          "tags": [
+            "coding",
+            "tools"
+          ]
+        }
+      ],
+      "name": "Cerebras",
+      "recommended": false,
+      "recommended_model": "zai-glm-4.7",
+      "recommended_model_why": "Good default for high-performance inference use.",
+      "setup_hint": "Create a Cerebras API key and start with zai-glm-4.7.",
+      "signup_url": "https://cloud.cerebras.ai/"
+    },
+    {
       "api_key_help": "Choose a coding-capable model after connecting your key.",
       "api_key_label": "OpenRouter API Key",
       "default_model": "qwen/qwen3.5-27b",
@@ -82,7 +108,7 @@
       "recommended": true,
       "recommended_model": "qwen/qwen3.5-27b",
       "recommended_model_why": "Prefer a coding-focused model over generic defaults.",
-      "setup_hint": "Best for users who want one key and the ability to switch between many coding-capable models.",
+      "setup_hint": "Best for users who want one key and ability to switch between many coding-capable models.",
       "signup_url": "https://openrouter.ai/keys"
     },
     {
@@ -101,7 +127,7 @@
       "signup_url": "https://deepinfra.com/dash/api_keys"
     },
     {
-      "api_key_help": "Create a Chutes key, then pick one of the available coding-capable models.",
+      "api_key_help": "Create a Chutes key, then pick one of available coding-capable models.",
       "api_key_label": "Chutes API Key",
       "default_model": "qwen/qwen3.5-27b",
       "description": "Hosted inference with strong open-model coverage and simple setup.",
@@ -130,7 +156,7 @@
       "name": "Chutes",
       "recommended": true,
       "recommended_model": "qwen/qwen3.5-27b",
-      "recommended_model_why": "Current coding/reasoning default from the checked-in Chutes catalog.",
+      "recommended_model_why": "Current coding/reasoning default from checked-in Chutes catalog.",
       "setup_hint": "Use Chutes when you want hosted access to open models with a lightweight workflow.",
       "signup_url": "https://chutes.ai/"
     },
@@ -146,7 +172,7 @@
       "recommended": false,
       "recommended_model": "gpt-5-mini",
       "recommended_model_why": "Fallback provider entry only.",
-      "setup_hint": "Available, but not recommended as the first onboarding suggestion in this app.",
+      "setup_hint": "Available, but not recommended as first onboarding suggestion in this app.",
       "signup_url": "https://platform.openai.com/api-keys"
     }
   ],

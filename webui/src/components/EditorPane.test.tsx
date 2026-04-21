@@ -154,6 +154,23 @@ jest.mock('../extensions/minimap', () => ({
   showMinimap: { compute: () => null },
 }));
 
+jest.mock('../extensions/emmet', () => ({
+  createEmmetCompartment: () => {
+    const mockCompartment = {
+      of: jest.fn((ext: any) => ext),
+      reconfigure: jest.fn((ext: any) => ({ reconfigure: ext })),
+    };
+    return mockCompartment;
+  },
+  getInitialEmmetExtensions: () => [],
+  reconfigureEmmet: jest.fn(),
+}));
+
+jest.mock('../extensions/snippets', () => ({
+  tabExpandSnippets: () => [],
+  setSnippetLanguage: jest.fn(),
+}));
+
 // Mock CodeMirror packages — their ESM internals break Jest 27.
 // Factories create stub jest.fn()s; the actual implementations are
 // configured in beforeEach (after resetMocks runs).
@@ -179,8 +196,12 @@ jest.mock('@codemirror/view', () => ({
   lineNumbers: () => [],
   highlightSpecialChars: () => [],
   highlightActiveLine: () => [],
+  highlightActiveLineGutter: () => [],
   rectangularSelection: () => [],
   crosshairCursor: () => [],
+  drawSelection: () => [],
+  dropCursor: () => [],
+  scrollPastEnd: () => [],
   Decoration: {
     mark: jest.fn(() => ({ range: jest.fn() })),
     set: jest.fn(),
@@ -209,6 +230,11 @@ jest.mock('@codemirror/state', () => {
       create: jest.fn(),
       range: jest.fn(),
     },
+    Transaction: {
+      addToHistory: {
+        of: jest.fn((v: any) => v),
+      },
+    },
   };
 });
 
@@ -225,6 +251,7 @@ jest.mock('@codemirror/search', () => ({
   replaceAll: jest.fn(),
   selectNextOccurrence: jest.fn(),
   selectSelectionMatches: jest.fn(),
+  highlightSelectionMatches: () => [],
 }));
 
 jest.mock('@codemirror/autocomplete', () => ({

@@ -2,77 +2,39 @@ package webui
 
 import (
 	"fmt"
-	"os/exec"
 
 	"github.com/creack/pty"
 )
 
-// ResizeTerminal resizes the terminal for the given session.
-// For tmux-backed sessions, the tmux pane is also resized.
+// ResizeTerminal resizes the PTY for the given session.
 func (tm *TerminalManager) ResizeTerminal(sessionID string, rows, cols uint16) error {
+	// Reject zero dimensions — these corrupt process.stdout.columns in child
+	// processes (e.g. Node.js tools using process.stdout.columns directly).
+	// The frontend guards against this too, but we also guard server-side.
+	if cols == 0 || rows == 0 {
+		return fmt.Errorf("resize rejected: zero dimensions (%dx%d) would corrupt PTY", cols, rows)
+	}
+
 	session, exists := tm.GetSession(sessionID)
 	if !exists {
 		return fmt.Errorf("session %s not found", sessionID)
 	}
 
-	// Snapshot tmux info and resize PTY under the lock.
 	session.mutex.Lock()
-	tmuxBacked := session.TmuxBacked
-	ptyFile := session.Pty
-	active := session.Active
+	defer session.mutex.Unlock()
 
-	if !active {
-		session.mutex.Unlock()
+	if !session.Active {
 		return fmt.Errorf("session %s is not active", sessionID)
 	}
-
-	if ptyFile == nil {
-		session.mutex.Unlock()
+	if session.Pty == nil {
 		return fmt.Errorf("no PTY available for session %s", sessionID)
 	}
 
-	newSize := &pty.Winsize{
-		Rows: rows,
-		Cols: cols,
-	}
-
-	// Resize the PTY while holding the lock
-	if err := pty.Setsize(ptyFile, newSize); err != nil {
-		session.mutex.Unlock()
+	newSize := &pty.Winsize{Rows: rows, Cols: cols}
+	if err := pty.Setsize(session.Pty, newSize); err != nil {
 		return fmt.Errorf("failed to resize PTY: %w", err)
 	}
-
 	session.Size = newSize
-	session.mutex.Unlock()
-
-	// For tmux-backed sessions, synchronously resize the tmux pane and update
-	// COLUMNS/LINES so child processes (e.g. Node.js) immediately see correct
-	// dimensions via process.stdout.columns or process.env.COLUMNS.
-	if tmuxBacked {
-		tmuxName := tm.TmuxSessionName(sessionID)
-
-		resizeCmd := exec.Command("tmux", "resize-pane",
-			"-t", tmuxName,
-			"-x", fmt.Sprintf("%d", cols),
-			"-y", fmt.Sprintf("%d", rows),
-		)
-		if err := resizeCmd.Run(); err != nil {
-			// Non-fatal: the PTY resize already happened
-			fmt.Printf("TerminalManager: failed to resize tmux pane %s: %v\n", tmuxName, err)
-		}
-
-		// Propagate updated dimensions into the tmux session environment
-		for _, pair := range []struct{ k, v string }{
-			{"COLUMNS", fmt.Sprintf("%d", cols)},
-			{"LINES", fmt.Sprintf("%d", rows)},
-		} {
-			cmd := exec.Command("tmux", "set-environment", "-t", tmuxName, pair.k, pair.v)
-			if err := cmd.Run(); err != nil {
-				fmt.Printf("TerminalManager: failed to set %s in tmux session %s: %v\n", pair.k, tmuxName, err)
-			}
-		}
-	}
-
 	return nil
 }
 

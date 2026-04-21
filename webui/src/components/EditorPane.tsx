@@ -92,6 +92,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   const lineWrappingCompartment = useRef(new Compartment());
   const languageCompartment = useRef(new Compartment());
   const minimapCompartment = useRef(new Compartment());
+  const fontSizeCompartment = useRef(new Compartment());
   const lastInitLanguageKey = useRef<string | null>(null);
   const [wordWrapEnabled, setWordWrapEnabled] = useState(true);
   const [loading, setLoading] = useState<boolean>(false);
@@ -106,6 +107,22 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     } catch (err) {
       debugLog('Failed to read minimap setting from localStorage:', err);
       return true; // default on if localStorage unavailable
+    }
+  });
+
+  const [editorFontSize, setEditorFontSize] = useState<number>(() => {
+    try {
+      const stored = localStorage.getItem('editor:font-size');
+      if (stored === null) return 13; // default 13px
+      const parsed = parseInt(stored, 10);
+      // Validate: must be a number and within acceptable range (8-32px)
+      if (!isNaN(parsed) && parsed >= 8 && parsed <= 32) {
+        return parsed;
+      }
+      return 13; // default 13px if invalid
+    } catch (err) {
+      debugLog('Failed to read font size from localStorage:', err);
+      return 13; // default 13px if localStorage unavailable
     }
   });
 
@@ -750,6 +767,26 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       },
     ];
 
+    // Zoom in/out keybindings: Mod+= to zoom in, Mod+- to zoom out
+    const zoomKeymap: KeyBinding[] = [
+      {
+        key: 'Mod-=',
+        preventDefault: true,
+        run: () => {
+          onZoomIn();
+          return true;
+        },
+      },
+      {
+        key: 'Mod--',
+        preventDefault: true,
+        run: () => {
+          onZoomOut();
+          return true;
+        },
+      },
+    ];
+
     const semanticKeymap: KeyBinding[] = [
       {
         key: 'F12',
@@ -774,6 +811,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       keymap.of(searchKeymap),
       keymap.of(customKeymap),
       keymap.of(replacePanelKeymap),
+      keymap.of(zoomKeymap),
       keymap.of(semanticKeymap),
       search(),
       highlightSelectionMatches(),
@@ -803,10 +841,16 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       }),
       codeFolding(),
       minimapCompartment.current.of(minimapEnabled ? minimapExtension() : []),
+      fontSizeCompartment.current.of([
+        EditorView.theme({
+          '&': {
+            fontSize: `${editorFontSize}px`,
+          },
+        }),
+      ]),
       EditorView.theme({
         '&': {
           height: '100%',
-          fontSize: '13px',
           fontFamily: "'Monaco', 'Menlo', 'Fira Code', monospace",
           backgroundColor: 'var(--cm-bg)',
           color: 'var(--cm-fg)',
@@ -992,6 +1036,49 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     });
   }, []);
 
+  // Zoom in/out: adjust font size and persist to localStorage
+  const onZoomIn = useCallback(() => {
+    setEditorFontSize((prev) => {
+      const next = Math.min(prev + 1, 32); // max 32px
+      try {
+        localStorage.setItem('editor:font-size', String(next));
+      } catch (err) {
+        debugLog('[onZoomIn] localStorage persist failed:', err);
+      }
+      viewRef.current?.dispatch({
+        effects: fontSizeCompartment.current.reconfigure([
+          EditorView.theme({
+            '&': {
+              fontSize: `${next}px`,
+            },
+          }),
+        ]),
+      });
+      return next;
+    });
+  }, []);
+
+  const onZoomOut = useCallback(() => {
+    setEditorFontSize((prev) => {
+      const next = Math.max(prev - 1, 8); // min 8px
+      try {
+        localStorage.setItem('editor:font-size', String(next));
+      } catch (err) {
+        debugLog('[onZoomOut] localStorage persist failed:', err);
+      }
+      viewRef.current?.dispatch({
+        effects: fontSizeCompartment.current.reconfigure([
+          EditorView.theme({
+            '&': {
+              fontSize: `${next}px`,
+            },
+          }),
+        ]),
+      });
+      return next;
+    });
+  }, []);
+
   // Keep the ref mirror in sync whenever the state value changes from
   // an external source (e.g. the global event listener).
   useEffect(() => {
@@ -1001,6 +1088,11 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   useEffect(() => {
     minimapEnabledRef.current = minimapEnabled;
   }, [minimapEnabled]);
+
+  const fontSizeRef = useRef(editorFontSize);
+  useEffect(() => {
+    fontSizeRef.current = editorFontSize;
+  }, [editorFontSize]);
 
   // Keep module-level linked scroll state in sync with context.
   useEffect(() => {

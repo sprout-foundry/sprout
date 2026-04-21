@@ -54,6 +54,11 @@ import { indentGuidesPlugin } from '../extensions/indentGuides';
 import { bracketColorizationPlugin } from '../extensions/bracketColorization';
 import { linkedScrollExtension, setLinkedScrollEnabled, suppressScrollSync } from '../extensions/linkedScroll';
 import { getLanguageExtensions, resolveLanguageId } from '../extensions/languageRegistry';
+import {
+  createEmmetCompartment,
+  getInitialEmmetExtensions,
+  reconfigureEmmet,
+} from '../extensions/emmet';
 import { minimapExtension } from '../extensions/minimap';
 import { tabExpandSnippets, setSnippetLanguage } from '../extensions/snippets';
 import { ApiService } from '../services/api';
@@ -100,6 +105,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   const relativeLineNumbersCompartment = useRef(new Compartment());
   const languageCompartment = useRef(new Compartment());
   const minimapCompartment = useRef(new Compartment());
+  const emmetCompartment = useRef(createEmmetCompartment());
   const fontSizeCompartment = useRef(new Compartment());
   const lastInitLanguageKey = useRef<string | null>(null);
   const [wordWrapEnabled, setWordWrapEnabled] = useState(true);
@@ -892,6 +898,8 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       },
     ];
 
+    const resolvedLanguage = resolveLanguageId(buffer?.languageOverride, buffer?.file?.ext?.replace(/^\./, ''), buffer?.file?.name);
+
     const extensions = [
       updateListener,
       EditorState.allowMultipleSelections.of(true),
@@ -1000,11 +1008,11 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         },
       }),
       lineWrappingCompartment.current.of(wordWrapEnabled ? EditorView.lineWrapping : []),
+      emmetCompartment.current.of(
+        getInitialEmmetExtensions(resolvedLanguage.languageId),
+      ),
       languageCompartment.current.of(
-        getLanguageExtensions(
-          resolveLanguageId(buffer?.languageOverride, buffer?.file?.ext?.replace(/^\./, ''), buffer?.file?.name)
-            .languageId,
-        ),
+        getLanguageExtensions(resolvedLanguage.languageId),
       ),
     ];
 
@@ -1053,7 +1061,8 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   // A guard key prevents a redundant reconfigure on the same render cycle
   // where the init effect already set the correct language.
   useEffect(() => {
-    if (!viewRef.current || !buffer) return;
+    const view = viewRef.current;
+    if (!view || !buffer) return;
 
     const key = `${buffer.id}:${buffer.languageOverride ?? ''}:${buffer.file?.ext ?? ''}:${buffer.file?.name ?? ''}`;
     if (key === lastInitLanguageKey.current) return; // init already applied this language
@@ -1065,9 +1074,10 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       buffer.file?.name,
     );
 
-    viewRef.current.dispatch({
+    view.dispatch({
       effects: languageCompartment.current.reconfigure(getLanguageExtensions(languageId)),
     });
+    reconfigureEmmet(emmetCompartment.current, view, languageId);
   }, [buffer?.id, buffer?.languageOverride, buffer?.file?.ext, buffer?.file?.name]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep the snippet expansion language in sync with the current buffer.

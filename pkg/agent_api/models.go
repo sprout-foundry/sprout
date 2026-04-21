@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/credentials"
+	"github.com/sprout-foundry/sprout/pkg/modelregistry"
 )
 
 const maxHTTPErrorBodyPreview = 240
@@ -172,9 +173,15 @@ func GetModelsForProvider(clientType ClientType) ([]ModelInfo, error) {
 	return GetModelsForProviderCtx(context.Background(), clientType)
 }
 
-// GetModelsForProviderCtx returns available models for a specific provider with context support
+// GetModelsForProviderCtx returns available models for a specific provider with context support.
+// It checks the model registry first (if enabled), falling back to direct per-provider API calls.
 func GetModelsForProviderCtx(ctx context.Context, clientType ClientType) ([]ModelInfo, error) {
-	// Use the provider's ListModels method
+	// Try the model registry first — fast, cached, no API key required.
+	if registryModels, err := modelregistry.FetchModels(ctx, string(clientType)); err == nil && registryModels != nil {
+		return convertRegistryModels(registryModels), nil
+	}
+
+	// Fall back to the provider's direct ListModels method.
 	provider, err := createProviderForType(clientType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create provider for %s: %w", clientType, err)
@@ -190,6 +197,26 @@ func GetModelsForProviderCtx(ctx context.Context, clientType ClientType) ([]Mode
 	}
 
 	return models, nil
+}
+
+// convertRegistryModels converts modelregistry.RawModel slices to ModelInfo.
+func convertRegistryModels(raw []modelregistry.RawModel) []ModelInfo {
+	out := make([]ModelInfo, len(raw))
+	for i, m := range raw {
+		out[i] = ModelInfo{
+			ID:            m.ID,
+			Name:          m.Name,
+			Description:   m.Description,
+			Provider:      m.Provider,
+			Size:          m.Size,
+			Cost:          m.Cost,
+			InputCost:     m.InputCost,
+			OutputCost:    m.OutputCost,
+			ContextLength: m.ContextLength,
+			Tags:          append([]string(nil), m.Tags...),
+		}
+	}
+	return out
 }
 
 // createProviderForType creates a provider instance for the given client type

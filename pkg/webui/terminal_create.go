@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -14,200 +13,50 @@ import (
 )
 
 // CreateSession creates a new terminal session with PTY support.
-// When tmux is available on Unix, the session is backed by a tmux server
-// so it can survive WebSocket disconnections and be reattached.
+// The shell process runs for the lifetime of the session and persists across
+// WebSocket disconnections. On reconnect, the ring buffer replays recent output.
 // shellOverride, if non-empty, specifies the preferred shell binary (must be in PATH).
 func (tm *TerminalManager) CreateSession(sessionID string, shellOverride ...string) (*TerminalSession, error) {
 	tm.mutex.Lock()
 	defer tm.mutex.Unlock()
 
-	// Check if session already exists
 	if _, exists := tm.sessions[sessionID]; exists {
 		return nil, fmt.Errorf("session %s already exists", sessionID)
 	}
 
-	// Resolve optional shell override from variadic arg
 	var override string
 	if len(shellOverride) > 0 {
 		override = shellOverride[0]
 	}
 
-	// Determine shell based on OS with better fallback logic
 	switch runtime.GOOS {
 	case "windows":
-		// On Windows, fallback to basic exec approach
 		return tm.createWindowsSession(sessionID)
 	default:
-		// Unix-like systems - try tmux first, then raw PTY
-		if tm.tmuxAvailable {
-			return tm.createTmuxSession(sessionID, override)
-		}
 		return tm.createUnixSession(sessionID, override)
 	}
 }
 
-// createTmuxSession creates a tmux-backed terminal session for persistence.
-func (tm *TerminalManager) createTmuxSession(sessionID string, shellOverride ...string) (*TerminalSession, error) {
-	tmuxName := tm.TmuxSessionName(sessionID)
-
-	// Determine the shell to use
-	var override string
-	if len(shellOverride) > 0 {
-		override = shellOverride[0]
-	}
-	shell, shellArgs, err := tm.resolveShell(override)
+// createUnixSession spawns a raw PTY terminal session. A background goroutine
+// reads PTY output into the ring buffer and broadcasts to any WebSocket subscribers.
+// The shell process keeps running even when no subscriber is attached.
+func (tm *TerminalManager) createUnixSession(sessionID, shellOverride string) (*TerminalSession, error) {
+	shell, shellArgs, err := tm.resolveShell(shellOverride)
 	if err != nil {
-		return nil, fmt.Errorf("resolve shell for tmux session: %w", err)
+		return nil, fmt.Errorf("resolve shell: %w", err)
 	}
 
-	// Default terminal size
-	defaultSize := &pty.Winsize{
-		Rows: 24,
-		Cols: 80,
-	}
-
-	// Create the detached tmux session with the user's shell.
-	// Use -e to explicitly pass COLUMNS/LINES into the shell environment.
-	// tmux's update-environment filter does not forward COLUMNS/LINES by default,
-	// so setting them on the outer Env alone is insufficient; the shell inside
-	// tmux would start without them, causing process.stdout.columns to be
-	// undefined in Node.js child processes.
-	createArgs := []string{
-		"new-session",
-		"-d",
-		"-s", tmuxName,
-		"-x", fmt.Sprintf("%d", defaultSize.Cols),
-		"-y", fmt.Sprintf("%d", defaultSize.Rows),
-		"-e", fmt.Sprintf("COLUMNS=%d", defaultSize.Cols),
-		"-e", fmt.Sprintf("LINES=%d", defaultSize.Rows),
-		"-e", "LEDIT_WEB_TERMINAL=1",
-		"-e", "TERM=xterm-256color",
-		"-e", "COLORTERM=truecolor",
-		"-e", "FORCE_COLOR=1",
-	}
-	// Set the session's starting directory explicitly via -c so the shell
-	// process inside tmux starts in the workspace root. Without this, tmux
-	// ignores createCmd.Dir and starts the shell in $HOME.
-	if strings.TrimSpace(tm.workspaceRoot) != "" {
-		createArgs = append(createArgs, "-c", tm.workspaceRoot)
-	}
-	createArgs = append(createArgs, shell)
-	createArgs = append(createArgs, shellArgs...)
-	createCmd := exec.Command("tmux", createArgs...)
-	if strings.TrimSpace(tm.workspaceRoot) != "" {
-		createCmd.Dir = tm.workspaceRoot
-	}
-	// Inherit useful env vars for the shell inside tmux.
-	// COLUMNS and LINES are set to the default PTY size so tools that read them
-	// at startup (e.g. Node.js packages, webpack) get a reasonable value.
-	// Shells (bash/zsh) update $COLUMNS dynamically in response to SIGWINCH
-	// when the frontend sends a resize, so the value stays accurate.
-	createCmd.Env = append(os.Environ(),
-		"TERM=xterm-256color",
-		"COLORTERM=truecolor",
-		"FORCE_COLOR=1",
-		"SHELL="+shell,
-		"LEDIT_WEB_TERMINAL=1",
-		fmt.Sprintf("COLUMNS=%d", defaultSize.Cols),
-		fmt.Sprintf("LINES=%d", defaultSize.Rows),
-	)
-
-	if output, err := createCmd.CombinedOutput(); err != nil {
-		fmt.Printf("TerminalManager: tmux new-session failed for %s: %v, output: %s\n", tmuxName, err, string(output))
-		return nil, fmt.Errorf("failed to create tmux session: %w", err)
-	}
-
-	// Set environment variable inside tmux session for child processes
-	setEnvCmd := exec.Command("tmux", "set-environment", "-t", tmuxName, "LEDIT_WEB_TERMINAL", "1")
-	_ = setEnvCmd.Run() // Best effort
-
-	// Enable tmux mouse mode so scroll events are captured by tmux for
-	// copy-mode scrolling instead of being converted to arrow key sequences
-	// by xterm.js.  With mouse on, text selection requires Shift+drag (standard
-	// tmux behaviour).  This matches VS Code's integrated terminal approach.
-	mouseOnCmd := exec.Command("tmux", "set-option", "-t", tmuxName, "mouse", "on")
-	_ = mouseOnCmd.Run() // Best effort
-
-	// Disable tmux status bar — the web UI provides its own terminal chrome
-	// (tab bar, controls, status indicators) so the green tmux bar is redundant
-	// and wastes a row of terminal space.
-	statusOffCmd := exec.Command("tmux", "set-option", "-t", tmuxName, "status", "off")
-	_ = statusOffCmd.Run() // Best effort
-
-	// Now attach to the tmux session to get a PTY we can read/write
 	ctx, cancel := context.WithCancel(context.Background())
-
-	attachCmd := exec.CommandContext(ctx, "tmux", "attach-session", "-t", tmuxName)
-	if strings.TrimSpace(tm.workspaceRoot) != "" {
-		attachCmd.Dir = tm.workspaceRoot
-	}
-	attachCmd.Env = append(os.Environ(),
-		"TERM=xterm-256color",
-	)
-
-	ptyFile, err := pty.StartWithSize(attachCmd, defaultSize)
-	if err != nil {
-		cancel()
-		// Clean up the tmux session
-		killCmd := exec.Command("tmux", "kill-session", "-t", tmuxName)
-		_ = killCmd.Run()
-		return nil, fmt.Errorf("failed to attach to tmux session: %w", err)
-	}
-
-	// Create session
-	session := &TerminalSession{
-		ID:          sessionID,
-		Command:     attachCmd,
-		Pty:         ptyFile,
-		Output:      ptyFile,
-		Cancel:      cancel,
-		Active:      true,
-		LastUsed:    time.Now(),
-		OutputCh:    make(chan []byte, 10000),
-		Size:        defaultSize,
-		TmuxBacked:  true,
-		monitorDone: make(chan struct{}),
-	}
-
-	tm.sessions[sessionID] = session
-
-	// Start monitoring the session
-	go tm.monitorSession(session)
-
-	return session, nil
-}
-
-// createUnixSession creates a raw PTY terminal session (fallback when tmux is unavailable).
-func (tm *TerminalManager) createUnixSession(sessionID string, shellOverride ...string) (*TerminalSession, error) {
-	var override string
-	if len(shellOverride) > 0 {
-		override = shellOverride[0]
-	}
-	shell, shellArgs, err := tm.resolveShell(override)
-	if err != nil {
-		return nil, fmt.Errorf("resolve shell for unix session: %w", err)
-	}
-
-	// Create context for the command
-	ctx, cancel := context.WithCancel(context.Background())
-
-	// Setup command with interactive shell
 	cmd := exec.CommandContext(ctx, shell, shellArgs...)
 	if strings.TrimSpace(tm.workspaceRoot) != "" {
 		cmd.Dir = tm.workspaceRoot
 	}
 
-	// Set default terminal size
-	defaultSize := &pty.Winsize{
-		Rows: 24,
-		Cols: 80,
-	}
+	defaultSize := &pty.Winsize{Rows: 24, Cols: 80}
 
-	// Set environment variables for better terminal experience.
 	// COLUMNS and LINES are set to the default PTY size so tools that read them
-	// at startup (e.g. Node.js packages, webpack) get a reasonable value.
-	// Shells (bash/zsh) update $COLUMNS dynamically in response to SIGWINCH
-	// when the frontend sends a resize, so the value stays accurate.
+	// at startup (e.g. Node.js packages) get a valid value. Shells update
+	// $COLUMNS dynamically in response to SIGWINCH when the frontend resizes.
 	cmd.Env = append(os.Environ(),
 		"TERM=xterm-256color",
 		"COLORTERM=truecolor",
@@ -218,34 +67,59 @@ func (tm *TerminalManager) createUnixSession(sessionID string, shellOverride ...
 		fmt.Sprintf("LINES=%d", defaultSize.Rows),
 	)
 
-	// Start the command with PTY
 	ptyFile, err := pty.StartWithSize(cmd, defaultSize)
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("failed to start PTY: %w", err)
 	}
 
-	// Create session
 	session := &TerminalSession{
-		ID:          sessionID,
-		Command:     cmd,
-		Pty:         ptyFile,
-		Output:      ptyFile, // PTY handles both input and output
-		Cancel:      cancel,
-		Active:      true,
-		LastUsed:    time.Now(),
-		OutputCh:    make(chan []byte, 10000),
-		Size:        defaultSize,
-		TmuxBacked:  false,
-		monitorDone: make(chan struct{}),
+		ID:       sessionID,
+		Command:  cmd,
+		Pty:      ptyFile,
+		Cancel:   cancel,
+		Active:   true,
+		LastUsed: time.Now(),
+		Size:     defaultSize,
+		ring:     newSessRing(),
 	}
 
 	tm.sessions[sessionID] = session
-
-	// Start monitoring the session
-	go tm.monitorSession(session)
+	go tm.runPTYReader(session)
 
 	return session, nil
+}
+
+// runPTYReader reads output from the PTY, writing it to the session's ring buffer
+// and broadcasting to all active subscribers. The goroutine runs for the entire
+// lifetime of the shell process — it only exits when the PTY closes.
+func (tm *TerminalManager) runPTYReader(session *TerminalSession) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("PTY reader panic for session %s: %v\n", session.ID, r)
+		}
+	}()
+
+	buf := make([]byte, 32768)
+	for {
+		n, err := session.Pty.Read(buf)
+		if n > 0 {
+			chunk := make([]byte, n)
+			copy(chunk, buf[:n])
+			session.mutex.Lock()
+			session.LastUsed = time.Now()
+			session.mutex.Unlock()
+			session.broadcast(chunk)
+		}
+		if err != nil {
+			fmt.Printf("Terminal session %s PTY closed: %v\n", session.ID, err)
+			session.mutex.Lock()
+			session.Active = false
+			session.mutex.Unlock()
+			session.closeAllSubs()
+			return
+		}
+	}
 }
 
 // resolveShell determines which shell to use on Unix systems.
@@ -259,38 +133,26 @@ func (tm *TerminalManager) resolveShell(shellOverride string) (shell string, she
 		return override, resolveShellArgs(override), nil
 	}
 
-	userShell := os.Getenv("SHELL")
-	switch {
-	case userShell != "":
-		return userShell, resolveShellArgs(userShell), nil
-	case shellExists("bash"):
-		return "bash", []string{"--login"}, nil
-	case shellExists("zsh"):
-		return "zsh", []string{"--login"}, nil
-	case shellExists("sh"):
-		return "sh", []string{"-l"}, nil
-	default:
-		return "", nil, fmt.Errorf("no suitable shell found")
+	// Prefer the user's login shell, then fall back to common choices.
+	candidates := []string{os.Getenv("SHELL")}
+	for _, s := range []string{"bash", "zsh", "sh", "fish"} {
+		candidates = append(candidates, s)
 	}
-}
-
-// resolveShellArgs returns suitable login args for a given shell name.
-func resolveShellArgs(shell string) []string {
-	base := filepath.Base(shell)
-	switch base {
-	case "fish":
-		return nil // fish doesn't use --login
-	case "sh", "dash", "ash", "ksh", "csh", "tcsh":
-		return []string{"-l"}
-	default:
-		return []string{"--login"}
+	for _, candidate := range candidates {
+		if candidate == "" {
+			continue
+		}
+		if shellExists(candidate) {
+			return candidate, resolveShellArgs(candidate), nil
+		}
 	}
+	return "", nil, fmt.Errorf("no suitable shell found; tried %v", candidates)
 }
 
 // createWindowsSession creates a fallback session for Windows (non-PTY).
 func (tm *TerminalManager) createWindowsSession(sessionID string) (*TerminalSession, error) {
-	// Windows implementation - this is a simplified version
-	// Full PTY on Windows requires conpty which is more complex
+	// Windows implementation - simplified fallback without PTY.
+	// Full PTY on Windows requires conpty which is more complex.
 	cmd := exec.Command("cmd")
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd = exec.CommandContext(ctx, cmd.Path)
@@ -315,23 +177,59 @@ func (tm *TerminalManager) createWindowsSession(sessionID string) (*TerminalSess
 		return nil, fmt.Errorf("failed to start command: %w", err)
 	}
 
-	// Create a basic session (Windows fallback)
 	session := &TerminalSession{
-		ID:          sessionID,
-		Command:     cmd,
-		Output:      stdout, // Limited functionality on Windows
-		Cancel:      cancel,
-		Active:      true,
-		LastUsed:    time.Now(),
-		OutputCh:    make(chan []byte, 10000),
-		TmuxBacked:  false,
-		monitorDone: make(chan struct{}),
+		ID:       sessionID,
+		Command:  cmd,
+		Cancel:   cancel,
+		Active:   true,
+		LastUsed: time.Now(),
+		ring:     newSessRing(),
 	}
 
-	// For Windows, we'll store stdin separately in the PTY field for compatibility
+	// Store stdin in the Pty field for WriteRawInput compatibility.
 	if ptyFile, ok := stdin.(*os.File); ok {
 		session.Pty = ptyFile
 	}
 
+	tm.sessions[sessionID] = session
+
+	// Start a reader goroutine for the stdout pipe.
+	go func() {
+		buf := make([]byte, 32768)
+		for {
+			n, err := stdout.Read(buf)
+			if n > 0 {
+				chunk := make([]byte, n)
+				copy(chunk, buf[:n])
+				session.mutex.Lock()
+				session.LastUsed = time.Now()
+				session.mutex.Unlock()
+				session.broadcast(chunk)
+			}
+			if err != nil {
+				session.mutex.Lock()
+				session.Active = false
+				session.mutex.Unlock()
+				session.closeAllSubs()
+				return
+			}
+		}
+	}()
+
 	return session, nil
+}
+
+// resolveShellArgs returns the extra arguments to pass when launching a shell
+// in login/interactive mode so that rc files are sourced correctly.
+func resolveShellArgs(shell string) []string {
+	base := shell
+	if idx := strings.LastIndex(shell, "/"); idx >= 0 {
+		base = shell[idx+1:]
+	}
+	switch base {
+	case "bash", "zsh":
+		return []string{"--login"}
+	default:
+		return nil
+	}
 }

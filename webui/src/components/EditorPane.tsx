@@ -31,6 +31,7 @@ import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { useTheme } from '../contexts/ThemeContext';
+import LivePreview from './LivePreview';
 import EditorToolbar from './EditorToolbar';
 import EditorBreadcrumb, { type BreadcrumbSymbol } from './EditorBreadcrumb';
 import { isImageFile, isAudioFile, isVideoFile, isBinaryFile } from '../utils/mediaPatterns';
@@ -1373,46 +1374,50 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   const isVideo = !!ext && isVideoFile(ext);
   const isBinary = !!ext && isBinaryFile(ext);
   const isSvgFile = buffer?.kind === 'file' && buffer?.file?.ext?.toLowerCase() === '.svg';
+  const isHtmlFile = buffer?.kind === 'file' && buffer?.file?.ext?.toLowerCase() === '.html';
   const isSvgPreviewBuffer = buffer?.metadata?.previewKind === 'svg';
+  const isHtmlPreviewBuffer = buffer?.metadata?.previewKind === 'html';
 
-  const openSvgPreview = () => {
+  const openLivePreview = () => {
     if (!buffer) return;
-
+    const lang = isSvgFile ? 'svg' : 'html';
     openWorkspaceBuffer({
       kind: 'file',
-      path: `__workspace/svg-preview:${buffer.file.path}`,
-      title: `${buffer.file.name} Preview`,
+      path: `__workspace/live-preview:${buffer.file.path}`,
+      title: `${buffer.file.name} Live Preview`,
       content: localContent || buffer.content || '',
-      ext: '.svg.preview',
+      ext: `.${lang}.preview`,
       metadata: {
-        previewKind: 'svg',
+        previewKind: lang,
         sourcePath: buffer.file.path,
         sourceName: buffer.file.name,
       },
     });
   };
 
-  const openSvgPreviewInSplit = () => {
+  const openLivePreviewInSplit = () => {
     if (!buffer) return;
-
+    const lang = isSvgFile ? 'svg' : 'html';
     const newPaneId = splitPane(paneId, 'vertical');
     if (!newPaneId) {
-      openSvgPreview();
+      openLivePreview();
       return;
     }
-
-    openWorkspaceBuffer({
-      kind: 'file',
-      path: `__workspace/svg-preview:${buffer.file.path}`,
-      title: `${buffer.file.name} Preview`,
-      content: localContent || buffer.content || '',
-      ext: '.svg.preview',
-      metadata: {
-        previewKind: 'svg',
-        sourcePath: buffer.file.path,
-        sourceName: buffer.file.name,
-      },
-    });
+    // small delay for the new pane to mount
+    setTimeout(() => {
+      openWorkspaceBuffer({
+        kind: 'file',
+        path: `__workspace/live-preview:${buffer.file.path}`,
+        title: `${buffer.file.name} Live Preview`,
+        content: localContent || buffer.content || '',
+        ext: `.${lang}.preview`,
+        metadata: {
+          previewKind: lang,
+          sourcePath: buffer.file.path,
+          sourceName: buffer.file.name,
+        },
+      });
+    }, 100);
   };
 
   if (isImage && buffer) {
@@ -1444,7 +1449,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     );
   }
 
-  if (isSvgPreviewBuffer) {
+  if (isSvgPreviewBuffer || isHtmlPreviewBuffer) {
     return (
       <div className="editor-pane">
         <EditorToolbar
@@ -1452,10 +1457,13 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
           saving={false}
           showSave={false}
         />
-        <SvgPreview
-          content={buffer.content || ''}
-          fileName={(buffer.metadata?.sourceName || buffer.file.name) as string}
-          sourcePath={buffer.metadata?.sourcePath as string | undefined}
+        <LivePreview
+          content={buffer?.content || ''}
+          language={(buffer?.metadata?.previewKind as 'svg' | 'html') || 'html'}
+          fileName={(buffer?.metadata?.sourceName || buffer?.file?.name) as string}
+          onContentChange={(newContent) => {
+            if (buffer) updateBufferContent(buffer.id, newContent);
+          }}
         />
       </div>
     );
@@ -1467,19 +1475,19 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
           onSave={handleSave}
           saving={saving}
           rightActions={[
-            ...(isSvgFile
+            ...(isSvgFile || isHtmlFile
               ? [
                   {
-                    id: 'svg-preview',
-                    title: 'Open SVG preview',
+                    id: 'live-preview',
+                    title: isSvgFile ? 'Open SVG live preview' : 'Open HTML live preview',
                     icon: <Eye size={16} />,
-                    onClick: openSvgPreview,
+                    onClick: openLivePreview,
                   },
                   {
-                    id: 'svg-preview-split',
-                    title: 'Open SVG preview in split',
+                    id: 'live-preview-split',
+                    title: isSvgFile ? 'Open SVG live preview in split' : 'Open HTML live preview in split',
                     icon: <Columns2 size={16} />,
-                    onClick: openSvgPreviewInSplit,
+                    onClick: openLivePreviewInSplit,
                   },
                 ]
               : []),

@@ -1,6 +1,7 @@
 package configuration
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 )
@@ -161,12 +162,217 @@ func applyZshCommandDetectionDefaults(raw map[string]interface{}) {
 	}
 }
 
+// applyMapInitializations ensures required map fields are initialized to empty maps.
+// It only sets fields that are nil/missing — existing values are preserved.
+func applyMapInitializations(raw map[string]interface{}) {
+	// List of map fields that should always exist as empty objects
+	mapFields := []string{
+		"provider_models",
+		"preferences",
+		"dismissed_prompts",
+		"custom_providers",
+		"subagent_types",
+		"skills",
+	}
+
+	for _, field := range mapFields {
+		if _, exists := raw[field]; !exists {
+			raw[field] = make(map[string]interface{})
+		}
+	}
+
+	// MCP needs special handling: ensure mcp.servers exists
+	if _, exists := raw["mcp"]; !exists {
+		raw["mcp"] = map[string]interface{}{
+			"servers": make(map[string]interface{}),
+		}
+	} else {
+		mcp, ok := raw["mcp"].(map[string]interface{})
+		if ok {
+			if _, exists := mcp["servers"]; !exists {
+				mcp["servers"] = make(map[string]interface{})
+			}
+		}
+	}
+}
+
+// applyDefaultSubagentTypes merges default subagent type entries for any missing IDs.
+// It uses json.Marshal/Unmarshal to convert SubagentType structs to raw JSON-compatible maps.
+func applyDefaultSubagentTypes(raw map[string]interface{}) {
+	subagentTypes, ok := raw["subagent_types"].(map[string]interface{})
+	if !ok {
+		subagentTypes = make(map[string]interface{})
+		raw["subagent_types"] = subagentTypes
+	}
+
+	// Get default subagent types
+	defaultTypes := defaultSubagentTypes()
+
+	// For each default type, add it if not already present
+	for id, persona := range defaultTypes {
+		if _, exists := subagentTypes[id]; !exists {
+			// Convert SubagentType struct to map[string]interface{}
+			personaData, err := json.Marshal(persona)
+			if err != nil {
+				log.Printf("[config] warning: failed to serialize subagent type %q: %v", id, err)
+				continue // Skip if serialization fails (shouldn't happen)
+			}
+			var personaMap map[string]interface{}
+			if err := json.Unmarshal(personaData, &personaMap); err != nil {
+				log.Printf("[config] warning: failed to unmarshal subagent type %q: %v", id, err)
+				continue // Skip if deserialization fails
+			}
+			subagentTypes[id] = personaMap
+		}
+	}
+}
+
+// applyDefaultSkills merges default skill entries for any missing IDs.
+// It uses json.Marshal/Unmarshal to convert Skill structs to raw JSON-compatible maps.
+func applyDefaultSkills(raw map[string]interface{}) {
+	skills, ok := raw["skills"].(map[string]interface{})
+	if !ok {
+		skills = make(map[string]interface{})
+		raw["skills"] = skills
+	}
+
+	// Get default skills
+	defaultSkills := defaultSkills()
+
+	// For each default skill, add it if not already present
+	for id, skill := range defaultSkills {
+		if _, exists := skills[id]; !exists {
+			// Convert Skill struct to map[string]interface{}
+			skillData, err := json.Marshal(skill)
+			if err != nil {
+				log.Printf("[config] warning: failed to serialize skill %q: %v", id, err)
+				continue // Skip if serialization fails (shouldn't happen)
+			}
+			var skillMap map[string]interface{}
+			if err := json.Unmarshal(skillData, &skillMap); err != nil {
+				log.Printf("[config] warning: failed to unmarshal skill %q: %v", id, err)
+				continue // Skip if deserialization fails
+			}
+			skills[id] = skillMap
+		}
+	}
+}
+
+// applyLegacyToolAllowlistMigration adds structured tool names to legacy persona allowlists.
+// This replicates the mergeLegacyStructuredToolsIntoPersonaAllowlists logic but on raw JSON maps.
+func applyLegacyToolAllowlistMigration(raw map[string]interface{}) {
+	subagentTypes, ok := raw["subagent_types"].(map[string]interface{})
+	if !ok {
+		return // No subagent types to migrate
+	}
+
+	defaults := defaultSubagentTypes()
+
+	// First pass: add write_structured_file and patch_structured_file to personas
+	// that have write_file or edit_file but not the structured tools
+	for id, personaRaw := range subagentTypes {
+		persona, ok := personaRaw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Skip if not a known default persona
+		normalizedID := normalizePersonaID(id)
+		if _, exists := defaults[normalizedID]; !exists {
+			continue
+		}
+
+		// Get allowed_tools array
+		toolsRaw, hasTools := persona["allowed_tools"]
+		if !hasTools {
+			continue
+		}
+
+		tools, ok := toolsRaw.([]interface{})
+		if !ok || len(tools) == 0 {
+			continue
+		}
+
+		// Check if persona has write_file or edit_file
+		hasWriteFile := hasRawTool(tools, "write_file")
+		hasEditFile := hasRawTool(tools, "edit_file")
+		if !hasWriteFile && !hasEditFile {
+			continue
+		}
+
+		changed := false
+
+		// Add write_structured_file if missing
+		if !hasRawTool(tools, "write_structured_file") {
+			tools = append(tools, "write_structured_file")
+			changed = true
+		}
+
+		// Add patch_structured_file if missing
+		if !hasRawTool(tools, "patch_structured_file") {
+			tools = append(tools, "patch_structured_file")
+			changed = true
+		}
+
+		if changed {
+			persona["allowed_tools"] = tools
+			subagentTypes[id] = persona
+		}
+	}
+
+	// Second pass: add shell_command to web_scraper if missing
+	for id, personaRaw := range subagentTypes {
+		persona, ok := personaRaw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Check if this is web_scraper
+		normalizedID := normalizePersonaID(id)
+		if normalizedID != "web_scraper" {
+			continue
+		}
+
+		// Get allowed_tools array
+		toolsRaw, hasTools := persona["allowed_tools"]
+		if !hasTools {
+			continue
+		}
+
+		tools, ok := toolsRaw.([]interface{})
+		if !ok || len(tools) == 0 {
+			continue
+		}
+
+		// Add shell_command if missing
+		if !hasRawTool(tools, "shell_command") {
+			tools = append(tools, "shell_command")
+			persona["allowed_tools"] = tools
+			subagentTypes[id] = persona
+		}
+	}
+}
+
+// hasRawTool checks if a tool name exists in a raw tools array
+func hasRawTool(tools []interface{}, candidate string) bool {
+	for _, tool := range tools {
+		if toolStr, ok := tool.(string); ok && toolStr == candidate {
+			return true
+		}
+	}
+	return false
+}
+
 // applyV2Defaults applies all version 2.0 default values to a config.
 // This function is idempotent and can be called multiple times safely.
 func applyV2Defaults(raw map[string]interface{}) error {
+	applyMapInitializations(raw)
 	applyAPITimeoutDefaults(raw)
 	applyPDFOCRDefaults(raw)
 	applyZshCommandDetectionDefaults(raw)
+	applyDefaultSubagentTypes(raw)
+	applyDefaultSkills(raw)
+	applyLegacyToolAllowlistMigration(raw)
 	return nil
 }
 

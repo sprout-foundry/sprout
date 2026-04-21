@@ -2,7 +2,7 @@
 # Provides clear commands for different types of tests and builds
 
 .PHONY: help test test-unit test-integration test-e2e test-smoke test-all test-ci test-coverage \
-       clean build build-all build-version build-ui deploy-ui \
+       clean build build-all build-version build-ui deploy-ui build-wasm \
        verify-ui-embedded test-webui lint lint-fix dev
 
 # Default target
@@ -19,6 +19,7 @@ help:
 	@echo "  make build            - Build sprout binary"
 	@echo "  make build-version    - Build with version information"
 	@echo "  make build-ui         - Build React web UI"
+	@echo "  make build-wasm      - Build WASM shell module (sprout.wasm)"
 	@echo "  make deploy-ui        - Build and deploy React UI to Go static"
 	@echo "  make verify-ui-embedded - Fail if embedded UI assets are stale"
 	@echo "  make test-webui      - Test React web UI server"
@@ -198,9 +199,15 @@ test-webui:
 	@echo "Press Ctrl+C to stop the server"
 	cd test && ./test_webserver
 
-# Full development build: UI + Go binary
-build-all: deploy-ui build
-	@echo "Full build completed: React UI + Go binary"
+# Build WASM shell module (sprout.wasm + wasm_exec.js)
+build-wasm:
+	@echo "Building WASM shell module..."
+	@./scripts/build-wasm.sh
+	@echo "WASM shell module build completed"
+
+# Full development build: UI + WASM + Go binary
+build-all: deploy-ui build-wasm build
+	@echo "Full build completed: React UI + WASM shell + Go binary"
 
 # Quick development workflow
 dev: deploy-ui

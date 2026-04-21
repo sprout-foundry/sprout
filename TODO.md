@@ -128,7 +128,7 @@ These gaps were identified by cross-referencing the current editor implementatio
 
 [x] - EDITOR: Add `drawSelection()` to the editor extensions array — explicitly enable CodeMirror's selection drawing extension from `@codemirror/view`. While CM6 does render selections by default, importing `drawSelection` explicitly ensures consistent cross-browser selection rendering (especially for single-cursor caret-style selections) and makes the dependency visible in the code.
 
-[] - EDITOR: Add editor font size zoom (Cmd/Ctrl+= to zoom in, Cmd/Ctrl+- to zoom out) — the editor font is hardcoded to `13px` in `EditorPane.tsx`. Add keybindings that adjust the `--editor-font-size` CSS variable (or the inline style) and persist the preference to `localStorage`. This is an accessibility and comfort feature that every IDE supports. Implementation: add a Compartment or reactive CSS variable, register `Mod-=` and `Mod--` keybindings, and read/write from localStorage.
+[x] - EDITOR: Add editor font size zoom (Cmd/Ctrl+= to zoom in, Cmd/Ctrl+- to zoom out) — the editor font is hardcoded to `13px` in `EditorPane.tsx`. Add keybindings that adjust the `--editor-font-size` CSS variable (or the inline style) and persist the preference to `localStorage`. This is an accessibility and comfort feature that every IDE supports. Implementation: add a Compartment or reactive CSS variable, register `Mod-=` and `Mod--` keybindings, and read/write from localStorage.
 
 #### Tier 2 — Small Package Additions (npm install + a few lines of code)
 

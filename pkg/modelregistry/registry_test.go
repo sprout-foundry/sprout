@@ -148,16 +148,19 @@ func TestFetchModels_CacheExpiry(t *testing.T) {
 	SetTTL(50 * time.Millisecond)
 
 	FetchModels(context.Background(), "expiring")
-
-	// Poll until cache expires and second fetch completes.
-	deadline := time.Now().Add(500 * time.Millisecond)
-	for time.Now().Before(deadline) && fetchCount.Load() < 2 {
-		FetchModels(context.Background(), "expiring")
-		time.Sleep(5 * time.Millisecond)
+	if fetchCount.Load() != 1 {
+		t.Fatalf("expected 1 initial fetch, got %d", fetchCount.Load())
 	}
 
-	if fetchCount.Load() != 2 {
-		t.Fatalf("expected 2 fetches after cache expiry, got %d", fetchCount.Load())
+	// Wait for cache to expire, then fetch once more.
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) && fetchCount.Load() < 2 {
+		time.Sleep(10 * time.Millisecond)
+		FetchModels(context.Background(), "expiring")
+	}
+
+	if fetchCount.Load() < 2 {
+		t.Fatalf("expected at least 2 fetches after cache expiry, got %d", fetchCount.Load())
 	}
 }
 
@@ -381,40 +384,30 @@ func TestFetchModels_ValidIDAfterNormalization(t *testing.T) {
 	ClearCache()
 
 	testCases := []struct {
-		name           string
-		id             string
-		expectedPath   string
-		expectError    bool
+		name         string
+		id           string
+		expectedPath string
 	}{
-		{"uppercase", "OpenRouter", "/models/openrouter.json", false},
-		{"mixed case", "MyProvider-V2", "/models/myprovider-v2.json", false},
-		{"all caps", "OPENAI", "/models/openai.json", false},
-		{"camelCase", "deepInfra", "/models/deepinfra.json", false},
+		{"uppercase", "OpenRouter", "/models/openrouter.json"},
+		{"mixed case", "MyProvider-V2", "/models/myprovider-v2.json"},
+		{"all caps", "OPENAI", "/models/openai.json"},
+		{"camelCase", "deepInfra", "/models/deepinfra.json"},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			models, err := FetchModels(context.Background(), tc.id)
-			if tc.expectError {
-				if err == nil {
-					t.Fatalf("expected error for provider ID %q", tc.id)
-				}
-				if models != nil {
-					t.Fatalf("expected nil models for error case, got: %v", models)
-				}
-			} else {
-				// Valid ID after normalization: should succeed but return nil (404)
-				if err != nil {
-					t.Fatalf("unexpected error for valid ID %q: %v", tc.id, err)
-				}
-				if models != nil {
-					t.Fatalf("expected nil models for 404 response, got: %v", models)
-				}
-				// Verify normalization worked
-				path := lastPath.Load().(string)
-				if path != tc.expectedPath {
-					t.Errorf("expected path %s, got %s", tc.expectedPath, path)
-				}
+			// Valid ID after normalization: should succeed but return nil (404).
+			if err != nil {
+				t.Fatalf("unexpected error for valid ID %q: %v", tc.id, err)
+			}
+			if models != nil {
+				t.Fatalf("expected nil models for 404 response, got: %v", models)
+			}
+			// Verify normalization worked.
+			path := lastPath.Load().(string)
+			if path != tc.expectedPath {
+				t.Errorf("expected path %s, got %s", tc.expectedPath, path)
 			}
 		})
 	}

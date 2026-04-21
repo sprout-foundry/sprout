@@ -2,11 +2,14 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import ErrorBoundary from './components/ErrorBoundary';
 import AppContent from './components/AppContent';
 import UIManager from './components/UIManager';
+import Notification from './components/Notification';
+import UpdateNotification from './components/UpdateNotification';
 import { EditorManagerProvider } from './contexts/EditorManagerContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { HotkeyProvider } from './contexts/HotkeyContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import './App.css';
+import './components/UpdateNotification.css';
 import { WebSocketService } from './services/websocket';
 import { ApiService, OnboardingEnvironment, OnboardingProviderOption } from './services/api';
 import { clientFetch, getTabWorkspacePath, getWebUIClientId } from './services/clientSession';
@@ -2042,6 +2045,8 @@ function App() {
                 onRenameChat={handleRenameChat}
                 perChatCache={state.perChatCache}
               />
+              <Notification />
+              <UpdateNotification />
               {onboarding.open && (
                 <div className="onboarding-overlay" role="dialog" aria-modal="true" aria-label="Set up ledit">
                   <div className="onboarding-card">

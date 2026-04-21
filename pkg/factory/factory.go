@@ -237,6 +237,9 @@ func CreateProviderClient(clientType api.ClientType, model string) (api.ClientIn
 	case api.OpenRouterClientType:
 		// Use the new generic provider system
 		return CreateGenericProvider("openrouter", model)
+	case api.CerebrasClientType:
+		// Use the new generic provider system
+		return CreateGenericProvider("cerebras", model)
 	case api.LMStudioClientType:
 		// Use the new generic provider system
 		return CreateGenericProvider("lmstudio", model)

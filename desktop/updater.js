@@ -122,14 +122,31 @@ function initAutoUpdater() {
     console.log(`[updater] Update downloaded: ${info.version}`);
     updateDownloaded = true;
     downloadedVersion = info.version;
-    persistUpdateState();
-    notifyUpdateAvailable(info);
 
-    // Also send direct IPC event for immediate response
-    const mainWindow = BrowserWindow.getAllWindows()[0];
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('update:downloaded', {
-        version: info.version,
+    // Validate update info before using
+    if (!info?.version || typeof info.version !== 'string') {
+      console.error('[updater] Invalid update info: missing or invalid version');
+      return;
+    }
+
+    // Persist state with error handling
+    try {
+      persistUpdateState();
+      notifyUpdateAvailable(info);
+
+      // Also send direct IPC event for immediate response
+      const mainWindow = BrowserWindow.getAllWindows()[0];
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update:downloaded', {
+          version: info.version,
+        });
+      }
+    } catch (error) {
+      console.error('[updater] Failed to persist update state after download:', error);
+      // Notify user that state persistence failed
+      notifyUpdateError({
+        title: 'Update download failed',
+        message: 'Update downloaded but state could not be saved. The update may not persist after restart.'
       });
     }
   });
@@ -159,21 +176,26 @@ function registerIpcHandlers() {
     try {
       // Clear the install-on-quit flag since we're installing now
       installOnQuit = false;
+
+      // Clear the downloaded state since we're installing now
+      // Note: Must do this BEFORE quitAndInstall because app quits immediately
+      updateDownloaded = false;
+      downloadedVersion = null;
       persistUpdateState();
 
       // Attempt to quit and install
       // Note: This will quit the app immediately, so code below may not execute
       autoUpdater.quitAndInstall();
 
-      // If we reach here, quitAndInstall failed to quit (shouldn't normally happen)
-      // Clear the downloaded state since we attempted to install
-      updateDownloaded = false;
-      downloadedVersion = null;
-      persistUpdateState();
-
+      // This return won't execute, but keeps TypeScript happy
       return { ok: true };
     } catch (error) {
       console.error('[updater] quitAndInstall error:', error);
+      // Restore state since install failed
+      installOnQuit = false;
+      updateDownloaded = false;
+      downloadedVersion = null;
+      persistUpdateState();
       // Return error to renderer so it can show a notification
       return { ok: false, error: error.message || 'Failed to install update' };
     }
@@ -181,23 +203,38 @@ function registerIpcHandlers() {
 
   // Defer update to install on quit
   ipcMain.handle('desktop:deferUpdate', async () => {
-    installOnQuit = true;
-    persistUpdateState();
-    return { ok: true, willInstallOnQuit: true };
+    try {
+      installOnQuit = true;
+      persistUpdateState();
+      return { ok: true, willInstallOnQuit: true };
+    } catch (error) {
+      console.error('[updater] Failed to defer update:', error);
+      return { ok: false, error: error.message || 'Failed to defer update' };
+    }
   });
 
   // Check if update is pending install on quit
   ipcMain.handle('desktop:isUpdatePending', async () => {
-    return { pending: installOnQuit };
+    try {
+      return { pending: installOnQuit };
+    } catch (error) {
+      console.error('[updater] Failed to check pending status:', error);
+      return { pending: false, error: error.message };
+    }
   });
 
   // Cancel pending install on quit
   ipcMain.handle('desktop:cancelPendingInstall', async () => {
-    installOnQuit = false;
-    updateDownloaded = false;
-    downloadedVersion = null;
-    persistUpdateState();
-    return { ok: true };
+    try {
+      installOnQuit = false;
+      updateDownloaded = false;
+      downloadedVersion = null;
+      persistUpdateState();
+      return { ok: true };
+    } catch (error) {
+      console.error('[updater] Failed to cancel pending install:', error);
+      return { ok: false, error: error.message || 'Failed to cancel pending install' };
+    }
   });
 }
 

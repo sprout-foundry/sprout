@@ -21,4 +21,10 @@ contextBridge.exposeInMainWorld('leditDesktop', {
     ipcRenderer.on('desktop:hotkey', handler);
     return () => ipcRenderer.removeListener('desktop:hotkey', handler);
   },
+  // Auto-update API
+  checkForUpdates: () => ipcRenderer.invoke('desktop:checkForUpdates'),
+  installUpdate: () => ipcRenderer.invoke('desktop:installUpdate'),
+  deferUpdate: () => ipcRenderer.invoke('desktop:deferUpdate'),
+  isUpdatePending: () => ipcRenderer.invoke('desktop:isUpdatePending'),
+  cancelPendingInstall: () => ipcRenderer.invoke('desktop:cancelPendingInstall'),
 });

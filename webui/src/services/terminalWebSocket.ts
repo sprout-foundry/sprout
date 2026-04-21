@@ -16,6 +16,7 @@ class TerminalWebSocketService {
   private maxReconnectAttempts = 30;
   private reconnectDelay = 1000;
   private sessionId: string | null = null;
+  private readonly instanceKey = Math.random().toString(36).slice(2);
   private isConnected = false;
   private eventHandler: TerminalEventCallback | null = null;
   private pingInterval: NodeJS.Timeout | null = null;
@@ -414,7 +415,7 @@ class TerminalWebSocketService {
   }
 
   private getPersistedSessionKey(): string {
-    return `ledit.webui.terminalSession.${getWebUIClientId()}`;
+    return `ledit.webui.terminalSession.${getWebUIClientId()}.${this.instanceKey}`;
   }
 
   /** Persist the current sessionId to localStorage so it survives tab discard. */

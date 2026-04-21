@@ -20,6 +20,8 @@ import {
 export interface TerminalPaneHandle {
   clear: () => void;
   focus: () => void;
+  /** Cleanup the pane's WebSocket connection when the session is being closed */
+  cleanup: () => void;
 }
 
 interface TerminalPaneProps {
@@ -496,7 +498,12 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     const sendResize = useCallback(() => {
       if (!paneConnectedRef.current || !terminalWSRef.current || !xtermRef.current || !fitAddonRef.current) return;
       fitAddonRef.current.fit();
-      terminalWSRef.current.sendResize(xtermRef.current.cols, xtermRef.current.rows);
+      const cols = xtermRef.current.cols;
+      const rows = xtermRef.current.rows;
+      // Guard against zero/NaN dimensions — these cause process.stdout.columns
+      // to be 0 in Node.js child processes (e.g. tools using sharp image resize).
+      if (!cols || !rows || cols < 1 || rows < 1) return;
+      terminalWSRef.current.sendResize(cols, rows);
     }, []);
 
     // ── Wheel event handler ──
@@ -622,10 +629,30 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       });
     }, []);
 
-    // Expose clear / focus to parent via ref
+    // Expose clear / focus / cleanup to parent via ref
     useImperativeHandle(ref, () => ({
       clear: () => xtermRef.current?.clear(),
       focus: () => xtermRef.current?.focus(),
+      cleanup: () => {
+        const service = terminalWSRef.current;
+        if (!service) return;
+
+        // Remove the event handler
+        if (eventHandlerRef.current) {
+          service.removeEvent(eventHandlerRef.current);
+          eventHandlerRef.current = null;
+        }
+
+        // Close the session and disconnect
+        // This works even if the service is frozen or reconnecting
+        service.closeSession();
+        service.disconnect();
+
+        // Clear refs
+        terminalWSRef.current = null;
+        setPaneConnected(false);
+        onConnectionChangeRef.current?.(false);
+      },
     }));
 
     // Initialize xterm when pane becomes active
@@ -847,9 +874,13 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       window.addEventListener('resize', schedule);
 
       let observer: ResizeObserver | null = null;
-      if (paneWrapperRef.current && 'ResizeObserver' in window) {
+      if ('ResizeObserver' in window) {
         observer = new ResizeObserver(schedule);
-        observer.observe(paneWrapperRef.current);
+        if (paneWrapperRef.current) observer.observe(paneWrapperRef.current);
+        // Also observe the xterm container: its size changes when the pane
+        // header is added (e.g. in the secondary split pane), even though the
+        // outer wrapper stays the same size.
+        if (xtermContainerRef.current) observer.observe(xtermContainerRef.current);
       }
 
       return () => {

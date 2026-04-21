@@ -770,7 +770,7 @@ func (ws *ReactWebServer) handleSecurityPromptResponse(safeConn *SafeConn, msg m
 }
 
 // handleTerminalWebSocket handles terminal WebSocket connections.
-// Supports both creating new sessions and reattaching to existing tmux-backed sessions.
+// Supports both creating new sessions and reattaching to existing sessions.
 // The client can request reattachment by passing ?reattach=<sessionID> in the URL.
 func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http.Request) {
 	defer func() {
@@ -797,8 +797,8 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 	var session *TerminalSession
 
 	if reattachID != "" && terminalManager.HasSession(reattachID) {
-		// Try to reattach to the existing session
-		scrollback, err := terminalManager.ReattachSession(reattachID, 2000)
+		// Reattach: snapshot ring buffer for scrollback replay
+		scrollback, err := terminalManager.ReattachSession(reattachID)
 		if err != nil {
 			log.Printf("Failed to reattach to session %s: %v, creating new session", reattachID, err)
 			// Fall through to create new session
@@ -810,9 +810,8 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 			if err := safeConn.WriteJSON(map[string]interface{}{
 				"type": "session_restored",
 				"data": map[string]interface{}{
-					"session_id":  sessionID,
-					"scrollback":  scrollback,
-					"tmux_backed": true,
+					"session_id": sessionID,
+					"scrollback": scrollback,
 				},
 			}); err != nil {
 				log.Printf("Terminal %s FAILED to send session_restored: %v", sessionID, err)
@@ -888,26 +887,36 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 	// Write done channel for output sync
 	writeDone := make(chan struct{})
 
-	// Output writer goroutine - reads from terminal session and writes to WebSocket
+	// Subscribe to the session's output stream. The subscription is removed
+	// when the output writer goroutine exits (via defer session.unsubscribe).
+	sub := session.subscribe()
+
+	// Output writer goroutine - reads from the subscription channel and writes to WebSocket.
+	// The shell process keeps running after this goroutine exits; the client can reconnect
+	// and receive a ring-buffer replay of the output it missed.
 	go func() {
 		defer close(writeDone)
+		defer session.unsubscribe(sub)
 		defer func() {
 			if r := recover(); r != nil {
 				log.Printf("Terminal output writer panic: %v", r)
 			}
 		}()
 
-		if session.OutputCh != nil {
-			for {
-				select {
-				case <-ctx.Done():
-					log.Printf("Terminal %s output writer stopped (context cancelled)", sessionID)
-					return
+		for {
+			select {
+			case <-ctx.Done():
+				log.Printf("Terminal %s output writer stopped (context cancelled)", sessionID)
+				return
 
-				case output, ok := <-session.OutputCh:
-					if !ok {
-						// Output channel closed — PTY process exited.
-						// Notify the client so it can display an appropriate message.
+			case output, ok := <-sub.ch:
+				if !ok {
+					// Channel closed: either the PTY process exited or the subscriber
+					// buffer overflowed. Check which case it is.
+					session.mutex.RLock()
+					active := session.Active
+					session.mutex.RUnlock()
+					if !active {
 						log.Printf("Terminal %s output channel closed (PTY exited)", sessionID)
 						safeConn.WriteJSON(map[string]interface{}{
 							"type": "pty_exit",
@@ -916,20 +925,22 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 								"message":    "Process exited",
 							},
 						})
-						return
+					} else {
+						log.Printf("Terminal %s subscriber buffer overflowed, disconnecting for ring-buffer replay", sessionID)
 					}
+					return
+				}
 
-					if err := safeConn.WriteJSON(map[string]interface{}{
-						"type": "output",
-						"data": map[string]string{
-							"session_id": sessionID,
-							"output":     string(output),
-						},
-					}); err != nil {
-						log.Printf("Terminal %s WebSocket write error: %v", sessionID, err)
-						cancel() // Signal other goroutines to stop
-						return
-					}
+				if err := safeConn.WriteJSON(map[string]interface{}{
+					"type": "output",
+					"data": map[string]string{
+						"session_id": sessionID,
+						"output":     string(output),
+					},
+				}); err != nil {
+					log.Printf("Terminal %s WebSocket write error: %v", sessionID, err)
+					cancel() // Signal other goroutines to stop
+					return
 				}
 			}
 		}
@@ -967,10 +978,9 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 				} else {
 					log.Printf("Terminal %s read error: %v", sessionID, err)
 				}
-				// On WebSocket disconnect, detach from session instead of closing it.
-				// For tmux-backed sessions, this preserves the tmux session for reattach.
-				// For raw PTY sessions, DetachFromSession will close them completely.
-				terminalManager.DetachFromSession(sessionID)
+				// Shell keeps running. Unsubscription is handled by the output
+				// writer goroutine's defer when it sees ctx.Done().
+				cancel()
 				return
 			}
 

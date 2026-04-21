@@ -1,20 +1,14 @@
 package webui
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
-	"os"
-	"os/exec"
-	"strings"
+	"log"
 	"time"
-
-	"github.com/creack/pty"
 )
 
-// CloseSession closes a terminal session and cleans up associated resources.
-// For tmux-backed sessions, the tmux server session is also killed.
+// CloseSession terminates the shell process and removes the session from the manager.
+// All active subscribers are notified via channel close before the session is deleted.
 func (tm *TerminalManager) CloseSession(sessionID string) error {
 	tm.mutex.Lock()
 	defer tm.mutex.Unlock()
@@ -24,94 +18,40 @@ func (tm *TerminalManager) CloseSession(sessionID string) error {
 		return fmt.Errorf("session %s not found", sessionID)
 	}
 
-	// Stop the monitor goroutine
+	// Signal all subscribers that the PTY is gone.
+	session.closeAllSubs()
+
+	// Cancel the shell process context.
 	session.mutex.Lock()
-	if session.monitorDone != nil {
-		select {
-		case <-session.monitorDone:
-		default:
-			close(session.monitorDone)
-		}
+	session.Active = false
+	if session.Cancel != nil {
+		session.Cancel()
 	}
-
-	// Cancel the context (kills the attach process, not the tmux session)
-	session.Cancel()
-
-	// Close PTY
+	// Close the PTY file to unblock the PTY reader goroutine.
 	if session.Pty != nil {
 		session.Pty.Close()
 	}
-
-	// Wait for command to finish
+	// Wait for the shell to exit.
 	if session.Command != nil && session.Command.Process != nil {
-		session.Command.Process.Wait()
-	}
-
-	session.Active = false
-	tmuxBacked := session.TmuxBacked
-	session.mutex.Unlock()
-
-	// Kill the tmux session if this was tmux-backed
-	if tmuxBacked {
-		tmuxName := tm.TmuxSessionName(sessionID)
-		killCmd := exec.Command("tmux", "kill-session", "-t", tmuxName)
-		if err := killCmd.Run(); err != nil {
-			// The tmux session might have been killed externally already.
-			// This is not an error condition — just log it.
-			fmt.Printf("TerminalManager: failed to kill tmux session %s (may already be dead): %v\n", tmuxName, err)
+		if _, err := session.Command.Process.Wait(); err != nil {
+			log.Printf("Terminal %s: process wait: %v", sessionID, err)
 		}
 	}
+	session.mutex.Unlock()
 
 	delete(tm.sessions, sessionID)
-
 	return nil
 }
 
-// DetachFromSession detaches the WebSocket from a session without destroying it.
-// For tmux-backed sessions, the tmux session stays alive for future reattach.
-// For raw PTY sessions, this is equivalent to CloseSession (they can't survive disconnect).
+// DetachFromSession signals that the WebSocket has disconnected.
+// The shell process keeps running; the subscriber goroutine (in websocket.go)
+// handles unsubscription via its own defer, so this is a no-op but kept for
+// API compatibility.
 func (tm *TerminalManager) DetachFromSession(sessionID string) error {
-	tm.mutex.RLock()
-	session, exists := tm.sessions[sessionID]
-	tm.mutex.RUnlock()
-
-	if !exists {
-		return fmt.Errorf("session %s not found", sessionID)
-	}
-
-	session.mutex.RLock()
-	tmuxBacked := session.TmuxBacked
-	session.mutex.RUnlock()
-
-	if tmuxBacked {
-		// For tmux-backed sessions: stop the monitor goroutine, cancel the attach
-		// process, and close the PTY — but keep the tmux server session alive.
-		session.mutex.Lock()
-		if session.monitorDone != nil {
-			select {
-			case <-session.monitorDone:
-			default:
-				close(session.monitorDone)
-			}
-		}
-		if session.Cancel != nil {
-			session.Cancel()
-		}
-		if session.Pty != nil {
-			session.Pty.Close()
-		}
-		if session.Command != nil && session.Command.Process != nil {
-			_, _ = session.Command.Process.Wait()
-		}
-		session.Active = false
-		session.mutex.Unlock()
-
-		fmt.Printf("TerminalManager: detached from tmux-backed session %s (tmux session preserved for reattach)\n", sessionID)
-		return nil
-	}
-
-	// For raw PTY sessions: close completely since they can't survive disconnect
-	return tm.CloseSession(sessionID)
+	// No-op: shell persistence is handled by the subscriber pattern.
+	// The output writer goroutine in handleTerminalWebSocket unsubscribes
+	// via defer when the WebSocket goroutine exits.
+	return nil
 }
 
 // CloseAllSessions closes all known terminal sessions and returns the first error encountered.
@@ -126,221 +66,26 @@ func (tm *TerminalManager) CloseAllSessions() error {
 	return firstErr
 }
 
-// ReattachSession reattaches to an existing tmux-backed session.
-// It returns the scrollback buffer content for immediate display on the client.
-// If the tmux session was killed externally, the stale entry is cleaned up and an error is returned.
-func (tm *TerminalManager) ReattachSession(sessionID string, maxScrollback int) (string, error) {
-	tm.mutex.Lock()
-	defer tm.mutex.Unlock()
-
-	session, exists := tm.sessions[sessionID]
+// ReattachSession returns the scrollback buffer of an existing session so the
+// reconnecting WebSocket can replay it. The shell is already running; the caller
+// subscribes to the session's live output stream immediately after this call.
+func (tm *TerminalManager) ReattachSession(sessionID string) (string, error) {
+	session, exists := tm.GetSession(sessionID)
 	if !exists {
 		return "", fmt.Errorf("session %s does not exist", sessionID)
 	}
 
 	session.mutex.Lock()
-	defer session.mutex.Unlock()
-
-	if !session.TmuxBacked {
-		return "", fmt.Errorf("session %s is not tmux-backed and cannot be reattached", sessionID)
+	if !session.Active {
+		session.mutex.Unlock()
+		return "", fmt.Errorf("session %s is no longer active", sessionID)
 	}
-
-	tmuxName := tm.TmuxSessionName(sessionID)
-
-	// Check if tmux session still exists
-	hasSession := exec.Command("tmux", "has-session", "-t", tmuxName)
-	if err := hasSession.Run(); err != nil {
-		// Tmux session was killed externally — clean up stale entry
-		fmt.Printf("TerminalManager: tmux session %s no longer exists, cleaning up\n", tmuxName)
-		session.Active = false
-		delete(tm.sessions, sessionID)
-		return "", fmt.Errorf("tmux session %s no longer exists (killed externally)", tmuxName)
-	}
-
-	// Stop the old monitor goroutine
-	if session.monitorDone != nil {
-		select {
-		case <-session.monitorDone:
-			// Already stopped
-		default:
-			close(session.monitorDone)
-		}
-	}
-
-	// Cancel old attach command and close old PTY
-	if session.Cancel != nil {
-		session.Cancel()
-	}
-	if session.Pty != nil {
-		session.Pty.Close()
-	}
-	// Wait for old command to finish (non-blocking)
-	if session.Command != nil && session.Command.Process != nil {
-		_, _ = session.Command.Process.Wait()
-	}
-
-	// Capture scrollback with escape sequences for proper rendering
-	scrollback, err := tm.captureScrollback(tmuxName, maxScrollback)
-	if err != nil {
-		fmt.Printf("TerminalManager: warning: failed to capture scrollback for %s: %v\n", tmuxName, err)
-		// Non-fatal: continue with reattach even if scrollback capture fails
-	}
-
-	// Create new PTY by attaching to the tmux session
-	ctx, cancel := context.WithCancel(context.Background())
-
-	attachCmd := exec.CommandContext(ctx, "tmux", "attach-session", "-t", tmuxName)
-	if strings.TrimSpace(tm.workspaceRoot) != "" {
-		attachCmd.Dir = tm.workspaceRoot
-	}
-	attachCmd.Env = append(os.Environ(),
-		"TERM=xterm-256color",
-	)
-
-	ptyFile, err := pty.StartWithSize(attachCmd, session.Size)
-	if err != nil {
-		cancel()
-		// Tmux session might have died between has-session check and attach
-		session.Active = false
-		delete(tm.sessions, sessionID)
-		killCmd := exec.Command("tmux", "kill-session", "-t", tmuxName)
-		_ = killCmd.Run()
-		return "", fmt.Errorf("failed to reattach to tmux session: %w", err)
-	}
-
-	// Replace session fields with new PTY
-	session.Command = attachCmd
-	session.Pty = ptyFile
-	session.Output = ptyFile
-	session.Cancel = cancel
-	session.Active = true
 	session.LastUsed = time.Now()
-	session.OutputCh = make(chan []byte, 10000)
-	session.monitorDone = make(chan struct{})
-
-	// Start a new monitor goroutine
-	go tm.monitorSession(session)
-
-	return scrollback, nil
-}
-
-// captureScrollback captures the scrollback buffer from a tmux session.
-func (tm *TerminalManager) captureScrollback(tmuxName string, maxLines int) (string, error) {
-	if maxLines <= 0 {
-		maxLines = 2000
-	}
-	captureCmd := exec.Command("tmux", "capture-pane",
-		"-t", tmuxName,
-		"-p",
-		"-S", fmt.Sprintf("-%d", maxLines),
-		"-e", // include escape sequences
-	)
-	var stdout, stderr bytes.Buffer
-	captureCmd.Stdout = &stdout
-	captureCmd.Stderr = &stderr
-	if err := captureCmd.Run(); err != nil {
-		return "", fmt.Errorf("tmux capture-pane failed: %w: %s", err, stderr.String())
-	}
-	return stdout.String(), nil
-}
-
-// monitorSession monitors a terminal session and handles output.
-func (tm *TerminalManager) monitorSession(session *TerminalSession) {
-	// Capture channel references at function entry so this goroutine
-	// always closes the channels it was started with — even if ReattachSession
-	// replaces them with new ones while we are still running.
-	outputCh := session.OutputCh
-	doneCh := session.monitorDone
-
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Printf("Terminal session %s monitor panic: %v\n", session.ID, r)
-		}
-		// Close the output channel this goroutine was started with.
-		if outputCh != nil {
-			close(outputCh)
-		}
-	}()
-
-	// Signal that this goroutine has stopped.
-	defer func() {
-		if doneCh != nil {
-			select {
-			case <-doneCh:
-				// Already closed (by Detach/Close/Reattach)
-			default:
-				close(doneCh)
-			}
-		}
-	}()
-
-	// Start goroutine to read from PTY (single stream for both stdout and stderr)
-	readDone := make(chan struct{})
-	go func() {
-		defer close(readDone)
-		buf := make([]byte, 16384)
-		for {
-			session.mutex.RLock()
-			if !session.Active {
-				session.mutex.RUnlock()
-				break
-			}
-			outputReader := session.Output
-			session.mutex.RUnlock()
-
-			if outputReader == nil {
-				break
-			}
-
-			// Read from PTY (handles both stdout and stderr)
-			n, err := outputReader.Read(buf)
-			if err != nil {
-				if err != io.EOF {
-					fmt.Printf("Terminal session %s PTY read error: %v\n", session.ID, err)
-				}
-				break
-			}
-
-			if n > 0 {
-				session.LastUsed = time.Now()
-				output := make([]byte, n)
-				copy(output, buf[:n])
-				fmt.Printf("Terminal %s: Read %d bytes from PTY\n", session.ID, n)
-
-				// Send to output channel with backpressure.
-				// Block until the channel has room or the monitor is asked to stop.
-				// This prevents data loss that corrupts terminal state when
-				// partial escape sequences are dropped.
-				select {
-				case outputCh <- output:
-					// Output sent successfully
-				case <-doneCh:
-					// Monitor was asked to stop
-					return
-				}
-			}
-		}
-	}()
-
-	// Wait for either the command to finish, the read goroutine to stop, or monitor to be cancelled
-	select {
-	case <-readDone:
-		// Read goroutine finished
-	case <-doneCh:
-		// Monitor was asked to stop (detach/reattach/close).
-		// Wait for the reader goroutine to fully stop before we close OutputCh,
-		// otherwise it may panic with "send on closed channel".
-		<-readDone
-		return
-	}
-
-	// Mark session as inactive only if the command exited on its own
-	// (not if we were cancelled externally by detach/reattach)
-	session.mutex.Lock()
-	session.Active = false
 	session.mutex.Unlock()
 
-	fmt.Printf("Terminal session %s ended\n", session.ID)
+	scrollback := string(session.ring.snapshot())
+	fmt.Printf("TerminalManager: reattached to session %s (scrollback: %d bytes)\n", sessionID, len(scrollback))
+	return scrollback, nil
 }
 
 // CleanupInactiveSessions removes sessions that have been inactive for too long.

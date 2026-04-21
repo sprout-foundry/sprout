@@ -7,12 +7,16 @@ import {
   lineNumbers,
   highlightSpecialChars,
   highlightActiveLine,
+  highlightActiveLineGutter,
   rectangularSelection,
   crosshairCursor,
+  dropCursor,
+  drawSelection,
+  scrollPastEnd,
 } from '@codemirror/view';
 import { EditorState, Compartment, Transaction } from '@codemirror/state';
 import { defaultKeymap, indentWithTab, history } from '@codemirror/commands';
-import { search, searchKeymap, openSearchPanel, replaceAll } from '@codemirror/search';
+import { search, searchKeymap, openSearchPanel, replaceAll, highlightSelectionMatches } from '@codemirror/search';
 import { autocompletion, closeBrackets } from '@codemirror/autocomplete';
 import {
   syntaxHighlighting,
@@ -761,7 +765,9 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       updateListener,
       EditorState.allowMultipleSelections.of(true),
       rectangularSelection(),
+      drawSelection(),
       crosshairCursor(),
+      dropCursor(),
       keymap.of(defaultKeymap),
       tabExpandSnippets(),
       keymap.of([indentWithTab]),
@@ -770,6 +776,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       keymap.of(replacePanelKeymap),
       keymap.of(semanticKeymap),
       search(),
+      highlightSelectionMatches(),
       autocompletion(),
       closeBrackets(),
       history(),
@@ -779,6 +786,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       indentOnInput(),
       highlightSpecialChars(),
       highlightActiveLine(),
+      highlightActiveLineGutter(),
       bracketMatching(),
       bracketColorizationPlugin(),
       syntaxHighlighting(
@@ -788,6 +796,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       diffGutter(),
       lintDiagnostics(),
       lineNumbers(),
+      scrollPastEnd(),
       foldGutter({
         openText: '▼',
         closedText: '▶',

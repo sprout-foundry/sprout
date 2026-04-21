@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,6 +15,9 @@ import (
 )
 
 func main() {
+	registryDir := flag.String("registry-dir", "", "output directory for per-provider JSON files (for model registry server)")
+	flag.Parse()
+
 	repoRoot, err := os.Getwd()
 	if err != nil {
 		failf("resolve working directory: %v", err)
@@ -31,6 +35,8 @@ func main() {
 	for _, provider := range baseCatalog.Providers {
 		orderedIDs = append(orderedIDs, provider.ID)
 	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
 
 	for _, providerID := range orderedIDs {
 		clientType, err := api.ParseProviderName(providerID)
@@ -59,10 +65,15 @@ func main() {
 		}
 		providerIndex[providerID] = provider
 		fmt.Fprintf(os.Stdout, "updated %s with %d models\n", providerID, len(provider.Models))
+
+		// Write per-provider JSON for the registry server.
+		if *registryDir != "" {
+			writeProviderJSON(*registryDir, providerID, now, models)
+		}
 	}
 
 	nextCatalog := providercatalog.Catalog{
-		UpdatedAt: time.Now().UTC().Format(time.RFC3339),
+		UpdatedAt: now,
 		Source:    "refresh_provider_catalog",
 		Providers: make([]providercatalog.Provider, 0, len(orderedIDs)),
 	}
@@ -82,6 +93,44 @@ func main() {
 	}
 
 	fmt.Printf("wrote %s\n", catalogPath)
+	if *registryDir != "" {
+		fmt.Printf("wrote per-provider JSON files to %s/models/\n", *registryDir)
+	}
+}
+
+// providerRegistryFile is the JSON schema for a per-provider model file served by the registry.
+type providerRegistryFile struct {
+	UpdatedAt string                `json:"updated_at"`
+	Models    []api.ModelInfo       `json:"models"`
+}
+
+// writeProviderJSON writes a per-provider model JSON file for the model registry server.
+func writeProviderJSON(registryDir, providerID, updatedAt string, models []api.ModelInfo) {
+	modelsDir := filepath.Join(registryDir, "models")
+	if err := os.MkdirAll(modelsDir, 0o755); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to create registry dir: %v\n", err)
+		return
+	}
+
+	payload := providerRegistryFile{
+		UpdatedAt: updatedAt,
+		Models:    models,
+	}
+
+	encoded, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to marshal %s registry: %v\n", providerID, err)
+		return
+	}
+	encoded = append(encoded, '\n')
+
+	filePath := filepath.Join(modelsDir, providerID+".json")
+	if err := os.WriteFile(filePath, encoded, 0o644); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to write %s registry: %v\n", providerID, err)
+		return
+	}
+
+	fmt.Fprintf(os.Stdout, "  → wrote %s (%d models)\n", filePath, len(models))
 }
 
 func normalizeModels(models []api.ModelInfo) []providercatalog.Model {

@@ -489,6 +489,24 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     });
   }, []);
 
+  const onResetZoom = useCallback(() => {
+    setEditorFontSize(FONT_SIZE_DEFAULT);
+    try {
+      localStorage.setItem('editor:font-size', String(FONT_SIZE_DEFAULT));
+    } catch (err) {
+      debugLog('[onResetZoom] localStorage persist failed:', err);
+    }
+    viewRef.current?.dispatch({
+      effects: fontSizeCompartment.current.reconfigure([
+        EditorView.theme({
+          '&': {
+            fontSize: `${FONT_SIZE_DEFAULT}px`,
+          },
+        }),
+      ]),
+    });
+  }, []);
+
   // Ref to always read current buffer state without subscribing to identity changes.
   // This prevents handleGoToDefinition from changing identity on every buffer
   // update (e.g. scroll position changes), which would trigger a full
@@ -815,8 +833,8 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       },
     ];
 
-    // Zoom in/out keybindings: Mod+= to zoom in, Mod+- to zoom out
-    // NOTE: onZoomIn/onZoomOut use empty dependency arrays to prevent
+    // Zoom in/out keybindings: Mod+= to zoom in, Mod+- to zoom out, Mod-0 to reset
+    // NOTE: onZoomIn/onZoomOut/onResetZoom use empty dependency arrays to prevent
     // editor destruction/recreation when this keymap is captured during
     // initialization. Do NOT add state dependencies to these callbacks.
     const zoomKeymap: KeyBinding[] = [
@@ -833,6 +851,14 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         preventDefault: true,
         run: () => {
           onZoomOut();
+          return true;
+        },
+      },
+      {
+        key: 'Mod-0',
+        preventDefault: true,
+        run: () => {
+          onResetZoom();
           return true;
         },
       },
@@ -1515,6 +1541,11 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
           <span className="cursor-position">
             Ln {buffer.cursorPosition.line + 1}, Col {buffer.cursorPosition.column + 1}
           </span>
+          {editorFontSize !== FONT_SIZE_DEFAULT && (
+            <span className="zoom-level">
+              Zoom: {Math.round((editorFontSize / FONT_SIZE_DEFAULT) * 100)}%
+            </span>
+          )}
         </div>
         <LanguageSwitcher
           currentLanguageId={languageInfo.languageId}

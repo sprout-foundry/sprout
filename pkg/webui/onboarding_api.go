@@ -114,6 +114,17 @@ var onboardingProviderPresentations = map[string]onboardingProviderPresentation{
 		RecommendedPrefixes: []string{"qwen/", "deepseek", "glm", "llama"},
 		RecommendedModelWhy: "Prefer strong open coding models over older generic chat defaults.",
 	},
+	"cerebras": {
+		Description:         "High-performance provider with fast inference and GLM model support.",
+		SetupHint:           "Create a Cerebras API key and start with zai-glm-4.7.",
+		DocsURL:             "https://inference-docs.cerebras.ai/",
+		SignupURL:           "https://cloud.cerebras.ai/",
+		APIKeyLabel:         "Cerebras API Key",
+		APIKeyHelp:          "Cerebras offers high-performance inference with fast token generation.",
+		Recommended:         false,
+		RecommendedPrefixes: []string{},
+		RecommendedModelWhy: "Good default for high-performance inference use.",
+	},
 }
 
 var onboardingProviderOrder = map[string]int{

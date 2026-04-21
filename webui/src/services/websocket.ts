@@ -26,6 +26,9 @@ class WebSocketService {
   private reconnectTimeout: NodeJS.Timeout | null = null;
   private wasConnectedBefore = false;
   private onReconnectCallback: (() => void) | null = null;
+  private pendingQueue: WsEvent[] = [];
+  private maxQueueSize = 100;
+  private isReplayingQueue = false;
 
   private constructor() {}
 
@@ -126,7 +129,28 @@ class WebSocketService {
       this.lastPongTime = Date.now();
       this.startPingInterval();
       this.startPongWatchdog();
-      this.notifyCallbacks({ type: 'connection_status', data: { connected: true, reconnected: isReconnect } });
+
+      // Replay queued messages on reconnect (but not on initial connection)
+      if (isReconnect && this.pendingQueue.length > 0) {
+        this.isReplayingQueue = true;
+        try {
+          const queuedCount = this.pendingQueue.length;
+          debugLog(`Replaying ${queuedCount} queued message(s) after reconnect`);
+          this.pendingQueue.forEach((event) => {
+            try {
+              this.ws?.send(JSON.stringify(event));
+            } catch (err) {
+              debugLog('[WebSocket] Failed to replay queued message:', err);
+            }
+          });
+          // Clear the queue after replay attempt (best-effort)
+          this.pendingQueue = [];
+        } finally {
+          this.isReplayingQueue = false;
+        }
+      }
+
+      this.notifyCallbacks({ type: 'connection_status', data: { connected: true, reconnected: isReconnect, queuedMessageCount: this.pendingQueue.length } });
 
       // Fire the reconnect callback so the application can sync state
       // (e.g., request fresh stats, check for stuck processing state).
@@ -140,16 +164,21 @@ class WebSocketService {
       this.stopPingInterval();
       this.stopPongWatchdog();
       const willReconnect = !this.intentionalClose && this.reconnectAttempts < this.maxReconnectAttempts;
-      this.notifyCallbacks({ type: 'connection_status', data: { connected: false, reconnecting: willReconnect } });
+      this.notifyCallbacks({ type: 'connection_status', data: { connected: false, reconnecting: willReconnect, queuedMessageCount: this.pendingQueue.length } });
 
       // Only reconnect if not intentionally closed and not already reconnecting
       if (!this.intentionalClose && this.reconnectAttempts < this.maxReconnectAttempts) {
         this.reconnectAttempts++;
+        // Use exponential backoff with jitter: base * (2 ^ (attempt - 1)) + random(0-1000ms), capped at 30s
+        const backoffDelay = Math.min(
+          this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1) + Math.random() * 1000,
+          30000
+        );
         this.reconnectTimeout = setTimeout(() => {
           debugLog(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
           this.reconnectTimeout = null;
           this.connect();
-        }, this.reconnectDelay * this.reconnectAttempts);
+        }, backoffDelay);
       }
     };
 
@@ -191,9 +220,14 @@ class WebSocketService {
     };
   }
 
+  /** Disconnect the WebSocket and clear the outbound message queue.
+   *  Use this when the user explicitly disconnects or the application is
+   *  shutting down. Clears the message queue since there's no expectation
+   *  of reconnecting. */
   disconnect() {
     this.intentionalClose = true;
     this.wasConnectedBefore = false;
+    this.pendingQueue = []; // Clear queue on explicit disconnect
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
@@ -213,7 +247,9 @@ class WebSocketService {
    *  server can properly detach from backend sessions. Unlike disconnect(), this
    *  does NOT reset wasConnectedBefore so that resume() → resetAndReconnect()
    *  → connect() will still recognise the next open as a reconnection and fire
-   *  the onReconnect callback (for state sync, stuck-processing guard, etc.). */
+   *  the onReconnect callback (for state sync, stuck-processing guard, etc.).
+   *  The outbound message queue is intentionally preserved so queued messages
+   *  can be replayed after resume(). */
   freeze() {
     this.intentionalClose = true;
     // Intentionally do NOT reset wasConnectedBefore — see comment above.
@@ -283,16 +319,60 @@ class WebSocketService {
     this.callbacks.forEach((callback) => callback(event));
   }
 
+  /** Add a message to the pending queue, dropping the oldest if at capacity. */
+  private enqueueMessage(event: WsEvent) {
+    if (this.pendingQueue.length >= this.maxQueueSize) {
+      this.pendingQueue.shift();
+      debugLog(`[WebSocket] Queue full (${this.maxQueueSize} messages). Dropped oldest message.`);
+    }
+    this.pendingQueue.push(event);
+    debugLog(`[WebSocket] Queued message (type: ${event.type}). Queue size: ${this.pendingQueue.length}`);
+  }
+
   sendEvent(event: WsEvent) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(event));
+      try {
+        this.ws.send(JSON.stringify(event));
+      } catch (err) {
+        debugLog('[WebSocket] Send failed, queuing message:', err);
+        this.enqueueMessage(event);
+      }
     } else {
-      notificationBus.notify('warning', 'WebSocket Warning', 'Cannot send event: connection not active');
+      this.enqueueMessage(event);
     }
   }
 
   isConnected(): boolean {
     return this.ws !== null && this.ws.readyState === WebSocket.OPEN;
+  }
+
+  /** Returns the current number of messages in the outbound queue. */
+  getQueuedMessageCount(): number {
+    return this.pendingQueue.length;
+  }
+
+  /** Force-sends all queued messages if the WebSocket is connected.
+   *  Returns the number of messages that were sent. Returns 0 if not connected. */
+  flushQueuedMessages(): number {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      return 0;
+    }
+    if (this.isReplayingQueue) {
+      return 0;
+    }
+    const count = this.pendingQueue.length;
+    if (count > 0) {
+      debugLog(`Flushing ${count} queued message(s)`);
+      this.pendingQueue.forEach((event) => {
+        try {
+          this.ws?.send(JSON.stringify(event));
+        } catch (err) {
+          debugLog('[WebSocket] Failed to flush queued message:', err);
+        }
+      });
+      this.pendingQueue = [];
+    }
+    return count;
   }
 }
 

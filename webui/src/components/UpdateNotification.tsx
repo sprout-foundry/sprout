@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNotifications } from '../contexts/NotificationContext';
-import { AlertTriangle, Download, RefreshCw, X } from 'lucide-react';
+import { AlertTriangle, Download, RefreshCw, X, Loader } from 'lucide-react';
 
 interface UpdateInfo {
   version: string;
@@ -10,6 +10,44 @@ interface UpdateInfo {
 interface CheckResult {
   hasUpdate: boolean;
   version?: string;
+}
+
+interface NotificationEvent {
+  title: string;
+  message: string;
+  version?: string;
+  duration?: number;
+}
+
+interface DesktopApiResponse<T = unknown> {
+  ok: boolean;
+  result?: T;
+  error?: string;
+}
+
+interface UpdateApiResponse {
+  pending?: boolean;
+  willInstallOnQuit?: boolean;
+}
+
+// Extend Window interface to include desktop API
+declare global {
+  interface Window {
+    leditDesktop?: {
+      // Auto-update API
+      checkForUpdates: () => Promise<DesktopApiResponse<CheckResult>>;
+      installUpdate: () => Promise<DesktopApiResponse<UpdateApiResponse>>;
+      deferUpdate: () => Promise<DesktopApiResponse<UpdateApiResponse>>;
+      isUpdatePending: () => Promise<UpdateApiResponse>;
+      cancelPendingInstall: () => Promise<DesktopApiResponse<UpdateApiResponse>>;
+      // Auto-update event listeners
+      onUpdateError: (callback: (data: NotificationEvent) => void) => () => void;
+      onUpdateAvailable: (callback: (data: NotificationEvent) => void) => () => void;
+      onUpdateDownloadProgress: (callback: (progress: any) => void) => () => void;
+      onUpdateDownloaded: (callback: (info: any) => void) => () => void;
+      onTriggerUpdateCheck: (callback: () => void) => () => void;
+    };
+  }
 }
 
 /**
@@ -25,23 +63,15 @@ function UpdateNotification(): JSX.Element | null {
   const [checking, setChecking] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState<CheckResult | null>(null);
   const [pendingInstall, setPendingInstall] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
+
+  // Ref to store the latest checkForUpdates function for event listeners
+  const checkForUpdatesRef = useRef<(() => Promise<void>) | null>(null);
 
   // Check for pending install on mount
   useEffect(() => {
     checkPendingInstall();
   }, []);
-
-  const checkPendingInstall = async () => {
-    if (!window.leditDesktop?.isUpdatePending) {
-      return;
-    }
-    try {
-      const result = await window.leditDesktop.isUpdatePending();
-      setPendingInstall(result.pending || false);
-    } catch (error) {
-      console.error('Failed to check pending install:', error);
-    }
-  };
 
   const checkForUpdates = async () => {
     if (!window.leditDesktop?.checkForUpdates) {
@@ -50,6 +80,7 @@ function UpdateNotification(): JSX.Element | null {
     }
 
     setChecking(true);
+    setDownloadProgress(null);
     try {
       const result = await window.leditDesktop.checkForUpdates();
       if (result.ok && result.result) {
@@ -73,6 +104,93 @@ function UpdateNotification(): JSX.Element | null {
     }
   };
 
+  // Update the ref whenever checkForUpdates changes
+  useEffect(() => {
+    checkForUpdatesRef.current = checkForUpdates;
+  }, [checkForUpdates]);
+
+  // Listen for IPC events from the main process
+  useEffect(() => {
+    if (!window.leditDesktop?.onUpdateError || !window.leditDesktop?.onUpdateAvailable) {
+      return;
+    }
+
+    // Listen for update error notifications
+    const unsubscribeError = window.leditDesktop.onUpdateError((data: NotificationEvent) => {
+      addNotification('warning', data.title, data.message, data.duration);
+    });
+
+    // Listen for update available notifications
+    const unsubscribeAvailable = window.leditDesktop.onUpdateAvailable((data: NotificationEvent) => {
+      setUpdateAvailable({ hasUpdate: true, version: data.version });
+      setDownloadProgress(null); // Reset progress when download completes
+      addNotification('success', data.title, data.message, data.duration);
+    });
+
+    // Listen for manual update check trigger from menu
+    let unsubscribeTriggerUpdateCheck: (() => void) | null = null;
+    if (window.leditDesktop.onTriggerUpdateCheck) {
+      unsubscribeTriggerUpdateCheck = window.leditDesktop.onTriggerUpdateCheck(() => {
+        // Call checkForUpdates when triggered from the menu
+        if (checkForUpdatesRef.current) {
+          void checkForUpdatesRef.current();
+        }
+      });
+    }
+
+    // Listen for download progress
+    let unsubscribeDownloadProgress: (() => void) | null = null;
+    if (window.leditDesktop.onUpdateDownloadProgress) {
+      unsubscribeDownloadProgress = window.leditDesktop.onUpdateDownloadProgress((progress) => {
+        console.log(`Update download progress: ${progress.percent}%`);
+        setDownloadProgress(progress.percent);
+      });
+    }
+
+    // Listen for update downloaded event
+    let unsubscribeDownloaded: (() => void) | null = null;
+    if (window.leditDesktop.onUpdateDownloaded) {
+      unsubscribeDownloaded = window.leditDesktop.onUpdateDownloaded((info) => {
+        console.log(`Update downloaded: ${info.version}`);
+        setDownloadProgress(null); // Reset progress when download completes
+        setUpdateAvailable({ hasUpdate: true, version: info.version });
+        addNotification(
+          'success',
+          'Update Available',
+          `Version ${info.version} is ready to install.`,
+          0 // Don't auto-dismiss
+        );
+      });
+    }
+
+    // Cleanup event listeners
+    return () => {
+      unsubscribeError();
+      unsubscribeAvailable();
+      if (unsubscribeTriggerUpdateCheck) {
+        unsubscribeTriggerUpdateCheck();
+      }
+      if (unsubscribeDownloadProgress) {
+        unsubscribeDownloadProgress();
+      }
+      if (unsubscribeDownloaded) {
+        unsubscribeDownloaded();
+      }
+    };
+  }, [addNotification]);
+
+  const checkPendingInstall = async () => {
+    if (!window.leditDesktop?.isUpdatePending) {
+      return;
+    }
+    try {
+      const result = await window.leditDesktop.isUpdatePending();
+      setPendingInstall(result.pending || false);
+    } catch (error) {
+      console.error('Failed to check pending install:', error);
+    }
+  };
+
   const installNow = async () => {
     if (!window.leditDesktop?.installUpdate) {
       addNotification('error', 'Update Failed', 'Update installation is not available');
@@ -85,7 +203,7 @@ function UpdateNotification(): JSX.Element | null {
         // The app will quit and reinstall
         addNotification('success', 'Installing Update', 'Ledit will restart to apply the update.');
       } else {
-        addNotification('error', 'Update Failed', 'Failed to install update');
+        addNotification('error', 'Update Failed', result.error || 'Failed to install update');
       }
     } catch (error) {
       addNotification('error', 'Update Failed', 'An error occurred while installing the update');
@@ -221,6 +339,24 @@ function UpdateNotification(): JSX.Element | null {
         <div className="update-checking-content">
           <RefreshCw size={14} className="spin" />
           <span>Checking for updates...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Show download progress
+  if (downloadProgress !== null) {
+    return (
+      <div
+        className="update-downloading-banner"
+        role="status"
+        aria-live="polite"
+      >
+        <div className="update-downloading-content">
+          <Loader size={16} className="update-downloading-icon" />
+          <span className="update-downloading-text">
+            Downloading update: {Math.round(downloadProgress)}%
+          </span>
         </div>
       </div>
     );

@@ -529,3 +529,385 @@ func TestConfigMigration_1_0_to_2_0_Integration(t *testing.T) {
 	_, err = json.Marshal(migrated)
 	require.NoError(t, err)
 }
+
+// TestApplyMapInitializations_MissingFields verifies empty maps are created for missing fields
+func TestApplyMapInitializations_MissingFields(t *testing.T) {
+	raw := map[string]interface{}{
+		"version": "2.0",
+	}
+
+	applyMapInitializations(raw)
+
+	// Verify all map fields are created as empty maps
+	require.IsType(t, map[string]interface{}{}, raw["provider_models"])
+	require.IsType(t, map[string]interface{}{}, raw["preferences"])
+	require.IsType(t, map[string]interface{}{}, raw["dismissed_prompts"])
+	require.IsType(t, map[string]interface{}{}, raw["custom_providers"])
+	require.IsType(t, map[string]interface{}{}, raw["subagent_types"])
+	require.IsType(t, map[string]interface{}{}, raw["skills"])
+
+	// Verify MCP structure
+	mcp, ok := raw["mcp"].(map[string]interface{})
+	require.True(t, ok)
+	require.IsType(t, map[string]interface{}{}, mcp["servers"])
+}
+
+// TestApplyMapInitializations_PreservesExisting verifies existing values aren't overwritten
+func TestApplyMapInitializations_PreservesExisting(t *testing.T) {
+	raw := map[string]interface{}{
+		"version": "2.0",
+		"provider_models": map[string]interface{}{
+			"openai": "gpt-4",
+		},
+		"preferences": map[string]interface{}{
+			"theme": "dark",
+		},
+	}
+
+	applyMapInitializations(raw)
+
+	// Verify existing values are preserved
+	providerModels := raw["provider_models"].(map[string]interface{})
+	assert.Equal(t, "gpt-4", providerModels["openai"])
+
+	preferences := raw["preferences"].(map[string]interface{})
+	assert.Equal(t, "dark", preferences["theme"])
+}
+
+// TestApplyDefaultSubagentTypes_MergesDefaults verifies default personas are added
+func TestApplyDefaultSubagentTypes_MergesDefaults(t *testing.T) {
+	raw := map[string]interface{}{
+		"version":        "2.0",
+		"subagent_types": map[string]interface{}{},
+	}
+
+	applyDefaultSubagentTypes(raw)
+
+	subagentTypes := raw["subagent_types"].(map[string]interface{})
+	// Should have at least the default personas
+	assert.NotEmpty(t, subagentTypes)
+
+	// Verify some expected fields exist in a default persona
+	for _, persona := range subagentTypes {
+		personaMap, ok := persona.(map[string]interface{})
+		require.True(t, ok)
+		// Should have standard fields
+		assert.Contains(t, personaMap, "id")
+		assert.Contains(t, personaMap, "name")
+		assert.Contains(t, personaMap, "enabled")
+		break // Just check one
+	}
+}
+
+// TestApplyDefaultSubagentTypes_PreservesExisting verifies existing personas aren't overwritten
+func TestApplyDefaultSubagentTypes_PreservesExisting(t *testing.T) {
+	raw := map[string]interface{}{
+		"version": "2.0",
+		"subagent_types": map[string]interface{}{
+			"coder": map[string]interface{}{
+				"id":           "coder",
+				"name":         "My Custom Coder",
+				"enabled":      false,
+				"allowed_tools": []interface{}{"read_file"},
+			},
+		},
+	}
+
+	applyDefaultSubagentTypes(raw)
+
+	subagentTypes := raw["subagent_types"].(map[string]interface{})
+	coder := subagentTypes["coder"].(map[string]interface{})
+
+	// Verify existing custom values are preserved
+	assert.Equal(t, "My Custom Coder", coder["name"])
+	assert.Equal(t, false, coder["enabled"])
+	tools := coder["allowed_tools"].([]interface{})
+	assert.Len(t, tools, 1)
+	assert.Equal(t, "read_file", tools[0])
+}
+
+// TestApplyDefaultSkills_MergesDefaults verifies default skills are added
+func TestApplyDefaultSkills_MergesDefaults(t *testing.T) {
+	raw := map[string]interface{}{
+		"version": "2.0",
+		"skills":  map[string]interface{}{},
+	}
+
+	applyDefaultSkills(raw)
+
+	skills := raw["skills"].(map[string]interface{})
+	// Should have all the default skills
+	assert.NotEmpty(t, skills)
+
+	// Verify expected default skills exist
+	expectedSkills := []string{
+		"go-conventions",
+		"test-writing",
+		"commit-msg",
+		"python-conventions",
+		"typescript-conventions",
+	}
+
+	for _, skillID := range expectedSkills {
+		assert.Contains(t, skills, skillID, "skill %q should exist", skillID)
+	}
+
+	// Verify skill structure
+	goConventions := skills["go-conventions"].(map[string]interface{})
+	assert.Equal(t, "go-conventions", goConventions["id"])
+	assert.Equal(t, "Go Conventions", goConventions["name"])
+	assert.Equal(t, true, goConventions["enabled"])
+}
+
+// TestApplyDefaultSkills_PreservesExisting verifies existing skills aren't overwritten
+func TestApplyDefaultSkills_PreservesExisting(t *testing.T) {
+	raw := map[string]interface{}{
+		"version": "2.0",
+		"skills": map[string]interface{}{
+			"go-conventions": map[string]interface{}{
+				"id":          "go-conventions",
+				"name":        "My Go Rules",
+				"description": "Custom description",
+				"enabled":     false,
+			},
+		},
+	}
+
+	applyDefaultSkills(raw)
+
+	skills := raw["skills"].(map[string]interface{})
+	goConventions := skills["go-conventions"].(map[string]interface{})
+
+	// Verify existing custom values are preserved
+	assert.Equal(t, "My Go Rules", goConventions["name"])
+	assert.Equal(t, "Custom description", goConventions["description"])
+	assert.Equal(t, false, goConventions["enabled"])
+
+	// Other default skills should be added
+	assert.Contains(t, skills, "test-writing")
+}
+
+// TestApplyLegacyToolAllowlistMigration_AddsStructuredTools verifies write_structured_file/patch_structured_file are added
+func TestApplyLegacyToolAllowlistMigration_AddsStructuredTools(t *testing.T) {
+	raw := map[string]interface{}{
+		"version": "2.0",
+		"subagent_types": map[string]interface{}{
+			"orchestrator": map[string]interface{}{
+				"id":           "orchestrator",
+				"name":         "Orchestrator",
+				"enabled":      true,
+				"allowed_tools": []interface{}{"read_file", "write_file", "edit_file"},
+			},
+			"coder": map[string]interface{}{
+				"id":           "coder",
+				"name":         "Coder",
+				"enabled":      true,
+				"allowed_tools": []interface{}{"edit_file"},
+			},
+		},
+	}
+
+	applyLegacyToolAllowlistMigration(raw)
+
+	subagentTypes := raw["subagent_types"].(map[string]interface{})
+
+	// Check orchestrator - should have structured tools added
+	orchestrator := subagentTypes["orchestrator"].(map[string]interface{})
+	orchTools := orchestrator["allowed_tools"].([]interface{})
+	assert.Contains(t, orchTools, "write_structured_file")
+	assert.Contains(t, orchTools, "patch_structured_file")
+	assert.Contains(t, orchTools, "read_file")
+	assert.Contains(t, orchTools, "write_file")
+	assert.Contains(t, orchTools, "edit_file")
+
+	// Check coder - should have structured tools added
+	coder := subagentTypes["coder"].(map[string]interface{})
+	coderTools := coder["allowed_tools"].([]interface{})
+	assert.Contains(t, coderTools, "write_structured_file")
+	assert.Contains(t, coderTools, "patch_structured_file")
+}
+
+// TestApplyLegacyToolAllowlistMigration_SkipsWithoutWriteEdit verifies personas without write_file/edit_file aren't modified
+func TestApplyLegacyToolAllowlistMigration_SkipsWithoutWriteEdit(t *testing.T) {
+	raw := map[string]interface{}{
+		"version": "2.0",
+		"subagent_types": map[string]interface{}{
+			"researcher": map[string]interface{}{
+				"id":           "researcher",
+				"name":         "Researcher",
+				"enabled":      true,
+				"allowed_tools": []interface{}{"read_file", "search_files"},
+			},
+		},
+	}
+
+	applyLegacyToolAllowlistMigration(raw)
+
+	subagentTypes := raw["subagent_types"].(map[string]interface{})
+	researcher := subagentTypes["researcher"].(map[string]interface{})
+	tools := researcher["allowed_tools"].([]interface{})
+
+	// Should NOT have structured tools added
+	assert.NotContains(t, tools, "write_structured_file")
+	assert.NotContains(t, tools, "patch_structured_file")
+	// Should preserve original tools
+	assert.Contains(t, tools, "read_file")
+	assert.Contains(t, tools, "search_files")
+}
+
+// TestApplyLegacyToolAllowlistMigration_AddsShellCommandToWebScraper verifies shell_command added to web_scraper
+func TestApplyLegacyToolAllowlistMigration_AddsShellCommandToWebScraper(t *testing.T) {
+	raw := map[string]interface{}{
+		"version": "2.0",
+		"subagent_types": map[string]interface{}{
+			"web_scraper": map[string]interface{}{
+				"id":           "web_scraper",
+				"name":         "Web Scraper",
+				"enabled":      true,
+				"allowed_tools": []interface{}{"read_file", "write_file"},
+			},
+		},
+	}
+
+	applyLegacyToolAllowlistMigration(raw)
+
+	subagentTypes := raw["subagent_types"].(map[string]interface{})
+	webScraper := subagentTypes["web_scraper"].(map[string]interface{})
+	tools := webScraper["allowed_tools"].([]interface{})
+
+	// Should have shell_command added
+	assert.Contains(t, tools, "shell_command")
+}
+
+// TestApplyLegacyToolAllowlistMigration_PreservesAlreadyMigrated verifies no duplicates
+func TestApplyLegacyToolAllowlistMigration_PreservesAlreadyMigrated(t *testing.T) {
+	raw := map[string]interface{}{
+		"version": "2.0",
+		"subagent_types": map[string]interface{}{
+			"orchestrator": map[string]interface{}{
+				"id":           "orchestrator",
+				"name":         "Orchestrator",
+				"enabled":      true,
+				"allowed_tools": []interface{}{
+					"read_file",
+					"write_file",
+					"edit_file",
+					"write_structured_file",
+					"patch_structured_file",
+				},
+			},
+		},
+	}
+
+	applyLegacyToolAllowlistMigration(raw)
+
+	subagentTypes := raw["subagent_types"].(map[string]interface{})
+	orchestrator := subagentTypes["orchestrator"].(map[string]interface{})
+	tools := orchestrator["allowed_tools"].([]interface{})
+
+	// Should not have duplicates
+	assert.Len(t, tools, 5)
+	assert.Contains(t, tools, "read_file")
+	assert.Contains(t, tools, "write_file")
+	assert.Contains(t, tools, "edit_file")
+	assert.Contains(t, tools, "write_structured_file")
+	assert.Contains(t, tools, "patch_structured_file")
+}
+
+// TestMigration_0_0_to_2_0_FullDefaults verify complete migration produces all expected defaults in raw JSON
+func TestMigration_0_0_to_2_0_FullDefaults(t *testing.T) {
+	raw := map[string]interface{}{}
+
+	migrated, err := MigrateConfig(raw, "2.0")
+	require.NoError(t, err)
+
+	// Verify version
+	assert.Equal(t, "2.0", migrated["version"])
+
+	// Verify map initializations
+	require.IsType(t, map[string]interface{}{}, migrated["provider_models"])
+	require.IsType(t, map[string]interface{}{}, migrated["preferences"])
+	require.IsType(t, map[string]interface{}{}, migrated["dismissed_prompts"])
+	require.IsType(t, map[string]interface{}{}, migrated["custom_providers"])
+	require.IsType(t, map[string]interface{}{}, migrated["subagent_types"])
+	require.IsType(t, map[string]interface{}{}, migrated["skills"])
+
+	// Verify API timeouts
+	apiTimeouts, ok := migrated["api_timeouts"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, 300.0, apiTimeouts["connection_timeout_sec"])
+	assert.Equal(t, 600.0, apiTimeouts["first_chunk_timeout_sec"])
+	assert.Equal(t, 600.0, apiTimeouts["chunk_timeout_sec"])
+	assert.Equal(t, 1800.0, apiTimeouts["overall_timeout_sec"])
+	assert.Equal(t, 300.0, apiTimeouts["commit_message_timeout_sec"])
+
+	// Verify PDF OCR defaults
+	assert.Equal(t, true, migrated["pdf_ocr_enabled"])
+	assert.Equal(t, "ollama", migrated["pdf_ocr_provider"])
+	assert.Equal(t, "glm-ocr", migrated["pdf_ocr_model"])
+
+	// Verify zsh command detection
+	assert.Equal(t, true, migrated["enable_zsh_command_detection"])
+	assert.Equal(t, true, migrated["auto_execute_detected_commands"])
+
+	// Verify default subagent types
+	subagentTypes, ok := migrated["subagent_types"].(map[string]interface{})
+	require.True(t, ok)
+	assert.NotEmpty(t, subagentTypes)
+	assert.Contains(t, subagentTypes, "coder")
+	assert.Contains(t, subagentTypes, "tester")
+
+	// Verify default skills
+	skills, ok := migrated["skills"].(map[string]interface{})
+	require.True(t, ok)
+	assert.NotEmpty(t, skills)
+	assert.Contains(t, skills, "go-conventions")
+	assert.Contains(t, skills, "test-writing")
+	assert.Contains(t, skills, "commit-msg")
+
+	// Verify the result can be marshaled to JSON
+	_, err = json.Marshal(migrated)
+	require.NoError(t, err)
+}
+
+// TestMigration_Idempotent_FullDefaults verify running migration twice on a config produces identical raw JSON
+func TestMigration_Idempotent_FullDefaults(t *testing.T) {
+	// Start with empty config
+	raw := map[string]interface{}{}
+
+	// Run migration first time
+	migrated1, err := MigrateConfig(raw, "2.0")
+	require.NoError(t, err)
+
+	// Run migration second time on the already-migrated config
+	migrated2, err := MigrateConfig(migrated1, "2.0")
+	require.NoError(t, err)
+
+	// Results should be identical
+	assert.Equal(t, migrated1["version"], migrated2["version"])
+
+	// Check map fields are identical
+	for _, field := range []string{
+		"provider_models",
+		"preferences",
+		"dismissed_prompts",
+		"custom_providers",
+		"subagent_types",
+		"skills",
+		"api_timeouts",
+		"mcp",
+	} {
+		assert.Equal(t, migrated1[field], migrated2[field], "field %q should be identical", field)
+	}
+
+	// Check scalar fields
+	for _, field := range []string{
+		"pdf_ocr_enabled",
+		"pdf_ocr_provider",
+		"pdf_ocr_model",
+		"enable_zsh_command_detection",
+		"auto_execute_detected_commands",
+	} {
+		assert.Equal(t, migrated1[field], migrated2[field], "field %q should be identical", field)
+	}
+}

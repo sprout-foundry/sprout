@@ -1,0 +1,207 @@
+/* LivePreview component styles */
+
+.live-preview {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: var(--bg-elevated);
+}
+
+/* Toolbar */
+.live-preview-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background-color: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.live-preview-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.live-preview-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.live-preview-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.live-preview-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.live-preview-badge-svg {
+  background-color: #ff6b3520;
+  color: #ff6b35;
+}
+
+.live-preview-badge-html {
+  background-color: #e34c2620;
+  color: #e34c26;
+}
+
+.live-preview-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background-color: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.live-preview-toggle:hover {
+  background-color: var(--border-subtle);
+  color: var(--text-primary);
+}
+
+.live-preview-toggle.active {
+  background-color: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: #ffffff;
+}
+
+/* Main content area */
+.live-preview-main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Panes */
+.live-preview-pane {
+  display: flex;
+  overflow: hidden;
+}
+
+.live-preview-pane-editor {
+  flex: 1;
+  background-color: var(--cm-bg);
+}
+
+.live-preview-pane-svg {
+  flex: 1;
+  background-color: var(--bg-elevated);
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.live-preview-pane-html {
+  flex: 1;
+  background-color: #ffffff;
+  overflow: hidden;
+}
+
+/* Editor textarea */
+.live-preview-editor {
+  width: 100%;
+  height: 100%;
+  padding: 16px;
+  background-color: var(--cm-bg);
+  color: var(--cm-fg);
+  font-family: 'Monaco', 'Menlo', 'Fira Code', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  border: none;
+  resize: none;
+  outline: none;
+  white-space: pre;
+  overflow: auto;
+}
+
+.live-preview-editor::placeholder {
+  color: var(--text-muted);
+}
+
+/* SVG preview container */
+.live-preview-svg-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  width: 100%;
+  height: 100%;
+  /* Checkerboard background for transparency */
+  background-image:
+    linear-gradient(45deg, var(--viewer-checker-light, #e0e0e0) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--viewer-checker-light, #e0e0e0) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--viewer-checker-light, #e0e0e0) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--viewer-checker-light, #e0e0e0) 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+}
+
+[data-theme='dark'] .live-preview-svg-container {
+  background-image:
+    linear-gradient(45deg, var(--viewer-checker-dark, #3a3a3a) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--viewer-checker-dark, #3a3a3a) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--viewer-checker-dark, #3a3a3a) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--viewer-checker-dark, #3a3a3a) 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+}
+
+.live-preview-svg-content {
+  max-width: 100%;
+  max-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.live-preview-svg-content svg {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+/* HTML iframe */
+.live-preview-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background-color: #ffffff;
+}
+
+/* Resizable divider */
+.live-preview-divider {
+  width: 4px;
+  background-color: var(--border-subtle);
+  cursor: col-resize;
+  transition: background-color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.live-preview-divider:hover {
+  background-color: var(--accent-primary);
+}
+
+.live-preview-divider.dragging {
+  background-color: var(--accent-primary);
+}

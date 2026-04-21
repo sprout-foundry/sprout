@@ -316,12 +316,29 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
+	// Run version-based migrations on the raw JSON before struct unmarshaling.
+	var rawConfig map[string]interface{}
+	if err := json.Unmarshal(data, &rawConfig); err != nil {
+		return nil, fmt.Errorf("failed to parse config file for migration: %w", err)
+	}
+	rawConfig, err = MigrateConfig(rawConfig, ConfigVersion)
+	if err != nil {
+		log.Printf("[config] warning: config migration failed, using as-is: %v", err)
+		// Continue with original data — don't block startup
+	} else {
+		data, err = json.Marshal(rawConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to re-marshal migrated config: %w", err)
+		}
+	}
+
 	var config Config
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
-	// Ensure maps are initialized
+	// Defensive nil-checks for map fields (migration ensures these exist in raw JSON,
+	// but these checks provide Go-level safety for edge cases).
 	if config.ProviderModels == nil {
 		config.ProviderModels = make(map[string]string)
 	}
@@ -337,99 +354,28 @@ func Load() (*Config, error) {
 	if config.CustomProviders == nil {
 		config.CustomProviders = make(map[string]CustomProviderConfig)
 	}
+	if config.SubagentTypes == nil {
+		config.SubagentTypes = make(map[string]SubagentType)
+	}
+	if config.Skills == nil {
+		config.Skills = make(map[string]Skill)
+	}
+
+	// Post-unmarshal operations that truly need struct-level access
 	fileCustomProviders, err := MigrateLegacyCustomProviders(&config)
 	if err != nil {
 		return nil, fmt.Errorf("get config path: %w", err)
 	}
 	config.CustomProviders = fileCustomProviders
+
 	if err := MigrateEmbeddedAPIKeys(config.CustomProviders); err != nil {
 		log.Printf("[config] warning: credential migration failed: %v", err)
 	}
-	if config.SubagentTypes == nil {
-		config.SubagentTypes = make(map[string]SubagentType)
-	}
-	mergeMissingDefaultSubagentTypes(&config)
-	mergeLegacyStructuredToolsIntoPersonaAllowlists(&config)
+
 	warnUnknownPersonaTools(config.SubagentTypes)
-	if config.Skills == nil {
-		config.Skills = make(map[string]Skill)
-	}
-	mergeMissingDefaultSkills(&config)
 
 	// Discover project-specific skills from .ledit/skills/
 	discoverProjectSkills(&config)
-
-	// Set version if not present
-	if config.Version == "" {
-		config.Version = ConfigVersion
-	}
-
-	// Apply defaults for API timeouts if missing or zeroed
-	if config.APITimeouts == nil {
-		def := NewConfig().APITimeouts
-		// Copy defaults to avoid sharing pointers
-		config.APITimeouts = &APITimeoutConfig{
-			ConnectionTimeoutSec: def.ConnectionTimeoutSec,
-			FirstChunkTimeoutSec: def.FirstChunkTimeoutSec,
-			ChunkTimeoutSec:      def.ChunkTimeoutSec,
-			OverallTimeoutSec:    def.OverallTimeoutSec,
-			CommitMessageTimeoutSec: def.CommitMessageTimeoutSec,
-		}
-	} else {
-		def := NewConfig().APITimeouts
-		if config.APITimeouts.ConnectionTimeoutSec == 0 {
-			config.APITimeouts.ConnectionTimeoutSec = def.ConnectionTimeoutSec
-		}
-		if config.APITimeouts.FirstChunkTimeoutSec == 0 {
-			config.APITimeouts.FirstChunkTimeoutSec = def.FirstChunkTimeoutSec
-		}
-		if config.APITimeouts.ChunkTimeoutSec == 0 {
-			config.APITimeouts.ChunkTimeoutSec = def.ChunkTimeoutSec
-		}
-		if config.APITimeouts.OverallTimeoutSec == 0 {
-			config.APITimeouts.OverallTimeoutSec = def.OverallTimeoutSec
-		}
-		if config.APITimeouts.CommitMessageTimeoutSec == 0 {
-			config.APITimeouts.CommitMessageTimeoutSec = def.CommitMessageTimeoutSec
-		}
-	}
-
-	// Apply PDF OCR defaults if not configured
-	if !config.PDFOCREnabled && config.PDFOCRProvider == "" && config.PDFOCRModel == "" {
-		// Only apply defaults if none of the PDF OCR settings are configured
-		def := NewConfig()
-		config.PDFOCREnabled = def.PDFOCREnabled
-		config.PDFOCRProvider = def.PDFOCRProvider
-		config.PDFOCRModel = def.PDFOCRModel
-	}
-
-	// Apply default for EnableZshCommandDetection if not explicitly set
-	// Note: We can't distinguish between "not set" and "set to false" in JSON unmarshaling
-	// for booleans, so we only apply the default if the config version is old
-	// However, since this is a new field in an existing config, we need to check
-	// if it was explicitly set. A simple heuristic: if version < 2.1, enable it
-	// Actually, better approach: Use the zero value as a signal to apply default
-	// But since we want it true by default, we need to be careful
-	// For now, let's just set it to true if it's false and the config was recently created
-	// A better solution would be to use a pointer, but that would break the API
-	// For now, we'll rely on the fact that new configs get the default via NewConfig()
-	// and existing configs will need to be manually updated or we add migration logic
-	// As a pragmatic solution: if the field doesn't exist in the JSON, it will be false,
-	// so we need to detect this case and apply the default
-	// The cleanest way is to check if the field exists in the raw JSON
-
-	// Check if enable_zsh_command_detection exists in the raw JSON
-	var rawConfig map[string]interface{}
-	if err := json.Unmarshal(data, &rawConfig); err == nil {
-		if _, exists := rawConfig["enable_zsh_command_detection"]; !exists {
-			// Field doesn't exist in config file, apply default
-			config.EnableZshCommandDetection = true
-		}
-		if _, exists := rawConfig["auto_execute_detected_commands"]; !exists {
-			// Field doesn't exist in config file, apply default
-			config.AutoExecuteDetectedCommands = true
-		}
-	}
 
 	return &config, nil
 }

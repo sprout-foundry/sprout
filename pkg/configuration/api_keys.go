@@ -13,47 +13,20 @@ import (
 	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/agent_providers"
 	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"golang.org/x/term"
 )
 
 // knownProviderNames is the canonical list of built-in provider names.
 // This is the single source of truth for provider ordering in CLI/UI.
-var knownProviderNames = []string{
-	"chutes",
-	"openrouter",
-	"zai",
-	"openai",
-	"deepinfra",
-	"deepseek",
-	"minimax",
-	"ollama",
-	"ollama-local",
-	"ollama-turbo",
-	"lmstudio",
-	"mistral",
-	"jinaai",
-}
+// Generated from provider configs - use providers.KnownProviders() for the full list.
+var knownProviderNames = providers.KnownProviders()
 
 // knownProviderDisplayNames maps provider names to their display names.
 // This is the single source of truth for provider display names in CLI/UI.
-// getProviderDisplayName() consults this map to avoid a circular dependency
-// with GetProviderAuthMetadata() (which calls getProviderDisplayName for display names).
-var knownProviderDisplayNames = map[string]string{
-	"chutes":       "Chutes",
-	"openrouter":   "OpenRouter (Recommended)",
-	"zai":          "Z.AI Coding Plan",
-	"openai":       "OpenAI",
-	"deepinfra":    "DeepInfra",
-	"deepseek":     "DeepSeek",
-	"minimax":      "MiniMax",
-	"ollama":       "Ollama (local)",
-	"ollama-local": "Ollama (Local)",
-	"ollama-turbo": "Ollama (turbo)",
-	"lmstudio":     "LM Studio",
-	"mistral":      "Mistral",
-	"jinaai":       "JinaAI",
-}
+// Generated from provider configs - use providers.ProviderDisplayNames() for the full map.
+var knownProviderDisplayNames = providers.ProviderDisplayNames()
 
 // keyValidationMutex protects ValidateAndSaveAPIKey from concurrent access.
 var keyValidationMutex sync.Mutex

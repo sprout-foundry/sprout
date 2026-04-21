@@ -14,6 +14,7 @@ import {
   drawSelection,
   scrollPastEnd,
 } from '@codemirror/view';
+import { lineNumbersRelative } from '@uiw/codemirror-extensions-line-numbers-relative';
 import { EditorState, Compartment, Transaction } from '@codemirror/state';
 import { defaultKeymap, indentWithTab, history } from '@codemirror/commands';
 import { search, searchKeymap, openSearchPanel, replaceAll, highlightSelectionMatches } from '@codemirror/search';
@@ -57,7 +58,7 @@ import { minimapExtension } from '../extensions/minimap';
 import { tabExpandSnippets, setSnippetLanguage } from '../extensions/snippets';
 import { ApiService } from '../services/api';
 import { notificationBus } from '../services/notificationBus';
-import { Loader2, AlertTriangle, Eye, Columns2, Copy, Navigation, FolderOpen, ClipboardCopy } from 'lucide-react';
+import { Loader2, AlertTriangle, Eye, Columns2, Copy, Navigation, FolderOpen, ClipboardCopy, ListOrdered } from 'lucide-react';
 import { copyToClipboard } from '../utils/clipboard';
 import { generateUnifiedDiff } from '../utils/simpleDiff';
 import { useLog, debugLog, warn } from '../utils/log';
@@ -96,6 +97,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const lineWrappingCompartment = useRef(new Compartment());
+  const relativeLineNumbersCompartment = useRef(new Compartment());
   const languageCompartment = useRef(new Compartment());
   const minimapCompartment = useRef(new Compartment());
   const fontSizeCompartment = useRef(new Compartment());
@@ -106,6 +108,15 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   const [error, setError] = useState<string | null>(null);
   const [localContent, setLocalContent] = useState<string>('');
   const [showGoToSymbol, setShowGoToSymbol] = useState<boolean>(false);
+  const [relativeLineNumbersEnabled, setRelativeLineNumbersEnabled] = useState(() => {
+    try {
+      const stored = localStorage.getItem('editor:relative-line-numbers-enabled');
+      return stored !== null ? stored === 'true' : false; // default off
+    } catch (err) {
+      debugLog('Failed to read relative line numbers setting from localStorage:', err);
+      return false; // default off if localStorage unavailable
+    }
+  });
   const [minimapEnabled, setMinimapEnabled] = useState(() => {
     try {
       const stored = localStorage.getItem('editor:minimap-enabled');
@@ -795,6 +806,11 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         // keymap, which is captured once during editor init.
         document.dispatchEvent(new CustomEvent('editor-toggle-word-wrap'));
       },
+      onToggleRelativeLineNumbers: () => {
+        // Dispatch globally so all editor panes toggle together
+        // (consistent with the toolbar button and command palette paths).
+        document.dispatchEvent(new CustomEvent('editor-toggle-relative-line-numbers'));
+      },
     });
 
     // Ctrl+H / Cmd+H: open search panel and focus the replace input field.
@@ -911,7 +927,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       ),
       diffGutter(),
       lintDiagnostics(),
-      lineNumbers(),
+      relativeLineNumbersCompartment.current.of(relativeLineNumbersEnabled ? lineNumbersRelative : lineNumbers()),
       scrollPastEnd(),
       foldGutter({
         openText: '▼',
@@ -1114,6 +1130,28 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     });
   }, []);
 
+  // Toggle relative line numbers: updates React state (for toolbar button) and
+  // dispatches a CodeMirror compartment reconfigure to switch between absolute
+  // and relative line numbers in the gutter.
+  const relativeLineNumbersEnabledRef = useRef(relativeLineNumbersEnabled);
+  const lastRelativeLineNumbersToggleRef = useRef(0);
+  const onToggleRelativeLineNumbers = useCallback(() => {
+    const now = Date.now();
+    if (now - lastRelativeLineNumbersToggleRef.current < 100) return; // dedup
+    lastRelativeLineNumbersToggleRef.current = now;
+    const next = !relativeLineNumbersEnabledRef.current;
+    relativeLineNumbersEnabledRef.current = next;
+    setRelativeLineNumbersEnabled(next);
+    try {
+      localStorage.setItem('editor:relative-line-numbers-enabled', String(next));
+    } catch (err) {
+      debugLog('[onToggleRelativeLineNumbers] localStorage persist failed:', err);
+    }
+    viewRef.current?.dispatch({
+      effects: relativeLineNumbersCompartment.current.reconfigure(next ? lineNumbersRelative : lineNumbers()),
+    });
+  }, []);
+
   // Keep the ref mirror in sync whenever the state value changes from
   // an external source (e.g. the global event listener).
   useEffect(() => {
@@ -1123,6 +1161,10 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   useEffect(() => {
     minimapEnabledRef.current = minimapEnabled;
   }, [minimapEnabled]);
+
+  useEffect(() => {
+    relativeLineNumbersEnabledRef.current = relativeLineNumbersEnabled;
+  }, [relativeLineNumbersEnabled]);
 
   // Keep module-level linked scroll state in sync with context.
   useEffect(() => {
@@ -1146,6 +1188,8 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         toggleLinkedScroll();
       } else if (e.type === 'editor-toggle-minimap') {
         onToggleMinimap();
+      } else if (e.type === 'editor-toggle-relative-line-numbers') {
+        onToggleRelativeLineNumbers();
       }
     };
 
@@ -1153,13 +1197,15 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     document.addEventListener('editor-toggle-word-wrap', handler);
     document.addEventListener('editor-toggle-linked-scroll', handler);
     document.addEventListener('editor-toggle-minimap', handler);
+    document.addEventListener('editor-toggle-relative-line-numbers', handler);
     return () => {
       document.removeEventListener('editor-goto-line', handler);
       document.removeEventListener('editor-toggle-word-wrap', handler);
       document.removeEventListener('editor-toggle-linked-scroll', handler);
       document.removeEventListener('editor-toggle-minimap', handler);
+      document.removeEventListener('editor-toggle-relative-line-numbers', handler);
     };
-  }, [handleGoToLine, onToggleMinimap, onToggleWordWrap, toggleLinkedScroll]);
+  }, [handleGoToLine, onToggleMinimap, onToggleRelativeLineNumbers, onToggleWordWrap, toggleLinkedScroll]);
 
   // Listen for scroll sync events from other panes (linked scrolling).
   useEffect(() => {
@@ -1491,6 +1537,13 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
                   },
                 ]
               : []),
+            {
+              id: 'relative-line-numbers',
+              title: 'Toggle relative line numbers',
+              icon: <ListOrdered size={16} />,
+              onClick: onToggleRelativeLineNumbers,
+              active: relativeLineNumbersEnabled,
+            },
           ]}
         />
         <GoToSymbolOverlay

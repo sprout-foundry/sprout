@@ -290,6 +290,13 @@ function Terminal({
 
   // Close secondary pane (called directly or when secondary session is closed)
   const closeSecondaryPane = useCallback(() => {
+    // Clean up the secondary pane's WebSocket connection before clearing state
+    if (secondarySessionIdRef.current) {
+      const handle = paneHandles.current.get(secondarySessionIdRef.current);
+      handle?.cleanup?.();
+      paneHandles.current.delete(secondarySessionIdRef.current);
+      sessionShellsRef.current.delete(secondarySessionIdRef.current);
+    }
     clearSplitState();
   }, [clearSplitState]);
 
@@ -299,14 +306,16 @@ function Terminal({
       const remaining = sessionsRef.current.filter((s) => s.id !== id);
       if (remaining.length === 0) return; // guard: never remove the last session
 
+      // Clean up the pane's WebSocket connection
+      const handle = paneHandles.current.get(id);
+      handle?.cleanup?.();
+      paneHandles.current.delete(id);
+      sessionShellsRef.current.delete(id);
+
       // If closing the session that's in the secondary pane, unsplit
       if (secondarySessionIdRef.current === id) {
         clearSplitState();
       }
-
-      // Clean up imperative handle (SIDE EFFECT outside updater)
-      paneHandles.current.delete(id);
-      sessionShellsRef.current.delete(id);
 
       // Batch state updates
       setSessions(remaining);
@@ -513,6 +522,19 @@ function Terminal({
     };
   }, []);
 
+  // Clean up all WebSocket connections when the Terminal component unmounts
+  useEffect(() => {
+    return () => {
+      // Clean up all pane handles and their WebSocket connections
+      paneHandles.current.forEach((handle) => {
+        handle?.cleanup?.();
+      });
+      // Ensure all refs are cleared
+      paneHandles.current.clear();
+      sessionShellsRef.current.clear();
+    };
+  }, []);
+
   const isSplitActive = splitDirection !== 'none';
 
   return (
@@ -667,7 +689,8 @@ function Terminal({
               <TerminalPane
                 key={activeSessionId}
                 ref={(handle) => {
-                  const id = activeSessionIdRef.current;
+                  // Capture the session ID from the key to avoid stale ref issues
+                  const id = activeSessionId;
                   if (handle) {
                     paneHandles.current.set(id, handle);
                   } else {
@@ -697,10 +720,11 @@ function Terminal({
               <TerminalPane
                 key={secondarySessionId}
                 ref={(handle) => {
+                  const id = secondarySessionId;
                   if (handle) {
-                    paneHandles.current.set(secondarySessionId, handle);
+                    paneHandles.current.set(id, handle);
                   } else {
-                    paneHandles.current.delete(secondarySessionId);
+                    paneHandles.current.delete(id);
                   }
                 }}
                 isActive={hasActivated || isExpanded}

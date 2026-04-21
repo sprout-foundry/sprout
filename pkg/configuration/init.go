@@ -414,27 +414,19 @@ func GetAvailableProviders() []string {
 	providerFactory := providers.NewProviderFactory()
 	err := providerFactory.LoadEmbeddedConfigs()
 	if err != nil {
-		// Fallback to hardcoded list if factory fails to load
-		return []string{
-			"openai",
-			"chutes",
-			"zai",
-			"openrouter",
-			"deepinfra",
-			"ollama-local",
-			"ollama-turbo",
-			"lmstudio",
-		}
+		// Fallback to generated known providers list if factory fails to load
+		return providers.KnownProviders()
 	}
 
 	// Get all available providers from the factory
 	factoryProviders := providerFactory.GetAvailableProviders()
 
-	// Add the hardcoded providers that aren't in the factory (built-in ones)
-	hardcodedProviders := []string{
-		"openai",
+	// Add the special providers that aren't in the factory (built-in ones)
+	specialProviders := []string{
 		"ollama-local",
 		"ollama-turbo",
+		"test",
+		"editor",
 	}
 
 	// Combine and deduplicate
@@ -445,8 +437,8 @@ func GetAvailableProviders() []string {
 		providerSet[provider] = true
 	}
 
-	// Add hardcoded providers
-	for _, provider := range hardcodedProviders {
+	// Add special providers
+	for _, provider := range specialProviders {
 		providerSet[provider] = true
 	}
 

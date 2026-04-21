@@ -379,6 +379,7 @@ describe('getEditorKeymap', () => {
         'Mod-Shift-o',
         'Mod-d',
         'Alt-z',
+        'Mod-Alt-r',
         'Alt-ArrowLeft',
         'Alt-ArrowRight',
         'Mod-k',

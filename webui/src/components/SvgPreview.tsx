@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { MouseEvent, WheelEvent } from 'react';
-import { Image as ImageIcon, Code2, Loader2, AlertTriangle } from 'lucide-react';
+import { Image as ImageIcon, Code2, Loader2, AlertTriangle, ExternalLink } from 'lucide-react';
 import ViewerToolbar from './ViewerToolbar';
 import './SvgPreview.css';
 
@@ -195,6 +195,46 @@ function SvgPreview({ content, fileName, sourcePath }: SvgPreviewProps): JSX.Ele
     setIsDragging(false);
   }, []);
 
+  // Open SVG in browser
+  const handleOpenInBrowser = useCallback(() => {
+    const blob = new Blob([content], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank', 'noopener,noreferrer');
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }, [content]);
+
+  // Keyboard shortcuts
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      // Check for Mod (Ctrl/Cmd) key
+      if (!(e.metaKey || e.ctrlKey)) return;
+
+      const key = e.key;
+
+      // Prevent default and stop propagation for viewer shortcuts
+      if (key === '=' || key === '-' || key === '0' || key === '1') {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+
+      switch (key) {
+        case '=': // Mod+= zoom in
+          handleZoomIn();
+          break;
+        case '-': // Mod+- zoom out
+          handleZoomOut();
+          break;
+        case '0': // Mod+0 fit to window
+          fitToWindow();
+          break;
+        case '1': // Mod+1 actual size
+          handleResetZoom();
+          break;
+      }
+    },
+    [handleZoomIn, handleZoomOut, handleResetZoom, fitToWindow],
+  );
+
   // Build stats
   const stats = svgDimensions ? (
     <span className="viewer-stat">
@@ -204,7 +244,7 @@ function SvgPreview({ content, fileName, sourcePath }: SvgPreviewProps): JSX.Ele
 
   if (!content.trim()) {
     return (
-      <div className="svg-preview">
+      <div className="svg-preview" tabIndex={0} onKeyDown={handleKeyDown}>
         <div className="svg-preview-header">
           <div className="svg-preview-title">
             <ImageIcon size={14} />
@@ -227,6 +267,15 @@ function SvgPreview({ content, fileName, sourcePath }: SvgPreviewProps): JSX.Ele
           onZoomOut={handleZoomOut}
           onFitToWindow={fitToWindow}
           onResetZoom={handleResetZoom}
+          centerActions={[
+            {
+              id: 'open-browser',
+              title: 'Open in browser',
+              icon: <ExternalLink size={16} />,
+              onClick: handleOpenInBrowser,
+              disabled: false,
+            },
+          ]}
           stats={null}
         />
       </div>
@@ -234,7 +283,7 @@ function SvgPreview({ content, fileName, sourcePath }: SvgPreviewProps): JSX.Ele
   }
 
   return (
-    <div className="svg-preview">
+    <div className="svg-preview" tabIndex={0} onKeyDown={handleKeyDown}>
       <div className="svg-preview-header">
         <div className="svg-preview-title">
           <ImageIcon size={14} />
@@ -291,6 +340,15 @@ function SvgPreview({ content, fileName, sourcePath }: SvgPreviewProps): JSX.Ele
         onZoomOut={handleZoomOut}
         onFitToWindow={fitToWindow}
         onResetZoom={handleResetZoom}
+        centerActions={[
+          {
+            id: 'open-browser',
+            title: 'Open in browser',
+            icon: <ExternalLink size={16} />,
+            onClick: handleOpenInBrowser,
+            disabled: false,
+          },
+        ]}
         stats={stats}
       />
     </div>

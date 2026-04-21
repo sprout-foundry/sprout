@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { MouseEvent, WheelEvent } from 'react';
-import { Image as ImageIcon, Loader2, AlertTriangle, ClipboardCopy, ExternalLink } from 'lucide-react';
+import { Image as ImageIcon, Loader2, AlertTriangle, ClipboardCopy, ExternalLink, Pipette } from 'lucide-react';
 import { readFileWithConsent } from '../services/fileAccess';
 import { useLog } from '../utils/log';
 import ViewerToolbar from './ViewerToolbar';
@@ -198,6 +198,40 @@ function ImageViewer({ filePath, fileName, fileSize }: ImageViewerProps): JSX.El
     setIsDragging(false);
   }, []);
 
+  // Keyboard shortcuts
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      // Check for Mod (Ctrl/Cmd) key
+      if (!(e.metaKey || e.ctrlKey)) return;
+
+      const key = e.key;
+
+      // Prevent default and stop propagation for viewer shortcuts
+      if (key === '=' || key === '-' || key === '0' || key === '1') {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+
+      switch (key) {
+        case '=': // Mod+= zoom in
+          handleZoomIn();
+          break;
+        case '-': // Mod+- zoom out
+          handleZoomOut();
+          break;
+        case '0': // Mod+0 fit to window
+          if (dimensions) {
+            fitToWindow(dimensions.width, dimensions.height);
+          }
+          break;
+        case '1': // Mod+1 actual size
+          handleResetZoom();
+          break;
+      }
+    },
+    [handleZoomIn, handleZoomOut, handleResetZoom, fitToWindow, dimensions],
+  );
+
   // Copy image to clipboard
   const handleCopyImage = useCallback(async () => {
     if (!imageBlob) {
@@ -227,6 +261,29 @@ function ImageViewer({ filePath, fileName, fileSize }: ImageViewerProps): JSX.El
     window.open(imageSrc, '_blank', 'noopener,noreferrer');
   }, [imageSrc, log]);
 
+  // Pick color from image (uses EyeDropper API, Chrome-only with graceful fallback)
+  const [pickedColor, setPickedColor] = useState<string | null>(null);
+  const handlePickColor = useCallback(async () => {
+    // EyeDropper API is Chrome-only; check availability
+    if (!('EyeDropper' in window)) {
+      log.warn('[ImageViewer] EyeDropper API not available in this browser', { title: 'Color Picker' });
+      return;
+    }
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const dropper = new (window as any).EyeDropper();
+      const result = await dropper.open();
+      setPickedColor(result.sRGBHex);
+      await navigator.clipboard.writeText(result.sRGBHex);
+    } catch {
+      // User cancelled (Escape) — ignore silently
+    }
+  }, [log]);
+  const handleCopyPickedColor = useCallback(async () => {
+    if (!pickedColor) return;
+    await navigator.clipboard.writeText(pickedColor);
+  }, [pickedColor]);
+
   // Format file size
   const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return `${bytes} B`;
@@ -250,6 +307,12 @@ function ImageViewer({ filePath, fileName, fileSize }: ImageViewerProps): JSX.El
       onClick: handleOpenInBrowser,
       disabled: !imageSrc,
     },
+    {
+      id: 'pick-color',
+      title: 'Pick color from image',
+      icon: <Pipette size={16} />,
+      onClick: handlePickColor,
+    },
   ];
 
   // Build stats
@@ -259,6 +322,16 @@ function ImageViewer({ filePath, fileName, fileSize }: ImageViewerProps): JSX.El
         {dimensions.width}×{dimensions.height} px
       </span>
       <span className="viewer-stat">{formatFileSize(fileSize)}</span>
+      {pickedColor && (
+        <button
+          className="image-viewer-picked-color"
+          onClick={handleCopyPickedColor}
+          title={`Click to copy ${pickedColor}`}
+        >
+          <span className="image-viewer-picked-swatch" style={{ backgroundColor: pickedColor }} />
+          <span className="image-viewer-picked-value">{pickedColor}</span>
+        </button>
+      )}
     </>
   ) : null;
 
@@ -276,7 +349,7 @@ function ImageViewer({ filePath, fileName, fileSize }: ImageViewerProps): JSX.El
   }
 
   return (
-    <div className="image-viewer">
+    <div className="image-viewer" tabIndex={0} onKeyDown={handleKeyDown}>
       {loading && (
         <div className="loading-indicator">
           <Loader2 size={16} className="spinner" />

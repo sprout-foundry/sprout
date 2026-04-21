@@ -120,6 +120,11 @@ func (fd *FileDiscovery) discoverBasic(options *DiscoveryOptions) *FileResult {
 		root = "."
 	}
 
+	// Check if root directory exists
+	if _, err := os.Stat(root); os.IsNotExist(err) {
+		return &FileResult{Error: fmt.Errorf("directory does not exist: %s", root)}
+	}
+
 	var files []string
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -349,6 +354,7 @@ func (fd *FileDiscovery) findWithGrepCommand(searchTerms []string, workspaceInfo
 
 	for _, term := range searchTerms {
 		// Build grep command
+		// Note: -l lists filenames only, -H includes filename headers
 		cmd := exec.Command("grep", "-r", // Recursive
 			"--include=*.go", "--include=*.js", "--include=*.ts", "--include=*.py",
 			"--include=*.java", "--include=*.cpp", "--include=*.c", "--include=*.rs",
@@ -356,7 +362,6 @@ func (fd *FileDiscovery) findWithGrepCommand(searchTerms []string, workspaceInfo
 			"--include=*.html", "--include=*.css", "--include=*.json", "--include=*.xml",
 			"--include=*.yaml", "--include=*.yml", "--include=*.md", "--include=*.txt",
 			"-l", // Only list filenames
-			"-n", // Show line numbers
 			term, workspaceInfo.RootDir)
 
 		output, err := cmd.Output()
@@ -365,16 +370,11 @@ func (fd *FileDiscovery) findWithGrepCommand(searchTerms []string, workspaceInfo
 			continue
 		}
 
-		// Parse output (format: filename:line_number:content)
+		// Parse output (format: filename per line when using -l)
 		lines := strings.Split(strings.TrimSpace(string(output)), "\n")
 		for _, line := range lines {
 			if line != "" {
-				// Extract filename from grep output
-				parts := strings.SplitN(line, ":", 3)
-				if len(parts) >= 2 {
-					filename := parts[0]
-					found = append(found, filename)
-				}
+				found = append(found, line)
 			}
 		}
 	}

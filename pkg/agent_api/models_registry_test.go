@@ -120,8 +120,10 @@ func TestGetModelsForProviderCtx_RegistryHit(t *testing.T) {
 	defer srv.Close()
 	defer restore()
 
+	var requestedPath string
 	// Registry returns two models for openrouter.
 	srv.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestedPath = r.URL.Path
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"updated_at": "2024-01-01T00:00:00Z",
@@ -138,6 +140,9 @@ func TestGetModelsForProviderCtx_RegistryHit(t *testing.T) {
 	}
 	if len(models) != 2 {
 		t.Fatalf("expected 2 models from registry, got %d", len(models))
+	}
+	if requestedPath != "/models/openrouter.json" {
+		t.Errorf("expected request to /models/openrouter.json, got %s", requestedPath)
 	}
 	if models[0].ID != "registry-model-1" {
 		t.Errorf("expected first model ID 'registry-model-1', got %q", models[0].ID)

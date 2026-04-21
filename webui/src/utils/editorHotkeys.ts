@@ -265,6 +265,7 @@ const EDITOR_COMMAND_IDS = new Set([
   'editor_select_all_occurrences',
   'editor_add_selection_to_next_match',
   'editor_toggle_word_wrap',
+  'editor_toggle_relative_line_numbers',
   'editor_navigate_back',
   'editor_navigate_forward',
   'split_editor_horizontal',

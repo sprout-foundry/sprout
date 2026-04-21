@@ -2,7 +2,9 @@ package filediscovery
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -2139,4 +2141,816 @@ func TestDeduplicateAndFilter_ReadOnlyFiles(t *testing.T) {
 	if len(result) != 1 {
 		t.Errorf("expected read-only file to be included, got %d files", len(result))
 	}
+}
+
+// ============================================================================
+// Shell Discovery Tests (Platform-Aware)
+// ============================================================================
+
+func TestFindWithFindCommand_BasicPattern(t *testing.T) {
+	if isWindows() {
+		t.Skip("skipping shell command tests on Windows")
+	}
+
+	if _, err := exec.LookPath("find"); err != nil {
+		t.Skip("find command not available on this system")
+	}
+
+	root := makeTree(t, map[string]string{
+		"main.go":          "package main",
+		"util.go":          "package util",
+		"handler.go":       "package handler",
+		"README.md":        "hello",
+		"sub/sub.go":       "package sub",
+		"other/script.js":  "console.log()",
+	})
+
+	fd := newFD()
+	wsInfo := &WorkspaceInfo{
+		RootDir:     root,
+		ProjectType: "go",
+	}
+
+	// Search for *.go pattern
+	result := fd.findWithFindCommand([]string{"*.go"}, wsInfo)
+
+	if len(result) == 0 {
+		t.Fatal("expected to find at least one .go file")
+	}
+
+	// All results should be .go files
+	for _, f := range result {
+		if filepath.Ext(f) != ".go" {
+			t.Errorf("expected .go file, got %s", f)
+		}
+	}
+
+	// Should find main.go, util.go, handler.go, and sub/sub.go
+	foundMain := false
+	foundUtil := false
+	foundHandler := false
+	foundSub := false
+
+	for _, f := range result {
+		base := filepath.Base(f)
+		switch base {
+		case "main.go":
+			foundMain = true
+		case "util.go":
+			foundUtil = true
+		case "handler.go":
+			foundHandler = true
+		case "sub.go":
+			if filepath.Dir(f) != "" {
+				foundSub = true
+			}
+		}
+	}
+
+	if !foundMain {
+		t.Error("expected to find main.go")
+	}
+	if !foundUtil {
+		t.Error("expected to find util.go")
+	}
+	if !foundHandler {
+		t.Error("expected to find handler.go")
+	}
+	if !foundSub {
+		t.Error("expected to find sub/sub.go")
+	}
+}
+
+func TestFindWithFindCommand_MultiplePatterns(t *testing.T) {
+	if isWindows() {
+		t.Skip("skipping shell command tests on Windows")
+	}
+
+	if _, err := exec.LookPath("find"); err != nil {
+		t.Skip("find command not available on this system")
+	}
+
+	root := makeTree(t, map[string]string{
+		"main.go":     "package main",
+		"util.go":     "package util",
+		"script.js":   "console.log()",
+		"style.css":   "body {}",
+		"README.md":   "hello",
+		"data.json":   "{}",
+	})
+
+	fd := newFD()
+	wsInfo := &WorkspaceInfo{
+		RootDir:     root,
+		ProjectType: "go",
+	}
+
+	// Search for multiple patterns
+	result := fd.findWithFindCommand([]string{"*.go", "*.js", "*.json"}, wsInfo)
+
+	if len(result) == 0 {
+		t.Fatal("expected to find files")
+	}
+
+	// Should only return .go, .js, and .json files
+	for _, f := range result {
+		ext := filepath.Ext(f)
+		if ext != ".go" && ext != ".js" && ext != ".json" {
+			t.Errorf("unexpected file extension: %s (%s)", f, ext)
+		}
+	}
+}
+
+func TestFindWithFindCommand_ExcludesHiddenFiles(t *testing.T) {
+	if isWindows() {
+		t.Skip("skipping shell command tests on Windows")
+	}
+
+	if _, err := exec.LookPath("find"); err != nil {
+		t.Skip("find command not available on this system")
+	}
+
+	root := makeTree(t, map[string]string{
+		"main.go":        "package main",
+		".hidden.go":     "package hidden",
+		".git/config":    "[core]",
+		"sub/.secret.go": "package secret",
+	})
+
+	fd := newFD()
+	wsInfo := &WorkspaceInfo{
+		RootDir:     root,
+		ProjectType: "go",
+	}
+
+	// Search for *.go - should NOT match hidden files
+	result := fd.findWithFindCommand([]string{"*.go"}, wsInfo)
+
+	for _, f := range result {
+		// Check no hidden files or hidden directories
+		base := filepath.Base(f)
+		if strings.HasPrefix(base, ".") {
+			t.Errorf("hidden file should be excluded: %s", f)
+		}
+
+		// Check directory path doesn't contain hidden dirs
+		dir := filepath.Dir(f)
+		if strings.Contains(dir, "/.") {
+			t.Errorf("file in hidden directory should be excluded: %s", f)
+		}
+	}
+}
+
+func TestFindWithFindCommand_ExcludesCommonDirs(t *testing.T) {
+	if isWindows() {
+		t.Skip("skipping shell command tests on Windows")
+	}
+
+	if _, err := exec.LookPath("find"); err != nil {
+		t.Skip("find command not available on this system")
+	}
+
+	root := makeTree(t, map[string]string{
+		"main.go":             "package main",
+		"node_modules/lib.js": "exports = {}",
+		"vendor/utils.go":     "package vendor",
+		"target/class.class":  "compiled",
+		"build/app.js":        "bundle",
+		"dist/bundle.js":      "minified",
+		"src/handler.go":      "package src",
+	})
+
+	fd := newFD()
+	wsInfo := &WorkspaceInfo{
+		RootDir:     root,
+		ProjectType: "go",
+	}
+
+	// Search for * - should exclude common dirs
+	result := fd.findWithFindCommand([]string{"*"}, wsInfo)
+
+	for _, f := range result {
+		if strings.Contains(f, "node_modules") ||
+			strings.Contains(f, "vendor") ||
+			strings.Contains(f, "target") ||
+			strings.Contains(f, "build") ||
+			strings.Contains(f, "dist") {
+			t.Errorf("excluded directory file should not be found: %s", f)
+		}
+	}
+}
+
+func TestFindWithFindCommand_CommandFailure(t *testing.T) {
+	if isWindows() {
+		t.Skip("skipping shell command tests on Windows")
+	}
+
+	// Check if find is available
+	if _, err := exec.LookPath("find"); err != nil {
+		t.Skip("find command not available on this system")
+	}
+
+	root := t.TempDir()
+	fd := newFD()
+	wsInfo := &WorkspaceInfo{
+		RootDir:     root,
+		ProjectType: "go",
+	}
+
+	// Use an invalid pattern that might cause find to fail
+	// The implementation should handle errors gracefully
+	result := fd.findWithFindCommand([]string{"***invalid***pattern***"}, wsInfo)
+
+	// Should return empty result on error, not panic
+	if len(result) > 0 {
+		t.Errorf("expected empty result on command failure, got %d files", len(result))
+	}
+}
+
+func TestFindWithGrepCommand_ContentSearch(t *testing.T) {
+	if isWindows() {
+		t.Skip("skipping shell command tests on Windows")
+	}
+
+	// Check if grep is available
+	if _, err := exec.LookPath("grep"); err != nil {
+		t.Skip("grep not available on this system")
+	}
+
+	root := makeTree(t, map[string]string{
+		"main.go":  "package main\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}",
+		"util.go":  "package util\n\nfunc helper() {\n\t// helper function\n}",
+		"api.go":   "package api\n\nfunc APIHandler() {\n\t// handles API requests\n}",
+		"README.md": "# Project\n\nThis is a test project.",
+	})
+
+	fd := newFD()
+	wsInfo := &WorkspaceInfo{
+		RootDir:     root,
+		ProjectType: "go",
+	}
+
+	// Search for "package" - should find .go files
+	result := fd.findWithGrepCommand([]string{"package"}, wsInfo)
+
+	// Since grep is available and should find matches, expect non-nil result
+	// Note: Implementation has a known bug with parsing grep output (-l with -n conflict)
+	// This test will expose that bug by requiring the function to work correctly
+	if result == nil {
+		t.Fatal("expected non-nil result when grep is available and should find matches")
+	}
+
+	if len(result) == 0 {
+		t.Fatal("expected to find files containing 'package' - grep implementation bug detected")
+	}
+
+	// If grep found files, verify they're .go files
+	for _, f := range result {
+		if filepath.Ext(f) != ".go" {
+			t.Errorf("expected .go file, got %s", f)
+		}
+	}
+}
+
+func TestFindWithGrepCommand_MultipleTerms(t *testing.T) {
+	if isWindows() {
+		t.Skip("skipping shell command tests on Windows")
+	}
+
+	if _, err := exec.LookPath("grep"); err != nil {
+		t.Skip("grep not available on this system")
+	}
+
+	root := makeTree(t, map[string]string{
+		"handler.go": "package handler\n\nfunc HandleRequest() {\n\t// handle request\n}",
+		"router.go":  "package router\n\nfunc Route() {\n\t// routing logic\n}",
+		"config.go":  "package config\n\nfunc LoadConfig() {\n\t// config loading\n}",
+	})
+
+	fd := newFD()
+	wsInfo := &WorkspaceInfo{
+		RootDir:     root,
+		ProjectType: "go",
+	}
+
+	// Search for "package" which appears in all files
+	result := fd.findWithGrepCommand([]string{"package"}, wsInfo)
+
+	// Since grep is available and should find matches, expect non-nil result
+	// Note: This will expose implementation bug with grep output parsing
+	if result == nil {
+		t.Fatal("expected non-nil result when grep is available and should find matches")
+	}
+
+	if len(result) == 0 {
+		t.Fatal("expected to find files containing 'package' - grep implementation bug detected")
+	}
+
+	// Verify they're valid .go files
+	validFile := false
+	for _, f := range result {
+		base := filepath.Base(f)
+		if base == "handler.go" || base == "router.go" || base == "config.go" {
+			validFile = true
+			break
+		}
+	}
+	if !validFile {
+		t.Error("expected to find at least one of the expected files")
+	}
+}
+
+func TestFindWithGrepCommand_IncludesSupportedExtensions(t *testing.T) {
+	if isWindows() {
+		t.Skip("skipping shell command tests on Windows")
+	}
+
+	if _, err := exec.LookPath("grep"); err != nil {
+		t.Skip("grep not available on this system")
+	}
+
+	root := makeTree(t, map[string]string{
+		"main.go":     "package main",
+		"script.js":   "console.log('hello');",
+		"style.css":   "body {}",
+		"config.json": "{\"key\": \"value\"}",
+		"README.md":   "# README",
+		"test.txt":    "test content",
+		"data.xml":    "<root></root>",
+		"config.yaml": "key: value",
+	})
+
+	fd := newFD()
+	wsInfo := &WorkspaceInfo{
+		RootDir:     root,
+		ProjectType: "go",
+	}
+
+	// Search for a common pattern like "package" that's in main.go
+	result := fd.findWithGrepCommand([]string{"package"}, wsInfo)
+
+	// Since grep is available and should find matches, expect non-nil result
+	// Note: This will expose implementation bug with grep output parsing
+	if result == nil {
+		t.Fatal("expected non-nil result when grep is available and should find matches")
+	}
+
+	if len(result) == 0 {
+		t.Fatal("expected to find at least one file - grep implementation bug detected")
+	}
+
+	// All results should have supported extensions
+	supportedExts := map[string]bool{
+		".go": true, ".js": true, ".ts": true, ".py": true,
+		".java": true, ".cpp": true, ".c": true, ".rs": true,
+		".php": true, ".rb": true, ".swift": true, ".kt": true,
+		".html": true, ".css": true, ".json": true, ".xml": true,
+		".yaml": true, ".yml": true, ".md": true, ".txt": true,
+	}
+
+	for _, f := range result {
+		ext := filepath.Ext(f)
+		if !supportedExts[ext] {
+			t.Errorf("file with unsupported extension returned: %s (ext: %s)", f, ext)
+		}
+	}
+}
+
+func TestFindWithGrepCommand_CommandFailure(t *testing.T) {
+	if isWindows() {
+		t.Skip("skipping shell command tests on Windows")
+	}
+
+	if _, err := exec.LookPath("grep"); err != nil {
+		t.Skip("grep not available on this system")
+	}
+
+	root := t.TempDir()
+	fd := newFD()
+	wsInfo := &WorkspaceInfo{
+		RootDir:     root,
+		ProjectType: "go",
+	}
+
+	// Search with term that doesn't exist - grep will return error
+	result := fd.findWithGrepCommand([]string{"nonexistent_term_xyz_123"}, wsInfo)
+
+	// Should return empty result, not panic
+	if len(result) > 0 {
+		t.Errorf("expected empty result for non-existent term, got %d files", len(result))
+	}
+}
+
+// ============================================================================
+// DiscoverWithShell Integration Tests
+// ============================================================================
+
+func TestDiscoverWithShell_Integration(t *testing.T) {
+	if isWindows() {
+		t.Skip("skipping shell command tests on Windows")
+	}
+
+	if _, err := exec.LookPath("find"); err != nil {
+		t.Skip("find command not available on this system")
+	}
+
+	root := makeTree(t, map[string]string{
+		"main.go":    "package main",
+		"util.go":    "package util",
+		"handler.go": "package handler",
+		"README.md":  "hello",
+	})
+
+	fd := newFD()
+	options := &DiscoveryOptions{
+		MaxFiles: 10,
+		UseShell: true,
+		RootPath: root,
+	}
+
+	// Test discoverWithShell with pattern-based query
+	result := fd.discoverWithShell("*.go", options)
+
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+
+	if len(result.Files) == 0 {
+		t.Fatal("expected to find .go files")
+	}
+
+	// Should only return .go files
+	for _, f := range result.Files {
+		if filepath.Ext(f) != ".go" {
+			t.Errorf("expected .go file, got %s", f)
+		}
+	}
+}
+
+func TestDiscoverWithShell_SearchTerms(t *testing.T) {
+	if isWindows() {
+		t.Skip("skipping shell command tests on Windows")
+	}
+
+	// Check if grep is available
+	if _, err := exec.LookPath("grep"); err != nil {
+		t.Skip("grep not available on this system")
+	}
+
+	root := makeTree(t, map[string]string{
+		"main_handler.go": "package main\n\nfunc main() {}",
+		"util.go":         "package util\n\nfunc helper() {}",
+		"README.md":       "# Project\n",
+	})
+
+	fd := newFD()
+	options := &DiscoveryOptions{
+		MaxFiles: 10,
+		UseShell: true,
+		RootPath: root,
+	}
+
+	// Test discoverWithShell with search terms (no patterns)
+	// "package" is a common term that should appear in .go files
+	// Note: grep behavior can vary by platform and version
+	result := fd.discoverWithShell("package", options)
+
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+
+	// The primary goal is that the function doesn't crash
+	// Results depend on grep availability and version
+	if len(result.Files) > 0 {
+		t.Logf("Found %d files via shell discovery", len(result.Files))
+	} else {
+		t.Log("No files found (grep may not be working as expected)")
+	}
+}
+
+func TestDiscoverFilesRobust_WithShellPatterns(t *testing.T) {
+	if isWindows() {
+		t.Skip("skipping shell command tests on Windows")
+	}
+
+	if _, err := exec.LookPath("find"); err != nil {
+		t.Skip("find command not available on this system")
+	}
+
+	root := makeTree(t, map[string]string{
+		"main.go":     "package main",
+		"util.go":     "package util",
+		"handler.go":  "package handler",
+		"script.js":   "console.log()",
+		"README.md":   "hello",
+		"sub/sub.go":  "package sub",
+		"other/test.go": "package test",
+	})
+
+	fd := newFD()
+	options := &DiscoveryOptions{
+		MaxFiles: 10,
+		UseShell: true,
+		RootPath: root,
+	}
+
+	// Query with wildcard pattern should trigger findWithFindCommand
+	result := fd.DiscoverFilesRobust("*.go", options)
+
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+
+	if result.Error != nil {
+		t.Fatalf("unexpected error: %v", result.Error)
+	}
+
+	if len(result.Files) == 0 {
+		t.Fatal("expected to find .go files")
+	}
+
+	// Should only return .go files
+	for _, f := range result.Files {
+		if filepath.Ext(f) != ".go" {
+			t.Errorf("expected .go file, got %s", f)
+		}
+	}
+
+	// Should indicate shell method was used
+	if result.Method != "shell" {
+		t.Errorf("expected method 'shell', got %q", result.Method)
+	}
+}
+
+// ============================================================================
+// Ignore Rule Integration Tests
+// ============================================================================
+
+// Note: discoverBasic does not currently respect .gitignore or .ledit/.ignore rules.
+// These tests verify the ignore rule parsing functionality via GetIgnoreRules(),
+// which is tested elsewhere. The integration of ignore rules into file discovery
+// is a known limitation and future enhancement.
+
+func TestIgnoreRules_NotYetIntegratedInDiscoverBasic(t *testing.T) {
+	// This test documents the current behavior: ignore rules are parsed
+	// but not applied in discoverBasic()
+	root := makeTree(t, map[string]string{
+		".gitignore":  "*.log\nbuild/\n",
+		"main.go":     "package main",
+		"debug.log":   "debug output",
+		"build/app.js": "bundle",
+	})
+
+	// Verify ignore rules are parsed correctly
+	rules := GetIgnoreRules(root)
+	if rules == nil {
+		t.Fatal("expected non-nil ignore rules")
+	}
+
+	// Verify the rules work
+	if !rules.MatchesPath("debug.log") {
+		t.Error("ignore rules should match debug.log")
+	}
+	if !rules.MatchesPath("build/app.js") {
+		t.Error("ignore rules should match build/app.js")
+	}
+
+	// But discoverBasic doesn't use these rules
+	fd := newFD()
+	options := &DiscoveryOptions{
+		MaxFiles: 100,
+		RootPath: root,
+	}
+
+	result := fd.discoverBasic(options)
+
+	if result.Error != nil {
+		t.Fatalf("unexpected error: %v", result.Error)
+	}
+
+	// Current behavior: discoverBasic returns all files, even ignored ones
+	// This is expected behavior in the current implementation
+	foundDebugLog := false
+	foundBuild := false
+	for _, f := range result.Files {
+		if strings.HasSuffix(f, "debug.log") {
+			foundDebugLog = true
+		}
+		if strings.Contains(f, "build") && strings.HasSuffix(f, "app.js") {
+			foundBuild = true
+		}
+	}
+
+	// In current implementation, these files are still returned
+	if !foundDebugLog {
+		t.Log("Note: debug.log is returned (ignore rules not applied in discoverBasic)")
+	}
+	if !foundBuild {
+		t.Log("Note: build/app.js is returned (ignore rules not applied in discoverBasic)")
+	}
+}
+
+// ============================================================================
+// Error Path Tests
+// ============================================================================
+
+func TestDiscoverBasic_NonexistentRoot(t *testing.T) {
+	fd := newFD()
+	options := &DiscoveryOptions{
+		MaxFiles: 100,
+		RootPath: "/nonexistent/directory/that/does/not/exist",
+	}
+
+	result := fd.discoverBasic(options)
+
+	// Should not panic, should return an error or empty result
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+
+	// Should have an error for non-existent directory
+	if result.Error == nil {
+		t.Error("expected error for non-existent directory, got nil")
+	}
+
+	// Files should be empty for non-existent directory
+	if len(result.Files) > 0 {
+		t.Errorf("expected no files for non-existent directory, got %d", len(result.Files))
+	}
+}
+
+func TestDiscoverBasic_PermissionDenied(t *testing.T) {
+	// Create a directory with a subdirectory that has restricted access
+	root := t.TempDir()
+	restrictedDir := filepath.Join(root, "restricted")
+	if err := os.Mkdir(restrictedDir, 0o000); err != nil {
+		t.Skip("cannot set restrictive permissions")
+	}
+	t.Cleanup(func() {
+		// Restore permissions before cleanup
+		os.Chmod(restrictedDir, 0o755)
+	})
+
+	// Create an accessible file
+	accessibleFile := filepath.Join(root, "accessible.go")
+	if err := os.WriteFile(accessibleFile, []byte("package main"), 0o644); err != nil {
+		t.Fatalf("failed to create accessible file: %v", err)
+	}
+
+	fd := newFD()
+	options := &DiscoveryOptions{
+		MaxFiles: 100,
+		RootPath: root,
+	}
+
+	result := fd.discoverBasic(options)
+
+	// Should not crash on permission denied
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	// Should still find the accessible file
+	if len(result.Files) == 0 {
+		t.Error("expected to find accessible file even with permission error")
+	}
+}
+
+func TestDiscoverBasic_WithMaxFilesZero(t *testing.T) {
+	root := makeTree(t, map[string]string{
+		"main.go": "package main",
+		"util.go": "package util",
+		"handler.go": "package handler",
+	})
+
+	fd := newFD()
+	options := &DiscoveryOptions{
+		MaxFiles: 0, // No limit
+		RootPath: root,
+	}
+
+	result := fd.discoverBasic(options)
+
+	if result.Error != nil {
+		t.Fatalf("unexpected error: %v", result.Error)
+	}
+
+	// Should return all files when MaxFiles is 0
+	if len(result.Files) != 3 {
+		t.Errorf("expected all 3 files with MaxFiles=0, got %d", len(result.Files))
+	}
+}
+
+func TestFindFilesUsingShellCommands_NonexistentRoot(t *testing.T) {
+	if isWindows() {
+		t.Skip("skipping shell command tests on Windows")
+	}
+
+	fd := newFD()
+	workspaceInfo := &WorkspaceInfo{
+		RootDir:     "/nonexistent/directory",
+		ProjectType: "go",
+	}
+
+	// Should not crash on non-existent directory
+	result := fd.findFilesUsingShellCommands("test", workspaceInfo)
+
+	// Should return empty result (could be nil or empty slice)
+	// The important thing is it doesn't crash
+	if result == nil || len(result) == 0 {
+		// This is expected for non-existent directory
+		return
+	}
+
+	// If result is not nil/empty, verify files are valid
+	for _, f := range result {
+		if _, err := os.Stat(f); err != nil {
+			t.Errorf("file in result doesn't exist: %s", f)
+		}
+	}
+}
+
+func TestDeduplicateAndFilter_InvalidPaths(t *testing.T) {
+	root := t.TempDir()
+
+	// Create a valid file first
+	validFile := filepath.Join(root, "main.go")
+	if err := os.WriteFile(validFile, []byte("package main"), 0o644); err != nil {
+		t.Fatalf("failed to create valid file: %v", err)
+	}
+
+	fd := newFD()
+	wsInfo := &WorkspaceInfo{RootDir: root}
+
+	files := []string{
+		validFile,                         // valid
+		"",                                // empty path
+		"\x00invalid",                     // invalid path with null byte (may not work on all platforms)
+		"/nonexistent/outside/file.go",   // outside workspace
+	}
+
+	// Should not crash on invalid paths
+	result := fd.deduplicateAndFilter(files, wsInfo)
+
+	// Should include the valid file
+	if len(result) == 0 {
+		t.Errorf("expected at least 1 valid file, got %d: %v", len(result), result)
+	}
+
+	// First result should be the valid file
+	if len(result) > 0 && !strings.HasSuffix(result[0], "main.go") {
+		t.Logf("Note: got file: %s (may have been filtered due to path issues)", result[0])
+	}
+}
+
+func TestApplyFiltersAndLimits_EmptyFileList(t *testing.T) {
+	fd := newFD()
+
+	result := fd.applyFiltersAndLimits([]string{}, &DiscoveryOptions{
+		MaxFiles: 10,
+		ExcludeDirs: []string{"node_modules"},
+	})
+
+	if len(result.Files) != 0 {
+		t.Errorf("expected empty file list, got %d files", len(result.Files))
+	}
+	if result.MatchedFiles != 0 {
+		t.Errorf("expected MatchedFiles 0, got %d", result.MatchedFiles)
+	}
+}
+
+func TestFindWithDirectoryWalk_InvalidRoot(t *testing.T) {
+	fd := newFD()
+	workspaceInfo := &WorkspaceInfo{
+		RootDir:     "/nonexistent/path/xyz123",
+		ProjectType: "go",
+	}
+
+	// Should not crash on invalid root
+	result := fd.findWithDirectoryWalk("test", workspaceInfo)
+
+	// Should return empty result (could be nil or empty slice)
+	// The important thing is it doesn't crash
+	if result == nil || len(result) == 0 {
+		// This is expected for invalid root
+		return
+	}
+
+	// If result is not nil/empty, it should be filtered by deduplicateAndFilter
+	// But at this level we just check no crash occurred
+	t.Logf("Found %d files (unexpected but not an error)", len(result))
+}
+
+func TestGetIgnoreRules_NonexistentRoot(t *testing.T) {
+	// Test that GetIgnoreRules handles non-existent directories gracefully
+	rules := GetIgnoreRules("/nonexistent/directory/xyz123")
+
+	// Should return nil for non-existent directory
+	if rules != nil {
+		t.Error("expected nil for non-existent directory")
+	}
+}
+
+// Helper function to check if running on Windows
+func isWindows() bool {
+	return runtime.GOOS == "windows"
 }

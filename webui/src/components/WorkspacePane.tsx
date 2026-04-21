@@ -71,7 +71,7 @@ interface WorkspacePaneProps {
   };
 }
 
-const WorkspacePane: React.FC<WorkspacePaneProps> = ({ paneId, chatProps, reviewProps, diffState }) => {
+const WorkspacePane: React.FC<WorkspacePaneProps> = ({ paneId, chatProps, reviewProps, diffState, perChatCache, activeChatId }) => {
   const { panes, buffers } = useEditorManager();
   const pane = panes.find((item) => item.id === paneId);
   const buffer = pane?.bufferId ? buffers.get(pane.bufferId) : null;
@@ -89,7 +89,35 @@ const WorkspacePane: React.FC<WorkspacePaneProps> = ({ paneId, chatProps, review
 
   switch (buffer.kind) {
     case 'chat': {
-      return <Chat {...chatProps} />;
+      // When multiple chat buffers exist across panes, each buffer has its own
+      // chatId in metadata.  The global chatProps always reflects the *active*
+      // chat's state, so for inactive panes we must look up the per-chat cache
+      // to render the correct conversation.
+      const bufferChatId = buffer.metadata?.chatId as string | undefined;
+      const isActiveChat = !bufferChatId || bufferChatId === activeChatId;
+
+      if (isActiveChat || !perChatCache || !bufferChatId) {
+        return <Chat {...chatProps} />;
+      }
+
+      // Inactive chat pane — use cached state for this specific chat
+      const cached = perChatCache[bufferChatId];
+      const inactiveChatProps = {
+        ...chatProps,
+        messages: cached?.messages ?? [],
+        toolExecutions: cached?.toolExecutions ?? [],
+        subagentActivities: cached?.subagentActivities ?? [],
+        currentTodos: cached?.currentTodos ?? [],
+        queryProgress: cached?.queryProgress ?? null,
+        lastError: cached?.lastError ?? null,
+        isProcessing: cached?.isProcessing ?? false,
+        inputValue: '',
+        queuedMessagesCount: 0,
+        queuedMessages: [],
+        chatId: bufferChatId,
+      };
+
+      return <Chat {...inactiveChatProps} />;
     }
     case 'diff': {
       const diffPath = buffer.metadata?.sourcePath as string | undefined;

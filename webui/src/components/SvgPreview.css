@@ -14,6 +14,7 @@
   padding: 10px 14px;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-secondary);
+  flex-shrink: 0;
 }
 
 .svg-preview-title,
@@ -41,8 +42,46 @@
 .svg-preview-canvas {
   flex: 1;
   min-height: 0;
+  overflow: hidden;
+  position: relative;
+  cursor: default;
+  /* Checkerboard pattern for transparency indication */
+  background-color: var(--viewer-checker-dark, #3a3a3a);
+  background-image:
+    linear-gradient(45deg, var(--viewer-checker-light, #e0e0e0) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--viewer-checker-light, #e0e0e0) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--viewer-checker-light, #e0e0e0) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--viewer-checker-light, #e0e0e0) 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+}
+
+.svg-preview-canvas:active {
+  cursor: default;
+}
+
+.svg-preview-canvas.dragging {
+  cursor: grabbing;
+}
+
+.svg-preview-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  will-change: transform;
+  transform-origin: 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 16px;
-  background: var(--bg-secondary);
+}
+
+.svg-preview-content > svg {
+  max-width: 100%;
+  max-height: 100%;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
 }
 
 .svg-preview-frame {
@@ -60,10 +99,83 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  height: 100%;
+  flex: 1;
   color: var(--text-tertiary);
+  min-height: 200px;
 }
 
 .svg-preview-empty-title {
   font-size: 14px;
+}
+
+/* Loading and error states */
+.loading-indicator,
+.error-message {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  position: absolute;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.loading-indicator {
+  background: var(--editor-loading-bg);
+  color: var(--editor-loading-fg);
+}
+
+.error-message {
+  background: var(--editor-error-bg);
+  color: var(--editor-error-fg);
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+  font-size: 14px;
+}
+
+.error-icon {
+  flex-shrink: 0;
+}
+
+.error-text {
+  white-space: nowrap;
+}
+
+.viewer-stat {
+  white-space: nowrap;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .svg-preview-header {
+    padding: 8px 12px;
+  }
+
+  .svg-preview-title {
+    font-size: 12px;
+  }
+
+  .svg-preview-meta {
+    font-size: 10px;
+  }
+
+  .svg-preview-canvas {
+    min-height: 0;
+  }
 }

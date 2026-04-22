@@ -140,7 +140,7 @@ These gaps were identified by cross-referencing the current editor implementatio
 [x] - EDITOR: Add clickable URL support via `@uiw/codemirror-extensions-hyper-link` — URLs in comments and strings are not clickable. Install this package so Cmd/Ctrl+click on a URL opens it in a browser. Add to the editor extensions array.
 [x] - EDITOR: Add clickable URL support via `@uiw/codemirror-extensions-hyper-link` — URLs in comments and strings are not clickable. Install this package so Cmd/Ctrl+click on a URL opens it in a browser. Add to the editor extensions array.
 
-[] - EDITOR: Add color value widget via `@uiw/codemirror-extensions-color` — CSS color values like `#ff0000`, `rgb(255,0,0)`, `hsl()` are displayed as plain text with no preview. This package renders an inline color swatch and opens a color picker when clicked. Install the package and add to the editor extensions (relevant for CSS, HTML, JS, TS, and any language with color literals).
+[x] - EDITOR: Add color value widget via `@uiw/codemirror-extensions-color` — CSS color values like `#ff0000`, `rgb(255,0,0)`, `hsl()` are displayed as plain text with no preview. This package renders an inline color swatch and opens a color picker when clicked. Install the package and add to the editor extensions (relevant for CSS, HTML, JS, TS, and any language with color literals).
 
 [] - EDITOR: Add configurable tab size — currently the editor uses CodeMirror's default 4-space indent unit. Add a `EditorState.tabSize` Compartment in `EditorPane.tsx` that reads from a setting (stored in localStorage or the settings API) and allows the user to choose 2, 4, or 8 spaces. Also add a tab size indicator to the editor footer/status bar.
 

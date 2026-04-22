@@ -79,6 +79,10 @@ function CommitDetailPanel({
     async (filePath: string) => {
       try {
         const result = await apiService.getGitCommitFileDiff(commit.hash, filePath);
+        if (!result?.diff) {
+          log.error(`No diff content returned for file: ${filePath}`, { title: 'Git Error' });
+          return;
+        }
         openWorkspaceBuffer({
           kind: 'diff',
           path: `__workspace/commit/${commit.short_hash}/${filePath}`,
@@ -91,14 +95,17 @@ function CommitDetailPanel({
           },
         });
       } catch (err) {
-        log.error('Failed to load file diff', { title: 'Git Error' });
+        log.error(`Failed to load file diff: ${err instanceof Error ? err.message : 'Unknown error'}`, { title: 'Git Error' });
       }
     },
     [apiService, commit.hash, commit.short_hash, openWorkspaceBuffer, log],
   );
 
   const handleViewAllDiffs = useCallback(() => {
-    if (!detail) return;
+    if (!detail?.diff || detail.diff.trim() === '') {
+      log.error('No diff content available for this commit', { title: 'Git Error' });
+      return;
+    }
     const subject = firstLine(detail.subject || commit.message);
     openWorkspaceBuffer({
       kind: 'diff',
@@ -111,7 +118,7 @@ function CommitDetailPanel({
         diffContent: detail.diff,
       },
     });
-  }, [detail, commit, openWorkspaceBuffer]);
+  }, [detail, commit, openWorkspaceBuffer, log]);
 
   // ── Loading state ──────────────────────────────────────────────
   if (isLoading) {
@@ -179,7 +186,7 @@ function CommitDetailPanel({
           type="button"
           className="commit-detail-action-btn"
           onClick={handleViewAllDiffs}
-          disabled={fileList.length === 0}
+          disabled={!detail?.diff || detail.diff.trim() === ''}
         >
           <GitCompareArrows size={12} />
           View All Diffs

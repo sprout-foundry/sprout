@@ -57,22 +57,22 @@
 }
 
 .commit-detail-diff-line.file .commit-detail-diff-line-text {
-  color: var(--accent-primary);
-  background: rgba(97, 175, 239, 0.08);
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--accent-primary) 16%, var(--bg-secondary));
   font-weight: 600;
 }
 
 .commit-detail-diff-line.hunk .commit-detail-diff-line-text {
-  color: var(--accent-warning);
-  background: rgba(229, 192, 123, 0.1);
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--accent-warning) 14%, var(--bg-secondary));
 }
 
 .commit-detail-diff-line.add .commit-detail-diff-line-text {
-  color: #86efac;
-  background: rgba(34, 197, 94, 0.14);
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--accent-success) 14%, var(--bg-secondary));
 }
 
 .commit-detail-diff-line.del .commit-detail-diff-line-text {
-  color: #fda4af;
-  background: rgba(244, 63, 94, 0.14);
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--accent-error) 14%, var(--bg-secondary));
 }

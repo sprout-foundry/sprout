@@ -1580,10 +1580,11 @@
 .git-sidebar-commit-header h4,
 .git-sidebar-file-section-header h4 {
   margin: 0;
-  font-size: 12px;
+  font-size: 11px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-tertiary);
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
 }
 
 .git-generate-icon-btn,
@@ -1728,6 +1729,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 5px 12px;
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border-default);
 }
 
 .git-sidebar-file-section-title,
@@ -1736,6 +1739,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
 }
 
 .git-sidebar-row-actions {
@@ -1794,7 +1798,7 @@
 
 .git-sidebar-file-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 8px;
   align-items: center;
   padding: 7px 12px;

@@ -163,7 +163,7 @@ jest.mock('../extensions/emmet', () => ({
     return mockCompartment;
   },
   getInitialEmmetExtensions: () => [],
-  reconfigureEmmet: jest.fn(),
+  buildEmmetExtensions: () => [],
 }));
 
 jest.mock('../extensions/snippets', () => ({

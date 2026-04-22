@@ -150,6 +150,7 @@ func (a *Agent) BuildCheckpointCompactedMessages(messages []api.Message) ([]api.
 	remaining := make([]TurnCheckpoint, 0, len(checkpoints))
 	nextIndex := 0
 	cumulativeDelta := 0 // tracks how many fewer messages exist after each consumed checkpoint
+	lastSummaryIdx := -1 // track index of last inserted summary for boundary checking
 
 	for _, checkpoint := range checkpoints {
 		if checkpoint.StartIndex < nextIndex {
@@ -171,6 +172,9 @@ func (a *Agent) BuildCheckpointCompactedMessages(messages []api.Message) ([]api.
 			Role:    "assistant",
 			Content: summaryText,
 		})
+
+		// Track the index of this summary message for boundary checking later
+		lastSummaryIdx = len(compacted) - 1
 
 		// This checkpoint replaced (EndIndex - StartIndex + 1) messages with 1 summary message.
 		replacedCount := checkpoint.EndIndex - checkpoint.StartIndex + 1
@@ -199,6 +203,25 @@ func (a *Agent) BuildCheckpointCompactedMessages(messages []api.Message) ([]api.
 	}
 
 	compacted = append(compacted, messages[nextIndex:]...)
+	
+	// FIX: Ensure we don't have consecutive assistant messages at the boundary.
+	// If the last inserted summary is followed by an assistant message without tool_calls,
+	// remove the following assistant message to avoid llama.cpp error:
+	// "Cannot have 2 or more assistant messages at the end of the list"
+	// 
+	// Note: lastSummaryIdx is only set if at least one checkpoint was consumed.
+	// If no checkpoints were consumed, lastSummaryIdx remains -1 and this check is skipped.
+	if lastSummaryIdx >= 0 && lastSummaryIdx+1 < len(compacted) {
+		if compacted[lastSummaryIdx].Role == "assistant" && len(compacted[lastSummaryIdx].ToolCalls) == 0 &&
+		   compacted[lastSummaryIdx+1].Role == "assistant" && len(compacted[lastSummaryIdx+1].ToolCalls) == 0 {
+			// Remove the duplicate assistant message (keep the summary, remove the original)
+			if a.debug {
+				a.debugLog("[clean] Removed consecutive assistant at compaction boundary\n")
+			}
+			compacted = append(compacted[:lastSummaryIdx+1], compacted[lastSummaryIdx+2:]...)
+		}
+	}
+	
 	return compacted, remaining
 }
 

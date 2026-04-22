@@ -57,7 +57,7 @@ import { getLanguageExtensions, resolveLanguageId } from '../extensions/language
 import {
   createEmmetCompartment,
   getInitialEmmetExtensions,
-  reconfigureEmmet,
+  buildEmmetExtensions,
 } from '../extensions/emmet';
 import { minimapExtension } from '../extensions/minimap';
 import { tabExpandSnippets, setSnippetLanguage } from '../extensions/snippets';
@@ -1075,9 +1075,11 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     );
 
     view.dispatch({
-      effects: languageCompartment.current.reconfigure(getLanguageExtensions(languageId)),
+      effects: [
+        languageCompartment.current.reconfigure(getLanguageExtensions(languageId)),
+        emmetCompartment.current.reconfigure(buildEmmetExtensions(languageId)),
+      ],
     });
-    reconfigureEmmet(emmetCompartment.current, view, languageId);
   }, [buffer?.id, buffer?.languageOverride, buffer?.file?.ext, buffer?.file?.name]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep the snippet expansion language in sync with the current buffer.

@@ -861,4 +861,166 @@ describe('EditorPane', () => {
       expect(languageSwitcher).toBeFalsy();
     });
   }); // language override
+
+  // ── Tab size tests ──────────────────────────────────────────────
+
+  describe('tab size', () => {
+    beforeEach(() => {
+      // Clear localStorage before each tab size test
+      localStorage.clear();
+    });
+
+    it('renders the tab size indicator in the footer with default value', async () => {
+      // eslint-disable-next-line testing-library/no-unnecessary-act
+      await act(async () => {
+        root.render(<EditorPane paneId="pane-1" />);
+      });
+      await flushPromises();
+
+      const footer = container.querySelector('.pane-footer');
+      expect(footer).toBeTruthy();
+
+      const tabSizeIndicator = footer?.querySelector('.tab-size');
+      expect(tabSizeIndicator).toBeTruthy();
+      expect(tabSizeIndicator?.textContent?.trim()).toBe('Spaces: 4');
+    });
+
+    it('clicking tab size indicator cycles from 4 to 8', async () => {
+      // eslint-disable-next-line testing-library/no-unnecessary-act
+      await act(async () => {
+        root.render(<EditorPane paneId="pane-1" />);
+      });
+      await flushPromises();
+
+      const footer = container.querySelector('.pane-footer');
+      const tabSizeIndicator = footer?.querySelector('.tab-size');
+
+      // Initial value is 4
+      expect(tabSizeIndicator?.textContent?.trim()).toBe('Spaces: 4');
+
+      // Click to cycle to 8
+      await act(async () => {
+        (tabSizeIndicator as HTMLElement).click();
+      });
+      await flushPromises();
+
+      expect(tabSizeIndicator?.textContent?.trim()).toBe('Spaces: 8');
+    });
+
+    it('clicking tab size indicator cycles from 8 to 2', async () => {
+      // Pre-set localStorage to 8
+      localStorage.setItem('editor:tab-size', '8');
+
+      // eslint-disable-next-line testing-library/no-unnecessary-act
+      await act(async () => {
+        root.render(<EditorPane paneId="pane-1" />);
+      });
+      await flushPromises();
+
+      const footer = container.querySelector('.pane-footer');
+      const tabSizeIndicator = footer?.querySelector('.tab-size');
+
+      // Initial value is 8
+      expect(tabSizeIndicator?.textContent?.trim()).toBe('Spaces: 8');
+
+      // Click to cycle to 2
+      await act(async () => {
+        (tabSizeIndicator as HTMLElement).click();
+      });
+      await flushPromises();
+
+      expect(tabSizeIndicator?.textContent?.trim()).toBe('Spaces: 2');
+    });
+
+    it('clicking tab size indicator cycles from 2 to 4', async () => {
+      // Pre-set localStorage to 2
+      localStorage.setItem('editor:tab-size', '2');
+
+      // eslint-disable-next-line testing-library/no-unnecessary-act
+      await act(async () => {
+        root.render(<EditorPane paneId="pane-1" />);
+      });
+      await flushPromises();
+
+      const footer = container.querySelector('.pane-footer');
+      const tabSizeIndicator = footer?.querySelector('.tab-size');
+
+      // Initial value is 2
+      expect(tabSizeIndicator?.textContent?.trim()).toBe('Spaces: 2');
+
+      // Click to cycle to 4
+      await act(async () => {
+        (tabSizeIndicator as HTMLElement).click();
+      });
+      await flushPromises();
+
+      expect(tabSizeIndicator?.textContent?.trim()).toBe('Spaces: 4');
+    });
+
+    it('tab size is persisted to localStorage when changed', async () => {
+      // eslint-disable-next-line testing-library/no-unnecessary-act
+      await act(async () => {
+        root.render(<EditorPane paneId="pane-1" />);
+      });
+      await flushPromises();
+
+      const footer = container.querySelector('.pane-footer');
+      const tabSizeIndicator = footer?.querySelector('.tab-size');
+
+      // Click to cycle from 4 to 8
+      await act(async () => {
+        (tabSizeIndicator as HTMLElement).click();
+      });
+      await flushPromises();
+
+      // Verify localStorage was updated
+      expect(localStorage.getItem('editor:tab-size')).toBe('8');
+    });
+
+    it('tab size indicator has correct title tooltip', async () => {
+      // eslint-disable-next-line testing-library/no-unnecessary-act
+      await act(async () => {
+        root.render(<EditorPane paneId="pane-1" />);
+      });
+      await flushPromises();
+
+      const footer = container.querySelector('.pane-footer');
+      const tabSizeIndicator = footer?.querySelector('.tab-size');
+
+      expect(tabSizeIndicator?.getAttribute('title')).toBe('Click to change tab size (Spaces: 2, 4, 8)');
+    });
+
+    it('loads tab size from localStorage on mount', async () => {
+      // Pre-set localStorage to 2
+      localStorage.setItem('editor:tab-size', '2');
+
+      // eslint-disable-next-line testing-library/no-unnecessary-act
+      await act(async () => {
+        root.render(<EditorPane paneId="pane-1" />);
+      });
+      await flushPromises();
+
+      const footer = container.querySelector('.pane-footer');
+      const tabSizeIndicator = footer?.querySelector('.tab-size');
+
+      expect(tabSizeIndicator?.textContent?.trim()).toBe('Spaces: 2');
+    });
+
+    it('uses default tab size when localStorage value is invalid', async () => {
+      // Set invalid value
+      localStorage.setItem('editor:tab-size', '5');
+
+      // eslint-disable-next-line testing-library/no-unnecessary-act
+      await act(async () => {
+        root.render(<EditorPane paneId="pane-1" />);
+      });
+      await flushPromises();
+
+      const footer = container.querySelector('.pane-footer');
+      const tabSizeIndicator = footer?.querySelector('.tab-size');
+
+      // Should fall back to default (4)
+      expect(tabSizeIndicator?.textContent?.trim()).toBe('Spaces: 4');
+    });
+  }); // tab size
 }); // EditorPane

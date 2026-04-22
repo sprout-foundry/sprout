@@ -55,6 +55,17 @@
   gap: 12px;
 }
 
+.pane-footer .tab-size {
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.15s ease;
+  user-select: none;
+}
+
+.pane-footer .tab-size:hover {
+  opacity: 1;
+}
+
 .pane-footer .language-switcher-button {
   flex-shrink: 0;
 }

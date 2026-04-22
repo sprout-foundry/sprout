@@ -10,6 +10,15 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
+// Layered compaction constants for graduated detail levels.
+const (
+	LayeredThreshold    = 30  // Minimum middle messages to trigger layered compaction
+	MinLayerSize        = 10  // Minimum messages per layer
+	BriefWordLimit      = 150 // Word limit for oldest (brief) layer
+	SummaryWordLimit    = 250 // Word limit for middle (summary) layer
+	DetailedWordLimit   = 350 // Word limit for newest (detailed) layer
+)
+
 // FileReadRecord tracks file reads to detect redundancy
 type FileReadRecord struct {
 	FilePath     string
@@ -97,8 +106,10 @@ func (co *ConversationOptimizer) OptimizeConversation(messages []api.Message) []
 	return optimized
 }
 
-// CompactConversation rewrites older middle history into a durable summary while
+// CompactConversation rewrites older middle history into durable summaries while
 // preserving the opening task anchor and the recent causal chain intact.
+// For large middle segments (>= 30 messages), it produces layered summaries at
+// graduated detail levels (brief, summary, detailed).
 func (co *ConversationOptimizer) CompactConversation(messages []api.Message) []api.Message {
 	if !co.enabled || len(messages) < PruningConfig.Structural.MinMessagesToCompact {
 		return messages
@@ -116,6 +127,13 @@ func (co *ConversationOptimizer) CompactConversation(messages []api.Message) []a
 	}
 
 	middle := messages[anchorEnd:recentStart]
+	
+	// Layered compaction for large middle segments (>= LayeredThreshold messages)
+	if len(middle) >= LayeredThreshold {
+		return co.compactConversationLayered(messages, anchorEnd, recentStart, middle)
+	}
+	
+	// Single summary for smaller middle segments (original behavior)
 	summary := co.buildLLMCompactionSummary(middle)
 	if summary == "" {
 		return messages
@@ -148,6 +166,201 @@ func (co *ConversationOptimizer) CompactConversation(messages []api.Message) []a
 	}
 	
 	return compacted
+}
+
+// compactConversationLayered creates multiple summary messages at graduated detail levels
+// for large middle segments. This prevents over-aggressive single-summary compaction.
+func (co *ConversationOptimizer) compactConversationLayered(messages []api.Message, anchorEnd, recentStart int, middle []api.Message) []api.Message {
+	// Split middle into 3 layers: old-middle, mid-middle, recent-middle
+	layerSize := len(middle) / 3
+	if layerSize < MinLayerSize {
+		layerSize = MinLayerSize
+	}
+	
+	oldMiddleEnd := anchorEnd + layerSize
+	midMiddleEnd := oldMiddleEnd + layerSize
+	
+	var summaries []api.Message
+	
+	// Old-middle: most condensed (brief)
+	oldMiddle := messages[anchorEnd:oldMiddleEnd]
+	briefSummary := co.buildLLMCompactionSummaryWithLimit(oldMiddle, BriefWordLimit, "brief")
+	if briefSummary != "" {
+		summaries = append(summaries, api.Message{
+			Role:    "assistant",
+			Content: briefSummary,
+		})
+	}
+	
+	// Mid-middle: medium detail (summary)
+	midMiddle := messages[oldMiddleEnd:midMiddleEnd]
+	summarySummary := co.buildLLMCompactionSummaryWithLimit(midMiddle, SummaryWordLimit, "summary")
+	if summarySummary != "" {
+		summaries = append(summaries, api.Message{
+			Role:    "assistant",
+			Content: summarySummary,
+		})
+	}
+	
+	// Recent-middle: higher detail (detailed)
+	recentMiddle := messages[midMiddleEnd:recentStart]
+	detailedSummary := co.buildLLMCompactionSummaryWithLimit(recentMiddle, DetailedWordLimit, "detailed")
+	if detailedSummary != "" {
+		summaries = append(summaries, api.Message{
+			Role:    "assistant",
+			Content: detailedSummary,
+		})
+	}
+	
+	// If no summaries were created, fall back to single summary
+	if len(summaries) == 0 {
+		summary := co.buildLLMCompactionSummary(middle)
+		if summary == "" {
+			return messages
+		}
+		summaries = append(summaries, api.Message{
+			Role:    "assistant",
+			Content: summary,
+		})
+	}
+	
+	// Build compacted message list
+	compacted := make([]api.Message, 0, anchorEnd+len(summaries)+len(messages)-recentStart)
+	compacted = append(compacted, messages[:anchorEnd]...)
+	compacted = append(compacted, summaries...)
+	compacted = append(compacted, messages[recentStart:]...)
+	
+	// FIX: Ensure we don't have consecutive assistant messages at the boundary.
+	// Check if the last summary is followed by an assistant message without tool_calls
+	if len(summaries) > 0 {
+		lastSummaryIdx := anchorEnd + len(summaries) - 1
+		if lastSummaryIdx+1 < len(compacted) {
+			if compacted[lastSummaryIdx].Role == "assistant" && len(compacted[lastSummaryIdx].ToolCalls) == 0 &&
+				compacted[lastSummaryIdx+1].Role == "assistant" && len(compacted[lastSummaryIdx+1].ToolCalls) == 0 {
+				if co.debug {
+					fmt.Printf("[clean] Removed consecutive assistant at layered compaction boundary\n")
+				}
+				compacted = append(compacted[:lastSummaryIdx+1], compacted[lastSummaryIdx+2:]...)
+			}
+		}
+	}
+	
+	if co.debug {
+		fmt.Printf("[layered] Layered compaction: %d messages → %d summary layers\n", len(middle), len(summaries))
+	}
+	
+	return compacted
+}
+
+// buildLLMCompactionSummaryWithLimit generates a compaction summary with a specified word limit
+// and detail level hint. Used for layered compaction.
+func (co *ConversationOptimizer) buildLLMCompactionSummaryWithLimit(messages []api.Message, maxWords int, detailLevel string) string {
+	if co.client == nil {
+		return co.buildGoCompactionSummary(messages)
+	}
+
+	n := len(messages)
+	context := co.extractCompactionContext(messages)
+
+	// Build compact text representation of the middle messages
+	var b strings.Builder
+	for _, msg := range messages {
+		switch msg.Role {
+		case "user":
+			b.WriteString("[user] ")
+			b.WriteString(msg.Content)
+			b.WriteString("\n")
+		case "assistant":
+			if len(msg.ToolCalls) > 0 {
+				b.WriteString("[assistant/tool_calls] ")
+				b.WriteString(summarizeAssistantToolCalls(msg))
+				b.WriteString("\n")
+				continue
+			}
+			// Check if this is a checkpoint summary
+			content := strings.TrimSpace(msg.Content)
+			if co.isCheckpointSummary(content) {
+				b.WriteString("[checkpoint summary] ")
+				b.WriteString(content)
+				b.WriteString("\n")
+				continue
+			}
+			if content != "" {
+				b.WriteString("[assistant] ")
+				b.WriteString(content)
+				b.WriteString("\n")
+			}
+		case "tool":
+			summary, _ := summarizeToolMessage(msg)
+			if summary != "" {
+				b.WriteString("[tool] ")
+				b.WriteString(summary)
+				b.WriteString("\n")
+			}
+		}
+	}
+	compactText := b.String()
+	if compactText == "" {
+		return co.buildGoCompactionSummary(messages)
+	}
+
+	// Proportional truncation based on message count
+	maxChars := n * 400
+	if maxChars > 32000 {
+		maxChars = 32000
+	}
+	if len(compactText) > maxChars {
+		compactText = compactText[:maxChars] + "\n[...truncated...]"
+	}
+
+	if co.printLine != nil {
+		co.printLine(fmt.Sprintf("\n[~] Compacting %d messages → %s LLM summary (max %d words)...", n, detailLevel, maxWords))
+	}
+
+	systemMsg := api.Message{
+		Role: "system",
+		Content: fmt.Sprintf("You are a conversation context summarizer. Summarize the following conversation segment concisely as a reference note for the AI agent continuing this session.\n\n"+
+			"Detail level: %s (target ~%d words)\n\n"+
+			"Rules:\n"+
+			"- Preserve: what files were read/modified, what errors occurred, what the current state was\n"+
+			"- Explicitly preserve the latest user request that appears in the compacted segment\n"+
+			"- Explicitly state whether the work was still in progress at the end of the compacted segment\n"+
+			"- Do NOT add planning, suggestions, or \"next steps\"\n"+
+			"- Respond in English only\n"+
+			"- Keep under %d words\n"+
+			"- Use a neutral, factual tone", detailLevel, maxWords, maxWords),
+	}
+	userMsg := api.Message{
+		Role:    "user",
+		Content: compactText,
+	}
+
+	resp, err := co.client.SendChatRequest([]api.Message{systemMsg, userMsg}, nil, "", false)
+	if err != nil {
+		if co.debug {
+			fmt.Printf("\n[WARN] LLM compaction summary failed: %v, falling back to Go summary\n", err)
+		}
+		if co.printLine != nil {
+			co.printLine(fmt.Sprintf("[WARN] LLM compaction failed (%v), using fallback summary", err))
+		}
+		return co.buildGoCompactionSummary(messages)
+	}
+
+	if len(resp.Choices) == 0 || strings.TrimSpace(resp.Choices[0].Message.Content) == "" {
+		if co.debug {
+			fmt.Printf("\n[WARN] LLM compaction returned empty response, falling back to Go summary\n")
+		}
+		return co.buildGoCompactionSummary(messages)
+	}
+
+	llmSummary := strings.TrimSpace(resp.Choices[0].Message.Content)
+
+	wordCount := len(strings.Fields(llmSummary))
+	if co.printLine != nil {
+		co.printLine(fmt.Sprintf("[OK] %s compaction: %d messages → %d-word LLM summary", detailLevel, n, wordCount))
+	}
+
+	return co.wrapCompactionSummaryWithLevel(messages, llmSummary, context, detailLevel)
 }
 
 // isRedundantFileRead checks if this message is a redundant file read
@@ -379,6 +592,7 @@ func (co *ConversationOptimizer) buildActionableSummary(messages []api.Message) 
 
 // buildLLMCompactionSummary generates a compaction summary using the LLM.
 // It falls back to buildGoCompactionSummary if the LLM client is unavailable or the call fails.
+// Uses proportional truncation based on message count and is checkpoint-aware.
 func (co *ConversationOptimizer) buildLLMCompactionSummary(messages []api.Message) string {
 	if co.client == nil {
 		return co.buildGoCompactionSummary(messages)
@@ -402,7 +616,14 @@ func (co *ConversationOptimizer) buildLLMCompactionSummary(messages []api.Messag
 				b.WriteString("\n")
 				continue
 			}
+			// Check if this is a checkpoint summary
 			content := strings.TrimSpace(msg.Content)
+			if co.isCheckpointSummary(content) {
+				b.WriteString("[checkpoint summary] ")
+				b.WriteString(content)
+				b.WriteString("\n")
+				continue
+			}
 			if content != "" {
 				b.WriteString("[assistant] ")
 				b.WriteString(content)
@@ -422,9 +643,13 @@ func (co *ConversationOptimizer) buildLLMCompactionSummary(messages []api.Messag
 		return co.buildGoCompactionSummary(messages)
 	}
 
-	// Truncate very large compaction text to avoid excessive token usage
-	if len(compactText) > 8000 {
-		compactText = compactText[:8000] + "\n[...truncated...]"
+	// Proportional truncation based on message count: maxChars = min(n * 400, 32000)
+	maxChars := n * 400
+	if maxChars > 32000 {
+		maxChars = 32000
+	}
+	if len(compactText) > maxChars {
+		compactText = compactText[:maxChars] + "\n[...truncated...]"
 	}
 
 	if co.printLine != nil {
@@ -440,7 +665,7 @@ func (co *ConversationOptimizer) buildLLMCompactionSummary(messages []api.Messag
 			"- Explicitly state whether the work was still in progress at the end of the compacted segment\n" +
 			"- Do NOT add planning, suggestions, or \"next steps\"\n" +
 			"- Respond in English only\n" +
-			"- Keep under 400 words\n" +
+			"- Keep under 600 words\n" +
 			"- Use a neutral, factual tone",
 	}
 	userMsg := api.Message{
@@ -623,6 +848,93 @@ func (co *ConversationOptimizer) wrapCompactionSummary(messages []api.Message, b
 	result.WriteString("- Use newer messages for the exact current step-by-step state.")
 
 	return strings.TrimSpace(result.String())
+}
+
+// wrapCompactionSummaryWithLevel wraps a summary with the standard header,
+// adapted for layered compaction with a detail level indicator.
+func (co *ConversationOptimizer) wrapCompactionSummaryWithLevel(messages []api.Message, body string, context compactionContext, detailLevel string) string {
+	body = strings.TrimSpace(body)
+	if body == "" {
+		return ""
+	}
+
+	var result strings.Builder
+	
+	// Add detail level indicator to the header
+	switch detailLevel {
+	case "brief":
+		result.WriteString("Compacted earlier conversation state (brief):\n")
+	case "summary":
+		result.WriteString("Compacted earlier conversation state (summary):\n")
+	case "detailed":
+		result.WriteString("Compacted earlier conversation state (detailed):\n")
+	default:
+		result.WriteString("Compacted earlier conversation state:\n")
+	}
+	
+	result.WriteString(fmt.Sprintf("- Summarized %d earlier messages to preserve context headroom.\n", len(messages)))
+	if context.latestUserRequest != "" {
+		result.WriteString("- Latest compacted user request: ")
+		result.WriteString(context.latestUserRequest)
+		result.WriteString("\n")
+		result.WriteString("- Status at compaction time: work was still in progress; newer messages continue from this task.\n")
+	}
+	if context.latestAssistantNote != "" {
+		result.WriteString("- Latest compacted assistant state: ")
+		result.WriteString(context.latestAssistantNote)
+		result.WriteString("\n")
+	}
+
+	lines := strings.Split(body, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "- ") {
+			result.WriteString(line)
+		} else {
+			result.WriteString("- ")
+			result.WriteString(line)
+		}
+		result.WriteString("\n")
+	}
+	result.WriteString("- Use newer messages for the exact current step-by-step state.")
+
+	return strings.TrimSpace(result.String())
+}
+
+// isCheckpointSummary detects if an assistant message content is a checkpoint summary.
+// Checkpoint summaries contain "Compacted earlier conversation state:" or use standard
+// checkpoint phrasing. This heuristic is intentionally conservative — false positives
+// (treating a regular assistant message as a checkpoint summary) only affect how the
+// message is represented in the LLM compaction prompt text (prefixed with
+// "[checkpoint summary]" instead of "[assistant]"), not whether the message is kept
+// or removed. The LLM gets slightly different context but no data is lost.
+func (co *ConversationOptimizer) isCheckpointSummary(content string) bool {
+	if content == "" {
+		return false
+	}
+	
+	// Direct check for checkpoint header
+	if strings.Contains(content, "Compacted earlier conversation state:") {
+		return true
+	}
+	
+	// Check for common checkpoint summary patterns
+	contentLower := strings.ToLower(content)
+	checkpointIndicators := []string{
+		"summarized", "compacted", "earlier conversation",
+		"latest compacted user request", "status at compaction time",
+	}
+	
+	for _, indicator := range checkpointIndicators {
+		if strings.Contains(contentLower, indicator) {
+			return true
+		}
+	}
+	
+	return false
 }
 
 func looksLikeDurableAssistantState(content string) bool {

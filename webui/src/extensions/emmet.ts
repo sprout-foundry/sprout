@@ -6,7 +6,7 @@
  * - Wrap-with-abbreviation (Ctrl+Shift+W by default)
  * - Manual expand-abbreviation command (Ctrl+E fallback)
  *
- * Only active for HTML, CSS, SCSS, SASS, and JSX language modes.
+ * Only active for HTML, XML, CSS, SCSS, SASS, and JSX language modes.
  */
 
 import { type Extension, Compartment } from '@codemirror/state';
@@ -23,6 +23,7 @@ import {
  */
 const EMMET_LANGUAGE_IDS = new Set([
   'html',
+  'xml',
   'css',
   'sass',
   'scss',
@@ -35,6 +36,7 @@ const EMMET_LANGUAGE_IDS = new Set([
  */
 const LANGUAGE_TO_EMMET_SYNTAX: Record<string, EmmetKnownSyntax> = {
   html: EmmetKnownSyntax.html,
+  xml: EmmetKnownSyntax.xml,
   css: EmmetKnownSyntax.css,
   scss: EmmetKnownSyntax.scss,
   sass: EmmetKnownSyntax.sass,
@@ -63,17 +65,22 @@ export function buildEmmetExtensions(languageId: string | null | undefined): Ext
     return [];
   }
 
-  return [
-    abbreviationTracker({ syntax }),
-    wrapWithAbbreviation('Ctrl-Shift-w'),
-    keymap.of([
-      {
-        key: 'Ctrl-e',
-        mac: 'Cmd-e',
-        run: expandAbbreviation,
-      },
-    ]),
-  ];
+  try {
+    return [
+      abbreviationTracker({ syntax }),
+      wrapWithAbbreviation('Ctrl-Shift-w'),
+      keymap.of([
+        {
+          key: 'Ctrl-e',
+          mac: 'Cmd-e',
+          run: expandAbbreviation,
+        },
+      ]),
+    ];
+  } catch (err) {
+    console.error('[emmet] Failed to build extensions:', err);
+    return [];
+  }
 }
 
 /**

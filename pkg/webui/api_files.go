@@ -866,15 +866,35 @@ func (ws *ReactWebServer) handleFileRead(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Determine content type
-	contentType := "text/plain"
-	if strings.HasSuffix(canonicalPath, ".json") {
+	// First, try to detect content type from the file content (magic bytes)
+	contentType := http.DetectContentType(content)
+
+	// Fallback to extension-based detection for types http.DetectContentType can't reliably detect
+	// or for types that need specific MIME types (like .js, .svg)
+	ext := strings.ToLower(filepath.Ext(canonicalPath))
+	switch ext {
+	case ".json":
 		contentType = "application/json"
-	} else if strings.HasSuffix(canonicalPath, ".js") {
+	case ".js":
 		contentType = "application/javascript"
-	} else if strings.HasSuffix(canonicalPath, ".css") {
+	case ".css":
 		contentType = "text/css"
-	} else if strings.HasSuffix(canonicalPath, ".html") {
+	case ".html":
 		contentType = "text/html"
+	case ".svg":
+		contentType = "image/svg+xml"
+	case ".png":
+		contentType = "image/png"
+	case ".jpg", ".jpeg":
+		contentType = "image/jpeg"
+	case ".gif":
+		contentType = "image/gif"
+	case ".webp":
+		contentType = "image/webp"
+	case ".bmp":
+		contentType = "image/bmp"
+	case ".ico":
+		contentType = "image/x-icon"
 	}
 
 	w.Header().Set("Content-Type", contentType)

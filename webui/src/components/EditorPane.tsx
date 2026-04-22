@@ -15,6 +15,7 @@ import {
   scrollPastEnd,
 } from '@codemirror/view';
 import { lineNumbersRelative } from '@uiw/codemirror-extensions-line-numbers-relative';
+import { hyperLink } from '@uiw/codemirror-extensions-hyper-link';
 import { EditorState, Compartment, Transaction } from '@codemirror/state';
 import { defaultKeymap, indentWithTab, history } from '@codemirror/commands';
 import { search, searchKeymap, openSearchPanel, replaceAll, highlightSelectionMatches } from '@codemirror/search';
@@ -917,6 +918,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       keymap.of(semanticKeymap),
       search(),
       highlightSelectionMatches(),
+      hyperLink,
       autocompletion(),
       closeBrackets(),
       history(),

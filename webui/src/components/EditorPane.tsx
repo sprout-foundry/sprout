@@ -16,6 +16,7 @@ import {
 } from '@codemirror/view';
 import { lineNumbersRelative } from '@uiw/codemirror-extensions-line-numbers-relative';
 import { hyperLink } from '@uiw/codemirror-extensions-hyper-link';
+import { color } from '@uiw/codemirror-extensions-color';
 import { EditorState, Compartment, Transaction } from '@codemirror/state';
 import { defaultKeymap, indentWithTab, history } from '@codemirror/commands';
 import { search, searchKeymap, openSearchPanel, replaceAll, highlightSelectionMatches } from '@codemirror/search';
@@ -919,6 +920,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       search(),
       highlightSelectionMatches(),
       hyperLink,
+      color,
       autocompletion(),
       closeBrackets(),
       history(),

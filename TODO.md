@@ -137,7 +137,8 @@ These gaps were identified by cross-referencing the current editor implementatio
 
 [x] - EDITOR: Add Emmet HTML/CSS abbreviation expansion via `@emmetio/codemirror6-plugin` — when editing HTML or CSS, Emmet allows typing abbreviations like `div.container>ul>li*3` and expanding them to full HTML. This is a massive productivity feature for web development and standard in VS Code. Install the package, configure it, and wire it into the editor extensions (only active for HTML/CSS/JSX language modes).
 
-[] - EDITOR: Add clickable URL support via `@uiw/codemirror-extensions-hyper-link` — URLs in comments and strings are not clickable. Install this package so Cmd/Ctrl+click on a URL opens it in a browser. Add to the editor extensions array.
+[x] - EDITOR: Add clickable URL support via `@uiw/codemirror-extensions-hyper-link` — URLs in comments and strings are not clickable. Install this package so Cmd/Ctrl+click on a URL opens it in a browser. Add to the editor extensions array.
+[x] - EDITOR: Add clickable URL support via `@uiw/codemirror-extensions-hyper-link` — URLs in comments and strings are not clickable. Install this package so Cmd/Ctrl+click on a URL opens it in a browser. Add to the editor extensions array.
 
 [] - EDITOR: Add color value widget via `@uiw/codemirror-extensions-color` — CSS color values like `#ff0000`, `rgb(255,0,0)`, `hsl()` are displayed as plain text with no preview. This package renders an inline color swatch and opens a color picker when clicked. Install the package and add to the editor extensions (relevant for CSS, HTML, JS, TS, and any language with color literals).
 

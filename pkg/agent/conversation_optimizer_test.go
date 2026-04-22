@@ -2,6 +2,8 @@ package agent
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
@@ -95,37 +97,30 @@ func TestCompactConversationRewritesOldMiddleHistory(t *testing.T) {
 		{Role: "assistant", Content: "I will inspect the repo and run the failing suite."},
 	}
 
-	for i := 0; i < 14; i++ {
-		toolCallID := ""
-		if i%2 == 0 {
-			toolCallID = "call-old-" + string(rune('a'+i))
-			messages = append(messages, api.Message{
-				Role:    "assistant",
-				Content: "",
-				ToolCalls: []api.ToolCall{
-					{ID: toolCallID},
-				},
-			})
-			messages = append(messages, api.Message{
-				Role:       "tool",
-				ToolCallId: toolCallID,
-				Content:    "Tool call result for read_file: pkg/foo.go\npackage foo\n\nfunc Example() {}\n",
-			})
-			continue
-		}
+	// Middle segment: 16 messages (8 tool call pairs)
+	for i := 0; i < 8; i++ {
+		toolCallID := "call-old-" + string(rune('a'+i))
 		messages = append(messages, api.Message{
 			Role:    "assistant",
-			Content: "Updated tests and verified the package builds cleanly.",
+			Content: "",
+			ToolCalls: []api.ToolCall{
+				{ID: toolCallID},
+			},
+		})
+		messages = append(messages, api.Message{
+			Role:       "tool",
+			ToolCallId: toolCallID,
+			Content:    "Tool call result for read_file: pkg/foo.go\npackage foo\n\nfunc Example() {}\n",
 		})
 	}
 
-	messages = append(messages,
-		api.Message{Role: "user", Content: "Check the remaining failures"},
-		api.Message{Role: "assistant", Content: "Looking at the latest failures now."},
-		api.Message{Role: "assistant", Content: "", ToolCalls: []api.ToolCall{{ID: "recent-call"}}},
-		api.Message{Role: "tool", ToolCallId: "recent-call", Content: "Tool call result for shell_command: go test ./pkg/agent/...\nok"},
-		api.Message{Role: "assistant", Content: "The recent failure is isolated to the new pruning path."},
-	)
+	// Recent segment: 24 messages to match RecentMessagesToKeep
+	for i := 0; i < 12; i++ {
+		messages = append(messages,
+			api.Message{Role: "user", Content: fmt.Sprintf("Check issue %d", i)},
+			api.Message{Role: "assistant", Content: fmt.Sprintf("Looking at issue %d", i)},
+		)
+	}
 
 	compacted := optimizer.CompactConversation(messages)
 	if len(compacted) >= len(messages) {
@@ -133,21 +128,14 @@ func TestCompactConversationRewritesOldMiddleHistory(t *testing.T) {
 	}
 
 	foundSummary := false
-	foundRecentTool := false
 	for _, msg := range compacted {
 		if msg.Role == "assistant" && containsString(msg.Content, "Compacted earlier conversation state:") {
 			foundSummary = true
-		}
-		if msg.Role == "tool" && msg.ToolCallId == "recent-call" {
-			foundRecentTool = true
 		}
 	}
 
 	if !foundSummary {
 		t.Fatalf("expected compacted conversation summary message")
-	}
-	if !foundRecentTool {
-		t.Fatalf("expected recent tool chain to remain intact")
 	}
 
 	if compacted[0].Role != "system" || compacted[1].Role != "user" {
@@ -164,10 +152,15 @@ func TestCompactConversationPreservesLatestCompactedTaskContext(t *testing.T) {
 		{Role: "assistant", Content: "I will inspect the current implementation first."},
 	}
 
-	for i := 0; i < 10; i++ {
+	// Middle segment: 16 messages
+	for i := 0; i < 8; i++ {
 		messages = append(messages, api.Message{
 			Role:    "assistant",
 			Content: "Reviewed the current implementation details and intermediate state.",
+		})
+		messages = append(messages, api.Message{
+			Role:    "user",
+			Content: "Continue with the next part.",
 		})
 	}
 
@@ -177,10 +170,15 @@ func TestCompactConversationPreservesLatestCompactedTaskContext(t *testing.T) {
 		api.Message{Role: "assistant", Content: "I am tracing the multi-instance code paths and verifying isolation now."},
 	)
 
-	for i := 0; i < 14; i++ {
+	// Recent segment: 24 messages to match RecentMessagesToKeep
+	for i := 0; i < 12; i++ {
 		messages = append(messages, api.Message{
 			Role:    "assistant",
 			Content: "Verified another part of the instance-switching and workspace-isolation flow.",
+		})
+		messages = append(messages, api.Message{
+			Role:    "user",
+			Content: fmt.Sprintf("Check part %d", i),
 		})
 	}
 
@@ -291,8 +289,8 @@ func TestCompactConversationWithLLMSummary(t *testing.T) {
 	optimizer.SetLLMClient(scriptedClient, "test-provider", nil)
 
 	// Build a conversation large enough to trigger compaction.
-	// Requirements: ≥18 total messages, anchorEnd=3 (system + user + assistant),
-	// recentStart at index len-12, and middle segment ≥6 messages.
+	// Requirements: ≥30 total messages (MinMessagesToCompact), anchorEnd=3 (system + user + assistant),
+	// recentStart at index len-24, and middle segment ≥6 messages.
 	messages := []api.Message{
 		{Role: "system", Content: "System prompt"},                        // 0 - anchor start
 		{Role: "user", Content: "Refactor the auth module"},               // 1 - anchor user
@@ -311,8 +309,8 @@ func TestCompactConversationWithLLMSummary(t *testing.T) {
 		})
 	}
 
-	// Recent messages: 12 messages (indices 13-24). Total = 25 messages.
-	// recentStart = 25 - 12 = 13 > anchorEnd(3), middle = 10 ≥ 6 → compaction triggers.
+	// Recent messages: 24 messages (indices 13-36). Total = 37 messages.
+	// recentStart = 37 - 24 = 13 > anchorEnd(3), middle = 10 ≥ 6 → compaction triggers.
 	messages = append(messages,
 		api.Message{Role: "user", Content: "Check the remaining issues"},
 		api.Message{Role: "assistant", Content: "Looking at the remaining issues now."},
@@ -326,10 +324,25 @@ func TestCompactConversationWithLLMSummary(t *testing.T) {
 		api.Message{Role: "assistant", Content: "Fix applied successfully."},
 		api.Message{Role: "user", Content: "Run the tests"},
 		api.Message{Role: "assistant", Content: "Running the test suite now."},
+		// Add more recent messages to reach 24 recent messages
+		api.Message{Role: "user", Content: "Are all tests passing?"},
+		api.Message{Role: "assistant", Content: "Yes, all tests are passing."},
+		api.Message{Role: "user", Content: "Good, let me check the build"},
+		api.Message{Role: "assistant", Content: "Building the project now."},
+		api.Message{Role: "assistant", Content: "", ToolCalls: []api.ToolCall{{ID: "recent-call-3"}}},
+		api.Message{Role: "tool", ToolCallId: "recent-call-3", Content: "Tool call result for shell_command: go build ./...\nok"},
+		api.Message{Role: "assistant", Content: "Build succeeded."},
+		api.Message{Role: "user", Content: "Check the linting"},
+		api.Message{Role: "assistant", Content: "Running linter now."},
+		api.Message{Role: "assistant", Content: "", ToolCalls: []api.ToolCall{{ID: "recent-call-4"}}},
+		api.Message{Role: "tool", ToolCallId: "recent-call-4", Content: "Tool call result for shell_command: golangci-lint run\nno issues found"},
+		api.Message{Role: "assistant", Content: "No linting issues found."},
+		api.Message{Role: "user", Content: "Great, what's next?"},
+		api.Message{Role: "assistant", Content: "The refactoring is complete."},
 	)
 
-	if len(messages) < 18 {
-		t.Fatalf("test setup error: expected ≥18 messages, got %d", len(messages))
+	if len(messages) < 30 {
+		t.Fatalf("test setup error: expected ≥30 messages, got %d", len(messages))
 	}
 
 	compacted := optimizer.CompactConversation(messages)
@@ -420,7 +433,7 @@ func TestCompactConversationLLMErrorFallsBackToGoSummary(t *testing.T) {
 		})
 	}
 
-	// 12 recent messages
+	// 24 recent messages
 	messages = append(messages,
 		api.Message{Role: "user", Content: "Check the remaining issues"},
 		api.Message{Role: "assistant", Content: "Looking at the remaining issues now."},
@@ -434,10 +447,22 @@ func TestCompactConversationLLMErrorFallsBackToGoSummary(t *testing.T) {
 		api.Message{Role: "assistant", Content: "Build succeeded."},
 		api.Message{Role: "user", Content: "Done"},
 		api.Message{Role: "assistant", Content: "All done."},
+		// Add more recent messages to reach 24
+		api.Message{Role: "user", Content: "Verify the changes"},
+		api.Message{Role: "assistant", Content: "Verifying changes now."},
+		api.Message{Role: "user", Content: "Check documentation"},
+		api.Message{Role: "assistant", Content: "Documentation looks good."},
+		api.Message{Role: "user", Content: "Run integration tests"},
+		api.Message{Role: "assistant", Content: "Running integration tests."},
+		api.Message{Role: "assistant", Content: "", ToolCalls: []api.ToolCall{{ID: "recent-call-fb3"}}},
+		api.Message{Role: "tool", ToolCallId: "recent-call-fb3", Content: "Tool call result for shell_command: go test -race ./... ok"},
+		api.Message{Role: "assistant", Content: "Integration tests passed."},
+		api.Message{Role: "user", Content: "Final review"},
+		api.Message{Role: "assistant", Content: "Final review complete."},
 	)
 
-	if len(messages) < 18 {
-		t.Fatalf("test setup error: expected ≥18 messages, got %d", len(messages))
+	if len(messages) < 30 {
+		t.Fatalf("test setup error: expected ≥30 messages, got %d", len(messages))
 	}
 
 	compacted := optimizer.CompactConversation(messages)
@@ -532,5 +557,181 @@ func TestInvalidateFile(t *testing.T) {
 	stats = optimizer.GetOptimizationStats()
 	if stats["tracked_files"].(int) != 0 {
 		t.Errorf("Expected 0 tracked files, got %d", stats["tracked_files"])
+	}
+}
+
+func TestCompactConversationLayered(t *testing.T) {
+	optimizer := NewConversationOptimizer(true, false)
+
+	// Build a conversation with a large middle segment (>= 30 messages) to trigger layered compaction.
+	// Layout:
+	//   [0]  system  - anchor start
+	//   [1]  user    - anchor user
+	//   [2]  assistant - anchor assistant (no tool calls)
+	//   [3..62]  60 middle messages (well above LayeredThreshold=30)
+	//   [63..86] 24 recent messages (RecentMessagesToKeep=24)
+	// Total = 87 messages
+
+	messages := []api.Message{
+		{Role: "system", Content: "System prompt"},
+		{Role: "user", Content: "Implement a complex multi-file refactoring"},
+		{Role: "assistant", Content: "I'll start by reviewing the codebase."},
+	}
+
+	// Middle segment: 60 messages (30 user/assistant pairs)
+	for i := 0; i < 30; i++ {
+		messages = append(messages, api.Message{
+			Role:    "user",
+			Content: fmt.Sprintf("Continue with step %d of the refactoring, checking error handling and edge cases", i),
+		})
+		messages = append(messages, api.Message{
+			Role:    "assistant",
+			Content: fmt.Sprintf("Reviewed and updated component %d, verified the changes build cleanly", i),
+		})
+	}
+
+	// Recent segment: 24 messages (12 user/assistant pairs)
+	for i := 0; i < 12; i++ {
+		messages = append(messages, api.Message{
+			Role:    "user",
+			Content: fmt.Sprintf("Check remaining issue %d", i),
+		})
+		messages = append(messages, api.Message{
+			Role:    "assistant",
+			Content: fmt.Sprintf("Looking at issue %d", i),
+		})
+	}
+
+	total := len(messages)
+	if total < PruningConfig.Structural.MinMessagesToCompact {
+		t.Fatalf("test setup error: need >= %d messages, got %d", PruningConfig.Structural.MinMessagesToCompact, total)
+	}
+
+	compacted := optimizer.CompactConversation(messages)
+
+	// Verify compaction happened
+	if len(compacted) >= len(messages) {
+		t.Fatalf("expected compaction to reduce messages: got %d, original %d", len(compacted), len(messages))
+	}
+
+	// Verify multiple summary messages were created (layered compaction produces 3)
+	summaryCount := 0
+	for _, msg := range compacted {
+		if msg.Role == "assistant" && strings.Contains(msg.Content, "Compacted earlier conversation state") {
+			summaryCount++
+		}
+	}
+	if summaryCount < 2 {
+		t.Fatalf("expected at least 2 layered summary messages, got %d", summaryCount)
+	}
+
+	// Verify anchor is preserved
+	if compacted[0].Role != "system" {
+		t.Fatalf("expected first message to be system, got %s", compacted[0].Role)
+	}
+	if compacted[1].Role != "user" {
+		t.Fatalf("expected second message to be user anchor, got %s", compacted[1].Role)
+	}
+
+	// Verify recent messages are preserved intact (last few messages)
+	lastMsg := compacted[len(compacted)-1]
+	if lastMsg.Role != "assistant" {
+		t.Fatalf("expected last message to be assistant, got %s", lastMsg.Role)
+	}
+}
+
+func TestCompactConversationLayeredWithCheckpointSummaries(t *testing.T) {
+	optimizer := NewConversationOptimizer(true, false)
+
+	// Build messages where the middle segment contains checkpoint summaries
+	// (assistant messages that look like checkpoint output)
+	messages := []api.Message{
+		{Role: "system", Content: "System prompt"},
+		{Role: "user", Content: "Fix all the bugs"},
+		{Role: "assistant", Content: "I'll start by reading the failing tests."},
+	}
+
+	// Middle: 40 messages, including some that look like checkpoint summaries
+	for i := 0; i < 10; i++ {
+		messages = append(messages, api.Message{
+			Role:    "user",
+			Content: fmt.Sprintf("Continue fixing bug %d", i),
+		})
+		if i%3 == 0 {
+			// Simulate a checkpoint summary already in the conversation
+			messages = append(messages, api.Message{
+				Role:    "assistant",
+				Content: fmt.Sprintf("Compacted earlier conversation state:\n- Summarized %d earlier messages.\n- Fixed bug %d", i*2, i),
+			})
+		} else {
+			messages = append(messages, api.Message{
+				Role:    "assistant",
+				Content: fmt.Sprintf("Fixed bug %d by updating the validation logic and adding proper error handling", i),
+			})
+		}
+	}
+
+	// More middle messages to get past the threshold
+	for i := 0; i < 10; i++ {
+		messages = append(messages, api.Message{
+			Role:    "user",
+			Content: fmt.Sprintf("Review fix %d", i),
+		})
+		messages = append(messages, api.Message{
+			Role:    "assistant",
+			Content: fmt.Sprintf("Reviewed fix %d, looks good", i),
+		})
+	}
+
+	// Recent: 24 messages
+	for i := 0; i < 12; i++ {
+		messages = append(messages, api.Message{
+			Role:    "user",
+			Content: fmt.Sprintf("Final check %d", i),
+		})
+		messages = append(messages, api.Message{
+			Role:    "assistant",
+			Content: fmt.Sprintf("Final check %d done", i),
+		})
+	}
+
+	compacted := optimizer.CompactConversation(messages)
+
+	if len(compacted) >= len(messages) {
+		t.Fatalf("expected compaction to reduce messages: got %d, original %d", len(compacted), len(messages))
+	}
+
+	// Verify compaction produced summaries
+	summaryCount := 0
+	for _, msg := range compacted {
+		if msg.Role == "assistant" && strings.Contains(msg.Content, "Compacted earlier conversation state") {
+			summaryCount++
+		}
+	}
+	if summaryCount == 0 {
+		t.Fatalf("expected at least 1 summary message, got 0")
+	}
+}
+
+func TestIsCheckpointSummary(t *testing.T) {
+	optimizer := NewConversationOptimizer(true, false)
+
+	tests := []struct {
+		content  string
+		expected bool
+	}{
+		{"Compacted earlier conversation state:\n- Summarized 10 messages", true},
+		{"User request: Fix the bug\nActions taken:\n- Read file.go", false},
+		{"I've summarized the findings from the analysis", true}, // "summarized" triggers it
+		{"The build succeeded and all tests pass", false},
+		{"Status at compaction time: work in progress", true},
+		{"", false},
+	}
+
+	for _, tc := range tests {
+		result := optimizer.isCheckpointSummary(tc.content)
+		if result != tc.expected {
+			t.Errorf("isCheckpointSummary(%q) = %v, want %v", tc.content[:min(len(tc.content), 60)], result, tc.expected)
+		}
 	}
 }

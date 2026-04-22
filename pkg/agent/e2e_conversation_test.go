@@ -526,7 +526,7 @@ func TestE2E_StructuralCompaction(t *testing.T) {
 	optimizer := NewConversationOptimizer(true, false)
 
 	// Build messages: system + user query anchor + many middle messages + recent messages.
-	// Need >= PruningConfig.Structural.MinMessagesToCompact (18).
+	// Need >= PruningConfig.Structural.MinMessagesToCompact (30).
 	messages := []api.Message{
 		{Role: "system", Content: "You are a helpful coding assistant."},
 		{Role: "user", Content: "Implement a feature in the codebase"},
@@ -560,8 +560,8 @@ func TestE2E_StructuralCompaction(t *testing.T) {
 		Role: "assistant",
 		Content: "I found the root cause and updated the file.",
 	})
-	// Add some recent messages (within RecentMessagesToKeep = 12).
-	for i := 0; i < 5; i++ {
+	// Add some recent messages (within RecentMessagesToKeep = 24).
+	for i := 0; i < 12; i++ {
 		messages = append(messages, api.Message{
 			Role:    "user",
 			Content: fmt.Sprintf("What about the error handling in function %d?", i),

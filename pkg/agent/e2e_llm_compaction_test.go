@@ -73,19 +73,19 @@ func TestE2E_LLMCompactionSummaryViaPrepareMessages(t *testing.T) {
 	agent.optimizer.SetLLMClient(compactionClient, "test-llm", nil)
 
 	// --- Populate agent.messages with enough messages to trigger compaction -
-	// We need ≥ PruningConfig.Structural.MinMessagesToCompact (18) total
+	// We need ≥ PruningConfig.Structural.MinMessagesToCompact (30) total
 	// messages after optimization, with a sufficiently large middle segment
 	// (≥ MinMiddleMessages = 6) between the anchor and the recent tail
-	// (RecentMessagesToKeep = 12).
+	// (RecentMessagesToKeep = 24).
 	//
 	// Layout (no system message in agent.messages — prepareMessages prepends it):
 	//   [0]  user    – anchor user query
 	//   [1]  assistant – anchor assistant reply (no tool calls)
 	//   [2..17]  8 user/assistant pairs → middle segment (16 messages)
-	//   [18..29] recent tail (12 messages)
-	// Total = 30 messages  (>18 ✓, middle = 16 ≥ 6 ✓)
+	//   [18..41] recent tail (24 messages)
+	// Total = 42 messages  (>30 ✓, middle = 16 ≥ 6 ✓)
 
-	messages := make([]api.Message, 0, 30)
+	messages := make([]api.Message, 0, 42)
 
 	// Anchor
 	messages = append(messages, api.Message{
@@ -114,8 +114,8 @@ func TestE2E_LLMCompactionSummaryViaPrepareMessages(t *testing.T) {
 		})
 	}
 
-	// Recent tail: 12 messages (within RecentMessagesToKeep)
-	for i := 0; i < 6; i++ {
+	// Recent tail: 24 messages (within RecentMessagesToKeep)
+	for i := 0; i < 12; i++ {
 		messages = append(messages, api.Message{
 			Role:    "user",
 			Content: "What about the error handling?",
@@ -241,13 +241,13 @@ func TestE2E_LLMCompactionErrorFallsBackToGoSummary(t *testing.T) {
 	//   [2..17]  middle segment: 8 user/assistant pairs with very long,
 	//            substantively different content that the Go de-duplication
 	//            truncates aggressively (each entry ~250 chars → truncated to 180)
-	//   [18..29] recent tail: 12 messages (preserved)
-	// Total = 30 messages
+	//   [18..41] recent tail: 24 messages (preserved)
+	// Total = 42 messages
 	//
 	// Each long middle message is ~400+ chars but the Go summary truncates
 	// to ~180 chars, giving the summary a clear token advantage.
 
-	messages := make([]api.Message, 0, 30)
+	messages := make([]api.Message, 0, 42)
 
 	// Anchor
 	messages = append(messages, api.Message{
@@ -274,8 +274,8 @@ func TestE2E_LLMCompactionErrorFallsBackToGoSummary(t *testing.T) {
 		})
 	}
 
-	// Recent tail
-	for i := 0; i < 6; i++ {
+	// Recent tail: 24 messages
+	for i := 0; i < 12; i++ {
 		messages = append(messages, api.Message{
 			Role:    "user",
 			Content: "What about the error handling?",

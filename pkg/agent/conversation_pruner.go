@@ -57,7 +57,7 @@ var PruningConfig = struct {
 		MinAvailableTokens: 0,    // Disabled - use percentage-based threshold only
 		AggressivePercent:  0.95, // Aggressive mode at 95%
 		MinMessages:        5,
-		RecentMessages:     15,
+		RecentMessages:     24,
 		SlidingWindow:      30,
 	},
 
@@ -68,8 +68,8 @@ var PruningConfig = struct {
 		MaxSummaryEntries    int
 		MaxEntryChars        int
 	}{
-		RecentMessagesToKeep: 12,
-		MinMessagesToCompact: 18,
+		RecentMessagesToKeep: 24,
+		MinMessagesToCompact: 30,
 		MinMiddleMessages:    6,
 		MaxSummaryEntries:    10,
 		MaxEntryChars:        180,

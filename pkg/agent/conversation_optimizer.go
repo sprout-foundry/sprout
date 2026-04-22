@@ -128,6 +128,25 @@ func (co *ConversationOptimizer) CompactConversation(messages []api.Message) []a
 		Content: summary,
 	})
 	compacted = append(compacted, messages[recentStart:]...)
+	
+	// FIX: Ensure we don't have consecutive assistant messages at the boundary.
+	// If the summary is followed by an assistant message without tool_calls,
+	// remove the following assistant message to avoid llama.cpp error:
+	// "Cannot have 2 or more assistant messages at the end of the list"
+	if len(compacted) >= 2 {
+		summaryIdx := anchorEnd
+		if summaryIdx < len(compacted) && compacted[summaryIdx].Role == "assistant" && len(compacted[summaryIdx].ToolCalls) == 0 {
+			// Check if the next message is also an assistant without tool_calls
+			if summaryIdx+1 < len(compacted) && compacted[summaryIdx+1].Role == "assistant" && len(compacted[summaryIdx+1].ToolCalls) == 0 {
+				// Remove the duplicate assistant message (keep the summary, remove the original)
+				if co.debug {
+					fmt.Printf("[clean] Removed consecutive assistant at compaction boundary\n")
+				}
+				compacted = append(compacted[:summaryIdx+1], compacted[summaryIdx+2:]...)
+			}
+		}
+	}
+	
 	return compacted
 }
 

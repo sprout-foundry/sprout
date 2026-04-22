@@ -170,6 +170,13 @@ func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 	// which some providers reject as "Assistant response prefill is
 	// incompatible with enable_thinking".
 	allMessages = ch.stripLeadingAssistantPrefill(allMessages)
+	
+	// FIX: Ensure we don't have consecutive assistant messages at the end.
+	// llama.cpp and some other providers reject messages ending with 2+ 
+	// assistant messages with error: "Cannot have 2 or more assistant messages at the end of the list"
+	// This can happen after compaction when a summary assistant message is followed by
+	// another assistant message from the recent conversation.
+	allMessages = ch.stripConsecutiveAssistantMessages(allMessages)
 
 	ch.transientMessagesMu.Lock()
 	ch.transientMessages = nil
@@ -239,6 +246,79 @@ func (ch *ConversationHandler) stripLeadingAssistantPrefill(messages []api.Messa
 	result := make([]api.Message, 0, len(messages)-stripped)
 	result = append(result, messages[:start-stripped]...)
 	result = append(result, messages[start:]...)
+	return result
+}
+
+// stripConsecutiveAssistantMessages removes consecutive assistant messages
+// (without tool_calls) that appear at the end of the message list. This fixes
+// llama.cpp error: "Cannot have 2 or more assistant messages at the end of the list"
+//
+// This can happen after compaction when a summary assistant message is followed
+// by another assistant message from the recent conversation. We preserve assistant
+// messages with tool_calls as they are part of active tool-use flows.
+func (ch *ConversationHandler) stripConsecutiveAssistantMessages(messages []api.Message) []api.Message {
+	if len(messages) <= 1 {
+		return messages
+	}
+
+	// Find the last message that breaks the "assistant without tool_calls" pattern
+	// This is either a non-assistant message, or an assistant with tool_calls
+	lastValidIdx := -1
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role != "assistant" || len(messages[i].ToolCalls) > 0 {
+			lastValidIdx = i
+			break
+		}
+	}
+
+	// If all messages are assistant without tool_calls, keep only the last one
+	if lastValidIdx == -1 {
+		if ch.agent != nil && ch.agent.debug {
+			ch.agent.debugLog("[clean] Stripped consecutive assistant messages: kept last of %d\n", len(messages))
+		}
+		return messages[len(messages)-1:]
+	}
+
+	// Count trailing assistant messages without tool_calls after lastValidIdx
+	trailingCount := 0
+	for i := lastValidIdx + 1; i < len(messages); i++ {
+		if messages[i].Role == "assistant" && len(messages[i].ToolCalls) == 0 {
+			trailingCount++
+		}
+	}
+
+	if trailingCount == 0 {
+		return messages
+	}
+
+	// Check if we have consecutive assistants at the end:
+	// - If lastValidIdx is an assistant (with tool_calls) and there's any trailing assistant,
+	//   we have consecutive assistants (assistant + assistant = bad) → strip all trailing
+	// - If there are 2+ trailing assistants (regardless of lastValidIdx), we have consecutive
+	//   assistants → keep only the last one
+	isLastValidAssistant := messages[lastValidIdx].Role == "assistant"
+	
+	var result []api.Message
+	if isLastValidAssistant {
+		// lastValidIdx is assistant with tool_calls, strip ALL trailing assistants
+		if ch.agent != nil && ch.agent.debug {
+			ch.agent.debugLog("[clean] Stripped %d consecutive assistant message(s) at end of list\n", trailingCount)
+		}
+		result = make([]api.Message, 0, lastValidIdx+1)
+		result = append(result, messages[:lastValidIdx+1]...)
+	} else if trailingCount >= 2 {
+		// Multiple trailing assistants, keep only the last one
+		if ch.agent != nil && ch.agent.debug {
+			ch.agent.debugLog("[clean] Stripped %d consecutive assistant message(s) at end of list\n", trailingCount-1)
+		}
+		result = make([]api.Message, 0, lastValidIdx+2)
+		result = append(result, messages[:lastValidIdx+1]...)
+		result = append(result, messages[len(messages)-1])
+	} else {
+		// Only 1 trailing assistant after non-assistant, it's fine
+		return messages
+	}
+	
 	return result
 }
 

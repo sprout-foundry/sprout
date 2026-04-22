@@ -34,9 +34,13 @@ function ImageViewer({ filePath, fileName, fileSize }: ImageViewerProps): JSX.El
   const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [translateStart, setTranslateStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // Fit to window calculation
+  // Fit to window calculation — centers the image within the container
   const fitToWindow = useCallback((imgWidth: number, imgHeight: number) => {
-    if (!containerRef.current) return;
+    if (!containerRef.current) {
+      setZoom(1);
+      setTranslate({ x: 0, y: 0 });
+      return;
+    }
 
     const container = containerRef.current;
     const containerWidth = container.clientWidth;
@@ -51,8 +55,12 @@ function ImageViewer({ filePath, fileName, fileSize }: ImageViewerProps): JSX.El
     const scaleHeight = availableHeight / imgHeight;
     const scale = Math.min(scaleWidth, scaleHeight, 1); // Don't scale up larger than 100%
 
+    // Center the image within the container
+    const tx = (containerWidth - imgWidth * scale) / 2;
+    const ty = (containerHeight - imgHeight * scale) / 2;
+
     setZoom(scale);
-    setTranslate({ x: 0, y: 0 });
+    setTranslate({ x: tx, y: ty });
   }, []);
 
   // Fetch image on mount
@@ -124,9 +132,12 @@ function ImageViewer({ filePath, fileName, fileSize }: ImageViewerProps): JSX.El
   }, []);
 
   const handleResetZoom = useCallback(() => {
-    if (!dimensions) return;
+    if (!dimensions || !containerRef.current) return;
+    const container = containerRef.current;
+    const tx = (container.clientWidth - dimensions.width) / 2;
+    const ty = (container.clientHeight - dimensions.height) / 2;
     setZoom(1);
-    setTranslate({ x: 0, y: 0 });
+    setTranslate({ x: tx, y: ty });
   }, [dimensions]);
 
   // Wheel zoom - zoom centered on cursor
@@ -253,13 +264,20 @@ function ImageViewer({ filePath, fileName, fileSize }: ImageViewerProps): JSX.El
 
   // Open image in browser
   const handleOpenInBrowser = useCallback(() => {
-    if (!imageSrc) {
-      log.warn('[ImageViewer] No image source available for opening', { title: 'Open Image' });
+    if (!imageBlob) {
+      log.warn('[ImageViewer] No image available for opening', { title: 'Open Image' });
       return;
     }
 
-    window.open(imageSrc, '_blank', 'noopener,noreferrer');
-  }, [imageSrc, log]);
+    // Create a new blob URL specifically for opening to ensure proper MIME type
+    const blob = new Blob([imageBlob], { type: imageBlob.type });
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, '_blank', 'noopener,noreferrer');
+    // Revoke after a delay to allow the new window to load it
+    if (win) {
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
+  }, [imageBlob, log]);
 
   // Pick color from image (uses EyeDropper API, Chrome-only with graceful fallback)
   const [pickedColor, setPickedColor] = useState<string | null>(null);

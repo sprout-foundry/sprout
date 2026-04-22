@@ -28,6 +28,7 @@ import {
   foldGutter,
   indentOnInput,
   bracketMatching,
+  indentUnit,
 } from '@codemirror/language';
 import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark';
 
@@ -83,6 +84,10 @@ const FONT_SIZE_MIN = 8;       // Minimum legible font size
 const FONT_SIZE_DEFAULT = 13;  // Default matches Monaco/Menlo editor defaults
 const FONT_SIZE_MAX = 72;      // Maximum for accessibility (WCAG supports 200% zoom)
 
+// Tab size constants
+const TAB_SIZE_DEFAULT = 4;
+const TAB_SIZE_OPTIONS = [2, 4, 8] as const;
+
 function isSemanticLanguage(languageId: string): boolean {
   return (
     languageId === 'typescript' ||
@@ -109,6 +114,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   const minimapCompartment = useRef(new Compartment());
   const emmetCompartment = useRef(createEmmetCompartment());
   const fontSizeCompartment = useRef(new Compartment());
+  const tabSizeCompartment = useRef(new Compartment());
   const lastInitLanguageKey = useRef<string | null>(null);
   const [wordWrapEnabled, setWordWrapEnabled] = useState(true);
   const [loading, setLoading] = useState<boolean>(false);
@@ -148,6 +154,21 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     } catch (err) {
       debugLog('Failed to read font size from localStorage:', err);
       return FONT_SIZE_DEFAULT; // default if localStorage unavailable
+    }
+  });
+
+  const [editorTabSize, setEditorTabSize] = useState<number>(() => {
+    try {
+      const stored = localStorage.getItem('editor:tab-size');
+      if (stored === null) return TAB_SIZE_DEFAULT;
+      const parsed = parseInt(stored, 10);
+      if (!isNaN(parsed) && TAB_SIZE_OPTIONS.includes(parsed as typeof TAB_SIZE_OPTIONS[number])) {
+        return parsed;
+      }
+      return TAB_SIZE_DEFAULT;
+    } catch (err) {
+      debugLog('Failed to read tab size from localStorage:', err);
+      return TAB_SIZE_DEFAULT;
     }
   });
 
@@ -524,6 +545,26 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
           },
         }),
       ]),
+    });
+  }, []);
+
+  const onCycleTabSize = useCallback(() => {
+    setEditorTabSize((prev) => {
+      const currentIdx = TAB_SIZE_OPTIONS.indexOf(prev as typeof TAB_SIZE_OPTIONS[number]);
+      const nextIdx = (currentIdx + 1) % TAB_SIZE_OPTIONS.length;
+      const next = TAB_SIZE_OPTIONS[nextIdx];
+      try {
+        localStorage.setItem('editor:tab-size', String(next));
+      } catch (err) {
+        debugLog('[onCycleTabSize] localStorage persist failed:', err);
+      }
+      viewRef.current?.dispatch({
+        effects: tabSizeCompartment.current.reconfigure([
+          EditorState.tabSize.of(next),
+          indentUnit.of(' '.repeat(next)),
+        ]),
+      });
+      return next;
     });
   }, []);
 
@@ -953,6 +994,10 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
             fontSize: `${editorFontSize}px`,
           },
         }),
+      ]),
+      tabSizeCompartment.current.of([
+        EditorState.tabSize.of(editorTabSize),
+        indentUnit.of(' '.repeat(editorTabSize)),
       ]),
       EditorView.theme({
         '&': {
@@ -1623,6 +1668,9 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
               Zoom: {Math.round((editorFontSize / FONT_SIZE_DEFAULT) * 100)}%
             </span>
           )}
+          <span className="tab-size" role="button" tabIndex={0} onClick={onCycleTabSize} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onCycleTabSize(); } }} title="Click to change tab size (Spaces: 2, 4, 8)">
+            Spaces: {editorTabSize}
+          </span>
         </div>
         <LanguageSwitcher
           currentLanguageId={languageInfo.languageId}

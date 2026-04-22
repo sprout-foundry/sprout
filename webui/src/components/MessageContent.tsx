@@ -1,6 +1,7 @@
 import type { AnchorHTMLAttributes, HTMLAttributes, ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 import { stripAnsiCodes } from '../utils/ansi';
 import { flattenMarkdownText, isMarkdownCodeBlock } from '../utils/markdownCode';
 
@@ -28,7 +29,7 @@ function isLocalFilePath(href: string | undefined): boolean {
 function MessageContent({ content }: MessageContentProps): JSX.Element {
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
+      remarkPlugins={[remarkGfm, remarkBreaks]}
       components={{
         code({ className, children, ...props }: HTMLAttributes<HTMLElement> & { children?: ReactNode }) {
           const languageMatch = /language-(\w+)/.exec(className || '');

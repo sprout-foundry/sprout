@@ -18,7 +18,7 @@ import { lineNumbersRelative } from '@uiw/codemirror-extensions-line-numbers-rel
 import { hyperLink } from '@uiw/codemirror-extensions-hyper-link';
 import { color } from '@uiw/codemirror-extensions-color';
 import { EditorState, Compartment, Transaction } from '@codemirror/state';
-import { defaultKeymap, indentWithTab, history } from '@codemirror/commands';
+import { defaultKeymap, indentWithTab, history, undo, redo } from '@codemirror/commands';
 import { search, searchKeymap, openSearchPanel, replaceAll, highlightSelectionMatches } from '@codemirror/search';
 import { autocompletion, closeBrackets } from '@codemirror/autocomplete';
 import {
@@ -57,6 +57,7 @@ import { indentGuidesPlugin } from '../extensions/indentGuides';
 import { bracketColorizationPlugin } from '../extensions/bracketColorization';
 import { linkedScrollExtension, setLinkedScrollEnabled, suppressScrollSync } from '../extensions/linkedScroll';
 import { getLanguageExtensions, resolveLanguageId } from '../extensions/languageRegistry';
+import { detectIndentation, DEFAULT_INDENT_WIDTH } from '../extensions/indentDetect';
 import {
   createEmmetCompartment,
   getInitialEmmetExtensions,
@@ -84,9 +85,15 @@ const FONT_SIZE_MIN = 8;       // Minimum legible font size
 const FONT_SIZE_DEFAULT = 13;  // Default matches Monaco/Menlo editor defaults
 const FONT_SIZE_MAX = 72;      // Maximum for accessibility (WCAG supports 200% zoom)
 
+/** Tab size value meaning "use tabs for indentation" (stored in state and localStorage) */
+const TAB_SIZE_TABS_MODE = 0;
+
 // Tab size constants
 const TAB_SIZE_DEFAULT = 4;
 const TAB_SIZE_OPTIONS = [2, 4, 8] as const;
+
+/** Minimum number of indented lines required for auto-detection to be confident */
+const MIN_INDENTED_LINES_FOR_DETECTION = 3;
 
 function isSemanticLanguage(languageId: string): boolean {
   return (
@@ -108,6 +115,7 @@ const suppressHistoryAnnotations = [
 function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Element {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const hotkeysCompartment = useRef(new Compartment());
   const lineWrappingCompartment = useRef(new Compartment());
   const relativeLineNumbersCompartment = useRef(new Compartment());
   const languageCompartment = useRef(new Compartment());
@@ -161,6 +169,8 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     try {
       const stored = localStorage.getItem('editor:tab-size');
       if (stored === null) return TAB_SIZE_DEFAULT;
+      // '0' means tabs mode
+      if (stored === '0') return TAB_SIZE_TABS_MODE;
       const parsed = parseInt(stored, 10);
       if (!isNaN(parsed) && TAB_SIZE_OPTIONS.includes(parsed as typeof TAB_SIZE_OPTIONS[number])) {
         return parsed;
@@ -169,6 +179,26 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     } catch (err) {
       debugLog('Failed to read tab size from localStorage:', err);
       return TAB_SIZE_DEFAULT;
+    }
+  });
+
+  // Whether the current file uses tabs for indentation (auto-detected on load)
+  const [editorUsesTabs, setEditorUsesTabs] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('editor:tab-size');
+      return stored === '0';
+    } catch (err) {
+      return false;
+    }
+  });
+
+  // Whether the user has manually overridden the indent setting via the footer cycle.
+  // When true, auto-detection on file load is skipped so the manual choice persists.
+  const [indentManuallySet, setIndentManuallySet] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('editor:indent-manual') === 'true';
+    } catch (err) {
+      return false;
     }
   });
 
@@ -226,6 +256,15 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   const fetchDiagnosticsRef = useRef<(filePath: string, content: string, trigger?: 'edit' | 'save') => void>(() => {
     /* noop */
   });
+
+  // Stable action references for hotkey keymap (used in both init and reconfigure effects)
+  const hotkeyActionsRef = useRef<{
+    onSave: () => void;
+    onGoToLine: () => void;
+    onGoToSymbol: () => void;
+    onToggleWordWrap: () => void;
+    onToggleRelativeLineNumbers: () => void;
+  } | null>(null);
 
   // Load file content - updates buffer in context to keep it in sync with editor
   const loadFile = useCallback(
@@ -310,6 +349,38 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
             debugLog('[EditorPane] Failed to fetch git diff for diagnostics:', err);
             notificationBus.notify('warning', 'Git Diff', 'Failed to fetch git diff for diagnostics');
             clearDiffGutter(viewRef.current);
+          }
+        }
+
+        // Auto-detect indentation from file content (skip if user has manually set their preference)
+        if (!indentManuallySet) {
+          const detected = detectIndentation(content);
+          if (detected.indentedLineCount >= MIN_INDENTED_LINES_FOR_DETECTION) {
+            const detectedSize = detected.useTabs ? TAB_SIZE_DEFAULT : detected.indentWidth;
+            setEditorTabSize(detected.useTabs ? TAB_SIZE_TABS_MODE : detectedSize);
+            setEditorUsesTabs(detected.useTabs);
+            // Note: auto-detected settings are NOT persisted to localStorage.
+            // Only user's manual cycle choice is persisted.
+            if (viewRef.current) {
+              viewRef.current.dispatch({
+                effects: tabSizeCompartment.current.reconfigure([
+                  EditorState.tabSize.of(detectedSize),
+                  indentUnit.of(detected.useTabs ? '\t' : ' '.repeat(detectedSize)),
+                ]),
+              });
+            }
+          } else {
+            // Reset to defaults when detection is inconclusive
+            setEditorUsesTabs(false);
+            setEditorTabSize(TAB_SIZE_DEFAULT);
+            if (viewRef.current) {
+              viewRef.current.dispatch({
+                effects: tabSizeCompartment.current.reconfigure([
+                  EditorState.tabSize.of(TAB_SIZE_DEFAULT),
+                  indentUnit.of(' '.repeat(TAB_SIZE_DEFAULT)),
+                ]),
+              });
+            }
           }
         }
 
@@ -548,16 +619,44 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     });
   }, []);
 
+  // Cycle tab size: rotates through Spaces:2 → Spaces:4 → Spaces:8 → Tabs → Spaces:2 …
+  // Each manual cycle marks the indent as user-chosen so auto-detection won't override it.
   const onCycleTabSize = useCallback(() => {
+    // Mark that the user has manually chosen an indent setting
+    setIndentManuallySet(true);
+    try { localStorage.setItem('editor:indent-manual', 'true'); } catch (_err) { /* ignore */ }
+
     setEditorTabSize((prev) => {
+      // Cycle order: 2 → 4 → 8 → "tabs" (represented as TAB_SIZE_TABS_MODE) → 2 …
+      if (prev === TAB_SIZE_TABS_MODE) {
+        // Was tabs → cycle to spaces:2
+        setEditorUsesTabs(false);
+        try { localStorage.setItem('editor:tab-size', '2'); } catch (err) { debugLog('[onCycleTabSize] localStorage persist failed:', err); }
+        viewRef.current?.dispatch({
+          effects: tabSizeCompartment.current.reconfigure([
+            EditorState.tabSize.of(2),
+            indentUnit.of('  '),
+          ]),
+        });
+        return 2;
+      }
       const currentIdx = TAB_SIZE_OPTIONS.indexOf(prev as typeof TAB_SIZE_OPTIONS[number]);
+      if (currentIdx === TAB_SIZE_OPTIONS.length - 1) {
+        // Last space option (8) → switch to tabs
+        setEditorUsesTabs(true);
+        try { localStorage.setItem('editor:tab-size', '0'); } catch (err) { debugLog('[onCycleTabSize] localStorage persist failed:', err); }
+        viewRef.current?.dispatch({
+          effects: tabSizeCompartment.current.reconfigure([
+            EditorState.tabSize.of(TAB_SIZE_DEFAULT),
+            indentUnit.of('\t'),
+          ]),
+        });
+        return TAB_SIZE_TABS_MODE;
+      }
       const nextIdx = (currentIdx + 1) % TAB_SIZE_OPTIONS.length;
       const next = TAB_SIZE_OPTIONS[nextIdx];
-      try {
-        localStorage.setItem('editor:tab-size', String(next));
-      } catch (err) {
-        debugLog('[onCycleTabSize] localStorage persist failed:', err);
-      }
+      setEditorUsesTabs(false);
+      try { localStorage.setItem('editor:tab-size', String(next)); } catch (err) { debugLog('[onCycleTabSize] localStorage persist failed:', err); }
       viewRef.current?.dispatch({
         effects: tabSizeCompartment.current.reconfigure([
           EditorState.tabSize.of(next),
@@ -954,7 +1053,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       tabExpandSnippets(),
       keymap.of([indentWithTab]),
       keymap.of(searchKeymap),
-      keymap.of(customKeymap),
+      hotkeysCompartment.current.of(keymap.of(customKeymap)),
       keymap.of(replacePanelKeymap),
       keymap.of(zoomKeymap),
       keymap.of(semanticKeymap),
@@ -996,8 +1095,8 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         }),
       ]),
       tabSizeCompartment.current.of([
-        EditorState.tabSize.of(editorTabSize),
-        indentUnit.of(' '.repeat(editorTabSize)),
+        EditorState.tabSize.of(editorTabSize === TAB_SIZE_TABS_MODE ? TAB_SIZE_DEFAULT : editorTabSize),
+        indentUnit.of(editorUsesTabs ? '\t' : ' '.repeat(editorTabSize === TAB_SIZE_TABS_MODE ? TAB_SIZE_DEFAULT : editorTabSize)),
       ]),
       EditorView.theme({
         '&': {
@@ -1096,7 +1195,6 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     buffer?.file?.ext,
     theme,
     themePack.id,
-    hotkeys,
     customHighlightStyle,
     updateBufferContent,
     setBufferModified,
@@ -1130,6 +1228,43 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       ],
     });
   }, [buffer?.id, buffer?.languageOverride, buffer?.file?.ext, buffer?.file?.name]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reconfigure the hotkey compartment when hotkeys change, without requiring
+  // a full editor re-initialization. This prevents the undo/redo history from
+  // being wiped when hotkeys are fetched from the API.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+
+    // Build the same action functions used in the init effect
+    const actions = {
+      onSave: () => {
+        handleSave();
+      },
+      onGoToLine: () => {
+        const event = new CustomEvent('editor-goto-line');
+        document.dispatchEvent(event);
+      },
+      onGoToSymbol: () => {
+        setShowGoToSymbol(true);
+      },
+      onToggleWordWrap: () => {
+        document.dispatchEvent(new CustomEvent('editor-toggle-word-wrap'));
+      },
+      onToggleRelativeLineNumbers: () => {
+        document.dispatchEvent(new CustomEvent('editor-toggle-relative-line-numbers'));
+      },
+    };
+
+    // Keep the ref in sync for use in other effects
+    hotkeyActionsRef.current = actions;
+
+    view.dispatch({
+      effects: hotkeysCompartment.current.reconfigure(
+        keymap.of(getEditorKeymap(hotkeys, actions)),
+      ),
+    });
+  }, [hotkeys]); // eslint-disable-line react-hooks/exhaustive-deps -- only depends on hotkeys
 
   // Keep the snippet expansion language in sync with the current buffer.
   // Reconfigures a per-view compartment so two panes showing files in
@@ -1251,6 +1386,35 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         onToggleMinimap();
       } else if (e.type === 'editor-toggle-relative-line-numbers') {
         onToggleRelativeLineNumbers();
+      } else if (e.type === 'editor-undo') {
+        if (viewRef.current) {
+          undo(viewRef.current);
+        }
+      } else if (e.type === 'editor-redo') {
+        if (viewRef.current) {
+          redo(viewRef.current);
+        }
+      } else if (e.type === 'editor-find') {
+        if (viewRef.current) {
+          openSearchPanel(viewRef.current);
+        }
+      } else if (e.type === 'editor-find-replace') {
+        if (viewRef.current) {
+          openSearchPanel(viewRef.current);
+          requestAnimationFrame(() => {
+            const replaceInput = viewRef.current?.dom.querySelector<HTMLInputElement>('.cm-search input[name="replace"]');
+            if (replaceInput) {
+              replaceInput.focus();
+              replaceInput.select();
+            }
+          });
+        }
+      } else if (e.type === 'editor-select-all') {
+        if (viewRef.current) {
+          viewRef.current.dispatch({
+            selection: { anchor: 0, head: viewRef.current.state.doc.length },
+          });
+        }
       }
     };
 
@@ -1259,12 +1423,22 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     document.addEventListener('editor-toggle-linked-scroll', handler);
     document.addEventListener('editor-toggle-minimap', handler);
     document.addEventListener('editor-toggle-relative-line-numbers', handler);
+    document.addEventListener('editor-undo', handler);
+    document.addEventListener('editor-redo', handler);
+    document.addEventListener('editor-find', handler);
+    document.addEventListener('editor-find-replace', handler);
+    document.addEventListener('editor-select-all', handler);
     return () => {
       document.removeEventListener('editor-goto-line', handler);
       document.removeEventListener('editor-toggle-word-wrap', handler);
       document.removeEventListener('editor-toggle-linked-scroll', handler);
       document.removeEventListener('editor-toggle-minimap', handler);
       document.removeEventListener('editor-toggle-relative-line-numbers', handler);
+      document.removeEventListener('editor-undo', handler);
+      document.removeEventListener('editor-redo', handler);
+      document.removeEventListener('editor-find', handler);
+      document.removeEventListener('editor-find-replace', handler);
+      document.removeEventListener('editor-select-all', handler);
     };
   }, [handleGoToLine, onToggleMinimap, onToggleRelativeLineNumbers, onToggleWordWrap, toggleLinkedScroll]);
 
@@ -1426,6 +1600,36 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
           });
         }
         setLocalContent(detail.content);
+
+        // Re-detect indentation on auto-reload (skip if user has manually set their preference)
+        if (!indentManuallySet) {
+          const detected = detectIndentation(detail.content);
+          if (detected.indentedLineCount >= MIN_INDENTED_LINES_FOR_DETECTION) {
+            const detectedSize = detected.useTabs ? TAB_SIZE_DEFAULT : detected.indentWidth;
+            setEditorTabSize(detected.useTabs ? TAB_SIZE_TABS_MODE : detectedSize);
+            setEditorUsesTabs(detected.useTabs);
+            if (viewRef.current) {
+              viewRef.current.dispatch({
+                effects: tabSizeCompartment.current.reconfigure([
+                  EditorState.tabSize.of(detectedSize),
+                  indentUnit.of(detected.useTabs ? '\t' : ' '.repeat(detectedSize)),
+                ]),
+              });
+            }
+          } else {
+            // Reset to defaults when detection is inconclusive
+            setEditorUsesTabs(false);
+            setEditorTabSize(TAB_SIZE_DEFAULT);
+            if (viewRef.current) {
+              viewRef.current.dispatch({
+                effects: tabSizeCompartment.current.reconfigure([
+                  EditorState.tabSize.of(TAB_SIZE_DEFAULT),
+                  indentUnit.of(' '.repeat(TAB_SIZE_DEFAULT)),
+                ]),
+              });
+            }
+          }
+        }
       } finally {
         isExternalUpdateRef.current = false;
       }
@@ -1668,8 +1872,8 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
               Zoom: {Math.round((editorFontSize / FONT_SIZE_DEFAULT) * 100)}%
             </span>
           )}
-          <span className="tab-size" role="button" tabIndex={0} onClick={onCycleTabSize} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onCycleTabSize(); } }} title="Click to change tab size (Spaces: 2, 4, 8)">
-            Spaces: {editorTabSize}
+          <span className="tab-size" role="button" tabIndex={0} onClick={onCycleTabSize} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onCycleTabSize(); } }} title="Click to change tab size (Spaces: 2, 4, 8 / Tabs)">
+            {editorUsesTabs ? 'Tabs' : `Spaces: ${editorTabSize}`}
           </span>
         </div>
         <LanguageSwitcher

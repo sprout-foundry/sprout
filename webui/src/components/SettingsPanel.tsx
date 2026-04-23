@@ -25,6 +25,7 @@ type SettingsSubTab = 'general' | 'security' | 'credentials' | 'performance' | '
 
 interface EditorPreferences {
   autoSaveEnabled: boolean;
+  whitespaceRenderingMode: 'none' | 'boundary' | 'all';
 }
 
 interface SettingsPanelProps {
@@ -796,6 +797,19 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
                   <span className="toggle-track" />
                   <span className="toggle-label">Auto-save files (every 30s)</span>
                 </label>
+                <div className="config-item">
+                  <label htmlFor="whitespace-rendering-select">Render whitespace</label>
+                  <select
+                    id="whitespace-rendering-select"
+                    className="styled-select"
+                    value={editorPreferences.whitespaceRenderingMode}
+                    onChange={(e) => onEditorPreferenceChanged('whitespaceRenderingMode', e.target.value)}
+                  >
+                    <option value="none">None</option>
+                    <option value="boundary">Boundary (trailing only)</option>
+                    <option value="all">All</option>
+                  </select>
+                </div>
               </div>
             )}
             <div className="section">

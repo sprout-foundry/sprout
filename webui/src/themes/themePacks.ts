@@ -85,6 +85,7 @@ const atomOneDark: ThemePack = {
     '--cm-bracket-3': '#56b6c2',
     '--cm-bracket-4': '#61afef',
     '--cm-bracket-5': '#c678dd',
+    '--cm-trailing-whitespace': 'rgba(255, 80, 80, 0.12)',
     '--editor-pane-inactive-overlay': 'rgba(0, 0, 0, 0.28)',
     '--editor-pane-inactive-overlay-hover': 'rgba(0, 0, 0, 0.18)',
 
@@ -177,6 +178,7 @@ const atomOneLight: ThemePack = {
     '--cm-bracket-3': '#0184bc',
     '--cm-bracket-4': '#4078f2',
     '--cm-bracket-5': '#a626a4',
+    '--cm-trailing-whitespace': 'rgba(255, 80, 80, 0.15)',
     '--editor-pane-inactive-overlay': 'rgba(56, 58, 66, 0.1)',
     '--editor-pane-inactive-overlay-hover': 'rgba(56, 58, 66, 0.06)',
 
@@ -274,6 +276,7 @@ const dracula: ThemePack = {
     '--cm-bracket-3': '#8be9fd',
     '--cm-bracket-4': '#bd93f9',
     '--cm-bracket-5': '#ffb86c',
+    '--cm-trailing-whitespace': 'rgba(255, 80, 80, 0.12)',
     '--editor-pane-inactive-overlay': 'rgba(0, 0, 0, 0.28)',
     '--editor-pane-inactive-overlay-hover': 'rgba(0, 0, 0, 0.18)',
 

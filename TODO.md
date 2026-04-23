@@ -27,18 +27,13 @@
 
 ~Was originally marked complete as "full end to end conversation mock" but 19 existing tests only cover basic-loop and unit-level compaction. 12 of 22 conversational patterns and 8 of 20 compaction paths remain untested at the e2e level. The first item (scriptedClient expansion) is a prerequisite for most others.~ Before any major refactoring, we need more robust testing of the full solution to catch regressions as refactoring is executed.
 
-
-[x] - E2E-TESTING: [FOUNDATION] Expand `scriptedClient` (from `termination_reason_test.go`) to support: sequential scripted responses with tool calls, streaming simulation, error injection, vision support, and rate limit simulation. (stub_client.go did not exist)
 [x] - E2E-TESTING: [FOUNDATION] Expand `scriptedClient` (from `termination_reason_test.go`) to support: sequential scripted responses with tool calls, streaming simulation, error injection, vision support, and rate limit simulation. (stub_client.go did not exist)
 [x] - E2E-TESTING: Add e2e test for tool call execution through `ProcessQuery`: model returns `tool_call` → tool executes → result appended → model sees result and continues → stops.
 [x] - E2E-TESTING: Add e2e test for fallback parser through `ProcessQuery`: model returns unstructured tool text → fallback parser extracts tool → tool executes → continues.
 [x] - E2E-TESTING: Add e2e test for malformed JSON tool arguments rejection through `ProcessQuery`: model returns invalid args → rejected → transient reminder → model re-emits valid args.
 [x] - E2E-TESTING: Add e2e test for streaming responses through `ProcessQuery`: validate streaming callbacks fire, content accumulates in `streamingBuffer`, and buffer content is preferred over choice content.
-[x] - E2E-TESTING: Add e2e test for streaming responses through `ProcessQuery`: validate streaming callbacks fire, content accumulates in `streamingBuffer`, and buffer content is preferred over choice content.
-[x] - E2E-TESTING: Add e2e test for API retry/error recovery: transient error → retry with backoff → success.
 [x] - E2E-TESTING: Add e2e test for API retry/error recovery: transient error → retry with backoff → success.
 [x] - E2E-TESTING: Add e2e test for rate limit handling: model returns rate limit error → `RateLimitExceededError` path exercised. (Unit tests exist in scripted_client_test.go but no e2e_rate_limit_test.go — no E2E test through ProcessQuery)
-[x] - E2E-TESTING: Add e2e test for input injection/interrupt mid-conversation: conversation running → user injects input via channel → input becomes new user message → conversation continues.
 [x] - E2E-TESTING: Add e2e test for input injection/interrupt mid-conversation: conversation running → user injects input via channel → input becomes new user message → conversation continues.
 [x] - E2E-TESTING: Add e2e test for tentative post-tool rejection through full `ProcessQuery`: model stops with tentative text after tool results → rejected → continues up to 2x.
 [x] - E2E-TESTING: Add e2e test for `content_filter` finish reason: model returns `content_filter` → conversation continues instead of stopping.
@@ -53,7 +48,6 @@
 [x] - E2E-TESTING: Add e2e test for file invalidation after edits: read file → optimizer caches → edit file → `InvalidateFile` called → old read not treated as redundant with new content.
 [x] - E2E-TESTING: Add e2e test for checkpoint compaction actionable summary round-trip: `ProcessQuery` completes → async checkpoint records → next `ProcessQuery` triggers compaction → actionable summary injected → model sees useful context.
 [x] - The codebase needs a lot of refactoring to follow SRP and to reduce file size to something more manageable.
-[x] - The codebase needs a lot of refactoring to follow SRP and to reduce file size to something more manageable.
 
 ---
 
@@ -65,8 +59,6 @@
 [x] - HOTKEYS: [BUG] `save_all_files` is defined in backend and fallback but has no case handler in AppContent's hotkey switch — pressing `Ctrl+Shift+S` does nothing.
 [x] - HOTKEYS: [BUG] `split_editor_vertical` (`Ctrl+\`) is defined in backend but has no case handler in AppContent — pressing it does nothing.
 [x] - HOTKEYS: [BUG] `focus_tab_4` through `focus_tab_9` are defined in the backend but have no case handlers in AppContent — `Ctrl+4` through `Ctrl+9` do nothing.
-[x] - HOTKEYS: [BUG] `focus_tab_4` through `focus_tab_9` are defined in the backend but have no case handlers in AppContent — `Ctrl+4` through `Ctrl+9` do nothing.
-[x] - HOTKEYS: [BUG] `focus_next_tab` (`Ctrl+Tab`) and `focus_prev_tab` (`Ctrl+Shift+Tab`) are defined in fallback only (not backend) and have no case handlers — tab cycling does not work.
 [x] - HOTKEYS: [BUG] `focus_next_tab` (`Ctrl+Tab`) and `focus_prev_tab` (`Ctrl+Shift+Tab`) are defined in fallback only (not backend) and have no case handlers — tab cycling does not work.
 [x] - HOTKEYS: Add missing toggle line comment (`Ctrl+/`) and toggle block comment (`Ctrl+Shift+/`) keybindings. (No @codemirror/comment package installed, no command IDs, no implementation found)
 [x] - HOTKEYS: Add insert line below (`Ctrl+Enter`) and insert line above (`Ctrl+Shift+Enter`) keybindings.
@@ -95,17 +87,13 @@
 [x] - EDITOR: Enable multi-cursor editing — CodeMirror 6 supports it natively but Alt+Click and rectangular selection are not wired up.
 [x] - EDITOR: Enable the in-file find & replace panel from `@codemirror/search` — only `search()` is loaded, not `replace`/`replaceKeymap`. The global `SearchView` replace exists but the standard `Ctrl+H` in-editor replace panel is not functional.
 [x] - EDITOR: Use `@codemirror/lint` (installed but zero imports) — the package is available at v6.9.2 but never used. Should be wired up to enable diagnostics/error squiggles from linters or the LSP.
-[x] - EDITOR: Use `@codemirror/lint` (installed but zero imports) — the package is available at v6.9.2 but never used. Should be wired up to enable diagnostics/error squiggles from linters or the LSP. (duplicate — see line above)
 [x] - EDITOR: Wire `@codemirror/lang-wast` (installed but unused) into the `getLanguageSupport()` extension-to-language switch.
 [x] - EDITOR: Add missing language support extensions — no syntax highlighting for Rust, C/C++, Java, Ruby, Shell/Bash, YAML, TOML, XML, SQL, Dockerfile, and many other common file types. Need to add corresponding `@codemirror/lang-*` packages and switch-case entries.
 [x] - EDITOR: Add language mode switcher UI — currently language is detected by file extension only; there is no way for the user to manually override the language mode.
 [x] - EDITOR: Make word wrap toggleable — currently `EditorView.lineWrapping` is hardcoded on. Add an `Alt+Z` toggle and a toolbar/menu option.
 [x] - EDITOR: Add indentation guides — no visible indent markers. Would benefit from a `indent-guides` extension or custom decoration.
 [x] - EDITOR: Add breadcrumb navigation bar — no breadcrumb row showing file path or symbol context above the editor.
-[x] - EDITOR: Add breadcrumb navigation bar — no breadcrumb row showing file path or symbol context above the editor. (duplicate — resolved)
 [x] - EDITOR: Add linked scrolling for split panes — when the same file is open in multiple panes, there is no option to sync scroll positions.
-[x] - EDITOR: Add linked scrolling for split panes — when the same file is open in multiple panes, there is no option to sync scroll positions.
-[x] - EDITOR: Add minimap — no minimap extension. Requires `@codemirror/minimap` or a custom implementation.
 [x] - EDITOR: Add minimap — no minimap extension. Requires `@codemirror/minimap` or a custom implementation.
 [x] - EDITOR: Add snippet support (expand `for`, `ifn`, etc. with tab-stop navigation through placeholders).
 [x] - EDITOR: Add bracket colorization — no distinct colors for nested bracket pairs (only matching-bracket highlight exists).
@@ -133,18 +121,16 @@ These gaps were identified by cross-referencing the current editor implementatio
 #### Tier 2 — Small Package Additions (npm install + a few lines of code)
 
 [x] - EDITOR: Add relative line numbers via `@uiw/codemirror-extensions-line-numbers-relative` — currently line numbers are absolute-only. Relative line numbers (showing distance from current line) are expected by vim users and are useful for `j15`-style jump commands. Install the package, wrap in a Compartment for toggling, and add a settings entry or keybinding to enable/disable.
-[x] - EDITOR: Add relative line numbers via `@uiw/codemirror-extensions-line-numbers-relative` — currently line numbers are absolute-only. Relative line numbers (showing distance from current line) are expected by vim users and are useful for `j15`-style jump commands. Install the package, wrap in a Compartment for toggling, and add a settings entry or keybinding to enable/disable.
 
 [x] - EDITOR: Add Emmet HTML/CSS abbreviation expansion via `@emmetio/codemirror6-plugin` — when editing HTML or CSS, Emmet allows typing abbreviations like `div.container>ul>li*3` and expanding them to full HTML. This is a massive productivity feature for web development and standard in VS Code. Install the package, configure it, and wire it into the editor extensions (only active for HTML/CSS/JSX language modes).
 
 [x] - EDITOR: Add clickable URL support via `@uiw/codemirror-extensions-hyper-link` — URLs in comments and strings are not clickable. Install this package so Cmd/Ctrl+click on a URL opens it in a browser. Add to the editor extensions array.
-[x] - EDITOR: Add clickable URL support via `@uiw/codemirror-extensions-hyper-link` — URLs in comments and strings are not clickable. Install this package so Cmd/Ctrl+click on a URL opens it in a browser. Add to the editor extensions array.
 
 [x] - EDITOR: Add color value widget via `@uiw/codemirror-extensions-color` — CSS color values like `#ff0000`, `rgb(255,0,0)`, `hsl()` are displayed as plain text with no preview. This package renders an inline color swatch and opens a color picker when clicked. Install the package and add to the editor extensions (relevant for CSS, HTML, JS, TS, and any language with color literals).
 
-[] - EDITOR: Add configurable tab size — currently the editor uses CodeMirror's default 4-space indent unit. Add a `EditorState.tabSize` Compartment in `EditorPane.tsx` that reads from a setting (stored in localStorage or the settings API) and allows the user to choose 2, 4, or 8 spaces. Also add a tab size indicator to the editor footer/status bar.
+[x] - EDITOR: Add configurable tab size — currently the editor uses CodeMirror's default 4-space indent unit. Add a `EditorState.tabSize` Compartment in `EditorPane.tsx` that reads from a setting (stored in localStorage or the settings API) and allows the user to choose 2, 4, or 8 spaces. Also add a tab size indicator to the editor footer/status bar.
 
-[] - EDITOR: Add auto-detect indentation from opened files — when opening a file, scan the first ~100 lines to detect the most common indent style (tabs vs spaces) and indent width (2, 4, 8). Apply the detected settings to the editor's tabSize/indentUnit compartments. This ensures consistency when opening files from different projects without requiring manual configuration.
+[x] - EDITOR: Add auto-detect indentation from opened files — when opening a file, scan the first ~100 lines to detect the most common indent style (tabs vs spaces) and indent width (2, 4, 8). Apply the detected settings to the editor's tabSize/indentUnit compartments. This ensures consistency when opening files from different projects without requiring manual configuration.
 
 #### Tier 3 — Small Custom Extensions (ViewPlugin/StateField, ~2-4 hours each)
 
@@ -210,11 +196,9 @@ These gaps were identified by cross-referencing the current editor implementatio
 [x] - TERMINAL: Add vertical terminal split option — implemented with Columns2/Rows2 buttons, hotkeys (Ctrl+Shift+5 / Ctrl+Alt+5), command palette entries, and full CSS layout support.
 [x] - TERMINAL: Persist terminal height to `localStorage` — always resets to 400px on mount. Sidebar and context panel widths are already persisted; terminal height should be too.
 [x] - TERMINAL: Allow user to choose shell profile for new terminal instances (e.g., bash, zsh, fish).
-[x] - TERMINAL: Allow user to choose shell profile for new terminal instances (e.g., bash, zsh, fish).
 [x] - FILE TREE: Add search/filter input to the file tree — currently there is no way to filter or fuzzy-find within the file tree (the command palette does project-wide file search, but not the tree itself).
 [x] - FILE TREE: Add `.gitignore`-aware toggle — currently ignored files are sorted to the bottom but always visible. Add a toggle to hide them.
 [x] - FILE TREE: Add drag-and-drop support — no ability to move files between folders via drag-and-drop. Currently files can only be moved via the rename operation.
-[x] - UX: Add a proper notification/toast system — errors from saves, API failures, and background operations often only appear in `console.error`. Users need visible, dismissible notifications for important events.
 
 ### Layout & Persistence Gaps
 
@@ -229,8 +213,6 @@ These gaps were identified by cross-referencing the current editor implementatio
 [x] - REFACTOR: Break up `git_api.go` (1,861 lines) — this is the largest Go file in `pkg/webui/` and likely combines multiple API endpoints that could be split by domain (status, staging, commit, history).
 [x] - REFACTOR: Break up `tool_executor.go` (1,353 lines) — the agent tool executor has grown large and could benefit from splitting by tool category or lifecycle stage.
 [x] - REFACTOR: Break up `EditorManagerContext.tsx` (817 lines) — consider extracting buffer persistence (save/load) and buffer mutation operations into separate hooks or modules.
-[x] - REFACTOR: Break up `EditorManagerContext.tsx` (817 lines) — consider extracting buffer persistence (save/load) and buffer mutation operations into separate hooks or modules.
-[x] - CODE QUALITY: Adopt a frontend linting setup — currently there is no ESLint config file, no Prettier config, and only a minimal `eslintConfig` in package.json. For a React/TypeScript project of this size, a proper linting and formatting setup is essential for consistency.
 [x] - CODE QUALITY: Adopt a frontend linting setup — currently there is no ESLint config file, no Prettier config, and only a minimal `eslintConfig` in package.json. For a React/TypeScript project of this size, a proper linting and formatting setup is essential for consistency.
 [x] - CODE QUALITY: Reduce excessive `console.error/warn` logging — there are 80+ `console.error` and `console.warn` calls scattered across frontend components. Many of these should be replaced with a proper logging service (the `utils/log.ts` file exists but is not widely used) to allow configurable log levels, filtering, and error reporting.
 [x] - CODE QUALITY: Reduce silent error swallowing — many catch blocks use `catch {}`, `catch { /* ignore */ }`, or `.catch(() => {})` which silently discard errors. At minimum, these should log at debug/warn level so issues are not invisible during development.
@@ -242,18 +224,13 @@ These gaps were identified by cross-referencing the current editor implementatio
 
 ### General UX Gaps
 
-
 [x] - UX: Add keyboard-accessible menu bar (File, Edit, View, Terminal, Help) — VS Code users expect a menu bar for discoverability of features that don't have hotkey assignments.
 [x] - UX: Add a welcome/Getting Started tab for new users — when the editor opens with no files, show helpful content instead of a blank pane.
-[x] - UX: Add a welcome/Getting Started tab for new users — when the editor opens with no files, show helpful content instead of a blank pane.
-[x] - UX: Add file drag-and-drop from OS into the editor (open dropped files).
 [x] - UX: Add file drag-and-drop from OS into the editor (open dropped files).
 [x] - UX: Add "Unsaved changes" indicator on close — when closing a tab or the browser window, warn if there are unsaved editor buffers.
 [x] - UX: Add "Unsaved changes" indicator on close — when closing a tab or the browser window, warn if there are unsaved editor buffers. (useUnsavedChangesWarning hook with beforeunload + tab close confirm dialog + document title indicator + tab dot indicator)
 [x] - UX: Add notifications for file changes detected on disk (when a file is modified externally, prompt the user to reload).
 [x] - UX: Add the ability to pin tabs to prevent accidental closure (type partially supported in `EditorBuffer` but no UI toggle for it).
-[x] - UX: Add the ability to pin tabs to prevent accidental closure (type partially supported in `EditorBuffer` but no UI toggle for it). (duplicate — see above)
-[x] - UX: Add a status bar at the bottom showing current branch, file type, encoding, line endings, indentation settings — currently cursor position is in the editor footer but there is no global status bar.
 [x] - UX: Add a status bar at the bottom showing current branch, file type, encoding, line endings, indentation settings — currently cursor position is in the editor footer but there is no global status bar.
 [x] - UX: Add "zoom into/zoom out of terminal" controls or a font size setting for the integrated terminal.
 
@@ -269,7 +246,6 @@ These gaps were identified by cross-referencing the current editor implementatio
 
 [x] - CREDENTIALS: Encrypt API keys at rest — `api_keys.json` stores keys in plaintext. Keys should be encrypted with a key derived from a user passphrase or machine-specific key (e.g., via `age`, `nacl/secretbox`, or OS keyring) so that a compromised `~/.ledit/` directory does not expose all provider secrets.
 [x] - CREDENTIALS: Support OS-native secret storage (keyring) — Integrate with `keychain` (macOS), `secret-service` (Linux/DBus), or `wincred` (Windows) via a library like `zalando/go-keyring` so keys are never written to disk in any file under `~/.ledit/`. Fall back to encrypted file if keyring is unavailable.
-[x] - CREDENTIALS: Support OS-native secret storage (keyring) — Integrate with `keychain` (macOS), `secret-service` (Linux/DBus), or `wincred` (Windows) via a library like `zalando/go-keyring` so keys are never written to disk in any file under `~/.ledit/`. Fall back to encrypted file if keyring is unavailable.
 [x] - CREDENTIALS: Mask API keys in logs — Ensure resolved credential values are never printed or logged (not even in debug/trace logs). Audit all `log.Printf`/`fmt.Printf` calls that handle `Resolved.Value` or `configCopy.Auth.Key` to confirm no leakage.
 
 ### Architecture & Consolidation
@@ -282,7 +258,6 @@ These gaps were identified by cross-referencing the current editor implementatio
 
 ### Custom Providers
 
-[x] - CREDENTIALS: Stop storing API keys in provider config JSON — `CustomProviderConfig.APIKey` stores secrets in the main `config.json` file (even though the webui strips it on read-back and the field is tagged `"not recommended for production"`). Remove this field entirely and use the `EnvVar` field (resolved through the unified credential path) or the credential store file as the only storage mechanism. Run a one-time migration that moves any existing `api_key` values into `api_keys.json`. (Duplicate — resolved: field removed, keys stored exclusively in credential store)
 [x] - CREDENTIALS: Custom providers should resolve keys through the same unified path — Currently `GetAuthToken()` in `pkg/agent_providers/provider_config.go` only checks the env var and the hardcoded `Auth.Key` field. These two paths should be consistent. The factory should inject the resolved key into `configCopy.Auth.Key` for custom providers (it already does this for generic providers) and document that `Auth.Key` is runtime-only, never persisted.
 
 ### MCP Service Credentials
@@ -334,7 +309,6 @@ These gaps were identified by cross-referencing the current editor implementatio
 ### Auto-Update
 
 [x] - DESKTOP: Implement auto-update — there is currently no mechanism to notify users of or apply new releases. Integrate `electron-updater` (already a peer dep in the electron ecosystem) pointing at the GitHub Releases feed. Show a non-intrusive "Update available" notification and allow deferred install-on-quit.
-[] - DESKTOP: Implement auto-update — there is currently no mechanism to notify users of or apply new releases. Integrate `electron-updater` (already a peer dep in the electron ecosystem) pointing at the GitHub Releases feed. Show a non-intrusive "Update available" notification and allow deferred install-on-quit.
 
 ### Testing
 
@@ -345,11 +319,8 @@ These gaps were identified by cross-referencing the current editor implementatio
 ### Editor-Only Mode (No Provider Required)
 
 [x] - ONBOARDING: Allow the webui to be used as a pure editor/terminal without configuring any AI provider — When a fresh user opens the webui, they are blocked by a mandatory onboarding dialog that requires selecting a provider and (for most providers) entering an API key. The webui is a full code editor with file browsing, terminals, and git integration — features that work entirely without an AI provider. The onboarding dialog should have a clear "Skip setup — use as editor" option (or equivalently, not block at all) so users can explore the editor first and set up AI later via Settings. Currently `handleAPIOnboardingStatus` in `pkg/webui/onboarding_api.go` returns `setup_required: true` when `currentProvider == "" || currentProvider == "test"`, which guarantees the modal blocks entry. The `test` provider is already excluded from the "configured" check even though it works fine for non-AI workflows.
-[x] - ONBOARDING: Allow the webui to be used as a pure editor/terminal without configuring any AI provider — When a fresh user opens the webui, they are blocked by a mandatory onboarding dialog that requires selecting a provider and (for most providers) entering an API key. The webui is a full code editor with file browsing, terminals, and git integration — features that work entirely without an AI provider. The onboarding dialog should have a clear "Skip setup — use as editor" option (or equivalently, not block at all) so users can explore the editor first and set up AI later via Settings. Currently `handleAPIOnboardingStatus` in `pkg/webui/onboarding_api.go` returns `setup_required: true` when `currentProvider == "" || currentProvider == "test"`, which guarantees the modal blocks entry. The `test` provider is already excluded from the "configured" check even though it works fine for non-AI workflows.
-[x] - ONBOARDING: Allow the webui chat/agent to gracefully degrade when no provider is configured — Once a user dismisses onboarding without a provider, the chat panel should show a friendly prompt explaining that AI features require a provider, with a button to open provider setup (rather than showing an error or a broken chat). The editor, terminal, file tree, and git panels should all remain fully functional. Currently `getClientAgent()` in `pkg/webui/client_context.go` calls `agent.NewAgentWithModel("")` which goes through `EnsureAPIKey` → `SelectNewProvider` and would fail without an interactive terminal. The webui agent creation path should tolerate a missing provider and produce a "no-agent" state that the chat UI can present gracefully.
 [x] - ONBOARDING: Allow the webui chat/agent to gracefully degrade when no provider is configured — Once a user dismisses onboarding without a provider, the chat panel should show a friendly prompt explaining that AI features require a provider, with a button to open provider setup (rather than showing an error or a broken chat). The editor, terminal, file tree, and git panels should all remain fully functional. Currently `getClientAgent()` in `pkg/webui/client_context.go` calls `agent.NewAgentWithModel("")` which goes through `EnsureAPIKey` → `SelectNewProvider` and would fail without an interactive terminal. The webui agent creation path should tolerate a missing provider and produce a "no-agent" state that the chat UI can present gracefully.
 [x] - ONBOARDING: Add "Set up later" / "Use as editor only" to the onboarding dialog — The webui `OnboardingDialog` component (`webui/src/components/OnboardingDialog.tsx`) has only "Refresh" and "Complete Setup" buttons. There is no way to dismiss the dialog without completing setup. Add a prominent "Skip — use as editor" button that dismisses the dialog and stores a `provider: "none"` or `provider: ""` preference so subsequent page loads do not re-trigger onboarding. The skip should be easily reversible (e.g., a banner or settings link saying "Configure AI provider to enable chat features").
-[x] - ONBOARDING: Add "Set up later" / "Use as editor only" to the onboarding dialog — The webui `OnboardingDialog` component (`webui/src/components/OnboardingDialog.tsx`) has only "Refresh" and "Complete Setup" buttons. There is no way to dismiss the dialog without completing setup. Add a prominent "Skip — use as editor" button that dismisses the dialog and stores a `provider: "none"` or `provider: ""` preference so subsequent page loads do not re-trigger onboarding. The skip should be easily reversible (e.g., a banner or settings link saying "Configure AI provider to enable chat features"). (duplicate — already implemented, see checked entry above)
 [x] - ONBOARDING: The CLI `agent` command should not block on provider setup — `NewAgentWithModel` (`pkg/agent/agent.go`) calls `configManager.EnsureAPIKey()` then `client.CheckConnection()` in a retry loop, and falls through to `recoverProviderStartup` which calls `SelectNewProvider()` — a terminal prompt that blocks. In the webui daemon path (non-interactive), this will hang or return an opaque error. The CLI should detect non-interactive environments and either default to `test` or fail fast with a clear message ("No provider configured. Run `ledit agent` interactively or set LEDIT_PROVIDER / configure ~/.ledit/config.json") instead of blocking.
 
 ### CLI Onboarding UX

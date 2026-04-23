@@ -67,6 +67,7 @@ import { minimapExtension } from '../extensions/minimap';
 import { tabExpandSnippets, setSnippetLanguage } from '../extensions/snippets';
 import { trailingWhitespacePlugin } from '../extensions/trailingWhitespace';
 import { whitespaceRenderingPlugin, type WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
+import { unsavedLineHighlight, setOriginalContent } from '../extensions/unsavedLineHighlight';
 import { ApiService } from '../services/api';
 import { notificationBus } from '../services/notificationBus';
 import { Loader2, AlertTriangle, Eye, Columns2, Copy, Navigation, FolderOpen, ClipboardCopy, ListOrdered } from 'lucide-react';
@@ -326,6 +327,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
               insert: content,
             },
             annotations: suppressHistoryAnnotations,
+            effects: setOriginalContent.of(content),
           });
         }
 
@@ -820,6 +822,16 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   const lastLoadedRef = useRef<{ bufferId: string; filePath: string } | null>(null);
   const currentBufferIdRef = useRef<string | null>(null);
 
+  // Sync original content to the unsaved line highlight extension
+  // whenever it changes (e.g., after save completes).
+  useEffect(() => {
+    if (viewRef.current && buffer?.originalContent !== undefined) {
+      viewRef.current.dispatch({
+        effects: setOriginalContent.of(buffer.originalContent),
+      });
+    }
+  }, [buffer?.originalContent]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Load file when pane has a buffer assigned
   useEffect(() => {
     // Skip if no buffer or no file
@@ -833,6 +845,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
             insert: '',
           },
           annotations: suppressHistoryAnnotations,
+          effects: setOriginalContent.of(''),
         });
       }
       setError(null);
@@ -858,6 +871,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
             insert: nextContent,
           },
           annotations: suppressHistoryAnnotations,
+          effects: setOriginalContent.of(nextContent),
         });
         clearDiffGutter(viewRef.current);
         clearDiagnostics(viewRef.current);
@@ -873,6 +887,15 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       lastLoadedRef.current = { bufferId: buffer.id, filePath: buffer.file.path };
       currentBufferIdRef.current = buffer.id;
       if (viewRef.current) {
+        viewRef.current.dispatch({
+          changes: {
+            from: 0,
+            to: viewRef.current.state.doc.length,
+            insert: nextContent,
+          },
+          annotations: suppressHistoryAnnotations,
+          effects: setOriginalContent.of(nextContent),
+        });
         clearDiffGutter(viewRef.current);
         clearDiagnostics(viewRef.current);
       }
@@ -1108,6 +1131,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       diffGutter(),
       lintDiagnostics(),
       trailingWhitespacePlugin(),
+      unsavedLineHighlight(),
       whitespaceRenderingCompartment.current.of(whitespaceRenderingPlugin(whitespaceRenderingMode)),
       relativeLineNumbersCompartment.current.of(relativeLineNumbersEnabled ? lineNumbersRelative : lineNumbers()),
       scrollPastEnd(),

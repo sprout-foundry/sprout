@@ -275,6 +275,7 @@ const EDITOR_COMMAND_IDS = new Set([
   'editor_toggle_block_comment',
   'toggle_linked_scroll',
   'toggle_minimap',
+  'editor_cycle_whitespace_rendering',
 ]);
 
 // ── Public API ──────────────────────────────────────────────────────
@@ -598,6 +599,15 @@ export function getEditorKeymap(hotkeyEntries: HotkeyEntry[] | null, actions: Ed
           detail: { commandId: 'toggle_minimap' },
         }),
       );
+      return true;
+    }),
+  );
+
+  // Cycle whitespace rendering mode (none → boundary → all).
+  // No default key binding — users must explicitly configure one.
+  bindings.push(
+    ...bindingsFor('editor_cycle_whitespace_rendering', () => {
+      document.dispatchEvent(new CustomEvent('editor-cycle-whitespace-rendering'));
       return true;
     }),
   );

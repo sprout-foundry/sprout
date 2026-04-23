@@ -66,6 +66,7 @@ import {
 import { minimapExtension } from '../extensions/minimap';
 import { tabExpandSnippets, setSnippetLanguage } from '../extensions/snippets';
 import { trailingWhitespacePlugin } from '../extensions/trailingWhitespace';
+import { whitespaceRenderingPlugin, type WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
 import { ApiService } from '../services/api';
 import { notificationBus } from '../services/notificationBus';
 import { Loader2, AlertTriangle, Eye, Columns2, Copy, Navigation, FolderOpen, ClipboardCopy, ListOrdered } from 'lucide-react';
@@ -121,6 +122,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   const relativeLineNumbersCompartment = useRef(new Compartment());
   const languageCompartment = useRef(new Compartment());
   const minimapCompartment = useRef(new Compartment());
+  const whitespaceRenderingCompartment = useRef(new Compartment());
   const emmetCompartment = useRef(createEmmetCompartment());
   const fontSizeCompartment = useRef(new Compartment());
   const tabSizeCompartment = useRef(new Compartment());
@@ -147,6 +149,17 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     } catch (err) {
       debugLog('Failed to read minimap setting from localStorage:', err);
       return true; // default on if localStorage unavailable
+    }
+  });
+
+  const [whitespaceRenderingMode, setWhitespaceRenderingMode] = useState<WhitespaceRenderingMode>(() => {
+    try {
+      const stored = localStorage.getItem('editor:whitespace-rendering');
+      if (stored === 'boundary' || stored === 'all' || stored === 'none') return stored;
+      return 'none'; // default off
+    } catch (err) {
+      debugLog('Failed to read whitespace rendering setting from localStorage:', err);
+      return 'none'; // default off if localStorage unavailable
     }
   });
 
@@ -1104,6 +1117,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       diffGutter(),
       lintDiagnostics(),
       trailingWhitespacePlugin(),
+      whitespaceRenderingCompartment.current.of(whitespaceRenderingPlugin(whitespaceRenderingMode)),
       relativeLineNumbersCompartment.current.of(relativeLineNumbersEnabled ? lineNumbersRelative : lineNumbers()),
       scrollPastEnd(),
       foldGutter({
@@ -1373,6 +1387,30 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     });
   }, []);
 
+  // Cycle whitespace rendering mode: none → boundary → all → none
+  const whitespaceRenderingModeRef = useRef(whitespaceRenderingMode);
+  const lastWhitespaceToggleRef = useRef(0);
+  const onCycleWhitespaceRendering = useCallback(() => {
+    const now = Date.now();
+    if (now - lastWhitespaceToggleRef.current < 100) return; // dedup
+    lastWhitespaceToggleRef.current = now;
+    const next: WhitespaceRenderingMode =
+      whitespaceRenderingModeRef.current === 'none' ? 'boundary' :
+      whitespaceRenderingModeRef.current === 'boundary' ? 'all' : 'none';
+    whitespaceRenderingModeRef.current = next;
+    setWhitespaceRenderingMode(next);
+    try {
+      localStorage.setItem('editor:whitespace-rendering', next);
+    } catch (err) {
+      debugLog('[onCycleWhitespaceRendering] localStorage persist failed:', err);
+    }
+    viewRef.current?.dispatch({
+      effects: whitespaceRenderingCompartment.current.reconfigure(
+        whitespaceRenderingPlugin(next),
+      ),
+    });
+  }, []);
+
   // Keep the ref mirror in sync whenever the state value changes from
   // an external source (e.g. the global event listener).
   useEffect(() => {
@@ -1386,6 +1424,10 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   useEffect(() => {
     relativeLineNumbersEnabledRef.current = relativeLineNumbersEnabled;
   }, [relativeLineNumbersEnabled]);
+
+  useEffect(() => {
+    whitespaceRenderingModeRef.current = whitespaceRenderingMode;
+  }, [whitespaceRenderingMode]);
 
   // Keep module-level linked scroll state in sync with context.
   useEffect(() => {
@@ -1411,6 +1453,8 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         onToggleMinimap();
       } else if (e.type === 'editor-toggle-relative-line-numbers') {
         onToggleRelativeLineNumbers();
+      } else if (e.type === 'editor-cycle-whitespace-rendering') {
+        onCycleWhitespaceRendering();
       } else if (e.type === 'editor-undo') {
         if (viewRef.current) {
           undo(viewRef.current);
@@ -1448,6 +1492,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     document.addEventListener('editor-toggle-linked-scroll', handler);
     document.addEventListener('editor-toggle-minimap', handler);
     document.addEventListener('editor-toggle-relative-line-numbers', handler);
+    document.addEventListener('editor-cycle-whitespace-rendering', handler);
     document.addEventListener('editor-undo', handler);
     document.addEventListener('editor-redo', handler);
     document.addEventListener('editor-find', handler);
@@ -1459,6 +1504,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       document.removeEventListener('editor-toggle-linked-scroll', handler);
       document.removeEventListener('editor-toggle-minimap', handler);
       document.removeEventListener('editor-toggle-relative-line-numbers', handler);
+      document.removeEventListener('editor-cycle-whitespace-rendering', handler);
       document.removeEventListener('editor-undo', handler);
       document.removeEventListener('editor-redo', handler);
       document.removeEventListener('editor-find', handler);
@@ -1900,6 +1946,11 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
           <span className="tab-size" role="button" tabIndex={0} onClick={onCycleTabSize} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onCycleTabSize(); } }} title="Click to change tab size (Spaces: 2, 4, 8 / Tabs)">
             {editorUsesTabs ? 'Tabs' : `Spaces: ${editorTabSize}`}
           </span>
+          {whitespaceRenderingMode !== 'none' && (
+            <span className="whitespace-mode" role="button" tabIndex={0} onClick={onCycleWhitespaceRendering} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onCycleWhitespaceRendering(); } }} title="Click to change whitespace rendering (none → boundary → all)">
+              {whitespaceRenderingMode === 'boundary' ? 'WS: boundary' : 'WS: all'}
+            </span>
+          )}
         </div>
         <LanguageSwitcher
           currentLanguageId={languageInfo.languageId}

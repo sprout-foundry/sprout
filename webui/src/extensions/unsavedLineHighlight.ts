@@ -296,10 +296,6 @@ const unsavedHighlightBaseTheme = EditorView.baseTheme({
     background: 'var(--diff-mod-bg, rgba(66, 133, 244, 0.08)) !important',
     borderLeft: '2px solid var(--diff-mod-color, rgba(66, 133, 244, 0.7))',
   },
-  '&dark .cm-unsavedLine': {
-    background: 'var(--diff-mod-bg, rgba(66, 133, 244, 0.08)) !important',
-    borderLeft: '2px solid var(--diff-mod-color, rgba(66, 133, 244, 0.7))',
-  },
   '&light .cm-unsavedLine': {
     background: 'var(--diff-mod-bg, rgba(66, 133, 244, 0.06)) !important',
     borderLeft: '2px solid var(--diff-mod-color, rgba(66, 133, 244, 0.6))',

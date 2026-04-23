@@ -152,17 +152,6 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     }
   });
 
-  const [whitespaceRenderingMode, setWhitespaceRenderingMode] = useState<WhitespaceRenderingMode>(() => {
-    try {
-      const stored = localStorage.getItem('editor:whitespace-rendering');
-      if (stored === 'boundary' || stored === 'all' || stored === 'none') return stored;
-      return 'none'; // default off
-    } catch (err) {
-      debugLog('Failed to read whitespace rendering setting from localStorage:', err);
-      return 'none'; // default off if localStorage unavailable
-    }
-  });
-
   const [editorFontSize, setEditorFontSize] = useState<number>(() => {
     try {
       const stored = localStorage.getItem('editor:font-size');
@@ -244,6 +233,8 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     setBufferLanguageOverride,
     isLinkedScrollEnabled,
     toggleLinkedScroll,
+    whitespaceRenderingMode,
+    setWhitespaceRenderingMode,
   } = useEditorManager();
 
   const { theme, themePack, customHighlightStyle } = useTheme();
@@ -1397,19 +1388,24 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     const next: WhitespaceRenderingMode =
       whitespaceRenderingModeRef.current === 'none' ? 'boundary' :
       whitespaceRenderingModeRef.current === 'boundary' ? 'all' : 'none';
-    whitespaceRenderingModeRef.current = next;
     setWhitespaceRenderingMode(next);
-    try {
-      localStorage.setItem('editor:whitespace-rendering', next);
-    } catch (err) {
-      debugLog('[onCycleWhitespaceRendering] localStorage persist failed:', err);
-    }
     viewRef.current?.dispatch({
       effects: whitespaceRenderingCompartment.current.reconfigure(
         whitespaceRenderingPlugin(next),
       ),
     });
-  }, []);
+  }, [setWhitespaceRenderingMode]);
+
+  // Keep the ref mirror in sync whenever the state value changes from context
+  // and reconfigure the CodeMirror compartment so the editor reflects the change.
+  useEffect(() => {
+    whitespaceRenderingModeRef.current = whitespaceRenderingMode;
+    viewRef.current?.dispatch({
+      effects: whitespaceRenderingCompartment.current.reconfigure(
+        whitespaceRenderingPlugin(whitespaceRenderingMode),
+      ),
+    });
+  }, [whitespaceRenderingMode]);
 
   // Keep the ref mirror in sync whenever the state value changes from
   // an external source (e.g. the global event listener).
@@ -1424,10 +1420,6 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   useEffect(() => {
     relativeLineNumbersEnabledRef.current = relativeLineNumbersEnabled;
   }, [relativeLineNumbersEnabled]);
-
-  useEffect(() => {
-    whitespaceRenderingModeRef.current = whitespaceRenderingMode;
-  }, [whitespaceRenderingMode]);
 
   // Keep module-level linked scroll state in sync with context.
   useEffect(() => {
@@ -1511,7 +1503,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       document.removeEventListener('editor-find-replace', handler);
       document.removeEventListener('editor-select-all', handler);
     };
-  }, [handleGoToLine, onToggleMinimap, onToggleRelativeLineNumbers, onToggleWordWrap, toggleLinkedScroll]);
+  }, [handleGoToLine, onToggleMinimap, onToggleRelativeLineNumbers, onToggleWordWrap, toggleLinkedScroll, onCycleWhitespaceRendering]);
 
   // Listen for scroll sync events from other panes (linked scrolling).
   useEffect(() => {

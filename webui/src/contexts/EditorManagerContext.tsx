@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { EditorBuffer, EditorPane, PaneLayout } from '../types/editor';
 import { writeFileWithConsent } from '../services/fileAccess';
 import { showThemedPrompt } from '../components/ThemedDialog';
+import { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
 
 interface PaneSize {
   [paneId: string]: number; // Size in pixels or percentage
@@ -15,6 +16,8 @@ interface EditorManagerContextValue {
   activeBufferId: string | null;
   isAutoSaveEnabled: boolean;
   setAutoSaveEnabled: (enabled: boolean) => void;
+  whitespaceRenderingMode: WhitespaceRenderingMode;
+  setWhitespaceRenderingMode: (mode: WhitespaceRenderingMode) => void;
   autoSaveInterval: number; // milliseconds
   paneSizes: PaneSize; // Track pane sizes for resizable split panes
 
@@ -109,6 +112,23 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   const [activeBufferId, setActiveBufferId] = useState<string | null>('buffer-chat');
   const [isAutoSaveEnabled, setIsAutoSaveEnabledState] = useState(true);
   const setAutoSaveEnabled = useCallback((enabled: boolean) => setIsAutoSaveEnabledState(enabled), []);
+  const [whitespaceRenderingMode, setWhitespaceRenderingModeState] = useState<WhitespaceRenderingMode>(() => {
+    try {
+      const stored = localStorage.getItem('editor:whitespace-rendering');
+      if (stored === 'boundary' || stored === 'all' || stored === 'none') return stored;
+      return 'none';
+    } catch (err) {
+      return 'none';
+    }
+  });
+  const setWhitespaceRenderingMode = useCallback((mode: WhitespaceRenderingMode) => {
+    setWhitespaceRenderingModeState(mode);
+    try {
+      localStorage.setItem('editor:whitespace-rendering', mode);
+    } catch (err) {
+      // Ignore localStorage errors
+    }
+  }, []);
   const [autoSaveInterval] = useState(30000); // 30 seconds
   const [paneSizes, setPaneSizes] = useState<PaneSize>({ 'pane-1': 100 }); // Initial sizes in percentage
   const [isLinkedScrollEnabled, setIsLinkedScrollEnabled] = useState(false);
@@ -913,6 +933,8 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     activeBufferId,
     isAutoSaveEnabled,
     setAutoSaveEnabled,
+    whitespaceRenderingMode,
+    setWhitespaceRenderingMode,
     autoSaveInterval,
     paneSizes,
     openFile,

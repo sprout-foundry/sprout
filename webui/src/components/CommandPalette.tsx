@@ -57,6 +57,7 @@ const COMMAND_DEFINITIONS: CommandDef[] = [
   { id: 'split_terminal_horizontal', label: 'Split Terminal Horizontal', category: 'View' },
   { id: 'editor_toggle_word_wrap', label: 'Toggle Word Wrap', category: 'View' },
   { id: 'toggle_minimap', label: 'Toggle Minimap', category: 'View' },
+  { id: 'editor_cycle_whitespace_rendering', label: 'Cycle Whitespace Rendering', category: 'View' },
   { id: 'toggle_linked_scroll', label: 'Toggle Linked Scrolling', category: 'View' },
   { id: 'reset_saved_layout', label: 'Reset Saved Layout', category: 'View' },
   // Navigation
@@ -417,6 +418,9 @@ function CommandPalette({
           break;
         case 'toggle_minimap':
           window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'toggle_minimap' } }));
+          break;
+        case 'editor_cycle_whitespace_rendering':
+          window.dispatchEvent(new CustomEvent('editor-cycle-whitespace-rendering'));
           break;
         case 'close_editor':
           window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'close_editor' } }));

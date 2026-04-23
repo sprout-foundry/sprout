@@ -133,6 +133,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   const [saving, setSaving] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [localContent, setLocalContent] = useState<string>('');
+  const [selectionInfo, setSelectionInfo] = useState<{ charCount: number; selectionCount: number } | null>(null);
   const [showGoToSymbol, setShowGoToSymbol] = useState<boolean>(false);
   const [relativeLineNumbersEnabled, setRelativeLineNumbersEnabled] = useState(() => {
     try {
@@ -309,6 +310,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         const content = await response.text();
 
         setLocalContent(content);
+        setSelectionInfo(null);
 
         // Update buffer in context to keep it in sync with editor.
         // Set originalContent so the buffer is NOT marked as modified just
@@ -848,6 +850,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
           effects: setOriginalContent.of(''),
         });
       }
+      setSelectionInfo(null);
       setError(null);
       lastLoadedRef.current = null;
       currentBufferIdRef.current = null;
@@ -861,6 +864,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     if (buffer.kind !== 'file') {
       const nextContent = buffer.content || '';
       setLocalContent(nextContent);
+      setSelectionInfo(null);
       setError(null);
       lastLoadedRef.current = { bufferId: buffer.id, filePath: buffer.file.path };
       if (viewRef.current) {
@@ -883,6 +887,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     if (buffer.file.path.startsWith('__workspace/')) {
       const nextContent = buffer.content || '';
       setLocalContent(nextContent);
+      setSelectionInfo(null);
       setError(null);
       lastLoadedRef.current = { bufferId: buffer.id, filePath: buffer.file.path };
       currentBufferIdRef.current = buffer.id;
@@ -956,6 +961,24 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
           }
         } catch (err) {
           debugLog('Cursor position update skipped:', err);
+        }
+      }
+
+      // Update selection info on selection change
+      if (update.selectionSet) {
+        const sel = update.state.selection;
+        const ranges = sel.ranges;
+        if (ranges.length > 1) {
+          // Multiple selections — show count and total chars
+          const totalChars = ranges.reduce((sum, range) => sum + (range.to - range.from), 0);
+          setSelectionInfo({ charCount: totalChars, selectionCount: ranges.length });
+        } else if (ranges.length === 1 && !ranges[0].empty) {
+          // Single non-empty selection — show character count
+          const charCount = ranges[0].to - ranges[0].from;
+          setSelectionInfo({ charCount, selectionCount: 1 });
+        } else {
+          // No selection (just a cursor)
+          setSelectionInfo(null);
         }
       }
 
@@ -1687,6 +1710,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
           });
         }
         setLocalContent(detail.content);
+        setSelectionInfo(null);
 
         // Re-detect indentation on auto-reload (skip if user has manually set their preference)
         if (!indentManuallySetRef.current) {
@@ -1953,6 +1977,8 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
           <span className="char-count">Chars: {(buffer?.content || '').length}</span>
           <span className="cursor-position">
             Ln {buffer.cursorPosition.line + 1}, Col {buffer.cursorPosition.column + 1}
+            {selectionInfo && selectionInfo.selectionCount > 1 && ` (${selectionInfo.selectionCount} selections)`}
+            {selectionInfo && selectionInfo.selectionCount === 1 && ` (${selectionInfo.charCount} selected)`}
           </span>
           {editorFontSize !== FONT_SIZE_DEFAULT && (
             <span className="zoom-level">

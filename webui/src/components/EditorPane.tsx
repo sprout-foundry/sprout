@@ -58,6 +58,7 @@ import { bracketColorizationPlugin } from '../extensions/bracketColorization';
 import { linkedScrollExtension, setLinkedScrollEnabled, suppressScrollSync } from '../extensions/linkedScroll';
 import { getLanguageExtensions, resolveLanguageId } from '../extensions/languageRegistry';
 import { detectIndentation, DEFAULT_INDENT_WIDTH } from '../extensions/indentDetect';
+import { detectLineEnding, type LineEnding } from '../extensions/lineEndingDetect';
 import {
   createEmmetCompartment,
   getInitialEmmetExtensions,
@@ -201,6 +202,9 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   // Resets when switching files so auto-detection runs fresh for each file.
   const [indentManuallySet, setIndentManuallySet] = useState<boolean>(false);
 
+  // Line ending style for the current file (auto-detected on load)
+  const [lineEnding, setLineEnding] = useState<LineEnding>('LF');
+
   // Ref mirror for indentManuallySet — read inside loadFile and auto-reload handler
   // to avoid stale closures (those callbacks cannot list indentManuallySet as a dep).
   const indentManuallySetRef = useRef(false);
@@ -257,6 +261,8 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       // state (async — drives React re-renders / UI display).
       indentManuallySetRef.current = false;
       setIndentManuallySet(false);
+      // Reset line ending to default; loadFile will re-detect for the new file.
+      setLineEnding('LF');
     }
   }, [buffer?.id]);
 
@@ -412,6 +418,10 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
             }
           }
         }
+
+        // Detect line ending style
+        const lineEndingResult = detectLineEnding(content);
+        setLineEnding(lineEndingResult.lineEnding);
 
         // Fetch diagnostics for the loaded file
         if (viewRef.current) {
@@ -1741,6 +1751,10 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
             }
           }
         }
+
+        // Re-detect line ending on auto-reload
+        const lineEndingResult = detectLineEnding(detail.content);
+        setLineEnding(lineEndingResult.lineEnding);
       } finally {
         isExternalUpdateRef.current = false;
       }
@@ -1987,6 +2001,9 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
           )}
           <span className="tab-size" role="button" tabIndex={0} onClick={onCycleTabSize} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onCycleTabSize(); } }} title="Click to change tab size (Spaces: 2, 4, 8 / Tabs)">
             {editorUsesTabs ? 'Tabs' : `Spaces: ${editorTabSize}`}
+          </span>
+          <span className="encoding-indicator" title="File encoding and line endings">
+            UTF-8 · {lineEnding}
           </span>
           {whitespaceRenderingMode !== 'none' && (
             <span className="whitespace-mode" role="button" tabIndex={0} onClick={onCycleWhitespaceRendering} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onCycleWhitespaceRendering(); } }} title="Click to change whitespace rendering (none → boundary → all)">

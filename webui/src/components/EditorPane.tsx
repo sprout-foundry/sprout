@@ -193,14 +193,20 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   });
 
   // Whether the user has manually overridden the indent setting via the footer cycle.
-  // When true, auto-detection on file load is skipped so the manual choice persists.
-  const [indentManuallySet, setIndentManuallySet] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('editor:indent-manual') === 'true';
-    } catch (err) {
-      return false;
-    }
-  });
+  // Resets when switching files so auto-detection runs fresh for each file.
+  const [indentManuallySet, setIndentManuallySet] = useState<boolean>(false);
+
+  // Ref mirror for indentManuallySet — read inside loadFile and auto-reload handler
+  // to avoid stale closures (those callbacks cannot list indentManuallySet as a dep).
+  const indentManuallySetRef = useRef(false);
+  // Keep the ref in sync whenever the state value changes.
+  useEffect(() => { indentManuallySetRef.current = indentManuallySet; }, [indentManuallySet]);
+
+  // Clean up orphaned localStorage key from previous versions that persisted
+  // indentManuallySet globally. Run once on mount.
+  useEffect(() => {
+    try { localStorage.removeItem('editor:indent-manual'); } catch (_err) { /* ignore */ }
+  }, []);
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; hasSelection: boolean; languageId: string } | null>(null);
@@ -232,6 +238,20 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   // Get buffer for this pane
   const pane = panes.find((p) => p.id === paneId);
   const buffer = pane?.bufferId ? buffers.get(pane.bufferId) : null;
+
+  // Reset manual indent override when switching to a different file,
+  // so auto-detection runs fresh for each file.
+  const prevBufferIdForIndentRef = useRef<string | null>(null);
+  useEffect(() => {
+    const currentBufferId = buffer?.id ?? null;
+    if (currentBufferId !== prevBufferIdForIndentRef.current) {
+      prevBufferIdForIndentRef.current = currentBufferId;
+      // Reset both the ref (synchronous — read by loadFile closure) and the
+      // state (async — drives React re-renders / UI display).
+      indentManuallySetRef.current = false;
+      setIndentManuallySet(false);
+    }
+  }, [buffer?.id]);
 
   // API service instance (singleton)
   const apiService = useRef(ApiService.getInstance()).current;
@@ -353,7 +373,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         }
 
         // Auto-detect indentation from file content (skip if user has manually set their preference)
-        if (!indentManuallySet) {
+        if (!indentManuallySetRef.current) {
           const detected = detectIndentation(content);
           if (detected.indentedLineCount >= MIN_INDENTED_LINES_FOR_DETECTION) {
             const detectedSize = detected.useTabs ? TAB_SIZE_DEFAULT : detected.indentWidth;
@@ -620,11 +640,14 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   }, []);
 
   // Cycle tab size: rotates through Spaces:2 → Spaces:4 → Spaces:8 → Tabs → Spaces:2 …
-  // Each manual cycle marks the indent as user-chosen so auto-detection won't override it.
+  // Each manual cycle marks the indent as user-chosen for this file, so auto-detection won't override it.
+  // Resets when switching to a different file.
   const onCycleTabSize = useCallback(() => {
-    // Mark that the user has manually chosen an indent setting
+    // Mark that the user has manually chosen an indent setting for this file.
+    // Write to both the ref (synchronous — read by loadFile closure) and the
+    // state (drives React re-renders).
+    indentManuallySetRef.current = true;
     setIndentManuallySet(true);
-    try { localStorage.setItem('editor:indent-manual', 'true'); } catch (_err) { /* ignore */ }
 
     setEditorTabSize((prev) => {
       // Cycle order: 2 → 4 → 8 → "tabs" (represented as TAB_SIZE_TABS_MODE) → 2 …
@@ -1602,7 +1625,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         setLocalContent(detail.content);
 
         // Re-detect indentation on auto-reload (skip if user has manually set their preference)
-        if (!indentManuallySet) {
+        if (!indentManuallySetRef.current) {
           const detected = detectIndentation(detail.content);
           if (detected.indentedLineCount >= MIN_INDENTED_LINES_FOR_DETECTION) {
             const detectedSize = detected.useTabs ? TAB_SIZE_DEFAULT : detected.indentWidth;

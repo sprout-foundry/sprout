@@ -66,6 +66,13 @@
   opacity: 1;
 }
 
+.pane-footer .encoding-indicator {
+  font-size: 11px;
+  opacity: 0.7;
+  user-select: none;
+  white-space: nowrap;
+}
+
 .pane-footer .language-switcher-button {
   flex-shrink: 0;
 }

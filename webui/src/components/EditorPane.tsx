@@ -65,6 +65,7 @@ import {
 } from '../extensions/emmet';
 import { minimapExtension } from '../extensions/minimap';
 import { tabExpandSnippets, setSnippetLanguage } from '../extensions/snippets';
+import { trailingWhitespacePlugin } from '../extensions/trailingWhitespace';
 import { ApiService } from '../services/api';
 import { notificationBus } from '../services/notificationBus';
 import { Loader2, AlertTriangle, Eye, Columns2, Copy, Navigation, FolderOpen, ClipboardCopy, ListOrdered } from 'lucide-react';
@@ -1102,6 +1103,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       ),
       diffGutter(),
       lintDiagnostics(),
+      trailingWhitespacePlugin(),
       relativeLineNumbersCompartment.current.of(relativeLineNumbersEnabled ? lineNumbersRelative : lineNumbers()),
       scrollPastEnd(),
       foldGutter({

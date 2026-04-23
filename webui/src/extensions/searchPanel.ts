@@ -5,7 +5,7 @@
  * whole-word matching, and regex mode, styled similarly to VS Code's search toggles.
  */
 
-import { EditorView, type Panel, type ViewUpdate, runScopeHandlers } from '@codemirror/view';
+import { EditorView, type Panel, type ViewUpdate } from '@codemirror/view';
 import { search, SearchQuery, setSearchQuery, getSearchQuery, findNext, findPrevious, selectMatches, replaceNext, replaceAll, closeSearchPanel } from '@codemirror/search';
 
 import './searchPanel.css';
@@ -21,7 +21,7 @@ import './searchPanel.css';
  * - Replace/Replace All buttons
  * - Close button (×)
  */
-function createCustomSearchPanel(view: EditorView): Panel {
+function createCustomSearchPanel(view: EditorView, onSave?: () => void): Panel {
   let query = getSearchQuery(view.state) || new SearchQuery({ search: '', replace: '' });
 
   // Search input field
@@ -156,21 +156,13 @@ function createCustomSearchPanel(view: EditorView): Panel {
   const dom = document.createElement('div');
   dom.className = 'cm-search';
   dom.onkeydown = (e: KeyboardEvent) => {
-    // Delegate modifier-key shortcuts to the editor's keymap system.
-    // The search panel is rendered outside CodeMirror's contentDOM, so CM's
-    // normal keydown handler (which runs editor-scoped keymaps) never sees
-    // events from panel inputs. Without this, editor shortcuts like Mod-s
-    // (save) are dropped when the search panel has focus.
-    //
-    // We only delegate when Ctrl or Cmd/Meta is held — these indicate
-    // editor commands (save, undo, etc.) rather than normal input
-    // interaction. Without this guard, Enter, Backspace, arrow keys, and
-    // other basic input keys would be intercepted by the editor's keymap
-    // (e.g., Enter → insertNewlineAndIndent, Backspace → deleteCharBackward)
-    // instead of being handled by the search panel's own handlers or native
-    // browser input behavior.
-    if ((e.ctrlKey || e.metaKey) && runScopeHandlers(view, e, 'editor')) {
+    // Only delegate Mod-s (save) to the editor — do NOT forward other
+    // modifier-key shortcuts (Ctrl+A, Ctrl+Z, Ctrl+K etc.) because the
+    // editor keymap contains bindings for these that conflict with normal
+    // input field behavior (e.g. on Linux, Ctrl+K → deleteToLineEnd).
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === 's' || e.key === 'S')) {
       e.preventDefault();
+      onSave?.();
       return;
     }
 
@@ -293,9 +285,12 @@ function createCustomSearchPanel(view: EditorView): Panel {
  * Custom search extension that replaces the default search panel with a styled version.
  *
  * Use this instead of `search()` from `@codemirror/search`.
+ *
+ * @param onSave - Optional callback invoked when Mod-s (save) is pressed while
+ *   the search panel has focus. If not provided, the save shortcut is ignored.
  */
-export function customSearchExtension() {
+export function customSearchExtension(onSave?: () => void) {
   return [
-    search({ createPanel: createCustomSearchPanel }),
+    search({ createPanel: (view: EditorView) => createCustomSearchPanel(view, onSave) }),
   ];
 }

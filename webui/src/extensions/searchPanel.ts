@@ -5,7 +5,7 @@
  * whole-word matching, and regex mode, styled similarly to VS Code's search toggles.
  */
 
-import { EditorView, type Panel, type ViewUpdate } from '@codemirror/view';
+import { EditorView, type Panel, type ViewUpdate, runScopeHandlers } from '@codemirror/view';
 import { search, SearchQuery, setSearchQuery, getSearchQuery, findNext, findPrevious, selectMatches, replaceNext, replaceAll, closeSearchPanel } from '@codemirror/search';
 
 import './searchPanel.css';
@@ -156,6 +156,24 @@ function createCustomSearchPanel(view: EditorView): Panel {
   const dom = document.createElement('div');
   dom.className = 'cm-search';
   dom.onkeydown = (e: KeyboardEvent) => {
+    // Delegate modifier-key shortcuts to the editor's keymap system.
+    // The search panel is rendered outside CodeMirror's contentDOM, so CM's
+    // normal keydown handler (which runs editor-scoped keymaps) never sees
+    // events from panel inputs. Without this, editor shortcuts like Mod-s
+    // (save) are dropped when the search panel has focus.
+    //
+    // We only delegate when Ctrl or Cmd/Meta is held — these indicate
+    // editor commands (save, undo, etc.) rather than normal input
+    // interaction. Without this guard, Enter, Backspace, arrow keys, and
+    // other basic input keys would be intercepted by the editor's keymap
+    // (e.g., Enter → insertNewlineAndIndent, Backspace → deleteCharBackward)
+    // instead of being handled by the search panel's own handlers or native
+    // browser input behavior.
+    if ((e.ctrlKey || e.metaKey) && runScopeHandlers(view, e, 'editor')) {
+      e.preventDefault();
+      return;
+    }
+
     // Handle Escape
     if (e.key === 'Escape') {
       e.preventDefault();

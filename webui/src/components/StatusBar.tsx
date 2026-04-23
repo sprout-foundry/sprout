@@ -3,6 +3,7 @@ import './StatusBar.css';
 import { useMemo } from 'react';
 import { GitBranch } from 'lucide-react';
 import { allLanguageEntries, resolveLanguageId } from '../extensions/languageRegistry';
+import { detectLineEnding } from '../extensions/lineEndingDetect';
 
 interface StatusBarProps {
   branch?: string;
@@ -48,14 +49,10 @@ function StatusBar({ branch, buffer, encoding, indentation }: StatusBarProps): J
     return name;
   }, [buffer]);
 
-  // Line endings detection — sample first 1024 chars to avoid scanning large files on every keystroke.
-  // Strip out all \r\n sequences first, then check for any remaining \n.
-  // This avoids a lookbehind regex and is safe across all JS environments.
+  // Line endings detection using shared utility (consistent with editor footer indicator).
   const lineEnding = useMemo(() => {
-    const sample = (buffer?.content || '').slice(0, 1024);
-    const hasCRLF = /\r\n/.test(sample);
-    const hasBareLF = /\n/.test(sample.replace(/\r\n/g, ''));
-    return hasCRLF && !hasBareLF ? 'CRLF' : hasCRLF && hasBareLF ? 'Mixed' : 'LF';
+    const result = detectLineEnding(buffer?.content || '');
+    return result.lineEnding;
   }, [buffer?.content]);
 
   return (

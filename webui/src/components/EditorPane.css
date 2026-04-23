@@ -183,3 +183,55 @@
 .cm-minimap-container {
   height: 100%;
 }
+
+/* Whitespace rendering decorations */
+.cm-whitespace-char {
+  color: var(--cm-whitespace-char, rgba(128, 128, 128, 0.4));
+  font-size: 0.85em;
+  line-height: 1;
+}
+
+.cm-whitespace-space {
+  position: relative;
+}
+
+.cm-whitespace-space::after {
+  content: '·';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  text-align: center;
+  color: var(--cm-whitespace-space, rgba(128, 128, 128, 0.35));
+  font-size: 0.7em;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.cm-whitespace-trailing {
+  position: relative;
+}
+
+.cm-whitespace-trailing::after {
+  content: '·';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  text-align: center;
+  color: var(--cm-whitespace-space, rgba(255, 80, 80, 0.5));
+  font-size: 0.7em;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.pane-footer .whitespace-mode {
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.15s ease;
+  user-select: none;
+}
+
+.pane-footer .whitespace-mode:hover {
+  opacity: 1;
+}

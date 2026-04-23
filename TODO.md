@@ -134,7 +134,8 @@ These gaps were identified by cross-referencing the current editor implementatio
 
 #### Tier 3 — Small Custom Extensions (ViewPlugin/StateField, ~2-4 hours each)
 
-[] - EDITOR: Add trailing whitespace highlighting — create a `trailingWhitespacePlugin` ViewPlugin in `webui/src/extensions/` that decorates trailing spaces and tabs on each line with a subtle background color (configurable via CSS variable). Lines with no trailing whitespace are unaffected. This is a standard feature in VS Code and Atom and helps catch whitespace-only diffs. Use viewport-decoration filtering for performance on large files.
+[x] - EDITOR: Add trailing whitespace highlighting — create a `trailingWhitespacePlugin` ViewPlugin in `webui/src/extensions/` that decorates trailing spaces and tabs on each line with a subtle background color (configurable via CSS variable). Lines with no trailing whitespace are unaffected. This is a standard feature in VS Code and Atom and helps catch whitespace-only diffs. Use viewport-decoration filtering for performance on large files.
+[x] - EDITOR: Add trailing whitespace highlighting — create a `trailingWhitespacePlugin` ViewPlugin in `webui/src/extensions/` that decorates trailing spaces and tabs on each line with a subtle background color (configurable via CSS variable). Lines with no trailing whitespace are unaffected. This is a standard feature in VS Code and Atom and helps catch whitespace-only diffs. Use viewport-decoration filtering for performance on large files.
 
 [] - EDITOR: Add whitespace rendering mode (render tabs/spaces as visible characters) — create a `whitespaceRenderingPlugin` ViewPlugin that replaces tab characters with visible `→` symbols and trailing spaces with `·` dots. Add a setting entry to toggle between: "none" (default), "boundary" (only trailing whitespace), and "all" (all whitespace). VS Code exposes this as "Editor: Render Whitespace". Use decorations to overlay the special characters.
 

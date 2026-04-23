@@ -4,6 +4,7 @@ import './Sidebar.css';
 import { ApiService, type ProviderOption, type LeditSettings, type LeditInstance } from '../services/api';
 import SettingsPanel from './SettingsPanel';
 import { useEditorManager } from '../contexts/EditorManagerContext';
+import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
 import type { ProviderLogEntry } from '../providers/types';
 import { useTheme } from '../contexts/ThemeContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
@@ -144,7 +145,7 @@ function Sidebar({
   const log = useLog();
   const { themePack, availableThemePacks, setThemePack, importTheme, removeTheme } = useTheme();
   const { applyPreset } = useHotkeys();
-  const { isAutoSaveEnabled: autoSaveEnabled, setAutoSaveEnabled } = useEditorManager();
+  const { isAutoSaveEnabled: autoSaveEnabled, setAutoSaveEnabled, whitespaceRenderingMode, setWhitespaceRenderingMode } = useEditorManager();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileTreeRef = useRef<{
     refresh: () => void;
@@ -912,9 +913,10 @@ function Sidebar({
           settings={settings}
           onSettingsChanged={(s) => setSettings(s)}
           onRequestProviderSetup={onRequestProviderSetup}
-          editorPreferences={{ autoSaveEnabled: !!autoSaveEnabled }}
+          editorPreferences={{ autoSaveEnabled: !!autoSaveEnabled, whitespaceRenderingMode }}
           onEditorPreferenceChanged={(key, value) => {
             if (key === 'autoSaveEnabled') setAutoSaveEnabled(value as boolean);
+            if (key === 'whitespaceRenderingMode') setWhitespaceRenderingMode(value as WhitespaceRenderingMode);
           }}
         />
       </>

@@ -1023,4 +1023,36 @@ describe('EditorPane', () => {
       expect(tabSizeIndicator?.textContent?.trim()).toBe('Spaces: 4');
     });
   }); // tab size
+
+  // ── Encoding/line ending indicator tests ──────────────────────────────
+
+  describe('encoding indicator', () => {
+    it('renders the encoding indicator in the footer with default "UTF-8 · LF"', async () => {
+      // eslint-disable-next-line testing-library/no-unnecessary-act
+      await act(async () => {
+        root.render(<EditorPane paneId="pane-1" />);
+      });
+      await flushPromises();
+
+      const footer = container.querySelector('.pane-footer');
+      expect(footer).toBeTruthy();
+
+      const encodingIndicator = footer?.querySelector('.encoding-indicator');
+      expect(encodingIndicator).toBeTruthy();
+      expect(encodingIndicator?.textContent?.trim()).toBe('UTF-8 · LF');
+    });
+
+    it('encoding indicator has correct title attribute', async () => {
+      // eslint-disable-next-line testing-library/no-unnecessary-act
+      await act(async () => {
+        root.render(<EditorPane paneId="pane-1" />);
+      });
+      await flushPromises();
+
+      const footer = container.querySelector('.pane-footer');
+      const encodingIndicator = footer?.querySelector('.encoding-indicator');
+
+      expect(encodingIndicator?.getAttribute('title')).toBe('File encoding and line endings');
+    });
+  }); // encoding indicator
 }); // EditorPane

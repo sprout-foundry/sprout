@@ -1,0 +1,150 @@
+/* Custom Search Panel Styles */
+
+/* Base panel styles - extend the default CodeMirror panel styles */
+.cm-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background-color: var(--cm-panel-bg, var(--cm-bg, #fff));
+  border-top: 1px solid var(--cm-border-color, #ccc);
+}
+
+/* Search input field */
+.cm-search .cm-textfield {
+  flex: 1;
+  min-width: 120px;
+  max-width: 250px;
+  padding: 4px 8px;
+  font-size: 13px;
+  font-family: inherit;
+  background-color: var(--cm-panel-input-bg, var(--cm-bg, #fff));
+  border: 1px solid var(--cm-panel-input-border, var(--cm-border-color, #ccc));
+  border-radius: 3px;
+  color: var(--cm-fg, #000);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cm-search .cm-textfield:focus {
+  border-color: var(--accent-primary, #6366f1);
+  box-shadow: 0 0 0 1px var(--accent-primary, #6366f1);
+}
+
+.cm-search .cm-textfield::placeholder {
+  color: var(--cm-panel-input-placeholder, #888);
+}
+
+/* Toggle buttons container */
+.cm-search .cm-search-toggles {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Individual toggle buttons */
+.cm-search .cm-search-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 24px;
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: 'Monaco', 'Menlo', 'Fira Code', monospace;
+  background-color: transparent;
+  border: 1px solid var(--cm-panel-button-border, var(--cm-border-color, #ccc));
+  border-radius: 3px;
+  color: var(--cm-panel-button-fg, var(--cm-fg, #000));
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.cm-search .cm-search-toggle:hover {
+  background-color: var(--cm-panel-button-hover-bg, rgba(0, 0, 0, 0.05));
+  border-color: var(--cm-panel-button-hover-border, #888);
+}
+
+.cm-search .cm-search-toggle:active {
+  background-color: var(--cm-panel-button-active-bg, rgba(0, 0, 0, 0.1));
+}
+
+/* Active toggle state - styled like VS Code search toggles */
+.cm-search .cm-search-toggle-active {
+  background-color: var(--accent-primary, #6366f1);
+  border-color: var(--accent-primary, #6366f1);
+  color: #fff;
+}
+
+.cm-search .cm-search-toggle-active:hover {
+  background-color: var(--accent-primary-hover, #5558e4);
+  border-color: var(--accent-primary-hover, #5558e4);
+}
+
+/* Action buttons (Prev, Next, All, Replace, Replace All) */
+.cm-search .cm-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: var(--cm-panel-button-bg, transparent);
+  border: 1px solid var(--cm-panel-button-border, var(--cm-border-color, #ccc));
+  border-radius: 3px;
+  color: var(--cm-panel-button-fg, var(--cm-fg, #000));
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.cm-search .cm-button:hover {
+  background-color: var(--cm-panel-button-hover-bg, rgba(0, 0, 0, 0.05));
+  border-color: var(--cm-panel-button-hover-border, #888);
+}
+
+.cm-search .cm-button:active {
+  background-color: var(--cm-panel-button-active-bg, rgba(0, 0, 0, 0.1));
+}
+
+/* Close button */
+.cm-search .cm-search-close {
+  min-width: 24px;
+  padding: 0;
+  font-size: 16px;
+  font-weight: 400;
+}
+
+/* Dark theme adjustments */
+.cm-search {
+  --cm-panel-bg: var(--cm-bg);
+  --cm-border-color: var(--cm-gutter-fg);
+  --cm-panel-input-bg: var(--cm-bg);
+  --cm-panel-input-border: var(--cm-gutter-fg);
+  --cm-panel-button-bg: transparent;
+  --cm-panel-button-border: var(--cm-gutter-fg);
+  --cm-panel-button-fg: var(--cm-fg);
+  --cm-panel-button-hover-bg: rgba(255, 255, 255, 0.08);
+  --cm-panel-button-hover-border: #aaa;
+  --cm-panel-button-active-bg: rgba(255, 255, 255, 0.12);
+  --cm-panel-input-placeholder: #888;
+}
+
+/* Ensure proper spacing when search field is the main field */
+.cm-search input[main-field] {
+  flex: 1;
+}
+
+/* Invalid regex indicator */
+.cm-search .cm-search-invalid {
+  border-color: var(--cm-search-invalid-border, #e74c3c) !important;
+  background-color: var(--cm-search-invalid-bg, rgba(231, 76, 60, 0.08));
+}
+
+.cm-search .cm-search-invalid:focus {
+  box-shadow: 0 0 0 1px var(--cm-search-invalid-border, #e74c3c) !important;
+}

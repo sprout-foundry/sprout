@@ -19,7 +19,8 @@ import { hyperLink } from '@uiw/codemirror-extensions-hyper-link';
 import { color } from '@uiw/codemirror-extensions-color';
 import { EditorState, Compartment, Transaction } from '@codemirror/state';
 import { defaultKeymap, indentWithTab, history, undo, redo } from '@codemirror/commands';
-import { search, searchKeymap, openSearchPanel, replaceAll, highlightSelectionMatches } from '@codemirror/search';
+import { searchKeymap, openSearchPanel, replaceAll, highlightSelectionMatches } from '@codemirror/search';
+import { customSearchExtension } from '../extensions/searchPanel';
 import { autocompletion, closeBrackets } from '@codemirror/autocomplete';
 import {
   syntaxHighlighting,
@@ -1141,7 +1142,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       keymap.of(replacePanelKeymap),
       keymap.of(zoomKeymap),
       keymap.of(semanticKeymap),
-      search(),
+      customSearchExtension(),
       highlightSelectionMatches(),
       hyperLink,
       color,

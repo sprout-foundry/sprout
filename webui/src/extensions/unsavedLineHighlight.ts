@@ -56,14 +56,6 @@ const originalContentField = StateField.define<string>({
 // ── Line-diff helpers ───────────────────────────────────────────────
 
 /**
- * Result of comparing current doc lines to original lines.
- * `modifiedLines` is a set of 1-based line numbers that are new or changed.
- */
-export interface DiffResult {
-  modifiedLines: Set<number>;
-}
-
-/**
  * Compare current document text against original text and return a set of
  * 1-based line numbers that have been added or modified.
  *

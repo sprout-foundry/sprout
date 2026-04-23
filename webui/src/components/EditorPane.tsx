@@ -300,6 +300,11 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     onToggleRelativeLineNumbers: () => void;
   } | null>(null);
 
+  // Stable ref for the save function - used by customSearchExtension
+  // to invoke save from the search panel without requiring handleSave
+  // as a dependency of the editor init effect.
+  const saveRef = useRef<() => void>(() => {});
+
   // Load file content - updates buffer in context to keep it in sync with editor
   const loadFile = useCallback(
     async (filePath: string) => {
@@ -597,6 +602,9 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       setSaving(false);
     }
   }, [buffer, saveBuffer, apiService]); // eslint-disable-line react-hooks/exhaustive-deps -- updateDiffGutter/clearDiffGutter are module-level functions
+
+  // Keep the saveRef in sync whenever handleSave changes (e.g., buffer changes)
+  saveRef.current = handleSave;
 
   // Zoom in/out: adjust font size and persist to localStorage
   const onZoomIn = useCallback(() => {
@@ -1142,7 +1150,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       keymap.of(replacePanelKeymap),
       keymap.of(zoomKeymap),
       keymap.of(semanticKeymap),
-      customSearchExtension(),
+      customSearchExtension(() => saveRef.current()),
       highlightSelectionMatches(),
       hyperLink,
       color,

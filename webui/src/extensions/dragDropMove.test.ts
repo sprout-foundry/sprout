@@ -1,40 +1,78 @@
 /**
  * dragDropMove.test.ts — Unit tests for the drag-drop move extension.
+ *
+ * Uses a minimal real CodeMirror EditorView (no DOM) so that dispatched
+ * transactions are actually applied to the document state. This lets us
+ * verify the resulting document content, not just that dispatch was called.
  */
 
 import { EditorView } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
 import { createDragDropHandlers } from './dragDropMove';
 
-// Mock EditorView factory
-function createMockView(content: string = 'hello world', selectionFrom: number = 0, selectionTo: number = 5): EditorView {
+// ── Helper: create a minimal real EditorView ────────────────────────
+// We use a real EditorView so that dispatch() applies changes to the
+// document state, allowing us to verify resulting content. The view
+// is constructed with minimal extensions and a mock DOM element.
+
+function createRealView(
+  content: string = 'hello world',
+  selectionFrom: number = 0,
+  selectionTo: number = 5,
+): EditorView {
+  // Create a stub DOM element with enough shape for EditorView
+  const dom = {
+    style: {} as CSSStyleDeclaration,
+    ownerDocument: {
+      defaultView: null as unknown as Window,
+      documentElement: { style: { setProperty: () => {} } } as HTMLElement,
+    } as unknown as Document,
+    appendChild: () => {},
+    removeChild: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    getBoundingClientRect: () => ({ left: 0, top: 0, right: 800, bottom: 600 }),
+    querySelectorAll: () => [] as Element[],
+    querySelector: () => null as Element | null,
+    childNodes: [] as ChildNode[],
+    firstChild: null as ChildNode | null,
+    className: '',
+    setAttribute: () => {},
+    removeAttribute: () => {},
+    contains: () => false,
+    dispatchEvent: () => false,
+    nodeName: 'DIV',
+    nodeType: 1,
+    parentNode: null as Node | null,
+    nextSibling: null as Node | null,
+    previousSibling: null as Node | null,
+  };
+
   const state = EditorState.create({
     doc: content,
     selection: { anchor: selectionFrom, head: selectionTo },
   });
 
-  return {
+  const view = new EditorView({
     state,
-    dispatch: jest.fn(),
-    posAtCoords: jest.fn().mockImplementation(function (this: EditorView, coords: { x: number; y: number }) {
-      // Simple mock: return position based on y coordinate
-      // For simplicity in tests, we just return a position relative to y
-      // In real code, posAtCoords uses actual DOM layout
-      const doc = this.state.doc;
-      const lines = doc.toString().split('\n');
-      // Map y to approximate line
-      const lineIndex = Math.floor(coords.y / 20); // Assume 20px per line
-      if (lineIndex >= lines.length) return doc.length;
-      let pos = 0;
-      for (let i = 0; i < lineIndex; i++) {
-        pos += lines[i].length + 1; // +1 for newline
-      }
-      return Math.min(pos, doc.length);
-    }),
-  } as unknown as EditorView;
+    dom,
+  });
+
+  // Override posAtCoords since we have no real DOM layout.
+  // Tests will control this via the withDropPos helper.
+  return view;
 }
 
-// Mock DragEvent factory
+// ── Helper: override posAtCoords for a specific test ────────────────
+
+function withDropPos(view: EditorView, pos: number | null): EditorView {
+  // We monkey-patch posAtCoords to return a controlled position
+  (view as unknown as Record<string, unknown>).posAtCoords = () => pos;
+  return view;
+}
+
+// ── Mock DragEvent factory ──────────────────────────────────────────
+
 function createMockDragEvent(overrides: Partial<DragEvent> = {}): DragEvent {
   const preventDefault = jest.fn();
   const stopPropagation = jest.fn();
@@ -55,10 +93,30 @@ function createMockDragEvent(overrides: Partial<DragEvent> = {}): DragEvent {
   } as DragEvent;
 }
 
+// ── Mock view factory (for tests that don't need document verification) ──
+
+function createMockView(content: string = 'hello world', selectionFrom: number = 0, selectionTo: number = 5): EditorView {
+  const state = EditorState.create({
+    doc: content,
+    selection: { anchor: selectionFrom, head: selectionTo },
+  });
+
+  return {
+    state,
+    dispatch: jest.fn(),
+    posAtCoords: jest.fn().mockReturnValue(0),
+  } as unknown as EditorView;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// Tests
+// ══════════════════════════════════════════════════════════════════════
+
 describe('dragDropMove handlers', () => {
-  // -------------------------------------------------------------------------
+
+  // -----------------------------------------------------------------------
   // dragstart handler
-  // -------------------------------------------------------------------------
+  // -----------------------------------------------------------------------
 
   describe('dragstart', () => {
     it('stores selection when dragging with a selection', () => {
@@ -69,21 +127,16 @@ describe('dragDropMove handlers', () => {
       const result = handlers.dragstart?.(event, view);
 
       expect(result).toBe(true);
-      // Verify event handlers were called
       expect(event.preventDefault).toHaveBeenCalled();
       expect(event.stopPropagation).toHaveBeenCalled();
-      // Verify dataTransfer.effectAllowed was set (use any since type casting can vary)
       expect(event.dataTransfer?.effectAllowed).toBe('copyMove');
     });
 
     it('does nothing when there is no selection', () => {
-      const view = createMockView('hello world');
-      // Clear selection by setting cursor at 0
       const state = EditorState.create({
         doc: 'hello world',
         selection: { anchor: 0, head: 0 },
       });
-
       const viewWithNoSelection = {
         state,
         dispatch: jest.fn(),
@@ -98,9 +151,9 @@ describe('dragDropMove handlers', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
+  // -----------------------------------------------------------------------
   // dragover handler
-  // -------------------------------------------------------------------------
+  // -----------------------------------------------------------------------
 
   describe('dragover', () => {
     it('allows drop and sets move effect by default', () => {
@@ -127,9 +180,9 @@ describe('dragDropMove handlers', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // drop handler
-  // -------------------------------------------------------------------------
+  // -----------------------------------------------------------------------
+  // drop handler — document content verification tests
+  // -----------------------------------------------------------------------
 
   describe('drop', () => {
     it('does nothing when there is no drag state', () => {
@@ -145,135 +198,192 @@ describe('dragDropMove handlers', () => {
 
     it('does nothing when drop position is outside editor', () => {
       const view = createMockView();
-      // First set up drag state via dragstart
-      const dragEvent = createMockDragEvent();
       const handlers = createDragDropHandlers();
-      handlers.dragstart?.(dragEvent, view);
+      handlers.dragstart?.(createMockDragEvent(), view);
 
-      // Now create drop event with coords that return null
-      const dropEvent = createMockDragEvent();
-      // Mock posAtCoords to return null
-      (view.posAtCoords as jest.Mock).mockReturnValue(null);
-
-      const result = handlers.drop?.(dropEvent, view);
+      withDropPos(view, null);
+      const result = handlers.drop?.(createMockDragEvent(), view);
 
       expect(result).toBe(false);
     });
 
     it('does nothing when drop is within source selection', () => {
-      const view = createMockView('hello world'); // "hello world" is at positions 0-11
-      // First set up drag state via dragstart
-      const dragEvent = createMockDragEvent();
+      const view = createRealView('hello world', 0, 5);
       const handlers = createDragDropHandlers();
-      handlers.dragstart?.(dragEvent, view);
+      handlers.dragstart?.(createMockDragEvent(), view);
 
-      // drop at position 5 (within "hello")
-      const dropEvent = createMockDragEvent();
-      (view.posAtCoords as jest.Mock).mockReturnValue(5);
-
-      const result = handlers.drop?.(dropEvent, view);
+      // Drop at position 3 (within source 0-5)
+      withDropPos(view, 3);
+      const before = view.state.doc.toString();
+      const result = handlers.drop?.(createMockDragEvent(), view);
 
       expect(result).toBe(false);
-      expect(view.dispatch).not.toHaveBeenCalled();
+      expect(view.state.doc.toString()).toBe(before);
     });
 
-    it('copies text when Alt key is held on drop', () => {
-      const view = createMockView('hello world');
-      // First set up drag state via dragstart - selection "hello" (positions 0-5)
-      const dragEvent = createMockDragEvent();
-      const handlers = createDragDropHandlers();
-      handlers.dragstart?.(dragEvent, view);
-
-      // Drop at position 12 (end of document) with Alt key
-      const dropEvent = createMockDragEvent({ altKey: true });
-      (view.posAtCoords as jest.Mock).mockReturnValue(12);
-
-      const result = handlers.drop?.(dropEvent, view);
-
-      expect(result).toBe(true);
-      expect(view.dispatch).toHaveBeenCalledTimes(1);
-
-      // Verify the dispatch was called with insert-only changes
-      const dispatchCall = (view.dispatch as jest.Mock).mock.calls[0][0];
-      expect(dispatchCall.changes).toHaveLength(1);
-      expect(dispatchCall.changes[0].insert).toBe('hello');
-    });
-
-    it('moves text when no Alt key is held on drop', () => {
-      const view = createMockView('hello world');
-      // First set up drag state via dragstart - selection "hello" (positions 0-5)
-      const dragEvent = createMockDragEvent();
-      const handlers = createDragDropHandlers();
-      handlers.dragstart?.(dragEvent, view);
-
-      // Drop at position 12 (end of document) - moving to end
-      const dropEvent = createMockDragEvent({ altKey: false });
-      (view.posAtCoords as jest.Mock).mockReturnValue(12);
-
-      const result = handlers.drop?.(dropEvent, view);
-
-      expect(result).toBe(true);
-      expect(view.dispatch).toHaveBeenCalledTimes(1);
-
-      // Verify the dispatch was called with delete+insert changes
-      const dispatchCall = (view.dispatch as jest.Mock).mock.calls[0][0];
-      expect(dispatchCall.changes).toHaveLength(2);
-    });
-
-    it('adjusts drop position correctly when dropping after source in move mode', () => {
-      // Select text at start (positions 0-5 = "hello")
-      const view = createMockView('hello world', 0, 5);
+    it('does nothing when drop is at exact source boundary', () => {
+      const view = createRealView('hello world', 0, 5);
       const handlers = createDragDropHandlers();
       handlers.dragstart?.(createMockDragEvent(), view);
 
-      // Drop at position 10 (inside " world") - clearly after source (0-5)
-      const dropEvent = createMockDragEvent({ altKey: false });
-      (view.posAtCoords as jest.Mock).mockReturnValue(10);
+      // Drop at position 5 (exact end of source selection)
+      withDropPos(view, 5);
+      const before = view.state.doc.toString();
+      const result = handlers.drop?.(createMockDragEvent(), view);
 
-      const result = handlers.drop?.(dropEvent, view);
-
-      expect(result).toBe(true);
+      expect(result).toBe(false);
+      expect(view.state.doc.toString()).toBe(before);
     });
 
-    it('drops before source correctly', () => {
-      // Select text at the end (positions 6-11 = "world")
-      const view = createMockView('hello world', 6, 11);
+    it('copies text to end of document when Alt key is held', () => {
+      // Doc: "hello world", selection "hello" (0-5)
+      const view = createRealView('hello world', 0, 5);
       const handlers = createDragDropHandlers();
       handlers.dragstart?.(createMockDragEvent(), view);
 
-      // Drop at position 0 (clearly before the source selection at 6-11)
-      const dropEvent = createMockDragEvent();
-      (view.posAtCoords as jest.Mock).mockReturnValue(0);
+      // Drop at position 11 (end of doc) with Alt key
+      withDropPos(view, 11);
+      const result = handlers.drop?.(createMockDragEvent({ altKey: true }), view);
 
-      const result = handlers.drop?.(dropEvent, view);
-
-      // Should succeed: drop position 0 is outside source range 6-11
       expect(result).toBe(true);
+      // Copy: original kept, text inserted at end
+      expect(view.state.doc.toString()).toBe('hello worldhello');
+    });
+
+    it('copies text to middle of document when Alt key is held', () => {
+      // Doc: "hello world", selection "hello" (0-5)
+      const view = createRealView('hello world', 0, 5);
+      const handlers = createDragDropHandlers();
+      handlers.dragstart?.(createMockDragEvent(), view);
+
+      // Drop at position 6 with Alt key
+      withDropPos(view, 6);
+      const result = handlers.drop?.(createMockDragEvent({ altKey: true }), view);
+
+      expect(result).toBe(true);
+      // Copy: original kept, "hello" inserted before "w"
+      expect(view.state.doc.toString()).toBe('hello helloworld');
+    });
+
+    it('moves text from start to end of document', () => {
+      // Doc: "hello world", selection "hello" (0-5)
+      const view = createRealView('hello world', 0, 5);
+      const handlers = createDragDropHandlers();
+      handlers.dragstart?.(createMockDragEvent(), view);
+
+      // Drop at position 11 (end of doc)
+      withDropPos(view, 11);
+      const result = handlers.drop?.(createMockDragEvent({ altKey: false }), view);
+
+      expect(result).toBe(true);
+      // "hello" moved to end, " world" left at start
+      expect(view.state.doc.toString()).toBe(' worldhello');
+    });
+
+    it('moves text from end to start of document', () => {
+      // Doc: "hello world", selection "world" (6-11)
+      const view = createRealView('hello world', 6, 11);
+      const handlers = createDragDropHandlers();
+      handlers.dragstart?.(createMockDragEvent(), view);
+
+      // Drop at position 0 (start of doc)
+      withDropPos(view, 0);
+      const result = handlers.drop?.(createMockDragEvent(), view);
+
+      expect(result).toBe(true);
+      // "world" moved to start, "hello " left behind
+      expect(view.state.doc.toString()).toBe('worldhello ');
+    });
+
+    it('moves text from middle to end across multiline document', () => {
+      // Doc: "line one\ntwo\nthree" (18 chars), selection "two" (9-12)
+      const view = createRealView('line one\ntwo\nthree', 9, 12);
+      const handlers = createDragDropHandlers();
+      handlers.dragstart?.(createMockDragEvent(), view);
+
+      // Drop at position 18 (past end of doc — end of "three")
+      withDropPos(view, 18);
+      const result = handlers.drop?.(createMockDragEvent(), view);
+
+      expect(result).toBe(true);
+      // "two" removed from middle, inserted at end
+      expect(view.state.doc.toString()).toBe('line one\n\nthreetwo');
+    });
+
+    it('moves text from start to middle of document', () => {
+      // Doc: "abcdefghij", selection "abc" (0-3)
+      const view = createRealView('abcdefghij', 0, 3);
+      const handlers = createDragDropHandlers();
+      handlers.dragstart?.(createMockDragEvent(), view);
+
+      // Drop at position 7 (original position, before adjustment)
+      withDropPos(view, 7);
+      const result = handlers.drop?.(createMockDragEvent(), view);
+
+      expect(result).toBe(true);
+      // "abc" removed from start (doc becomes "defghij"), then inserted at adjusted pos (7-3=4)
+      // "defg" + "abc" + "hij" = "defgabchij"
+      expect(view.state.doc.toString()).toBe('defgabchij');
+    });
+
+    it('selects the moved text after drop', () => {
+      // Doc: "hello world", selection "hello" (0-5)
+      const view = createRealView('hello world', 0, 5);
+      const handlers = createDragDropHandlers();
+      handlers.dragstart?.(createMockDragEvent(), view);
+
+      // Drop at position 11
+      withDropPos(view, 11);
+      handlers.drop?.(createMockDragEvent(), view);
+
+      // Selection should be on the moved text
+      const sel = view.state.selection.main;
+      expect(view.state.sliceDoc(sel.from, sel.to)).toBe('hello');
+    });
+
+    it('selects the copied text after Alt-drop', () => {
+      // Doc: "hello world", selection "hello" (0-5)
+      const view = createRealView('hello world', 0, 5);
+      const handlers = createDragDropHandlers();
+      handlers.dragstart?.(createMockDragEvent(), view);
+
+      // Drop at position 11 with Alt
+      withDropPos(view, 11);
+      handlers.drop?.(createMockDragEvent({ altKey: true }), view);
+
+      // Selection should be on the copied text at the destination
+      const sel = view.state.selection.main;
+      expect(view.state.sliceDoc(sel.from, sel.to)).toBe('hello');
     });
   });
 
-  // -------------------------------------------------------------------------
+  // -----------------------------------------------------------------------
   // dragend handler
-  // -------------------------------------------------------------------------
+  // -----------------------------------------------------------------------
 
   describe('dragend', () => {
     it('clears drag state', () => {
       const view = createMockView('hello world');
       const handlers = createDragDropHandlers();
 
-      // Set up drag state
-      const dragEvent = createMockDragEvent();
-      handlers.dragstart?.(dragEvent, view);
+      handlers.dragstart?.(createMockDragEvent(), view);
 
-      // Fire dragend
       const endEvent = createMockDragEvent();
       const result = handlers.dragend?.(endEvent, view);
 
       expect(result).toBe(true);
-      // Drag state should be cleared - next drop should do nothing
-      const dropEvent = createMockDragEvent();
-      const dropResult = handlers.drop?.(dropEvent, view);
+      // Drag state should be cleared — next drop should do nothing
+      const dropResult = handlers.drop?.(createMockDragEvent(), view);
       expect(dropResult).toBe(false);
+    });
+
+    it('returns false when there is no drag state', () => {
+      const view = createMockView('hello world');
+      const handlers = createDragDropHandlers();
+
+      const result = handlers.dragend?.(createMockDragEvent(), view);
+
+      expect(result).toBe(false);
     });
   });
 });

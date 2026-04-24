@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // InstanceInfo represents a running ledit instance
@@ -21,7 +23,7 @@ type InstanceInfo struct {
 
 // getConfigDir returns the config directory path
 func getConfigDir() string {
-	if dir := os.Getenv("LEDIT_CONFIG"); dir != "" {
+	if dir := configuration.GetEnvSimple("CONFIG"); dir != "" {
 		return dir
 	}
 

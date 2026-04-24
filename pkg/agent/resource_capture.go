@@ -15,6 +15,7 @@ import (
 	"time"
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 const resourceCaptureMaxSizeBytes = 50 * 1024 * 1024
@@ -24,7 +25,7 @@ func (a *Agent) resourceDirectory() string {
 		return ""
 	}
 
-	raw := strings.TrimSpace(os.Getenv("LEDIT_RESOURCE_DIRECTORY"))
+	raw := strings.TrimSpace(configuration.GetEnvSimple("RESOURCE_DIRECTORY"))
 	if raw == "" {
 		if cfg := a.GetConfig(); cfg != nil {
 			raw = strings.TrimSpace(cfg.ResourceDirectory)

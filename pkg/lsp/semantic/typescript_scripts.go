@@ -270,6 +270,108 @@ function analyze(input) {
     };
   }
 
+  if (method === 'code_actions') {
+    const pos = input.position || { line: 1, column: 1 };
+    const offset = lineColToOffset(fileContent, pos.line, pos.column);
+    const actions = [];
+
+    // Organize imports (add missing + remove unused)
+    try {
+      const changes = ls.organizeImports({ fileName: filePath, type: "file", mode: ts.OrganizeImportsMode.All });
+      if (changes && changes.length > 0) {
+        const edits = [];
+        for (const change of changes) {
+          for (const tc of change.textChanges) {
+            edits.push({
+              filePath: filePath,
+              from: tc.start,
+              to: tc.start + tc.length,
+              newText: tc.newText
+            });
+          }
+        }
+        if (edits.length > 0) {
+          actions.push({ title: 'Organize Imports', kind: 'source.organizeImports', edits });
+        }
+      }
+    } catch (_) {}
+
+    // Get code fixes at position (for individual diagnostics like missing imports)
+    try {
+      const syntactic = ls.getSyntacticDiagnostics(filePath) || [];
+      const semantic = ls.getSemanticDiagnostics(filePath) || [];
+      const allDiagnostics = syntactic.concat(semantic);
+
+      // Filter diagnostics at/near the cursor position
+      const relevantDiags = allDiagnostics.filter(d => {
+        const start = d.start || 0;
+        const len = d.length || 0;
+        const end = start + len;
+        return start <= offset && end >= offset;
+      });
+
+      // Collect unique actions from all applicable code fixes
+      const seenActions = new Set();
+      for (const diag of relevantDiags.slice(0, 5)) { // limit to prevent slowness
+        try {
+          const fixStart = diag.start || offset;
+          const fixEnd = fixStart + (diag.length || 1);
+          const fixes = ls.getCodeFixesAtPosition(filePath, fixStart, fixEnd);
+          for (const fix of fixes || []) {
+            if (seenActions.has(fix.fixName)) continue;
+            seenActions.add(fix.fixName);
+            const edits = [];
+            for (const change of fix.changes || []) {
+              for (const tc of change.textChanges || []) {
+                edits.push({
+                  filePath: change.fileName,
+                  from: tc.start,
+                  to: tc.start + tc.length,
+                  newText: tc.newText
+                });
+              }
+            }
+            if (edits.length > 0) {
+              // Convert fixName (e.g., "addMissingImport") to title (e.g., "Add Missing Import")
+              const title = fix.fixName.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()).trim();
+              actions.push({
+                title: title,
+                kind: 'quickfix',
+                edits
+              });
+            }
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
+
+    // Add all quick fixes across the file
+    try {
+      const combinedFix = ls.getCombinedCodeFix({ fileName: filePath }, "fixAll", {});
+      if (combinedFix && combinedFix.changes && combinedFix.changes.length > 0) {
+        const edits = [];
+        for (const change of combinedFix.changes) {
+          for (const tc of change.textChanges || []) {
+            edits.push({
+              filePath: change.fileName,
+              from: tc.start,
+              to: tc.start + tc.length,
+              newText: tc.newText
+            });
+          }
+        }
+        if (edits.length > 0) {
+          actions.push({ title: 'Fix All', kind: 'quickfix', edits });
+        }
+      }
+    } catch (_) {}
+
+    return {
+      capabilities: { diagnostics: true, definition: true, hover: true, rename: true, references: true, code_actions: true },
+      code_actions: actions
+    };
+  }
+
   const syntactic = ls.getSyntacticDiagnostics(filePath) || [];
   const semantic = ls.getSemanticDiagnostics(filePath) || [];
   const all = syntactic.concat(semantic);

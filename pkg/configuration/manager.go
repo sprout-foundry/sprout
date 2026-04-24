@@ -156,13 +156,13 @@ func NewManagerWithDir(configDir string) (*Manager, error) {
 	}
 
 	// Temporarily point the configuration layer at configDir.
-	prev, ok := os.LookupEnv("LEDIT_CONFIG")
-	os.Setenv("LEDIT_CONFIG", configDir)
+	prev, ok := LookupEnv("CONFIG")
+	SetEnv("CONFIG", configDir)
 	defer func() {
 		if ok {
-			os.Setenv("LEDIT_CONFIG", prev)
+			SetEnv("CONFIG", prev)
 		} else {
-			os.Unsetenv("LEDIT_CONFIG")
+			UnsetEnv("CONFIG")
 		}
 	}()
 
@@ -209,13 +209,13 @@ func NewManagerWithLayers(globalDir, workspaceDir string) (*Manager, error) {
 		if err := os.MkdirAll(saveDir, 0700); err != nil {
 			return nil, fmt.Errorf("failed to create config directory %q: %w", saveDir, err)
 		}
-		prev, ok := os.LookupEnv("LEDIT_CONFIG")
-		os.Setenv("LEDIT_CONFIG", saveDir)
+		prev, ok := LookupEnv("CONFIG")
+		SetEnv("CONFIG", saveDir)
 		defer func() {
 			if ok {
-				os.Setenv("LEDIT_CONFIG", prev)
+				SetEnv("CONFIG", prev)
 			} else {
-				os.Unsetenv("LEDIT_CONFIG")
+				UnsetEnv("CONFIG")
 			}
 		}()
 	}

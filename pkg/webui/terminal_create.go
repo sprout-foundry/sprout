@@ -62,7 +62,7 @@ func (tm *TerminalManager) createUnixSession(sessionID, shellOverride string) (*
 		"COLORTERM=truecolor",
 		"FORCE_COLOR=1",
 		"SHELL="+shell,
-		"LEDIT_WEB_TERMINAL=1",
+		"SPROUT_WEB_TERMINAL=1", "LEDIT_WEB_TERMINAL=1",
 		fmt.Sprintf("COLUMNS=%d", defaultSize.Cols),
 		fmt.Sprintf("LINES=%d", defaultSize.Rows),
 	)

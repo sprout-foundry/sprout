@@ -182,7 +182,7 @@ type Agent struct {
 }
 
 func isDebugEnvEnabled() bool {
-	value := strings.TrimSpace(os.Getenv("LEDIT_DEBUG"))
+	value := strings.TrimSpace(configuration.GetEnvSimple("DEBUG"))
 	if value == "" {
 		return false
 	}
@@ -290,7 +290,7 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 
 	// If running under `go test`, prefer the test/mock client to avoid network/API key
 	// dependencies unless explicitly overridden by LEDIT_ALLOW_REAL_PROVIDER.
-	if isRunningUnderTest() && os.Getenv("LEDIT_ALLOW_REAL_PROVIDER") == "" {
+	if isRunningUnderTest() && configuration.GetEnvSimple("ALLOW_REAL_PROVIDER") == "" {
 		clientType = api.TestClientType
 		finalModel = model
 		// Create the test client immediately to avoid API key checks
@@ -355,7 +355,7 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 		// Initialize MCP manager
 		agent.mcpManager = mcp.NewMCPManager(nil)
 
-		if persona := strings.TrimSpace(os.Getenv("LEDIT_PERSONA")); persona != "" {
+		if persona := strings.TrimSpace(configuration.GetEnvSimple("PERSONA")); persona != "" {
 			agent.activePersona = strings.ReplaceAll(strings.ToLower(persona), "-", "_")
 		}
 
@@ -476,7 +476,7 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 
 		// Check connection (allow tests to skip by setting LEDIT_SKIP_CONNECTION_CHECK)
 		// Also skip for providers where a fast/reliable connectivity probe is not available (e.g., Z.AI Coding Plan).
-		skipConnectionCheck := os.Getenv("LEDIT_SKIP_CONNECTION_CHECK") != "" || clientType == api.ZAIClientType
+		skipConnectionCheck := configuration.GetEnvSimple("SKIP_CONNECTION_CHECK") != "" || clientType == api.ZAIClientType
 		if !skipConnectionCheck {
 			if err := client.CheckConnection(); err != nil {
 				nextClientType, nextModel, recoverErr := recoverProviderStartup(configManager, clientType, model, err)
@@ -605,7 +605,7 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 	// Load command history from configuration
 	agent.loadHistoryFromConfig()
 
-	if persona := strings.TrimSpace(os.Getenv("LEDIT_PERSONA")); persona != "" {
+	if persona := strings.TrimSpace(configuration.GetEnvSimple("PERSONA")); persona != "" {
 		agent.activePersona = strings.ReplaceAll(strings.ToLower(persona), "-", "_")
 	}
 
@@ -757,8 +757,8 @@ func (a *Agent) GetTaskActions() []TaskAction {
 
 // IsInteractiveMode returns true if running in interactive mode
 func (a *Agent) IsInteractiveMode() bool {
-	return os.Getenv("LEDIT_INTERACTIVE") == "1" ||
-		os.Getenv("LEDIT_FROM_AGENT") != "1"
+	return configuration.GetEnvSimple("INTERACTIVE") == "1" ||
+		configuration.GetEnvSimple("FROM_AGENT") != "1"
 }
 
 // GenerateResponse generates a simple response using the current model without tool calls

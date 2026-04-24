@@ -1,8 +1,8 @@
 package providers
 
 import (
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 
@@ -190,7 +190,7 @@ func CalculateMaxTokensWithLimits(contextLimit int, completionLimit int, message
 }
 
 func getMaxRequestCompletionTokensCap() int {
-	raw := strings.TrimSpace(os.Getenv("LEDIT_MAX_REQUEST_COMPLETION_TOKENS"))
+	raw := strings.TrimSpace(envutil.GetEnvSimple("MAX_REQUEST_COMPLETION_TOKENS"))
 	if raw == "" {
 		return defaultMaxRequestCompletionTokens
 	}

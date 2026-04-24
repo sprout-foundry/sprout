@@ -1,6 +1,7 @@
 package credentials
 
 import (
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -27,7 +28,7 @@ type Resolved struct {
 
 // GetConfigDir returns the configuration directory path, creating it if it doesn't exist.
 func GetConfigDir() (string, error) {
-	configDir := strings.TrimSpace(os.Getenv("LEDIT_CONFIG"))
+	configDir := strings.TrimSpace(envutil.GetEnvSimple("CONFIG"))
 	if configDir == "" {
 		xdgConfigHome := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME"))
 		if xdgConfigHome != "" {

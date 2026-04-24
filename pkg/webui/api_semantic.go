@@ -70,20 +70,34 @@ type semanticReferences struct {
 	SymbolName string                     `json:"symbolName"`
 }
 
+type semanticCodeActionEdit struct {
+	FilePath string `json:"filePath"`
+	From     int    `json:"from"`
+	To       int    `json:"to"`
+	NewText  string `json:"newText"`
+}
+
+type semanticCodeAction struct {
+	Title string                   `json:"title"`
+	Kind  string                   `json:"kind"`
+	Edits []semanticCodeActionEdit `json:"edits"`
+}
+
 type semanticResponse struct {
-	Message      string               `json:"message"`
-	Path         string               `json:"path"`
-	LanguageID   string               `json:"language_id"`
-	Method       string               `json:"method"`
-	Capabilities semanticCapabilities `json:"capabilities"`
-	Diagnostics  []semanticDiagnostic `json:"diagnostics,omitempty"`
-	Definition   *semanticDefinition  `json:"definition,omitempty"`
-	Hover        *semanticHover       `json:"hover,omitempty"`
-	Rename       *semanticRename      `json:"rename,omitempty"`
-	References   *semanticReferences  `json:"references,omitempty"`
-	Error        string               `json:"error,omitempty"`
-	Version      string               `json:"version"`
-	DurationMs   int64                `json:"duration_ms,omitempty"`
+	Message      string                    `json:"message"`
+	Path         string                  `json:"path"`
+	LanguageID   string                  `json:"language_id"`
+	Method       string                  `json:"method"`
+	Capabilities semanticCapabilities    `json:"capabilities"`
+	Diagnostics  []semanticDiagnostic    `json:"diagnostics,omitempty"`
+	Definition   *semanticDefinition    `json:"definition,omitempty"`
+	Hover        *semanticHover          `json:"hover,omitempty"`
+	Rename       *semanticRename        `json:"rename,omitempty"`
+	References   *semanticReferences    `json:"references,omitempty"`
+	CodeActions  []semanticCodeAction   `json:"code_actions,omitempty"`
+	Error        string                  `json:"error,omitempty"`
+	Version      string                  `json:"version"`
+	DurationMs   int64                   `json:"duration_ms,omitempty"`
 }
 
 type semanticToolInput = lspsemantic.ToolInput
@@ -163,13 +177,13 @@ func (ws *ReactWebServer) handleAPISemantic(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "File path is required", http.StatusBadRequest)
 		return
 	}
-	if req.Method != "diagnostics" && req.Method != "definition" && req.Method != "hover" && req.Method != "rename" && req.Method != "references" {
+	if req.Method != "diagnostics" && req.Method != "definition" && req.Method != "hover" && req.Method != "rename" && req.Method != "references" && req.Method != "code_actions" {
 		http.Error(w, "Invalid method", http.StatusBadRequest)
 		return
 	}
-	if req.Method == "definition" || req.Method == "hover" || req.Method == "rename" || req.Method == "references" {
+	if req.Method == "definition" || req.Method == "hover" || req.Method == "rename" || req.Method == "references" || req.Method == "code_actions" {
 		if req.Position == nil || req.Position.Line <= 0 || req.Position.Column <= 0 {
-			http.Error(w, "Position is required for definition, hover, rename, and references", http.StatusBadRequest)
+			http.Error(w, "Position is required for definition, hover, rename, references, and code_actions", http.StatusBadRequest)
 			return
 		}
 	}
@@ -292,6 +306,25 @@ func applyToolResult(result *semanticResponse, toolResult semanticToolResult, wo
 		result.References = &semanticReferences{
 			Locations:  locs,
 			SymbolName: toolResult.References.SymbolName,
+		}
+	}
+	if len(toolResult.CodeActions) > 0 {
+		result.CodeActions = make([]semanticCodeAction, 0, len(toolResult.CodeActions))
+		for _, ca := range toolResult.CodeActions {
+			edits := make([]semanticCodeActionEdit, 0, len(ca.Edits))
+			for _, e := range ca.Edits {
+				edits = append(edits, semanticCodeActionEdit{
+					FilePath: e.FilePath,
+					From:     e.From,
+					To:       e.To,
+					NewText:  e.NewText,
+				})
+			}
+			result.CodeActions = append(result.CodeActions, semanticCodeAction{
+				Title: ca.Title,
+				Kind:  ca.Kind,
+				Edits: edits,
+			})
 		}
 	}
 }

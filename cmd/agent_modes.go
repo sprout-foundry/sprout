@@ -26,7 +26,7 @@ import (
 // "Press Ctrl+C" messages are suppressed since there is no interactive
 // terminal.
 func isServiceMode() bool {
-	return os.Getenv("LEDIT_SERVICE") == "1"
+	return configuration.GetEnvSimple("SERVICE") == "1"
 }
 
 var queryInProgress atomic.Bool
@@ -545,7 +545,7 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 
 // runDirectMode handles single query execution
 func runDirectMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus, query string) error {
-	if os.Getenv("LEDIT_SUBAGENT") != "1" {
+	if configuration.GetEnvSimple("SUBAGENT") != "1" {
 		fmt.Printf("[>>] Processing: %s\n", query)
 	}
 

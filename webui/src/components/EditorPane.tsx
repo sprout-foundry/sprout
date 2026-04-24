@@ -59,6 +59,7 @@ import { lintDiagnostics, clearDiagnostics, createDebouncedDiagnosticsUpdater } 
 import { createCodeActionsExtension, codeActionsKeybinding } from '../extensions/codeActions';
 import { cursorHistoryPlugin } from '../extensions/cursorHistory';
 import { indentGuidesPlugin } from '../extensions/indentGuides';
+import { stickyScrollPlugin } from '../extensions/stickyScroll';
 import { bracketColorizationPlugin } from '../extensions/bracketColorization';
 import { linkedScrollExtension, setLinkedScrollEnabled, suppressScrollSync } from '../extensions/linkedScroll';
 import { getLanguageExtensions, resolveLanguageId } from '../extensions/languageRegistry';
@@ -1292,6 +1293,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       history(),
       cursorHistoryPlugin,
       indentGuidesPlugin(),
+      stickyScrollPlugin(() => buffer?.file?.ext),
       linkedScrollExtension(paneId, () => buffer?.file?.path ?? null),
       indentOnInput(),
       highlightSpecialChars(),

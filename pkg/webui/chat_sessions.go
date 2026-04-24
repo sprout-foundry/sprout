@@ -133,10 +133,10 @@ func (cs *chatSession) getWorktreePath() string {
 // otherwise it falls back to the provided workspaceRoot parameter.
 //
 // The optional workspaceChdir function, when non-nil, wraps the
-// agent.NewAgentWithModel call so that initialization-time os.Getwd() and
+// agent.NewAgentWithLayers call so that initialization-time os.Getwd() and
 // relative-path resolution observe the correct workspace directory (critical
 // in daemon mode where the process CWD may differ from the client workspace).
-func (cs *chatSession) getOrCreateAgent(workspaceRoot string, eventBus *events.EventBus, clientID string, workspaceChdir func(string, func() error) error) (*agent.Agent, error) {
+func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string, workspaceDir string, eventBus *events.EventBus, clientID string, workspaceChdir func(string, func() error) error) (*agent.Agent, error) {
 	cs.mu.Lock()
 	if cs.Agent != nil {
 		// Use chat's worktree path if set, otherwise use provided workspaceRoot
@@ -166,7 +166,7 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, eventBus *events.E
 	// Fast check: if no provider is configured, return immediately with a
 	// sentinel error instead of attempting expensive agent creation.
 	// NOTE: A narrow TOCTOU race exists between this config read and the
-	// config read inside agent.NewAgentWithModel. Acceptable since the worst
+	// config read inside agent.NewAgentWithLayers. Acceptable since the worst
 	// case is a single unnecessary retry after the user configures a provider.
 	if !isProviderAvailable() {
 		return nil, ErrNoProviderConfigured
@@ -178,13 +178,13 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, eventBus *events.E
 	var createErr error
 	if workspaceChdir != nil {
 		if err := workspaceChdir(agentWorkspace, func() error {
-			created, createErr = agent.NewAgentWithModel("")
+			created, createErr = agent.NewAgentWithLayers(configBase, workspaceDir, "")
 			return createErr
 		}); err != nil {
 			return nil, fmt.Errorf("create chat agent in workspace: %w", err)
 		}
 	} else {
-		created, createErr = agent.NewAgentWithModel("")
+		created, createErr = agent.NewAgentWithLayers(configBase, workspaceDir, "")
 	}
 	if createErr != nil {
 		return nil, fmt.Errorf("create chat agent: %w", createErr)

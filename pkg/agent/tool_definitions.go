@@ -417,7 +417,7 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 	}
 
 	// CRITICAL: Prevent subagents from creating nested subagents
-	// This check ensures that subagents (identified by LEDIT_SUBAGENT env var)
+	// This check ensures that subagents (identified by SPROUT_SUBAGENT env var)
 		// cannot spawn further subagents, preventing runaway agent chains
 	if configuration.GetEnvSimple("SUBAGENT") == "1" {
 		if toolName == "run_subagent" || toolName == "run_parallel_subagents" {
@@ -607,8 +607,8 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 		}
 
 		// Check if we're running as a subagent — subagents cannot prompt.
-		// Note: LEDIT_FROM_AGENT is already checked above (returns early), but we also
-		// check LEDIT_SUBAGENT here for completeness.
+		// Note: SPROUT_FROM_AGENT is already checked above (returns early), but we also
+		// check SPROUT_SUBAGENT here for completeness.
 		isSubagent := configuration.GetEnvSimple("FROM_AGENT") == "1" || configuration.GetEnvSimple("SUBAGENT") == "1"
 
 		// Prefer webui approval path when a browser tab is connected.

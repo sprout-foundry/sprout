@@ -573,7 +573,17 @@ func (ws *ReactWebServer) getChatAgent(clientID, chatID string) (*agent.Agent, e
 	eventBus := ws.eventBus
 	ws.mutex.RUnlock()
 
-	agentInst, err := cs.getOrCreateAgent(workspaceRoot, eventBus, clientID, ws.withAgentWorkspace)
+	// Compute layered config directories: global + workspace (no session file)
+	configBase, err := configuration.GetConfigDir()
+	if err != nil {
+		return nil, fmt.Errorf("get config directory: %w", err)
+	}
+	var workspaceDir string
+	if workspaceRoot != "" {
+		workspaceDir = filepath.Join(workspaceRoot, configuration.ConfigDirName)
+	}
+
+	agentInst, err := cs.getOrCreateAgent(workspaceRoot, configBase, workspaceDir, eventBus, clientID, ws.withAgentWorkspace)
 	if err != nil {
 		return nil, fmt.Errorf("get or create chat agent: %w", err)
 	}

@@ -245,6 +245,10 @@ func ProviderEnvVar(name string) string {
 	case "zai":
 		return "ZAI_API_KEY"
 
+	// Special providers (no config files)
+	case "jinaai":
+		return "JINA_API_KEY"
+
 	default:
 		return ""
 	}
@@ -271,6 +275,7 @@ func KnownProviders() []string {
 		"ollama-local",
 		"test",
 		"editor",
+		"jinaai",
 	}
 }
 
@@ -295,5 +300,6 @@ func ProviderDisplayNames() map[string]string {
 		"ollama-local": "Ollama (Local)",
 		"test": "Test Provider",
 		"editor": "Editor Mode",
+		"jinaai": "JinaAI",
 	}
 }

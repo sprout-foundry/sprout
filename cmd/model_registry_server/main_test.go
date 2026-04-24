@@ -5,91 +5,156 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
-	"time"
 )
 
-func TestValidateRegistryDir(t *testing.T) {
-	// Create a temporary directory for testing
-	tempDir := t.TempDir()
-
+func TestIsValidProviderID(t *testing.T) {
 	tests := []struct {
-		name    string
-		setup   func(string) error
-		wantErr bool
+		name string
+		id   string
+		want bool
 	}{
-		{
-			name: "valid directory with models subdirectory",
-			setup: func(dir string) error {
-				return os.MkdirAll(filepath.Join(dir, "models"), 0755)
-			},
-			wantErr: false,
-		},
-		{
-			name: "valid directory without models subdirectory (creates it)",
-			setup: func(dir string) error {
-				// Create the directory but not the models subdirectory
-				// validateRegistryDir will create the models subdirectory
-				return os.Mkdir(dir, 0755)
-			},
-			wantErr: false,
-		},
-		{
-			name: "directory does not exist",
-			setup: func(dir string) error {
-				// t.TempDir() already created testDir, so we don't need to create it again
-				return nil
-			},
-			wantErr: true,
-		},
-		{
-			name: "path is not a directory",
-			setup: func(dir string) error {
-				return os.WriteFile(dir, []byte("not a directory"), 0644)
-			},
-			wantErr: true,
-		},
-		{
-			name: "models subdirectory is a file",
-			setup: func(dir string) error {
-				if err := os.Mkdir(dir, 0755); err != nil {
-					return err
-				}
-				return os.WriteFile(filepath.Join(dir, "models"), []byte("not a directory"), 0644)
-			},
-			wantErr: true,
-		},
+		// Valid IDs
+		{"lowercase letters", "openrouter", true},
+		{"single word", "openai", true},
+		{"short", "zai", true},
+		{"with hyphen", "ollama-local", true},
+		{"with hyphen and number", "my-provider-v2", true},
+		{"with underscore", "lm_studio", true},
+		{"with hyphen and underscore", "test-provider_name", true},
+		{"alphanumeric", "a1", true},
+		{"starts with number", "123provider", true},
+		{"only numbers", "123", true},
+		{"max length (128 chars)", strings.Repeat("a", 128), true},
+
+		// Invalid IDs
+		{"empty string", "", false},
+		{"uppercase", "OpenRouter", false},
+		{"mixed case", "openAI", false},
+		{"with slash", "open/router", false},
+		{"with dot", "open.router", false},
+		{"with special chars", "has!special", false},
+		{"with space", "open router", false},
+		{"with dollar", "provider$name", false},
+		{"with at sign", "provider@test", false},
+		{"too long (129 chars)", strings.Repeat("a", 129), false},
+		{"with percent", "prov%der", false},
+		{"with ampersand", "prov&der", false},
+		{"with asterisk", "prov*der", false},
+		{"with plus", "prov+der", false},
+		{"with equals", "prov=der", false},
+		{"with brackets", "prov[der]", false},
+		{"with braces", "prov{der}", false},
+		{"with pipe", "prov|der", false},
+		{"with colon", "prov:der", false},
+		{"with semicolon", "prov;der", false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testDir := filepath.Join(tempDir, tt.name)
-			if tt.setup != nil {
-				if err := tt.setup(testDir); err != nil {
-					t.Fatalf("setup failed: %v", err)
-				}
-			}
-
-			// Override registryDir for this test
-			originalDir := *registryDir
-			defer func() { *registryDir = originalDir }()
-			*registryDir = testDir
-
-			err := validateRegistryDir(testDir)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("validateRegistryDir() error = %v, wantErr %v", err, tt.wantErr)
+			got := isValidProviderID(tt.id)
+			if got != tt.want {
+				t.Errorf("isValidProviderID(%q) = %v, want %v", tt.id, got, tt.want)
 			}
 		})
 	}
 }
 
+func TestListAvailableProviders(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create valid provider JSON files
+	validFiles := []string{"openai.json", "openrouter.json", "ollama-local.json", "zai.json"}
+	for _, name := range validFiles {
+		if err := os.WriteFile(filepath.Join(tempDir, name), []byte("{}"), 0644); err != nil {
+			t.Fatalf("failed to create test file: %v", err)
+		}
+	}
+
+	// Create files that should be ignored
+	if err := os.WriteFile(filepath.Join(tempDir, "README.md"), []byte(""), 0644); err != nil {
+		t.Fatalf("failed to create README: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tempDir, "InvalidProvider.json"), []byte("{}"), 0644); err != nil {
+		t.Fatalf("failed to create invalid provider file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tempDir, "bad@provider.json"), []byte("{}"), 0644); err != nil {
+		t.Fatalf("failed to create bad provider file: %v", err)
+	}
+
+	// Create a subdirectory (should be ignored)
+	if err := os.Mkdir(filepath.Join(tempDir, "subdir"), 0755); err != nil {
+		t.Fatalf("failed to create subdir: %v", err)
+	}
+
+	providers, err := listAvailableProviders(tempDir)
+	if err != nil {
+		t.Fatalf("listAvailableProviders() error = %v", err)
+	}
+
+	expectedProviders := []string{"openai", "openrouter", "ollama-local", "zai"}
+	if len(providers) != len(expectedProviders) {
+		t.Errorf("got %d providers, want %d", len(providers), len(expectedProviders))
+	}
+
+	providerMap := make(map[string]bool)
+	for _, p := range providers {
+		providerMap[p] = true
+	}
+	for _, exp := range expectedProviders {
+		if !providerMap[exp] {
+			t.Errorf("missing expected provider: %s", exp)
+		}
+	}
+}
+
+func TestHandleHealth(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	w := httptest.NewRecorder()
+
+	handleHealth(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected status 200, got %d", resp.StatusCode)
+	}
+
+	contentType := resp.Header.Get("Content-Type")
+	if contentType != "application/json" {
+		t.Errorf("expected Content-Type application/json, got %s", contentType)
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	var data map[string]string
+	if err := json.Unmarshal(body, &data); err != nil {
+		t.Fatalf("failed to unmarshal JSON: %v", err)
+	}
+	if data["status"] != "ok" {
+		t.Errorf("expected status 'ok', got %s", data["status"])
+	}
+}
+
 func TestHandleRoot(t *testing.T) {
+	tempDir := t.TempDir()
+
+	for _, name := range []string{"openai.json", "openrouter.json"} {
+		if err := os.WriteFile(filepath.Join(tempDir, name), []byte(`{"models":[]}`), 0644); err != nil {
+			t.Fatalf("failed to create test file: %v", err)
+		}
+	}
+
+	originalDir := *registryDir
+	defer func() { *registryDir = originalDir }()
+	*registryDir = tempDir
+
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	w := httptest.NewRecorder()
 
@@ -107,26 +172,28 @@ func TestHandleRoot(t *testing.T) {
 		t.Errorf("expected Content-Type application/json, got %s", contentType)
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("failed to read response body: %v", err)
-	}
-
+	body, _ := io.ReadAll(resp.Body)
 	var data map[string]interface{}
 	if err := json.Unmarshal(body, &data); err != nil {
 		t.Fatalf("failed to unmarshal JSON: %v", err)
 	}
-
 	if data["name"] == nil {
 		t.Error("expected 'name' field in response")
 	}
-
 	if data["version"] == nil {
 		t.Error("expected 'version' field in response")
 	}
+
+	providers, ok := data["providers"].([]interface{})
+	if !ok {
+		t.Fatal("expected 'providers' to be an array")
+	}
+	if len(providers) != 2 {
+		t.Errorf("expected 2 providers, got %d", len(providers))
+	}
 }
 
-func TestHandleRootNotFound(t *testing.T) {
+func TestHandleRoot_NotFound(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/notfound", nil)
 	w := httptest.NewRecorder()
 
@@ -140,126 +207,85 @@ func TestHandleRootNotFound(t *testing.T) {
 	}
 }
 
-func TestHandleHealth(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
-	w := httptest.NewRecorder()
-
-	handleHealth(w, req)
-
-	resp := w.Result()
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("expected status 200, got %d", resp.StatusCode)
-	}
-
-	contentType := resp.Header.Get("Content-Type")
-	if contentType != "application/json" {
-		t.Errorf("expected Content-Type application/json, got %s", contentType)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("failed to read response body: %v", err)
-	}
-
-	var data map[string]string
-	if err := json.Unmarshal(body, &data); err != nil {
-		t.Fatalf("failed to unmarshal JSON: %v", err)
-	}
-
-	if data["status"] != "ok" {
-		t.Errorf("expected status 'ok', got %s", data["status"])
-	}
-}
-
 func TestHandleModels(t *testing.T) {
-	// Create a temporary registry directory
 	tempDir := t.TempDir()
-	modelsDir := filepath.Join(tempDir, "models")
-	if err := os.MkdirAll(modelsDir, 0755); err != nil {
-		t.Fatalf("failed to create models directory: %v", err)
-	}
 
-	// Create a test provider JSON file
-	testProvider := "openrouter"
 	testData := map[string]interface{}{
-		"updated_at": time.Now().UTC().Format(time.RFC3339),
+		"updated_at": "2024-01-01T00:00:00Z",
 		"models": []map[string]interface{}{
 			{
-				"id":              "test-model-1",
-				"name":            "Test Model 1",
-				"context_length":  128000,
-				"input_cost":      0.15,
-				"output_cost":     0.60,
-				"description":     "A test model",
-				"provider":        "openrouter",
-				"tags":            []string{"test", "demo"},
+				"id":             "test-model",
+				"name":           "Test Model",
+				"context_length": 128000,
 			},
 		},
 	}
-	jsonData, err := json.MarshalIndent(testData, "", "  ")
-	if err != nil {
-		t.Fatalf("failed to marshal test data: %v", err)
-	}
-	testFile := filepath.Join(modelsDir, testProvider+".json")
-	if err := os.WriteFile(testFile, jsonData, 0644); err != nil {
+	jsonData, _ := json.Marshal(testData)
+	if err := os.WriteFile(filepath.Join(tempDir, "openrouter.json"), jsonData, 0644); err != nil {
 		t.Fatalf("failed to write test file: %v", err)
 	}
 
-	// Override registryDir for this test
 	originalDir := *registryDir
 	defer func() { *registryDir = originalDir }()
 	*registryDir = tempDir
 
 	tests := []struct {
-		name       string
-		path       string
-		method     string
-		wantStatus int
-		checkBody  bool
+		name         string
+		path         string
+		method       string
+		wantStatus   int
+		checkHeaders bool
+		checkBody    bool
 	}{
 		{
-			name:       "valid provider JSON",
-			path:       "/models/" + testProvider + ".json",
-			method:     http.MethodGet,
-			wantStatus: http.StatusOK,
-			checkBody:  true,
+			name:         "valid provider",
+			path:         "/models/openrouter.json",
+			method:       http.MethodGet,
+			wantStatus:   http.StatusOK,
+			checkHeaders: true,
+			checkBody:    true,
 		},
 		{
-			name:       "provider not found",
+			name:       "non-existent provider",
 			path:       "/models/nonexistent.json",
 			method:     http.MethodGet,
 			wantStatus: http.StatusNotFound,
-			checkBody:  false,
+		},
+		{
+			name:       "uppercase provider ID",
+			path:       "/models/OpenRouter.json",
+			method:     http.MethodGet,
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "special characters in provider ID",
+			path:       "/models/provider$test.json",
+			method:     http.MethodGet,
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "POST request",
+			path:       "/models/openrouter.json",
+			method:     http.MethodPost,
+			wantStatus: http.StatusMethodNotAllowed,
 		},
 		{
 			name:       "missing .json extension",
 			path:       "/models/openrouter",
 			method:     http.MethodGet,
 			wantStatus: http.StatusBadRequest,
-			checkBody:  false,
-		},
-		{
-			name:       "invalid provider ID with special characters",
-			path:       "/models/invalid$provider.json",
-			method:     http.MethodGet,
-			wantStatus: http.StatusBadRequest,
-			checkBody:  false,
-		},
-		{
-			name:       "method not allowed",
-			path:       "/models/openrouter.json",
-			method:     http.MethodPost,
-			wantStatus: http.StatusMethodNotAllowed,
-			checkBody:  false,
 		},
 		{
 			name:       "empty provider ID",
 			path:       "/models/.json",
 			method:     http.MethodGet,
 			wantStatus: http.StatusBadRequest,
-			checkBody:  false,
+		},
+		{
+			name:       "path traversal attempt",
+			path:       "/models/../otherfile.json",
+			method:     http.MethodGet,
+			wantStatus: http.StatusBadRequest,
 		},
 	}
 
@@ -277,238 +303,254 @@ func TestHandleModels(t *testing.T) {
 				t.Errorf("expected status %d, got %d", tt.wantStatus, resp.StatusCode)
 			}
 
-			if tt.checkBody {
-				body, err := io.ReadAll(resp.Body)
-				if err != nil {
-					t.Fatalf("failed to read response body: %v", err)
+			if tt.checkHeaders {
+				cacheControl := resp.Header.Get("Cache-Control")
+				if cacheControl != "public, max-age=300" {
+					t.Errorf("Cache-Control = %q, want %q", cacheControl, "public, max-age=300")
 				}
 
+				nosniff := resp.Header.Get("X-Content-Type-Options")
+				if nosniff != "nosniff" {
+					t.Errorf("X-Content-Type-Options = %q, want nosniff", nosniff)
+				}
+
+				frameOpts := resp.Header.Get("X-Frame-Options")
+				if frameOpts != "DENY" {
+					t.Errorf("X-Frame-Options = %q, want DENY", frameOpts)
+				}
+
+				contentType := resp.Header.Get("Content-Type")
+				if !strings.HasPrefix(contentType, "application/json") {
+					t.Errorf("Content-Type = %q, want application/json", contentType)
+				}
+			}
+
+			if tt.checkBody {
+				body, _ := io.ReadAll(resp.Body)
 				var data map[string]interface{}
 				if err := json.Unmarshal(body, &data); err != nil {
 					t.Fatalf("failed to unmarshal JSON: %v", err)
 				}
-
 				if data["models"] == nil {
 					t.Error("expected 'models' field in response")
 				}
-
-				// Verify Cache-Control header is set
-				cacheControl := resp.Header.Get("Cache-Control")
-				if cacheControl != "public, max-age=3600" {
-					t.Errorf("expected Cache-Control 'public, max-age=3600', got %q", cacheControl)
-				}
-
-				// Verify security headers are set
-				nosniff := resp.Header.Get("X-Content-Type-Options")
-				if nosniff != "nosniff" {
-					t.Errorf("expected X-Content-Type-Options 'nosniff', got %q", nosniff)
-				}
-
-				frameOptions := resp.Header.Get("X-Frame-Options")
-				if frameOptions != "DENY" {
-					t.Errorf("expected X-Frame-Options 'DENY', got %q", frameOptions)
-				}
 			}
 		})
 	}
 }
 
-func TestIsValidProviderID(t *testing.T) {
-	tests := []struct {
-		id    string
-		valid bool
-	}{
-		// Valid IDs
-		{"openai", true},
-		{"openrouter", true},
-		{"ollama-local", true},
-		{"zai", true},
-		{"deepinfra", true},
-		{"lm_studio", true},
-		{"provider123", true},
-		{"test-provider_name", true},
-		{"a", true},
-		{"123", true},
+func TestHandleModels_SymlinkOutside(t *testing.T) {
+	tempDir := t.TempDir()
 
-		// Invalid IDs
-		{"", false},
-		{"OpenAI", false},          // uppercase
-		{"openAI", false},          // mixed case
-		{"open.ai", false},         // contains dot
-		{"open$router", false},      // contains special character
-		{"open router", false},      // contains space
-		{"openrouter/", false},     // contains slash
-		{"openrouter\\", false},    // contains backslash
-		{"openrouter!", false},     // contains exclamation
-		{"openrouter@", false},     // contains at sign
-		{"openrouter#", false},     // contains hash
-		{"openrouter%", false},     // contains percent
-		{"openrouter^", false},     // contains caret
-		{"openrouter&", false},     // contains ampersand
-		{"openrouter*", false},     // contains asterisk
-		{"openrouter(", false},     // contains parenthesis
-		{"openrouter)", false},     // contains parenthesis
-		{"openrouter+", false},     // contains plus
-		{"openrouter=", false},     // contains equals
-		{"openrouter[", false},     // contains bracket
-		{"openrouter]", false},     // contains bracket
-		{"openrouter{", false},     // contains brace
-		{"openrouter}", false},     // contains brace
-		{"openrouter|", false},     // contains pipe
-		{"openrouter:", false},     // contains colon
-		{"openrouter;", false},     // contains semicolon
-		{"openrouter'", false},     // contains single quote
-		{"openrouter\"", false},    // contains double quote
-		{"openrouter<", false},     // contains less than
-		{"openrouter>", false},     // contains greater than
-		{"openrouter,", false},     // contains comma
-		{"openrouter.", false},     // contains dot
-		{"openrouter?", false},     // contains question mark
-		{"openrouter~", false},     // contains tilde
-		{"openrouter`", false},     // contains backtick
-		{strings.Repeat("a", 129), false}, // too long
+	// Create a file outside the registry directory
+	secretFile := filepath.Join(tempDir, "secret.txt")
+	if err := os.WriteFile(secretFile, []byte("secret data"), 0644); err != nil {
+		t.Fatalf("failed to create secret file: %v", err)
+	}
+
+	// Create registry directory
+	modelsDir := filepath.Join(tempDir, "models")
+	if err := os.Mkdir(modelsDir, 0755); err != nil {
+		t.Fatalf("failed to create models dir: %v", err)
+	}
+
+	// Create symlink pointing outside the registry directory
+	symlinkPath := filepath.Join(modelsDir, "openrouter.json")
+	if err := os.Symlink(secretFile, symlinkPath); err != nil {
+		t.Skipf("symlinks not supported on this filesystem: %v", err)
+	}
+
+	originalDir := *registryDir
+	defer func() { *registryDir = originalDir }()
+	*registryDir = modelsDir
+
+	req := httptest.NewRequest(http.MethodGet, "/models/openrouter.json", nil)
+	w := httptest.NewRecorder()
+
+	handleModels(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	// Symlinks pointing outside the registry directory must be blocked.
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("expected 404 for symlink pointing outside registry, got %d (body: %s)", resp.StatusCode, string(body))
+	}
+}
+
+func TestHandleModels_SymlinkInside(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create a real JSON file inside the registry directory.
+	realData := `{"updated_at":"2024-01-01T00:00:00Z","models":[{"id":"symlinked-model"}]}`
+	realFile := filepath.Join(tempDir, "real-data.json")
+	if err := os.WriteFile(realFile, []byte(realData), 0644); err != nil {
+		t.Fatalf("failed to create real data file: %v", err)
+	}
+
+	// Create a symlink pointing to the real file.
+	symlinkPath := filepath.Join(tempDir, "openrouter.json")
+	if err := os.Symlink(realFile, symlinkPath); err != nil {
+		t.Skipf("symlinks not supported on this filesystem: %v", err)
+	}
+
+	originalDir := *registryDir
+	defer func() { *registryDir = originalDir }()
+	*registryDir = tempDir
+
+	req := httptest.NewRequest(http.MethodGet, "/models/openrouter.json", nil)
+	w := httptest.NewRecorder()
+
+	handleModels(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 for symlink pointing inside registry, got %d", resp.StatusCode)
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	var data map[string]interface{}
+	if err := json.Unmarshal(body, &data); err != nil {
+		t.Fatalf("failed to unmarshal JSON: %v", err)
+	}
+	if data["models"] == nil {
+		t.Error("expected 'models' field in response")
+	}
+}
+
+func TestHandleModels_ConcurrentRequests(t *testing.T) {
+	tempDir := t.TempDir()
+
+	testData := map[string]interface{}{"models": []string{"test"}}
+	jsonData, _ := json.Marshal(testData)
+	if err := os.WriteFile(filepath.Join(tempDir, "openrouter.json"), jsonData, 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	originalDir := *registryDir
+	defer func() { *registryDir = originalDir }()
+	*registryDir = tempDir
+
+	var wg sync.WaitGroup
+	errors := make(chan error, 100)
+
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			req := httptest.NewRequest(http.MethodGet, "/models/openrouter.json", nil)
+			w := httptest.NewRecorder()
+			handleModels(w, req)
+			if w.Code != http.StatusOK {
+				errors <- fmt.Errorf("got status %d, want 200", w.Code)
+			}
+		}()
+	}
+
+	wg.Wait()
+	close(errors)
+
+	for err := range errors {
+		t.Error(err)
+	}
+}
+
+func TestSanitizeForLog(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"normal path", "/models/openrouter.json", "/models/openrouter.json"},
+		{"with newline", "/models/test\ninjected", "/models/testinjected"},
+		{"with carriage return", "/models/test\rfake", "/models/testfake"},
+		{"with tab", "/models/test\tfile.json", "/models/test\tfile.json"},
+		{"with null byte", "/models/\x00secret", "/models/secret"},
+		{"with control chars", "/models/\x01\x02\x03", "/models/"},
+		{"empty string", "", ""},
+		{"only control chars", "\x00\x01\x02", ""},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.id, func(t *testing.T) {
-			result := isValidProviderID(tt.id)
-			if result != tt.valid {
-				t.Errorf("isValidProviderID(%q) = %v, want %v", tt.id, result, tt.valid)
+		t.Run(tt.name, func(t *testing.T) {
+			got := sanitizeForLog(tt.input)
+			if got != tt.want {
+				t.Errorf("sanitizeForLog(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
 	}
 }
 
-func TestMainIntegration(t *testing.T) {
-	// Create a temporary registry directory
-	tempDir := t.TempDir()
-	modelsDir := filepath.Join(tempDir, "models")
-	if err := os.MkdirAll(modelsDir, 0755); err != nil {
-		t.Fatalf("failed to create models directory: %v", err)
-	}
+func TestLoggingMiddleware(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	w := httptest.NewRecorder()
 
-	// Create test provider files
-	testProviders := []string{"openai", "openrouter", "ollama-local"}
-	for _, provider := range testProviders {
-		testData := map[string]interface{}{
-			"updated_at": time.Now().UTC().Format(time.RFC3339),
-			"models": []map[string]interface{}{
-				{
-					"id":             provider + "-model-1",
-					"name":           "Model 1",
-					"context_length": 128000,
-					"input_cost":     0.15,
-					"output_cost":    0.60,
-					"description":    "A test model",
-					"provider":       provider,
-				},
-			},
-		}
-		jsonData, err := json.MarshalIndent(testData, "", "  ")
-		if err != nil {
-			t.Fatalf("failed to marshal test data: %v", err)
-		}
-		testFile := filepath.Join(modelsDir, provider+".json")
-		if err := os.WriteFile(testFile, jsonData, 0644); err != nil {
-			t.Fatalf("failed to write test file: %v", err)
-		}
-	}
+	middleware := loggingMiddleware(handleHealth)
+	middleware(w, req)
 
-	// Override registryDir for this test
-	originalDir := *registryDir
-	originalPort := *port
-	defer func() {
-		*registryDir = originalDir
-		*port = originalPort
-	}()
-	*registryDir = tempDir
-	*port = 0 // Use random port
-
-	// Start server in a goroutine
-	server := &http.Server{
-		Addr:         fmt.Sprintf(":%d", *port),
-		ReadTimeout:  defaultReadTimeout,
-		WriteTimeout: defaultWriteTimeout,
-		IdleTimeout:  defaultIdleTimeout,
-	}
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", handleRoot)
-	mux.HandleFunc("/healthz", handleHealth)
-	mux.HandleFunc("/models/", handleModels)
-	server.Handler = mux
-
-	// Use a listener to get the actual port
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("failed to create listener: %v", err)
-	}
-
-	go func() {
-		if err := server.Serve(listener); err != nil && err != http.ErrServerClosed {
-			t.Errorf("server error: %v", err)
-		}
-	}()
-	defer server.Close()
-
-	// Give the server time to start
-	time.Sleep(100 * time.Millisecond)
-
-	baseURL := "http://" + listener.Addr().String()
-
-	// Test root endpoint
-	resp, err := http.Get(baseURL + "/")
-	if err != nil {
-		t.Fatalf("failed to GET /: %v", err)
-	}
+	resp := w.Result()
 	defer resp.Body.Close()
+
 	if resp.StatusCode != http.StatusOK {
-		t.Errorf("GET / returned status %d", resp.StatusCode)
+		t.Errorf("expected status 200, got %d", resp.StatusCode)
 	}
 
-	// Test health endpoint
-	resp, err = http.Get(baseURL + "/healthz")
-	if err != nil {
-		t.Fatalf("failed to GET /healthz: %v", err)
+	body, _ := io.ReadAll(resp.Body)
+	var data map[string]string
+	json.Unmarshal(body, &data)
+	if data["status"] != "ok" {
+		t.Error("middleware did not call handler correctly")
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("GET /healthz returned status %d", resp.StatusCode)
-	}
+}
 
-	// Test model endpoints
-	for _, provider := range testProviders {
-		resp, err = http.Get(baseURL + "/models/" + provider + ".json")
+func TestLoggingResponseWriter(t *testing.T) {
+	t.Run("captures explicit status code", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		lw := &loggingResponseWriter{ResponseWriter: w}
+
+		if lw.status != 0 {
+			t.Errorf("initial status should be 0, got %d", lw.status)
+		}
+
+		lw.WriteHeader(http.StatusNotFound)
+
+		if lw.status != http.StatusNotFound {
+			t.Errorf("status after WriteHeader = %d, want %d", lw.status, http.StatusNotFound)
+		}
+
+		if w.Code != http.StatusNotFound {
+			t.Errorf("underlying writer status = %d, want %d", w.Code, http.StatusNotFound)
+		}
+	})
+
+	t.Run("defaults to 200 on Write without WriteHeader", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		lw := &loggingResponseWriter{ResponseWriter: w}
+
+		lw.Write([]byte("hello"))
+
+		if lw.status != http.StatusOK {
+			t.Errorf("status after Write = %d, want %d", lw.status, http.StatusOK)
+		}
+	})
+
+	t.Run("Write called without WriteHeader defaults to 200 on subsequent reads", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		lw := &loggingResponseWriter{ResponseWriter: w}
+
+		// Simulate http.ServeFile behavior: write body without explicit WriteHeader
+		n, err := lw.Write([]byte("response body"))
 		if err != nil {
-			t.Fatalf("failed to GET /models/%s.json: %v", provider, err)
+			t.Fatalf("unexpected error: %v", err)
 		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			t.Errorf("GET /models/%s.json returned status %d", provider, resp.StatusCode)
+		if n != len("response body") {
+			t.Errorf("expected %d bytes written, got %d", len("response body"), n)
 		}
-
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			t.Fatalf("failed to read response body: %v", err)
+		if lw.status != http.StatusOK {
+			t.Errorf("status after Write = %d, want %d", lw.status, http.StatusOK)
 		}
-
-		var data map[string]interface{}
-		if err := json.Unmarshal(body, &data); err != nil {
-			t.Fatalf("failed to unmarshal JSON: %v", err)
-		}
-
-		if data["models"] == nil {
-			t.Errorf("expected 'models' field in response for %s", provider)
-		}
-	}
-
-	// Test 404 for non-existent provider
-	resp, err = http.Get(baseURL + "/models/nonexistent.json")
-	if err != nil {
-		t.Fatalf("failed to GET /models/nonexistent.json: %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusNotFound {
-		t.Errorf("GET /models/nonexistent.json returned status %d, expected 404", resp.StatusCode)
-	}
+	})
 }

@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/credentials"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 // ClientInterface defines the common interface for all API clients
@@ -106,7 +106,7 @@ func DetermineProvider(explicitProvider string, lastUsedProvider ClientType) (Cl
 	}
 
 	// 2. Environment variable
-	if providerEnv := os.Getenv("LEDIT_PROVIDER"); providerEnv != "" {
+	if providerEnv := envutil.GetEnvSimple("PROVIDER"); providerEnv != "" {
 		provider, err := ParseProviderName(providerEnv)
 		if err == nil && IsProviderAvailable(provider) {
 			return provider, nil

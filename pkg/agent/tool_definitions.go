@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
@@ -419,7 +419,7 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 	// CRITICAL: Prevent subagents from creating nested subagents
 	// This check ensures that subagents (identified by LEDIT_SUBAGENT env var)
 		// cannot spawn further subagents, preventing runaway agent chains
-	if os.Getenv("LEDIT_SUBAGENT") == "1" {
+	if configuration.GetEnvSimple("SUBAGENT") == "1" {
 		if toolName == "run_subagent" || toolName == "run_parallel_subagents" {
 			const errMsg = "SUBAGENT_RESTRICTION: Subagents are not allowed to spawn nested subagents. " +
 				"This restriction prevents runaway agent chains and ensures proper task delegation. " +
@@ -441,7 +441,7 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 			}
 		} else if agent != nil {
 			// Check if we're running as a subagent — subagents cannot prompt
-			isSubagent := os.Getenv("LEDIT_FROM_AGENT") == "1" || os.Getenv("LEDIT_SUBAGENT") == "1"
+			isSubagent := configuration.GetEnvSimple("FROM_AGENT") == "1" || configuration.GetEnvSimple("SUBAGENT") == "1"
 
 			// Prefer webui approval path when a browser tab is connected.
 			// When the process has an active webui client, the query likely
@@ -600,7 +600,7 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 		// CRITICAL: When running as a subagent, we CANNOT prompt for user confirmation
 		// because stdin is /dev/null. Instead, we must return the error and let the primary
 		// agent handle the security decision.
-		if os.Getenv("LEDIT_FROM_AGENT") == "1" {
+		if configuration.GetEnvSimple("FROM_AGENT") == "1" {
 			agent.debugLog("Subagent encountered filesystem security error for %s, delegating to primary agent\n", filePath)
 			// Return the original context (without bypass) so the error is propagated
 			return ctx
@@ -609,7 +609,7 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 		// Check if we're running as a subagent — subagents cannot prompt.
 		// Note: LEDIT_FROM_AGENT is already checked above (returns early), but we also
 		// check LEDIT_SUBAGENT here for completeness.
-		isSubagent := os.Getenv("LEDIT_FROM_AGENT") == "1" || os.Getenv("LEDIT_SUBAGENT") == "1"
+		isSubagent := configuration.GetEnvSimple("FROM_AGENT") == "1" || configuration.GetEnvSimple("SUBAGENT") == "1"
 
 		// Prefer webui approval path when a browser tab is connected.
 		// See the comment in the security validation section above for rationale.

@@ -1,6 +1,7 @@
 package webui
 
 import (
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -211,7 +212,7 @@ func getConfigDir() (string, error) {
 }
 
 func resolveConfigDir() (string, error) {
-	if d := strings.TrimSpace(os.Getenv("LEDIT_CONFIG")); d != "" {
+	if d := strings.TrimSpace(envutil.GetEnvSimple("CONFIG")); d != "" {
 		abs, err := filepath.Abs(d)
 		if err != nil {
 			return "", fmt.Errorf("resolve LEDIT_CONFIG path: %w", err)

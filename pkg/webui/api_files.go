@@ -724,23 +724,19 @@ func (ws *ReactWebServer) handleAPIGetPrettierConfig(w http.ResponseWriter, r *h
 		return
 	}
 
-	// Common Prettier config filenames to check, in order of precedence
+	// Prettier config filenames to check, in order of precedence.
+	// Only includes formats the Go backend can actually parse.
+	// JS/CJS/MJS and TOML config files are intentionally omitted because
+	// they cannot be safely evaluated or parsed in Go.
 	prettierConfigFiles := []string{
 		".prettierrc",
 		".prettierrc.json",
 		".prettierrc.json5",
 		".prettierrc.yaml",
 		".prettierrc.yml",
-		".prettierrc.toml",
-		"prettier.config.js",
-		"prettier.config.cjs",
-		"prettier.config.mjs",
 	}
 
-	// Also check for package.json prettier key
-	checkPackageJSON := true
-
-	// Merge config from all sources (later ones can override)
+	// Merge config from all sources (later ones override earlier ones)
 	mergedConfig := make(map[string]interface{})
 
 	// Try to find config in workspace root
@@ -754,15 +750,10 @@ func (ws *ReactWebServer) handleAPIGetPrettierConfig(w http.ResponseWriter, r *h
 		var fileConfig map[string]interface{}
 		content := strings.TrimSpace(string(data))
 
-		// Skip JS/CJS/MJS files - can't evaluate JS safely in Go
-		if strings.HasSuffix(configFile, ".js") || strings.HasSuffix(configFile, ".cjs") || strings.HasSuffix(configFile, ".mjs") {
-			continue
-		}
-
 		// Parse based on file extension
 		switch {
 		case strings.HasSuffix(configFile, ".json") || strings.HasSuffix(configFile, ".json5"):
-			// JSON or JSON5 (JSON5 is a super-set, plain JSON.parse works for most cases)
+			// JSON or JSON5 (JSON5 is a super-set, plain JSON parser works for most cases)
 			if err := json.Unmarshal(data, &fileConfig); err != nil {
 				fmt.Printf("[debug] prettier config parse error in %s: %v\n", configFile, err)
 				continue
@@ -772,15 +763,10 @@ func (ws *ReactWebServer) handleAPIGetPrettierConfig(w http.ResponseWriter, r *h
 				fmt.Printf("[debug] prettier config parse error in %s: %v\n", configFile, err)
 				continue
 			}
-		case strings.HasSuffix(configFile, ".toml"):
-			// TOML parsing - can't do safely without toml library, skip
-			continue
 		case configFile == ".prettierrc":
-			// Plain .prettierrc - could be JSON or just options like "singleQuote"
-			// Try first as JSON
+			// Plain .prettierrc - Prettier treats this as JSON by default.
+			// Try JSON first, then fall back to key:value pairs.
 			if err := json.Unmarshal(data, &fileConfig); err != nil {
-				// If not valid JSON, it might be a simple option file
-				// Parse as key=value pairs
 				lines := strings.Split(content, "\n")
 				for _, line := range lines {
 					line = strings.TrimSpace(line)
@@ -791,7 +777,6 @@ func (ws *ReactWebServer) handleAPIGetPrettierConfig(w http.ResponseWriter, r *h
 					if len(parts) == 2 {
 						key := strings.TrimSpace(parts[0])
 						val := strings.TrimSpace(parts[1])
-						// Parse simple values
 						if val == "true" {
 							fileConfig[key] = true
 						} else if val == "false" {
@@ -814,18 +799,16 @@ func (ws *ReactWebServer) handleAPIGetPrettierConfig(w http.ResponseWriter, r *h
 		}
 	}
 
-	// Check package.json for prettier key
-	if checkPackageJSON {
-		pkgPath := filepath.Join(workspaceRoot, "package.json")
-		pkgData, err := os.ReadFile(pkgPath)
-		if err == nil {
-			var pkgJSON map[string]interface{}
-			if err := json.Unmarshal(pkgData, &pkgJSON); err == nil {
-				if prettierKey, ok := pkgJSON["prettier"]; ok {
-					if prettierCfg, ok := prettierKey.(map[string]interface{}); ok {
-						for k, v := range prettierCfg {
-							mergedConfig[k] = v
-						}
+	// Also check package.json for a "prettier" key
+	pkgPath := filepath.Join(workspaceRoot, "package.json")
+	pkgData, err := os.ReadFile(pkgPath)
+	if err == nil {
+		var pkgJSON map[string]interface{}
+		if err := json.Unmarshal(pkgData, &pkgJSON); err == nil {
+			if prettierKey, ok := pkgJSON["prettier"]; ok {
+				if prettierCfg, ok := prettierKey.(map[string]interface{}); ok {
+					for k, v := range prettierCfg {
+						mergedConfig[k] = v
 					}
 				}
 			}

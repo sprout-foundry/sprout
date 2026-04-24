@@ -1,13 +1,13 @@
 package providercatalog
 
 import (
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"context"
 	_ "embed"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -73,7 +73,7 @@ func mustParseCatalog(data []byte) Catalog {
 }
 
 func CatalogURL() string {
-	if override := strings.TrimSpace(os.Getenv("LEDIT_PROVIDER_CATALOG_URL")); override != "" {
+	if override := strings.TrimSpace(envutil.GetEnvSimple("PROVIDER_CATALOG_URL")); override != "" {
 		return override
 	}
 	return defaultCatalogURL

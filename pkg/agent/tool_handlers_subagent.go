@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -749,7 +750,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	// Check if subagent failed with security-related errors
 	// When running as a subagent (LEDIT_FROM_AGENT=1), we can't prompt the user
 	// So we need to delegate the security decision back to the primary agent
-	if os.Getenv("LEDIT_FROM_AGENT") == "1" {
+	if configuration.GetEnvSimple("FROM_AGENT") == "1" {
 		stderr := resultMap["stderr"]
 		exitCode := resultMap["exit_code"]
 
@@ -1085,7 +1086,7 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 
 	// Check for security errors in any of the parallel subagents
 	// When running as a subagent, we need to delegate security decisions to the primary agent
-	if os.Getenv("LEDIT_FROM_AGENT") == "1" {
+	if configuration.GetEnvSimple("FROM_AGENT") == "1" {
 		for taskID, result := range resultMap {
 			exitCode := result["exit_code"]
 			stderr := result["stderr"]

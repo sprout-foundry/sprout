@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"bufio"
 	"fmt"
 	"os"
@@ -496,7 +497,7 @@ retryLoop:
 			break // Exit retry loop
 		} else {
 			// If TUI is active use dropdown, otherwise stdin prompt
-			if os.Getenv("LEDIT_AGENT_CONSOLE") == "1" && chatAgent != nil {
+			if envutil.GetEnvSimple("AGENT_CONSOLE") == "1" && chatAgent != nil {
 				// Include the commit title in the prompt so users see context even if overlay obscures preview
 				title := ""
 				if parts := strings.Split(commitMessage, "\n"); len(parts) > 0 {

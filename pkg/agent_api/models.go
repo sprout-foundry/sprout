@@ -16,6 +16,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/sprout-foundry/sprout/pkg/modelregistry"
 	"github.com/sprout-foundry/sprout/pkg/providercatalog"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 const maxHTTPErrorBodyPreview = 240
@@ -791,7 +792,7 @@ func (w *genericConfigListModelsWrapper) loadCustomProviderModels(ctx context.Co
 }
 
 func customProviderFilePath(providerName string) string {
-	configRoot := strings.TrimSpace(os.Getenv("LEDIT_CONFIG"))
+	configRoot := strings.TrimSpace(envutil.GetEnvSimple("CONFIG"))
 	if configRoot == "" {
 		xdgConfigHome := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME"))
 		if xdgConfigHome != "" {

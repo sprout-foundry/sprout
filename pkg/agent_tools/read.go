@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // File size constants for read operations
@@ -25,7 +26,7 @@ const (
 )
 
 func getFileReadMaxSize() int {
-	if raw := os.Getenv("LEDIT_READ_FILE_MAX_BYTES"); raw != "" {
+	if raw := configuration.GetEnvSimple("READ_FILE_MAX_BYTES"); raw != "" {
 		if size, err := strconv.Atoi(raw); err == nil && size > 0 {
 			return size
 		}

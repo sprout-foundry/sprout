@@ -58,6 +58,7 @@ func sharedUniversalHotkeys() []HotkeyEntry {
 		{Key: "Cmd+Shift+S", CommandID: "save_all_files", Description: "Save all files (Mac)", Global: true},
 		{Key: "Shift+Alt+F", CommandID: "format_document", Description: "Format document"},
 		{Key: "Shift+Cmd+F", CommandID: "format_document", Description: "Format document (Mac)"},
+		{Key: "Shift+F12", CommandID: "editor_find_all_references", Description: "Find all references"},
 		{Key: "Ctrl+N", CommandID: "new_file", Description: "New file"},
 		{Key: "Cmd+N", CommandID: "new_file", Description: "New file (Mac)"},
 		{Key: "Ctrl+\\", CommandID: "split_editor_vertical", Description: "Split editor vertical"},

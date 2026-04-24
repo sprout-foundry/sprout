@@ -30,6 +30,8 @@ func (a goAdapter) Run(input ToolInput) (ToolResult, error) {
 		return runGoHover(input)
 	case "rename":
 		return runGoRename(input)
+	case "references":
+		return runGoReferences(input)
 	default:
 		return ToolResult{Capabilities: Capabilities{}}, nil
 	}
@@ -58,7 +60,7 @@ func runGoDiagnostics(input ToolInput) (ToolResult, error) {
 		return ToolResult{}, err
 	}
 
-	caps := Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: true}
+	caps := Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: true, References: true}
 
 	fmtCmd := exec.Command("gofmt", "-e", tmpFile)
 	var fmtStderr bytes.Buffer
@@ -126,6 +128,114 @@ func runGoHover(input ToolInput) (ToolResult, error) {
 		Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: true},
 		Hover:        &ToolHover{Contents: contents},
 	}, nil
+}
+
+// runGoReferences finds all references to the symbol at the given position
+// across the entire workspace (not just the current file like runGoRename).
+func runGoReferences(input ToolInput) (ToolResult, error) {
+	goplsPath, err := exec.LookPath("gopls")
+	if err != nil {
+		return ToolResult{
+			Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: true, References: false},
+			Error:        "gopls_not_available",
+		}, nil
+	}
+
+	pos := input.Position
+	if pos == nil {
+		pos = &Position{Line: 1, Column: 1}
+	}
+	posArg := fmt.Sprintf("%s:%d:%d", input.FilePath, pos.Line, pos.Column)
+
+	cmd := exec.Command(goplsPath, "references", "-c", "0", posArg)
+	cmd.Dir = input.WorkspaceRoot
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	_ = cmd.Run()
+
+	re := regexp.MustCompile(`^(.+?):(\d+):(\d+)-(\d+)$`)
+	var locations []ToolReferenceLocation
+	symbolName := ""
+
+	// Extract the word at the cursor position for the symbol name
+	lines := strings.Split(input.Content, "\n")
+	if pos.Line >= 1 && pos.Line <= len(lines) {
+		lineText := lines[pos.Line-1]
+		cols := []rune(lineText)
+		wordStart, wordEnd := pos.Column-1, pos.Column-1
+		for wordStart > 0 && isIdentRune(cols[wordStart-1]) {
+			wordStart--
+		}
+		for wordEnd < len(cols) && isIdentRune(cols[wordEnd]) {
+			wordEnd++
+		}
+		symbolName = string(cols[wordStart:wordEnd])
+	}
+
+	for _, raw := range strings.Split(stdout.String(), "\n") {
+		s := strings.TrimSpace(raw)
+		if s == "" {
+			continue
+		}
+		m := re.FindStringSubmatch(s)
+		if m == nil {
+			continue
+		}
+		refFile := m[1]
+		lineNum, _ := strconv.Atoi(m[2])
+		colNum, _ := strconv.Atoi(m[3])
+		endCol, _ := strconv.Atoi(m[4])
+
+		// Read the line text from the reference file
+		var lineText string
+		refBytes, err := os.ReadFile(refFile)
+		if err == nil {
+			refLines := strings.Split(string(refBytes), "\n")
+			if lineNum >= 1 && lineNum <= len(refLines) {
+				lineText = strings.TrimRight(refLines[lineNum-1], "\r\n")
+			}
+		}
+
+		// Make the file path relative to workspace root
+		displayPath := refFile
+		if rel, relErr := filepath.Rel(input.WorkspaceRoot, refFile); relErr == nil {
+			displayPath = filepath.ToSlash(rel)
+		}
+
+		locations = append(locations, ToolReferenceLocation{
+			FilePath: displayPath,
+			Line:     lineNum,
+			StartCol: colNum,
+			EndCol:   endCol,
+			LineText: lineText,
+		})
+	}
+
+	// Sort: current file first, then alphabetical
+	curRel, _ := filepath.Rel(input.WorkspaceRoot, input.FilePath)
+	curRel = filepath.ToSlash(curRel)
+	sort.Slice(locations, func(i, j int) bool {
+		if locations[i].FilePath == locations[j].FilePath {
+			return locations[i].Line < locations[j].Line
+		}
+		if locations[i].FilePath == curRel {
+			return true
+		}
+		if locations[j].FilePath == curRel {
+			return false
+		}
+		return locations[i].FilePath < locations[j].FilePath
+	})
+
+	return ToolResult{
+		Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: true, References: true},
+		References:   &ToolReferences{Locations: locations, SymbolName: symbolName},
+	}, nil
+}
+
+func isIdentRune(r rune) bool {
+	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_'
 }
 
 // runGoRename finds all references to the symbol at the given position.
@@ -200,7 +310,7 @@ func runGoRename(input ToolInput) (ToolResult, error) {
 	}
 
 	return ToolResult{
-		Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: true},
+		Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: true, References: true},
 		Rename:       &ToolRename{Locations: locations},
 	}, nil
 }
@@ -228,11 +338,11 @@ func runGoDefinitionWithRemote(input ToolInput, goplsPath, remoteAddr string) (T
 	defPath, defLine, defCol, ok := parseGoplsDefinition(stdout.String())
 	if !ok {
 		return ToolResult{
-			Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: true},
+			Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: true, References: true},
 		}, nil
 	}
 	return ToolResult{
-		Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: true},
+		Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: true, References: true},
 		Definition:   &ToolDefinition{Path: defPath, Line: defLine, Column: defCol},
 	}, nil
 }

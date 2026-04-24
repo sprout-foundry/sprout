@@ -1,0 +1,191 @@
+/* ── Find All References Overlay ───────────────────────────────────────── */
+
+.find-refs-overlay {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  min-width: 400px;
+  max-width: min(700px, 90vw);
+  max-height: 300px;
+  background: var(--input-bg, #252525);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Header section ──────────────────────────────────────────────────── */
+
+.find-refs-header {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color, #444);
+  background: var(--input-bg, #1e1e1e);
+  flex-shrink: 0;
+}
+
+.find-refs-symbol-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--input-fg, #fff);
+  margin-right: 8px;
+}
+
+.find-refs-count {
+  font-size: 12px;
+  color: var(--toolbar-fg, #888);
+}
+
+.find-refs-searching {
+  font-size: 13px;
+  color: var(--toolbar-fg, #888);
+  font-style: italic;
+}
+
+/* ── Scrollable reference list ──────────────────────────────────────────────── */
+
+.find-refs-list {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* ── Empty states ───────────────────────────────────────────────────── */
+
+.find-refs-empty {
+  padding: 16px 12px;
+  color: var(--toolbar-fg, #888);
+  font-style: italic;
+  text-align: center;
+  font-size: 13px;
+}
+
+/* ── Group header (for references in other files) ─────────────────────── */
+
+.find-refs-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  font-size: 11px;
+  color: var(--toolbar-fg, #888);
+  background: var(--bg, #1a1a1a);
+  border-bottom: 1px solid var(--border-color, #333);
+  border-top: 1px solid var(--border-color, #333);
+}
+
+.find-refs-group-header svg {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+/* ── Individual reference row ───────────────────────────────────────── */
+
+.find-refs-item {
+  display: flex;
+  align-items: center;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--input-fg, #ddd);
+  transition: background-color 0.1s ease;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.find-refs-item:last-child {
+  border-bottom: none;
+}
+
+.find-refs-item:hover {
+  background: var(--toolbar-hover-bg, #333);
+}
+
+.find-refs-item.find-refs-item-active {
+  background: var(--accent-bg, #0e7490);
+  color: var(--accent-fg, #fff);
+}
+
+/* ── File path ────────────────────────────────────────────────────── */
+
+.find-refs-file-path {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--toolbar-fg, #9ca3af);
+  min-width: 60px;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-right: 8px;
+}
+
+.find-refs-item-active .find-refs-file-path {
+  color: var(--accent-fg, rgba(255, 255, 255, 0.8));
+}
+
+/* ── Line number ──────────────────────────────────────────────────── */
+
+.find-refs-line-num {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-family: var(--font-mono, 'Monaco', 'Menlo', 'Fira Code', monospace);
+  color: var(--toolbar-fg, #888);
+  margin-right: 10px;
+  min-width: 30px;
+}
+
+.find-refs-item-active .find-refs-line-num {
+  color: var(--accent-fg, rgba(255, 255, 255, 0.7));
+}
+
+/* ── Line text (code) ───────────────────────────────────────────── */
+
+.find-refs-line-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  font-family: var(--font-mono, 'Monaco', 'Menlo', 'Fira Code', monospace);
+  font-size: 12px;
+  color: var(--input-fg, #ccc);
+}
+
+/* ── Highlighted symbol in line text ─────────────────────────── */
+
+.find-refs-line-text .find-refs-symbol {
+  color: inherit;
+  font-weight: 600;
+  background: none;
+  text-decoration: underline;
+  text-decoration-color: var(--accent-bg, #0e7490);
+  text-underline-offset: 2px;
+}
+
+.find-refs-item-active .find-refs-line-text .find-refs-symbol {
+  color: #fff;
+  text-decoration-color: rgba(255, 255, 255, 0.8);
+}
+
+/* ── Scrollbar ──────────────────────────────────────────────────── */
+
+.find-refs-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.find-refs-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.find-refs-list::-webkit-scrollbar-thumb {
+  background: var(--border-color, #444);
+  border-radius: 3px;
+}
+
+.find-refs-list::-webkit-scrollbar-thumb:hover {
+  background: var(--toolbar-hover-bg, #555);
+}

@@ -17,6 +17,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/filediscovery"
 	ignore "github.com/sabhiram/go-gitignore"
+	"gopkg.in/yaml.v3"
 )
 
 // gatherStats collects server statistics
@@ -702,6 +703,137 @@ func (ws *ReactWebServer) handleAPIRenameItem(w http.ResponseWriter, r *http.Req
 		"old_path": oldCanonicalPath,
 		"new_path": newCanonicalPath,
 	})
+}
+
+// handleAPIGetPrettierConfig handles API requests for Prettier config discovery.
+func (ws *ReactWebServer) handleAPIGetPrettierConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get workspace root for this request
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	if workspaceRoot == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "No workspace configured",
+			"code":  "no_workspace",
+		})
+		return
+	}
+
+	// Common Prettier config filenames to check, in order of precedence
+	prettierConfigFiles := []string{
+		".prettierrc",
+		".prettierrc.json",
+		".prettierrc.json5",
+		".prettierrc.yaml",
+		".prettierrc.yml",
+		".prettierrc.toml",
+		"prettier.config.js",
+		"prettier.config.cjs",
+		"prettier.config.mjs",
+	}
+
+	// Also check for package.json prettier key
+	checkPackageJSON := true
+
+	// Merge config from all sources (later ones can override)
+	mergedConfig := make(map[string]interface{})
+
+	// Try to find config in workspace root
+	for _, configFile := range prettierConfigFiles {
+		configPath := filepath.Join(workspaceRoot, configFile)
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+			continue // File doesn't exist, skip
+		}
+
+		var fileConfig map[string]interface{}
+		content := strings.TrimSpace(string(data))
+
+		// Skip JS/CJS/MJS files - can't evaluate JS safely in Go
+		if strings.HasSuffix(configFile, ".js") || strings.HasSuffix(configFile, ".cjs") || strings.HasSuffix(configFile, ".mjs") {
+			continue
+		}
+
+		// Parse based on file extension
+		switch {
+		case strings.HasSuffix(configFile, ".json") || strings.HasSuffix(configFile, ".json5"):
+			// JSON or JSON5 (JSON5 is a super-set, plain JSON.parse works for most cases)
+			if err := json.Unmarshal(data, &fileConfig); err != nil {
+				fmt.Printf("[debug] prettier config parse error in %s: %v\n", configFile, err)
+				continue
+			}
+		case strings.HasSuffix(configFile, ".yaml") || strings.HasSuffix(configFile, ".yml"):
+			if err := yaml.Unmarshal(data, &fileConfig); err != nil {
+				fmt.Printf("[debug] prettier config parse error in %s: %v\n", configFile, err)
+				continue
+			}
+		case strings.HasSuffix(configFile, ".toml"):
+			// TOML parsing - can't do safely without toml library, skip
+			continue
+		case configFile == ".prettierrc":
+			// Plain .prettierrc - could be JSON or just options like "singleQuote"
+			// Try first as JSON
+			if err := json.Unmarshal(data, &fileConfig); err != nil {
+				// If not valid JSON, it might be a simple option file
+				// Parse as key=value pairs
+				lines := strings.Split(content, "\n")
+				for _, line := range lines {
+					line = strings.TrimSpace(line)
+					if line == "" || strings.HasPrefix(line, "#") {
+						continue
+					}
+					parts := strings.SplitN(line, ":", 2)
+					if len(parts) == 2 {
+						key := strings.TrimSpace(parts[0])
+						val := strings.TrimSpace(parts[1])
+						// Parse simple values
+						if val == "true" {
+							fileConfig[key] = true
+						} else if val == "false" {
+							fileConfig[key] = false
+						} else if num, err := strconv.Atoi(val); err == nil {
+							fileConfig[key] = num
+						} else {
+							fileConfig[key] = val
+						}
+					}
+				}
+			}
+		default:
+			continue
+		}
+
+		// Merge into mergedConfig
+		for k, v := range fileConfig {
+			mergedConfig[k] = v
+		}
+	}
+
+	// Check package.json for prettier key
+	if checkPackageJSON {
+		pkgPath := filepath.Join(workspaceRoot, "package.json")
+		pkgData, err := os.ReadFile(pkgPath)
+		if err == nil {
+			var pkgJSON map[string]interface{}
+			if err := json.Unmarshal(pkgData, &pkgJSON); err == nil {
+				if prettierKey, ok := pkgJSON["prettier"]; ok {
+					if prettierCfg, ok := prettierKey.(map[string]interface{}); ok {
+						for k, v := range prettierCfg {
+							mergedConfig[k] = v
+						}
+					}
+				}
+			}
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(mergedConfig)
 }
 
 // getGitFileStatusMap runs git status --porcelain once and returns sets of modified and untracked files.

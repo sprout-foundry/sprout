@@ -24,6 +24,133 @@ import { extractSymbols, getEnclosingSymbols, type SymbolInfo } from '../compone
 
 const MAX_SCOPES_DISPLAY = 3;
 
+// Container kinds that can act as scope containers for the breadcrumb.
+// Must match the set in GoToSymbolOverlay.tsx.
+const CONTAINER_KINDS: ReadonlySet<SymbolInfo['kind']> = new Set<SymbolInfo['kind']>(['function', 'method', 'class', 'interface']);
+
+/**
+ * Find the 1-based end line (inclusive) of a symbol's scope by counting
+ * balanced braces from the symbol's definition line onward.
+ *
+ * Handles:
+ *  - Single-quoted, double-quoted, and backtick strings (skips braces inside).
+ *  - Multi-line strings (the `inString` state persists across line boundaries).
+ *  - `//` line comments (skips the rest of the line).
+ *  - Block comments (skips the rest of the line inside a block comment).
+ *  - Handles escape sequences inside strings (e.g. `\"`, `\'`, `\\`).
+ *
+ * If no matching close brace is found, returns `lines.length` (end of file).
+ */
+export function findScopeEnd(lines: string[], startLineIndex: number): number {
+  let braceCount = 0;
+  let foundFirstBrace = false;
+  let inBlockComment = false;
+  let inString: string | null = null;
+
+  for (let i = startLineIndex; i < lines.length; i++) {
+    const line = lines[i];
+    for (let j = 0; j < line.length; j++) {
+      const ch = line[j];
+
+      // Inside a string (possibly multi-line)
+      if (inString) {
+        if (ch === '\\' && j + 1 < line.length) {
+          j += 1;
+          continue;
+        }
+        if (ch === inString) {
+          inString = null;
+        }
+        continue;
+      }
+
+      // Inside a block comment — look for */
+      if (inBlockComment) {
+        if (ch === '*' && j + 1 < line.length && line[j + 1] === '/') {
+          inBlockComment = false;
+          j++;
+        }
+        continue;
+      }
+
+      // Start of block comment
+      if (ch === '/' && j + 1 < line.length && line[j + 1] === '*') {
+        inBlockComment = true;
+        j++;
+        continue;
+      }
+
+      // Line comment — skip rest of line
+      if (ch === '/' && j + 1 < line.length && line[j + 1] === '/') {
+        break;
+      }
+
+      // String start
+      if (ch === "'" || ch === '"' || ch === '`') {
+        inString = ch;
+        continue;
+      }
+
+      if (ch === '{') {
+        braceCount++;
+        foundFirstBrace = true;
+      } else if (ch === '}') {
+        braceCount--;
+        if (foundFirstBrace && braceCount === 0) {
+          return i + 1; // 1-based inclusive end line
+        }
+      }
+    }
+  }
+
+  // No matching close brace — scope extends to end of file
+  return lines.length;
+}
+
+/**
+ * Filter symbols to those enclosing the target line (1-based).
+ *
+ * Only container kinds are considered (function, method, class, interface).
+ * Symbols are returned sorted by line ascending (outermost → innermost).
+ *
+ * This function operates on pre-extracted symbols, avoiding redundant parsing.
+ *
+ * @param symbols - Pre-extracted SymbolInfo array.
+ * @param targetLine - The 1-based line number to find enclosing scopes for.
+ * @param content - The document content (needed for scope end detection).
+ * @returns Array of enclosing SymbolInfo objects (up to 3).
+ */
+export function findEnclosingScopes(
+  symbols: SymbolInfo[],
+  targetLine: number,
+  content: string,
+): SymbolInfo[] {
+  if (!symbols || symbols.length === 0 || targetLine < 1) {
+    return [];
+  }
+
+  const lines = content.split('\n');
+  const result: SymbolInfo[] = [];
+
+  // Symbols from extractSymbols() are pre-sorted by line ascending.
+  // Sort defensively in case of unsorted input.
+  const containers = symbols
+    .filter((s) => CONTAINER_KINDS.has(s.kind))
+    .sort((a, b) => a.line - b.line);
+
+  for (const sym of containers) {
+    if (sym.line > targetLine) continue; // symbol starts after target
+
+    const endLine = findScopeEnd(lines, sym.line - 1);
+    if (targetLine <= endLine) {
+      result.push(sym);
+      if (result.length >= 3) break; // cap at 3 levels deep
+    }
+  }
+
+  return result;
+}
+
 // ── Helper Function (exported for testing) ───────────────────────────
 
 /**
@@ -62,8 +189,25 @@ export function computeStickyScopes(
 class StickyScrollPlugin {
   private domElement: HTMLElement | null = null;
   private cachedSymbols: SymbolInfo[] = [];
-  private lastContentHash = '';
   private fileExtension: string | undefined;
+
+  /**
+   * Click handler for scope navigation.
+   * Bound method stored as instance property for proper cleanup.
+   */
+  private handleClick = (e: Event): void => {
+    const view = this.view;
+    const target = (e.target as HTMLElement).closest('.sticky-scope');
+    if (!target) return;
+
+    const lineAttr = target.getAttribute('data-line');
+    if (!lineAttr) return;
+
+    const targetLine = parseInt(lineAttr, 10);
+    if (isNaN(targetLine)) return;
+
+    this.navigateToLine(view, targetLine);
+  };
 
   constructor(
     readonly view: EditorView,
@@ -99,24 +243,20 @@ class StickyScrollPlugin {
     }
 
     this.domElement = dom;
+
+    // Set up event delegation for click handling (single listener)
+    dom.addEventListener('click', this.handleClick);
   }
 
   /**
    * Update cached symbols if the document has changed.
+   * Called from the update() method when docChanged is true.
    */
   private updateSymbols(): void {
     const doc = this.view.state.doc;
     const content = doc.toString();
 
-    // Simple hash for change detection (skip full parse when unchanged)
-    const contentHash = content.slice(0, 10000) + content.length;
-    if (contentHash === this.lastContentHash && this.cachedSymbols.length > 0) {
-      return;
-    }
-
-    this.lastContentHash = contentHash;
-
-    // Re-extract symbols only when document changes
+    // Re-extract symbols when document changes
     this.cachedSymbols = extractSymbols(content, this.fileExtension);
   }
 
@@ -158,11 +298,12 @@ class StickyScrollPlugin {
     // Get the top line of the viewport (1-based)
     const topLineNumber = view.state.doc.lineAt(view.viewport.from).number;
 
-    // Compute enclosing scopes at the viewport top
-    const scopes = computeStickyScopes(
-      doc.toString(),
-      this.fileExtension,
+    // Use cached symbols directly to find enclosing scopes
+    // (avoids re-parsing via getEnclosingSymbols)
+    const scopes = findEnclosingScopes(
+      this.cachedSymbols,
       topLineNumber,
+      doc.toString(),
     );
 
     // No scope or header visible — hide and clear
@@ -187,9 +328,6 @@ class StickyScrollPlugin {
     const html = this.buildScopeChainHTML(scopes);
     dom.innerHTML = html;
 
-    // Re-attach click handlers after innerHTML update
-    this.attachClickHandlers(dom, view);
-
     // Show the element
     dom.style.display = 'block';
   }
@@ -209,35 +347,17 @@ class StickyScrollPlugin {
       }
 
       // Add the scope as a clickable span
-      const escapedName = scope.name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const escapedName = scope.name
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
       scopeElements.push(
         `<span class="sticky-scope" data-line="${scope.line}" data-name="${escapedName}">${escapedName}</span>`,
       );
     }
 
     return scopeElements.join('');
-  }
-
-  /**
-   * Attach click handlers to scope spans for navigation.
-   */
-  private attachClickHandlers(dom: HTMLElement, view: EditorView): void {
-    const scopeSpans = dom.querySelectorAll('.sticky-scope');
-    scopeSpans.forEach((span) => {
-      const element = span as HTMLElement;
-      const lineAttr = element.getAttribute('data-line');
-      if (!lineAttr) return;
-
-      const targetLine = parseInt(lineAttr, 10);
-      if (isNaN(targetLine)) return;
-
-      element.addEventListener('click', () => {
-        this.navigateToLine(view, targetLine);
-      });
-
-      // Change cursor to pointer
-      element.style.cursor = 'pointer';
-    });
   }
 
   /**
@@ -260,11 +380,12 @@ class StickyScrollPlugin {
   }
 
   /**
-   * Destroy the plugin: remove the DOM element.
+   * Destroy the plugin: clean up DOM and event listeners.
    */
   destroy(): void {
-    if (this.domElement && this.domElement.parentNode) {
-      this.domElement.parentNode.removeChild(this.domElement);
+    if (this.domElement) {
+      this.domElement.removeEventListener('click', this.handleClick);
+      this.domElement.parentNode?.removeChild(this.domElement);
     }
     this.domElement = null;
   }
@@ -348,5 +469,5 @@ export function stickyScrollPlugin(getFileExtension: () => string | undefined): 
   ];
 }
 
-// Also export the computeStickyScopes for testing
+// Also export types for testing
 export type { SymbolInfo };

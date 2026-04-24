@@ -51,10 +51,9 @@ function analyze(input) {
       ts = require('typescript');
     }
   } catch (_) {
-    return {
-      capabilities: { diagnostics: false, definition: false, hover: false, rename: false },
-      error: 'typescript_not_available'
-    };
+          return {
+      capabilities: { diagnostics: false, definition: false, hover: false, rename: false, references: false },
+      error: 'typescript_not_available'};
   }
 
   let compilerOptions = {
@@ -125,7 +124,7 @@ function analyze(input) {
     const first = defs[0];
     if (!first) {
       return {
-        capabilities: { diagnostics: true, definition: true, hover: true, rename: true },
+        capabilities: { diagnostics: true, definition: true, hover: true, rename: true, references: true },
         definition: null
       };
     }
@@ -137,7 +136,7 @@ function analyze(input) {
     const source = ts.createSourceFile(targetPath, targetText, ts.ScriptTarget.Latest, true);
     const lc = source.getLineAndCharacterOfPosition(first.textSpan.start);
     return {
-      capabilities: { diagnostics: true, definition: true, hover: true, rename: true },
+      capabilities: { diagnostics: true, definition: true, hover: true, rename: true, references: true },
       definition: {
         path: targetPath,
         line: lc.line + 1,
@@ -152,7 +151,7 @@ function analyze(input) {
     const info = ls.getQuickInfoAtPosition(filePath, offset);
     if (!info) {
       return {
-        capabilities: { diagnostics: true, definition: true, hover: true, rename: true },
+        capabilities: { diagnostics: true, definition: true, hover: true, rename: true, references: true },
         hover: null
       };
     }
@@ -164,7 +163,7 @@ function analyze(input) {
       contents = contents + '\n\n' + docText;
     }
     return {
-      capabilities: { diagnostics: true, definition: true, hover: true, rename: true },
+      capabilities: { diagnostics: true, definition: true, hover: true, rename: true, references: true },
       hover: { contents: contents }
     };
   }
@@ -175,7 +174,7 @@ function analyze(input) {
     const renameInfo = ls.getRenameInfoAtPosition(filePath, offset);
     if (!renameInfo || !renameInfo.canRename) {
       return {
-        capabilities: { diagnostics: true, definition: true, hover: true, rename: true },
+        capabilities: { diagnostics: true, definition: true, hover: true, rename: true, references: true },
         rename: { locations: [] }
       };
     }
@@ -197,8 +196,75 @@ function analyze(input) {
     }
     locations.sort((a, b) => a.from - b.from);
     return {
-      capabilities: { diagnostics: true, definition: true, hover: true, rename: true },
+      capabilities: { diagnostics: true, definition: true, hover: true, rename: true, references: true },
       rename: { locations }
+    };
+  }
+
+  if (method === 'references') {
+    const pos = input.position || { line: 1, column: 1 };
+    const offset = lineColToOffset(fileContent, pos.line, pos.column);
+    const renameInfo = ls.getRenameInfoAtPosition(filePath, offset);
+    if (!renameInfo || !renameInfo.canRename) {
+      return {
+        capabilities: { diagnostics: true, definition: true, hover: true, rename: true, references: true },
+        references: { locations: [], symbolName: '' }
+      };
+    }
+    const symbolName = renameInfo.displayName || '';
+    const refs = ls.findReferences(filePath, offset) || [];
+    const locations = [];
+    const seen = new Set();
+    for (const ref of refs) {
+      if (!ref.textSpan) continue;
+      const refPath = ref.fileName;
+      // Read line text for the reference
+      let lineText = '';
+      try {
+        if (refPath === filePath) {
+          lineText = fileContent;
+        } else if (fs.existsSync(refPath)) {
+          lineText = fs.readFileSync(refPath, 'utf8');
+        }
+      } catch (_) {}
+
+      // Get line number and column from the text span
+      const lineStarts = buildLineStarts(lineText);
+      let lineNum = 1;
+      let startCol = 1;
+      for (let i = 0; i < lineStarts.length - 1 && lineStarts[i + 1] <= ref.textSpan.start; i++) {
+        lineNum = i + 2;
+      }
+      startCol = ref.textSpan.start - lineStarts[Math.max(0, lineNum - 1)] + 1;
+      const endCol = startCol + ref.textSpan.length - 1;
+
+      // Extract the actual line text
+      const lines = lineText.split('\n');
+      const actualLineText = lines[lineNum - 1] || '';
+
+      const key = refPath + ':' + ref.textSpan.start;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      locations.push({
+        filePath: refPath,
+        line: lineNum,
+        startCol: startCol,
+        endCol: endCol,
+        lineText: actualLineText
+      });
+    }
+
+    // Sort: current file first, then by path, then by line
+    locations.sort((a, b) => {
+      if (a.filePath === b.filePath) return a.line - b.line;
+      if (a.filePath === filePath) return -1;
+      if (b.filePath === filePath) return 1;
+      return a.filePath.localeCompare(b.filePath);
+    });
+
+    return {
+      capabilities: { diagnostics: true, definition: true, hover: true, rename: true, references: true },
+      references: { locations, symbolName }
     };
   }
 
@@ -219,7 +285,7 @@ function analyze(input) {
   });
 
   return {
-    capabilities: { diagnostics: true, definition: true, hover: true, rename: true },
+    capabilities: { diagnostics: true, definition: true, hover: true, rename: true, references: true },
     diagnostics
   };
 }

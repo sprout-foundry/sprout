@@ -12,6 +12,7 @@ type Capabilities struct {
 	Definition  bool `json:"definition"`
 	Hover       bool `json:"hover"`
 	Rename      bool `json:"rename"`
+	References  bool `json:"references"`
 }
 
 // ToolInput is the normalized request shape sent to language adapters.
@@ -59,19 +60,36 @@ type ToolRenameLocation struct {
 	To       int    `json:"to"`   // 0-based byte offset
 }
 
+// ToolReferenceLocation is a single reference location in find-all-references.
+type ToolReferenceLocation struct {
+	FilePath string `json:"filePath"`
+	Line     int    `json:"line"`     // 1-based line number
+	StartCol int    `json:"startCol"` // 1-based start column
+	EndCol   int    `json:"endCol"`   // 1-based end column
+	LineText string `json:"lineText"`
+}
+
 // ToolRename is the rename preview result.
 type ToolRename struct {
 	Locations []ToolRenameLocation `json:"locations"`
 }
 
+// ToolReferences is the find-all-references result.
+type ToolReferences struct {
+	Locations []ToolReferenceLocation `json:"locations"`
+	// SymbolName is the resolved name of the referenced symbol.
+	SymbolName string `json:"symbolName"`
+}
+
 // ToolResult is the normalized adapter response.
 type ToolResult struct {
-	Capabilities Capabilities      `json:"capabilities"`
-	Diagnostics  []ToolDiagnostic `json:"diagnostics,omitempty"`
-	Definition   *ToolDefinition  `json:"definition,omitempty"`
-	Hover        *ToolHover       `json:"hover,omitempty"`
-	Rename       *ToolRename      `json:"rename,omitempty"`
-	Error        string           `json:"error,omitempty"`
+	Capabilities Capabilities       `json:"capabilities"`
+	Diagnostics  []ToolDiagnostic  `json:"diagnostics,omitempty"`
+	Definition   *ToolDefinition   `json:"definition,omitempty"`
+	Hover        *ToolHover        `json:"hover,omitempty"`
+	Rename       *ToolRename       `json:"rename,omitempty"`
+	References   *ToolReferences   `json:"references,omitempty"`
+	Error        string            `json:"error,omitempty"`
 	// DurationMs is the wall-clock time the adapter took to run, in milliseconds.
 	// Populated by the registry dispatch layer, not by individual adapters.
 	DurationMs int64 `json:"duration_ms,omitempty"`

@@ -57,6 +57,19 @@ type semanticRename struct {
 	Locations []semanticRenameLocation `json:"locations"`
 }
 
+type semanticReferenceLocation struct {
+	FilePath string `json:"filePath"`
+	Line     int    `json:"line"`
+	StartCol int    `json:"startCol"`
+	EndCol   int    `json:"endCol"`
+	LineText string `json:"lineText"`
+}
+
+type semanticReferences struct {
+	Locations  []semanticReferenceLocation `json:"locations"`
+	SymbolName string                     `json:"symbolName"`
+}
+
 type semanticResponse struct {
 	Message      string               `json:"message"`
 	Path         string               `json:"path"`
@@ -67,6 +80,7 @@ type semanticResponse struct {
 	Definition   *semanticDefinition  `json:"definition,omitempty"`
 	Hover        *semanticHover       `json:"hover,omitempty"`
 	Rename       *semanticRename      `json:"rename,omitempty"`
+	References   *semanticReferences  `json:"references,omitempty"`
 	Error        string               `json:"error,omitempty"`
 	Version      string               `json:"version"`
 	DurationMs   int64                `json:"duration_ms,omitempty"`
@@ -149,13 +163,13 @@ func (ws *ReactWebServer) handleAPISemantic(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "File path is required", http.StatusBadRequest)
 		return
 	}
-	if req.Method != "diagnostics" && req.Method != "definition" && req.Method != "hover" && req.Method != "rename" {
+	if req.Method != "diagnostics" && req.Method != "definition" && req.Method != "hover" && req.Method != "rename" && req.Method != "references" {
 		http.Error(w, "Invalid method", http.StatusBadRequest)
 		return
 	}
-	if req.Method == "definition" || req.Method == "hover" || req.Method == "rename" {
+	if req.Method == "definition" || req.Method == "hover" || req.Method == "rename" || req.Method == "references" {
 		if req.Position == nil || req.Position.Line <= 0 || req.Position.Column <= 0 {
-			http.Error(w, "Position is required for definition, hover, and rename", http.StatusBadRequest)
+			http.Error(w, "Position is required for definition, hover, rename, and references", http.StatusBadRequest)
 			return
 		}
 	}
@@ -259,6 +273,26 @@ func applyToolResult(result *semanticResponse, toolResult semanticToolResult, wo
 			})
 		}
 		result.Rename = &semanticRename{Locations: locs}
+	}
+	if toolResult.References != nil {
+		locs := make([]semanticReferenceLocation, 0, len(toolResult.References.Locations))
+		for _, loc := range toolResult.References.Locations {
+			refPath := loc.FilePath
+			if rel, relErr := filepath.Rel(workspaceRoot, refPath); relErr == nil {
+				refPath = filepath.ToSlash(rel)
+			}
+			locs = append(locs, semanticReferenceLocation{
+				FilePath: refPath,
+				Line:     loc.Line,
+				StartCol: loc.StartCol,
+				EndCol:   loc.EndCol,
+				LineText: loc.LineText,
+			})
+		}
+		result.References = &semanticReferences{
+			Locations:  locs,
+			SymbolName: toolResult.References.SymbolName,
+		}
 	}
 }
 

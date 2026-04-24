@@ -211,7 +211,7 @@ function analyze(input) {
         references: { locations: [], symbolName: '' }
       };
     }
-    const symbolName = renameInfo.displayName || '';
+    const symbolName = renameInfo.displayName || '<symbol>';
     const refs = ls.findReferences(filePath, offset) || [];
     const locations = [];
     const seen = new Set();
@@ -226,7 +226,9 @@ function analyze(input) {
         } else if (fs.existsSync(refPath)) {
           lineText = fs.readFileSync(refPath, 'utf8');
         }
-      } catch (_) {}
+      } catch (e) {
+        console.error('Failed to read reference file:', refPath, e);
+      }
 
       // Get line number and column from the text span
       const lineStarts = buildLineStarts(lineText);

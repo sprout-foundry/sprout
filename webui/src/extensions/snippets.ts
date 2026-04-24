@@ -22,6 +22,7 @@ import { keymap, EditorView } from '@codemirror/view';
 import { type Extension, Facet, Compartment } from '@codemirror/state';
 import { snippet, hasNextSnippetField } from '@codemirror/autocomplete';
 import { debugLog } from '../utils/log';
+import { isEmmetLanguage } from './emmet';
 
 // ── Snippet definitions ─────────────────────────────────────────────
 
@@ -594,6 +595,12 @@ export function tabExpandSnippets(): Extension {
           // safety net, skip our expansion logic when fields remain.
           if (hasNextSnippetField(view.state)) return false;
 
+          // When Emmet abbreviation tracking is active for the current
+          // language (HTML, CSS, JSX, TSX), defer to Emmet's Tab handler
+          // which provides more powerful abbreviation expansion.
+          const langId = view.state.facet(snippetLanguageFacet);
+          if (isEmmetLanguage(langId)) return false;
+
           const sel = view.state.selection.main;
           // Only expand when the cursor is a simple caret (no selection).
           if (sel.from !== sel.to) return false;
@@ -601,7 +608,6 @@ export function tabExpandSnippets(): Extension {
           const wordInfo = wordBeforeCursor(view.state.doc, sel.from);
           if (!wordInfo) return false;
 
-          const langId = view.state.facet(snippetLanguageFacet);
           const snippets = getSnippetsForLanguage(langId);
           const template = snippets.get(wordInfo.word);
           if (!template) return false;

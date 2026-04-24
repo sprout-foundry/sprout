@@ -22,7 +22,7 @@ class TerminalWebSocketService {
   private pingInterval: NodeJS.Timeout | null = null;
   private lastPongTime = Date.now();
   private pongWatchdogInterval: NodeJS.Timeout | null = null;
-  private maxPongAge = 60000;
+  private maxPongAge = 90000;
   private intentionalClose = false;
   private reconnectTimeout: NodeJS.Timeout | null = null;
   private preferredShell: string | null = null;
@@ -252,10 +252,9 @@ class TerminalWebSocketService {
           this.sessionId = data.data.session_id;
           debugLog('Terminal session restored:', this.sessionId);
           this.persistSessionId();
-          // Send scrollback content as output so the terminal displays it
-          if (data.data.scrollback) {
-            this.notifyCallbacks({ type: 'output', data: { output: data.data.scrollback } });
-          }
+          // Emit session_restored with scrollback so the UI can clear + replay
+          // instead of blindly appending (which causes duplication).
+          this.notifyCallbacks({ type: 'session_restored', data: { session_id: this.sessionId, scrollback: data.data.scrollback || '' } });
           // Notify that we're now ready to send commands
           this.notifyCallbacks({ type: 'session_ready', data: { session_id: this.sessionId } });
         }

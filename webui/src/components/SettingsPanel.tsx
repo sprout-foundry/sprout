@@ -99,6 +99,9 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
   // Ref so render helpers can read the current display settings without prop changes
   const displaySettingsRef = useRef<LeditSettings | null>(null);
 
+  // Provenance sources: maps setting key → "global"|"workspace"|"session"
+  const [provenanceSources, setProvenanceSources] = useState<Record<string, string>>({});
+
   // Use the shared notification system instead of local toasts
   const { addNotification } = useNotifications();
 
@@ -210,6 +213,10 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
       setLayerData(null);
       setLayerError(null);
       setLayerLoading(null);
+      // Fetch provenance for badge display
+      api.getSettingsProvenance()
+        .then((data) => { setProvenanceSources(data.sources || {}); })
+        .catch(() => { setProvenanceSources({}); });
     }
   }, [activeSubTab, configViewLayer]);
 
@@ -322,6 +329,36 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
 
   /* ─── Field render helpers ──────────────────────────────── */
 
+  /** Renders a small badge showing which config layer a setting comes from.
+   *  Only shown when viewing the effective (session) config. */
+  const renderProvenanceBadge = (settingKey: string) => {
+    const source = provenanceSources[settingKey];
+    if (!source || configViewLayer !== 'session' || activeSubTab !== 'general') return null;
+    const colors: Record<string, string> = {
+      session: 'var(--accent-primary, #4a9eff)',
+      workspace: 'var(--accent-warning, #f0ad4e)',
+      global: 'var(--text-tertiary, #888)',
+    };
+    return (
+      <span
+        style={{
+          fontSize: 9,
+          padding: '1px 4px',
+          borderRadius: 3,
+          marginLeft: 6,
+          backgroundColor: `color-mix(in srgb, ${colors[source] || colors.global} 15%, transparent)`,
+          color: colors[source] || colors.global,
+          fontWeight: 600,
+          textTransform: 'uppercase' as const,
+          letterSpacing: 0.5,
+          verticalAlign: 'middle',
+        }}
+      >
+        {source}
+      </span>
+    );
+  };
+
   const renderToggle = (settingKey: string, label: string) => {
     const current = displaySettingsRef.current ?? settings;
     if (!current) return null;
@@ -330,7 +367,7 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
       <label className="styled-toggle">
         <input type="checkbox" checked={checked} onChange={() => updateSetting(settingKey, !checked)} />
         <span className="toggle-track" />
-        <span className="toggle-label">{label}</span>
+        <span className="toggle-label">{label}{renderProvenanceBadge(settingKey)}</span>
       </label>
     );
   };
@@ -341,7 +378,7 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
     const value = String(getNestedValue(current as unknown as Record<string, unknown>, settingKey) || '');
     return (
       <div className="config-item">
-        <label htmlFor={`setting-${settingKey}`}>{label}</label>
+        <label htmlFor={`setting-${settingKey}`}>{label}{renderProvenanceBadge(settingKey)}</label>
         <select
           id={`setting-${settingKey}`}
           value={value}
@@ -364,7 +401,7 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
     const value = getNestedValue(current as unknown as Record<string, unknown>, settingKey);
     return (
       <div className="config-item">
-        <label htmlFor={`setting-${settingKey}`}>{label}</label>
+        <label htmlFor={`setting-${settingKey}`}>{label}{renderProvenanceBadge(settingKey)}</label>
         <input
           id={`setting-${settingKey}`}
           type="number"
@@ -389,7 +426,7 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
     const value = textDrafts[settingKey] ?? persistedValue;
     return (
       <div className="config-item">
-        <label htmlFor={`setting-${settingKey}`}>{label}</label>
+        <label htmlFor={`setting-${settingKey}`}>{label}{renderProvenanceBadge(settingKey)}</label>
         <input
           id={`setting-${settingKey}`}
           type="text"
@@ -438,7 +475,7 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
     const value = textDrafts[settingKey] ?? persistedValue;
     return (
       <div className="config-item">
-        <label htmlFor={`setting-${settingKey}`}>{label}</label>
+        <label htmlFor={`setting-${settingKey}`}>{label}{renderProvenanceBadge(settingKey)}</label>
         <textarea
           id={`setting-${settingKey}`}
           className="styled-input styled-textarea"
@@ -868,6 +905,32 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
               </span>
               {layerError && (
                 <div style={{ color: 'var(--text-error)', fontSize: 'var(--text-xs)', marginTop: 4 }}>{layerError}</div>
+              )}
+              {/* Workspace config creation prompt */}
+              {configViewLayer === 'workspace' && layerData && Object.keys(layerData).length === 0 && (
+                <div style={{ marginTop: 8, padding: '8px 12px', backgroundColor: 'var(--bg-secondary)', borderRadius: 6, fontSize: 'var(--text-sm)' }}>
+                  <p style={{ margin: '0 0 8px 0', color: 'var(--text-secondary)' }}>
+                    No workspace config found. Create one from your current global settings?
+                  </p>
+                  <button
+                    type="button"
+                    className="styled-button"
+                    style={{ fontSize: 'var(--text-xs)' }}
+                    onClick={async () => {
+                      try {
+                        const globalData = await api.getSettingsLayer('global');
+                        await api.updateSettings(globalData, 'workspace');
+                        const data = await api.getSettingsLayer('workspace');
+                        setLayerData(data);
+                        addNotification('success', 'Settings', 'Workspace config created from global settings', 3000);
+                      } catch (err) {
+                        addNotification('error', 'Settings', 'Failed to create workspace config', 5000);
+                      }
+                    }}
+                  >
+                    Create Workspace Config
+                  </button>
+                </div>
               )}
             </div>
             {/* Editor preferences (frontend-only) */}

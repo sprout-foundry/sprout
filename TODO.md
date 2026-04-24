@@ -15,7 +15,7 @@
 [x] - WEBUI: Missing costs and token counting in the status tab of the webui chat.
 [x] - WEBUI: In the status tab of the webui chat, the duration is not accurate. It appears to anchor to the first time the tab is opened and never progresses
 [x] - WEBUI: Selecting subagents providers and models doesn't work in the ui.
-[x] - Provider and model selection should be scoped to the session so if it changes it doesn't affect all agents and just sets the last used provider / model in the config if possible, but fail cleanly if it can't update the config. (RATING note: ChatSession interface has no provider/model fields, perChatCache doesn't save/restore provider/model — provider/model remain global AppState)
+[x] - Provider and model selection should be scoped to the session so if it changes it doesn't affect all agents and just sets the last used provider / model in the config if possible, but fail cleanly if it can't update the config. → Implemented: Session-scoped config overrides via `chatSession.ConfigOverrides` + `ConversationState.ConfigOverrides`. Settings API writes provider/model to session (not config file). `getOrCreateAgent` restores overrides from session on agent creation. Workspace config layer (`{workspace}/.ledit/config.json`) merges on top of global. See commits implementing `MergeConfig`, `NewManagerWithLayers`, `NewAgentWithLayers`.
 [x] - WEBUI: the git view is not auto-updating as expected when files are edited, deleted, or renamed.
 [x] - WEBUI: Queued prompts need to be able to be modified.
 [x] - WEBUI: prompt history is not preserved past a refresh of the browser (pressing up arrow to scroll through history). It should be using the same history mechanism as the terminal cli so not sure why the behavior is different
@@ -175,6 +175,7 @@ These gaps were identified by cross-referencing the current editor implementatio
 [x] - EDITOR: Add sticky scroll (pinned function/class headers) — when scrolling through a large file, the current function or class header should pin at the top of the viewport so the user always sees context. This is a feature in VS Code 2023+ and is very valuable for navigating large files. Implement as a ViewPlugin that: (1) uses the syntax tree to find the enclosing function/class at the viewport top, (2) renders a pinned/sticky decoration above the editor content, (3) updates on scroll and cursor movement.
 [x] - EDITOR: Add sticky scroll (pinned function/class headers) — when scrolling through a large file, the current function or class header should pin at the top of the viewport so the user always sees context. This is a feature in VS Code 2023+ and is very valuable for navigating large files. Implement as a ViewPlugin that: (1) uses the syntax tree to find the enclosing function/class at the viewport top, (2) renders a pinned/sticky decoration above the editor content, (3) updates on scroll and cursor movement.
 
+[x] - EDITOR: Add drag-and-drop text movement — implement proper drag-and-drop for text within the editor. Currently `dropCursor()` shows a visual indicator but there is no actual drag handler for text movement. Use `EditorView.domEventHandlers({ dragstart, dragover, drop })` to: (1) on dragstart, store the selected text and cursor position, (2) on drop, delete the dragged text from the source position and insert at the drop position. Hold Alt during drop to copy instead of move.
 [] - EDITOR: Add drag-and-drop text movement — implement proper drag-and-drop for text within the editor. Currently `dropCursor()` shows a visual indicator but there is no actual drag handler for text movement. Use `EditorView.domEventHandlers({ dragstart, dragover, drop })` to: (1) on dragstart, store the selected text and cursor position, (2) on drop, delete the dragged text from the source position and insert at the drop position. Hold Alt during drop to copy instead of move.
 
 [] - EDITOR: Add workspace-wide symbol search — the current "Go to Symbol" (`Cmd+Shift+O`) only searches within the current file. Add a "Go to Symbol in Workspace" command that queries the backend for symbols across all files in the project (leverages the existing semantic API). Show results grouped by file in the overlay.
@@ -372,9 +373,19 @@ All files above the 500-line target that still need splitting: `tool_handlers_su
 
 ---
 
+## Layered Config — Remaining Work
+
+The backend for layered config (global → workspace → session overrides) is complete. Remaining frontend work:
+
+[x] - WEBUI SETTINGS: Add config scope tabs (Global / Workspace / Session) to the Settings panel — Currently the Settings panel shows a flat list with no indication of which layer a setting comes from. Add tabs at the top: "Global" (reads/writes `~/.ledit/config.json`), "Workspace" (reads/writes `{workspace}/.ledit/config.json`, disabled when no workspace), "Session" (reads/writes `chatSession.ConfigOverrides`, ephemeral per-chat). The "General" settings tab provider/model selector should default to the Session scope. Add API endpoints: `GET /api/settings?layer=global|workspace|session` and `PUT /api/settings?layer=global|workspace|session`. → Implemented: Backend GET `/api/settings?layer=...` already existed. Added backend PUT `/api/settings?layer=global|workspace|session` with three scoped handlers. Frontend: SettingsPanel already had Session/Workspace/Global tab buttons. Wired `updateSetting()` to pass `configViewLayer` to `api.updateSettings()`, and `ApiService.updateSettings()` now accepts optional `layer` param. Display settings use `displaySettingsRef` to render the correct layer's values.
+[] - WEBUI SETTINGS: Show config layer provenance in the UI — When viewing settings, indicate which layer each value comes from (e.g., a badge showing "workspace" next to a reasoning_effort value that was set at the workspace level). This requires the GET endpoint to return provenance metadata alongside values.
+[] - WEBUI SETTINGS: Add workspace config creation UX — Provide a "Create workspace config" button in the Workspace tab that copies current global config values to `{workspace}/.ledit/config.json` so users can then customize per-project settings without starting from scratch.
+
+---
+
 ## Remaining Large File Refactors (TypeScript)
 
-18 components still over 500 lines: `LocationSwitcher.tsx` (1850), `ContextPanel.tsx` (1662), `EditorPane.tsx` (1262), `FileTree.tsx` (1243), `SettingsPanel.tsx` (1199), `Sidebar.tsx` (1025), `CommandInput.tsx` (945), `SearchView.tsx` (735), `CommandPalette.tsx` (653), `Chat.tsx` (622), `Terminal.tsx` (619), `ReviewWorkspaceTab.tsx` (598), `GoToSymbolOverlay.tsx` (571), `PaneLayoutManager.tsx` (533), `EditorTabs.tsx` (530), `GitSidebarPanel.tsx` (524), `AppContent.tsx` (504), `FileEditsPanel.tsx` (503).
+18 components still over 500 lines: `LocationSwitcher.tsx` (1850), `ContextPanel.tsx` (1662), `EditorPane.tsx` (1262), `FileTree.tsx` (1243), `SettingsPanel.tsx` (1936), `Sidebar.tsx` (1025), `CommandInput.tsx` (945), `SearchView.tsx` (735), `CommandPalette.tsx` (653), `Chat.tsx` (622), `Terminal.tsx` (619), `ReviewWorkspaceTab.tsx` (598), `GoToSymbolOverlay.tsx` (571), `PaneLayoutManager.tsx` (533), `EditorTabs.tsx` (530), `GitSidebarPanel.tsx` (524), `AppContent.tsx` (504), `FileEditsPanel.tsx` (503).
 
 ---
 

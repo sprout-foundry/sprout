@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -175,7 +176,7 @@ func (c *OllamaLocalClient) buildChatRequest(messages []Message, tools []Tool, r
 	ollamaTools := convertToolsToOllamaTools(tools)
 
 	// Optional: fold system content into first user message for templates that ignore system role
-	if os.Getenv("LEDIT_OLLAMA_FOLD_SYSTEM") != "" {
+	if envutil.GetEnvSimple("OLLAMA_FOLD_SYSTEM") != "" {
 		var systemParts []string
 		injected := false
 		for _, m := range messages {
@@ -290,7 +291,7 @@ func (c *OllamaLocalClient) buildChatRequest(messages []Message, tools []Tool, r
 func getOllamaMaxPredictCap(contextLimit int) int {
 	// Keep a practical default, while allowing users to raise/lower as needed.
 	cap := 8192
-	raw := strings.TrimSpace(os.Getenv("LEDIT_OLLAMA_MAX_PREDICT"))
+	raw := strings.TrimSpace(envutil.GetEnvSimple("OLLAMA_MAX_PREDICT"))
 	if raw != "" {
 		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
 			cap = parsed

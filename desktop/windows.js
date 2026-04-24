@@ -22,7 +22,7 @@ const { startSSHBackendForHost } = require('./ssh');
 const { resolveWorkspaceDirectory, promptForWorkspace } = require('./workspace');
 
 function isSmokeTestMode() {
-  return process.env.LEDIT_SMOKE_TEST === '1';
+  return process.env.SPROUT_SMOKE_TEST === '1';
 }
 
 function writeSmokeStatus(payload) {
@@ -30,7 +30,7 @@ function writeSmokeStatus(payload) {
     return;
   }
 
-  const smokeStatusFile = process.env.LEDIT_SMOKE_STATUS_FILE;
+  const smokeStatusFile = process.env.SPROUT_SMOKE_STATUS_FILE;
   if (!smokeStatusFile) {
     return;
   }

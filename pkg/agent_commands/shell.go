@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"bufio"
 	"context"
 	"fmt"
@@ -110,7 +111,7 @@ Generate the command/script now:`, description, envContext)
 	// Validate that the output looks like executable code
 	if !c.isValidShellCode(generatedScript) {
 		// Debug: show what we got
-		if os.Getenv("LEDIT_DEBUG") == "1" {
+		if envutil.GetEnvSimple("DEBUG") == "1" {
 			fmt.Printf("DEBUG: Generated script failed validation:\n%s\n", generatedScript)
 		}
 

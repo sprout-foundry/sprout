@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"golang.org/x/sync/singleflight"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 const (
@@ -22,10 +23,10 @@ const (
 	defaultNegativeTTL = 30 * time.Second
 	defaultHTTPTimeout = 500 * time.Millisecond
 	maxResponseBytes   int64 = 1 << 20 // 1 MiB — matches pkg/providercatalog limit
-	envRegistryURL     = "LEDIT_MODEL_REGISTRY_URL"
-	envRegistryTTL     = "LEDIT_MODEL_REGISTRY_TTL"
-	envRegistryNegTTL  = "LEDIT_MODEL_REGISTRY_NEGATIVE_TTL"
-	envRegistryTimeout = "LEDIT_MODEL_REGISTRY_TIMEOUT"
+	envRegistryURL     = "SPROUT_MODEL_REGISTRY_URL"
+	envRegistryTTL     = "SPROUT_MODEL_REGISTRY_TTL"
+	envRegistryNegTTL  = "SPROUT_MODEL_REGISTRY_NEGATIVE_TTL"
+	envRegistryTimeout = "SPROUT_MODEL_REGISTRY_TIMEOUT"
 )
 
 // ModelInfo mirrors api.ModelInfo for registry JSON responses.
@@ -250,7 +251,7 @@ func FetchModels(ctx context.Context, providerID string) ([]RawModel, error) {
 
 		if resp.StatusCode == http.StatusNotFound {
 			// Log debug information if debug mode is enabled
-			if os.Getenv("LEDIT_DEBUG_REGISTRY") != "" {
+			if envutil.GetEnvSimple("DEBUG_REGISTRY") != "" {
 				log.Printf("[modelregistry] provider %q not found at %s/models/%s.json (404), falling back to provider API", providerID, baseURLCopy(), providerID)
 			}
 			mu.Lock()

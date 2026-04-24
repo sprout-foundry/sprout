@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"errors"
 	"fmt"
 	"os"
@@ -54,7 +55,7 @@ func ShowCommandSelector(registry *CommandRegistry, chatAgent *agent.Agent) (str
 	sort.Strings(names)
 
 	// Check if we're in agent console - show help instead
-	if os.Getenv("LEDIT_AGENT_CONSOLE") == "1" {
+	if envutil.GetEnvSimple("AGENT_CONSOLE") == "1" {
 		fmt.Println("\n[list] Available Commands:")
 		fmt.Println("=====================")
 

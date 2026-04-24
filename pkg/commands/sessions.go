@@ -8,6 +8,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/ui"
 	"golang.org/x/term"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // SessionsCommand handles session management with auto-tracking and session recovery
@@ -62,7 +63,7 @@ func (c *SessionsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 // selectSessionWithDropdown provides interactive session selection with dropdown
 func (c *SessionsCommand) selectSessionWithDropdown(sessions []agent.SessionInfo, chatAgent *agent.Agent) error {
 	// Check if we're in agent console - if so, show list with help
-	if os.Getenv("LEDIT_AGENT_CONSOLE") == "1" {
+	if configuration.GetEnvSimple("AGENT_CONSOLE") == "1" {
 		fmt.Println("\n[dir/] Available Sessions:")
 		fmt.Println("=====================")
 

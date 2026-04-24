@@ -480,20 +480,20 @@ func applyWorkflowRuntimeOverrides(chatAgent *agent.Agent, runtime AgentWorkflow
 	}
 	if runtime.DryRun != nil {
 		if *runtime.DryRun {
-			_ = os.Setenv("LEDIT_DRY_RUN", "1")
+			_ = configuration.SetEnv("DRY_RUN", "1")
 		} else {
-			_ = os.Unsetenv("LEDIT_DRY_RUN")
+			configuration.UnsetEnv("DRY_RUN")
 		}
 	}
 	if runtime.NoSubagents != nil {
 		if *runtime.NoSubagents {
-			_ = os.Setenv("LEDIT_NO_SUBAGENTS", "1")
+			_ = configuration.SetEnv("NO_SUBAGENTS", "1")
 		} else {
-			_ = os.Unsetenv("LEDIT_NO_SUBAGENTS")
+			configuration.UnsetEnv("NO_SUBAGENTS")
 		}
 	}
 	if runtime.ResourceDirectory != "" {
-		_ = os.Setenv("LEDIT_RESOURCE_DIRECTORY", runtime.ResourceDirectory)
+		_ = configuration.SetEnv("RESOURCE_DIRECTORY", runtime.ResourceDirectory)
 	}
 
 	if runtime.Provider != "" {
@@ -592,9 +592,9 @@ func prepareWorkflowRuntimeRestorer(chatAgent *agent.Agent, cfg *AgentWorkflowCo
 		Unsafe:                 chatAgent.GetUnsafeMode(),
 		MaxIterations:          chatAgent.GetMaxIterations(),
 		NoStream:               agentNoStreaming,
-		DryRunEnv:              os.Getenv("LEDIT_DRY_RUN"),
-		NoSubagentsEnv:         os.Getenv("LEDIT_NO_SUBAGENTS"),
-		ResourceDirectoryEnv:   os.Getenv("LEDIT_RESOURCE_DIRECTORY"),
+		DryRunEnv:              configuration.GetEnvSimple("DRY_RUN"),
+		NoSubagentsEnv:         configuration.GetEnvSimple("NO_SUBAGENTS"),
+		ResourceDirectoryEnv:   configuration.GetEnvSimple("RESOURCE_DIRECTORY"),
 		SystemPrompt:           chatAgent.GetSystemPrompt(),
 		CustomReasoningEfforts: map[string]string{},
 	}
@@ -697,19 +697,19 @@ func prepareWorkflowRuntimeRestorer(chatAgent *agent.Agent, cfg *AgentWorkflowCo
 		chatAgent.SetBaseSystemPrompt(snapshot.SystemPrompt)
 
 		if snapshot.DryRunEnv != "" {
-			_ = os.Setenv("LEDIT_DRY_RUN", snapshot.DryRunEnv)
+			_ = configuration.SetEnv("DRY_RUN", snapshot.DryRunEnv)
 		} else {
-			_ = os.Unsetenv("LEDIT_DRY_RUN")
+			configuration.UnsetEnv("DRY_RUN")
 		}
 		if snapshot.NoSubagentsEnv != "" {
-			_ = os.Setenv("LEDIT_NO_SUBAGENTS", snapshot.NoSubagentsEnv)
+			_ = configuration.SetEnv("NO_SUBAGENTS", snapshot.NoSubagentsEnv)
 		} else {
-			_ = os.Unsetenv("LEDIT_NO_SUBAGENTS")
+			configuration.UnsetEnv("NO_SUBAGENTS")
 		}
 		if snapshot.ResourceDirectoryEnv != "" {
-			_ = os.Setenv("LEDIT_RESOURCE_DIRECTORY", snapshot.ResourceDirectoryEnv)
+			_ = configuration.SetEnv("RESOURCE_DIRECTORY", snapshot.ResourceDirectoryEnv)
 		} else {
-			_ = os.Unsetenv("LEDIT_RESOURCE_DIRECTORY")
+			configuration.UnsetEnv("RESOURCE_DIRECTORY")
 		}
 
 		if len(restoreErrors) > 0 {

@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"os"
 	"strconv"
 )
@@ -43,7 +44,7 @@ func getTerminalSizeEnv() (*TerminalSize, error) {
 
 	// LEDIT specific overrides
 	if height == 0 {
-		if val := os.Getenv("LEDIT_TERM_HEIGHT"); val != "" {
+		if val := envutil.GetEnvSimple("TERM_HEIGHT"); val != "" {
 			if h, err := strconv.Atoi(val); err == nil && h > 0 {
 				height = h
 			}

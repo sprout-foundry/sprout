@@ -49,7 +49,7 @@ func (a *goSessionAdapter) Run(input ToolInput) (ToolResult, error) {
 		if err := a.ensureServerLocked(input.WorkspaceRoot); err != nil {
 			if errors.Is(err, errGoplsNotAvailable) {
 				return ToolResult{
-					Capabilities: Capabilities{Diagnostics: true, Definition: false},
+					Capabilities: Capabilities{Diagnostics: true, Definition: false, Hover: true, Rename: true},
 					Error:        "gopls_not_available",
 				}, nil
 			}
@@ -61,6 +61,10 @@ func (a *goSessionAdapter) Run(input ToolInput) (ToolResult, error) {
 			a.resetServerLocked()
 		}
 		return result, err
+	case "hover":
+		return runGoHover(input)
+	case "rename":
+		return runGoRename(input)
 	default:
 		return ToolResult{Capabilities: Capabilities{}}, nil
 	}

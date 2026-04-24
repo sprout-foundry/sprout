@@ -186,10 +186,8 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 	// Set debug mode on the new client
 	newClient.SetDebug(a.debug)
 
-	// Check connection
-	if err := newClient.CheckConnection(); err != nil {
-		return fmt.Errorf("connection check failed for provider %s: %w", api.GetProviderName(provider), err)
-	}
+	// Connection is validated on the first real request — skip the blocking
+	// connection check here so provider/model switches feel instant in the UI.
 
 	// Switch to the new client
 	a.client = newClient
@@ -274,10 +272,8 @@ func (a *Agent) SetProviderPersisted(provider api.ClientType) error {
 	// Set debug mode on the new client
 	newClient.SetDebug(a.debug)
 
-	// Check connection
-	if err := newClient.CheckConnection(); err != nil {
-		return fmt.Errorf("connection check failed for provider %s: %w", api.GetProviderName(provider), err)
-	}
+	// Connection is validated on the first real request — skip the blocking
+	// connection check here so provider/model switches feel instant in the CLI.
 
 	// Switch to the new client
 	a.client = newClient
@@ -367,14 +363,8 @@ func (a *Agent) SetModel(model string) error {
 		}
 	}
 
-	// Verify the model works by checking connection
-	if err := a.client.CheckConnection(); err != nil {
-		// Revert to previous model if connection check fails
-		if prevModel := a.client.GetModel(); prevModel != "" {
-			_ = a.client.SetModel(prevModel)
-		}
-		return fmt.Errorf("model %s failed connection check: %w", model, err)
-	}
+	// Connection is validated on the first real request — skip the blocking
+	// connection check here so model switches feel instant in the UI.
 
 	// Store in session fields (not config) - this allows session-scoped changes
 	a.sessionModel = model
@@ -426,14 +416,8 @@ func (a *Agent) SetModelPersisted(model string) error {
 		}
 	}
 
-	// Verify the model works by checking connection
-	if err := a.client.CheckConnection(); err != nil {
-		// Revert to previous model if connection check fails
-		if prevModel := a.client.GetModel(); prevModel != "" {
-			_ = a.client.SetModel(prevModel)
-		}
-		return fmt.Errorf("model %s failed connection check: %w", model, err)
-	}
+	// Connection is validated on the first real request — skip the blocking
+	// connection check here so model switches feel instant in the CLI.
 
 	// Save the selection to config (persisted for CLI use)
 	if err := a.configManager.SetProvider(a.clientType); err != nil {

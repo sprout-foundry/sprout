@@ -3,6 +3,7 @@ package semantic
 import (
 	"bytes"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -195,6 +196,8 @@ func runGoReferences(input ToolInput) (ToolResult, error) {
 			if lineNum >= 1 && lineNum <= len(refLines) {
 				lineText = strings.TrimRight(refLines[lineNum-1], "\r\n")
 			}
+		} else {
+			log.Printf("[semantic] failed to read reference file %s: %v", refFile, err)
 		}
 
 		// Make the file path relative to workspace root

@@ -185,9 +185,8 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
     });
   }, [settings]);
 
-  // Fetch config layer data when layer changes (only in general tab)
+  // Fetch config layer data when layer changes
   useEffect(() => {
-    if (activeSubTab !== 'general') return;
     if (configViewLayer !== 'session') {
       // workspace and global layers are fetched from the backend
       let cancelled = false;
@@ -309,9 +308,9 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
         ) as unknown as LeditSettings;
         onSettingsChanged(updated);
 
-        // Use the current configViewLayer when on the general tab
+        // Use the current configViewLayer when not editing session
         let layer: 'session' | 'workspace' | 'global' | undefined;
-        if (activeSubTab === 'general' && configViewLayer !== 'session') {
+        if (configViewLayer !== 'session') {
           layer = configViewLayer;
         }
         await api.updateSettings({ [keyOrPath]: value }, layer);
@@ -324,7 +323,7 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
         setSavingKey(null);
       }
     },
-    [onSettingsChanged, api, addNotification, activeSubTab, configViewLayer],
+    [onSettingsChanged, api, addNotification, configViewLayer],
   );
 
   /* ─── Field render helpers ──────────────────────────────── */
@@ -333,7 +332,7 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
    *  Only shown when viewing the effective (session) config. */
   const renderProvenanceBadge = (settingKey: string) => {
     const source = provenanceSources[settingKey];
-    if (!source || configViewLayer !== 'session' || activeSubTab !== 'general') return null;
+    if (!source || configViewLayer !== 'session') return null;
     const colors: Record<string, string> = {
       session: 'var(--accent-primary, #4a9eff)',
       workspace: 'var(--accent-warning, #f0ad4e)',
@@ -868,10 +867,10 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
       return <div className="settings-empty">Loading settings…</div>;
     }
 
-    // When viewing workspace or global layer in general tab, use that layer's data
+    // When viewing workspace or global layer, use that layer's data
     // so the user sees and edits only that layer's specific values.
     const activeSettings: LeditSettings =
-      activeSubTab === 'general' && configViewLayer !== 'session' && layerData
+      configViewLayer !== 'session' && layerData
         ? (layerData as unknown as LeditSettings)
         : settings;
     displaySettingsRef.current = activeSettings;
@@ -881,58 +880,6 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
       case 'general':
         return (
           <>
-            {/* Config Layer Selector */}
-            <div className="section">
-              <h4>Config Scope</h4>
-              <div style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
-                {(['session', 'workspace', 'global'] as const).map((layer) => (
-                  <button
-                    key={layer}
-                    type="button"
-                    className={`layerscope-btn ${configViewLayer === layer ? 'active' : ''}`}
-                    onClick={() => setConfigViewLayer(layer)}
-                    disabled={layerLoading === layer}
-                  >
-                    {layer === 'session' ? 'Session' : layer === 'workspace' ? 'Workspace' : 'Global'}
-                    {layerLoading === layer && <span style={{ marginLeft: 4, opacity: 0.5 }}>…</span>}
-                  </button>
-                ))}
-              </div>
-              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', lineHeight: 1.3 }}>
-                {configViewLayer === 'session' && 'Editing session-scoped overrides only. These are saved with your chat session and don\'t affect other clients.'}
-                {configViewLayer === 'workspace' && 'Editing workspace config. Settings are shared across all sessions in this workspace.'}
-                {configViewLayer === 'global' && 'Editing global config (~/.ledit). Settings apply to all workspaces and sessions.'}
-              </span>
-              {layerError && (
-                <div style={{ color: 'var(--text-error)', fontSize: 'var(--text-xs)', marginTop: 4 }}>{layerError}</div>
-              )}
-              {/* Workspace config creation prompt */}
-              {configViewLayer === 'workspace' && layerData && Object.keys(layerData).length === 0 && (
-                <div style={{ marginTop: 8, padding: '8px 12px', backgroundColor: 'var(--bg-secondary)', borderRadius: 6, fontSize: 'var(--text-sm)' }}>
-                  <p style={{ margin: '0 0 8px 0', color: 'var(--text-secondary)' }}>
-                    No workspace config found. Create one from your current global settings?
-                  </p>
-                  <button
-                    type="button"
-                    className="styled-button"
-                    style={{ fontSize: 'var(--text-xs)' }}
-                    onClick={async () => {
-                      try {
-                        const globalData = await api.getSettingsLayer('global');
-                        await api.updateSettings(globalData, 'workspace');
-                        const data = await api.getSettingsLayer('workspace');
-                        setLayerData(data);
-                        addNotification('success', 'Settings', 'Workspace config created from global settings', 3000);
-                      } catch (err) {
-                        addNotification('error', 'Settings', 'Failed to create workspace config', 5000);
-                      }
-                    }}
-                  >
-                    Create Workspace Config
-                  </button>
-                </div>
-              )}
-            </div>
             {/* Editor preferences (frontend-only) */}
             {editorPreferences && onEditorPreferenceChanged && (
               <div className="section">
@@ -1991,6 +1938,54 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
           </button>
         ))}
         {renderSaving()}
+      </div>
+
+      {/* Config Scope Selector — applies to all tabs */}
+      <div className="config-scope-row">
+        <div className="config-scope-buttons">
+          {(['session', 'workspace', 'global'] as const).map((layer) => (
+            <button
+              key={layer}
+              type="button"
+              className={`layerscope-btn ${configViewLayer === layer ? 'active' : ''}`}
+              onClick={() => setConfigViewLayer(layer)}
+              disabled={layerLoading === layer}
+            >
+              {layer === 'session' ? 'Session' : layer === 'workspace' ? 'Workspace' : 'Global'}
+              {layerLoading === layer && <span style={{ marginLeft: 4, opacity: 0.5 }}>…</span>}
+            </button>
+          ))}
+        </div>
+        <span className="config-scope-desc">
+          {configViewLayer === 'session' && 'Session overrides only'}
+          {configViewLayer === 'workspace' && 'Workspace config (shared across sessions)'}
+          {configViewLayer === 'global' && 'Global config (~/.ledit)'}
+        </span>
+        {layerError && (
+          <div className="config-scope-error">{layerError}</div>
+        )}
+        {configViewLayer === 'workspace' && layerData && Object.keys(layerData).length === 0 && (
+          <div className="config-scope-create">
+            <span>No workspace config found. </span>
+            <button
+              type="button"
+              className="config-scope-create-btn"
+              onClick={async () => {
+                try {
+                  const globalData = await api.getSettingsLayer('global');
+                  await api.updateSettings(globalData, 'workspace');
+                  const data = await api.getSettingsLayer('workspace');
+                  setLayerData(data);
+                  addNotification('success', 'Settings', 'Workspace config created from global settings', 3000);
+                } catch (err) {
+                  addNotification('error', 'Settings', 'Failed to create workspace config', 5000);
+                }
+              }}
+            >
+              Create from global
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Content */}

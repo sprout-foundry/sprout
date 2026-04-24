@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 
@@ -26,7 +27,7 @@ const (
 
 // getSearchMaxBytes returns the max bytes limit from env or default
 func getSearchMaxBytes() int {
-	if raw := os.Getenv("LEDIT_SEARCH_MAX_BYTES"); raw != "" {
+	if raw := configuration.GetEnvSimple("SEARCH_MAX_BYTES"); raw != "" {
 		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
 			return parsed
 		}

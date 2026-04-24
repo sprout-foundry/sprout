@@ -2,9 +2,10 @@
 package agent
 
 import (
-	"os"
 	"strconv"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 const maxToolFailureMessageChars = 4000     // ~1000 tokens worst-case (4 chars/token heuristic)
@@ -17,7 +18,7 @@ const defaultAnalyzeImageResultExcerptChars = 4000
 // Can be overridden via LEDIT_TOOL_TIMEOUT environment variable (in seconds)
 func getToolTimeout(toolName string) time.Duration {
 	// Check for environment variable override first
-	if envTimeout := os.Getenv("LEDIT_TOOL_TIMEOUT"); envTimeout != "" {
+	if envTimeout := configuration.GetEnvSimple("TOOL_TIMEOUT"); envTimeout != "" {
 		if seconds, err := strconv.Atoi(envTimeout); err == nil && seconds > 0 {
 			return time.Duration(seconds) * time.Second
 		}

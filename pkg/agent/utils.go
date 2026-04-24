@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -266,7 +267,7 @@ func (a *Agent) resolveLegacyMCPToolName(toolName string) string {
 // File: ./tool_calls.log (in the current working directory)
 func (a *Agent) LogToolCall(tc api.ToolCall, phase string) {
 	// Only log when explicitly enabled or in debug mode
-	if os.Getenv("LEDIT_LOG_TOOL_CALLS") == "" && !a.debug {
+	if envutil.GetEnvSimple("LOG_TOOL_CALLS") == "" && !a.debug {
 		return
 	}
 	entry := map[string]interface{}{

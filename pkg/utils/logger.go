@@ -10,6 +10,7 @@ import (
 	"sync" // For thread-safe initialization
 
 	"gopkg.in/natefinch/lumberjack.v2"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 // Logger represents a workspace logger.
@@ -45,10 +46,10 @@ func GetLogger(skipPrompts bool) *Logger {
 	})
 	// Always update userInteractionEnabled, allowing it to be overridden
 	globalLogger.userInteractionEnabled = !skipPrompts
-	if os.Getenv("LEDIT_JSON_LOGS") == "1" {
+	if envutil.GetEnvSimple("JSON_LOGS") == "1" {
 		globalLogger.jsonMode = true
 	}
-	if cid := os.Getenv("LEDIT_CORRELATION_ID"); cid != "" {
+	if cid := envutil.GetEnvSimple("CORRELATION_ID"); cid != "" {
 		globalLogger.correlationID = cid
 	}
 	return globalLogger

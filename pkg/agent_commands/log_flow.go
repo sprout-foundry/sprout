@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"fmt"
 	"os"
 	"strings"
@@ -76,7 +77,7 @@ func (lf *LogFlow) showLogOptions() error {
 	}
 
 	// Check if we're in agent console - just show the log
-	if os.Getenv("LEDIT_AGENT_CONSOLE") == "1" {
+	if envutil.GetEnvSimple("AGENT_CONSOLE") == "1" {
 		// In agent console, just display the change log by default
 		return lf.viewChangeLog()
 	}
@@ -209,7 +210,7 @@ func (lf *LogFlow) interactiveRollback() error {
 	}
 
 	// Check if we're in agent console - show list with help
-	if os.Getenv("LEDIT_AGENT_CONSOLE") == "1" {
+	if envutil.GetEnvSimple("AGENT_CONSOLE") == "1" {
 		fmt.Println("\n[|<] Available Revisions:")
 		fmt.Println("=======================")
 

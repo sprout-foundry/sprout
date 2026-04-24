@@ -129,7 +129,7 @@ func init() {
 	agentCmd.Flags().StringVar(&agentPersona, "persona", "", "Persona to activate at startup (e.g., general, coder, refactor, debugger, tester, code_reviewer, researcher, web_scraper)")
 	agentCmd.Flags().BoolVar(&agentDryRun, "dry-run", false, "Run tools in simulation mode (enhanced safety)")
 	agentCmd.Flags().IntVar(&maxIterations, "max-iterations", 0, "Maximum iterations per prompt before stopping (default: 0 = unlimited)")
-	agentCmd.Flags().BoolVar(&agentNoStreaming, "no-stream", false, "Disable streaming mode (useful for scripts and pipelines) (or set LEDIT_NO_STREAM=1)")
+	agentCmd.Flags().BoolVar(&agentNoStreaming, "no-stream", false, "Disable streaming mode (useful for scripts and pipelines) (or set SPROUT_NO_STREAM=1)")
 	agentCmd.Flags().BoolVar(&agentShowReasoningTerminal, "show-reasoning-terminal", false, "Render reasoning stream chunks in terminal output (default: hidden; WebUI still receives reasoning)")
 	agentCmd.Flags().StringVar(&agentSystemPromptFile, "system-prompt", "", "File path containing custom system prompt")
 	agentCmd.Flags().StringVar(&agentSystemPrompt, "system-prompt-str", "", "Direct system prompt string")
@@ -139,29 +139,28 @@ func init() {
 	agentCmd.Flags().StringVar(&agentSubagentProvider, "subagent-provider", "", "Provider for subagent tools (persists to config; set per-session)")
 	agentCmd.Flags().StringVar(&agentResourceDirectory, "resource-directory", "", "Optional directory (relative to current working directory) to store captured web/vision resources")
 	agentCmd.Flags().StringVar(&agentWorkflowConfig, "workflow-config", "", "JSON file that defines agent workflow steps for non-interactive runs")
-	agentCmd.Flags().StringVar(&agentTraceDatasetDir, "trace-dataset-dir", "", "Enable dataset trace mode and write to directory (also settable via LEDIT_TRACE_DATASET_DIR env var)")
+	agentCmd.Flags().StringVar(&agentTraceDatasetDir, "trace-dataset-dir", "", "Enable dataset trace mode and write to directory (also settable via SPROUT_TRACE_DATASET_DIR env var)")
 	agentCmd.Flags().BoolVar(&agentPromptStdin, "prompt-stdin", false, "Read the prompt from stdin (avoids OS ARG_MAX limits for large prompts)")
 	_ = agentCmd.RegisterFlagCompletionFunc("persona", completePersonaFlag)
 
 	// Initialize environment-based defaults
 	cobra.OnInitialize(func() {
-		// Check for LEDIT_NO_STREAM environment variable
-		if os.Getenv("LEDIT_NO_STREAM") == "1" || os.Getenv("LEDIT_NO_STREAM") == "true" {
-			agentNoStreaming = true
-		}
-		// Check for LEDIT_SHOW_REASONING_TERMINAL environment variable
-		if os.Getenv("LEDIT_SHOW_REASONING_TERMINAL") == "1" || strings.EqualFold(os.Getenv("LEDIT_SHOW_REASONING_TERMINAL"), "true") {
-			agentShowReasoningTerminal = true
-		}
-		// Check for LEDIT_NO_SUBAGENTS environment variable
-		if os.Getenv("LEDIT_NO_SUBAGENTS") == "1" || os.Getenv("LEDIT_NO_SUBAGENTS") == "true" {
-			agentNoSubagents = true
-		}
-		// Check for LEDIT_NO_CONNECTION_CHECK environment variable
-		if os.Getenv("LEDIT_NO_CONNECTION_CHECK") == "1" || os.Getenv("LEDIT_NO_CONNECTION_CHECK") == "true" {
-			agentNoConnectionCheck = true
-		}
-	})
+			// Check for SPROUT_NO_STREAM environment variable
+	if configuration.GetEnvSimple("NO_STREAM") == "1" || configuration.GetEnvSimple("NO_STREAM") == "true" {
+		agentNoStreaming = true
+	}
+	// Check for SPROUT_SHOW_REASONING_TERMINAL environment variable
+	if configuration.GetEnvSimple("SHOW_REASONING_TERMINAL") == "1" || strings.EqualFold(configuration.GetEnvSimple("SHOW_REASONING_TERMINAL"), "true") {
+		agentShowReasoningTerminal = true
+	}
+	// Check for SPROUT_NO_SUBAGENTS environment variable
+	if configuration.GetEnvSimple("NO_SUBAGENTS") == "1" || configuration.GetEnvSimple("NO_SUBAGENTS") == "true" {
+		agentNoSubagents = true
+	}
+	// Check for SPROUT_NO_CONNECTION_CHECK environment variable
+	if configuration.GetEnvSimple("NO_CONNECTION_CHECK") == "1" || configuration.GetEnvSimple("NO_CONNECTION_CHECK") == "true" {
+		agentNoConnectionCheck = true
+	}})
 }
 
 func completePersonaFlag(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -244,7 +243,7 @@ Examples:
 
   # Skip connection check for faster startup (saves 1-3 seconds)
   ledit agent --no-connection-check "Quick analysis"
-  LEDIT_NO_CONNECTION_CHECK=1 ledit agent "Another quick analysis"
+  SPROUT_NO_CONNECTION_CHECK=1 ledit agent "Another quick analysis"
 
   # Set subagent model/provider (persists to config)
   ledit agent --subagent-model "claude-haiku-4-20250514" "Fix the tests"
@@ -286,7 +285,7 @@ Examples:
 
 		// Disable subagents if flag is set
 		if agentNoSubagents {
-			os.Setenv("LEDIT_NO_SUBAGENTS", "1")
+			_ = configuration.SetEnv("NO_SUBAGENTS", "1")
 		}
 
 		// Persist subagent model/provider CLI flags to config
@@ -310,13 +309,13 @@ Examples:
 		}
 
 		if agentDryRun {
-			_ = os.Setenv("LEDIT_DRY_RUN", "1")
+			_ = configuration.SetEnv("DRY_RUN", "1")
 		}
 		if agentNoConnectionCheck {
-			os.Setenv("LEDIT_SKIP_CONNECTION_CHECK", "1")
+			_ = configuration.SetEnv("SKIP_CONNECTION_CHECK", "1")
 		}
 		if strings.TrimSpace(agentResourceDirectory) != "" {
-			_ = os.Setenv("LEDIT_RESOURCE_DIRECTORY", strings.TrimSpace(agentResourceDirectory))
+			_ = configuration.SetEnv("RESOURCE_DIRECTORY", strings.TrimSpace(agentResourceDirectory))
 		}
 		if agentLastSession && strings.TrimSpace(agentSessionID) != "" {
 			return errors.New("flag --session-id and --last-session are mutually exclusive")

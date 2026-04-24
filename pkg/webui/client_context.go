@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 const (
@@ -91,7 +93,20 @@ func (ws *ReactWebServer) resolveClientID(r *http.Request) string {
 	if clientID == "" {
 		clientID = defaultWebClientID
 	}
-	return clientID
+	return sanitizeClientID(clientID)
+}
+
+// sanitizeClientID removes any path traversal characters from a client ID
+// to prevent directory traversal attacks when constructing config paths.
+func sanitizeClientID(id string) string {
+	// Remove path separators and traversal sequences
+	id = strings.ReplaceAll(id, "/", "")
+	id = strings.ReplaceAll(id, "\\", "")
+	id = strings.ReplaceAll(id, "..", "")
+	if id == "" {
+		return defaultWebClientID
+	}
+	return id
 }
 
 func (ws *ReactWebServer) getOrCreateClientContext(clientID string) *webClientContext {
@@ -190,6 +205,32 @@ func (ws *ReactWebServer) clearClientSSHContextForSessionKey(sessionKey string) 
 
 func (ws *ReactWebServer) getWorkspaceRootForRequest(r *http.Request) string {
 	return ws.getClientContextForRequest(r).WorkspaceRoot
+}
+
+// getLayeredConfigManager creates a config manager using the layered approach
+// (global → workspace → session) for the given client ID.
+// This is used as a fallback when no live agent's config manager is available.
+func (ws *ReactWebServer) getLayeredConfigManager(clientID string) (*configuration.Manager, error) {
+	configBase, err := configuration.GetConfigDir()
+	if err != nil {
+		return nil, fmt.Errorf("get config directory: %w", err)
+	}
+
+	// Resolve workspace root for this client
+	ws.mutex.RLock()
+	ctx := ws.clientContexts[clientID]
+	ws.mutex.RUnlock()
+	var workspaceRoot string
+	if ctx != nil {
+		workspaceRoot = ctx.WorkspaceRoot
+	}
+
+	var workspaceDir string
+	if workspaceRoot != "" {
+		workspaceDir = filepath.Join(workspaceRoot, configuration.ConfigDirName)
+	}
+
+	return configuration.NewManagerWithLayers(configBase, workspaceDir)
 }
 
 func (ws *ReactWebServer) getTerminalManagerForRequest(r *http.Request) *TerminalManager {
@@ -376,8 +417,21 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 
 	var created *agent.Agent
 	var createErr error
-	err := ws.withAgentWorkspace(workspaceRoot, func() error {
-		created, createErr = agent.NewAgentWithModel("")
+
+	// Compute layered config directories: global + workspace (no session file)
+	configBase, err := configuration.GetConfigDir()
+	if err != nil {
+		return nil, fmt.Errorf("get config directory: %w", err)
+	}
+
+	// Workspace config is in {workspaceRoot}/.ledit/ (if workspace exists)
+	var workspaceDir string
+	if workspaceRoot != "" {
+		workspaceDir = filepath.Join(workspaceRoot, configuration.ConfigDirName)
+	}
+
+	err = ws.withAgentWorkspace(workspaceRoot, func() error {
+		created, createErr = agent.NewAgentWithLayers(configBase, workspaceDir, "")
 		return createErr
 	})
 	if err != nil {

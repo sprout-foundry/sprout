@@ -14,7 +14,6 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
-	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/security"
 	"github.com/gorilla/websocket"
@@ -332,8 +331,8 @@ func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, msg ma
 				return
 			}
 
-			// Use a fresh config manager to update the provider directly.
-			cm, createErr := configuration.NewManagerSilent()
+			// Use a layered config manager to update the provider directly.
+			cm, createErr := ws.getLayeredConfigManager(clientID)
 			if createErr != nil {
 				_ = safeConn.WriteJSON(map[string]interface{}{
 					"type": "error",

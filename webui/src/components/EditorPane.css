@@ -278,3 +278,37 @@
   background: none;
   padding: 0;
 }
+
+/* ── Markdown Preview Layout ──────────────────────────────────── */
+
+/* Wrapper around editor + preview content area.
+ * Defaults to column (single child fills space).
+ * In split mode, switches to row so editor and preview sit side-by-side. */
+.pane-content-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pane-content-wrapper-md-split {
+  flex-direction: row;
+}
+
+.pane-content-md-editor-side {
+  flex: 1;
+  border-right: 1px solid var(--border-subtle);
+}
+
+.pane-content-md-preview-full {
+  flex: 1;
+  overflow: hidden;
+}
+
+.pane-md-preview-split {
+  flex: 1;
+  border-left: 1px solid var(--border-subtle);
+  overflow: hidden;
+  min-width: 0;
+}

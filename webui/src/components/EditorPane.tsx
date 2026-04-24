@@ -56,6 +56,7 @@ import { getEditorKeymap } from '../utils/editorHotkeys';
 import { diffGutter, updateDiffGutter, clearDiffGutter } from '../extensions/diffGutter';
 import './EditorPane.css';
 import { lintDiagnostics, clearDiagnostics, createDebouncedDiagnosticsUpdater } from '../extensions/lintDiagnostics';
+import { createCodeActionsExtension, codeActionsKeybinding } from '../extensions/codeActions';
 import { cursorHistoryPlugin } from '../extensions/cursorHistory';
 import { indentGuidesPlugin } from '../extensions/indentGuides';
 import { bracketColorizationPlugin } from '../extensions/bracketColorization';
@@ -1257,6 +1258,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
           return true;
         },
       },
+      codeActionsKeybinding(),
     ];
 
     const resolvedLanguage = resolveLanguageId(buffer?.languageOverride, buffer?.file?.ext?.replace(/^\./, ''), buffer?.file?.name);
@@ -1303,6 +1305,10 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       ),
       diffGutter(),
       lintDiagnostics(),
+      createCodeActionsExtension(
+        () => buffer?.file?.path,
+        () => localContentRef.current,
+      ),
       trailingWhitespacePlugin(),
       unsavedLineHighlight(),
       whitespaceRenderingCompartment.current.of(whitespaceRenderingPlugin(whitespaceRenderingMode)),

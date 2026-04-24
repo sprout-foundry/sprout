@@ -58,6 +58,7 @@ import './EditorPane.css';
 import { lintDiagnostics, clearDiagnostics, createDebouncedDiagnosticsUpdater } from '../extensions/lintDiagnostics';
 import { createCodeActionsExtension, codeActionsKeybinding } from '../extensions/codeActions';
 import { cursorHistoryPlugin } from '../extensions/cursorHistory';
+import { dragDropMovePlugin } from '../extensions/dragDropMove';
 import { indentGuidesPlugin } from '../extensions/indentGuides';
 import { stickyScrollPlugin } from '../extensions/stickyScroll';
 import { bracketColorizationPlugin } from '../extensions/bracketColorization';
@@ -1271,6 +1272,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       drawSelection(),
       crosshairCursor(),
       dropCursor(),
+      dragDropMovePlugin,
       keymap.of(defaultKeymap),
       tabExpandSnippets(),
       keymap.of([indentWithTab]),

@@ -168,7 +168,7 @@ These gaps were identified by cross-referencing the current editor implementatio
 
 [x] - EDITOR: Add LSP-aware rename (F2) — the current rename workflow is manual (find and replace). Implement F2 rename that uses the backend's semantic capabilities (for TS/JS/Go) or falls back to a find-and-replace dialog with preview for other languages. Add an input dialog at cursor position, show a rename preview with highlighting, and apply the change atomically.
 
-[] - EDITOR: Add LSP-aware "Find All References" (Shift+F12) — for TypeScript/JavaScript/Go files, add a "Find All References" command that queries the backend semantic API and displays results in a panel or popover. Show file path and line number for each reference. Make it available via keybinding, command palette, and context menu.
+[x] - EDITOR: Add LSP-aware "Find All References" (Shift+F12) — for TypeScript/JavaScript/Go files, add a "Find All References" command that queries the backend semantic API and displays results in a panel or popover. Show file path and line number for each reference. Make it available via keybinding, command palette, and context menu.
 
 [] - EDITOR: Add quick actions / refactor menu (Ctrl/Cmd+.) — when the cursor is on a line that has available code actions (from LSP or static analysis), show a lightbulb icon in the gutter and a menu (triggered by Ctrl+.) with actions like "Add import", "Extract function", "Fix all", etc. This is a defining IDE feature. Start with static analysis actions (missing imports, unused variables) and expand to LSP code actions.
 

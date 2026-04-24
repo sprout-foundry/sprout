@@ -15,58 +15,132 @@ interface EditorHotkeyActions {
 
 // ── Editor line-manipulation helpers ────────────────────────────────
 
-function hasSingleSelection(view: EditorView): boolean {
-  return view.state.selection.ranges.length === 1;
-}
-
 function duplicateCurrentLine(view: EditorView, direction: 'up' | 'down' = 'down'): boolean {
-  if (!hasSingleSelection(view)) return false;
+  const state = view.state;
+  const ranges = state.selection.ranges;
 
-  const cursor = view.state.selection.main.head;
-  const line = view.state.doc.lineAt(cursor);
-  const lineText = line.text;
-  const insertText = `${lineText}\n`;
+  // Single cursor: existing implementation
+  if (ranges.length === 1) {
+    const cursor = state.selection.main.head;
+    const line = state.doc.lineAt(cursor);
+    const lineText = line.text;
+    const insertText = `${lineText}\n`;
 
-  if (direction === 'up') {
+    if (direction === 'up') {
+      view.dispatch({
+        changes: { from: line.from, insert: insertText },
+        selection: { anchor: cursor + insertText.length },
+        scrollIntoView: true,
+      });
+      return true;
+    }
+
+    const insertPos = line.to;
+    const prefix = line.to === state.doc.length ? '\n' : '';
     view.dispatch({
-      changes: { from: line.from, insert: insertText },
-      selection: { anchor: cursor + insertText.length },
+      changes: { from: insertPos, insert: prefix + lineText },
+      selection: {
+        anchor: cursor + prefix.length + lineText.length + (line.to === state.doc.length ? 1 : 0),
+      },
       scrollIntoView: true,
     });
     return true;
   }
 
-  const insertPos = line.to;
-  const prefix = line.to === view.state.doc.length ? '\n' : '';
-  view.dispatch({
-    changes: { from: insertPos, insert: prefix + lineText },
-    selection: {
-      anchor: cursor + prefix.length + lineText.length + (line.to === view.state.doc.length ? 1 : 0),
-    },
-    scrollIntoView: true,
-  });
+  // Multi-cursor: collect unique lines, process bottom-to-top.
+  // Use state.update() without explicit selection so CodeMirror maps
+  // the current selection through the changes automatically (positions
+  // in a TransactionSpec.selection refer to the post-change document,
+  // so omitting it lets CM do the mapping for us).
+  const lineSet = new Set<number>();
+  for (const range of ranges) {
+    lineSet.add(state.doc.lineAt(range.head).number);
+  }
+  const lineNumbers = Array.from(lineSet).sort((a, b) => b - a);
+
+  const changes: { from: number; to: number; insert: string }[] = [];
+
+  for (const lineNum of lineNumbers) {
+    const line = state.doc.line(lineNum);
+    const lineText = line.text;
+    const insertText = `${lineText}\n`;
+
+    if (direction === 'up') {
+      changes.push({ from: line.from, to: line.from, insert: insertText });
+    } else {
+      const insertPos = line.to;
+      const prefix = line.to === state.doc.length ? '\n' : '';
+      changes.push({ from: insertPos, to: insertPos, insert: prefix + lineText });
+    }
+  }
+
+  view.dispatch({ changes, scrollIntoView: true });
   return true;
 }
 
 function deleteCurrentLine(view: EditorView): boolean {
-  if (!hasSingleSelection(view)) return false;
+  const state = view.state;
+  const ranges = state.selection.ranges;
 
-  const cursor = view.state.selection.main.head;
-  const line = view.state.doc.lineAt(cursor);
-  const isLastLine = line.to === view.state.doc.length;
+  // Single cursor: existing implementation
+  if (ranges.length === 1) {
+    const cursor = state.selection.main.head;
+    const line = state.doc.lineAt(cursor);
+    const isLastLine = line.to === state.doc.length;
 
-  let from = line.from;
-  let to = line.to;
+    let from = line.from;
+    let to = line.to;
 
-  if (!isLastLine) {
-    to += 1;
-  } else if (line.from > 0) {
-    from -= 1;
+    if (!isLastLine) {
+      to += 1;
+    } else if (line.from > 0) {
+      from -= 1;
+    }
+
+    view.dispatch({
+      changes: { from, to, insert: '' },
+      selection: { anchor: Math.max(0, from) },
+      scrollIntoView: true,
+    });
+    return true;
+  }
+
+  // Multi-cursor: collect unique lines, process bottom-to-top.
+  // Compute explicit post-change selection: each deleted line's cursor
+  // collapses to the line's start position (or previous line if last).
+  const lineSet = new Set<number>();
+  for (const range of ranges) {
+    const line = state.doc.lineAt(range.head);
+    lineSet.add(line.number);
+  }
+  const lineNumbers = Array.from(lineSet).sort((a, b) => b - a);
+
+  const changes: { from: number; to: number; insert: string }[] = [];
+  const newRanges: { anchor: number }[] = [];
+
+  for (const lineNum of lineNumbers) {
+    const line = state.doc.line(lineNum);
+    const isLastLine = line.to === state.doc.length;
+
+    let from = line.from;
+    let to = line.to;
+
+    if (!isLastLine) {
+      to += 1;
+    } else if (line.from > 0) {
+      from -= 1;
+    }
+
+    changes.push({ from, to, insert: '' });
+    newRanges.push({ anchor: Math.max(0, from) });
   }
 
   view.dispatch({
-    changes: { from, to, insert: '' },
-    selection: { anchor: Math.max(0, from) },
+    changes,
+    selection: EditorSelection.create(
+      newRanges.map((r) => EditorSelection.cursor(r.anchor)),
+      0,
+    ),
     scrollIntoView: true,
   });
   return true;
@@ -87,52 +161,109 @@ export function getLineIndent(text: string): string {
 // is consistent with CodeMirror's built-in editor behavior.
 
 function insertLineBelow(view: EditorView): boolean {
-  if (!hasSingleSelection(view)) return false;
+  const state = view.state;
+  const ranges = state.selection.ranges;
 
-  const line = view.state.doc.lineAt(view.state.selection.main.head);
-  const indent = getLineIndent(line.text);
-  // Insert \n + indentation at end of the current line, then place the
-  // cursor at the start of the new line (before the indentation —
-  // VS Code places cursor at column 0 of the new indented line).
-  const endOfLine = line.to;
-  const insertText = `\n${indent}`;
-  view.dispatch({
-    changes: { from: endOfLine, insert: insertText },
-    selection: { anchor: endOfLine + 1 },
-    scrollIntoView: true,
-  });
+  // Single cursor: existing implementation
+  if (ranges.length === 1) {
+    const line = state.doc.lineAt(state.selection.main.head);
+    const indent = getLineIndent(line.text);
+    const endOfLine = line.to;
+    const insertText = `\n${indent}`;
+    view.dispatch({
+      changes: { from: endOfLine, insert: insertText },
+      selection: { anchor: endOfLine + 1 },
+      scrollIntoView: true,
+    });
+    return true;
+  }
+
+  // Multi-cursor: collect unique lines, process bottom-to-top.
+  // Omit explicit selection so CodeMirror maps cursors through changes.
+  const lineSet = new Set<number>();
+  for (const range of ranges) {
+    lineSet.add(state.doc.lineAt(range.head).number);
+  }
+  const lineNumbers = Array.from(lineSet).sort((a, b) => b - a);
+
+  const changes: { from: number; to: number; insert: string }[] = [];
+  for (const lineNum of lineNumbers) {
+    const line = state.doc.line(lineNum);
+    const indent = getLineIndent(line.text);
+    const endOfLine = line.to;
+    changes.push({ from: endOfLine, to: endOfLine, insert: `\n${indent}` });
+  }
+
+  view.dispatch({ changes, scrollIntoView: true });
   return true;
 }
 
 function insertLineAbove(view: EditorView): boolean {
-  if (!hasSingleSelection(view)) return false;
+  const state = view.state;
+  const ranges = state.selection.ranges;
 
-  const line = view.state.doc.lineAt(view.state.selection.main.head);
-  const indent = getLineIndent(line.text);
-  // Insert indentation + \n before the current line's start, then place
-  // the cursor at the start of the new line (before the indentation).
-  const insertText = `${indent}\n`;
-  view.dispatch({
-    changes: { from: line.from, insert: insertText },
-    selection: { anchor: line.from },
-    scrollIntoView: true,
-  });
+  // Single cursor: existing implementation
+  if (ranges.length === 1) {
+    const line = state.doc.lineAt(state.selection.main.head);
+    const indent = getLineIndent(line.text);
+    const insertText = `${indent}\n`;
+    view.dispatch({
+      changes: { from: line.from, insert: insertText },
+      selection: { anchor: line.from },
+      scrollIntoView: true,
+    });
+    return true;
+  }
+
+  // Multi-cursor: collect unique lines, process bottom-to-top.
+  // Omit explicit selection so CodeMirror maps cursors through changes.
+  const lineSet = new Set<number>();
+  for (const range of ranges) {
+    lineSet.add(state.doc.lineAt(range.head).number);
+  }
+  const lineNumbers = Array.from(lineSet).sort((a, b) => b - a);
+
+  const changes: { from: number; to: number; insert: string }[] = [];
+  for (const lineNum of lineNumbers) {
+    const line = state.doc.line(lineNum);
+    const indent = getLineIndent(line.text);
+    changes.push({ from: line.from, to: line.from, insert: `${indent}\n` });
+  }
+
+  view.dispatch({ changes, scrollIntoView: true });
   return true;
 }
 
 function moveCurrentLine(view: EditorView, direction: 'up' | 'down'): boolean {
-  if (!hasSingleSelection(view)) return false;
+  const state = view.state;
+  const ranges = state.selection.ranges;
 
-  const cursor = view.state.selection.main.head;
-  const line = view.state.doc.lineAt(cursor);
+  // Single cursor: existing implementation
+  if (ranges.length === 1) {
+    const cursor = state.selection.main.head;
+    const line = state.doc.lineAt(cursor);
 
-  if (direction === 'up') {
-    if (line.number <= 1) return true;
-    const prevLine = view.state.doc.line(line.number - 1);
-    const from = prevLine.from;
-    const to = line.to;
-    const swapped = `${line.text}\n${prevLine.text}`;
-    const newCursor = Math.max(from, cursor - (prevLine.length + 1));
+    if (direction === 'up') {
+      if (line.number <= 1) return true;
+      const prevLine = state.doc.line(line.number - 1);
+      const from = prevLine.from;
+      const to = line.to;
+      const swapped = `${line.text}\n${prevLine.text}`;
+      const newCursor = Math.max(from, cursor - (prevLine.length + 1));
+      view.dispatch({
+        changes: { from, to, insert: swapped },
+        selection: { anchor: newCursor },
+        scrollIntoView: true,
+      });
+      return true;
+    }
+
+    if (line.number >= state.doc.lines) return true;
+    const nextLine = state.doc.line(line.number + 1);
+    const from = line.from;
+    const to = nextLine.to;
+    const swapped = `${nextLine.text}\n${line.text}`;
+    const newCursor = Math.min(from + swapped.length, cursor + (nextLine.length + 1));
     view.dispatch({
       changes: { from, to, insert: swapped },
       selection: { anchor: newCursor },
@@ -141,17 +272,44 @@ function moveCurrentLine(view: EditorView, direction: 'up' | 'down'): boolean {
     return true;
   }
 
-  if (line.number >= view.state.doc.lines) return true;
-  const nextLine = view.state.doc.line(line.number + 1);
-  const from = line.from;
-  const to = nextLine.to;
-  const swapped = `${nextLine.text}\n${line.text}`;
-  const newCursor = Math.min(from + swapped.length, cursor + (nextLine.length + 1));
-  view.dispatch({
-    changes: { from, to, insert: swapped },
-    selection: { anchor: newCursor },
-    scrollIntoView: true,
-  });
+  // Multi-cursor: collect unique lines, determine processing order
+  // Use state.update() without explicit selection so CodeMirror maps
+  // cursors through the changes automatically. This correctly handles
+  // position shifts after each line swap.
+  const lineSet = new Set<number>();
+  for (const range of ranges) {
+    lineSet.add(state.doc.lineAt(range.head).number);
+  }
+
+  // 'up': process top-to-bottom (lower line numbers first)
+  // 'down': process bottom-to-top (higher line numbers first)
+  const lineNumbers = Array.from(lineSet).sort((a, b) => (direction === 'up' ? a - b : b - a));
+
+  const changes: { from: number; to: number; insert: string }[] = [];
+
+  for (const lineNum of lineNumbers) {
+    const line = state.doc.line(lineNum);
+
+    if (direction === 'up') {
+      if (line.number <= 1) continue;
+      const prevLine = state.doc.line(line.number - 1);
+      const from = prevLine.from;
+      const to = line.to;
+      const swapped = `${line.text}\n${prevLine.text}`;
+      changes.push({ from, to, insert: swapped });
+    } else {
+      if (line.number >= state.doc.lines) continue;
+      const nextLine = state.doc.line(line.number + 1);
+      const from = line.from;
+      const to = nextLine.to;
+      const swapped = `${nextLine.text}\n${line.text}`;
+      changes.push({ from, to, insert: swapped });
+    }
+  }
+
+  if (changes.length === 0) return true;
+
+  view.dispatch({ changes, scrollIntoView: true });
   return true;
 }
 

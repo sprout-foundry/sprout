@@ -16,7 +16,7 @@ type semanticRequest struct {
 	Path       string            `json:"path"`
 	Content    string            `json:"content"`
 	LanguageID string            `json:"language_id"`
-	Method     string            `json:"method"`            // diagnostics | definition
+	Method     string            `json:"method"`            // diagnostics | definition | hover
 	Trigger    string            `json:"trigger,omitempty"` // edit | save | ""
 	Position   *semanticPosition `json:"position,omitempty"`
 }
@@ -39,6 +39,14 @@ type semanticDefinition struct {
 	Column int    `json:"column"` // 1-based
 }
 
+type semanticHover struct {
+	Contents    string `json:"contents"`
+	StartLine   int    `json:"start_line,omitempty"`
+	StartColumn int    `json:"start_column,omitempty"`
+	EndLine     int    `json:"end_line,omitempty"`
+	EndColumn   int    `json:"end_column,omitempty"`
+}
+
 type semanticResponse struct {
 	Message      string               `json:"message"`
 	Path         string               `json:"path"`
@@ -47,6 +55,7 @@ type semanticResponse struct {
 	Capabilities semanticCapabilities `json:"capabilities"`
 	Diagnostics  []semanticDiagnostic `json:"diagnostics,omitempty"`
 	Definition   *semanticDefinition  `json:"definition,omitempty"`
+	Hover        *semanticHover      `json:"hover,omitempty"`
 	Error        string               `json:"error,omitempty"`
 	Version      string               `json:"version"`
 	DurationMs   int64                `json:"duration_ms,omitempty"`
@@ -57,6 +66,8 @@ type semanticToolInput = lspsemantic.ToolInput
 type semanticToolDiagnostic = lspsemantic.ToolDiagnostic
 
 type semanticToolDefinition = lspsemantic.ToolDefinition
+
+type semanticToolHover = lspsemantic.ToolHover
 
 type semanticToolResult = lspsemantic.ToolResult
 
@@ -127,13 +138,13 @@ func (ws *ReactWebServer) handleAPISemantic(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "File path is required", http.StatusBadRequest)
 		return
 	}
-	if req.Method != "diagnostics" && req.Method != "definition" {
+	if req.Method != "diagnostics" && req.Method != "definition" && req.Method != "hover" {
 		http.Error(w, "Invalid method", http.StatusBadRequest)
 		return
 	}
-	if req.Method == "definition" {
+	if req.Method == "definition" || req.Method == "hover" {
 		if req.Position == nil || req.Position.Line <= 0 || req.Position.Column <= 0 {
-			http.Error(w, "Position is required for definition", http.StatusBadRequest)
+			http.Error(w, "Position is required for definition and hover", http.StatusBadRequest)
 			return
 		}
 	}
@@ -216,6 +227,15 @@ func applyToolResult(result *semanticResponse, toolResult semanticToolResult, wo
 			Path:   defPath,
 			Line:   toolResult.Definition.Line,
 			Column: toolResult.Definition.Column,
+		}
+	}
+	if toolResult.Hover != nil {
+		result.Hover = &semanticHover{
+			Contents:    toolResult.Hover.Contents,
+			StartLine:   toolResult.Hover.StartLine,
+			StartColumn: toolResult.Hover.StartColumn,
+			EndLine:     toolResult.Hover.EndLine,
+			EndColumn:   toolResult.Hover.EndColumn,
 		}
 	}
 }

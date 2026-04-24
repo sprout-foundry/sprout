@@ -218,12 +218,12 @@ func resolveRecommendedModel(models []string, prefixes []string) string {
 }
 
 func detectOnboardingEnvironment() onboardingEnvironment {
-	hostPlatform := strings.TrimSpace(os.Getenv("LEDIT_HOST_PLATFORM"))
+	hostPlatform := strings.TrimSpace(configuration.GetEnvSimple("HOST_PLATFORM"))
 	if hostPlatform == "" {
 		hostPlatform = runtime.GOOS
 	}
 
-	backendMode := strings.TrimSpace(os.Getenv("LEDIT_DESKTOP_BACKEND_MODE"))
+	backendMode := strings.TrimSpace(configuration.GetEnvSimple("DESKTOP_BACKEND_MODE"))
 	if backendMode == "" {
 		backendMode = "native"
 	}

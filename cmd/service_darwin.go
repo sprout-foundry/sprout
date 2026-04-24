@@ -47,7 +47,7 @@ func generateLaunchdPlist(binaryPath, homeDir string) ([]byte, error) {
 		fmt.Fprintf(&envBuf, "\t\t<key>%s</key>\n\t\t<string>%s</string>\n",
 			xmlEscapeStr(key), xmlEscapeStr(value))
 	}
-	addEnvEntry("LEDIT_SERVICE", "1")
+	addEnvEntry("SPROUT_SERVICE", "1")
 	addEnvEntry("HOME", homeDir)
 	// Include the user's PATH so the daemon can locate developer tools.
 	if path := os.Getenv("PATH"); path != "" {

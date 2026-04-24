@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -95,7 +96,7 @@ func runPlanMode(args []string) error {
 	}
 
 	// Set environment for agent
-	_ = os.Setenv("LEDIT_FROM_AGENT", "1")
+	_ = envutil.SetEnv("FROM_AGENT", "1")
 
 	// Determine initial query
 	var query string

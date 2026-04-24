@@ -2,8 +2,9 @@ package agent
 
 import (
 	"fmt"
-	"os"
 	"strings"
+
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // shouldLogTurnSummaries determines if turn summaries should be logged
@@ -14,7 +15,7 @@ func (ch *ConversationHandler) shouldLogTurnSummaries() bool {
 	if ch.agent.debug {
 		return true
 	}
-	return os.Getenv("LEDIT_LOG_TURNS") == "1"
+	return configuration.GetEnvSimple("LOG_TURNS") == "1"
 }
 
 // logTurnSummary logs a summary of the turn for debugging

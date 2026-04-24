@@ -95,8 +95,8 @@ function Detect-Arch {
 
 # Determine install directory
 function Get-InstallDir {
-    if ($env:LEDIT_INSTALL_DIR) {
-        return $env:LEDIT_INSTALL_DIR
+    if ($env:SPROUT_INSTALL_DIR) {
+        return $env:SPROUT_INSTALL_DIR
     }
     
     # Default to LOCALAPPDATA\Programs\ledit
@@ -123,8 +123,8 @@ function Get-InstallDir {
 
 # Get version from environment or fetch latest from GitHub
 function Get-Version {
-    if ($env:LEDIT_VERSION) {
-        return $env:LEDIT_VERSION
+    if ($env:SPROUT_VERSION) {
+        return $env:SPROUT_VERSION
     }
     
     try {
@@ -305,8 +305,8 @@ function Print-Success {
 
 # Show version info
 function Show-Version {
-    if ($env:LEDIT_VERSION) {
-        Write-Host "ledit version $env:LEDIT_VERSION (requested)"
+    if ($env:SPROUT_VERSION) {
+        Write-Host "ledit version $env:SPROUT_VERSION (requested)"
     } else {
         try {
             $apiUrl = "https://api.github.com/repos/alantheprice/ledit/releases/latest"

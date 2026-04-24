@@ -1,6 +1,7 @@
 package trace
 
 import (
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -299,47 +300,47 @@ func collectEnvConfig() map[string]string {
 	config := make(map[string]string)
 
 	// Truncation limits
-	if v := os.Getenv("LEDIT_INTERACTIVE_INPUT_MAX_CHARS"); v != "" {
+	if v := envutil.GetEnvSimple("INTERACTIVE_INPUT_MAX_CHARS"); v != "" {
 		config["interactive_input_max_chars"] = v
 	}
-	if v := os.Getenv("LEDIT_AUTOMATION_INPUT_MAX_CHARS"); v != "" {
+	if v := envutil.GetEnvSimple("AUTOMATION_INPUT_MAX_CHARS"); v != "" {
 		config["automation_input_max_chars"] = v
 	}
-	if v := os.Getenv("LEDIT_USER_INPUT_MAX_CHARS"); v != "" {
+	if v := envutil.GetEnvSimple("USER_INPUT_MAX_CHARS"); v != "" {
 		config["user_input_max_chars"] = v
 	}
-	if v := os.Getenv("LEDIT_READ_FILE_MAX_BYTES"); v != "" {
+	if v := envutil.GetEnvSimple("READ_FILE_MAX_BYTES"); v != "" {
 		config["read_file_max_bytes"] = v
 	}
-	if v := os.Getenv("LEDIT_SHELL_HEAD_TOKENS"); v != "" {
+	if v := envutil.GetEnvSimple("SHELL_HEAD_TOKENS"); v != "" {
 		config["shell_head_tokens"] = v
 	}
-	if v := os.Getenv("LEDIT_SHELL_TAIL_TOKENS"); v != "" {
+	if v := envutil.GetEnvSimple("SHELL_TAIL_TOKENS"); v != "" {
 		config["shell_tail_tokens"] = v
 	}
-	if v := os.Getenv("LEDIT_VISION_MAX_TEXT_CHARS"); v != "" {
+	if v := envutil.GetEnvSimple("VISION_MAX_TEXT_CHARS"); v != "" {
 		config["vision_max_text_chars"] = v
 	}
-	if v := os.Getenv("LEDIT_SEARCH_MAX_BYTES"); v != "" {
+	if v := envutil.GetEnvSimple("SEARCH_MAX_BYTES"); v != "" {
 		config["search_max_bytes"] = v
 	}
-	if v := os.Getenv("LEDIT_FETCH_URL_MAX_CHARS"); v != "" {
+	if v := envutil.GetEnvSimple("FETCH_URL_MAX_CHARS"); v != "" {
 		config["fetch_url_max_chars"] = v
 	}
 
 	// Token caps
-	if v := os.Getenv("LEDIT_SUBAGENT_MAX_TOKENS"); v != "" {
+	if v := envutil.GetEnvSimple("SUBAGENT_MAX_TOKENS"); v != "" {
 		config["subagent_max_tokens"] = v
 	}
 
 	// Feature flags
-	if v := os.Getenv("LEDIT_SELF_REVIEW_MODE"); v != "" {
+	if v := envutil.GetEnvSimple("SELF_REVIEW_MODE"); v != "" {
 		config["self_review_mode"] = v
 	}
-	if v := os.Getenv("LEDIT_NO_SUBAGENT_MODE"); v != "" {
+	if v := envutil.GetEnvSimple("NO_SUBAGENT_MODE"); v != "" {
 		config["no_subagent_mode"] = v
 	}
-	if v := os.Getenv("LEDIT_ISOLATED_CONFIG"); v != "" {
+	if v := envutil.GetEnvSimple("ISOLATED_CONFIG"); v != "" {
 		config["isolated_config"] = v
 	}
 

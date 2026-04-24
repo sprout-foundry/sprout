@@ -2,10 +2,10 @@ package agent
 
 import (
 	"context"
-	"os"
 	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // TriggerInterrupt manually triggers an interrupt for testing purposes
@@ -50,7 +50,7 @@ func (a *Agent) HandleInterrupt() string {
 
 	// Interrupt handling is deterministic:
 	// any interrupt request stops the current task immediately without prompting.
-	if os.Getenv("LEDIT_FROM_AGENT") == "1" {
+	if configuration.GetEnvSimple("FROM_AGENT") == "1" {
 		a.debugLog("Subagent interrupt detected, stopping task\n")
 	}
 	a.pauseState.IsPaused = false

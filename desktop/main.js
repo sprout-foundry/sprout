@@ -37,11 +37,11 @@ const { autoUpdater } = require('electron-updater');
 const { registerDesktopProtocol, extractWorkspacePathFromOpenTarget } = require('./protocol');
 
 function isSmokeTestMode() {
-  return process.env.LEDIT_SMOKE_TEST === '1';
+  return process.env.SPROUT_SMOKE_TEST === '1';
 }
 
 function shouldSkipRestore() {
-  return process.env.LEDIT_SKIP_RESTORE === '1';
+  return process.env.SPROUT_SKIP_RESTORE === '1';
 }
 
 function isAppEntryArgument(candidate) {

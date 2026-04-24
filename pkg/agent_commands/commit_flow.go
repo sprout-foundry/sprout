@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"bufio"
 	"errors"
 	"fmt"
@@ -207,7 +208,7 @@ func (cf *CommitFlow) commitStagedFiles() error {
 // selectFilesToCommit allows the user to select specific files to commit
 func (cf *CommitFlow) selectFilesToCommit() error {
 	// Use console flow if in agent console
-	if os.Getenv("LEDIT_AGENT_CONSOLE") == "1" {
+	if envutil.GetEnvSimple("AGENT_CONSOLE") == "1" {
 		return cf.selectFilesToCommitConsole()
 	}
 
@@ -264,7 +265,7 @@ func (cf *CommitFlow) stageAllAndCommit() error {
 // singleFileCommit allows selecting and committing a single file
 func (cf *CommitFlow) singleFileCommit() error {
 	// Use console flow if in agent console
-	if os.Getenv("LEDIT_AGENT_CONSOLE") == "1" {
+	if envutil.GetEnvSimple("AGENT_CONSOLE") == "1" {
 		return cf.singleFileCommitConsole()
 	}
 

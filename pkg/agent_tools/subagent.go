@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // StreamCallback is a function that receives streamed output from subagents
@@ -40,7 +41,7 @@ const DefaultSubagentMaxTokens = 2_000_000 // 2M tokens default budget
 // Environment variable format: number followed by unit (e.g., "30m", "1h", "90s")
 // Set to "0" or leave unset to disable timeout completely (recommended)
 func GetSubagentTimeout() time.Duration {
-	envTimeout := os.Getenv("LEDIT_SUBAGENT_TIMEOUT")
+	envTimeout := configuration.GetEnvSimple("SUBAGENT_TIMEOUT")
 	if envTimeout == "" {
 		return 0 // No timeout by default
 	}
@@ -76,7 +77,7 @@ func GetSubagentTimeout() time.Duration {
 //
 // Environment variable format: integer number of tokens (e.g., "1000000" for 1M tokens)
 func GetSubagentMaxTokens() int {
-	envMaxTokens := os.Getenv("LEDIT_SUBAGENT_MAX_TOKENS")
+	envMaxTokens := configuration.GetEnvSimple("SUBAGENT_MAX_TOKENS")
 	if envMaxTokens == "" {
 		return DefaultSubagentMaxTokens // Use default
 	}
@@ -213,15 +214,15 @@ func RunSubagent(workspaceRoot string, prompt, model, provider string, streamCal
 	} else if wd, err := os.Getwd(); err == nil {
 		cmd.Dir = wd
 	}
-	cmd.Env = append(os.Environ(), "LEDIT_FROM_AGENT=1", "LEDIT_SUBAGENT=1")
+	cmd.Env = append(os.Environ(), "SPROUT_FROM_AGENT=1", "LEDIT_FROM_AGENT=1", "SPROUT_SUBAGENT=1", "LEDIT_SUBAGENT=1")
 	if persona != "" {
-		cmd.Env = append(cmd.Env, "LEDIT_PERSONA="+persona)
+		cmd.Env = append(cmd.Env, "SPROUT_PERSONA="+persona, "LEDIT_PERSONA="+persona)
 	}
-	if debug := os.Getenv("LEDIT_DEBUG"); debug != "" {
-		cmd.Env = append(cmd.Env, "LEDIT_DEBUG="+debug)
+	if debug := configuration.GetEnvSimple("DEBUG"); debug != "" {
+		cmd.Env = append(cmd.Env, "SPROUT_DEBUG="+debug, "LEDIT_DEBUG="+debug)
 	}
-	if unsafe := os.Getenv("LEDIT_UNSAFE_MODE"); unsafe != "" {
-		cmd.Env = append(cmd.Env, "LEDIT_UNSAFE_MODE="+unsafe)
+	if unsafe := configuration.GetEnvSimple("UNSAFE_MODE"); unsafe != "" {
+		cmd.Env = append(cmd.Env, "SPROUT_UNSAFE_MODE="+unsafe, "LEDIT_UNSAFE_MODE="+unsafe)
 	}
 
 	// Also collect full output for return value
@@ -560,12 +561,12 @@ func spawnSubagent(workspaceRoot string, task ParallelSubagentTask, noTimeout bo
 	}
 
 	// Propagate important environment variables to subagent processes
-	cmd.Env = append(os.Environ(), "LEDIT_FROM_AGENT=1", "LEDIT_SUBAGENT=1")
-	if debug := os.Getenv("LEDIT_DEBUG"); debug != "" {
-		cmd.Env = append(cmd.Env, "LEDIT_DEBUG="+debug)
+	cmd.Env = append(os.Environ(), "SPROUT_FROM_AGENT=1", "LEDIT_FROM_AGENT=1", "SPROUT_SUBAGENT=1", "LEDIT_SUBAGENT=1")
+	if debug := configuration.GetEnvSimple("DEBUG"); debug != "" {
+		cmd.Env = append(cmd.Env, "SPROUT_DEBUG="+debug, "LEDIT_DEBUG="+debug)
 	}
-	if unsafe := os.Getenv("LEDIT_UNSAFE_MODE"); unsafe != "" {
-		cmd.Env = append(cmd.Env, "LEDIT_UNSAFE_MODE="+unsafe)
+	if unsafe := configuration.GetEnvSimple("UNSAFE_MODE"); unsafe != "" {
+		cmd.Env = append(cmd.Env, "SPROUT_UNSAFE_MODE="+unsafe, "LEDIT_UNSAFE_MODE="+unsafe)
 	}
 
 	// Also collect full output for return value

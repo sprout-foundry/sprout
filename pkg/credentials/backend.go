@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 const (
@@ -210,7 +211,7 @@ func GetStorageBackend() (Backend, error) {
 // This is extracted from GetStorageBackend() to allow caching via sync.Once.
 func resolveBackend() (Backend, error) {
 	// Check environment variable first
-	envMode := strings.TrimSpace(os.Getenv("LEDIT_CREDENTIAL_BACKEND"))
+	envMode := strings.TrimSpace(envutil.GetEnvSimple("CREDENTIAL_BACKEND"))
 	if envMode == "keyring" {
 		log.Printf("[credentials] Using keyring backend (forced via LEDIT_CREDENTIAL_BACKEND)")
 		return NewOSKeyringBackend(), nil

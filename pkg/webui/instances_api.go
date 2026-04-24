@@ -1,6 +1,7 @@
 package webui
 
 import (
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"bufio"
 	"encoding/json"
 	"net/http"
@@ -504,7 +505,7 @@ func parseSSHConfigFile(filePath string, hostsMap map[string]*sshHostEntryDTO, v
 }
 
 func getLeditConfigDir() string {
-	if dir := strings.TrimSpace(os.Getenv("LEDIT_CONFIG")); dir != "" {
+	if dir := strings.TrimSpace(envutil.GetEnvSimple("CONFIG")); dir != "" {
 		return dir
 	}
 	if xdg := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME")); xdg != "" {

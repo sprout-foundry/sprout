@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"golang.org/x/term"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // CIOutputHandler manages output formatting for CI/non-interactive environments
@@ -75,7 +76,7 @@ func (h *CIOutputHandler) Write(p []byte) (n int, err error) {
 	content := h.buffer.String()
 
 	// Debug all writes
-	if os.Getenv("LEDIT_DEBUG_OUTPUT") == "1" {
+	if configuration.GetEnvSimple("DEBUG_OUTPUT") == "1" {
 		fmt.Fprintf(os.Stderr, "[DEBUG CIOutputHandler.Write] Buffer now: %q\n", content)
 	}
 
@@ -114,7 +115,7 @@ func (h *CIOutputHandler) Write(p []byte) (n int, err error) {
 
 		// Strip ANSI escape codes only if colors should be disabled
 		// Allow preserve of markdown colors via environment variable
-		shouldPreserveColors := os.Getenv("LEDIT_CI_COLORS") == "1" || os.Getenv("LEDIT_COLOR") == "always"
+		shouldPreserveColors := configuration.GetEnvSimple("CI_COLORS") == "1" || configuration.GetEnvSimple("COLOR") == "always"
 
 		if !shouldPreserveColors {
 			content = h.stripANSIEscapeCodes(content)

@@ -748,7 +748,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	}
 
 	// Check if subagent failed with security-related errors
-	// When running as a subagent (LEDIT_FROM_AGENT=1), we can't prompt the user
+	// When running as a subagent (SPROUT_FROM_AGENT=1), we can't prompt the user
 	// So we need to delegate the security decision back to the primary agent
 	if configuration.GetEnvSimple("FROM_AGENT") == "1" {
 		stderr := resultMap["stderr"]

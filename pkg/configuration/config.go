@@ -659,6 +659,44 @@ func (c *Config) Save() error {
 	return nil
 }
 
+// SaveToDir saves the configuration to a specific directory, bypassing
+// GetConfigPath() (which reads the SPROUT_CONFIG/LEDIT_CONFIG env vars).
+// Use this when a Manager has an explicit configDir so that saves go to
+// the correct location even after the env var has been restored.
+func (c *Config) SaveToDir(dir string) error {
+	// Migrate any plaintext secrets in MCP server env blocks to the
+	// credential store before persisting.
+	for name := range c.MCP.Servers {
+		s := c.MCP.Servers[name]
+		count, err := mcp.MigrateEnvSecretsFromServer(name, &s)
+		if err != nil {
+			log.Printf("[config] Warning: failed to migrate MCP secrets for server %s: %v", name, err)
+		} else if count > 0 {
+			c.MCP.Servers[name] = s
+		}
+	}
+
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return fmt.Errorf("create config directory %q: %w", dir, err)
+	}
+
+	configPath := filepath.Join(dir, ConfigFileName)
+	c.Version = ConfigVersion
+	persisted := *c
+	persisted.Version = ConfigVersion
+	persisted.CustomProviders = nil
+	data, err := json.MarshalIndent(&persisted, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	if err := os.WriteFile(configPath, data, 0600); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	return nil
+}
+
 // GetModelForProvider returns the configured model for a provider
 func (c *Config) GetModelForProvider(provider string) string {
 	if model, exists := c.ProviderModels[provider]; exists && model != "" {

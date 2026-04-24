@@ -35,7 +35,7 @@ const DefaultSubagentTimeout = 0 // 0 means no timeout
 const DefaultSubagentMaxTokens = 2_000_000 // 2M tokens default budget
 
 // GetSubagentTimeout returns the configured timeout for subagent execution.
-// It reads from LEDIT_SUBAGENT_TIMEOUT environment variable if set.
+// It reads from SPROUT_SUBAGENT_TIMEOUT environment variable if set.
 // A value of "0" or unset means NO timeout (runs indefinitely).
 //
 // Environment variable format: number followed by unit (e.g., "30m", "1h", "90s")
@@ -72,7 +72,7 @@ func GetSubagentTimeout() time.Duration {
 }
 
 // GetSubagentMaxTokens returns the configured token budget for subagent execution.
-// It reads from LEDIT_SUBAGENT_MAX_TOKENS environment variable if set.
+// It reads from SPROUT_SUBAGENT_MAX_TOKENS environment variable if set.
 // A value of "0" or unset means use the default 2M token budget.
 //
 // Environment variable format: integer number of tokens (e.g., "1000000" for 1M tokens)
@@ -89,7 +89,7 @@ func GetSubagentMaxTokens() int {
 	}
 
 	// If parsing failed, return default
-	log.Printf("[WARNING] Invalid LEDIT_SUBAGENT_MAX_TOKENS value '%s', using default %d\n", envMaxTokens, DefaultSubagentMaxTokens)
+	log.Printf("[WARNING] Invalid SPROUT_SUBAGENT_MAX_TOKENS value '%s', using default %d\n", envMaxTokens, DefaultSubagentMaxTokens)
 	return DefaultSubagentMaxTokens
 }
 

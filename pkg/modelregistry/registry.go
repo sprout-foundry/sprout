@@ -9,7 +9,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -23,10 +22,6 @@ const (
 	defaultNegativeTTL = 30 * time.Second
 	defaultHTTPTimeout = 500 * time.Millisecond
 	maxResponseBytes   int64 = 1 << 20 // 1 MiB — matches pkg/providercatalog limit
-	envRegistryURL     = "SPROUT_MODEL_REGISTRY_URL"
-	envRegistryTTL     = "SPROUT_MODEL_REGISTRY_TTL"
-	envRegistryNegTTL  = "SPROUT_MODEL_REGISTRY_NEGATIVE_TTL"
-	envRegistryTimeout = "SPROUT_MODEL_REGISTRY_TIMEOUT"
 )
 
 // ModelInfo mirrors api.ModelInfo for registry JSON responses.
@@ -88,20 +83,20 @@ func init() {
 }
 
 func loadConfig() {
-	if v := strings.TrimSpace(os.Getenv(envRegistryURL)); v != "" {
+	if v := strings.TrimSpace(envutil.GetEnvSimple("MODEL_REGISTRY_URL")); v != "" {
 		baseURL = strings.TrimRight(v, "/")
 	}
-	if v := strings.TrimSpace(os.Getenv(envRegistryTTL)); v != "" {
+	if v := strings.TrimSpace(envutil.GetEnvSimple("MODEL_REGISTRY_TTL")); v != "" {
 		if d, err := time.ParseDuration(v); err == nil && d > 0 {
 			ttl = d
 		}
 	}
-	if v := strings.TrimSpace(os.Getenv(envRegistryNegTTL)); v != "" {
+	if v := strings.TrimSpace(envutil.GetEnvSimple("MODEL_REGISTRY_NEGATIVE_TTL")); v != "" {
 		if d, err := time.ParseDuration(v); err == nil && d > 0 {
 			negativeTTL = d
 		}
 	}
-	if v := strings.TrimSpace(os.Getenv(envRegistryTimeout)); v != "" {
+	if v := strings.TrimSpace(envutil.GetEnvSimple("MODEL_REGISTRY_TIMEOUT")); v != "" {
 		if d, err := time.ParseDuration(v); err == nil && d > 0 {
 			httpTimeout = d
 		}

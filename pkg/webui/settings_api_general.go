@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 
 	agentpkg "github.com/sprout-foundry/sprout/pkg/agent"
@@ -33,6 +34,21 @@ func (ws *ReactWebServer) handleAPISettings(w http.ResponseWriter, r *http.Reque
 // ---------------------------------------------------------------------------
 
 func (ws *ReactWebServer) handleAPISettingsGet(w http.ResponseWriter, r *http.Request) {
+	layer := strings.TrimSpace(r.URL.Query().Get("layer"))
+
+	switch layer {
+	case "global":
+		ws.handleGetGlobalSettings(w, r)
+		return
+	case "workspace":
+		ws.handleGetWorkspaceSettings(w, r)
+		return
+	case "session":
+		ws.handleGetSessionSettings(w, r)
+		return
+	}
+
+	// Default: return effective merged config (current behavior)
 	cm := ws.getConfigManager(r, w)
 	if cm == nil {
 		return
@@ -40,6 +56,72 @@ func (ws *ReactWebServer) handleAPISettingsGet(w http.ResponseWriter, r *http.Re
 
 	cfg := cm.GetConfig()
 	writeJSON(w, http.StatusOK, sanitizedConfig(cfg))
+}
+
+// handleGetGlobalSettings returns the global config file contents.
+func (ws *ReactWebServer) handleGetGlobalSettings(w http.ResponseWriter, r *http.Request) {
+	configPath, err := configuration.GetConfigPath()
+	if err != nil {
+		writeJSON(w, http.StatusOK, sanitizedConfig(configuration.NewConfig()))
+		return
+	}
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		writeJSON(w, http.StatusOK, sanitizedConfig(configuration.NewConfig()))
+		return
+	}
+	var cfg configuration.Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		writeJSON(w, http.StatusOK, sanitizedConfig(configuration.NewConfig()))
+		return
+	}
+	writeJSON(w, http.StatusOK, sanitizedConfig(&cfg))
+}
+
+// handleGetWorkspaceSettings returns the workspace config if it exists, else empty.
+func (ws *ReactWebServer) handleGetWorkspaceSettings(w http.ResponseWriter, r *http.Request) {
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	if workspaceRoot == "" {
+		writeJSON(w, http.StatusOK, map[string]interface{}{})
+		return
+	}
+	workspacePath := configuration.GetWorkspaceConfigPath(workspaceRoot)
+	data, err := os.ReadFile(workspacePath)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{})
+		return
+	}
+	var cfg configuration.Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{})
+		return
+	}
+	writeJSON(w, http.StatusOK, sanitizedConfig(&cfg))
+}
+
+// handleGetSessionSettings returns the current session's config overrides.
+func (ws *ReactWebServer) handleGetSessionSettings(w http.ResponseWriter, r *http.Request) {
+	clientID := ws.resolveClientID(r)
+	ws.mutex.RLock()
+	ctx := ws.clientContexts[clientID]
+	ws.mutex.RUnlock()
+	if ctx == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{})
+		return
+	}
+	activeChatID := ctx.getActiveChatID()
+	cs := ctx.getChatSession(activeChatID)
+	if cs == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{})
+		return
+	}
+	cs.mu.Lock()
+	overrides := cs.ConfigOverrides
+	if overrides == nil {
+		overrides = make(map[string]interface{})
+	}
+	cs.mu.Unlock()
+	writeJSON(w, http.StatusOK, overrides)
 }
 
 // ---------------------------------------------------------------------------

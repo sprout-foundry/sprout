@@ -50,6 +50,40 @@
   box-shadow: 0 0 0 2px rgba(var(--accent-primary-rgb, 99, 102, 241), 0.2);
 }
 
+/* ── Config layer scope buttons ─────────────────────────────── */
+.sidebar .layerscope-btn {
+  min-height: 24px;
+  padding: 2px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.12s var(--ease-out),
+    color 0.12s var(--ease-out),
+    border-color 0.12s var(--ease-out);
+}
+
+.sidebar .layerscope-btn:hover:not(:disabled) {
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+}
+
+.sidebar .layerscope-btn.active {
+  color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 14%, var(--bg-elevated));
+  border-color: color-mix(in srgb, var(--accent-primary) 36%, var(--border-default));
+}
+
+.sidebar .layerscope-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ── Toggle switch ───────────────────────────────────────────── */
 .sidebar .styled-toggle {
   position: relative;

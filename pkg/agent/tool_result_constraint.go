@@ -3,6 +3,7 @@
 package agent
 
 import (
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -24,7 +25,7 @@ func constrainToolResultForModel(toolName string, args map[string]interface{}, r
 	}
 
 	maxChars := defaultFetchURLResultMaxChars
-	if raw := strings.TrimSpace(os.Getenv("LEDIT_FETCH_URL_MAX_CHARS")); raw != "" {
+	if raw := strings.TrimSpace(envutil.GetEnvSimple("FETCH_URL_MAX_CHARS")); raw != "" {
 		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
 			maxChars = parsed
 		}
@@ -62,7 +63,7 @@ func buildFetchURLTruncationNotice(omitted int, archivePath string, archiveErr e
 }
 
 func saveFetchURLOutputToFile(args map[string]interface{}, output string) (string, error) {
-	dir := strings.TrimSpace(os.Getenv("LEDIT_FETCH_URL_ARCHIVE_DIR"))
+	dir := strings.TrimSpace(envutil.GetEnvSimple("FETCH_URL_ARCHIVE_DIR"))
 	if dir == "" {
 		dir = defaultFetchURLArchiveDir
 	}

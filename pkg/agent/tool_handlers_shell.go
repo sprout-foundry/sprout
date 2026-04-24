@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/factory"
 	"github.com/sprout-foundry/sprout/pkg/git"
 	"github.com/sprout-foundry/sprout/pkg/security"
@@ -256,7 +256,7 @@ func handleCommitTool(_ context.Context, a *Agent, args map[string]interface{}) 
 	// All other personas still require interactive approval.
 	persona := a.GetActivePersona()
 	isRepoOrchestrator := persona == "repo_orchestrator"
-	isSubagent := os.Getenv("LEDIT_FROM_AGENT") == "1" || os.Getenv("LEDIT_SUBAGENT") == "1"
+	isSubagent := configuration.GetEnvSimple("FROM_AGENT") == "1" || configuration.GetEnvSimple("SUBAGENT") == "1"
 
 	if !isRepoOrchestrator && !isSubagent {
 		// Prompt user for approval before committing (only in interactive mode)

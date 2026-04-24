@@ -106,8 +106,8 @@ detect_arch() {
 
 # Determine install directory, preferring the location of any existing ledit binary
 get_install_dir() {
-    if [ -n "${LEDIT_INSTALL_DIR:-}" ]; then
-        echo "$LEDIT_INSTALL_DIR"
+    if [ -n "${SPROUT_INSTALL_DIR:-}" ]; then
+        echo "$SPROUT_INSTALL_DIR"
         return
     fi
 
@@ -155,8 +155,8 @@ get_install_dir() {
 
 # Get version from environment or fetch latest from GitHub
 get_version() {
-    if [ -n "${LEDIT_VERSION:-}" ]; then
-        echo "$LEDIT_VERSION"
+    if [ -n "${SPROUT_VERSION:-}" ]; then
+        echo "$SPROUT_VERSION"
     else
         local api_url="https://api.github.com/repos/alantheprice/ledit/releases/latest"
         local version
@@ -292,8 +292,8 @@ main() {
         log_info "Uninstalling ledit..."
         
         local install_dir
-        if [ -n "${LEDIT_INSTALL_DIR:-}" ]; then
-            install_dir="$LEDIT_INSTALL_DIR"
+        if [ -n "${SPROUT_INSTALL_DIR:-}" ]; then
+            install_dir="$SPROUT_INSTALL_DIR"
         else
             install_dir=$(get_install_dir)
         fi

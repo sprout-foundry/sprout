@@ -2,7 +2,6 @@ package configuration
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
@@ -84,10 +83,10 @@ func ResolveProviderModel(cfg *Config, explicitProvider, explicitModel string) (
 	}
 
 	if providerName == "" {
-		providerName = strings.TrimSpace(os.Getenv("LEDIT_PROVIDER"))
+		providerName = strings.TrimSpace(GetEnvSimple("PROVIDER"))
 	}
 	if modelCandidate == "" {
-		modelCandidate = strings.TrimSpace(os.Getenv("LEDIT_MODEL"))
+		modelCandidate = strings.TrimSpace(GetEnvSimple("MODEL"))
 	}
 
 	if providerName == "" && modelCandidate != "" {

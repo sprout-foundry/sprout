@@ -11,6 +11,7 @@ import (
 	"time"
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 var nonWhitespaceTokenRegex = regexp.MustCompile(`\S+`)
@@ -25,12 +26,12 @@ func getShellOutputTokenLimits() (head, tail int) {
 	head = defaultShellHeadTokenLimit
 	tail = defaultShellTailTokenLimit
 
-	if raw := os.Getenv("LEDIT_SHELL_HEAD_TOKENS"); raw != "" {
+	if raw := configuration.GetEnvSimple("SHELL_HEAD_TOKENS"); raw != "" {
 		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
 			head = parsed
 		}
 	}
-	if raw := os.Getenv("LEDIT_SHELL_TAIL_TOKENS"); raw != "" {
+	if raw := configuration.GetEnvSimple("SHELL_TAIL_TOKENS"); raw != "" {
 		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
 			tail = parsed
 		}

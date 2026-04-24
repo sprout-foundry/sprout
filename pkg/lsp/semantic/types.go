@@ -8,11 +8,12 @@ type Position struct {
 
 // Capabilities describes which semantic features are available for a language.
 type Capabilities struct {
-	Diagnostics bool `json:"diagnostics"`
+	Diagnostics  bool `json:"diagnostics"`
 	Definition  bool `json:"definition"`
 	Hover       bool `json:"hover"`
 	Rename      bool `json:"rename"`
 	References  bool `json:"references"`
+	CodeActions bool `json:"code_actions"`
 }
 
 // ToolInput is the normalized request shape sent to language adapters.
@@ -81,15 +82,31 @@ type ToolReferences struct {
 	SymbolName string `json:"symbolName"`
 }
 
+// ToolCodeActionEdit is a single text edit within a code action.
+type ToolCodeActionEdit struct {
+	FilePath string `json:"filePath"`
+	From     int    `json:"from"` // 0-based byte offset
+	To       int    `json:"to"`   // 0-based byte offset
+	NewText  string `json:"newText"`
+}
+
+// ToolCodeAction represents a single code action available at a position.
+type ToolCodeAction struct {
+	Title string               `json:"title"` // human-readable label like "Add import", "Organize imports"
+	Kind  string               `json:"kind"`  // "quickfix", "refactor.extract", "source.organizeImports", etc
+	Edits []ToolCodeActionEdit `json:"edits"`
+}
+
 // ToolResult is the normalized adapter response.
 type ToolResult struct {
-	Capabilities Capabilities       `json:"capabilities"`
-	Diagnostics  []ToolDiagnostic  `json:"diagnostics,omitempty"`
-	Definition   *ToolDefinition   `json:"definition,omitempty"`
-	Hover        *ToolHover        `json:"hover,omitempty"`
-	Rename       *ToolRename       `json:"rename,omitempty"`
+	Capabilities Capabilities        `json:"capabilities"`
+	Diagnostics  []ToolDiagnostic   `json:"diagnostics,omitempty"`
+	Definition   *ToolDefinition    `json:"definition,omitempty"`
+	Hover        *ToolHover         `json:"hover,omitempty"`
+	Rename       *ToolRename        `json:"rename,omitempty"`
 	References   *ToolReferences   `json:"references,omitempty"`
-	Error        string            `json:"error,omitempty"`
+	CodeActions  []ToolCodeAction  `json:"code_actions,omitempty"`
+	Error        string             `json:"error,omitempty"`
 	// DurationMs is the wall-clock time the adapter took to run, in milliseconds.
 	// Populated by the registry dispatch layer, not by individual adapters.
 	DurationMs int64 `json:"duration_ms,omitempty"`

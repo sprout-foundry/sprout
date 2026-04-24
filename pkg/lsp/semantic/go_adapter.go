@@ -33,6 +33,8 @@ func (a goAdapter) Run(input ToolInput) (ToolResult, error) {
 		return runGoRename(input)
 	case "references":
 		return runGoReferences(input)
+	case "code_actions":
+		return runGoCodeActions(input)
 	default:
 		return ToolResult{Capabilities: Capabilities{}}, nil
 	}
@@ -61,7 +63,7 @@ func runGoDiagnostics(input ToolInput) (ToolResult, error) {
 		return ToolResult{}, err
 	}
 
-	caps := Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: true, References: true}
+	caps := Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: true, References: true, CodeActions: true}
 
 	fmtCmd := exec.Command("gofmt", "-e", tmpFile)
 	var fmtStderr bytes.Buffer
@@ -87,7 +89,7 @@ func runGoDefinition(input ToolInput) (ToolResult, error) {
 	goplsPath, err := exec.LookPath("gopls")
 	if err != nil {
 		return ToolResult{
-			Capabilities: Capabilities{Diagnostics: true, Definition: false, Hover: false, Rename: false},
+			Capabilities: Capabilities{Diagnostics: true, Definition: false, Hover: false, Rename: false, CodeActions: true},
 			Error:        "gopls_not_available",
 		}, nil
 	}
@@ -99,7 +101,7 @@ func runGoHover(input ToolInput) (ToolResult, error) {
 	goplsPath, err := exec.LookPath("gopls")
 	if err != nil {
 		return ToolResult{
-			Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: false, Rename: false},
+			Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: false, Rename: false, CodeActions: true},
 			Error:        "gopls_not_available",
 		}, nil
 	}
@@ -120,13 +122,13 @@ func runGoHover(input ToolInput) (ToolResult, error) {
 	contents := strings.TrimSpace(stdout.String())
 	if contents == "" {
 		return ToolResult{
-			Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: true},
+			Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: true, CodeActions: true},
 			Hover:        nil,
 		}, nil
 	}
 
 	return ToolResult{
-		Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: true},
+		Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: true, CodeActions: true},
 		Hover:        &ToolHover{Contents: contents},
 	}, nil
 }
@@ -137,7 +139,7 @@ func runGoReferences(input ToolInput) (ToolResult, error) {
 	goplsPath, err := exec.LookPath("gopls")
 	if err != nil {
 		return ToolResult{
-			Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: true, References: false},
+			Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: true, References: false, CodeActions: true},
 			Error:        "gopls_not_available",
 		}, nil
 	}
@@ -232,7 +234,7 @@ func runGoReferences(input ToolInput) (ToolResult, error) {
 	})
 
 	return ToolResult{
-		Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: true, References: true},
+		Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: true, References: true, CodeActions: true},
 		References:   &ToolReferences{Locations: locations, SymbolName: symbolName},
 	}, nil
 }
@@ -246,7 +248,7 @@ func runGoRename(input ToolInput) (ToolResult, error) {
 	goplsPath, err := exec.LookPath("gopls")
 	if err != nil {
 		return ToolResult{
-			Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: false},
+			Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: false, CodeActions: true},
 			Error:        "gopls_not_available",
 		}, nil
 	}
@@ -313,7 +315,7 @@ func runGoRename(input ToolInput) (ToolResult, error) {
 	}
 
 	return ToolResult{
-		Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: true, References: true},
+		Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: true, References: true, CodeActions: true},
 		Rename:       &ToolRename{Locations: locations},
 	}, nil
 }
@@ -341,11 +343,11 @@ func runGoDefinitionWithRemote(input ToolInput, goplsPath, remoteAddr string) (T
 	defPath, defLine, defCol, ok := parseGoplsDefinition(stdout.String())
 	if !ok {
 		return ToolResult{
-			Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: true, References: true},
+			Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: true, References: true, CodeActions: true},
 		}, nil
 	}
 	return ToolResult{
-		Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: true, References: true},
+		Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: true, References: true, CodeActions: true},
 		Definition:   &ToolDefinition{Path: defPath, Line: defLine, Column: defCol},
 	}, nil
 }
@@ -441,4 +443,93 @@ func parseGoplsDefinition(output string) (path string, line, col int, ok bool) {
 		return m[1], lineNum, colNum, true
 	}
 	return "", 0, 0, false
+}
+
+// runGoCodeActions provides code actions for the current file using goimports.
+func runGoCodeActions(input ToolInput) (ToolResult, error) {
+	caps := Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: true, References: true, CodeActions: true}
+
+	// Check if goimports is available
+	goimportsPath, err := exec.LookPath("goimports")
+	if err != nil {
+		return ToolResult{
+			Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: true, References: true, CodeActions: false},
+			Error:        "goimports_not_available",
+		}, nil
+	}
+
+	// Write content to a temp file for goimports to process
+	tmpDir, err := os.MkdirTemp("", "ledit-go-codeaction-*")
+	if err != nil {
+		return ToolResult{}, err
+	}
+	defer os.RemoveAll(tmpDir)
+
+	baseName := filepath.Base(input.FilePath)
+	if baseName == "" || baseName == "." {
+		baseName = "main.go"
+	}
+	tmpFile := filepath.Join(tmpDir, baseName)
+
+	if err := os.WriteFile(tmpFile, []byte(input.Content), 0600); err != nil {
+		return ToolResult{}, err
+	}
+
+	// Run goimports to get formatted output with organized imports
+	formatted, err := exec.Command(goimportsPath, tmpFile).Output()
+	if err != nil {
+		// goimports can fail on syntax errors; return no actions
+		return ToolResult{Capabilities: caps, CodeActions: nil}, nil
+	}
+
+	formattedStr := string(formatted)
+	if formattedStr == input.Content {
+		return ToolResult{Capabilities: caps, CodeActions: nil}, nil
+	}
+
+	// Compute minimal edits between original and formatted
+	edits := computeGoEdits(input.Content, formattedStr, input.FilePath)
+	if len(edits) == 0 {
+		return ToolResult{Capabilities: caps, CodeActions: nil}, nil
+	}
+
+	actions := []ToolCodeAction{
+		{
+			Title: "Organize Imports",
+			Kind:  "source.organizeImports",
+			Edits: edits,
+		},
+	}
+
+	return ToolResult{Capabilities: caps, CodeActions: actions}, nil
+}
+
+// computeGoEdits produces a list of edits by comparing original and new text.
+func computeGoEdits(original, modified, filePath string) []ToolCodeActionEdit {
+	// Find common prefix
+	prefixLen := 0
+	for prefixLen < len(original) && prefixLen < len(modified) && original[prefixLen] == modified[prefixLen] {
+		prefixLen++
+	}
+
+	// Find common suffix
+	origSuffix := len(original)
+	modSuffix := len(modified)
+	for origSuffix > prefixLen && modSuffix > prefixLen && original[origSuffix-1] == modified[modSuffix-1] {
+		origSuffix--
+		modSuffix--
+	}
+
+	if prefixLen == origSuffix && prefixLen == modSuffix {
+		return nil // no changes
+	}
+
+	return []ToolCodeActionEdit{
+		{
+			FilePath: filePath,
+			From:     prefixLen,
+			To:       origSuffix,
+			NewText:  modified[prefixLen:modSuffix],
+		},
+	}
 }

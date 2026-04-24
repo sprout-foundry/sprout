@@ -44,7 +44,7 @@ Running just 'ledit' without arguments starts enhanced agent mode with automatic
 				os.Exit(1)
 			}
 			isolatedDir := filepath.Join(cwd, ".ledit")
-			if err := os.Setenv("LEDIT_CONFIG", isolatedDir); err != nil {
+			if err := configuration.SetEnv("CONFIG", isolatedDir); err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to set LEDIT_CONFIG for --isolated-config: %v\n", err)
 				os.Exit(1)
 			}
@@ -86,7 +86,7 @@ func initializeSystem() {
 	if isCI {
 		// In CI environments, just load what we can and continue
 		_, err := configuration.LoadAPIKeys()
-		if err != nil && os.Getenv("LEDIT_DEBUG") != "" {
+		if err != nil && configuration.GetEnvSimple("DEBUG") != "" {
 			println("API key initialization warning:", err.Error())
 		}
 		return

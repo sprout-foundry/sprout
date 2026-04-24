@@ -19,9 +19,9 @@ var apiEnvKeyPatterns = []string{
 
 // apiEnvKeyPrefixes defines specific prefixes to capture.
 var apiEnvKeyPrefixes = []string{
-	"LEDIT_PROVIDER",
-	"LEDIT_SUBAGENT_PROVIDER",
-	"LEDIT_SUBAGENT_MODEL",
+	"SPROUT_PROVIDER",
+	"SPROUT_SUBAGENT_PROVIDER",
+	"SPROUT_SUBAGENT_MODEL",
 }
 
 // matchesAPIKeyPattern returns true if the environment variable name appears to be an API key.

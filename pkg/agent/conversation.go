@@ -64,7 +64,7 @@ func (a *Agent) getOptimizedToolDefinitions(messages []api.Message) []api.Tool {
 	// Filter out run_subagent and run_parallel_subagents when:
 	// 1. Running as a subagent (prevents nested subagents)
 	// 2. User explicitly disabled subagents via --no-subagents flag or LEDIT_NO_SUBAGENTS env
-	noSubagents := os.Getenv("LEDIT_SUBAGENT") == "1" || os.Getenv("LEDIT_NO_SUBAGENTS") == "1"
+	noSubagents := configuration.GetEnvSimple("SUBAGENT") == "1" || configuration.GetEnvSimple("NO_SUBAGENTS") == "1"
 	if noSubagents {
 		filtered := make([]api.Tool, 0, len(tools))
 		for _, tool := range tools {

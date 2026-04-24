@@ -38,7 +38,7 @@ const (
 
 // getVisionMaxReturnedTextChars returns the max text chars limit from env or default
 func getVisionMaxReturnedTextChars() int {
-	if raw := os.Getenv("LEDIT_VISION_MAX_TEXT_CHARS"); raw != "" {
+	if raw := configuration.GetEnvSimple("VISION_MAX_TEXT_CHARS"); raw != "" {
 		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
 			return parsed
 		}
@@ -1022,7 +1022,7 @@ func persistVisionFullText(sourcePath, fullText string) (string, error) {
 // resolveVisionOutputDirectoryWithRoot resolves the vision output directory using the given
 // workspace root. If workspaceRoot is empty, it falls back to os.Getwd().
 func resolveVisionOutputDirectoryWithRoot(workspaceRoot string) string {
-	raw := strings.TrimSpace(os.Getenv("LEDIT_RESOURCE_DIRECTORY"))
+	raw := strings.TrimSpace(configuration.GetEnvSimple("RESOURCE_DIRECTORY"))
 	if raw == "" {
 		raw = ".ledit_ocr_outputs"
 	}

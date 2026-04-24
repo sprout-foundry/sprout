@@ -1,14 +1,4 @@
-/**
- * Code actions / Quick Actions extension for CodeMirror.
- *
- * Provides:
- * - Lightbulb icon in the gutter when code actions are available at the cursor line
- * - Ctrl/Cmd+. keyboard shortcut to trigger the quick actions menu
- * - A floating menu showing available actions that can be applied to the document
- *
- * This is the defining IDE feature: hoverable and click-to-trigger lightbulb
- * that shows refactor/arbitrary code-fix suggestions from the backend.
- */
+/** Code actions extension — lightbulb gutter + Ctrl+. quick actions menu. Static analysis in ./staticAnalysis.ts. */
 
 import {
   type EditorView,
@@ -24,11 +14,11 @@ import { StateField, type Extension, StateEffect as SE, Facet, RangeSetBuilder }
 import { ApiService } from '../services/api';
 import { resolveLanguageId } from './languageRegistry';
 import { debugLog } from '../utils/log';
+import { computeStaticActions, kindEmoji } from './staticAnalysis';
 
 import './codeActions.css';
 
-// ─── Types ────────────────────────────────────────────────────────
-
+/** CodeActionEdit describes a single text replacement within a file. */
 export interface CodeActionEdit {
   filePath: string;
   from: number;
@@ -42,14 +32,9 @@ export interface CodeAction {
   edits: CodeActionEdit[];
 }
 
-export interface CodeActionState {
-  actions: CodeAction[];
-  loading: boolean;
-  line: number;
-}
+export interface CodeActionState { actions: CodeAction[]; loading: boolean; line: number; }
 
-// ─── Configuration Facet ──────────────────────────────────────────
-
+/** Configuration provided by the host editor. */
 interface CodeActionsConfig {
   getFilePath: () => string | undefined;
   getContent: () => string;
@@ -57,17 +42,11 @@ interface CodeActionsConfig {
 }
 
 export const codeActionsConfig = Facet.define<CodeActionsConfig, Required<CodeActionsConfig>>({
-  combine(configs) {
-    return configs[0] as Required<CodeActionsConfig>;
-  },
+  combine(configs) { return configs[0] as Required<CodeActionsConfig>; },
 });
-
-// ─── State Effects ────────────────────────────────────────────────
 
 const setCodeActions = SE.define<CodeActionState>();
 const clearCodeActions = SE.define<void>();
-
-// ─── State Field ──────────────────────────────────────────────────
 
 const codeActionsField = StateField.define<CodeActionState>({
   create() {
@@ -82,7 +61,7 @@ const codeActionsField = StateField.define<CodeActionState>({
   },
 });
 
-// ─── Lightbulb Widget ─────────────────────────────────────────────
+// ─── Lightbulb Widget & Gutter Marker ─────────────────────────────
 
 class LightbulbWidget extends WidgetType {
   private _onClick: (e: MouseEvent) => void;
@@ -116,22 +95,12 @@ class LightbulbWidget extends WidgetType {
   }
 }
 
-// ─── Gutter Marker ────────────────────────────────────────────────
+// ─── Code Actions Plugin ──────────────────────────────────────────
 
 class LightbulbGutterMarker extends GutterMarker {
-  private _widget: LightbulbWidget;
-
-  constructor(widget: LightbulbWidget) {
-    super();
-    this._widget = widget;
-  }
-
-  toDOM() {
-    return this._widget.toDOM();
-  }
+  constructor(private _widget: LightbulbWidget) { super(); }
+  toDOM() { return this._widget.toDOM(); }
 }
-
-// ─── Code Actions Plugin ──────────────────────────────────────────
 
 class CodeActionsPlugin implements PluginValue {
   private view: EditorView;
@@ -207,6 +176,13 @@ class CodeActionsPlugin implements PluginValue {
     try {
       const result = await api.getSemanticCodeActions(filePath, content, languageId, lineNum, col);
 
+      if (!result) {
+        this.view.dispatch({
+          effects: setCodeActions.of({ actions: staticActions, loading: false, line: lineNum }),
+        });
+        return;
+      }
+
       const lspActions = (result.code_actions || []).map((a) => ({
         title: a.title,
         kind: a.kind,
@@ -237,111 +213,15 @@ class CodeActionsPlugin implements PluginValue {
 
   /**
    * Compute static code actions that don't require LSP or backend.
-   * These provide universal actions for any file type.
+   * Delegates to the standalone static analysis module.
    */
   private computeStaticActions(lineNum: number): CodeAction[] {
-    const actions: CodeAction[] = [];
-    const doc = this.view.state.doc;
-
-    // Get the line content
-    const lineInfo = doc.line(lineNum);
-    const lineContent = lineInfo.text;
-
-    // Action: Remove trailing whitespace on current line
-    const trailingMatch = lineContent.match(/(\s+)$/);
-    if (trailingMatch && trailingMatch[1].length > 0) {
-      const trailingStart = lineInfo.from + (lineContent.length - trailingMatch[1].length);
-      const trailingEnd = lineInfo.to;
-      actions.push({
-        title: 'Remove trailing whitespace',
-        kind: 'refactor.remove',
-        edits: [
-          {
-            filePath: this.config.getFilePath() || '',
-            from: trailingStart,
-            to: trailingEnd,
-            newText: '',
-          },
-        ],
-      });
-    }
-
-    // Action: Remove empty lines around cursor (collapse consecutive empty lines)
-    // Check previous and next lines for emptiness
-    const hasEmptyBefore = lineNum > 1 && doc.line(lineNum - 1).length === 0;
-    const hasEmptyAfter = lineNum < doc.lines && doc.line(lineNum + 1).length === 0;
-
-    if (hasEmptyBefore || hasEmptyAfter) {
-      // Collect all empty line ranges to remove
-      const edits: CodeActionEdit[] = [];
-      if (hasEmptyBefore) {
-        const emptyLineInfo = doc.line(lineNum - 1);
-        edits.push({
-          filePath: this.config.getFilePath() || '',
-          from: emptyLineInfo.from,
-          to: emptyLineInfo.to,
-          newText: '',
-        });
-      }
-      if (hasEmptyAfter && lineNum < doc.lines) {
-        const emptyLineInfo = doc.line(lineNum + 1);
-        edits.push({
-          filePath: this.config.getFilePath() || '',
-          from: emptyLineInfo.from,
-          to: emptyLineInfo.to,
-          newText: '',
-        });
-      }
-      if (edits.length > 0) {
-        actions.push({
-          title: 'Remove empty lines',
-          kind: 'refactor.remove',
-          edits,
-        });
-      }
-    }
-
-    // Action: Sort selected lines alphabetically
-    const selection = this.view.state.selection.main;
-    if (!selection.empty) {
-      // Get content of selected lines
-      const fromLine = doc.lineAt(selection.from).number;
-      const toLine = doc.lineAt(selection.to).number;
-
-      if (fromLine !== toLine) {
-        // Collect all lines in selection
-        const lines: string[] = [];
-        for (let i = fromLine; i <= toLine; i++) {
-          lines.push(doc.line(i).text);
-        }
-
-        // Check if lines can be sorted (not already sorted)
-        const sortedLines = [...lines].sort((a, b) =>
-          a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }),
-        );
-        const isAlreadySorted = lines.every((line, idx) => line === sortedLines[idx]);
-
-        if (!isAlreadySorted) {
-          // Generate edits: replace all selected content with sorted lines
-          const fromPos = doc.line(fromLine).from;
-          const toPos = doc.line(toLine).to;
-          actions.push({
-            title: 'Sort lines alphabetically',
-            kind: 'refactor.sort',
-            edits: [
-              {
-                filePath: this.config.getFilePath() || '',
-                from: fromPos,
-                to: toPos,
-                newText: sortedLines.join('\n'),
-              },
-            ],
-          });
-        }
-      }
-    }
-
-    return actions;
+    return computeStaticActions(
+      this.view.state.doc,
+      lineNum,
+      this.view.state.selection.main,
+      this.config.getFilePath() || '',
+    );
   }
 
   /**
@@ -445,19 +325,13 @@ class CodeActionsPlugin implements PluginValue {
       item.setAttribute('tabindex', '0');
 
       const icon = document.createElement('span');
-      icon.className = 'cm-codeAction-menu-icon' + this.kindIcon(action.kind);
+      icon.className = 'cm-codeAction-menu-icon';
       icon.innerHTML = this.kindEmoji(action.kind);
       item.appendChild(icon);
 
-      const label = document.createElement('span');
-      label.className = 'cm-codeAction-menu-label';
+      const label = document.createElement('span');      label.className = 'cm-codeAction-menu-label';
       label.textContent = action.title;
       item.appendChild(label);
-
-      const shortcut = document.createElement('span');
-      shortcut.className = 'cm-codeAction-menu-shortcut';
-      shortcut.textContent = '';
-      item.appendChild(shortcut);
 
       item.addEventListener('mousedown', (e) => {
         e.preventDefault();
@@ -532,15 +406,7 @@ class CodeActionsPlugin implements PluginValue {
   }
 
   private kindEmoji(kind: string): string {
-    if (kind.includes('organizeImports') || kind.includes('import')) return '📦';
-    if (kind.includes('quickfix') || kind.includes('fix')) return '🔧';
-    if (kind.includes('remove') || kind.includes('delete')) return '🗑️';
-    if (kind.includes('refactor') || kind.includes('sort')) return '♻️';
-    return '⚡';
-  }
-
-  private kindIcon(_kind: string): string {
-    return '';
+    return kindEmoji(kind);
   }
 
   destroy() {
@@ -598,14 +464,7 @@ function pluginForView(view: EditorView): CodeActionsPlugin | null {
 
 // ─── Public API ───────────────────────────────────────────────────
 
-/**
- * Build the code actions extension that provides a lightbulb gutter icon
- * and Ctrl+. quick actions menu.
- *
- * @param getFilePath - returns the current file path
- * @param getContent - returns the current document content
- * @param onApplyEdits - optional callback for edits in other files
- */
+/** Build the code actions extension with lightbulb gutter and Ctrl+. menu. */
 export function createCodeActionsExtension(
   getFilePath: () => string | undefined,
   getContent: () => string,
@@ -619,9 +478,7 @@ export function createCodeActionsExtension(
   ];
 }
 
-/**
- * Create a keybinding for Ctrl/Cmd+. to open the quick actions menu.
- */
+/** Create a keybinding for Ctrl/Cmd+. to open the quick actions menu. */
 export function codeActionsKeybinding(): KeyBinding {
   return {
     key: 'Mod-.',
@@ -636,3 +493,6 @@ export function codeActionsKeybinding(): KeyBinding {
     },
   };
 }
+
+// Re-export for backward compatibility
+export { kindEmoji } from './staticAnalysis';

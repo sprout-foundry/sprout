@@ -1557,22 +1557,67 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         const currentBuffer = bufferRef.current;
         if (viewRef.current && currentBuffer) {
           const content = viewRef.current.state.doc.toString();
-          formatCode(content, currentBuffer.file.path, currentBuffer.file.size).then(result => {
-            if (result.error) {
-              notificationBus.notify('warning', 'Format Document', `Format failed: ${result.error}`);
-              return;
-            }
-            if (result.formatted !== content && viewRef.current) {
-              viewRef.current.dispatch({
-                changes: {
-                  from: 0,
-                  to: viewRef.current.state.doc.length,
-                  insert: result.formatted,
-                },
-                annotations: [Transaction.addToHistory.of(false)],
-              });
-            }
-          });
+          const detail = (e as CustomEvent).detail as { requestId?: string } | undefined;
+          const requestId = detail?.requestId;
+          const formatPromise = formatCode(content, currentBuffer.file.path, currentBuffer.file.size);
+          const capturedBufferId = currentBuffer.id;
+
+          if (requestId) {
+            // Called by format-on-save — resolve the pending promise when done
+            formatPromise.then(result => {
+              // Guard: if the buffer changed while formatting was in-flight,
+              // discard the result so we don't apply stale content.
+              if (bufferRef.current?.id !== capturedBufferId) {
+                return;
+              }
+              const windowAny = window as unknown as Record<string, Map<string, (r: { formatted: string; error?: string }) => void>>;
+              const resolveMap = windowAny.__formatResolveMap;
+              // Check if the request was already consumed (timed out).
+              // If so, the file was already saved with the original content —
+              // don't apply the format to the editor to avoid a mismatch.
+              const stillActive = resolveMap?.has(requestId);
+              if (result.error) {
+                notificationBus.notify('warning', 'Format Document', `Format failed: ${result.error}`);
+              }
+              if (stillActive && !result.error && result.formatted !== content && viewRef.current) {
+                viewRef.current.dispatch({
+                  changes: {
+                    from: 0,
+                    to: viewRef.current.state.doc.length,
+                    insert: result.formatted,
+                  },
+                  annotations: [Transaction.addToHistory.of(false)],
+                });
+              }
+              // Always resolve so the save doesn't hang
+              if (resolveMap) {
+                const resolve = resolveMap.get(requestId);
+                if (resolve) {
+                  resolve(result);
+                  resolveMap.delete(requestId);
+                }
+              }
+            });
+          } else {
+            // Manual format command — no callback needed
+            formatPromise.then(result => {
+              if (bufferRef.current?.id !== capturedBufferId) return;
+              if (result.error) {
+                notificationBus.notify('warning', 'Format Document', `Format failed: ${result.error}`);
+                return;
+              }
+              if (result.formatted !== content && viewRef.current) {
+                viewRef.current.dispatch({
+                  changes: {
+                    from: 0,
+                    to: viewRef.current.state.doc.length,
+                    insert: result.formatted,
+                  },
+                  annotations: [Transaction.addToHistory.of(false)],
+                });
+              }
+            });
+          }
         }
       }
     };

@@ -1054,5 +1054,47 @@ describe('EditorPane', () => {
 
       expect(encodingIndicator?.getAttribute('title')).toBe('File encoding and line endings');
     });
+
+    it('shows "UTF-8 · CRLF" when file content uses Windows line endings', async () => {
+      // readFileWithConsent returns content with CRLF line endings.
+      // loadFile() calls detectLineEnding() on the API response text,
+      // so the mock response determines the detected line ending.
+      (readFileWithConsent as jest.Mock).mockResolvedValue({
+        ok: true,
+        statusText: 'OK',
+        text: () => Promise.resolve('line1\r\nline2\r\nline3\r\n'),
+      });
+
+      // eslint-disable-next-line testing-library/no-unnecessary-act
+      await act(async () => {
+        root.render(<EditorPane paneId="pane-1" />);
+      });
+      await flushPromises();
+
+      const footer = container.querySelector('.pane-footer');
+      const encodingIndicator = footer?.querySelector('.encoding-indicator');
+      expect(encodingIndicator).toBeTruthy();
+      expect(encodingIndicator?.textContent?.trim()).toBe('UTF-8 · CRLF');
+    });
+
+    it('shows "UTF-8 · Mixed" when file content has both LF and CRLF', async () => {
+      // readFileWithConsent returns content with mixed line endings.
+      (readFileWithConsent as jest.Mock).mockResolvedValue({
+        ok: true,
+        statusText: 'OK',
+        text: () => Promise.resolve('line1\nline2\r\nline3\n'),
+      });
+
+      // eslint-disable-next-line testing-library/no-unnecessary-act
+      await act(async () => {
+        root.render(<EditorPane paneId="pane-1" />);
+      });
+      await flushPromises();
+
+      const footer = container.querySelector('.pane-footer');
+      const encodingIndicator = footer?.querySelector('.encoding-indicator');
+      expect(encodingIndicator).toBeTruthy();
+      expect(encodingIndicator?.textContent?.trim()).toBe('UTF-8 · Mixed');
+    });
   }); // encoding indicator
 }); // EditorPane

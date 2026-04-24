@@ -13,7 +13,10 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/mcp"
 )
 
-// Manager provides a unified interface for configuration management
+// envMutex protects concurrent access to the LEDIT_CONFIG environment variable.
+// Both NewManagerWithDir and NewManagerWithLayers temporarily set this env var,
+// so they must be serialized to avoid config path corruption.
+var envMutex sync.Mutex
 type Manager struct {
 	mu        sync.RWMutex
 	config    *Config
@@ -145,6 +148,9 @@ func NewManagerWithConfig(cfg *Config, apiKeys *APIKeys) *Manager {
 // This is intended for tests and tooling that need a hermetic config
 // environment without touching the caller's real ~/.ledit.
 func NewManagerWithDir(configDir string) (*Manager, error) {
+	envMutex.Lock()
+	defer envMutex.Unlock()
+
 	if err := os.MkdirAll(configDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create config directory %q: %w", configDir, err)
 	}
@@ -182,6 +188,120 @@ func NewManagerWithDir(configDir string) (*Manager, error) {
 	}
 
 	return NewManagerWithConfig(config, apiKeys), nil
+}
+
+// NewManagerWithLayers creates a configuration manager using layered config.
+// globalDir is the directory containing global config (~/.ledit/).
+// workspaceDir is the directory containing workspace config ({workspace}/.ledit/).
+// Each layer is optional - missing layers are skipped.
+// Settings writes go to the workspace dir if provided, otherwise global.
+func NewManagerWithLayers(globalDir, workspaceDir string) (*Manager, error) {
+	envMutex.Lock()
+	defer envMutex.Unlock()
+
+	// Set LEDIT_CONFIG to workspace dir (if present) or global dir
+	// so that Save() writes to the correct location.
+	saveDir := globalDir
+	if workspaceDir != "" {
+		saveDir = workspaceDir
+	}
+	if saveDir != "" {
+		if err := os.MkdirAll(saveDir, 0700); err != nil {
+			return nil, fmt.Errorf("failed to create config directory %q: %w", saveDir, err)
+		}
+		prev, ok := os.LookupEnv("LEDIT_CONFIG")
+		os.Setenv("LEDIT_CONFIG", saveDir)
+		defer func() {
+			if ok {
+				os.Setenv("LEDIT_CONFIG", prev)
+			} else {
+				os.Unsetenv("LEDIT_CONFIG")
+			}
+		}()
+	}
+
+	// Compute file paths
+	var globalPath, workspacePath string
+	if globalDir != "" {
+		globalPath = filepath.Join(globalDir, ConfigFileName)
+	}
+	if workspaceDir != "" {
+		workspacePath = filepath.Join(workspaceDir, ConfigFileName)
+	}
+
+	// Load merged config (global + workspace, no session layer)
+	config, err := LoadConfigWithLayers(globalPath, workspacePath, "")
+	if err != nil {
+		return nil, fmt.Errorf("load layered config: %w", err)
+	}
+
+	// Load API keys (always from global location)
+	apiKeys, err := LoadAPIKeys()
+	if err != nil {
+		return nil, fmt.Errorf("load API keys: %w", err)
+	}
+
+	// Populate from environment (always do this for any manager)
+	apiKeys.PopulateFromJSONEnv()
+	if !apiKeys.PopulateFromEnvironment() {
+		log.Printf("[debug] no API keys found in environment variables")
+	}
+
+	return &Manager{
+		config:    config,
+		apiKeys:   apiKeys,
+		lastSaved: cloneConfig(config),
+		loaded:    true,
+	}, nil
+}
+
+// LoadConfigWithLayers loads configuration from three layers:
+// globalPath -> workspacePath -> sessionPath (each overrides previous)
+// Each layer is optional; missing layers are skipped.
+func LoadConfigWithLayers(globalPath, workspacePath, sessionPath string) (*Config, error) {
+	var result *Config
+
+	// 1. Load global config (base)
+	if globalPath != "" {
+		if data, err := os.ReadFile(globalPath); err == nil {
+			var cfg Config
+			if err := json.Unmarshal(data, &cfg); err != nil {
+				log.Printf("[config] warning: failed to parse global config %s: %v", globalPath, err)
+			} else {
+				result = &cfg
+			}
+		}
+	}
+
+	if result == nil {
+		result = NewConfig()
+	}
+
+	// 2. Merge workspace config if exists
+	if workspacePath != "" {
+		if data, err := os.ReadFile(workspacePath); err == nil {
+			var workspaceCfg Config
+			if err := json.Unmarshal(data, &workspaceCfg); err != nil {
+				log.Printf("[config] warning: failed to parse workspace config %s: %v", workspacePath, err)
+			} else {
+				result = MergeConfig(result, &workspaceCfg)
+			}
+		}
+	}
+
+	// 3. Merge session config if exists (highest priority)
+	if sessionPath != "" {
+		if data, err := os.ReadFile(sessionPath); err == nil {
+			var sessionCfg Config
+			if err := json.Unmarshal(data, &sessionCfg); err != nil {
+				log.Printf("[config] warning: failed to parse session config %s: %v", sessionPath, err)
+			} else {
+				result = MergeConfig(result, &sessionCfg)
+			}
+		}
+	}
+
+	return result, nil
 }
 
 // GetConfig returns the current configuration
@@ -431,21 +551,6 @@ func (m *Manager) AddMCPServer(name string, server mcp.MCPServerConfig) error {
 	m.config.MCP.Servers[name] = server
 	m.mu.Unlock()
 	return m.SaveConfig()
-}
-
-func cloneConfig(cfg *Config) *Config {
-	if cfg == nil {
-		return nil
-	}
-	data, err := json.Marshal(cfg)
-	if err != nil {
-		return nil
-	}
-	var out Config
-	if err := json.Unmarshal(data, &out); err != nil {
-		return nil
-	}
-	return &out
 }
 
 func cloneAPIKeys(keys *APIKeys) *APIKeys {

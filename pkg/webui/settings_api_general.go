@@ -3,10 +3,12 @@ package webui
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 
 	agentpkg "github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
@@ -58,6 +60,90 @@ func (ws *ReactWebServer) handleAPISettingsPut(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Check for provider and model at the top level - these need special handling.
+	// Provider/model changes are session-scoped: stored in chatSession.ConfigOverrides
+	// and applied to the live agent in-memory, NOT persisted to config file.
+	var newProvider string
+	var newModel string
+	if v, ok := incoming["provider"]; ok {
+		newProvider, _ = v.(string)
+		delete(incoming, "provider")
+	}
+	if v, ok := incoming["model"]; ok {
+		newModel, _ = v.(string)
+		delete(incoming, "model")
+	}
+
+	// Handle provider/model changes as session-scoped overrides
+	clientID := ws.resolveClientID(r)
+	if newProvider != "" || newModel != "" {
+		// Validate provider if specified
+		if newProvider != "" {
+			providerType, err := cm.MapStringToClientType(newProvider)
+			if err != nil {
+				writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("Invalid provider: %v", err))
+				return
+			}
+			if providerType == api.TestClientType {
+				writeJSONError(w, http.StatusBadRequest, "test provider cannot be set via API")
+				return
+			}
+		}
+
+		// Store overrides in the session's ConfigOverrides map
+		ws.mutex.Lock()
+		ctx := ws.clientContexts[clientID]
+		if ctx != nil {
+			activeChatID := ctx.getActiveChatID()
+			if cs := ctx.getChatSession(activeChatID); cs != nil {
+				cs.mu.Lock()
+				if cs.ConfigOverrides == nil {
+					cs.ConfigOverrides = make(map[string]interface{})
+				}
+				if newProvider != "" {
+					cs.ConfigOverrides["provider"] = newProvider
+					cs.Provider = newProvider
+				}
+				if newModel != "" {
+					cs.ConfigOverrides["model"] = newModel
+					cs.Model = newModel
+				}
+				cs.mu.Unlock()
+			}
+		}
+		ws.mutex.Unlock()
+
+		// Apply to the live agent in-memory if one exists
+		if agentInst, err := ws.getClientAgent(clientID); err == nil && agentInst != nil {
+			if newProvider != "" {
+				providerType, _ := cm.MapStringToClientType(newProvider)
+				if err := agentInst.SetProvider(providerType); err != nil {
+					log.Printf("webui: failed to set provider on live agent: %v", err)
+				}
+			}
+			if newModel != "" {
+				if err := agentInst.SetModel(newModel); err != nil {
+					log.Printf("webui: failed to set model on live agent: %v", err)
+				}
+			}
+			// Sync overrides to the agent so they're persisted with session state
+			ws.mutex.RLock()
+			ctx := ws.clientContexts[clientID]
+			var overrides map[string]interface{}
+			if ctx != nil {
+				if cs := ctx.getChatSession(ctx.getActiveChatID()); cs != nil {
+					cs.mu.Lock()
+					overrides = cs.ConfigOverrides
+					cs.mu.Unlock()
+				}
+			}
+			ws.mutex.RUnlock()
+			if len(overrides) > 0 {
+				agentInst.SetConfigOverrides(overrides)
+			}
+		}
+	}
+
 	if err := cm.UpdateConfig(func(cfg *configuration.Config) error {
 		return applyPartialSettings(cfg, incoming)
 	}); err != nil {
@@ -82,6 +168,14 @@ func (ws *ReactWebServer) handleAPISettingsPut(w http.ResponseWriter, r *http.Re
 
 	// Return the updated (sanitized) config.
 	updated := cm.GetConfig()
+
+	// Sync agent state after provider/model change
+	if newProvider != "" || newModel != "" {
+		if err := ws.syncAgentStateForClient(clientID); err != nil {
+			log.Printf("webui: failed to sync agent state after provider/model change: %v", err)
+		}
+	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"config":  sanitizedConfig(updated),

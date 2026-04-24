@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // prepareMessages prepares and optimizes the message list for API submission.
@@ -799,7 +800,7 @@ func (ch *ConversationHandler) estimateTokens(messages []api.Message) int {
 
 // appendTurnLogFile writes turn evaluation data to a log file if configured
 func (ch *ConversationHandler) appendTurnLogFile(turn TurnEvaluation) {
-	path := os.Getenv("LEDIT_TURN_LOG_FILE")
+	path := configuration.GetEnvSimple("TURN_LOG_FILE")
 	if path == "" {
 		return
 	}

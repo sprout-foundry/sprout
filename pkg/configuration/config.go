@@ -251,7 +251,7 @@ func NewConfig() *Config {
 
 // GetConfigDir returns the configuration directory path
 func GetConfigDir() (string, error) {
-	configDir := strings.TrimSpace(os.Getenv("LEDIT_CONFIG"))
+	configDir := strings.TrimSpace(GetEnvSimple("CONFIG"))
 	if configDir == "" {
 		var err error
 		configDir, err = getDefaultConfigDir()

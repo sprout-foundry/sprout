@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 const defaultInteractiveInputMaxChars = 100000
@@ -61,7 +63,7 @@ func (ch *ConversationHandler) getInputLimit() (int, string) {
 	if isInteractive {
 		maxChars = defaultInteractiveInputMaxChars
 		inputType = "interactive input"
-		if raw := strings.TrimSpace(os.Getenv("LEDIT_INTERACTIVE_INPUT_MAX_CHARS")); raw != "" {
+		if raw := strings.TrimSpace(configuration.GetEnvSimple("INTERACTIVE_INPUT_MAX_CHARS")); raw != "" {
 			if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
 				maxChars = parsed
 			}
@@ -69,7 +71,7 @@ func (ch *ConversationHandler) getInputLimit() (int, string) {
 	} else {
 		maxChars = defaultAutomationInputMaxChars
 		inputType = "automation input"
-		if raw := strings.TrimSpace(os.Getenv("LEDIT_AUTOMATION_INPUT_MAX_CHARS")); raw != "" {
+		if raw := strings.TrimSpace(configuration.GetEnvSimple("AUTOMATION_INPUT_MAX_CHARS")); raw != "" {
 			if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
 				maxChars = parsed
 			}
@@ -78,7 +80,7 @@ func (ch *ConversationHandler) getInputLimit() (int, string) {
 
 	// Legacy support for LEDIT_USER_INPUT_MAX_CHARS
 	// This overrides mode-specific limits for backward compatibility
-	if raw := strings.TrimSpace(os.Getenv("LEDIT_USER_INPUT_MAX_CHARS")); raw != "" {
+	if raw := strings.TrimSpace(configuration.GetEnvSimple("USER_INPUT_MAX_CHARS")); raw != "" {
 		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
 			maxChars = parsed
 		}
@@ -91,11 +93,11 @@ func buildUserInputTruncationNotice(omitted int, archivePath string, archiveErr 
 	var envVarHint string
 	switch inputType {
 	case "interactive input":
-		envVarHint = "LEDIT_INTERACTIVE_INPUT_MAX_CHARS"
+		envVarHint = "SPROUT_INTERACTIVE_INPUT_MAX_CHARS"
 	case "automation input":
-		envVarHint = "LEDIT_AUTOMATION_INPUT_MAX_CHARS"
+		envVarHint = "SPROUT_AUTOMATION_INPUT_MAX_CHARS"
 	default:
-		envVarHint = "LEDIT_USER_INPUT_MAX_CHARS"
+		envVarHint = "SPROUT_USER_INPUT_MAX_CHARS"
 	}
 
 	if archivePath == "" {
@@ -108,7 +110,7 @@ func buildUserInputTruncationNotice(omitted int, archivePath string, archiveErr 
 }
 
 func saveUserInputArchive(input string) (string, error) {
-	dir := strings.TrimSpace(os.Getenv("LEDIT_USER_INPUT_ARCHIVE_DIR"))
+	dir := strings.TrimSpace(configuration.GetEnvSimple("USER_INPUT_ARCHIVE_DIR"))
 	if dir == "" {
 		dir = defaultUserInputArchiveDir
 	}

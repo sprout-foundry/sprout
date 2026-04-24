@@ -2,10 +2,10 @@ package agent
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // sendMessage handles the API communication with retry logic
@@ -30,7 +30,7 @@ func (ch *ConversationHandler) prepareTools() []api.Tool {
 	}
 
 	fallback := api.GetToolDefinitions()
-	noSubagents := os.Getenv("LEDIT_SUBAGENT") == "1" || os.Getenv("LEDIT_NO_SUBAGENTS") == "1"
+	noSubagents := configuration.GetEnvSimple("SUBAGENT") == "1" || configuration.GetEnvSimple("NO_SUBAGENTS") == "1"
 	if noSubagents {
 		filtered := make([]api.Tool, 0, len(fallback))
 		for _, tool := range fallback {

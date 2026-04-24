@@ -15,21 +15,23 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 )
 
 const (
 	defaultPort         = 8080
-	defaultRegistryDir  = "./registry"
+	defaultAddr         = "0.0.0.0"
+	defaultRegistryDir  = "./registry/models"
 	defaultReadTimeout  = 5 * time.Second
 	defaultWriteTimeout = 10 * time.Second
 	defaultIdleTimeout  = 60 * time.Second
+	defaultCacheMaxAge  = 300 // 5 minutes in seconds
 )
 
 var (
 	port        = flag.Int("port", defaultPort, "HTTP port to listen on")
+	addr        = flag.String("addr", defaultAddr, "HTTP address to listen on")
 	registryDir = flag.String("dir", defaultRegistryDir, "Directory containing model JSON files")
 	version     = flag.Bool("version", false, "Print version and exit")
 )
@@ -60,13 +62,13 @@ func main() {
 
 	// Create HTTP file server with custom handler
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", handleRoot)
-	mux.HandleFunc("/healthz", handleHealth)
-	mux.HandleFunc("/models/", handleModels)
+	mux.HandleFunc("/", loggingMiddleware(handleRoot))
+	mux.HandleFunc("/health", loggingMiddleware(handleHealth))
+	mux.HandleFunc("/models/", loggingMiddleware(handleModels))
 
 	// Configure server with appropriate timeouts
 	server := &http.Server{
-		Addr:          fmt.Sprintf(":%d", *port),
+		Addr:          fmt.Sprintf("%s:%d", *addr, *port),
 		Handler:       mux,
 		ReadTimeout:    defaultReadTimeout,
 		WriteTimeout:   defaultWriteTimeout,
@@ -80,12 +82,12 @@ func main() {
 
 	// Start server in a goroutine
 	go func() {
-		log.Printf("[server] Starting model registry server on port %d", *port)
+		log.Printf("[server] Starting model registry server on %s:%d", *addr, *port)
 		log.Printf("[server] Serving model files from: %s", *registryDir)
 		log.Printf("[server] Endpoints:")
-		log.Printf("  GET /              - API info")
-		log.Printf("  GET /healthz       - Health check")
-		log.Printf("  GET /models/<id>.json - Per-provider model list")
+		log.Printf("  GET /                  - API info and available providers")
+		log.Printf("  GET /health            - Health check")
+		log.Printf("  GET /models/<id>.json  - Per-provider model list")
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("[server] failed: %v", err)
 		}
@@ -95,36 +97,17 @@ func main() {
 	<-stop
 	log.Printf("[server] Shutting down gracefully...")
 
-	// Graceful shutdown with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-
-	go func() {
-		defer wg.Done()
-		if err := server.Shutdown(ctx); err != nil {
-			log.Printf("[server] shutdown error: %v", err)
-		}
-	}()
-
-	// Wait for shutdown to complete or timeout
-	done := make(chan struct{})
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
-
-	select {
-	case <-done:
+	if err := server.Shutdown(ctx); err != nil {
+		log.Printf("[server] shutdown error: %v", err)
+	} else {
 		log.Printf("[server] Shutdown complete")
-	case <-ctx.Done():
-		log.Printf("[server] Shutdown timeout, forcing exit")
 	}
 }
 
-// validateRegistryDir checks that the registry directory exists and contains models subdirectory
+// validateRegistryDir checks that the registry directory exists and is a directory.
 func validateRegistryDir(dir string) error {
 	info, err := os.Stat(dir)
 	if err != nil {
@@ -133,34 +116,27 @@ func validateRegistryDir(dir string) error {
 		}
 		return fmt.Errorf("failed to stat registry directory: %w", err)
 	}
-
 	if !info.IsDir() {
 		return fmt.Errorf("registry path is not a directory: %s", dir)
 	}
-
-	// Check for models subdirectory
-	modelsDir := filepath.Join(dir, "models")
-	if info, err := os.Stat(modelsDir); err != nil {
-		if os.IsNotExist(err) {
-			// Models subdirectory does not exist yet - create it
-			if err := os.MkdirAll(modelsDir, 0755); err != nil {
-				return fmt.Errorf("failed to create models subdirectory: %w", err)
-			}
-			log.Printf("[server] Created models subdirectory: %s", modelsDir)
-		} else {
-			return fmt.Errorf("failed to stat models subdirectory: %w", err)
-		}
-	} else if !info.IsDir() {
-		return fmt.Errorf("models path is not a directory: %s", modelsDir)
-	}
-
 	return nil
 }
 
-// handleRoot serves API information
+// handleRoot serves API information and lists available providers.
 func handleRoot(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	providers, err := listAvailableProviders(*registryDir)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to list providers: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -171,9 +147,10 @@ func handleRoot(w http.ResponseWriter, r *http.Request) {
 		"build_time":  buildInfo.BuildTime,
 		"description": "Static file server for per-provider model lists",
 		"endpoints": map[string]string{
-			"/healthz":              "Health check",
+			"/health":                 "Health check",
 			"/models/<provider>.json": "Per-provider model list",
 		},
+		"providers": providers,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -182,8 +159,12 @@ func handleRoot(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleHealth returns simple health check
+// handleHealth returns a simple health check response.
 func handleHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{
@@ -191,7 +172,7 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleModels serves per-provider model JSON files
+// handleModels serves per-provider model JSON files with security protections.
 func handleModels(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -211,41 +192,52 @@ func handleModels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate provider ID (alphanumeric, hyphen, underscore)
+	// Validate provider ID (lowercase letters, numbers, hyphens, underscores only).
+	// Use 400 Bad Request — the input is malformed, not unauthorized.
 	providerID := strings.TrimSuffix(filename, ".json")
 	if !isValidProviderID(providerID) {
-		http.Error(w, "invalid provider ID: must contain only lowercase letters, numbers, hyphens, and underscores", http.StatusBadRequest)
+		http.Error(w, "invalid provider ID", http.StatusBadRequest)
 		return
 	}
 
-	// Build the file path and sanitize it to prevent path traversal
-	filePath := filepath.Join(*registryDir, "models", filename)
+	// Build and sanitize the file path to prevent path traversal.
+	filePath := filepath.Join(*registryDir, filename)
 	cleanPath := filepath.Clean(filePath)
 	registryDirClean := filepath.Clean(*registryDir)
-	modelsDirClean := filepath.Join(registryDirClean, "models")
 
-	// Defense-in-depth: Verify the resolved path is within the models directory
-	if !strings.HasPrefix(cleanPath, modelsDirClean+string(filepath.Separator)) &&
-		cleanPath != modelsDirClean {
+	// Defense-in-depth: use filepath.Rel to detect any escape attempt,
+	// including via symlinks on Unix or case-insensitive drive letters on Windows.
+	relPath, err := filepath.Rel(registryDirClean, cleanPath)
+	if err != nil || strings.HasPrefix(relPath, ".."+string(filepath.Separator)) || relPath == ".." {
 		http.Error(w, "file not found", http.StatusNotFound)
 		return
 	}
 
-	// Check if file exists before serving to prevent information disclosure
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+	// Verify symlinks don't escape the registry directory. A file named
+	// "openrouter.json" may be a symlink pointing outside the registry.
+	resolvedPath, symlinkErr := filepath.EvalSymlinks(filePath)
+	if symlinkErr != nil {
+		http.Error(w, "file not found", http.StatusNotFound)
+		return
+	}
+	resolvedRel, err := filepath.Rel(registryDirClean, resolvedPath)
+	if err != nil || strings.HasPrefix(resolvedRel, ".."+string(filepath.Separator)) || resolvedRel == ".." {
 		http.Error(w, "file not found", http.StatusNotFound)
 		return
 	}
 
-	// Add security headers
+	// Set security and cache headers before serving.
+	// Explicit Content-Type ensures correct MIME even if ServeFile sniffs differently.
+	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Frame-Options", "DENY")
-	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d", defaultCacheMaxAge))
 
 	http.ServeFile(w, r, filePath)
 }
 
-// isValidProviderID checks that provider ID contains only safe characters
+// isValidProviderID checks that a provider ID contains only safe characters:
+// lowercase letters, digits, hyphens, and underscores. Max length 128 chars.
 func isValidProviderID(id string) bool {
 	if len(id) == 0 || len(id) > 128 {
 		return false
@@ -258,10 +250,79 @@ func isValidProviderID(id string) bool {
 	return true
 }
 
+// listAvailableProviders scans the registry directory for valid provider JSON files.
+func listAvailableProviders(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	var providers []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if strings.HasSuffix(name, ".json") {
+			providerID := strings.TrimSuffix(name, ".json")
+			if isValidProviderID(providerID) {
+				providers = append(providers, providerID)
+			}
+		}
+	}
+	return providers, nil
+}
+
+// loggingMiddleware wraps a handler to log request method, path, status, and duration.
+// Sanitizes the URL path to prevent log injection.
+func loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		lw := &loggingResponseWriter{ResponseWriter: w}
+		next(lw, r)
+		duration := time.Since(start)
+		log.Printf("[request] %s %s status=%d duration=%v",
+			r.Method, sanitizeForLog(r.URL.Path), lw.status, duration)
+	}
+}
+
+// sanitizeForLog strips control characters (except tab) from a string to prevent
+// log injection attacks where crafted URLs insert fake log entries.
+func sanitizeForLog(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '\t' || (r >= 32 && r <= 126) {
+			return r
+		}
+		return -1
+	}, s)
+}
+
+// loggingResponseWriter wraps http.ResponseWriter to capture the status code
+// for logging. Defaults to 200 if WriteHeader is never called.
+type loggingResponseWriter struct {
+	http.ResponseWriter
+	status int
+	wrote  bool
+}
+
+func (lw *loggingResponseWriter) WriteHeader(code int) {
+	lw.wrote = true
+	lw.status = code
+	lw.ResponseWriter.WriteHeader(code)
+}
+
+func (lw *loggingResponseWriter) Write(b []byte) (int, error) {
+	if !lw.wrote {
+		lw.wrote = true
+		lw.status = http.StatusOK
+	}
+	return lw.ResponseWriter.Write(b)
+}
+
 // init sets build info from environment variables.
-// These can be set at build time via:
-//   go build -ldflags "-X main.VERSION=$VERSION -X main.COMMIT=$GIT_SHA -X main.BUILD_TIME=$BUILD_TIME"
-// or at runtime via env vars.
+// Can be overridden at build time via:
+//
+//	go build -ldflags "-X main.VERSION=$VERSION -X main.COMMIT=$GIT_SHA -X main.BUILD_TIME=$BUILD_TIME"
 func init() {
 	if v := os.Getenv("VERSION"); v != "" {
 		buildInfo.Version = v

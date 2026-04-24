@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"log"
-	"os"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/trace"
@@ -52,7 +51,7 @@ func NewBaseCommand(use, short, long string) *BaseCommand {
 	base.flags.SkipPrompt = base.cmd.Flags().Bool("skip-prompt", false, "Skip user confirmation prompts")
 	base.flags.Model = base.cmd.Flags().String("model", "", "Model to use for this command")
 	base.flags.DryRun = base.cmd.Flags().Bool("dry-run", false, "Run in simulation mode")
-	base.flags.TraceDatasetDir = base.cmd.Flags().String("trace-dataset-dir", "", "Enable dataset trace mode and write to directory (also settable via LEDIT_TRACE_DATASET_DIR env var)")
+	base.flags.TraceDatasetDir = base.cmd.Flags().String("trace-dataset-dir", "", "Enable dataset trace mode and write to directory (also settable via SPROUT_TRACE_DATASET_DIR env var)")
 
 	return base
 }
@@ -109,7 +108,7 @@ func getTraceDatasetDir(flagValue string) string {
 		return flagValue
 	}
 	// Check env var as fallback
-	dir, ok := os.LookupEnv("LEDIT_TRACE_DATASET_DIR")
+	dir, ok := configuration.LookupEnv("TRACE_DATASET_DIR")
 	if ok && dir != "" {
 		return dir
 	}

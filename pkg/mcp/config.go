@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/credentials"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 // MCPConfig represents the MCP configuration
@@ -78,7 +79,7 @@ func DefaultMCPConfig() MCPConfig {
 
 // getConfigDir returns the user's config directory
 func getConfigDir() (string, error) {
-	configDir := strings.TrimSpace(os.Getenv("LEDIT_CONFIG"))
+	configDir := strings.TrimSpace(envutil.GetEnvSimple("CONFIG"))
 	if configDir != "" {
 		return configDir, nil
 	}
@@ -113,15 +114,15 @@ func LoadMCPConfig() (MCPConfig, error) {
 	}
 
 	// Override with environment variables if present
-	if enabled := os.Getenv("LEDIT_MCP_ENABLED"); enabled != "" {
+	if enabled := envutil.GetEnvSimple("MCP_ENABLED"); enabled != "" {
 		mcpConfig.Enabled = enabled == "true" || enabled == "1"
 	}
 
-	if autoStart := os.Getenv("LEDIT_MCP_AUTO_START"); autoStart != "" {
+	if autoStart := envutil.GetEnvSimple("MCP_AUTO_START"); autoStart != "" {
 		mcpConfig.AutoStart = autoStart == "true" || autoStart == "1"
 	}
 
-	if autoDiscover := os.Getenv("LEDIT_MCP_AUTO_DISCOVER"); autoDiscover != "" {
+	if autoDiscover := envutil.GetEnvSimple("MCP_AUTO_DISCOVER"); autoDiscover != "" {
 		mcpConfig.AutoDiscover = autoDiscover == "true" || autoDiscover == "1"
 	}
 

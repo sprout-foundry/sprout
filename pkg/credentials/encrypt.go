@@ -1,6 +1,7 @@
 package credentials
 
 import (
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -232,7 +233,7 @@ func DecryptStore(data []byte) ([]byte, error) {
 	}
 
 	// Fallback: try environment passphrase
-	if passphrase := strings.TrimSpace(os.Getenv("LEDIT_KEY_PASSPHRASE")); passphrase != "" {
+	if passphrase := strings.TrimSpace(envutil.GetEnvSimple("KEY_PASSPHRASE")); passphrase != "" {
 		decrypted, passErr := DecryptWithPassphrase(data, passphrase)
 		if passErr == nil {
 			if !IsPlaintextJSON(decrypted) {
@@ -391,14 +392,14 @@ func saveUnlocked(store Store) error {
 	}
 	var encrypted []byte
 	if mode == "passphrase" {
-		passphrase := strings.TrimSpace(os.Getenv("LEDIT_KEY_PASSPHRASE"))
+		passphrase := strings.TrimSpace(envutil.GetEnvSimple("KEY_PASSPHRASE"))
 		if passphrase == "" {
 			return fmt.Errorf("cannot save: API keys are passphrase-encrypted but LEDIT_KEY_PASSPHRASE is not set. "+
 				"Set LEDIT_KEY_PASSPHRASE or run 'ledit keys encrypt' to switch to machine-key mode")
 		}
 		encrypted, err = EncryptWithPassphrase(data, passphrase)
-	} else if mode == "" && strings.TrimSpace(os.Getenv("LEDIT_KEY_PASSPHRASE")) != "" {
-		encrypted, err = EncryptWithPassphrase(data, strings.TrimSpace(os.Getenv("LEDIT_KEY_PASSPHRASE")))
+	} else if mode == "" && strings.TrimSpace(envutil.GetEnvSimple("KEY_PASSPHRASE")) != "" {
+		encrypted, err = EncryptWithPassphrase(data, strings.TrimSpace(envutil.GetEnvSimple("KEY_PASSPHRASE")))
 		if err == nil {
 			_ = SetEncryptionMode("passphrase")
 		}
@@ -539,18 +540,18 @@ func Save(store Store) error {
 	var encrypted []byte
 	if mode == "passphrase" {
 		// Passphrase mode: encrypt with the user's passphrase
-		passphrase := strings.TrimSpace(os.Getenv("LEDIT_KEY_PASSPHRASE"))
+		passphrase := strings.TrimSpace(envutil.GetEnvSimple("KEY_PASSPHRASE"))
 		if passphrase == "" {
 			return fmt.Errorf("cannot save: API keys are passphrase-encrypted but LEDIT_KEY_PASSPHRASE is not set. "+
 				"Set LEDIT_KEY_PASSPHRASE or run 'ledit keys encrypt' to switch to machine-key mode")
 		}
 		encrypted, err = EncryptWithPassphrase(data, passphrase)
-	} else if mode == "" && strings.TrimSpace(os.Getenv("LEDIT_KEY_PASSPHRASE")) != "" {
+	} else if mode == "" && strings.TrimSpace(envutil.GetEnvSimple("KEY_PASSPHRASE")) != "" {
 		// Legacy passphrase-encrypted file with no mode file: the user has
 		// LEDIT_KEY_PASSPHRASE set (required to have loaded the file), so
 		// preserve their passphrase encryption rather than silently downgrading
 		// to machine-key mode.
-		encrypted, err = EncryptWithPassphrase(data, strings.TrimSpace(os.Getenv("LEDIT_KEY_PASSPHRASE")))
+		encrypted, err = EncryptWithPassphrase(data, strings.TrimSpace(envutil.GetEnvSimple("KEY_PASSPHRASE")))
 		if err == nil {
 			_ = SetEncryptionMode("passphrase")
 		}

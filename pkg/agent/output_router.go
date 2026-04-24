@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -210,7 +211,7 @@ func (r *OutputRouter) writeTerminalMessage(message string) {
 	}
 
 	// Direct terminal output
-	if os.Getenv("LEDIT_CI_MODE") == "1" || os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+	if configuration.GetEnvSimple("CI_MODE") == "1" || os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
 		fmt.Print(message)
 		return
 	}

@@ -197,7 +197,7 @@ func (keys *APIKeys) PopulateFromEnvironment() bool {
 // This is designed for containerized/SaaS environments (e.g. Sprout Foundry) where
 // keys are injected at runtime rather than stored in config files.
 func (keys *APIKeys) PopulateFromJSONEnv() bool {
-	raw := strings.TrimSpace(os.Getenv("LEDIT_API_KEYS_JSON"))
+	raw := strings.TrimSpace(GetEnvSimple("API_KEYS_JSON"))
 	if raw == "" {
 		return false
 	}

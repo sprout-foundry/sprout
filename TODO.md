@@ -373,13 +373,13 @@ All files above the 500-line target that still need splitting: `tool_handlers_su
 
 ---
 
-## Layered Config — Remaining Work
+## Layered Config — Complete
 
-The backend for layered config (global → workspace → session overrides) is complete. Remaining frontend work:
+All layered config work (backend + frontend) is complete:
 
 [x] - WEBUI SETTINGS: Add config scope tabs (Global / Workspace / Session) to the Settings panel — Currently the Settings panel shows a flat list with no indication of which layer a setting comes from. Add tabs at the top: "Global" (reads/writes `~/.ledit/config.json`), "Workspace" (reads/writes `{workspace}/.ledit/config.json`, disabled when no workspace), "Session" (reads/writes `chatSession.ConfigOverrides`, ephemeral per-chat). The "General" settings tab provider/model selector should default to the Session scope. Add API endpoints: `GET /api/settings?layer=global|workspace|session` and `PUT /api/settings?layer=global|workspace|session`. → Implemented: Backend GET `/api/settings?layer=...` already existed. Added backend PUT `/api/settings?layer=global|workspace|session` with three scoped handlers. Frontend: SettingsPanel already had Session/Workspace/Global tab buttons. Wired `updateSetting()` to pass `configViewLayer` to `api.updateSettings()`, and `ApiService.updateSettings()` now accepts optional `layer` param. Display settings use `displaySettingsRef` to render the correct layer's values.
-[] - WEBUI SETTINGS: Show config layer provenance in the UI — When viewing settings, indicate which layer each value comes from (e.g., a badge showing "workspace" next to a reasoning_effort value that was set at the workspace level). This requires the GET endpoint to return provenance metadata alongside values.
-[] - WEBUI SETTINGS: Add workspace config creation UX — Provide a "Create workspace config" button in the Workspace tab that copies current global config values to `{workspace}/.ledit/config.json` so users can then customize per-project settings without starting from scratch.
+[] - WEBUI SETTINGS: Show config layer provenance in the UI — When viewing settings, indicate which layer each value comes from (e.g., a badge showing "workspace" next to a reasoning_effort value that was set at the workspace level). This requires the GET endpoint to return provenance metadata alongside values. → Implemented: Backend `GET /api/settings?layer=provenance` returns `{ config, sources }`. Frontend `renderProvenanceBadge()` shows color-coded labels (session=blue, workspace=amber, global=gray) on all setting labels when viewing effective config.
+[] - WEBUI SETTINGS: Add workspace config creation UX — Provide a "Create workspace config" button in the Workspace tab that copies current global config values to `{workspace}/.ledit/config.json` so users can then customize per-project settings without starting from scratch. → Implemented: "Create Workspace Config" button appears when workspace layer is selected and no workspace config exists. Copies global settings via `api.getSettingsLayer('global')` → `api.updateSettings(data, 'workspace')`.
 
 ---
 

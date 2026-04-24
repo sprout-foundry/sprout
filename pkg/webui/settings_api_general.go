@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	agentpkg "github.com/sprout-foundry/sprout/pkg/agent"
@@ -129,6 +130,27 @@ func (ws *ReactWebServer) handleGetSessionSettings(w http.ResponseWriter, r *htt
 // ---------------------------------------------------------------------------
 
 func (ws *ReactWebServer) handleAPISettingsPut(w http.ResponseWriter, r *http.Request) {
+	// Check for explicit layer parameter
+	layer := strings.TrimSpace(r.URL.Query().Get("layer"))
+	switch layer {
+	case "session":
+		ws.handlePutSessionSettings(w, r)
+		return
+	case "workspace":
+		ws.handlePutWorkspaceSettings(w, r)
+		return
+	case "global":
+		ws.handlePutGlobalSettings(w, r)
+		return
+	}
+
+	// Default (no layer): current backward-compatible behavior
+	ws.handleAPISettingsPutDefault(w, r)
+}
+
+// handleAPISettingsPutDefault is the original PUT behavior:
+// provider/model → session overrides, everything else → config manager.
+func (ws *ReactWebServer) handleAPISettingsPutDefault(w http.ResponseWriter, r *http.Request) {
 	cm := ws.getConfigManager(r, w)
 	if cm == nil {
 		return
@@ -261,6 +283,159 @@ func (ws *ReactWebServer) handleAPISettingsPut(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"config":  sanitizedConfig(updated),
+	})
+}
+
+// ---------------------------------------------------------------------------
+// Scoped PUT handlers — /api/settings?layer=global|workspace|session
+// ---------------------------------------------------------------------------
+
+// handlePutSessionSettings writes settings to the current session's ConfigOverrides.
+func (ws *ReactWebServer) handlePutSessionSettings(w http.ResponseWriter, r *http.Request) {
+	clientID := ws.resolveClientID(r)
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxSettingsBodyBytes)
+	var incoming map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&incoming); err != nil {
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("Invalid JSON: %v", err))
+		return
+	}
+
+	// Validate provider if included
+	if p, ok := incoming["provider"].(string); ok && p != "" {
+		cm := ws.getConfigManager(r, w)
+		if cm == nil {
+			return
+		}
+		if _, err := cm.MapStringToClientType(p); err != nil {
+			writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("Invalid provider: %v", err))
+			return
+		}
+	}
+
+	// Merge into session ConfigOverrides
+	ws.mutex.Lock()
+	ctx := ws.clientContexts[clientID]
+	var cs *chatSession
+	if ctx != nil {
+		cs = ctx.getChatSession(ctx.getActiveChatID())
+	}
+	if ctx == nil || cs == nil {
+		ws.mutex.Unlock()
+		writeJSONError(w, http.StatusBadRequest, "No active session")
+		return
+	}
+	cs.mu.Lock()
+	if cs.ConfigOverrides == nil {
+		cs.ConfigOverrides = make(map[string]interface{})
+	}
+	for k, v := range incoming {
+		if v == nil || v == "" || v == 0 || v == false {
+			delete(cs.ConfigOverrides, k)
+		} else {
+			cs.ConfigOverrides[k] = v
+		}
+	}
+	// Sync Provider/Model shortcuts
+	if p, ok := cs.ConfigOverrides["provider"].(string); ok {
+		cs.Provider = p
+	}
+	if m, ok := cs.ConfigOverrides["model"].(string); ok {
+		cs.Model = m
+	}
+	savedOverrides := make(map[string]interface{}, len(cs.ConfigOverrides))
+	for k, v := range cs.ConfigOverrides {
+		savedOverrides[k] = v
+	}
+	cs.mu.Unlock()
+	ws.mutex.Unlock()
+
+	// Apply to live agent in-memory
+	if agentInst, err := ws.getClientAgent(clientID); err == nil && agentInst != nil {
+		if p, ok := savedOverrides["provider"].(string); ok && p != "" {
+			cm := ws.getConfigManager(r, w)
+			if cm != nil {
+				if pt, err := cm.MapStringToClientType(p); err == nil {
+					agentInst.SetProvider(pt)
+				}
+			}
+		}
+		if m, ok := savedOverrides["model"].(string); ok && m != "" {
+			agentInst.SetModel(m)
+		}
+		agentInst.SetConfigOverrides(savedOverrides)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"config":  savedOverrides,
+	})
+}
+
+// handlePutWorkspaceSettings writes settings to the workspace config file.
+func (ws *ReactWebServer) handlePutWorkspaceSettings(w http.ResponseWriter, r *http.Request) {
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	if workspaceRoot == "" {
+		writeJSONError(w, http.StatusBadRequest, "No workspace configured")
+		return
+	}
+	ws.putConfigToFile(w, r, configuration.GetWorkspaceConfigPath(workspaceRoot))
+}
+
+// handlePutGlobalSettings writes settings to the global config file.
+func (ws *ReactWebServer) handlePutGlobalSettings(w http.ResponseWriter, r *http.Request) {
+	configPath, err := configuration.GetConfigPath()
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "Cannot determine global config path")
+		return
+	}
+	ws.putConfigToFile(w, r, configPath)
+}
+
+// putConfigToFile is a helper that merges incoming settings into an existing
+// config file and writes the result back.
+func (ws *ReactWebServer) putConfigToFile(w http.ResponseWriter, r *http.Request, configPath string) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxSettingsBodyBytes)
+	var incoming map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&incoming); err != nil {
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("Invalid JSON: %v", err))
+		return
+	}
+
+	// Load existing config or create default
+	var cfg configuration.Config
+	if data, err := os.ReadFile(configPath); err == nil {
+		_ = json.Unmarshal(data, &cfg)
+	} else {
+		cfg = *configuration.NewConfig()
+	}
+
+	// Apply patch
+	if err := applyPartialSettings(&cfg, incoming); err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// Ensure directory exists
+	if err := os.MkdirAll(filepath.Dir(configPath), 0700); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Cannot create config directory: %v", err))
+		return
+	}
+
+	// Write
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to marshal config: %v", err))
+		return
+	}
+	if err := os.WriteFile(configPath, data, 0600); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to write config: %v", err))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"config":  sanitizedConfig(&cfg),
 	})
 }
 

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -135,17 +136,36 @@ func (ws *ReactWebServer) getConfigManager(r *http.Request, w http.ResponseWrite
 	if err == nil && agentInst != nil && agentInst.GetConfigManager() != nil {
 		return agentInst.GetConfigManager()
 	}
-	// Fall back to a standalone config manager for any error or missing
-	// config manager — this covers:
+	// Fallback: create a config manager using layered approach.
+	// This ensures per-client isolation even when no agent exists yet.
+	// Settings writes will go to the session layer (most specific).
+	//
+	// This covers:
 	//   • ErrNoProviderConfigured (no provider set up yet)
 	//   • Provider config errors (key missing, editor mode, etc.)
 	//   • Agent creation failures that don't match the provider-error patterns
 	//     (e.g. "create agent in workspace: ...", "failed to initialize configuration: ...")
 	//   • Agent exists but GetConfigManager() is nil (err is nil in that case)
-	// The only hard failure is when NewManagerSilent itself cannot read config.
-	cm, createErr := configuration.NewManagerSilent()
+
+	// Get base directory (global config location)
+	configBase, configErr := configuration.GetConfigDir()
+	if configErr != nil {
+		writeJSONErr(w, http.StatusServiceUnavailable, "config_unavailable",
+			"Configuration directory not available")
+		return nil
+	}
+
+	// Get workspace directory if workspace is available
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	var workspaceDir string
+	if workspaceRoot != "" {
+		workspaceDir = filepath.Join(workspaceRoot, configuration.ConfigDirName)
+	}
+
+	cm, createErr := configuration.NewManagerWithLayers(configBase, workspaceDir)
 	if createErr != nil {
-		writeJSONErr(w, http.StatusServiceUnavailable, "config_unavailable", "Configuration manager is not available")
+		writeJSONErr(w, http.StatusServiceUnavailable, "config_unavailable",
+			"Configuration manager is not available")
 		return nil
 	}
 	return cm

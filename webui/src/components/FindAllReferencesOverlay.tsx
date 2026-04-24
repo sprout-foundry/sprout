@@ -37,7 +37,7 @@ function highlightSymbol(
   startCol: number,
   endCol: number,
 ): React.ReactNode {
-  if (startCol < 1 || startCol > lineText.length) {
+  if (startCol < 1 || startCol > lineText.length || endCol < startCol || endCol > lineText.length + 1) {
     return lineText;
   }
   const before = lineText.slice(0, startCol - 1);
@@ -219,6 +219,9 @@ function FindAllReferencesOverlay({
         className="find-refs-list"
         ref={listRef}
         onMouseDown={handleMouseDown}
+        role="listbox"
+        aria-label={symbolName ? `References to ${symbolName}` : 'References'}
+        aria-activedescendant={flatRefs[selectedIndex] ? `ref-item-${selectedIndex}` : undefined}
       >
         {isEmpty && <div className="find-refs-empty">No references found</div>}
 
@@ -254,7 +257,11 @@ function FindAllReferencesOverlay({
                   return (
                     <div
                       key={`${ref.filePath}:${ref.line}:${ref.startCol}`}
+                      id={`ref-item-${flatIndex}`}
                       data-selected={isActive}
+                      role="option"
+                      aria-selected={isActive}
+                      tabIndex={-1}
                       className={`find-refs-item${
                         isActive ? ' find-refs-item-active' : ''
                       }`}

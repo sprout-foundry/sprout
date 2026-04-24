@@ -181,6 +181,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/onboarding/complete", ws.handleAPIOnboardingComplete)
 	mux.HandleFunc("/api/onboarding/skip", ws.handleAPIOnboardingSkip)
 	mux.HandleFunc("/api/files", ws.handleAPIFiles)
+	mux.HandleFunc("/api/files/prettier-config", ws.handleAPIGetPrettierConfig)
 	mux.HandleFunc("/api/create", ws.handleAPICreateFile)
 	mux.HandleFunc("/api/delete", ws.handleAPIDeleteItem)
 	mux.HandleFunc("/api/rename", ws.handleAPIRenameItem)

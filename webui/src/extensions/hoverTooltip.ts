@@ -81,11 +81,12 @@ export function createHoverTooltipExtension(
  * the safe text. Handles code spans, code blocks, bold, italic, and
  * line breaks.
  */
-function formatMarkdown(md: string): string {
+export function formatMarkdown(md: string): string {
   // Escape all raw HTML first to prevent XSS
   let safe = escapeHtml(md);
 
-  // Code blocks (``` ... ```) — restore escaped backticks first
+  // Code blocks (``` ... ```) — backticks are not escaped by escapeHtml,
+  // so the regex matches directly on the escaped-HTML text.
   safe = safe.replace(/```[\s\S]*?```/g, (match) => {
     // Strip the ``` delimiters, keep inner text (already escaped)
     return '<pre><code>' + match.replace(/^```\w*\n?/, '').replace(/\n```$/, '') + '</code></pre>';
@@ -101,7 +102,7 @@ function formatMarkdown(md: string): string {
   return safe;
 }
 
-function escapeHtml(s: string): string {
+export function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')

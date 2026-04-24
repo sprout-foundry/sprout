@@ -90,6 +90,12 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [textDrafts, setTextDrafts] = useState<Record<string, string>>({});
 
+  // Config view layer: session (default), workspace, global
+  const [configViewLayer, setConfigViewLayer] = useState<'session' | 'workspace' | 'global'>('session');
+  const [layerLoading, setLayerLoading] = useState<string | null>(null);
+  const [layerData, setLayerData] = useState<Record<string, any> | null>(null);
+  const [layerError, setLayerError] = useState<string | null>(null);
+
   // Use the shared notification system instead of local toasts
   const { addNotification } = useNotifications();
 
@@ -172,6 +178,37 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
       return changed ? next : prev;
     });
   }, [settings]);
+
+  // Fetch config layer data when layer changes (only in general tab)
+  useEffect(() => {
+    if (activeSubTab !== 'general') return;
+    if (configViewLayer !== 'session') {
+      // workspace and global layers are fetched from the backend
+      let cancelled = false;
+      setLayerLoading(configViewLayer);
+      setLayerError(null);
+      api.getSettingsLayer(configViewLayer)
+        .then((data) => {
+          if (cancelled) return;
+          setLayerData(data);
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          console.error(`[SettingsPanel] failed to load ${configViewLayer} config:`, err);
+          setLayerError(`Failed to load ${configViewLayer} config`);
+          setLayerData(null);
+        })
+        .finally(() => {
+          if (!cancelled) setLayerLoading(null);
+        });
+      return () => { cancelled = true; };
+    } else {
+      // Session layer: show overrides from the effective config diff
+      setLayerData(null);
+      setLayerError(null);
+      setLayerLoading(null);
+    }
+  }, [activeSubTab, configViewLayer]);
 
   // Fetch subagent types + providers when subagents tab is activated
   useEffect(() => {
@@ -785,6 +822,32 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
       case 'general':
         return (
           <>
+            {/* Config Layer Selector */}
+            <div className="section">
+              <h4>Config Scope</h4>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
+                {(['session', 'workspace', 'global'] as const).map((layer) => (
+                  <button
+                    key={layer}
+                    type="button"
+                    className={`layerscope-btn ${configViewLayer === layer ? 'active' : ''}`}
+                    onClick={() => setConfigViewLayer(layer)}
+                    disabled={layerLoading === layer}
+                  >
+                    {layer === 'session' ? 'Session' : layer === 'workspace' ? 'Workspace' : 'Global'}
+                    {layerLoading === layer && <span style={{ marginLeft: 4, opacity: 0.5 }}>…</span>}
+                  </button>
+                ))}
+              </div>
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', lineHeight: 1.3 }}>
+                {configViewLayer === 'session' && 'Editing session-scoped overrides only. These are saved with your chat session and don\'t affect other clients.'}
+                {configViewLayer === 'workspace' && 'Editing workspace config ({workspace || "project"}). Settings are shared across all sessions in this workspace.'}
+                {configViewLayer === 'global' && 'Editing global config (~/.ledit). Settings apply to all workspaces and sessions.'}
+              </span>
+              {layerError && (
+                <div style={{ color: 'var(--text-error)', fontSize: 'var(--text-xs)', marginTop: 4 }}>{layerError}</div>
+              )}
+            </div>
             {/* Editor preferences (frontend-only) */}
             {editorPreferences && onEditorPreferenceChanged && (
               <div className="section">

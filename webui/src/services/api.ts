@@ -1243,6 +1243,19 @@ class ApiService {
     }
   }
 
+  async getPrettierConfig(filePath: string): Promise<Record<string, unknown>> {
+    try {
+      const response = await clientFetch(`/api/files/prettier-config?path=${encodeURIComponent(filePath)}`);
+      if (!response.ok) {
+        return {};
+      }
+      return await response.json().catch(() => ({}));
+    } catch (error) {
+      console.error('Failed to fetch prettier config:', error);
+      return {};
+    }
+  }
+
   async getDiagnostics(path: string, content: string): Promise<{
     message: string;
     path: string;

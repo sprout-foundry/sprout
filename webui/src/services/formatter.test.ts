@@ -11,7 +11,7 @@ jest.mock('prettier', () => ({
   __esModule: true,
 }));
 
-import { formatCode, isFormattable } from './formatter';
+import { formatCode, formatCodeWithConfigDiscovery, isFormattable, setConfigFetcher, clearConfigCache } from './formatter';
 
 // Get a reference to the mocked format function
 const mockedFormat = jest.requireMock('prettier').format as jest.Mock;
@@ -367,5 +367,162 @@ describe('formatCode — edge cases', () => {
     const r = await formatCode('input', 'app.js');
     expect(typeof r.formatted).toBe('string');
     expect(typeof r.error).toBe('undefined');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatCode — config merging
+// ---------------------------------------------------------------------------
+
+describe('formatCode — config merging', () => {
+  beforeEach(() => {
+    clearConfigCache();
+  });
+
+  it('uses default options when no config provided', async () => {
+    mockedFormat.mockResolvedValue('formatted');
+    await formatCode('input', 'app.js');
+    expect(mockedFormat).toHaveBeenCalledWith('input', expect.objectContaining({
+      parser: 'babel',
+      semi: true,
+      singleQuote: true,
+      tabWidth: 2,
+      trailingComma: 'all',
+      printWidth: 80,
+    }));
+  });
+
+  it('merges user config with defaults (user config takes precedence)', async () => {
+    mockedFormat.mockResolvedValue('formatted');
+    await formatCode('input', 'app.js', undefined, { singleQuote: false, printWidth: 100 });
+    expect(mockedFormat).toHaveBeenCalledWith('input', expect.objectContaining({
+      parser: 'babel',
+      semi: true, // default
+      singleQuote: false, // from user config
+      tabWidth: 2, // default
+      trailingComma: 'all', // default
+      printWidth: 100, // from user config
+    }));
+  });
+
+  it('allows full override of all default options', async () => {
+    mockedFormat.mockResolvedValue('formatted');
+    await formatCode('input', 'app.js', undefined, {
+      semi: false,
+      singleQuote: false,
+      tabWidth: 4,
+      trailingComma: 'none',
+      printWidth: 120,
+    });
+    expect(mockedFormat).toHaveBeenCalledWith('input', expect.objectContaining({
+      parser: 'babel',
+      semi: false,
+      singleQuote: false,
+      tabWidth: 4,
+      trailingComma: 'none',
+      printWidth: 120,
+    }));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatCodeWithConfigDiscovery — config fetcher integration
+// ---------------------------------------------------------------------------
+
+describe('formatCodeWithConfigDiscovery — config discovery', () => {
+  beforeEach(() => {
+    clearConfigCache();
+  });
+
+  it('fetches config when config fetcher is set', async () => {
+    const mockFetcher = jest.fn().mockResolvedValue({ singleQuote: false, tabWidth: 4 });
+    setConfigFetcher(mockFetcher);
+
+    mockedFormat.mockResolvedValue('formatted');
+    await formatCodeWithConfigDiscovery('input', 'src/app.js');
+
+    expect(mockFetcher).toHaveBeenCalledWith('src/app.js');
+    expect(mockedFormat).toHaveBeenCalledWith('input', expect.objectContaining({
+      parser: 'babel',
+      singleQuote: false,
+      tabWidth: 4,
+    }));
+  });
+
+  it('uses empty config when fetcher returns empty', async () => {
+    setConfigFetcher(jest.fn().mockResolvedValue({}));
+
+    mockedFormat.mockResolvedValue('formatted');
+    await formatCodeWithConfigDiscovery('input', 'app.js');
+
+    expect(mockedFormat).toHaveBeenCalledWith('input', expect.objectContaining({
+      parser: 'babel',
+      semi: true,
+      singleQuote: true,
+      tabWidth: 2,
+    }));
+  });
+
+  it('caches config per directory', async () => {
+    const mockFetcher = jest.fn().mockResolvedValue({ singleQuote: false });
+    setConfigFetcher(mockFetcher);
+
+    mockedFormat.mockResolvedValue('formatted');
+
+    // Format multiple files in same directory
+    await formatCodeWithConfigDiscovery('input1', 'src/components/a.js');
+    await formatCodeWithConfigDiscovery('input2', 'src/components/b.ts');
+
+    // Should only fetch config once (for the first file)
+    expect(mockFetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('fetches new config for different directory', async () => {
+    const mockFetcher = jest.fn().mockResolvedValue({ singleQuote: false });
+    setConfigFetcher(mockFetcher);
+
+    mockedFormat.mockResolvedValue('formatted');
+
+    // Format files in different directories
+    await formatCodeWithConfigDiscovery('input1', 'src/components/a.js');
+    await formatCodeWithConfigDiscovery('input2', 'lib/utils/b.ts');
+
+    // Should fetch config twice (once per directory)
+    expect(mockFetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it('fails gracefully when config fetcher throws', async () => {
+    setConfigFetcher(jest.fn().mockRejectedValue(new Error('network error')));
+
+    mockedFormat.mockResolvedValue('formatted');
+    const result = await formatCodeWithConfigDiscovery('input', 'app.js');
+
+    // Should fall back to defaults when fetcher throws
+    expect(result.formatted).toBe('formatted');
+    expect(mockedFormat).toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// clearConfigCache
+// ---------------------------------------------------------------------------
+
+describe('clearConfigCache', () => {
+  it('clears cached config', async () => {
+    const mockFetcher = jest.fn().mockResolvedValue({ singleQuote: false });
+    setConfigFetcher(mockFetcher);
+
+    mockedFormat.mockResolvedValue('formatted');
+
+    // First format - populates cache
+    await formatCodeWithConfigDiscovery('input1', 'src/a.js');
+    expect(mockFetcher).toHaveBeenCalledTimes(1);
+
+    // Clear cache
+    clearConfigCache();
+
+    // Second format - should fetch again
+    await formatCodeWithConfigDiscovery('input2', 'src/b.js');
+    expect(mockFetcher).toHaveBeenCalledTimes(2);
   });
 });

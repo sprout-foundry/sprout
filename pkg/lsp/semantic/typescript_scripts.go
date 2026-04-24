@@ -52,7 +52,7 @@ function analyze(input) {
     }
   } catch (_) {
     return {
-      capabilities: { diagnostics: false, definition: false },
+      capabilities: { diagnostics: false, definition: false, hover: false },
       error: 'typescript_not_available'
     };
   }
@@ -125,7 +125,7 @@ function analyze(input) {
     const first = defs[0];
     if (!first) {
       return {
-        capabilities: { diagnostics: true, definition: true },
+        capabilities: { diagnostics: true, definition: true, hover: true },
         definition: null
       };
     }
@@ -137,12 +137,35 @@ function analyze(input) {
     const source = ts.createSourceFile(targetPath, targetText, ts.ScriptTarget.Latest, true);
     const lc = source.getLineAndCharacterOfPosition(first.textSpan.start);
     return {
-      capabilities: { diagnostics: true, definition: true },
+      capabilities: { diagnostics: true, definition: true, hover: true },
       definition: {
         path: targetPath,
         line: lc.line + 1,
         column: lc.character + 1,
       }
+    };
+  }
+
+  if (method === 'hover') {
+    const pos = input.position || { line: 1, column: 1 };
+    const offset = lineColToOffset(fileContent, pos.line, pos.column);
+    const info = ls.getQuickInfoAtPosition(filePath, offset);
+    if (!info) {
+      return {
+        capabilities: { diagnostics: true, definition: true, hover: true },
+        hover: null
+      };
+    }
+    const displayParts = info.displayParts || [];
+    const docs = info.documentation || [];
+    let contents = displayParts.map((p) => p.text).join('');
+    if (docs.length > 0) {
+      const docText = docs.map((p) => p.text).join('\n');
+      contents = contents + '\n\n' + docText;
+    }
+    return {
+      capabilities: { diagnostics: true, definition: true, hover: true },
+      hover: { contents: contents }
     };
   }
 
@@ -163,7 +186,7 @@ function analyze(input) {
   });
 
   return {
-    capabilities: { diagnostics: true, definition: true },
+    capabilities: { diagnostics: true, definition: true, hover: true },
     diagnostics
   };
 }
@@ -192,7 +215,7 @@ function readStdin() {
     process.stdout.write(JSON.stringify(out));
   } catch (err) {
     process.stdout.write(JSON.stringify({
-      capabilities: { diagnostics: false, definition: false },
+      capabilities: { diagnostics: false, definition: false, hover: false },
       error: String(err && err.message ? err.message : err)
     }));
   }
@@ -212,7 +235,7 @@ rl.on('line', (line) => {
     input = JSON.parse(line || '{}');
   } catch (err) {
     const out = {
-      capabilities: { diagnostics: false, definition: false },
+      capabilities: { diagnostics: false, definition: false, hover: false },
       error: String(err && err.message ? err.message : err),
     };
     process.stdout.write(JSON.stringify(out) + '\n');
@@ -224,7 +247,7 @@ rl.on('line', (line) => {
     process.stdout.write(JSON.stringify(out) + '\n');
   } catch (err) {
     const out = {
-      capabilities: { diagnostics: false, definition: false },
+      capabilities: { diagnostics: false, definition: false, hover: false },
       error: String(err && err.message ? err.message : err),
     };
     process.stdout.write(JSON.stringify(out) + '\n');

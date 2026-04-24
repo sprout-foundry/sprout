@@ -463,31 +463,32 @@ describe('formatCodeWithConfigDiscovery — config discovery', () => {
     }));
   });
 
-  it('caches config per directory', async () => {
+  it('caches config (single fetch regardless of directory)', async () => {
     const mockFetcher = jest.fn().mockResolvedValue({ singleQuote: false });
     setConfigFetcher(mockFetcher);
 
     mockedFormat.mockResolvedValue('formatted');
 
-    // Format multiple files in same directory
-    await formatCodeWithConfigDiscovery('input1', 'src/components/a.js');
-    await formatCodeWithConfigDiscovery('input2', 'src/components/b.ts');
-
-    // Should only fetch config once (for the first file)
-    expect(mockFetcher).toHaveBeenCalledTimes(1);
-  });
-
-  it('fetches new config for different directory', async () => {
-    const mockFetcher = jest.fn().mockResolvedValue({ singleQuote: false });
-    setConfigFetcher(mockFetcher);
-
-    mockedFormat.mockResolvedValue('formatted');
-
-    // Format files in different directories
+    // Format multiple files in different directories
     await formatCodeWithConfigDiscovery('input1', 'src/components/a.js');
     await formatCodeWithConfigDiscovery('input2', 'lib/utils/b.ts');
 
-    // Should fetch config twice (once per directory)
+    // Should only fetch config once (backend resolves from workspace root)
+    expect(mockFetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('fetches config again after cache clear', async () => {
+    const mockFetcher = jest.fn().mockResolvedValue({ singleQuote: false });
+    setConfigFetcher(mockFetcher);
+
+    mockedFormat.mockResolvedValue('formatted');
+
+    await formatCodeWithConfigDiscovery('input1', 'src/a.js');
+    expect(mockFetcher).toHaveBeenCalledTimes(1);
+
+    clearConfigCache();
+
+    await formatCodeWithConfigDiscovery('input2', 'lib/b.ts');
     expect(mockFetcher).toHaveBeenCalledTimes(2);
   });
 
@@ -508,6 +509,10 @@ describe('formatCodeWithConfigDiscovery — config discovery', () => {
 // ---------------------------------------------------------------------------
 
 describe('clearConfigCache', () => {
+  beforeEach(() => {
+    clearConfigCache();
+  });
+
   it('clears cached config', async () => {
     const mockFetcher = jest.fn().mockResolvedValue({ singleQuote: false });
     setConfigFetcher(mockFetcher);

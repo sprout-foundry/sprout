@@ -814,6 +814,18 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
           });
         } else if (event.type === 'output' || event.type === 'error_output') {
           xtermRef.current?.write((data?.output as string) || '');
+        } else if (event.type === 'session_restored') {
+          // Reattach: clear the terminal first to avoid duplicating content
+          // that was already displayed, then replay the scrollback from the
+          // server's ring buffer.
+          const term = xtermRef.current;
+          if (term) {
+            term.clear();
+            const scrollback = (data?.scrollback as string) || '';
+            if (scrollback) {
+              term.write(scrollback);
+            }
+          }
         } else if (event.type === 'pty_exit') {
           xtermRef.current?.writeln('\r\n\x1b[90m[Process exited]\x1b[0m');
         } else if (event.type === 'error') {

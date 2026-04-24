@@ -215,7 +215,7 @@ func resolveConfigDir() (string, error) {
 	if d := strings.TrimSpace(envutil.GetEnvSimple("CONFIG")); d != "" {
 		abs, err := filepath.Abs(d)
 		if err != nil {
-			return "", fmt.Errorf("resolve LEDIT_CONFIG path: %w", err)
+			return "", fmt.Errorf("resolve SPROUT_CONFIG path: %w", err)
 		}
 		return abs, nil
 	}

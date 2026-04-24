@@ -13,7 +13,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/mcp"
 )
 
-// envMutex protects concurrent access to the LEDIT_CONFIG environment variable.
+// envMutex protects concurrent access to the SPROUT_CONFIG/LEDIT_CONFIG environment variable.
 // Both NewManagerWithDir and NewManagerWithLayers temporarily set this env var,
 // so they must be serialized to avoid config path corruption.
 var envMutex sync.Mutex
@@ -23,6 +23,7 @@ type Manager struct {
 	apiKeys   *APIKeys
 	lastSaved *Config // Track last saved state, not initial snapshot
 	loaded    bool    // Track if config has been loaded
+	configDir string  // Explicit config directory for saves (empty = use env/default)
 }
 
 // loadConfigSilently loads configuration without showing welcome messages
@@ -42,7 +43,7 @@ func loadConfigSilently() (*Config, *APIKeys, error) {
 		return nil, nil, fmt.Errorf("failed to load API keys: %w", err)
 	}
 
-	// Populate from LEDIT_API_KEYS_JSON env var (bulk injection for SaaS/container environments)
+	// Populate from SPROUT_API_KEYS_JSON env var (bulk injection for SaaS/container environments)
 	apiKeys.PopulateFromJSONEnv()
 
 	// Populate from individual environment variables — these take priority over JSON blob
@@ -130,8 +131,9 @@ func NewManagerSilent() (*Manager, error) {
 
 // NewManagerWithConfig creates a new configuration manager from an explicit
 // Config and optional API key set.  The manager will persist saves to the same
-// location that config.Save()/Load() would use for the current env.  Pass nil
-// for apiKeys to skip key loading.
+// location that config.Save()/Load() would use for the current env (when
+// configDir is empty) or to configDir (when non-empty).  Pass nil for apiKeys
+// to skip key loading.
 func NewManagerWithConfig(cfg *Config, apiKeys *APIKeys) *Manager {
 	return &Manager{
 		config:    cfg,
@@ -187,7 +189,9 @@ func NewManagerWithDir(configDir string) (*Manager, error) {
 		return nil, fmt.Errorf("failed to load API keys from %q: %w", configDir, err)
 	}
 
-	return NewManagerWithConfig(config, apiKeys), nil
+	mgr := NewManagerWithConfig(config, apiKeys)
+	mgr.configDir = configDir // Store explicit dir for saves after env var is restored
+	return mgr, nil
 }
 
 // NewManagerWithLayers creates a configuration manager using layered config.
@@ -199,7 +203,7 @@ func NewManagerWithLayers(globalDir, workspaceDir string) (*Manager, error) {
 	envMutex.Lock()
 	defer envMutex.Unlock()
 
-	// Set LEDIT_CONFIG to workspace dir (if present) or global dir
+	// Set SPROUT_CONFIG to workspace dir (if present) or global dir
 	// so that Save() writes to the correct location.
 	saveDir := globalDir
 	if workspaceDir != "" {
@@ -252,6 +256,7 @@ func NewManagerWithLayers(globalDir, workspaceDir string) (*Manager, error) {
 		apiKeys:   apiKeys,
 		lastSaved: cloneConfig(config),
 		loaded:    true,
+		configDir: saveDir, // Store explicit dir for saves after env var is restored
 	}, nil
 }
 
@@ -318,14 +323,37 @@ func (m *Manager) GetAPIKeys() *APIKeys {
 	return cloneAPIKeys(m.apiKeys)
 }
 
+// GetConfigDir returns the stored config directory for this manager.
+// Returns empty string if the manager uses the default (env-based) location.
+func (m *Manager) GetConfigDir() string {
+	return m.configDir
+}
+
+// saveConfigLocked persists the in-memory config to disk.
+// If m.configDir is set, it uses SaveToDir (bypassing env vars).
+// Otherwise it falls back to Config.Save() (which reads env vars).
+// Caller must hold m.mu.
+func (m *Manager) saveConfigLocked() error {
+	if m.configDir != "" {
+		if err := m.config.SaveToDir(m.configDir); err != nil {
+			return fmt.Errorf("save config: %w", err)
+		}
+	} else {
+		if err := m.config.Save(); err != nil {
+			return fmt.Errorf("save config: %w", err)
+		}
+	}
+	return nil
+}
+
 // SaveConfig saves the configuration to disk
 func (m *Manager) SaveConfig() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	// Save the current manager config directly
-	if err := m.config.Save(); err != nil {
-		return fmt.Errorf("save config: %w", err)
+	if err := m.saveConfigLocked(); err != nil {
+		return err
 	}
 
 	// Update lastSaved
@@ -346,7 +374,7 @@ func (m *Manager) UpdateConfig(mutator func(*Config) error) error {
 			return fmt.Errorf("update config mutator: %w", err)
 		}
 	}
-	if err := m.config.Save(); err != nil {
+	if err := m.saveConfigLocked(); err != nil {
 		return fmt.Errorf("update config save: %w", err)
 	}
 	m.lastSaved = cloneConfig(m.config)

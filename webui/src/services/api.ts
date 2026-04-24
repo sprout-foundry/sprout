@@ -1407,6 +1407,34 @@ class ApiService {
     return response.json();
   }
 
+  async getSemanticCodeActions(path: string, content: string, languageId: string, line: number, column: number): Promise<{
+    message: string;
+    path: string;
+    language_id: string;
+    method: string;
+    capabilities: { diagnostics: boolean; definition: boolean; hover: boolean; rename: boolean; references: boolean; code_actions: boolean };
+    code_actions?: Array<{ title: string; kind: string; edits: Array<{ filePath: string; from: number; to: number; newText: string }> }> | null;
+    duration_ms?: number;
+    error?: string;
+    version: string;
+  }> {
+    const response = await clientFetch('/api/semantic', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        path,
+        content,
+        language_id: languageId,
+        method: 'code_actions',
+        position: { line, column },
+      }),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to get code actions: HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
   // History and Rollback API methods
   async getChangelog(): Promise<{
     message: string;
@@ -1576,6 +1604,18 @@ class ApiService {
       return await response.json();
     } catch (error) {
       console.error('Failed to get settings:', error);
+      throw error;
+    }
+  }
+
+  /** Get settings from a specific config layer (global, workspace, or session) */
+  async getSettingsLayer(layer: 'global' | 'workspace' | 'session'): Promise<Record<string, any>> {
+    try {
+      const response = await clientFetch(`/api/settings?layer=${layer}`);
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error(`Failed to get ${layer} settings:`, error);
       throw error;
     }
   }

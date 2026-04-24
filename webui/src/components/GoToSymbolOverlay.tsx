@@ -250,7 +250,7 @@ export function extractSymbols(content: string, languageId?: string): SymbolInfo
 // ── Enclosing-symbol detection ───────────────────────────────────────────
 
 /** Kinds that can act as scope containers for the breadcrumb. */
-const CONTAINER_KINDS: ReadonlySet<SymbolKind> = new Set<SymbolKind>(['function', 'method', 'class', 'interface']);
+export const CONTAINER_KINDS: ReadonlySet<SymbolKind> = new Set<SymbolKind>(['function', 'method', 'class', 'interface']);
 
 /**
  * Find the 1-based end line (inclusive) of a symbol's scope by counting
@@ -265,7 +265,7 @@ const CONTAINER_KINDS: ReadonlySet<SymbolKind> = new Set<SymbolKind>(['function'
  *
  * If no matching close brace is found, returns `lines.length` (end of file).
  */
-function findSymbolScopeEnd(lines: string[], startLineIndex: number): number {
+export function findSymbolScopeEnd(lines: string[], startLineIndex: number): number {
   let braceCount = 0;
   let foundFirstBrace = false;
   let inBlockComment = false;

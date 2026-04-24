@@ -14,7 +14,7 @@
  */
 
 import { EditorView, type DOMEventHandlers } from '@codemirror/view';
-import { Transaction, type ChangeSpec } from '@codemirror/state';
+import type { ChangeSpec } from '@codemirror/state';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -61,7 +61,7 @@ function createDragDropHandlers(): DOMEventHandlers<null> {
 
       // Signal move+copy support to browser
       if (event.dataTransfer) {
-        (event.dataTransfer as DataTransfer).effectAllowed = 'copyMove';
+        event.dataTransfer.effectAllowed = 'copyMove';
       }
 
       // Prevent default browser drag behavior - we handle it ourselves
@@ -112,70 +112,68 @@ function createDragDropHandlers(): DOMEventHandlers<null> {
       // Determine if this is a copy or move operation
       const isCopy = event.altKey;
 
-      // Calculate adjusted position:
-      // If dropping AFTER the source and this is a move (deletion),
-      // we need to account for the deleted text shifting positions.
-      let adjustedDropPos = dropPos;
-      if (!isCopy && dropPos > srcTo) {
-        adjustedDropPos = dropPos - (srcTo - srcFrom);
-      } else if (!isCopy && dropPos > srcFrom) {
-        // Dropping within the source range - adjust to start of selection
-        adjustedDropPos = srcFrom;
-      }
-
-      // Build the transaction with appropriate changes
+      // Build the transaction with appropriate changes.
+      //
+      // CM6 applies multiple changes in a single transaction by sorting them
+      // by `from` position and mapping each change through previous ones
+      // automatically. All positions must be in ORIGINAL document coordinates.
+      //
+      // For move operations we need two changes (delete source + insert at
+      // destination). The order in the changes array does not matter — CM6
+      // sorts them. We just need to use original coords everywhere.
       const changes: ChangeSpec[] = [];
 
       if (isCopy) {
-        // Copy mode: just insert the text at drop position
+        // Copy mode: just insert the text at drop position (original coords)
         changes.push({
-          from: adjustedDropPos,
-          to: adjustedDropPos,
+          from: dropPos,
+          to: dropPos,
           insert: text,
         });
       } else {
-        // Move mode: delete source, then insert at destination
-        // Use a single dispatch with both changes to avoid flicker
+        // Move mode: delete source + insert at destination, all in original coords
+        changes.push({
+          from: srcFrom,
+          to: srcTo,
+          insert: '',
+        });
+        changes.push({
+          from: dropPos,
+          to: dropPos,
+          insert: text,
+        });
+      }
 
-        if (adjustedDropPos < srcFrom) {
-          // Dropping before source: insert first, then delete the original
-          // After inserting at adjustedDropPos, the original text shifts by text.length positions
-          // So we delete from (adjustedDropPos + text.length) for (srcTo - srcFrom) characters
-          changes.push({
-            from: adjustedDropPos,
-            to: adjustedDropPos,
-            insert: text,
-          });
-          changes.push({
-            from: adjustedDropPos + text.length,
-            to: adjustedDropPos + text.length + (srcTo - srcFrom),
-            insert: '',
-          });
-        } else {
-          // Dropping after source: delete first, then insert
-          // (adjustedDropPos already accounts for the shift)
-          changes.push({
-            from: srcFrom,
-            to: srcTo,
-            insert: '',
-          });
-          changes.push({
-            from: adjustedDropPos,
-            to: adjustedDropPos,
-            insert: text,
-          });
-        }
+      // For the selection, we need the POST-change position of the inserted
+      // text. CM6 maps positions through changes, so we compute the expected
+      // final position based on whether the insertion is before or after
+      // the deletion.
+      let selAnchor: number;
+      let selHead: number;
+
+      if (isCopy) {
+        selAnchor = dropPos;
+        selHead = dropPos + text.length;
+      } else if (dropPos < srcFrom) {
+        // Insertion is before the deletion. The inserted text stays at dropPos.
+        selAnchor = dropPos;
+        selHead = dropPos + text.length;
+      } else {
+        // dropPos > srcTo (guaranteed by the guard above).
+        // CM6 sorts: deletion (srcFrom..srcTo) comes before insertion
+        // (dropPos..dropPos). After the deletion removes (srcTo-srcFrom)
+        // characters, the insertion point shifts left by that amount.
+        selAnchor = dropPos - (srcTo - srcFrom);
+        selHead = selAnchor + text.length;
       }
 
       // Apply the changes using the view from the event
       view.dispatch({
         changes,
-        // Don't record this in undo history
-        annotations: Transaction.addToHistory.of(false),
-        // Select the inserted text
+        // Select the inserted text at its final position
         selection: {
-          anchor: adjustedDropPos,
-          head: adjustedDropPos + text.length,
+          anchor: selAnchor,
+          head: selHead,
         },
         scrollIntoView: true,
       });
@@ -188,8 +186,11 @@ function createDragDropHandlers(): DOMEventHandlers<null> {
 
     dragend: (_event: DragEvent, view: EditorView) => {
       // Clear drag state on dragend (handles cancelled drags)
-      dragStateMap.delete(view);
-      return true;
+      if (dragStateMap.has(view)) {
+        dragStateMap.delete(view);
+        return true;
+      }
+      return false;
     },
   };
 }

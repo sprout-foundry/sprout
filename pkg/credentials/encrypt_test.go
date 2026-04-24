@@ -355,7 +355,7 @@ func TestConcurrentMachineKeyGeneration(t *testing.T) {
 }
 
 // TestDecryptStore_WithPassphraseEnvVar verifies that DecryptStore falls back to
-// LEDIT_KEY_PASSPHRASE when machine key decryption fails (e.g., data was
+// SPROUT_KEY_PASSPHRASE when machine key decryption fails (e.g., data was
 // encrypted with passphrase via `ledit keys encrypt --passphrase`).
 func TestDecryptStore_WithPassphraseEnvVar(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -382,7 +382,7 @@ func TestDecryptStore_WithPassphraseEnvVar(t *testing.T) {
 }
 
 // TestDecryptStore_WrongPassphraseInEnvVar verifies that DecryptStore returns
-// a clear error when both machine key and LEDIT_KEY_PASSPHRASE are tried but fail.
+// a clear error when both machine key and SPROUT_KEY_PASSPHRASE are tried but fail.
 func TestDecryptStore_WrongPassphraseInEnvVar(t *testing.T) {
 	tmpDir := t.TempDir()
 	originalConfig := os.Getenv("LEDIT_CONFIG")
@@ -403,7 +403,7 @@ func TestDecryptStore_WrongPassphraseInEnvVar(t *testing.T) {
 	_, err = DecryptStore(encrypted)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to decrypt API keys")
-	assert.Contains(t, err.Error(), "LEDIT_KEY_PASSPHRASE")
+	assert.Contains(t, err.Error(), "SPROUT_KEY_PASSPHRASE")
 }
 
 // TestDecryptStore_SizeLimit verifies that DecryptStore rejects excessively large files.
@@ -503,7 +503,7 @@ func TestSetEncryptionMode_InvalidMode(t *testing.T) {
 }
 
 // TestSave_RespectsPassphraseMode verifies that Save() refuses to write when the
-// encryption mode is "passphrase" but LEDIT_KEY_PASSPHRASE is not set.
+// encryption mode is "passphrase" but SPROUT_KEY_PASSPHRASE is not set.
 func TestSave_RespectsPassphraseMode(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", tmpDir)
@@ -518,7 +518,7 @@ func TestSave_RespectsPassphraseMode(t *testing.T) {
 	store := Store{"provider": "secret-key"}
 	err = Save(store)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "LEDIT_KEY_PASSPHRASE")
+	assert.Contains(t, err.Error(), "SPROUT_KEY_PASSPHRASE")
 }
 
 // TestSave_RespectsMachineKeyMode verifies that when the encryption mode is
@@ -706,7 +706,7 @@ func TestDecryptStore_PlaintextSizeLimit(t *testing.T) {
 func TestSave_AutoSetsMachineKeyMode(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", tmpDir)
-	// Ensure LEDIT_KEY_PASSPHRASE is not set
+	// Ensure SPROUT_KEY_PASSPHRASE is not set
 	originalPassphrase := os.Getenv("LEDIT_KEY_PASSPHRASE")
 	t.Setenv("LEDIT_KEY_PASSPHRASE", "")
 	defer os.Setenv("LEDIT_KEY_PASSPHRASE", originalPassphrase)
@@ -728,7 +728,7 @@ func TestSave_AutoSetsMachineKeyMode(t *testing.T) {
 
 // TestSave_LegacyPassphraseFilePreserved saves passphrase-encrypted data to disk
 // without a mode file (simulating a legacy file), then verifies that Save()
-// re-encrypts with the passphrase (not machine-key) when LEDIT_KEY_PASSPHRASE is set.
+// re-encrypts with the passphrase (not machine-key) when SPROUT_KEY_PASSPHRASE is set.
 func TestSave_LegacyPassphraseFilePreserved(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", tmpDir)
@@ -751,7 +751,7 @@ func TestSave_LegacyPassphraseFilePreserved(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "", mode, "mode file should not exist for legacy file")
 
-	// Set LEDIT_KEY_PASSPHRASE so the legacy file can be decrypted AND re-saved
+	// Set SPROUT_KEY_PASSPHRASE so the legacy file can be decrypted AND re-saved
 	t.Setenv("LEDIT_KEY_PASSPHRASE", passphrase)
 
 	// Load the legacy store to verify it's accessible
@@ -767,7 +767,7 @@ func TestSave_LegacyPassphraseFilePreserved(t *testing.T) {
 	mode, err = GetEncryptionMode()
 	require.NoError(t, err)
 	assert.Equal(t, "passphrase", mode,
-		"Save should auto-detect passphrase mode for legacy files when LEDIT_KEY_PASSPHRASE is set")
+		"Save should auto-detect passphrase mode for legacy files when SPROUT_KEY_PASSPHRASE is set")
 
 	// Verify the file is still passphrase-encrypted (loaded successfully via env var)
 	reloaded, err := Load()
@@ -775,7 +775,7 @@ func TestSave_LegacyPassphraseFilePreserved(t *testing.T) {
 	assert.Equal(t, store, reloaded)
 
 	// Verify machine key was NOT used: delete/passphrase-encrypt and try to load
-	// without LEDIT_KEY_PASSPHRASE
+	// without SPROUT_KEY_PASSPHRASE
 	t.Setenv("LEDIT_KEY_PASSPHRASE", "")
 	_, err = Load()
 	require.Error(t, err, "file should not be readable without passphrase")
@@ -803,5 +803,5 @@ func TestDecryptStore_NoMachineKeyNoPassphrase(t *testing.T) {
 	_, err = DecryptStore(encrypted)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no decryption key")
-	assert.Contains(t, err.Error(), "LEDIT_KEY_PASSPHRASE")
+	assert.Contains(t, err.Error(), "SPROUT_KEY_PASSPHRASE")
 }

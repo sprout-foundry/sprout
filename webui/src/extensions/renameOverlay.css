@@ -1,0 +1,58 @@
+/**
+ * Rename overlay extension styles.
+ *
+ * Uses CSS variables from the editor theme for consistency.
+ */
+
+/* Highlight for rename locations */
+.cm-rename-highlight {
+  background-color: rgba(255, 200, 0, 0.3);
+  outline: 1px solid rgba(200, 150, 0, 0.5);
+  border-radius: 2px;
+}
+
+/* Rename overlay container */
+.cm-rename-overlay {
+  position: absolute;
+  z-index: 100;
+  background: var(--editor-pane-bg, #1e1e2e);
+  border: 1px solid var(--accent, #f0a030);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  padding: 2px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Caption showing match count */
+.cm-rename-caption {
+  font-size: 10px;
+  color: var(--text-muted, #888);
+  padding: 0 4px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+/* Input field in rename overlay */
+.cm-rename-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: inherit;
+  font-family: var(--editor-font-family, monospace);
+  font-size: var(--editor-font-size, 13px);
+  padding: 2px 4px;
+  width: auto;
+  min-width: 60px;
+  border-radius: 2px;
+}
+
+.cm-rename-input:focus {
+  outline: none;
+}
+
+/* Placeholder text style */
+.cm-rename-input::placeholder {
+  color: var(--text-muted, #666);
+}

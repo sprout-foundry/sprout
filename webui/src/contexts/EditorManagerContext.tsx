@@ -663,13 +663,19 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
         }
 
         const requestId = crypto.randomUUID();
+        const savedContent = buffer.content;
         const formatPromise = new Promise<{ formatted: string; error?: string }>((resolve) => {
           resolveMap!.set(requestId, resolve);
         });
 
-        // Dispatch the format event to the editor
+        // Dispatch the format event to the editor with the content to format.
+        // Passing content explicitly (rather than having EditorPane read from
+        // the editor state) ensures that if the user triggers another save
+        // while a format is in-flight, each save formats the exact content it
+        // captured — preventing a rapid-save race from overwriting formatted
+        // content with stale unformatted content.
         document.dispatchEvent(new CustomEvent('editor-format-document', {
-          detail: { requestId },
+          detail: { requestId, content: savedContent },
         }));
 
         // Wait for the editor to resolve or timeout
@@ -690,6 +696,10 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
         }
       } catch {
         // If anything goes wrong, just save the original content
+        // Dispatch an event so EditorPane can notify the user
+        document.dispatchEvent(new CustomEvent('format-on-save-failed', {
+          detail: { bufferId, filePath: buffer.file.path },
+        }));
       }
     }
 

@@ -1620,6 +1620,17 @@ class ApiService {
     }
   }
 
+  async getSettingsProvenance(): Promise<{ config: Record<string, any>; sources: Record<string, string> }> {
+    try {
+      const response = await clientFetch('/api/settings?layer=provenance');
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to get settings provenance:', error);
+      throw error;
+    }
+  }
+
   async updateSettings(settings: Record<string, any>, layer?: 'session' | 'workspace' | 'global'): Promise<{ message: string }> {
     try {
       const url = layer ? `/api/settings?layer=${layer}` : '/api/settings';

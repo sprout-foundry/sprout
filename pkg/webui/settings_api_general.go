@@ -47,6 +47,9 @@ func (ws *ReactWebServer) handleAPISettingsGet(w http.ResponseWriter, r *http.Re
 	case "session":
 		ws.handleGetSessionSettings(w, r)
 		return
+	case "provenance":
+		ws.handleGetProvenanceSettings(w, r)
+		return
 	}
 
 	// Default: return effective merged config (current behavior)
@@ -123,6 +126,92 @@ func (ws *ReactWebServer) handleGetSessionSettings(w http.ResponseWriter, r *htt
 	}
 	cs.mu.Unlock()
 	writeJSON(w, http.StatusOK, overrides)
+}
+
+// handleGetProvenanceSettings returns the effective config with per-key source information.
+// Response shape: { "config": {...}, "sources": { "key": "global"|"workspace"|"session" } }
+func (ws *ReactWebServer) handleGetProvenanceSettings(w http.ResponseWriter, r *http.Request) {
+	// Load global config
+	var globalCfg configuration.Config
+	if configPath, err := configuration.GetConfigPath(); err == nil {
+		if data, err := os.ReadFile(configPath); err == nil {
+			_ = json.Unmarshal(data, &globalCfg)
+		}
+	}
+
+	// Load workspace config
+	var workspaceCfg configuration.Config
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	if workspaceRoot != "" {
+		if data, err := os.ReadFile(configuration.GetWorkspaceConfigPath(workspaceRoot)); err == nil {
+			_ = json.Unmarshal(data, &workspaceCfg)
+		}
+	}
+
+	// Load session overrides
+	clientID := ws.resolveClientID(r)
+	var sessionOverrides map[string]interface{}
+	ws.mutex.RLock()
+	if ctx := ws.clientContexts[clientID]; ctx != nil {
+		if cs := ctx.getChatSession(ctx.getActiveChatID()); cs != nil {
+			cs.mu.Lock()
+			sessionOverrides = cs.ConfigOverrides
+			cs.mu.Unlock()
+		}
+	}
+	ws.mutex.RUnlock()
+
+	// Get effective merged config
+	cm := ws.getConfigManager(r, w)
+	if cm == nil {
+		return
+	}
+	effective := cm.GetConfig()
+
+	// Build provenance map
+	sources := make(map[string]string)
+
+	// Session overrides take highest priority
+	for k := range sessionOverrides {
+		sources[k] = "session"
+	}
+
+	// Compare workspace vs global
+	globalJSON, _ := json.Marshal(globalCfg)
+	workspaceJSON, _ := json.Marshal(workspaceCfg)
+	var globalMap, workspaceMap map[string]interface{}
+	_ = json.Unmarshal(globalJSON, &globalMap)
+	_ = json.Unmarshal(workspaceJSON, &workspaceMap)
+
+	for k, wv := range workspaceMap {
+		if _, isSession := sources[k]; isSession {
+			continue
+		}
+		wvBytes, _ := json.Marshal(wv)
+		if gv, ok := globalMap[k]; ok {
+			gvBytes, _ := json.Marshal(gv)
+			if string(wvBytes) != string(gvBytes) && string(wvBytes) != "null" {
+				sources[k] = "workspace"
+			}
+		} else if wv != nil {
+			sources[k] = "workspace"
+		}
+	}
+
+	// Everything else is global
+	effectiveJSON, _ := json.Marshal(effective)
+	var effectiveMap map[string]interface{}
+	_ = json.Unmarshal(effectiveJSON, &effectiveMap)
+	for k := range effectiveMap {
+		if _, exists := sources[k]; !exists {
+			sources[k] = "global"
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"config":  sanitizedConfig(effective),
+		"sources": sources,
+	})
 }
 
 // ---------------------------------------------------------------------------

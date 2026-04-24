@@ -74,7 +74,7 @@ import { whitespaceRenderingPlugin, type WhitespaceRenderingMode } from '../exte
 import { unsavedLineHighlight, setOriginalContent } from '../extensions/unsavedLineHighlight';
 import { ApiService } from '../services/api';
 import { notificationBus } from '../services/notificationBus';
-import { formatCode } from '../services/formatter';
+import { formatCode, formatCodeWithConfigDiscovery, setConfigFetcher } from '../services/formatter';
 import { Loader2, AlertTriangle, Eye, Columns2, Copy, Navigation, FolderOpen, ClipboardCopy, ListOrdered } from 'lucide-react';
 import { copyToClipboard } from '../utils/clipboard';
 import { generateUnifiedDiff } from '../utils/simpleDiff';
@@ -290,6 +290,11 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       .catch((err) => {
         warn(`Failed to fetch workspace root: ${err instanceof Error ? err.message : String(err)}`);
       });
+
+    // Set up Prettier config fetcher for formatter service
+    setConfigFetcher(async (filePath: string) => {
+      return apiService.getPrettierConfig(filePath);
+    });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isExternalUpdateRef = useRef<boolean>(false);
@@ -1556,10 +1561,14 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       } else if (e.type === 'editor-format-document') {
         const currentBuffer = bufferRef.current;
         if (viewRef.current && currentBuffer) {
-          const content = viewRef.current.state.doc.toString();
-          const detail = (e as CustomEvent).detail as { requestId?: string } | undefined;
+          const detail = (e as CustomEvent).detail as { requestId?: string; content?: string } | undefined;
           const requestId = detail?.requestId;
-          const formatPromise = formatCode(content, currentBuffer.file.path, currentBuffer.file.size);
+          // When called by format-on-save, the content to format is passed
+          // explicitly in the event detail so each save operates on the
+          // content it captured (prevents rapid-save race conditions).
+          // Falls back to the editor's current state for manual format commands.
+          const content = detail?.content ?? viewRef.current.state.doc.toString();
+          const formatPromise = formatCodeWithConfigDiscovery(content, currentBuffer.file.path, currentBuffer.file.size);
           const capturedBufferId = currentBuffer.id;
 
           if (requestId) {
@@ -1619,6 +1628,10 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
             });
           }
         }
+      } else if (e.type === 'format-on-save-failed') {
+        // Format-on-save failed in EditorManagerContext - notify the user
+        const detail = (e as CustomEvent).detail as { bufferId?: string; filePath?: string } | undefined;
+        notificationBus.notify('warning', 'Format Document', 'Format on save failed - file saved without formatting');
       }
     };
 
@@ -1634,6 +1647,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     document.addEventListener('editor-find-replace', handler);
     document.addEventListener('editor-select-all', handler);
     document.addEventListener('editor-format-document', handler);
+    document.addEventListener('format-on-save-failed', handler);
     return () => {
       document.removeEventListener('editor-goto-line', handler);
       document.removeEventListener('editor-toggle-word-wrap', handler);
@@ -1647,6 +1661,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       document.removeEventListener('editor-find-replace', handler);
       document.removeEventListener('editor-select-all', handler);
       document.removeEventListener('editor-format-document', handler);
+      document.removeEventListener('format-on-save-failed', handler);
     };
   }, [handleGoToLine, onToggleMinimap, onToggleRelativeLineNumbers, onToggleWordWrap, toggleLinkedScroll, onCycleWhitespaceRendering]);
 

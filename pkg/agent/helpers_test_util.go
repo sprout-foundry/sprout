@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"os"
 	"strings"
 )
@@ -9,7 +10,7 @@ import (
 // common signs: -test.* flags in os.Args or the program name ending with ".test".
 func isRunningUnderTest() bool {
 	// Explicit env override
-	if os.Getenv("LEDIT_TEST_ENV") == "1" {
+	if envutil.GetEnvSimple("TEST_ENV") == "1" {
 		return true
 	}
 

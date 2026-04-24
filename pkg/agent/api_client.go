@@ -14,6 +14,7 @@ import (
 	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/sprout-foundry/sprout/pkg/logging"
 	"github.com/sprout-foundry/sprout/pkg/utils"
@@ -53,7 +54,7 @@ func LogAPIResponse(content string, streaming bool) {
 }
 
 func logChatResponseDetailed(resp *api.ChatResponse, provider string, streaming bool, iteration int) {
-	if os.Getenv("LEDIT_LOG_API_RESPONSES") == "" || resp == nil {
+	if configuration.GetEnvSimple("LOG_API_RESPONSES") == "" || resp == nil {
 		return
 	}
 
@@ -355,7 +356,7 @@ func (ac *APIClient) sendRequest(messages []api.Message, tools []api.Tool, reaso
 	ac.agent.currentContextTokens = ac.estimateRequestTokens(messages, tools)
 
 	// Optional context breakdown diagnostic
-	if os.Getenv("LEDIT_CONTEXT_DIAG") != "" {
+	if configuration.GetEnvSimple("CONTEXT_DIAG") != "" {
 		ac.printContextBreakdown(messages, tools)
 	}
 

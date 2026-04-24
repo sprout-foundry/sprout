@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -82,7 +83,7 @@ func LogRequestPayloadOnError(payload []byte, provider, model string, streaming 
 
 // WriteLocalCopy optionally mirrors log files to the current working directory.
 func WriteLocalCopyRequest(filename string, data []byte) {
-	if os.Getenv("LEDIT_COPY_LOGS_TO_CWD") != "1" {
+	if envutil.GetEnvSimple("COPY_LOGS_TO_CWD") != "1" {
 		return
 	}
 	wd, err := os.Getwd()

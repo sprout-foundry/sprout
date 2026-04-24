@@ -3,7 +3,9 @@ package webui
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -203,5 +205,138 @@ func TestGetLayeredConfigManager_Isolation(t *testing.T) {
 	// They should be different instances (different workspace configs)
 	if cmA == cmB {
 		t.Error("config managers for different clients should be different instances")
+	}
+}
+
+// --- Scoped PUT settings tests ---
+
+func makeSettingsRequest(ws *ReactWebServer, method, urlPath string, body string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(method, urlPath, strings.NewReader(body))
+	req.Header.Set("X-Ledit-Client-ID", "test-client")
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	ws.handleAPISettings(rec, req)
+	return rec
+}
+
+func TestHandlePutSessionSettings(t *testing.T) {
+	isolatedHome := t.TempDir()
+	t.Setenv("HOME", isolatedHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
+	t.Setenv("USERPROFILE", isolatedHome)
+	t.Setenv("CI", "1")
+
+	ws := NewReactWebServer(nil, events.NewEventBus(), 0)
+	clientID := "test-client"
+	ctx := ws.getOrCreateClientContext(clientID)
+	chat := ctx.getOrCreateChatSession("default")
+	chat.Provider = "openai"
+	chat.Model = "gpt-4"
+
+	// Verify setup
+	activeChatID := ctx.getActiveChatID()
+	session := ctx.getChatSession(activeChatID)
+	if session == nil {
+		t.Fatalf("setup: expected chat session for %q, got nil", activeChatID)
+	}
+
+	body := `{"reasoning_effort": "high", "model": "gpt-4o-mini"}`
+	rec := makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=session", body)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	chat.mu.Lock()
+	overrides := chat.ConfigOverrides
+	chat.mu.Unlock()
+
+	if overrides == nil {
+		t.Fatal("ConfigOverrides should not be nil after PUT")
+	}
+	if overrides["model"] != "gpt-4o-mini" {
+		t.Errorf("expected model override gpt-4o-mini, got %v", overrides["model"])
+	}
+	if overrides["reasoning_effort"] != "high" {
+		t.Errorf("expected reasoning_effort high, got %v", overrides["reasoning_effort"])
+	}
+}
+
+func TestHandlePutWorkspaceSettings(t *testing.T) {
+	isolatedHome := t.TempDir()
+	t.Setenv("HOME", isolatedHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
+	t.Setenv("USERPROFILE", isolatedHome)
+
+	workspaceRoot := t.TempDir()
+	ws := NewReactWebServer(nil, events.NewEventBus(), 0)
+	clientID := "test-client"
+	ctx := ws.getOrCreateClientContext(clientID)
+	ctx.WorkspaceRoot = workspaceRoot
+
+	body := `{"reasoning_effort": "low"}`
+	rec := makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=workspace", body)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify workspace config file was created
+	workspaceConfigPath := filepath.Join(workspaceRoot, ".ledit", "config.json")
+	data, err := os.ReadFile(workspaceConfigPath)
+	if err != nil {
+		t.Fatalf("workspace config file should exist: %v", err)
+	}
+
+	if !strings.Contains(string(data), `"low"`) {
+		t.Errorf("workspace config should contain reasoning_effort=low, got: %s", string(data))
+	}
+}
+
+func TestHandlePutGlobalSettings(t *testing.T) {
+	isolatedHome := t.TempDir()
+	t.Setenv("HOME", isolatedHome)
+	os.Unsetenv("XDG_CONFIG_HOME") // Ensure no leftover from other tests
+	os.Unsetenv("LEDIT_CONFIG")
+	t.Setenv("USERPROFILE", isolatedHome)
+
+	ws := NewReactWebServer(nil, events.NewEventBus(), 0)
+	clientID := "test-client"
+	ws.getOrCreateClientContext(clientID)
+
+	body := `{"reasoning_effort": "medium"}`
+	rec := makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=global", body)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: body=%s", rec.Code, rec.Body.String())
+	}
+
+	configPath := filepath.Join(isolatedHome, ".ledit", "config.json")
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("global config file should exist: %v", err)
+	}
+
+	if !strings.Contains(string(data), `"medium"`) {
+		t.Errorf("global config should contain reasoning_effort=medium, got: %s", string(data))
+	}
+}
+
+func TestHandleAPISettingsPutDefault_NoLayer(t *testing.T) {
+	isolatedHome := t.TempDir()
+	t.Setenv("HOME", isolatedHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
+	t.Setenv("USERPROFILE", isolatedHome)
+
+	ws := NewReactWebServer(nil, events.NewEventBus(), 0)
+	clientID := "test-client"
+	ws.getOrCreateClientContext(clientID)
+
+	body := `{"reasoning_effort": "high"}`
+	rec := makeSettingsRequest(ws, http.MethodPut, "/api/settings", body)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 }

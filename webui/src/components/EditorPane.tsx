@@ -45,6 +45,8 @@ import ImageViewer from './ImageViewer';
 import SvgPreview from './SvgPreview';
 import GoToSymbolOverlay from './GoToSymbolOverlay';
 import { getEnclosingSymbols } from './GoToSymbolOverlay';
+import FindAllReferencesOverlay from './FindAllReferencesOverlay';
+import type { ReferenceInfo } from './FindAllReferencesOverlay';
 import LanguageSwitcher from './LanguageSwitcher';
 import BinaryFileViewer from './BinaryFileViewer';
 import MediaViewer from './MediaViewer';
@@ -141,6 +143,13 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   const [localContent, setLocalContent] = useState<string>('');
   const [selectionInfo, setSelectionInfo] = useState<{ charCount: number; selectionCount: number } | null>(null);
   const [showGoToSymbol, setShowGoToSymbol] = useState<boolean>(false);
+
+  // Find All References state
+  const [showFindRefs, setShowFindRefs] = useState<boolean>(false);
+  const [refsSymbolName, setRefsSymbolName] = useState<string>('');
+  const [refsResults, setRefsResults] = useState<ReferenceInfo[]>([]);
+  const [refsLoading, setRefsLoading] = useState<boolean>(false);
+
   const [relativeLineNumbersEnabled, setRelativeLineNumbersEnabled] = useState(() => {
     try {
       const stored = localStorage.getItem('editor:relative-line-numbers-enabled');
@@ -807,6 +816,89 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     void handleGoToDefinition();
   }, [hideContextMenu, handleGoToDefinition]);
 
+  const handleFindAllReferences = useCallback(async () => {
+    const buf = bufferStateRef.current;
+    if (!viewRef.current || !buf || buf.kind !== 'file' || !buf.file || buf.file.path.startsWith('__workspace/')) {
+      return;
+    }
+
+    const languageId = resolveLanguageId(
+      buf.languageOverride,
+      buf.file.ext?.replace(/^\./, ''),
+      buf.file.name,
+    ).languageId ?? '';
+    if (!isSemanticLanguage(languageId)) {
+      notificationBus.notify('info', 'Find All References', 'Semantic references are currently available for TypeScript/JavaScript and Go files.');
+      return;
+    }
+
+    const selection = viewRef.current.state.selection.main;
+    const lineInfo = viewRef.current.state.doc.lineAt(selection.head);
+    const line = lineInfo.number;
+    const column = selection.head - lineInfo.from + 1;
+
+    setShowFindRefs(true);
+    setRefsLoading(true);
+    setRefsSymbolName('');
+    setRefsResults([]);
+
+    try {
+      const result = await apiService.getSemanticReferences(buf.file.path, localContentRef.current, languageId, line, column);
+      setRefsLoading(false);
+
+      if (!result.capabilities?.references) {
+        notificationBus.notify('warning', 'Find All References', 'Semantic references are not available for this language in this environment.');
+        setShowFindRefs(false);
+        return;
+      }
+
+      if (result.error || !result.references?.locations?.length) {
+        setRefsResults([]);
+        setRefsSymbolName('');
+        return;
+      }
+
+      setRefsSymbolName(result.references.symbolName || '');
+      setRefsResults(result.references.locations);
+    } catch (err) {
+      debugLog('[EditorPane] Find all references failed:', err);
+      setRefsLoading(false);
+      notificationBus.notify('warning', 'Find All References', 'Failed to find references.');
+      setShowFindRefs(false);
+    }
+  }, [apiService]);
+
+  const handleFindAllReferencesFromMenu = useCallback(() => {
+    hideContextMenu();
+    void handleFindAllReferences();
+  }, [hideContextMenu, handleFindAllReferences]);
+
+  const handleSelectReference = useCallback((filePath: string, line: number) => {
+    const buf = bufferStateRef.current;
+    if (!buf) return;
+
+    if (filePath === buf.file.path) {
+      handleGoToLine(line);
+      viewRef.current?.focus();
+      return;
+    }
+
+    const fileName = filePath.split('/').pop() || filePath;
+    const dotIndex = fileName.lastIndexOf('.');
+    const ext = dotIndex >= 0 ? fileName.slice(dotIndex) : undefined;
+
+    openWorkspaceBuffer({
+      kind: 'file',
+      path: filePath,
+      title: fileName,
+      ext,
+    });
+
+    requestAnimationFrame(() => {
+      document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line } }));
+    });
+  }, [handleGoToLine, openWorkspaceBuffer]);
+
   // Fetch diagnostics for the current file and push them into the editor
   const fetchDiagnostics = useCallback(
     async (filePath: string, content: string, trigger: 'edit' | 'save' = 'edit') => {
@@ -1154,6 +1246,14 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
               getContent: () => localContentRef.current,
             });
           }
+          return true;
+        },
+      },
+      {
+        key: 'Shift-F12',
+        preventDefault: true,
+        run: () => {
+          void handleFindAllReferences();
           return true;
         },
       },
@@ -1647,6 +1747,8 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         // Format-on-save failed in EditorManagerContext - notify the user
         const detail = (e as CustomEvent).detail as { bufferId?: string; filePath?: string } | undefined;
         notificationBus.notify('warning', 'Format Document', 'Format on save failed - file saved without formatting');
+      } else if (e.type === 'editor-find-all-references') {
+        void handleFindAllReferences();
       }
     };
 
@@ -1663,6 +1765,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     document.addEventListener('editor-select-all', handler);
     document.addEventListener('editor-format-document', handler);
     document.addEventListener('format-on-save-failed', handler);
+    document.addEventListener('editor-find-all-references', handler);
     return () => {
       document.removeEventListener('editor-goto-line', handler);
       document.removeEventListener('editor-toggle-word-wrap', handler);
@@ -1677,8 +1780,9 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       document.removeEventListener('editor-select-all', handler);
       document.removeEventListener('editor-format-document', handler);
       document.removeEventListener('format-on-save-failed', handler);
+      document.removeEventListener('editor-find-all-references', handler);
     };
-  }, [handleGoToLine, onToggleMinimap, onToggleRelativeLineNumbers, onToggleWordWrap, toggleLinkedScroll, onCycleWhitespaceRendering]);
+  }, [handleGoToLine, onToggleMinimap, onToggleRelativeLineNumbers, onToggleWordWrap, toggleLinkedScroll, onCycleWhitespaceRendering, handleFindAllReferences]);
 
   // Listen for scroll sync events from other panes (linked scrolling).
   useEffect(() => {
@@ -2091,6 +2195,16 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
             viewRef.current?.focus();
           }}
         />
+        <FindAllReferencesOverlay
+          visible={showFindRefs}
+          symbolName={refsSymbolName}
+          references={refsResults}
+          onSelectReference={handleSelectReference}
+          onClose={() => {
+            setShowFindRefs(false);
+            viewRef.current?.focus();
+          }}
+        />
 
       <EditorBreadcrumb
         filePath={buffer.file.path}
@@ -2190,6 +2304,12 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
           <button className="context-menu-item" onClick={handleGoToDefinitionFromMenu} type="button">
             <Navigation size={13} />
             <span className="menu-item-label">Go to Definition</span>
+          </button>
+        )}
+        {contextMenu?.languageId && isSemanticLanguage(contextMenu.languageId) && (
+          <button className="context-menu-item" onClick={handleFindAllReferencesFromMenu} type="button">
+            <Eye size={13} />
+            <span className="menu-item-label">Find All References</span>
           </button>
         )}
         {(contextMenu?.hasSelection || (contextMenu?.languageId && isSemanticLanguage(contextMenu.languageId))) && (

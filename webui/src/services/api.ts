@@ -1379,6 +1379,34 @@ class ApiService {
     return response.json();
   }
 
+  async getSemanticReferences(path: string, content: string, languageId: string, line: number, column: number): Promise<{
+    message: string;
+    path: string;
+    language_id: string;
+    method: string;
+    capabilities: { diagnostics: boolean; definition: boolean; hover: boolean; rename: boolean; references: boolean };
+    references?: { locations: Array<{ filePath: string; line: number; startCol: number; endCol: number; lineText: string }>; symbolName: string } | null;
+    duration_ms?: number;
+    error?: string;
+    version: string;
+  }> {
+    const response = await clientFetch('/api/semantic', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        path,
+        content,
+        language_id: languageId,
+        method: 'references',
+        position: { line, column },
+      }),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to get references: HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
   // History and Rollback API methods
   async getChangelog(): Promise<{
     message: string;

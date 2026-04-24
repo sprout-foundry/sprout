@@ -9,6 +9,65 @@ jest.mock('@codemirror/search', () => ({
   selectNextOccurrence: jest.fn(() => true),
 }));
 
+jest.mock('@codemirror/state', () => ({
+  EditorSelection: {
+    create: jest.fn((ranges, mainIndex = 0) => ({
+      ranges,
+      mainIndex,
+      main: ranges[mainIndex] || ranges[0],
+    })),
+    cursor: jest.fn((pos) => ({ anchor: pos, head: pos })),
+    range: jest.fn((from, to) => ({ from, to })),
+  },
+  EditorState: {
+    create: jest.fn(),
+  },
+  Compartment: class {
+    of() { return this; }
+    reconfigure() { return this; }
+    get() { return null; }
+  },
+}));
+
+jest.mock('@codemirror/view', () => ({
+  EditorView: class {
+    constructor() {}
+    destroy() {}
+    dispatch() {}
+    focus() {}
+    hasFocus() { return false; }
+    contentDOM: {}
+    dom: {}
+    state: {}
+    static scrollIntoView() { return {}; }
+  },
+  ViewPlugin: class {
+    static fromClass() { return {}; }
+  },
+}));
+
+jest.mock('@codemirror/language', () => ({
+  bracketMatching: () => [],
+  indentOnInput: () => [],
+  foldGutter: () => [],
+  foldKeymap: () => [],
+}));
+
+jest.mock('@codemirror/commands', () => ({
+  toggleLineComment: jest.fn(() => true),
+  toggleBlockComment: jest.fn(() => true),
+  defaultKeymap: [],
+  indentWithTab: {},
+  history: () => [],
+  undo: {},
+  redo: {},
+}));
+
+jest.mock('../extensions/cursorHistory', () => ({
+  navigateCursorBack: jest.fn(() => true),
+  navigateCursorForward: jest.fn(() => true),
+}));
+
 describe('getLineIndent', () => {
   it('returns empty string for empty input', () => {
     expect(getLineIndent('')).toBe('');
@@ -409,6 +468,326 @@ describe('getEditorKeymap', () => {
       // No Mod-Enter fallback for insert_line_below should exist
       const modEnterBindings = keymap.filter((b) => b.key === 'Mod-Enter');
       expect(modEnterBindings.length).toBe(0);
+    });
+  });
+
+  // ── Multi-cursor line operation tests ───────────────────────────────
+
+  describe('multi-cursor line operations', () => {
+    // Helper to create a mock EditorView with multiple cursors
+    function createMockMultiCursorView(lines, cursorPositions) {
+      // Build line data from the lines array
+      const lineData = [];
+      let pos = 0;
+      for (let i = 0; i < lines.length; i++) {
+        lineData.push({
+          number: i + 1,
+          text: lines[i],
+          from: pos,
+          to: pos + lines[i].length,
+          length: lines[i].length,
+        });
+        pos += lines[i].length + 1; // +1 for newline
+      }
+      const fullText = lines.join('\n');
+
+      // Build ranges from cursor positions
+      const ranges = cursorPositions.map((p) => ({ from: p, to: p, head: p }));
+
+      const doc = {
+        toString: () => fullText,
+        length: fullText.length,
+        lines: lines.length,
+        lineAt: (p) => {
+          for (let i = lineData.length - 1; i >= 0; i--) {
+            if (p >= lineData[i].from && (p <= lineData[i].to || (i === lineData.length - 1 && p === lineData[i].to + 1))) {
+              return lineData[i];
+            }
+          }
+          return lineData[0];
+        },
+        line: (n) => lineData[n - 1],
+      };
+
+      const dispatched = [];
+      const mockView = {
+        state: {
+          doc,
+          selection: { ranges, main: ranges[0], mainIndex: 0 },
+        },
+        dispatch: (tr) => dispatched.push(tr),
+        focus: () => {},
+      };
+
+      return { view: mockView, dispatched, doc, lineData };
+    }
+
+    describe('multiple cursors - delete current line', () => {
+      it('deletes lines at each cursor position', () => {
+        const { view, dispatched } = createMockMultiCursorView(
+          ['line1', 'line2', 'line3'],
+          [0, 12]
+        );
+
+        // Ctrl+Shift+K → Mod-Shift-k
+        const entries = [{ key: 'Ctrl+Shift+K', command_id: 'editor_delete_line' }];
+        const keymap = getEditorKeymap(entries, emptyActions);
+        const deleteBinding = keymap.find((b) => b.key === 'Mod-Shift-k');
+        expect(deleteBinding).toBeDefined();
+
+        const result = deleteBinding.run(view);
+        expect(result).toBe(true);
+        expect(dispatched.length).toBe(1);
+
+        const tr = dispatched[0];
+        // Should have changes for both lines (line1 and line3)
+        expect(tr.changes).toBeDefined();
+        // Should delete 2 unique lines (bottom-to-top order)
+        expect(tr.changes.length).toBe(2);
+        // Both should be deletions (empty insert)
+        expect(tr.changes[0].insert).toBe('');
+        expect(tr.changes[1].insert).toBe('');
+        // Selection should have cursors for unique lines
+        expect(tr.selection).toBeDefined();
+        expect(tr.selection.ranges.length).toBe(2);
+      });
+    });
+
+    describe('multiple cursors - duplicate current line (down)', () => {
+      it('duplicates lines at each cursor position', () => {
+        const { view, dispatched } = createMockMultiCursorView(
+          ['line1', 'line2', 'line3'],
+          [0, 12]
+        );
+
+        // Ctrl+Shift+D → Mod-Shift-d
+        const entries = [{ key: 'Ctrl+Shift+D', command_id: 'editor_duplicate_line_down' }];
+        const keymap = getEditorKeymap(entries, emptyActions);
+        const dupBinding = keymap.find((b) => b.key === 'Mod-Shift-d');
+        expect(dupBinding).toBeDefined();
+
+        const result = dupBinding.run(view);
+        expect(result).toBe(true);
+        expect(dispatched.length).toBe(1);
+        const tr = dispatched[0];
+        expect(Array.isArray(tr.changes)).toBe(true);
+        // 2 unique lines → 2 changes
+        expect(tr.changes.length).toBe(2);
+        expect(tr.changes[0].insert).toContain('line3');
+        expect(tr.changes[1].insert).toContain('line1');
+      });
+    });
+
+    describe('multiple cursors - duplicate current line (up)', () => {
+      it('duplicates lines above each cursor position', () => {
+        const { view, dispatched } = createMockMultiCursorView(
+          ['line1', 'line2', 'line3'],
+          [6, 18]
+        );
+
+        // Ctrl+Shift+Alt+D → Mod-Shift-Alt-d
+        const entries = [{ key: 'Ctrl+Shift+Alt+D', command_id: 'editor_duplicate_line_up' }];
+        const keymap = getEditorKeymap(entries, emptyActions);
+        const dupBinding = keymap.find((b) => b.key === 'Mod-Shift-Alt-d');
+        expect(dupBinding).toBeDefined();
+
+        const result = dupBinding.run(view);
+        expect(result).toBe(true);
+        expect(dispatched.length).toBe(1);
+        const tr = dispatched[0];
+        expect(Array.isArray(tr.changes)).toBe(true);
+        expect(tr.changes.length).toBe(2);
+        expect(tr.changes[0].insert).toContain('line3');
+        expect(tr.changes[1].insert).toContain('line2');
+      });
+    });
+
+    describe('multiple cursors - insert line below', () => {
+      it('inserts blank lines below each unique cursor line', () => {
+        const { view, dispatched } = createMockMultiCursorView(
+          ['  const x = 1;', '    let y = 2;'],
+          [2, 18]
+        );
+
+        // Insert line below uses Mod-Enter fallback
+        const keymap = getEditorKeymap(null, emptyActions);
+        const belowBinding = keymap.find((b) => b.key === 'Mod-Enter');
+        expect(belowBinding).toBeDefined();
+
+        const result = belowBinding.run(view);
+        expect(result).toBe(true);
+        expect(dispatched.length).toBe(1);
+        const tr = dispatched[0];
+        expect(Array.isArray(tr.changes)).toBe(true);
+        // 2 unique lines → 2 changes
+        expect(tr.changes.length).toBe(2);
+        expect(tr.changes[0].insert).toContain('\n');
+        expect(tr.changes[1].insert).toContain('\n');
+      });
+    });
+
+    describe('multiple cursors - insert line above', () => {
+      it('inserts blank lines above each unique cursor line', () => {
+        const { view, dispatched } = createMockMultiCursorView(
+          ['  const x = 1;', '    let y = 2;'],
+          [2, 18]
+        );
+
+        const keymap = getEditorKeymap(null, emptyActions);
+        const aboveBinding = keymap.find((b) => b.key === 'Mod-Shift-Enter');
+        expect(aboveBinding).toBeDefined();
+
+        const result = aboveBinding.run(view);
+        expect(result).toBe(true);
+        expect(dispatched.length).toBe(1);
+        const tr = dispatched[0];
+        expect(Array.isArray(tr.changes)).toBe(true);
+        expect(tr.changes.length).toBe(2);
+        expect(tr.changes[0].insert).toContain('\n');
+      });
+    });
+
+    describe('multiple cursors - move line up', () => {
+      it('moves lines up from each cursor position', () => {
+        const { view, dispatched } = createMockMultiCursorView(
+          ['line1', 'line2', 'line3', 'line4'],
+          [6, 18]
+        );
+
+        const entries = [{ key: 'Alt+ArrowUp', command_id: 'editor_move_line_up' }];
+        const keymap = getEditorKeymap(entries, emptyActions);
+        const moveUpBinding = keymap.find((b) => b.key === 'Alt-ArrowUp');
+        expect(moveUpBinding).toBeDefined();
+
+        const result = moveUpBinding.run(view);
+        expect(result).toBe(true);
+        expect(dispatched.length).toBe(1);
+        const tr = dispatched[0];
+        expect(Array.isArray(tr.changes)).toBe(true);
+        // Should have 2 swap changes
+        expect(tr.changes.length).toBe(2);
+      });
+    });
+
+    describe('multiple cursors - same line deduplication', () => {
+      it('only duplicates once when multiple cursors are on the same line', () => {
+        const { view, dispatched } = createMockMultiCursorView(
+          ['some line', 'another'],
+          [2, 4]
+        );
+
+        const entries = [{ key: 'Ctrl+Shift+D', command_id: 'editor_duplicate_line_down' }];
+        const keymap = getEditorKeymap(entries, emptyActions);
+        const dupBinding = keymap.find((b) => b.key === 'Mod-Shift-d');
+        expect(dupBinding).toBeDefined();
+
+        const result = dupBinding.run(view);
+        expect(result).toBe(true);
+        expect(dispatched.length).toBe(1);
+        const tr = dispatched[0];
+        // Only 1 change because both cursors are on line 1
+        expect(Array.isArray(tr.changes)).toBe(true);
+        expect(tr.changes.length).toBe(1);
+        expect(tr.changes[0].insert).toContain('some line');
+      });
+    });
+
+    describe('single cursor - regression tests', () => {
+      it('delete line works with single cursor', () => {
+        const { view, dispatched } = createMockMultiCursorView(
+          ['line1', 'line2', 'line3'],
+          [0]
+        );
+
+        const entries = [{ key: 'Ctrl+Shift+K', command_id: 'editor_delete_line' }];
+        const keymap = getEditorKeymap(entries, emptyActions);
+        const deleteBinding = keymap.find((b) => b.key === 'Mod-Shift-k');
+
+        const result = deleteBinding.run(view);
+        expect(result).toBe(true);
+        expect(dispatched.length).toBe(1);
+        expect(dispatched[0].changes).toBeDefined();
+      });
+
+      it('duplicate line down works with single cursor', () => {
+        const { view, dispatched } = createMockMultiCursorView(
+          ['const x = 1;'],
+          [5]
+        );
+
+        const entries = [{ key: 'Ctrl+Shift+D', command_id: 'editor_duplicate_line_down' }];
+        const keymap = getEditorKeymap(entries, emptyActions);
+        const dupBinding = keymap.find((b) => b.key === 'Mod-Shift-d');
+
+        const result = dupBinding.run(view);
+        expect(result).toBe(true);
+        expect(dispatched.length).toBe(1);
+        expect(dispatched[0].changes).toBeDefined();
+      });
+
+      it('insert line below works with single cursor', () => {
+        const { view, dispatched } = createMockMultiCursorView(
+          ['  indented'],
+          [2]
+        );
+
+        const keymap = getEditorKeymap(null, emptyActions);
+        const belowBinding = keymap.find((b) => b.key === 'Mod-Enter');
+
+        const result = belowBinding.run(view);
+        expect(result).toBe(true);
+        expect(dispatched.length).toBe(1);
+        expect(dispatched[0].changes.insert).toContain('  ');
+      });
+
+      it('insert line above works with single cursor', () => {
+        const { view, dispatched } = createMockMultiCursorView(
+          ['  indented'],
+          [2]
+        );
+
+        const keymap = getEditorKeymap(null, emptyActions);
+        const aboveBinding = keymap.find((b) => b.key === 'Mod-Shift-Enter');
+
+        const result = aboveBinding.run(view);
+        expect(result).toBe(true);
+        expect(dispatched.length).toBe(1);
+        expect(dispatched[0].changes.insert).toContain('  ');
+      });
+
+      it('move line up works with single cursor', () => {
+        const { view, dispatched } = createMockMultiCursorView(
+          ['line1', 'line2'],
+          [6]
+        );
+
+        const entries = [{ key: 'Alt+ArrowUp', command_id: 'editor_move_line_up' }];
+        const keymap = getEditorKeymap(entries, emptyActions);
+        const moveUpBinding = keymap.find((b) => b.key === 'Alt-ArrowUp');
+
+        const result = moveUpBinding.run(view);
+        expect(result).toBe(true);
+        expect(dispatched.length).toBe(1);
+        expect(dispatched[0].changes.from).toBe(0);
+        expect(dispatched[0].changes.to).toBe(11);
+      });
+
+      it('move line down works with single cursor', () => {
+        const { view, dispatched } = createMockMultiCursorView(
+          ['line1', 'line2'],
+          [0]
+        );
+
+        const entries = [{ key: 'Alt+ArrowDown', command_id: 'editor_move_line_down' }];
+        const keymap = getEditorKeymap(entries, emptyActions);
+        const moveDownBinding = keymap.find((b) => b.key === 'Alt-ArrowDown');
+
+        const result = moveDownBinding.run(view);
+        expect(result).toBe(true);
+        expect(dispatched.length).toBe(1);
+        expect(dispatched[0].changes.from).toBe(0);
+        expect(dispatched[0].changes.to).toBe(11);
+      });
     });
   });
 });

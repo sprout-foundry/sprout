@@ -242,3 +242,39 @@
 .pane-footer .whitespace-mode:hover {
   opacity: 1;
 }
+
+/* Hover tooltip styling */
+.cm-hover-tooltip {
+  padding: 6px 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 480px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--cm-fg, #c9d1d9);
+  background: var(--cm-tooltip-bg, #1e1e2e);
+  border: 1px solid var(--cm-tooltip-border, rgba(255, 255, 255, 0.1));
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.cm-hover-tooltip code {
+  font-family: 'Monaco', 'Menlo', 'Fira Code', monospace;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.cm-hover-tooltip pre {
+  margin: 4px 0;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  overflow-x: auto;
+}
+
+.cm-hover-tooltip pre code {
+  background: none;
+  padding: 0;
+}

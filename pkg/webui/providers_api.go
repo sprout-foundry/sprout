@@ -61,10 +61,10 @@ func (ws *ReactWebServer) listProviders(clientID string) []providerDescriptor {
 	if err == nil && agentInst != nil && agentInst.GetConfigManager() != nil {
 		configManager = agentInst.GetConfigManager()
 	} else {
-		// Fall back to a standalone config manager for any error or missing
+		// Fall back to a layered config manager for any error or missing
 		// config manager — covers no-provider, provider-config errors, agent
 		// creation failures, and the nil-configManager case (err == nil).
-		cm, createErr := configuration.NewManagerSilent()
+		cm, createErr := ws.getLayeredConfigManager(clientID)
 		if createErr != nil {
 			return []providerDescriptor{}
 		}

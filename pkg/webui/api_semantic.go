@@ -16,7 +16,7 @@ type semanticRequest struct {
 	Path       string            `json:"path"`
 	Content    string            `json:"content"`
 	LanguageID string            `json:"language_id"`
-	Method     string            `json:"method"`            // diagnostics | definition | hover
+	Method     string            `json:"method"`            // diagnostics | definition | hover | rename
 	Trigger    string            `json:"trigger,omitempty"` // edit | save | ""
 	Position   *semanticPosition `json:"position,omitempty"`
 }
@@ -47,6 +47,16 @@ type semanticHover struct {
 	EndColumn   int    `json:"end_column,omitempty"`
 }
 
+type semanticRenameLocation struct {
+	FilePath string `json:"filePath"`
+	From     int    `json:"from"`
+	To       int    `json:"to"`
+}
+
+type semanticRename struct {
+	Locations []semanticRenameLocation `json:"locations"`
+}
+
 type semanticResponse struct {
 	Message      string               `json:"message"`
 	Path         string               `json:"path"`
@@ -55,7 +65,8 @@ type semanticResponse struct {
 	Capabilities semanticCapabilities `json:"capabilities"`
 	Diagnostics  []semanticDiagnostic `json:"diagnostics,omitempty"`
 	Definition   *semanticDefinition  `json:"definition,omitempty"`
-	Hover        *semanticHover      `json:"hover,omitempty"`
+	Hover        *semanticHover       `json:"hover,omitempty"`
+	Rename       *semanticRename      `json:"rename,omitempty"`
 	Error        string               `json:"error,omitempty"`
 	Version      string               `json:"version"`
 	DurationMs   int64                `json:"duration_ms,omitempty"`
@@ -138,13 +149,13 @@ func (ws *ReactWebServer) handleAPISemantic(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "File path is required", http.StatusBadRequest)
 		return
 	}
-	if req.Method != "diagnostics" && req.Method != "definition" && req.Method != "hover" {
+	if req.Method != "diagnostics" && req.Method != "definition" && req.Method != "hover" && req.Method != "rename" {
 		http.Error(w, "Invalid method", http.StatusBadRequest)
 		return
 	}
-	if req.Method == "definition" || req.Method == "hover" {
+	if req.Method == "definition" || req.Method == "hover" || req.Method == "rename" {
 		if req.Position == nil || req.Position.Line <= 0 || req.Position.Column <= 0 {
-			http.Error(w, "Position is required for definition and hover", http.StatusBadRequest)
+			http.Error(w, "Position is required for definition, hover, and rename", http.StatusBadRequest)
 			return
 		}
 	}
@@ -237,6 +248,17 @@ func applyToolResult(result *semanticResponse, toolResult semanticToolResult, wo
 			EndLine:     toolResult.Hover.EndLine,
 			EndColumn:   toolResult.Hover.EndColumn,
 		}
+	}
+	if toolResult.Rename != nil {
+		locs := make([]semanticRenameLocation, 0, len(toolResult.Rename.Locations))
+		for _, loc := range toolResult.Rename.Locations {
+			locs = append(locs, semanticRenameLocation{
+				FilePath: loc.FilePath,
+				From:     loc.From,
+				To:       loc.To,
+			})
+		}
+		result.Rename = &semanticRename{Locations: locs}
 	}
 }
 

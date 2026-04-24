@@ -43,3 +43,20 @@ export const isMarkdownCodeBlock = (className: string | undefined, codeText: str
   }
   return false;
 };
+
+/** Returns true if href looks like a local file path rather than a URL. */
+export function isLocalFilePath(href: string | undefined): boolean {
+  if (!href) return false;
+  if (
+    href.startsWith('http://') ||
+    href.startsWith('https://') ||
+    href.startsWith('//') ||
+    href.startsWith('mailto:') ||
+    href.startsWith('#') ||
+    href.startsWith('javascript:')
+  ) {
+    return false;
+  }
+  // Must look like a path: contains a slash, or is a bare filename with a code extension
+  return href.includes('/') || /\.\w{1,10}$/.test(href);
+}

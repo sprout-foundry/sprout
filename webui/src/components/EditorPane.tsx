@@ -37,6 +37,7 @@ import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { useTheme } from '../contexts/ThemeContext';
 import LivePreview from './LivePreview';
+import MarkdownPreview from './MarkdownPreview';
 import EditorToolbar from './EditorToolbar';
 import EditorBreadcrumb, { type BreadcrumbSymbol } from './EditorBreadcrumb';
 import { isImageFile, isAudioFile, isVideoFile, isBinaryFile } from '../utils/mediaPatterns';
@@ -206,6 +207,10 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
 
   // Line ending style for the current file (auto-detected on load)
   const [lineEnding, setLineEnding] = useState<LineEnding>('LF');
+
+  // Markdown preview mode for .md files
+  const [markdownPreviewMode, setMarkdownPreviewMode] = useState<'off' | 'split' | 'preview'>('off');
+  const markdownPreviewBodyRef = useRef<HTMLDivElement>(null);
 
   // Ref mirror for indentManuallySet — read inside loadFile and auto-reload handler
   // to avoid stale closures (those callbacks cannot list indentManuallySet as a dep).
@@ -1827,6 +1832,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   const isHtmlFile = buffer?.kind === 'file' && buffer?.file?.ext?.toLowerCase() === '.html';
   const isSvgPreviewBuffer = buffer?.metadata?.previewKind === 'svg';
   const isHtmlPreviewBuffer = buffer?.metadata?.previewKind === 'html';
+  const isMarkdownFile = buffer?.kind === 'file' && buffer?.file?.ext?.toLowerCase() === '.md';
 
   const openLivePreview = () => {
     if (!buffer) return;
@@ -1941,6 +1947,28 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
                   },
                 ]
               : []),
+            ...(isMarkdownFile
+              ? [
+                  {
+                    id: 'md-toggle',
+                    title: markdownPreviewMode === 'off' ? 'Toggle markdown preview' : 'Close markdown preview',
+                    icon: <Eye size={16} />,
+                    onClick: () => setMarkdownPreviewMode((prev) => prev === 'off' ? 'split' : prev === 'split' ? 'preview' : 'off'),
+                    active: markdownPreviewMode !== 'off',
+                  },
+                  ...(markdownPreviewMode !== 'off'
+                    ? [
+                        {
+                          id: 'md-split',
+                          title: 'Side-by-side view',
+                          icon: <Columns2 size={16} />,
+                          onClick: () => setMarkdownPreviewMode('split'),
+                          active: markdownPreviewMode === 'split',
+                        },
+                      ]
+                    : []),
+                ]
+              : []),
             {
               id: 'relative-line-numbers',
               title: 'Toggle relative line numbers',
@@ -1995,8 +2023,23 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         </div>
       )}
 
-      <div className="pane-content" onContextMenu={handleEditorContextMenu}>
-        <div ref={editorRef} className="editor" />
+      <div className={`pane-content-wrapper${markdownPreviewMode === 'split' ? ' pane-content-wrapper-md-split' : ''}`}>
+        {isMarkdownFile && markdownPreviewMode === 'preview' ? (
+          <div className="pane-content pane-content-md-preview-full">
+            <MarkdownPreview content={localContent} scrollRef={markdownPreviewBodyRef} />
+          </div>
+        ) : (
+          <>
+            <div className={`pane-content${markdownPreviewMode === 'split' ? ' pane-content-md-editor-side' : ''}`} onContextMenu={handleEditorContextMenu}>
+              <div ref={editorRef} className="editor" />
+            </div>
+            {markdownPreviewMode === 'split' && (
+              <div className="pane-md-preview-split">
+                <MarkdownPreview content={localContent} scrollRef={markdownPreviewBodyRef} />
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       <div className="pane-footer">

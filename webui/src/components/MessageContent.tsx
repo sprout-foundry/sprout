@@ -3,27 +3,10 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { stripAnsiCodes } from '../utils/ansi';
-import { flattenMarkdownText, isMarkdownCodeBlock } from '../utils/markdownCode';
+import { flattenMarkdownText, isMarkdownCodeBlock, isLocalFilePath } from '../utils/markdownCode';
 
 interface MessageContentProps {
   content: string;
-}
-
-/** Returns true if href looks like a local file path rather than a URL. */
-function isLocalFilePath(href: string | undefined): boolean {
-  if (!href) return false;
-  if (
-    href.startsWith('http://') ||
-    href.startsWith('https://') ||
-    href.startsWith('//') ||
-    href.startsWith('mailto:') ||
-    href.startsWith('#') ||
-    href.startsWith('javascript:')
-  ) {
-    return false;
-  }
-  // Must look like a path: contains a slash, or is a bare filename with a code extension
-  return href.includes('/') || /\.\w{1,10}$/.test(href);
 }
 
 function MessageContent({ content }: MessageContentProps): JSX.Element {

@@ -74,6 +74,7 @@ import { whitespaceRenderingPlugin, type WhitespaceRenderingMode } from '../exte
 import { unsavedLineHighlight, setOriginalContent } from '../extensions/unsavedLineHighlight';
 import { ApiService } from '../services/api';
 import { notificationBus } from '../services/notificationBus';
+import { formatCode } from '../services/formatter';
 import { Loader2, AlertTriangle, Eye, Columns2, Copy, Navigation, FolderOpen, ClipboardCopy, ListOrdered } from 'lucide-react';
 import { copyToClipboard } from '../utils/clipboard';
 import { generateUnifiedDiff } from '../utils/simpleDiff';
@@ -1552,6 +1553,27 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
             selection: { anchor: 0, head: viewRef.current.state.doc.length },
           });
         }
+      } else if (e.type === 'editor-format-document') {
+        const currentBuffer = bufferRef.current;
+        if (viewRef.current && currentBuffer) {
+          const content = viewRef.current.state.doc.toString();
+          formatCode(content, currentBuffer.file.path, currentBuffer.file.size).then(result => {
+            if (result.error) {
+              notificationBus.notify('warning', 'Format Document', `Format failed: ${result.error}`);
+              return;
+            }
+            if (result.formatted !== content && viewRef.current) {
+              viewRef.current.dispatch({
+                changes: {
+                  from: 0,
+                  to: viewRef.current.state.doc.length,
+                  insert: result.formatted,
+                },
+                annotations: [Transaction.addToHistory.of(false)],
+              });
+            }
+          });
+        }
       }
     };
 
@@ -1566,6 +1588,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     document.addEventListener('editor-find', handler);
     document.addEventListener('editor-find-replace', handler);
     document.addEventListener('editor-select-all', handler);
+    document.addEventListener('editor-format-document', handler);
     return () => {
       document.removeEventListener('editor-goto-line', handler);
       document.removeEventListener('editor-toggle-word-wrap', handler);
@@ -1578,6 +1601,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       document.removeEventListener('editor-find', handler);
       document.removeEventListener('editor-find-replace', handler);
       document.removeEventListener('editor-select-all', handler);
+      document.removeEventListener('editor-format-document', handler);
     };
   }, [handleGoToLine, onToggleMinimap, onToggleRelativeLineNumbers, onToggleWordWrap, toggleLinkedScroll, onCycleWhitespaceRendering]);
 

@@ -26,6 +26,7 @@ type SettingsSubTab = 'general' | 'security' | 'credentials' | 'performance' | '
 interface EditorPreferences {
   autoSaveEnabled: boolean;
   whitespaceRenderingMode: 'none' | 'boundary' | 'all';
+  formatOnSaveEnabled?: boolean;
 }
 
 interface SettingsPanelProps {
@@ -797,6 +798,16 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
                   <span className="toggle-track" />
                   <span className="toggle-label">Auto-save files (every 30s)</span>
                 </label>
+                <label className="styled-toggle">
+                  <input
+                    type="checkbox"
+                    checked={!!editorPreferences.formatOnSaveEnabled}
+                    onChange={() => onEditorPreferenceChanged('formatOnSaveEnabled', !editorPreferences.formatOnSaveEnabled)}
+                  />
+                  <span className="toggle-track" />
+                  <span className="toggle-label">Format on Save</span>
+                </label>
+                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', lineHeight: 1.3, marginTop: 2 }}>Format files with Prettier before saving</span>
                 <div className="config-item">
                   <label htmlFor="whitespace-rendering-select">Render whitespace</label>
                   <select

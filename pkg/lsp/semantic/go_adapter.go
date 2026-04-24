@@ -25,6 +25,8 @@ func (a goAdapter) Run(input ToolInput) (ToolResult, error) {
 		return runGoDiagnostics(input)
 	case "definition":
 		return runGoDefinition(input)
+	case "hover":
+		return runGoHover(input)
 	default:
 		return ToolResult{Capabilities: Capabilities{}}, nil
 	}
@@ -53,7 +55,7 @@ func runGoDiagnostics(input ToolInput) (ToolResult, error) {
 		return ToolResult{}, err
 	}
 
-	caps := Capabilities{Diagnostics: true, Definition: true}
+	caps := Capabilities{Diagnostics: true, Definition: true, Hover: true}
 
 	fmtCmd := exec.Command("gofmt", "-e", tmpFile)
 	var fmtStderr bytes.Buffer
@@ -79,11 +81,48 @@ func runGoDefinition(input ToolInput) (ToolResult, error) {
 	goplsPath, err := exec.LookPath("gopls")
 	if err != nil {
 		return ToolResult{
-			Capabilities: Capabilities{Diagnostics: true, Definition: false},
+			Capabilities: Capabilities{Diagnostics: true, Definition: false, Hover: false},
 			Error:        "gopls_not_available",
 		}, nil
 	}
 	return runGoDefinitionWithRemote(input, goplsPath, "")
+}
+
+// runGoHover retrieves hover documentation at a position using gopls.
+func runGoHover(input ToolInput) (ToolResult, error) {
+	goplsPath, err := exec.LookPath("gopls")
+	if err != nil {
+		return ToolResult{
+			Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: false},
+			Error:        "gopls_not_available",
+		}, nil
+	}
+
+	pos := input.Position
+	if pos == nil {
+		pos = &Position{Line: 1, Column: 1}
+	}
+	posArg := fmt.Sprintf("%s:%d:%d", input.FilePath, pos.Line, pos.Column)
+
+	cmd := exec.Command(goplsPath, "hover", posArg)
+	cmd.Dir = input.WorkspaceRoot
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	_ = cmd.Run()
+
+	contents := strings.TrimSpace(stdout.String())
+	if contents == "" {
+		return ToolResult{
+			Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true},
+			Hover:        nil,
+		}, nil
+	}
+
+	return ToolResult{
+		Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true},
+		Hover:        &ToolHover{Contents: contents},
+	}, nil
 }
 
 func runGoDefinitionWithRemote(input ToolInput, goplsPath, remoteAddr string) (ToolResult, error) {
@@ -109,11 +148,11 @@ func runGoDefinitionWithRemote(input ToolInput, goplsPath, remoteAddr string) (T
 	defPath, defLine, defCol, ok := parseGoplsDefinition(stdout.String())
 	if !ok {
 		return ToolResult{
-			Capabilities: Capabilities{Diagnostics: true, Definition: true},
+			Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true},
 		}, nil
 	}
 	return ToolResult{
-		Capabilities: Capabilities{Diagnostics: true, Definition: true},
+		Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true},
 		Definition:   &ToolDefinition{Path: defPath, Line: defLine, Column: defCol},
 	}, nil
 }

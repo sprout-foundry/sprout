@@ -243,6 +243,9 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
           // Dispatch to editor save handler for single-file save
           document.dispatchEvent(new CustomEvent('editor-save-current'));
           break;
+        case 'format_document':
+          document.dispatchEvent(new CustomEvent('editor-format-document'));
+          break;
         case 'reset_saved_layout': {
           if (!window.confirm('Reset all saved layout settings? This cannot be undone.')) break;
           // Match CommandPalette reset logic: clear persisted snapshot + all layout keys

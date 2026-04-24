@@ -145,7 +145,7 @@ function Sidebar({
   const log = useLog();
   const { themePack, availableThemePacks, setThemePack, importTheme, removeTheme } = useTheme();
   const { applyPreset } = useHotkeys();
-  const { isAutoSaveEnabled: autoSaveEnabled, setAutoSaveEnabled, whitespaceRenderingMode, setWhitespaceRenderingMode } = useEditorManager();
+  const { isAutoSaveEnabled: autoSaveEnabled, setAutoSaveEnabled, whitespaceRenderingMode, setWhitespaceRenderingMode, isFormatOnSaveEnabled: formatOnSaveEnabled, setFormatOnSaveEnabled } = useEditorManager();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileTreeRef = useRef<{
     refresh: () => void;
@@ -913,10 +913,11 @@ function Sidebar({
           settings={settings}
           onSettingsChanged={(s) => setSettings(s)}
           onRequestProviderSetup={onRequestProviderSetup}
-          editorPreferences={{ autoSaveEnabled: !!autoSaveEnabled, whitespaceRenderingMode }}
+          editorPreferences={{ autoSaveEnabled: !!autoSaveEnabled, whitespaceRenderingMode, formatOnSaveEnabled: !!formatOnSaveEnabled }}
           onEditorPreferenceChanged={(key, value) => {
             if (key === 'autoSaveEnabled') setAutoSaveEnabled(value as boolean);
             if (key === 'whitespaceRenderingMode') setWhitespaceRenderingMode(value as WhitespaceRenderingMode);
+            if (key === 'formatOnSaveEnabled') setFormatOnSaveEnabled(value as boolean);
           }}
         />
       </>

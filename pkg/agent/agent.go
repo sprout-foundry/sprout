@@ -82,6 +82,11 @@ type Agent struct {
 	sessionProvider api.ClientType // Session-scoped provider override
 	sessionModel    string         // Session-scoped model override
 
+	// configOverrides stores additional session-scoped config overrides
+	// (e.g., subagent_provider, reasoning_effort) that are applied in-memory.
+	// These come from chatSession.ConfigOverrides and are saved with the session.
+	configOverrides map[string]interface{}
+
 	// Input injection handling
 	inputInjectionChan  chan string        // Channel for injecting new user input
 	inputInjectionMutex sync.Mutex         // Mutex for input injection operations
@@ -241,6 +246,37 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		return nil, fmt.Errorf("failed to initialize configuration: %w", err)
 	}
 
+	return newAgentWithConfigManager(configManager, model)
+}
+
+// NewAgentWithConfigDir creates a new agent using a per-client config directory.
+// This enables per-client config isolation for the WebUI, where each X-Ledit-Client-ID
+// can have its own isolated config directory so settings changes by one client don't affect another.
+func NewAgentWithConfigDir(configDir, model string) (*Agent, error) {
+	// Initialize configuration manager with a client-specific directory
+	configManager, err := configuration.NewManagerWithDir(configDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize configuration from %s: %w", configDir, err)
+	}
+
+	return newAgentWithConfigManager(configManager, model)
+}
+
+// NewAgentWithLayers creates a new agent using layered configuration.
+// globalDir contains global config (~/.ledit/), workspaceDir contains workspace config.
+// This is the preferred method for WebUI usage where workspace config is supported.
+func NewAgentWithLayers(globalDir, workspaceDir, model string) (*Agent, error) {
+	configManager, err := configuration.NewManagerWithLayers(globalDir, workspaceDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize layered configuration: %w", err)
+	}
+
+	return newAgentWithConfigManager(configManager, model)
+}
+
+// newAgentWithConfigManager is the internal implementation that creates an agent
+// with a pre-configured configuration manager.
+func newAgentWithConfigManager(configManager *configuration.Manager, model string) (*Agent, error) {
 	workspaceRoot, err := os.Getwd()
 	if err != nil {
 		workspaceRoot = "."
@@ -760,6 +796,17 @@ func (a *Agent) SetWorkspaceRoot(workspaceRoot string) {
 // GetWorkspaceRoot returns the logical workspace root for this agent instance.
 func (a *Agent) GetWorkspaceRoot() string {
 	return strings.TrimSpace(a.workspaceRoot)
+}
+
+// SetConfigOverrides stores session-scoped config overrides on the agent.
+// These are applied in-memory and persisted with the session state.
+func (a *Agent) SetConfigOverrides(overrides map[string]interface{}) {
+	a.configOverrides = overrides
+}
+
+// GetConfigOverrides returns the session-scoped config overrides.
+func (a *Agent) GetConfigOverrides() map[string]interface{} {
+	return a.configOverrides
 }
 
 // currentWorkspaceRoot resolves the agent workspace, falling back to the process cwd.

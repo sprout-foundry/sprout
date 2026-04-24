@@ -3,6 +3,7 @@ import { EditorBuffer, EditorPane, PaneLayout } from '../types/editor';
 import { writeFileWithConsent } from '../services/fileAccess';
 import { showThemedPrompt } from '../components/ThemedDialog';
 import { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
+import { formatCode, isFormattable } from '../services/formatter';
 
 interface PaneSize {
   [paneId: string]: number; // Size in pixels or percentage
@@ -20,6 +21,8 @@ interface EditorManagerContextValue {
   setWhitespaceRenderingMode: (mode: WhitespaceRenderingMode) => void;
   autoSaveInterval: number; // milliseconds
   paneSizes: PaneSize; // Track pane sizes for resizable split panes
+  isFormatOnSaveEnabled: boolean;
+  setFormatOnSaveEnabled: (enabled: boolean) => void;
 
   // Actions
   openFile: (file: any) => string; // Returns buffer ID
@@ -125,6 +128,22 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     setWhitespaceRenderingModeState(mode);
     try {
       localStorage.setItem('editor:whitespace-rendering', mode);
+    } catch (err) {
+      // Ignore localStorage errors
+    }
+  }, []);
+  const [isFormatOnSaveEnabled, setIsFormatOnSaveEnabledState] = useState(() => {
+    try {
+      const stored = localStorage.getItem('editor.format-on-save');
+      return stored === 'true';
+    } catch (err) {
+      return false;
+    }
+  });
+  const setFormatOnSaveEnabled = useCallback((enabled: boolean) => {
+    setIsFormatOnSaveEnabledState(enabled);
+    try {
+      localStorage.setItem('editor.format-on-save', String(enabled));
     } catch (err) {
       // Ignore localStorage errors
     }
@@ -631,8 +650,30 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     }
 
     // Normal save for existing files
+    // Format before saving if format-on-save is enabled
+    let contentToSave = buffer.content;
+    if (isFormatOnSaveEnabled && isFormattable(buffer.file.path)) {
+      const formatResult = await formatCode(buffer.content, buffer.file.path, buffer.file.size);
+      if (!formatResult.error && formatResult.formatted !== buffer.content) {
+        contentToSave = formatResult.formatted;
+        // Update buffer content with formatted version before saving
+        setBuffers(prev => {
+          const newBuffers = new Map(prev);
+          const buf = newBuffers.get(bufferId);
+          if (buf) {
+            newBuffers.set(bufferId, {
+              ...buf,
+              content: formatResult.formatted,
+              isModified: formatResult.formatted !== buf.originalContent,
+            });
+          }
+          return newBuffers;
+        });
+      }
+    }
+
     try {
-      const response = await writeFileWithConsent(buffer.file.path, buffer.content);
+      const response = await writeFileWithConsent(buffer.file.path, contentToSave);
 
       if (response.ok) {
         const data = await response.json();
@@ -658,7 +699,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
       console.error('Failed to save buffer:', bufferId, error);
       throw error;
     }
-  }, []);
+  }, [isFormatOnSaveEnabled]);
 
   // Save all modified buffers
   const saveAllBuffers = useCallback(async () => {
@@ -967,6 +1008,8 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     setBufferPinned,
     setBufferClosable,
     reloadBufferFromDisk,
+    isFormatOnSaveEnabled,
+    setFormatOnSaveEnabled,
   };
 
   return (

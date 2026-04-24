@@ -70,6 +70,7 @@ const COMMAND_DEFINITIONS: CommandDef[] = [
   { id: 'open_hotkeys_config', label: 'Edit Keyboard Shortcuts', category: 'Preferences' },
   // Editor
   { id: 'format_document', label: 'Format Document', category: 'Editor' },
+  { id: 'editor_find_all_references', label: 'Find All References', category: 'Editor' },
 ];
 
 // ── File browsing constants ────────────────────────────────────────────────
@@ -475,6 +476,9 @@ function CommandPalette({
         }
         case 'format_document':
           document.dispatchEvent(new CustomEvent('editor-format-document'));
+          break;
+        case 'editor_find_all_references':
+          document.dispatchEvent(new CustomEvent('editor-find-all-references'));
           break;
         default:
           break;

@@ -1310,6 +1310,34 @@ class ApiService {
     return response.json();
   }
 
+  async getSemanticHover(path: string, content: string, languageId: string, line: number, column: number): Promise<{
+    message: string;
+    path: string;
+    language_id: string;
+    method: string;
+    capabilities: { diagnostics: boolean; definition: boolean; hover: boolean };
+    hover?: { contents: string } | null;
+    duration_ms?: number;
+    error?: string;
+    version: string;
+  }> {
+    const response = await clientFetch('/api/semantic', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        path,
+        content,
+        language_id: languageId,
+        method: 'hover',
+        position: { line, column },
+      }),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to get semantic hover: HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
   // History and Rollback API methods
   async getChangelog(): Promise<{
     message: string;

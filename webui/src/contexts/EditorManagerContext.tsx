@@ -653,22 +653,43 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     // Format before saving if format-on-save is enabled
     let contentToSave = buffer.content;
     if (isFormatOnSaveEnabled && isFormattable(buffer.file.path)) {
-      const formatResult = await formatCode(buffer.content, buffer.file.path, buffer.file.size);
-      if (!formatResult.error && formatResult.formatted !== buffer.content) {
-        contentToSave = formatResult.formatted;
-        // Update buffer content with formatted version before saving
-        setBuffers(prev => {
-          const newBuffers = new Map(prev);
-          const buf = newBuffers.get(bufferId);
-          if (buf) {
-            newBuffers.set(bufferId, {
-              ...buf,
-              content: formatResult.formatted,
-              isModified: formatResult.formatted !== buf.originalContent,
-            });
-          }
-          return newBuffers;
+      try {
+        // Initialize the global resolve map if needed
+        const windowAny = window as unknown as Record<string, Map<string, (result: { formatted: string; error?: string }) => void>>;
+        let resolveMap = windowAny.__formatResolveMap;
+        if (!resolveMap) {
+          windowAny.__formatResolveMap = new Map();
+          resolveMap = windowAny.__formatResolveMap;
+        }
+
+        const requestId = crypto.randomUUID();
+        const formatPromise = new Promise<{ formatted: string; error?: string }>((resolve) => {
+          resolveMap!.set(requestId, resolve);
         });
+
+        // Dispatch the format event to the editor
+        document.dispatchEvent(new CustomEvent('editor-format-document', {
+          detail: { requestId },
+        }));
+
+        // Wait for the editor to resolve or timeout
+        const timeout = new Promise<{ formatted: string; error?: string }>((resolve) =>
+          setTimeout(() => resolve({ formatted: buffer.content }), 2000),
+        );
+        const result = await Promise.race([formatPromise, timeout]);
+
+        // Delete the resolve callback immediately. If the timeout won the
+        // race, the EditorPane handler will see the entry is gone (via
+        // resolveMap.has(requestId) → false) and skip applying the stale
+        // formatted content to the CodeMirror editor. If the format won
+        // the race, the entry was already deleted by the EditorPane handler.
+        resolveMap.delete(requestId);
+
+        if (!result.error) {
+          contentToSave = result.formatted;
+        }
+      } catch {
+        // If anything goes wrong, just save the original content
       }
     }
 

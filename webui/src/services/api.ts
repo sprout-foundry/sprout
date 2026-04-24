@@ -1620,9 +1620,10 @@ class ApiService {
     }
   }
 
-  async updateSettings(settings: Record<string, any>): Promise<{ message: string }> {
+  async updateSettings(settings: Record<string, any>, layer?: 'session' | 'workspace' | 'global'): Promise<{ message: string }> {
     try {
-      const response = await clientFetch('/api/settings', {
+      const url = layer ? `/api/settings?layer=${layer}` : '/api/settings';
+      const response = await clientFetch(url, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings),

@@ -96,6 +96,9 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
   const [layerData, setLayerData] = useState<Record<string, any> | null>(null);
   const [layerError, setLayerError] = useState<string | null>(null);
 
+  // Ref so render helpers can read the current display settings without prop changes
+  const displaySettingsRef = useRef<LeditSettings | null>(null);
+
   // Use the shared notification system instead of local toasts
   const { addNotification } = useNotifications();
 
@@ -298,7 +301,13 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
           value,
         ) as unknown as LeditSettings;
         onSettingsChanged(updated);
-        await api.updateSettings({ [keyOrPath]: value });
+
+        // Use the current configViewLayer when on the general tab
+        let layer: 'session' | 'workspace' | 'global' | undefined;
+        if (activeSubTab === 'general' && configViewLayer !== 'session') {
+          layer = configViewLayer;
+        }
+        await api.updateSettings({ [keyOrPath]: value }, layer);
         addNotification('success', 'Settings', 'Saved', 3000);
       } catch (err) {
         debugLog('[SettingsPanel] failed to save setting:', err);
@@ -308,14 +317,15 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
         setSavingKey(null);
       }
     },
-    [onSettingsChanged, api, addNotification],
+    [onSettingsChanged, api, addNotification, activeSubTab, configViewLayer],
   );
 
   /* ─── Field render helpers ──────────────────────────────── */
 
   const renderToggle = (settingKey: string, label: string) => {
-    if (!settings) return null;
-    const checked = !!getNestedValue(settings as unknown as Record<string, unknown>, settingKey);
+    const current = displaySettingsRef.current ?? settings;
+    if (!current) return null;
+    const checked = !!getNestedValue(current as unknown as Record<string, unknown>, settingKey);
     return (
       <label className="styled-toggle">
         <input type="checkbox" checked={checked} onChange={() => updateSetting(settingKey, !checked)} />
@@ -326,8 +336,9 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
   };
 
   const renderSelect = (settingKey: string, label: string, options: string[]) => {
-    if (!settings) return null;
-    const value = String(getNestedValue(settings as unknown as Record<string, unknown>, settingKey) || '');
+    const current = displaySettingsRef.current ?? settings;
+    if (!current) return null;
+    const value = String(getNestedValue(current as unknown as Record<string, unknown>, settingKey) || '');
     return (
       <div className="config-item">
         <label htmlFor={`setting-${settingKey}`}>{label}</label>
@@ -348,8 +359,9 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
   };
 
   const renderNumberInput = (settingKey: string, label: string, min?: number, max?: number, step = 1) => {
-    if (!settings) return null;
-    const value = getNestedValue(settings as unknown as Record<string, unknown>, settingKey);
+    const current = displaySettingsRef.current ?? settings;
+    if (!current) return null;
+    const value = getNestedValue(current as unknown as Record<string, unknown>, settingKey);
     return (
       <div className="config-item">
         <label htmlFor={`setting-${settingKey}`}>{label}</label>
@@ -371,8 +383,9 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
   };
 
   const renderTextInput = (settingKey: string, label: string, placeholder?: string) => {
-    if (!settings) return null;
-    const persistedValue = String(getNestedValue(settings as unknown as Record<string, unknown>, settingKey) || '');
+    const current = displaySettingsRef.current ?? settings;
+    if (!current) return null;
+    const persistedValue = String(getNestedValue(current as unknown as Record<string, unknown>, settingKey) || '');
     const value = textDrafts[settingKey] ?? persistedValue;
     return (
       <div className="config-item">
@@ -419,8 +432,9 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
     rows = 10,
     helpText?: string,
   ) => {
-    if (!settings) return null;
-    const persistedValue = String(getNestedValue(settings as unknown as Record<string, unknown>, settingKey) || '');
+    const current = displaySettingsRef.current ?? settings;
+    if (!current) return null;
+    const persistedValue = String(getNestedValue(current as unknown as Record<string, unknown>, settingKey) || '');
     const value = textDrafts[settingKey] ?? persistedValue;
     return (
       <div className="config-item">
@@ -817,6 +831,14 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
       return <div className="settings-empty">Loading settings…</div>;
     }
 
+    // When viewing workspace or global layer in general tab, use that layer's data
+    // so the user sees and edits only that layer's specific values.
+    const activeSettings: LeditSettings =
+      activeSubTab === 'general' && configViewLayer !== 'session' && layerData
+        ? (layerData as unknown as LeditSettings)
+        : settings;
+    displaySettingsRef.current = activeSettings;
+
     switch (activeSubTab) {
       /* ── General ─────────────────────────────────────────── */
       case 'general':
@@ -841,7 +863,7 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
               </div>
               <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', lineHeight: 1.3 }}>
                 {configViewLayer === 'session' && 'Editing session-scoped overrides only. These are saved with your chat session and don\'t affect other clients.'}
-                {configViewLayer === 'workspace' && 'Editing workspace config ({workspace || "project"}). Settings are shared across all sessions in this workspace.'}
+                {configViewLayer === 'workspace' && 'Editing workspace config. Settings are shared across all sessions in this workspace.'}
                 {configViewLayer === 'global' && 'Editing global config (~/.ledit). Settings apply to all workspaces and sessions.'}
               </span>
               {layerError && (

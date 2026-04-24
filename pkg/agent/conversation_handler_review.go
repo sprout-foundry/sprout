@@ -14,7 +14,7 @@ import (
 // runSelfReviewGate runs self-review validation after conversation completion.
 func (ch *ConversationHandler) runSelfReviewGate() error {
 	if configuration.GetEnvSimple("SKIP_SELF_REVIEW_GATE") == "1" {
-		ch.agent.PrintLineAsync("[WARN] Self-review gate skipped (LEDIT_SKIP_SELF_REVIEW_GATE=1)")
+		ch.agent.PrintLineAsync("[WARN] Self-review gate skipped (SPROUT_SKIP_SELF_REVIEW_GATE=1)")
 		return nil
 	}
 	activePersona := ch.agent.GetActivePersona()

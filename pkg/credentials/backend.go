@@ -192,8 +192,8 @@ func SetStorageMode(mode string) error {
 
 // GetStorageBackend returns the active backend based on configuration and auto-detection.
 // Resolution order:
-// 1. If LEDIT_CREDENTIAL_BACKEND=keyring → OSKeyringBackend
-// 2. If LEDIT_CREDENTIAL_BACKEND=file → FileBackend
+// 1. If SPROUT_CREDENTIAL_BACKEND=keyring → OSKeyringBackend
+// 2. If SPROUT_CREDENTIAL_BACKEND=file → FileBackend
 // 3. Auto-detect: try OSKeyringBackend.Get("__ledit_probe__") to check availability
 //    - If available → use OSKeyringBackend (persist mode as "keyring")
 //    - If unavailable → fallback to FileBackend (persist mode as "file")
@@ -213,11 +213,11 @@ func resolveBackend() (Backend, error) {
 	// Check environment variable first
 	envMode := strings.TrimSpace(envutil.GetEnvSimple("CREDENTIAL_BACKEND"))
 	if envMode == "keyring" {
-		log.Printf("[credentials] Using keyring backend (forced via LEDIT_CREDENTIAL_BACKEND)")
+		log.Printf("[credentials] Using keyring backend (forced via SPROUT_CREDENTIAL_BACKEND)")
 		return NewOSKeyringBackend(), nil
 	}
 	if envMode == "file" {
-		log.Printf("[credentials] Using file backend (forced via LEDIT_CREDENTIAL_BACKEND)")
+		log.Printf("[credentials] Using file backend (forced via SPROUT_CREDENTIAL_BACKEND)")
 		return NewFileBackend(), nil
 	}
 

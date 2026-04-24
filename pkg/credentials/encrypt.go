@@ -242,7 +242,7 @@ func DecryptStore(data []byte) ([]byte, error) {
 			return decrypted, nil
 		}
 		// Passphrase decryption also failed
-		return nil, fmt.Errorf("failed to decrypt API keys (tried machine key and LEDIT_KEY_PASSPHRASE): %w", passErr)
+		return nil, fmt.Errorf("failed to decrypt API keys (tried machine key and SPROUT_KEY_PASSPHRASE): %w", passErr)
 	}
 
 	// Neither worked — provide actionable guidance
@@ -257,14 +257,14 @@ func DecryptStore(data []byte) ([]byte, error) {
 			"or the machine key file (key.age) was deleted.\n\n"+
 			"Recovery options:\n"+
 			"  1. Update ledit to the latest version if you're running an older build\n"+
-			"  2. Set LEDIT_KEY_PASSPHRASE=<your-passphrase> if you previously used passphrase encryption\n"+
+			"  2. Set SPROUT_KEY_PASSPHRASE=<your-passphrase> if you previously used passphrase encryption\n"+
 			"  3. Run 'ledit keys migrate' to generate a new machine key (existing encrypted keys will be lost): %w", err)
 	}
 	return nil, fmt.Errorf("API keys file is encrypted but decryption with the machine key failed.\n"+
 		"The machine key (key.age) may have been regenerated, making the old encrypted data unreadable.\n\n"+
 		"Recovery options:\n"+
 		"  1. If you have a backup of api_keys.json from before encryption, restore it\n"+
-		"  2. Set LEDIT_KEY_PASSPHRASE if the file was passphrase-encrypted\n"+
+		"  2. Set SPROUT_KEY_PASSPHRASE if the file was passphrase-encrypted\n"+
 		"  3. Delete api_keys.json and re-enter your API keys: %w", err)
 }
 
@@ -394,32 +394,31 @@ func saveUnlocked(store Store) error {
 	if mode == "passphrase" {
 		passphrase := strings.TrimSpace(envutil.GetEnvSimple("KEY_PASSPHRASE"))
 		if passphrase == "" {
-			return fmt.Errorf("cannot save: API keys are passphrase-encrypted but LEDIT_KEY_PASSPHRASE is not set. "+
-				"Set LEDIT_KEY_PASSPHRASE or run 'ledit keys encrypt' to switch to machine-key mode")
-		}
-		encrypted, err = EncryptWithPassphrase(data, passphrase)
-	} else if mode == "" && strings.TrimSpace(envutil.GetEnvSimple("KEY_PASSPHRASE")) != "" {
-		encrypted, err = EncryptWithPassphrase(data, strings.TrimSpace(envutil.GetEnvSimple("KEY_PASSPHRASE")))
-		if err == nil {
-			_ = SetEncryptionMode("passphrase")
-		}
-	} else {
-		encrypted, err = EncryptStore(data)
-		if err == nil && mode == "" {
-			_ = SetEncryptionMode("machine-key")
-		}
+					return fmt.Errorf("cannot save: API keys are passphrase-encrypted but SPROUT_KEY_PASSPHRASE is not set. "+
+			"Set SPROUT_KEY_PASSPHRASE or run 'ledit keys encrypt' to switch to machine-key mode")
 	}
-	if err != nil {
-		return fmt.Errorf("failed to encrypt API keys: %w", err)
+	encrypted, err = EncryptWithPassphrase(data, passphrase)
+} else if mode == "" && strings.TrimSpace(envutil.GetEnvSimple("KEY_PASSPHRASE")) != "" {
+	encrypted, err = EncryptWithPassphrase(data, strings.TrimSpace(envutil.GetEnvSimple("KEY_PASSPHRASE")))
+	if err == nil {
+		_ = SetEncryptionMode("passphrase")
 	}
-	if err := AtomicWriteFile(path, encrypted, 0600); err != nil {
-		return err
+} else {
+	encrypted, err = EncryptStore(data)
+	if err == nil && mode == "" {
+		_ = SetEncryptionMode("machine-key")
 	}
-	return nil
+}
+if err != nil {
+	return fmt.Errorf("failed to encrypt API keys: %w", err)
+}
+if err := AtomicWriteFile(path, encrypted, 0600); err != nil {
+	return err
+}
+return nil
 }
 
-// AtomicModify acquires an exclusive lock, loads the API keys store,
-// calls fn to modify it, and saves it back. The entire load-modify-save
+// AtomicModify acquires an exclusive lock, loads the API keys store,// calls fn to modify it, and saves it back. The entire load-modify-save
 // cycle is protected by the exclusive lock, preventing TOCTOU races.
 // Uses a 15-second timeout to account for slow encryption operations.
 func AtomicModify(fn func(Store) error) error {
@@ -515,7 +514,7 @@ func Load() (Store, error) {
 // to prevent data corruption if the process crashes during the write.
 //
 // If the API keys are passphrase-encrypted, this function requires the
-// LEDIT_KEY_PASSPHRASE environment variable to be set. Otherwise, it returns
+// SPROUT_KEY_PASSPHRASE environment variable to be set. Otherwise, it returns
 // an error directing the user to set the environment variable or switch to
 // machine-key mode.
 func Save(store Store) error {
@@ -542,13 +541,13 @@ func Save(store Store) error {
 		// Passphrase mode: encrypt with the user's passphrase
 		passphrase := strings.TrimSpace(envutil.GetEnvSimple("KEY_PASSPHRASE"))
 		if passphrase == "" {
-			return fmt.Errorf("cannot save: API keys are passphrase-encrypted but LEDIT_KEY_PASSPHRASE is not set. "+
-				"Set LEDIT_KEY_PASSPHRASE or run 'ledit keys encrypt' to switch to machine-key mode")
+			return fmt.Errorf("cannot save: API keys are passphrase-encrypted but SPROUT_KEY_PASSPHRASE is not set. "+
+			"Set SPROUT_KEY_PASSPHRASE or run 'ledit keys encrypt' to switch to machine-key mode")
 		}
 		encrypted, err = EncryptWithPassphrase(data, passphrase)
 	} else if mode == "" && strings.TrimSpace(envutil.GetEnvSimple("KEY_PASSPHRASE")) != "" {
 		// Legacy passphrase-encrypted file with no mode file: the user has
-		// LEDIT_KEY_PASSPHRASE set (required to have loaded the file), so
+		// SPROUT_KEY_PASSPHRASE set (required to have loaded the file), so
 		// preserve their passphrase encryption rather than silently downgrading
 		// to machine-key mode.
 		encrypted, err = EncryptWithPassphrase(data, strings.TrimSpace(envutil.GetEnvSimple("KEY_PASSPHRASE")))
@@ -596,7 +595,7 @@ func Save(store Store) error {
 //
 // For keyring backends, the keyring entries are loaded via the active backend.
 // For file backends, Load() is called directly to read the file store
-// (avoiding cached backend path issues when LEDIT_CONFIG changes between tests).
+// (avoiding cached backend path issues when SPROUT_CONFIG changes between tests).
 func resolve(provider, envVar string) (Resolved, error) {
 	resolved := Resolved{
 		Provider: strings.TrimSpace(provider),

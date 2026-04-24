@@ -59,6 +59,8 @@ const fallbackHotkeys: HotkeyEntry[] = [
   { key: 'Ctrl+Tab', command_id: 'focus_next_tab', global: false },
   { key: 'Ctrl+Shift+Tab', command_id: 'focus_prev_tab', global: false },
   { key: 'Alt+Z', command_id: 'editor_toggle_word_wrap', global: false },
+  { key: 'Shift+Alt+F', command_id: 'format_document', global: false },
+  { key: 'Shift+Cmd+F', command_id: 'format_document', global: false },
   { key: 'Ctrl+K', command_id: 'split_editor_horizontal', global: false },
   { key: 'Cmd+K', command_id: 'split_editor_horizontal', global: false },
   { key: 'Alt+1', command_id: 'switch_to_editor', global: false },
@@ -204,6 +206,28 @@ export function HotkeyProvider({ children }: HotkeyProviderProps): JSX.Element {
     [loadHotkeys],
   );
 
+  /**
+   * Normalize modifier order in a hotkey string to the canonical order
+   * used by `buildKeyString`: Cmd, Ctrl, Alt, Shift, then the main key.
+   * This ensures "Shift+Alt+F" matches "Alt+Shift+F" from keyboard events.
+   */
+  function normalizeKeyOrder(key: string): string {
+    const parts = key.split('+');
+    const modifierOrder = ['Cmd', 'Ctrl', 'Alt', 'Shift'];
+    const modifiers: string[] = [];
+    const rest: string[] = [];
+    for (const part of parts) {
+      if (modifierOrder.includes(part)) {
+        modifiers.push(part);
+      } else {
+        rest.push(part);
+      }
+    }
+    // Sort modifiers by their canonical position
+    modifiers.sort((a, b) => modifierOrder.indexOf(a) - modifierOrder.indexOf(b));
+    return [...modifiers, ...rest].join('+');
+  }
+
   // Global keydown handler
   useEffect(() => {
     if (!isLoaded) return;
@@ -221,7 +245,7 @@ export function HotkeyProvider({ children }: HotkeyProviderProps): JSX.Element {
           } else {
             storedKey = storedKey.replace(/\bCmd\b/g, 'Ctrl');
           }
-          return storedKey.toLowerCase() === keyString.toLowerCase();
+          return normalizeKeyOrder(storedKey).toLowerCase() === keyString.toLowerCase();
         });
       }
 
@@ -233,7 +257,7 @@ export function HotkeyProvider({ children }: HotkeyProviderProps): JSX.Element {
           } else {
             storedKey = storedKey.replace(/\bCmd\b/g, 'Ctrl');
           }
-          return storedKey.toLowerCase() === keyString.toLowerCase();
+          return normalizeKeyOrder(storedKey).toLowerCase() === keyString.toLowerCase();
         });
       }
 

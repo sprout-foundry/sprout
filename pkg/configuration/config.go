@@ -293,6 +293,247 @@ func GetConfigPath() (string, error) {
 	return filepath.Join(configDir, ConfigFileName), nil
 }
 
+// GetWorkspaceConfigPath returns the path to workspace-level config
+func GetWorkspaceConfigPath(workspaceRoot string) string {
+	return filepath.Join(workspaceRoot, ConfigDirName, ConfigFileName)
+}
+
+// IsWorkspaceConfigPresent checks if a workspace config file exists
+func IsWorkspaceConfigPresent(workspaceRoot string) bool {
+	_, err := os.Stat(GetWorkspaceConfigPath(workspaceRoot))
+	return err == nil
+}
+
+// MergeConfig merges two configs, with override taking precedence over base.
+// The override config typically contains only changed fields (deltas).
+// Returns a new config without modifying either input.
+func MergeConfig(base, override *Config) *Config {
+	if base == nil {
+		return cloneConfig(override)
+	}
+	if override == nil {
+		return cloneConfig(base)
+	}
+
+	result := cloneConfig(base)
+
+	// Override simple string fields if non-empty
+	if override.LastUsedProvider != "" {
+		result.LastUsedProvider = override.LastUsedProvider
+	}
+
+	// Merge ProviderModels - override takes precedence
+	if len(override.ProviderModels) > 0 {
+		if result.ProviderModels == nil {
+			result.ProviderModels = make(map[string]string)
+		}
+		for k, v := range override.ProviderModels {
+			result.ProviderModels[k] = v
+		}
+	}
+
+	// Override slices if non-empty
+	if len(override.ProviderPriority) > 0 {
+		result.ProviderPriority = override.ProviderPriority
+	}
+
+	// Merge MCP config
+	if override.MCP.Enabled {
+		result.MCP.Enabled = override.MCP.Enabled
+	}
+	if override.MCP.Timeout > 0 {
+		result.MCP.Timeout = override.MCP.Timeout
+	}
+	if override.MCP.Servers != nil {
+		if result.MCP.Servers == nil {
+			result.MCP.Servers = make(map[string]mcp.MCPServerConfig)
+		}
+		for k, v := range override.MCP.Servers {
+			result.MCP.Servers[k] = v
+		}
+	}
+
+	// Merge Preferences
+	if len(override.Preferences) > 0 {
+		if result.Preferences == nil {
+			result.Preferences = make(map[string]interface{})
+		}
+		for k, v := range override.Preferences {
+			result.Preferences[k] = v
+		}
+	}
+
+	// Override simple bool/int/string fields
+	if override.EnablePreWriteValidation {
+		result.EnablePreWriteValidation = override.EnablePreWriteValidation
+	}
+	if override.AllowOrchestratorGitWrite {
+		result.AllowOrchestratorGitWrite = override.AllowOrchestratorGitWrite
+	}
+	if override.ResourceDirectory != "" {
+		result.ResourceDirectory = override.ResourceDirectory
+	}
+	if override.ReasoningEffort != "" {
+		result.ReasoningEffort = override.ReasoningEffort
+	}
+	if override.DisableThinking {
+		result.DisableThinking = override.DisableThinking
+	}
+	if override.SystemPromptText != "" {
+		result.SystemPromptText = override.SystemPromptText
+	}
+	if override.SkipPrompt {
+		result.SkipPrompt = override.SkipPrompt
+	}
+
+	// Merge DismissedPrompts
+	if len(override.DismissedPrompts) > 0 {
+		if result.DismissedPrompts == nil {
+			result.DismissedPrompts = make(map[string]bool)
+		}
+		for k, v := range override.DismissedPrompts {
+			result.DismissedPrompts[k] = v
+		}
+	}
+
+	// Merge APITimeouts
+	if override.APITimeouts != nil {
+		if result.APITimeouts == nil {
+			result.APITimeouts = &APITimeoutConfig{}
+		}
+		if override.APITimeouts.ConnectionTimeoutSec > 0 {
+			result.APITimeouts.ConnectionTimeoutSec = override.APITimeouts.ConnectionTimeoutSec
+		}
+		if override.APITimeouts.FirstChunkTimeoutSec > 0 {
+			result.APITimeouts.FirstChunkTimeoutSec = override.APITimeouts.FirstChunkTimeoutSec
+		}
+		if override.APITimeouts.ChunkTimeoutSec > 0 {
+			result.APITimeouts.ChunkTimeoutSec = override.APITimeouts.ChunkTimeoutSec
+		}
+		if override.APITimeouts.OverallTimeoutSec > 0 {
+			result.APITimeouts.OverallTimeoutSec = override.APITimeouts.OverallTimeoutSec
+		}
+		if override.APITimeouts.CommitMessageTimeoutSec > 0 {
+			result.APITimeouts.CommitMessageTimeoutSec = override.APITimeouts.CommitMessageTimeoutSec
+		}
+	}
+
+	// Merge CustomProviders
+	if len(override.CustomProviders) > 0 {
+		if result.CustomProviders == nil {
+			result.CustomProviders = make(map[string]CustomProviderConfig)
+		}
+		for k, v := range override.CustomProviders {
+			result.CustomProviders[k] = v
+		}
+	}
+
+	// Override CommandHistoryByPath and HistoryIndexByPath
+	if len(override.CommandHistoryByPath) > 0 {
+		result.CommandHistoryByPath = override.CommandHistoryByPath
+	}
+	if len(override.HistoryIndexByPath) > 0 {
+		result.HistoryIndexByPath = override.HistoryIndexByPath
+	}
+
+	// Override HistoryScope
+	if override.HistoryScope != "" {
+		result.HistoryScope = override.HistoryScope
+	}
+
+	// Override SelfReviewGateMode
+	if override.SelfReviewGateMode != "" {
+		result.SelfReviewGateMode = override.SelfReviewGateMode
+	}
+
+	// Override subagent settings
+	if override.SubagentProvider != "" {
+		result.SubagentProvider = override.SubagentProvider
+	}
+	if override.SubagentModel != "" {
+		result.SubagentModel = override.SubagentModel
+	}
+	if override.SubagentMaxParallel > 0 {
+		result.SubagentMaxParallel = override.SubagentMaxParallel
+	}
+	if override.SubagentParallelEnabled != nil {
+		result.SubagentParallelEnabled = override.SubagentParallelEnabled
+	}
+
+	// Merge SubagentTypes
+	if len(override.SubagentTypes) > 0 {
+		if result.SubagentTypes == nil {
+			result.SubagentTypes = make(map[string]SubagentType)
+		}
+		for k, v := range override.SubagentTypes {
+			result.SubagentTypes[k] = v
+		}
+	}
+
+	// Override commit provider/model
+	if override.CommitProvider != "" {
+		result.CommitProvider = override.CommitProvider
+	}
+	if override.CommitModel != "" {
+		result.CommitModel = override.CommitModel
+	}
+
+	// Override review provider/model
+	if override.ReviewProvider != "" {
+		result.ReviewProvider = override.ReviewProvider
+	}
+	if override.ReviewModel != "" {
+		result.ReviewModel = override.ReviewModel
+	}
+
+	// Override PDF OCR settings
+	if override.PDFOCREnabled {
+		result.PDFOCREnabled = override.PDFOCREnabled
+	}
+	if override.PDFOCRProvider != "" {
+		result.PDFOCRProvider = override.PDFOCRProvider
+	}
+	if override.PDFOCRModel != "" {
+		result.PDFOCRModel = override.PDFOCRModel
+	}
+
+	// Merge Skills
+	if len(override.Skills) > 0 {
+		if result.Skills == nil {
+			result.Skills = make(map[string]Skill)
+		}
+		for k, v := range override.Skills {
+			result.Skills[k] = v
+		}
+	}
+
+	// Override zsh settings
+	if override.EnableZshCommandDetection {
+		result.EnableZshCommandDetection = override.EnableZshCommandDetection
+	}
+	if override.AutoExecuteDetectedCommands {
+		result.AutoExecuteDetectedCommands = override.AutoExecuteDetectedCommands
+	}
+
+	return result
+}
+
+// cloneConfig creates a deep copy of a Config
+func cloneConfig(cfg *Config) *Config {
+	if cfg == nil {
+		return nil
+	}
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		return nil
+	}
+	var out Config
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil
+	}
+	return &out
+}
+
 // Load loads the configuration from file
 func Load() (*Config, error) {
 	configPath, err := GetConfigPath()

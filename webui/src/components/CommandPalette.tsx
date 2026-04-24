@@ -68,6 +68,8 @@ const COMMAND_DEFINITIONS: CommandDef[] = [
   { id: 'switch_to_git', label: 'Switch to Git', category: 'Navigation' },
   // Preferences
   { id: 'open_hotkeys_config', label: 'Edit Keyboard Shortcuts', category: 'Preferences' },
+  // Editor
+  { id: 'format_document', label: 'Format Document', category: 'Editor' },
 ];
 
 // ── File browsing constants ────────────────────────────────────────────────
@@ -471,6 +473,9 @@ function CommandPalette({
           window.location.reload();
           return; // page is reloading — skip onClose()
         }
+        case 'format_document':
+          document.dispatchEvent(new CustomEvent('editor-format-document'));
+          break;
         default:
           break;
       }

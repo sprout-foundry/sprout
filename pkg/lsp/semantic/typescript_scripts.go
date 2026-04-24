@@ -52,7 +52,7 @@ function analyze(input) {
     }
   } catch (_) {
     return {
-      capabilities: { diagnostics: false, definition: false, hover: false },
+      capabilities: { diagnostics: false, definition: false, hover: false, rename: false },
       error: 'typescript_not_available'
     };
   }
@@ -125,7 +125,7 @@ function analyze(input) {
     const first = defs[0];
     if (!first) {
       return {
-        capabilities: { diagnostics: true, definition: true, hover: true },
+        capabilities: { diagnostics: true, definition: true, hover: true, rename: true },
         definition: null
       };
     }
@@ -137,7 +137,7 @@ function analyze(input) {
     const source = ts.createSourceFile(targetPath, targetText, ts.ScriptTarget.Latest, true);
     const lc = source.getLineAndCharacterOfPosition(first.textSpan.start);
     return {
-      capabilities: { diagnostics: true, definition: true, hover: true },
+      capabilities: { diagnostics: true, definition: true, hover: true, rename: true },
       definition: {
         path: targetPath,
         line: lc.line + 1,
@@ -152,7 +152,7 @@ function analyze(input) {
     const info = ls.getQuickInfoAtPosition(filePath, offset);
     if (!info) {
       return {
-        capabilities: { diagnostics: true, definition: true, hover: true },
+        capabilities: { diagnostics: true, definition: true, hover: true, rename: true },
         hover: null
       };
     }
@@ -164,8 +164,41 @@ function analyze(input) {
       contents = contents + '\n\n' + docText;
     }
     return {
-      capabilities: { diagnostics: true, definition: true, hover: true },
+      capabilities: { diagnostics: true, definition: true, hover: true, rename: true },
       hover: { contents: contents }
+    };
+  }
+
+  if (method === 'rename') {
+    const pos = input.position || { line: 1, column: 1 };
+    const offset = lineColToOffset(fileContent, pos.line, pos.column);
+    const renameInfo = ls.getRenameInfoAtPosition(filePath, offset);
+    if (!renameInfo || !renameInfo.canRename) {
+      return {
+        capabilities: { diagnostics: true, definition: true, hover: true, rename: true },
+        rename: { locations: [] }
+      };
+    }
+    // Find all references in the current file to get locations
+    const refs = ls.findReferences(filePath, offset) || [];
+    const currentFileRefs = refs.filter(r => r.fileName === filePath);
+    const locations = [];
+    const seen = new Set();
+    for (const ref of currentFileRefs) {
+      if (!ref.textSpan) continue;
+      const key = ref.textSpan.start + ':' + ref.textSpan.length;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      locations.push({
+        filePath: filePath,
+        from: ref.textSpan.start,
+        to: ref.textSpan.start + ref.textSpan.length,
+      });
+    }
+    locations.sort((a, b) => a.from - b.from);
+    return {
+      capabilities: { diagnostics: true, definition: true, hover: true, rename: true },
+      rename: { locations }
     };
   }
 
@@ -186,7 +219,7 @@ function analyze(input) {
   });
 
   return {
-    capabilities: { diagnostics: true, definition: true, hover: true },
+    capabilities: { diagnostics: true, definition: true, hover: true, rename: true },
     diagnostics
   };
 }
@@ -215,7 +248,7 @@ function readStdin() {
     process.stdout.write(JSON.stringify(out));
   } catch (err) {
     process.stdout.write(JSON.stringify({
-      capabilities: { diagnostics: false, definition: false, hover: false },
+      capabilities: { diagnostics: false, definition: false, hover: false, rename: false },
       error: String(err && err.message ? err.message : err)
     }));
   }
@@ -235,7 +268,7 @@ rl.on('line', (line) => {
     input = JSON.parse(line || '{}');
   } catch (err) {
     const out = {
-      capabilities: { diagnostics: false, definition: false, hover: false },
+      capabilities: { diagnostics: false, definition: false, hover: false, rename: false },
       error: String(err && err.message ? err.message : err),
     };
     process.stdout.write(JSON.stringify(out) + '\n');
@@ -247,7 +280,7 @@ rl.on('line', (line) => {
     process.stdout.write(JSON.stringify(out) + '\n');
   } catch (err) {
     const out = {
-      capabilities: { diagnostics: false, definition: false, hover: false },
+      capabilities: { diagnostics: false, definition: false, hover: false, rename: false },
       error: String(err && err.message ? err.message : err),
     };
     process.stdout.write(JSON.stringify(out) + '\n');

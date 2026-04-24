@@ -1351,6 +1351,34 @@ class ApiService {
     return response.json();
   }
 
+  async getSemanticRename(path: string, content: string, languageId: string, line: number, column: number): Promise<{
+    message: string;
+    path: string;
+    language_id: string;
+    method: string;
+    capabilities: { diagnostics: boolean; definition: boolean; hover: boolean; rename: boolean };
+    rename?: { locations: Array<{ filePath: string; from: number; to: number }> } | null;
+    duration_ms?: number;
+    error?: string;
+    version: string;
+  }> {
+    const response = await clientFetch('/api/semantic', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        path,
+        content,
+        language_id: languageId,
+        method: 'rename',
+        position: { line, column },
+      }),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to get rename locations: HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
   // History and Rollback API methods
   async getChangelog(): Promise<{
     message: string;

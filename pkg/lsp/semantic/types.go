@@ -11,6 +11,7 @@ type Capabilities struct {
 	Diagnostics bool `json:"diagnostics"`
 	Definition  bool `json:"definition"`
 	Hover       bool `json:"hover"`
+	Rename      bool `json:"rename"`
 }
 
 // ToolInput is the normalized request shape sent to language adapters.
@@ -51,13 +52,26 @@ type ToolHover struct {
 	EndColumn   int    `json:"end_column,omitempty"`
 }
 
+// ToolRenameLocation is a single rename edit location in a file.
+type ToolRenameLocation struct {
+	FilePath string `json:"filePath"`
+	From     int    `json:"from"` // 0-based byte offset
+	To       int    `json:"to"`   // 0-based byte offset
+}
+
+// ToolRename is the rename preview result.
+type ToolRename struct {
+	Locations []ToolRenameLocation `json:"locations"`
+}
+
 // ToolResult is the normalized adapter response.
 type ToolResult struct {
 	Capabilities Capabilities      `json:"capabilities"`
 	Diagnostics  []ToolDiagnostic `json:"diagnostics,omitempty"`
 	Definition   *ToolDefinition  `json:"definition,omitempty"`
-	Hover        *ToolHover      `json:"hover,omitempty"`
-	Error        string          `json:"error,omitempty"`
+	Hover        *ToolHover       `json:"hover,omitempty"`
+	Rename       *ToolRename      `json:"rename,omitempty"`
+	Error        string           `json:"error,omitempty"`
 	// DurationMs is the wall-clock time the adapter took to run, in milliseconds.
 	// Populated by the registry dispatch layer, not by individual adapters.
 	DurationMs int64 `json:"duration_ms,omitempty"`

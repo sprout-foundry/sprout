@@ -10,6 +10,7 @@ type Position struct {
 type Capabilities struct {
 	Diagnostics bool `json:"diagnostics"`
 	Definition  bool `json:"definition"`
+	Hover       bool `json:"hover"`
 }
 
 // ToolInput is the normalized request shape sent to language adapters.
@@ -41,12 +42,22 @@ type ToolDefinition struct {
 	Column int    `json:"column"`
 }
 
+// ToolHover is a hover tooltip result with markdown content.
+type ToolHover struct {
+	Contents    string `json:"contents"` // Markdown content
+	StartLine   int    `json:"start_line,omitempty"`
+	StartColumn int    `json:"start_column,omitempty"`
+	EndLine     int    `json:"end_line,omitempty"`
+	EndColumn   int    `json:"end_column,omitempty"`
+}
+
 // ToolResult is the normalized adapter response.
 type ToolResult struct {
-	Capabilities Capabilities     `json:"capabilities"`
+	Capabilities Capabilities      `json:"capabilities"`
 	Diagnostics  []ToolDiagnostic `json:"diagnostics,omitempty"`
 	Definition   *ToolDefinition  `json:"definition,omitempty"`
-	Error        string           `json:"error,omitempty"`
+	Hover        *ToolHover      `json:"hover,omitempty"`
+	Error        string          `json:"error,omitempty"`
 	// DurationMs is the wall-clock time the adapter took to run, in milliseconds.
 	// Populated by the registry dispatch layer, not by individual adapters.
 	DurationMs int64 `json:"duration_ms,omitempty"`

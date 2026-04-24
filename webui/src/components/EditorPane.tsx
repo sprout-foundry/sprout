@@ -58,6 +58,7 @@ import { indentGuidesPlugin } from '../extensions/indentGuides';
 import { bracketColorizationPlugin } from '../extensions/bracketColorization';
 import { linkedScrollExtension, setLinkedScrollEnabled, suppressScrollSync } from '../extensions/linkedScroll';
 import { getLanguageExtensions, resolveLanguageId } from '../extensions/languageRegistry';
+import { createHoverTooltipExtension } from '../extensions/hoverTooltip';
 import { detectIndentation, DEFAULT_INDENT_WIDTH } from '../extensions/indentDetect';
 import { detectLineEnding, type LineEnding } from '../extensions/lineEndingDetect';
 import {
@@ -1155,6 +1156,10 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       hyperLink,
       color,
       autocompletion(),
+      createHoverTooltipExtension(
+        () => buffer?.file?.path,
+        () => localContentRef.current,
+      ),
       closeBrackets(),
       history(),
       cursorHistoryPlugin,

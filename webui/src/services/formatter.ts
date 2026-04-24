@@ -46,8 +46,8 @@ const DEFAULT_OPTIONS = {
   printWidth: 80,
 };
 
-/** Cached Prettier config by directory */
-const configCache = new Map<string, Record<string, unknown>>();
+/** Cached Prettier config (single entry — the backend resolves from workspace root). */
+let cachedConfig: Record<string, unknown> | null = null;
 
 /** Prettier config fetcher function - set by the consumer (formatter.ts doesn't directly import api) */
 let configFetcher: ((filePath: string) => Promise<Record<string, unknown>>) | null = null;
@@ -61,28 +61,13 @@ export function setConfigFetcher(fetcher: (filePath: string) => Promise<Record<s
 }
 
 /**
- * Get the directory for caching config.
- * Uses the parent directory of the file path.
- */
-function getConfigDirectory(filePath: string): string {
-  // Get the directory part of the file path for caching
-  const lastSlash = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
-  if (lastSlash > 0) {
-    return filePath.slice(0, lastSlash);
-  }
-  // If no directory, use the file's directory (current dir)
-  return '.';
-}
-
-/**
- * Fetch and cache Prettier config for a file's directory.
- * Only fetches once per directory and caches the result.
+ * Fetch and cache Prettier config.
+ * The backend resolves config from the workspace root, so the result is the
+ * same regardless of which file path is passed. We cache a single entry.
  */
 async function fetchAndCacheConfig(filePath: string): Promise<Record<string, unknown>> {
-  const configDir = getConfigDirectory(filePath);
-
-  if (configCache.has(configDir)) {
-    return configCache.get(configDir)!;
+  if (cachedConfig !== null) {
+    return cachedConfig;
   }
 
   let config: Record<string, unknown> = {};
@@ -94,7 +79,7 @@ async function fetchAndCacheConfig(filePath: string): Promise<Record<string, unk
     }
   }
 
-  configCache.set(configDir, config);
+  cachedConfig = config;
   return config;
 }
 
@@ -173,7 +158,7 @@ export function isFormattable(filePath: string): boolean {
 
 /** Clear the config cache (useful for testing). */
 export function clearConfigCache(): void {
-  configCache.clear();
+  cachedConfig = null;
 }
 
 function getExtension(filePath: string): string {

@@ -42,6 +42,11 @@ type ConversationState struct {
 	SessionID               string           `json:"session_id"`
 	Name                    string           `json:"name"`              // Human-readable session name
 	WorkingDirectory        string           `json:"working_directory"` // Directory where session was created
+
+	// ConfigOverrides stores session-scoped configuration overrides.
+	// Applied on top of global and workspace config when the session is restored.
+	// Only non-empty values are considered overrides.
+	ConfigOverrides map[string]interface{} `json:"config_overrides,omitempty"`
 }
 
 // Variable to allow overriding GetStateDir for testing
@@ -228,6 +233,7 @@ func (a *Agent) SaveStateScoped(sessionID, workingDir string) error {
 		SessionID:               cleanSessionID,
 		Name:                    sessionName,
 		WorkingDirectory:        cleanWorkingDir,
+		ConfigOverrides:         a.configOverrides,
 	}
 
 	data, err := json.MarshalIndent(state, "", "  ")

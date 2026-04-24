@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -35,6 +36,11 @@ type chatSession struct {
 	Provider         string    `json:"provider"`
 	Model            string    `json:"model"`
 	WorktreePath     string    `json:"worktree_path"`
+
+	// ConfigOverrides stores session-scoped configuration overrides that differ
+	// from the global/workspace config. Populated when settings change during a session.
+	ConfigOverrides map[string]interface{} `json:"config_overrides,omitempty"`
+
 	Agent            *agent.Agent `json:"-"`
 	mu               sync.Mutex
 }
@@ -210,6 +216,24 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, eventBus *events.E
 	if sessionModel != "" {
 		if err := created.SetModel(sessionModel); err != nil {
 			log.Printf("chatSession.getOrCreateAgent: warning: failed to set session model %q: %v", sessionModel, err)
+		}
+	}
+
+	// Apply any additional config overrides from the session (e.g., subagent_provider,
+	// reasoning_effort, etc.) directly to the config manager in-memory.
+	cs.mu.Lock()
+	sessionOverrides := cs.ConfigOverrides
+	cs.mu.Unlock()
+	if len(sessionOverrides) > 0 {
+		// Store overrides on the agent so they get saved with the session state
+		created.SetConfigOverrides(sessionOverrides)
+		cm := created.GetConfigManager()
+		if cm != nil {
+			if err := cm.UpdateConfig(func(cfg *configuration.Config) error {
+				return applyPartialSettings(cfg, sessionOverrides)
+			}); err != nil {
+				log.Printf("chatSession.getOrCreateAgent: warning: failed to apply session config overrides: %v", err)
+			}
 		}
 	}
 

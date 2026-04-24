@@ -156,6 +156,29 @@ func (ws *ReactWebServer) handleAPIRestoreSession(w http.ResponseWriter, r *http
 		clientAgent.SetWorkspaceRoot(workspaceRoot)
 	}
 
+	// Restore config overrides from the saved session into the active chat session.
+	// These will be applied to the agent on next getOrCreateAgent call.
+	if len(state.ConfigOverrides) > 0 {
+		ws.mutex.Lock()
+		ctx := ws.clientContexts[clientID]
+		if ctx != nil {
+			activeChatID := ctx.getActiveChatID()
+			if cs := ctx.getChatSession(activeChatID); cs != nil {
+				cs.mu.Lock()
+				cs.ConfigOverrides = state.ConfigOverrides
+				// Also set Provider/Model from overrides for backward compat
+				if p, ok := state.ConfigOverrides["provider"].(string); ok && p != "" {
+					cs.Provider = p
+				}
+				if m, ok := state.ConfigOverrides["model"].(string); ok && m != "" {
+					cs.Model = m
+				}
+				cs.mu.Unlock()
+			}
+		}
+		ws.mutex.Unlock()
+	}
+
 	ws.publishClientEvent(clientID, "connection_status", map[string]interface{}{
 		"connected":     true,
 		"session_id":    state.SessionID,

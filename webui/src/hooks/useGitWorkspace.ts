@@ -46,7 +46,7 @@ interface UseGitWorkspaceOptions {
   onGitUnstage: (files: string[]) => Promise<void>;
   onGitDiscard: (files: string[]) => Promise<void>;
   openWorkspaceBuffer: (options: {
-    kind: 'chat' | 'diff' | 'review';
+    kind: 'chat' | 'diff' | 'review' | 'compare';
     path: string;
     title: string;
     content?: string;

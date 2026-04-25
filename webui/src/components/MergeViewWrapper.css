@@ -159,6 +159,18 @@
   margin-left: 4px;
 }
 
+/* Side-by-side navigation controls */
+.merge-view-controls.sbs-navigation {
+  justify-content: space-between;
+}
+
+.merge-view-controls .sbs-hunk-info {
+  font-family: var(--font-mono, 'SFMono-Regular', Consolas, monospace);
+  font-size: 11px;
+  color: var(--text-tertiary);
+  user-select: none;
+}
+
 /* Accept/Reject buttons in unified diff */
 .cm-merge-view .cm-merge-view-chunk {
   position: relative;
@@ -195,6 +207,56 @@
 .cm-merge-view .cm-merge-view-reject {
   background: var(--accent-error);
   color: #fff;
+}
+
+/* Theme-integrated change decoration overrides
+   Uses the same CSS variables as the diff gutter for visual consistency */
+.merge-view-container .cm-changedLine,
+.merge-view-container .cm-deletedLine {
+  background-color: var(--diff-del-bg, rgba(248, 81, 73, 0.08));
+}
+
+.merge-view-container .cm-insertedLine {
+  background-color: var(--diff-add-bg, rgba(46, 160, 67, 0.08));
+}
+
+/* In side-by-side mode, chunk A shows deletions; chunk B shows insertions.
+   @codemirror/merge marks both with cm-changedLine. Use cm-merge-a/b context. */
+.merge-view-wrapper.side-by-side .merge-view-container .cm-merge-a .cm-changedLine {
+  background-color: var(--diff-del-bg, rgba(248, 81, 73, 0.08));
+}
+
+.merge-view-wrapper.side-by-side .merge-view-container .cm-merge-b .cm-changedLine {
+  background-color: var(--diff-add-bg, rgba(46, 160, 67, 0.08));
+}
+
+.merge-view-container .cm-changedText {
+  background-color: var(--diff-mod-bg, rgba(66, 133, 244, 0.15)) !important;
+}
+
+.merge-view-container .cm-deletedText {
+  background-color: var(--diff-del-bg, rgba(248, 81, 73, 0.15)) !important;
+}
+
+.merge-view-container .cm-changedLineGutter {
+  background-color: var(--diff-del-color, rgba(248, 81, 73, 0.5));
+}
+
+.merge-view-container .cm-deletedLineGutter {
+  background-color: var(--diff-del-color, rgba(248, 81, 73, 0.5));
+}
+
+.merge-view-container .cm-inlineChangedLineGutter {
+  background-color: var(--diff-mod-color, rgba(66, 133, 244, 0.5));
+}
+
+/* Change gutter */
+.merge-view-container .cm-changeGutter {
+  width: 4px;
+}
+
+.merge-view-container .cm-changeGutter .cm-gutterElement {
+  padding: 0;
 }
 
 /* Scrollbar styling */

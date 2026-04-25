@@ -1,5 +1,5 @@
 /* MergeViewWrapper - diff viewer React component */
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
 import {
   MergeView,
   goToNextChunk,
@@ -47,6 +47,8 @@ export interface MergeViewWrapperProps {
   onRejectChunk?: () => void;
   /** Show accept/reject controls in unified mode (default: true) */
   mergeControls?: boolean;
+  /** Show Prev/Next navigation in side-by-side mode (default: true) */
+  sideBySideNavigation?: boolean;
   /** Label for side A (original) - side-by-side mode */
   aLabel?: string;
   /** Label for side B (modified) - side-by-side mode */
@@ -74,6 +76,7 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
   onAcceptChunk,
   onRejectChunk,
   mergeControls = true,
+  sideBySideNavigation = true,
   aLabel = 'Original',
   bLabel = 'Modified',
 }) => {
@@ -82,6 +85,7 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
   const editorViewRef = useRef<EditorView | null>(null);
   // Track whether the side-by-side view has been created
   const sideBySideCreatedRef = useRef(false);
+  const [hunkInfo, setHunkInfo] = useState<{ current: number; total: number } | null>(null);
 
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -156,6 +160,47 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
     if (editorViewRef.current) goToNextChunk(editorViewRef.current);
   }, []);
 
+  // ── Side-by-side hunk navigation helpers ──
+
+  const updateSbsHunkInfo = useCallback(() => {
+    if (!mergeViewRef.current || mode !== 'side-by-side') return;
+    const chunks = mergeViewRef.current.chunks;
+    if (!chunks.length) {
+      setHunkInfo(null);
+      return;
+    }
+    const view = mergeViewRef.current.b;
+    const pos = view.state.selection.main.head;
+    let current = 0;
+    for (let i = 0; i < chunks.length; i++) {
+      if (pos >= chunks[i].fromB) {
+        current = i;
+      } else {
+        break;
+      }
+    }
+    setHunkInfo({ current: current + 1, total: chunks.length });
+  }, [mode]);
+
+  const handleSbsPrevChunk = useCallback(() => {
+    if (mergeViewRef.current?.b) {
+      goToPreviousChunk(mergeViewRef.current.b);
+      setTimeout(updateSbsHunkInfo, 10);
+    }
+  }, [updateSbsHunkInfo]);
+
+  const handleSbsNextChunk = useCallback(() => {
+    if (mergeViewRef.current?.b) {
+      goToNextChunk(mergeViewRef.current.b);
+      setTimeout(updateSbsHunkInfo, 10);
+    }
+  }, [updateSbsHunkInfo]);
+
+  // Reset hunk info when mode changes
+  useEffect(() => {
+    if (mode !== 'side-by-side') setHunkInfo(null);
+  }, [mode]);
+
   // ── Side-by-side mode ──
 
   // Create the MergeView once when switching into side-by-side mode
@@ -167,9 +212,18 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
 
     const baseExtensions = buildBaseExtensions();
 
+    // Add hunk navigation keymaps to both panes
+    const sbsExtensions = [
+      ...baseExtensions,
+      keymap.of([
+        { key: 'Alt-ArrowUp', run: goToPreviousChunk, preventDefault: true },
+        { key: 'Alt-ArrowDown', run: goToNextChunk, preventDefault: true },
+      ]),
+    ];
+
     const mv = new MergeView({
-      a: EditorState.create({ doc: originalContent, extensions: baseExtensions }),
-      b: EditorState.create({ doc: modifiedContent, extensions: baseExtensions }),
+      a: EditorState.create({ doc: originalContent, extensions: sbsExtensions }),
+      b: EditorState.create({ doc: modifiedContent, extensions: sbsExtensions }),
       parent: containerRef.current,
       orientation: 'a-b',
       revertControls: 'a-to-b',
@@ -181,7 +235,30 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
     mergeViewRef.current = mv;
     sideBySideCreatedRef.current = true;
 
+    // Attach hunk tracking listeners to pane B after MergeView is created
+    let cleanupListeners: (() => void) | undefined;
+    if (sideBySideNavigation) {
+      const view = mv.b;
+      const immediateUpdate = () => updateSbsHunkInfo();
+      immediateUpdate();
+
+      const handleClick = () => setTimeout(immediateUpdate, 10);
+      const handleKeyup = (e: KeyboardEvent) => {
+        if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+          setTimeout(immediateUpdate, 10);
+        }
+      };
+
+      view.dom.addEventListener('click', handleClick);
+      view.dom.addEventListener('keyup', handleKeyup);
+      cleanupListeners = () => {
+        view.dom.removeEventListener('click', handleClick);
+        view.dom.removeEventListener('keyup', handleKeyup);
+      };
+    }
+
     return () => {
+      cleanupListeners?.();
       if (mergeViewRef.current) {
         mergeViewRef.current.destroy();
         mergeViewRef.current = null;
@@ -190,7 +267,7 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
     };
     // Only recreate when structural config changes; content updates handled separately
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, buildBaseExtensions, highlightChanges, gutter, collapseUnchanged]);
+  }, [mode, buildBaseExtensions, highlightChanges, gutter, collapseUnchanged, sideBySideNavigation, updateSbsHunkInfo]);
 
   // Update side-by-side content in-place without tearing down the MergeView
   useEffect(() => {
@@ -210,8 +287,10 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
       if (bChanged) {
         b.dispatch({ changes: { from: 0, to: b.state.doc.length, insert: modifiedContent } });
       }
+      // Update hunk info after content change
+      setTimeout(updateSbsHunkInfo, 50);
     }
-  }, [mode, originalContent, modifiedContent]);
+  }, [mode, originalContent, modifiedContent, updateSbsHunkInfo]);
 
   // ── Unified mode ──
 
@@ -248,6 +327,21 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
         </div>
       )}
       <div className="merge-view-container" ref={containerRef} />
+      {mode === 'side-by-side' && sideBySideNavigation && (
+        <div className="merge-view-controls sbs-navigation">
+          <span className="sbs-hunk-info">
+            {hunkInfo ? `${hunkInfo.current}/${hunkInfo.total} changes` : 'No changes'}
+          </span>
+          <button type="button" className="btn-prev" onClick={handleSbsPrevChunk} title="Previous Change (Alt+Up)">
+            Prev
+            <span className="shortcut-hint">Alt+Up</span>
+          </button>
+          <button type="button" className="btn-next" onClick={handleSbsNextChunk} title="Next Change (Alt+Down)">
+            Next
+            <span className="shortcut-hint">Alt+Down</span>
+          </button>
+        </div>
+      )}
       {mode === 'unified' && mergeControls && (
         <div className="merge-view-controls">
           <button type="button" className="btn-prev" onClick={handlePrevChunk} title="Previous Change (Alt+Up)">

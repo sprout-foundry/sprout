@@ -1,3 +1,41 @@
+/* ── DiffWorkspaceTab — view mode toggle ── */
+
+.workspace-diff-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.workspace-diff-view-toggle {
+  display: flex;
+  background: var(--bg-tertiary, rgba(255, 255, 255, 0.06));
+  border-radius: 6px;
+  padding: 2px;
+  border: 1px solid var(--border-subtle);
+}
+
+.workspace-diff-view-btn {
+  padding: 3px 10px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.workspace-diff-view-btn:hover {
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+}
+
+.workspace-diff-view-btn.active {
+  color: var(--text-primary);
+  background: var(--accent-primary);
+}
+
 /* ── DiffSurface — self-contained diff display component ── */
 /* Requires: classifyDiffLine from utils/format for line classification */
 

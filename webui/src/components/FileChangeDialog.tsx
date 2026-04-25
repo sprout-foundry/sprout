@@ -1,6 +1,7 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { KeyboardEvent, ReactElement } from 'react';
 import ReactDOM from 'react-dom/client';
+import { MergeViewWrapper } from './MergeViewWrapper';
 import './ThemedDialog.css';
 
 /* ── Types ───────────────────────────────────────────────────── */
@@ -11,27 +12,36 @@ interface FileChangeDialogProps {
   fileName: string;
   deleted: boolean;
   hasUnsavedChanges: boolean;
+  originalContent?: string;
+  modifiedContent?: string;
   onResolve: (result: FileChangeResult) => void;
 }
 
 /* ── Internal dialog component ───────────────────────────────── */
 
-function FileChangeDialog({ fileName, deleted, hasUnsavedChanges, onResolve }: FileChangeDialogProps): JSX.Element {
+function FileChangeDialog({ fileName, deleted, hasUnsavedChanges, originalContent, modifiedContent, onResolve }: FileChangeDialogProps): JSX.Element {
+  const [showMergeView, setShowMergeView] = useState(false);
+  const hasMergeContent = !!(originalContent && modifiedContent);
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
+        if (showMergeView) {
+          setShowMergeView(false);
+          return;
+        }
         if (deleted) {
           onResolve('ignore');
         } else {
           onResolve('keep-mine');
         }
-      } else if (e.key === 'Enter' && !deleted && !hasUnsavedChanges) {
+      } else if (e.key === 'Enter' && !deleted && !hasUnsavedChanges && !showMergeView) {
         e.preventDefault();
         onResolve('reload');
       }
     },
-    [onResolve, deleted, hasUnsavedChanges],
+    [onResolve, deleted, hasUnsavedChanges, showMergeView],
   );
 
   useEffect(() => {
@@ -102,9 +112,13 @@ function FileChangeDialog({ fileName, deleted, hasUnsavedChanges, onResolve }: F
 
   // Conflict mode (has unsaved changes)
   if (hasUnsavedChanges) {
+    const cardClass = showMergeView
+      ? 'themed-dialog-card themed-dialog-card--merge-expanded'
+      : 'themed-dialog-card';
+
     return (
       <div className="themed-dialog-overlay" onClick={() => onResolve('keep-mine')} onKeyDown={handleKeyDown}>
-        <div className="themed-dialog-card" onClick={(e) => e.stopPropagation()}>
+        <div className={cardClass} onClick={(e) => e.stopPropagation()}>
           <div className="themed-dialog-accent-bar themed-dialog-accent-bar--warning" />
           <div className="themed-dialog-header">
             <span className="themed-dialog-icon themed-dialog-icon--warning">⚠</span>
@@ -113,18 +127,41 @@ function FileChangeDialog({ fileName, deleted, hasUnsavedChanges, onResolve }: F
           <div className="themed-dialog-body" style={{ whiteSpace: 'pre-line' }}>
             {`This file has been changed by another process and you have unsaved changes.\n\n${fileName}\n\nHow do you want to resolve this?`}
           </div>
+
+          {showMergeView && hasMergeContent && (
+            <div className="themed-dialog-merge-view">
+              <MergeViewWrapper
+                originalContent={originalContent!}
+                modifiedContent={modifiedContent!}
+                mode="unified"
+                fileName={fileName}
+                mergeControls={false}
+              />
+            </div>
+          )}
+
           <div className="themed-dialog-footer">
             <button type="button" className="themed-dialog-btn" onClick={() => onResolve('keep-mine')}>
               Keep Mine
             </button>
-            <button type="button" className="themed-dialog-btn" onClick={() => onResolve('show-diff')}>
-              Show Diff
+            <button
+              type="button"
+              className="themed-dialog-btn"
+              onClick={() => {
+                if (hasMergeContent) {
+                  setShowMergeView(!showMergeView);
+                } else {
+                  onResolve('show-diff');
+                }
+              }}
+            >
+              {showMergeView ? 'Hide Diff' : 'Show Diff'}
             </button>
             <button
               type="button"
               className="themed-dialog-btn themed-dialog-btn--primary"
               onClick={() => onResolve('reload')}
-              autoFocus
+              autoFocus={!showMergeView}
             >
               Reload from Disk
             </button>
@@ -183,11 +220,18 @@ function mountToBody(element: ReactElement): () => void {
 
 export async function showFileChangeDialog(
   fileName: string,
-  options?: { deleted?: boolean; hasUnsavedChanges?: boolean },
+  options?: {
+    deleted?: boolean;
+    hasUnsavedChanges?: boolean;
+    originalContent?: string;
+    modifiedContent?: string;
+  },
 ): Promise<FileChangeResult> {
   return new Promise<FileChangeResult>((resolve) => {
     const deleted = options?.deleted ?? false;
     const hasUnsavedChanges = options?.hasUnsavedChanges ?? false;
+    const originalContent = options?.originalContent;
+    const modifiedContent = options?.modifiedContent;
     let cleanup: (() => void) | null = null;
 
     const dismiss = (result: FileChangeResult) => {
@@ -205,6 +249,8 @@ export async function showFileChangeDialog(
         fileName={fileName}
         deleted={deleted}
         hasUnsavedChanges={hasUnsavedChanges}
+        originalContent={originalContent}
+        modifiedContent={modifiedContent}
         onResolve={dismiss}
       />,
     );

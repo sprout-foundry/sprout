@@ -1,0 +1,274 @@
+/* MergeViewWrapper - diff viewer React component */
+import React, { useRef, useEffect, useCallback } from 'react';
+import {
+  MergeView,
+  goToNextChunk,
+  goToPreviousChunk,
+  acceptChunk,
+  rejectChunk,
+  unifiedMergeView,
+} from '@codemirror/merge';
+import { EditorView, keymap, lineNumbers } from '@codemirror/view';
+import { EditorState, Extension } from '@codemirror/state';
+import { defaultKeymap } from '@codemirror/commands';
+import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
+import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark';
+import { getLanguageExtensions, detectLanguage } from '../extensions/languageRegistry';
+import { useTheme } from '../contexts/ThemeContext';
+import './MergeViewWrapper.css';
+
+// Re-export utilities for consumers
+export { goToNextChunk, goToPreviousChunk, acceptChunk, rejectChunk };
+
+export interface MergeViewWrapperProps {
+  /** Original content (left pane in side-by-side mode) */
+  originalContent: string;
+  /** Modified content (right pane in side-by-side mode) */
+  modifiedContent: string;
+  /** Display mode: 'side-by-side' (default) or 'unified' */
+  mode?: 'side-by-side' | 'unified';
+  /** File name for language detection */
+  fileName?: string;
+  /** Make editors read-only (default: true) */
+  readOnly?: boolean;
+  /** Highlight changes in diff */
+  highlightChanges?: boolean;
+  /** Show gutter markers for changed lines */
+  gutter?: boolean;
+  /** Collapse unchanged regions */
+  collapseUnchanged?: { margin?: number; minSize?: number };
+  /** Additional CSS class name */
+  className?: string;
+  /** Inline styles */
+  style?: React.CSSProperties;
+  /** Called when user accepts a chunk in unified mode */
+  onAcceptChunk?: () => void;
+  /** Called when user rejects a chunk in unified mode */
+  onRejectChunk?: () => void;
+  /** Show accept/reject controls in unified mode (default: true) */
+  mergeControls?: boolean;
+  /** Label for side A (original) - side-by-side mode */
+  aLabel?: string;
+  /** Label for side B (modified) - side-by-side mode */
+  bLabel?: string;
+}
+
+/**
+ * MergeViewWrapper - a shared React component that wraps @codemirror/merge
+ * functionality. Supports both side-by-side and unified diff modes.
+ *
+ * In side-by-side mode, content changes update the editors in-place via
+ * EditorView.dispatch() to avoid DOM teardown and scroll-position loss.
+ */
+export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
+  originalContent,
+  modifiedContent,
+  mode = 'side-by-side',
+  fileName,
+  readOnly = true,
+  highlightChanges = true,
+  gutter = true,
+  collapseUnchanged,
+  className = '',
+  style,
+  onAcceptChunk,
+  onRejectChunk,
+  mergeControls = true,
+  aLabel = 'Original',
+  bLabel = 'Modified',
+}) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mergeViewRef = useRef<MergeView | null>(null);
+  const editorViewRef = useRef<EditorView | null>(null);
+  // Track whether the side-by-side view has been created
+  const sideBySideCreatedRef = useRef(false);
+
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+
+  // Build base extensions shared by both panes
+  const buildBaseExtensions = useCallback(() => {
+    const syntaxStyle = isDark ? oneDarkHighlightStyle : defaultHighlightStyle;
+    const extensions: Extension[] = [
+      lineNumbers(),
+      keymap.of(defaultKeymap),
+      syntaxHighlighting(syntaxStyle),
+    ];
+
+    if (fileName) {
+      const ext = fileName.split('.').pop();
+      const languageId = detectLanguage(ext || '', fileName);
+      const langExtensions = getLanguageExtensions(languageId);
+      if (langExtensions.length > 0) {
+        extensions.push(...langExtensions);
+      }
+    }
+
+    if (readOnly) {
+      extensions.push(EditorState.readOnly.of(true));
+    }
+
+    return extensions;
+  }, [fileName, isDark, readOnly]);
+
+  // Build unified mode extensions (closure captures originalContent)
+  const buildUnifiedExtensions = useCallback(() => {
+    const extensions = buildBaseExtensions();
+
+    extensions.push(
+      unifiedMergeView({
+        original: originalContent,
+        highlightChanges,
+        gutter,
+        mergeControls,
+        collapseUnchanged,
+      })
+    );
+
+    extensions.push(
+      keymap.of([
+        { key: 'Alt-ArrowUp', run: goToPreviousChunk, preventDefault: true },
+        { key: 'Alt-ArrowDown', run: goToNextChunk, preventDefault: true },
+      ])
+    );
+
+    return extensions;
+  }, [originalContent, highlightChanges, gutter, mergeControls, collapseUnchanged, buildBaseExtensions]);
+
+  // Accept/reject handlers for unified mode
+  const handleAccept = useCallback(() => {
+    if (editorViewRef.current && acceptChunk(editorViewRef.current) && onAcceptChunk) {
+      onAcceptChunk();
+    }
+  }, [onAcceptChunk]);
+
+  const handleReject = useCallback(() => {
+    if (editorViewRef.current && rejectChunk(editorViewRef.current) && onRejectChunk) {
+      onRejectChunk();
+    }
+  }, [onRejectChunk]);
+
+  const handlePrevChunk = useCallback(() => {
+    if (editorViewRef.current) goToPreviousChunk(editorViewRef.current);
+  }, []);
+
+  const handleNextChunk = useCallback(() => {
+    if (editorViewRef.current) goToNextChunk(editorViewRef.current);
+  }, []);
+
+  // ── Side-by-side mode ──
+
+  // Create the MergeView once when switching into side-by-side mode
+  useEffect(() => {
+    if (mode !== 'side-by-side' || !containerRef.current) return;
+    // Clear container for fresh mount
+    containerRef.current.replaceChildren();
+    sideBySideCreatedRef.current = false;
+
+    const baseExtensions = buildBaseExtensions();
+
+    const mv = new MergeView({
+      a: EditorState.create({ doc: originalContent, extensions: baseExtensions }),
+      b: EditorState.create({ doc: modifiedContent, extensions: baseExtensions }),
+      parent: containerRef.current,
+      orientation: 'a-b',
+      revertControls: 'a-to-b',
+      highlightChanges,
+      gutter,
+      collapseUnchanged,
+    });
+
+    mergeViewRef.current = mv;
+    sideBySideCreatedRef.current = true;
+
+    return () => {
+      if (mergeViewRef.current) {
+        mergeViewRef.current.destroy();
+        mergeViewRef.current = null;
+      }
+      sideBySideCreatedRef.current = false;
+    };
+    // Only recreate when structural config changes; content updates handled separately
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, buildBaseExtensions, highlightChanges, gutter, collapseUnchanged]);
+
+  // Update side-by-side content in-place without tearing down the MergeView
+  useEffect(() => {
+    if (mode !== 'side-by-side' || !mergeViewRef.current || !sideBySideCreatedRef.current) return;
+
+    const mv = mergeViewRef.current;
+    const a = mv.a;
+    const b = mv.b;
+
+    const aChanged = a.state.doc.toString() !== originalContent;
+    const bChanged = b.state.doc.toString() !== modifiedContent;
+
+    if (aChanged || bChanged) {
+      if (aChanged) {
+        a.dispatch({ changes: { from: 0, to: a.state.doc.length, insert: originalContent } });
+      }
+      if (bChanged) {
+        b.dispatch({ changes: { from: 0, to: b.state.doc.length, insert: modifiedContent } });
+      }
+    }
+  }, [mode, originalContent, modifiedContent]);
+
+  // ── Unified mode ──
+
+  // Create/recreate unified view (full recreation required since unifiedMergeView
+  // is a StateField that captures originalContent at creation time)
+  useEffect(() => {
+    if (mode !== 'unified' || !containerRef.current) return;
+    containerRef.current.replaceChildren();
+
+    const state = EditorState.create({
+      doc: modifiedContent,
+      extensions: buildUnifiedExtensions(),
+    });
+
+    const view = new EditorView({ state, parent: containerRef.current });
+    editorViewRef.current = view;
+
+    return () => {
+      if (editorViewRef.current) {
+        editorViewRef.current.destroy();
+        editorViewRef.current = null;
+      }
+    };
+  }, [mode, buildUnifiedExtensions, modifiedContent]);
+
+  const wrapperClassName = `merge-view-wrapper ${mode === 'side-by-side' ? 'side-by-side' : 'unified'} ${className}`.trim();
+
+  return (
+    <div className={wrapperClassName} style={style}>
+      {mode === 'side-by-side' && (
+        <div className="merge-view-header">
+          <span className="header-label header-labelOriginal">{aLabel}</span>
+          <span className="header-label header-labelModified">{bLabel}</span>
+        </div>
+      )}
+      <div className="merge-view-container" ref={containerRef} />
+      {mode === 'unified' && mergeControls && (
+        <div className="merge-view-controls">
+          <button type="button" className="btn-prev" onClick={handlePrevChunk} title="Previous Change (Alt+Up)">
+            Prev
+            <span className="shortcut-hint">Alt+Up</span>
+          </button>
+          <button type="button" className="btn-next" onClick={handleNextChunk} title="Next Change (Alt+Down)">
+            Next
+            <span className="shortcut-hint">Alt+Down</span>
+          </button>
+          <span className="btn-separator">|</span>
+          <button type="button" className="btn-reject" onClick={handleReject} title="Reject Change">
+            Reject
+          </button>
+          <button type="button" className="btn-accept" onClick={handleAccept} title="Accept Change">
+            Accept
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default MergeViewWrapper;

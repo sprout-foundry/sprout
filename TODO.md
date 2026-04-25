@@ -183,7 +183,7 @@ These gaps were identified by cross-referencing the current editor implementatio
 
 [x] - EDITOR: Improve the Go to Symbol overlay — add keyboard navigation (arrow keys to move between results), fuzzy matching for symbol names, display of symbol kind (function, class, variable, type) with icons, and show the enclosing scope path. Currently it does substring matching and basic rendering.
 
-[] - EDITOR: Add minimap click-to-scroll — the minimap (already implemented via `@replit/codemirror-minimap`) shows the viewport position but may not support clicking/dragging on the minimap to jump to that position in the document. If the package doesn't support it natively, add click and drag event handlers on the minimap container that map the click position to a document line and scroll the editor there.
+[x] - EDITOR: Add minimap click-to-scroll — the minimap (already implemented via `@replit/codemirror-minimap`) shows the viewport position but may not support clicking/dragging on the minimap to jump to that position in the document. If the package doesn't support it natively, add click and drag event handlers on the minimap container that map the click position to a document line and scroll the editor there.
 
 #### Tier 5 — Large Features (new architecture/significant integration, ~16-40 hours each)
 

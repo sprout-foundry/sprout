@@ -182,11 +182,22 @@ function GoToSymbolOverlay({
           autoCorrect="off"
           autoCapitalize="off"
           spellCheck={false}
+          role="combobox"
+          aria-expanded={visible}
+          aria-controls="goto-symbol-list"
+          aria-activedescendant={displayItems.length > 0 ? `goto-symbol-item-${selectedIndex}` : undefined}
         />
       </div>
 
       {/* Symbol list */}
-      <div className="goto-symbol-list" ref={listRef} onMouseDown={handleMouseDown}>
+      <div
+        className="goto-symbol-list"
+        ref={listRef}
+        onMouseDown={handleMouseDown}
+        id="goto-symbol-list"
+        role="listbox"
+        aria-label="Symbols"
+      >
         {isEmpty && hasQuery && <div className="goto-symbol-empty">No matching symbols</div>}
 
         {isEmpty && !hasQuery && <div className="goto-symbol-empty">No symbols found</div>}
@@ -206,10 +217,13 @@ function GoToSymbolOverlay({
           return (
             <div
               key={`${symbol.kind}-${symbol.name}-${symbol.line}`}
+              id={`goto-symbol-item-${index}`}
               data-selected={isActive}
               className={`goto-symbol-item${isActive ? ' goto-symbol-item-active' : ''}${scopePath ? ' goto-symbol-item-scoped' : ''}`}
               onClick={() => handleItemClick(symbol)}
               onMouseEnter={() => handleItemMouseEnter(index)}
+              role="option"
+              aria-selected={isActive}
             >
               <div className="goto-symbol-item-main">
                 <span className={`goto-symbol-kind goto-symbol-kind-${symbol.kind}`}>{icon}</span>

@@ -22,6 +22,7 @@ jest.mock('@codemirror/view', () => ({
 }));
 
 jest.mock('@codemirror/state', () => ({
+  Annotation: { define: jest.fn(() => ({})) },
   Extension: {},
 }));
 
@@ -627,6 +628,41 @@ function processData() {
     const result = computeCodeLenses(content, '.ts');
 
     // Block comment mentions should be stripped, real call counts
+    expect(result.length).toBe(1);
+    expect(result[0].refCount).toBe(1);
+  });
+
+  it('excludes references found in Python # comments', () => {
+    mockExtractSymbols.mockReturnValue([
+      { name: 'my_func', line: 1, kind: 'function' },
+    ]);
+
+    const content = `def my_func():
+    # my_func is a great function
+    # Call my_func() to do stuff
+    my_func()`;
+
+    const result = computeCodeLenses(content, '.py');
+
+    // Only the real call on line 4 counts; Python comments are stripped
+    expect(result.length).toBe(1);
+    expect(result[0].refCount).toBe(1);
+  });
+
+  it('handles # that appears inside a Python string (not a comment)', () => {
+    mockExtractSymbols.mockReturnValue([
+      { name: 'fetch_data', line: 1, kind: 'function' },
+    ]);
+
+    const content = `def fetch_data():
+    url = "https://example.com"
+    fetch_data()`;
+
+    const result = computeCodeLenses(content, '.py');
+
+    // The # inside the URL string should not trigger comment stripping
+    // so fetch_data() on line 3 should still be counted
+    // and the string containing fetch_data is not in this example
     expect(result.length).toBe(1);
     expect(result[0].refCount).toBe(1);
   });

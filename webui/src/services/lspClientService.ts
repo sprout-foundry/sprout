@@ -63,6 +63,15 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 /** WebSocket connection timeout (30 seconds). */
 const WS_CONNECT_TIMEOUT_MS = 30_000;
 
+/** Maximum reconnect backoff time (30 seconds). */
+const MAX_RECONNECT_BACKOFF_MS = 30_000;
+
+/** Maximum reconnect attempts before giving up. */
+const MAX_RECONNECT_ATTEMPTS = 15;
+
+/** LSP client connection state. */
+export type LSPConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting';
+
 // ---------------------------------------------------------------------------
 // EditorView Registry for cross-file LSP navigation
 // ---------------------------------------------------------------------------
@@ -309,6 +318,18 @@ class LSPClientService {
   /** Workspace root path */
   private workspacePath: string = '';
 
+  /** Connection state for each language */
+  private clientStates: Map<string, LSPConnectionState> = new Map();
+
+  /** Reconnect timers for each language */
+  private reconnectTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+
+  /** Reconnect attempt counts */
+  private reconnectAttempts: Map<string, number> = new Map();
+
+  /** State change callbacks */
+  private stateChangeCallbacks: Set<(languageId: string, state: LSPConnectionState) => void> = new Set();
+
   /** Private constructor for singleton */
   private constructor() {}
 
@@ -515,6 +536,9 @@ class LSPClientService {
    * @returns The LSPClient instance, or null if creation failed
    */
   private async doCreateClient(languageId: string): Promise<LSPClient | null> {
+    // Set initial state to connecting
+    this.setClientState(languageId, 'connecting');
+
     // Ensure workspace is loaded
     await this.getWorkspacePath();
 
@@ -537,6 +561,10 @@ class LSPClientService {
           this.clients.delete(languageId);
         }
         this.transportCloseFns.delete(languageId);
+
+        // Update state and schedule reconnection
+        this.setClientState(languageId, 'disconnected');
+        this.scheduleReconnect(languageId);
       });
 
       // Store the transport close function for cleanup
@@ -562,17 +590,29 @@ class LSPClientService {
         patchWorkspaceDisplayFile(client);
       }
 
+      // Clear any reconnect timer since we successfully connected
+      const existingTimer = this.reconnectTimers.get(languageId);
+      if (existingTimer) {
+        clearTimeout(existingTimer);
+        this.reconnectTimers.delete(languageId);
+      }
+      this.reconnectAttempts.delete(languageId);
+
       // Store client
       this.clients.set(languageId, client);
 
       // Clear the disconnected flag since we successfully created a new client
       this.disconnectedLanguages.delete(languageId);
 
+      // Update state to connected
+      this.setClientState(languageId, 'connected');
+
       console.log('[LSPClientService] Connected LSP client for:', languageId);
 
       return client;
     } catch (err) {
       console.error('[LSPClientService] Failed to create LSP client for', languageId, ':', err);
+      this.setClientState(languageId, 'disconnected');
       return null;
     }
   }
@@ -637,6 +677,11 @@ class LSPClientService {
     });
     this.transportCloseFns.clear();
 
+    // Clear all reconnect timers
+    this.reconnectTimers.forEach((timer) => clearTimeout(timer));
+    this.reconnectTimers.clear();
+    this.reconnectAttempts.clear();
+
     // Disconnect all LSP clients
     this.clients.forEach((client, languageId) => {
       try {
@@ -649,6 +694,74 @@ class LSPClientService {
     this.clients.clear();
     this.statusCache.clear();
     this.disconnectedLanguages.clear();
+    this.clientStates.clear();
+    this.stateChangeCallbacks.clear();
+  }
+
+  /**
+   * Get the connection state for a language.
+   *
+   * @param languageId - The language ID
+   * @returns The current connection state
+   */
+  getLSPState(languageId: string): LSPConnectionState {
+    return this.clientStates.get(languageId) ?? 'disconnected';
+  }
+
+  /**
+   * Subscribe to connection state changes.
+   *
+   * @param callback - Called when a language's connection state changes
+   * @returns Unsubscribe function
+   */
+  onStateChange(callback: (languageId: string, state: LSPConnectionState) => void): () => void {
+    this.stateChangeCallbacks.add(callback);
+    return () => this.stateChangeCallbacks.delete(callback);
+  }
+
+  /**
+   * Set the connection state for a language and notify listeners.
+   */
+  private setClientState(languageId: string, state: LSPConnectionState): void {
+    const prev = this.clientStates.get(languageId);
+    if (prev === state) return;
+    this.clientStates.set(languageId, state);
+    this.stateChangeCallbacks.forEach((cb) => {
+      try {
+        cb(languageId, state);
+      } catch (err) {
+        console.error('[LSPClientService] state change callback error:', err);
+      }
+    });
+  }
+
+  /**
+   * Schedule a reconnection attempt with exponential backoff.
+   */
+  private scheduleReconnect(languageId: string): void {
+    const attempts = (this.reconnectAttempts.get(languageId) ?? 0) + 1;
+    this.reconnectAttempts.set(languageId, attempts);
+
+    if (attempts > MAX_RECONNECT_ATTEMPTS) {
+      console.log(`[LSPClientService] Max reconnect attempts (${MAX_RECONNECT_ATTEMPTS}) reached for ${languageId}, giving up`);
+      this.setClientState(languageId, 'disconnected');
+      return;
+    }
+
+    const backoff = Math.min(1000 * Math.pow(2, attempts - 1), MAX_RECONNECT_BACKOFF_MS);
+
+    console.log(`[LSPClientService] Scheduling reconnect for ${languageId} in ${backoff}ms (attempt ${attempts})`);
+    this.setClientState(languageId, 'reconnecting');
+
+    const timer = setTimeout(() => {
+      this.reconnectTimers.delete(languageId);
+      if (this.disconnectedLanguages.has(languageId)) {
+        this.disconnectedLanguages.delete(languageId);
+        this.getClientForLanguage(languageId).catch(() => {});
+      }
+    }, backoff);
+
+    this.reconnectTimers.set(languageId, timer);
   }
 }
 

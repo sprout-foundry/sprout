@@ -73,6 +73,12 @@
   white-space: nowrap;
 }
 
+.pane-footer .cm-footer-lsp {
+  margin-left: 8px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .pane-footer .language-switcher-button {
   flex-shrink: 0;
 }

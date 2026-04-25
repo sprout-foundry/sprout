@@ -82,7 +82,7 @@ import { unsavedLineHighlight, setOriginalContent } from '../extensions/unsavedL
 import { ApiService } from '../services/api';
 import { notificationBus } from '../services/notificationBus';
 import { formatCode, formatCodeWithConfigDiscovery, setConfigFetcher } from '../services/formatter';
-import { getLSPClientService, LSP_SUPPORTED_LANGUAGES } from '../services/lspClientService';
+import { getLSPClientService, LSP_SUPPORTED_LANGUAGES, type LSPConnectionState } from '../services/lspClientService';
 import { buildLSPPluginExtensions, lspSyncOnDocChange, setGlobalDisplayFileCallback, getClientForLanguageSync, type DisplayFileCallback, registerEditorView, unregisterEditorView } from '../extensions/lspExtensions';
 
 // LSP commands from @codemirror/lsp-client for keybinding integration
@@ -164,6 +164,10 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   const [refsSymbolName, setRefsSymbolName] = useState<string>('');
   const [refsResults, setRefsResults] = useState<ReferenceInfo[]>([]);
   const [refsLoading, setRefsLoading] = useState<boolean>(false);
+
+  // LSP connection status for footer indicator
+  const [lspState, setLspState] = useState<LSPConnectionState>('disconnected');
+  const [lspLanguage, setLspLanguage] = useState<string | null>(null);
 
   const [relativeLineNumbersEnabled, setRelativeLineNumbersEnabled] = useState(() => {
     try {
@@ -1576,12 +1580,37 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       buffer.file?.name,
     );
 
+    // Clear LSP extensions when language changes, then asynchronously re-initialize LSP for the new language
+    const lspService = getLSPClientService();
+    const filePath = buffer.file?.path ?? '';
+
     view.dispatch({
       effects: [
         languageCompartment.current.reconfigure(getLanguageExtensions(languageId)),
         emmetCompartment.current.reconfigure(buildEmmetExtensions(languageId)),
+        lspCompartment.current.reconfigure([]),
       ],
     });
+
+    // Re-initialize LSP for the new language asynchronously
+    if (languageId && LSP_SUPPORTED_LANGUAGES.has(languageId)) {
+      void (async () => {
+        try {
+          const client = await lspService.getClientForLanguage(languageId);
+          if (client && viewRef.current === view && view.dom?.isConnected) {
+            view.dispatch({
+              effects: lspCompartment.current.reconfigure([
+                ...buildLSPPluginExtensions(client, filePath, languageId),
+                ...lspSyncOnDocChange(languageId),
+              ]),
+            });
+            debugLog('[LSP] Extensions reconfigured for', languageId, '(language change)');
+          }
+        } catch (err) {
+          debugLog('[LSP] Failed to reconfigure:', err);
+        }
+      })();
+    }
   }, [buffer?.id, buffer?.languageOverride, buffer?.file?.ext, buffer?.file?.name]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reconfigure the hotkey compartment when hotkeys change, without requiring
@@ -2142,6 +2171,31 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     [buffer?.id, setBufferLanguageOverride],
   );
 
+  // Subscribe to LSP connection state changes for the footer indicator.
+  useEffect(() => {
+    const langId = languageInfo.languageId;
+    if (!langId || !LSP_SUPPORTED_LANGUAGES.has(langId)) {
+      setLspLanguage(null);
+      return;
+    }
+
+    setLspLanguage(langId);
+
+    const lspService = getLSPClientService();
+    // Sync initial state
+    setLspState(lspService.getLSPState(langId));
+
+    const unsubscribe = lspService.onStateChange((languageId, state) => {
+      if (languageId === langId) {
+        setLspState(state);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [languageInfo.languageId]);
+
   // Compute enclosing symbols for breadcrumb display (before early returns).
   // buffer.cursorPosition.line is 0-based; getEnclosingSymbols expects 1-based.
   // Debounced to avoid running extractSymbols on every cursor move.
@@ -2423,6 +2477,22 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
           {whitespaceRenderingMode !== 'none' && (
             <span className="whitespace-mode" role="button" tabIndex={0} onClick={onCycleWhitespaceRendering} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onCycleWhitespaceRendering(); } }} title="Click to change whitespace rendering (none → boundary → all)">
               {whitespaceRenderingMode === 'boundary' ? 'WS: boundary' : 'WS: all'}
+            </span>
+          )}
+          {lspLanguage && (
+            <span
+              className="cm-footer-lsp"
+              title={`LSP: ${lspState}`}
+              style={{
+                color:
+                  lspState === 'connected'
+                    ? 'var(--cm-status-ok, #4caf50)'
+                    : lspState === 'disconnected'
+                      ? 'var(--cm-status-error, #666)'
+                      : 'var(--cm-status-warning, #c90)',
+              }}
+            >
+              LSP:{lspState === 'connected' ? '✓' : lspState === 'connecting' || lspState === 'reconnecting' ? '…' : '✗'}
             </span>
           )}
         </div>

@@ -1,0 +1,217 @@
+/* ── MergeViewWrapper — diff viewer component ── */
+
+.merge-view-wrapper {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg-primary);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.merge-view-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  font-family: var(--font-mono, 'SFMono-Regular', Consolas, monospace);
+  font-size: 12px;
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.merge-view-header .header-label {
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.merge-view-header .header-labelOriginal {
+  color: var(--text-tertiary);
+}
+
+.merge-view-header .header-labelModified {
+  color: var(--accent-success);
+}
+
+.merge-view-container {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.merge-view-container .cm-editor {
+  height: 100%;
+  font-family: var(--font-mono, 'SFMono-Regular', Consolas, monospace);
+  font-size: 13px;
+}
+
+.merge-view-container .cm-editor .cm-scroller {
+  overflow: auto;
+}
+
+.merge-view-container .cm-mergeView {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.merge-view-container .cm-mergeView .cm-merge-view {
+  height: 100%;
+}
+
+.merge-view-container .cm-mergeView .cm-editor {
+  flex: 1;
+}
+
+/* Gutter markers for changed lines */
+.merge-view-container .cm-mergeView .cm-gutterElement {
+  font-size: 10px;
+}
+
+/* Side-by-side specific styles */
+.merge-view-wrapper.side-by-side .merge-view-container .cm-merge-view {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.merge-view-wrapper.side-by-side .merge-view-container .cm-merge-view .cm-editor:first-child {
+  border-right: 1px solid var(--border-subtle);
+}
+
+/* Unified mode specific styles */
+.merge-view-wrapper.unified .merge-view-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.merge-view-wrapper.unified .merge-view-container .cm-editor {
+  flex: 1;
+}
+
+/* Merge controls for unified mode */
+.merge-view-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.merge-view-controls button {
+  padding: 4px 10px;
+  font-family: var(--font-mono, 'SFMono-Regular', Consolas, monospace);
+  font-size: 11px;
+  font-weight: 500;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.merge-view-controls button:hover {
+  filter: brightness(1.1);
+}
+
+.merge-view-controls button:active {
+  transform: scale(0.98);
+}
+
+.merge-view-controls .btn-accept {
+  background: var(--accent-success);
+  color: #fff;
+  border-color: var(--accent-success);
+}
+
+.merge-view-controls .btn-reject {
+  background: var(--accent-error);
+  color: #fff;
+  border-color: var(--accent-error);
+}
+
+.merge-view-controls .btn-prev,
+.merge-view-controls .btn-next {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-color: var(--border-subtle);
+}
+
+.merge-view-controls .btn-separator {
+  margin: 0 4px;
+  color: var(--text-tertiary);
+  border: none;
+  background: none;
+  cursor: default;
+}
+
+/* Keyboard shortcut hint */
+.merge-view-controls .shortcut-hint {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  margin-left: 4px;
+}
+
+/* Accept/Reject buttons in unified diff */
+.cm-merge-view .cm-merge-view-chunk {
+  position: relative;
+}
+
+.cm-merge-view .cm-merge-view-chunk .cm-merge-view-accept,
+.cm-merge-view .cm-merge-view-chunk .cm-merge-view-reject {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 3px 8px;
+  font-family: var(--font-mono, 'SFMono-Regular', Consolas, monospace);
+  font-size: 10px;
+  font-weight: 600;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.cm-merge-view .cm-merge-view-chunk:hover .cm-merge-view-accept,
+.cm-merge-view .cm-merge-view-chunk:hover .cm-merge-view-reject {
+  opacity: 1;
+}
+
+.cm-merge-view .cm-merge-view-accept {
+  background: var(--accent-success);
+  color: #fff;
+}
+
+.cm-merge-view .cm-merge-view-reject {
+  background: var(--accent-error);
+  color: #fff;
+}
+
+/* Scrollbar styling */
+.merge-view-container::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.merge-view-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.merge-view-container::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 3px;
+}
+
+.merge-view-container::-webkit-scrollbar-corner {
+  background: var(--bg-primary);
+}

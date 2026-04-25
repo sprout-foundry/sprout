@@ -1,5 +1,8 @@
+import { useState, useMemo } from 'react';
 import { GitCompareArrows } from 'lucide-react';
 import DiffSurface from './DiffSurface';
+import { MergeViewWrapper } from './MergeViewWrapper';
+import { parseUnifiedDiffToDocuments } from '../utils/diffParser';
 
 interface GitDiffResponse {
   message: string;
@@ -44,6 +47,8 @@ function DiffWorkspaceTab({
   title = 'Git Diff',
   modeOptions,
 }: DiffWorkspaceTabProps): JSX.Element {
+  const [viewMode, setViewMode] = useState<'merge' | 'text'>('merge');
+
   const availableModes =
     modeOptions ||
     (['combined', 'staged', 'unstaged'] as const).filter((mode) => {
@@ -54,6 +59,8 @@ function DiffWorkspaceTab({
 
   const diffText = getDiffText(diff, diffMode);
 
+  const docs = useMemo(() => parseUnifiedDiffToDocuments(diffText), [diffText]);
+
   return (
     <div className="workspace-tab workspace-diff-tab">
       <div className="workspace-tab-header">
@@ -61,19 +68,35 @@ function DiffWorkspaceTab({
           <div className="workspace-tab-eyebrow">{title}</div>
           <h2>{path}</h2>
         </div>
-        {availableModes.length > 1 ? (
-          <div className="workspace-diff-mode-tabs">
-            {availableModes.map((mode) => (
-              <button
-                key={mode}
-                className={`workspace-diff-mode-tab ${diffMode === mode ? 'active' : ''}`}
-                onClick={() => onDiffModeChange(mode)}
-              >
-                {mode}
-              </button>
-            ))}
+        <div className="workspace-diff-controls">
+          {availableModes.length > 1 && (
+            <div className="workspace-diff-mode-tabs">
+              {availableModes.map((mode) => (
+                <button
+                  key={mode}
+                  className={`workspace-diff-mode-tab ${diffMode === mode ? 'active' : ''}`}
+                  onClick={() => onDiffModeChange(mode)}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="workspace-diff-view-toggle">
+            <button
+              className={`workspace-diff-view-btn ${viewMode === 'merge' ? 'active' : ''}`}
+              onClick={() => setViewMode('merge')}
+            >
+              Merge
+            </button>
+            <button
+              className={`workspace-diff-view-btn ${viewMode === 'text' ? 'active' : ''}`}
+              onClick={() => setViewMode('text')}
+            >
+              Text
+            </button>
           </div>
-        ) : null}
+        </div>
       </div>
 
       {isLoading ? (
@@ -87,7 +110,18 @@ function DiffWorkspaceTab({
           <p>{error}</p>
         </div>
       ) : diffText ? (
-        <DiffSurface diffText={diffText} />
+        viewMode === 'merge' && (docs.original !== '' || docs.modified !== '') ? (
+          <MergeViewWrapper
+            originalContent={docs.original}
+            modifiedContent={docs.modified}
+            mode="side-by-side"
+            fileName={path}
+            aLabel="Before"
+            bLabel="After"
+          />
+        ) : (
+          <DiffSurface diffText={diffText} />
+        )
       ) : (
         <div className="workspace-tab-empty">
           <p>(no diff available)</p>

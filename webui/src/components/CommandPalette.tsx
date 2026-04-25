@@ -71,6 +71,8 @@ const COMMAND_DEFINITIONS: CommandDef[] = [
   // Editor
   { id: 'format_document', label: 'Format Document', category: 'Editor' },
   { id: 'editor_find_all_references', label: 'Find All References', category: 'Editor' },
+  { id: 'editor_workspace_symbol', label: 'Go to Symbol in Workspace', category: 'Editor' },
+  { id: 'editor_goto_symbol', label: 'Go to Symbol in File', category: 'Editor' },
 ];
 
 // ── File browsing constants ────────────────────────────────────────────────
@@ -479,6 +481,12 @@ function CommandPalette({
           break;
         case 'editor_find_all_references':
           document.dispatchEvent(new CustomEvent('editor-find-all-references'));
+          break;
+        case 'editor_workspace_symbol':
+          document.dispatchEvent(new CustomEvent('editor-go-to-workspace-symbol'));
+          break;
+        case 'editor_goto_symbol':
+          document.dispatchEvent(new CustomEvent('editor-go-to-symbol'));
           break;
         default:
           break;

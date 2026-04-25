@@ -1786,6 +1786,10 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         notificationBus.notify('warning', 'Format Document', 'Format on save failed - file saved without formatting');
       } else if (e.type === 'editor-find-all-references') {
         void handleFindAllReferences();
+      } else if (e.type === 'editor-go-to-workspace-symbol') {
+        setShowGoToWorkspaceSymbol(true);
+      } else if (e.type === 'editor-go-to-symbol') {
+        setShowGoToSymbol(true);
       }
     };
 
@@ -1803,6 +1807,8 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     document.addEventListener('editor-format-document', handler);
     document.addEventListener('format-on-save-failed', handler);
     document.addEventListener('editor-find-all-references', handler);
+    document.addEventListener('editor-go-to-workspace-symbol', handler);
+    document.addEventListener('editor-go-to-symbol', handler);
     return () => {
       document.removeEventListener('editor-goto-line', handler);
       document.removeEventListener('editor-toggle-word-wrap', handler);
@@ -1818,6 +1824,8 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       document.removeEventListener('editor-format-document', handler);
       document.removeEventListener('format-on-save-failed', handler);
       document.removeEventListener('editor-find-all-references', handler);
+      document.removeEventListener('editor-go-to-workspace-symbol', handler);
+      document.removeEventListener('editor-go-to-symbol', handler);
     };
   }, [handleGoToLine, onToggleMinimap, onToggleRelativeLineNumbers, onToggleWordWrap, toggleLinkedScroll, onCycleWhitespaceRendering, handleFindAllReferences]);
 

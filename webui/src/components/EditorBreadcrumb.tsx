@@ -7,7 +7,7 @@ import './EditorBreadcrumb.css';
 // ── Types ────────────────────────────────────────────────────────────────
 
 // BreadcrumbSymbol is re-exported as an alias for SymbolInfo (from
-// GoToSymbolOverlay) so that existing consumers that import
+// symbolUtils) so that existing consumers that import
 // `BreadcrumbSymbol` from this module continue to compile without changes.
 export type { BreadcrumbSymbol };
 

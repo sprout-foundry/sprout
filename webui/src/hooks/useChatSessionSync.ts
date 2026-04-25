@@ -3,7 +3,7 @@ import type { EditorBuffer } from '../types/editor';
 
 /** Shape of the openWorkspaceBuffer callback from EditorManagerContext */
 export type OpenWorkspaceBufferFn = (options: {
-  kind: 'chat' | 'diff' | 'review' | 'file';
+  kind: 'chat' | 'diff' | 'review' | 'file' | 'compare';
   path: string;
   title: string;
   content?: string;

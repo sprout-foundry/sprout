@@ -8,7 +8,7 @@ interface UseHotkeyIntegrationOptions {
   onTerminalExpandedChange: (expanded: boolean) => void;
   isTerminalExpanded: boolean;
   openWorkspaceBuffer: (options: {
-    kind: 'chat' | 'diff' | 'review' | 'file';
+    kind: 'chat' | 'diff' | 'review' | 'file' | 'compare';
     path: string;
     title: string;
     content?: string;

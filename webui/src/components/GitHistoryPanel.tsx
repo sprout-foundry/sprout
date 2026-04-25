@@ -12,7 +12,7 @@ interface GitHistoryPanelProps {
   apiService: ApiService;
   isActing: boolean;
   openWorkspaceBuffer: (options: {
-    kind: 'chat' | 'diff' | 'review';
+    kind: 'chat' | 'diff' | 'review' | 'compare';
     path: string;
     title: string;
     content?: string;

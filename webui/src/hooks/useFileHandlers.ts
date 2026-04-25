@@ -5,7 +5,7 @@ export interface UseFileHandlersOptions {
   onViewChange: (view: 'chat' | 'editor' | 'git') => void;
   openFile: (file: { path: string; name: string; isDir: boolean; size: number; modified: number; ext: string }) => void;
   openWorkspaceBuffer: (options: {
-    kind: 'chat' | 'diff' | 'review' | 'file';
+    kind: 'chat' | 'diff' | 'review' | 'file' | 'compare';
     path: string;
     title: string;
     content?: string;

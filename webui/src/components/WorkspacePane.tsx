@@ -4,6 +4,7 @@ import { useEditorManager } from '../contexts/EditorManagerContext';
 import Chat from './Chat';
 import EditorPane from './EditorPane';
 import DiffWorkspaceTab from './DiffWorkspaceTab';
+import CompareTab from './CompareTab';
 import ReviewWorkspaceTab from './ReviewWorkspaceTab';
 import './WorkspacePane.css';
 
@@ -137,6 +138,19 @@ const WorkspacePane: React.FC<WorkspacePaneProps> = ({ paneId, chatProps, review
     }
     case 'review':
       return <ReviewWorkspaceTab {...reviewProps} />;
+    case 'compare': {
+      const { originalContent = '', modifiedContent = '', fileName = 'Untitled', aLabel, bLabel, title } = buffer.metadata ?? {};
+      return (
+        <CompareTab
+          fileName={fileName as string}
+          originalContent={originalContent as string}
+          modifiedContent={modifiedContent as string}
+          aLabel={aLabel as string | undefined}
+          bLabel={bLabel as string | undefined}
+          title={title as string | undefined}
+        />
+      );
+    }
     default:
       return <EditorPane paneId={paneId} />;
   }

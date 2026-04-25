@@ -50,10 +50,8 @@ describe('formatRefText', () => {
     expect(formatRefText(999)).toBe('999 refs');
   });
 
-  it('handles negative counts by returning plural form', () => {
-    // Math.max(0, count - 1) should prevent negative refs from reaching this
-    // But formatRefText doesn't have special handling, so it formats whatever
-    expect(formatRefText(-1)).toBe('-1 refs');
+  it('handles negative counts gracefully', () => {
+    expect(formatRefText(-1)).toBe('0 refs');
   });
 });
 
@@ -201,9 +199,21 @@ describe('computeCodeLenses', () => {
     expect(result).toEqual([]);
   });
 
-  it('returns empty array for null/undefined language', () => {
-    const result = computeCodeLenses('function foo() {}', undefined);
-    expect(result).toEqual([]);
+  it('uses generic patterns for undefined language and produces lenses when refs exist', () => {
+    mockExtractSymbols.mockReturnValue([
+      { name: 'foo', line: 1, kind: 'function' },
+    ]);
+
+    const content = `function foo() {}
+foo();`;
+
+    const result = computeCodeLenses(content, undefined);
+
+    // undefined languageId falls through to GENERIC_PATTERNS in the real code,
+    // and lenses are produced when refs > 0 regardless of language
+    expect(result.length).toBe(1);
+    expect(result[0].name).toBe('foo');
+    expect(result[0].refCount).toBe(1);
   });
 
   it('returns lenses for container-kind symbols with refs > 0', () => {
@@ -512,5 +522,62 @@ foo(); // match`;
 
     // Only 'foo' matches (lowercase), not 'Foo'
     expect(result[0].refCount).toBe(1);
+  });
+
+  it('excludes references found in single-line comments', () => {
+    mockExtractSymbols.mockReturnValue([
+      { name: 'myFunc', line: 1, kind: 'function' },
+    ]);
+
+    const content = `function myFunc() {
+  // myFunc is a great function
+  // Call myFunc() to do stuff
+  myFunc();
+}`;
+
+    const result = computeCodeLenses(content, '.ts');
+
+    // Only the real call on line 4 counts; comments are stripped
+    expect(result.length).toBe(1);
+    expect(result[0].refCount).toBe(1);
+  });
+
+  it('excludes references found in block comments', () => {
+    mockExtractSymbols.mockReturnValue([
+      { name: 'handleClick', line: 5, kind: 'function' },
+    ]);
+
+    const content = `/* handleClick processes click events.
+   Always call handleClick() in your event handler.
+   handleClick returns void.
+*/
+function handleClick() {
+  handleClick();
+}`;
+
+    const result = computeCodeLenses(content, '.ts');
+
+    // Only the real call on line 6 counts; block comment refs are stripped
+    expect(result.length).toBe(1);
+    expect(result[0].refCount).toBe(1);
+  });
+
+  it('correctly counts refs when comments and real calls are mixed', () => {
+    mockExtractSymbols.mockReturnValue([
+      { name: 'processData', line: 1, kind: 'function' },
+    ]);
+
+    const content = `function processData() {
+  // processData does things
+  processData();
+  /* processData is called again */
+  processData();
+}`;
+
+    const result = computeCodeLenses(content, '.ts');
+
+    // Only the 2 real calls count; comment mentions are excluded
+    expect(result.length).toBe(1);
+    expect(result[0].refCount).toBe(2);
   });
 });

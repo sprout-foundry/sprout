@@ -74,6 +74,11 @@ import {
   getInitialEmmetExtensions,
   buildEmmetExtensions,
 } from '../extensions/emmet';
+import {
+  createAutoCloseTagCompartment,
+  getInitialAutoCloseTagExtensions,
+  buildAutoCloseTagExtensions,
+} from '../extensions/autoCloseTag';
 import { minimapExtension } from '../extensions/minimap';
 import { tabExpandSnippets, setSnippetLanguage } from '../extensions/snippets';
 import { trailingWhitespacePlugin } from '../extensions/trailingWhitespace';
@@ -146,6 +151,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   const minimapCompartment = useRef(new Compartment());
   const whitespaceRenderingCompartment = useRef(new Compartment());
   const emmetCompartment = useRef(createEmmetCompartment());
+  const autoCloseTagCompartment = useRef(createAutoCloseTagCompartment());
   const fontSizeCompartment = useRef(new Compartment());
   const tabSizeCompartment = useRef(new Compartment());
   const lspCompartment = useRef(new Compartment());
@@ -1450,6 +1456,9 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       emmetCompartment.current.of(
         getInitialEmmetExtensions(resolvedLanguage.languageId),
       ),
+      autoCloseTagCompartment.current.of(
+        getInitialAutoCloseTagExtensions(resolvedLanguage.languageId),
+      ),
       languageCompartment.current.of(
         getLanguageExtensions(resolvedLanguage.languageId),
       ),
@@ -1588,6 +1597,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       effects: [
         languageCompartment.current.reconfigure(getLanguageExtensions(languageId)),
         emmetCompartment.current.reconfigure(buildEmmetExtensions(languageId)),
+        autoCloseTagCompartment.current.reconfigure(buildAutoCloseTagExtensions(languageId)),
         lspCompartment.current.reconfigure([]),
       ],
     });

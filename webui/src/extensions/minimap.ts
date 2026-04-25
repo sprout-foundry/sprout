@@ -10,6 +10,11 @@
  * - `showOverlay: 'always'` — always shows the viewport indicator.
  * - The `create` callback builds a `<div class="cm-minimap-container">`
  *   that the minimap renders into.
+ *
+ * Click-to-scroll and drag-to-scroll are supported natively by
+ * @replit/codemirror-minimap. Cursor affordance styles (pointer/grab/
+ * grabbing) are defined in EditorPane.css since they target internal
+ * package class names that may change across versions.
  */
 
 import { EditorView } from '@codemirror/view';

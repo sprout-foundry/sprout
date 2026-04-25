@@ -93,11 +93,26 @@ export function countReferences(content: string, name: string): number {
  * @returns "1 ref" for count === 1, "N refs" otherwise.
  */
 export function formatRefText(count: number): string {
-  return count === 1 ? '1 ref' : `${count} refs`;
+  const safe = Math.max(0, count);
+  return safe === 1 ? '1 ref' : `${safe} refs`;
+}
+
+/**
+ * Strip single-line and block comments from source content for accurate
+ * reference counting. Does NOT strip string contents (which are valid reference
+ * sites for type names, etc.).
+ */
+function stripComments(content: string): string {
+  return content
+    .replace(/\/\/.*$/gm, '')       // single-line comments
+    .replace(/\/\*[\s\S]*?\*\//g, ''); // block comments
 }
 
 /**
  * Compute code lenses for all container symbols in the document.
+ *
+ * Comments are stripped before reference counting to avoid inflated counts
+ * from docstrings and inline comments that mention the symbol name.
  *
  * @param content - The document content.
  * @param languageId - The file extension/language identifier.
@@ -118,11 +133,14 @@ export function computeCodeLenses(
   // Deduplicate by line (keep first symbol per line)
   const seenLines = new Set<number>();
 
+  // Strip comments for more accurate reference counts
+  const strippedContent = stripComments(content);
+
   for (const sym of containerSymbols) {
     if (seenLines.has(sym.line)) continue;
     seenLines.add(sym.line);
 
-    const refCount = countReferences(content, sym.name);
+    const refCount = countReferences(strippedContent, sym.name);
     if (refCount > 0) {
       lenses.push({
         line: sym.line,

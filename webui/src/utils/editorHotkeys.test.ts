@@ -444,6 +444,7 @@ describe('getEditorKeymap', () => {
         'Mod-k',
         'Mod-/',
         'Mod-Shift-/',
+        'Mod-t',
       ];
       expect(keymap.every((b) => b.key != null && knownKeys.includes(b.key))).toBe(true);
     });

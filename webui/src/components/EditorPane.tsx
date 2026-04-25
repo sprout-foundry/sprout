@@ -916,7 +916,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       ext,
     });
 
-    if (line) {
+    if (line !== undefined && line !== null) {
       requestAnimationFrame(() => {
         document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line } }));
       });

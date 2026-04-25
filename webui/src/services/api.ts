@@ -1435,6 +1435,31 @@ class ApiService {
     return response.json();
   }
 
+  // ── Workspace Symbol Index API ───────────────────────────────────────
+
+  async getWorkspaceSymbols(query: string): Promise<{
+    message: string;
+    files: Array<{
+      file: string;
+      symbols: Array<{
+        name: string;
+        kind: string;
+        line?: number;
+      }>;
+    }>;
+    total: number;
+  }> {
+    const params = new URLSearchParams();
+    if (query.trim()) {
+      params.set('query', query.trim());
+    }
+    const response = await clientFetch(`/api/workspace/symbols?${params.toString()}`);
+    if (!response.ok) {
+      throw new Error(`Failed to get workspace symbols: HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
   // History and Rollback API methods
   async getChangelog(): Promise<{
     message: string;

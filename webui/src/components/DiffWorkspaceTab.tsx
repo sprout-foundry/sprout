@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { GitCompareArrows } from 'lucide-react';
+import { GitCompareArrows, ChevronUp, ChevronDown } from 'lucide-react';
 import DiffSurface from './DiffSurface';
 import { MergeViewWrapper } from './MergeViewWrapper';
 import { parseUnifiedDiffToDocuments } from '../utils/diffParser';
@@ -48,6 +48,7 @@ function DiffWorkspaceTab({
   modeOptions,
 }: DiffWorkspaceTabProps): JSX.Element {
   const [viewMode, setViewMode] = useState<'merge' | 'text'>('merge');
+  const [collapseUnchanged, setCollapseUnchanged] = useState(true);
 
   const availableModes =
     modeOptions ||
@@ -111,14 +112,29 @@ function DiffWorkspaceTab({
         </div>
       ) : diffText ? (
         viewMode === 'merge' && (docs.original !== '' || docs.modified !== '') ? (
-          <MergeViewWrapper
-            originalContent={docs.original}
-            modifiedContent={docs.modified}
-            mode="side-by-side"
-            fileName={path}
-            aLabel="Before"
-            bLabel="After"
-          />
+          <div className="workspace-diff-merge-wrapper">
+            {/* Collapse unchanged toggle */}
+            <div className="workspace-diff-collapse-toggle">
+              <button
+                className={`workspace-diff-collapse-btn ${collapseUnchanged ? 'active' : ''}`}
+                onClick={() => setCollapseUnchanged(!collapseUnchanged)}
+                title={collapseUnchanged ? 'Expand unchanged regions' : 'Collapse unchanged regions'}
+                aria-pressed={collapseUnchanged}
+              >
+                {collapseUnchanged ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                <span>{collapseUnchanged ? 'Collapse Unchanged' : 'Show All'}</span>
+              </button>
+            </div>
+            <MergeViewWrapper
+              originalContent={docs.original}
+              modifiedContent={docs.modified}
+              mode="side-by-side"
+              fileName={path}
+              aLabel="Before"
+              bLabel="After"
+              collapseUnchanged={collapseUnchanged ? { margin: 4, minSize: 3 } : undefined}
+            />
+          </div>
         ) : (
           <DiffSurface diffText={diffText} />
         )

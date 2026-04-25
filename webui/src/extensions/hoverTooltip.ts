@@ -12,6 +12,7 @@
 import { hoverTooltip, type HoverTooltipSource, type EditorView } from '@codemirror/view';
 import { ApiService } from '../services/api';
 import { resolveLanguageId } from './languageRegistry';
+import { LSPClientService } from '../services/lspClientService';
 import { debugLog } from '../utils/log';
 
 /** Semantic language IDs that support hover. */
@@ -21,6 +22,10 @@ const HOVER_LANGUAGES = new Set([
 
 /**
  * Build a CodeMirror extension that shows hover tooltips via the semantic API.
+ *
+ * Acts as a fallback when the LSP-based hover (from @codemirror/lsp-client)
+ * is not active for the current language. If LSP hover is available, this
+ * extension is a no-op to avoid duplicate tooltips.
  *
  * @param getFilePath - returns the current file path (for API calls)
  * @param getContent - returns the current document content (for API calls)
@@ -39,6 +44,13 @@ export function createHoverTooltipExtension(
     const name = filePath.split('/').pop() || '';
     const { languageId } = resolveLanguageId(undefined, ext.replace(/^\./, ''), name);
     if (!languageId || !HOVER_LANGUAGES.has(languageId)) return null;
+
+    // Skip if LSP-based hover is available for this language.
+    // The LSP hover (from @codemirror/lsp-client) will handle tooltips
+    // when LSP is connected, avoiding duplicate network requests.
+    if (LSPClientService.lspClientService.isSupported(languageId)) {
+      return null;
+    }
 
     // Convert the hovered position (0-based offset) to 1-based line:column
     // for the semantic API.

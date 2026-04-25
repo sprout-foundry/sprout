@@ -19,6 +19,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
+	lspproxy "github.com/sprout-foundry/sprout/pkg/lsp/proxy"
 	"github.com/sprout-foundry/sprout/pkg/providercatalog"
 	"github.com/sprout-foundry/sprout/pkg/security"
 	"github.com/gorilla/websocket"
@@ -70,6 +71,7 @@ type ReactWebServer struct {
 	lastClientContextCleanupAt      time.Time
 	lastClientContextCleanupRemoved int
 	totalClientContextsRemoved      int
+	lspManager                      *lspproxy.Manager
 }
 
 const (
@@ -169,6 +171,10 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/ssh/", ws.handleSSHProxy)
 	mux.HandleFunc("/ws", ws.handleWebSocket)
 	mux.HandleFunc("/terminal", ws.handleTerminalWebSocket)
+	// LSP proxy WebSocket — bridges @codemirror/lsp-client to language servers
+	ws.lspManager = lspproxy.NewManager(ctx)
+	mux.HandleFunc("/api/lsp/ws", lspproxy.BridgeHandler(ws.lspManager, ws.upgrader, ws.workspaceRoot))
+	mux.HandleFunc("/api/lsp/status", ws.handleLSPStatus)
 	mux.HandleFunc("/api/query", ws.handleAPIQuery)
 	mux.HandleFunc("/api/query/steer", ws.handleAPIQuerySteer)
 	mux.HandleFunc("/api/query/stop", ws.handleAPIQueryStop)
@@ -370,6 +376,11 @@ func (ws *ReactWebServer) Shutdown() error {
 
 	// Stop the file watcher.
 	ws.fileWatcher.stop()
+
+	// Clean up LSP manager (closes all language server processes)
+	if ws.lspManager != nil {
+		ws.lspManager.Cleanup()
+	}
 
 	// Close all WebSocket connections
 	ws.connections.Range(func(conn, value interface{}) bool {

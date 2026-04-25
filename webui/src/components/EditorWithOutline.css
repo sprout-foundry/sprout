@@ -1,0 +1,63 @@
+/* EditorWithOutline wrapper */
+.editor-with-outline {
+  display: flex;
+  flex-direction: row;
+  min-height: 0;
+  flex: 1 1 0%;
+  overflow: hidden;
+}
+
+.editor-with-outline .editor-workspace-wrapper {
+  flex: 1 1 0%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Resize handle between editor and outline panel */
+.editor-with-outline .outline-resize-handle {
+  flex-shrink: 0;
+  width: 4px;
+  background: transparent;
+  cursor: col-resize;
+  position: relative;
+}
+
+.editor-with-outline .outline-resize-handle::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 1px;
+  width: 2px;
+  background: var(--border-subtle);
+  transition: background 0.15s ease;
+}
+
+.editor-with-outline .outline-resize-handle:hover::before,
+.editor-with-outline .outline-resize-handle.resizing::before {
+  background: var(--accent-primary);
+}
+
+/* Outline panel container */
+.editor-with-outline .outline-panel-container {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border-subtle);
+}
+
+/* Mobile: hide outline panel */
+@media (max-width: 768px) {
+  .editor-with-outline .outline-panel-container {
+    display: none;
+  }
+
+  .editor-with-outline .outline-resize-handle {
+    display: none;
+  }
+}

@@ -126,9 +126,9 @@ describe('dragDropMove handlers', () => {
       const handlers = createDragDropHandlers();
       const result = handlers.dragstart?.(event, view);
 
-      expect(result).toBe(true);
-      expect(event.preventDefault).toHaveBeenCalled();
-      expect(event.stopPropagation).toHaveBeenCalled();
+      // Return false to let the native drag proceed
+      expect(result).toBe(false);
+      // Setting effectAllowed is fine - doesn't cancel the drag
       expect(event.dataTransfer?.effectAllowed).toBe('copyMove');
     });
 
@@ -204,6 +204,21 @@ describe('dragDropMove handlers', () => {
       withDropPos(view, null);
       const result = handlers.drop?.(createMockDragEvent(), view);
 
+      expect(result).toBe(false);
+      expect(view.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when document was modified between dragstart and drop', () => {
+      const view = createRealView('hello world', 0, 5);
+      const handlers = createDragDropHandlers();
+      handlers.dragstart?.(createMockDragEvent(), view);
+
+      // Modify the document between dragstart and drop
+      view.dispatch({ changes: { from: 0, to: 5, insert: 'XXXXX' } });
+
+      // Drop should be a no-op because stored positions are stale
+      withDropPos(view, 11);
+      const result = handlers.drop?.(createMockDragEvent(), view);
       expect(result).toBe(false);
     });
 

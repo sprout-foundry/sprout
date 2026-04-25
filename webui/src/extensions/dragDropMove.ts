@@ -15,6 +15,7 @@
 
 import { EditorView, type DOMEventHandlers } from '@codemirror/view';
 import type { ChangeSpec } from '@codemirror/state';
+import { Prec } from '@codemirror/state';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -64,11 +65,8 @@ function createDragDropHandlers(): DOMEventHandlers<null> {
         event.dataTransfer.effectAllowed = 'copyMove';
       }
 
-      // Prevent default browser drag behavior - we handle it ourselves
-      event.preventDefault();
-      event.stopPropagation();
-
-      return true;
+      // Return false to let the native drag proceed (CM6 will handle it)
+      return false;
     },
 
     dragover: (event: DragEvent, _view: EditorView) => {
@@ -88,6 +86,14 @@ function createDragDropHandlers(): DOMEventHandlers<null> {
       // Only handle if we have stored drag state for this view
       const state = dragStateMap.get(view);
       if (!state) {
+        return false;
+      }
+
+      // Validate that the stored positions still correspond to the selected text.
+      // This handles the case where the document was modified between dragstart and drop.
+      const currentText = view.state.sliceDoc(state.from, state.to);
+      if (currentText !== state.text) {
+        dragStateMap.delete(view);
         return false;
       }
 
@@ -176,6 +182,7 @@ function createDragDropHandlers(): DOMEventHandlers<null> {
           head: selHead,
         },
         scrollIntoView: true,
+        userEvent: isCopy ? 'input.drop' : 'move.drop',
       });
 
       // Clear the drag state for this view
@@ -219,4 +226,4 @@ export { createDragDropHandlers };
  * - Hold Alt while dropping to copy (keep original text)
  * - Dropping on the same selection is a no-op
  */
-export const dragDropMovePlugin = EditorView.domEventHandlers(createDragDropHandlers());
+export const dragDropMovePlugin = Prec.high(EditorView.domEventHandlers(createDragDropHandlers()));

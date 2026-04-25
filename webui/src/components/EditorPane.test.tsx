@@ -166,6 +166,18 @@ jest.mock('../extensions/emmet', () => ({
   buildEmmetExtensions: () => [],
 }));
 
+jest.mock('../extensions/autoCloseTag', () => ({
+  createAutoCloseTagCompartment: () => {
+    const mockCompartment = {
+      of: jest.fn((exts: any) => []),
+      reconfigure: jest.fn((exts: any) => ({ type: 'StateEffect' })),
+    };
+    return mockCompartment;
+  },
+  getInitialAutoCloseTagExtensions: jest.fn(() => []),
+  buildAutoCloseTagExtensions: jest.fn(() => []),
+}));
+
 jest.mock('../extensions/snippets', () => ({
   tabExpandSnippets: () => [],
   setSnippetLanguage: jest.fn(),

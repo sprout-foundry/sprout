@@ -9,6 +9,7 @@ import { ApiService } from './api';
 
 // Types from @codemirror/lsp-client
 import type { Transport, LSPClientConfig, LSPClient } from '@codemirror/lsp-client';
+import type { EditorView } from '@codemirror/view';
 import {
   LSPClient as LSPClientClass,
   languageServerExtensions,
@@ -63,8 +64,46 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 const WS_CONNECT_TIMEOUT_MS = 30_000;
 
 // ---------------------------------------------------------------------------
+// EditorView Registry for cross-file LSP navigation
+// ---------------------------------------------------------------------------
+
+/** Registry of file paths → their active EditorViews (for cross-file LSP navigation) */
+const editorViewRegistry: Map<string, EditorView> = new Map();
+
+/**
+ * Register an editor view for a file path (called by EditorPane when editor is created).
+ * This enables the LSP displayFile callback to find open editors for cross-file navigation.
+ */
+export function registerEditorView(filePath: string, view: EditorView): void {
+  editorViewRegistry.set(filePath, view);
+}
+
+/**
+ * Unregister an editor view (called when EditorPane destroys the editor).
+ */
+export function unregisterEditorView(filePath: string): void {
+  editorViewRegistry.delete(filePath);
+}
+
+/**
+ * Find an editor view by file path.
+ * Used by the LSP displayFile callback to get the EditorView for position mapping.
+ */
+export function findEditorView(filePath: string): EditorView | null {
+  return editorViewRegistry.get(filePath) ?? null;
+}
+
+// ---------------------------------------------------------------------------
 // Transport Implementation
 // ---------------------------------------------------------------------------
+
+/**
+ * Transport interface with close method for WebSocket cleanup.
+ */
+export interface TransportWithClose extends Transport {
+  /** Close the underlying WebSocket connection */
+  close: () => void;
+}
 
 /**
  * Creates a WebSocket-based Transport for the LSP client.
@@ -74,16 +113,17 @@ const WS_CONNECT_TIMEOUT_MS = 30_000;
  * - send(msg: string) → ws.send(msg)
  * - subscribe(handler) → adds handler to message list
  * - unsubscribe(handler) → removes handler from list
+ * - close() → ws.close()
  *
  * @param wsUrl - The WebSocket URL to connect to
  * @param onClose - Optional callback called when WebSocket closes after connection
- * @returns Promise that resolves to a Transport once WebSocket connects
+ * @returns Promise that resolves to a TransportWithClose once WebSocket connects
  */
 export async function createTransport(
   wsUrl: string,
   onClose?: () => void,
-): Promise<Transport> {
-  return new Promise<Transport>((resolve, reject) => {
+): Promise<TransportWithClose> {
+  return new Promise<TransportWithClose>((resolve, reject) => {
     const handlers: Set<(value: string) => void> = new Set();
 
     // Create WebSocket
@@ -111,6 +151,11 @@ export async function createTransport(
         },
         unsubscribe(handler: (value: string) => void): void {
           handlers.delete(handler);
+        },
+        close(): void {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.close();
+          }
         },
       });
     };
@@ -146,9 +191,90 @@ export async function createTransport(
   });
 }
 
-// ---------------------------------------------------------------------------
-// LSP Client Service
-// ---------------------------------------------------------------------------
+/**
+ * Type for displayFile callback.
+ * Called by the custom workspace when navigating to another file
+ * (go-to-definition, find references, etc.).
+ *
+ * Return the EditorView of the opened file, or null if it couldn't be opened.
+ * If a view is returned, the LSP client will use it to compute position mappings.
+ * If null, the LSP client will show an error but the callback may have still opened
+ * the file in the editor.
+ */
+export type DisplayFileCallback = (filePath: string) => Promise<EditorView | null>;
+
+/**
+ * Set the global displayFile callback for LSP cross-file navigation.
+ * This should be called once during app initialization, before any LSP
+ * clients are created. The callback is invoked by the custom Workspace
+ * whenever the LSP client needs to navigate to a different file.
+ */
+let globalDisplayFileCallback: DisplayFileCallback | null = null;
+
+export function setGlobalDisplayFileCallback(callback: DisplayFileCallback): void {
+  globalDisplayFileCallback = callback;
+}
+
+export function getGlobalDisplayFileCallback(): DisplayFileCallback | null {
+  return globalDisplayFileCallback;
+}
+
+/**
+ * Convert a file:// URI back to a file path.
+ * Used internally by patchWorkspaceDisplayFile.
+ */
+function privateUriToFilePath(uri: string): string {
+  if (uri.startsWith('file://')) {
+    const pathPart = uri.replace(/^file:\/?\/+/, '/');
+    return decodeURIComponent(pathPart);
+  }
+  return uri;
+}
+
+/**
+ * Patch the workspace's displayFile method on an existing LSP client.
+ *
+ * The default workspace only returns views for already-open files.
+ * This override:
+ * 1. First tries the default behavior (file already open in some editor)
+ * 2. Then checks the EditorView registry for open editors
+ * 3. Finally invokes the global callback to open the file (if not already open)
+ *
+ * This is called after client creation because we can't extend the
+ * internal DefaultWorkspace class (it's not exported).
+ *
+ * @param client - The LSP client to patch
+ */
+function patchWorkspaceDisplayFile(client: LSPClient): void {
+  const workspace = client.workspace;
+  const originalDisplayFile = workspace.displayFile.bind(workspace);
+
+  workspace.displayFile = async (uri: string) => {
+    // First, try default behavior (file already open in some editor)
+    const existingView = await originalDisplayFile(uri);
+    if (existingView) return existingView;
+
+    const filePath = privateUriToFilePath(uri);
+    if (!filePath) return null;
+
+    // Check if there's already an open editor for this file in our registry
+    const existingRegistryView = findEditorView(filePath);
+    if (existingRegistryView) return existingRegistryView;
+
+    // File not currently open — invoke the callback to open it
+    if (globalDisplayFileCallback) {
+      await globalDisplayFileCallback(filePath);
+      // After opening, poll briefly for the view to appear in the registry
+      for (let i = 0; i < 20; i++) {
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        const view = findEditorView(filePath);
+        if (view) return view;
+      }
+    }
+
+    return null;
+  };
+}
 
 /**
  * Singleton service for managing LSP client connections.
@@ -164,6 +290,12 @@ class LSPClientService {
 
   /** Active LSP clients, keyed by languageId */
   private clients: Map<string, LSPClient> = new Map();
+
+  /** Languages whose clients have been disconnected (to work around connected getter bug) */
+  private disconnectedLanguages: Set<string> = new Set();
+
+  /** Close functions for active transports (for WebSocket cleanup) */
+  private transportCloseFns: Map<string, () => void> = new Map();
 
   /** Cached LSP server status */
   private statusCache: Map<string, LSPLanguageInfo> = new Map();
@@ -331,14 +463,20 @@ class LSPClientService {
    * @returns The LSPClient instance, or null if unavailable
    */
   async getClientForLanguage(languageId: string): Promise<LSPClient | null> {
-    // Check if already have a healthy client
+    // Check if already have a healthy client (and not manually marked as disconnected)
     const existing = this.clients.get(languageId);
-    if (existing && existing.connected) {
+    if (existing && existing.connected && !this.disconnectedLanguages.has(languageId)) {
       return existing;
     }
 
     // Clean up dead client if exists
     if (existing) {
+      // Close the transport WebSocket if we have a close function
+      const closeFn = this.transportCloseFns.get(languageId);
+      if (closeFn) {
+        try { closeFn(); } catch { /* ignore */ }
+        this.transportCloseFns.delete(languageId);
+      }
       try {
         existing.disconnect();
       } catch {
@@ -387,6 +525,8 @@ class LSPClientService {
 
       const transport = await createTransport(wsUrl, () => {
         console.log('[LSPClientService] Transport closed for:', languageId);
+        // Mark as disconnected (to work around connected getter bug)
+        this.disconnectedLanguages.add(languageId);
         const client = this.clients.get(languageId);
         if (client) {
           try {
@@ -396,7 +536,11 @@ class LSPClientService {
           }
           this.clients.delete(languageId);
         }
+        this.transportCloseFns.delete(languageId);
       });
+
+      // Store the transport close function for cleanup
+      this.transportCloseFns.set(languageId, transport.close);
 
       // Create LSP client
       const config: LSPClientConfig = {
@@ -411,8 +555,18 @@ class LSPClientService {
       // Wait for initialization
       await client.initializing;
 
+      // Patch the default workspace's displayFile to support cross-file navigation
+      // via the app's editor management. The default workspace only handles files
+      // already open in an editor; this patch adds support for opening new files.
+      if (globalDisplayFileCallback) {
+        patchWorkspaceDisplayFile(client);
+      }
+
       // Store client
       this.clients.set(languageId, client);
+
+      // Clear the disconnected flag since we successfully created a new client
+      this.disconnectedLanguages.delete(languageId);
 
       console.log('[LSPClientService] Connected LSP client for:', languageId);
 
@@ -477,6 +631,13 @@ class LSPClientService {
   cleanup(): void {
     console.log('[LSPClientService] Cleaning up clients');
 
+    // Close all WebSocket connections first
+    this.transportCloseFns.forEach((close) => {
+      try { close(); } catch { /* ignore */ }
+    });
+    this.transportCloseFns.clear();
+
+    // Disconnect all LSP clients
     this.clients.forEach((client, languageId) => {
       try {
         client.disconnect();
@@ -487,12 +648,42 @@ class LSPClientService {
 
     this.clients.clear();
     this.statusCache.clear();
+    this.disconnectedLanguages.clear();
   }
 }
 
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
+
+/**
+ * Convert a workspace path to a file:// URI.
+ * Exported for use in other modules (e.g., lspExtensions.ts).
+ */
+export function getFileURI(filePath: string): string {
+  if (!filePath) return '';
+
+  // Normalize path: ensure forward slashes, leading slash on Windows
+  let normalized = filePath.replace(/\\/g, '/');
+  if (!normalized.startsWith('/')) {
+    // Windows path - add leading slash
+    normalized = '/' + normalized;
+  }
+
+  return `file://${normalized}`;
+}
+
+/**
+ * Convert a file:// URI back to a file path.
+ * Exported for use in other modules (e.g., lspExtensions.ts).
+ */
+export function uriToFilePath(uri: string): string {
+  if (uri.startsWith('file://')) {
+    const pathPart = uri.replace(/^file:\/?\/+/, '/');
+    return decodeURIComponent(pathPart);
+  }
+  return uri;
+}
 
 /**
  * Get the LSP client service singleton.

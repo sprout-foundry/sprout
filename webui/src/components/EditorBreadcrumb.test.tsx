@@ -1,7 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import { act } from 'react';
 import EditorBreadcrumb, { type BreadcrumbSymbol } from './EditorBreadcrumb';
-import { getEnclosingSymbols } from './GoToSymbolOverlay';
+import { getEnclosingSymbols } from '../utils/symbolUtils';
 
 // ---------------------------------------------------------------------------
 // Mocks

@@ -18,7 +18,7 @@
 
 import { EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view';
 import { type Extension } from '@codemirror/state';
-import { extractSymbols, getEnclosingSymbols, findSymbolScopeEnd as findScopeEnd, CONTAINER_KINDS, type SymbolInfo } from '../components/GoToSymbolOverlay';
+import { extractSymbols, getEnclosingSymbols, findSymbolScopeEnd as findScopeEnd, CONTAINER_KINDS, type SymbolInfo } from '../utils/symbolUtils';
 
 // ── Constants ────────────────────────────────────────────────────────
 
@@ -400,5 +400,5 @@ export function stickyScrollPlugin(getFileExtension: () => string | undefined): 
 
 // Also export types for testing
 export type { SymbolInfo };
-// Re-export findScopeEnd for testing (aliased from GoToSymbolOverlay.findSymbolScopeEnd)
+// Re-export findScopeEnd for testing (aliased from symbolUtils.findSymbolScopeEnd)
 export { findScopeEnd };

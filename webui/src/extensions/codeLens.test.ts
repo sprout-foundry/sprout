@@ -580,4 +580,54 @@ function handleClick() {
     expect(result.length).toBe(1);
     expect(result[0].refCount).toBe(2);
   });
+
+  it('does not under-count when a string contains // on the same line as a real ref', () => {
+    mockExtractSymbols.mockReturnValue([
+      { name: 'fetchData', line: 1, kind: 'function' },
+    ]);
+
+    const content = `function fetchData() {
+  const url = "http://example.com/api";
+  fetchData();
+}`;
+
+    const result = computeCodeLenses(content, '.ts');
+
+    expect(result.length).toBe(1);
+    expect(result[0].refCount).toBe(1);
+  });
+
+  it('does not under-count when multiple strings with // are on same line as a ref', () => {
+    mockExtractSymbols.mockReturnValue([
+      { name: 'open', line: 1, kind: 'function' },
+    ]);
+
+    const content = `function open() {
+  const a = "https://a.com"; open();
+}`;
+
+    const result = computeCodeLenses(content, '.ts');
+
+    expect(result.length).toBe(1);
+    expect(result[0].refCount).toBe(1);
+  });
+
+  it('handles block comments correctly with string-aware stripping', () => {
+    mockExtractSymbols.mockReturnValue([
+      { name: 'processData', line: 5, kind: 'function' },
+    ]);
+
+    const content = `/* processData processes click events.
+   Always call processData() in your handler.
+*/
+function processData() {
+  processData();
+}`;
+
+    const result = computeCodeLenses(content, '.ts');
+
+    // Block comment mentions should be stripped, real call counts
+    expect(result.length).toBe(1);
+    expect(result[0].refCount).toBe(1);
+  });
 });

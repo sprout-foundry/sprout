@@ -37,6 +37,15 @@ const DEBOUNCE_MS = 300;
 const MAX_SYMBOLS_PER_FILE = 100;
 const MAX_FILES = 50;
 
+// Map backend kind strings to our SymbolKind type
+const BACKEND_KIND_TO_SYMBOL_KIND: Record<string, SymbolKind> = {
+  func: 'function',
+  struct: 'type',
+  enum: 'type',
+  trait: 'interface',
+  impl: 'method',
+};
+
 // ── Component ────────────────────────────────────────────────────────────
 
 function GoToWorkspaceSymbolOverlay({
@@ -99,7 +108,7 @@ function GoToWorkspaceSymbolOverlay({
         symbols: file.symbols.map((sym) => ({
           name: sym.name,
           // Normalize kind strings to our SymbolKind type (API returns 'func' not 'function')
-          kind: (sym.kind === 'func' ? 'function' : sym.kind) as SymbolKind,
+          kind: (BACKEND_KIND_TO_SYMBOL_KIND[sym.kind] ?? sym.kind) as SymbolKind,
           line: sym.line,
         })),
       }));
@@ -114,7 +123,9 @@ function GoToWorkspaceSymbolOverlay({
       setFileGroups([]);
       setTotalCount(0);
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   }, []);
 

@@ -82,6 +82,8 @@ import { unsavedLineHighlight, setOriginalContent } from '../extensions/unsavedL
 import { ApiService } from '../services/api';
 import { notificationBus } from '../services/notificationBus';
 import { formatCode, formatCodeWithConfigDiscovery, setConfigFetcher } from '../services/formatter';
+import { getLSPClientService, LSP_SUPPORTED_LANGUAGES } from '../services/lspClientService';
+import { buildLSPPluginExtensions, lspSyncOnDocChange } from '../extensions/lspExtensions';
 import { Loader2, AlertTriangle, Eye, Columns2, Copy, Navigation, FolderOpen, ClipboardCopy, ListOrdered } from 'lucide-react';
 import { copyToClipboard } from '../utils/clipboard';
 import { generateUnifiedDiff } from '../utils/simpleDiff';
@@ -139,6 +141,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   const emmetCompartment = useRef(createEmmetCompartment());
   const fontSizeCompartment = useRef(new Compartment());
   const tabSizeCompartment = useRef(new Compartment());
+  const lspCompartment = useRef(new Compartment());
   const lastInitLanguageKey = useRef<string | null>(null);
   const [wordWrapEnabled, setWordWrapEnabled] = useState(true);
   const [loading, setLoading] = useState<boolean>(false);
@@ -1423,6 +1426,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       languageCompartment.current.of(
         getLanguageExtensions(resolvedLanguage.languageId),
       ),
+      lspCompartment.current.of([]),
     ];
 
     const state = EditorState.create({
@@ -1436,6 +1440,36 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     });
 
     viewRef.current = view;
+
+    // Initialize LSP extensions asynchronously (after editor is ready).
+    // Capture the view reference at creation time to avoid applying
+    // extensions to a different editor if the user switches files
+    // before the LSP client connects.
+    if (resolvedLanguage.languageId && LSP_SUPPORTED_LANGUAGES.has(resolvedLanguage.languageId)) {
+      const currentLangId = resolvedLanguage.languageId;
+      const currentFilePath = buffer?.file?.path ?? '';
+      const capturedView = view; // capture the specific view for this init
+      void (async () => {
+        try {
+          const lspService = getLSPClientService();
+          await lspService.getStatus();
+          const client = await lspService.getClientForLanguage(currentLangId);
+          // Only apply if this editor is still active (not replaced by file switch)
+          if (client && viewRef.current === capturedView && capturedView.dom?.isConnected) {
+            const lspExtensions = [
+              ...buildLSPPluginExtensions(client, currentFilePath, currentLangId),
+              ...lspSyncOnDocChange(currentLangId),
+            ];
+            capturedView.dispatch({
+              effects: lspCompartment.current.reconfigure(lspExtensions),
+            });
+            debugLog('[LSP] Extensions activated for', currentLangId);
+          }
+        } catch (err) {
+          debugLog('[LSP] Failed to initialize:', err);
+        }
+      })();
+    }
 
     // Track which language was set during init so the reconfiguration effect
     // can skip a redundant reconfigure on the same buffer/language combo.

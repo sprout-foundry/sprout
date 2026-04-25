@@ -144,20 +144,23 @@ class StickyScrollPlugin {
   }
 
   /**
-   * Create the sticky header DOM element and append to the scroller.
+   * Create the sticky header DOM element and attach to the editor root.
+   *
+   * Uses absolute positioning relative to the .cm-editor container
+   * rather than inserting as a flow element into the scroller.
+   * This avoids flex-direction layout issues where the element
+   * could appear as a vertical column instead of a horizontal bar.
    */
   private createDOMElement(): void {
     const dom = document.createElement('div');
     dom.className = 'sticky-scroll-header';
     dom.style.display = 'none'; // Hidden by default until scopes are found
 
-    // Append as the first child of the scroller container
-    const scroller = this.view.scrollDOM;
-    if (scroller.firstChild) {
-      scroller.insertBefore(dom, scroller.firstChild);
-    } else {
-      scroller.appendChild(dom);
-    }
+    // Attach to the .cm-editor root so it overlays the entire editor
+    // width (including gutter area), immune to scroller flex layout.
+    const editorDom = this.view.dom;
+    editorDom.style.position = 'relative';
+    editorDom.appendChild(dom);
 
     this.domElement = dom;
 
@@ -325,8 +328,10 @@ class StickyScrollPlugin {
  */
 const stickyScrollBaseTheme = EditorView.baseTheme({
   '.sticky-scroll-header': {
-    position: 'sticky',
+    position: 'absolute',
     top: '0',
+    left: '0',
+    right: '0',
     zIndex: '5',
     background: 'var(--cm-sticky-scroll-bg, rgba(46, 52, 64, 0.95))',
     color: 'var(--cm-sticky-scroll-fg, rgba(255, 255, 255, 0.9))',

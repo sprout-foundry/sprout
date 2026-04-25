@@ -39,12 +39,13 @@ import { useTheme } from '../contexts/ThemeContext';
 import LivePreview from './LivePreview';
 import MarkdownPreview from './MarkdownPreview';
 import EditorToolbar from './EditorToolbar';
-import EditorBreadcrumb, { type BreadcrumbSymbol } from './EditorBreadcrumb';
+import type { BreadcrumbSymbol } from './EditorBreadcrumb';
 import { isImageFile, isAudioFile, isVideoFile, isBinaryFile } from '../utils/mediaPatterns';
 import ImageViewer from './ImageViewer';
 import SvgPreview from './SvgPreview';
 import GoToSymbolOverlay from './GoToSymbolOverlay';
 import { getEnclosingSymbols } from './GoToSymbolOverlay';
+import GoToWorkspaceSymbolOverlay from './GoToWorkspaceSymbolOverlay';
 import FindAllReferencesOverlay from './FindAllReferencesOverlay';
 import type { ReferenceInfo } from './FindAllReferencesOverlay';
 import LanguageSwitcher from './LanguageSwitcher';
@@ -146,6 +147,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   const [localContent, setLocalContent] = useState<string>('');
   const [selectionInfo, setSelectionInfo] = useState<{ charCount: number; selectionCount: number } | null>(null);
   const [showGoToSymbol, setShowGoToSymbol] = useState<boolean>(false);
+  const [showGoToWorkspaceSymbol, setShowGoToWorkspaceSymbol] = useState<boolean>(false);
 
   // Find All References state
   const [showFindRefs, setShowFindRefs] = useState<boolean>(false);
@@ -902,6 +904,25 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     });
   }, [handleGoToLine, openWorkspaceBuffer]);
 
+  const handleSelectWorkspaceSymbol = useCallback((filePath: string, line?: number) => {
+    const fileName = filePath.split('/').pop() || filePath;
+    const dotIndex = fileName.lastIndexOf('.');
+    const ext = dotIndex >= 0 ? fileName.slice(dotIndex) : undefined;
+
+    openWorkspaceBuffer({
+      kind: 'file',
+      path: filePath,
+      title: fileName,
+      ext,
+    });
+
+    if (line) {
+      requestAnimationFrame(() => {
+        document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line } }));
+      });
+    }
+  }, [openWorkspaceBuffer]);
+
   // Fetch diagnostics for the current file and push them into the editor
   const fetchDiagnostics = useCallback(
     async (filePath: string, content: string, trigger: 'edit' | 'save' = 'edit') => {
@@ -1146,6 +1167,9 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       },
       onGoToSymbol: () => {
         setShowGoToSymbol(true);
+      },
+      onGoToWorkspaceSymbol: () => {
+        setShowGoToWorkspaceSymbol(true);
       },
       onToggleWordWrap: () => {
         // Dispatch globally so all editor panes toggle together
@@ -1484,6 +1508,9 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       },
       onGoToSymbol: () => {
         setShowGoToSymbol(true);
+      },
+      onGoToWorkspaceSymbol: () => {
+        setShowGoToWorkspaceSymbol(true);
       },
       onToggleWordWrap: () => {
         document.dispatchEvent(new CustomEvent('editor-toggle-word-wrap'));
@@ -2143,6 +2170,20 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         <EditorToolbar
           onSave={handleSave}
           saving={saving}
+          breadcrumbProps={{
+            filePath: buffer.file.path,
+            onNavigate: (path) => {
+              window.dispatchEvent(
+                new CustomEvent('ledit:reveal-in-explorer', {
+                  detail: { path },
+                }),
+              );
+            },
+            symbols: enclosingSymbols,
+            onNavigateToSymbol: (line) => {
+              handleGoToLine(line);
+            },
+          }}
           rightActions={[
             ...(isSvgFile || isHtmlFile
               ? [
@@ -2205,6 +2246,14 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
             viewRef.current?.focus();
           }}
         />
+        <GoToWorkspaceSymbolOverlay
+          visible={showGoToWorkspaceSymbol}
+          onSelectSymbol={handleSelectWorkspaceSymbol}
+          onClose={() => {
+            setShowGoToWorkspaceSymbol(false);
+            viewRef.current?.focus();
+          }}
+        />
         <FindAllReferencesOverlay
           visible={showFindRefs}
           symbolName={refsSymbolName}
@@ -2215,22 +2264,6 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
             viewRef.current?.focus();
           }}
         />
-
-      <EditorBreadcrumb
-        filePath={buffer.file.path}
-        onNavigate={(path) => {
-          // Reveal the clicked path segment in the file explorer sidebar
-          window.dispatchEvent(
-            new CustomEvent('ledit:reveal-in-explorer', {
-              detail: { path },
-            }),
-          );
-        }}
-        symbols={enclosingSymbols}
-        onNavigateToSymbol={(line) => {
-          handleGoToLine(line);
-        }}
-      />
 
       {loading && (
         <div className="loading-indicator">

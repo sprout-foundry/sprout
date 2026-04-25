@@ -2035,9 +2035,13 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
           })
           .then(async (diskContent) => {
             if (diskContent === undefined) return;
+            // Get editor content for the dialog (enables inline merge view)
+            const editorContent = bufferRef.current?.content || '';
             const action = await showFileChangeDialog(currentBuffer.file.name, {
               deleted: false,
               hasUnsavedChanges: true,
+              originalContent: editorContent,
+              modifiedContent: diskContent,
             });
             if (action === 'reload') {
               if (loadFileRef.current) {
@@ -2047,8 +2051,9 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
             } else if (action === 'keep-mine') {
               setBufferExternallyModified(currentBuffer.id, diskContent);
             } else if (action === 'show-diff') {
+              // show-diff only fires when inline merge wasn't available
+              // (hasMergeContent was false — content wasn't passed to dialog)
               try {
-                const editorContent = bufferRef.current?.content || '';
                 const diffText = generateUnifiedDiff(editorContent, diskContent, 'Editor', 'Disk');
                 if (!diffText) return;
 

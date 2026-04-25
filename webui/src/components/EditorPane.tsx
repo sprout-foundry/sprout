@@ -44,7 +44,7 @@ import { isImageFile, isAudioFile, isVideoFile, isBinaryFile } from '../utils/me
 import ImageViewer from './ImageViewer';
 import SvgPreview from './SvgPreview';
 import GoToSymbolOverlay from './GoToSymbolOverlay';
-import { getEnclosingSymbols } from './GoToSymbolOverlay';
+import { getEnclosingSymbols } from '../utils/symbolUtils';
 import GoToWorkspaceSymbolOverlay from './GoToWorkspaceSymbolOverlay';
 import FindAllReferencesOverlay from './FindAllReferencesOverlay';
 import type { ReferenceInfo } from './FindAllReferencesOverlay';

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { KeyboardEvent, MouseEvent } from 'react';
 import { fuzzyFilter, highlightMatches } from '../utils/fuzzyMatch';
 import type { FuzzyResult } from '../utils/fuzzyMatch';
-import { KIND_ICONS, type SymbolKind } from './GoToSymbolOverlay';
+import { KIND_ICONS, type SymbolKind } from '../utils/symbolUtils';
 import { ApiService } from '../services/api';
 import { Loader2 } from 'lucide-react';
 import './GoToWorkspaceSymbolOverlay.css';

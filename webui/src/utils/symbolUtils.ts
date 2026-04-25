@@ -95,9 +95,11 @@ const TYPESCRIPT_PATTERNS: PatternEntry[] = [
   // type Foo =
   [/\btype\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=/, 'type'],
   // const foo = ( must NOT be treated as function if value is not a function
-  [/\bconst\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*(?:async\s*)?\(/, 'function'],
+  // Supports optional generic type params: const foo = <T>(x: T) =>
+  [/\bconst\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*(?:async\s*)?(?:<[^>]*>)?\s*\(/, 'function'],
   // Arrow function: const foo = () =>
-  [/\bconst\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[a-zA-Z_$][a-zA-Z0-9_$]*)\s*=>/, 'function'],
+  // Supports optional generic type params: const foo = <T>(x: T) =>
+  [/\bconst\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*(?:async\s*)?(?:<[^>]*>)?\s*(?:\([^)]*\)|[a-zA-Z_$][a-zA-Z0-9_$]*)\s*=>/, 'function'],
   // const foo: Type = ...
   [/\bconst\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:/, 'variable'],
   // const foo = value (non-function)
@@ -206,12 +208,27 @@ export function extractSymbols(content: string, languageId?: string): SymbolInfo
     // Skip blank lines cheaply.
     if (!line || line.trim().length === 0) continue;
 
-    // Strip single-line comments for Go (// style).
-    // Backtick raw strings are not handled here, but they can't start
-    // with // in a way that affects symbol extraction.
-    if (ext === '.go') {
+    // Strip single-line comments based on language.
+    // Handles // style for Go/JS/TS and # style for Python.
+    if (ext === '.go' || ext === '.ts' || ext === '.tsx' || ext === '.js' || ext === '.jsx' || ext === '.mjs') {
       const commentIdx = line.indexOf('//');
       if (commentIdx !== -1) line = line.slice(0, commentIdx);
+      if (!line.trim()) continue;
+    } else if (ext === '.py') {
+      const commentIdx = line.indexOf('#');
+      if (commentIdx !== -1) {
+        // Simple heuristic: only strip # if it's not inside a string
+        // Count quotes before # to determine if we're in a string context
+        const before = line.slice(0, commentIdx);
+        let inSingle = false, inDouble = false;
+        for (let j = 0; j < before.length; j++) {
+          if (before[j] === '"' && !inSingle) inDouble = !inDouble;
+          if (before[j] === "'" && !inDouble) inSingle = !inSingle;
+        }
+        if (!inSingle && !inDouble) {
+          line = line.slice(0, commentIdx);
+        }
+      }
       if (!line.trim()) continue;
     }
 
@@ -239,8 +256,12 @@ export function extractSymbols(content: string, languageId?: string): SymbolInfo
 // ── Enclosing-symbol detection ───────────────────────────────────────────
 
 /**
- * Find the 1-based end line (inclusive) of a symbol's scope by counting
- * balanced braces from the symbol's definition line onward.
+ * Find the 1-based end line (inclusive) of a symbol's scope.
+ *
+ * For brace-based languages (JS/TS/Go), counts balanced braces from the
+ * symbol's definition line onward.
+ *
+ * For Python, uses indentation-based scope detection.
  *
  * Handles:
  *  - Single-quoted, double-quoted, and backtick strings (skips braces inside).
@@ -251,7 +272,10 @@ export function extractSymbols(content: string, languageId?: string): SymbolInfo
  *
  * If no matching close brace is found, returns `lines.length` (end of file).
  */
-export function findSymbolScopeEnd(lines: string[], startLineIndex: number): number {
+export function findSymbolScopeEnd(lines: string[], startLineIndex: number, languageId?: string): number {
+  if (languageId === '.py') {
+    return findPythonScopeEnd(lines, startLineIndex);
+  }
   let braceCount = 0;
   let foundFirstBrace = false;
   let inBlockComment = false;
@@ -328,6 +352,54 @@ export function findSymbolScopeEnd(lines: string[], startLineIndex: number): num
 }
 
 /**
+ * Find Python scope end using indentation levels.
+ * The symbol's scope ends when a line at a lesser or equal indentation level
+ * is encountered after the indented body.
+ */
+function findPythonScopeEnd(lines: string[], startLineIndex: number): number {
+  const declLine = lines[startLineIndex] || '';
+  const declIndent = declLine.search(/\S/);
+  if (declIndent === -1) return lines.length; // blank line, no scope
+
+  // Find what indentation the body uses
+  let bodyStarted = false;
+  let bodyIndent = -1;
+
+  for (let i = startLineIndex + 1; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Skip blank lines and comment-only lines
+    if (!line.trim() || line.trimStart().startsWith('#')) continue;
+
+    const lineIndent = line.search(/\S/);
+
+    if (!bodyStarted) {
+      if (lineIndent > declIndent) {
+        bodyStarted = true;
+        bodyIndent = lineIndent;
+      } else {
+        // First non-blank line isn't indented past declaration → empty body
+        return i;
+      }
+      continue;
+    }
+
+    // Lines more indented than the body are nested (still in scope)
+    if (lineIndent > bodyIndent) continue;
+
+    // Lines at the body indentation level are still part of the scope
+    if (lineIndent === bodyIndent) continue;
+
+    // Line at or less than declaration indentation → scope ends
+    if (lineIndent <= declIndent) {
+      return i;
+    }
+  }
+
+  return lines.length;
+}
+
+/**
  * Return the symbols (up to 3) that enclose `cursorLine` (1-based).
  *
  * Only container kinds are considered (function, method, class, interface).
@@ -350,7 +422,7 @@ export function getEnclosingSymbols(
   for (const sym of containers) {
     if (sym.line > cursorLine) continue; // symbol starts after cursor
 
-    const endLine = findSymbolScopeEnd(lines, sym.line - 1);
+    const endLine = findSymbolScopeEnd(lines, sym.line - 1, languageId);
     if (cursorLine <= endLine) {
       result.push(sym);
       if (result.length >= 3) break; // cap at 3 levels deep
@@ -409,7 +481,7 @@ export function buildScopePaths(
   // Precompute endLine for each container (one findSymbolScopeEnd call per container).
   const containerRanges: Array<{ sym: SymbolInfo; endLine: number }> = containers.map((sym) => ({
     sym,
-    endLine: findSymbolScopeEnd(lines, sym.line - 1),
+    endLine: findSymbolScopeEnd(lines, sym.line - 1, languageId),
   }));
 
   for (const sym of symbols) {

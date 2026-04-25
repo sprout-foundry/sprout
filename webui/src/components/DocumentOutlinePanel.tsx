@@ -235,31 +235,31 @@ function DocumentOutlinePanel({
     return ancestors.map(a => a.symbol);
   }, [cursorLine, symbolTree]);
 
-  // Auto-expand ancestors of cursor position (runs on mount and when deps change)
+  // Auto-expand ancestors of cursor position
   useEffect(() => {
-    // Only expand when cursor > 0 (cursor at line 0 means no real cursor)
-    if (cursorLine > 0) {
-      const ancestors = getContainerAncestors(cursorLine, symbolTree);
-      if (ancestors.length > 0) {
-        setExpandedNodes(prev => {
-          const next = new Set(prev);
-          for (const anc of ancestors) next.add(anc.symbol.line);
-          return next;
-        });
-      }
-    }
-
-    // Expand containers matching search
-    if (searchQuery && filteredSymbols.length > 0) {
+    if (cursorLine <= 0) return;
+    if (symbolTree.length === 0) return;
+    const ancestors = getContainerAncestors(cursorLine, symbolTree);
+    if (ancestors.length > 0) {
       setExpandedNodes(prev => {
         const next = new Set(prev);
-        for (const sym of filteredSymbols) {
-          if (CONTAINER_KINDS.has(sym.kind)) next.add(sym.line);
-        }
+        for (const anc of ancestors) next.add(anc.symbol.line);
         return next;
       });
     }
-  }, [cursorLine, symbolTree, searchQuery, filteredSymbols]);
+  }, [cursorLine, symbolTree]);
+
+  // Expand containers matching search
+  useEffect(() => {
+    if (!searchQuery || filteredSymbols.length === 0) return;
+    setExpandedNodes(prev => {
+      const next = new Set(prev);
+      for (const sym of filteredSymbols) {
+        if (CONTAINER_KINDS.has(sym.kind)) next.add(sym.line);
+      }
+      return next;
+    });
+  }, [searchQuery, filteredSymbols]);
 
   // Scroll active symbol into view
   useEffect(() => {
@@ -271,7 +271,7 @@ function DocumentOutlinePanel({
     );
 
     if (activeElement) {
-      activeElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      activeElement.scrollIntoView({ behavior: 'auto', block: 'nearest' });
     }
   }, [enclosingSymbols]);
 
@@ -519,12 +519,16 @@ function TreeNodeWithState({
           {KIND_ICONS[node.symbol.kind]}
         </span>
 
-        <span
-          className="outline-node-name"
-          dangerouslySetInnerHTML={{
-            __html: highlightedName || node.symbol.name,
-          }}
-        />
+        {searchQuery && highlightedName ? (
+          <span
+            className="outline-node-name"
+            dangerouslySetInnerHTML={{
+              __html: highlightedName,
+            }}
+          />
+        ) : (
+          <span className="outline-node-name">{node.symbol.name}</span>
+        )}
 
         <span className="outline-node-line">{node.symbol.line}</span>
       </div>

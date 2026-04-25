@@ -42,6 +42,7 @@ type fileSymbolsEntry struct {
 type symbolEntry struct {
 	Name string `json:"name"`
 	Kind string `json:"kind"`
+	Line int    `json:"line,omitempty"`
 }
 
 func doGetSymbols(t *testing.T, ws *ReactWebServer, query string) symbolsResponse {
@@ -283,5 +284,40 @@ func TestAPIWorkspaceSymbolsEmptyWorkspace(t *testing.T) {
 	}
 	if len(resp.Files) != 0 {
 		t.Fatalf("expected 0 files, got %d", len(resp.Files))
+	}
+}
+
+// TestAPIWorkspaceSymbolsReturnsLineNumbers verifies that line numbers are returned
+// in the workspace symbol API response.
+func TestAPIWorkspaceSymbolsReturnsLineNumbers(t *testing.T) {
+	ws := newSymbolsTestServer(t, map[string]string{
+		"main.go": "package main\n\nfunc Hello() {}\nfunc World() {}\n",
+	})
+
+	resp := doGetSymbols(t, ws, "")
+
+	// Verify line numbers in results
+	for _, f := range resp.Files {
+		for _, s := range f.Symbols {
+			if s.Line == 0 {
+				t.Errorf("symbol %q in %s: expected non-zero line number", s.Name, f.File)
+			}
+		}
+	}
+
+	// Find Hello and verify it's at line 3
+	for _, f := range resp.Files {
+		for _, s := range f.Symbols {
+			if s.Name == "Hello" {
+				if s.Line != 3 {
+					t.Errorf("Hello: expected line 3, got %d", s.Line)
+				}
+			}
+			if s.Name == "World" {
+				if s.Line != 4 {
+					t.Errorf("World: expected line 4, got %d", s.Line)
+				}
+			}
+		}
 	}
 }

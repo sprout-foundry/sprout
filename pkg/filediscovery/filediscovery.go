@@ -192,8 +192,8 @@ func (fd *FileDiscovery) rerankWithSymbols(files []string, userIntent string) []
 
 	if idx, err := index.BuildSymbols(root); err == nil && idx != nil {
 		tokens := strings.Fields(userIntent)
-		for _, f := range index.SearchSymbols(idx, tokens) {
-			symHits[filepath.ToSlash(f)]++
+		for _, fs := range index.SearchSymbolFiles(idx, tokens) {
+			symHits[fs.File] += len(fs.Symbols)
 		}
 	}
 
@@ -205,7 +205,11 @@ func (fd *FileDiscovery) rerankWithSymbols(files []string, userIntent string) []
 
 		var scored []scoredFile
 		for _, f := range files {
-			s := symHits[filepath.ToSlash(f)]
+			rel, err := filepath.Rel(root, f)
+			if err != nil {
+				rel = f
+			}
+			s := symHits[filepath.ToSlash(rel)]
 			scored = append(scored, scoredFile{file: f, score: s})
 		}
 

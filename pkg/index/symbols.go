@@ -1,17 +1,23 @@
 package index
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 )
 
+const maxFileSize = 1 << 20 // 1MB — skip larger files during indexing
+
 type Symbol struct {
 	Name string `json:"name"`
-	Kind string `json:"kind"` // func, class, type, method
+	Kind string `json:"kind"` // func, class, type, method, interface, constant, variable, struct, enum, trait, impl
+	Line int    `json:"line,omitempty"`
 }
 
 type FileSymbols struct {
@@ -23,7 +29,35 @@ type SymbolIndex struct {
 	Files []FileSymbols `json:"files"`
 }
 
-// BuildSymbols scans the workspace root for source files and extracts simple symbols via regex
+// LoadSymbols reads the cached symbol index from {root}/.ledit/symbols.json.
+// Returns nil, nil if the cache file doesn't exist.
+func LoadSymbols(root string) (*SymbolIndex, error) {
+	cachePath := filepath.Join(root, ".ledit", "symbols.json")
+	data, err := os.ReadFile(cachePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var idx SymbolIndex
+	if err := json.Unmarshal(data, &idx); err != nil {
+		return nil, err
+	}
+	// Validate that files still exist on disk
+	validFiles := make([]FileSymbols, 0, len(idx.Files))
+	for _, fs := range idx.Files {
+		absPath := filepath.Join(root, fs.File)
+		if _, err := os.Stat(absPath); err == nil {
+			validFiles = append(validFiles, fs)
+		}
+	}
+	idx.Files = validFiles
+	return &idx, nil
+}
+
+// BuildSymbols scans the workspace root for source files and extracts symbols via regex.
+// Results are sorted by file path and then by line number within each file.
 func BuildSymbols(root string) (*SymbolIndex, error) {
 	var files []string
 	if err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
@@ -33,9 +67,18 @@ func BuildSymbols(root string) (*SymbolIndex, error) {
 		if info == nil || info.IsDir() {
 			return nil
 		}
+		// Skip hidden directories and files
+		base := filepath.Base(path)
+		if strings.HasPrefix(base, ".") {
+			return nil
+		}
+		// Skip files larger than the size limit
+		if info.Size() > maxFileSize {
+			return nil
+		}
 		ext := strings.ToLower(filepath.Ext(path))
 		switch ext {
-		case ".go", ".py", ".js", ".ts", ".rb", ".php", ".rs", ".java":
+		case ".go", ".py", ".js", ".ts", ".jsx", ".tsx", ".mjs", ".rb", ".php", ".rs", ".java":
 			files = append(files, path)
 		}
 		return nil
@@ -49,18 +92,28 @@ func BuildSymbols(root string) (*SymbolIndex, error) {
 		if err != nil {
 			continue
 		}
-		content := string(b)
-		ext := strings.ToLower(filepath.Ext(f))
-		symbols := extractSymbols(ext, content)
+		rel := f
+		if r, err := filepath.Rel(root, f); err == nil {
+			rel = r
+		}
+		symbols := extractSymbols(f, b)
 		if len(symbols) > 0 {
-			rel := f
-			if r, err := filepath.Rel(root, f); err == nil {
-				rel = r
-			}
-			idx.Files = append(idx.Files, FileSymbols{File: filepath.ToSlash(rel), Symbols: symbols})
+			// Sort symbols by line number
+			sort.Slice(symbols, func(i, j int) bool {
+				return symbols[i].Line < symbols[j].Line
+			})
+			idx.Files = append(idx.Files, FileSymbols{
+				File:    filepath.ToSlash(rel),
+				Symbols: symbols,
+			})
 		}
 	}
-	// persist to .ledit/symbols.json
+	// Sort files by path
+	sort.Slice(idx.Files, func(i, j int) bool {
+		return idx.Files[i].File < idx.Files[j].File
+	})
+
+	// Persist to .ledit/symbols.json
 	if err := os.MkdirAll(filepath.Join(root, ".ledit"), 0755); err != nil {
 		log.Printf("[debug] failed to create .ledit directory: %v", err)
 	}
@@ -76,107 +129,167 @@ func BuildSymbols(root string) (*SymbolIndex, error) {
 	return idx, nil
 }
 
-func extractSymbols(ext, content string) []Symbol {
+// extractSymbols extracts symbols from a file, tracking line numbers.
+func extractSymbols(path string, content []byte) []Symbol {
+	ext := strings.ToLower(filepath.Ext(path))
 	var out []Symbol
-	add := func(kind, name string) {
+
+	addSymbol := func(kind, name string, line int) {
 		if name != "" {
-			out = append(out, Symbol{Name: name, Kind: kind})
+			out = append(out, Symbol{Name: name, Kind: kind, Line: line})
 		}
 	}
+
+	// addPatternMatch finds all regex matches in content, calculates line
+	// numbers from byte offsets, and passes the first capture group to fn.
+	//
+	// NOTE on line calculation: Go's regexp with (?m)^ can match starting at
+	// the '\n' character itself (not the character after it). When a blank line
+	// precedes the match, m[0] points to '\n', so we must include that byte in
+	// the newline count to get the correct line number.
+	addPatternMatch := func(pattern, kind string, fn func(match []byte) string) {
+		re := regexp.MustCompile(pattern)
+		matches := re.FindAllSubmatchIndex(content, -1)
+		for _, m := range matches {
+			if len(m) >= 4 {
+				name := fn(content[m[2]:m[3]])
+				if name != "" {
+					lineNum := bytes.Count(content[:m[0]+1], []byte{'\n'}) + 1
+					addSymbol(kind, string(name), lineNum)
+				}
+			}
+		}
+	}
+
 	switch ext {
 	case ".go":
-		reFunc := regexp.MustCompile(`(?m)^\s*func\s+(?:\([^)]*\)\s*)?([A-Za-z_][A-Za-z0-9_]*)\s*\(`)
-		for _, m := range reFunc.FindAllStringSubmatch(content, -1) {
-			add("func", m[1])
-		}
-		reType := regexp.MustCompile(`(?m)^\s*type\s+([A-Za-z_][A-Za-z0-9_]*)\b`)
-		for _, m := range reType.FindAllStringSubmatch(content, -1) {
-			add("type", m[1])
-		}
-	case ".py":
-		reDef := regexp.MustCompile(`(?m)^\s*def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(`)
-		for _, m := range reDef.FindAllStringSubmatch(content, -1) {
-			add("func", m[1])
-		}
-		reCls := regexp.MustCompile(`(?m)^\s*class\s+([A-Za-z_][A-Za-z0-9_]*)\b`)
-		for _, m := range reCls.FindAllStringSubmatch(content, -1) {
-			add("class", m[1])
-		}
-	case ".js", ".ts":
-		reFunc := regexp.MustCompile(`(?m)\bfunction\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(|\b([A-Za-z_][A-Za-z0-9_]*)\s*=\s*\(`)
-		for _, m := range reFunc.FindAllStringSubmatch(content, -1) {
-			name := m[1]
-			if name == "" {
-				name = m[2]
+		// Functions: func Name(
+		addPatternMatch(`(?m)^\s*func\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(`, "func", func(b []byte) string { return string(b) })
+		// Methods: func (recv) Name(
+		addPatternMatch(`(?m)^\s*func\s+\([^)]+\)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(`, "method", func(b []byte) string { return string(b) })
+		// Types: type Name struct
+		addPatternMatch(`(?m)^\s*type\s+([A-Za-z_][A-Za-z0-9_]*)\s+struct\b`, "type", func(b []byte) string { return string(b) })
+		// Interfaces: type X interface {
+		addPatternMatch(`(?m)^\s*type\s+([A-Za-z_][A-Za-z0-9_]*)\s+interface\s*\{`, "interface", func(b []byte) string { return string(b) })
+		// Type aliases: type X = Y
+		addPatternMatch(`(?m)^\s*type\s+([A-Za-z_][A-Za-z0-9_]*)\s*=`, "type", func(b []byte) string { return string(b) })
+		// Other named types: type Status int, type Handler func(...), type Slice []T
+		// (catch-all for types not matching struct/interface/alias above)
+		addPatternMatch(`(?m)^\s*type\s+([A-Za-z_][A-Za-z0-9_]*)\s+[A-Za-z(*[]`, "type", func(b []byte) string { return string(b) })
+		// Const and Var: extracted line-by-line to skip block forms (const (), var ())
+		constRe := regexp.MustCompile(`^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=`)
+		varRe := regexp.MustCompile(`^\s*var\s+([A-Za-z_][A-Za-z0-9_]*)\s*=`)
+		lines := bytes.Split(content, []byte{'\n'})
+		for i, line := range lines {
+			text := strings.TrimSpace(string(line))
+			if strings.HasPrefix(text, "const ") && !strings.Contains(text, "(") {
+				if m := constRe.FindSubmatch(line); len(m) > 1 {
+					addSymbol("constant", string(m[1]), i+1)
+				}
 			}
-			add("func", name)
+			if strings.HasPrefix(text, "var ") && !strings.Contains(text, "(") {
+				if m := varRe.FindSubmatch(line); len(m) > 1 {
+					addSymbol("variable", string(m[1]), i+1)
+				}
+			}
 		}
-		reCls := regexp.MustCompile(`(?m)\bclass\s+([A-Za-z_][A-Za-z0-9_]*)\b`)
-		for _, m := range reCls.FindAllStringSubmatch(content, -1) {
-			add("class", m[1])
-		}
+
+	case ".py":
+		// Functions: def name(
+		addPatternMatch(`(?m)^\s*def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(`, "func", func(b []byte) string { return string(b) })
+		// Classes: class Name(
+		addPatternMatch(`(?m)^\s*class\s+([A-Za-z_][A-Za-z0-9_]*)\b`, "class", func(b []byte) string { return string(b) })
+		// Constants: UPPER_SNAKE_CASE = ... at module level (no indentation)
+		addPatternMatch(`(?m)^([A-Z][A-Z0-9_]*)\s*=`, "constant", func(b []byte) string { return string(b) })
+
+	case ".js", ".ts", ".jsx", ".tsx", ".mjs":
+		// Functions: function name(
+		addPatternMatch(`(?m)\bfunction\s+([A-Za-z_][A-Za-z0-9_$]*)\s*[<(]`, "func", func(b []byte) string { return string(b) })
+		// Classes
+		addPatternMatch(`(?m)\bclass\s+([A-Za-z_$][a-zA-Z0-9_$]*)\b`, "class", func(b []byte) string { return string(b) })
+		// Interfaces (TypeScript)
+		addPatternMatch(`(?m)\binterface\s+([A-Za-z_$][a-zA-Z0-9_$]*)\b`, "interface", func(b []byte) string { return string(b) })
+		// Type aliases
+		addPatternMatch(`(?m)\btype\s+([A-Za-z_$][a-zA-Z0-9_$]*)\s*=`, "type", func(b []byte) string { return string(b) })
+		// Exported functions: export default function, export function
+		addPatternMatch(`(?m)\bexport\s+(?:default\s+)?function\s+([A-Za-z_$][a-zA-Z0-9_$]*)`, "func", func(b []byte) string { return string(b) })
+		// Arrow functions: const name = (params) => or const name = async (params) =>
+		addPatternMatch(`(?m)\bconst\s+([A-Za-z_$][a-zA-Z0-9_$]*)\s*=\s*(?:async\s+)?(?:\([^)]*\)|[A-Za-z_$][a-zA-Z0-9_$]*)\s*=>`, "func", func(b []byte) string { return string(b) })
+		// Constants: const NAME: Type = ... (typed)
+		addPatternMatch(`(?m)\bconst\s+([A-Za-z_$][a-zA-Z0-9_$]*)\s*:\s*[A-Z]`, "constant", func(b []byte) string { return string(b) })
+		// Constants: const NAME = value (untyped, non-arrow-function)
+		addPatternMatch(`(?m)\bconst\s+([A-Za-z_$][a-zA-Z0-9_$]*)\s*=\s*(?:async\s+)?[^=(]`, "constant", func(b []byte) string { return string(b) })
+		// Let/Var declarations
+		addPatternMatch(`(?m)\b(?:let|var)\s+([A-Za-z_$][a-zA-Z0-9_$]*)\s*[=:]`, "variable", func(b []byte) string { return string(b) })
+
 	case ".rb":
-		reDef := regexp.MustCompile(`(?m)^\s*def\s+([A-Za-z_][A-Za-z0-9_!?]*)`)
-		for _, m := range reDef.FindAllStringSubmatch(content, -1) {
-			add("func", m[1])
-		}
-		reCls := regexp.MustCompile(`(?m)^\s*class\s+([A-Za-z_][A-Za-z0-9_:]*)`)
-		for _, m := range reCls.FindAllStringSubmatch(content, -1) {
-			add("class", m[1])
-		}
+		addPatternMatch(`(?m)^\s*def\s+(?:self\.)?([A-Za-z_][A-Za-z0-9_!?]*)`, "func", func(b []byte) string { return string(b) })
+		addPatternMatch(`^\s*class\s+([A-Za-z_][A-Za-z0-9_:]*)`, "class", func(b []byte) string { return string(b) })
+
 	case ".php":
-		reDef := regexp.MustCompile(`(?m)^\s*function\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(`)
-		for _, m := range reDef.FindAllStringSubmatch(content, -1) {
-			add("func", m[1])
-		}
-		reCls := regexp.MustCompile(`(?m)^\s*class\s+([A-Za-z_][A-Za-z0-9_]*)`)
-		for _, m := range reCls.FindAllStringSubmatch(content, -1) {
-			add("class", m[1])
-		}
+		addPatternMatch(`^\s*function\s+([A-Za-z_][A-Za-z0-9_]*)`, "func", func(b []byte) string { return string(b) })
+		addPatternMatch(`^\s*class\s+([A-Za-z_][A-Za-z0-9_]*)`, "class", func(b []byte) string { return string(b) })
+
 	case ".rs":
-		reFn := regexp.MustCompile(`(?m)^\s*fn\s+([A-Za-z_][A-Za-z0-9_]*)\b`)
-		for _, m := range reFn.FindAllStringSubmatch(content, -1) {
-			add("func", m[1])
-		}
+		addPatternMatch(`(?m)^\s*fn\s+([A-Za-z_][A-Za-z0-9_]*)`, "func", func(b []byte) string { return string(b) })
+		addPatternMatch(`(?m)^\s*struct\s+([A-Za-z_][A-Za-z0-9_]*)`, "struct", func(b []byte) string { return string(b) })
+		addPatternMatch(`(?m)^\s*enum\s+([A-Za-z_][A-Za-z0-9_]*)`, "enum", func(b []byte) string { return string(b) })
+		addPatternMatch(`(?m)^\s*trait\s+([A-Za-z_][A-Za-z0-9_]*)`, "trait", func(b []byte) string { return string(b) })
+		addPatternMatch(`(?m)^\s*impl\s+(?:<[^>]+>\s*)?([A-Za-z_][A-Za-z0-9_]*)`, "impl", func(b []byte) string { return string(b) })
+		addPatternMatch(`(?m)^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)`, "constant", func(b []byte) string { return string(b) })
+
 	case ".java":
-		reCls := regexp.MustCompile(`(?m)\bclass\s+([A-Za-z_][A-Za-z0-9_]*)\b`)
-		for _, m := range reCls.FindAllStringSubmatch(content, -1) {
-			add("class", m[1])
-		}
-		reMeth := regexp.MustCompile(`(?m)\b([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\([^;]*\)\s*\{`)
-		for _, m := range reMeth.FindAllStringSubmatch(content, -1) {
-			add("method", m[2])
+		// Classes
+		addPatternMatch(`\bclass\s+([A-Za-z_][A-Za-z0-9_]*)`, "class", func(b []byte) string { return string(b) })
+		// Methods: capture the name that comes right before the opening (
+		// Skip keywords like if/for/while/switch/return/new
+		addPatternMatch(`(?m)^\s*(?:public|private|protected|static|\s)*\s*([A-Za-z_][A-Za-z0-9_]*)\s*\([^;]*\)\s*(?:throws\s+[A-Za-z_,\s]+)?\{`, "method", func(b []byte) string { return string(b) })
+	}
+
+	// Deduplicate by name+kind+line
+	seen := make(map[string]bool)
+	deduped := out[:0]
+	for _, s := range out {
+		key := fmt.Sprintf("%s:%s:%d", s.Name, s.Kind, s.Line)
+		if !seen[key] {
+			seen[key] = true
+			deduped = append(deduped, s)
 		}
 	}
-	return out
+	return deduped
 }
 
-// SearchSymbols returns files whose symbols match any of the provided tokens (case-insensitive)
-func SearchSymbols(idx *SymbolIndex, tokens []string) []string {
-	var out []string
-	tokSet := map[string]bool{}
+// SearchSymbolFiles returns files whose symbols match any of the provided tokens (case-insensitive).
+// For each matching file, only the matching symbols are included.
+// Returns empty slice (not nil) if no matches.
+func SearchSymbolFiles(idx *SymbolIndex, tokens []string) []FileSymbols {
+	tokSet := make(map[string]bool)
 	for _, t := range tokens {
 		t = strings.ToLower(strings.TrimSpace(t))
 		if len(t) >= 3 {
 			tokSet[t] = true
 		}
 	}
+	var out []FileSymbols
 	for _, fs := range idx.Files {
-		match := false
+		var matchingSymbols []Symbol
 		for _, s := range fs.Symbols {
 			name := strings.ToLower(s.Name)
 			for t := range tokSet {
 				if strings.Contains(name, t) {
-					match = true
+					matchingSymbols = append(matchingSymbols, s)
 					break
 				}
 			}
-			if match {
-				break
-			}
 		}
-		if match {
-			out = append(out, fs.File)
+		if len(matchingSymbols) > 0 {
+			sort.Slice(matchingSymbols, func(i, j int) bool {
+				return matchingSymbols[i].Line < matchingSymbols[j].Line
+			})
+			out = append(out, FileSymbols{
+				File:    fs.File,
+				Symbols: matchingSymbols,
+			})
 		}
 	}
 	return out

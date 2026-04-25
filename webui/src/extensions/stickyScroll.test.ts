@@ -25,12 +25,12 @@ jest.mock('@codemirror/state', () => ({
   StateEffect: { define: jest.fn(() => ({})) },
 }));
 
-// Mock the GoToSymbolOverlay module.
+// Mock the symbolUtils module.
 // Use requireActual to preserve the real findSymbolScopeEnd implementation
 // (avoids duplicating the brace-counting logic in the mock), while replacing
 // extractSymbols and getEnclosingSymbols with jest.fn() for controlled testing.
-jest.mock('../components/GoToSymbolOverlay', () => ({
-  ...jest.requireActual('../components/GoToSymbolOverlay'),
+jest.mock('../utils/symbolUtils', () => ({
+  ...jest.requireActual('../utils/symbolUtils'),
   extractSymbols: jest.fn(),
   getEnclosingSymbols: jest.fn(),
 }));
@@ -323,7 +323,7 @@ describe('findScopeEnd', () => {
 
 describe('computeStickyScopes', () => {
   // Import the mocked functions for use in tests
-  const { getEnclosingSymbols } = require('../components/GoToSymbolOverlay');
+  const { getEnclosingSymbols } = require('../utils/symbolUtils');
 
   beforeEach(() => {
     jest.clearAllMocks();

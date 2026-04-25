@@ -1,7 +1,7 @@
 import { useMemo, useCallback } from 'react';
 import type { KeyboardEvent } from 'react';
 import { ChevronRight } from 'lucide-react';
-import { type SymbolInfo as BreadcrumbSymbol, type SymbolKind, KIND_ICONS } from './GoToSymbolOverlay';
+import { type SymbolInfo as BreadcrumbSymbol, type SymbolKind, KIND_ICONS } from '../utils/symbolUtils';
 import './EditorBreadcrumb.css';
 
 // ── Types ────────────────────────────────────────────────────────────────

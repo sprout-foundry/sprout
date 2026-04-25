@@ -12,22 +12,37 @@ import { StateEffect, StateField } from '@codemirror/state';
 import type { Extension } from '@codemirror/state';
 import type { LSPClient } from '@codemirror/lsp-client';
 
-import { getLSPClientService, LSPClientService } from '../services/lspClientService';
+import { getLSPClientService, LSPClientService, getFileURI, uriToFilePath } from '../services/lspClientService';
 
 // ---------------------------------------------------------------------------
 // Helper Functions
 // ---------------------------------------------------------------------------
 
+// getFileURI and uriToFilePath are now imported from lspClientService
+
+// ---------------------------------------------------------------------------
+// Check if LSP client is connected and ready
+// ---------------------------------------------------------------------------
+
 /**
- * Convert a file path to a file:// URI.
+ * Check if an LSP client is connected and healthy for a given language.
+ *
+ * @param languageId - The language ID to check
+ * @returns true if LSP client is active for this language
  */
-function filePathToURI(filePath: string): string {
-  if (!filePath) return '';
-  let normalized = filePath.replace(/\\/g, '/');
-  if (!normalized.startsWith('/')) {
-    normalized = '/' + normalized;
-  }
-  return `file://${normalized}`;
+export function isLSPClientConnected(languageId: string): boolean {
+  const client = LSPClientService.lspClientService.getClientSync(languageId);
+  return client?.connected ?? false;
+}
+
+/**
+ * Synchronously get an existing LSP client without creating one.
+ *
+ * @param languageId - The language ID
+ * @returns The LSPClient instance, or null if not connected
+ */
+export function getClientForLanguageSync(languageId: string): LSPClient | null {
+  return LSPClientService.lspClientService.getClientSync(languageId);
 }
 
 /**
@@ -53,7 +68,7 @@ export function buildLSPPluginExtensions(
   languageId: string,
 ): Extension[] {
   if (!client) return [];
-  const fileURI = filePathToURI(filePath);
+  const fileURI = getFileURI(filePath);
   return [client.plugin(fileURI, languageId)];
 }
 
@@ -143,4 +158,12 @@ export {
   LSP_SUPPORTED_LANGUAGES,
   type LSPLanguageInfo,
   type LSPStatusResponse,
+  setGlobalDisplayFileCallback,
+  getGlobalDisplayFileCallback,
+  type DisplayFileCallback,
+  getFileURI,
+  uriToFilePath,
+  registerEditorView,
+  unregisterEditorView,
+  findEditorView,
 } from '../services/lspClientService';

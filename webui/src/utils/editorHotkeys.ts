@@ -9,6 +9,7 @@ interface EditorHotkeyActions {
   onSave?: () => void;
   onGoToLine?: () => void;
   onGoToSymbol?: () => void;
+  onGoToWorkspaceSymbol?: () => void;
   onToggleWordWrap?: () => void;
   onToggleRelativeLineNumbers?: () => void;
 }
@@ -413,6 +414,7 @@ const EDITOR_COMMAND_IDS = new Set([
   'save_file',
   'editor_goto_line',
   'editor_goto_symbol',
+  'editor_workspace_symbol',
   'editor_move_line_up',
   'editor_move_line_down',
   'editor_duplicate_line_up',
@@ -769,6 +771,24 @@ export function getEditorKeymap(hotkeyEntries: HotkeyEntry[] | null, actions: Ed
       return true;
     }),
   );
+
+  // Go to workspace symbol — fallback Mod-t (Ctrl+T / Cmd+T) matching the preset definition.
+  const gotoWorkspaceSymbolBindings = bindingsFor('editor_workspace_symbol', () => {
+    actions.onGoToWorkspaceSymbol?.();
+    return true;
+  });
+  if (gotoWorkspaceSymbolBindings.length === 0) {
+    bindings.push({
+      key: 'Mod-t',
+      preventDefault: true,
+      run: () => {
+        actions.onGoToWorkspaceSymbol?.();
+        return true;
+      },
+    });
+  } else {
+    bindings.push(...gotoWorkspaceSymbolBindings);
+  }
 
   return bindings;
 }

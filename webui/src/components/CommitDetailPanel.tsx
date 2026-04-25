@@ -92,6 +92,7 @@ function CommitDetailPanel({
           metadata: {
             sourcePath: `commit:${commit.hash}:${filePath}`,
             diffContent: result.diff,
+            modeOptions: ['combined'],
           },
         });
       } catch (err) {
@@ -116,6 +117,7 @@ function CommitDetailPanel({
       metadata: {
         sourcePath: `commit:${commit.hash}`,
         diffContent: detail.diff,
+        modeOptions: ['combined'],
       },
     });
   }, [detail, commit, openWorkspaceBuffer, log]);

@@ -19,4 +19,18 @@ describe('CommandPalette path formatting', () => {
       'src/components/ReallyImportantFile.tsx',
     );
   });
+
+  it('returns the raw path when workspace root does not match', () => {
+    expect(toWorkspaceRelativePath('/other/path/file.ts', '/workspace/project')).toBe(
+      '/other/path/file.ts',
+    );
+  });
+
+  it('returns empty string when path equals workspace root', () => {
+    expect(toWorkspaceRelativePath('/workspace/project', '/workspace/project')).toBe('');
+  });
+
+  it('normalizes backslashes to forward slashes', () => {
+    expect(toWorkspaceRelativePath('src\\components\\file.ts', '')).toBe('src/components/file.ts');
+  });
 });

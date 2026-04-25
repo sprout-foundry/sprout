@@ -12,6 +12,38 @@
   display: flex;
   align-items: center;
   gap: 4px;
+  flex-shrink: 0;
+}
+
+/* ── Breadcrumb integration ──────────────────────────────────────── */
+
+.toolbar-breadcrumb {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  height: 100%;
+}
+
+.toolbar-breadcrumb .editor-breadcrumb {
+  border-bottom: none;
+  background: transparent;
+  height: 100%;
+  padding: 0 8px;
+  flex: 1;
+}
+
+.toolbar-breadcrumb .editor-breadcrumb .breadcrumb-list {
+  overflow: hidden;
+}
+
+.toolbar-separator {
+  width: 1px;
+  height: 20px;
+  background: var(--border-subtle);
+  flex-shrink: 0;
+  margin: 0 4px;
 }
 
 .toolbar-button {

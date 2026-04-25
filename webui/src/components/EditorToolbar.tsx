@@ -1,12 +1,19 @@
 import type { ReactNode } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { Save, Sun, Moon, Loader2 } from 'lucide-react';
+import EditorBreadcrumb, { type BreadcrumbSymbol } from './EditorBreadcrumb';
 import './EditorToolbar.css';
 
 interface EditorToolbarProps {
   onSave: () => void;
   saving?: boolean;
   showSave?: boolean;
+  breadcrumbProps?: {
+    filePath: string;
+    onNavigate?: (path: string) => void;
+    symbols?: BreadcrumbSymbol[];
+    onNavigateToSymbol?: (line: number) => void;
+  };
   actions?: Array<{
     id: string;
     title: string;
@@ -29,6 +36,7 @@ function EditorToolbar({
   onSave,
   saving = false,
   showSave = true,
+  breadcrumbProps,
   actions = [],
   rightActions = [],
 }: EditorToolbarProps): JSX.Element {
@@ -37,6 +45,20 @@ function EditorToolbar({
   return (
     <div className="editor-toolbar">
       <div className="toolbar-group">
+        {breadcrumbProps && (
+          <>
+            <div className="toolbar-breadcrumb">
+              <EditorBreadcrumb
+                filePath={breadcrumbProps.filePath}
+                onNavigate={breadcrumbProps.onNavigate}
+                symbols={breadcrumbProps.symbols}
+                onNavigateToSymbol={breadcrumbProps.onNavigateToSymbol}
+              />
+            </div>
+            <div className="toolbar-separator" />
+          </>
+        )}
+
         {actions.map((action) => (
           <button
             key={action.id}

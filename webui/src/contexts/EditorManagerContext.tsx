@@ -27,7 +27,7 @@ interface EditorManagerContextValue {
   // Actions
   openFile: (file: any) => string; // Returns buffer ID
   openWorkspaceBuffer: (options: {
-    kind: 'chat' | 'diff' | 'review' | 'file';
+    kind: 'chat' | 'diff' | 'review' | 'file' | 'compare';
     path: string;
     title: string;
     content?: string;
@@ -35,6 +35,14 @@ interface EditorManagerContextValue {
     isPinned?: boolean;
     isClosable?: boolean;
     metadata?: Record<string, any>;
+  }) => string;
+  openCompareBuffer: (options: {
+    originalContent: string;
+    modifiedContent: string;
+    fileName: string;
+    aLabel?: string;
+    bLabel?: string;
+    title?: string;
   }) => string;
   closeBuffer: (bufferId: string) => void;
   reorderBuffers: (sourceBufferId: string, targetBufferId: string) => void;
@@ -318,7 +326,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   }, []);
 
   const openWorkspaceBuffer = useCallback((options: {
-    kind: 'chat' | 'diff' | 'review' | 'file';
+    kind: 'chat' | 'diff' | 'review' | 'file' | 'compare';
     path: string;
     title: string;
     content?: string;
@@ -408,6 +416,33 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
 
     return bufferId;
   }, [activePaneId, activateBuffer, getRightmostPane, panes]);
+
+  // Convenience helper to open a compare buffer (renders CompareTab in WorkspacePane)
+  const openCompareBuffer = useCallback((options: {
+    originalContent: string;
+    modifiedContent: string;
+    fileName: string;
+    aLabel?: string;
+    bLabel?: string;
+    title?: string;
+  }) => {
+    const bufferTitle = options.title || `Compare: ${options.fileName}`;
+    const bufferPath = `__workspace/compare/${options.fileName}-${Date.now()}`;
+
+    return openWorkspaceBuffer({
+      kind: 'compare',
+      path: bufferPath,
+      title: bufferTitle,
+      metadata: {
+        originalContent: options.originalContent,
+        modifiedContent: options.modifiedContent,
+        fileName: options.fileName,
+        aLabel: options.aLabel,
+        bLabel: options.bLabel,
+        title: options.title,
+      },
+    });
+  }, [openWorkspaceBuffer]);
 
   // Update buffer content
   const updateBufferMetadata = useCallback((bufferId: string, updates: Record<string, any>) => {
@@ -1011,6 +1046,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     paneSizes,
     openFile,
     openWorkspaceBuffer,
+    openCompareBuffer,
     closeBuffer,
     reorderBuffers,
     moveBufferToPane,

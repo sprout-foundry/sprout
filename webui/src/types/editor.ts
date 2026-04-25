@@ -1,4 +1,4 @@
-export type EditorBufferKind = 'file' | 'chat' | 'diff' | 'review' | 'welcome';
+export type EditorBufferKind = 'file' | 'chat' | 'diff' | 'review' | 'welcome' | 'compare';
 
 export interface EditorBuffer {
   id: string;

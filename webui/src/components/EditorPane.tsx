@@ -61,6 +61,7 @@ import { cursorHistoryPlugin } from '../extensions/cursorHistory';
 import { dragDropMovePlugin } from '../extensions/dragDropMove';
 import { indentGuidesPlugin } from '../extensions/indentGuides';
 import { stickyScrollPlugin } from '../extensions/stickyScroll';
+import { codeLensPlugin } from '../extensions/codeLens';
 import { bracketColorizationPlugin } from '../extensions/bracketColorization';
 import { linkedScrollExtension, setLinkedScrollEnabled, suppressScrollSync } from '../extensions/linkedScroll';
 import { getLanguageExtensions, resolveLanguageId } from '../extensions/languageRegistry';
@@ -1348,6 +1349,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       cursorHistoryPlugin,
       indentGuidesPlugin(),
       stickyScrollPlugin(() => buffer?.file?.ext),
+      codeLensPlugin(() => buffer?.file?.ext),
       linkedScrollExtension(paneId, () => buffer?.file?.path ?? null),
       indentOnInput(),
       highlightSpecialChars(),

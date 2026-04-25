@@ -247,6 +247,35 @@
   color: #fff;
 }
 
+/* ── Merge-expanded dialog state (FileChangeDialog) ─────── */
+
+.themed-dialog-card--merge-expanded {
+  width: min(800px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: hidden;
+  animation: themed-dialog-expand 0.25s var(--ease-out);
+}
+
+@keyframes themed-dialog-expand {
+  from {
+    width: min(440px, 100%);
+    max-height: none;
+  }
+  to {
+    width: min(800px, 100%);
+    max-height: calc(100vh - 48px);
+  }
+}
+
+.themed-dialog-merge-view {
+  margin: 0 var(--space-10) var(--space-4);
+  min-height: 200px;
+  max-height: 50vh;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  overflow: hidden;
+}
+
 /* ── SecurityApprovalDialog ──────────────────────────────────── */
 
 .security-approval-overlay {

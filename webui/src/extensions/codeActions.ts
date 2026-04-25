@@ -12,11 +12,41 @@ import {
 } from '@codemirror/view';
 import { StateField, type Extension, StateEffect as SE, Facet, RangeSetBuilder } from '@codemirror/state';
 import { ApiService } from '../services/api';
+import { uriToFilePath, getFileURI } from '../services/lspClientService';
+import { getClientForLanguageSync } from './lspExtensions';
+import { LSPPlugin } from '@codemirror/lsp-client';
 import { resolveLanguageId } from './languageRegistry';
 import { debugLog } from '../utils/log';
 import { computeStaticActions, kindEmoji } from './staticAnalysis';
 
 import './codeActions.css';
+
+/** LSP CodeAction request parameters. */
+interface LSPCodeActionParams {
+  textDocument: { uri: string };
+  range: { start: { line: number; character: number }; end: { line: number; character: number } };
+  context: { diagnostics: unknown[] };
+}
+
+/** LSP CodeAction result item. */
+interface LSPCodeActionResult {
+  title: string;
+  kind?: string;
+  edit?: {
+    changes?: Record<string, Array<{
+      range: { start: { line: number; character: number }; end: { line: number; character: number } };
+      newText: string;
+    }>>;
+  };
+}
+
+/** LSP WorkspaceEdit fragment for convertLSPEdits. */
+interface LSPWorkspaceEdit {
+  changes?: Record<string, Array<{
+    range: { start: { line: number; character: number }; end: { line: number; character: number } };
+    newText: string;
+  }>>;
+}
 
 /** CodeActionEdit describes a single text replacement within a file. */
 export interface CodeActionEdit {
@@ -106,6 +136,7 @@ class CodeActionsPlugin implements PluginValue {
   private view: EditorView;
   private config: Required<CodeActionsConfig>;
   private fetchTimeout: ReturnType<typeof setTimeout> | null = null;
+  private fetchGeneration: number = 0;
   private menuEl: HTMLDivElement | null = null;
   private lastFetchedLine: number = -1;
   private lastFetchedContent: string = '';
@@ -138,9 +169,15 @@ class CodeActionsPlugin implements PluginValue {
       return;
     }
 
+    // Increment generation to track this fetch request
+    this.fetchGeneration++;
+    const gen = this.fetchGeneration;
+
     // Debounce fetches
     this.fetchTimeout = setTimeout(() => {
-      this.fetchCodeActions(currentLine);
+      if (gen === this.fetchGeneration) {
+        this.fetchCodeActions(currentLine);
+      }
     }, 400);
   }
 
@@ -174,30 +211,68 @@ class CodeActionsPlugin implements PluginValue {
     this.lastFetchedContent = content;
 
     try {
-      const result = await api.getSemanticCodeActions(filePath, content, languageId, lineNum, col);
+      // Try LSP client first if available for this language
+      let semanticActions: CodeAction[] = [];
+      const lspClient = getClientForLanguageSync(languageId);
+      const plugin = LSPPlugin.get(this.view);
 
-      if (!result) {
+      if (lspClient?.connected && plugin) {
+        try {
+          const fileURI = getFileURI(filePath);
+          const startPos = plugin.toPosition(lineInfo.from);
+          const endPos = plugin.toPosition(lineInfo.to);
+
+          await lspClient.sync();
+
+          const params: LSPCodeActionParams = {
+            textDocument: { uri: fileURI },
+            range: { start: startPos, end: endPos },
+            context: { diagnostics: [] },
+          };
+          const lspResult = await lspClient.request('textDocument/codeAction', params) as LSPCodeActionResult[];
+
+          if (lspResult && Array.isArray(lspResult)) {
+            semanticActions = lspResult.map((action) => ({
+              title: action.title,
+              kind: action.kind || '',
+              edits: this.convertLSPEdits(action.edit, plugin),
+            }));
+          }
+        } catch (lspErr) {
+          debugLog('[codeActions] LSP codeAction request failed, falling back to REST:', lspErr);
+          semanticActions = [];
+        }
+      }
+
+      // If LSP didn't return actions, fall back to REST API
+      if (semanticActions.length === 0) {
+        const result = await api.getSemanticCodeActions(filePath, content, languageId, lineNum, col);
+
+        if (result) {
+          semanticActions = (result.code_actions || []).map((a) => ({
+            title: a.title,
+            kind: a.kind,
+            edits: (a.edits || []).map((e) => ({
+              filePath: e.filePath,
+              from: e.from,
+              to: e.to,
+              newText: e.newText,
+            })),
+          }));
+        }
+      }
+
+      if (semanticActions.length === 0) {
         this.view.dispatch({
           effects: setCodeActions.of({ actions: staticActions, loading: false, line: lineNum }),
         });
         return;
       }
 
-      const lspActions = (result.code_actions || []).map((a) => ({
-        title: a.title,
-        kind: a.kind,
-        edits: (a.edits || []).map((e) => ({
-          filePath: e.filePath,
-          from: e.from,
-          to: e.to,
-          newText: e.newText,
-        })),
-      }));
-
-      // Merge static actions with LSP actions (static first, then LSP)
+      // Merge static actions with semantic actions (static first, then semantic)
       // Deduplicate by title in case both provide the same action
       const seenTitles = new Set(staticActions.map(a => a.title));
-      const mergedActions = [...staticActions, ...lspActions.filter(a => !seenTitles.has(a.title))];
+      const mergedActions = [...staticActions, ...semanticActions.filter(a => !seenTitles.has(a.title))];
 
       this.view.dispatch({
         effects: setCodeActions.of({ actions: mergedActions, loading: false, line: lineNum }),
@@ -209,6 +284,47 @@ class CodeActionsPlugin implements PluginValue {
         effects: setCodeActions.of({ actions: staticActions, loading: false, line: lineNum }),
       });
     }
+  }
+
+  /**
+   * Convert LSP WorkspaceEdit changes into CodeActionEdit[] format.
+   *
+   * For edits in the current file, uses the LSPPlugin to convert positions.
+   * For edits in other files, stores only filePath and raw position info;
+   * these are forwarded via onApplyEdits.
+   */
+  private convertLSPEdits(
+    edit: LSPWorkspaceEdit | undefined,
+    plugin: LSPPlugin,
+  ): CodeActionEdit[] {
+    if (!edit?.changes) return [];
+
+    const edits: CodeActionEdit[] = [];
+    const currentFilePath = this.config.getFilePath() || '';
+
+    for (const [uri, textEdits] of Object.entries(edit.changes)) {
+      const editFilePath = uriToFilePath(uri);
+
+      for (const te of textEdits) {
+        if (editFilePath === currentFilePath && plugin) {
+          // Convert LSP positions to CodeMirror offsets using the plugin
+          const from = plugin.fromPosition(te.range.start);
+          const to = plugin.fromPosition(te.range.end);
+          edits.push({ filePath: editFilePath, from, to, newText: te.newText });
+        } else {
+          // Edits for other files — store without valid from/to
+          // These will be forwarded via onApplyEdits
+          edits.push({
+            filePath: editFilePath,
+            from: 0,
+            to: 0,
+            newText: te.newText,
+          });
+        }
+      }
+    }
+
+    return edits;
   }
 
   /**
@@ -410,6 +526,8 @@ class CodeActionsPlugin implements PluginValue {
   }
 
   destroy() {
+    // Mark generation as invalid to ignore any pending async callbacks
+    this.fetchGeneration = -1;
     if (this.fetchTimeout) {
       clearTimeout(this.fetchTimeout);
       this.fetchTimeout = null;

@@ -227,6 +227,20 @@ describe('extractSymbols', () => {
       expect(symbols).toHaveLength(1);
       expect(symbols[0]).toMatchObject({ name: 'FOO_BAR', kind: 'variable' });
     });
+
+    it('does not extract symbols from commented-out TypeScript lines', () => {
+      const content = '// function oldCode() {}\nfunction realFunc() {}\n';
+      const symbols = extractSymbols(content, '.ts');
+      expect(symbols).toHaveLength(1);
+      expect(symbols[0]).toMatchObject({ name: 'realFunc', kind: 'function' });
+    });
+
+    it('extracts generic arrow functions as function kind', () => {
+      const content = 'const handler = <T,>(x: T) => x;\n';
+      const symbols = extractSymbols(content, '.ts');
+      expect(symbols).toHaveLength(1);
+      expect(symbols[0]).toMatchObject({ name: 'handler', kind: 'function' });
+    });
   });
 
   // ── JavaScript patterns ─────────────────────────────────────────────
@@ -290,6 +304,22 @@ describe('extractSymbols', () => {
       const symbols = extractSymbols(content, '.py');
       expect(symbols).toHaveLength(1);
       expect(symbols[0]).toMatchObject({ name: 'foo', kind: 'variable' });
+    });
+
+    it('does not extract symbols from commented-out Python lines', () => {
+      const content = '# class Foo:\n# def bar():\nFOO = 42\n';
+      const symbols = extractSymbols(content, '.py');
+      expect(symbols).toHaveLength(1);
+      expect(symbols[0]).toMatchObject({ name: 'FOO', kind: 'constant' });
+    });
+
+    it('preserves symbols when # appears inside a Python string', () => {
+      const content = 's = "# not a comment"\nFOO = 42\n';
+      const symbols = extractSymbols(content, '.py');
+      // s should be extracted as a variable, and FOO as constant
+      expect(symbols.some((s) => s.name === 'FOO' && s.kind === 'constant')).toBe(true);
+      // The '# not a comment' shouldn't cause the line to be stripped
+      expect(symbols.some((s) => s.name === 's' && s.kind === 'variable')).toBe(true);
     });
   });
 
@@ -403,6 +433,49 @@ describe('extractSymbols', () => {
       expect(names).not.toContain('return');
       expect(names).not.toContain('typeof');
       expect(names).not.toContain('x');
+    });
+  });
+
+  // ── Python scope detection ───────────────────────────────────────────
+
+  describe('Python scope detection', () => {
+    it('correctly identifies scope boundaries using indentation', () => {
+      const content = [
+        'class MyClass:',
+        '    def my_method(self):',
+        '        x = 1',
+        '    def another_method(self):',
+        '        y = 2',
+        '',
+        'class OtherClass:',
+        '    def other_method(self):',
+        '        z = 3',
+      ].join('\n');
+
+      // my_method (line 2) should have scope MyClass
+      const scope1 = getScopePath(content, '.py', 2, 'my_method');
+      expect(scope1).toBe('MyClass');
+
+      // another_method (line 4) should have scope MyClass (sibling of my_method)
+      const scope2 = getScopePath(content, '.py', 4, 'another_method');
+      expect(scope2).toBe('MyClass');
+
+      // other_method (line 8) should have scope OtherClass
+      const scope3 = getScopePath(content, '.py', 8, 'other_method');
+      expect(scope3).toBe('OtherClass');
+    });
+
+    it('returns empty scope for top-level Python functions', () => {
+      const content = [
+        'def standalone():',
+        '    x = 1',
+        '',
+        'class MyClass:',
+        '    pass',
+      ].join('\n');
+
+      const scope = getScopePath(content, '.py', 1, 'standalone');
+      expect(scope).toBe('');
     });
   });
 });

@@ -17,13 +17,16 @@
  */
 
 import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate, WidgetType } from '@codemirror/view';
-import { type Extension } from '@codemirror/state';
+import { type Extension, Annotation } from '@codemirror/state';
 import { extractSymbols, CONTAINER_KINDS, type SymbolInfo } from '../utils/symbolUtils';
 import { debugLog } from '../utils/log';
 
 // ── Constants ────────────────────────────────────────────────────────
 
 const DEBOUNCE_MS = 300;
+
+/** Internal annotation used to trigger a view re-render after async decoration computation. */
+const codeLensAnnotation = Annotation.define<boolean>();
 
 // ── Widget Type ───────────────────────────────────────────────────
 
@@ -104,7 +107,8 @@ export function formatRefText(count: number): string {
  * reference counting. Handles strings correctly so that `//` inside string
  * literals (URLs, file paths, etc.) is not treated as a comment start.
  */
-function stripComments(content: string): string {
+function stripComments(content: string, languageId?: string): string {
+  const isPython = languageId === '.py' || languageId === '.pyw' || languageId === '.pyi';
   const lines = content.split('\n');
   let inBlockComment = false;
   let inString: string | null = null; // '"' | "'" | '`' | null
@@ -137,6 +141,9 @@ function stripComments(content: string): string {
       // Check for comment start (only outside strings)
       if (ch === '/' && line[i + 1] === '/') break; // rest of line is comment
       if (ch === '/' && line[i + 1] === '*') { inBlockComment = true; i++; continue; }
+
+      // Python # comments (only outside strings and block comments)
+      if (isPython && ch === '#') break;
 
       // Check for string start
       if (ch === '"' || ch === "'" || ch === '`') inString = ch;
@@ -173,7 +180,7 @@ export function computeCodeLenses(
   const seenLines = new Set<number>();
 
   // Strip comments for more accurate reference counts
-  const strippedContent = stripComments(content);
+  const strippedContent = stripComments(content, languageId);
 
   for (const sym of containerSymbols) {
     if (seenLines.has(sym.line)) continue;
@@ -209,6 +216,7 @@ class CodeLensPlugin {
   private timeoutId: ReturnType<typeof setTimeout> | null = null;
   private cachedContent: string = '';
   private cachedLenses: Array<{ line: number; name: string; kind: string; refCount: number }> = [];
+  private destroyed = false;
 
   constructor(view: EditorView, getFileExtension: () => string | undefined) {
     this.view = view;
@@ -218,6 +226,11 @@ class CodeLensPlugin {
   }
 
   update(update: ViewUpdate): void {
+    // Skip re-scheduling when this plugin itself triggered the transaction
+    // (to avoid an infinite schedule → dispatch → update → schedule loop).
+    if (update.transactions.some((t) => t.annotation(codeLensAnnotation))) {
+      return;
+    }
     if (update.docChanged || update.viewportChanged || update.transactions.some((t) => t.reconfigured)) {
       this.scheduleUpdate();
     }
@@ -225,6 +238,12 @@ class CodeLensPlugin {
 
   /**
    * Schedule a debounced update of decorations.
+   *
+   * After the debounce fires and decorations are recomputed, dispatches a
+   * no-op transaction (annotated to not add to history) so that CodeMirror
+   * re-reads the `decorations` field and re-renders the widgets. Without
+   * this, asynchronously set decorations would not appear until the next
+   * user-triggered update.
    */
   private scheduleUpdate(): void {
     if (this.timeoutId) {
@@ -232,7 +251,15 @@ class CodeLensPlugin {
     }
 
     this.timeoutId = setTimeout(() => {
+      if (this.destroyed) return;
       this.decorations = this.buildDecorations(this.view);
+      // Trigger a view re-render so the new decorations are picked up.
+      // The annotation prevents this from entering history or being treated
+      // as a doc change — it only causes view.update() to run, which reads
+      // the fresh decorations value.
+      this.view.dispatch({
+        annotations: [codeLensAnnotation.of(true)],
+      });
     }, DEBOUNCE_MS);
   }
 
@@ -297,9 +324,10 @@ class CodeLensPlugin {
   }
 
   /**
-   * Destroy the plugin: clear any pending timeout.
+   * Destroy the plugin: clear any pending timeout and mark as destroyed.
    */
   destroy(): void {
+    this.destroyed = true;
     if (this.timeoutId) {
       clearTimeout(this.timeoutId);
       this.timeoutId = null;

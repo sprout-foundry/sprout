@@ -554,6 +554,12 @@ const AppContent: React.FC<AppContentProps> = ({
             closeBuffer(activeBufferId);
           }
           break;
+        case 'editor_workspace_symbol':
+          document.dispatchEvent(new CustomEvent('editor-go-to-workspace-symbol'));
+          break;
+        case 'editor_goto_symbol':
+          document.dispatchEvent(new CustomEvent('editor-go-to-symbol'));
+          break;
       }
     };
     

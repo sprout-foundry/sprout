@@ -43,7 +43,6 @@ import type { BreadcrumbSymbol } from './EditorBreadcrumb';
 import { isImageFile, isAudioFile, isVideoFile, isBinaryFile } from '../utils/mediaPatterns';
 import ImageViewer from './ImageViewer';
 import SvgPreview from './SvgPreview';
-import GoToSymbolOverlay from './GoToSymbolOverlay';
 import { getEnclosingSymbols } from '../utils/symbolUtils';
 import GoToWorkspaceSymbolOverlay from './GoToWorkspaceSymbolOverlay';
 import FindAllReferencesOverlay from './FindAllReferencesOverlay';
@@ -156,7 +155,6 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   const [error, setError] = useState<string | null>(null);
   const [localContent, setLocalContent] = useState<string>('');
   const [selectionInfo, setSelectionInfo] = useState<{ charCount: number; selectionCount: number } | null>(null);
-  const [showGoToSymbol, setShowGoToSymbol] = useState<boolean>(false);
   const [showGoToWorkspaceSymbol, setShowGoToWorkspaceSymbol] = useState<boolean>(false);
 
   // Find All References state
@@ -1187,7 +1185,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         document.dispatchEvent(event);
       },
       onGoToSymbol: () => {
-        setShowGoToSymbol(true);
+        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'editor_goto_symbol' } }));
       },
       onGoToWorkspaceSymbol: () => {
         setShowGoToWorkspaceSymbol(true);
@@ -1630,7 +1628,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         document.dispatchEvent(event);
       },
       onGoToSymbol: () => {
-        setShowGoToSymbol(true);
+        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'editor_goto_symbol' } }));
       },
       onGoToWorkspaceSymbol: () => {
         setShowGoToWorkspaceSymbol(true);
@@ -1912,7 +1910,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       } else if (e.type === 'editor-go-to-workspace-symbol') {
         setShowGoToWorkspaceSymbol(true);
       } else if (e.type === 'editor-go-to-symbol') {
-        setShowGoToSymbol(true);
+        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'editor_goto_symbol' } }));
       }
     };
 
@@ -2387,20 +2385,6 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
               active: relativeLineNumbersEnabled,
             },
           ]}
-        />
-        <GoToSymbolOverlay
-          visible={showGoToSymbol}
-          content={localContent}
-          fileExtension={buffer?.file?.ext}
-          onSelectSymbol={(line) => {
-            handleGoToLine(line);
-            setShowGoToSymbol(false);
-            viewRef.current?.focus();
-          }}
-          onClose={() => {
-            setShowGoToSymbol(false);
-            viewRef.current?.focus();
-          }}
         />
         <GoToWorkspaceSymbolOverlay
           visible={showGoToWorkspaceSymbol}

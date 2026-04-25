@@ -39,6 +39,8 @@ class CodeLensWidget extends WidgetType {
     const div = document.createElement('div');
     div.className = 'cm-codeLens';
     div.textContent = this.text;
+    div.setAttribute('role', 'presentation');
+    div.setAttribute('aria-hidden', 'true');
     return div;
   }
 
@@ -46,7 +48,7 @@ class CodeLensWidget extends WidgetType {
     return this.text === other.text;
   }
 
-  ignoreEvent(): boolean {
+  ignoreEvent(_event: Event): boolean {
     return true;
   }
 }
@@ -99,13 +101,50 @@ export function formatRefText(count: number): string {
 
 /**
  * Strip single-line and block comments from source content for accurate
- * reference counting. Does NOT strip string contents (which are valid reference
- * sites for type names, etc.).
+ * reference counting. Handles strings correctly so that `//` inside string
+ * literals (URLs, file paths, etc.) is not treated as a comment start.
  */
 function stripComments(content: string): string {
-  return content
-    .replace(/\/\/.*$/gm, '')       // single-line comments
-    .replace(/\/\*[\s\S]*?\*\//g, ''); // block comments
+  const lines = content.split('\n');
+  let inBlockComment = false;
+  let inString: string | null = null; // '"' | "'" | '`' | null
+
+  return lines.map(line => {
+    let result = '';
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+
+      // Inside a string — pass through, handle escape sequences
+      if (inString) {
+        result += ch;
+        if (ch === '\\' && i + 1 < line.length) {
+          result += line[++i];
+          continue;
+        }
+        if (ch === inString) inString = null;
+        continue;
+      }
+
+      // Inside a block comment — look for */
+      if (inBlockComment) {
+        if (ch === '*' && line[i + 1] === '/') {
+          inBlockComment = false;
+          i++; // skip /
+        }
+        continue;
+      }
+
+      // Check for comment start (only outside strings)
+      if (ch === '/' && line[i + 1] === '/') break; // rest of line is comment
+      if (ch === '/' && line[i + 1] === '*') { inBlockComment = true; i++; continue; }
+
+      // Check for string start
+      if (ch === '"' || ch === "'" || ch === '`') inString = ch;
+
+      result += ch;
+    }
+    return result;
+  }).join('\n');
 }
 
 /**
@@ -170,7 +209,6 @@ class CodeLensPlugin {
   private timeoutId: ReturnType<typeof setTimeout> | null = null;
   private cachedContent: string = '';
   private cachedLenses: Array<{ line: number; name: string; kind: string; refCount: number }> = [];
-  private cachedDocChanged = false;
 
   constructor(view: EditorView, getFileExtension: () => string | undefined) {
     this.view = view;
@@ -180,9 +218,6 @@ class CodeLensPlugin {
   }
 
   update(update: ViewUpdate): void {
-    if (update.docChanged) {
-      this.cachedDocChanged = true;
-    }
     if (update.docChanged || update.viewportChanged || update.transactions.some((t) => t.reconfigured)) {
       this.scheduleUpdate();
     }
@@ -215,10 +250,9 @@ class CodeLensPlugin {
 
       // Only recompute lenses when the document has changed.
       // Viewport-only changes reuse the cached results.
-      if (this.cachedDocChanged || content !== this.cachedContent) {
+      if (content !== this.cachedContent) {
         this.cachedLenses = computeCodeLenses(content, languageId);
         this.cachedContent = content;
-        this.cachedDocChanged = false;
       }
 
       const lenses = this.cachedLenses;

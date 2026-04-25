@@ -51,6 +51,18 @@ function FileChangeDialog({ fileName, deleted, hasUnsavedChanges, originalConten
     };
   }, []);
 
+  // Default to showing merge view when there's merge content (conflict resolution)
+  useEffect(() => {
+    if (hasUnsavedChanges && hasMergeContent) {
+      setShowMergeView(true);
+    }
+  }, [hasUnsavedChanges, hasMergeContent]);
+
+  // Reset accept/reject counts when merge view is toggled
+  const toggleMergeView = useCallback(() => {
+    setShowMergeView((prev) => !prev);
+  }, []);
+
   // Deleted + unsaved changes — the user has work that could be lost.
   if (deleted && hasUnsavedChanges) {
     return (
@@ -135,7 +147,7 @@ function FileChangeDialog({ fileName, deleted, hasUnsavedChanges, originalConten
                 modifiedContent={modifiedContent!}
                 mode="unified"
                 fileName={fileName}
-                mergeControls={false}
+                mergeControls={true}
               />
             </div>
           )}
@@ -147,13 +159,7 @@ function FileChangeDialog({ fileName, deleted, hasUnsavedChanges, originalConten
             <button
               type="button"
               className="themed-dialog-btn"
-              onClick={() => {
-                if (hasMergeContent) {
-                  setShowMergeView(!showMergeView);
-                } else {
-                  onResolve('show-diff');
-                }
-              }}
+              onClick={hasMergeContent ? toggleMergeView : () => onResolve('show-diff')}
             >
               {showMergeView ? 'Hide Diff' : 'Show Diff'}
             </button>

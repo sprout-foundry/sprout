@@ -83,7 +83,11 @@ import { ApiService } from '../services/api';
 import { notificationBus } from '../services/notificationBus';
 import { formatCode, formatCodeWithConfigDiscovery, setConfigFetcher } from '../services/formatter';
 import { getLSPClientService, LSP_SUPPORTED_LANGUAGES } from '../services/lspClientService';
-import { buildLSPPluginExtensions, lspSyncOnDocChange } from '../extensions/lspExtensions';
+import { buildLSPPluginExtensions, lspSyncOnDocChange, setGlobalDisplayFileCallback, getClientForLanguageSync, type DisplayFileCallback, registerEditorView, unregisterEditorView } from '../extensions/lspExtensions';
+
+// LSP commands from @codemirror/lsp-client for keybinding integration
+import { jumpToDefinition, findReferences, renameSymbol } from '@codemirror/lsp-client';
+
 import { Loader2, AlertTriangle, Eye, Columns2, Copy, Navigation, FolderOpen, ClipboardCopy, ListOrdered } from 'lucide-react';
 import { copyToClipboard } from '../utils/clipboard';
 import { generateUnifiedDiff } from '../utils/simpleDiff';
@@ -91,6 +95,9 @@ import { useLog, debugLog, warn } from '../utils/log';
 import ContextMenu from './ContextMenu';
 import WelcomeTab from './WelcomeTab';
 import { JUST_SAVED_THRESHOLD_MS, justSavedRef } from '../hooks/useAutoReloadCleanBuffers';
+
+/** Track if the global displayFile callback has been registered */
+let globalDisplayFileRegistered = false;
 
 interface EditorPaneProps {
   paneId: string;
@@ -937,6 +944,13 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         buffer?.file?.name,
       ).languageId ?? '';
 
+      // If LSP client is connected, it handles diagnostics via serverDiagnostics() extension
+      // - skip old semantic diagnostics to avoid duplication
+      if (isSemanticLanguage(languageId) && getClientForLanguageSync(languageId)) {
+        debugLog('[fetchDiagnostics] LSP client active, skipping semantic diagnostics');
+        return;
+      }
+
       try {
         if (isSemanticLanguage(languageId)) {
           const semantic = await apiService.getSemanticDiagnostics(filePath, content, languageId, trigger);
@@ -1261,7 +1275,10 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       {
         key: 'F12',
         preventDefault: true,
-        run: () => {
+        run: (view) => {
+          // Try LSP jumpToDefinition first - it returns true if it handled the action
+          if (jumpToDefinition(view)) return true;
+          // Fall back to old semantic API
           void handleGoToDefinition();
           return true;
         },
@@ -1269,7 +1286,10 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       {
         key: 'F2',
         preventDefault: true,
-        run: () => {
+        run: (view) => {
+          // Try LSP rename first
+          if (renameSymbol(view)) return true;
+          // Fall back to old rename trigger
           if (viewRef.current) {
             triggerRename(viewRef.current, {
               getFilePath: () => bufferStateRef.current?.file?.path,
@@ -1282,7 +1302,10 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       {
         key: 'Shift-F12',
         preventDefault: true,
-        run: () => {
+        run: (view) => {
+          // Try LSP findReferences first
+          if (findReferences(view)) return true;
+          // Fall back to old semantic API
           void handleFindAllReferences();
           return true;
         },
@@ -1441,6 +1464,12 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
 
     viewRef.current = view;
 
+    // Register the editor view for cross-file LSP navigation
+    const filePath = buffer?.file?.path;
+    if (filePath && !filePath.startsWith('__workspace/')) {
+      registerEditorView(filePath, view);
+    }
+
     // Initialize LSP extensions asynchronously (after editor is ready).
     // Capture the view reference at creation time to avoid applying
     // extensions to a different editor if the user switches files
@@ -1449,6 +1478,31 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       const currentLangId = resolvedLanguage.languageId;
       const currentFilePath = buffer?.file?.path ?? '';
       const capturedView = view; // capture the specific view for this init
+
+      // Track callback registration at module level to avoid duplication
+      if (!globalDisplayFileRegistered) {
+        globalDisplayFileRegistered = true;
+        const displayFileCb: DisplayFileCallback = async (filePath: string) => {
+          const fileName = filePath.split('/').pop() || filePath;
+          const dotIndex = fileName.lastIndexOf('.');
+          const ext = dotIndex >= 0 ? fileName.slice(dotIndex) : undefined;
+
+          openWorkspaceBuffer({
+            kind: 'file',
+            path: filePath,
+            title: fileName,
+            ext,
+          });
+
+          // The caller (patchWorkspaceDisplayFile) polls the EditorView registry
+          // after this callback returns, so we just need to open the file here.
+          // Return null — we don't need to find the view ourselves.
+          return null;
+        };
+        setGlobalDisplayFileCallback(displayFileCb);
+        debugLog('[LSP] DisplayFile callback set');
+      }
+
       void (async () => {
         try {
           const lspService = getLSPClientService();
@@ -1477,9 +1531,15 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
 
     // Snapshot ref value for cleanup (ref.current in cleanup triggers exhaustive-deps)
     const debounced = debouncedDiag.current;
+    // Capture file path for cleanup
+    const cleanupFilePath = buffer?.file?.path;
 
     return () => {
       debounced.cancel();
+      // Unregister the editor view for cross-file LSP navigation
+      if (cleanupFilePath && !cleanupFilePath.startsWith('__workspace/')) {
+        unregisterEditorView(cleanupFilePath);
+      }
       view.destroy();
       viewRef.current = null;
     };

@@ -28,17 +28,24 @@ func (ws *ReactWebServer) handleAPIWorkspaceSymbols(w http.ResponseWriter, r *ht
 		return
 	}
 
-	// Build the symbol index for the workspace
-	idx, err := index.BuildSymbols(workspaceRoot)
+	// Try loading cached symbols first
+	idx, err := index.LoadSymbols(workspaceRoot)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to build symbol index: %v", err), http.StatusInternalServerError)
-		return
+		log.Printf("[debug] LoadSymbols error: %v", err)
+	}
+	// If cache doesn't exist or has no files, build fresh
+	if idx == nil || len(idx.Files) == 0 {
+		idx, err = index.BuildSymbols(workspaceRoot)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to build symbol index: %v", err), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	// Get the query parameter
 	query := strings.TrimSpace(r.URL.Query().Get("query"))
 
-	var resultFiles = make([]index.FileSymbols, 0)
+	var resultFiles []index.FileSymbols
 	var total int
 
 	if query != "" {
@@ -49,34 +56,33 @@ func (ws *ReactWebServer) handleAPIWorkspaceSymbols(w http.ResponseWriter, r *ht
 			resultFiles = []index.FileSymbols{}
 			total = 0
 		} else {
-			// Search for matching files
-			matchingFiles := index.SearchSymbols(idx, tokens)
-			if len(matchingFiles) == 0 {
-				resultFiles = []index.FileSymbols{}
-				total = 0
-			} else {
-				// Build result with symbols from matching files, capped at maxSymbolResults
-				fileSet := make(map[string]bool)
-				for _, f := range matchingFiles {
-					fileSet[f] = true
-				}
-				for _, fs := range idx.Files {
-					if fileSet[fs.File] {
-						if total+len(fs.Symbols) > maxSymbolResults {
-							remaining := maxSymbolResults - total
-							if remaining > 0 {
-								resultFiles = append(resultFiles, index.FileSymbols{
-									File:    fs.File,
-									Symbols: fs.Symbols[:remaining],
-								})
-								total += remaining
-							}
-							break
-						}
-						resultFiles = append(resultFiles, fs)
-						total += len(fs.Symbols)
+			// Search for matching files with per-symbol filtering
+			resultFiles = index.SearchSymbolFiles(idx, tokens)
+			total = 0
+			for _, fs := range resultFiles {
+				total += len(fs.Symbols)
+			}
+			// Cap results
+			if total > maxSymbolResults {
+				capped := resultFiles[:0]
+				remaining := maxSymbolResults
+				for _, fs := range resultFiles {
+					if remaining <= 0 {
+						break
+					}
+					if len(fs.Symbols) > remaining {
+						capped = append(capped, index.FileSymbols{
+							File:    fs.File,
+							Symbols: fs.Symbols[:remaining],
+						})
+						remaining = 0
+					} else {
+						capped = append(capped, fs)
+						remaining -= len(fs.Symbols)
 					}
 				}
+				resultFiles = capped
+				total = maxSymbolResults
 			}
 		}
 	} else {

@@ -85,11 +85,13 @@ function EditorWithOutline({
 
       {isFileOpen && (
         <>
-          <ResizeHandle
-            direction="horizontal"
-            onResize={handleResize}
-            className="outline-resize-handle"
-          />
+          {!isCollapsed && (
+            <ResizeHandle
+              direction="horizontal"
+              onResize={handleResize}
+              className="outline-resize-handle"
+            />
+          )}
           <div className="outline-panel-container" style={outlinePanelStyle}>
             <DocumentOutlinePanel
               content={content}

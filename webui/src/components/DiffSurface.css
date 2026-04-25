@@ -36,6 +36,46 @@
   background: var(--accent-primary);
 }
 
+/* Collapse unchanged toggle */
+.workspace-diff-merge-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.workspace-diff-collapse-toggle {
+  display: flex;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.workspace-diff-collapse-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s var(--ease-out);
+}
+
+.workspace-diff-collapse-btn:hover {
+  background: var(--bg-surface);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.workspace-diff-collapse-btn.active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: var(--accent-fg);
+}
+
 /* ── DiffSurface — self-contained diff display component ── */
 /* Requires: classifyDiffLine from utils/format for line classification */
 

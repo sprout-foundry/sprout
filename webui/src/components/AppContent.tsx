@@ -7,6 +7,7 @@ import EditorTabs from './EditorTabs';
 import WorkspacePane from './WorkspacePane';
 import ContextPanel, { type ContextPanelHandle } from './ContextPanel';
 import ResizeHandle from './ResizeHandle';
+import EditorWithOutline from './EditorWithOutline';
 import Status from './Status';
 import MenuBar from './MenuBar';
 import StatusBar from './StatusBar';
@@ -452,6 +453,11 @@ const AppContent: React.FC<AppContentProps> = ({
     }
     onViewChange(view);
   }, [onViewChange, openWorkspaceBuffer]);
+
+  // Handle navigation from the outline panel — dispatch event that EditorPane listens for
+  const handleOutlineNavigateToSymbol = useCallback((line: number) => {
+    document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line } }));
+  }, []);
 
   const focusTabIndex = useCallback((index: number) => {
     if (!activePaneId || index < 0) {
@@ -1108,14 +1114,22 @@ const AppContent: React.FC<AppContentProps> = ({
               </div>
             )}
 
-            <div className={`editor-workspace ${paneLayout}`}>
-              <div
-                ref={containerRef}
-                className={`panes-container layout-${paneLayout}`}
-              >
-                {renderPaneLayout()}
+            <EditorWithOutline
+              content={currentBuffer?.content || ''}
+              fileExtension={currentBuffer?.file?.ext}
+              cursorLine={currentBuffer?.cursorPosition?.line || 0}
+              isFileOpen={currentBuffer?.kind === 'file'}
+              onNavigateToSymbol={handleOutlineNavigateToSymbol}
+            >
+              <div className={`editor-workspace ${paneLayout}`}>
+                <div
+                  ref={containerRef}
+                  className={`panes-container layout-${paneLayout}`}
+                >
+                  {renderPaneLayout()}
+                </div>
               </div>
-            </div>
+            </EditorWithOutline>
           </div>
           {showContextSidebar && (
             <ContextPanel

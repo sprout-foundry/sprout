@@ -10,6 +10,7 @@
 import { type Extension, Compartment } from '@codemirror/state';
 import { EditorView, type EditorView as EditorViewType } from '@codemirror/view';
 import { indentUnit as indentUnitFacet } from '@codemirror/language';
+import { getLineIndent } from '../utils/editorHotkeys';
 
 /**
  * Language IDs for which auto-close tag should be active.
@@ -44,6 +45,11 @@ const VOID_ELEMENTS = new Set([
 ]);
 
 /**
+ * Maximum number of characters to scan backward when looking for an opening `<`.
+ */
+const MAX_TAG_SCAN_DISTANCE = 500;
+
+/**
  * Check whether a language ID supports auto-close tag.
  */
 export function isAutoCloseTagLanguage(languageId: string | null | undefined): boolean {
@@ -60,13 +66,14 @@ export function isAutoCloseTagLanguage(languageId: string | null | undefined): b
  * @param text - The document text before cursor position
  * @param cursorPos - Cursor position in the document
  * @returns The tag name (without `<`) or null if not a valid opening tag
+ * @internal Exported for testing only
  */
-function extractTagName(docText: string, cursorPos: number): string | null {
+export function extractTagName(docText: string, cursorPos: number): string | null {
   if (cursorPos < 1) {
     return null;
   }
 
-  // Get the character at cursor position - 1 (the character before where > was typed)
+  // The '>' was just typed, so it's at cursorPos - 1
   const charBefore = docText[cursorPos - 1];
   if (charBefore !== '>') {
     return null;
@@ -151,29 +158,22 @@ function extractTagName(docText: string, cursorPos: number): string | null {
     return null;
   }
 
+  // Guard against spurious '>' inside the tag name (e.g., double-typed '>>')
+  if (tagName.includes('>')) {
+    return null;
+  }
+
   // Check for void elements (case-insensitive)
   if (VOID_ELEMENTS.has(tagName.toLowerCase())) {
     return null;
   }
 
-  // Valid tag name should start with a letter, underscore, or contain a colon/hyphen
-  // (for web components like <my-component> or <ns:tag>)
-  if (!/^[a-zA-Z_]/.test(tagName) && !tagName.includes(':') && !tagName.includes('-')) {
+  // Tag names must start with a letter or underscore (allows <my-component>, <ns:tag>, <_custom>)
+  if (!/^[a-zA-Z_]/.test(tagName)) {
     return null;
   }
 
   return tagName;
-}
-
-/**
- * Get the indentation string for a given line.
- *
- * @param text - Line text
- * @returns The leading whitespace (indentation)
- */
-function getLineIndent(text: string): string {
-  const match = text.match(/^(\s*)/);
-  return match ? match[1] : '';
 }
 
 /**
@@ -184,6 +184,7 @@ function getIndentUnit(view: EditorViewType): string {
   try {
     return view.state.facet(indentUnitFacet);
   } catch {
+    // Facet not configured; fall back to 2-space indent
     return '  ';
   }
 }
@@ -209,8 +210,8 @@ function maybeAutoCloseTag(view: EditorViewType): void {
   }
 
   // Get text before the cursor position to analyze
-  // Look at last 500 characters to find relevant tag context
-  const startScan = Math.max(0, pos - 500);
+  // Look at last MAX_TAG_SCAN_DISTANCE characters to find relevant tag context
+  const startScan = Math.max(0, pos - MAX_TAG_SCAN_DISTANCE);
   const textBefore = doc.sliceString(startScan, pos);
 
   // Extract the tag name from what we just typed (the cursor is right after the '>')

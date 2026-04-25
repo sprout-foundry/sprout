@@ -143,7 +143,6 @@
 .command-palette-file-path {
   display: block;
   flex: 1;
-  flex: 1;
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--text-tertiary);
@@ -198,45 +197,122 @@
   text-align: center;
 }
 
-/* Filter bar for Commands / Files / All chips */
-.command-palette-filter-bar {
+/* Mode tab bar — shown at the top of the palette container */
+.command-palette-mode-bar {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 12px;
-  background: var(--bg-tertiary);
-  border-bottom: 1px solid var(--border-subtle);
+  gap: 2px;
+  padding: 6px 8px 0;
+  background: var(--bg-secondary);
 }
 
-.filter-chip {
-  padding: 2px 10px;
-  font-size: 11px;
+.command-palette-mode-tab {
+  padding: 4px 12px;
+  font-size: 12px;
   font-family: var(--font-sans);
-  color: var(--text-secondary);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
+  font-weight: 500;
+  color: var(--text-tertiary);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 4px 4px 0 0;
   cursor: pointer;
   transition:
     background-color 0.1s ease,
-    color 0.1s ease;
+    color 0.1s ease,
+    border-color 0.1s ease;
+  user-select: none;
+}
+
+.command-palette-mode-tab:hover {
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+}
+
+.command-palette-mode-tab.active {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+  border-bottom-color: var(--accent-primary);
+}
+
+/* Symbol result items */
+.command-palette-symbol-item {
+  gap: 8px;
+}
+
+.command-palette-symbol-icon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  border-radius: 4px;
+  background: var(--bg-elevated);
+}
+
+.command-palette-symbol-icon.goto-symbol-kind-function,
+.command-palette-symbol-icon.goto-symbol-kind-method {
+  color: #c678dd;
+}
+
+.command-palette-symbol-icon.goto-symbol-kind-class {
+  color: #e5c07b;
+}
+
+.command-palette-symbol-icon.goto-symbol-kind-interface {
+  color: #61afef;
+}
+
+.command-palette-symbol-icon.goto-symbol-kind-variable,
+.command-palette-symbol-icon.goto-symbol-kind-constant {
+  color: #56b6c2;
+}
+
+.command-palette-symbol-icon.goto-symbol-kind-type {
+  color: #98c379;
+}
+
+.command-palette-selected .command-palette-symbol-icon {
+  background: rgba(255, 255, 255, 0.2);
+  color: var(--accent-fg) !important;
+}
+
+.command-palette-symbol-scope {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-tertiary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.filter-chip:hover {
-  background: var(--bg-surface);
+.command-palette-selected .command-palette-symbol-scope {
+  color: rgba(255, 255, 255, 0.7);
 }
 
-.filter-chip.active {
-  color: var(--accent-fg);
-  background: var(--accent-primary);
-  border-color: var(--accent-primary);
+.command-palette-symbol-line {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-left: auto;
 }
 
-/* Highlight matched characters inside command/file labels */
+.command-palette-selected .command-palette-symbol-line {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Highlight matched characters inside command/file/symbol labels */
 .command-palette-label mark,
 .command-palette-file-name mark,
-.command-palette-file-path mark {
+.command-palette-file-path mark,
+.command-palette-symbol-scope mark {
   color: inherit;
   font-weight: 600;
   background: none;
@@ -247,7 +323,8 @@
 
 .command-palette-selected .command-palette-label mark,
 .command-palette-selected .command-palette-file-name mark,
-.command-palette-selected .command-palette-file-path mark {
+.command-palette-selected .command-palette-file-path mark,
+.command-palette-selected .command-palette-symbol-scope mark {
   color: inherit;
   text-decoration-color: rgba(255, 255, 255, 0.5);
 }

@@ -11,7 +11,7 @@ import EditorWithOutline from './EditorWithOutline';
 import Status from './Status';
 import MenuBar from './MenuBar';
 import StatusBar from './StatusBar';
-import CommandPalette from './CommandPalette';
+import CommandPalette, { type PaletteMode } from './CommandPalette';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { ApiService, LeditInstance } from '../services/api';
 import { useGitWorkspace } from '../hooks/useGitWorkspace';
@@ -233,6 +233,7 @@ const AppContent: React.FC<AppContentProps> = ({
 
   // Command palette state
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [commandPaletteMode, setCommandPaletteMode] = useState<PaletteMode>('all');
   const [isContextPanelMobileOpen, setIsContextPanelMobileOpen] = useState(false);
   const [hotkeysConfigPath, setHotkeysConfigPath] = useState<string | null>(null);
   const [instances, setInstances] = useState<LeditInstance[]>([]);
@@ -502,6 +503,7 @@ const AppContent: React.FC<AppContentProps> = ({
       
       switch (detail.commandId) {
         case 'command_palette':
+          setCommandPaletteMode('all');
           setIsCommandPaletteOpen(prev => !prev);
           break;
         case 'new_file':
@@ -535,6 +537,7 @@ const AppContent: React.FC<AppContentProps> = ({
           break;
         }
         case 'quick_open':
+          setCommandPaletteMode('files');
           setIsCommandPaletteOpen(true);
           break;
         case 'switch_to_chat':
@@ -564,7 +567,8 @@ const AppContent: React.FC<AppContentProps> = ({
           document.dispatchEvent(new CustomEvent('editor-go-to-workspace-symbol'));
           break;
         case 'editor_goto_symbol':
-          document.dispatchEvent(new CustomEvent('editor-go-to-symbol'));
+          setCommandPaletteMode('symbols');
+          setIsCommandPaletteOpen(true);
           break;
       }
     };
@@ -1190,6 +1194,12 @@ const AppContent: React.FC<AppContentProps> = ({
         onToggleSidebar={onSidebarToggle}
         onToggleTerminal={() => onTerminalExpandedChange(!isTerminalExpanded)}
         onOpenHotkeysConfig={handleOpenHotkeysConfig}
+        initialMode={commandPaletteMode}
+        onNavigateToLine={(line) => {
+          document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line } }));
+        }}
+        activeBufferContent={currentBuffer?.content}
+        activeBufferFileExtension={currentBuffer?.file?.ext}
       />
     </div>
   );

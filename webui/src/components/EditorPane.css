@@ -191,6 +191,35 @@
   height: 100%;
 }
 
+/* Click/drag affordance for the minimap.
+   @replit/codemirror-minimap natively supports click-to-scroll
+   (mousedown on canvas scrolls editor to that position) and
+   drag-to-scroll (drag the viewport overlay to scroll).
+   Cursor styles provide visual affordance for these interactions.
+   NOTE: Selectors below target internal package class names
+   (v0.5.x) — verify if upgrading @replit/codemirror-minimap. */
+
+/* Minimap canvas — clickable to jump to a document position */
+.cm-minimap-container canvas {
+  cursor: pointer;
+}
+
+/* Overlay container covers entire minimap area for click dispatch */
+.cm-minimap-overlay-container {
+  cursor: pointer;
+}
+
+/* Viewport indicator overlay — draggable */
+.cm-minimap-overlay {
+  cursor: grab;
+}
+
+/* While dragging the viewport indicator */
+.cm-minimap-overlay-active .cm-minimap-overlay {
+  cursor: grabbing;
+  opacity: 0.4 !important;
+}
+
 /* Whitespace rendering decorations */
 .cm-whitespace-char {
   color: var(--cm-whitespace-char, rgba(128, 128, 128, 0.4));

@@ -102,8 +102,8 @@ function ensureWslBackendBinary(distro, resolveBackendBinary) {
   }
 
   const sourceWslPath = toWslPath(sourceBinary, distro);
-  const remoteDir = '$HOME/.cache/ledit-desktop/backend';
-  const remotePath = `${remoteDir}/ledit`;
+  const remoteDir = '$HOME/.cache/sprout-desktop/backend';
+  const remotePath = `${remoteDir}/sprout`;
   const command = `mkdir -p ${remoteDir} && cp ${shellEscape(sourceWslPath)} ${shellEscape(remotePath)} && chmod +x ${shellEscape(remotePath)} && printf '%s' ${shellEscape(remotePath)}`;
   const result = runWslCommand(['-d', distro, '--', 'bash', '-lc', command]);
   if (result.status !== 0) {

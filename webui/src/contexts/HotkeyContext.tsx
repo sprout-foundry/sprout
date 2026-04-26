@@ -299,7 +299,7 @@ export function HotkeyProvider({ children }: HotkeyProviderProps): JSX.Element {
   useEffect(() => {
     const desktop = (
       window as unknown as Record<string, { onDesktopHotkey?: (cb: (cmd: string) => void) => () => void } | undefined>
-    ).leditDesktop;
+    ).sproutDesktop;
     if (typeof desktop?.onDesktopHotkey !== 'function') return;
 
     const cleanup = desktop.onDesktopHotkey((commandId: string) => {

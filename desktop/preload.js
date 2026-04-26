@@ -1,6 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-contextBridge.exposeInMainWorld('leditDesktop', {
+contextBridge.exposeInMainWorld('sproutDesktop', {
   platform: process.platform,
   listRecentWorktrees: () => ipcRenderer.invoke('desktop:listRecentWorktrees'),
   listSshHosts: () => ipcRenderer.invoke('desktop:listSshHosts'),

@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"os/signal"
 	"strings"
@@ -30,9 +31,11 @@ func isServiceMode() bool {
 }
 
 // displayAddr returns a user-friendly address for display. It substitutes
-// "localhost" for "127.0.0.1" so URLs look familiar in terminal output.
+// "localhost" for 127.0.0.1, 0.0.0.0, ::, and ::1 so URLs look familiar
+// in terminal output.
 func displayAddr(bindAddr string) string {
-	if bindAddr == "127.0.0.1" {
+	switch bindAddr {
+	case "127.0.0.1", "0.0.0.0", "::", "::1":
 		return "localhost"
 	}
 	return bindAddr
@@ -100,6 +103,16 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 	}
 	if bindAddr == "" {
 		bindAddr = "127.0.0.1"
+	}
+
+	// Validate the bind address is a plausible IP or hostname.
+	if bindAddr != "localhost" && net.ParseIP(bindAddr) == nil {
+		return fmt.Errorf("invalid bind address %q: must be a valid IP address", bindAddr)
+	}
+
+	// Warn when binding to all interfaces
+	if bindAddr == "0.0.0.0" || bindAddr == "::" {
+		fmt.Fprintf(os.Stderr, "[WARN] Binding to %s — web UI is accessible from all network interfaces\n", bindAddr)
 	}
 
 	if enableWebUI {

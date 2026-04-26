@@ -88,12 +88,12 @@ func main() {
 	}
 	encoded = append(encoded, '\n')
 
-	if err := os.WriteFile(catalogPath, encoded, 0o644); err != nil {
-		failf("write catalog: %v", err)
-	}
-
-	fmt.Printf("wrote %s\n", catalogPath)
-	if *registryDir != "" {
+	if *registryDir == "" {
+		if err := os.WriteFile(catalogPath, encoded, 0o644); err != nil {
+			failf("write catalog: %v", err)
+		}
+		fmt.Printf("wrote %s\n", catalogPath)
+	} else {
 		fmt.Printf("wrote per-provider JSON files to %s/models/\n", *registryDir)
 	}
 }

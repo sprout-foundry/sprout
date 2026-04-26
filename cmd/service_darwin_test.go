@@ -23,7 +23,7 @@ func TestGenerateLaunchdPlist(t *testing.T) {
 		{"has doctype declaration", "<!DOCTYPE plist"},
 		{"has plist root", "<plist version="},
 		{"has label key", "<key>Label</key>"},
-		{"has label value", "com.ledit.daemon"},
+		{"has label value", "com.sprout.daemon"},
 		{"has program arguments key", "<key>ProgramArguments</key>"},
 		{"has binary path", "/usr/local/bin/ledit"},
 		{"has agent arg", ">agent<"},
@@ -77,8 +77,8 @@ func TestPlistEnvironmentVariables(t *testing.T) {
 		name     string
 		contains string
 	}{
-		{"has LEDIT_SERVICE key", "<key>LEDIT_SERVICE</key>"},
-		{"has LEDIT_SERVICE value 1", ">1<"},
+		{"has SPROUT_SERVICE key", "<key>SPROUT_SERVICE</key>"},
+		{"has SPROUT_SERVICE value 1", ">1<"},
 		{"has HOME key in env", "<key>HOME</key>"},
 		{"has HOME value", ">/home/alice<"},
 	}

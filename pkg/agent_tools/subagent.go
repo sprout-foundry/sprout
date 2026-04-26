@@ -145,9 +145,9 @@ func RunSubagent(workspaceRoot string, prompt, model, provider string, streamCal
 
 	args = append(args, "--prompt-stdin")
 
-	// Use the currently running ledit binary path to ensure consistency
+	// Use the currently running sprout binary path to ensure consistency
 	// This avoids issues where exec.LookPath might find a different binary
-	leditPath, err := os.Executable()
+	sproutPath, err := os.Executable()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current executable path: %w", err)
 	}
@@ -171,7 +171,7 @@ func RunSubagent(workspaceRoot string, prompt, model, provider string, streamCal
 	// Create temporary metrics file for token budget monitoring
 	metricsFile := ""
 	if maxTokens > 0 {
-		tmpFile, err := os.CreateTemp("", "ledit-subagent-metrics-*.txt")
+		tmpFile, err := os.CreateTemp("", "sprout-subagent-metrics-*.txt")
 		if err != nil {
 			log.Printf("[WARNING] Failed to create metrics file: %v (token budget monitoring disabled)", err)
 		} else {
@@ -202,7 +202,7 @@ func RunSubagent(workspaceRoot string, prompt, model, provider string, streamCal
 		return nil, fmt.Errorf("failed to create stderr pipe: %w", err)
 	}
 
-	cmd := exec.CommandContext(ctx, leditPath, args...)
+	cmd := exec.CommandContext(ctx, sproutPath, args...)
 
 	// Pass the prompt via stdin (child reads it with --prompt-stdin)
 	cmd.Stdin = promptReader
@@ -349,7 +349,7 @@ func RunSubagent(workspaceRoot string, prompt, model, provider string, streamCal
 			// Command ran but exited with non-zero status
 			exitCode = exitError.ExitCode()
 		} else {
-			// Couldn't start the command (e.g., ledit not found)
+			// Couldn't start the command (e.g., sprout not found)
 			exitCode = -1
 		}
 	}
@@ -485,8 +485,8 @@ func spawnSubagent(workspaceRoot string, task ParallelSubagentTask, noTimeout bo
 
 	args = append(args, "--prompt-stdin")
 
-	// Use the currently running ledit binary path to ensure consistency
-	leditPath, err := os.Executable()
+	// Use the currently running sprout binary path to ensure consistency
+	sproutPath, err := os.Executable()
 	if err != nil {
 		log.Printf("[SUBAGENT_ERROR] method=%s task_id=%s error=get_executable_failed details=%v",
 			callerMethod, taskID, err)
@@ -547,7 +547,7 @@ func spawnSubagent(workspaceRoot string, task ParallelSubagentTask, noTimeout bo
 		}
 	}
 
-	cmd := exec.CommandContext(ctx, leditPath, args...)
+	cmd := exec.CommandContext(ctx, sproutPath, args...)
 
 	// Pass the prompt via stdin (child reads it with --prompt-stdin)
 	cmd.Stdin = promptReader
@@ -676,7 +676,7 @@ func spawnSubagent(workspaceRoot string, task ParallelSubagentTask, noTimeout bo
 			log.Printf("[SUBAGENT_FAILED] method=%s task_id=%s exit_code=%d",
 				callerMethod, taskID, exitCode)
 		} else {
-			// Couldn't start the command (e.g., ledit not found)
+			// Couldn't start the command (e.g., sprout not found)
 			exitCode = -1
 			completed = false
 			log.Printf("[SUBAGENT_ERROR] method=%s task_id=%s error=exec_failed details=%v",

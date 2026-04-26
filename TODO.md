@@ -510,12 +510,12 @@ Three Python test runner scripts at the project root with overlapping purposes:
 
 ### 2. Add Token Metrics to Structured JSON Output
 
-[] - CLOUD: Extend `AgentResultMetrics` in `cmd/agent_result.go` with `TokensIn`, `TokensOut`, `LLMCalls`, `Provider`, `Model` fields
-[] - CLOUD: Create `pkg/agent/metrics.go` with thread-safe `ExecutionMetrics` accumulator (RecordCall with mutex-protected totals)
-[] - CLOUD: Hook token count accumulation into LLM completion/chat response handler (from API `usage` fields) — ensure subagent LLM calls are excluded from provider/model (record primary agent only)
-[] - CLOUD: Pass `ExecutionMetrics` to `emitJSONResult` and populate the new fields in the JSON output
-[] - CLOUD: Add tests for token metrics — verify accumulation across multiple LLM calls, subagent exclusion, backward-compatible output structure
-[] - CLOUD: Verify backward compatibility — existing tests pass, new fields are additive only
+[x] - CLOUD: Extend `AgentResultMetrics` in `cmd/agent_result.go` with `TokensIn`, `TokensOut`, `LLMCalls`, `Provider`, `Model` fields
+[x] - CLOUD: Create `pkg/agent/metrics.go` with thread-safe `ExecutionMetrics` accumulator (RecordCall with mutex-protected totals)
+[x] - CLOUD: Hook token count accumulation into LLM completion/chat response handler (from API `usage` fields) — ensure subagent LLM calls are excluded from provider/model (record primary agent only)
+[x] - CLOUD: Pass `ExecutionMetrics` to `emitJSONResult` and populate the new fields in the JSON output
+[x] - CLOUD: Add tests for token metrics — verify accumulation across multiple LLM calls, subagent exclusion, backward-compatible output structure
+[x] - CLOUD: Verify backward compatibility — existing tests pass, new fields are additive only
 
 ### 3. Fix `--port` vs `--web-port` Flag Inconsistency
 

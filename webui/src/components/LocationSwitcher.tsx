@@ -5,7 +5,7 @@ import { FolderOpen, Monitor, RefreshCw, Loader2, Server } from 'lucide-react';
 import {
   ApiService,
   SSHBrowseEntry,
-  LeditInstance,
+  SproutInstance,
   SSHHostEntry,
   SSHSessionEntry,
   SSHWorkspaceOpenError,
@@ -14,7 +14,7 @@ import { clientFetch, getSSHProxyContext } from '../services/clientSession';
 
 interface LocationSwitcherProps {
   isConnected: boolean;
-  instances?: LeditInstance[];
+  instances?: SproutInstance[];
   selectedInstancePID?: number;
   isSwitchingInstance?: boolean;
   onInstanceChange?: (pid: number) => void;

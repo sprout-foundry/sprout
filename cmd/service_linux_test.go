@@ -42,7 +42,7 @@ func TestGenerateSystemdUnit(t *testing.T) {
 
 			// Key fields in [Unit]
 			for _, field := range []string{
-				"Description=ledit daemon - AI coding assistant web UI",
+				"Description=sprout daemon - AI coding assistant web UI",
 				"After=default.target",
 			} {
 				if !strings.Contains(s, field) {
@@ -77,8 +77,8 @@ func TestGenerateSystemdUnit(t *testing.T) {
 			}
 
 			// Environment lines
-			if !strings.Contains(s, "Environment=LEDIT_SERVICE=1") {
-				t.Error("missing Environment=LEDIT_SERVICE=1")
+			if !strings.Contains(s, "Environment=SPROUT_SERVICE=1") {
+				t.Error("missing Environment=SPROUT_SERVICE=1")
 			}
 			wantHome := "Environment=HOME=" + tt.homeDir
 			if !strings.Contains(s, wantHome) {

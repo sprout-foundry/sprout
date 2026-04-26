@@ -1,4 +1,4 @@
-// Agent command for ledit
+// Agent command for sprout
 package cmd
 
 import (

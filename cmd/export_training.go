@@ -1,4 +1,4 @@
-// Export training data command for ledit
+// Export training data command for sprout
 package cmd
 
 import (
@@ -25,7 +25,7 @@ var (
 var exportTrainingCmd = &cobra.Command{
 	Use:   "export-training",
 	Short: "Export session data into training-ready formats",
-	Long: `Convert ledit session data into formats suitable for LLM fine-tuning.
+	Long: `Convert sprout session data into formats suitable for LLM fine-tuning.
 
 Supported formats:
   sharegpt  - ShareGPT JSON (conversations with metadata)
@@ -53,16 +53,16 @@ Message cleaning (when --no-tool-results is set, the default):
 
 Examples:
   # Export all sessions in current directory as OpenAI JSONL
-  ledit export-training --format openai --output training.jsonl
+  sprout export-training --format openai --output training.jsonl
 
   # Export everything across all directories as ShareGPT
-  ledit export-training --format sharegpt --output data.json --all
+  sprout export-training --format sharegpt --output data.json --all
 
   # Export a specific session as Alpaca format
-  ledit export-training --format alpaca --output alpaca.json --session abc123
+  sprout export-training --format alpaca --output alpaca.json --session abc123
 
   # Include system prompts and keep raw tool results
-  ledit export-training --format openai --output full.jsonl --include-system --no-tool-results=false`,
+  sprout export-training --format openai --output full.jsonl --include-system --no-tool-results=false`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		start := time.Now()

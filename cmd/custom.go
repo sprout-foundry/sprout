@@ -71,7 +71,7 @@ func runCustomModelAdd() error {
 
 	fmt.Println("Custom Provider Setup")
 	fmt.Println("=====================")
-	fmt.Println("Ledit assumes the endpoint is OpenAI-compatible and discovers models from /v1/models.")
+	fmt.Println("Sprout assumes the endpoint is OpenAI-compatible and discovers models from /v1/models.")
 	fmt.Println()
 
 	name, err := promptLine(reader, "Provider name (e.g. my-gateway): ")

@@ -27,7 +27,7 @@ func systemdExecArg(s string) string {
 	return s
 }
 
-// generateSystemdUnit produces a systemd user unit file for the ledit daemon.
+// generateSystemdUnit produces a systemd user unit file for the sprout daemon.
 func generateSystemdUnit(binaryPath, homeDir string) ([]byte, error) {
 	if binaryPath == "" {
 		return nil, fmt.Errorf("binary path must not be empty")
@@ -43,7 +43,7 @@ func generateSystemdUnit(binaryPath, homeDir string) ([]byte, error) {
 	// WorkingDirectory, Environment HOME, and EnvironmentFile take literal
 	// unquoted paths — systemd treats quotes as part of the value.
 	unit := fmt.Sprintf(`[Unit]
-Description=ledit daemon - AI coding assistant web UI
+Description=sprout daemon - AI coding assistant web UI
 After=default.target
 
 [Service]

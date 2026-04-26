@@ -17,7 +17,7 @@ var isolatedConfig bool
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "ledit",
+	Use:   "sprout",
 	Short: "Agent for code analysis and editing (interactive mode when run without arguments)",
 	Long: `Sprout is a command-line tool that leverages Large Language Models (LLMs)
 to automate and assist in software development tasks. It features a modern CLI

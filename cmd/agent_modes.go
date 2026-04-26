@@ -21,7 +21,7 @@ import (
 	"golang.org/x/term"
 )
 
-// isServiceMode returns true when ledit is running as a managed system
+// isServiceMode returns true when sprout is running as a managed system
 // service (systemd, launchd). In service mode, terminal prompts and
 // "Press Ctrl+C" messages are suppressed since there is no interactive
 // terminal.

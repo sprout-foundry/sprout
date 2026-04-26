@@ -46,6 +46,7 @@ type ReactWebServer struct {
 	fileConsents                    *fileConsentManager
 	clientContexts                  map[string]*webClientContext
 	port                            int
+	bindAddr                        string
 	server                          *http.Server
 	listener                        net.Listener
 	upgrader                        websocket.Upgrader
@@ -80,9 +81,12 @@ const (
 )
 
 // NewReactWebServer creates a new React web server
-func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int) *ReactWebServer {
+func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, bindAddr string) *ReactWebServer {
 	if port == 0 {
 		port = DaemonPort
+	}
+	if bindAddr == "" {
+		bindAddr = "127.0.0.1"
 	}
 
 	workspaceRoot, err := os.Getwd()
@@ -136,9 +140,14 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int) 
 		securityPromptMgr: securityPromptMgr,
 		clientContexts:    make(map[string]*webClientContext),
 		port:              port,
+		bindAddr:          bindAddr,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
-				// Allow localhost connections only.
+				// Allow localhost connections. When binding to
+				// 0.0.0.0 (cloud/service mode), accept any origin
+				// since the service is explicitly exposed. The
+				// SPROUT_ALLOWED_ORIGINS env var will provide
+				// finer-grained control once implemented.
 				origin := r.Header.Get("Origin")
 				if origin == "" {
 					return true // Allow same-origin and direct connections
@@ -149,7 +158,14 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int) 
 					return false
 				}
 				host := strings.ToLower(parsed.Hostname())
-				return host == "localhost" || host == "127.0.0.1"
+				if host == "localhost" || host == "127.0.0.1" {
+					return true
+				}
+				// When binding to all interfaces, accept any origin.
+				if bindAddr == "0.0.0.0" || bindAddr == "::" {
+					return true
+				}
+				return false
 			},
 		},
 		terminalManager:   NewTerminalManager(workspaceRoot),
@@ -178,6 +194,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/query", ws.handleAPIQuery)
 	mux.HandleFunc("/api/query/steer", ws.handleAPIQuerySteer)
 	mux.HandleFunc("/api/query/stop", ws.handleAPIQueryStop)
+	mux.HandleFunc("/api/query/status", ws.handleAPIQueryStatus)
 	mux.HandleFunc("/api/stats", ws.handleAPIStats)
 	mux.HandleFunc("/api/costs/summary", ws.handleCostsSummary)
 	mux.HandleFunc("/api/costs/history", ws.handleCostsHistory)
@@ -274,6 +291,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/chat-sessions/unpin", ws.handleAPIChatSessionsUnpin)
 	mux.HandleFunc("/api/chat-sessions/switch", ws.handleAPIChatSessionsSwitch)
 	mux.HandleFunc("/api/chat-sessions/compact", ws.handleAPIChatSessionsCompact)
+	mux.HandleFunc("/api/chat-sessions/history", ws.handleAPIChatSessionClearHistory)
 	mux.HandleFunc("/api/chat-sessions/worktree-mappings", ws.handleAPIChatSessionWorktreeList)
 	// Chat session worktree API
 	mux.HandleFunc("/api/chat-session/", ws.handleAPIChatSessionWorktree)
@@ -303,7 +321,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	})
 
 	ws.server = &http.Server{
-		Addr:    fmt.Sprintf("127.0.0.1:%d", ws.port),
+		Addr:    formatListenAddr(ws.bindAddr, ws.port),
 		Handler: mux,
 	}
 
@@ -318,7 +336,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	if ws.port == 0 {
 		actualPort := listener.Addr().(*net.TCPAddr).Port
 		ws.port = actualPort
-		ws.server.Addr = fmt.Sprintf("127.0.0.1:%d", actualPort)
+		ws.server.Addr = formatListenAddr(ws.bindAddr, actualPort)
 	}
 
 	ws.mutex.Lock()
@@ -333,7 +351,11 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 
 	// Start server in goroutine
 	go func() {
-		log.Printf("[web] Web UI starting at http://localhost:%d", ws.port)
+		addr := ws.bindAddr
+		if addr == "127.0.0.1" {
+			addr = "localhost"
+		}
+		log.Printf("[web] Web UI starting at http://%s:%d", addr, ws.port)
 		if err := ws.server.Serve(listener); err != nil && !isExpectedServerCloseError(err) {
 			log.Printf("Web server error: %v", err)
 		}
@@ -543,4 +565,13 @@ func FindAvailablePort(basePort int) (int, error) {
 		port++
 	}
 	return 0, fmt.Errorf("no available port found in range %d-%d", basePort, basePort+99)
+}
+
+// formatListenAddr constructs a listen address string in "host:port" format,
+// using bracket notation for IPv6 addresses (e.g., "[::]:54000").
+func formatListenAddr(host string, port int) string {
+	if strings.Contains(host, ":") {
+		return fmt.Sprintf("[%s]:%d", host, port)
+	}
+	return fmt.Sprintf("%s:%d", host, port)
 }

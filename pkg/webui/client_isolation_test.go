@@ -32,7 +32,7 @@ func TestMultiWindowClientIsolationForWorkspaceSessionAndModel(t *testing.T) {
 		t.Fatalf("mkdir workspaceB: %v", err)
 	}
 
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0)
+	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
 	ws.daemonRoot = daemonRoot
 	ws.workspaceRoot = daemonRoot
 	ws.terminalManager = NewTerminalManager(daemonRoot)
@@ -170,7 +170,7 @@ func TestActiveQueryIsolationAllowsOtherWindowWorkspaceSwitch(t *testing.T) {
 		}
 	}
 
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0)
+	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
 	ws.daemonRoot = daemonRoot
 	ws.workspaceRoot = daemonRoot
 	ws.terminalManager = NewTerminalManager(daemonRoot)
@@ -226,7 +226,7 @@ func TestSetClientWorkspaceRootResetsAgentSessionState(t *testing.T) {
 		t.Fatalf("mkdir next workspace: %v", err)
 	}
 
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0)
+	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
 	ws.daemonRoot = daemonRoot
 	ws.workspaceRoot = daemonRoot
 
@@ -280,7 +280,7 @@ func TestSetClientWorkspaceRootResetsAgentSessionState(t *testing.T) {
 }
 
 func TestShouldForwardEventToConnectionRequiresClientIDExceptGlobal(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0)
+	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
 
 	targeted := events.UIEvent{
 		Type: events.EventTypeQueryProgress,
@@ -311,7 +311,7 @@ func TestShouldForwardEventToConnectionRequiresClientIDExceptGlobal(t *testing.T
 }
 
 func TestStopSSHSessionLockedClearsMatchingClientSSHContext(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0)
+	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
 	ws.clientContexts = map[string]*webClientContext{
 		"client-a": {
 			WorkspaceRoot:  "/tmp/a",
@@ -352,7 +352,7 @@ func TestStopSSHSessionLockedClearsMatchingClientSSHContext(t *testing.T) {
 func TestCleanupInactiveClientContextsRemovesOnlyStaleInactiveDisconnectedClients(t *testing.T) {
 	daemonRoot := t.TempDir()
 
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0)
+	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
 	ws.daemonRoot = daemonRoot
 	ws.workspaceRoot = daemonRoot
 

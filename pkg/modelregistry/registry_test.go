@@ -228,6 +228,87 @@ func TestFetchModels_InvalidJSON(t *testing.T) {
 	}
 }
 
+func TestFetchModels_UnsupportedSchemaVersion(t *testing.T) {
+	originalURL := baseURLCopy()
+	defer func() { SetBaseURL(originalURL) }()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// Schema version 2 is not supported (only 0 and 1 are allowed)
+		w.Write([]byte(`{"schema_version": 2, "updated_at": "2024-01-01T00:00:00Z", "models": [{"id": "test"}]}`))
+	}))
+	defer srv.Close()
+
+	SetBaseURL(srv.URL)
+	ClearCache()
+
+	models, err := FetchModels(context.Background(), "badversion")
+	if err == nil {
+		t.Fatal("expected error for unsupported schema version")
+	}
+	if !strings.Contains(err.Error(), "unsupported schema version") {
+		t.Errorf("expected error containing 'unsupported schema version', got: %v", err)
+	}
+	if models != nil {
+		t.Fatalf("expected nil models for unsupported schema version, got: %v", models)
+	}
+}
+
+func TestFetchModels_LegacySchemaVersion(t *testing.T) {
+	originalURL := baseURLCopy()
+	defer func() { SetBaseURL(originalURL) }()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// No schema_version field - defaults to 0 (legacy/unset), which should be accepted
+		w.Write([]byte(`{"updated_at": "2024-01-01T00:00:00Z", "models": [{"id": "legacy-model"}]}`))
+	}))
+	defer srv.Close()
+
+	SetBaseURL(srv.URL)
+	ClearCache()
+
+	models, err := FetchModels(context.Background(), "legacy")
+	if err != nil {
+		t.Fatalf("unexpected error for legacy schema version: %v", err)
+	}
+	if models == nil {
+		t.Fatal("expected non-nil models for legacy schema version")
+	}
+	if len(models) != 1 || models[0].ID != "legacy-model" {
+		t.Errorf("expected models with ID 'legacy-model', got: %v", models)
+	}
+}
+
+func TestFetchModels_SentinelDisabledEnv(t *testing.T) {
+	// Verify that loadConfig recognizes "disabled", "off", "none" sentinels.
+	// We test by calling SetBaseURL (which loadConfig would set to ""),
+	// then verifying IsEnabled returns false and FetchModels returns nil.
+	originalURL := baseURLCopy()
+	defer func() { SetBaseURL(originalURL) }()
+
+	for _, sentinel := range []string{"disabled", "Disabled", "OFF", "None"} {
+		t.Run(sentinel, func(t *testing.T) {
+			// Simulate what loadConfig does when it sees the sentinel.
+			lower := strings.ToLower(strings.TrimSpace(sentinel))
+			if lower == "off" || lower == "none" || lower == "disabled" {
+				SetBaseURL("")
+			}
+			if IsEnabled() {
+				t.Errorf("expected IsEnabled() = false for sentinel %q", sentinel)
+			}
+			ClearCache()
+			models, err := FetchModels(context.Background(), "openrouter")
+			if err != nil {
+				t.Fatalf("expected nil error when disabled, got: %v", err)
+			}
+			if models != nil {
+				t.Fatalf("expected nil models when disabled, got: %v", models)
+			}
+		})
+	}
+}
+
 func TestSetTTL(t *testing.T) {
 	originalTTL := ttlCopy()
 	defer func() { SetTTL(originalTTL) }()

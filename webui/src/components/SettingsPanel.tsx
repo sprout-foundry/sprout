@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import './SettingsPanel.css';
-import { ApiService, type LeditSettings, type ProviderOption } from '../services/api';
+import { ApiService, type SproutSettings, type ProviderOption } from '../services/api';
 import { useNotifications } from '../contexts/NotificationContext';
 import { debugLog } from '../utils/log';
 import { Pencil, Plus, Trash2, Lock, Cog } from 'lucide-react';
@@ -30,8 +30,8 @@ interface EditorPreferences {
 }
 
 interface SettingsPanelProps {
-  settings: LeditSettings | null;
-  onSettingsChanged: (settings: LeditSettings) => void;
+  settings: SproutSettings | null;
+  onSettingsChanged: (settings: SproutSettings) => void;
   /** Callback to open the provider setup/onboarding dialog */
   onRequestProviderSetup?: () => void;
   editorPreferences?: EditorPreferences | null;
@@ -97,7 +97,7 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
   const [layerError, setLayerError] = useState<string | null>(null);
 
   // Ref so render helpers can read the current display settings without prop changes
-  const displaySettingsRef = useRef<LeditSettings | null>(null);
+  const displaySettingsRef = useRef<SproutSettings | null>(null);
 
   // State to guard the "Create from global" button from double-clicks
   const [creatingWorkspaceConfig, setCreatingWorkspaceConfig] = useState(false);
@@ -310,7 +310,7 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
           current as unknown as Record<string, unknown>,
           keyOrPath,
           value,
-        ) as unknown as LeditSettings;
+        ) as unknown as SproutSettings;
         onSettingsChanged(updated);
 
         // Use the current configViewLayer when not editing session
@@ -881,9 +881,9 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
 
     // When viewing workspace or global layer, use that layer's data
     // so the user sees and edits only that layer's specific values.
-    const activeSettings: LeditSettings =
+    const activeSettings: SproutSettings =
       configViewLayer !== 'session' && layerData
-        ? (layerData as unknown as LeditSettings)
+        ? (layerData as unknown as SproutSettings)
         : settings;
     displaySettingsRef.current = activeSettings;
 

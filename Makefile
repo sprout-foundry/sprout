@@ -1,7 +1,7 @@
 # Ledit Testing and Build Makefile
 # Provides clear commands for different types of tests and builds
 
-.PHONY: help test test-unit test-integration test-e2e test-smoke test-all test-ci test-coverage \
+.PHONY: help test test-unit test-integration test-e2e test-smoke test-desktop-smoke test-all test-ci test-coverage \
        clean build build-all build-version build-ui deploy-ui build-wasm \
        verify-ui-embedded test-webui lint lint-fix dev
 
@@ -13,6 +13,7 @@ help:
 	@echo "  make test-integration - Run integration tests (mocked AI)"  
 	@echo "  make test-e2e         - Run e2e tests (requires AI model)"
 	@echo "  make test-smoke       - Run smoke tests (basic functionality)"
+	@echo "  make test-desktop-smoke - Run desktop Electron smoke tests"
 	@echo "  make test-all         - Run unit + integration + smoke tests"
 	@echo "  make test-coverage    - Run unit tests with coverage check (fails if < 40%)"
 	@echo "  make clean            - Clean test artifacts"
@@ -74,6 +75,12 @@ endif
 test-smoke:
 	@echo "Running smoke tests..."
 	cd smoke_tests && chmod +x run_api_test.sh && ./run_api_test.sh
+
+# Desktop Electron Smoke Tests - Run with Playwright under xvfb
+test-desktop-smoke:
+	@echo "Running desktop Electron smoke tests..."
+	@which xvfb-run >/dev/null 2>&1 || ( echo "Error: xvfb-run not found. Install xvfb (e.g., sudo apt-get install xvfb)."; exit 1 )
+	xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" npx playwright test --config=playwright.config.js
 
 # Test All (except expensive e2e)
 test-all: test-unit test-integration test-smoke

@@ -1,13 +1,13 @@
 import { useId } from 'react';
-import './LeditLogo.css';
+import './SproutLogo.css';
 
-interface LeditLogoProps {
+interface SproutLogoProps {
   showWordmark?: boolean;
   compact?: boolean;
   className?: string;
 }
 
-function LeditLogo({ showWordmark = true, compact = false, className = '' }: LeditLogoProps): JSX.Element {
+function SproutLogo({ showWordmark = true, compact = false, className = '' }: SproutLogoProps): JSX.Element {
   const logoTitleId = useId();
 
   return (
@@ -81,4 +81,4 @@ function LeditLogo({ showWordmark = true, compact = false, className = '' }: Led
   );
 }
 
-export default LeditLogo;
+export default SproutLogo;

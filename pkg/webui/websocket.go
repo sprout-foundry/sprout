@@ -117,6 +117,7 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 		if r := recover(); r != nil {
 			log.Printf("WebSocket handler panic: %v", r)
 			safeConn.WritePanicError(sessionID, "websocket handler", r)
+			ws.cleanupAfterPanic(clientID, sessionID)
 		}
 	}()
 
@@ -163,6 +164,7 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 			if r := recover(); r != nil {
 				log.Printf("WebSocket read goroutine panic recovered: %v", r)
 				safeConn.WritePanicError(sessionID, "read goroutine", r)
+				ws.cleanupAfterPanic(clientID, sessionID)
 				cancel() // ensure write loop exits cleanly
 			}
 		}()
@@ -303,7 +305,7 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 
 	case "request_stats":
 		// Send current stats immediately
-		ws.safeHandleGoroutine(safeConn, sessionID, clientID, false, func() {
+		ws.safeHandleGoroutine(safeConn, sessionID, clientID, func() {
 			stats := ws.gatherStatsForClientID(clientID)
 			safeConn.WriteJSON(map[string]interface{}{
 				"type": "stats_update",
@@ -312,27 +314,27 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 		})
 
 	case "provider_change":
-		ws.safeHandleGoroutine(safeConn, sessionID, clientID, true, func() {
+		ws.safeHandleGoroutine(safeConn, sessionID, clientID, func() {
 			ws.handleProviderChangeMessage(safeConn, msg, clientID)
 		})
 
 	case "model_change":
-		ws.safeHandleGoroutine(safeConn, sessionID, clientID, true, func() {
+		ws.safeHandleGoroutine(safeConn, sessionID, clientID, func() {
 			ws.handleModelChangeMessage(safeConn, msg, clientID)
 		})
 
 	case "persona_change":
-		ws.safeHandleGoroutine(safeConn, sessionID, clientID, true, func() {
+		ws.safeHandleGoroutine(safeConn, sessionID, clientID, func() {
 			ws.handlePersonaChangeMessage(safeConn, msg, clientID)
 		})
 
 	case "security_approval_response":
-		ws.safeHandleGoroutine(safeConn, sessionID, clientID, false, func() {
+		ws.safeHandleGoroutine(safeConn, sessionID, clientID, func() {
 			ws.handleSecurityApprovalResponse(safeConn, msg, clientID)
 		})
 
 	case "security_prompt_response":
-		ws.safeHandleGoroutine(safeConn, sessionID, clientID, false, func() {
+		ws.safeHandleGoroutine(safeConn, sessionID, clientID, func() {
 			ws.handleSecurityPromptResponse(safeConn, msg, clientID)
 		})
 	}
@@ -809,34 +811,42 @@ func (ws *ReactWebServer) handleSecurityPromptResponse(safeConn *SafeConn, msg m
 }
 
 // safeHandleGoroutine runs fn in a goroutine with panic recovery. If fn
-// panics, an error event is written to the WebSocket. When decrementQueries
-// is true (for handlers that may have incremented the active-query counter),
-// the client's active query count is also decremented so the session isn't
-// left in a half-running state.
-func (ws *ReactWebServer) safeHandleGoroutine(safeConn *SafeConn, sessionID, clientID string, decrementQueries bool, fn func()) {
+// panics, an error event is written to the WebSocket, the client's active
+// query state is reset, and the connection is closed.
+func (ws *ReactWebServer) safeHandleGoroutine(safeConn *SafeConn, sessionID, clientID string, fn func()) {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
 				log.Printf("WebSocket handler panic in session %s: %v", sessionID, r)
 				safeConn.WritePanicError(sessionID, "message handler", r)
-				if decrementQueries {
-					ws.decrementActiveQueries(clientID)
-				}
+				ws.cleanupAfterPanic(clientID, sessionID)
+				safeConn.Close() // Terminate the session since state is unreliable after a panic
 			}
 		}()
 		fn()
 	}()
 }
 
+// cleanupAfterPanic resets the client's query state and publishes a clean
+// state event so the UI doesn't get stuck showing "running" after a panic.
+func (ws *ReactWebServer) cleanupAfterPanic(clientID, sessionID string) {
+	if clientID != "" {
+		ws.decrementActiveQueries(clientID)
+		// Publish state event to UI so it refreshes to idle state
+		ws.publishClientEvent(clientID, "agent_state_change", map[string]interface{}{
+			"session_id": sessionID,
+			"status":     "error",
+			"message":    "Session terminated due to internal error",
+		})
+	}
+}
+
 // handleTerminalWebSocket handles terminal WebSocket connections.
 // Supports both creating new sessions and reattaching to existing sessions.
 // The client can request reattachment by passing ?reattach=<sessionID> in the URL.
 func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http.Request) {
-	defer func() {
-		if r := recover(); r != nil {
-			log.Printf("Terminal WebSocket handler panic: %v", r)
-		}
-	}()
+	// Generate a session ID early so it's available for panic recovery
+	sessionID := fmt.Sprintf("terminal_%d", time.Now().UnixNano())
 
 	conn, err := ws.upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -848,11 +858,18 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 	safeConn := NewSafeConn(conn)
 	defer safeConn.Close()
 
+	// Panic recovery - now safeConn is available
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Terminal WebSocket handler panic: %v", r)
+			safeConn.WritePanicError(sessionID, "terminal handler", r)
+		}
+	}()
+
 	terminalManager := ws.getTerminalManagerForRequest(r)
 
 	// Check if client wants to reattach to an existing session
 	reattachID := strings.TrimSpace(r.URL.Query().Get("reattach"))
-	var sessionID string
 	var session *TerminalSession
 
 	if reattachID != "" && terminalManager.HasSession(reattachID) {

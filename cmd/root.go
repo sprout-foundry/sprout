@@ -19,7 +19,7 @@ var isolatedConfig bool
 var rootCmd = &cobra.Command{
 	Use:   "ledit",
 	Short: "Agent for code analysis and editing (interactive mode when run without arguments)",
-	Long: `Ledit is a command-line tool that leverages Large Language Models (LLMs)
+	Long: `Sprout is a command-line tool that leverages Large Language Models (LLMs)
 to automate and assist in software development tasks. It features a modern CLI
 with automatic web UI startup for rich interactive experiences.
 
@@ -33,9 +33,9 @@ Available commands:
   mcp    - Manage MCP (Model Context Protocol) servers
   custom - Manage custom OpenAI-compatible providers
 
-For autonomous operation, try: ledit agent "your intent here"
+For autonomous operation, try: sprout agent "your intent here"
 
-Running just 'ledit' without arguments starts enhanced agent mode with automatic web UI.`,
+Running just 'sprout' without arguments starts enhanced agent mode with automatic web UI.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		if isolatedConfig {
 			cwd, err := os.Getwd()
@@ -97,7 +97,7 @@ func initializeSystem() {
 	_, err := configuration.NewManagerSilent()
 	if err != nil {
 		// If initialization fails, print helpful error and exit
-		fmt.Fprintf(os.Stderr, "Failed to initialize ledit: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Failed to initialize sprout: %v\n", err)
 		fmt.Fprintln(os.Stderr, "\nThis usually means there's an issue with your configuration or API keys.")
 		fmt.Fprintln(os.Stderr, "   Try opening the Web UI onboarding or checking ~/.ledit configuration.")
 		os.Exit(1)

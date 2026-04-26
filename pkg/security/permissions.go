@@ -8,7 +8,7 @@ import (
 )
 
 // PermissionChecker provides utilities to check file and directory permissions
-// for security-sensitive files in the ledit configuration directory.
+// for security-sensitive files in the sprout configuration directory.
 type PermissionChecker struct {
 	configDir string
 }

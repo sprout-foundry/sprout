@@ -25,7 +25,7 @@ type serviceDiagnostics interface {
 var newServiceManager func() serviceManager
 
 const (
-	serviceName = "ledit-daemon"
+	serviceName = "sprout-daemon"
 	servicePort = 54000
 	serviceURL  = "http://localhost:54000"
 )

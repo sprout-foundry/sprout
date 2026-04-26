@@ -401,7 +401,7 @@ All layered config work (backend + frontend) is complete:
 
 ## Developer Experience
 
-[] - DX: Add a `CONTRIBUTING.md` or similar developer setup guide — There is no documentation on how to set up a development environment. The `Makefile` has `help` but there is no guide covering: required Go version (1.25 per CI), Node.js version (22), how to run the webui in dev mode (`npm run dev`), how the embed system works, or the test strategy.
+[x] - DX: Add a `CONTRIBUTING.md` or similar developer setup guide — There is no documentation on how to set up a development environment. The `Makefile` has `help` but there is no guide covering: required Go version (1.25 per CI), Node.js version (22), how to run the webui in dev mode (`npm run dev`), how the embed system works, or the test strategy.
 [] - DX: `make lint` and `make lint-fix` exist but are not wired into CI — The Makefile frontend lint targets exist but `.github/workflows/build.yml` never calls them. A PR with a lint error can pass CI and merge silently. Add `make lint` to the CI pipeline (non-blocking initially, then blocking once clean).
 
 ---

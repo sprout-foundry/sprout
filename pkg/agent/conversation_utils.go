@@ -212,10 +212,11 @@ func (a *Agent) shouldDisableThinking() bool {
 		return false // Use reasoning_effort instead
 	}
 
-	// DeepSeek chat, coder, and V3 models - support thinking.type = "disabled"
+	// DeepSeek chat, coder, V3, and V4 models - support thinking.type = "disabled"
 	if strings.Contains(modelLower, "deepseek-chat") ||
 		strings.Contains(modelLower, "deepseek-coder") ||
-		strings.Contains(modelLower, "deepseek-v3") {
+		strings.Contains(modelLower, "deepseek-v3") ||
+		strings.Contains(modelLower, "deepseek-v4") {
 		return true
 	}
 

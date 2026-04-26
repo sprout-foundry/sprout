@@ -224,7 +224,7 @@ func DecryptStore(data []byte) ([]byte, error) {
 			}
 			if !IsPlaintextJSON(decrypted) {
 				return nil, fmt.Errorf("decrypted data is not valid JSON — the machine key may be wrong (was key.age regenerated?). "+
-					"Run 'ledit keys migrate' to re-encrypt with the current machine key")
+					"Run 'sprout keys migrate' to re-encrypt with the current machine key")
 			}
 			return decrypted, nil
 		}
@@ -253,12 +253,12 @@ func DecryptStore(data []byte) ([]byte, error) {
 
 	if os.IsNotExist(err) || identity == nil {
 		return nil, fmt.Errorf("API keys file is encrypted (age format) but no decryption key is available.\n"+
-			"This usually means you need to update your ledit binary to a version that supports encryption,\n"+
+			"This usually means you need to update your sprout binary to a version that supports encryption,\n"+
 			"or the machine key file (key.age) was deleted.\n\n"+
 			"Recovery options:\n"+
-			"  1. Update ledit to the latest version if you're running an older build\n"+
+			"  1. Update sprout to the latest version if you're running an older build\n"+
 			"  2. Set SPROUT_KEY_PASSPHRASE=<your-passphrase> if you previously used passphrase encryption\n"+
-			"  3. Run 'ledit keys migrate' to generate a new machine key (existing encrypted keys will be lost): %w", err)
+			"  3. Run 'sprout keys migrate' to generate a new machine key (existing encrypted keys will be lost): %w", err)
 	}
 	return nil, fmt.Errorf("API keys file is encrypted but decryption with the machine key failed.\n"+
 		"The machine key (key.age) may have been regenerated, making the old encrypted data unreadable.\n\n"+
@@ -395,7 +395,7 @@ func saveUnlocked(store Store) error {
 		passphrase := strings.TrimSpace(envutil.GetEnvSimple("KEY_PASSPHRASE"))
 		if passphrase == "" {
 					return fmt.Errorf("cannot save: API keys are passphrase-encrypted but SPROUT_KEY_PASSPHRASE is not set. "+
-			"Set SPROUT_KEY_PASSPHRASE or run 'ledit keys encrypt' to switch to machine-key mode")
+			"Set SPROUT_KEY_PASSPHRASE or run 'sprout keys encrypt' to switch to machine-key mode")
 	}
 	encrypted, err = EncryptWithPassphrase(data, passphrase)
 } else if mode == "" && strings.TrimSpace(envutil.GetEnvSimple("KEY_PASSPHRASE")) != "" {
@@ -542,7 +542,7 @@ func Save(store Store) error {
 		passphrase := strings.TrimSpace(envutil.GetEnvSimple("KEY_PASSPHRASE"))
 		if passphrase == "" {
 			return fmt.Errorf("cannot save: API keys are passphrase-encrypted but SPROUT_KEY_PASSPHRASE is not set. "+
-			"Set SPROUT_KEY_PASSPHRASE or run 'ledit keys encrypt' to switch to machine-key mode")
+			"Set SPROUT_KEY_PASSPHRASE or run 'sprout keys encrypt' to switch to machine-key mode")
 		}
 		encrypted, err = EncryptWithPassphrase(data, passphrase)
 	} else if mode == "" && strings.TrimSpace(envutil.GetEnvSimple("KEY_PASSPHRASE")) != "" {

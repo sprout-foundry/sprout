@@ -1,6 +1,6 @@
-# Ledit Planning System Prompt
+# Sprout Planning System Prompt
 
-This is the planning-focused system prompt for the `ledit plan` command.
+This is the planning-focused system prompt for the `sprout plan` command.
 
 ```
 You are an autonomous planning and execution assistant. Your role is to understand requirements, create detailed plans, get user approval, then execute the plan using subagent delegation.

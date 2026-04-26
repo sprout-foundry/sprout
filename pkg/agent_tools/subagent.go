@@ -123,7 +123,7 @@ func GetSubagentMaxTokens() int {
 //   - completed: true if process ran to completion (always true for blocking mode)
 //   - timed_out: true if the subprocess was terminated due to timeout (always false with no timeout)
 func RunSubagent(workspaceRoot string, prompt, model, provider string, streamCallback StreamCallback, systemPromptPath, systemPromptText, persona string) (map[string]string, error) {
-	// Build command: ledit agent with the given prompt
+	// Build command: sprout agent with the given prompt
 	args := []string{"agent"}
 
 	// Add persona prompt override, preferring inline text if provided.
@@ -470,7 +470,7 @@ func spawnSubagent(workspaceRoot string, task ParallelSubagentTask, noTimeout bo
 	log.Printf("[SUBAGENT_SPAWN] method=%s task_id=%s model=%s provider=%s timeout=%v",
 		callerMethod, taskID, task.Model, task.Provider, !noTimeout)
 
-	// Build command: ledit agent with the given prompt
+	// Build command: sprout agent with the given prompt
 	args := []string{"agent"}
 
 	// Add provider/model if specified

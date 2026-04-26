@@ -11,7 +11,7 @@ import (
 
 // AgentResult is the structured output produced when --output-format=json is used.
 // It captures everything a SaaS wrapper (e.g. Sprout Foundry) needs from a
-// non-interactive ledit run.
+// non-interactive sprout run.
 type AgentResult struct {
 	Status        string             `json:"status"`                   // "success" or "error"
 	Error         string             `json:"error,omitempty"`          // error message if status=="error"

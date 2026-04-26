@@ -35,8 +35,8 @@ func (e *ExitCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		sessionID = fmt.Sprintf("session_%d", time.Now().UnixNano())
 		chatAgent.SetSessionID(sessionID)
 	}
-	fmt.Printf("To Continue: `ledit agent --session-id %s`\n", sessionID)
-	fmt.Println("Or Resume Latest: `ledit agent --last-session`")
+	fmt.Printf("To Continue: `sprout agent --session-id %s`\n", sessionID)
+	fmt.Println("Or Resume Latest: `sprout agent --last-session`")
 	exitProcess(0)
 	return nil // This line won't be reached due to os.Exit
 }

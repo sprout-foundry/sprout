@@ -356,7 +356,7 @@ func TestConcurrentMachineKeyGeneration(t *testing.T) {
 
 // TestDecryptStore_WithPassphraseEnvVar verifies that DecryptStore falls back to
 // SPROUT_KEY_PASSPHRASE when machine key decryption fails (e.g., data was
-// encrypted with passphrase via `ledit keys encrypt --passphrase`).
+// encrypted with passphrase via `sprout keys encrypt --passphrase`).
 func TestDecryptStore_WithPassphraseEnvVar(t *testing.T) {
 	tmpDir := t.TempDir()
 	originalConfig := os.Getenv("LEDIT_CONFIG")

@@ -58,8 +58,9 @@ type RawModel struct {
 
 // providerResponse is the JSON schema for a per-provider model file.
 type providerResponse struct {
-	UpdatedAt string      `json:"updated_at"`
-	Models    []ModelInfo `json:"models"`
+	SchemaVersion int         `json:"schema_version"`
+	UpdatedAt     string      `json:"updated_at"`
+	Models        []ModelInfo `json:"models"`
 }
 
 type cacheEntry struct {
@@ -75,17 +76,21 @@ var (
 	ttl           = defaultTTL
 	negativeTTL   = defaultNegativeTTL
 	httpTimeout   = defaultHTTPTimeout
-	once          sync.Once
 	sf            singleflight.Group
 )
 
 func init() {
-	once.Do(loadConfig)
+	loadConfig()
 }
 
 func loadConfig() {
 	if v := strings.TrimSpace(envutil.GetEnvSimple("MODEL_REGISTRY_URL")); v != "" {
-		baseURL = strings.TrimRight(v, "/")
+		lower := strings.ToLower(v)
+		if lower == "off" || lower == "none" || lower == "disabled" {
+			baseURL = ""
+		} else {
+			baseURL = strings.TrimRight(v, "/")
+		}
 	} else {
 		baseURL = defaultRegistryURL
 	}
@@ -204,16 +209,13 @@ func FetchModels(ctx context.Context, providerID string) ([]RawModel, error) {
 		return nil, fmt.Errorf("modelregistry: invalid provider ID %q", providerID)
 	}
 
-	// Check cache
+	// Check cache and negative cache under a single lock to avoid TOCTOU window.
 	mu.RLock()
 	entry, ok := cache[providerID]
-	mu.RUnlock()
 	if ok && time.Since(entry.fetchedAt) < ttlCopy() {
+		mu.RUnlock()
 		return convertToRaw(entry.models), nil
 	}
-
-	// Check negative cache (providers that returned 404)
-	mu.RLock()
 	negHit, negOk := negativeCache[providerID]
 	mu.RUnlock()
 	if negOk && time.Since(negHit) < negativeTTLCopy() {
@@ -222,12 +224,17 @@ func FetchModels(ctx context.Context, providerID string) ([]RawModel, error) {
 
 	// Use singleflight to deduplicate concurrent requests for the same provider.
 	result, err, _ := sf.Do(providerID, func() (interface{}, error) {
-		// Double-check cache after acquiring singleflight lock.
+		// Double-check cache and negative cache after acquiring singleflight lock.
 		mu.RLock()
 		entry, ok := cache[providerID]
-		mu.RUnlock()
 		if ok && time.Since(entry.fetchedAt) < ttlCopy() {
+			mu.RUnlock()
 			return convertToRaw(entry.models), nil
+		}
+		negHit, negOk := negativeCache[providerID]
+		mu.RUnlock()
+		if negOk && time.Since(negHit) < negativeTTLCopy() {
+			return nil, nil
 		}
 
 		// Fetch from registry.
@@ -265,6 +272,10 @@ func FetchModels(ctx context.Context, providerID string) ([]RawModel, error) {
 		var payload providerResponse
 		if decodeErr := json.NewDecoder(io.LimitReader(resp.Body, maxResponseBytes)).Decode(&payload); decodeErr != nil {
 			return nil, fmt.Errorf("modelregistry: decode %s: %w", providerID, decodeErr)
+		}
+
+		if payload.SchemaVersion != 0 && payload.SchemaVersion != 1 {
+			return nil, fmt.Errorf("modelregistry: unsupported schema version %d for %s", payload.SchemaVersion, providerID)
 		}
 
 		// Store in cache.

@@ -90,9 +90,9 @@ module.exports = async function beforePack(context) {
   if (!process.env.SKIP_BACKEND_BUILD) {
     run('node', ['scripts/build-electron-backend.mjs'], {
       env: {
-        LEDIT_GOOS: platform,
-        LEDIT_GOARCH: arch,
-        LEDIT_EXTRA_TARGETS: extraTargets.join(','),
+        SPROUT_GOOS: platform,
+        SPROUT_GOARCH: arch,
+        SPROUT_EXTRA_TARGETS: extraTargets.join(','),
       },
     });
   } else {

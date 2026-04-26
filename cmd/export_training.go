@@ -33,7 +33,7 @@ Supported formats:
   alpaca    - Alpaca instruction-following JSON
 
 The command reads session files from ~/.ledit/sessions (or the directory
-configured via LEDIT_CONFIG) and writes cleaned training data to the
+configured via SPROUT_CONFIG) and writes cleaned training data to the
 specified output file.
 
 Session filtering:

@@ -245,7 +245,7 @@ func FetchModels(ctx context.Context, providerID string) ([]RawModel, error) {
 			return nil, fmt.Errorf("modelregistry: create request: %w", reqErr)
 		}
 		req.Header.Set("Accept", "application/json")
-		req.Header.Set("User-Agent", "ledit-model-registry/1.0")
+		req.Header.Set("User-Agent", "sprout-model-registry/1.0")
 
 		client := &http.Client{Timeout: httpTimeoutCopy()}
 		resp, fetchErr := client.Do(req)

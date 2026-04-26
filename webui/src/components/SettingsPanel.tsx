@@ -357,7 +357,7 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
           backgroundColor: `color-mix(in srgb, ${colors[source] || colors.global} 15%, transparent)`,
           color: colors[source] || colors.global,
           fontWeight: 600,
-          textTransform: 'uppercase' as const,
+          textTransform: 'uppercase',
           letterSpacing: 0.5,
           verticalAlign: 'middle',
         }}

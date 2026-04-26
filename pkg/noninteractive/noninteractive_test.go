@@ -12,7 +12,7 @@ func TestHelpHint(t *testing.T) {
 	}
 
 	keyPhrases := []string{
-		"LEDIT_PROVIDER",
+		"SPROUT_PROVIDER",
 		"~/.ledit/config.json",
 		"sprout agent",
 		"interactively",
@@ -43,7 +43,7 @@ func TestIsNonInteractiveHint(t *testing.T) {
 		},
 		{
 			name: "error with only part of HelpHint returns false",
-			err:  errors.New("error: Set LEDIT_PROVIDER / configure ~/.ledit/config.json"),
+			err:  errors.New("error: Set SPROUT_PROVIDER / configure ~/.ledit/config.json"),
 			want: false,
 		},
 		{

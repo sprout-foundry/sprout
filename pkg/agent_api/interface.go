@@ -88,7 +88,7 @@ func NewOpenRouterClientWrapper(model string) (ClientInterface, error) {
 
 // DetermineProvider provides unified provider detection with clear precedence:
 // 1. Command-line flag (if provided)
-// 2. Environment variable (LEDIT_PROVIDER)
+// 2. Environment variable (SPROUT_PROVIDER, with LEDIT_PROVIDER backward-compat)
 // 3. Config file (last_used_provider)
 // 4. First available provider based on API keys (uses priority order + dynamic discovery)
 // 5. Fallback to Ollama

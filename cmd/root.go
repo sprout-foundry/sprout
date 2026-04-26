@@ -45,7 +45,7 @@ Running just 'sprout' without arguments starts enhanced agent mode with automati
 			}
 			isolatedDir := filepath.Join(cwd, ".ledit")
 			if err := configuration.SetEnv("CONFIG", isolatedDir); err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to set LEDIT_CONFIG for --isolated-config: %v\n", err)
+				fmt.Fprintf(os.Stderr, "Failed to set SPROUT_CONFIG for --isolated-config: %v\n", err)
 				os.Exit(1)
 			}
 			if err := configuration.BootstrapIsolatedConfig(isolatedDir); err != nil {

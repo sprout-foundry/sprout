@@ -121,7 +121,7 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 
 	// Create a context with a timeout for the tool execution
 	// Subagents get 30 minutes (for large file operations), other tools get 5 minutes
-	// Can be overridden via LEDIT_TOOL_TIMEOUT environment variable
+	// Can be overridden via SPROUT_TOOL_TIMEOUT environment variable
 	toolTimeout := getToolTimeout(normalizedToolName)
 	ctx, cancel := context.WithTimeout(context.Background(), toolTimeout)
 	defer cancel()

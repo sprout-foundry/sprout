@@ -209,7 +209,7 @@ func handleSearchFiles(ctx context.Context, a *Agent, args map[string]interface{
 
 	// Add truncation warning if search was capped by max_bytes limit
 	if searchCapped {
-		return fmt.Sprintf("%s\n\n[Search results truncated due to max_bytes limit (%d bytes). Consider increasing max_bytes parameter or using LEDIT_SEARCH_MAX_BYTES env var.]", b.String(), maxBytes), nil
+		return fmt.Sprintf("%s\n\n[Search results truncated due to max_bytes limit (%d bytes). Consider increasing max_bytes parameter or using SPROUT_SEARCH_MAX_BYTES env var.]", b.String(), maxBytes), nil
 	}
 	return b.String(), nil
 }

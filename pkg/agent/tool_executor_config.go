@@ -15,7 +15,7 @@ const defaultAnalyzeImageResultExcerptChars = 4000
 
 // getToolTimeout returns the timeout duration for tool execution
 // Subagents get 30 minutes (for large file operations), other tools get 5 minutes
-// Can be overridden via LEDIT_TOOL_TIMEOUT environment variable (in seconds)
+// Can be overridden via SPROUT_TOOL_TIMEOUT environment variable (in seconds)
 func getToolTimeout(toolName string) time.Duration {
 	// Check for environment variable override first
 	if envTimeout := configuration.GetEnvSimple("TOOL_TIMEOUT"); envTimeout != "" {

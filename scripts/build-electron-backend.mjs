@@ -21,8 +21,8 @@ const defaultArch = ({
 }[process.arch] || process.arch);
 
 const primaryTarget = {
-  platform: process.env.LEDIT_GOOS || defaultPlatform,
-  arch: process.env.LEDIT_GOARCH || defaultArch,
+  platform: process.env.SPROUT_GOOS || defaultPlatform,
+  arch: process.env.SPROUT_GOARCH || defaultArch,
 };
 
 const remoteTargets = [
@@ -32,14 +32,14 @@ const remoteTargets = [
   { platform: 'darwin', arch: 'arm64' },
 ];
 
-const extraTargets = String(process.env.LEDIT_EXTRA_TARGETS || '')
+const extraTargets = String(process.env.SPROUT_EXTRA_TARGETS || '')
   .split(',')
   .map((item) => item.trim())
   .filter(Boolean)
   .map((item) => {
     const [platform, arch] = item.split('-');
     if (!platform || !arch) {
-      throw new Error(`Invalid LEDIT_EXTRA_TARGETS entry: ${item}`);
+      throw new Error(`Invalid SPROUT_EXTRA_TARGETS entry: ${item}`);
     }
     return { platform, arch };
   });
@@ -57,7 +57,7 @@ const targets = [primaryTarget, ...extraTargets].filter((target, index, array) =
 );
 
 for (const target of targets) {
-  const binaryName = target.platform === 'windows' ? 'ledit.exe' : 'ledit';
+  const binaryName = target.platform === 'windows' ? 'sprout.exe' : 'sprout';
   const outputDir = join(backendOutDir, `${target.platform}-${target.arch}`);
   const outputPath = join(outputDir, binaryName);
 

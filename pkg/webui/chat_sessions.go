@@ -540,6 +540,21 @@ func (cc *webClientContext) setChatQueryActive(chatID string, active bool, query
 	}
 }
 
+// clearAllChatQueryState resets ActiveQuery and CurrentQuery for every chat
+// session and the top-level context. Used during panic recovery to ensure no
+// chat is left stuck in a "running" state.
+func (cc *webClientContext) clearAllChatQueryState() {
+	if cc.ChatSessions != nil {
+		for _, cs := range cc.ChatSessions {
+			if cs != nil {
+				cs.setQueryActive(false, "")
+			}
+		}
+	}
+	cc.ActiveQuery = false
+	cc.CurrentQuery = ""
+}
+
 // setChatSessionWorktree sets the worktree path for a chat session.
 // The caller is responsible for validating the path before calling this function.
 // Callers must provide an absolute path. This function trusts its caller and

@@ -10,9 +10,9 @@ import (
 
 const (
 	// keyringServiceName is the service name used for go-keyring
-	keyringServiceName = "ledit"
+	keyringServiceName = "sprout"
 	// keyringProbeProvider is a special provider name used to probe keyring availability
-	keyringProbeProvider = "__ledit_probe__"
+	keyringProbeProvider = "__sprout_probe__"
 )
 
 // Backend interface defines the contract for credential storage backends.

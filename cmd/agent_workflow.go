@@ -22,8 +22,8 @@ const (
 	workflowWhenOnSuccess = "on_success"
 	workflowWhenOnError   = "on_error"
 
-	defaultWorkflowOrchestrationStateFile  = ".ledit/workflow_state.json"
-	defaultWorkflowOrchestrationEventsFile = ".ledit/workflow_events.jsonl"
+	defaultWorkflowOrchestrationStateFile  = ".sprout/workflow_state.json"
+	defaultWorkflowOrchestrationEventsFile = ".sprout/workflow_events.jsonl"
 	defaultWorkflowConversationSessionID   = "workflow"
 )
 

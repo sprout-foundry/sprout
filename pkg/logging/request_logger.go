@@ -13,7 +13,7 @@ import (
 // LogRequestPayload saves the exact JSON payload sent to the provider.
 // It writes both the canonical lastRequest.json and a timestamped diagnostic copy.
 func LogRequestPayload(payload []byte, provider, model string, streaming bool) {
-	dir := filepath.Join(os.Getenv("HOME"), ".ledit")
+	dir := filepath.Join(os.Getenv("HOME"), ".sprout")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return
 	}
@@ -47,7 +47,7 @@ func LogRequestPayload(payload []byte, provider, model string, streaming bool) {
 // LogRequestPayloadOnError saves the JSON payload only when an error occurs.
 // It writes to lastRequest.json and a timestamped file with error context.
 func LogRequestPayloadOnError(payload []byte, provider, model string, streaming bool, errorType string, err error) {
-	dir := filepath.Join(os.Getenv("HOME"), ".ledit")
+	dir := filepath.Join(os.Getenv("HOME"), ".sprout")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return
 	}

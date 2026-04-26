@@ -57,16 +57,16 @@ func captureAPIKeysFromEnv() []string {
 
 // serviceEnvPath returns the path to the service.env file.
 func serviceEnvPath(homeDir string) string {
-	return filepath.Join(homeDir, ".ledit", "service.env")
+	return filepath.Join(homeDir, ".sprout", "service.env")
 }
 
 // generateServiceEnvFile captures API keys from the current environment and writes them
-// to ~/.ledit/service.env with restricted permissions (0600).
+// to ~/.sprout/service.env with restricted permissions (0600).
 func generateServiceEnvFile(homeDir string) error {
-	// Ensure the .ledit directory exists
-	leditDir := filepath.Join(homeDir, ".ledit")
-	if err := os.MkdirAll(leditDir, 0755); err != nil {
-		return fmt.Errorf("failed to create .ledit directory: %w", err)
+	// Ensure the .sprout directory exists
+	sproutDir := filepath.Join(homeDir, ".sprout")
+	if err := os.MkdirAll(sproutDir, 0755); err != nil {
+		return fmt.Errorf("failed to create .sprout directory: %w", err)
 	}
 
 	// Capture API keys from current environment
@@ -74,7 +74,7 @@ func generateServiceEnvFile(homeDir string) error {
 	envPath := serviceEnvPath(homeDir)
 
 	// Write to a random temp file first, then rename for atomicity.
-	tmpFile, err := os.CreateTemp(leditDir, ".service.env.*.tmp")
+	tmpFile, err := os.CreateTemp(sproutDir, ".service.env.*.tmp")
 	if err != nil {
 		return fmt.Errorf("failed to create temp file: %w", err)
 	}
@@ -139,7 +139,7 @@ func generateServiceEnvFile(homeDir string) error {
 	return nil
 }
 
-// loadServiceEnvFile reads ~/.ledit/service.env and returns a map of key-value pairs.
+// loadServiceEnvFile reads ~/.sprout/service.env and returns a map of key-value pairs.
 // If the file doesn't exist or is empty, returns an empty map.
 func loadServiceEnvFile(homeDir string) (map[string]string, error) {
 	envPath := serviceEnvPath(homeDir)

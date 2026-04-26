@@ -26,7 +26,7 @@ func (ws *ReactWebServer) handleAPIConfig(w http.ResponseWriter, r *http.Request
 		"daemon_root":    ws.GetDaemonRoot(),
 		"workspace_root": clientCtx.WorkspaceRoot,
 		"agent": map[string]interface{}{
-			"name":    "ledit",
+			"name":    "sprout",
 			"version": "1.0.0", // This should come from actual version info
 		},
 		"features": map[string]interface{}{

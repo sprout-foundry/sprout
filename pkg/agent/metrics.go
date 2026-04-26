@@ -62,6 +62,7 @@ func (a *Agent) GetPromptTokens() int {
 
 // TrackMetricsFromResponse updates agent metrics from API response usage data
 func (a *Agent) TrackMetricsFromResponse(promptTokens, completionTokens, totalTokens int, estimatedCost float64, cachedTokens int) {
+	a.llmCallCount++
 	a.totalTokens += totalTokens
 	a.promptTokens += promptTokens
 	a.completionTokens += completionTokens
@@ -88,6 +89,11 @@ func (a *Agent) TrackMetricsFromResponse(promptTokens, completionTokens, totalTo
 // GetCompletionTokens returns the total completion tokens used
 func (a *Agent) GetCompletionTokens() int {
 	return a.completionTokens
+}
+
+// GetLLMCallCount returns the total number of LLM API calls made
+func (a *Agent) GetLLMCallCount() int {
+	return a.llmCallCount
 }
 
 // GetEstimatedTokenResponses returns how many responses used estimated token usage.

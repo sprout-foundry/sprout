@@ -179,7 +179,7 @@ func defaultGetStateDir() (string, error) {
 		return "", fmt.Errorf("failed to get home directory: %w", err)
 	}
 
-	stateDir := filepath.Join(homeDir, ".ledit", "sessions")
+	stateDir := filepath.Join(homeDir, ".sprout", "sessions")
 	if err := os.MkdirAll(stateDir, 0700); err != nil {
 		return "", fmt.Errorf("failed to create state directory: %w", err)
 	}

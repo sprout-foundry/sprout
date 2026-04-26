@@ -175,7 +175,7 @@ func screenshotRemoteURL(ctx context.Context, a *Agent, targetURL string, viewpo
 
 // captureScreenshot creates a temp screenshot file and uses the headless browser to capture it.
 func captureScreenshot(ctx context.Context, a *Agent, target string, viewportWidth, viewportHeight int) (string, error) {
-	screenshotPath := filepath.Join(os.TempDir(), "ledit_examples", fmt.Sprintf("html_screenshot_%d.png", time.Now().UnixNano()))
+	screenshotPath := filepath.Join(os.TempDir(), "sprout_examples", fmt.Sprintf("html_screenshot_%d.png", time.Now().UnixNano()))
 	if err := os.MkdirAll(filepath.Dir(screenshotPath), 0755); err != nil {
 		return "", fmt.Errorf("failed to create screenshot directory: %w", err)
 	}
@@ -520,7 +520,7 @@ func materializeImageDataForVisionTool(img api.ImageData) (string, func(), error
 		ext = ".png"
 	}
 
-	tempFile, err := os.CreateTemp("", "ledit-attached-image-*"+ext)
+	tempFile, err := os.CreateTemp("", "sprout-attached-image-*"+ext)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to create temp image file: %w", err)
 	}

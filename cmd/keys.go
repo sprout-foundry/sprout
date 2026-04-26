@@ -24,7 +24,7 @@ var keysCmd = &cobra.Command{
 	Short: "Manage API key encryption and credentials",
 	Long: `Manage encryption and storage of API keys.
 
-The ledit tool now encrypts API keys at rest using the age encryption library.
+The sprout tool now encrypts API keys at rest using the age encryption library.
 By default, a machine-specific key is used for transparent encryption.
 
 Commands:
@@ -48,7 +48,7 @@ var statusCmd = &cobra.Command{
 
 		if !status.Encrypted && !status.MachineKeyExists {
 			fmt.Println("API keys are not encrypted (plaintext mode).")
-			fmt.Println("Run 'ledit keys encrypt' to enable encryption.")
+			fmt.Println("Run 'sprout keys encrypt' to enable encryption.")
 			return nil
 		}
 
@@ -85,8 +85,8 @@ Passphrase mode:
   - Requires passphrase entry each time keys are accessed
 
 Examples:
-  ledit keys encrypt                    # Use machine key mode
-  ledit keys encrypt --passphrase       # Use passphrase mode`,
+  sprout keys encrypt                    # Use machine key mode
+  sprout keys encrypt --passphrase       # Use passphrase mode`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		usePassphrase, _ := cmd.Flags().GetBool("passphrase")
 
@@ -179,7 +179,7 @@ Examples:
 			}
 
 			fmt.Println("API keys encrypted with passphrase successfully.")
-			fmt.Println("Note: You will need to enter the passphrase each time you use ledit.")
+			fmt.Println("Note: You will need to enter the passphrase each time you use sprout.")
 			fmt.Println("      Consider using machine key mode for convenience, or use LEDIT_KEY_PASSPHRASE env var.")
 		} else {
 			// Machine key mode - just ensure the key exists
@@ -242,7 +242,7 @@ Only use this for migration or export purposes.`,
 
 		fmt.Println("API keys decrypted to plaintext successfully.")
 		fmt.Println("WARNING: Your API keys are now stored in unencrypted format.")
-		fmt.Println("Run 'ledit keys encrypt' to re-enable encryption when done.")
+		fmt.Println("Run 'sprout keys encrypt' to re-enable encryption when done.")
 		return nil
 	},
 }
@@ -324,7 +324,7 @@ you have a backup of the old key or have exported your keys.`,
 
 		// Check if the API keys file is plaintext (not yet encrypted)
 		if credentials.IsPlaintextJSON(encryptedData) {
-			return fmt.Errorf("API keys file is not yet encrypted — run 'ledit keys migrate' to encrypt it first")
+			return fmt.Errorf("API keys file is not yet encrypted — run 'sprout keys migrate' to encrypt it first")
 		}
 
 		// Decrypt using the old key (load from memory) BEFORE deleting it

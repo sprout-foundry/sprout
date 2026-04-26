@@ -11,13 +11,13 @@ import (
 var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Show or manage configuration",
-	Long:  `Display and manage ledit configuration. Output is always credential-redacted.`,
+	Long:  `Display and manage sprout configuration. Output is always credential-redacted.`,
 }
 
 var configShowCmd = &cobra.Command{
 	Use:   "show",
 	Short: "Display current configuration (credentials are redacted)",
-	Long: `Display the current ledit configuration as JSON.
+	Long: `Display the current sprout configuration as JSON.
 All credential values (API keys, tokens, secrets in MCP env vars, etc.)
 are redacted before output.`,
 	RunE: func(cmd *cobra.Command, args []string) error {

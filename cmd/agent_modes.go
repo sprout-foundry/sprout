@@ -56,7 +56,7 @@ func printContinuationHint(chatAgent *agent.Agent) {
 	if sessionID == "" {
 		return
 	}
-	fmt.Printf("To Continue: `ledit agent --session-id %s`\n", sessionID)
+	fmt.Printf("To Continue: `sprout agent --session-id %s`\n", sessionID)
 }
 
 // RunAgent runs the agent in interactive or direct mode
@@ -322,9 +322,9 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				<-ctx.Done()
 				return nil
 			}
-			fmt.Println("Welcome to ledit! [bot]")
+			fmt.Println("Welcome to sprout! [bot]")
 			fmt.Println("Agent initialized successfully.")
-			fmt.Println("Use 'ledit agent \"your query\"' to execute commands.")
+			fmt.Println("Use 'sprout agent \"your query\"' to execute commands.")
 			return nil
 		}
 
@@ -472,13 +472,13 @@ func SetupAgentEvents(chatAgent *agent.Agent, eventBus *events.EventBus) {
 
 // runInteractiveMode handles interactive REPL mode
 func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus) error {
-	fmt.Printf("\n[bot] Welcome to ledit! Enhanced CLI with Web UI\n")
+	fmt.Printf("\n[bot] Welcome to sprout! Enhanced CLI with Web UI\n")
 	fmt.Printf("[chart] Provider: %s | Model: %s\n\n",
 		chatAgent.GetProvider(),
 		chatAgent.GetModel())
 
 	// Create enhanced input reader with completion support
-	inputReader := console.NewInputReader("ledit> ")
+	inputReader := console.NewInputReader("sprout> ")
 
 	// Initialize with existing history from agent
 	inputReader.SetHistory(chatAgent.GetHistory())

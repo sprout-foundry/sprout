@@ -17,7 +17,7 @@ import (
 
 // ReviewCommand implements the /review slash command
 // This command performs AI-powered code review on staged Git changes
-// It provides the same functionality as the 'ledit review' CLI command
+// It provides the same functionality as the 'sprout review' CLI command
 // but accessible through the interactive agent console
 
 type ReviewCommand struct{}

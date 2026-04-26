@@ -42,10 +42,10 @@ func TestExitCommandPrintsContinuationForExistingSession(t *testing.T) {
 		_ = (&ExitCommand{}).Execute(nil, chatAgent)
 	})
 
-	if !strings.Contains(output, "To Continue: `ledit agent --session-id existing-session`") {
+	if !strings.Contains(output, "To Continue: `sprout agent --session-id existing-session`") {
 		t.Fatalf("expected continuation command in output, got:\n%s", output)
 	}
-	if !strings.Contains(output, "Or Resume Latest: `ledit agent --last-session`") {
+	if !strings.Contains(output, "Or Resume Latest: `sprout agent --last-session`") {
 		t.Fatalf("expected --last-session hint in output, got:\n%s", output)
 	}
 }
@@ -64,7 +64,7 @@ func TestExitCommandCreatesSessionIDWhenMissing(t *testing.T) {
 	if chatAgent.GetSessionID() == "" {
 		t.Fatal("expected session ID to be created when missing")
 	}
-	if !strings.Contains(output, "To Continue: `ledit agent --session-id ") {
+	if !strings.Contains(output, "To Continue: `sprout agent --session-id ") {
 		t.Fatalf("expected continuation command in output, got:\n%s", output)
 	}
 }

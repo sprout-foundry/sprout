@@ -1,4 +1,4 @@
-// Package commands provides slash commands for the ledit agent.
+// Package commands provides slash commands for the sprout agent.
 //
 // This file (commit.go) serves as a backward compatibility wrapper.
 // The commit functionality has been refactored into multiple files:

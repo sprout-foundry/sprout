@@ -388,8 +388,8 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 		// Check if editor mode is active
 		if resolvedType == api.EditorClientType {
 			return nil, fmt.Errorf("editor mode is active — no AI provider configured. " +
-				"Set up a provider with: ledit agent --provider <provider> " +
-				"or configure via Settings in the webui (ledit agent -d)")
+				"Set up a provider with: sprout agent --provider <provider> " +
+				"or configure via Settings in the webui (sprout agent -d)")
 		}
 		// Provider resolved — ensure API key exists without prompting.
 		if keyErr := configManager.EnsureAPIKey(resolvedType); keyErr != nil {
@@ -434,13 +434,13 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 				finalModel = autoModel
 			} else {
 				return nil, fmt.Errorf("editor mode is active — no AI provider configured. " +
-					"Set up a provider with: ledit agent --provider <provider> " +
-					"or configure via Settings in the webui (ledit agent -d)")
+					"Set up a provider with: sprout agent --provider <provider> " +
+					"or configure via Settings in the webui (sprout agent -d)")
 			}
 		} else {
 			return nil, fmt.Errorf("editor mode is active — no AI provider configured. " +
-				"Set up a provider with: ledit agent --provider <provider> " +
-				"or configure via Settings in the webui (ledit agent -d)")
+				"Set up a provider with: sprout agent --provider <provider> " +
+				"or configure via Settings in the webui (sprout agent -d)")
 		}
 	}
 

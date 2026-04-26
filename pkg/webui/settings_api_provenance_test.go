@@ -104,7 +104,15 @@ func setupProvenanceTestServer(t *testing.T, globalCfg, workspaceCfg *configurat
 
 	// Write global config if provided
 	if globalCfg != nil {
-		configDir := filepath.Join(isolatedHome, ".ledit")
+		// getDefaultConfigDir() checks XDG_CONFIG_HOME first, then $HOME.
+		// The test sets XDG_CONFIG_HOME, so the config dir resolves to
+		// $XDG_CONFIG_HOME/ledit (not $HOME/.ledit).
+		var configDir string
+		if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
+			configDir = filepath.Join(xdg, "ledit")
+		} else {
+			configDir = filepath.Join(isolatedHome, ".ledit")
+		}
 		os.MkdirAll(configDir, 0700)
 		configPath := filepath.Join(configDir, "config.json")
 		data, err := json.Marshal(globalCfg)
@@ -430,4 +438,28 @@ func TestHandleGetProvenanceSettings_NilSessionOverrides(t *testing.T) {
 	// Should not crash and should have a source for reasoning_effort
 	assert.Contains(t, sources, "reasoning_effort",
 		"key should exist in sources even with nil session overrides")
+}
+
+func TestHandleGetProvenanceSettings_WorkspaceMatchesGlobal(t *testing.T) {
+	// Setup: workspace config is identical to global — all keys should be "global"
+	globalCfg := &configuration.Config{ReasoningEffort: "medium"}
+	workspaceCfg := &configuration.Config{ReasoningEffort: "medium"}
+
+	ws, clientID := setupProvenanceTestServer(t, globalCfg, workspaceCfg)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/settings?layer=provenance", nil)
+	req.Header.Set(webClientIDHeader, clientID)
+	rec := httptest.NewRecorder()
+	ws.handleGetProvenanceSettings(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp map[string]interface{}
+	decodeJSON(t, rec, &resp)
+
+	sources, ok := resp["sources"].(map[string]interface{})
+	require.True(t, ok, "sources should be present")
+
+	assert.Equal(t, "global", sources["reasoning_effort"],
+		"identical workspace value should not claim workspace provenance")
 }

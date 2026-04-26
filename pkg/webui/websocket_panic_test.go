@@ -145,7 +145,7 @@ func TestSafeConn_WriteJSON_IgnoresClosed(t *testing.T) {
 // resets the client's query state, clears cached agents, and publishes
 // a session_terminated event.
 func TestCleanupAfterPanic_ResetsClientState(t *testing.T) {
-	ws := NewReactWebServer(nil, newTestEventBus(), 0)
+	ws := NewReactWebServer(nil, newTestEventBus(), 0, "127.0.0.1")
 	clientID := "test-client"
 	sessionID := "ws_test123"
 
@@ -227,7 +227,7 @@ func TestCleanupAfterPanic_ResetsClientState(t *testing.T) {
 // TestCleanupAfterPanic_ClearsCachedAgents verifies cleanupAfterPanic
 // clears cached agents so the next request gets a fresh agent.
 func TestCleanupAfterPanic_ClearsCachedAgents(t *testing.T) {
-	ws := NewReactWebServer(nil, newTestEventBus(), 0)
+	ws := NewReactWebServer(nil, newTestEventBus(), 0, "127.0.0.1")
 	clientID := "test-client"
 
 	// Set up client context with chat sessions
@@ -274,7 +274,7 @@ func TestSafeConn_WritePanicError_HandlesDoublePanic(t *testing.T) {
 // TestCleanupAfterPanic_EmptyClientID_DoesNotPanic verifies cleanupAfterPanic
 // with an empty clientID is a no-op.
 func TestCleanupAfterPanic_EmptyClientID_DoesNotPanic(t *testing.T) {
-	ws := NewReactWebServer(nil, newTestEventBus(), 0)
+	ws := NewReactWebServer(nil, newTestEventBus(), 0, "127.0.0.1")
 	// Should not panic
 	ws.cleanupAfterPanic("", "session-1")
 	ws.cleanupAfterPanic("  ", "session-2")
@@ -283,7 +283,7 @@ func TestCleanupAfterPanic_EmptyClientID_DoesNotPanic(t *testing.T) {
 // TestCleanupAfterPanic_UnknownClientID_DoesNotPanic verifies cleanupAfterPanic
 // with a clientID that has no context doesn't panic.
 func TestCleanupAfterPanic_UnknownClientID_DoesNotPanic(t *testing.T) {
-	ws := NewReactWebServer(nil, newTestEventBus(), 0)
+	ws := NewReactWebServer(nil, newTestEventBus(), 0, "127.0.0.1")
 	// Should not panic even though no context exists
 	ws.cleanupAfterPanic("nonexistent-client", "session-1")
 }
@@ -370,7 +370,7 @@ func TestSafeConn_WriteJSON_WithConcurrentClose(t *testing.T) {
 // TestCleanupAfterPanic_WithMultipleChatSessions verifies cleanupAfterPanic
 // resets all chat sessions, not just the default one.
 func TestCleanupAfterPanic_WithMultipleChatSessions(t *testing.T) {
-	ws := NewReactWebServer(nil, newTestEventBus(), 0)
+	ws := NewReactWebServer(nil, newTestEventBus(), 0, "127.0.0.1")
 	clientID := "test-client"
 	sessionID := "ws_test456"
 

@@ -13,7 +13,7 @@ import (
 )
 
 func TestRootAssetHandlersServeEmbeddedFiles(t *testing.T) {
-	server := NewReactWebServer(nil, events.NewEventBus(), 0)
+	server := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
 
 	tests := []struct {
 		name        string
@@ -82,7 +82,7 @@ func TestRootAssetHandlersServeEmbeddedFiles(t *testing.T) {
 }
 
 func TestStaticFilesServesHashedMainBundle(t *testing.T) {
-	server := NewReactWebServer(nil, events.NewEventBus(), 0)
+	server := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
 
 	type manifest struct {
 		Files map[string]string `json:"files"`
@@ -134,7 +134,7 @@ func TestEmbeddedIndexReferencesAvailableRootAssets(t *testing.T) {
 
 	for _, match := range matches {
 		assetName := path.Base(match[1])
-		server := NewReactWebServer(nil, events.NewEventBus(), 0)
+		server := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
 		if _, err := server.readRootAsset(assetName); err != nil {
 			t.Fatalf("embedded index.html references missing root asset %q: %v", assetName, err)
 		}
@@ -142,7 +142,7 @@ func TestEmbeddedIndexReferencesAvailableRootAssets(t *testing.T) {
 }
 
 func TestHandleIndexDoesNotServeAPIPaths(t *testing.T) {
-	server := NewReactWebServer(nil, events.NewEventBus(), 0)
+	server := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
 	rec := httptest.NewRecorder()

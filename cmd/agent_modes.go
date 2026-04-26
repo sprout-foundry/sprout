@@ -400,12 +400,12 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		// err could be nil or from runDirectMode
 		if err != nil {
 			if outputFormatJSON {
-				emitJSONResult(query, directModeStart, err)
+				emitJSONResult(query, directModeStart, err, chatAgent)
 			}
 			return fmt.Errorf("failed to run direct mode: %w", err)
 		}
 		if outputFormatJSON {
-			emitJSONResult(query, directModeStart, nil)
+			emitJSONResult(query, directModeStart, nil, chatAgent)
 		}
 		return nil // No error, workflow completed successfully
 	}

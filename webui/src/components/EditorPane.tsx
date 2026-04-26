@@ -156,6 +156,15 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   const tabSizeCompartment = useRef(new Compartment());
   const lspCompartment = useRef(new Compartment());
   const lastInitLanguageKey = useRef<string | null>(null);
+
+  // Throttle state for scroll position persistence.
+  // Without throttling, `updateBufferScroll` fires ~60 times/sec during
+  // scrolling, creating new buffer objects each time and causing the entire
+  // component tree to re-render every frame — which starves the browser paint
+  // cycle and leads to blank editor content in some files.
+  let lastScrollSyncTime = 0;
+  let scrollFlushRafId: number | null = null;
+
   const [wordWrapEnabled, setWordWrapEnabled] = useState(true);
   const [loading, setLoading] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
@@ -1174,11 +1183,25 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         }
       }
 
-      // Track scroll position changes for layout persistence
+      // Track scroll position changes for layout persistence.
+      // Throttled to ~100ms to avoid excessive React state updates
+      // (~60 unthrottled calls/sec would create new buffer objects every
+      // frame, causing the entire component tree to re-render and starving
+      // the browser paint cycle — leading to blank editor content).
       if (buffer && update.viewportChanged) {
         const scrollInfo = update.view.scrollDOM;
         if (scrollInfo) {
-          updateBufferScroll(buffer.id, { top: scrollInfo.scrollTop, left: scrollInfo.scrollLeft });
+          const now = performance.now();
+          if (now - lastScrollSyncTime >= 100) {
+            lastScrollSyncTime = now;
+            updateBufferScroll(buffer.id, { top: scrollInfo.scrollTop, left: scrollInfo.scrollLeft });
+            if (scrollFlushRafId != null) cancelAnimationFrame(scrollFlushRafId);
+            scrollFlushRafId = requestAnimationFrame(() => {
+              scrollFlushRafId = null;
+              const sd = update.view.scrollDOM;
+              if (sd) updateBufferScroll(buffer.id, { top: sd.scrollTop, left: sd.scrollLeft });
+            });
+          }
         }
       }
     });
@@ -1549,6 +1572,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
 
     return () => {
       debounced.cancel();
+      if (scrollFlushRafId != null) cancelAnimationFrame(scrollFlushRafId);
       // Unregister the editor view for cross-file LSP navigation
       if (cleanupFilePath && !cleanupFilePath.startsWith('__workspace/')) {
         unregisterEditorView(cleanupFilePath);

@@ -57,6 +57,21 @@ func (sc *SafeConn) WriteJSON(v interface{}) error {
 	return sc.conn.WriteJSON(v)
 }
 
+// writeDirectJSON writes JSON directly to the underlying WebSocket connection,
+// bypassing the closed check. Used only during panic recovery to ensure
+// termination events reach the client even after the connection is marked closed.
+// Has its own panic recovery since it may be called from recover() paths.
+//
+// Preconditions: sc.writeMu must be held by caller.
+func (sc *SafeConn) writeDirectJSON(v interface{}) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("WebSocket writeDirectJSON panicked: %v", r)
+		}
+	}()
+	_ = sc.conn.WriteJSON(v)
+}
+
 // Close closes the underlying connection
 func (sc *SafeConn) Close() error {
 	sc.writeMu.Lock()
@@ -79,19 +94,28 @@ func (sc *SafeConn) WritePanicError(sessionID, location string, r interface{}) {
 	sc.writeMu.Lock()
 	defer sc.writeMu.Unlock()
 	sc.closed = true
-	// Defend against conn.WriteJSON panicking — since this is called from
-	// recover() paths, an unhandled panic here would escape to the runtime.
-	defer func() {
-		if r := recover(); r != nil {
-			log.Printf("WebSocket WritePanicError itself panicked: %v", r)
-		}
-	}()
-	_ = sc.conn.WriteJSON(map[string]interface{}{
+
+	// Send error event directly so the client knows what happened.
+	sc.writeDirectJSON(map[string]interface{}{
 		"type": "error",
 		"data": map[string]string{
 			"message":    fmt.Sprintf("Internal error in %s", location),
 			"code":       "internal_panic",
 			"session_id": sessionID,
+		},
+	})
+
+	// Also send session_terminated directly so the client can tear down its UI
+	// state (e.g. hide the "running" spinner). The normal write path (WriteJSON)
+	// silently drops events on closed connections, and since we just set
+	// sc.closed = true, only a direct write guarantees delivery.
+	sc.writeDirectJSON(map[string]interface{}{
+		"type": "session_terminated",
+		"data": map[string]interface{}{
+			"session_id": sessionID,
+			"status":     "error",
+			"code":       "internal_panic",
+			"message":    "Session terminated due to internal error",
 		},
 	})
 }
@@ -829,6 +853,16 @@ func (ws *ReactWebServer) safeHandleGoroutine(safeConn *SafeConn, sessionID, cli
 
 // cleanupAfterPanic resets the client's query state and publishes a clean
 // state event so the UI doesn't get stuck showing "running" after a panic.
+//
+// Design note: this clears ALL chat sessions for the clientID, not just the
+// one that panicked. This is intentional — a panicked goroutine may have
+// corrupted shared agent state (e.g. the MCP manager or conversation history),
+// so it's safer to force full agent recreation rather than risk using a
+// half-initialized agent in other chat sessions.
+//
+// The session_terminated event is published to the event bus for any other
+// subscribers (monitoring, multi-tab clients). The panicked connection
+// itself already receives the event directly via WritePanicError.
 func (ws *ReactWebServer) cleanupAfterPanic(clientID, sessionID string) {
 	if strings.TrimSpace(clientID) == "" {
 		return

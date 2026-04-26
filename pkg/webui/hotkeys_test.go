@@ -241,7 +241,7 @@ func TestHotkeyPresetConfigs(t *testing.T) {
 				}
 			}
 
-			// VS Code / Ledit presets also include Ctrl+D for next-match
+			// VS Code / Sprout presets also include Ctrl+D for next-match
 			// selection (WebStorm uses Ctrl+D for duplicate-line-down instead).
 			if preset != "webstorm" {
 				vscodeEditorCmds := []string{

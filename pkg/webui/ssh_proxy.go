@@ -37,7 +37,7 @@ var sshProxyUpgrader = websocket.Upgrader{
 //	"~/..."   → "$HOME/..."
 //	everything else → original
 //
-// The actual expansion of $HOME happens on the remote ledit daemon side;
+// The actual expansion of $HOME happens on the remote sprout daemon side;
 // this function only handles ~/ shortcuts that the frontend needs to resolve
 // to send a valid absolute path to the setWorkspace API.
 func resolveInitialWorkspace(path string) string {

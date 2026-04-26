@@ -75,6 +75,7 @@ func sanitizedConfig(cfg *configuration.Config) map[string]interface{} {
 		"pdf_ocr_provider":               cfg.PDFOCRProvider,
 		"pdf_ocr_model":                  cfg.PDFOCRModel,
 		"skills":                         cfg.Skills,
+		"disable_thinking":              cfg.DisableThinking,
 		"enable_zsh_command_detection":   cfg.EnableZshCommandDetection,
 		"auto_execute_detected_commands": cfg.AutoExecuteDetectedCommands,
 	}

@@ -378,7 +378,7 @@ function useOnboarding(): UseOnboardingReturn {
   const onInstallWsl = useCallback(async () => {
     const desktopBridge = (
       window as unknown as Record<string, Record<string, (...args: unknown[]) => Promise<Record<string, unknown>>>>
-    ).leditDesktop;
+    ).sproutDesktop;
     if (!desktopBridge?.installWsl) {
       setOnboarding((prev) => ({
         ...prev,
@@ -394,7 +394,7 @@ function useOnboarding(): UseOnboardingReturn {
   const onInstallGitBash = useCallback(async () => {
     const desktopBridge = (
       window as unknown as Record<string, Record<string, (...args: unknown[]) => Promise<Record<string, unknown>>>>
-    ).leditDesktop;
+    ).sproutDesktop;
     if (!desktopBridge?.installGitForWindows) {
       setOnboarding((prev) => ({
         ...prev,

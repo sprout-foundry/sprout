@@ -26,7 +26,7 @@ func setupConcurrentTestServer(t *testing.T) *ReactWebServer {
 		t.Fatalf("mkdir workspace: %v", err)
 	}
 
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0)
+	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
 	ws.daemonRoot = daemonRoot
 	ws.workspaceRoot = workspaceRoot
 	ws.terminalManager = NewTerminalManager(daemonRoot)

@@ -1290,7 +1290,7 @@ func (c *Config) GetSkillPath(id string) string {
 	if skill == nil || skill.Path == "" {
 		return ""
 	}
-	// Skill path is relative to ledit source root
+	// Skill path is relative to sprout source root
 	return skill.Path
 }
 

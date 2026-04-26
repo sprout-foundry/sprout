@@ -212,10 +212,12 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
       setLayerData(null);
       setLayerError(null);
       setLayerLoading(null);
-      // Fetch provenance for badge display
+      // Fetch provenance for badge display (with cancellation guard)
+      let cancelled = false;
       api.getSettingsProvenance()
-        .then((data) => { setProvenanceSources(data.sources || {}); })
-        .catch(() => { setProvenanceSources({}); });
+        .then((data) => { if (!cancelled) setProvenanceSources(data.sources || {}); })
+        .catch(() => { if (!cancelled) setProvenanceSources({}); });
+      return () => { cancelled = true; };
     }
   }, [activeSubTab, configViewLayer]);
 
@@ -315,6 +317,12 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
         }
         await api.updateSettings({ [keyOrPath]: value }, layer);
         addNotification('success', 'Settings', 'Saved', 3000);
+        // Refresh provenance badges after save (they may change due to layer promotion)
+        if (configViewLayer === 'session') {
+          api.getSettingsProvenance()
+            .then((data) => setProvenanceSources(data.sources || {}))
+            .catch(() => { /* keep current badges */ });
+        }
       } catch (err) {
         debugLog('[SettingsPanel] failed to save setting:', err);
         onSettingsChanged(prev);
@@ -340,6 +348,7 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
     };
     return (
       <span
+        title={`This value comes from your ${source} configuration`}
         style={{
           fontSize: 9,
           padding: '1px 4px',

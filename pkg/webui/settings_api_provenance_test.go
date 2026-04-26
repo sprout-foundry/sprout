@@ -398,3 +398,36 @@ func TestHandleGetProvenanceSettings_AllThreeLayers(t *testing.T) {
 	assert.Equal(t, "workspace", sources["api_timeouts.connection_timeout_sec"],
 		"workspace override should apply when session doesn't override")
 }
+
+func TestHandleGetProvenanceSettings_NilSessionOverrides(t *testing.T) {
+	// Setup: global config only, session exists but has nil overrides
+	globalCfg := &configuration.Config{ReasoningEffort: "low"}
+
+	ws, clientID := setupProvenanceTestServer(t, globalCfg, nil)
+
+	// Create chat session but don't set any overrides (ConfigOverrides is nil)
+	ctx := ws.clientContexts[clientID]
+	chat := ctx.getOrCreateChatSession("default")
+	// Explicitly verify ConfigOverrides is nil (freshly created session)
+	chat.mu.Lock()
+	_ = chat.ConfigOverrides // assert field exists; intentionally left nil
+	chat.mu.Unlock()
+
+	// Make request
+	req := httptest.NewRequest(http.MethodGet, "/api/settings?layer=provenance", nil)
+	req.Header.Set(webClientIDHeader, clientID)
+	rec := httptest.NewRecorder()
+	ws.handleGetProvenanceSettings(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp map[string]interface{}
+	decodeJSON(t, rec, &resp)
+
+	sources, ok := resp["sources"].(map[string]interface{})
+	require.True(t, ok, "sources should be present")
+
+	// Should not crash and should have a source for reasoning_effort
+	assert.Contains(t, sources, "reasoning_effort",
+		"key should exist in sources even with nil session overrides")
+}

@@ -129,7 +129,7 @@ func promptGitHubMCPSetupIfNeeded(chatAgent interface{}) {
 		}); saveErr != nil {
 			fmt.Fprintf(os.Stderr, "[WARN] Failed to save preference: %v\n", saveErr)
 		}
-		fmt.Println("   Won't ask again. Re-enable with: ledit config set dismissed_prompts.github_mcp_setup false")
+		fmt.Println("   Won't ask again. Re-enable with: sprout config set dismissed_prompts.github_mcp_setup false")
 	}
 	// Unrecognized choices (including empty/Enter) are silently ignored.
 }

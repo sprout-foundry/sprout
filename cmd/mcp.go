@@ -19,7 +19,7 @@ import (
 var mcpCmd = &cobra.Command{
 	Use:   "mcp",
 	Short: "Manage MCP (Model Context Protocol) servers",
-	Long: `Manage MCP servers that extend ledit with external tools and services.
+	Long: `Manage MCP servers that extend sprout with external tools and services.
 Use subcommands to add, remove, or list configured MCP servers.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		cmd.Help()
@@ -223,7 +223,7 @@ func runMCPAdd() error {
 	fmt.Printf("[OK] %s configured successfully!\n", serverConfig.Name)
 	fmt.Printf("Command: %s %v\n", serverConfig.Command, credentials.RedactLogLine(fmt.Sprintf("%v", serverConfig.Args)))
 	fmt.Println()
-	fmt.Printf("To test the configuration, run: ledit mcp test %s\n", serverName)
+	fmt.Printf("To test the configuration, run: sprout mcp test %s\n", serverName)
 	fmt.Println()
 
 	if selectedTemplate.Docs != "" {
@@ -315,7 +315,7 @@ func setupGitMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
 	fmt.Println("[OK] Git MCP Server configured successfully!")
 	fmt.Printf("Command: %s %v\n", serverConfig.Command, credentials.RedactLogLine(fmt.Sprintf("%v", serverConfig.Args)))
 	fmt.Println()
-	fmt.Println("To test the configuration, run: ledit mcp test git")
+	fmt.Println("To test the configuration, run: sprout mcp test git")
 	fmt.Println()
 
 	// Installation instructions
@@ -459,13 +459,13 @@ func setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 		fmt.Println()
 		if err := runMCPTest("github"); err != nil {
 			fmt.Printf("[WARN] Test failed: %v\n", err)
-			fmt.Println("You can retry later with: ledit mcp test github")
+			fmt.Println("You can retry later with: sprout mcp test github")
 		}
 		return nil
 	}
 
 	fmt.Println()
-	fmt.Println("To test the configuration later, run: ledit mcp test github")
+	fmt.Println("To test the configuration later, run: sprout mcp test github")
 	fmt.Println()
 	fmt.Println("[pkg] Features available:")
 	fmt.Println("• Repository management and file operations")
@@ -594,7 +594,7 @@ func setupPlaywrightMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) er
 	fmt.Println("[OK] Playwright MCP Server configured successfully!")
 	fmt.Printf("Command: %s %v\n", serverConfig.Command, credentials.RedactLogLine(fmt.Sprintf("%v", serverConfig.Args)))
 	fmt.Println()
-	fmt.Println("To test the configuration, run: ledit mcp test playwright")
+	fmt.Println("To test the configuration, run: sprout mcp test playwright")
 	fmt.Println()
 	fmt.Println("[pkg] Installation (if not already installed):")
 	fmt.Println("npx will install the package automatically")
@@ -675,7 +675,7 @@ func setupChromeDevToolsMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader
 	fmt.Println("[OK] Chrome DevTools MCP Server configured successfully!")
 	fmt.Printf("Command: %s %v\n", serverConfig.Command, credentials.RedactLogLine(fmt.Sprintf("%v", serverConfig.Args)))
 	fmt.Println()
-	fmt.Println("To test the configuration, run: ledit mcp test chrome-devtools")
+	fmt.Println("To test the configuration, run: sprout mcp test chrome-devtools")
 	fmt.Println()
 	fmt.Println("[pkg] Installation (if not already installed):")
 	fmt.Println("npx will install the package automatically")
@@ -821,7 +821,7 @@ func setupCustomMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader, regist
 	fmt.Printf("[OK] Custom MCP Server '%s' configured successfully!\n", serverName)
 	fmt.Printf("Command: %s %v\n", serverConfig.Command, credentials.RedactLogLine(fmt.Sprintf("%v", serverConfig.Args)))
 	fmt.Println()
-	fmt.Printf("To test the configuration, run: ledit mcp test %s\n", serverName)
+	fmt.Printf("To test the configuration, run: sprout mcp test %s\n", serverName)
 
 	return nil
 }
@@ -935,7 +935,7 @@ func runMCPList() error {
 
 	if len(redactedConfig.Servers) == 0 {
 		fmt.Println("No MCP servers configured.")
-		fmt.Println("Run 'ledit mcp add' to add a server.")
+		fmt.Println("Run 'sprout mcp add' to add a server.")
 		return nil
 	}
 
@@ -981,9 +981,9 @@ func runMCPList() error {
 	}
 
 	fmt.Println("Commands:")
-	fmt.Println("  ledit mcp test [server] - Test server connection")
-	fmt.Println("  ledit mcp add          - Add new server")
-	fmt.Println("  ledit mcp remove       - Remove server")
+	fmt.Println("  sprout mcp test [server] - Test server connection")
+	fmt.Println("  sprout mcp add          - Add new server")
+	fmt.Println("  sprout mcp remove       - Remove server")
 
 	return nil
 }
@@ -1006,7 +1006,7 @@ func runMCPTest(serverName string) error {
 	if serverName == "" {
 		if len(mcpConfig.Servers) == 0 {
 			fmt.Println("No MCP servers configured.")
-			fmt.Println("Run 'ledit mcp add' to add a server.")
+			fmt.Println("Run 'sprout mcp add' to add a server.")
 			return nil
 		}
 

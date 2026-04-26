@@ -198,10 +198,10 @@ func (m *launchdManager) Install() error {
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "Bootstrap failed: 5") || strings.Contains(errMsg, "Input/output error") {
 			return fmt.Errorf("launchctl bootstrap failed: %w\n\nThis error typically means:\n"+
-				"  1. The service is already loaded (try: ledit service uninstall first)\n"+
+				"  1. The service is already loaded (try: sprout service uninstall first)\n"+
 				"  2. The launchd database needs rebuilding (try: launchctl reboot 2>/dev/null || sudo killall launchd)\n"+
 				"  3. There's a permission issue with the plist file\n\n"+
-				"Try running: ledit service uninstall && ledit service install", err)
+				"Try running: sprout service uninstall && sprout service install", err)
 		}
 		return fmt.Errorf("launchctl bootstrap failed: %w", err)
 	}
@@ -326,7 +326,7 @@ func (m *launchdManager) Diagnose() error {
 		return fmt.Errorf("failed to determine plist path: %w", err)
 	}
 
-	fmt.Println("=== ledit Service Diagnostics ===")
+	fmt.Println("=== sprout Service Diagnostics ===")
 	fmt.Println()
 
 	// Check plist file
@@ -367,7 +367,7 @@ func (m *launchdManager) Diagnose() error {
 	fmt.Println()
 
 	// Check binary
-	fmt.Println("🔧 Checking ledit binary:")
+	fmt.Println("🔧 Checking sprout binary:")
 	binaryPath, err := getBinaryPath()
 	if err != nil {
 		fmt.Printf("  ❌ Error determining binary path: %v\n", err)
@@ -436,12 +436,12 @@ func (m *launchdManager) Diagnose() error {
 	// Troubleshooting suggestions
 	fmt.Println("💡 Common fixes:")
 	if !isServiceLoaded(servicePath) {
-		fmt.Println("  • Service not loaded: Try 'ledit service start'")
+		fmt.Println("  • Service not loaded: Try 'sprout service start'")
 	} else {
-		fmt.Println("  • Service loaded but may not be running: Try 'ledit service start'")
+		fmt.Println("  • Service loaded but may not be running: Try 'sprout service start'")
 		fmt.Println("  • Check logs in ~/.ledit/logs/ for errors")
 	}
-	fmt.Println("  • If problems persist, try: 'ledit service uninstall && ledit service install'")
+	fmt.Println("  • If problems persist, try: 'sprout service uninstall && sprout service install'")
 	fmt.Println("  • Rebuild launchd database: 'launchctl reboot 2>/dev/null || sudo killall launchd'")
 	fmt.Println()
 

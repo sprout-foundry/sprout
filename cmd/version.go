@@ -61,7 +61,7 @@ func init() {
 
 // printVersionInfo prints comprehensive version information
 func printVersionInfo() {
-	fmt.Printf("ledit version %s\n", version)
+	fmt.Printf("sprout version %s\n", version)
 
 	// Add build information if available
 	if buildDate != "unknown" {

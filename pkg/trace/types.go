@@ -14,7 +14,7 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
-// RunMetadata represents metadata for a single ledit invocation/run
+// RunMetadata represents metadata for a single sprout invocation/run
 type RunMetadata struct {
 	RunID        string            `json:"run_id"`
 	Timestamp     string            `json:"timestamp"`
@@ -91,7 +91,7 @@ const (
 	LabelToolCallExecutionError  = "tool_call_execution_error"
 )
 
-// TraceSession manages dataset collection for a single ledit run
+// TraceSession manages dataset collection for a single sprout run
 type TraceSession struct {
 	mu          sync.RWMutex
 	RunID       string

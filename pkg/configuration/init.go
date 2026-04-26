@@ -109,7 +109,7 @@ func Initialize() (*Config, *APIKeys, error) {
 	// In CI environments, skip interactive setup and use defaults
 	if isCI && (isFirstRun || needsSetup) {
 		if isFirstRun {
-			fmt.Printf("[>>] Welcome to ledit! Let's set up your AI provider.\n")
+			fmt.Printf("[>>] Welcome to sprout! Let's set up your AI provider.\n")
 			fmt.Printf("   Config directory: %s\n\n", configDir)
 		}
 
@@ -131,7 +131,7 @@ func Initialize() (*Config, *APIKeys, error) {
 			return nil, nil, fmt.Errorf("failed to save config: %w", err)
 		}
 
-		fmt.Printf("[done] Setup complete! You can now use ledit.\n\n")
+		fmt.Printf("[done] Setup complete! You can now use sprout.\n\n")
 
 		return config, apiKeys, nil
 	}
@@ -156,11 +156,11 @@ func Initialize() (*Config, *APIKeys, error) {
 		if provider == "editor" {
 			fmt.Println("[done] Setup complete! Editor mode selected — AI features are not configured.")
 			fmt.Println("   You can set up an AI provider later:")
-			fmt.Println("   • Run 'ledit agent --provider openrouter' to use AI features")
-			fmt.Println("   • Or set up a provider via the webui: ledit agent -d")
+			fmt.Println("   • Run 'sprout agent --provider openrouter' to use AI features")
+			fmt.Println("   • Or set up a provider via the webui: sprout agent -d")
 			fmt.Println()
 		} else {
-			fmt.Printf("[done] Setup complete! You can now use ledit with %s.\n\n", getProviderDisplayName(provider))
+			fmt.Printf("[done] Setup complete! You can now use sprout with %s.\n\n", getProviderDisplayName(provider))
 		}
 
 		// Show helpful next steps
@@ -656,21 +656,21 @@ func DebugPrintConfig(config *Config, apiKeys *APIKeys) {
 
 // ShowWelcomeMessage displays a comprehensive welcome message for new users
 func ShowWelcomeMessage() {
-	fmt.Println("[>>] Welcome to ledit - AI-powered code assistance!")
+	fmt.Println("[>>] Welcome to sprout - AI-powered code assistance!")
 	fmt.Println()
 	fmt.Println("[i] Get started with the web-based code editor:")
-	fmt.Println("   • Run 'ledit agent -d' to launch at http://localhost:54000")
+	fmt.Println("   • Run 'sprout agent -d' to launch at http://localhost:54000")
 	fmt.Println("   • Full code editor with AI integration built in")
 	fmt.Println("   • Friendly setup experience for providers and models")
-	fmt.Println("   • The recommended way to explore ledit's capabilities")
+	fmt.Println("   • The recommended way to explore sprout's capabilities")
 	fmt.Println()
-	fmt.Println("   ledit helps you write code faster using AI language models.")
+	fmt.Println("   sprout helps you write code faster using AI language models.")
 	fmt.Println("   Requires models with tool-calling support for code editing.")
 	fmt.Println("   Get started with low-cost AI models - no lock-in, maximum flexibility.")
 	fmt.Println()
 	fmt.Println("[i] Recommended for beginners:")
 	fmt.Println("   • OpenRouter - Access to 100+ AI models through one API")
-	fmt.Println("   • Tool-calling models are required for ledit to function properly")
+	fmt.Println("   • Tool-calling models are required for sprout to function properly")
 	fmt.Println("   • Pay-as-you-go pricing starting from $0.0001 per request")
 	fmt.Println("   • Great model: qwen/qwen3-coder-30b-a3b-instruct (excellent for coding)")
 	fmt.Println()
@@ -684,16 +684,16 @@ func ShowNextSteps(provider, configDir string) {
 		fmt.Println("You're in editor-only mode. AI-powered features are not available.")
 		fmt.Println()
 		fmt.Println("To enable AI features:")
-		fmt.Println("  • Run 'ledit agent -d' to launch the webui and configure providers")
+		fmt.Println("  • Run 'sprout agent -d' to launch the webui and configure providers")
 		fmt.Println("  • Or set the LEDIT_PROVIDER environment variable")
 		fmt.Println()
 		return
 	}
 
 	fmt.Println("Next steps:")
-	fmt.Println("  • Run 'ledit agent -d' to start the web-based code editor (recommended)")
-	fmt.Println("  • Run 'ledit' to start the interactive CLI mode")
-	fmt.Println("  • Run 'ledit agent \"your task here\"' for direct commands")
+	fmt.Println("  • Run 'sprout agent -d' to start the web-based code editor (recommended)")
+	fmt.Println("  • Run 'sprout' to start the interactive CLI mode")
+	fmt.Println("  • Run 'sprout agent \"your task here\"' for direct commands")
 
 	// Add specific recommendations based on provider
 	if provider == "openrouter" {
@@ -701,11 +701,11 @@ func ShowNextSteps(provider, configDir string) {
 		fmt.Println("$ Cost-effective tool-calling models:")
 		fmt.Println("  • qwen/qwen3-coder-30b-a3b-instruct - Excellent for coding tasks")
 		fmt.Println("  • openai/gpt-5-mini - Good performance, low cost")
-		fmt.Println("  • Note: Avoid models without tool-calling support - they won't work with ledit")
+		fmt.Println("  • Note: Avoid models without tool-calling support - they won't work with sprout")
 		fmt.Println()
 		fmt.Println("[read] Usage examples:")
-		fmt.Println("  ledit agent -m \"qwen/qwen3-coder-30b-a3b-instruct\" \"Add error handling\"")
-		fmt.Println("  ledit agent -p openrouter \"Explain this code\"")
+		fmt.Println("  sprout agent -m \"qwen/qwen3-coder-30b-a3b-instruct\" \"Add error handling\"")
+		fmt.Println("  sprout agent -p openrouter \"Explain this code\"")
 	}
 
 	fmt.Println()

@@ -14,7 +14,7 @@ func TestHelpHint(t *testing.T) {
 	keyPhrases := []string{
 		"LEDIT_PROVIDER",
 		"~/.ledit/config.json",
-		"ledit agent",
+		"sprout agent",
 		"interactively",
 	}
 

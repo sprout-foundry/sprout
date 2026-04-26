@@ -147,7 +147,7 @@ func describeMode(mode string, keyringAvail bool, providerCount int) string {
 	return strings.Join(parts, ", ") + "\n"
 }
 
-// runBackendSet handles the `ledit keys backend set <mode>` command.
+// runBackendSet handles the `sprout keys backend set <mode>` command.
 func runBackendSet(arg string) error {
 	mode := strings.ToLower(arg)
 
@@ -163,7 +163,7 @@ func runBackendSet(arg string) error {
 		}
 		if len(providers) > 0 {
 			fmt.Printf("Warning: %d provider(s) still have credentials in the OS keyring.\n", len(providers))
-			fmt.Println("Run 'ledit keys backend migrate-to-file' to migrate them first.")
+			fmt.Println("Run 'sprout keys backend migrate-to-file' to migrate them first.")
 			if mode == "auto" {
 				fmt.Println("After migration, credentials will be picked up from the file store.")
 			}
@@ -199,7 +199,7 @@ func runBackendSet(arg string) error {
 			return fmt.Errorf("failed to load file credentials: %w", err)
 		}
 		if len(store) > 0 {
-			fmt.Printf("Found %d credential(s) in file store. Run 'ledit keys backend migrate-to-keyring' to migrate them.\n", len(store))
+			fmt.Printf("Found %d credential(s) in file store. Run 'sprout keys backend migrate-to-keyring' to migrate them.\n", len(store))
 		}
 
 	case "file":

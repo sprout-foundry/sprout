@@ -9,7 +9,7 @@ import (
 // initDebugLogger creates a temporary file for debug logs and writes a session header
 func (a *Agent) initDebugLogger() error {
 	// Create temp file
-	f, err := os.CreateTemp("", "ledit-debug-*.log")
+	f, err := os.CreateTemp("", "sprout-debug-*.log")
 	if err != nil {
 		return fmt.Errorf("initDebugLogger: failed to create temp file: %w", err)
 	}

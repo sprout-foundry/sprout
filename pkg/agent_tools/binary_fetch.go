@@ -119,7 +119,7 @@ func processPDFBinary(effectiveURL string, data []byte) (*BinaryFetchResult, err
 	}
 
 	// Write to a temp file (ProcessPDFForMultimodal takes a file path)
-	tmpFile, err := os.CreateTemp("", "ledit_pdf_*.pdf")
+	tmpFile, err := os.CreateTemp("", "sprout_pdf_*.pdf")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp file for PDF: %w", err)
 	}

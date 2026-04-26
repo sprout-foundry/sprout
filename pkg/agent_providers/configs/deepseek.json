@@ -1,29 +1,30 @@
 {
-  "name": "deepseek",
-  "endpoint": "https://api.deepseek.com/v1/chat/completions",
   "auth": {
-    "type": "bearer",
-    "env_var": "DEEPSEEK_API_KEY"
+    "env_var": "DEEPSEEK_API_KEY",
+    "type": "bearer"
   },
-  "headers": {},
+  "cost": {
+    "currency": "USD",
+    "input_token_cost": 0.14,
+    "output_token_cost": 0.28
+  },
   "defaults": {
+    "max_tokens": -1,
     "model": "deepseek-chat",
     "temperature": 0.7,
-    "max_tokens": -1,
-    "top_p": 1.0
+    "top_p": 1
   },
+  "endpoint": "https://api.deepseek.com/v1/chat/completions",
+  "headers": {},
   "message_conversion": {
-    "include_tool_call_id": true,
     "convert_tool_role_to_user": false,
-    "reasoning_content_field": ""
-  },
-  "streaming": {
-    "format": "sse",
-    "chunk_timeout_ms": 320000,
-    "done_marker": "[DONE]"
+    "include_tool_call_id": true,
+    "reasoning_content_field": "reasoning_content"
   },
   "models": {
+    "available_models": [],
     "default_context_limit": 128000,
+    "default_model": "deepseek-chat",
     "model_overrides": {
       "deepseek-chat": 128000,
       "deepseek-coder": 128000,
@@ -31,25 +32,28 @@
     },
     "pattern_overrides": [
       {
-        "pattern": "deepseek-.*",
-        "context_limit": 128000
+        "context_limit": 128000,
+        "pattern": "deepseek-.*"
       }
     ],
     "supports_vision": false,
-    "vision_model": "",
-    "default_model": "deepseek-chat",
-    "available_models": []
+    "vision_model": ""
   },
+  "name": "deepseek",
   "retry": {
-    "max_attempts": 3,
+    "backoff_multiplier": 2,
     "base_delay_ms": 1000,
-    "backoff_multiplier": 2.0,
+    "max_attempts": 3,
     "max_delay_ms": 30000,
-    "retryable_errors": ["rate_limit_exceeded", "temporary_error", "timeout"]
+    "retryable_errors": [
+      "rate_limit_exceeded",
+      "temporary_error",
+      "timeout"
+    ]
   },
-  "cost": {
-    "input_token_cost": 0.14,
-    "output_token_cost": 0.28,
-    "currency": "USD"
+  "streaming": {
+    "chunk_timeout_ms": 320000,
+    "done_marker": "[DONE]",
+    "format": "sse"
   }
 }

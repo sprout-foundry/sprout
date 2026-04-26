@@ -340,3 +340,57 @@ func TestHandleAPISettingsPutDefault_NoLayer(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
+
+// TestHandlePutWorkspaceSettings_CopyFromGlobal tests the "copy global to workspace" flow
+// that the Settings panel uses when clicking "Create Workspace Config".
+func TestHandlePutWorkspaceSettings_CopyFromGlobal(t *testing.T) {
+	isolatedHome := t.TempDir()
+	t.Setenv("HOME", isolatedHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
+	t.Setenv("USERPROFILE", isolatedHome)
+
+	workspaceRoot := t.TempDir()
+	ws := NewReactWebServer(nil, events.NewEventBus(), 0)
+	clientID := "test-client"
+	ctx := ws.getOrCreateClientContext(clientID)
+	ctx.WorkspaceRoot = workspaceRoot
+
+	// Step 1: Set some global settings
+	globalBody := `{"reasoning_effort": "high", "history_scope": "global", "version": "2.0", "last_used_provider": "openai"}`
+	rec := makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=global", globalBody)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("global PUT failed: %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Step 2: GET global settings (simulates the frontend "getSettingsLayer('global')")
+	req := httptest.NewRequest(http.MethodGet, "/api/settings?layer=global", nil)
+	req.Header.Set("X-Ledit-Client-ID", clientID)
+	rec = httptest.NewRecorder()
+	ws.handleAPISettings(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("global GET failed: %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Step 3: PUT global data to workspace (simulates "updateSettings(globalData, 'workspace')")
+	rec = makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=workspace", rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("workspace PUT failed: %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Step 4: GET workspace settings and verify data was preserved
+	req = httptest.NewRequest(http.MethodGet, "/api/settings?layer=workspace", nil)
+	req.Header.Set("X-Ledit-Client-ID", clientID)
+	rec = httptest.NewRecorder()
+	ws.handleAPISettings(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("workspace GET failed: %d: %s", rec.Code, rec.Body.String())
+	}
+
+	body := rec.Body.String()
+	// Verify key fields were preserved
+	for _, expected := range []string{`"reasoning_effort":"high"`, `"history_scope":"global"`, `"version":"2.0"`, `"last_used_provider":"openai"`} {
+		if !strings.Contains(body, expected) {
+			t.Errorf("workspace config missing %s, got: %s", expected, body)
+		}
+	}
+}

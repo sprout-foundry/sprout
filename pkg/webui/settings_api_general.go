@@ -12,6 +12,7 @@ import (
 	agentpkg "github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/mcp"
 )
 
 // ---------------------------------------------------------------------------
@@ -718,6 +719,68 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 			}
 			cfg.ProviderPriority = pp
 		}
+	}
+
+	// Version
+	if v, ok := patch["version"]; ok {
+		cfg.Version, _ = v.(string)
+	}
+
+	// LastUsedProvider
+	if v, ok := patch["last_used_provider"]; ok {
+		cfg.LastUsedProvider, _ = v.(string)
+	}
+
+	// MCP — complex struct, use JSON marshal/unmarshal
+	if v, ok := patch["mcp"]; ok {
+		raw, err := json.Marshal(v)
+		if err != nil {
+			return fmt.Errorf("invalid mcp config: %w", err)
+		}
+		var mcpCfg mcp.MCPConfig
+		if err := json.Unmarshal(raw, &mcpCfg); err != nil {
+			return fmt.Errorf("invalid mcp config: %w", err)
+		}
+		cfg.MCP = mcpCfg
+	}
+
+	// CustomProviders — map[string]CustomProviderConfig
+	if v, ok := patch["custom_providers"]; ok {
+		raw, err := json.Marshal(v)
+		if err != nil {
+			return fmt.Errorf("invalid custom_providers config: %w", err)
+		}
+		var providers map[string]configuration.CustomProviderConfig
+		if err := json.Unmarshal(raw, &providers); err != nil {
+			return fmt.Errorf("invalid custom_providers config: %w", err)
+		}
+		cfg.CustomProviders = providers
+	}
+
+	// SubagentTypes — map[string]SubagentType
+	if v, ok := patch["subagent_types"]; ok {
+		raw, err := json.Marshal(v)
+		if err != nil {
+			return fmt.Errorf("invalid subagent_types config: %w", err)
+		}
+		var types map[string]configuration.SubagentType
+		if err := json.Unmarshal(raw, &types); err != nil {
+			return fmt.Errorf("invalid subagent_types config: %w", err)
+		}
+		cfg.SubagentTypes = types
+	}
+
+	// Skills — map[string]Skill
+	if v, ok := patch["skills"]; ok {
+		raw, err := json.Marshal(v)
+		if err != nil {
+			return fmt.Errorf("invalid skills config: %w", err)
+		}
+		var skills map[string]configuration.Skill
+		if err := json.Unmarshal(raw, &skills); err != nil {
+			return fmt.Errorf("invalid skills config: %w", err)
+		}
+		cfg.Skills = skills
 	}
 
 	return nil

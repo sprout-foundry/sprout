@@ -128,8 +128,8 @@ func (ws *ReactWebServer) handleGetSessionSettings(w http.ResponseWriter, r *htt
 	writeJSON(w, http.StatusOK, overrides)
 }
 
-// handleGetProvenanceSettings returns the effective config with per-key source information.
-// Response shape: { "config": {...}, "sources": { "key": "global"|"workspace"|"session" } }
+// handleGetProvenanceSettings returns per-key source information for the effective config.
+// Response shape: { "sources": { "key": "global"|"workspace"|"session" } }
 func (ws *ReactWebServer) handleGetProvenanceSettings(w http.ResponseWriter, r *http.Request) {
 	// Load global config
 	var globalCfg configuration.Config
@@ -155,7 +155,12 @@ func (ws *ReactWebServer) handleGetProvenanceSettings(w http.ResponseWriter, r *
 	if ctx := ws.clientContexts[clientID]; ctx != nil {
 		if cs := ctx.getChatSession(ctx.getActiveChatID()); cs != nil {
 			cs.mu.Lock()
-			sessionOverrides = cs.ConfigOverrides
+			if cs.ConfigOverrides != nil {
+				sessionOverrides = make(map[string]interface{}, len(cs.ConfigOverrides))
+				for k, v := range cs.ConfigOverrides {
+					sessionOverrides[k] = v
+				}
+			}
 			cs.mu.Unlock()
 		}
 	}
@@ -214,7 +219,6 @@ func (ws *ReactWebServer) handleGetProvenanceSettings(w http.ResponseWriter, r *
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"config":  sanitizedConfig(effective),
 		"sources": sources,
 	})
 }

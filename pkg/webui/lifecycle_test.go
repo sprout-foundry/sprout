@@ -8,7 +8,7 @@ import (
 )
 
 func TestTouchClientLastSeen_ExistingContext(t *testing.T) {
-	server := NewReactWebServer(nil, events.NewEventBus(), 0)
+	server := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
 
 	// Create a client context
 	ctx := server.getOrCreateClientContext("test-client")
@@ -25,7 +25,7 @@ func TestTouchClientLastSeen_ExistingContext(t *testing.T) {
 }
 
 func TestTouchClientLastSeen_DefaultClientID(t *testing.T) {
-	server := NewReactWebServer(nil, events.NewEventBus(), 0)
+	server := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
 
 	ctx := server.getOrCreateClientContext(defaultWebClientID)
 
@@ -42,7 +42,7 @@ func TestTouchClientLastSeen_DefaultClientID(t *testing.T) {
 }
 
 func TestTouchClientLastSeen_NonexistentContext(t *testing.T) {
-	server := NewReactWebServer(nil, events.NewEventBus(), 0)
+	server := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
 
 	// Should not panic or create a context for a nonexistent client
 	server.touchClientLastSeen("nonexistent-client")
@@ -58,7 +58,7 @@ func TestTouchClientLastSeen_NonexistentContext(t *testing.T) {
 }
 
 func TestTouchClientLastSeen_WhitespaceClientID(t *testing.T) {
-	server := NewReactWebServer(nil, events.NewEventBus(), 0)
+	server := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
 
 	ctx := server.getOrCreateClientContext(defaultWebClientID)
 

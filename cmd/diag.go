@@ -24,7 +24,7 @@ var diagCmd = &cobra.Command{
 }
 
 func runDiag() {
-	fmt.Println("=== Ledit Configuration Diagnostics ===")
+	fmt.Println("=== Sprout Configuration Diagnostics ===")
 	fmt.Println()
 
 	// Check global config
@@ -50,7 +50,7 @@ func runDiag() {
 
 	// Check what the code will actually load
 	fmt.Printf("Loaded config path: %s\n", globalConfigPath)
-	fmt.Println("(Note: ledit currently ONLY uses global config, not project-local)")
+	fmt.Println("(Note: sprout currently ONLY uses global config, not project-local)")
 	fmt.Println()
 
 	providersDir, _ := configuration.GetProvidersDir()

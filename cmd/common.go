@@ -10,7 +10,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
-// InstanceInfo represents a running ledit instance
+// InstanceInfo represents a running sprout instance
 type InstanceInfo struct {
 	ID         string    `json:"id"`
 	Port       int       `json:"port"`

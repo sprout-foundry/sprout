@@ -1,4 +1,4 @@
-// Mouse tracking and context menu support for ledit IDE
+// Mouse tracking and context menu support for sprout IDE
 package console
 
 import (

@@ -84,11 +84,16 @@ export function extractTagName(docText: string, cursorPos: number): string | nul
   let startPos = cursorPos - 2;
   let inSingleQuote = false;
   let inDoubleQuote = false;
+  let braceDepth = 0;
   while (startPos >= 0) {
     const ch = docText[startPos];
     // Track quote context (single and double quotes skip each other)
     if (ch === '"' && !inSingleQuote) { inDoubleQuote = !inDoubleQuote; }
     else if (ch === "'" && !inDoubleQuote) { inSingleQuote = !inSingleQuote; }
+    // Track brace depth to detect unclosed JSX expressions (e.g., `<div data-x={5 >`)
+    // When scanning backwards: } increments, { decrements
+    if (ch === '}' && !inDoubleQuote && !inSingleQuote) { braceDepth++; }
+    if (ch === '{' && !inDoubleQuote && !inSingleQuote) { braceDepth--; }
     if (ch === '<' && !inDoubleQuote && !inSingleQuote) {
       break;
     }
@@ -101,6 +106,11 @@ export function extractTagName(docText: string, cursorPos: number): string | nul
 
   // If inside a quote or didn't find '<', skip
   if (inDoubleQuote || inSingleQuote || startPos < 0) {
+    return null;
+  }
+
+  // If there are unclosed braces, the '>' belongs to a JSX expression, not a tag
+  if (braceDepth !== 0) {
     return null;
   }
 

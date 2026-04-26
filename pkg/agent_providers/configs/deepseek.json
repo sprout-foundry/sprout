@@ -9,8 +9,8 @@
     "output_token_cost": 0.28
   },
   "defaults": {
-    "max_tokens": -1,
-    "model": "deepseek-chat",
+    "max_tokens": 32768,
+    "model": "deepseek-v4-flash",
     "temperature": 0.7,
     "top_p": 1
   },
@@ -23,17 +23,28 @@
   },
   "models": {
     "available_models": [],
-    "default_context_limit": 128000,
-    "default_model": "deepseek-chat",
+    "default_context_limit": 1000000,
+    "default_model": "deepseek-v4-flash",
     "model_overrides": {
-      "deepseek-chat": 128000,
+      "deepseek-chat": 1000000,
       "deepseek-coder": 128000,
-      "deepseek-v3": 128000
+      "deepseek-reasoner": 1000000,
+      "deepseek-v3": 128000,
+      "deepseek-v4-flash": 1000000,
+      "deepseek-v4-pro": 1000000
     },
     "pattern_overrides": [
       {
+        "context_limit": 1000000,
+        "pattern": "deepseek-v4-.*"
+      },
+      {
         "context_limit": 128000,
-        "pattern": "deepseek-.*"
+        "pattern": "deepseek-v3.*"
+      },
+      {
+        "context_limit": 128000,
+        "pattern": "deepseek-coder.*"
       }
     ],
     "supports_vision": false,

@@ -172,7 +172,7 @@ func isWithinWorkspace(path, workspaceRoot string) bool {
 	return !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && rel != ".."
 }
 
-// isAppConfigPath returns true if the path is inside the ledit configuration
+// isAppConfigPath returns true if the path is inside the sprout configuration
 // directory (e.g. ~/.ledit/ or ~/.config/ledit/). These are workspace-owned
 // config files and should never trigger the external-path consent prompt.
 func isAppConfigPath(path string) bool {
@@ -194,7 +194,7 @@ func isAppConfigPath(path string) bool {
 	return !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && rel != ".."
 }
 
-// getConfigDir returns the ledit configuration directory, memoized across calls.
+// getConfigDir returns the sprout configuration directory, memoized across calls.
 // It uses the same logic as configuration.GetConfigDir but is kept in the webui
 // package to avoid pulling in the full configuration import graph.
 var configDirCache string

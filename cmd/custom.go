@@ -18,7 +18,7 @@ var customModelCmd = &cobra.Command{
 	Short: "Manage custom OpenAI-compatible providers",
 	Long: `Manage custom OpenAI-compatible providers backed by ~/.ledit/providers/*.json.
 Each custom provider stores an endpoint URL and optional API-key environment variable,
-and ledit discovers available models from the provider's /v1/models endpoint.`,
+and sprout discovers available models from the provider's /v1/models endpoint.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		_ = cmd.Help()
 	},
@@ -324,7 +324,7 @@ func runCustomModelList() error {
 
 	if len(cfg.CustomProviders) == 0 {
 		fmt.Println("No custom providers configured.")
-		fmt.Println("Use 'ledit custom add' to add one.")
+		fmt.Println("Use 'sprout custom add' to add one.")
 		return nil
 	}
 

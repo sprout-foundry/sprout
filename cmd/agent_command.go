@@ -198,7 +198,7 @@ func availablePersonaCompletions(cfg *configuration.Config, toComplete string) [
 // agentCmd represents the agent command
 var agentCmd = &cobra.Command{
 	Use:   "agent [intent]",
-	Short: "Agent for code analysis and editing (default when running 'ledit' alone)",
+	Short: "Agent for code analysis and editing (default when running 'sprout' alone)",
 	Long: `Agent mode for intelligent code analysis and editing with modern CLI + Web UI.
 
 Features:
@@ -224,42 +224,42 @@ The agent runs in two modes:
 
 Examples:
   # Interactive mode (automatic when no arguments provided)
-  ledit agent
+  sprout agent
 
   # Direct mode
-  ledit agent "Add better error handling to the main function"
-  ledit agent "How does the authentication system work?"
+  sprout agent "Add better error handling to the main function"
+  sprout agent "How does the authentication system work?"
 
   # With specific provider and model
-  ledit agent --provider openrouter --model "qwen/qwen3-coder-30b" "Fix the login bug"
-  ledit agent -p deepinfra -m "deepseek-v3" "Analyze the codebase structure"
-  ledit agent -p deepseek -m "deepseek-chat" "Write Python code for data analysis"
+  sprout agent --provider openrouter --model "qwen/qwen3-coder-30b" "Fix the login bug"
+  sprout agent -p deepinfra -m "deepseek-v3" "Analyze the codebase structure"
+  sprout agent -p deepseek -m "deepseek-chat" "Write Python code for data analysis"
 
   # Start with a persona
-  ledit agent --persona web-scraper "Collect pricing table data from docs pages"
+  sprout agent --persona web-scraper "Collect pricing table data from docs pages"
 
-  # With custom provider (configured via 'ledit custom add')
-  ledit agent --provider my-custom-slow --model "custom-model-v1" "Review this code"
+  # With custom provider (configured via 'sprout custom add')
+  sprout agent --provider my-custom-slow --model "custom-model-v1" "Review this code"
 
   # Skip connection check for faster startup (saves 1-3 seconds)
-  ledit agent --no-connection-check "Quick analysis"
-  SPROUT_NO_CONNECTION_CHECK=1 ledit agent "Another quick analysis"
+  sprout agent --no-connection-check "Quick analysis"
+  SPROUT_NO_CONNECTION_CHECK=1 sprout agent "Another quick analysis"
 
   # Set subagent model/provider (persists to config)
-  ledit agent --subagent-model "claude-haiku-4-20250514" "Fix the tests"
-  ledit agent --subagent-provider deepinfra --subagent-model "deepseek-v3" "Refactor auth"
+  sprout agent --subagent-model "claude-haiku-4-20250514" "Fix the tests"
+  sprout agent --subagent-provider deepinfra --subagent-model "deepseek-v3" "Refactor auth"
 
   # Non-interactive run with an agent workflow
-  ledit agent --workflow-config examples/agent_workflow.json
+  sprout agent --workflow-config examples/agent_workflow.json
 
   # Resume a previous session in this directory scope
-  ledit agent --session-id session_1234567890
+  sprout agent --session-id session_1234567890
 
   # Resume the most recent session from this directory
-  ledit agent --last-session
+  sprout agent --last-session
 
   # Disable web UI
-  ledit agent --no-web-ui "Analyze this code"`,
+  sprout agent --no-web-ui "Analyze this code"`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		chatAgent, err := createChatAgent()

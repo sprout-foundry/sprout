@@ -29,8 +29,8 @@ func TestShowWelcomeMessage(t *testing.T) {
 	output := captureStdout(ShowWelcomeMessage)
 
 	// Verify daemon command is mentioned
-	if !strings.Contains(output, "ledit agent -d") {
-		t.Errorf("ShowWelcomeMessage() should contain 'ledit agent -d', got:\n%s", output)
+	if !strings.Contains(output, "sprout agent -d") {
+		t.Errorf("ShowWelcomeMessage() should contain 'sprout agent -d', got:\n%s", output)
 	}
 
 	// Verify web is mentioned (case insensitive)
@@ -79,8 +79,8 @@ func TestShowNextSteps_NormalProvider(t *testing.T) {
 	})
 
 	// Verify daemon command is the first recommended step
-	if !strings.Contains(output, "ledit agent -d") {
-		t.Errorf("ShowNextSteps(%q) should contain 'ledit agent -d', got:\n%s", provider, output)
+	if !strings.Contains(output, "sprout agent -d") {
+		t.Errorf("ShowNextSteps(%q) should contain 'sprout agent -d', got:\n%s", provider, output)
 	}
 
 	// Verify it's marked as recommended
@@ -109,8 +109,8 @@ func TestShowNextSteps_EditorOnly(t *testing.T) {
 	}
 
 	// Should provide guidance to enable AI features via webui
-	if !strings.Contains(output, "ledit agent -d") {
-		t.Errorf("ShowNextSteps(%q) should mention 'ledit agent -d' to configure providers, got:\n%s", provider, output)
+	if !strings.Contains(output, "sprout agent -d") {
+		t.Errorf("ShowNextSteps(%q) should mention 'sprout agent -d' to configure providers, got:\n%s", provider, output)
 	}
 
 	// Should mention that AI features are not available

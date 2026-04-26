@@ -63,7 +63,7 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 				return
 			}
 		} else {
-			logger.LogUserInteraction("No staged changes found. Please stage your changes before running 'ledit review'.")
+			logger.LogUserInteraction("No staged changes found. Please stage your changes before running 'sprout review'.")
 			return
 		}
 

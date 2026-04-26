@@ -196,7 +196,7 @@ func fallbackCommand(homeDir string) string {
 		}
 	}
 	logPath := filepath.Join(homeDir, ".ledit", "daemon.log")
-	return fmt.Sprintf("nohup ledit agent -d > %s 2>&1 &\nView logs with: tail -f %s", logPath, logPath)
+	return fmt.Sprintf("nohup sprout agent -d > %s 2>&1 &\nView logs with: tail -f %s", logPath, logPath)
 }
 
 // runSystemctl executes a systemctl command at user scope and returns its stdout.

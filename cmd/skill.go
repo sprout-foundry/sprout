@@ -24,7 +24,7 @@ Use 'skill add' to create a new project-specific skill.`,
 var skillAddCmd = &cobra.Command{
 	Use:   "add [skill-id]",
 	Short: "Create a new project-specific skill",
-	Long: `Create a new skill in the project's .ledit/skills/ directory.
+	Long: `Create a new skill in the project's .sprout/skills/ directory.
 
 The skill-id should be a short identifier like "myproject-conventions" or "api-patterns".
 This will create a SKILL.md file with the correct structure that you can edit.

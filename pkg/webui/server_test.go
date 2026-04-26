@@ -272,3 +272,43 @@ func TestBindAddrStoredCorrectly(t *testing.T) {
 		t.Errorf("Server bindAddr = %s, want \"127.0.0.1\"", server.bindAddr)
 	}
 }
+
+func TestDisplayAddr(t *testing.T) {
+	tests := []struct{ input, want string }{
+		{"127.0.0.1", "localhost"},
+		{"0.0.0.0", "localhost"},
+		{"::", "localhost"},
+		{"::1", "localhost"},
+		{"192.168.1.1", "192.168.1.1"},
+		{"10.0.0.5", "10.0.0.5"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			if got := DisplayAddr(tt.input); got != tt.want {
+				t.Errorf("DisplayAddr(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFormatListenAddr(t *testing.T) {
+	tests := []struct {
+		host string
+		port int
+		want string
+	}{
+		{"127.0.0.1", 8080, "127.0.0.1:8080"},
+		{"0.0.0.0", 443, "0.0.0.0:443"},
+		{"::", 54000, "[::]:54000"},
+		{"::1", 8080, "[::1]:8080"},
+		{"fe80::1", 9090, "[fe80::1]:9090"},
+	}
+	for _, tt := range tests {
+		name := fmt.Sprintf("%s:%d", tt.host, tt.port)
+		t.Run(name, func(t *testing.T) {
+			if got := formatListenAddr(tt.host, tt.port); got != tt.want {
+				t.Errorf("formatListenAddr(%q, %d) = %q, want %q", tt.host, tt.port, got, tt.want)
+			}
+		})
+	}
+}

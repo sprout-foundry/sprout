@@ -351,11 +351,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 
 	// Start server in goroutine
 	go func() {
-		addr := ws.bindAddr
-		if addr == "127.0.0.1" {
-			addr = "localhost"
-		}
-		log.Printf("[web] Web UI starting at http://%s:%d", addr, ws.port)
+		log.Printf("[web] Web UI starting at http://%s:%d", DisplayAddr(ws.bindAddr), ws.port)
 		if err := ws.server.Serve(listener); err != nil && !isExpectedServerCloseError(err) {
 			log.Printf("Web server error: %v", err)
 		}
@@ -574,4 +570,13 @@ func formatListenAddr(host string, port int) string {
 		return fmt.Sprintf("[%s]:%d", host, port)
 	}
 	return fmt.Sprintf("%s:%d", host, port)
+}
+
+// DisplayAddr returns a user-friendly address string for display in logs.
+func DisplayAddr(bindAddr string) string {
+	switch bindAddr {
+	case "127.0.0.1", "0.0.0.0", "::", "::1":
+		return "localhost"
+	}
+	return bindAddr
 }

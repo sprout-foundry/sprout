@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/agent"
 )
 
 // AgentResult is the structured output produced when --output-format=json is used.
@@ -24,6 +26,11 @@ type AgentResult struct {
 // AgentResultMetrics holds execution metrics for structured output.
 type AgentResultMetrics struct {
 	ElapsedSeconds float64 `json:"elapsed_seconds"`
+	TokensIn       int     `json:"tokens_in"`  // Total prompt/input tokens
+	TokensOut      int     `json:"tokens_out"` // Total completion/output tokens
+	LLMCalls       int     `json:"llm_calls"`  // Number of LLM API calls made
+	Provider       string  `json:"provider"`   // LLM provider name (e.g., "openai", "anthropic")
+	Model          string  `json:"model"`      // Model identifier (e.g., "gpt-4o")
 }
 
 // outputFormatJSON is the flag value for JSON output mode.
@@ -35,12 +42,21 @@ func init() {
 
 // emitJSONResult writes the AgentResult to stdout as a single JSON line.
 // It collects git diff and modified files from the workspace.
-func emitJSONResult(query string, startTime time.Time, runErr error) {
+func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Agent) {
 	result := AgentResult{
 		Query: query,
 		Metrics: AgentResultMetrics{
 			ElapsedSeconds: time.Since(startTime).Seconds(),
 		},
+	}
+
+	// Populate metrics from the agent if available
+	if a != nil {
+		result.Metrics.TokensIn = a.GetPromptTokens()
+		result.Metrics.TokensOut = a.GetCompletionTokens()
+		result.Metrics.LLMCalls = a.GetCurrentIteration()
+		result.Metrics.Provider = a.GetProvider()
+		result.Metrics.Model = a.GetModel()
 	}
 
 	if runErr != nil {

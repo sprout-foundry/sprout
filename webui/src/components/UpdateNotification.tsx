@@ -33,7 +33,7 @@ interface UpdateApiResponse {
 // Extend Window interface to include desktop API
 declare global {
   interface Window {
-    leditDesktop?: {
+    sproutDesktop?: {
       // Auto-update API
       checkForUpdates: () => Promise<DesktopApiResponse<CheckResult>>;
       installUpdate: () => Promise<DesktopApiResponse<UpdateApiResponse>>;
@@ -74,7 +74,7 @@ function UpdateNotification(): JSX.Element | null {
   }, []);
 
   const checkForUpdates = async () => {
-    if (!window.leditDesktop?.checkForUpdates) {
+    if (!window.sproutDesktop?.checkForUpdates) {
       addNotification('info', 'Update Check', 'Auto-update is not available in this environment.');
       return;
     }
@@ -82,7 +82,7 @@ function UpdateNotification(): JSX.Element | null {
     setChecking(true);
     setDownloadProgress(null);
     try {
-      const result = await window.leditDesktop.checkForUpdates();
+      const result = await window.sproutDesktop.checkForUpdates();
       if (result.ok && result.result) {
         setUpdateAvailable(result.result);
         if (result.result.hasUpdate) {
@@ -111,17 +111,17 @@ function UpdateNotification(): JSX.Element | null {
 
   // Listen for IPC events from the main process
   useEffect(() => {
-    if (!window.leditDesktop?.onUpdateError || !window.leditDesktop?.onUpdateAvailable) {
+    if (!window.sproutDesktop?.onUpdateError || !window.sproutDesktop?.onUpdateAvailable) {
       return;
     }
 
     // Listen for update error notifications
-    const unsubscribeError = window.leditDesktop.onUpdateError((data: NotificationEvent) => {
+    const unsubscribeError = window.sproutDesktop.onUpdateError((data: NotificationEvent) => {
       addNotification('warning', data.title, data.message, data.duration);
     });
 
     // Listen for update available notifications
-    const unsubscribeAvailable = window.leditDesktop.onUpdateAvailable((data: NotificationEvent) => {
+    const unsubscribeAvailable = window.sproutDesktop.onUpdateAvailable((data: NotificationEvent) => {
       setUpdateAvailable({ hasUpdate: true, version: data.version });
       setDownloadProgress(null); // Reset progress when download completes
       addNotification('success', data.title, data.message, data.duration);
@@ -129,8 +129,8 @@ function UpdateNotification(): JSX.Element | null {
 
     // Listen for manual update check trigger from menu
     let unsubscribeTriggerUpdateCheck: (() => void) | null = null;
-    if (window.leditDesktop.onTriggerUpdateCheck) {
-      unsubscribeTriggerUpdateCheck = window.leditDesktop.onTriggerUpdateCheck(() => {
+    if (window.sproutDesktop.onTriggerUpdateCheck) {
+      unsubscribeTriggerUpdateCheck = window.sproutDesktop.onTriggerUpdateCheck(() => {
         // Call checkForUpdates when triggered from the menu
         if (checkForUpdatesRef.current) {
           void checkForUpdatesRef.current();
@@ -140,8 +140,8 @@ function UpdateNotification(): JSX.Element | null {
 
     // Listen for download progress
     let unsubscribeDownloadProgress: (() => void) | null = null;
-    if (window.leditDesktop.onUpdateDownloadProgress) {
-      unsubscribeDownloadProgress = window.leditDesktop.onUpdateDownloadProgress((progress) => {
+    if (window.sproutDesktop.onUpdateDownloadProgress) {
+      unsubscribeDownloadProgress = window.sproutDesktop.onUpdateDownloadProgress((progress) => {
         console.log(`Update download progress: ${progress.percent}%`);
         setDownloadProgress(progress.percent);
       });
@@ -149,8 +149,8 @@ function UpdateNotification(): JSX.Element | null {
 
     // Listen for update downloaded event
     let unsubscribeDownloaded: (() => void) | null = null;
-    if (window.leditDesktop.onUpdateDownloaded) {
-      unsubscribeDownloaded = window.leditDesktop.onUpdateDownloaded((info) => {
+    if (window.sproutDesktop.onUpdateDownloaded) {
+      unsubscribeDownloaded = window.sproutDesktop.onUpdateDownloaded((info) => {
         console.log(`Update downloaded: ${info.version}`);
         setDownloadProgress(null); // Reset progress when download completes
         setUpdateAvailable({ hasUpdate: true, version: info.version });
@@ -180,11 +180,11 @@ function UpdateNotification(): JSX.Element | null {
   }, [addNotification]);
 
   const checkPendingInstall = async () => {
-    if (!window.leditDesktop?.isUpdatePending) {
+    if (!window.sproutDesktop?.isUpdatePending) {
       return;
     }
     try {
-      const result = await window.leditDesktop.isUpdatePending();
+      const result = await window.sproutDesktop.isUpdatePending();
       setPendingInstall(result.pending || false);
     } catch (error) {
       console.error('Failed to check pending install:', error);
@@ -192,16 +192,16 @@ function UpdateNotification(): JSX.Element | null {
   };
 
   const installNow = async () => {
-    if (!window.leditDesktop?.installUpdate) {
+    if (!window.sproutDesktop?.installUpdate) {
       addNotification('error', 'Update Failed', 'Update installation is not available');
       return;
     }
 
     try {
-      const result = await window.leditDesktop.installUpdate();
+      const result = await window.sproutDesktop.installUpdate();
       if (result.ok) {
         // The app will quit and reinstall
-        addNotification('success', 'Installing Update', 'Ledit will restart to apply the update.');
+        addNotification('success', 'Installing Update', 'Sprout will restart to apply the update.');
       } else {
         addNotification('error', 'Update Failed', result.error || 'Failed to install update');
       }
@@ -212,17 +212,17 @@ function UpdateNotification(): JSX.Element | null {
   };
 
   const deferInstall = async () => {
-    if (!window.leditDesktop?.deferUpdate) {
+    if (!window.sproutDesktop?.deferUpdate) {
       addNotification('info', 'Update Deferred', 'Update will be installed on next quit.');
       setPendingInstall(true);
       return;
     }
 
     try {
-      const result = await window.leditDesktop.deferUpdate();
+      const result = await window.sproutDesktop.deferUpdate();
       if (result.ok) {
         setPendingInstall(true);
-        addNotification('info', 'Update Deferred', 'Update will be installed when you quit Ledit.');
+        addNotification('info', 'Update Deferred', 'Update will be installed when you quit Sprout.');
       } else {
         addNotification('error', 'Update Failed', 'Failed to defer update');
       }
@@ -233,13 +233,13 @@ function UpdateNotification(): JSX.Element | null {
   };
 
   const cancelPendingInstall = async () => {
-    if (!window.leditDesktop?.cancelPendingInstall) {
+    if (!window.sproutDesktop?.cancelPendingInstall) {
       setPendingInstall(false);
       return;
     }
 
     try {
-      const result = await window.leditDesktop.cancelPendingInstall();
+      const result = await window.sproutDesktop.cancelPendingInstall();
       if (result.ok) {
         setPendingInstall(false);
         addNotification('info', 'Update Cancelled', 'Update installation has been cancelled.');
@@ -250,7 +250,7 @@ function UpdateNotification(): JSX.Element | null {
   };
 
   // Don't render if there's no desktop API available
-  if (!window.leditDesktop?.checkForUpdates) {
+  if (!window.sproutDesktop?.checkForUpdates) {
     return null;
   }
 
@@ -265,7 +265,7 @@ function UpdateNotification(): JSX.Element | null {
         <div className="update-pending-content">
           <Download size={16} className="update-pending-icon" />
           <span className="update-pending-text">
-            An update is queued and will be installed when you quit Ledit.
+            An update is queued and will be installed when you quit Sprout.
           </span>
           <button
             className="update-pending-dismiss"

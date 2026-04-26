@@ -1,10 +1,10 @@
 /**
- * TypeScript type declarations for the Ledit Desktop API.
+ * TypeScript type declarations for the Sprout Desktop API.
  * This file extends the global Window interface to include
  * the desktop-specific IPC methods exposed via preload.js.
  */
 
-export interface LeditDesktopAPI {
+export interface SproutDesktopAPI {
   // Platform detection
   platform: NodeJS.Platform;
 
@@ -37,7 +37,7 @@ export interface LeditDesktopAPI {
 
 declare global {
   interface Window {
-    leditDesktop?: LeditDesktopAPI;
+    sproutDesktop?: SproutDesktopAPI;
   }
 }
 

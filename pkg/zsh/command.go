@@ -28,8 +28,8 @@ type CommandInfo struct {
 	SubCommand string      // For commands with subcommands, the detected subcommand
 }
 
-// allowedCommands is the allowlist of commands safe for auto-execution in ledit context.
-// These commands are read-only or safe operations that make sense to run within ledit.
+// allowedCommands is the allowlist of commands safe for auto-execution in sprout context.
+// These commands are read-only or safe operations that make sense to run within sprout.
 var allowedCommands = map[string]bool{
 	// Version control
 	"git": true,
@@ -108,7 +108,7 @@ var allowedCommands = map[string]bool{
 }
 
 // blockedCommands is a disallowlist of commands that should NEVER be auto-executed.
-// These are either dangerous or don't make sense in the ledit context.
+// These are either dangerous or don't make sense in the sprout context.
 var blockedCommands = map[string]bool{
 	// Dangerous - destructive operations
 	"rm":    true, // delete files (too easy to accidentally delete)
@@ -122,7 +122,7 @@ var blockedCommands = map[string]bool{
 	"reboot":   true,
 	"poweroff": true,
 
-	// Don't make sense in ledit context (interactive editors)
+	// Don't make sense in sprout context (interactive editors)
 	"vi":    true,
 	"vim":   true,
 	"nvim":  true,
@@ -141,7 +141,7 @@ var blockedCommands = map[string]bool{
 }
 
 // IsCommand checks if the given input starts with a valid zsh command that is
-// safe for auto-execution in the ledit context.
+// safe for auto-execution in the sprout context.
 // Returns (isCommand, commandInfo, error).
 func IsCommand(input string) (bool, *CommandInfo, error) {
 	// Extract the first word (command name)

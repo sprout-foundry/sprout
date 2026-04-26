@@ -45,7 +45,7 @@ func sessionProxyPath(sessionKey, suffix string) string {
 
 const testSessionKey = "test-host::$HOME"
 
-// startEchoBackend creates an httptest server that acts as the "remote" ledit
+// startEchoBackend creates an httptest server that acts as the "remote" sprout
 // backend.  It handles:
 //   - /health          → {"status":"ok"}
 //   - /api/workspace   → {"workspace_root":"/remote/project"}
@@ -531,9 +531,9 @@ func TestSSHProxyConcurrentRequests(t *testing.T) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Real ledit backend integration test
+// Real sprout backend integration test
 // Runs only when LEDIT_INTEGRATION_SSH_TEST=1 is set in the environment.
-// The test expects a local ledit process to be running on LEDIT_WEBUI_PORT
+// The test expects a local sprout process to be running on LEDIT_WEBUI_PORT
 // (defaults to 54000) that has at least one SSH session attached.
 // It verifies:
 //   1. /ssh/{key}/ returns 200 with LEDIT_PROXY_BASE injected.
@@ -628,7 +628,7 @@ func TestSSHProxyRealBackendIntegration(t *testing.T) {
 		}
 		_, _, err = conn.ReadMessage()
 		if err != nil {
-			// A real ledit backend may close after the first message if it
+			// A real sprout backend may close after the first message if it
 			// doesn't recognise "ping" — that's still proof the proxy works.
 			t.Logf("WS read returned (may be normal close): %v", err)
 		}

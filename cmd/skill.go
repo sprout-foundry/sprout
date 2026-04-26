@@ -30,7 +30,7 @@ The skill-id should be a short identifier like "myproject-conventions" or "api-p
 This will create a SKILL.md file with the correct structure that you can edit.
 
 Example:
-  ledit skill add myproject-conventions`,
+  sprout skill add myproject-conventions`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		skillID := args[0]
@@ -113,7 +113,7 @@ description: Project-specific conventions for %s. Update this description.
 		
 		fmt.Printf("[ok] Created skill '%s' at %s\n", skillID, skillFile)
 		fmt.Printf("\nEdit the file to add your project-specific conventions.\n")
-		fmt.Printf("The skill will be automatically discovered when running ledit in this project.\n")
+		fmt.Printf("The skill will be automatically discovered when running sprout in this project.\n")
 	},
 }
 

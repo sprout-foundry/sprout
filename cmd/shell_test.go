@@ -48,7 +48,7 @@ func TestShellCommandHelp(t *testing.T) {
 		t.Error("Long description should contain examples")
 	}
 
-	if !strings.Contains(shellCmd.Long, "ledit shell") {
+	if !strings.Contains(shellCmd.Long, "sprout shell") {
 		t.Error("Long description should contain usage examples")
 	}
 }

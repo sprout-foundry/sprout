@@ -22,6 +22,7 @@ const (
 	defaultNegativeTTL = 30 * time.Second
 	defaultHTTPTimeout = 500 * time.Millisecond
 	maxResponseBytes   int64 = 1 << 20 // 1 MiB — matches pkg/providercatalog limit
+	defaultRegistryURL = "https://sprout-foundry.github.io/sprout"
 )
 
 // ModelInfo mirrors api.ModelInfo for registry JSON responses.
@@ -85,6 +86,8 @@ func init() {
 func loadConfig() {
 	if v := strings.TrimSpace(envutil.GetEnvSimple("MODEL_REGISTRY_URL")); v != "" {
 		baseURL = strings.TrimRight(v, "/")
+	} else {
+		baseURL = defaultRegistryURL
 	}
 	if v := strings.TrimSpace(envutil.GetEnvSimple("MODEL_REGISTRY_TTL")); v != "" {
 		if d, err := time.ParseDuration(v); err == nil && d > 0 {

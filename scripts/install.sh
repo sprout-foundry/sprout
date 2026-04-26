@@ -1,5 +1,5 @@
 #!/bin/sh
-# ledit one-line install script
+# sprout one-line install script
 set -eu
 
 # Colors with fallback for non-tty
@@ -104,7 +104,7 @@ detect_arch() {
     esac
 }
 
-# Determine install directory, preferring the location of any existing ledit binary
+# Determine install directory, preferring the location of any existing sprout binary
 get_install_dir() {
     if [ -n "${SPROUT_INSTALL_DIR:-}" ]; then
         echo "$SPROUT_INSTALL_DIR"
@@ -123,9 +123,13 @@ get_install_dir() {
         fi
     fi
 
-    # If ledit is already installed somewhere on PATH, upgrade in place.
+    # If sprout is already installed somewhere on PATH, upgrade in place.
+    # Also check for legacy ledit binary to allow in-place rebrand upgrades.
     local existing
-    existing=$(command -v ledit 2>/dev/null || true)
+    existing=$(command -v sprout 2>/dev/null || true)
+    if [ -z "$existing" ]; then
+        existing=$(command -v ledit 2>/dev/null || true)
+    fi
     if [ -n "$existing" ]; then
         local existing_dir
         existing_dir=$(dirname "$existing")
@@ -158,7 +162,7 @@ get_version() {
     if [ -n "${SPROUT_VERSION:-}" ]; then
         echo "$SPROUT_VERSION"
     else
-        local api_url="https://api.github.com/repos/alantheprice/ledit/releases/latest"
+        local api_url="https://api.github.com/repos/sprout-foundry/sprout/releases/latest"
         local version
         version=$(curl --fail --show-error --silent "$api_url" | awk -F'"' '/"tag_name":/ {print $4; exit}')
         if [ -z "$version" ]; then
@@ -175,8 +179,8 @@ download_release() {
     local os="$2"
     local arch="$3"
 
-    local filename="ledit-${os}-${arch}.tar.gz"
-    local download_url="https://github.com/alantheprice/ledit/releases/download/${version}/${filename}"
+    local filename="sprout-${os}-${arch}.tar.gz"
+    local download_url="https://github.com/sprout-foundry/sprout/releases/download/${version}/${filename}"
 
     log_info "Downloading $filename" >&2
 
@@ -207,42 +211,42 @@ install_binary() {
         if command -v sudo >/dev/null 2>&1; then
             log_info "Using sudo for installation..."
             sudo mkdir -p "$install_dir"
-            sudo cp "$TEMP_DIR/$extracted_binary" "${install_dir}/ledit"
-            sudo chmod +x "${install_dir}/ledit"
+            sudo cp "$TEMP_DIR/$extracted_binary" "${install_dir}/sprout"
+            sudo chmod +x "${install_dir}/sprout"
         else
             log_error "Installation requires sudo but sudo is not available"
             exit 1
         fi
     else
-        cp "$TEMP_DIR/$extracted_binary" "${install_dir}/ledit"
-        chmod +x "${install_dir}/ledit"
+        cp "$TEMP_DIR/$extracted_binary" "${install_dir}/sprout"
+        chmod +x "${install_dir}/sprout"
     fi
     
-    log_success "ledit installed to $install_dir/ledit"
+    log_success "sprout installed to $install_dir/sprout"
 }
 
 # Verify installation
 verify_installation() {
     local install_dir="$1"
-    local binary_path="${install_dir}/ledit"
+    local binary_path="${install_dir}/sprout"
     
     if [ ! -f "$binary_path" ]; then
-        log_error "ledit binary not found at $binary_path"
+        log_error "sprout binary not found at $binary_path"
         exit 1
     fi
     
     if [ ! -x "$binary_path" ]; then
-        log_error "ledit binary is not executable"
+        log_error "sprout binary is not executable"
         exit 1
     fi
     
-    log_success "ledit binary verified"
+    log_success "sprout binary verified"
 }
 
 # Remove old versions
 remove_old_versions() {
     local install_dir="$1"
-    local binary_path="${install_dir}/ledit"
+    local binary_path="${install_dir}/sprout"
 
     if [ -f "$binary_path" ]; then
         local old_version
@@ -260,13 +264,13 @@ remove_old_versions() {
 print_uninstall_instructions() {
     local install_dir="$1"
     echo ""
-    log_info "To uninstall ledit:"
+    log_info "To uninstall sprout:"
     echo ""
     echo "  # Remove the binary"
     if [ -w "$install_dir" ]; then
-        echo "  rm -f \"$install_dir/ledit\""
+        echo "  rm -f \"$install_dir/sprout\""
     else
-        echo "  sudo rm -f \"$install_dir/ledit\""
+        echo "  sudo rm -f \"$install_dir/sprout\""
     fi
     echo ""
 }
@@ -277,11 +281,11 @@ print_success() {
     local version="$2"
     
     echo ""
-    log_success "ledit $version installed successfully!"
+    log_success "sprout $version installed successfully!"
     echo ""
-    echo "  Binary location: $install_dir/ledit"
+    echo "  Binary location: $install_dir/sprout"
     echo ""
-    echo "  Run 'ledit version' to verify the installation"
+    echo "  Run 'sprout version' to verify the installation"
     echo ""
 }
 
@@ -289,7 +293,7 @@ print_success() {
 main() {
     # Check for uninstall flag
     if [ "${1:-}" = "--uninstall" ] || [ "${1:-}" = "-u" ]; then
-        log_info "Uninstalling ledit..."
+        log_info "Uninstalling sprout..."
         
         local install_dir
         if [ -n "${SPROUT_INSTALL_DIR:-}" ]; then
@@ -298,7 +302,7 @@ main() {
             install_dir=$(get_install_dir)
         fi
         
-        local binary_path="${install_dir}/ledit"
+        local binary_path="${install_dir}/sprout"
         
         if [ -f "$binary_path" ]; then
             local version
@@ -312,9 +316,9 @@ main() {
                     exit 1
                 fi
             fi
-            log_success "ledit uninstalled successfully"
+            log_success "sprout uninstalled successfully"
         else
-            log_warn "ledit not found at $binary_path"
+            log_warn "sprout not found at $binary_path"
         fi
         
         print_uninstall_instructions "$install_dir"
@@ -338,7 +342,7 @@ main() {
     # Get version
     local version
     version=$(get_version)
-    log_info "Installing ledit version: $version"
+    log_info "Installing sprout version: $version"
     
     # Determine install directory
     local install_dir
@@ -350,7 +354,11 @@ main() {
     # is registered — we'll re-install it automatically after the upgrade.
     local service_was_installed="false"
     local existing_binary
-    existing_binary=$(command -v ledit 2>/dev/null || true)
+    existing_binary=$(command -v sprout 2>/dev/null || true)
+    if [ -z "$existing_binary" ]; then
+        # Also check for legacy ledit binary from before the rebrand
+        existing_binary=$(command -v ledit 2>/dev/null || true)
+    fi
     if [ -n "$existing_binary" ]; then
         local old_version
         old_version=$("$existing_binary" version 2>/dev/null | head -1 || echo "unknown")
@@ -358,14 +366,17 @@ main() {
     fi
 
     # Detect installed service files before removing the old binary.
+    # Check both current sprout paths and legacy ledit paths.
     case "$(uname -s)" in
         Darwin)
-            if [ -f "${HOME}/Library/LaunchAgents/com.ledit.daemon.plist" ]; then
+            if [ -f "${HOME}/Library/LaunchAgents/com.sprout.daemon.plist" ] || \
+               [ -f "${HOME}/Library/LaunchAgents/com.ledit.daemon.plist" ]; then
                 service_was_installed="true"
             fi
             ;;
         Linux)
-            if [ -f "${HOME}/.config/systemd/user/ledit.service" ]; then
+            if [ -f "${HOME}/.config/systemd/user/sprout.service" ] || \
+               [ -f "${HOME}/.config/systemd/user/ledit.service" ]; then
                 service_was_installed="true"
             fi
             ;;
@@ -384,19 +395,51 @@ main() {
     log_info "Downloaded from: $download_url"
     
     # Install the binary
-    install_binary "$TEMP_DIR/ledit-${os}-${arch}.tar.gz" "$install_dir"
+    install_binary "$TEMP_DIR/sprout-${os}-${arch}.tar.gz" "$install_dir"
     
     # Verify installation
     verify_installation "$install_dir"
 
+    # Clean up legacy ledit binary if present on PATH
+    local legacy_binary
+    legacy_binary=$(command -v ledit 2>/dev/null || true)
+    if [ -n "$legacy_binary" ]; then
+        log_info "Removing legacy 'ledit' binary..."
+        if ! rm -f "$legacy_binary" 2>/dev/null; then
+            if command -v sudo >/dev/null 2>&1; then
+                sudo rm -f "$legacy_binary" 2>/dev/null || true
+            fi
+        fi
+    fi
+
+    # Clean up legacy ledit service files
+    case "$(uname -s)" in
+        Darwin)
+            if [ -f "${HOME}/Library/LaunchAgents/com.ledit.daemon.plist" ]; then
+                log_info "Removing legacy ledit service..."
+                launchctl unload "${HOME}/Library/LaunchAgents/com.ledit.daemon.plist" 2>/dev/null || true
+                rm -f "${HOME}/Library/LaunchAgents/com.ledit.daemon.plist"
+            fi
+            ;;
+        Linux)
+            if [ -f "${HOME}/.config/systemd/user/ledit.service" ]; then
+                log_info "Removing legacy ledit service..."
+                systemctl --user stop ledit.service 2>/dev/null || true
+                systemctl --user disable ledit.service 2>/dev/null || true
+                rm -f "${HOME}/.config/systemd/user/ledit.service"
+                systemctl --user daemon-reload 2>/dev/null || true
+            fi
+            ;;
+    esac
+
     # If the service was previously installed, reinstall it now so the service
     # unit/plist points at the newly installed binary.
     if [ "$service_was_installed" = "true" ]; then
-        log_info "Reinstalling ledit service to point at the updated binary..."
-        if "${install_dir}/ledit" service install; then
+        log_info "Reinstalling sprout service to point at the updated binary..."
+        if "${install_dir}/sprout" service install; then
             log_success "Service reinstalled successfully."
         else
-            log_warn "Service reinstall failed. Run 'ledit service install' manually."
+            log_warn "Service reinstall failed. Run 'sprout service install' manually."
         fi
     fi
 

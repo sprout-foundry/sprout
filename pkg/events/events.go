@@ -35,6 +35,7 @@ const (
 	EventTypeSecurityPromptRequest  = "security_prompt_request"
 	EventTypeAgentMessage            = "agent_message"
 	EventTypeWorkspaceChanged        = "workspace_changed"
+	EventTypeSessionTerminated       = "session_terminated"
 )
 
 // EventBus manages event distribution between CLI and Web UI

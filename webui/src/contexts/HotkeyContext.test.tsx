@@ -368,8 +368,8 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
   beforeEach(() => {
     registeredCallback = null;
     _cleanupFn = undefined;
-    // Install a mock leditDesktop API on the window.
-    (window as any).leditDesktop = {
+    // Install a mock sproutDesktop API on the window.
+    (window as any).sproutDesktop = {
       platform: 'linux',
       onDesktopHotkey: (callback: (commandId: string) => void) => {
         registeredCallback = callback;
@@ -384,7 +384,7 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
   });
 
   afterEach(() => {
-    delete (window as any).leditDesktop;
+    delete (window as any).sproutDesktop;
     registeredCallback = null;
     _cleanupFn = undefined;
   });
@@ -506,8 +506,8 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
     expect(registeredCallback).toBeNull();
   });
 
-  it('gracefully handles missing leditDesktop API (non-Electron browsers)', async () => {
-    delete (window as any).leditDesktop;
+  it('gracefully handles missing sproutDesktop API (non-Electron browsers)', async () => {
+    delete (window as any).sproutDesktop;
 
     // eslint-disable-next-line testing-library/no-unnecessary-act
     act(() => {

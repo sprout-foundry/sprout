@@ -1645,7 +1645,7 @@ class ApiService {
     }
   }
 
-  async getSettingsProvenance(): Promise<{ config: Record<string, any>; sources: Record<string, string> }> {
+  async getSettingsProvenance(): Promise<{ sources: Record<string, string> }> {
     try {
       const response = await clientFetch('/api/settings?layer=provenance');
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);

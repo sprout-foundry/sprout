@@ -115,7 +115,7 @@ export interface OnboardingStatusResponse {
   environment?: OnboardingEnvironment;
 }
 
-export interface LeditInstance {
+export interface SproutInstance {
   id: string;
   pid: number;
   port: number;
@@ -510,7 +510,7 @@ class ApiService {
   }
 
   async getInstances(): Promise<{
-    instances: LeditInstance[];
+    instances: SproutInstance[];
     current_pid: number;
     active_host_pid: number;
     active_host_port: number;
@@ -1622,7 +1622,7 @@ class ApiService {
 
   // ── Settings API ─────────────────────────────────────────────────
 
-  async getSettings(): Promise<LeditSettings> {
+  async getSettings(): Promise<SproutSettings> {
     try {
       const response = await clientFetch('/api/settings');
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -2051,7 +2051,7 @@ export interface ProvidersResponse {
 
 // ── Settings interfaces ───────────────────────────────────────────
 
-export interface LeditSettings {
+export interface SproutSettings {
   reasoning_effort: string;
   system_prompt_text: string;
   skip_prompt: boolean;

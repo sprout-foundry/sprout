@@ -40,7 +40,7 @@ func init() {
 	agentCmd.Flags().BoolVar(&outputFormatJSON, "output-json", false, "Output structured JSON result to stdout after execution (for CI/SaaS integration)")
 }
 
-// emitJSONResult writes the AgentResult to stdout as a single JSON line.
+// emitJSONResult writes the AgentResult as indented JSON to stdout.
 // It collects git diff and modified files from the workspace.
 func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Agent) {
 	result := AgentResult{
@@ -54,7 +54,7 @@ func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Ag
 	if a != nil {
 		result.Metrics.TokensIn = a.GetPromptTokens()
 		result.Metrics.TokensOut = a.GetCompletionTokens()
-		result.Metrics.LLMCalls = a.GetCurrentIteration()
+		result.Metrics.LLMCalls = a.GetLLMCallCount()
 		result.Metrics.Provider = a.GetProvider()
 		result.Metrics.Model = a.GetModel()
 	}

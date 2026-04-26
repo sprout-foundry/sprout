@@ -98,7 +98,16 @@ function Get-InstallDir {
     if ($env:SPROUT_INSTALL_DIR) {
         return $env:SPROUT_INSTALL_DIR
     }
-    
+
+    # Check for existing sprout or legacy ledit binary on PATH to upgrade in place
+    $existingSprout = Get-Command sprout -ErrorAction SilentlyContinue
+    if (-not $existingSprout) {
+        $existingSprout = Get-Command ledit -ErrorAction SilentlyContinue
+    }
+    if ($existingSprout) {
+        return Split-Path $existingSprout.Source
+    }
+
     # Default to LOCALAPPDATA\Programs\sprout
     $defaultDir = Join-Path $env:LOCALAPPDATA "Programs\sprout"
     
@@ -108,7 +117,7 @@ function Get-InstallDir {
     # Prefer a writable directory on PATH
     foreach ($dir in $pathDirs) {
         try {
-            $testFile = Join-Path $dir "test_write_$$.$(Get-Random)"
+            $testFile = Join-Path $dir "test_write_$PID.$(Get-Random)"
             $null = [System.IO.File]::WriteAllText($testFile, "test")
             [System.IO.File]::Delete($testFile)
             return $dir
@@ -407,6 +416,13 @@ function Main {
     
     # Verify installation
     Verify-Installation -InstallDir $installDir
+
+    # Clean up legacy ledit binary if present on PATH
+    $legacyBinary = Get-Command ledit -ErrorAction SilentlyContinue
+    if ($legacyBinary) {
+        Write-LogInfo "Removing legacy 'ledit' binary..."
+        Remove-Item $legacyBinary.Source -Force -ErrorAction SilentlyContinue
+    }
 
     # Offer to install as system service
     if (-not $NoService.IsPresent) {

@@ -99,6 +99,9 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
   // Ref so render helpers can read the current display settings without prop changes
   const displaySettingsRef = useRef<LeditSettings | null>(null);
 
+  // State to guard the "Create from global" button from double-clicks
+  const [creatingWorkspaceConfig, setCreatingWorkspaceConfig] = useState(false);
+
   // Provenance sources: maps setting key → "global"|"workspace"|"session"
   const [provenanceSources, setProvenanceSources] = useState<Record<string, string>>({});
 
@@ -1979,19 +1982,29 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
             <button
               type="button"
               className="config-scope-create-btn"
+              disabled={creatingWorkspaceConfig}
               onClick={async () => {
+                if (creatingWorkspaceConfig) return;
+                setCreatingWorkspaceConfig(true);
                 try {
                   const globalData = await api.getSettingsLayer('global');
-                  await api.updateSettings(globalData, 'workspace');
+                  // Strip mcp from data before writing to workspace — the global GET
+                  // response contains redacted MCP credentials; writing those to the
+                  // workspace config would corrupt credential references.  The workspace
+                  // layer inherits MCP from global via the layered merge instead.
+                  const { mcp: _mcpRedacted, ...workspaceData } = globalData;
+                  await api.updateSettings(workspaceData, 'workspace');
                   const data = await api.getSettingsLayer('workspace');
                   setLayerData(data);
                   addNotification('success', 'Settings', 'Workspace config created from global settings', 3000);
                 } catch (err) {
                   addNotification('error', 'Settings', 'Failed to create workspace config', 5000);
+                } finally {
+                  setCreatingWorkspaceConfig(false);
                 }
               }}
             >
-              Create from global
+              {creatingWorkspaceConfig ? 'Creating…' : 'Create from global'}
             </button>
           </div>
         )}

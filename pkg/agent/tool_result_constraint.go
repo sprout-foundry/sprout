@@ -55,11 +55,11 @@ func constrainToolResultForModel(toolName string, args map[string]interface{}, r
 func buildFetchURLTruncationNotice(omitted int, archivePath string, archiveErr error) string {
 	if archivePath == "" {
 		if archiveErr != nil {
-			return fmt.Sprintf("\n\n[FETCH_URL OUTPUT TRUNCATED FOR MODEL CONTEXT: omitted %d characters. Set LEDIT_FETCH_URL_MAX_CHARS to adjust. Failed to save full output: %v]\n\n", omitted, archiveErr)
+			return fmt.Sprintf("\n\n[FETCH_URL OUTPUT TRUNCATED FOR MODEL CONTEXT: omitted %d characters. Set SPROUT_FETCH_URL_MAX_CHARS to adjust. Failed to save full output: %v]\n\n", omitted, archiveErr)
 		}
-		return fmt.Sprintf("\n\n[FETCH_URL OUTPUT TRUNCATED FOR MODEL CONTEXT: omitted %d characters. Set LEDIT_FETCH_URL_MAX_CHARS to adjust. Full output path unavailable.]\n\n", omitted)
+		return fmt.Sprintf("\n\n[FETCH_URL OUTPUT TRUNCATED FOR MODEL CONTEXT: omitted %d characters. Set SPROUT_FETCH_URL_MAX_CHARS to adjust. Full output path unavailable.]\n\n", omitted)
 	}
-	return fmt.Sprintf("\n\n[FETCH_URL OUTPUT TRUNCATED FOR MODEL CONTEXT: omitted %d characters. Set LEDIT_FETCH_URL_MAX_CHARS to adjust. Full output saved to %s]\n\n", omitted, archivePath)
+	return fmt.Sprintf("\n\n[FETCH_URL OUTPUT TRUNCATED FOR MODEL CONTEXT: omitted %d characters. Set SPROUT_FETCH_URL_MAX_CHARS to adjust. Full output saved to %s]\n\n", omitted, archivePath)
 }
 
 func saveFetchURLOutputToFile(args map[string]interface{}, output string) (string, error) {

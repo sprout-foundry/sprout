@@ -83,7 +83,7 @@ func Initialize() (*Config, *APIKeys, error) {
 		return nil, nil, fmt.Errorf("failed to load API keys: %w", err)
 	}
 
-	// Populate from LEDIT_API_KEYS_JSON env var (bulk injection for SaaS/container environments)
+	// Populate from SPROUT_API_KEYS_JSON env var (bulk injection for SaaS/container environments)
 	apiKeys.PopulateFromJSONEnv()
 
 	// Populate from individual environment variables — these take priority over JSON blob

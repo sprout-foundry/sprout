@@ -82,7 +82,7 @@ func generateServiceEnvFile(homeDir string) error {
 
 	if len(envVars) == 0 {
 		fmt.Println("No API key environment variables found in current environment.")
-		fmt.Println("If you need to set API keys, export them before running 'ledit service install'.")
+		fmt.Println("If you need to set API keys, export them before running 'sprout service install'.")
 		// Create an empty file anyway (systemd tolerates this with the - prefix).
 		if err := tmpFile.Close(); err != nil {
 			os.Remove(tmpPath)

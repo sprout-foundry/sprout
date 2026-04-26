@@ -115,7 +115,7 @@ func (a *Agent) initializeMCP() error {
 	// Auto-discover GitHub server if PAT token is available.
 	// Note: This only applies to PAT-based (local) GitHub MCP servers.
 	// The remote OAuth server (https://api.githubcopilot.com/mcp/) is configured
-	// explicitly via `ledit mcp add` and is NOT auto-discovered here, since it
+	// explicitly via `sprout mcp add` and is NOT auto-discovered here, since it
 	// requires a Copilot seat and uses OAuth rather than a PAT.
 	if config.MCP.AutoDiscover {
 		if githubToken := os.Getenv("GITHUB_PERSONAL_ACCESS_TOKEN"); githubToken != "" {

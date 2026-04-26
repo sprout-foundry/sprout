@@ -1,11 +1,11 @@
 /**
  * Comprehensive tests for UpdateNotification component
- * 
+ *
  * Tests cover:
  * - Component rendering in different states
  * - User interactions (install, defer, cancel, check)
  * - Event listeners (update available, download progress, errors)
- * - API calls to window.leditDesktop
+ * - API calls to window.sproutDesktop
  * - Edge cases and error scenarios
  * - Conditional rendering based on desktop API availability
  * - Notification integration with useNotifications hook
@@ -178,8 +178,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockDesktopApi = createMockDesktopApi();
   
-  // Set up window.leditDesktop API
-  Object.defineProperty(window, 'leditDesktop', {
+  // Set up window.sproutDesktop API
+  Object.defineProperty(window, 'sproutDesktop', {
     value: mockDesktopApi,
     writable: true,
     configurable: true,
@@ -203,9 +203,9 @@ afterEach(() => {
     container = null;
   }
   mockDesktopApi.cleanup();
-  
-  // Clean up window.leditDesktop
-  delete (window as any).leditDesktop;
+
+  // Clean up window.sproutDesktop
+  delete (window as any).sproutDesktop;
 });
 
 // ---------------------------------------------------------------------------
@@ -255,7 +255,7 @@ function getBySelector(selector: string): HTMLElement | null {
 describe('UpdateNotification - Conditional Rendering', () => {
   test('does not render when desktop API is not available', () => {
     // Arrange: Remove desktop API
-    delete (window as any).leditDesktop;
+    delete (window as any).sproutDesktop;
 
     // Act: Render component
     renderComponent();
@@ -739,7 +739,7 @@ describe('UpdateNotification - Install Now Action', () => {
     expect(mockAddNotification).toHaveBeenCalledWith(
       'success',
       'Installing Update',
-      'Ledit will restart to apply the update.'
+      'Sprout will restart to apply the update.'
     );
   });
 
@@ -914,7 +914,7 @@ describe('UpdateNotification - Defer Install Action', () => {
     expect(mockAddNotification).toHaveBeenCalledWith(
       'info',
       'Update Deferred',
-      'Update will be installed when you quit Ledit.'
+      'Update will be installed when you quit Sprout.'
     );
   });
 
@@ -970,7 +970,7 @@ describe('UpdateNotification - Defer Install Action', () => {
     });
 
     // Now remove deferUpdate from mock (simulating an API that doesn't support defer)
-    (window as any).leditDesktop.deferUpdate = undefined;
+    (window as any).sproutDesktop.deferUpdate = undefined;
 
     // Click defer button - this should work even without deferUpdate API
     const deferButton = getByLabelText('Defer update installation');
@@ -1287,7 +1287,7 @@ describe('UpdateNotification - API Error Handling', () => {
     renderComponent();
 
     // Now remove the desktop API
-    delete (window as any).leditDesktop;
+    delete (window as any).sproutDesktop;
 
     // Try to trigger update check via menu (but there's no API now)
     act(() => {
@@ -1311,7 +1311,7 @@ describe('UpdateNotification - API Error Handling', () => {
     // Arrange: Setup API
     mockDesktopApi.isUpdatePending.mockResolvedValue({ pending: false });
     // Remove installUpdate from mock
-    (window as any).leditDesktop.installUpdate = undefined;
+    (window as any).sproutDesktop.installUpdate = undefined;
 
     // Act: Render component
     renderComponent();
@@ -1385,7 +1385,7 @@ describe('UpdateNotification - Edge Cases', () => {
   test('handles cancel pending install without API', async () => {
     // Arrange: Setup API without cancelPendingInstall
     mockDesktopApi.isUpdatePending.mockResolvedValue({ pending: true });
-    (window as any).leditDesktop.cancelPendingInstall = undefined;
+    (window as any).sproutDesktop.cancelPendingInstall = undefined;
 
     // Act: Render component
     renderComponent();

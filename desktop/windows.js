@@ -66,7 +66,7 @@ function createLauncherWindow() {
     minHeight: 620,
     show: isSmokeTestMode(),
     backgroundColor: '#171b22',
-    title: 'Ledit Launcher',
+    title: 'Sprout Launcher',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -212,7 +212,7 @@ function buildMenu() {
         },
         {
           label: 'Open Project Homepage',
-          click: () => shell.openExternal('https://github.com/alantheprice/ledit'),
+          click: () => shell.openExternal('https://github.com/sprout-foundry/sprout'),
         },
         { type: 'separator' },
         {
@@ -233,16 +233,16 @@ function attachNavigationHandlers(browserWindow) {
   });
 
   browserWindow.webContents.on('will-navigate', (event, url) => {
-    if (url.startsWith('ledit://reload')) {
+    if (url.startsWith('sprout://reload')) {
       event.preventDefault();
       const record = ctx.instanceRegistry.get(browserWindow.id);
       if (record && record.reloadCallback) {
         record.reloadCallback();
       }
-    } else if (url.startsWith('ledit://open-log-dir')) {
+    } else if (url.startsWith('sprout://open-log-dir')) {
       event.preventDefault();
       try {
-        const params = new URL(url.replace('ledit://', 'https://ledit/'));
+        const params = new URL(url.replace('sprout://', 'https://sprout/'));
         const dir = params.searchParams.get('dir') || getLogDirectory();
         shell.openPath(dir);
       } catch {
@@ -299,8 +299,8 @@ async function createWorkspaceWindow(options = {}) {
     show: false,
     backgroundColor: '#1f242d',
     title: backendMode === 'wsl'
-      ? `Ledit · ${path.basename(workspacePath)} (${wslDistro || 'WSL'})`
-      : `Ledit · ${path.basename(workspacePath)}`,
+      ? `Sprout · ${path.basename(workspacePath)} (${wslDistro || 'WSL'})`
+      : `Sprout · ${path.basename(workspacePath)}`,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -412,7 +412,7 @@ async function createSSHWorkspaceWindow(options = {}) {
     minHeight: 700,
     show: false,
     backgroundColor: '#1f242d',
-    title: `Ledit · ${hostAlias} (SSH)`,
+    title: `Sprout · ${hostAlias} (SSH)`,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

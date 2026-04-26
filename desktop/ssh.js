@@ -216,10 +216,10 @@ function inspectRemoteSSHHost(hostAlias) {
 
 function ensureRemoteBackendBinary(hostAlias, appVersion, remotePlatform, remoteArch) {
   const localBinary = ensureRemoteBackendBinaryArtifact(remotePlatform, remoteArch);
-  const remoteDirForSSH = `$HOME/.cache/ledit-desktop/backend/${appVersion}/${remotePlatform}-${remoteArch}`;
-  const remoteDirForSCP = `~/.cache/ledit-desktop/backend/${appVersion}/${remotePlatform}-${remoteArch}`;
-  const remoteBinaryForSSH = `${remoteDirForSSH}/ledit`;
-  const remoteBinaryForSCP = `${remoteDirForSCP}/ledit`;
+  const remoteDirForSSH = `$HOME/.cache/sprout-desktop/backend/${appVersion}/${remotePlatform}-${remoteArch}`;
+  const remoteDirForSCP = `~/.cache/sprout-desktop/backend/${appVersion}/${remotePlatform}-${remoteArch}`;
+  const remoteBinaryForSSH = `${remoteDirForSSH}/sprout`;
+  const remoteBinaryForSCP = `${remoteDirForSCP}/sprout`;
 
   const mkdir = runSSH(['-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=accept-new', hostAlias, 'bash', '-lc', `mkdir -p ${shellEscape(remoteDirForSSH)}`]);
   if (mkdir.status !== 0) throw new Error(mkdir.stderr?.trim() || mkdir.stdout?.trim() || `Failed to prepare remote backend directory on ${hostAlias}.`);
@@ -283,10 +283,10 @@ function startSSHBackendForHost(options = {}) {
         '  echo "python3 or python is required on the remote host" >&2',
         '  exit 1',
         '}',
-        `mkdir -p "$HOME/.cache/ledit-desktop/logs"`,
+        `mkdir -p "$HOME/.cache/sprout-desktop/logs"`,
         `cd ${remoteWorkspacePath === '$HOME' ? '"$HOME"' : shellEscape(remoteWorkspacePath)}`,
         'REMOTE_PORT="$(choose_port)"',
-        `LOG_FILE="$HOME/.cache/ledit-desktop/logs/${hostAlias.replace(/[^a-zA-Z0-9_.-]/g, '_')}.log"`,
+        `LOG_FILE="$HOME/.cache/sprout-desktop/logs/${hostAlias.replace(/[^a-zA-Z0-9_.-]/g, '_')}.log"`,
         `nohup env BROWSER=none SPROUT_DESKTOP=1 LEDIT_DESKTOP=1 SPROUT_DESKTOP_BACKEND_MODE=ssh ${shellEscape(remoteBinary)} --isolated-config agent --daemon --web-port "$REMOTE_PORT" >"$LOG_FILE" 2>&1 < /dev/null &`,
         'REMOTE_PID=$!',
         'printf "%s\\n%s\\n" "$REMOTE_PORT" "$REMOTE_PID"',

@@ -61,7 +61,7 @@ function configureSmokeTestPaths() {
     return;
   }
 
-  const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ledit-smoke-'));
+  const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sprout-smoke-'));
   app.setPath('userData', path.join(baseDir, 'user-data'));
   app.setPath('sessionData', path.join(baseDir, 'session-data'));
   app.setPath('cache', path.join(baseDir, 'cache'));

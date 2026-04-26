@@ -16,7 +16,7 @@ const { renderErrorPage } = require('./error-pages');
 function resolveBackendBinary() {
   const platform = arguments[0] || (process.platform === 'win32' ? 'windows' : process.platform);
   const arch = arguments[1] || (process.arch === 'x64' ? 'amd64' : process.arch);
-  const binaryName = platform === 'windows' ? 'ledit.exe' : 'ledit';
+  const binaryName = platform === 'windows' ? 'sprout.exe' : 'sprout';
 
   if (app.isPackaged) {
     return path.join(process.resourcesPath, 'backend', `${platform}-${arch}`, binaryName);
@@ -117,6 +117,9 @@ async function startBackendForWorkspace(workspaceEntry) {
     cwd: workspaceEntry.workspacePath,
     env: {
       ...process.env,
+      SPROUT_DESKTOP: '1',
+      SPROUT_HOST_PLATFORM: process.platform === 'win32' ? 'windows' : process.platform,
+      SPROUT_DESKTOP_BACKEND_MODE: 'native',
       LEDIT_DESKTOP: '1',
       LEDIT_HOST_PLATFORM: process.platform === 'win32' ? 'windows' : process.platform,
       LEDIT_DESKTOP_BACKEND_MODE: 'native',

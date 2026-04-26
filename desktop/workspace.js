@@ -73,7 +73,7 @@ async function promptForWorkspace(browserWindow) {
   const selection = await dialog.showOpenDialog(browserWindow ?? null, {
     title: 'Open Folder',
     properties: ['openDirectory', 'createDirectory'],
-    message: 'Choose the working directory for this Ledit window.',
+    message: 'Choose the working directory for this Sprout window.',
   });
 
   if (selection.canceled || selection.filePaths.length === 0) {

@@ -1,11 +1,11 @@
 {
   "author": "Alan Price <alan@inicion.com>",
   "bugs": {
-    "url": "https://github.com/alantheprice/ledit/issues"
+    "url": "https://github.com/sprout-foundry/sprout/issues"
   },
   "build": {
     "afterSign": "scripts/electron-after-sign.cjs",
-    "appId": "dev.alantheprice.ledit",
+    "appId": "dev.alantheprice.sprout",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "asar": true,
     "beforePack": "scripts/electron-before-pack.cjs",
@@ -13,7 +13,7 @@
       "buildResources": "desktop/resources",
       "output": "desktop/dist/releases"
     },
-    "executableName": "ledit",
+    "executableName": "sprout",
     "extraResources": [
       {
         "filter": [
@@ -33,8 +33,8 @@
         "entry": {
           "Comment": "AI-powered code editing desktop application",
           "GenericName": "AI Code Editor",
-          "Name": "Ledit",
-          "StartupWMClass": "Ledit"
+          "Name": "Sprout",
+          "StartupWMClass": "Sprout"
         }
       },
       "icon": "desktop/resources/icons/png",
@@ -60,14 +60,14 @@
       "allowToChangeInstallationDirectory": true,
       "oneClick": false,
       "perMachine": false,
-      "shortcutName": "Ledit"
+      "shortcutName": "Sprout"
     },
-    "productName": "Ledit",
+    "productName": "Sprout",
     "protocols": [
       {
-        "name": "Ledit Workspace",
+        "name": "Sprout Workspace",
         "schemes": [
-          "ledit"
+          "sprout"
         ]
       }
     ],
@@ -75,7 +75,7 @@
       "owner": "alantheprice",
       "provider": "github",
       "releaseType": "release",
-      "repo": "ledit"
+      "repo": "sprout"
     },
     "win": {
       "icon": "desktop/resources/icon.ico",
@@ -92,21 +92,21 @@
     "electron-updater": "^6.8.3",
     "ws": "^8.18.3"
   },
-  "description": "`ledit` is an AI-powered code editing and assistance tool designed to streamline software development by leveraging Large Language Models (LLMs) to understand your entire workspace, generate code, and orchestrate complex features.",
+  "description": "`sprout` is an AI-powered code editing and assistance tool designed to streamline software development by leveraging Large Language Models (LLMs) to understand your entire workspace, generate code, and orchestrate complex features.",
   "devDependencies": {
     "electron": "^37.2.0",
     "electron-builder": "^26.0.12"
   },
-  "homepage": "https://github.com/alantheprice/ledit#readme",
+  "homepage": "https://github.com/sprout-foundry/sprout#readme",
   "keywords": [],
   "license": "ISC",
   "main": "desktop/main.js",
-  "name": "ledit",
+  "name": "sprout",
   "private": true,
-  "productName": "Ledit",
+  "productName": "Sprout",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/alantheprice/ledit.git"
+    "url": "git+https://github.com/sprout-foundry/sprout.git"
   },
   "scripts": {
     "build:desktop": "npm run build:webui:embed && npm run build:desktop:backend",

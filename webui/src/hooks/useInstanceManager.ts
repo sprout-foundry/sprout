@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { type ApiService, type LeditInstance } from '../services/api';
+import { type ApiService, type SproutInstance } from '../services/api';
 import { INSTANCE_PID_STORAGE_KEY, INSTANCE_SWITCH_RESET_KEY } from '../constants/app';
 import { useLog } from '../utils/log';
 
@@ -9,7 +9,7 @@ export interface UseInstanceManagerOptions {
 }
 
 export interface UseInstanceManagerReturn {
-  instances: LeditInstance[];
+  instances: SproutInstance[];
   selectedInstancePID: number;
   isSwitchingInstance: boolean;
   handleInstanceChange: (pid: number) => Promise<void>;
@@ -18,7 +18,7 @@ export interface UseInstanceManagerReturn {
 export function useInstanceManager({ isConnected, apiService }: UseInstanceManagerOptions): UseInstanceManagerReturn {
   const log = useLog();
 
-  const [instances, setInstances] = useState<LeditInstance[]>([]);
+  const [instances, setInstances] = useState<SproutInstance[]>([]);
   const [selectedInstancePID, setSelectedInstancePID] = useState<number>(0);
   const [isSwitchingInstance, setIsSwitchingInstance] = useState(false);
 

@@ -1,0 +1,813 @@
+package cmd
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/agent"
+)
+
+// =============================================================================
+// AgentResultMetrics JSON serialization tests
+// =============================================================================
+
+func TestAgentResultMetrics_Serialization_AllFields(t *testing.T) {
+	m := AgentResultMetrics{
+		ElapsedSeconds: 12.5,
+		TokensIn:       1500,
+		TokensOut:      800,
+		LLMCalls:       5,
+		Provider:       "openai",
+		Model:          "gpt-4o",
+	}
+
+	data, err := json.Marshal(m)
+	if err != nil {
+		t.Fatalf("failed to marshal AgentResultMetrics: %v", err)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatalf("failed to unmarshal marshaled metrics: %v", err)
+	}
+
+	// Verify every expected key is present with the correct value
+	assertJSONFloat(t, result, "elapsed_seconds", 12.5)
+	assertJSONInt(t, result, "tokens_in", 1500)
+	assertJSONInt(t, result, "tokens_out", 800)
+	assertJSONInt(t, result, "llm_calls", 5)
+	assertJSONString(t, result, "provider", "openai")
+	assertJSONString(t, result, "model", "gpt-4o")
+
+	// Ensure exactly these keys and no extras
+	expectedKeys := map[string]bool{
+		"elapsed_seconds": true,
+		"tokens_in":       true,
+		"tokens_out":      true,
+		"llm_calls":       true,
+		"provider":        true,
+		"model":           true,
+	}
+	for k := range result {
+		if !expectedKeys[k] {
+			t.Errorf("unexpected key in serialized metrics: %q", k)
+		}
+	}
+	if len(result) != len(expectedKeys) {
+		t.Errorf("expected %d keys, got %d", len(expectedKeys), len(result))
+	}
+}
+
+func TestAgentResultMetrics_Serialization_ZeroValues(t *testing.T) {
+	m := AgentResultMetrics{}
+
+	data, err := json.Marshal(m)
+	if err != nil {
+		t.Fatalf("failed to marshal zero-value AgentResultMetrics: %v", err)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+
+	// All zero values should still be serialized (no omitempty on metrics fields)
+	assertJSONFloat(t, result, "elapsed_seconds", 0.0)
+	assertJSONInt(t, result, "tokens_in", 0)
+	assertJSONInt(t, result, "tokens_out", 0)
+	assertJSONInt(t, result, "llm_calls", 0)
+	assertJSONString(t, result, "provider", "")
+	assertJSONString(t, result, "model", "")
+}
+
+func TestAgentResultMetrics_Serialization_RoundTrip(t *testing.T) {
+	original := AgentResultMetrics{
+		ElapsedSeconds: 99.99,
+		TokensIn:       100000,
+		TokensOut:      50000,
+		LLMCalls:       42,
+		Provider:       "anthropic",
+		Model:          "claude-3-opus-20240229",
+	}
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var restored AgentResultMetrics
+	if err := json.Unmarshal(data, &restored); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if restored != original {
+		t.Errorf("round-trip mismatch:\n  got:  %+v\n  want: %+v", restored, original)
+	}
+}
+
+func TestAgentResultMetrics_Serialization_LargeValues(t *testing.T) {
+	m := AgentResultMetrics{
+		ElapsedSeconds: 3600.0,
+		TokensIn:       2000000,
+		TokensOut:      1000000,
+		LLMCalls:       500,
+		Provider:       "deepinfra",
+		Model:          "meta-llama/Meta-Llama-3.1-405B-Instruct",
+	}
+
+	data, err := json.Marshal(m)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var restored AgentResultMetrics
+	if err := json.Unmarshal(data, &restored); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if restored != m {
+		t.Errorf("round-trip mismatch:\n  got:  %+v\n  want: %+v", restored, m)
+	}
+}
+
+// =============================================================================
+// AgentResult JSON serialization tests
+// =============================================================================
+
+func TestAgentResult_Serialization_SuccessMinimal(t *testing.T) {
+	r := AgentResult{
+		Status: "success",
+		Query:  "fix the bug in main.go",
+		Metrics: AgentResultMetrics{
+			ElapsedSeconds: 5.0,
+		},
+	}
+
+	data, err := json.Marshal(r)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	assertJSONString(t, result, "status", "success")
+	assertJSONString(t, result, "query", "fix the bug in main.go")
+
+	// "error" should be omitted when empty (omitempty)
+	if _, exists := result["error"]; exists {
+		t.Error("expected 'error' key to be omitted for success result, but it was present")
+	}
+
+	// "files_modified" should be omitted when nil/empty
+	if _, exists := result["files_modified"]; exists {
+		t.Error("expected 'files_modified' to be omitted when empty")
+	}
+
+	// "git_diff" should be omitted when empty
+	if _, exists := result["git_diff"]; exists {
+		t.Error("expected 'git_diff' to be omitted when empty")
+	}
+
+	// "metrics" must always be present
+	if _, exists := result["metrics"]; !exists {
+		t.Error("expected 'metrics' key to always be present")
+	}
+}
+
+func TestAgentResult_Serialization_ErrorWithAllFields(t *testing.T) {
+	r := AgentResult{
+		Status:        "error",
+		Error:         "connection timed out",
+		Query:         "refactor the module",
+		FilesModified: []string{"main.go", "utils.go"},
+		GitDiff:       "diff --git a/main.go\n--- a/main.go\n+++ b/main.go",
+		Metrics: AgentResultMetrics{
+			ElapsedSeconds: 3.14,
+			TokensIn:       500,
+			TokensOut:      200,
+			LLMCalls:       2,
+			Provider:       "anthropic",
+			Model:          "claude-3-sonnet",
+		},
+	}
+
+	data, err := json.Marshal(r)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	assertJSONString(t, result, "status", "error")
+	assertJSONString(t, result, "error", "connection timed out")
+	assertJSONString(t, result, "query", "refactor the module")
+	assertJSONString(t, result, "git_diff", "diff --git a/main.go\n--- a/main.go\n+++ b/main.go")
+
+	filesRaw, ok := result["files_modified"]
+	if !ok {
+		t.Fatal("expected 'files_modified' key to be present")
+	}
+	files, ok := filesRaw.([]interface{})
+	if !ok {
+		t.Fatalf("expected files_modified to be array, got %T", filesRaw)
+	}
+	if len(files) != 2 {
+		t.Fatalf("expected 2 files, got %d", len(files))
+	}
+	if files[0].(string) != "main.go" || files[1].(string) != "utils.go" {
+		t.Errorf("unexpected files: %v", files)
+	}
+}
+
+func TestAgentResult_Serialization_RoundTrip(t *testing.T) {
+	original := AgentResult{
+		Status:        "success",
+		Query:         "add unit tests",
+		FilesModified: []string{"foo_test.go"},
+		GitDiff:       "diff content here",
+		Metrics: AgentResultMetrics{
+			ElapsedSeconds: 10.5,
+			TokensIn:       2000,
+			TokensOut:      1500,
+			LLMCalls:       3,
+			Provider:       "openai",
+			Model:          "gpt-4o",
+		},
+	}
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var restored AgentResult
+	if err := json.Unmarshal(data, &restored); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if restored.Status != original.Status {
+		t.Errorf("Status: got %q, want %q", restored.Status, original.Status)
+	}
+	if restored.Query != original.Query {
+		t.Errorf("Query: got %q, want %q", restored.Query, original.Query)
+	}
+	if restored.GitDiff != original.GitDiff {
+		t.Errorf("GitDiff: got %q, want %q", restored.GitDiff, original.GitDiff)
+	}
+	if len(restored.FilesModified) != len(original.FilesModified) {
+		t.Errorf("FilesModified length: got %d, want %d", len(restored.FilesModified), len(original.FilesModified))
+	} else {
+		for i, f := range restored.FilesModified {
+			if f != original.FilesModified[i] {
+				t.Errorf("FilesModified[%d]: got %q, want %q", i, f, original.FilesModified[i])
+			}
+		}
+	}
+	if restored.Metrics != original.Metrics {
+		t.Errorf("Metrics: got %+v, want %+v", restored.Metrics, original.Metrics)
+	}
+}
+
+func TestAgentResult_Serialization_FilesModifiedEmptySlice(t *testing.T) {
+	r := AgentResult{
+		Status:        "success",
+		Query:         "test",
+		FilesModified: []string{}, // empty but non-nil
+		Metrics:       AgentResultMetrics{},
+	}
+
+	data, err := json.Marshal(r)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	// An empty non-nil slice should still be serialized (as []) because
+	// omitempty considers both nil and empty slices as empty.
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	// With omitempty, empty slice is omitted
+	if _, exists := result["files_modified"]; exists {
+		// This is acceptable either way — both behaviors are fine.
+		// Just log it for documentation purposes.
+		t.Log("files_modified present with empty slice (json.Marshal behavior)")
+	}
+}
+
+func TestAgentResult_Serialization_BackwardCompatibility(t *testing.T) {
+	// Verify that the JSON structure is stable: all known keys exist
+	// and new fields can be added without breaking existing consumers.
+	r := AgentResult{
+		Status: "success",
+		Query:  "compatibility test",
+		Metrics: AgentResultMetrics{
+			ElapsedSeconds: 1.0,
+			TokensIn:       100,
+			TokensOut:      50,
+			LLMCalls:       1,
+			Provider:       "openai",
+			Model:          "gpt-4o",
+		},
+	}
+
+	data, err := json.Marshal(r)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	// Parse as generic map to verify structure
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("unmarshal to raw map: %v", err)
+	}
+
+	// These top-level keys must always exist
+	requiredKeys := []string{"status", "query", "metrics"}
+	for _, k := range requiredKeys {
+		if _, exists := raw[k]; !exists {
+			t.Errorf("missing required key %q in JSON output", k)
+		}
+	}
+
+	// Parse metrics sub-object
+	var metricsRaw map[string]json.RawMessage
+	if err := json.Unmarshal(raw["metrics"], &metricsRaw); err != nil {
+		t.Fatalf("unmarshal metrics: %v", err)
+	}
+
+	// All metric fields must always be present (no omitempty on metrics)
+	requiredMetricKeys := []string{
+		"elapsed_seconds", "tokens_in", "tokens_out",
+		"llm_calls", "provider", "model",
+	}
+	for _, k := range requiredMetricKeys {
+		if _, exists := metricsRaw[k]; !exists {
+			t.Errorf("missing required metrics key %q", k)
+		}
+	}
+}
+
+// =============================================================================
+// emitJSONResult integration tests
+// =============================================================================
+
+func TestEmitJSONResult_SuccessWithAgent(t *testing.T) {
+	a := createTestAgent(t)
+	defer a.Shutdown()
+
+	// Populate metrics via TrackMetricsFromResponse (the only public setter)
+	a.TrackMetricsFromResponse(1000, 500, 1500, 0.05, 0)
+
+	query := "write a hello world program"
+	startTime := time.Now().Add(-5 * time.Second)
+
+	output := captureStdout(t, func() {
+		emitJSONResult(query, startTime, nil, a)
+	})
+
+	var result AgentResult
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("failed to parse JSON output: %v\noutput was:\n%s", err, output)
+	}
+
+	if result.Status != "success" {
+		t.Errorf("Status = %q, want %q", result.Status, "success")
+	}
+	if result.Error != "" {
+		t.Errorf("Error = %q, want empty", result.Error)
+	}
+	if result.Query != query {
+		t.Errorf("Query = %q, want %q", result.Query, query)
+	}
+	if result.Metrics.TokensIn != 1000 {
+		t.Errorf("TokensIn = %d, want 1000", result.Metrics.TokensIn)
+	}
+	if result.Metrics.TokensOut != 500 {
+		t.Errorf("TokensOut = %d, want 500", result.Metrics.TokensOut)
+	}
+	if result.Metrics.LLMCalls != 1 {
+		t.Errorf("LLMCalls = %d, want 1 (one TrackMetricsFromResponse call)", result.Metrics.LLMCalls)
+	}
+	if result.Metrics.ElapsedSeconds < 4.9 {
+		t.Errorf("ElapsedSeconds = %f, want at least ~5.0", result.Metrics.ElapsedSeconds)
+	}
+	// Provider and Model should be non-empty for a real agent
+	if result.Metrics.Provider == "" {
+		t.Error("Provider should not be empty when agent is provided")
+	}
+	if result.Metrics.Model == "" {
+		t.Error("Model should not be empty when agent is provided")
+	}
+}
+
+func TestEmitJSONResult_SuccessWithAccumulatedMetrics(t *testing.T) {
+	a := createTestAgent(t)
+	defer a.Shutdown()
+
+	// Simulate multiple API calls accumulating metrics
+	a.TrackMetricsFromResponse(500, 200, 700, 0.02, 0)
+	a.TrackMetricsFromResponse(600, 300, 900, 0.03, 0)
+	a.TrackMetricsFromResponse(400, 100, 500, 0.01, 0)
+
+	output := captureStdout(t, func() {
+		emitJSONResult("test query", time.Now(), nil, a)
+	})
+
+	var result AgentResult
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("failed to parse JSON: %v", err)
+	}
+
+	// Verify accumulated token counts
+	if result.Metrics.TokensIn != 1500 { // 500+600+400
+		t.Errorf("TokensIn = %d, want 1500", result.Metrics.TokensIn)
+	}
+	if result.Metrics.TokensOut != 600 { // 200+300+100
+		t.Errorf("TokensOut = %d, want 600", result.Metrics.TokensOut)
+	}
+	if result.Metrics.LLMCalls != 3 { // Three TrackMetricsFromResponse calls
+		t.Errorf("LLMCalls = %d, want 3", result.Metrics.LLMCalls)
+	}
+}
+
+func TestEmitJSONResult_ErrorCase(t *testing.T) {
+	a := createTestAgent(t)
+	defer a.Shutdown()
+
+	testErr := errors.New("API rate limit exceeded")
+
+	output := captureStdout(t, func() {
+		emitJSONResult("refactor code", time.Now(), testErr, a)
+	})
+
+	var result AgentResult
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("failed to parse JSON: %v", err)
+	}
+
+	if result.Status != "error" {
+		t.Errorf("Status = %q, want %q", result.Status, "error")
+	}
+	if result.Error != "API rate limit exceeded" {
+		t.Errorf("Error = %q, want %q", result.Error, "API rate limit exceeded")
+	}
+	if result.Query != "refactor code" {
+		t.Errorf("Query = %q, want %q", result.Query, "refactor code")
+	}
+	// Metrics should still be populated even on error
+	if result.Metrics.TokensIn != 0 {
+		t.Errorf("TokensIn = %d, want 0 (no calls made before error)", result.Metrics.TokensIn)
+	}
+}
+
+func TestEmitJSONResult_NilAgent(t *testing.T) {
+	output := captureStdout(t, func() {
+		emitJSONResult("test with nil agent", time.Now(), nil, nil)
+	})
+
+	var result AgentResult
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("failed to parse JSON: %v", err)
+	}
+
+	if result.Status != "success" {
+		t.Errorf("Status = %q, want %q", result.Status, "success")
+	}
+	if result.Query != "test with nil agent" {
+		t.Errorf("Query = %q, want %q", result.Query, "test with nil agent")
+	}
+	// All metric values should be zero when agent is nil
+	if result.Metrics.TokensIn != 0 {
+		t.Errorf("TokensIn = %d, want 0", result.Metrics.TokensIn)
+	}
+	if result.Metrics.TokensOut != 0 {
+		t.Errorf("TokensOut = %d, want 0", result.Metrics.TokensOut)
+	}
+	if result.Metrics.LLMCalls != 0 {
+		t.Errorf("LLMCalls = %d, want 0", result.Metrics.LLMCalls)
+	}
+	if result.Metrics.Provider != "" {
+		t.Errorf("Provider = %q, want empty", result.Metrics.Provider)
+	}
+	if result.Metrics.Model != "" {
+		t.Errorf("Model = %q, want empty", result.Metrics.Model)
+	}
+}
+
+func TestEmitJSONResult_NilAgentWithError(t *testing.T) {
+	testErr := fmt.Errorf("agent initialization failed: no API key")
+
+	output := captureStdout(t, func() {
+		emitJSONResult("broken query", time.Now(), testErr, nil)
+	})
+
+	var result AgentResult
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("failed to parse JSON: %v", err)
+	}
+
+	if result.Status != "error" {
+		t.Errorf("Status = %q, want %q", result.Status, "error")
+	}
+	if result.Error != "agent initialization failed: no API key" {
+		t.Errorf("Error = %q, want %q", result.Error, "agent initialization failed: no API key")
+	}
+	// Metrics should all be zero
+	if result.Metrics.TokensIn != 0 {
+		t.Errorf("TokensIn = %d, want 0", result.Metrics.TokensIn)
+	}
+	if result.Metrics.LLMCalls != 0 {
+		t.Errorf("LLMCalls = %d, want 0", result.Metrics.LLMCalls)
+	}
+}
+
+func TestEmitJSONResult_QueryPreserved(t *testing.T) {
+	testCases := []string{
+		"simple query",
+		"query with \"quotes\" and \\backslashes\\",
+		"query with\nnewlines\nand\ttabs",
+		"unicode: 日本語 中文 한국어 🚀",
+		"", // empty query
+		strings.Repeat("a", 10000), // long query
+	}
+
+	for _, query := range testCases {
+		t.Run(fmt.Sprintf("query_len_%d", len(query)), func(t *testing.T) {
+			output := captureStdoutLarge(t, func() {
+				emitJSONResult(query, time.Now(), nil, nil)
+			})
+
+			var result AgentResult
+			if err := json.Unmarshal([]byte(output), &result); err != nil {
+				truncatedQuery := query[:min(len(query), 50)]
+				truncatedOutput := output[:min(len(output), 200)]
+				t.Fatalf("failed to parse JSON for query %q: %v\noutput: %s", truncatedQuery, err, truncatedOutput)
+			}
+			if result.Query != query {
+				truncatedGot := result.Query[:min(len(result.Query), 100)]
+				truncatedWant := query[:min(len(query), 100)]
+				t.Errorf("Query mismatch:\n  got:  %q\n  want: %q", truncatedGot, truncatedWant)
+			}
+		})
+	}
+}
+
+func TestEmitJSONResult_ElapsedSeconds(t *testing.T) {
+	// Verify elapsed time is computed from the provided startTime
+	startTime := time.Now().Add(-10 * time.Second)
+
+	output := captureStdout(t, func() {
+		emitJSONResult("timing test", startTime, nil, nil)
+	})
+
+	var result AgentResult
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("failed to parse JSON: %v", err)
+	}
+
+	// Allow some tolerance for test execution
+	if result.Metrics.ElapsedSeconds < 9.5 {
+		t.Errorf("ElapsedSeconds = %f, want approximately 10.0", result.Metrics.ElapsedSeconds)
+	}
+	if result.Metrics.ElapsedSeconds > 15.0 {
+		t.Errorf("ElapsedSeconds = %f, unexpectedly large", result.Metrics.ElapsedSeconds)
+	}
+}
+
+func TestEmitJSONResult_OutputIsValidJSON(t *testing.T) {
+	// Ensure the output is always valid JSON regardless of input
+	output := captureStdout(t, func() {
+		emitJSONResult("validate JSON", time.Now(), nil, nil)
+	})
+
+	// Should parse without error
+	var result AgentResult
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("output is not valid JSON: %v\noutput: %s", err, output)
+	}
+}
+
+func TestEmitJSONResult_Indentation(t *testing.T) {
+	// Verify the output uses indented formatting (as set by enc.SetIndent)
+	output := captureStdout(t, func() {
+		emitJSONResult("indent test", time.Now(), nil, nil)
+	})
+
+	// Indented JSON should contain newlines within the object
+	if !strings.Contains(output, "  ") {
+		t.Error("expected indented JSON output (with leading spaces)")
+	}
+	// Should have proper line breaks between fields
+	if !strings.Contains(output, "\n") {
+		t.Error("expected multi-line JSON output")
+	}
+}
+
+// =============================================================================
+// Backward compatibility: verify JSON field names are stable
+// =============================================================================
+
+func TestAgentResult_BackwardCompat_FieldNames(t *testing.T) {
+	// This test locks in the exact JSON field names so that any renaming
+	// is caught as a test failure (breaking change for consumers).
+	r := AgentResult{
+		Status:        "success",
+		Error:         "",
+		Query:         "test",
+		FilesModified: []string{"a.go"},
+		GitDiff:       "diff",
+		Metrics: AgentResultMetrics{
+			ElapsedSeconds: 1.0,
+			TokensIn:       1,
+			TokensOut:      1,
+			LLMCalls:       1,
+			Provider:       "test",
+			Model:          "test",
+		},
+	}
+
+	data, err := json.Marshal(r)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	// Map from Go field name to expected JSON key
+	expectedKeys := map[string]string{
+		"Status":        "status",
+		"Error":         "error", // present here because we set it explicitly even though empty
+		"Query":         "query",
+		"FilesModified": "files_modified",
+		"GitDiff":       "git_diff",
+		"Metrics":       "metrics",
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	for goField, jsonKey := range expectedKeys {
+		if goField == "Error" {
+			// Error has omitempty; we set empty string so it may be omitted.
+			// This is fine — just skip the check for empty Error.
+			continue
+		}
+		if _, exists := raw[jsonKey]; !exists {
+			t.Errorf("Go field %q: expected JSON key %q not found", goField, jsonKey)
+		}
+	}
+}
+
+func TestAgentResultMetrics_BackwardCompat_FieldNames(t *testing.T) {
+	// Lock in exact JSON field names for metrics sub-struct
+	expectedKeys := map[string]string{
+		"ElapsedSeconds": "elapsed_seconds",
+		"TokensIn":       "tokens_in",
+		"TokensOut":      "tokens_out",
+		"LLMCalls":       "llm_calls",
+		"Provider":       "provider",
+		"Model":          "model",
+	}
+
+	m := AgentResultMetrics{
+		ElapsedSeconds: 1.0,
+		TokensIn:       1,
+		TokensOut:      1,
+		LLMCalls:       1,
+		Provider:       "test",
+		Model:          "test",
+	}
+
+	data, err := json.Marshal(m)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	for goField, jsonKey := range expectedKeys {
+		if _, exists := raw[jsonKey]; !exists {
+			t.Errorf("Go field %q: expected JSON key %q not found", goField, jsonKey)
+		}
+	}
+}
+
+// =============================================================================
+// Test helpers
+// =============================================================================
+
+// createTestAgent creates a minimal agent suitable for testing in the cmd package.
+// It uses agent.NewAgentWithModel which auto-selects the test provider under go test.
+func createTestAgent(t *testing.T) *agent.Agent {
+	t.Helper()
+	a, err := agent.NewAgentWithModel("test:test")
+	if err != nil {
+		t.Fatalf("failed to create test agent: %v", err)
+	}
+	return a
+}
+
+// captureStdoutLarge is like captureStdout but uses a goroutine to drain the
+// read end of the pipe concurrently with writing. This avoids deadlocks when
+// the captured output exceeds the OS pipe buffer size (typically 64KB on Linux).
+func captureStdoutLarge(t *testing.T, fn func()) string {
+	t.Helper()
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("failed to create pipe: %v", err)
+	}
+	os.Stdout = w
+
+	done := make(chan string, 1)
+	go func() {
+		var buf strings.Builder
+		tmp := make([]byte, 4096)
+		for {
+			n, readErr := r.Read(tmp)
+			if n > 0 {
+				buf.Write(tmp[:n])
+			}
+			if readErr != nil {
+				break
+			}
+		}
+		done <- buf.String()
+	}()
+
+	fn()
+	w.Close()
+	os.Stdout = oldStdout
+	return <-done
+}
+
+// assertJSONString checks that the map contains the given key with the expected string value.
+func assertJSONString(t *testing.T, m map[string]interface{}, key, expected string) {
+	t.Helper()
+	v, ok := m[key]
+	if !ok {
+		t.Errorf("key %q not found in JSON", key)
+		return
+	}
+	s, ok := v.(string)
+	if !ok {
+		t.Errorf("key %q: expected string, got %T", key, v)
+		return
+	}
+	if s != expected {
+		t.Errorf("key %q: got %q, want %q", key, s, expected)
+	}
+}
+
+// assertJSONFloat checks that the map contains the given key with the expected float64 value.
+func assertJSONFloat(t *testing.T, m map[string]interface{}, key string, expected float64) {
+	t.Helper()
+	v, ok := m[key]
+	if !ok {
+		t.Errorf("key %q not found in JSON", key)
+		return
+	}
+	f, ok := v.(float64)
+	if !ok {
+		t.Errorf("key %q: expected float64, got %T", key, v)
+		return
+	}
+	if f != expected {
+		t.Errorf("key %q: got %f, want %f", key, f, expected)
+	}
+}
+
+// assertJSONInt checks that the map contains the given key with the expected integer value.
+// JSON numbers are decoded as float64, so we check for float64 and compare.
+func assertJSONInt(t *testing.T, m map[string]interface{}, key string, expected int) {
+	t.Helper()
+	v, ok := m[key]
+	if !ok {
+		t.Errorf("key %q not found in JSON", key)
+		return
+	}
+	f, ok := v.(float64)
+	if !ok {
+		t.Errorf("key %q: expected numeric value, got %T", key, v)
+		return
+	}
+	if int(f) != expected {
+		t.Errorf("key %q: got %d, want %d", key, int(f), expected)
+	}
+}

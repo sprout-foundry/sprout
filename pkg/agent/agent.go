@@ -51,6 +51,7 @@ type Agent struct {
 	totalTokens             int                            // Track total tokens used across all requests
 	promptTokens            int                            // Track total prompt tokens
 	completionTokens        int                            // Track total completion tokens
+	llmCallCount            int                            // Track number of LLM API calls made
 	estimatedTokenResponses int                            // Number of responses where token usage was estimated
 	cachedTokens            int                            // Track tokens that were cached/reused
 	cachedCostSavings       float64                        // Track cost savings from cached tokens

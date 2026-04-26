@@ -180,7 +180,7 @@ Examples:
 
 			fmt.Println("API keys encrypted with passphrase successfully.")
 			fmt.Println("Note: You will need to enter the passphrase each time you use sprout.")
-			fmt.Println("      Consider using machine key mode for convenience, or use LEDIT_KEY_PASSPHRASE env var.")
+			fmt.Println("      Consider using machine key mode for convenience, or use SPROUT_KEY_PASSPHRASE env var.")
 		} else {
 			// Machine key mode - just ensure the key exists
 			_, err := credentials.LoadOrCreateMachineKey()

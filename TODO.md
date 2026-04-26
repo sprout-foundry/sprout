@@ -519,7 +519,7 @@ Three Python test runner scripts at the project root with overlapping purposes:
 
 ### 3. Fix `--port` vs `--web-port` Flag Inconsistency
 
-[] - CLOUD: Add `--port` as a hidden alias for `--web-port` in `cmd/agent.go` so that `sprout agent -d --port 54000` works for the Docker entrypoint
+[x] - CLOUD: Add `--port` as a hidden alias for `--web-port` in `cmd/agent.go` so that `sprout agent -d --port 54000` works for the Docker entrypoint
 
 ### 4. Service Mode: Bind Address, Origin Allowlist, and Auth Header Trust
 

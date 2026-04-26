@@ -13,7 +13,7 @@ import MenuBar from './MenuBar';
 import StatusBar from './StatusBar';
 import CommandPalette, { type PaletteMode } from './CommandPalette';
 import { useEditorManager } from '../contexts/EditorManagerContext';
-import { ApiService, LeditInstance } from '../services/api';
+import { ApiService, SproutInstance } from '../services/api';
 import { useGitWorkspace } from '../hooks/useGitWorkspace';
 import type { ChatSession } from '../services/chatSessions';
 
@@ -236,7 +236,7 @@ const AppContent: React.FC<AppContentProps> = ({
   const [commandPaletteMode, setCommandPaletteMode] = useState<PaletteMode>('all');
   const [isContextPanelMobileOpen, setIsContextPanelMobileOpen] = useState(false);
   const [hotkeysConfigPath, setHotkeysConfigPath] = useState<string | null>(null);
-  const [instances, setInstances] = useState<LeditInstance[]>([]);
+  const [instances, setInstances] = useState<SproutInstance[]>([]);
   const [selectedInstancePID, setSelectedInstancePID] = useState<number>(0);
   const [isSwitchingInstance, setIsSwitchingInstance] = useState(false);
   const [panelWidth, setPanelWidth] = useState(() => {

@@ -10,7 +10,7 @@ jest.mock('./FileTree', () => () => <div data-testid="file-tree" />);
 jest.mock('./SearchView', () => () => <div data-testid="search-view" />);
 jest.mock('./GitSidebarPanel', () => () => <div data-testid="git-panel" />);
 jest.mock('./RevisionListPanel', () => () => <div data-testid="revision-panel" />);
-jest.mock('./LeditLogo', () => () => <div data-testid="ledit-logo" />);
+jest.mock('./SproutLogo', () => () => <div data-testid="sprout-logo" />);
 jest.mock('./LocationSwitcher', () => () => <div data-testid="location-switcher" />);
 jest.mock('./ResizeHandle', () => () => null);
 jest.mock('../contexts/ThemeContext', () => ({

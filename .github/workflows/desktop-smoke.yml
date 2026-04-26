@@ -115,5 +115,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: desktop-smoke-results
-          path: test-results/
+          path: test-results-html/
           retention-days: 7

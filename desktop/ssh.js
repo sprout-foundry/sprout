@@ -287,7 +287,7 @@ function startSSHBackendForHost(options = {}) {
         `cd ${remoteWorkspacePath === '$HOME' ? '"$HOME"' : shellEscape(remoteWorkspacePath)}`,
         'REMOTE_PORT="$(choose_port)"',
         `LOG_FILE="$HOME/.cache/sprout-desktop/logs/${hostAlias.replace(/[^a-zA-Z0-9_.-]/g, '_')}.log"`,
-        `nohup env BROWSER=none SPROUT_DESKTOP=1 LEDIT_DESKTOP=1 SPROUT_DESKTOP_BACKEND_MODE=ssh ${shellEscape(remoteBinary)} --isolated-config agent --daemon --web-port "$REMOTE_PORT" >"$LOG_FILE" 2>&1 < /dev/null &`,
+        `nohup env BROWSER=none SPROUT_DESKTOP=1 SPROUT_DESKTOP_BACKEND_MODE=ssh ${shellEscape(remoteBinary)} --isolated-config agent --daemon --web-port "$REMOTE_PORT" >"$LOG_FILE" 2>&1 < /dev/null &`,
         'REMOTE_PID=$!',
         'printf "%s\\n%s\\n" "$REMOTE_PORT" "$REMOTE_PID"',
       ].join('; '),

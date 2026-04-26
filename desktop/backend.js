@@ -85,7 +85,7 @@ async function startBackendForWorkspace(workspaceEntry) {
 
     const backendBinary = ensureWslBackendBinary(distro, resolveBackendBinary);
     const workspaceWslPath = toWslPath(workspaceEntry.workspacePath, distro);
-    const command = `cd ${shellEscape(workspaceWslPath)} && SPROUT_DESKTOP=1 LEDIT_DESKTOP=1 SPROUT_HOST_PLATFORM=windows SPROUT_DESKTOP_BACKEND_MODE=wsl BROWSER=none ${shellEscape(backendBinary)} --isolated-config agent --daemon --web-port ${shellEscape(String(port))}`;
+    const command = `cd ${shellEscape(workspaceWslPath)} && SPROUT_DESKTOP=1 SPROUT_HOST_PLATFORM=windows SPROUT_DESKTOP_BACKEND_MODE=wsl BROWSER=none ${shellEscape(backendBinary)} --isolated-config agent --daemon --web-port ${shellEscape(String(port))}`;
     const child = spawn('wsl.exe', ['-d', distro, '--', 'bash', '-lc', command], {
       env: { ...process.env },
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -120,9 +120,6 @@ async function startBackendForWorkspace(workspaceEntry) {
       SPROUT_DESKTOP: '1',
       SPROUT_HOST_PLATFORM: process.platform === 'win32' ? 'windows' : process.platform,
       SPROUT_DESKTOP_BACKEND_MODE: 'native',
-      LEDIT_DESKTOP: '1',
-      LEDIT_HOST_PLATFORM: process.platform === 'win32' ? 'windows' : process.platform,
-      LEDIT_DESKTOP_BACKEND_MODE: 'native',
       BROWSER: 'none',
     },
     stdio: ['ignore', 'pipe', 'pipe'],

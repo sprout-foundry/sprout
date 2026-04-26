@@ -85,7 +85,7 @@ jobs:
 
       - name: Verify backend binary exists
         run: |
-          ls -lh desktop/dist/backend/linux-amd64/ledit
+          ls -lh desktop/dist/backend/linux-amd64/sprout
 
       - name: Run Electron smoke tests (with virtual display)
         env:

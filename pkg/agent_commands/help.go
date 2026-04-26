@@ -24,29 +24,29 @@ func (h *HelpCommand) Description() string {
 // Execute runs the help command
 func (h *HelpCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	fmt.Print(`
-[bot] Ledit - AI Coding Agent
+[bot] Sprout - AI Coding Agent
 
 A command-line coding assistant that uses AI to help you build software.
 
 USAGE:
-  Interactive mode:     ./ledit
-  Non-interactive:      ./ledit "your query here"
-  Custom model:         ./ledit --provider openrouter --model qwen/qwen3-coder-30b "your query"
-  Piped input:         echo "your query" | ./ledit
+  Interactive mode:     ./sprout
+  Non-interactive:      ./sprout "your query here"
+  Custom model:         ./sprout --provider openrouter --model qwen/qwen3-coder-30b "your query"
+  Piped input:         echo "your query" | ./sprout
 
 EXAMPLES:
   # Interactive mode
-  ./ledit
+  ./sprout
   > Create a simple Go HTTP server
 
   # Non-interactive
-  ./ledit "Create a simple Go HTTP server"
+  ./sprout "Create a simple Go HTTP server"
 
   # Use specific provider/model
-  ./ledit --provider openrouter --model qwen/qwen3-coder-30b "Fix the bug"
+  ./sprout --provider openrouter --model qwen/qwen3-coder-30b "Fix the bug"
 
   # Piped input
-  echo "Explain this code" | ./ledit
+  echo "Explain this code" | ./sprout
 
 AVAILABLE TOOLS:
   • shell_command - Execute shell commands

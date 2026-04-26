@@ -1,4 +1,4 @@
-// Shell command for ledit
+// Shell command for sprout
 package cmd
 
 import (
@@ -21,14 +21,14 @@ The generated scripts are tailored to your current environment (OS, shell, avail
 and include proper error handling and best practices.
 
 Examples:
-  ledit shell "backup all .go files to a timestamped archive"
-  ledit shell "find and delete all node_modules directories older than 30 days"
-  ledit shell "setup a development environment for a React project"
-  ledit shell 'list all files larger than 100MB and sort by size'
+  sprout shell "backup all .go files to a timestamped archive"
+  sprout shell "find and delete all node_modules directories older than 30 days"
+  sprout shell "setup a development environment for a React project"
+  sprout shell 'list all files larger than 100MB and sort by size'
   
   # With specific provider and model
-  ledit shell --provider openrouter --model "qwen/qwen3-coder-30b" "backup all .go files"
-  ledit shell -p deepinfra -m "deepseek-v3" "list all files larger than 100MB"
+  sprout shell --provider openrouter --model "qwen/qwen3-coder-30b" "backup all .go files"
+  sprout shell -p deepinfra -m "deepseek-v3" "list all files larger than 100MB"
 
 The generated script will be displayed for you to copy, save, or execute as needed.
 No automatic execution occurs - you have full control over when and how to run the script.`,

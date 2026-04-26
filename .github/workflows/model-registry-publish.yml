@@ -1,0 +1,62 @@
+name: Publish Model Registry
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version-file: go.mod
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Generate per-provider model files
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          DEEPINFRA_API_KEY: ${{ secrets.DEEPINFRA_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          CHUTES_API_KEY: ${{ secrets.CHUTES_API_KEY }}
+        run: go run ./cmd/refresh_provider_catalog --registry-dir=models
+
+      - name: Generate model index
+        run: bash scripts/generate-model-index.sh models/models
+
+      - name: Upload models artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: models
+
+  pages:
+    needs: publish
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    permissions:
+      pages: write
+      id-token: write
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

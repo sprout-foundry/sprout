@@ -43,7 +43,7 @@ func (a goAdapter) Run(input ToolInput) (ToolResult, error) {
 // runGoDiagnostics reports syntax errors (via gofmt -e) and vet issues
 // (via go vet) by writing the current file content to a temp package.
 func runGoDiagnostics(input ToolInput) (ToolResult, error) {
-	tmpDir, err := os.MkdirTemp("", "ledit-go-diag-*")
+	tmpDir, err := os.MkdirTemp("", "sprout-go-diag-*")
 	if err != nil {
 		return ToolResult{}, err
 	}
@@ -58,7 +58,7 @@ func runGoDiagnostics(input ToolInput) (ToolResult, error) {
 	if err := os.WriteFile(tmpFile, []byte(input.Content), 0600); err != nil {
 		return ToolResult{}, err
 	}
-	const goMod = "module ledit_temp\n\ngo 1.21\n"
+	const goMod = "module sprout_temp\n\ngo 1.21\n"
 	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0600); err != nil {
 		return ToolResult{}, err
 	}
@@ -459,7 +459,7 @@ func runGoCodeActions(input ToolInput) (ToolResult, error) {
 	}
 
 	// Write content to a temp file for goimports to process
-	tmpDir, err := os.MkdirTemp("", "ledit-go-codeaction-*")
+	tmpDir, err := os.MkdirTemp("", "sprout-go-codeaction-*")
 	if err != nil {
 		return ToolResult{}, err
 	}

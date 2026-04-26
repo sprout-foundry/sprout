@@ -30,7 +30,7 @@ func TestGetConfigDir_XDGEnv(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	expected := filepath.Join(xdgDir, "ledit")
+	expected := filepath.Join(xdgDir, "sprout")
 	if got != expected {
 		t.Fatalf("expected %q, got %q", expected, got)
 	}
@@ -47,7 +47,7 @@ func TestGetConfigDir_Default(t *testing.T) {
 	}
 
 	homeDir, _ := os.UserHomeDir()
-	expected := filepath.Join(homeDir, ".ledit")
+	expected := filepath.Join(homeDir, ".sprout")
 	if got != expected {
 		t.Fatalf("expected %q, got %q", expected, got)
 	}
@@ -301,7 +301,7 @@ func TestGetConfigDir_WhitespaceLEDITConfig(t *testing.T) {
 	}
 
 	homeDir, _ := os.UserHomeDir()
-	expected := filepath.Join(homeDir, ".ledit")
+	expected := filepath.Join(homeDir, ".sprout")
 	if got != expected {
 		t.Fatalf("expected %q, got %q", expected, got)
 	}
@@ -317,7 +317,7 @@ func TestGetConfigDir_WhitespaceXDGConfigHome(t *testing.T) {
 	}
 
 	homeDir, _ := os.UserHomeDir()
-	expected := filepath.Join(homeDir, ".ledit")
+	expected := filepath.Join(homeDir, ".sprout")
 	if got != expected {
 		t.Fatalf("expected %q (fallthrough to home), got %q", expected, got)
 	}

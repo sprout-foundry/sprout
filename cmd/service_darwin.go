@@ -32,8 +32,8 @@ func init() {
 // structure — in particular to avoid the double-nested <dict> that xml.Marshal produces
 // when a struct has both XMLName "dict" and a child field also tagged xml:"dict".
 func generateLaunchdPlist(binaryPath, homeDir string) ([]byte, error) {
-	stdoutPath := filepath.Join(homeDir, ".ledit/logs/daemon.stdout.log")
-	stderrPath := filepath.Join(homeDir, ".ledit/logs/daemon.stderr.log")
+	stdoutPath := filepath.Join(homeDir, ".sprout/logs/daemon.stdout.log")
+	stderrPath := filepath.Join(homeDir, ".sprout/logs/daemon.stderr.log")
 
 	// Load API keys and other environment variables from service.env.
 	envVars, err := loadServiceEnvFile(homeDir)
@@ -154,7 +154,7 @@ func (m *launchdManager) Install() error {
 	if err := os.MkdirAll(agentsDir, 0755); err != nil {
 		return fmt.Errorf("failed to create LaunchAgents directory: %w", err)
 	}
-	logDir := filepath.Join(homeDir, ".ledit/logs")
+	logDir := filepath.Join(homeDir, ".sprout/logs")
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		return fmt.Errorf("failed to create log directory: %w", err)
 	}
@@ -385,7 +385,7 @@ func (m *launchdManager) Diagnose() error {
 	homeDir, err := os.UserHomeDir()
 	if err == nil {
 		fmt.Println("📝 Checking log files:")
-		logDir := filepath.Join(homeDir, ".ledit/logs")
+		logDir := filepath.Join(homeDir, ".sprout/logs")
 		stdoutPath := filepath.Join(logDir, "daemon.stdout.log")
 		stderrPath := filepath.Join(logDir, "daemon.stderr.log")
 
@@ -439,7 +439,7 @@ func (m *launchdManager) Diagnose() error {
 		fmt.Println("  • Service not loaded: Try 'sprout service start'")
 	} else {
 		fmt.Println("  • Service loaded but may not be running: Try 'sprout service start'")
-		fmt.Println("  • Check logs in ~/.ledit/logs/ for errors")
+		fmt.Println("  • Check logs in ~/.sprout/logs/ for errors")
 	}
 	fmt.Println("  • If problems persist, try: 'sprout service uninstall && sprout service install'")
 	fmt.Println("  • Rebuild launchd database: 'launchctl reboot 2>/dev/null || sudo killall launchd'")

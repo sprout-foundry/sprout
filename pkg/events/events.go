@@ -1,4 +1,4 @@
-// Package events provides event system for ledit UI architecture
+// Package events provides event system for sprout UI architecture
 package events
 
 import (

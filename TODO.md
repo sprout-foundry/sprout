@@ -500,7 +500,7 @@ Three Python test runner scripts at the project root with overlapping purposes:
 [x] - CLOUD: Create `GetEnv(sproutKey, legacyKey)` helper in `pkg/configuration/env.go` that checks `SPROUT_*` first with `LEDIT_*` fallback + deprecation warning → Implemented as `pkg/envutil` (zero-dependency) + `pkg/configuration/env.go` wrapper
 [x] - CLOUD: Replace all ~221 `os.Getenv("LEDIT_...")` call sites with `envutil.GetEnvSimple()` / `configuration.GetEnvSimple()` across non-test Go files
 [x] - CLOUD: Update `cmd/service_darwin.go` and `cmd/service_linux.go` to use `SPROUT_SERVICE=1` in launchd/systemd config (keep `LEDIT_SERVICE` as backward-compat alias)
-[] - CLOUD: Rename WebUI types: `LeditInstance` → `SproutInstance`, `LeditSettings` → `SproutSettings`, `LeditConfigDir` → `SproutConfigDir`, `LeditLogo` → `SproutLogo`, `LeditLogoProps` → `SproutLogoProps` (in `webui/src/services/api.ts` and refs in Sidebar.tsx, AppContent.tsx, LocationSwitcher.tsx)
+[x] - CLOUD: Rename WebUI types: `LeditInstance` → `SproutInstance`, `LeditSettings` → `SproutSettings`, `LeditConfigDir` → `SproutConfigDir`, `LeditLogo` → `SproutLogo`, `LeditLogoProps` → `SproutLogoProps` (in `webui/src/services/api.ts` and refs in Sidebar.tsx, AppContent.tsx, LocationSwitcher.tsx)
 [] - CLOUD: Update `webui/package.json` name from `ledit-webui` to `sprout-webui`
 [] - CLOUD: Update all CLI help strings and comments referencing `ledit agent`, `ledit custom add`, `ledit service install` etc. to use `sprout` prefix (in `cmd/*.go` and `pkg/`)
 [] - CLOUD: Update desktop/Electron branding: window title, app ID `dev.alantheprice.sprout`, `desktop/package.json` name/productName/build.appId

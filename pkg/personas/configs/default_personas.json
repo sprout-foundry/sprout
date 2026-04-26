@@ -20,6 +20,8 @@
         "run_subagent",
         "run_parallel_subagents",
         "mcp_tools",
+        "list_skills",
+        "activate_skill",
         "TodoWrite",
         "TodoRead",
         "add_memory",
@@ -55,6 +57,8 @@
         "run_subagent",
         "run_parallel_subagents",
         "mcp_tools",
+        "list_skills",
+        "activate_skill",
         "TodoWrite",
         "TodoRead",
         "add_memory",
@@ -86,6 +90,8 @@
         "run_subagent",
         "run_parallel_subagents",
         "mcp_tools",
+        "list_skills",
+        "activate_skill",
         "TodoWrite",
         "TodoRead"
       ],
@@ -208,7 +214,9 @@
         "TodoWrite",
         "TodoRead",
         "web_search",
-        "fetch_url"
+        "fetch_url",
+        "list_skills",
+        "activate_skill"
       ],
       "description": "Code review, security review, and best-practices specialist",
       "enabled": true,
@@ -226,7 +234,9 @@
         "analyze_ui_screenshot",
         "analyze_image_content",
         "TodoWrite",
-        "TodoRead"
+        "TodoRead",
+        "list_skills",
+        "activate_skill"
       ],
       "description": "Combined local codebase analysis and external research specialist",
       "enabled": true,

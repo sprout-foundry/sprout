@@ -113,7 +113,7 @@ func fallbackDefinitions() map[string]Definition {
 			ID:           "orchestrator",
 			Name:         "Orchestrator",
 			Description:  "Primary orchestration persona",
-			AllowedTools: []string{"shell_command", "read_file", "write_file", "edit_file", "write_structured_file", "patch_structured_file", "search_files", "web_search", "fetch_url", "run_subagent", "run_parallel_subagents", "TodoWrite", "TodoRead", "add_memory", "read_memory", "list_memories", "delete_memory"},
+			AllowedTools: []string{"shell_command", "read_file", "write_file", "edit_file", "write_structured_file", "patch_structured_file", "search_files", "web_search", "fetch_url", "run_subagent", "run_parallel_subagents", "list_skills", "activate_skill", "TodoWrite", "TodoRead", "add_memory", "read_memory", "list_memories", "delete_memory"},
 			Enabled:      true,
 		},
 		"general": {
@@ -121,7 +121,7 @@ func fallbackDefinitions() map[string]Definition {
 			Name:         "General",
 			Description:  "General-purpose persona",
 			SystemPrompt: "pkg/agent/prompts/subagent_prompts/general.md",
-			AllowedTools: []string{"shell_command", "read_file", "write_file", "edit_file", "write_structured_file", "patch_structured_file", "search_files", "TodoWrite", "TodoRead"},
+			AllowedTools: []string{"shell_command", "read_file", "write_file", "edit_file", "write_structured_file", "patch_structured_file", "search_files", "list_skills", "activate_skill", "TodoWrite", "TodoRead"},
 			Enabled:      true,
 		},
 	}

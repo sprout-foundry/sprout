@@ -303,7 +303,12 @@ main() {
         fi
         
         local binary_path="${install_dir}/sprout"
-        
+
+        # Stop and uninstall service before removing binary
+        if command -v sprout >/dev/null 2>&1; then
+            command sprout service uninstall 2>/dev/null || true
+        fi
+
         if [ -f "$binary_path" ]; then
             local version
             version=$("$binary_path" version 2>/dev/null | head -1 || echo "unknown")
@@ -320,7 +325,33 @@ main() {
         else
             log_warn "sprout not found at $binary_path"
         fi
-        
+
+        # Clean up legacy ledit binary if present
+        local legacy_binary
+        legacy_binary=$(command -v ledit 2>/dev/null || true)
+        if [ -n "$legacy_binary" ]; then
+            log_info "Removing legacy 'ledit' binary..."
+            rm -f "$legacy_binary" 2>/dev/null || sudo rm -f "$legacy_binary" 2>/dev/null || true
+        fi
+
+        # Clean up legacy ledit service files
+        case "$(uname -s)" in
+            Darwin)
+                if [ -f "${HOME}/Library/LaunchAgents/com.ledit.daemon.plist" ]; then
+                    launchctl unload "${HOME}/Library/LaunchAgents/com.ledit.daemon.plist" 2>/dev/null || true
+                    rm -f "${HOME}/Library/LaunchAgents/com.ledit.daemon.plist"
+                fi
+                ;;
+            Linux)
+                if [ -f "${HOME}/.config/systemd/user/ledit.service" ]; then
+                    systemctl --user stop ledit.service 2>/dev/null || true
+                    systemctl --user disable ledit.service 2>/dev/null || true
+                    rm -f "${HOME}/.config/systemd/user/ledit.service"
+                    systemctl --user daemon-reload 2>/dev/null || true
+                fi
+                ;;
+        esac
+
         print_uninstall_instructions "$install_dir"
         exit 0
     fi

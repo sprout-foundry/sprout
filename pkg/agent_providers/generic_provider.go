@@ -784,10 +784,12 @@ func applyDisableThinking(model string, disableThinking bool, request map[string
 		return // Use reasoning_effort instead
 	}
 
-	// DeepSeek - chat, coder, and V3 models support disabling thinking
+	// DeepSeek - chat, coder, V3, and V4 models support disabling thinking
+	// V4 models (deepseek-v4-flash, deepseek-v4-pro) default to thinking enabled
 	if strings.Contains(modelLower, "deepseek-chat") ||
 		strings.Contains(modelLower, "deepseek-coder") ||
-		strings.Contains(modelLower, "deepseek-v3") {
+		strings.Contains(modelLower, "deepseek-v3") ||
+		strings.Contains(modelLower, "deepseek-v4") {
 		request["thinking"] = map[string]interface{}{
 			"type": "disabled",
 		}

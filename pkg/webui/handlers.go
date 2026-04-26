@@ -46,7 +46,7 @@ const uiBuildRequiredHTML = `<!doctype html>
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>ledit — UI not built</title>
+  <title>sprout — UI not built</title>
   <style>
     body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0;
            display: flex; align-items: center; justify-content: center;
@@ -64,13 +64,13 @@ const uiBuildRequiredHTML = `<!doctype html>
 </head>
 <body>
   <div class="card">
-    <h1>ledit — UI not built</h1>
+    <h1>sprout — UI not built</h1>
     <p>The React front-end is not embedded in this binary. This happens when
-       <code>ledit</code> is installed with <code>go install</code> from a source
+       <code>sprout</code> is installed with <code>go install</code> from a source
        tree where <code>pkg/webui/static/</code> is gitignored.</p>
     <p>Build and embed the UI, then rebuild the binary:</p>
     <pre>git clone https://github.com/sprout-foundry/sprout
-cd ledit
+cd sprout
 make build-all    # builds React UI + Go binary
 go install .</pre>
     <p>Or download a pre-built release from

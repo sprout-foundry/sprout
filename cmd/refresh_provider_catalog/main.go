@@ -103,8 +103,9 @@ func main() {
 // avoid a dependency on the modelregistry package (which would create an import
 // cycle through agent_api). Both types have identical JSON representations.
 type providerRegistryFile struct {
-	UpdatedAt string                `json:"updated_at"`
-	Models    []api.ModelInfo       `json:"models"`
+	SchemaVersion int            `json:"schema_version"`
+	UpdatedAt     string         `json:"updated_at"`
+	Models        []api.ModelInfo `json:"models"`
 }
 
 // writeProviderJSON writes a per-provider model JSON file for the model registry server.
@@ -116,8 +117,9 @@ func writeProviderJSON(registryDir, providerID, updatedAt string, models []api.M
 	}
 
 	payload := providerRegistryFile{
-		UpdatedAt: updatedAt,
-		Models:    models,
+		SchemaVersion: 1,
+		UpdatedAt:     updatedAt,
+		Models:        models,
 	}
 
 	encoded, err := json.MarshalIndent(payload, "", "  ")

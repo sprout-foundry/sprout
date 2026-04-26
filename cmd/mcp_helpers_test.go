@@ -131,8 +131,8 @@ func TestRunMCPTest_EmptyServers(t *testing.T) {
 	if !strings.Contains(out, "No MCP servers configured") {
 		t.Errorf("expected 'No MCP servers configured' in output, got:\n%s", out)
 	}
-	if !strings.Contains(out, "ledit mcp add") {
-		t.Errorf("expected 'ledit mcp add' in output, got:\n%s", out)
+	if !strings.Contains(out, "sprout mcp add") {
+		t.Errorf("expected 'sprout mcp add' in output, got:\n%s", out)
 	}
 }
 

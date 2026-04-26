@@ -33,16 +33,16 @@ const (
 // serviceCmd is the root command for service management.
 var serviceCmd = &cobra.Command{
 	Use:   "service",
-	Short: "Manage the ledit daemon service",
-	Long: `Manage the ledit daemon as a system service.
+	Short: "Manage the sprout daemon service",
+	Long: `Manage the sprout daemon as a system service.
 
-Integration with systemd (Linux) or launchd (macOS) allows the ledit
+Integration with systemd (Linux) or launchd (macOS) allows the sprout
 web UI to start automatically on boot and run persistently in the background.`,
 }
 
 var serviceInstallCmd = &cobra.Command{
 	Use:   "install",
-	Short: "Install the ledit daemon as a system service",
+	Short: "Install the sprout daemon as a system service",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sm, err := getOrCreateServiceManager()
 		if err != nil {
@@ -54,14 +54,14 @@ var serviceInstallCmd = &cobra.Command{
 		fmt.Printf("Service '%s' installed successfully.\n", serviceName)
 		fmt.Printf("The daemon will start automatically (RunAtLoad=true).\n")
 		fmt.Printf("Access the web UI at: %s\n", serviceURL)
-		fmt.Println("Run 'ledit service status' to confirm it is running.")
+		fmt.Println("Run 'sprout service status' to confirm it is running.")
 		return nil
 	},
 }
 
 var serviceUninstallCmd = &cobra.Command{
 	Use:   "uninstall",
-	Short: "Uninstall the ledit daemon system service",
+	Short: "Uninstall the sprout daemon system service",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sm, err := getOrCreateServiceManager()
 		if err != nil {
@@ -77,7 +77,7 @@ var serviceUninstallCmd = &cobra.Command{
 
 var serviceStartCmd = &cobra.Command{
 	Use:   "start",
-	Short: "Start the ledit daemon service",
+	Short: "Start the sprout daemon service",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sm, err := getOrCreateServiceManager()
 		if err != nil {
@@ -94,7 +94,7 @@ var serviceStartCmd = &cobra.Command{
 
 var serviceStopCmd = &cobra.Command{
 	Use:   "stop",
-	Short: "Stop the ledit daemon service",
+	Short: "Stop the sprout daemon service",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sm, err := getOrCreateServiceManager()
 		if err != nil {
@@ -110,7 +110,7 @@ var serviceStopCmd = &cobra.Command{
 
 var serviceStatusCmd = &cobra.Command{
 	Use:   "status",
-	Short: "Check the status of the ledit daemon service",
+	Short: "Check the status of the sprout daemon service",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sm, err := getOrCreateServiceManager()
 		if err != nil {
@@ -163,11 +163,11 @@ func getOrCreateServiceManager() (serviceManager, error) {
 	return newServiceManager(), nil
 }
 
-// getBinaryPath returns the absolute path to the running ledit binary.
+// getBinaryPath returns the absolute path to the running sprout binary.
 func getBinaryPath() (string, error) {
 	exe, err := os.Executable()
 	if err != nil {
-		return "", fmt.Errorf("failed to determine ledit binary path: %w", err)
+		return "", fmt.Errorf("failed to determine sprout binary path: %w", err)
 	}
 	return exe, nil
 }

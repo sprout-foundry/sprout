@@ -1,4 +1,4 @@
-// Plan command for ledit - Seamless planning and execution using agent framework
+// Plan command for sprout - Seamless planning and execution using agent framework
 package cmd
 
 import (
@@ -59,13 +59,13 @@ WORKFLOW:
 
 Examples:
   # Start planning session
-  ledit plan "Add user authentication"
+  sprout plan "Add user authentication"
 
   # Continue from existing plan
-  ledit plan --continue plan.md
+  sprout plan --continue plan.md
 
   # Use specific model
-  ledit plan -p openrouter -m "qwen/qwen3-coder-30b" "Build REST API"
+  sprout plan -p openrouter -m "qwen/qwen3-coder-30b" "Build REST API"
 
 The agent will seamlessly transition from planning to execution upon your approval.`,
 	Args: cobra.MaximumNArgs(1),
@@ -82,7 +82,7 @@ func runPlanMode(args []string) error {
 
 	fmt.Print(`
 ╔══════════════════════════════════════════════════════════════════════╗
-║              LEDIT PLANNING & EXECUTION MODE                         ║
+║              SPROUT PLANNING & EXECUTION MODE                       ║
 ║                                                                      ║
 ║  Phase 1: Collaborative planning (ask questions, explore code)        ║
 ║  Phase 2: Autonomous execution (subagent delegation after approval)   ║

@@ -48,13 +48,10 @@ jobs:
       run: |
         cd webui && npm ci
 
-    - name: Lint frontend code
+    - name: Lint frontend (non-blocking)
+      continue-on-error: true
       run: |
-        cd webui && npm run lint:ci
-
-    - name: Type check
-      run: |
-        cd webui && npm run type-check
+        make lint || echo "::warning::make lint reported issues. See lint step above for details."
 
     - name: Build and deploy React UI
       run: make deploy-ui

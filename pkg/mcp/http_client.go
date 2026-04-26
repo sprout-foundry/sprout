@@ -200,7 +200,7 @@ func (c *MCPHTTPClient) Initialize(ctx context.Context) error {
 			},
 		},
 		"clientInfo": map[string]interface{}{
-			"name":    "ledit",
+			"name":    "sprout",
 			"version": "1.0.0",
 		},
 	}

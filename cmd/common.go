@@ -29,17 +29,17 @@ func getConfigDir() string {
 
 	// Try XDG_CONFIG_HOME
 	if configHome := os.Getenv("XDG_CONFIG_HOME"); configHome != "" {
-		return filepath.Join(configHome, "ledit")
+		return filepath.Join(configHome, "sprout")
 	}
 
 	// Use user home directory
 	homeDir := os.Getenv("HOME")
 	if homeDir == "" {
 		// Fallback for Android or special environments
-		return "/data/data/com.termux/files/home/.ledit"
+		return "/data/data/com.termux/files/home/.sprout"
 	}
 
-	return filepath.Join(homeDir, ".ledit")
+	return filepath.Join(homeDir, ".sprout")
 }
 
 // loadInstances loads running instances from config

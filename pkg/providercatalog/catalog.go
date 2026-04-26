@@ -16,7 +16,7 @@ import (
 //go:embed providers.json
 var embeddedCatalogJSON []byte
 
-const defaultCatalogURL = "https://raw.githubusercontent.com/alantheprice/ledit/main/pkg/providercatalog/providers.json"
+const defaultCatalogURL = "https://raw.githubusercontent.com/alantheprice/sprout/main/pkg/providercatalog/providers.json"
 const maxCatalogBytes int64 = 1 << 20
 
 type Catalog struct {
@@ -115,7 +115,7 @@ func RefreshFromRemote(ctx context.Context, url string) error {
 		return fmt.Errorf("create catalog request: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "ledit-provider-catalog/1.0")
+	req.Header.Set("User-Agent", "sprout-provider-catalog/1.0")
 
 	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Do(req)

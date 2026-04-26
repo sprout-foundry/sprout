@@ -195,7 +195,7 @@ func fallbackCommand(homeDir string) string {
 			homeDir = "$HOME"
 		}
 	}
-	logPath := filepath.Join(homeDir, ".ledit", "daemon.log")
+	logPath := filepath.Join(homeDir, ".sprout", "daemon.log")
 	return fmt.Sprintf("nohup sprout agent -d > %s 2>&1 &\nView logs with: tail -f %s", logPath, logPath)
 }
 

@@ -139,7 +139,7 @@ func downloadRemotePDFToTemp(url string) (string, func(), error) {
 		return "", func() {}, fmt.Errorf("downloaded content is not a valid PDF")
 	}
 
-	tmp, err := os.CreateTemp("", "ledit_pdf_*.pdf")
+	tmp, err := os.CreateTemp("", "sprout_pdf_*.pdf")
 	if err != nil {
 		return "", func() {}, fmt.Errorf("failed to create temp PDF file: %w", err)
 	}

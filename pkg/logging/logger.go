@@ -25,14 +25,14 @@ func NewLogger() (*Logger, error) {
 
 // init initializes the logging system
 func (l *Logger) init() error {
-	// Create .ledit directory if it doesn't exist
-	leditDir := filepath.Join(os.Getenv("HOME"), ".ledit")
-	if err := os.MkdirAll(leditDir, 0755); err != nil {
-		return fmt.Errorf("failed to create .ledit directory: %w", err)
+	// Create .sprout directory if it doesn't exist
+	sproutDir := filepath.Join(os.Getenv("HOME"), ".sprout")
+	if err := os.MkdirAll(sproutDir, 0755); err != nil {
+		return fmt.Errorf("failed to create .sprout directory: %w", err)
 	}
 
 	// Open log file for writing
-	logPath := filepath.Join(leditDir, "ledit.log")
+	logPath := filepath.Join(sproutDir, "sprout.log")
 	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to open log file: %w", err)
@@ -93,8 +93,8 @@ func (l *Logger) Close() error {
 
 // WriteLocalCopy writes a copy of content to a local log file for debugging
 func WriteLocalCopy(filename string, content []byte) {
-	leditDir := filepath.Join(os.Getenv("HOME"), ".ledit")
-	logPath := filepath.Join(leditDir, filename)
+	sproutDir := filepath.Join(os.Getenv("HOME"), ".sprout")
+	logPath := filepath.Join(sproutDir, filename)
 
 	if err := os.WriteFile(logPath, content, 0644); err != nil {
 		fmt.Printf("Failed to write local copy: %v\n", err)
@@ -103,6 +103,6 @@ func WriteLocalCopy(filename string, content []byte) {
 
 // GetLogPath returns the path to the log file
 func GetLogPath() string {
-	leditDir := filepath.Join(os.Getenv("HOME"), ".ledit")
-	return filepath.Join(leditDir, "ledit.log")
+	sproutDir := filepath.Join(os.Getenv("HOME"), ".sprout")
+	return filepath.Join(sproutDir, "sprout.log")
 }

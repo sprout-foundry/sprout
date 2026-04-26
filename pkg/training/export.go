@@ -422,7 +422,7 @@ func buildShareGPT(states []agent.ConversationState, opts ExportOptions) ([]Shar
 			Metadata: ShareGPTMetadata{
 				SessionID:   state.SessionID,
 				SessionName: state.Name,
-				Source:      "ledit",
+				Source:      "sprout",
 				TotalCost:   state.TotalCost,
 				WorkingDir:  state.WorkingDirectory,
 			},

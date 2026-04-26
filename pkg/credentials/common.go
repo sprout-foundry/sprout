@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	configDirName      = ".ledit"
+	configDirName      = ".sprout"
 	apiKeysFileName    = "api_keys.json"
 	machineKeyFileName = "key.age"
 	encryptedMagic     = "age-encryption.org/v1"
@@ -32,7 +32,7 @@ func GetConfigDir() (string, error) {
 	if configDir == "" {
 		xdgConfigHome := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME"))
 		if xdgConfigHome != "" {
-			configDir = filepath.Join(xdgConfigHome, "ledit")
+			configDir = filepath.Join(xdgConfigHome, "sprout")
 		} else {
 			homeDir, err := os.UserHomeDir()
 			if err != nil {

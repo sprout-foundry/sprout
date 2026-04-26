@@ -796,9 +796,9 @@ func customProviderFilePath(providerName string) string {
 	if configRoot == "" {
 		xdgConfigHome := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME"))
 		if xdgConfigHome != "" {
-			configRoot = filepath.Join(xdgConfigHome, "ledit")
+			configRoot = filepath.Join(xdgConfigHome, "sprout")
 		} else if homeDir, err := os.UserHomeDir(); err == nil {
-			configRoot = filepath.Join(homeDir, ".ledit")
+			configRoot = filepath.Join(homeDir, ".sprout")
 		}
 	}
 	return filepath.Join(configRoot, "providers", providerName+".json")

@@ -106,7 +106,9 @@ test.describe('Desktop smoke', () => {
 
     try {
       const status = await waitForSmokeStatusOrExit(app, 30000);
-      expect(status.event).toBe('launcher-loaded');
+      // Both events indicate successful launcher initialization;
+      // 'launcher-ready-to-show' overwrites 'launcher-loaded' in the status file.
+      expect(['launcher-loaded', 'launcher-ready-to-show']).toContain(status.event);
       expect(status.title).toBeTruthy();
       expect(status.title).toContain('Ledit');
       expect(status.visible).toBe(true);

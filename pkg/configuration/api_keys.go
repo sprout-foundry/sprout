@@ -191,7 +191,7 @@ func (keys *APIKeys) PopulateFromEnvironment() bool {
 	return populated
 }
 
-// PopulateFromJSONEnv populates API keys from the LEDIT_API_KEYS_JSON environment
+// PopulateFromJSONEnv populates API keys from the SPROUT_API_KEYS_JSON environment
 // variable. The value must be a JSON object mapping provider names to API key strings,
 // e.g. {"openrouter":"sk-...","deepinfra":"di-..."}.
 // This is designed for containerized/SaaS environments (e.g. Sprout Foundry) where
@@ -203,7 +203,7 @@ func (keys *APIKeys) PopulateFromJSONEnv() bool {
 	}
 	var parsed map[string]string
 	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
-		log.Printf("[WARN] LEDIT_API_KEYS_JSON: invalid JSON: %v", err)
+		log.Printf("[WARN] SPROUT_API_KEYS_JSON: invalid JSON: %v", err)
 		return false
 	}
 	populated := false

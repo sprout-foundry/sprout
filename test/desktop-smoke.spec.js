@@ -60,11 +60,10 @@ async function launchSmokeApp() {
     cwd: APP_ROOT,
     env: {
       ...process.env,
-      LEDIT_SMOKE_TEST: '1',
       NODE_ENV: 'test',
-      LEDIT_DESKTOP: '1',
-      LEDIT_SKIP_RESTORE: '1',
-      LEDIT_SMOKE_STATUS_FILE: statusFile,
+      SPROUT_SMOKE_TEST: '1',
+      SPROUT_SKIP_RESTORE: '1',
+      SPROUT_SMOKE_STATUS_FILE: statusFile,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

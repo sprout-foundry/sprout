@@ -24,6 +24,7 @@ type Definition struct {
 	Model            string   `json:"model,omitempty"`
 	SystemPrompt     string   `json:"system_prompt,omitempty"`
 	SystemPromptText string   `json:"system_prompt_text,omitempty"`
+	SystemPromptAppend string `json:"system_prompt_append,omitempty"`
 	AllowedTools     []string `json:"allowed_tools,omitempty"`
 	Enabled          bool     `json:"enabled"`
 	Aliases          []string `json:"aliases,omitempty"`

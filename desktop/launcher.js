@@ -96,7 +96,7 @@ function closeCreateModal() {
 }
 
 async function refreshRecentWorktrees() {
-  const entries = await window.leditDesktop.listRecentWorktrees();
+  const entries = await window.sproutDesktop.listRecentWorktrees();
   renderRecentWorktrees(entries);
 }
 
@@ -136,7 +136,7 @@ function renderRecentWorktrees(entries) {
 
   recentContainer.querySelectorAll('[data-open]').forEach((button) => {
     button.addEventListener('click', async () => {
-      await window.leditDesktop.openWorkspace({
+      await window.sproutDesktop.openWorkspace({
         workspacePath: button.getAttribute('data-open'),
         forceNewWindow: false,
         backendMode: entry.backendMode,
@@ -147,7 +147,7 @@ function renderRecentWorktrees(entries) {
 
   recentContainer.querySelectorAll('[data-open-new]').forEach((button) => {
     button.addEventListener('click', async () => {
-      await window.leditDesktop.openWorkspace({
+      await window.sproutDesktop.openWorkspace({
         workspacePath: button.getAttribute('data-open-new'),
         forceNewWindow: true,
         backendMode: entry.backendMode,
@@ -158,19 +158,19 @@ function renderRecentWorktrees(entries) {
 }
 
 async function openViaPicker(forceNewWindow) {
-  const workspacePath = await window.leditDesktop.pickWorkspace();
+  const workspacePath = await window.sproutDesktop.pickWorkspace();
   if (!workspacePath) {
     return;
   }
-  await window.leditDesktop.openWorkspace({ workspacePath, forceNewWindow });
+  await window.sproutDesktop.openWorkspace({ workspacePath, forceNewWindow });
 }
 
 async function setupWslLauncher() {
-  if (window.leditDesktop.platform !== 'win32') {
+  if (window.sproutDesktop.platform !== 'win32') {
     return;
   }
 
-  const distros = await window.leditDesktop.listWslDistros();
+  const distros = await window.sproutDesktop.listWslDistros();
   if (!distros.length) {
     return;
   }
@@ -196,7 +196,7 @@ async function openWslWorkspace(forceNewWindow) {
   }
 
   try {
-    await window.leditDesktop.openWorkspace({
+    await window.sproutDesktop.openWorkspace({
       workspacePath,
       forceNewWindow,
       backendMode: 'wsl',
@@ -208,7 +208,7 @@ async function openWslWorkspace(forceNewWindow) {
 }
 
 async function browseRepository() {
-  const repositoryPath = await window.leditDesktop.pickRepository();
+  const repositoryPath = await window.sproutDesktop.pickRepository();
   if (!repositoryPath) {
     return;
   }
@@ -219,7 +219,7 @@ async function browseRepository() {
 }
 
 async function browseWorktreeParent() {
-  const parentPath = await window.leditDesktop.pickWorktreeParent();
+  const parentPath = await window.sproutDesktop.pickWorktreeParent();
   if (!parentPath) {
     return;
   }
@@ -285,7 +285,7 @@ createForm.addEventListener('submit', async (event) => {
 
   submitCreateWorktreeButton.disabled = true;
   try {
-    await window.leditDesktop.createWorktree({
+    await window.sproutDesktop.createWorktree({
       repositoryPath,
       branchName,
       worktreePath,
@@ -303,7 +303,7 @@ createForm.addEventListener('submit', async (event) => {
 Promise.all([
   refreshRecentWorktrees(),
   setupWslLauncher(),
-  window.leditDesktop.appVersion(),
+  window.sproutDesktop.appVersion(),
 ]).then(([, version]) => {
   versionNode.textContent = `v${version}`;
 });

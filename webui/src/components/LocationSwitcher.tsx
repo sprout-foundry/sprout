@@ -513,7 +513,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
     if (!isOpen && !isSshPanelOpen) {
       return;
     }
-    const desktopBridge = (window as any).leditDesktop;
+    const desktopBridge = (window as any).sproutDesktop;
 
     let cancelled = false;
     Promise.all([
@@ -825,7 +825,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
       if (errorMessage.includes('HTML response')) {
         setSwitchingState({
           isSwitching: false,
-          error: 'Remote workspace API is unavailable on this backend. Update the remote ledit binary.',
+          error: 'Remote workspace API is unavailable on this backend. Update the remote Sprout binary.',
           status: null,
         });
         return;
@@ -950,7 +950,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
   }, [switchingState.error]);
 
   const handleOpenSshHost = useCallback(async (hostAlias: string, explicitRemotePath?: string) => {
-    const desktopBridge = (window as any).leditDesktop;
+    const desktopBridge = (window as any).sproutDesktop;
     if (!hostAlias) {
       return;
     }

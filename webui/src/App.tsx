@@ -1835,7 +1835,7 @@ function App() {
   }, [apiService, onboarding.apiKey, onboarding.model, onboarding.provider, selectedOnboardingProvider]);
 
   const handleInstallWsl = useCallback(async () => {
-    const desktopBridge = (window as any).leditDesktop;
+    const desktopBridge = (window as any).sproutDesktop;
     if (!desktopBridge?.installWsl) {
       setOnboarding((prev) => ({ ...prev, platformActionMessage: 'WSL installation is only available from the desktop app.' }));
       return;
@@ -1845,7 +1845,7 @@ function App() {
   }, []);
 
   const handleInstallGitBash = useCallback(async () => {
-    const desktopBridge = (window as any).leditDesktop;
+    const desktopBridge = (window as any).sproutDesktop;
     if (!desktopBridge?.installGitForWindows) {
       setOnboarding((prev) => ({ ...prev, platformActionMessage: 'Git Bash installation is only available from the desktop app.' }));
       return;
@@ -2048,9 +2048,9 @@ function App() {
               <Notification />
               <UpdateNotification />
               {onboarding.open && (
-                <div className="onboarding-overlay" role="dialog" aria-modal="true" aria-label="Set up ledit">
+                <div className="onboarding-overlay" role="dialog" aria-modal="true" aria-label="Set up Sprout">
                   <div className="onboarding-card">
-                    <h2>Set Up Ledit</h2>
+                    <h2>Set Up Sprout</h2>
                     <p>
                       {onboarding.reason === 'missing_provider_credential'
                         ? 'The selected provider is missing credentials.'

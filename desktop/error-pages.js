@@ -18,7 +18,7 @@ function renderLoadingPage(workspacePath) {
     <html>
       <body style="margin:0;font-family:sans-serif;background:#1f242d;color:#d6deeb;display:flex;align-items:center;justify-content:center;height:100vh;">
         <div style="text-align:center;">
-          <div style="font-size:18px;font-weight:600;margin-bottom:8px;">Starting Ledit…</div>
+          <div style="font-size:18px;font-weight:600;margin-bottom:8px;">Starting Sprout…</div>
           <div style="font-size:13px;opacity:.75;">${htmlEscape(workspacePath)}</div>
         </div>
       </body>
@@ -126,12 +126,12 @@ function renderErrorPage(workspacePath, exitCode, signal, retriesExhausted = fal
           </div>
           ${logPath ? `<div class="log-path">Log: ${htmlEscape(logPath)}</div>` : ''}
         </div>
-        <script>
+          <script>
           const diagnostics = ${JSON.stringify(diagnosticsText)};
           const logDir = ${JSON.stringify(logDir)};
-          document.getElementById('reloadBtn') && document.getElementById('reloadBtn').addEventListener('click', () => { location.href = 'ledit://reload'; });
+          document.getElementById('reloadBtn') && document.getElementById('reloadBtn').addEventListener('click', () => { location.href = 'sprout://reload'; });
           document.getElementById('copyBtn').addEventListener('click', () => { navigator.clipboard.writeText(diagnostics).then(() => { document.getElementById('copyBtn').textContent = 'Copied!'; setTimeout(() => { document.getElementById('copyBtn').textContent = 'Copy Diagnostics'; }, 2000); }); });
-          document.getElementById('logsBtn').addEventListener('click', () => { location.href = 'ledit://open-log-dir?dir=' + encodeURIComponent(logDir); });
+          document.getElementById('logsBtn').addEventListener('click', () => { location.href = 'sprout://open-log-dir?dir=' + encodeURIComponent(logDir); });
         </script>
       </body>
     </html>

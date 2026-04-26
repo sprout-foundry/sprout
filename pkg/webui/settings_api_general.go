@@ -182,14 +182,26 @@ func (ws *ReactWebServer) handleGetProvenanceSettings(w http.ResponseWriter, r *
 		sources[k] = "session"
 	}
 
-	// Compare workspace vs global (using expanded maps for nested keys)
+	// Compare workspace vs global (using expanded maps for nested keys).
+	// Merge in defaults from a fresh config so that explicit workspace zero
+	// values (e.g., reasoning_effort="") match the implicit global default
+	// instead of being falsely attributed to "workspace".
 	globalJSON, _ := json.Marshal(globalCfg)
 	workspaceJSON, _ := json.Marshal(workspaceCfg)
 	var globalMap, workspaceMap map[string]interface{}
 	_ = json.Unmarshal(globalJSON, &globalMap)
 	_ = json.Unmarshal(workspaceJSON, &workspaceMap)
 
+	defaultJSON, _ := json.Marshal(configuration.NewConfig())
+	var defaultMap map[string]interface{}
+	_ = json.Unmarshal(defaultJSON, &defaultMap)
+
 	expandedGlobal := expandNestedKeys(globalMap)
+	for k, v := range expandNestedKeys(defaultMap) {
+		if _, ok := expandedGlobal[k]; !ok {
+			expandedGlobal[k] = v
+		}
+	}
 	expandedWorkspace := expandNestedKeys(workspaceMap)
 
 	for k, wv := range expandedWorkspace {

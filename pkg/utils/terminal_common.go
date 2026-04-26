@@ -42,7 +42,7 @@ func getTerminalSizeEnv() (*TerminalSize, error) {
 		}
 	}
 
-	// LEDIT specific overrides
+	// Sprout specific overrides
 	if height == 0 {
 		if val := envutil.GetEnvSimple("TERM_HEIGHT"); val != "" {
 			if h, err := strconv.Atoi(val); err == nil && h > 0 {

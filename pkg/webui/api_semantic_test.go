@@ -44,7 +44,7 @@ func TestHandleAPISemanticIncludesDurationAndNormalizesTrigger(t *testing.T) {
 	semanticAdapterRegistry = registry
 
 	workspaceRoot := t.TempDir()
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0)
+	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
 	ws.workspaceRoot = workspaceRoot
 	ws.daemonRoot = workspaceRoot
 	ws.fileConsents = newFileConsentManager()

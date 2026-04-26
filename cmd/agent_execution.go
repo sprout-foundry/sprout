@@ -14,6 +14,7 @@ import (
 var (
 	disableWebUI bool
 	webPort      int
+	webBindAddr  string
 	daemonMode   bool
 )
 
@@ -22,6 +23,7 @@ func init() {
 	agentCmd.Flags().IntVar(&webPort, "web-port", 0, "Port for web UI (default: 54000 for daemon mode)")
 	agentCmd.Flags().IntVar(&webPort, "port", 0, "") // Hidden alias for --web-port (Docker/cloud entrypoint compat)
 	agentCmd.Flags().MarkHidden("port")
+	agentCmd.Flags().StringVar(&webBindAddr, "bind", "", "Bind address for web UI (default: 127.0.0.1, or set SPROUT_BIND_ADDR)")
 	agentCmd.Flags().BoolVarP(&daemonMode, "daemon", "d", false, "Run in daemon mode - keep web UI running without interactive prompt")
 }
 

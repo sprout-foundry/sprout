@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	launchdLabel    = "com.ledit.daemon"
+	launchdLabel    = "com.sprout.daemon"
 	launchdPlistDir = "Library/LaunchAgents"
 )
 
@@ -135,8 +135,8 @@ func (m *launchdManager) Install() error {
 	if err != nil {
 		return err
 	}
-	if filepath.Base(binaryPath) != "ledit" {
-		return fmt.Errorf("unexpected binary name %q — service requires the ledit binary", filepath.Base(binaryPath))
+	if filepath.Base(binaryPath) != "sprout" {
+		return fmt.Errorf("unexpected binary name %q — service requires the sprout binary", filepath.Base(binaryPath))
 	}
 	homeDir, err := os.UserHomeDir()
 	if err != nil {

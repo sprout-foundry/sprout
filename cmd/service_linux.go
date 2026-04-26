@@ -70,8 +70,8 @@ func (m *systemdManager) Install() error {
 	if err != nil {
 		return fmt.Errorf("failed to get binary path: %w", err)
 	}
-	if filepath.Base(binaryPath) != "ledit" {
-		return fmt.Errorf("unexpected binary name %q — service unit requires the ledit binary", filepath.Base(binaryPath))
+	if filepath.Base(binaryPath) != "sprout" {
+		return fmt.Errorf("unexpected binary name %q — service unit requires the sprout binary", filepath.Base(binaryPath))
 	}
 
 	homeDir, err := os.UserHomeDir()
@@ -96,7 +96,7 @@ func (m *systemdManager) Install() error {
 		return fmt.Errorf("failed to generate unit file: %w", err)
 	}
 
-	unitFile := filepath.Join(unitDir, "ledit.service")
+	unitFile := filepath.Join(unitDir, "sprout.service")
 	tmpFile := unitFile + ".tmp"
 	if err := os.WriteFile(tmpFile, content, 0644); err != nil {
 		return fmt.Errorf("failed to write unit file: %w", err)
@@ -114,7 +114,7 @@ func (m *systemdManager) Install() error {
 		fmt.Printf("\nTo start the daemon without systemd, run:\n  %s\n", fallbackCommand(homeDir))
 	}
 
-	if _, err := runSystemctl("enable", "ledit.service"); err != nil {
+	if _, err := runSystemctl("enable", "sprout.service"); err != nil {
 		fmt.Printf("Warning: failed to enable service: %v\n", err)
 	} else {
 		fmt.Println("Service enabled.")
@@ -129,10 +129,10 @@ func (m *systemdManager) Uninstall() error {
 	}
 
 	// Stop and disable — ignore errors since the service may not be running.
-	runSystemctl("stop", "ledit.service")
-	runSystemctl("disable", "ledit.service")
+	runSystemctl("stop", "sprout.service")
+	runSystemctl("disable", "sprout.service")
 
-	unitFile := filepath.Join(homeDir, ".config", "systemd", "user", "ledit.service")
+	unitFile := filepath.Join(homeDir, ".config", "systemd", "user", "sprout.service")
 	if err := os.Remove(unitFile); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove unit file: %w", err)
 	}
@@ -155,7 +155,7 @@ func (m *systemdManager) Uninstall() error {
 func (m *systemdManager) Start() error {
 	// Try systemctl first; if it fails (e.g., systemd user instance not running in containers),
 	// fall back to running the daemon directly in the background
-	if _, err := runSystemctl("start", "ledit.service"); err != nil {
+	if _, err := runSystemctl("start", "sprout.service"); err != nil {
 		// Check if it's a systemd availability issue (not a service config issue)
 		if strings.Contains(err.Error(), "Failed to start") {
 			return fmt.Errorf("failed to start service: %w", err)
@@ -170,7 +170,7 @@ func (m *systemdManager) Start() error {
 }
 
 func (m *systemdManager) Stop() error {
-	if _, err := runSystemctl("stop", "ledit.service"); err != nil {
+	if _, err := runSystemctl("stop", "sprout.service"); err != nil {
 		return fmt.Errorf("failed to stop service: %w", err)
 	}
 	fmt.Println("Service stopped.")
@@ -178,7 +178,7 @@ func (m *systemdManager) Stop() error {
 }
 
 func (m *systemdManager) Status() (bool, error) {
-	output, err := runSystemctl("show", "--property=SubState", "ledit.service")
+	output, err := runSystemctl("show", "--property=SubState", "sprout.service")
 	if err != nil {
 		return false, nil // service not known — treat as stopped
 	}

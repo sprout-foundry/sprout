@@ -270,7 +270,7 @@ func GetConfigDir() (string, error) {
 func getDefaultConfigDir() (string, error) {
 	xdgConfigHome := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME"))
 	if xdgConfigHome != "" {
-		return filepath.Join(xdgConfigHome, "ledit"), nil
+		return filepath.Join(xdgConfigHome, "sprout"), nil
 	}
 
 	homeEnv := strings.TrimSpace(os.Getenv("HOME"))

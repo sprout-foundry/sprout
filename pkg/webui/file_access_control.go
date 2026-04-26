@@ -231,8 +231,8 @@ func resolveConfigDir() (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("resolve XDG_CONFIG_HOME path: %w", err)
 		}
-		return filepath.Join(abs, "ledit"), nil
+		return filepath.Join(abs, "sprout"), nil
 	}
 
-	return filepath.Join(homeDir, ".ledit"), nil
+	return filepath.Join(homeDir, ".sprout"), nil
 }

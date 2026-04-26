@@ -104,9 +104,9 @@ func (ws *ReactWebServer) handleAPIInstances(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	instancesPath := filepath.Join(getLeditConfigDir(), "instances.json")
-	hostPath := filepath.Join(getLeditConfigDir(), "webui_host.json")
-	desiredPath := filepath.Join(getLeditConfigDir(), "webui_desired_host.json")
+	instancesPath := filepath.Join(getSproutConfigDir(), "instances.json")
+	hostPath := filepath.Join(getSproutConfigDir(), "webui_host.json")
+	desiredPath := filepath.Join(getSproutConfigDir(), "webui_desired_host.json")
 
 	instancesMap := map[string]rawInstanceInfo{}
 	if data, err := os.ReadFile(instancesPath); err == nil && len(data) > 0 {
@@ -181,7 +181,7 @@ func (ws *ReactWebServer) handleAPIInstanceSelect(w http.ResponseWriter, r *http
 		return
 	}
 
-	if err := os.MkdirAll(getLeditConfigDir(), 0755); err != nil {
+	if err := os.MkdirAll(getSproutConfigDir(), 0755); err != nil {
 		http.Error(w, "Failed to prepare config dir", http.StatusInternalServerError)
 		return
 	}
@@ -193,12 +193,12 @@ func (ws *ReactWebServer) handleAPIInstanceSelect(w http.ResponseWriter, r *http
 		return
 	}
 
-	tmp := filepath.Join(getLeditConfigDir(), "webui_desired_host.json.tmp")
+	tmp := filepath.Join(getSproutConfigDir(), "webui_desired_host.json.tmp")
 	if err := os.WriteFile(tmp, data, 0644); err != nil {
 		http.Error(w, "Failed to write selection", http.StatusInternalServerError)
 		return
 	}
-	if err := os.Rename(tmp, filepath.Join(getLeditConfigDir(), "webui_desired_host.json")); err != nil {
+	if err := os.Rename(tmp, filepath.Join(getSproutConfigDir(), "webui_desired_host.json")); err != nil {
 		http.Error(w, "Failed to apply selection", http.StatusInternalServerError)
 		return
 	}
@@ -504,16 +504,16 @@ func parseSSHConfigFile(filePath string, hostsMap map[string]*sshHostEntryDTO, v
 	}
 }
 
-func getLeditConfigDir() string {
+func getSproutConfigDir() string {
 	if dir := strings.TrimSpace(envutil.GetEnvSimple("CONFIG")); dir != "" {
 		return dir
 	}
 	if xdg := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME")); xdg != "" {
-		return filepath.Join(xdg, "ledit")
+		return filepath.Join(xdg, "sprout")
 	}
 	homeDir := strings.TrimSpace(os.Getenv("HOME"))
 	if homeDir == "" {
-		return "/data/data/com.termux/files/home/.ledit"
+		return "/data/data/com.termux/files/home/.sprout"
 	}
-	return filepath.Join(homeDir, ".ledit")
+	return filepath.Join(homeDir, ".sprout")
 }

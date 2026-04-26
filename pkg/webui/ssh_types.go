@@ -156,7 +156,7 @@ const (
 	sshLaunchHealthTimeout  = 30 * time.Second
 	sshRestoreHealthTimeout = 12 * time.Second
 
-	// DaemonPort is the unified fixed port used by all ledit daemons
+	// DaemonPort is the unified fixed port used by all sprout daemons
 	// (both local and SSH-launched remote).  All daemons on a given host
 	// share this port — the launcher detects an existing daemon and
 	// reuses it rather than starting a duplicate.

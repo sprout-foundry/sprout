@@ -177,7 +177,7 @@ Example format: find . -name "*.go" | wc -l`, description)},
 		_, execErr = tools.ExecuteShellCommandWithSafety(context.Background(), generatedScript, true, "", true)
 	} else {
 		// For scripts, save to temporary file and execute
-		tmpFile, err := os.CreateTemp("", "ledit-script-*.sh")
+		tmpFile, err := os.CreateTemp("", "sprout-script-*.sh")
 		if err != nil {
 			return fmt.Errorf("failed to create temporary script file: %v", err)
 		}

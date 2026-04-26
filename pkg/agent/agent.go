@@ -289,7 +289,7 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 	var finalModel string
 
 	// If running under `go test`, prefer the test/mock client to avoid network/API key
-	// dependencies unless explicitly overridden by LEDIT_ALLOW_REAL_PROVIDER.
+	// dependencies unless explicitly overridden by SPROUT_ALLOW_REAL_PROVIDER (or legacy LEDIT_ALLOW_REAL_PROVIDER).
 	if isRunningUnderTest() && configuration.GetEnvSimple("ALLOW_REAL_PROVIDER") == "" {
 		clientType = api.TestClientType
 		finalModel = model
@@ -474,7 +474,7 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 		debug := isDebugEnvEnabled()
 		client.SetDebug(debug)
 
-		// Check connection (allow tests to skip by setting LEDIT_SKIP_CONNECTION_CHECK)
+		// Check connection (allow tests to skip by setting SPROUT_SKIP_CONNECTION_CHECK or legacy LEDIT_SKIP_CONNECTION_CHECK)
 		// Also skip for providers where a fast/reliable connectivity probe is not available (e.g., Z.AI Coding Plan).
 		skipConnectionCheck := configuration.GetEnvSimple("SKIP_CONNECTION_CHECK") != "" || clientType == api.ZAIClientType
 		if !skipConnectionCheck {

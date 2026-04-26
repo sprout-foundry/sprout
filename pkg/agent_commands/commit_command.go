@@ -54,7 +54,7 @@ func (c *CommitCommand) parseFlags(args []string) []string {
 // editInEditor opens $VISUAL or $EDITOR to edit content, returns the edited text
 func editInEditor(initial string) (string, error) {
 	// Create temp file
-	f, err := os.CreateTemp("", "ledit_commit_*.txt")
+	f, err := os.CreateTemp("", "sprout_commit_*.txt")
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp file: %w", err)
 	}

@@ -36,6 +36,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -44,6 +49,9 @@ jobs:
 
       - name: Install root dependencies
         run: npm ci
+
+      - name: Install Go dependencies
+        run: go mod download
 
       - name: Install Playwright and Electron dependencies
         run: |
@@ -69,34 +77,15 @@ jobs:
         run: |
           cd webui && npm ci
 
-      - name: Build launcher HTML assets
-        run: |
-          # The launcher.html is already committed; ensure desktop JS deps are available
-          ls desktop/launcher.html
+      - name: Build Go backend binary for E2E tests
+        run: npm run build:desktop:backend
 
-      - name: Run module syntax smoke test (no display needed)
+      - name: Build embedded webui for E2E tests
+        run: npm run build:webui:embed
+
+      - name: Verify backend binary exists
         run: |
-          node -e "
-            const {spawnSync} = require('child_process');
-            const path = require('path');
-            const fs = require('fs');
-            const d = 'desktop';
-            const skip = ['main.js.bak'];
-            const mods = fs.readdirSync(d)
-              .filter(f => f.endsWith('.js') && !skip.includes(f))
-              .sort();
-            let failed = false;
-            for (const m of mods) {
-              const r = spawnSync(process.execPath, ['--check', path.join(d, m)], { encoding: 'utf8' });
-              if (r.status !== 0) {
-                console.error('FAIL', m, r.stderr.trim());
-                failed = true;
-              } else {
-                console.log('OK  ', m);
-              }
-            }
-            if (failed) process.exit(1);
-          "
+          ls -lh desktop/dist/backend/linux-amd64/ledit
 
       - name: Run Electron smoke tests (with virtual display)
         env:
@@ -108,7 +97,7 @@ jobs:
             head -n 5 /tmp/desktop-smoke-xdpyinfo.txt
             npm run test:desktop-smoke -- --reporter=list | tee /tmp/desktop-smoke-run.log
           '
-        timeout-minutes: 5
+        timeout-minutes: 10
 
       - name: Upload desktop smoke diagnostics (failure only)
         if: failure()

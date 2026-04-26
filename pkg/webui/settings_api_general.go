@@ -171,24 +171,28 @@ func (ws *ReactWebServer) handleGetProvenanceSettings(w http.ResponseWriter, r *
 	// Build provenance map
 	sources := make(map[string]string)
 
-	// Session overrides take highest priority
-	for k := range sessionOverrides {
+	// Session overrides take highest priority (both original and expanded keys)
+	expandedSession := expandNestedKeys(sessionOverrides)
+	for k := range expandedSession {
 		sources[k] = "session"
 	}
 
-	// Compare workspace vs global
+	// Compare workspace vs global (using expanded maps for nested keys)
 	globalJSON, _ := json.Marshal(globalCfg)
 	workspaceJSON, _ := json.Marshal(workspaceCfg)
 	var globalMap, workspaceMap map[string]interface{}
 	_ = json.Unmarshal(globalJSON, &globalMap)
 	_ = json.Unmarshal(workspaceJSON, &workspaceMap)
 
-	for k, wv := range workspaceMap {
+	expandedGlobal := expandNestedKeys(globalMap)
+	expandedWorkspace := expandNestedKeys(workspaceMap)
+
+	for k, wv := range expandedWorkspace {
 		if _, isSession := sources[k]; isSession {
 			continue
 		}
 		wvBytes, _ := json.Marshal(wv)
-		if gv, ok := globalMap[k]; ok {
+		if gv, ok := expandedGlobal[k]; ok {
 			gvBytes, _ := json.Marshal(gv)
 			if string(wvBytes) != string(gvBytes) && string(wvBytes) != "null" {
 				sources[k] = "workspace"
@@ -198,11 +202,12 @@ func (ws *ReactWebServer) handleGetProvenanceSettings(w http.ResponseWriter, r *
 		}
 	}
 
-	// Everything else is global
+	// Everything else is global (using expanded effective map)
 	effectiveJSON, _ := json.Marshal(effective)
 	var effectiveMap map[string]interface{}
 	_ = json.Unmarshal(effectiveJSON, &effectiveMap)
-	for k := range effectiveMap {
+	expandedEffective := expandNestedKeys(effectiveMap)
+	for k := range expandedEffective {
 		if _, exists := sources[k]; !exists {
 			sources[k] = "global"
 		}
@@ -731,4 +736,23 @@ func (ws *ReactWebServer) applySystemPromptToLiveAgents(systemPrompt string) {
 			agentInst.SetSystemPrompt(systemPrompt)
 		}
 	}
+}
+
+// expandNestedKeys recursively expands nested maps in a flat dot-path map.
+// e.g. {"a": {"b": 1}} becomes {"a.b": 1, "a": {"b": 1}}
+// The original keys are preserved alongside the expanded ones.
+func expandNestedKeys(m map[string]interface{}) map[string]interface{} {
+	if m == nil {
+		return make(map[string]interface{})
+	}
+	result := make(map[string]interface{}, len(m))
+	for k, v := range m {
+		result[k] = v
+		if sub, ok := v.(map[string]interface{}); ok {
+			for sk, sv := range expandNestedKeys(sub) {
+				result[k+"."+sk] = sv
+			}
+		}
+	}
+	return result
 }

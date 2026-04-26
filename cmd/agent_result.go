@@ -42,6 +42,12 @@ func init() {
 
 // emitJSONResult writes the AgentResult as indented JSON to stdout.
 // It collects git diff and modified files from the workspace.
+//
+// Thread safety note: Metrics are read from the agent after it has finished
+// executing (sequential access). The non-interactive --output-json mode guarantees
+// the agent is idle when this function runs, so no mutex is needed for the
+// promptTokens/completionTokens/llmCallCount reads. Do NOT call this from a
+// goroutine that may run concurrently with agent execution.
 func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Agent) {
 	result := AgentResult{
 		Query: query,

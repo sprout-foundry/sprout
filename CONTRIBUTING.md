@@ -8,6 +8,12 @@ Welcome to the sprout project! This guide covers everything you need to start de
 - **Node.js 22** (required, matches CI)
 - **Python 3.11+** (for test runners)
 - **npm** (comes with Node.js)
+- **Python packages** for integration tests: `pip install requests pytest` (or see `requirements.txt` if it exists)
+
+## Recommended Local Tools
+
+- **goimports** — Go source formatter (CI enforces this). Install: `go install golang.org/x/tools/cmd/goimports@latest`
+- **golangci-lint** — Go linter aggregate (optional, for pre-commit checks)
 
 ## Quick Start
 
@@ -52,15 +58,26 @@ make build          # compiles Go binary (expects UI already deployed)
 make test-unit      # fast unit tests
 ```
 
-**UI development mode** (hot reload):
+**UI development mode** (hot reload + live API):
+
+1. Build and start the Go backend:
+   ```bash
+   make build-all        # or: make deploy-ui && make build
+   ./sprout              # serves API on http://localhost:54000
+   ```
+2. In a separate terminal, start the CRA dev server:
+   ```bash
+   cd webui && npm start  # runs on port 3000 with hot reload
+   ```
+   The dev server proxies API requests to `http://localhost:54000` (configured in `webui/package.json`'s `proxy` field). Changes to React components are reflected immediately without rebuilding.
+
+**Quick dev cycle** (UI-only changes, no Go changes):
 
 ```bash
-cd webui
-npm install
-npm start           # starts CRA dev server on port 3000
+make dev               # deploys React UI to pkg/webui/static/
+make build             # recompiles Go binary with updated UI
+./sprout               # run to test
 ```
-
-The dev server proxies API requests to `http://localhost:54000` (configured in `webui/package.json` proxy field). Run the Go backend with `./sprout` to serve the API.
 
 **Full build** (before committing):
 
@@ -78,6 +95,7 @@ make build-all      # UI + WASM + Go binary
 - **All non-expensive tests**: `make test-all`
 - **Frontend linting**: `make lint` (eslint + prettier format check + type-check)
 - **Frontend lint fix**: `make lint-fix`
+- **Test directories**: `pkg/**/*_test.go` (Go unit tests), `integration_tests/` (Python integration tests), `e2e_tests/` (Python E2E tests), `smoke_tests/` (API smoke tests), `webui/src/**/*.test.{ts,tsx}` (React/TypeScript tests)
 
 ## Useful Make Targets
 
@@ -114,3 +132,11 @@ CI runs on push/PR to `main`:
 4. Integration tests
 5. Smoke tests
 6. Multi-platform builds (linux/darwin/windows × amd64/arm64)
+
+## Creating a Pull Request
+
+1. Run `make build-all` to confirm everything compiles
+2. Run `make test-all` to ensure all non-expensive tests pass
+3. Run `make test-coverage` to verify coverage meets the 40% minimum (CI enforces this)
+4. Run `make lint` to verify frontend linting
+5. Push to a feature branch and open a PR against `main`

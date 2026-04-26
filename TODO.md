@@ -503,7 +503,7 @@ Three Python test runner scripts at the project root with overlapping purposes:
 [x] - CLOUD: Rename WebUI types: `LeditInstance` → `SproutInstance`, `LeditSettings` → `SproutSettings`, `LeditConfigDir` → `SproutConfigDir`, `LeditLogo` → `SproutLogo`, `LeditLogoProps` → `SproutLogoProps` (in `webui/src/services/api.ts` and refs in Sidebar.tsx, AppContent.tsx, LocationSwitcher.tsx)
 [x] - CLOUD: Update `webui/package.json` name from `ledit-webui` to `sprout-webui`
 [x] - CLOUD: Update `webui/package.json` name from `ledit-webui` to `sprout-webui` (duplicate — already done on line above)
-[] - CLOUD: Update all CLI help strings and comments referencing `ledit agent`, `ledit custom add`, `ledit service install` etc. to use `sprout` prefix (in `cmd/*.go` and `pkg/`)
+[x] - CLOUD: Update all CLI help strings and comments referencing `ledit agent`, `ledit custom add`, `ledit service install` etc. to use `sprout` prefix (in `cmd/*.go` and `pkg/`)
 [] - CLOUD: Update desktop/Electron branding: window title, app ID `dev.alantheprice.sprout`, `desktop/package.json` name/productName/build.appId
 [] - CLOUD: Update install scripts `scripts/install.sh` and `scripts/install.ps1` with sprout binary name and GitHub URL paths
 [] - CLOUD: Clean install script — Ensure no remaining `ledit`/`Ledit`/`LEDIT` references in source (excluding `.ledit` config dir paths and backward-compat test files)

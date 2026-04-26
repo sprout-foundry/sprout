@@ -121,7 +121,7 @@ func setupProvenanceTestServer(t *testing.T, globalCfg, workspaceCfg *configurat
 	}
 
 	// Create web server
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0)
+	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
 
 	// Create client context
 	clientID := "test-client"

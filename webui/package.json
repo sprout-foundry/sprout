@@ -79,7 +79,7 @@
       "^@marijn/find-cluster-break$": "<rootDir>/node_modules/@marijn/find-cluster-break/dist/index.cjs"
     }
   },
-  "name": "ledit-webui",
+  "name": "sprout-webui",
   "overrides": {
     "@tootallnate/once": "^3.0.1",
     "nth-check": "^2.1.1",

@@ -137,7 +137,7 @@ func TestGetConfigDir_WhitespaceOnlyXDG(t *testing.T) {
 	}
 
 	homeDir, _ := os.UserHomeDir()
-	expected := filepath.Join(homeDir, ".ledit")
+	expected := filepath.Join(homeDir, ".sprout")
 	if got != expected {
 		t.Fatalf("expected fallthrough to home %q, got %q", expected, got)
 	}

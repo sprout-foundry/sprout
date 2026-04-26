@@ -194,7 +194,7 @@ func SetStorageMode(mode string) error {
 // Resolution order:
 // 1. If SPROUT_CREDENTIAL_BACKEND=keyring → OSKeyringBackend
 // 2. If SPROUT_CREDENTIAL_BACKEND=file → FileBackend
-// 3. Auto-detect: try OSKeyringBackend.Get("__ledit_probe__") to check availability
+// 3. Auto-detect: try OSKeyringBackend.Get("__sprout_probe__") to check availability
 //    - If available → use OSKeyringBackend (persist mode as "keyring")
 //    - If unavailable → fallback to FileBackend (persist mode as "file")
 //

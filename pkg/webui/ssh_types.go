@@ -151,7 +151,7 @@ type sshLaunchStatus struct {
 
 const (
 	githubReleaseRepoOwner = "alantheprice"
-	githubReleaseRepoName  = "ledit"
+	githubReleaseRepoName  = "sprout"
 
 	sshLaunchHealthTimeout  = 30 * time.Second
 	sshRestoreHealthTimeout = 12 * time.Second
@@ -172,9 +172,9 @@ var errNoReleaseTagForArtifact = errors.New("no release tag available for curren
 func workspaceLogPath() string {
 	home := os.Getenv("HOME")
 	if strings.TrimSpace(home) == "" {
-		return ".ledit/workspace.log"
+		return ".sprout/workspace.log"
 	}
-	return filepath.Join(home, ".ledit", "workspace.log")
+	return filepath.Join(home, ".sprout", "workspace.log")
 }
 
 func newSSHLaunchFailure(step, message, details string, logger *sshLaunchLogger) error {
@@ -241,7 +241,7 @@ func ensureSSHProgramsAvailable() error {
 
 func localSSHCacheRoot() string {
 	if tempBase := strings.TrimSpace(os.TempDir()); tempBase != "" {
-		candidate := filepath.Join(tempBase, "ledit-ssh-cache")
+		candidate := filepath.Join(tempBase, "sprout-ssh-cache")
 		if err := os.MkdirAll(candidate, 0755); err == nil {
 			return candidate
 		}
@@ -251,14 +251,14 @@ func localSSHCacheRoot() string {
 	if home != "" {
 		for _, base := range []string{
 			filepath.Join(home, ".cache"),
-			filepath.Join(home, ".ledit", "cache"),
+			filepath.Join(home, ".sprout", "cache"),
 		} {
-			candidate := filepath.Join(base, "ledit-ssh-cache")
+			candidate := filepath.Join(base, "sprout-ssh-cache")
 			if err := os.MkdirAll(candidate, 0755); err == nil {
 				return candidate
 			}
 		}
 	}
 
-	return filepath.Join(".", "ledit-ssh-cache")
+	return filepath.Join(".", "sprout-ssh-cache")
 }

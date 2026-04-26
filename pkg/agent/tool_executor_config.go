@@ -10,7 +10,7 @@ import (
 
 const maxToolFailureMessageChars = 4000     // ~1000 tokens worst-case (4 chars/token heuristic)
 const defaultFetchURLResultMaxChars = 80000 // Raised from 60000 to 80000 (better web content coverage)
-const defaultFetchURLArchiveDir = "/tmp/ledit/downloads"
+const defaultFetchURLArchiveDir = "/tmp/sprout/downloads"
 const defaultAnalyzeImageResultExcerptChars = 4000
 
 // getToolTimeout returns the timeout duration for tool execution

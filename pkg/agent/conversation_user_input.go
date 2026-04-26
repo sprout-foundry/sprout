@@ -13,7 +13,7 @@ import (
 
 const defaultInteractiveInputMaxChars = 100000
 const defaultAutomationInputMaxChars = 0 // 0 = unlimited
-const defaultUserInputArchiveDir = "/tmp/ledit/inputs"
+const defaultUserInputArchiveDir = "/tmp/sprout/inputs"
 
 func (ch *ConversationHandler) prepareUserInputForModel(input string) string {
 	maxChars, inputType := ch.getInputLimit()

@@ -1,4 +1,4 @@
-# ledit one-line install script for Windows
+# sprout one-line install script for Windows
 # Requires PowerShell 5.1+ or PowerShell 7+
 
 param(
@@ -99,8 +99,8 @@ function Get-InstallDir {
         return $env:SPROUT_INSTALL_DIR
     }
     
-    # Default to LOCALAPPDATA\Programs\ledit
-    $defaultDir = Join-Path $env:LOCALAPPDATA "Programs\ledit"
+    # Default to LOCALAPPDATA\Programs\sprout
+    $defaultDir = Join-Path $env:LOCALAPPDATA "Programs\sprout"
     
     # Check if we should use a directory on PATH
     $pathDirs = $env:PATH -split ";" | Where-Object { $_ -and (Test-Path $_) }
@@ -128,7 +128,7 @@ function Get-Version {
     }
     
     try {
-        $apiUrl = "https://api.github.com/repos/alantheprice/ledit/releases/latest"
+        $apiUrl = "https://api.github.com/repos/sprout-foundry/sprout/releases/latest"
         $response = Invoke-RestMethod -Uri $apiUrl -UseBasicParsing -ErrorAction Stop
         $version = $response.tag_name
         return $version
@@ -146,8 +146,8 @@ function Download-Release {
         [string]$Arch
     )
     
-    $filename = "ledit-${OS}-${Arch}.zip"
-    $downloadUrl = "https://github.com/alantheprice/ledit/releases/download/${Version}/${filename}"
+    $filename = "sprout-${OS}-${Arch}.zip"
+    $downloadUrl = "https://github.com/sprout-foundry/sprout/releases/download/${Version}/${filename}"
     
     Write-LogInfo "Downloading $filename"
     
@@ -184,7 +184,7 @@ function Install-Binary {
     }
     
     # Extract to temp directory
-    $extractedPath = Join-Path $script:TEMP_DIR "ledit.exe"
+    $extractedPath = Join-Path $script:TEMP_DIR "sprout.exe"
     $exeEntry.ExtractToFile($extractedPath, $true)
     $zip.Dispose()
     
@@ -194,10 +194,10 @@ function Install-Binary {
     }
     
     # Copy the binary to install directory
-    $installPath = Join-Path $InstallDir "ledit.exe"
+    $installPath = Join-Path $InstallDir "sprout.exe"
     Copy-Item -Path $extractedPath -Destination $installPath -Force
     
-    Write-LogSuccess "ledit installed to $installPath"
+    Write-LogSuccess "sprout installed to $installPath"
     
     return $installPath
 }
@@ -234,33 +234,33 @@ function Add-To-Path {
 function Verify-Installation {
     param([string]$InstallDir)
     
-    $binaryPath = Join-Path $InstallDir "ledit.exe"
+    $binaryPath = Join-Path $InstallDir "sprout.exe"
     
     if (-not (Test-Path $binaryPath)) {
-        Write-LogError "ledit binary not found at $binaryPath"
+        Write-LogError "sprout binary not found at $binaryPath"
         exit 1
     }
     
     # Try to run the binary to verify it works
     try {
         $versionOutput = & $binaryPath version 2>&1
-        if ($LASTEXITCODE -ne 0 -and $versionOutput -notmatch "ledit") {
-            Write-LogError "ledit binary verification failed"
+        if ($LASTEXITCODE -ne 0 -and $versionOutput -notmatch "sprout") {
+            Write-LogError "sprout binary verification failed"
             exit 1
         }
     } catch {
-        Write-LogError "Failed to verify ledit binary: $_"
+        Write-LogError "Failed to verify sprout binary: $_"
         exit 1
     }
     
-    Write-LogSuccess "ledit binary verified"
+    Write-LogSuccess "sprout binary verified"
 }
 
 # Remove old versions
 function Remove-Old-Versions {
     param([string]$InstallDir)
     
-    $binaryPath = Join-Path $InstallDir "ledit.exe"
+    $binaryPath = Join-Path $InstallDir "sprout.exe"
     
     if (Test-Path $binaryPath) {
         try {
@@ -278,10 +278,10 @@ function Print-UninstallInstructions {
     param([string]$InstallDir)
     
     Write-Host ""
-    Write-LogInfo "To uninstall ledit:"
+    Write-LogInfo "To uninstall sprout:"
     Write-Host ""
     Write-Host "  # Remove the binary"
-    Write-Host "  Remove-Item -Path '$InstallDir\ledit.exe'"
+    Write-Host "  Remove-Item -Path '$InstallDir\sprout.exe'"
     Write-Host ""
 }
 
@@ -290,15 +290,15 @@ function Print-Success {
     param([string]$InstallDir, [string]$Version)
     
     Write-Host ""
-    Write-LogSuccess "ledit $Version installed successfully!"
+    Write-LogSuccess "sprout $Version installed successfully!"
     Write-Host ""
-    Write-Host "  Binary location: $InstallDir\ledit.exe"
+    Write-Host "  Binary location: $InstallDir\sprout.exe"
     Write-Host ""
-    Write-Host "  Run 'ledit version' to verify the installation"
+    Write-Host "  Run 'sprout version' to verify the installation"
     Write-Host ""
 
     if (-not $NoService.IsPresent) {
-        Write-Host "  Run 'ledit service install' to set up auto-start"
+        Write-Host "  Run 'sprout service install' to set up auto-start"
         Write-Host ""
     }
 }
@@ -306,13 +306,13 @@ function Print-Success {
 # Show version info
 function Show-Version {
     if ($env:SPROUT_VERSION) {
-        Write-Host "ledit version $env:SPROUT_VERSION (requested)"
+        Write-Host "sprout version $env:SPROUT_VERSION (requested)"
     } else {
         try {
-            $apiUrl = "https://api.github.com/repos/alantheprice/ledit/releases/latest"
+            $apiUrl = "https://api.github.com/repos/sprout-foundry/sprout/releases/latest"
             $response = Invoke-RestMethod -Uri $apiUrl -UseBasicParsing -ErrorAction Stop
             $version = $response.tag_name -replace '^v', ''
-            Write-Host "ledit version $version (latest)"
+            Write-Host "sprout version $version (latest)"
         } catch {
             Write-LogError "Failed to get version: $_"
             exit 1
@@ -336,10 +336,10 @@ function Main {
 
     # Handle uninstall
     if ($Uninstall.IsPresent) {
-        Write-LogInfo "Uninstalling ledit..."
+        Write-LogInfo "Uninstalling sprout..."
 
         $installDir = Get-InstallDir
-        $binaryPath = Join-Path $installDir "ledit.exe"
+        $binaryPath = Join-Path $installDir "sprout.exe"
 
         if (Test-Path $binaryPath) {
             try {
@@ -360,13 +360,13 @@ function Main {
         if (Test-Path $binaryPath) {
             try {
                 Remove-Item -Path $binaryPath -Force
-                Write-LogSuccess "ledit uninstalled successfully"
+                Write-LogSuccess "sprout uninstalled successfully"
             } catch {
                 Write-LogError "Cannot remove $binaryPath: $_"
                 exit 1
             }
         } else {
-            Write-LogWarn "ledit not found at $binaryPath"
+            Write-LogWarn "sprout not found at $binaryPath"
         }
         
         Print-UninstallInstructions $installDir
@@ -378,7 +378,7 @@ function Main {
     Check-Dependencies
     
     # Create temporary directory
-    $script:TEMP_DIR = (New-Item -ItemType Directory -Path (Join-Path $env:TEMP "ledit-$PID") -Force).FullName
+    $script:TEMP_DIR = (New-Item -ItemType Directory -Path (Join-Path $env:TEMP "sprout-$PID") -Force).FullName
     
     # Detect OS and architecture
     Write-LogInfo "Detecting operating system and architecture..."
@@ -388,7 +388,7 @@ function Main {
     
     # Get version
     $version = Get-Version
-    Write-LogInfo "Installing ledit version: $version"
+    Write-LogInfo "Installing sprout version: $version"
     
     # Determine install directory
     $installDir = Get-InstallDir
@@ -402,7 +402,7 @@ function Main {
     Write-LogInfo "Downloaded from: $downloadUrl"
     
     # Install the binary
-    $zipPath = Join-Path $script:TEMP_DIR "ledit-${os}-${arch}.zip"
+    $zipPath = Join-Path $script:TEMP_DIR "sprout-${os}-${arch}.zip"
     $binaryPath = Install-Binary -ZipPath $zipPath -InstallDir $installDir
     
     # Verify installation
@@ -412,13 +412,13 @@ function Main {
     if (-not $NoService.IsPresent) {
         if ($Service.IsPresent) {
             Write-LogInfo "Automatic service management is not yet available on Windows."
-            Write-LogInfo "You can manually run: ledit agent -d to start the daemon."
+            Write-LogInfo "You can manually run: sprout agent -d to start the daemon."
         } else {
             # Interactive prompt
-            $answer = Read-Host "[INFO] Install ledit as a background service? (auto-start on login) [Y/n]"
+            $answer = Read-Host "[INFO] Install sprout as a background service? (auto-start on login) [Y/n]"
             if (-not $answer -or $answer -match '^[Yy]') {
                 Write-LogInfo "Automatic service management is not yet available on Windows."
-                Write-LogInfo "You can manually run: ledit agent -d to start the daemon."
+                Write-LogInfo "You can manually run: sprout agent -d to start the daemon."
             }
         }
     }

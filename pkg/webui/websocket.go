@@ -830,15 +830,34 @@ func (ws *ReactWebServer) safeHandleGoroutine(safeConn *SafeConn, sessionID, cli
 // cleanupAfterPanic resets the client's query state and publishes a clean
 // state event so the UI doesn't get stuck showing "running" after a panic.
 func (ws *ReactWebServer) cleanupAfterPanic(clientID, sessionID string) {
-	if clientID != "" {
-		ws.decrementActiveQueries(clientID)
-		// Publish state event to UI so it refreshes to idle state
-		ws.publishClientEvent(clientID, "agent_state_change", map[string]interface{}{
-			"session_id": sessionID,
-			"status":     "error",
-			"message":    "Session terminated due to internal error",
-		})
+	if strings.TrimSpace(clientID) == "" {
+		return
 	}
+
+	// 1. Decrement top-level active query counter and clear top-level state
+	ws.decrementActiveQueries(clientID)
+
+	// 2. Reset per-chat session query state — prevents individual chats
+	// from being stuck in "running" state after a panic.
+	// Hold ws.mutex to safely access ctx and its fields (ActiveQuery,
+	// CurrentQuery, ChatSessions) which are always guarded by ws.mutex.
+	ws.mutex.Lock()
+	if ctx := ws.clientContexts[clientID]; ctx != nil {
+		ctx.clearAllChatQueryState()
+	}
+	ws.mutex.Unlock()
+
+	// 3. Clear cached agents — a panicked goroutine may have left the
+	// agent in a half-initialized or corrupted state. Force recreation.
+	ws.clearCachedAgent(clientID)
+
+	// 4. Publish session_terminated event so the client can tear down UI
+	ws.publishClientEvent(clientID, events.EventTypeSessionTerminated, map[string]interface{}{
+		"session_id": sessionID,
+		"status":     "error",
+		"code":       "internal_panic",
+		"message":    "Session terminated due to internal error",
+	})
 }
 
 // handleTerminalWebSocket handles terminal WebSocket connections.

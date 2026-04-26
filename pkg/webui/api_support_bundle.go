@@ -22,7 +22,7 @@ const (
 // handleAPISupportBundle handles GET /api/support-bundle.
 // It builds a zip archive containing:
 //   - redacted config snapshot (config.json)
-//   - all *.log, *.jsonl files from the ledit config directory
+//   - all *.log, *.jsonl files from the sprout config directory
 //
 // The archive is streamed directly to the client.
 func (ws *ReactWebServer) handleAPISupportBundle(w http.ResponseWriter, r *http.Request) {
@@ -32,7 +32,7 @@ func (ws *ReactWebServer) handleAPISupportBundle(w http.ResponseWriter, r *http.
 	}
 
 	timestamp := time.Now().Format("20060102-150405")
-	filename := fmt.Sprintf("ledit-diagnostics-%s.zip", timestamp)
+	filename := fmt.Sprintf("sprout-diagnostics-%s.zip", timestamp)
 
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
@@ -46,7 +46,7 @@ func (ws *ReactWebServer) handleAPISupportBundle(w http.ResponseWriter, r *http.
 		writeBundleText(zw, "config-error.txt", err.Error())
 	}
 
-	// 2. Log files from the ledit config directory
+	// 2. Log files from the sprout config directory
 	configDir, err := configuration.GetConfigDir()
 	if err == nil {
 		writeBundleLogs(zw, configDir)

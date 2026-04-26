@@ -246,8 +246,8 @@ func TestPrintVersionInfo(t *testing.T) {
 	out := captureStdout(t, printVersionInfo)
 
 	// Should always contain these strings
-	if !strings.Contains(out, "ledit version") {
-		t.Errorf("printVersionInfo() output missing 'ledit version', got:\n%s", out)
+	if !strings.Contains(out, "sprout version") {
+		t.Errorf("printVersionInfo() output missing 'sprout version', got:\n%s", out)
 	}
 	if !strings.Contains(out, "Go version") {
 		t.Errorf("printVersionInfo() output missing 'Go version', got:\n%s", out)

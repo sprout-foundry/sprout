@@ -159,8 +159,8 @@ func TestNonInteractiveErrorMessageContent(t *testing.T) {
 	t.Run("NewAgentWithModel provider resolution error", func(t *testing.T) {
 		// From agent.go — early non-interactive fast-fail:
 		//   "no provider configured. Running in non-interactive mode. Set LEDIT_PROVIDER
-		//    / configure ~/.ledit/config.json, or run `ledit agent` interactively: %w"
-		errMsg := "no provider configured. Running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `ledit agent` interactively: some error"
+		//    / configure ~/.ledit/config.json, or run `sprout agent` interactively: %w"
+		errMsg := "no provider configured. Running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `sprout agent` interactively: some error"
 
 		expectedPhrases := []struct {
 			name   string
@@ -169,7 +169,7 @@ func TestNonInteractiveErrorMessageContent(t *testing.T) {
 			{"non-interactive mode (case-insensitive)", "non-interactive mode"},
 			{"LEDIT_PROVIDER env var", "LEDIT_PROVIDER"},
 			{"config file path", "~/.ledit/config.json"},
-			{"interactive run guidance", "run `ledit agent` interactively"},
+			{"interactive run guidance", "run `sprout agent` interactively"},
 		}
 
 		for _, tc := range expectedPhrases {
@@ -183,8 +183,8 @@ func TestNonInteractiveErrorMessageContent(t *testing.T) {
 		// From agent.go — second non-interactive check after resolution succeeds
 		// but EnsureAPIKey fails:
 		//   "no provider configured. Running in non-interactive mode. Set LEDIT_PROVIDER
-		//    / configure ~/.ledit/config.json, or run `ledit agent` interactively: %w"
-		errMsg := "no provider configured. Running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `ledit agent` interactively: some error"
+		//    / configure ~/.ledit/config.json, or run `sprout agent` interactively: %w"
+		errMsg := "no provider configured. Running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `sprout agent` interactively: some error"
 
 		required := []string{"non-interactive mode", "LEDIT_PROVIDER", "~/.ledit/config.json"}
 		for _, phrase := range required {
@@ -198,8 +198,8 @@ func TestNonInteractiveErrorMessageContent(t *testing.T) {
 		// From agent.go — the fallback path when ResolveProviderModel fails
 		// and stdin is not a terminal (now uses canonical 'Running'):
 		//   "no provider configured. Running in non-interactive mode. Set LEDIT_PROVIDER
-		//    / configure ~/.ledit/config.json, or run `ledit agent` interactively"
-		errMsg := "no provider configured. Running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `ledit agent` interactively"
+		//    / configure ~/.ledit/config.json, or run `sprout agent` interactively"
+		errMsg := "no provider configured. Running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `sprout agent` interactively"
 
 		// Use case-insensitive check for "non-interactive mode" since test
 		// uses canonical "Running" now for consistency.
@@ -217,15 +217,15 @@ func TestNonInteractiveErrorMessageContent(t *testing.T) {
 	t.Run("recoverProviderStartup error", func(t *testing.T) {
 		// From agent_provider.go — recoverProviderStartup non-interactive path:
 		//   "failed to initialize provider %s: Running in non-interactive mode.
-		//    Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `ledit agent`
+		//    Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `sprout agent`
 		//    interactively: %w"
-		errMsg := "failed to initialize provider OpenAI: Running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `ledit agent` interactively: API key not configured"
+		errMsg := "failed to initialize provider OpenAI: Running in non-interactive mode. Set LEDIT_PROVIDER / configure ~/.ledit/config.json, or run `sprout agent` interactively: API key not configured"
 
 		required := []string{
 			"non-interactive",
 			"LEDIT_PROVIDER",
 			"~/.ledit/config.json",
-			"run `ledit agent` interactively",
+			"run `sprout agent` interactively",
 		}
 		for _, phrase := range required {
 			if !strings.Contains(errMsg, phrase) {

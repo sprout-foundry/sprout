@@ -178,7 +178,7 @@ func WebStormHotkeyConfig() *HotkeyConfig {
 }
 
 // HotkeyPresetConfig returns the hotkey configuration for a named preset.
-// Supported presets: "vscode", "webstorm", "ledit".
+// Supported presets: "vscode", "webstorm", "sprout".
 // For unknown presets, falls back to the default config.
 func HotkeyPresetConfig(preset string) *HotkeyConfig {
 	switch strings.ToLower(preset) {
@@ -186,7 +186,9 @@ func HotkeyPresetConfig(preset string) *HotkeyConfig {
 		return VsCodeHotkeyConfig()
 	case "webstorm":
 		return WebStormHotkeyConfig()
-	case "ledit":
+	case "sprout":
+		return DefaultHotkeyConfig()
+	case "ledit": // legacy alias
 		return DefaultHotkeyConfig()
 	default:
 		return DefaultHotkeyConfig()

@@ -17,7 +17,7 @@ func (a *Agent) initDebugLogger() error {
 	a.debugLogPath = f.Name()
 
 	// Write header
-	header := fmt.Sprintf("==== Ledit Debug Log ====%sSession start: %s\nProvider: %s\nModel: %s\nPID: %d\n========================\n",
+	header := fmt.Sprintf("==== Sprout Debug Log ====%sSession start: %s\nProvider: %s\nModel: %s\nPID: %d\n========================\n",
 		"\n",
 		time.Now().Format(time.RFC3339),
 		a.GetProvider(), a.GetModel(), os.Getpid(),

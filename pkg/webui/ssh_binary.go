@@ -293,7 +293,7 @@ func extractTarGzSingleFile(archivePath, destPath string) error {
 	return fmt.Errorf("artifact archive %s did not contain a binary", archivePath)
 }
 
-// ensureRemoteSSHBinary ensures the remote host has a ledit binary matching
+// ensureRemoteSSHBinary ensures the remote host has a sprout binary matching
 // localBinary's fingerprint. Returns the remote path, a boolean indicating
 // whether the binary was freshly uploaded (true) or already present (false),
 // and an error.

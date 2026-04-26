@@ -84,7 +84,7 @@ func TestStartFailsWhenPortAlreadyInUse(t *testing.T) {
 	defer listener.Close()
 
 	port := listener.Addr().(*net.TCPAddr).Port
-	server := NewReactWebServer(&agent.Agent{}, events.NewEventBus(), port)
+	server := NewReactWebServer(&agent.Agent{}, events.NewEventBus(), port, "127.0.0.1")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -126,8 +126,8 @@ func TestMultipleServersOnDifferentPorts(t *testing.T) {
 	}
 
 	// Create two web servers
-	server1 := NewReactWebServer(agent1, eventBus1, port1)
-	server2 := NewReactWebServer(agent2, eventBus2, port2)
+	server1 := NewReactWebServer(agent1, eventBus1, port1, "127.0.0.1")
+	server2 := NewReactWebServer(agent2, eventBus2, port2, "127.0.0.1")
 
 	// Start both servers
 	ctx1, cancel1 := context.WithCancel(context.Background())
@@ -205,5 +205,70 @@ func TestMultipleServersOnDifferentPorts(t *testing.T) {
 	}
 	if !CheckPortAvailable(port2) {
 		t.Errorf("Port %d should be available after shutdown", port2)
+	}
+}
+
+// TestCustomBindAddress verifies the server binds to a custom address
+func TestCustomBindAddress(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	// Find an available port to avoid conflicts with running servers
+	port, err := FindAvailablePort(DaemonPort + 100)
+	if err != nil {
+		t.Fatalf("FindAvailablePort failed: %v", err)
+	}
+
+	server := NewReactWebServer(&agent.Agent{}, events.NewEventBus(), port, "127.0.0.1")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := server.Start(ctx); err != nil {
+		t.Fatalf("Failed to start server: %v", err)
+	}
+	defer server.Shutdown()
+
+	// Verify the server is using the correct bind address
+	if server.bindAddr != "127.0.0.1" {
+		t.Errorf("Server bindAddr = %s, want \"127.0.0.1\"", server.bindAddr)
+	}
+
+	// Verify the server is running
+	if !server.IsRunning() {
+		t.Error("Server should be running")
+	}
+}
+
+// TestBindAddrStoredCorrectly verifies the bind address is correctly stored
+// on the server after construction and start.
+func TestBindAddrStoredCorrectly(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	// Use a non-zero port to avoid DaemonPort (54000) conflicts
+	// This test verifies that the bindAddr is correctly stored, not dynamic port allocation
+	port := DaemonPort + 200
+
+	server := NewReactWebServer(&agent.Agent{}, events.NewEventBus(), port, "127.0.0.1")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := server.Start(ctx); err != nil {
+		t.Fatalf("Failed to start server: %v", err)
+	}
+	defer server.Shutdown()
+
+	// Port should match what we specified
+	if server.GetPort() != port {
+		t.Errorf("Server port = %d, want %d", server.GetPort(), port)
+	}
+
+	// Verify the server is using the correct bind address
+	if server.bindAddr != "127.0.0.1" {
+		t.Errorf("Server bindAddr = %s, want \"127.0.0.1\"", server.bindAddr)
 	}
 }

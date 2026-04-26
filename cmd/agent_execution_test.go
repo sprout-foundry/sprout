@@ -2,6 +2,7 @@
 package cmd
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -188,5 +189,103 @@ func TestPortAlias_PortFlagUsage(t *testing.T) {
 
 	if webPortFlag.Usage == "" {
 		t.Error("--web-port flag should have a non-empty usage string")
+	}
+}
+
+// =============================================================================
+// Tests for --bind flag (bind address for web UI)
+// =============================================================================
+
+func TestBindFlag_IsRegistered(t *testing.T) {
+	// Verify that the --bind flag is registered
+	flag := agentCmd.Flags().Lookup("bind")
+	if flag == nil {
+		t.Fatal("expected --bind flag to be registered on agentCmd")
+	}
+
+	// Verify it's a string flag
+	if flag.Value.Type() != "string" {
+		t.Errorf("--bind flag type = %s, want \"string\"", flag.Value.Type())
+	}
+}
+
+func TestBindFlag_DefaultValue(t *testing.T) {
+	// Verify default value is empty string (will resolve to 127.0.0.1)
+	flag := agentCmd.Flags().Lookup("bind")
+	if flag == nil {
+		t.Fatal("expected --bind flag to be registered on agentCmd")
+	}
+
+	if flag.DefValue != "" {
+		t.Errorf("--bind flag default value = %s, want \"\"", flag.DefValue)
+	}
+}
+
+func TestBindFlag_SetValue(t *testing.T) {
+	// Save original values
+	origWebBindAddr := webBindAddr
+	defer func() { webBindAddr = origWebBindAddr }()
+
+	// Test setting the flag
+	err := agentCmd.Flags().Set("bind", "0.0.0.0")
+	if err != nil {
+		t.Fatalf("failed to set --bind flag: %v", err)
+	}
+
+	if webBindAddr != "0.0.0.0" {
+		t.Errorf("after setting --bind 0.0.0.0, webBindAddr = %s, want \"0.0.0.0\"", webBindAddr)
+	}
+}
+
+func TestBindFlag_HasUsageText(t *testing.T) {
+	// Verify that the --bind flag has usage text
+	flag := agentCmd.Flags().Lookup("bind")
+	if flag == nil {
+		t.Fatal("expected --bind flag to be registered on agentCmd")
+	}
+
+	if flag.Usage == "" {
+		t.Error("--bind flag should have a non-empty usage string")
+	}
+
+	// Verify usage mentions the env var
+	if !strings.Contains(flag.Usage, "SPROUT_BIND_ADDR") {
+		t.Error("--bind flag usage should mention SPROUT_BIND_ADDR env var")
+	}
+}
+
+func TestBindFlag_NotHidden(t *testing.T) {
+	// Verify that the --bind flag is NOT hidden
+	flag := agentCmd.Flags().Lookup("bind")
+	if flag == nil {
+		t.Fatal("expected --bind flag to be registered on agentCmd")
+	}
+
+	if flag.Hidden {
+		t.Error("--bind flag should NOT be hidden (it's a user-facing flag)")
+	}
+}
+
+func TestBindFlag_AllowedAddresses(t *testing.T) {
+	// Save original values
+	origWebBindAddr := webBindAddr
+	defer func() { webBindAddr = origWebBindAddr }()
+
+	allowedAddresses := []string{
+		"0.0.0.0",
+		"127.0.0.1",
+		"localhost",
+		"192.168.1.100",
+		"10.0.0.5",
+	}
+
+	for _, addr := range allowedAddresses {
+		err := agentCmd.Flags().Set("bind", addr)
+		if err != nil {
+			t.Errorf("failed to set --bind to %q: %v", addr, err)
+		}
+		if webBindAddr != addr {
+			t.Errorf("after setting --bind %q, webBindAddr = %s, want %q", addr, webBindAddr, addr)
+		}
 	}
 }

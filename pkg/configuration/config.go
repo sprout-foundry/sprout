@@ -173,7 +173,8 @@ type SubagentType struct {
 	Provider         string   `json:"provider"`                     // Provider for this subagent type (optional, falls back to SubagentProvider)
 	Model            string   `json:"model"`                        // Model for this subagent type (optional, falls back to SubagentModel)
 	SystemPrompt     string   `json:"system_prompt"`                // Relative path to system prompt file (e.g., "subagent_prompts/coder.md")
-	SystemPromptText string   `json:"system_prompt_text,omitempty"` // Optional inline system prompt text
+	SystemPromptText string   `json:"system_prompt_text,omitempty"` // Optional inline system prompt text (replaces base prompt entirely)
+	SystemPromptAppend string `json:"system_prompt_append,omitempty"` // Optional inline text appended to the base or loaded system prompt (for composition)
 	AllowedTools     []string `json:"allowed_tools,omitempty"`      // Optional explicit tool allowlist for focused persona behavior
 	Aliases          []string `json:"aliases,omitempty"`            // Optional aliases (e.g., "web-scraper")
 	Enabled          bool     `json:"enabled"`                      // Whether this subagent type is available for use
@@ -1024,6 +1025,7 @@ func defaultSubagentTypes() map[string]SubagentType {
 			Model:            definition.Model,
 			SystemPrompt:     definition.SystemPrompt,
 			SystemPromptText: definition.SystemPromptText,
+			SystemPromptAppend: definition.SystemPromptAppend,
 			AllowedTools:     append([]string{}, definition.AllowedTools...),
 			Aliases:          append([]string{}, definition.Aliases...),
 			Enabled:          definition.Enabled,

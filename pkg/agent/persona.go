@@ -66,11 +66,24 @@ func (a *Agent) ApplyPersona(personaID string) error {
 	}
 
 	// Persona prompt overrides only this session's active prompt.
+	// system_prompt_text: completely replaces the current prompt.
+	// system_prompt_append: appends to the current prompt (useful for adding
+	// persona-specific rules on top of the base orchestrator prompt).
 	if promptText := strings.TrimSpace(persona.SystemPromptText); promptText != "" {
 		a.SetSystemPrompt(promptText)
 	} else if promptPath := strings.TrimSpace(persona.SystemPrompt); promptPath != "" {
 		if err := a.SetSystemPromptFromFile(promptPath); err != nil {
 			return fmt.Errorf("failed loading persona system prompt %q: %w", promptPath, err)
+		}
+	}
+
+	// Append supplement after the base/file/text prompt is set.
+	if appendText := strings.TrimSpace(persona.SystemPromptAppend); appendText != "" {
+		current := a.GetSystemPrompt()
+		if strings.TrimSpace(current) != "" {
+			a.SetSystemPrompt(current + "\n\n---\n\n" + appendText)
+		} else {
+			a.SetSystemPrompt(appendText)
 		}
 	}
 

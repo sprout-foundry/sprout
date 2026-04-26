@@ -280,7 +280,7 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (result *s
 	// When a new binary was freshly uploaded (different fingerprint from any
 	// previously-cached remote binary), kill any existing daemon so it restarts
 	// with the updated binary.  This avoids the common case where a stale daemon
-	// is reused indefinitely after a local ledit upgrade.
+	// is reused indefinitely after a local sprout upgrade.
 	if binaryWasUploaded {
 		logger.Logf("new backend binary uploaded; stopping any existing remote daemon to force restart")
 		killOld := newSSHCommandContext(launchCtx, hostAlias,
@@ -443,7 +443,7 @@ func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherU
 		`  else`,
 		`    resp=$(wget -qO- -T 3 "http://127.0.0.1:$DAEMON_PORT/health" 2>/dev/null) || return 1`,
 		`  fi`,
-		`  # Look for a JSON response with a "port" field to confirm ledit.`,
+		`  # Look for a JSON response with a "port" field to confirm sprout.`,
 		`  case "$resp" in`,
 		`    *'"status":"ok"'*) ;;`,
 		`    *) return 1 ;;`,
@@ -471,7 +471,7 @@ func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherU
 		`fi`,
 		"",
 		"# No existing daemon — start one.",
-		`mkdir -p "$HOME/.cache/ledit-webui/logs"`,
+		`mkdir -p "$HOME/.cache/sprout-webui/logs"`,
 		fmt.Sprintf("WORKSPACE_RAW=%s", shellEscapeSSH(workspaceRaw)),
 		`WORKSPACE_PATH="$WORKSPACE_RAW"`,
 		`case "$WORKSPACE_PATH" in`,
@@ -484,7 +484,7 @@ func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherU
 		// Validate the workspace path is accessible without cd-ing into it.
 		// The daemon runs host-level from $HOME to support multi-workspace.
 		`test -d "$WORKSPACE_PATH" || { echo "remote workspace path is not accessible: $WORKSPACE_RAW" >&2; exit 1; }`,
-		fmt.Sprintf(`LOG_FILE="$HOME/.cache/ledit-webui/logs/%s.log"`, sanitizeRemoteLogName(hostAlias)),
+		fmt.Sprintf(`LOG_FILE="$HOME/.cache/sprout-webui/logs/%s.log"`, sanitizeRemoteLogName(hostAlias)),
 		// Launch the daemon from $HOME (not the workspace directory) using
 		// the user's main config.  No --isolated-config — this is a host-level
 		// daemon that serves multiple workspaces via per-client context.
@@ -506,7 +506,7 @@ func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherU
 		`  MAX_WAIT=15`,
 		`  while [ $START_WAIT -lt $MAX_WAIT ]; do`,
 		`    if ! kill -0 "$REMOTE_PID" 2>/dev/null; then`,
-		`      echo "ERROR: ledit daemon exited prematurely on port $DAEMON_PORT" >&2`,
+		`      echo "ERROR: sprout daemon exited prematurely on port $DAEMON_PORT" >&2`,
 		`      echo "Last 50 lines from daemon log:" >&2`,
 		`      tail -n 50 "$LOG_FILE" 2>&1 | while IFS= read -r line; do echo "  $line" >&2; done`,
 		`      exit 1`,
@@ -526,7 +526,7 @@ func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherU
 		`else`,
 		`  sleep 1`,
 		`  if ! kill -0 "$REMOTE_PID" 2>/dev/null; then`,
-		`    echo "ERROR: ledit daemon failed to start on port $DAEMON_PORT — another daemon may already be running on this host" >&2`,
+		`    echo "ERROR: sprout daemon failed to start on port $DAEMON_PORT — another daemon may already be running on this host" >&2`,
 		`    exit 1`,
 		`  fi`,
 		`fi`,
@@ -618,7 +618,7 @@ func waitForWebHealth(port int, timeout time.Duration) error {
 	}
 
 	if lastErr == nil {
-		lastErr = fmt.Errorf("timed out waiting for remote ledit backend")
+		lastErr = fmt.Errorf("timed out waiting for remote sprout backend")
 	}
 	return fmt.Errorf("failed to connect to SSH workspace: %w", lastErr)
 }
@@ -677,7 +677,7 @@ func inspectRemoteSSHBackendFailure(hostAlias string, remotePort, remotePID int,
 		"set +e",
 		fmt.Sprintf("REMOTE_PORT=%d", remotePort),
 		fmt.Sprintf("REMOTE_PID=%d", remotePID),
-		fmt.Sprintf(`LOG_FILE="$HOME/.cache/ledit-webui/logs/%s.log"`, sanitizeRemoteLogName(hostAlias)),
+		fmt.Sprintf(`LOG_FILE="$HOME/.cache/sprout-webui/logs/%s.log"`, sanitizeRemoteLogName(hostAlias)),
 		`echo "Remote backend port: $REMOTE_PORT"`,
 		`if [ "$REMOTE_PID" -gt 0 ] && kill -0 "$REMOTE_PID" >/dev/null 2>&1; then`,
 		`  echo "Remote backend PID: $REMOTE_PID (running)"`,

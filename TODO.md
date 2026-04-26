@@ -323,7 +323,8 @@ These gaps were identified by cross-referencing the current editor implementatio
 
 ### Testing
 
-[] - DESKTOP: Add desktop E2E smoke tests to CI — write a minimal Playwright or Spectron test suite that launches the packaged app in headless mode, opens a temp workspace, and asserts the UI loads and the backend health endpoint responds. Run on Linux in CI at minimum.
+[x] - DESKTOP: Add desktop E2E smoke tests to CI — write a minimal Playwright or Spectron test suite that launches the packaged app in headless mode, opens a temp workspace, and asserts the UI loads and the backend health endpoint responds. Run on Linux in CI at minimum.
+[x] - DESKTOP: Add desktop E2E smoke tests to CI — write a minimal Playwright or Spectron test suite that launches the packaged app in headless mode, opens a temp workspace, and asserts the UI loads and the backend health endpoint responds. Run on Linux in CI at minimum. (duplicate of line above)
 
 ## Onboarding Flow Improvements
 

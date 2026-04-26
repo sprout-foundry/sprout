@@ -251,7 +251,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Parameters: []ParameterConfig{
 			{"url", "string", true, []string{}, "URL to browse — works with localhost URLs for testing local apps"},
 			{"action", "string", false, []string{}, "What to do: 'screenshot' (save PNG), 'dom' (return rendered HTML), 'text' (return visible text, default), or 'inspect' (return structured JSON with page state and diagnostics)"},
-			{"screenshot_path", "string", false, []string{}, "File path to save screenshot (required when action=screenshot, e.g. /tmp/ledit_examples/screenshot.png)"},
+			{"screenshot_path", "string", false, []string{}, "File path to save screenshot (required when action=screenshot, e.g. /tmp/sprout_examples/screenshot.png)"},
 			{"session_id", "string", false, []string{}, "Reuse a persistent built-in browser session across multiple browse_url calls for iterative debugging"},
 			{"persist_session", "boolean", false, []string{}, "Keep the browser page alive after this call and return a session_id in inspect output"},
 			{"close_session", "boolean", false, []string{}, "Close the referenced persistent session after this call completes"},

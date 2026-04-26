@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import type { ChangeEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import './Sidebar.css';
-import { ApiService, type ProviderOption, type LeditSettings, type LeditInstance } from '../services/api';
+import { ApiService, type ProviderOption, type SproutSettings, type SproutInstance } from '../services/api';
 import SettingsPanel from './SettingsPanel';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
@@ -29,7 +29,7 @@ import SearchView from './SearchView';
 import GitSidebarPanel from './GitSidebarPanel';
 import type { GitSidebarPanelProps } from './GitSidebarPanel';
 import GitHistoryPanel from './GitHistoryPanel';
-import LeditLogo from './LeditLogo';
+import SproutLogo from './SproutLogo';
 import LocationSwitcher from './LocationSwitcher';
 import WorktreePanel from './WorktreePanel';
 
@@ -37,7 +37,7 @@ type SectionTab = 'git' | 'logs' | 'files' | 'settings' | 'search';
 
 interface SidebarProps {
   isConnected: boolean;
-  instances?: LeditInstance[];
+  instances?: SproutInstance[];
   selectedInstancePID?: number;
   isSwitchingInstance?: boolean;
   onInstanceChange?: (pid: number) => void;
@@ -170,7 +170,7 @@ function Sidebar({
   const hasHydratedProviderStateRef = useRef(false);
   const [selectedSection, setSelectedSection] = useState<SectionTab>('git');
   const [gitSubTab, setGitSubTab] = useState<'changes' | 'history' | 'worktrees'>('changes');
-  const [settings, setSettings] = useState<LeditSettings | null>(null);
+  const [settings, setSettings] = useState<SproutSettings | null>(null);
   const [settingsFocusTarget, setSettingsFocusTarget] = useState<'persona' | 'provider' | null>(null);
   const apiService = ApiService.getInstance();
   const effectiveSidebarCollapsed = !isMobile && !!sidebarCollapsed;
@@ -1061,7 +1061,7 @@ function Sidebar({
             aria-label={isMobile ? 'Close sidebar' : effectiveSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             title={isMobile ? 'Close sidebar' : effectiveSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
-            <LeditLogo showWordmark={false} compact />
+            <SproutLogo showWordmark={false} compact />
           </button>
           {!effectiveSidebarCollapsed ? (
             <LocationSwitcher

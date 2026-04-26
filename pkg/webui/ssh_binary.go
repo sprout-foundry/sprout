@@ -26,11 +26,11 @@ import (
 func currentExecutableForSSH() (string, error) {
 	executablePath, err := os.Executable()
 	if err != nil {
-		return "", fmt.Errorf("failed to determine current ledit executable: %w", err)
+		return "", fmt.Errorf("failed to determine current sprout executable: %w", err)
 	}
 	executablePath, err = filepath.EvalSymlinks(executablePath)
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve current ledit executable: %w", err)
+		return "", fmt.Errorf("failed to resolve current sprout executable: %w", err)
 	}
 	return executablePath, nil
 }
@@ -70,7 +70,7 @@ func prepareLocalSSHBinary(remotePlatform, remoteArch string, logger *sshLaunchL
 		// Source tree not adjacent to the executable (e.g. running from GOPATH/bin).
 		// Before falling back to downloading a release artifact, check if a
 		// previous run already cross-compiled the binary from source and cached it.
-		cachedBuildPath := filepath.Join(localSSHCacheRoot(), "builds", fmt.Sprintf("ledit-%s-%s", remotePlatform, remoteArch))
+		cachedBuildPath := filepath.Join(localSSHCacheRoot(), "builds", fmt.Sprintf("sprout-%s-%s", remotePlatform, remoteArch))
 		if info, statErr := os.Stat(cachedBuildPath); statErr == nil && !info.IsDir() {
 			logger.Logf("source tree unavailable at %s; reusing locally-built cross-platform binary at %s", repoRoot, cachedBuildPath)
 			return cachedBuildPath, nil
@@ -79,9 +79,9 @@ func prepareLocalSSHBinary(remotePlatform, remoteArch string, logger *sshLaunchL
 		if latestPath, latestErr := ensureLocalSSHBinaryArtifactForTag("latest", remotePlatform, remoteArch, logger); latestErr == nil && latestPath != "" {
 			return latestPath, nil
 		} else if latestErr != nil {
-			return "", fmt.Errorf("cannot build matching SSH backend for %s/%s because the ledit source tree is not available next to %s (latest artifact fallback failed: %w)", remotePlatform, remoteArch, executablePath, latestErr)
+			return "", fmt.Errorf("cannot build matching SSH backend for %s/%s because the sprout source tree is not available next to %s (latest artifact fallback failed: %w)", remotePlatform, remoteArch, executablePath, latestErr)
 		}
-		return "", fmt.Errorf("cannot build matching SSH backend for %s/%s because the ledit source tree is not available next to %s", remotePlatform, remoteArch, executablePath)
+		return "", fmt.Errorf("cannot build matching SSH backend for %s/%s because the sprout source tree is not available next to %s", remotePlatform, remoteArch, executablePath)
 	}
 
 	cacheDir := filepath.Join(localSSHCacheRoot(), "builds")
@@ -89,7 +89,7 @@ func prepareLocalSSHBinary(remotePlatform, remoteArch string, logger *sshLaunchL
 		return "", fmt.Errorf("failed to prepare SSH build cache: %w", err)
 	}
 
-	outputPath := filepath.Join(cacheDir, fmt.Sprintf("ledit-%s-%s", remotePlatform, remoteArch))
+	outputPath := filepath.Join(cacheDir, fmt.Sprintf("sprout-%s-%s", remotePlatform, remoteArch))
 	buildCmd := exec.Command(goBinary, "build", "-o", outputPath, ".")
 	buildCmd.Dir = repoRoot
 	buildCmd.Env = append(os.Environ(),
@@ -124,13 +124,13 @@ func ensureLocalSSHBinaryArtifact(remotePlatform, remoteArch string, logger *ssh
 }
 
 func ensureLocalSSHBinaryArtifactForTag(tag, remotePlatform, remoteArch string, logger *sshLaunchLogger) (string, error) {
-	assetName := fmt.Sprintf("ledit-%s-%s.tar.gz", remotePlatform, remoteArch)
+	assetName := fmt.Sprintf("sprout-%s-%s.tar.gz", remotePlatform, remoteArch)
 	cacheTag := strings.TrimPrefix(tag, "v")
 	if strings.TrimSpace(cacheTag) == "" {
 		cacheTag = "latest"
 	}
 	cacheDir := filepath.Join(localSSHCacheRoot(), "artifacts", cacheTag, remotePlatform+"-"+remoteArch)
-	binaryPath := filepath.Join(cacheDir, fmt.Sprintf("ledit-%s-%s", remotePlatform, remoteArch))
+	binaryPath := filepath.Join(cacheDir, fmt.Sprintf("sprout-%s-%s", remotePlatform, remoteArch))
 
 	hasCachedBinary := false
 	if info, err := os.Stat(binaryPath); err == nil && info.Mode().IsRegular() {
@@ -313,9 +313,9 @@ func ensureRemoteSSHBinary(ctx context.Context, hostAlias, localBinary string, r
 		return "", false, newSSHLaunchFailure("resolve-remote-home", "failed to resolve remote home directory", "remote $HOME was empty", logger)
 	}
 
-	remoteDirSSH := fmt.Sprintf("%s/.cache/ledit-webui/backend/%s/%s-%s", remoteHome, localFingerprint, remoteInfo.Platform, remoteInfo.Arch)
-	remoteBinarySSH := remoteDirSSH + "/ledit"
-	remoteUploadSCP := fmt.Sprintf(".ledit-ssh-upload-%s.tmp", localFingerprint)
+	remoteDirSSH := fmt.Sprintf("%s/.cache/sprout-webui/backend/%s/%s-%s", remoteHome, localFingerprint, remoteInfo.Platform, remoteInfo.Arch)
+	remoteBinarySSH := remoteDirSSH + "/sprout"
+	remoteUploadSCP := fmt.Sprintf(".sprout-ssh-upload-%s.tmp", localFingerprint)
 
 	// Fast path: if the fingerprinted backend already exists and executes,
 	// skip upload/install and reuse it directly (wasUploaded = false).

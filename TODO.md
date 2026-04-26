@@ -199,7 +199,7 @@ These gaps were identified by cross-referencing the current editor implementatio
 
 [x] - EDITOR: Add code lens decorations — render inline text above lines (e.g., "12 references", "Run test" button) using LSP code lens data or custom rules. This requires a ViewPlugin that creates inline widgets at specific line positions. Start with basic static code lens (function reference counts) before adding interactive elements.
 
-[] - EDITOR: Add auto-close HTML/XML/JSX tags — the current `closeBrackets()` from `@codemirror/autocomplete` auto-closes `()`, `[]`, `{}`, `"`, `'` but does NOT auto-close HTML/JSX tags (`<div>` → `</div>`, `<span>` → `</span>`, etc.). Implement a custom extension that: (1) on typing `>`, checks if the current context is inside a tag (needs syntax tree consultation), (2) inserts the matching closing tag after auto-indent, (3) places the cursor between the opening and closing tags. Consider the Emmet plugin as an alternative if it covers this use case.
+[x] - EDITOR: Add auto-close HTML/XML/JSX tags — the current `closeBrackets()` from `@codemirror/autocomplete` auto-closes `()`, `[]`, `{}`, `"`, `'` but does NOT auto-close HTML/JSX tags (`<div>` → `</div>`, `<span>` → `</span>`, etc.). Implement a custom extension that: (1) on typing `>`, checks if the current context is inside a tag (needs syntax tree consultation), (2) inserts the matching closing tag after auto-indent, (3) places the cursor between the opening and closing tags. Consider the Emmet plugin as an alternative if it covers this use case.
 
 ### Terminal & File Pane Gaps
 

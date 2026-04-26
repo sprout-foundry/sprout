@@ -562,4 +562,51 @@ describe('extractTagName', () => {
       expect(extractTagName('<div><span>', 11)).toBe('span');
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Brace depth tracking (JSX expressions)
+  // -------------------------------------------------------------------------
+
+  describe('brace depth tracking (JSX expressions)', () => {
+    it('returns null for <div data-x={5 > (comparison in JSX expression)', () => {
+      // <div data-x={5 >  → 16 chars, cursorPos=16
+      expect(extractTagName('<div data-x={5 >', 16)).toBeNull();
+    });
+
+    it('returns "div" for <div data-x={5} > (closed brace before tag close)', () => {
+      // <div data-x={5} >  → 17 chars, cursorPos=17
+      expect(extractTagName('<div data-x={5} >', 17)).toBe('div');
+    });
+
+    it('returns null for <div style={{ width: width > (nested unclosed braces)', () => {
+      // <div style={{ width: width >  → 28 chars, cursorPos=28
+      expect(extractTagName('<div style={{ width: width >', 28)).toBeNull();
+    });
+
+    it('returns "div" for <div style={{ width: 100 }} > (closed nested braces)', () => {
+      // <div style={{ width: 100 }} >  → 29 chars, cursorPos=29
+      expect(extractTagName('<div style={{ width: 100 }} >', 29)).toBe('div');
+    });
+
+    it('returns null for <div onClick={a > (partial ternary in JSX expression)', () => {
+      // <div onClick={a >  → 17 chars, cursorPos=17
+      expect(extractTagName('<div onClick={a >', 17)).toBeNull();
+    });
+
+    it('returns "div" for <div onClick={a > b ? fn : fn2} > (closed ternary in braces)', () => {
+      // <div onClick={a > b ? fn : fn2} >  → 33 chars, cursorPos=33
+      expect(extractTagName('<div onClick={a > b ? fn : fn2} >', 33)).toBe('div');
+    });
+
+    it('returns null for deeply nested unclosed braces <div x={{a: {b: 1 >', () => {
+      // <div x={{a: {b: 1 >  → 19 chars, cursorPos=19
+      expect(extractTagName('<div x={{a: {b: 1 >', 19)).toBeNull();
+    });
+
+    it('extracts "div" when braces appear inside quoted attribute <div x=\'{foo}\'>', () => {
+      // <div x='{foo}'>  → 15 chars, cursorPos=15
+      // Braces inside quotes should not affect brace depth tracking
+      expect(extractTagName("<div x='{foo}'>", 15)).toBe('div');
+    });
+  });
 });

@@ -20,7 +20,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
-// LogAPIResponse saves the accumulated streaming response to .ledit/lastResponse.json
+// LogAPIResponse saves the accumulated streaming response to .sprout/lastResponse.json
 func LogAPIResponse(content string, streaming bool) {
 	// Create the response structure
 	response := map[string]interface{}{
@@ -37,15 +37,15 @@ func LogAPIResponse(content string, streaming bool) {
 			err, len(content), streaming, time.Now().Format(time.RFC3339)))
 	}
 
-	// Ensure .ledit directory exists
-	leditDir := filepath.Join(os.Getenv("HOME"), ".ledit")
-	if err := os.MkdirAll(leditDir, 0755); err != nil {
+	// Ensure .sprout directory exists
+	sproutDir := filepath.Join(os.Getenv("HOME"), ".sprout")
+	if err := os.MkdirAll(sproutDir, 0755); err != nil {
 		// If we can't create the directory, we can't log
 		return
 	}
 
 	// Write to lastResponse.json
-	filePath := filepath.Join(leditDir, "lastResponse.json")
+	filePath := filepath.Join(sproutDir, "lastResponse.json")
 	if err := os.WriteFile(filePath, jsonData, 0644); err != nil {
 		// If we can't write the file, we can't log
 		return
@@ -72,7 +72,7 @@ func logChatResponseDetailed(resp *api.ChatResponse, provider string, streaming 
 		return
 	}
 
-	dir := filepath.Join(os.Getenv("HOME"), ".ledit")
+	dir := filepath.Join(os.Getenv("HOME"), ".sprout")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return
 	}

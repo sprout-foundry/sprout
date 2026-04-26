@@ -47,7 +47,7 @@ func GetCostStore() *CostStore {
 			log.Printf("coststore: failed to get config dir: %v", err)
 			// Fallback to home directory
 			homeDir, _ := os.UserHomeDir()
-			configDir = filepath.Join(homeDir, ".ledit")
+			configDir = filepath.Join(homeDir, ".sprout")
 		}
 		costStore = &CostStore{
 			filePath: filepath.Join(configDir, "cost_history.json"),

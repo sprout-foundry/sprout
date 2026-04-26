@@ -107,7 +107,7 @@ func (a *goSessionAdapter) ensureServerLocked(workspaceRoot string) error {
 		a.goplsPath = path
 	}
 
-	tmpDir, err := os.MkdirTemp("", "ledit-gopls-*")
+	tmpDir, err := os.MkdirTemp("", "sprout-gopls-*")
 	if err != nil {
 		return fmt.Errorf("failed to create gopls temp dir: %w", err)
 	}

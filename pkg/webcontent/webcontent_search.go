@@ -160,7 +160,7 @@ func performDuckDuckGoSearch(query string, logger *utils.Logger) ([]SearchResult
 		return nil, fmt.Errorf("failed to create duckduckgo request: %w", err)
 	}
 
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; ledit/1.0)")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; sprout/1.0)")
 	req.Header.Set("Accept", "application/json")
 
 	client := &http.Client{Timeout: 30 * time.Second}

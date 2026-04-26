@@ -21,7 +21,7 @@ func getHomeSettingsPath() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to get home directory: %w", err)
 	}
-	return filepath.Join(home, ".ledit"), nil
+	return filepath.Join(home, ".sprout"), nil
 }
 
 func getPathWithFallback(folderName string) string {

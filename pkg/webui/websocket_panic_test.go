@@ -16,12 +16,10 @@ import (
 // TestWritePanicError_SendsErrorEvent verifies WritePanicError sends
 // a structured error event with type "error" and code "internal_panic".
 func TestWritePanicError_SendsErrorEvent(t *testing.T) {
-	// Create a local upgrader for testing
 	testUpgrader := websocket.Upgrader{
 		CheckOrigin: func(*http.Request) bool { return true },
 	}
 
-	// Set up a WebSocket server that panics on connect
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := testUpgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -32,7 +30,6 @@ func TestWritePanicError_SendsErrorEvent(t *testing.T) {
 		sc := NewSafeConn(conn)
 		sc.WritePanicError("test-session", "test-location", "something went wrong")
 
-		// Give client time to read
 		time.Sleep(50 * time.Millisecond)
 	}))
 	defer server.Close()
@@ -47,29 +44,55 @@ func TestWritePanicError_SendsErrorEvent(t *testing.T) {
 	ws.SetReadDeadline(time.Now().Add(2 * time.Second))
 	_, msg, err := ws.ReadMessage()
 	if err != nil {
-		t.Fatalf("read failed: %v", err)
+		t.Fatalf("read error event failed: %v", err)
 	}
 
-	var event map[string]interface{}
-	if err := json.Unmarshal(msg, &event); err != nil {
+	var errorEvent map[string]interface{}
+	if err := json.Unmarshal(msg, &errorEvent); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
 
-	if event["type"] != "error" {
-		t.Errorf("expected type=error, got %v", event["type"])
+	if errorEvent["type"] != "error" {
+		t.Errorf("expected type=error, got %v", errorEvent["type"])
 	}
-
-	data, ok := event["data"].(map[string]interface{})
+	data, ok := errorEvent["data"].(map[string]interface{})
 	if !ok {
-		t.Fatalf("expected data to be map, got %T", event["data"])
+		t.Fatalf("expected data to be map, got %T", errorEvent["data"])
 	}
-
 	if data["code"] != "internal_panic" {
 		t.Errorf("expected code=internal_panic, got %v", data["code"])
 	}
-
 	if data["session_id"] != "test-session" {
 		t.Errorf("expected session_id=test-session, got %v", data["session_id"])
+	}
+
+	// Read session_terminated event
+	ws.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_, msg, err = ws.ReadMessage()
+	if err != nil {
+		t.Fatalf("read session_terminated event failed: %v", err)
+	}
+
+	var termEvent map[string]interface{}
+	if err := json.Unmarshal(msg, &termEvent); err != nil {
+		t.Fatalf("invalid JSON for session_terminated: %v", err)
+	}
+
+	if termEvent["type"] != "session_terminated" {
+		t.Errorf("expected type=session_terminated, got %v", termEvent["type"])
+	}
+	termData, ok := termEvent["data"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected session_terminated data to be map, got %T", termEvent["data"])
+	}
+	if termData["session_id"] != "test-session" {
+		t.Errorf("expected session_id=test-session, got %v", termData["session_id"])
+	}
+	if termData["code"] != "internal_panic" {
+		t.Errorf("expected code=internal_panic, got %v", termData["code"])
+	}
+	if termData["status"] != "error" {
+		t.Errorf("expected status=error, got %v", termData["status"])
 	}
 }
 

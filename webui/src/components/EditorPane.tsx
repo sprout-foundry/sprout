@@ -368,6 +368,32 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       isExternalUpdateRef.current = true;
 
       try {
+        // Virtual workspace buffers have no on-disk file — handle in-memory only.
+        if (filePath.startsWith('__workspace/')) {
+          const content = buffer?.content || '';
+          setLocalContent(content);
+          setSelectionInfo(null);
+          setError(null);
+          if (buffer) {
+            updateBufferContent(buffer.id, content);
+            setBufferOriginalContent(buffer.id, content);
+          }
+          if (viewRef.current) {
+            viewRef.current.dispatch({
+              changes: {
+                from: 0,
+                to: viewRef.current.state.doc.length,
+                insert: content,
+              },
+              annotations: suppressHistoryAnnotations,
+              effects: setOriginalContent.of(content),
+            });
+            clearDiffGutter(viewRef.current);
+            clearDiagnostics(viewRef.current);
+          }
+          return; // Skip server fetch
+        }
+
         const response = await readFileWithConsent(filePath);
         if (!response.ok) {
           throw new Error(`Failed to load file: ${response.statusText}`);

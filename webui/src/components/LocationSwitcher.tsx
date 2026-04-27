@@ -11,6 +11,7 @@ import {
   SSHWorkspaceOpenError,
 } from '../services/api';
 import { clientFetch, getSSHProxyContext } from '../services/clientSession';
+import { supportsSSH, supportsInstances } from '../config/mode';
 
 interface LocationSwitcherProps {
   isConnected: boolean;
@@ -510,7 +511,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
   }, [switchingState.error, switchingState.status, isOpeningSshHost]);
 
   useEffect(() => {
-    if (!isOpen && !isSshPanelOpen) {
+    if (!supportsSSH || (!isOpen && !isSshPanelOpen)) {
       return;
     }
     const desktopBridge = (window as any).sproutDesktop;
@@ -945,6 +946,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
   }, []);
 
   const showExpiredSessionRecovery = useMemo(() => {
+    if (!supportsSSH) return false;
     const message = switchingState.error?.toLowerCase() || '';
     return message.includes('ssh session not found or expired');
   }, [switchingState.error]);
@@ -1126,22 +1128,24 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
       }`}
     >
       {/* ── Host / connection indicator button (icon only) ── */}
-      <button
-        ref={sshBtnRef}
-        type="button"
-        className={`location-host-btn ${remoteContext ? 'ssh-active' : ''}`}
-        onClick={toggleSshPanel}
-        aria-expanded={isSshPanelOpen}
-        aria-haspopup="listbox"
-        disabled={!isConnected}
-        title={remoteContext ? `SSH: ${remoteContext.hostAlias} — click to manage` : 'Local — click to connect via SSH'}
-      >
-        {remoteContext ? (
-          <Server size={13} className="location-host-btn-icon" />
-        ) : (
-          <Monitor size={13} className="location-host-btn-icon" />
-        )}
-      </button>
+      {supportsSSH ? (
+        <button
+          ref={sshBtnRef}
+          type="button"
+          className={`location-host-btn ${remoteContext ? 'ssh-active' : ''}`}
+          onClick={toggleSshPanel}
+          aria-expanded={isSshPanelOpen}
+          aria-haspopup="listbox"
+          disabled={!isConnected}
+          title={remoteContext ? `SSH: ${remoteContext.hostAlias} — click to manage` : 'Local — click to connect via SSH'}
+        >
+          {remoteContext ? (
+            <Server size={13} className="location-host-btn-icon" />
+          ) : (
+            <Monitor size={13} className="location-host-btn-icon" />
+          )}
+        </button>
+      ) : null}
 
       {/* ── Workspace picker button ── */}
       <button
@@ -1166,7 +1170,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
       </button>
 
       {/* ── SSH panel popover ── */}
-      {isSshPanelOpen ? (
+      {supportsSSH && isSshPanelOpen ? (
         <div
           ref={sshPanelRef}
           className="location-switcher-popover location-ssh-panel"
@@ -1695,7 +1699,8 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
 
             <div className="location-switcher-divider" role="separator" />
 
-            {!remoteContext ? (
+            {/* Instances section */}
+            {supportsInstances && !remoteContext ? (
               <>
                 <div className="location-switcher-section-header" role="presentation">
                   <Monitor size={12} className="location-switcher-section-icon" />
@@ -1770,7 +1775,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
       ) : null}
       {/* Post-SSH-connect workspace picker dialog — rendered via portal so it
           escapes any parent overflow/transform that would confine fixed positioning. */}
-      {showSSHWorkspacePicker ? createPortal(
+      {supportsSSH && showSSHWorkspacePicker ? createPortal(
         <div className="ssh-workspace-picker-overlay" role="dialog" aria-modal="true" aria-label="Select SSH workspace">
           <div className="ssh-workspace-picker-dialog">
             <div className="ssh-workspace-picker-header">

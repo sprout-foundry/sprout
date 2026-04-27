@@ -365,6 +365,22 @@ describe('initWasmShell — configurable paths', () => {
 
       await expect(initWasmShell()).rejects.toThrow('Failed to load wasm_exec.js from /wasm/wasm_exec.js');
     });
+
+    it('includes custom wasmExecUrl in the error when script load fails', async () => {
+      const customUrl = '/custom/broken/wasm_exec.js';
+
+      (document.head.appendChild as jest.Mock).mockImplementation((node: Node) => {
+        if (node === mockScript) {
+          queueMicrotask(() => {
+            mockScript.dispatchEvent(new Event('error'));
+          });
+        }
+        return node;
+      });
+
+      await expect(initWasmShell({ wasmExecUrl: customUrl }))
+        .rejects.toThrow(`Failed to load wasm_exec.js from ${customUrl}`);
+    });
   });
 
   describe('singleton behavior', () => {

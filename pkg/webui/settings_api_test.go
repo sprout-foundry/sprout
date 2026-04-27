@@ -20,10 +20,14 @@ func TestSanitizedConfigIncludesSystemPromptText(t *testing.T) {
 
 func TestApplyPartialSettingsUpdatesSystemPromptText(t *testing.T) {
 	cfg := configuration.NewConfig()
-	if err := applyPartialSettings(cfg, map[string]interface{}{
+	unknown, err := applyPartialSettings(cfg, map[string]interface{}{
 		"system_prompt_text": "be stricter",
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("applyPartialSettings returned error: %v", err)
+	}
+	if len(unknown) > 0 {
+		t.Fatalf("applyPartialSettings returned unknown keys: %v", unknown)
 	}
 
 	if cfg.SystemPromptText != "be stricter" {

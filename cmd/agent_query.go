@@ -300,11 +300,19 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 	}
 
 	// Publish query started event
-	eventBus.Publish(events.EventTypeQueryStarted, events.QueryStartedEvent(
+	startedEvent := events.QueryStartedEvent(
 		query,
 		chatAgent.GetProvider(),
 		chatAgent.GetModel(),
-	))
+	)
+	// Decorate with agent metadata for event routing
+	if clientID := chatAgent.GetEventClientID(); clientID != "" {
+		startedEvent["client_id"] = clientID
+	}
+	if chatID := chatAgent.GetEventChatID(); chatID != "" {
+		startedEvent["chat_id"] = chatID
+	}
+	eventBus.Publish(events.EventTypeQueryStarted, startedEvent)
 
 	startTime := time.Now()
 
@@ -314,13 +322,21 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 	// StatsUpdateCallback is set once; subsequent calls overwrite which is fine.
 	chatAgent.SetStatsUpdateCallback(func(totalTokens int, totalCost float64) {
 		// Publish metrics to event bus for WebUI
-		eventBus.Publish(events.EventTypeMetricsUpdate, events.MetricsUpdateEvent(
+		metricsEvent := events.MetricsUpdateEvent(
 			totalTokens,
 			chatAgent.GetCurrentContextTokens(),
 			chatAgent.GetMaxContextTokens(),
 			chatAgent.GetCurrentIteration(),
 			totalCost,
-		))
+		)
+		// Decorate with agent metadata for event routing
+		if clientID := chatAgent.GetEventClientID(); clientID != "" {
+			metricsEvent["client_id"] = clientID
+		}
+		if chatID := chatAgent.GetEventChatID(); chatID != "" {
+			metricsEvent["chat_id"] = chatID
+		}
+		eventBus.Publish(events.EventTypeMetricsUpdate, metricsEvent)
 	})
 
 	// Run agent processing in a goroutine to support cancellation
@@ -341,9 +357,17 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 		duration := time.Since(startTime)
 
 		if res.err != nil {
-			eventBus.Publish(events.EventTypeError, events.ErrorEvent(
+			errorEvent := events.ErrorEvent(
 				fmt.Sprintf("Failed to process query: %s", query), res.err,
-			))
+			)
+			// Decorate with agent metadata for event routing
+			if clientID := chatAgent.GetEventClientID(); clientID != "" {
+				errorEvent["client_id"] = clientID
+			}
+			if chatID := chatAgent.GetEventChatID(); chatID != "" {
+				errorEvent["chat_id"] = chatID
+			}
+			eventBus.Publish(events.EventTypeError, errorEvent)
 			return fmt.Errorf("agent processing failed: %w", res.err)
 		}
 
@@ -357,6 +381,13 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 		)
 		if reason := chatAgent.GetLastRunTerminationReason(); reason != "" {
 			completedEvent["status"] = reason
+		}
+		// Decorate with agent metadata for event routing
+		if clientID := chatAgent.GetEventClientID(); clientID != "" {
+			completedEvent["client_id"] = clientID
+		}
+		if chatID := chatAgent.GetEventChatID(); chatID != "" {
+			completedEvent["chat_id"] = chatID
 		}
 		eventBus.Publish(events.EventTypeQueryCompleted, completedEvent)
 
@@ -384,9 +415,17 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 		case <-time.After(3 * time.Second):
 		}
 
-		eventBus.Publish(events.EventTypeError, events.ErrorEvent(
+		errorEvent := events.ErrorEvent(
 			fmt.Sprintf("Query interrupted: %s", query), ctx.Err(),
-		))
+		)
+		// Decorate with agent metadata for event routing
+		if clientID := chatAgent.GetEventClientID(); clientID != "" {
+			errorEvent["client_id"] = clientID
+		}
+		if chatID := chatAgent.GetEventChatID(); chatID != "" {
+			errorEvent["chat_id"] = chatID
+		}
+		eventBus.Publish(events.EventTypeError, errorEvent)
 		return fmt.Errorf("query interrupted: %w", ctx.Err())
 	}
 }

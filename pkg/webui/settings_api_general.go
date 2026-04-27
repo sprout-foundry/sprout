@@ -359,8 +359,12 @@ func (ws *ReactWebServer) handleAPISettingsPutDefault(w http.ResponseWriter, r *
 		}
 	}
 
+	// Apply patch and collect unknown keys
+	var unknownKeys []string
 	if err := cm.UpdateConfig(func(cfg *configuration.Config) error {
-		return applyPartialSettings(cfg, incoming)
+		unknown, err := applyPartialSettings(cfg, incoming)
+		unknownKeys = unknown
+		return err
 	}); err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -391,10 +395,14 @@ func (ws *ReactWebServer) handleAPISettingsPutDefault(w http.ResponseWriter, r *
 		}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	resp := map[string]interface{}{
 		"success": true,
 		"config":  sanitizedConfig(updated),
-	})
+	}
+	if len(unknownKeys) > 0 {
+		resp["warnings"] = []string{fmt.Sprintf("Unknown fields ignored: %v", unknownKeys)}
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // ---------------------------------------------------------------------------
@@ -421,6 +429,36 @@ func (ws *ReactWebServer) handlePutSessionSettings(w http.ResponseWriter, r *htt
 		if _, err := cm.MapStringToClientType(p); err != nil {
 			writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("Invalid provider: %v", err))
 			return
+		}
+	}
+
+	// Check for unknown keys and collect warnings
+	knownSessionKeys := map[string]bool{
+		"provider":                       true,
+		"model":                          true,
+		"temperature":                    true,
+		"max_tokens":                     true,
+		"reasoning_effort":               true,
+		"system_prompt_text":             true,
+		"skip_prompt":                    true,
+		"enable_pre_write_validation":    true,
+		"web_search_enabled":             true,
+		"subagent_provider":              true,
+		"subagent_model":                 true,
+		"disable_thinking":               true,
+		"top_p":                          true,
+		"frequency_penalty":              true,
+		"presence_penalty":               true,
+		"stop_sequences":                 true,
+		"tool_choice":                    true,
+		"response_format":                true,
+		"stream":                         true,
+	}
+
+	var unknownKeys []string
+	for k := range incoming {
+		if !knownSessionKeys[k] {
+			unknownKeys = append(unknownKeys, k)
 		}
 	}
 
@@ -477,10 +515,14 @@ func (ws *ReactWebServer) handlePutSessionSettings(w http.ResponseWriter, r *htt
 		agentInst.SetConfigOverrides(savedOverrides)
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	resp := map[string]interface{}{
 		"success": true,
 		"config":  savedOverrides,
-	})
+	}
+	if len(unknownKeys) > 0 {
+		resp["warnings"] = []string{fmt.Sprintf("Unknown fields ignored: %v", unknownKeys)}
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // handlePutWorkspaceSettings writes settings to the workspace config file.
@@ -521,8 +563,9 @@ func (ws *ReactWebServer) putConfigToFile(w http.ResponseWriter, r *http.Request
 		cfg = *configuration.NewConfig()
 	}
 
-	// Apply patch
-	if err := applyPartialSettings(&cfg, incoming); err != nil {
+	// Apply patch and collect unknown keys
+	unknownKeys, err := applyPartialSettings(&cfg, incoming)
+	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -544,114 +587,145 @@ func (ws *ReactWebServer) putConfigToFile(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	resp := map[string]interface{}{
 		"success": true,
 		"config":  sanitizedConfig(&cfg),
-	})
+	}
+	if len(unknownKeys) > 0 {
+		resp["warnings"] = []string{fmt.Sprintf("Unknown fields ignored: %v", unknownKeys)}
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // applyPartialSettings applies a partial JSON patch to the config struct.
 // Only whitelisted top-level keys are accepted to prevent accidental
 // overwrite of internal bookkeeping fields.
-func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{}) error {
+// Unknown keys are collected and returned so callers can warn the user.
+func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{}) ([]string, error) {
+	// knownKeys tracks which keys were recognized and consumed.
+	// After processing, any key NOT in this set is returned as unknown.
+	knownKeys := make(map[string]bool, len(patch))
 	// Simple scalar fields
 	if v, ok := patch["reasoning_effort"]; ok {
+		knownKeys["reasoning_effort"] = true
 		s, _ := v.(string)
 		if err := validateReasoningEffort(s); err != nil {
-			return fmt.Errorf("validate reasoning_effort: %w", err)
+			return nil, fmt.Errorf("validate reasoning_effort: %w", err)
 		}
 		cfg.ReasoningEffort = s
 	}
 	if v, ok := patch["system_prompt_text"]; ok {
+		knownKeys["system_prompt_text"] = true
 		s, _ := v.(string)
 		cfg.SystemPromptText = s
 	}
 	if v, ok := patch["skip_prompt"]; ok {
+		knownKeys["skip_prompt"] = true
 		cfg.SkipPrompt, _ = v.(bool)
 	}
 	if v, ok := patch["enable_pre_write_validation"]; ok {
+		knownKeys["enable_pre_write_validation"] = true
 		cfg.EnablePreWriteValidation, _ = v.(bool)
 	}
 	if v, ok := patch["allow_orchestrator_git_write"]; ok {
+		knownKeys["allow_orchestrator_git_write"] = true
 		cfg.AllowOrchestratorGitWrite, _ = v.(bool)
 	}
 	if v, ok := patch["resource_directory"]; ok {
+		knownKeys["resource_directory"] = true
 		s, _ := v.(string)
 		cfg.ResourceDirectory = s
 	}
 	if v, ok := patch["history_scope"]; ok {
+		knownKeys["history_scope"] = true
 		s, _ := v.(string)
 		if err := validateHistoryScope(s); err != nil {
-			return fmt.Errorf("validate history_scope: %w", err)
+			return nil, fmt.Errorf("validate history_scope: %w", err)
 		}
 		cfg.HistoryScope = s
 	}
 	if v, ok := patch["self_review_gate_mode"]; ok {
+		knownKeys["self_review_gate_mode"] = true
 		s, _ := v.(string)
 		if err := validateSelfReviewGateMode(s); err != nil {
-			return fmt.Errorf("validate self_review_gate_mode: %w", err)
+			return nil, fmt.Errorf("validate self_review_gate_mode: %w", err)
 		}
 		cfg.SelfReviewGateMode = s
 	}
 	if v, ok := patch["subagent_provider"]; ok {
+		knownKeys["subagent_provider"] = true
 		s, _ := v.(string)
 		cfg.SubagentProvider = s
 	}
 	if v, ok := patch["subagent_model"]; ok {
+		knownKeys["subagent_model"] = true
 		s, _ := v.(string)
 		cfg.SubagentModel = s
 	}
 	if v, ok := patch["subagent_max_parallel"]; ok {
+		knownKeys["subagent_max_parallel"] = true
 		n, ok2 := asInt(v)
 		if ok2 && n >= 0 {
 			cfg.SubagentMaxParallel = n
 		}
 	}
 	if v, ok := patch["subagent_parallel_enabled"]; ok {
+		knownKeys["subagent_parallel_enabled"] = true
 		b, ok2 := v.(bool)
 		if ok2 {
 			cfg.SubagentParallelEnabled = &b
 		}
 	}
 	if v, ok := patch["commit_provider"]; ok {
+		knownKeys["commit_provider"] = true
 		s, _ := v.(string)
 		cfg.CommitProvider = s
 	}
 	if v, ok := patch["commit_model"]; ok {
+		knownKeys["commit_model"] = true
 		s, _ := v.(string)
 		cfg.CommitModel = s
 	}
 	if v, ok := patch["review_provider"]; ok {
+		knownKeys["review_provider"] = true
 		s, _ := v.(string)
 		cfg.ReviewProvider = s
 	}
 	if v, ok := patch["review_model"]; ok {
+		knownKeys["review_model"] = true
 		s, _ := v.(string)
 		cfg.ReviewModel = s
 	}
 	if v, ok := patch["pdf_ocr_enabled"]; ok {
+		knownKeys["pdf_ocr_enabled"] = true
 		cfg.PDFOCREnabled, _ = v.(bool)
 	}
 	if v, ok := patch["pdf_ocr_provider"]; ok {
+		knownKeys["pdf_ocr_provider"] = true
 		s, _ := v.(string)
 		cfg.PDFOCRProvider = s
 	}
 	if v, ok := patch["pdf_ocr_model"]; ok {
+		knownKeys["pdf_ocr_model"] = true
 		s, _ := v.(string)
 		cfg.PDFOCRModel = s
 	}
 	if v, ok := patch["enable_zsh_command_detection"]; ok {
+		knownKeys["enable_zsh_command_detection"] = true
 		cfg.EnableZshCommandDetection, _ = v.(bool)
 	}
 	if v, ok := patch["auto_execute_detected_commands"]; ok {
+		knownKeys["auto_execute_detected_commands"] = true
 		cfg.AutoExecuteDetectedCommands, _ = v.(bool)
 	}
 	if v, ok := patch["disable_thinking"]; ok {
+		knownKeys["disable_thinking"] = true
 		cfg.DisableThinking, _ = v.(bool)
 	}
 
 	// APITimeouts
 	if at, ok := patch["api_timeouts"]; ok {
+		knownKeys["api_timeouts"] = true
 		if atMap, ok := at.(map[string]interface{}); ok {
 			if existing := cfg.APITimeouts; existing == nil {
 				cfg.APITimeouts = &configuration.APITimeoutConfig{}
@@ -659,40 +733,40 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 			if v2, ok2 := atMap["connection_timeout_sec"]; ok2 {
 				n, ok3 := asInt(v2)
 				if !ok3 {
-					return fmt.Errorf("api_timeouts.connection_timeout_sec must be a positive integer")
+					return nil, fmt.Errorf("api_timeouts.connection_timeout_sec must be a positive integer")
 				}
 				if err := validateAPITimeout(n); err != nil {
-					return fmt.Errorf("validate connection_timeout_sec: %w", err)
+					return nil, fmt.Errorf("validate connection_timeout_sec: %w", err)
 				}
 				cfg.APITimeouts.ConnectionTimeoutSec = n
 			}
 			if v2, ok2 := atMap["first_chunk_timeout_sec"]; ok2 {
 				n, ok3 := asInt(v2)
 				if !ok3 {
-					return fmt.Errorf("api_timeouts.first_chunk_timeout_sec must be a positive integer")
+					return nil, fmt.Errorf("api_timeouts.first_chunk_timeout_sec must be a positive integer")
 				}
 				if err := validateAPITimeout(n); err != nil {
-					return fmt.Errorf("validate first_chunk_timeout_sec: %w", err)
+					return nil, fmt.Errorf("validate first_chunk_timeout_sec: %w", err)
 				}
 				cfg.APITimeouts.FirstChunkTimeoutSec = n
 			}
 			if v2, ok2 := atMap["chunk_timeout_sec"]; ok2 {
 				n, ok3 := asInt(v2)
 				if !ok3 {
-					return fmt.Errorf("api_timeouts.chunk_timeout_sec must be a positive integer")
+					return nil, fmt.Errorf("api_timeouts.chunk_timeout_sec must be a positive integer")
 				}
 				if err := validateAPITimeout(n); err != nil {
-					return fmt.Errorf("validate chunk_timeout_sec: %w", err)
+					return nil, fmt.Errorf("validate chunk_timeout_sec: %w", err)
 				}
 				cfg.APITimeouts.ChunkTimeoutSec = n
 			}
 			if v2, ok2 := atMap["overall_timeout_sec"]; ok2 {
 				n, ok3 := asInt(v2)
 				if !ok3 {
-					return fmt.Errorf("api_timeouts.overall_timeout_sec must be a positive integer")
+					return nil, fmt.Errorf("api_timeouts.overall_timeout_sec must be a positive integer")
 				}
 				if err := validateAPITimeout(n); err != nil {
-					return fmt.Errorf("validate overall_timeout_sec: %w", err)
+					return nil, fmt.Errorf("validate overall_timeout_sec: %w", err)
 				}
 				cfg.APITimeouts.OverallTimeoutSec = n
 			}
@@ -701,6 +775,7 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 
 	// Provider models / provider_priority (simple maps & slices)
 	if v, ok := patch["provider_models"]; ok {
+		knownKeys["provider_models"] = true
 		if m, ok := v.(map[string]interface{}); ok {
 			pm := make(map[string]string, len(m))
 			for k, val := range m {
@@ -710,6 +785,7 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 		}
 	}
 	if v, ok := patch["provider_priority"]; ok {
+		knownKeys["provider_priority"] = true
 		if arr, ok := v.([]interface{}); ok {
 			pp := make([]string, 0, len(arr))
 			for _, item := range arr {
@@ -723,67 +799,80 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 
 	// Version
 	if v, ok := patch["version"]; ok {
+		knownKeys["version"] = true
 		cfg.Version, _ = v.(string)
 	}
 
 	// LastUsedProvider
 	if v, ok := patch["last_used_provider"]; ok {
+		knownKeys["last_used_provider"] = true
 		cfg.LastUsedProvider, _ = v.(string)
 	}
 
 	// MCP — complex struct, use JSON marshal/unmarshal
 	if v, ok := patch["mcp"]; ok {
+		knownKeys["mcp"] = true
 		raw, err := json.Marshal(v)
 		if err != nil {
-			return fmt.Errorf("invalid mcp config: %w", err)
+			return nil, fmt.Errorf("invalid mcp config: %w", err)
 		}
 		var mcpCfg mcp.MCPConfig
 		if err := json.Unmarshal(raw, &mcpCfg); err != nil {
-			return fmt.Errorf("invalid mcp config: %w", err)
+			return nil, fmt.Errorf("invalid mcp config: %w", err)
 		}
 		cfg.MCP = mcpCfg
 	}
 
 	// CustomProviders — map[string]CustomProviderConfig
 	if v, ok := patch["custom_providers"]; ok {
+		knownKeys["custom_providers"] = true
 		raw, err := json.Marshal(v)
 		if err != nil {
-			return fmt.Errorf("invalid custom_providers config: %w", err)
+			return nil, fmt.Errorf("invalid custom_providers config: %w", err)
 		}
 		var providers map[string]configuration.CustomProviderConfig
 		if err := json.Unmarshal(raw, &providers); err != nil {
-			return fmt.Errorf("invalid custom_providers config: %w", err)
+			return nil, fmt.Errorf("invalid custom_providers config: %w", err)
 		}
 		cfg.CustomProviders = providers
 	}
 
 	// SubagentTypes — map[string]SubagentType
 	if v, ok := patch["subagent_types"]; ok {
+		knownKeys["subagent_types"] = true
 		raw, err := json.Marshal(v)
 		if err != nil {
-			return fmt.Errorf("invalid subagent_types config: %w", err)
+			return nil, fmt.Errorf("invalid subagent_types config: %w", err)
 		}
 		var types map[string]configuration.SubagentType
 		if err := json.Unmarshal(raw, &types); err != nil {
-			return fmt.Errorf("invalid subagent_types config: %w", err)
+			return nil, fmt.Errorf("invalid subagent_types config: %w", err)
 		}
 		cfg.SubagentTypes = types
 	}
 
 	// Skills — map[string]Skill
 	if v, ok := patch["skills"]; ok {
+		knownKeys["skills"] = true
 		raw, err := json.Marshal(v)
 		if err != nil {
-			return fmt.Errorf("invalid skills config: %w", err)
+			return nil, fmt.Errorf("invalid skills config: %w", err)
 		}
 		var skills map[string]configuration.Skill
 		if err := json.Unmarshal(raw, &skills); err != nil {
-			return fmt.Errorf("invalid skills config: %w", err)
+			return nil, fmt.Errorf("invalid skills config: %w", err)
 		}
 		cfg.Skills = skills
 	}
 
-	return nil
+	// Collect unknown keys
+	var unknown []string
+	for k := range patch {
+		if !knownKeys[k] {
+			unknown = append(unknown, k)
+		}
+	}
+	return unknown, nil
 }
 
 // applySystemPromptToLiveAgents distributes a system prompt update to all
@@ -811,7 +900,7 @@ func (ws *ReactWebServer) applySystemPromptToLiveAgents(systemPrompt string) {
 	for _, agentInst := range agents {
 		agentInst.SetBaseSystemPrompt(systemPrompt)
 		activePersona := strings.TrimSpace(agentInst.GetActivePersona())
-		if activePersona == "" || activePersona == "orchestrator" {
+		if activePersona == "" || activePersona == "orchestrator" || activePersona == "repo_orchestrator" {
 			agentInst.SetSystemPrompt(systemPrompt)
 		}
 	}

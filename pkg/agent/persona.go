@@ -204,10 +204,12 @@ func (a *Agent) GetAvailableToolNames() []string {
 	return names
 }
 
-// isOrchestratorGitWriteAllowed returns true if the current agent is the orchestrator
-// persona and the AllowOrchestratorGitWrite config is enabled.
+// isOrchestratorGitWriteAllowed returns true if the current agent is an orchestrator
+// persona (orchestrator or repo_orchestrator) and the AllowOrchestratorGitWrite
+// config is enabled.
 func (a *Agent) isOrchestratorGitWriteAllowed() bool {
-	if a.GetActivePersona() != "orchestrator" {
+	persona := a.GetActivePersona()
+	if persona != "orchestrator" && persona != "repo_orchestrator" {
 		return false
 	}
 	if a.configManager == nil {

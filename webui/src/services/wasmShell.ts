@@ -141,6 +141,9 @@ async function idbListFiles(): Promise<string> {
 
 // ── WASM loader ─────────────────────────────────────────────────────────────
 
+const DEFAULT_WASM_URL = '/wasm/sprout.wasm';
+const DEFAULT_WASM_EXEC_URL = '/wasm/wasm_exec.js';
+
 declare global {
   interface Window {
     __sproutStore: SproutStore;
@@ -205,7 +208,7 @@ export async function initWasmShell(config?: {
 
   // 2. Load wasm_exec.js.
   const script = document.createElement('script');
-  const execUrl = config?.wasmExecUrl ?? '/wasm/wasm_exec.js';
+  const execUrl = config?.wasmExecUrl ?? DEFAULT_WASM_EXEC_URL;
   script.src = execUrl;
   document.head.appendChild(script);
   await new Promise<void>((resolve, reject) => {
@@ -215,7 +218,7 @@ export async function initWasmShell(config?: {
 
   // 3. Fetch and instantiate the WASM binary.
   const go = new window.Go();
-  const wasmUrl = config?.wasmUrl ?? '/wasm/sprout.wasm';
+  const wasmUrl = config?.wasmUrl ?? DEFAULT_WASM_URL;
   const wasmResponse = await fetch(wasmUrl);
   if (!wasmResponse.ok) {
     throw new Error(`Failed to fetch ${wasmUrl}: ${wasmResponse.status}`);

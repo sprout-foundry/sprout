@@ -13,7 +13,8 @@ func TestBootstrapIsolatedConfig_ClonesProviderSettings(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", "")
 	t.Setenv("LEDIT_CONFIG", "")
 
-	mainDir := filepath.Join(homeDir, ".ledit")
+	// New behavior: HOME-based config uses .config/sprout
+	mainDir := filepath.Join(homeDir, ".config", "sprout")
 	if err := os.MkdirAll(mainDir, 0700); err != nil {
 		t.Fatalf("mkdir main dir: %v", err)
 	}
@@ -34,7 +35,7 @@ func TestBootstrapIsolatedConfig_ClonesProviderSettings(t *testing.T) {
 		t.Fatalf("write source api keys: %v", err)
 	}
 
-	isolatedDir := filepath.Join(t.TempDir(), ".ledit")
+	isolatedDir := filepath.Join(t.TempDir(), ".sprout")
 	if err := BootstrapIsolatedConfig(isolatedDir); err != nil {
 		t.Fatalf("bootstrap isolated config: %v", err)
 	}
@@ -68,7 +69,7 @@ func TestBootstrapIsolatedConfig_NoOverwriteWhenConfigExists(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", "")
 	t.Setenv("LEDIT_CONFIG", "")
 
-	isolatedDir := filepath.Join(t.TempDir(), ".ledit")
+	isolatedDir := filepath.Join(t.TempDir(), ".sprout")
 	if err := os.MkdirAll(isolatedDir, 0700); err != nil {
 		t.Fatalf("mkdir isolated dir: %v", err)
 	}

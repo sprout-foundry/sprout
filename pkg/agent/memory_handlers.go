@@ -23,7 +23,7 @@ func handleAddMemory(ctx context.Context, a *Agent, args map[string]interface{})
 	}
 
 	sanitized := sanitizeMemoryName(name)
-	return fmt.Sprintf("Memory '%s' saved to ~/.ledit/memories/%s.md. This memory will be loaded in all future conversations.", sanitized, sanitized), nil
+	return fmt.Sprintf("Memory '%s' saved to ~/.config/sprout/memories/%s.md. This memory will be loaded in all future conversations.", sanitized, sanitized), nil
 }
 
 // handleReadMemory reads and returns the content of a specific memory

@@ -174,7 +174,7 @@ func TestGetDefaultConfigDirPrefersXDGConfigHome(t *testing.T) {
 
 	dir, err := getDefaultConfigDir()
 	assert.NoError(t, err)
-	assert.Equal(t, filepath.Join("/tmp/xdg-home", "ledit"), dir)
+	assert.Equal(t, filepath.Join("/tmp/xdg-home", "sprout"), dir)
 }
 
 func TestGetDefaultConfigDirUsesHomeEnvWhenXDGUnset(t *testing.T) {
@@ -183,7 +183,7 @@ func TestGetDefaultConfigDirUsesHomeEnvWhenXDGUnset(t *testing.T) {
 
 	dir, err := getDefaultConfigDir()
 	assert.NoError(t, err)
-	assert.Equal(t, filepath.Join("/tmp/home-preferred", ConfigDirName), dir)
+	assert.Equal(t, filepath.Join("/tmp/home-preferred", ".config", "sprout"), dir)
 }
 
 func TestMergeLegacyStructuredToolsIntoPersonaAllowlists(t *testing.T) {

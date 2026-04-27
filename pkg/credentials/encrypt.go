@@ -149,7 +149,7 @@ func serializeKeyFile(identity *age.X25519Identity) ([]byte, error) {
 // output is returned as a byte slice.
 //
 // Use this function when you want to encrypt data with the machine-specific
-// key that is stored in ~/.ledit/key.age.
+// key that is stored in ~/.config/sprout/key.age.
 func EncryptStore(plaintext []byte) ([]byte, error) {
 	identity, err := LoadOrCreateMachineKey()
 	if err != nil {

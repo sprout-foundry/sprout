@@ -30,7 +30,7 @@ func TestLogger_JSONModeWritesJSONWithCID(t *testing.T) {
 	_ = l.Close()
 
 	// Read the last JSON object from the log file; lumberjack writes raw JSON lines
-	f, err := os.Open(filepath.Join(".ledit", "workspace.log"))
+	f, err := os.Open(filepath.Join(".sprout", "workspace.log"))
 	if err != nil {
 		t.Fatalf("open log: %v", err)
 	}

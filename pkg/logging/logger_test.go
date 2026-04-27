@@ -62,7 +62,7 @@ func TestNewLogger(t *testing.T) {
 	}
 
 	// Verify log file was created
-	logPath := filepath.Join(tmpDir, ".ledit", "ledit.log")
+	logPath := filepath.Join(tmpDir, ".sprout", "ledit.log")
 	if _, err := os.Stat(logPath); os.IsNotExist(err) {
 		t.Errorf("Expected log file to be created at %s", logPath)
 	}
@@ -82,10 +82,10 @@ func TestLoggerInit(t *testing.T) {
 		t.Fatalf("Unexpected error in init: %v", err)
 	}
 
-	// Verify .ledit directory was created
-	leditDir := filepath.Join(tmpDir, ".ledit")
+	// Verify .sprout directory was created
+	leditDir := filepath.Join(tmpDir, ".sprout")
 	if _, err := os.Stat(leditDir); os.IsNotExist(err) {
-		t.Error("Expected .ledit directory to be created")
+		t.Error("Expected .sprout directory to be created")
 	}
 
 	// Verify log file exists
@@ -117,7 +117,7 @@ func TestLoggerLog(t *testing.T) {
 	}
 
 	// Verify file was written
-	logPath := filepath.Join(tmpDir, ".ledit", "ledit.log")
+	logPath := filepath.Join(tmpDir, ".sprout", "ledit.log")
 	content, err := os.ReadFile(logPath)
 	if err != nil {
 		t.Fatalf("Failed to read log file: %v", err)
@@ -205,16 +205,16 @@ func TestWriteLocalCopy(t *testing.T) {
 	})
 	os.Setenv("HOME", tmpDir)
 
-	// Create the .ledit directory first (WriteLocalCopy doesn't create it)
-	if err := os.MkdirAll(filepath.Join(tmpDir, ".ledit"), 0755); err != nil {
-		t.Fatalf("Failed to create .ledit directory: %v", err)
+	// Create the .sprout directory first (WriteLocalCopy doesn't create it)
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".sprout"), 0755); err != nil {
+		t.Fatalf("Failed to create .sprout directory: %v", err)
 	}
 
 	content := []byte("test content")
 	WriteLocalCopy("testfile.txt", content)
 
 	// Verify file was written
-	path := filepath.Join(tmpDir, ".ledit", "testfile.txt")
+	path := filepath.Join(tmpDir, ".sprout", "testfile.txt")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("Failed to read file: %v", err)
@@ -232,7 +232,7 @@ func TestGetLogPath(t *testing.T) {
 	os.Setenv("HOME", "/home/testuser")
 
 	path := GetLogPath()
-	expected := filepath.Join("/home/testuser", ".ledit", "ledit.log")
+	expected := filepath.Join("/home/testuser", ".sprout", "ledit.log")
 	if path != expected {
 		t.Errorf("Expected path %q, got %q", expected, path)
 	}
@@ -313,7 +313,7 @@ func TestLogRequestPayload(t *testing.T) {
 	LogRequestPayload(payloadJSON, "openrouter", "gpt-4", true)
 
 	// Verify lastRequest.json was created
-	lastReqPath := filepath.Join(tmpDir, ".ledit", "lastRequest.json")
+	lastReqPath := filepath.Join(tmpDir, ".sprout", "lastRequest.json")
 	data, err := os.ReadFile(lastReqPath)
 	if err != nil {
 		t.Fatalf("Failed to read lastRequest.json: %v", err)
@@ -323,16 +323,16 @@ func TestLogRequestPayload(t *testing.T) {
 	}
 
 	// Verify timestamped file was created (check for api_request_*.json)
-	entries, err := os.ReadDir(filepath.Join(tmpDir, ".ledit"))
+	entries, err := os.ReadDir(filepath.Join(tmpDir, ".sprout"))
 	if err != nil {
-		t.Fatalf("Failed to read .ledit directory: %v", err)
+		t.Fatalf("Failed to read .sprout directory: %v", err)
 	}
 	foundTimestamped := false
 	for _, entry := range entries {
 		if strings.HasPrefix(entry.Name(), "api_request_") && strings.HasSuffix(entry.Name(), ".json") {
 			foundTimestamped = true
 			// Verify it contains timestamp, provider, model, streaming fields
-			tsData, err := os.ReadFile(filepath.Join(tmpDir, ".ledit", entry.Name()))
+			tsData, err := os.ReadFile(filepath.Join(tmpDir, ".sprout", entry.Name()))
 			if err != nil {
 				t.Errorf("Failed to read timestamped file: %v", err)
 				continue
@@ -379,7 +379,7 @@ func TestLogRequestPayloadOnError(t *testing.T) {
 	LogRequestPayloadOnError(payloadJSON, "openrouter", "gpt-4o", false, "connection", testErr)
 
 	// Verify lastRequest.json was created
-	lastReqPath := filepath.Join(tmpDir, ".ledit", "lastRequest.json")
+	lastReqPath := filepath.Join(tmpDir, ".sprout", "lastRequest.json")
 	data, err := os.ReadFile(lastReqPath)
 	if err != nil {
 		t.Fatalf("Failed to read lastRequest.json: %v", err)
@@ -389,16 +389,16 @@ func TestLogRequestPayloadOnError(t *testing.T) {
 	}
 
 	// Verify timestamped error file was created
-	entries, err := os.ReadDir(filepath.Join(tmpDir, ".ledit"))
+	entries, err := os.ReadDir(filepath.Join(tmpDir, ".sprout"))
 	if err != nil {
-		t.Fatalf("Failed to read .ledit directory: %v", err)
+		t.Fatalf("Failed to read .sprout directory: %v", err)
 	}
 	foundErrorFile := false
 	for _, entry := range entries {
 		if strings.HasPrefix(entry.Name(), "error_request_connection_") && strings.HasSuffix(entry.Name(), ".json") {
 			foundErrorFile = true
 			// Verify it contains error context
-			errData, err := os.ReadFile(filepath.Join(tmpDir, ".ledit", entry.Name()))
+			errData, err := os.ReadFile(filepath.Join(tmpDir, ".sprout", entry.Name()))
 			if err != nil {
 				t.Errorf("Failed to read error file: %v", err)
 				continue
@@ -478,13 +478,13 @@ func TestLogRequestPayloadWithNonStreaming(t *testing.T) {
 	LogRequestPayload(payload, "anthropic", "claude-3", false)
 
 	// Verify timestamped file has streaming=false
-	entries, err := os.ReadDir(filepath.Join(tmpDir, ".ledit"))
+	entries, err := os.ReadDir(filepath.Join(tmpDir, ".sprout"))
 	if err != nil {
-		t.Fatalf("Failed to read .ledit directory: %v", err)
+		t.Fatalf("Failed to read .sprout directory: %v", err)
 	}
 	for _, entry := range entries {
 		if strings.HasPrefix(entry.Name(), "api_request_") {
-			data, err := os.ReadFile(filepath.Join(tmpDir, ".ledit", entry.Name()))
+			data, err := os.ReadFile(filepath.Join(tmpDir, ".sprout", entry.Name()))
 			if err != nil {
 				t.Fatalf("Failed to read file: %v", err)
 			}
@@ -505,10 +505,10 @@ func TestLogRequestPayloadJSONFormat(t *testing.T) {
 	payload := []byte(`{"test":"value"}`)
 	LogRequestPayload(payload, "test-provider", "test-model", true)
 
-	entries, _ := os.ReadDir(filepath.Join(tmpDir, ".ledit"))
+	entries, _ := os.ReadDir(filepath.Join(tmpDir, ".sprout"))
 	for _, entry := range entries {
 		if strings.HasPrefix(entry.Name(), "api_request_") {
-			data, err := os.ReadFile(filepath.Join(tmpDir, ".ledit", entry.Name()))
+			data, err := os.ReadFile(filepath.Join(tmpDir, ".sprout", entry.Name()))
 			if err != nil {
 				t.Fatalf("Failed to read file: %v", err)
 			}

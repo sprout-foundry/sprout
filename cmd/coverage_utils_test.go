@@ -405,7 +405,7 @@ func TestGetConfigDir_HOME(t *testing.T) {
 	}()
 
 	got := getConfigDir()
-	want := filepath.Join("/home/testuser", ".ledit")
+	want := filepath.Join("/home/testuser", ".config", "sprout")
 	if got != want {
 		t.Errorf("getConfigDir() with HOME = %q, want %q", got, want)
 	}
@@ -437,7 +437,7 @@ func TestGetConfigDir_Fallback(t *testing.T) {
 	}()
 
 	got := getConfigDir()
-	want := "/data/data/com.termux/files/home/.ledit"
+	want := "/data/data/com.termux/files/home/.config/sprout"
 	if got != want {
 		t.Errorf("getConfigDir() fallback = %q, want %q", got, want)
 	}

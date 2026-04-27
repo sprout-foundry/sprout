@@ -751,7 +751,7 @@ func GetToolDefinitions() []Tool {
 				Parameters  interface{} `json:"parameters"`
 			}{
 				Name:        "add_memory",
-				Description: "Save a memory to persist across all future conversations. Use this to remember user preferences, learned patterns, project-specific conventions, or anything useful for future sessions. Memories are stored as markdown files in ~/.ledit/memories/ and loaded into your system prompt automatically.",
+				Description: "Save a memory to persist across all future conversations. Use this to remember user preferences, learned patterns, project-specific conventions, or anything useful for future sessions. Memories are stored as markdown files in ~/.config/sprout/memories/ and loaded into your system prompt automatically.",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -816,7 +816,7 @@ func GetToolDefinitions() []Tool {
 				Parameters  interface{} `json:"parameters"`
 			}{
 				Name:        "delete_memory",
-				Description: "Delete a memory by name. Permanently removes the memory file from ~/.ledit/memories/.",
+				Description: "Delete a memory by name. Permanently removes the memory file from ~/.config/sprout/memories/.",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{

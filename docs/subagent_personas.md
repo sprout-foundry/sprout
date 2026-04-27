@@ -45,7 +45,7 @@ Personas are specified using the `persona` parameter with the `run_subagent` too
 
 ### Configuration
 
-Personas are configured in `.ledit/config.json` under the `subagent_types` field. Each persona can have:
+Personas are configured in `.sprout/config.json` under the `subagent_types` field. Each persona can have:
 - Custom provider (uses `subagent_provider` if not set)
 - Custom model (uses `subagent_model` if not set)
 - Enable/disable flag
@@ -338,7 +338,7 @@ Use when tasks have dependencies or require handoff:
 
 ## Configuration File Structure
 
-Subagent personas are configured in `.ledit/subagents.json`:
+Subagent personas are configured in `.sprout/subagents.json`:
 
 ```json
 {

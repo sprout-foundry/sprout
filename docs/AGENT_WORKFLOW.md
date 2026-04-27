@@ -49,8 +49,8 @@ If both are provided, the CLI prompt is used as the initial prompt.
     "enabled": true,
     "resume": true,
     "yield_on_provider_handoff": true,
-    "state_file": ".ledit/workflow_state.json",
-    "events_file": ".ledit/workflow_events.jsonl"
+    "state_file": ".sprout/workflow_state.json",
+    "events_file": ".sprout/workflow_events.jsonl"
   },
 
   "initial": {
@@ -114,8 +114,8 @@ If both are provided, the CLI prompt is used as the initial prompt.
   - `enabled` (`bool`): turn orchestration mode on.
   - `resume` (`bool`, default `true`): resume from `state_file` if present.
   - `yield_on_provider_handoff` (`bool`, default `true`): stop before a step whose provider differs from the previous executed provider.
-  - `state_file` (`string`, default `.ledit/workflow_state.json`): JSON checkpoint path.
-  - `events_file` (`string`, default `.ledit/workflow_events.jsonl`): JSONL event stream path.
+  - `state_file` (`string`, default `.sprout/workflow_state.json`): JSON checkpoint path.
+  - `events_file` (`string`, default `.sprout/workflow_events.jsonl`): JSONL event stream path.
 
 Validation rule: workflow must include at least one `steps` item, or an `initial.prompt`/`initial.prompt_file`.
 
